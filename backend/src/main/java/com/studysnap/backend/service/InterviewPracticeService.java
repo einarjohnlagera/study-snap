@@ -23,6 +23,7 @@ import com.studysnap.backend.exception.InterviewPracticeQuotaExhaustedException;
 import com.studysnap.backend.exception.InterviewPracticeSessionNotFoundException;
 import com.studysnap.backend.exception.InterviewPracticeSessionNotInProgressException;
 import com.studysnap.backend.exception.InvalidInterviewPracticeRequestException;
+import com.studysnap.backend.exception.AdaptivePracticeSessionActiveException;
 import com.studysnap.backend.exception.StudyPackNotFoundException;
 import com.studysnap.backend.repository.QuickReviewSessionRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
@@ -121,8 +122,12 @@ public class InterviewPracticeService {
             return toStartResponse(existing);
         }
         if (existing != null) {
-            markForfeited(existing);
-            quickReviewSessionRepository.save(existing);
+            // ⚠️ THE REVERSE DIRECTION, and it is the destructive one. `existing` here is an ADAPTIVE
+            // session that is NOT ours -- a note-scoped or plan-scoped Adaptive Practice session, which
+            // shares this mode discriminator and V41's (user, pack, mode) unique index. Forfeiting it
+            // would silently end a session this mode does not own. Starting anyway is not an option
+            // either: the unique index would reject the insert.
+            throw new AdaptivePracticeSessionActiveException();
         }
 
         assertQuotaAvailable(userId, planType);

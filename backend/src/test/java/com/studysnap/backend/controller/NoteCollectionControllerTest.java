@@ -67,6 +67,13 @@ class NoteCollectionControllerTest {
                 .getMethod("create", CreateNoteCollectionRequest.class, AuthenticatedUser.class)
                 .getAnnotation(PreAuthorize.class).value()).isEqualTo(PREAUTHORIZE_ROLES);
         assertThat(NoteCollectionController.class
+                .getMethod("startAdaptivePractice", String.class, String.class, AuthenticatedUser.class)
+                .getAnnotation(PreAuthorize.class).value()).isEqualTo("hasAnyRole('USER','ADMIN')");
+        assertThat(NoteCollectionController.class
+                .getMethod("getAdaptivePractice", String.class, AuthenticatedUser.class)
+                .getAnnotation(PreAuthorize.class).value()).isEqualTo("hasAnyRole('USER','ADMIN')");
+
+        assertThat(NoteCollectionController.class
                 .getMethod("get", String.class, AuthenticatedUser.class)
                 .getAnnotation(PreAuthorize.class).value()).isEqualTo(PREAUTHORIZE_ROLES);
         assertThat(NoteCollectionController.class

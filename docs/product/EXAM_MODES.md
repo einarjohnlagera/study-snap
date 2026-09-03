@@ -86,6 +86,11 @@ No other identity changes from `quick-review.md`; included here for completeness
 - **Identity**: Targeted weak-area reinforcement. Not a full-coverage assessment.
 - **Audience**: All learning profiles with monthly quota per `PLANS.md` (`Free` 3/mo, `Plus` 10/mo, `Pro` 30/mo). See *Open Discrepancies* below.
 - **Boundary**: Generated only from weak concepts. Result screen `Generate New Set` only.
+- **Capability (v0.107.0)**: Adaptive Practice may be scoped to a whole **Subject Plan or Review
+  Set**, not just one note, via a collection-addressed endpoint. This is a **capability, not a mode
+  or sub-mode** — same questions, same scoring, same result screen, more notes — so it takes no
+  `subMode` value and adds no row to the table above. The session is still anchored on a single pack
+  (the plan's lowest-position eligible one, derived server-side).
 
 ### Long Exam Mode (new — Student-facing)
 

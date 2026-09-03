@@ -483,9 +483,21 @@ export default function AdaptivePracticePage() {
   // Display names for the focus list. Duplicates are preserved DELIBERATELY: two packs weak on the
   // same concept are two distinct focus entries, and de-duplicating here would re-introduce, in the
   // UI, exactly the cross-pack merge the response shape exists to prevent.
+  const adaptiveFocusEntries = useMemo(() => adaptiveQuiz?.focusConcepts ?? [], [adaptiveQuiz]);
   const adaptiveFocusConceptNames = useMemo(
-    () => (adaptiveQuiz?.focusConcepts ?? []).map((entry) => entry.concept),
-    [adaptiveQuiz],
+    () => adaptiveFocusEntries.map((entry) => entry.concept),
+    [adaptiveFocusEntries],
+  );
+  /**
+   * True when the same concept string appears for more than one pack.
+   *
+   * Duplicates are preserved deliberately -- two packs weak on one concept are two distinct focus
+   * entries -- so the SOURCE has to be shown, or the list reads as a rendering bug. This is the
+   * disambiguation the "never merge concepts across packs" decision rests on.
+   */
+  const adaptiveFocusHasDuplicateNames = useMemo(
+    () => new Set(adaptiveFocusConceptNames).size !== adaptiveFocusConceptNames.length,
+    [adaptiveFocusConceptNames],
   );
 
   const adaptiveQuizActive = Boolean(
@@ -576,6 +588,11 @@ export default function AdaptivePracticePage() {
           correctAnswers: score,
           totalQuestions: quiz.length,
           durationSeconds,
+          // Sent so the server can bucket ConceptHealth by (sourceStudyPackId, concept). Without
+          // them its breakdown is empty, and a plan-scoped session attributes every concept to the
+          // anchor pack and records no misses -- the exact over-attribution shape item 1 removed.
+          selectedChoices,
+          selectedMultiChoices,
         };
         if (correctConceptNames.length > 0) {
           completeRequest.correctConceptNames = correctConceptNames;
@@ -585,7 +602,12 @@ export default function AdaptivePracticePage() {
           .then((completed) => {
             setCompletionResult(completed);
             setCompletionSignalLoaded(true);
-            return getPostSessionNextStep(adaptiveQuiz.studyPackId);
+            // studyPackId is null only on a declined start, which carries no session to complete,
+            // so this branch is unreachable from here -- but the type now says so rather than
+            // relying on a cast that hid it.
+            return adaptiveQuiz.studyPackId
+              ? getPostSessionNextStep(adaptiveQuiz.studyPackId)
+              : Promise.resolve(null);
           })
           .then(setNextStepResponse)
           .catch(() => {
@@ -706,8 +728,13 @@ export default function AdaptivePracticePage() {
             <p className="font-medium text-foreground">Weak concepts:</p>
             {adaptiveFocusConceptNames.length > 0 ? (
               <ul className="list-disc space-y-1 pl-5">
-                {adaptiveFocusConceptNames.map((concept) => (
-                  <li key={`weak-concept-${concept}`}>{concept}</li>
+                {adaptiveFocusEntries.map((entry) => (
+                  <li key={`weak-concept-${entry.sourceStudyPackId}-${entry.concept}`}>
+                    {entry.concept}
+                    {adaptiveFocusHasDuplicateNames && entry.sourceTitle ? (
+                      <span className="text-foreground/60"> · {entry.sourceTitle}</span>
+                    ) : null}
+                  </li>
                 ))}
               </ul>
             ) : (
@@ -741,8 +768,10 @@ export default function AdaptivePracticePage() {
                 Targeted Weak Areas
               </p>
               <ul className="mt-2 list-disc space-y-1 pl-5">
-                {adaptiveFocusConceptNames.map((concept) => (
-                  <li key={concept}>
+                {adaptiveFocusEntries.map((entry) => {
+                  const concept = entry.concept;
+                  return (
+                  <li key={`${entry.sourceStudyPackId}-${concept}`}>
                     {note?.id && note.keyConcepts?.some((keyConcept) => (
                       normalizeConceptKey(keyConcept) === normalizeConceptKey(concept)
                     )) ? (
@@ -753,8 +782,12 @@ export default function AdaptivePracticePage() {
                         {concept}
                       </Link>
                     ) : concept}
+                    {adaptiveFocusHasDuplicateNames && entry.sourceTitle ? (
+                      <span className="text-foreground/60"> · {entry.sourceTitle}</span>
+                    ) : null}
                   </li>
-                ))}
+                  );
+                })}
               </ul>
             </div>
           ) : (

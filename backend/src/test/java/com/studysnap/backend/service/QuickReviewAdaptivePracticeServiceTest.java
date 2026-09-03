@@ -13,6 +13,7 @@ import com.studysnap.backend.entity.QuickReviewSessionEntity;
 import com.studysnap.backend.entity.QuickReviewSessionMode;
 import com.studysnap.backend.entity.QuickReviewSessionStatus;
 import com.studysnap.backend.entity.StudyPackEntity;
+import com.studysnap.backend.exception.AdaptivePracticeSessionNotFoundException;
 import com.studysnap.backend.entity.StudyPackStatus;
 import com.studysnap.backend.entity.NoteCollectionEntity;
 import com.studysnap.backend.entity.NoteCollectionItemEntity;
@@ -771,25 +772,107 @@ class QuickReviewAdaptivePracticeServiceTest {
     }
 
     @Test
-    void collectionScoped_doesNotResumeAnInterviewPracticeSessionOnTheAnchorPack() {
+    void collectionScoped_reportsTheInterviewSessionWhenEveryEligiblePackIsOccupiedByOne() {
+        // ⚠️ REPLACES A VACUOUS TEST. The previous version used a SINGLE-pack fixture whose
+        // findTop...ByStudyPackId stub returned empty while the list query returned an active
+        // session -- a state no single table can produce -- so it exercised the focusEligible early
+        // return, not the guard, and its assertion (sessionId != interviewId) was satisfied by null.
+        // Stubs here are CONSISTENT: both queries see the same sessions.
         CollectionFixture f = collectionFixture(1);
         stubCollectionFocus(f, 0, List.of("Shear Force"), List.of());
-        QuickReviewSessionEntity interview = buildInProgressAdaptiveSession(
-                UUID.randomUUID(), f.userId, f.packs.get(0).getId(), f.noteIds.get(0));
-        Map<String, Object> interviewState = new LinkedHashMap<>(interview.getSessionState());
-        interviewState.put("subMode", "INTERVIEW");
-        interview.setSessionState(interviewState);
-        when(quickReviewSessionRepository.findByUserIdAndSessionModeAndStatusInOrderByCreatedAtDesc(
-                eq(f.userId), eq(QuickReviewSessionMode.ADAPTIVE), any()))
-                .thenReturn(List.of(interview));
+        QuickReviewSessionEntity interview = interviewSessionOn(f, 0);
+        seeActiveSessions(f, interview);
 
         QuickReviewAdaptiveQuizResponse response =
                 adaptivePracticeService.generateAdaptiveQuizForCollection(
                         f.collectionId.toString(), f.userId, "collection-detail");
 
-        // It must NOT hand back the interview session's id, and must not spend quota doing so.
-        assertThat(response.sessionId()).isNotEqualTo(interview.getId().toString());
+        // The dedicated message must actually be REACHABLE -- it used to be dead code behind the
+        // focusEligible filter, and the learner was told "no weak concepts" when they had some.
+        assertThat(response.message()).contains("Interview Practice session in progress");
+        assertThat(response.sessionId()).isNull();
         verify(userUsageService, never()).incrementAdaptiveQuizGeneration(any(), any());
+    }
+
+    @Test
+    void collectionScoped_anchorsOnAnUnoccupiedPackRatherThanBlockingTheWholePlan() {
+        CollectionFixture f = collectionFixture(2);
+        stubCollectionFocus(f, 0, List.of("Shear Force"), List.of());
+        stubCollectionFocus(f, 1, List.of("Bending Moment"), List.of());
+        seeActiveSessions(f, interviewSessionOn(f, 0));
+        stubCollectionGeneration(f, 1);
+
+        QuickReviewAdaptiveQuizResponse response =
+                adaptivePracticeService.generateAdaptiveQuizForCollection(
+                        f.collectionId.toString(), f.userId, "collection-detail");
+
+        // Pack 0 is occupied, so the session anchors on pack 1 instead of refusing the whole plan.
+        assertThat(response.studyPackId()).isEqualTo(f.packs.get(1).getId().toString());
+        verify(userUsageService).incrementAdaptiveQuizGeneration(eq(f.userId), any());
+    }
+
+    @Test
+    void collectionScoped_neverReturnsAForeignNoteScopedSessionAsThePlanSession() {
+        // The blocker: a note-scoped session on the plan's first eligible pack used to come back
+        // labelled as the plan's, while the plan's own in-progress endpoint reported nothing --
+        // a permanent dead end for that plan.
+        CollectionFixture f = collectionFixture(1);
+        stubCollectionFocus(f, 0, List.of("Shear Force"), List.of());
+        QuickReviewSessionEntity noteScoped = buildInProgressAdaptiveSession(
+                UUID.randomUUID(), f.userId, f.packs.get(0).getId(), f.noteIds.get(0));
+        seeActiveSessions(f, noteScoped);
+
+        QuickReviewAdaptiveQuizResponse response =
+                adaptivePracticeService.generateAdaptiveQuizForCollection(
+                        f.collectionId.toString(), f.userId, "collection-detail");
+
+        assertThat(response.sessionId()).isNotEqualTo(noteScoped.getId().toString());
+        assertThat(response.sessionId()).isNull();
+        assertThat(response.message()).contains("another Adaptive Practice session");
+        verify(userUsageService, never()).incrementAdaptiveQuizGeneration(any(), any());
+    }
+
+    @Test
+    void completeAdaptiveSession_doesNotCompleteAnInterviewPracticeSession() {
+        UUID userId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        QuickReviewSessionEntity interview =
+                buildInProgressAdaptiveSession(sessionId, userId, studyPackId, noteId);
+        Map<String, Object> state = new LinkedHashMap<>(interview.getSessionState());
+        state.put("subMode", "INTERVIEW");
+        interview.setSessionState(state);
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(
+                sessionId, userId, QuickReviewSessionMode.ADAPTIVE))
+                .thenReturn(Optional.of(interview));
+
+        assertThatThrownBy(() -> adaptivePracticeService.completeAdaptiveSession(
+                sessionId.toString(), userId, 1, 1, null, null, null, null))
+                .isInstanceOf(AdaptivePracticeSessionNotFoundException.class);
+
+        // The destructive half: the interview session must be left completable by its OWN mode.
+        assertThat(interview.getStatus()).isEqualTo(QuickReviewSessionStatus.IN_PROGRESS);
+        verify(conceptHealthService, never()).recordCorrectAnswers(any(), any(), any(), any());
+    }
+
+    @Test
+    void forfeitAdaptiveSession_doesNotForfeitAnInterviewPracticeSession() {
+        UUID userId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+        QuickReviewSessionEntity interview = buildInProgressAdaptiveSession(
+                sessionId, userId, UUID.randomUUID(), UUID.randomUUID());
+        Map<String, Object> state = new LinkedHashMap<>(interview.getSessionState());
+        state.put("subMode", "INTERVIEW");
+        interview.setSessionState(state);
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(
+                sessionId, userId, QuickReviewSessionMode.ADAPTIVE))
+                .thenReturn(Optional.of(interview));
+
+        assertThatThrownBy(() -> adaptivePracticeService.forfeitAdaptiveSession(sessionId.toString(), userId))
+                .isInstanceOf(AdaptivePracticeSessionNotFoundException.class);
+
+        assertThat(interview.getStatus()).isEqualTo(QuickReviewSessionStatus.IN_PROGRESS);
     }
 
     @Test
@@ -928,6 +1011,196 @@ class QuickReviewAdaptivePracticeServiceTest {
 
         assertThat(response.sessionId()).isNull();
         assertThat(response.quiz()).isEmpty();
+    }
+
+
+    /** An in-progress Interview Practice session anchored on one of the fixture's packs. */
+    @Test
+    void completeAdaptiveSession_attributesConceptsPerSourcePackWhenSelectionsAreSubmitted() {
+        // The substantive half of the wiring fix. Adaptive Practice has NO progress endpoint, so
+        // nothing persists selections during the session -- if the client does not submit them the
+        // breakdown is empty and everything lands on the anchor pack with no misses recorded.
+        // Two packs, the SAME concept in both, NON-UNIFORM answers: A correct, B wrong.
+        UUID userId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+        UUID packA = UUID.randomUUID();
+        UUID packB = UUID.randomUUID();
+        UUID noteA = UUID.randomUUID();
+        StudyPackEntity a = buildStudyPack(packA, noteA, userId);
+        StudyPackEntity b = buildStudyPack(packB, UUID.randomUUID(), userId);
+        a.setKeyConcepts(List.of("Shear Force"));
+        b.setKeyConcepts(List.of("Shear Force"));
+
+        QuickReviewSessionEntity session = buildInProgressAdaptiveSession(sessionId, userId, packA, noteA);
+        session.setSessionState(QuizSessionStateUtils.withQuiz(List.of(
+                stampedItem("A1", "Shear Force", packA),
+                stampedItem("B1", "Shear Force", packB)
+        ), session.getSessionState()));
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(
+                sessionId, userId, QuickReviewSessionMode.ADAPTIVE)).thenReturn(Optional.of(session));
+        when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        lenient().when(studyPackRepository.findByIdAndOwnerUserId(packA, userId)).thenReturn(Optional.of(a));
+        lenient().when(studyPackRepository.findByIdAndOwnerUserId(packB, userId)).thenReturn(Optional.of(b));
+
+        adaptivePracticeService.completeAdaptiveSession(
+                sessionId.toString(), userId, 1, 2, null, null,
+                Map.of(0, 0, 1, 1),   // index 0 correct, index 1 wrong
+                Map.of());
+
+        // Same concept string, opposite outcomes, kept apart by SOURCE PACK -- which is the whole
+        // point: merging them by name would record one pack's success against the other's failure.
+        //
+        // Note the methods: Adaptive Practice uses recordCorrect/IncorrectAnswers, NOT the
+        // ...ForKnownConcepts variants, so it applies no keyConcepts intersection. That asymmetry is
+        // pre-existing and shared with Board Exam (see docs/features/exam-hub.md); it is not
+        // introduced here, and bucketing by source pack is what keeps it safe.
+        verify(conceptHealthService).recordCorrectAnswers(
+                eq(userId), eq(packA), eq(List.of("Shear Force")), any());
+        verify(conceptHealthService).recordIncorrectAnswers(
+                eq(userId), eq(packB), eq(List.of("Shear Force")), any());
+        verify(conceptHealthService, never()).recordIncorrectAnswers(
+                eq(userId), eq(packA), any(), any());
+        verify(conceptHealthService, never()).recordCorrectAnswers(
+                eq(userId), eq(packB), any(), any());
+    }
+
+    private QuizItem stampedItem(String question, String keyConcept, UUID sourceStudyPackId) {
+        return new QuizItem(question, List.of("A", "B", "C", "D"), 0, keyConcept, "Explanation",
+                null, "MCQ", null, null, null, null, keyConcept, null, null)
+                .withSourceStudyPackId(sourceStudyPackId.toString());
+    }
+
+    @Test
+    void collectionScoped_returnsTheServerDerivedAnchorNoteIdForNavigation() {
+        // T3.1 -- noteId was asserted NOWHERE in the stack, yet it is what the new plan-scoped
+        // navigation routes on. Nulling it at all 7 construction sites left the whole suite green,
+        // and it was inserted by a regex that over-matched once during development.
+        CollectionFixture f = collectionFixture(1);
+        stubCollectionFocus(f, 0, List.of("Shear Force"), List.of());
+        stubCollectionGeneration(f, 1);
+
+        QuickReviewAdaptiveQuizResponse response =
+                adaptivePracticeService.generateAdaptiveQuizForCollection(
+                        f.collectionId.toString(), f.userId, "collection-detail");
+
+        assertThat(response.noteId()).isEqualTo(f.noteIds.get(0).toString());
+        assertThat(response.studyPackId()).isEqualTo(f.packs.get(0).getId().toString());
+    }
+
+    @Test
+    void collectionScoped_excludesEachPacksOwnSavedQuizAndAccumulatesAcrossPacks() {
+        // T3.5 -- the whole dedup mechanism was deletable with 26/26 green, because the fixture
+        // generated a fresh UUID per question so nothing could ever collide. Here the generator
+        // returns the SAME question text every time, so only real dedup keeps the run honest.
+        CollectionFixture f = collectionFixture(2);
+        stubCollectionFocus(f, 0, List.of("Shear Force"), List.of());
+        stubCollectionFocus(f, 1, List.of("Bending Moment"), List.of());
+        lenient().when(longExamPlanSourceSampler.sample(any(), any(), anyInt(), any()))
+                .thenAnswer(invocation -> invocation.<List<LongExamPlanSourceSampler.EligiblePlanSource>>getArgument(0));
+
+        ArgumentCaptor<List<String>> disallowedCaptor = ArgumentCaptor.forClass(List.class);
+        lenient().when(quizGenerationService.generateAdaptivePracticeQuiz(
+                        any(), any(), any(), any(), disallowedCaptor.capture(), anyInt(), any()))
+                .thenAnswer(invocation -> List.of(new QuizItem(
+                        "Repeated question", List.of("A", "B", "C", "D"), "A", "Shear Force", "Explanation")));
+
+        adaptivePracticeService.generateAdaptiveQuizForCollection(
+                f.collectionId.toString(), f.userId, "collection-detail");
+
+        List<List<String>> disallowedPerCall = disallowedCaptor.getAllValues();
+        assertThat(disallowedPerCall).hasSizeGreaterThanOrEqualTo(2);
+        // Each pack excludes its OWN saved quiz...
+        assertThat(disallowedPerCall.get(0)).contains("Base Q");
+        // ...and the second call also carries what the first pack already produced.
+        assertThat(disallowedPerCall.get(1)).contains("Repeated question");
+    }
+
+    @Test
+    void collectionScoped_boundsTheFocusConceptListThatFeedsThePrompt() {
+        // T3.7 -- MAX_PLAN_FOCUS_CONCEPTS could be raised to 10000 with every test green. The
+        // question-count cap bounds the OUTPUT; this list is what goes INTO the prompt.
+        CollectionFixture f = collectionFixture(3);
+        List<String> many = new ArrayList<>();
+        for (int i = 0; i < 40; i++) {
+            many.add("Concept " + i);
+        }
+        for (int i = 0; i < 3; i++) {
+            f.packs.get(i).setKeyConcepts(many);
+            stubCollectionFocus(f, i, many, List.of());
+        }
+        stubCollectionGeneration(f, 3);
+
+        QuickReviewAdaptiveQuizResponse response =
+                adaptivePracticeService.generateAdaptiveQuizForCollection(
+                        f.collectionId.toString(), f.userId, "collection-detail");
+
+        assertThat(response.focusConcepts()).hasSizeLessThanOrEqualTo(10);
+    }
+
+    @Test
+    void collectionScoped_inProgressReadReturnsThePlansOwnSessionAndSkipsInterviewOnes() {
+        // T3.8 -- getAdaptiveQuizSessionForCollection had ZERO tests anywhere.
+        CollectionFixture f = collectionFixture(1);
+        QuickReviewSessionEntity planSession = buildInProgressAdaptiveSession(
+                UUID.randomUUID(), f.userId, f.packs.get(0).getId(), f.noteIds.get(0));
+        Map<String, Object> state = new LinkedHashMap<>(planSession.getSessionState());
+        state.put("sourceCollectionId", f.collectionId.toString());
+        planSession.setSessionState(state);
+        // An interview session on the SAME collection, ordered FIRST. Without the sub-mode filter
+        // findFirst() picks it and the plan's read hands back interview questions. A fixture without
+        // this session cannot distinguish the two, which is why the first version of this test
+        // survived deleting the filter.
+        QuickReviewSessionEntity interview = interviewSessionOn(f, 0);
+        Map<String, Object> interviewState = new LinkedHashMap<>(interview.getSessionState());
+        interviewState.put("sourceCollectionId", f.collectionId.toString());
+        interview.setSessionState(interviewState);
+        lenient().when(quickReviewSessionRepository.findByUserIdAndSessionModeAndStatusInOrderByCreatedAtDesc(
+                        eq(f.userId), eq(QuickReviewSessionMode.ADAPTIVE), any()))
+                .thenReturn(List.of(interview, planSession));
+        lenient().when(studyPackRepository.findByIdAndOwnerUserId(f.packs.get(0).getId(), f.userId))
+                .thenReturn(Optional.of(f.packs.get(0)));
+
+        QuickReviewAdaptiveQuizResponse response =
+                adaptivePracticeService.getAdaptiveQuizSessionForCollection(
+                        f.collectionId.toString(), f.userId);
+
+        assertThat(response.sessionId()).isEqualTo(planSession.getId().toString());
+        assertThat(response.sessionId()).isNotEqualTo(interview.getId().toString());
+    }
+
+    private QuickReviewSessionEntity interviewSessionOn(CollectionFixture f, int packIndex) {
+        QuickReviewSessionEntity interview = buildInProgressAdaptiveSession(
+                UUID.randomUUID(), f.userId, f.packs.get(packIndex).getId(), f.noteIds.get(packIndex));
+        Map<String, Object> state = new LinkedHashMap<>(interview.getSessionState());
+        state.put("subMode", "INTERVIEW");
+        interview.setSessionState(state);
+        return interview;
+    }
+
+    /**
+     * Makes BOTH active-session queries see the same sessions.
+     *
+     * <p>⚠️ Stubbing only one of them produces a state no single table can hold, which is how the
+     * previous interview test passed while exercising the wrong branch. Every collection-scoped test
+     * that involves an existing session must go through here.
+     */
+    private void seeActiveSessions(CollectionFixture f, QuickReviewSessionEntity... sessions) {
+        List<QuickReviewSessionEntity> all = List.of(sessions);
+        lenient().when(quickReviewSessionRepository.findByUserIdAndSessionModeAndStatusInOrderByCreatedAtDesc(
+                        eq(f.userId), eq(QuickReviewSessionMode.ADAPTIVE), any()))
+                .thenReturn(all);
+        for (QuickReviewSessionEntity session : all) {
+            lenient().when(quickReviewSessionRepository
+                            .findTopByUserIdAndStudyPackIdAndSessionModeAndStatusInOrderByCreatedAtDesc(
+                                    eq(f.userId), eq(session.getStudyPackId()),
+                                    eq(QuickReviewSessionMode.ADAPTIVE), any()))
+                    .thenReturn(Optional.of(session));
+            lenient().when(studyPackRepository.findByIdAndOwnerUserId(session.getStudyPackId(), f.userId))
+                    .thenReturn(f.packs.stream()
+                            .filter(pack -> pack.getId().equals(session.getStudyPackId()))
+                            .findFirst());
+        }
     }
 
     private record CollectionFixture(

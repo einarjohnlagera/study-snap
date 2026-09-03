@@ -1290,7 +1290,9 @@ export type AdaptivePracticeFocusConcept = {
 export type QuickReviewAdaptiveQuizResponse = {
   sessionId: string | null;
   status: QuizSessionStatus | null;
-  studyPackId: string;
+  /** Null when the server declined to start a session (nothing due, or every eligible pack is
+   *  occupied) -- emptyCollectionResponse returns nulls for the whole identity block. */
+  studyPackId: string | null;
   /** The anchor note, DERIVED BY THE SERVER. Clients must route with this rather than computing an
    *  anchor themselves -- a plan's item order is mutable, so a client-computed anchor drifts. */
   noteId: string | null;
@@ -1305,6 +1307,17 @@ export type AdaptivePracticeCompleteRequest = {
   totalQuestions: number;
   durationSeconds?: number;
   correctConceptNames?: string[];
+  /**
+   * The learner's answers, keyed by ABSOLUTE index in the session's quiz array.
+   *
+   * ⚠️ These are what let the server attribute ConceptHealth PER SOURCE PACK. Adaptive Practice has
+   * no progress endpoint, so nothing persists selections into session state during the session --
+   * if the client does not send them here, the server's per-source breakdown is empty and it falls
+   * back to attributing everything to the anchor pack and recording NO MISSES at all. That fallback
+   * is correct for a single-note session and wrong for a plan-scoped one.
+   */
+  selectedChoices?: Record<number, number>;
+  selectedMultiChoices?: Record<number, number[]>;
 };
 
 export type AdaptivePracticeCompleteResponse = SimpleMessageResponse & {
@@ -3825,22 +3838,6 @@ export async function generateAdaptivePracticeForCollection(
   );
 }
 
-export async function getInProgressCollectionAdaptivePracticeSession(
-  collectionId: string,
-): Promise<QuickReviewAdaptiveQuizResponse> {
-  const response = await fetchWithAuth(
-    `/collections/${collectionId}/adaptive-practice/in-progress`,
-    {
-      method: "GET",
-      headers: buildAuthHeaders(),
-    },
-    true,
-  );
-  return parseApiResponse<QuickReviewAdaptiveQuizResponse>(
-    response,
-    "Could not load adaptive practice for this plan.",
-  );
-}
 
 export async function getInProgressAdaptivePracticeSession(
   noteId: string,
