@@ -40,20 +40,72 @@ links per plan. **What is missing is the COMBINED part**, not the sharing.
 
 ### Planned Scope
 
-- **(1) A generated quiz can span several notes.** **⚠️ THE ANCHOR PROBLEM HAS A KNOWN ANSWER IN THIS
-  REPO — do NOT invent a second one:** `QuizItem` has carried `sourceStudyPackId` since `v0.104.0`, so
-  items hold their own provenance while the row keeps a primary, exactly as Long Exam, Board Exam and
-  plan-scoped Adaptive Practice all do. **⚠️ Decide at prompt time whether the migration relaxes
-  `note_id`'s uniqueness, makes it nullable, or adds a source list — and RECORD which, with the reason.**
-- **(2) The share path carries a combined quiz unchanged.** **⚠️ Verify before building** — the sharing
-  half is believed already complete, and `v0.89.0`'s audit of a supposedly-unbuilt phase found half of it
-  shipped. **⚠️ `PublicQuizItem` / DOCX export are MCQ-only** (audit §15, a recorded sharing gap): confirm
-  what a combined quiz's formats do on the share path before promising anything.
-- **(3) Selecting the notes.** **⚠️ Reuse the existing selection surface rather than adding one** — the
-  Challenge Quiz multi-note picker and `collection-exam.ts` already select notes by membership.
+**⚠️ AMENDED 2026-09-03 AFTER A COLD AUDIT OF ITEMS 2 AND 3, AND THE RELEASE ROUGHLY DOUBLED. THE COST IS
+STATED, NOT ABSORBED (owner):** this is the `v0.107.0` fold shape — three items became five, and that
+release then needed a four-batch remediation. It also mixes a **correctness fix** with a **design
+decision**, which is what made that one expensive. Taken deliberately.
+
+**⚠️ THREE OF THE KICKOFF'S FOUR CLAIMS WERE WRONG OR WRONGLY FRAMED. Do NOT re-derive them:**
+- **The named reusable surfaces do NOT exist.** `collection-exam.ts` is 54 lines of collection-scoped
+  helpers with **no UI**; the "Challenge multi-note picker" is **inline JSX** selecting `studyPackId`, not
+  `noteId`. The real precedent is `/library/exam-builder` — **`TEACHER`-gated and DOCX-only**, so it is the
+  MODEL, not the artifact.
+- **`note_id NOT NULL` is not *the* blocker.** `exportCombinedDocx` (`GeneratedQuizService:265-321`)
+  **already assembles a combined quiz over N notes** from `(noteId, questionIndex)` refs, with no schema
+  change. The constraint binds only under one of two designs.
+- **⚠️ Dropping `uq_generated_quizzes_note_id` would break `NoteService.mapToResponse:1529` on EVERY
+  note-detail load** — an owner-unscoped `findByNoteId` returning `Optional`, safe today only because of
+  that index.
+
+**⚠️ STORAGE DECIDED (owner, 2026-09-03): SNAPSHOT INTO A NEW TABLE.** A combined quiz owns its copied
+questions; `generated_quizzes` and its unique index are **untouched**, so `NoteService:1529` is unaffected.
+**⚠️ REJECTED — refs:** regenerating a source note would mutate a live shared quiz, and
+`getSharedQuizResults`' exact `answers.size() != questions.size()` check (`:128-130`) then **400s a
+recipient mid-quiz**. **⚠️ REJECTED — nullable `note_id`:** breaks the read above.
+
+- **(1) LIVE DEFECT — shared quizzes silently mis-grade MULTI_SELECT questions.** Proven by probe, not
+  inferred: `teacher-quiz-developer.txt` instructs 1–2 MULTI_SELECT per quiz and the schema allows it, but
+  `PublicQuizItem` (`dto/PublicQuizItem.java:5-9`) carries **only** `question, choices, concept` — dropping
+  `questionFormat` and `correctIndices` — and `getSharedQuizResults` grades `answer == correctIndex`, which
+  for MULTI_SELECT resolves to `correctIndices.getFirst()`. On a question whose correct answers are
+  `[0, 2]`, **picking 2 scores zero.** **⚠️ Live today on the single-note path, in every shared quiz, and
+  invisible to all 10 existing `QuizShareLinkServiceTest` tests** (zero references to `MULTI_SELECT`,
+  `MATCHING` or `correctIndices`). **A combined quiz multiplies the exposure, so this is fixed FIRST.**
+- **(2) LIVE DEFECT — a PLUS/PRO supporter picks 30 questions and silently gets 10.**
+  `resolveQuestionCount:351-363` returns the default for any `profileType != TEACHER`, **ignoring the
+  request**, while the modal renders a 10/20/30 selector with a lock badge only for FREE. **⚠️ Whether the
+  cap moves is a PRICING DECISION and is NOT assumed here** — the defect is the silent discard. Honour it
+  or stop offering it; **do not quietly raise the cap.**
+- **(3) LIVE FALSEHOOD — the product already advertises this feature to the audience that cannot use it.**
+  A guidance tip (`private-note-detail-page-client.tsx:3249-3252`, `tipId="teacher-generate-quiz-multi-note"`,
+  rendered **unconditionally**) tells the learner to *"select multiple notes to build a quiz from a full
+  unit"* — the library CTA it names is `TEACHER`-gated.
+- **(4) A combined quiz spanning several notes**, snapshotted into its own table, reachable by a supporter.
+  **⚠️ `QuizItem.sourceStudyPackId` (from `v0.104.0`) carries per-item provenance — do NOT invent a second
+  mechanism.**
+- **(5) A supporter-reachable multi-note picker and a share surface not routed under `/notes/[id]`.**
+  **⚠️ The library's `selectionMode` multi-select is already UNGATED and reusable; the exam-builder is
+  not.** A combined quiz also needs a title that is not a note title.
+
+**⚠️ ALSO FOUND, AND OWED A DECISION RATHER THAN A DEFAULT:** `notes(id) ON DELETE CASCADE` plus
+`quiz_share_links.generated_quiz_id ON DELETE CASCADE` (`V65:3`) mean deleting **one** source note today
+destroys a whole quiz and its live share link, silently. **The snapshot design removes this for combined
+quizzes; it remains true for single-note ones.** **⚠️ And a 6-note combined quiz costs SIX Study Pack
+generations plus SIX quiz generations before combining** (`openGenerateQuizModal:1843-1855` auto-triggers
+Study Pack generation) — state that cost, do not hide it.
 
 ### Anti-drift (locked for this release)
 
+- **⚠️ ITEM 2 IS NOT A LICENCE TO RAISE THE QUESTION CAP.** The defect is the SILENT DISCARD — a selector
+  that offers 30 and delivers 10. Honouring the cap or withdrawing the choice both fix it; **raising it is a
+  pricing decision nobody has taken**, and `v0.92.0` records that adding capacity to this audience without a
+  pricing call is how a meter quietly becomes a second product tier.
+- **⚠️ Do NOT generate fresh questions across N notes.** A combined quiz assembles from per-note quizzes that
+  already exist. Generating would fire `incrementChallengeQuizGeneration` N times against a single
+  `assertQuizCreditAvailable` check — a quota-semantics change this release does not take.
+- **⚠️ Do NOT drop or weaken `uq_generated_quizzes_note_id`.** `NoteService.mapToResponse:1529` is an
+  owner-unscoped `findByNoteId` returning `Optional`; a second row for one note throws on **every**
+  note-detail load. The snapshot design exists partly to avoid touching it.
 - **⚠️ NO SESSION-ANCHORING MIGRATION.** It has **no forcing slice any more** — that is this release's own
   finding — so the plan/note session collision stays a **named Known limitation** and its fix is a
   separate decision. **⚠️ Do NOT take it opportunistically because a migration is already in the diff.**
@@ -77,7 +129,13 @@ links per plan. **What is missing is the COMBINED part**, not the sharing.
 ### Verification
 
 **ONE SCOPED COLD AGENT, framed as FALSIFICATION.** The trigger is named by the gate outright: this
-release changes **production-data semantics via a migration**. It is **not** the three-agent test — there
+release changes **production-data semantics via a migration**. **⚠️ RE-EVALUATED after the scope amendment
+and it HOLDS at one agent rather than three:** the new table is additive, `generated_quizzes` is untouched,
+taking a shared quiz still creates no session and writes no `ConceptHealth` (audit confirmed, grep count 0
+in both services), and items 1–3 are correctness fixes on a shipped path rather than new semantics. **⚠️ The
+tier would escalate if the combined quiz GENERATES fresh questions across N notes** — `assertQuizCreditAvailable`
+is checked once while `incrementChallengeQuizGeneration` would fire N times — **so it reuses already-generated
+per-note quizzes, and that is a scope rule, not an optimisation.** It is **not** the three-agent test — there
 is no permission substrate, no cross-user read beyond the sharing that already ships, and no money or
 quota change.
 
