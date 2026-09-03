@@ -143,6 +143,19 @@ Ownership rule:
 - summaries, key concepts, quizzes, and practice/performance data are owned by `note_id`
 - legacy `study_pack_id` references can remain for compatibility, but `note_id` is canonical
 
+## Combined Quizzes and Share Links
+
+`combined_quizzes` is an immutable owner-scoped snapshot for a quiz assembled across several notes.
+Relevant fields are `id`, `owner_user_id` (FK to `users`, cascade delete), `title`, JSONB `sections`, and
+`created_at`. A section contains its copied source-note title and ordered copied `QuizItem`s. **There is no
+foreign key to `notes`**: source-note deletion and generated-quiz regeneration must not remove or mutate a
+combined quiz a recipient may already be taking.
+
+`quiz_share_links` has one token namespace and one usage counter. Its target is an exclusive arc: exactly
+one of nullable `generated_quiz_id` (FK to `generated_quizzes`, cascade delete) and nullable
+`combined_quiz_id` (FK to `combined_quizzes`, cascade delete) is populated. PostgreSQL enforces the
+exactly-one invariant. Existing single-note rows remain on the generated-quiz arc unchanged.
+
 ## Concept Health
 
 `concept_health` stores per-user, per-Study-Pack review signals for one normalized concept.

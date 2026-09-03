@@ -1,6 +1,7 @@
 package com.studysnap.backend.controller;
 
 import com.studysnap.backend.dto.CreateQuizShareLinkRequest;
+import com.studysnap.backend.dto.CreateCombinedQuizShareLinkRequest;
 import com.studysnap.backend.dto.PublicSharedQuizResponse;
 import com.studysnap.backend.dto.QuizShareLinkResponse;
 import com.studysnap.backend.dto.SharedQuizResultsRequest;
@@ -35,6 +36,24 @@ public class QuizShareController {
     ) {
         UUID userId = user.userId();
         return quizShareLinkService.createShareLink(request.generatedQuizId(), userId);
+    }
+
+    @PostMapping("/combined-quiz-share")
+    @PreAuthorize("hasAnyRole('USER','ADMIN')")
+    public QuizShareLinkResponse createCombinedQuizShareLink(
+            @Valid @RequestBody CreateCombinedQuizShareLinkRequest request,
+            @AuthenticationPrincipal AuthenticatedUser user
+    ) {
+        return quizShareLinkService.createCombinedQuizShareLink(request.combinedQuizId(), user.userId());
+    }
+
+    @GetMapping("/combined-quiz-share/{combinedQuizId}")
+    @PreAuthorize("hasAnyRole('USER','ADMIN')")
+    public QuizShareLinkResponse getCombinedQuizShareLink(
+            @PathVariable UUID combinedQuizId,
+            @AuthenticationPrincipal AuthenticatedUser user
+    ) {
+        return quizShareLinkService.getCombinedQuizShareLink(combinedQuizId, user.userId());
     }
 
     @GetMapping("/quiz-share/{generatedQuizId}")

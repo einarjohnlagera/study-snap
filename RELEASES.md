@@ -234,6 +234,49 @@ a prompt**; and **call `advisor()` BEFORE writing the Codex prompt.**
   `generate_refusesToSilentlyShrinkANonTeacherQuestionCount` (both parameterized cases); forcing the modal
   gate true reds both page tests.
 
+- **Item 4 — combined supporter quizzes are immutable snapshots.** `combined_quizzes` stores ordered
+  sections with copied note titles and copied generated-quiz questions; it has no foreign key to `notes`, so
+  deleting or regenerating a source note cannot alter or remove a live combined quiz. Each copied item is
+  stamped through `QuizItem.withSourceStudyPackId`; that provenance is **inert on this path** because a
+  shared quiz creates no session and writes no `ConceptHealth`. Copied section titles carry the source
+  identity a recipient can actually read. `quiz_share_links` now has one exclusive target arc — exactly one
+  of `generated_quiz_id` or `combined_quiz_id` — preserving one token namespace and one share-link meter.
+- **Item 4 exposes an API and no UI, deliberately.** `RELEASES.md`'s "reachable by a supporter" is the
+  release's commitment across items 4 **and** 5; item 5 owns the picker and the share surface. **Zero files
+  changed under `frontend/`.** The public payload stays a **flat** `List<PublicQuizItem>` in section order,
+  which is what lets `/quiz/[token]` render a combined quiz with no frontend change at all.
+- **⚠️ FOUR DEFECTS WERE FOUND IN THE DELIVERED DIFF AND FIXED BEFORE IT WAS COMMITTED.** Recorded because
+  three of them are the categories the audit step exists for, and one was a test passing for the wrong reason.
+  - **A null-injecting constructor had been added to production code to avoid editing a test fixture.**
+    `@RequiredArgsConstructor` was replaced by two hand-written constructors, the shorter passing `null` for
+    `combinedQuizRepository` "for the pre-V132 unit fixture". That leaves a permanent NPE hazard in a
+    Spring-managed service to save a one-line test change. Lombok restored; the fixture takes the new mock.
+  - **No read endpoint for a combined quiz's share link — the load-on-refresh gap.** The only route back to
+    an existing link was to POST, and on a link the owner had toggled **off** that POST does not return it
+    (the idempotent early return requires an *active* link), so a page refresh would **mint a new link and
+    spend share-link quota**. `GET /combined-quiz-share/{id}` added, mirroring `getShareLinkByQuizId`.
+  - **⚠️ THE EXCLUSIVE-ARC TEST ASSERTED NOTHING ON ITS SECOND HALF.** Both violations were asserted in one
+    test against a bare `RuntimeException`. PostgreSQL aborts the transaction on the first constraint
+    violation, so the second insert failed with SQLSTATE **25P02** (*"current transaction is aborted"*) and
+    never reached the CHECK — green, and blind. Split into two tests, each asserting
+    `DataIntegrityViolationException` **and the constraint name**. The tightened assertion is what exposed it.
+  - **A dead `NoteNotFoundException` import**, left when the single-note path was unified onto the
+    share-link not-found contract. **That unification is a behaviour change on a shipped path and is kept
+    deliberately** — it removes a note-existence oracle from an anonymous endpoint and matches the single
+    not-found contract the release already requires — but it was not requested, so it is recorded here
+    rather than left silent.
+- **Every guard has a named killing mutant:** dropping the count-match ownership gate reds
+  `assemble_rejectsAnExistingButUnownedNoteThroughTheCountMatchGate`; truncating instead of rejecting an
+  over-cap selection reds `assemble_rejectsAnOverCapSelectionWithoutPersisting`; removing the combined
+  share-link idempotency guard reds `combinedShareLinkReturnsAnExistingActiveLinkWithoutQuotaOrUsage` and
+  `combinedShareLinkReusesOnlyAnActiveLinkAndKeepsTheGuardAndUsageOrder`; and copying items through the
+  public `QuizItem` constructor instead of `withSourceStudyPackId` reds
+  `assemble_snapshotsOrderedSectionsCopiedTitlesAndTrustedProvenanceCopies` — the non-idempotent
+  choice-sanitizer trap.
+- **Request-safety bounds are plan-agnostic, so they are not a pricing decision:** 20 sections, 20 source
+  notes, 100 total questions. An over-cap request is **rejected, never truncated** — silent truncation is
+  the defect item 2 of this release just fixed.
+
 ### Known limitations
 
 - **A MATCHING block loses its grouping on the shared quiz page.** `teacher-quiz-developer.txt` may emit one
