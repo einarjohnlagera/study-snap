@@ -93,7 +93,7 @@ describe("AdaptivePracticePage", () => {
       status: null,
       studyPackId: "study-pack-1",
       title: "Derivatives",
-      weakConcepts: ["Trigonometric derivatives"],
+      focusConcepts: [{ concept: "Trigonometric derivatives", sourceStudyPackId: "study-pack-1", sourceTitle: "Derivatives", selectionReason: null }],
       message: "Focusing on concepts you need to improve.",
       quiz: [],
     });
@@ -124,7 +124,7 @@ describe("AdaptivePracticePage", () => {
       status: "IN_PROGRESS",
       studyPackId: "study-pack-1",
       title: "Derivatives",
-      weakConcepts: ["Trigonometric derivatives"],
+      focusConcepts: [{ concept: "Trigonometric derivatives", sourceStudyPackId: "study-pack-1", sourceTitle: "Derivatives", selectionReason: null }],
       message: "Focusing on concepts you need to improve.",
       quiz: [
         {
@@ -141,7 +141,7 @@ describe("AdaptivePracticePage", () => {
       status: "IN_PROGRESS",
       studyPackId: "study-pack-1",
       title: "Derivatives",
-      weakConcepts: ["Trigonometric derivatives"],
+      focusConcepts: [{ concept: "Trigonometric derivatives", sourceStudyPackId: "study-pack-1", sourceTitle: "Derivatives", selectionReason: null }],
       message: "Focusing on concepts you need to improve.",
       quiz: [
         {
@@ -170,8 +170,9 @@ describe("AdaptivePracticePage", () => {
       status: "IN_PROGRESS",
       studyPackId: "study-pack-1",
       title: "Derivatives",
-      weakConcepts: ["Trigonometric derivatives"],
-      conceptSelectionReasons: [reason],
+      focusConcepts: [
+        { concept: "Trigonometric derivatives", sourceStudyPackId: "study-pack-1", sourceTitle: "Derivatives", selectionReason: reason }
+      ],
       message: "Focusing on concepts you need to improve.",
       quiz: [
         {
@@ -196,8 +197,9 @@ describe("AdaptivePracticePage", () => {
       status: "IN_PROGRESS",
       studyPackId: "study-pack-1",
       title: "Derivatives",
-      weakConcepts: ["Trigonometric derivatives"],
-      conceptSelectionReasons: [null],
+      focusConcepts: [
+        { concept: "Trigonometric derivatives", sourceStudyPackId: "study-pack-1", sourceTitle: "Derivatives", selectionReason: null }
+      ],
       message: "Focusing on concepts you need to improve.",
       quiz: [
         {
@@ -231,7 +233,7 @@ describe("AdaptivePracticePage", () => {
       status: "IN_PROGRESS",
       studyPackId: "study-pack-1",
       title: "Derivatives",
-      weakConcepts: ["Trigonometric derivatives"],
+      focusConcepts: [{ concept: "Trigonometric derivatives", sourceStudyPackId: "study-pack-1", sourceTitle: "Derivatives", selectionReason: null }],
       message: "Focusing on concepts you need to improve.",
       quiz: [
         {
@@ -355,7 +357,7 @@ describe("AdaptivePracticePage", () => {
       status: null,
       studyPackId: "study-pack-1",
       title: "Derivatives",
-      weakConcepts: ["Trigonometric derivatives"],
+      focusConcepts: [{ concept: "Trigonometric derivatives", sourceStudyPackId: "study-pack-1", sourceTitle: "Derivatives", selectionReason: null }],
       message: "Focusing on concepts you need to improve.",
       quiz: [],
     });
@@ -470,7 +472,7 @@ describe("AdaptivePracticePage", () => {
       status: "IN_PROGRESS",
       studyPackId: "study-pack-1",
       title: "Derivatives",
-      weakConcepts: ["Derivatives"],
+      focusConcepts: [{ concept: "Derivatives", sourceStudyPackId: "study-pack-1", sourceTitle: "Derivatives", selectionReason: null }],
       message: "Focusing on weak areas.",
       quiz: [
         {
@@ -509,7 +511,7 @@ describe("AdaptivePracticePage", () => {
       status: "IN_PROGRESS",
       studyPackId: "study-pack-1",
       title: "Derivatives",
-      weakConcepts: ["  TRIGONOMETRIC DERIVATIVES  ", "Unmapped concept"],
+      focusConcepts: [{ concept: "  TRIGONOMETRIC DERIVATIVES  ", sourceStudyPackId: "study-pack-1", sourceTitle: "Derivatives", selectionReason: null }, { concept: "Unmapped concept", sourceStudyPackId: "study-pack-1", sourceTitle: "Derivatives", selectionReason: null }],
       message: "Focusing on concepts you need to improve.",
       quiz: [
         {
@@ -526,7 +528,7 @@ describe("AdaptivePracticePage", () => {
       status: "IN_PROGRESS",
       studyPackId: "study-pack-1",
       title: "Derivatives",
-      weakConcepts: ["  TRIGONOMETRIC DERIVATIVES  ", "Unmapped concept"],
+      focusConcepts: [{ concept: "  TRIGONOMETRIC DERIVATIVES  ", sourceStudyPackId: "study-pack-1", sourceTitle: "Derivatives", selectionReason: null }, { concept: "Unmapped concept", sourceStudyPackId: "study-pack-1", sourceTitle: "Derivatives", selectionReason: null }],
       message: "Focusing on concepts you need to improve.",
       quiz: [
         {
@@ -570,7 +572,7 @@ describe("AdaptivePracticePage", () => {
       status: "IN_PROGRESS",
       studyPackId: "study-pack-1",
       title: "Derivatives",
-      weakConcepts: ["Derivatives"],
+      focusConcepts: [{ concept: "Derivatives", sourceStudyPackId: "study-pack-1", sourceTitle: "Derivatives", selectionReason: null }],
       message: "Focusing on weak areas.",
       quiz: [
         {
@@ -632,7 +634,7 @@ describe("AdaptivePracticePage", () => {
       status: "IN_PROGRESS",
       studyPackId: "study-pack-1",
       title: "Derivatives",
-      weakConcepts: ["Derivatives"],
+      focusConcepts: [{ concept: "Derivatives", sourceStudyPackId: "study-pack-1", sourceTitle: "Derivatives", selectionReason: null }],
       message: "Focusing on weak areas.",
       quiz: [
         {
@@ -688,7 +690,7 @@ describe("AdaptivePracticePage", () => {
       status: "IN_PROGRESS",
       studyPackId: "study-pack-1",
       title: "Derivatives",
-      weakConcepts: [],
+      focusConcepts: [],
       message: "Focusing on weak areas.",
       quiz: [
         {
@@ -733,7 +735,7 @@ describe("AdaptivePracticePage", () => {
       status: "IN_PROGRESS",
       studyPackId: "study-pack-1",
       title: "Derivatives",
-      weakConcepts: [],
+      focusConcepts: [],
       message: "Focusing on weak areas.",
       quiz: [
         {
@@ -781,7 +783,7 @@ describe("AdaptivePracticePage", () => {
       status: "IN_PROGRESS",
       studyPackId: "study-pack-1",
       title: "Derivatives",
-      weakConcepts: ["Trigonometric derivatives"],
+      focusConcepts: [{ concept: "Trigonometric derivatives", sourceStudyPackId: "study-pack-1", sourceTitle: "Derivatives", selectionReason: null }],
       message: "Focusing on weak areas.",
       quiz: [
         {

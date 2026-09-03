@@ -375,6 +375,12 @@ public interface QuickReviewSessionRepository extends JpaRepository<QuickReviewS
             QuickReviewSessionStatus status
     );
 
+    List<QuickReviewSessionEntity> findByUserIdAndSessionModeAndStatusInOrderByCreatedAtDesc(
+            UUID userId,
+            QuickReviewSessionMode sessionMode,
+            Collection<QuickReviewSessionStatus> statuses
+    );
+
     @Deprecated
     Optional<QuickReviewSessionEntity> findTopByUserIdAndStatusOrderByCreatedAtDesc(
             UUID userId,

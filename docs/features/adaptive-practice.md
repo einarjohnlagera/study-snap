@@ -4,6 +4,37 @@
 
 Adaptive Practice is the weak-area follow-up quiz mode for a Study Pack-ready note.
 
+**As of `v0.107.0` it also runs at PLAN scope.** A learner can practise weak areas across a whole
+Subject Plan or Review Set, not just one note. This is a **capability of Adaptive Practice, not a new
+mode and not a sub-mode** — same questions, same scoring, same result screen, more notes — so it
+takes no `subMode` value and adds no row to `EXAM_MODES.md`.
+
+### Plan scope, and the rules that constrain it
+
+- **The session is anchored on a primary pack: the plan's lowest-position eligible pack.** The route
+  is collection-addressed (`/collections/{id}/adaptive-practice/...`) and **the server derives the
+  anchor** — a client must never compute and send one, because a plan's item order is mutable and a
+  client-computed anchor drifts.
+- **Resume is resolved by the recorded source collection id, filtered in Java**, never by recomputing
+  the anchor. Recomputing would miss a live session after a reorder and start a second one, leaving
+  the first unreachable.
+- **Concepts are never merged across packs.** Two packs weak on the same concept string stay **two**
+  focus entries, each carrying its source pack. Concept identity is scoped per Study Pack, so merging
+  would assert a cross-pack identity the product does not have. The focus structure is keyed by
+  `(studyPackId, concept)` — a `Set<String>` would silently collapse it.
+- **One quota unit per session**, regardless of scope or pack count, charged **after** successful
+  generation. That ordering is what makes a refund path unnecessary: a generation failure never
+  charges. **Do not move generation off the transaction** — doing so destroys that guarantee.
+- **Both the sampled pack count and the focus-concept list are bounded.** The question-count cap
+  bounds only the output; the focus list feeds the prompt and needs its own bound.
+- **Three session types share the `ADAPTIVE` discriminator** — note-scoped Adaptive Practice,
+  Interview Practice, and plan-scoped Adaptive Practice — and `V41` allows one active session per
+  `(user, pack)`. So they contend: a plan-scoped session active on a pack makes a note-scoped request
+  on that pack resume the plan session, and vice versa. **Known limitation, accepted deliberately.**
+  The plan-scoped lookup explicitly excludes `subMode: "INTERVIEW"` sessions.
+- **Historical `ConceptHealth` is not backfilled.** Rows written by Interview Practice before
+  `v0.107.0` remain over-attributed.
+
 Interview Practice is a Pro-only Professional Profile sub-mode of Adaptive Practice. It keeps the `ADAPTIVE` session discriminator and stores `subMode: "INTERVIEW"` in session state.
 
 It should stay focused on:
