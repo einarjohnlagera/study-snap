@@ -1,5 +1,150 @@
 # RELEASES.md - NoteLib
 
+## v0.109.0 - Assessment Discoverability
+
+**Status: Released** (kicked off and signed off 2026-09-03, base branch `releases/v0.109.0`, cut from `main` after
+`v0.108.0` merged and tagged)
+
+Theme: four releases rebuilt what an exam and a practice session are, and nobody has been told.
+
+### Why this version number, and not `v1.0.0`
+
+**⚠️ `v1.0.0` STAYS RESERVED (owner, 2026-07-23; re-confirmed 2026-09-01).** Conjunctive condition — live
+core **and** product success — and both halves are unmet.
+
+### Why this release exists
+
+**⚠️ THE TRIGGER IS AN OWNER OBSERVATION, NOT A DEFECT REPORT (2026-09-03):** *"we don't yet announce that
+the existing plans were updated to be much comprehensive."* Acting on it, **both `2026-10-06` assessment
+checkpoints were LIFTED to `[EFFORT]` gates** rather than re-dated — a read on an unannounced capability
+measures **discoverability, not demand**, and `v0.107.0`'s kill criterion (*"if plan-scoped starts are ZERO
+… do NOT build slice 6 on the assumption that broader scope is the constraint"*) would have fired on
+evidence it was never designed to weigh. **This release is what un-lifts them.**
+
+**⚠️ THE GAP IS COMMUNICATION, NOT WIRING — AND THAT DISTINCTION IS LOAD-BEARING, because the obvious
+reading is wrong.** `v0.103.0`'s defect was a capability **unreachable** through the UI. This is not that:
+the CTAs exist and work (*Practice Weak Areas Across This Plan* on the collection page, *Practice Across
+This Plan* on the dashboard, Board Exam launching from a Review Set). **⚠️ So do NOT "fix" reachability —
+there is nothing to wire.** What is missing is that nothing TELLS a learner any of it changed.
+
+**⚠️ THE CORE IS VERIFIED, NOT ASSERTED, AND IT IS EMBARRASSINGLY CONCRETE:** `board-exam-guide.tsx`
+contains the string *"Review Set"* **ZERO times** — the Help Center guide for Board Exam does not mention
+the thing a Board Exam is now built from — and `quiz-modes-guide.tsx` mentions it zero times while
+mentioning Adaptive Practice once. **Those guides describe the product as it was four releases ago**, and
+`board-exam-guide.tsx` still advises organising *"one note per topic"* as the path to a good exam, which is
+now the smallest possible Board Exam rather than the intended one.
+
+**⚠️ THIS IS THE SWEEP-BY-SURFACE RULE FAILING IN THE DIRECTION IT ALWAYS FAILS.** `AGENTS.md` records it:
+*a file that explains a feature is exactly the file that never changes when the feature does.* Four
+releases changed what Board Exam, Long Exam and Adaptive Practice ARE, and the guides that explain them
+were in none of those diffs.
+
+### Planned Scope
+
+- **(1) The Help Center guides describe the product that exists.** `board-exam-guide.tsx`,
+  `quiz-modes-guide.tsx`, and the plan/Study Pack guides. **⚠️ Anchor every claim to code before writing
+  it** — these went stale precisely because nobody did. **⚠️ Copy only; no behaviour change.**
+- **(2) The capability is announced where learners already are, not only in release notes.** **⚠️ The
+  SURFACE is a decision owed at prompt time, not an assumption** — options include the Exam Hub, the
+  collection page, and a one-time guidance tip. **⚠️ A one-time tip must go through
+  `pickActiveGuidance()`** (`lib/guidance-engine.ts`); do not add a bespoke localStorage flag.
+- **(3) Re-arm both lifted `[EFFORT]` checkpoints, dated from THIS release's deploy** — that deploy is the
+  announcement. **⚠️ Their reads, kill criteria and denominator clauses are PRESERVED in the Backlog Index
+  and must be re-used verbatim, not re-derived.**
+
+### Anti-drift (locked for this release)
+
+- **⚠️ NO BEHAVIOUR CHANGE. This release changes what the product SAYS, not what it does.** No mode, no
+  scope, no quota, no entitlement, no route.
+- **⚠️ AMENDED 2026-09-03 (owner), raised as a letter-versus-reason conflict rather than reasoned past,
+  per the `v0.95.0` precedent.** This line read *"Do NOT 'fix' reachability — the CTAs exist and work."*
+  **THAT PREMISE WAS FALSE and was falsified by item 2's own tests:** `planPracticeAction` was passed to
+  the **Goal view only**, and `isGoalView` requires `childCount > 0`, so a **leaf Subject Plan had no
+  plan-scoped practice CTA at all.** It was a `v0.107.0` miss — I intended two call sites and only one
+  landed, and the test I wrote asserted the *handler* rather than that both views receive it.
+  **⚠️ THE AMENDMENT IS NARROW: passing the EXISTING action to the view it was omitted from is not a
+  SECOND entry point**, which is what the line exists to prevent. The rule's purpose — do not add a new
+  door and confound the reads item 3 re-arms — is intact and still binding. **⚠️ It IS a behaviour change
+  on a shipped path, and that is stated rather than hidden.** Without it the announcement would tell
+  leaf-plan learners about something they cannot do.
+- **⚠️ NO new mode and NO new sub-mode.** `EXAM_MODES.md` stays a locked five-mode contract; it gained its
+  Adaptive Practice capability line in `v0.107.0` and needs no further row.
+- **⚠️ Do NOT change `BOARD_EXAM_STARTED`'s or `ADAPTIVE_PRACTICE_STARTED`'s field names, values or firing
+  conditions.** Both lifted checkpoints still own those metrics; changing them now means re-arming against
+  a broken series.
+- **⚠️ Slice 6 (supporter combined quiz) is NOT started**, and the session-anchoring migration stays
+  deferred to it.
+- **⚠️ The plan/note session collision stays a NAMED Known limitation.**
+- **⚠️ `frontend/app/onboarding` STAYS FROZEN — `[CHECKPOINT — due 2026-09-11]` is 8 DAYS OUT.** The
+  announcement must not reach the onboarding FLOW, which would confound a 62.4% completion baseline.
+- **⚠️ Marketing and pricing copy are OUT.** `v0.76.0`'s doctrine holds: money surfaces are their own
+  slice, and a positioning change is not a side effect of a Help Center update.
+
+### Verification
+
+**A single `advisor()` call on the diff.** No permission substrate, no cross-user read, no money or quota
+semantics, no migration, and — by construction — no behaviour change. **⚠️ ESCALATE TO ONE SCOPED COLD
+AGENT IF** item 2's surface decision turns into a behaviour change, or if any item is found to require a
+code path rather than copy.
+
+**⚠️ THE VERIFICATION RISK HERE IS UNUSUAL AND WORTH NAMING: a copy release has no failing test to catch a
+false claim.** The guides went stale silently for four releases precisely because nothing executes them. So
+**anchor each claim to the code that implements it** and prefer a pinned string in a test over prose that
+nothing checks — the `quiz-session-history.test.ts` guard that pins a label against a mode name is the
+in-repo precedent.
+
+**Routing: CLAUDE CODE inline** — copy and a surface decision, not multi-system work.
+
+### Shipped
+
+- **Both lifted assessment checkpoints are RE-ARMED, dated `2026-10-13` (item 3).** The `[EFFORT]` gate
+  named announcement as its condition, and this release is the announcement — so the dated obligation
+  returns. Their reads, kill criteria and denominator clauses were **re-used verbatim from the Backlog
+  Index rather than re-derived**, which is why they were preserved rather than deleted at the lift.
+- **⚠️ `2026-10-13` is deploy+40, not the usual +30, and both reasons are deliberate:** it **joins the
+  existing `2026-10-13` batch** per the consolidation rule instead of minting `2026-10-03`, and the extra
+  ten days go straight to the denominator these rows were lifted over in the first place.
+- **⚠️ THE PRE-ANNOUNCEMENT WINDOW MUST NOT BE POOLED WITH THE NEW ONE — recorded on both rows before the
+  read.** Anything before this deploy measures a capability nobody was told about, which is the entire
+  reason they were lifted; counting it in would reproduce the false zero the lift existed to prevent.
+- Instrumentation was verified emitting at the `v0.107.0` and `v0.106.0` signoffs and is unchanged by
+  either the lift or the re-arm; this release touched no analytics field or firing condition.
+
+- **The capability is announced where the plan lives (item 2).** A one-time tip on the collection detail
+  page — *"Practice and exams now cover this whole plan, not one note at a time"* — routed through
+  `pickActiveGuidance()` as the kickoff required, so it is one-shot and arbitrated against the existing
+  post-adopt tip by priority rather than competing with it. **⚠️ It deliberately carries NO action
+  button**: the CTA is already on the page, and a second click target for the same capability would
+  confound the reads item 3 re-arms.
+- **⚠️ AND ITEM 2'S OWN TESTS FALSIFIED THIS RELEASE'S ANTI-DRIFT, which is the more important half.**
+  The tip would not render, and chasing that revealed `planPracticeAction` reached the **Goal view
+  only** — so a leaf Subject Plan had no plan-scoped practice CTA at all since `v0.107.0`. Both the CTA
+  and the tip slot now reach the leaf view.
+- **⚠️ THE FIX WAS NOT ENOUGH ON ITS OWN — MUTATION SHOWED WHY.** Reverting the leaf CTA left all 135
+  tests green, because nothing asserted the leaf view receives it; that is the *same* gap that let the
+  original miss ship. A named test now pins it, and reverting the fix fails it. **Fixing a defect
+  without pinning it would have let it regress identically.**
+
+- **The Board Exam and quiz-mode guides describe the product that exists (item 1).**
+  `board-exam-guide.tsx` now says a Board Exam is drawn from a whole **Review Set**, that launching from
+  a Subject Plan covers the parent set, and that it targets 30 questions sampled across Subject Plans.
+  `quiz-modes-guide.tsx` stops describing Long Exam as *"covering your full note"* and stops describing
+  Adaptive Practice as *"concepts you missed in Challenge Quiz"* — it is driven by due-or-persistently-weak
+  concepts and can span a Subject Plan or Review Set.
+- **⚠️ EVERY CLAIM WAS ANCHORED TO CODE BEFORE IT WAS WRITTEN**, which is the discipline whose absence
+  caused the drift. Verified in this pass: Board Exam is **PRO-only** (`resolveMonthlyBoardExamLimit`
+  returns 0 for every other plan, so the *Pro* badge is right), the target count is **30 and
+  configurable**, visibility **is** profile-gated on `BOARD_EXAM` (so the *"switch your profile type"*
+  tip survives), Long Exam accepts a `sourceCollectionId`, and Adaptive Practice reads both
+  `getDueConceptsByStudyPackIds` and `getPersistentlyWeakConceptsByStudyPackIds`. The **3 / 10 / 30**
+  Adaptive quota copy was checked and is correct — it was left alone.
+- **⚠️ THE DURABLE HALF IS A GUARD, NOT THE COPY FIX.** These guides went stale for four releases
+  precisely because nothing executes them, and only one Help guide had a test at all.
+  `assessment-guides-currency.test.tsx` now pins the scope claims of both — including the exact stale
+  sentences (*"one note per topic works best"*, *"covering your full note"*, *"concepts you missed in
+  Challenge Quiz"*) as **negative** assertions. **Mutation-verified: restoring the old copy fails two of
+  the four tests.** The file states honestly what the assertions do and do not prove.
+
 ## v0.108.0 - Session Identity
 
 **Status: Released** (kicked off and signed off 2026-09-03, base branch `releases/v0.108.0`, cut from `main` after
@@ -267,11 +412,14 @@ implementation discovers a surface not in the agreed plan, which is how `v0.103.
 - **⚠️ KNOWN LIMITATION — `GET /collections/{id}/adaptive-practice/in-progress` has no client
   consumer.** It is the natural pair of the start endpoint and is now covered by a test; the unused
   frontend wrapper was removed rather than left as dead code. A resume affordance would consume it.
-- **⚠️ KNOWN LIMITATION, PRE-EXISTING — `DashboardService.findInProgressSessionsByRecency` and
+- **~~⚠️ KNOWN LIMITATION, PRE-EXISTING — `DashboardService.findInProgressSessionsByRecency` and
   `PostSessionNextStepService` surface an in-progress Interview Practice session as an Adaptive
-  Practice one.** Both predate `v0.107.0` and are untouched here; they are the same shared-`ADAPTIVE`
-  -discriminator class as item 4 but on read-only surfaces.
-
+  Practice one.~~ ✅ CLOSED IN `v0.108.0` items 1 and 2** (2026-09-03), verified in code at that
+  release's signoff: `resolveResumeType` now takes the SESSION rather than the mode and emits
+  `INTERVIEW_PRACTICE`, and `PostSessionNextStepService` routes an interview session to the neutral
+  default. **⚠️ Struck through rather than deleted, because this entry was still asserting an open
+  defect a full release after it was fixed** — and a stale limitation reads as live work to the next
+  person who opens this file.
 - **Adaptive Practice and Interview Practice no longer consume each other's sessions (item 4).** Both
   share the `ADAPTIVE` discriminator and therefore `V41`'s `(user_id, study_pack_id, session_mode)`
   unique index on active sessions. The note-scoped start path would **resume** an interview session as

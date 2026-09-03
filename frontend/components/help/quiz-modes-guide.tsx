@@ -34,17 +34,17 @@ const SECTIONS: Section[] = [
   {
     icon: Target,
     title: "Adaptive Practice",
-    description: "Focuses on concepts you missed in Challenge Quiz, targeting weak areas with questions built from recent performance.",
+    description: "Targets concepts that are due for review or that you keep missing — not just the last quiz you took.",
     bullets: [
       "Free includes 3 sessions/month; Plus includes 10 and Pro includes 30",
-      "Works best after completing at least one Challenge Quiz",
+      "Can cover a single note, or a whole Subject Plan or Review Set at once",
     ],
     badge: "Free taste",
   },
   {
     icon: Clock,
     title: "Long Exam",
-    description: "A timed, fixed-length exam covering your full note — designed for comprehensive mastery testing before exams.",
+    description: "A timed, fixed-length exam across a Subject Plan or Study Plan — sampled to span the curriculum, not just one note.",
     bullets: [
       "Timer runs continuously — leaving the session forfeits your score",
       "Generates a mastery report with weak domains and a suggested next step",
