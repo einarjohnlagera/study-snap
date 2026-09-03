@@ -1,5 +1,94 @@
 # RELEASES.md - NoteLib
 
+## v0.109.0 - Assessment Discoverability
+
+**Status: In Progress** (kicked off 2026-09-03, base branch `releases/v0.109.0`, cut from `main` after
+`v0.108.0` merged and tagged)
+
+Theme: four releases rebuilt what an exam and a practice session are, and nobody has been told.
+
+### Why this version number, and not `v1.0.0`
+
+**⚠️ `v1.0.0` STAYS RESERVED (owner, 2026-07-23; re-confirmed 2026-09-01).** Conjunctive condition — live
+core **and** product success — and both halves are unmet.
+
+### Why this release exists
+
+**⚠️ THE TRIGGER IS AN OWNER OBSERVATION, NOT A DEFECT REPORT (2026-09-03):** *"we don't yet announce that
+the existing plans were updated to be much comprehensive."* Acting on it, **both `2026-10-06` assessment
+checkpoints were LIFTED to `[EFFORT]` gates** rather than re-dated — a read on an unannounced capability
+measures **discoverability, not demand**, and `v0.107.0`'s kill criterion (*"if plan-scoped starts are ZERO
+… do NOT build slice 6 on the assumption that broader scope is the constraint"*) would have fired on
+evidence it was never designed to weigh. **This release is what un-lifts them.**
+
+**⚠️ THE GAP IS COMMUNICATION, NOT WIRING — AND THAT DISTINCTION IS LOAD-BEARING, because the obvious
+reading is wrong.** `v0.103.0`'s defect was a capability **unreachable** through the UI. This is not that:
+the CTAs exist and work (*Practice Weak Areas Across This Plan* on the collection page, *Practice Across
+This Plan* on the dashboard, Board Exam launching from a Review Set). **⚠️ So do NOT "fix" reachability —
+there is nothing to wire.** What is missing is that nothing TELLS a learner any of it changed.
+
+**⚠️ THE CORE IS VERIFIED, NOT ASSERTED, AND IT IS EMBARRASSINGLY CONCRETE:** `board-exam-guide.tsx`
+contains the string *"Review Set"* **ZERO times** — the Help Center guide for Board Exam does not mention
+the thing a Board Exam is now built from — and `quiz-modes-guide.tsx` mentions it zero times while
+mentioning Adaptive Practice once. **Those guides describe the product as it was four releases ago**, and
+`board-exam-guide.tsx` still advises organising *"one note per topic"* as the path to a good exam, which is
+now the smallest possible Board Exam rather than the intended one.
+
+**⚠️ THIS IS THE SWEEP-BY-SURFACE RULE FAILING IN THE DIRECTION IT ALWAYS FAILS.** `AGENTS.md` records it:
+*a file that explains a feature is exactly the file that never changes when the feature does.* Four
+releases changed what Board Exam, Long Exam and Adaptive Practice ARE, and the guides that explain them
+were in none of those diffs.
+
+### Planned Scope
+
+- **(1) The Help Center guides describe the product that exists.** `board-exam-guide.tsx`,
+  `quiz-modes-guide.tsx`, and the plan/Study Pack guides. **⚠️ Anchor every claim to code before writing
+  it** — these went stale precisely because nobody did. **⚠️ Copy only; no behaviour change.**
+- **(2) The capability is announced where learners already are, not only in release notes.** **⚠️ The
+  SURFACE is a decision owed at prompt time, not an assumption** — options include the Exam Hub, the
+  collection page, and a one-time guidance tip. **⚠️ A one-time tip must go through
+  `pickActiveGuidance()`** (`lib/guidance-engine.ts`); do not add a bespoke localStorage flag.
+- **(3) Re-arm both lifted `[EFFORT]` checkpoints, dated from THIS release's deploy** — that deploy is the
+  announcement. **⚠️ Their reads, kill criteria and denominator clauses are PRESERVED in the Backlog Index
+  and must be re-used verbatim, not re-derived.**
+
+### Anti-drift (locked for this release)
+
+- **⚠️ NO BEHAVIOUR CHANGE. This release changes what the product SAYS, not what it does.** No mode, no
+  scope, no quota, no entitlement, no route.
+- **⚠️ Do NOT "fix" reachability.** The CTAs exist and work. Adding a second entry point because the
+  capability feels hidden would be solving the wrong problem and would confound the very reads item 3
+  re-arms.
+- **⚠️ NO new mode and NO new sub-mode.** `EXAM_MODES.md` stays a locked five-mode contract; it gained its
+  Adaptive Practice capability line in `v0.107.0` and needs no further row.
+- **⚠️ Do NOT change `BOARD_EXAM_STARTED`'s or `ADAPTIVE_PRACTICE_STARTED`'s field names, values or firing
+  conditions.** Both lifted checkpoints still own those metrics; changing them now means re-arming against
+  a broken series.
+- **⚠️ Slice 6 (supporter combined quiz) is NOT started**, and the session-anchoring migration stays
+  deferred to it.
+- **⚠️ The plan/note session collision stays a NAMED Known limitation.**
+- **⚠️ `frontend/app/onboarding` STAYS FROZEN — `[CHECKPOINT — due 2026-09-11]` is 8 DAYS OUT.** The
+  announcement must not reach the onboarding FLOW, which would confound a 62.4% completion baseline.
+- **⚠️ Marketing and pricing copy are OUT.** `v0.76.0`'s doctrine holds: money surfaces are their own
+  slice, and a positioning change is not a side effect of a Help Center update.
+
+### Verification
+
+**A single `advisor()` call on the diff.** No permission substrate, no cross-user read, no money or quota
+semantics, no migration, and — by construction — no behaviour change. **⚠️ ESCALATE TO ONE SCOPED COLD
+AGENT IF** item 2's surface decision turns into a behaviour change, or if any item is found to require a
+code path rather than copy.
+
+**⚠️ THE VERIFICATION RISK HERE IS UNUSUAL AND WORTH NAMING: a copy release has no failing test to catch a
+false claim.** The guides went stale silently for four releases precisely because nothing executes them. So
+**anchor each claim to the code that implements it** and prefer a pinned string in a test over prose that
+nothing checks — the `quiz-session-history.test.ts` guard that pins a label against a mode name is the
+in-repo precedent.
+
+**Routing: CLAUDE CODE inline** — copy and a surface decision, not multi-system work.
+
+### Shipped
+
 ## v0.108.0 - Session Identity
 
 **Status: Released** (kicked off and signed off 2026-09-03, base branch `releases/v0.108.0`, cut from `main` after
