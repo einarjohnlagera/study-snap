@@ -238,9 +238,17 @@ a prompt**; and **call `advisor()` BEFORE writing the Codex prompt.**
   sections with copied note titles and copied generated-quiz questions; it has no foreign key to `notes`, so
   deleting or regenerating a source note cannot alter or remove a live combined quiz. Each copied item is
   stamped through `QuizItem.withSourceStudyPackId`; that provenance is **inert on this path** because a
-  shared quiz creates no session and writes no `ConceptHealth`. Copied section titles carry the source
-  identity a recipient can actually read. `quiz_share_links` now has one exclusive target arc — exactly one
-  of `generated_quiz_id` or `combined_quiz_id` — preserving one token namespace and one share-link meter.
+  shared quiz creates no session and writes no `ConceptHealth`. `quiz_share_links` now has one exclusive
+  target arc — exactly one of `generated_quiz_id` or `combined_quiz_id` — preserving one token namespace and
+  one share-link meter.
+- **⚠️ CORRECTION to this item's own first write-up: copied section titles are OWNER-visible only.** It
+  claimed they "carry the source identity a recipient can actually read." **They do not.**
+  `PublicSharedQuizResponse` is `{ quizId, noteTitle, questions }` and `PublicQuizItem` is
+  `{ question, choices, concept, questionFormat }` — **neither carries a section or source title**, so a
+  recipient sees one flat question list under the combined quiz's single title, and the section titles reach
+  only the owner through `GET /combined-quizzes/{id}`. Caught while self-reviewing item 5's prompt, before
+  the false claim could be built on. **Giving the recipient section headers needs a field on the public
+  payload and is a separate decision, not a bug** — recorded below.
 - **Item 4 exposes an API and no UI, deliberately.** `RELEASES.md`'s "reachable by a supporter" is the
   release's commitment across items 4 **and** 5; item 5 owns the picker and the share surface. **Zero files
   changed under `frontend/`.** The public payload stays a **flat** `List<PublicQuizItem>` in section order,
@@ -276,6 +284,18 @@ a prompt**; and **call `advisor()` BEFORE writing the Codex prompt.**
 - **Request-safety bounds are plan-agnostic, so they are not a pricing decision:** 20 sections, 20 source
   notes, 100 total questions. An over-cap request is **rejected, never truncated** — silent truncation is
   the defect item 2 of this release just fixed.
+- **Item 5 — the combined quiz is reachable from Library for every onboarded, email-verified user.** The
+  Create menu starts an intent-aware multi-select, so its card says *combined quiz* rather than promising a
+  Study Plan. Quiz-ready selected notes contribute all of their questions; notes without a generated quiz
+  are named as excluded, and the UI blocks the 20-source-note / 100-question request bounds before POSTing.
+  It also states the real prerequisite cost: each source still needs one Study Pack generation and one quiz
+  generation; assembling costs nothing.
+- **The owner flow survives refresh as two Library sub-pages, not a note-detail action:**
+  `/library/combined-quiz?notes=…` takes the required standalone title and creates one immutable snapshot;
+  `/library/combined-quiz/{id}` reads that snapshot and reads any existing share link. The latter never
+  POSTs merely to discover a link — including an inactive one — so refresh cannot mint a replacement or
+  spend quota. The share card reuses the existing link meter and events with `scope=combined_quiz` metadata;
+  it adds no entitlement, counter, quiz mode, DOCX action, connection requirement, or `ProfileType` gate.
 
 ### Known limitations
 
@@ -288,6 +308,30 @@ a prompt**; and **call `advisor()` BEFORE writing the Codex prompt.**
   mis-grade.
 - **IDENTIFICATION and ENUMERATION remain ungradeable on the shared path.** Neither is reachable today —
   the teacher-quiz prompt does not emit them — and the recipient has no text input to answer one with.
+- **⚠️ AUDIT OF THE DELIVERED DIFF — two changes, and one of them was reverting my own.**
+  - **The request bounds had landed in THREE places, one as bare literals.** `app/library/page.tsx` compared
+    against inline `20` and `100` while the builder page declared its own constants and the server holds the
+    authority. Extracted to `frontend/lib/combined-quiz.ts` so the two surfaces cannot drift — `v0.103.0`
+    records a standalone constant beside a derived cap as exactly how that leakage returns. The
+    frontend/server duplication remains by necessity (no endpoint publishes the bounds) and is commented as
+    the server being authoritative.
+  - **⚠️ A double-submit guard I wrote was REMOVED BY ITS OWN MUTATION TEST.** A duplicate POST orphans an
+    immutable row permanently, so a ref-based guard looked obviously right. Mutation said otherwise:
+    reverting to the delivered state guard **still passed**, because `canAssemble` reads `assembling` and
+    `Button` already applies `disabled={loading || disabled}`. Removing **both** reds the test, so the
+    guarantee is held jointly and the ref added nothing. It was deleted rather than shipped as code whose
+    necessity could not be demonstrated — the same discipline that catches a fix which changes nothing,
+    pointed at my own work. The test stays, with its subject and the mutation result recorded in a comment.
+- **Verification:** frontend **2127** tests green across 197 suites, `tsc --noEmit` clean, `npm run lint` at
+  0 errors, and the backend suite unchanged at **2044** (zero backend files touched). Mutants and their
+  killing tests: replacing the share step's read with a POST on load reds all four
+  `CombinedQuizSharePage` tests; removing both assemble guards reds
+  *assembles once when the button is double-clicked before the first request settles*.
+- **A combined quiz's section structure is invisible to the recipient.** The snapshot stores a title per
+  source note, but the public payload carries no section field, so the recipient takes the questions as one
+  flat list. **Grading and ordering are unaffected** — section order is preserved in the flattened list.
+  Showing the recipient which note each question came from would need a new field on `PublicQuizItem` and is
+  an unmade product decision, not an oversight.
 - **⚠️ A non-teacher still persists a Target Level they never chose — FOUND DURING ITEM 2, DELIBERATELY NOT
   FOLDED IN, AND AN OWNER DECISION IS OWED.** `openGenerateQuizModal:1855` sets `selectedQuizLearnerLevel`
   unconditionally and `handleGenerateTeacherQuiz:1880` sends it for **every** profile, while the Target

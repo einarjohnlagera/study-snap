@@ -44,7 +44,28 @@ This is what lets an active combined link survive source-note deletion and sourc
 public endpoint still receives a flat question list in section order, so `/quiz/{token}` treats either arc
 identically. Per-item `sourceStudyPackId` is retained through `QuizItem.withSourceStudyPackId`, but is inert
 for anonymous shared play because that path creates no quiz session or Concept Health signal; copied section
-titles are the source identity the recipient sees.
+titles remain owner-visible snapshot context. The public payload is flat, so recipients see the combined
+quiz's title rather than source-note section headers.
+
+## Combined Quiz Owner Flow
+
+Any onboarded, email-verified user starts in **Library → Create → Combined quiz**. The Library picker uses
+the existing multi-select and sends the selection to `/library/combined-quiz?notes=…`; it is not a
+`/notes/[id]` route and is not gated on profile type or a Learning Connection.
+
+The build page names the combined quiz, reports the contributing notes and running question total, and sends
+all question indexes from every selected note with a generated quiz. Notes without a generated quiz are
+excluded with an explicit warning, never silently. The owner must first generate a Study Pack and quiz for
+each source note that needs one; assembling itself has no generation cost. Requests are blocked before
+submission above 20 source notes or 100 questions, while the API remains the final guard if a source quiz
+changes between selection and assembly.
+
+After assembly, `/library/combined-quiz/{combinedQuizId}` is the share surface. It loads the immutable
+snapshot and uses `GET /combined-quiz-share/{combinedQuizId}` on every visit to discover an existing link,
+including one the owner turned off. It only POSTs when the owner explicitly creates a link, so refresh does
+not consume a second share link. The owner can copy the link and toggle it on or off; the page has no edit,
+regenerate, re-assemble, or export action because another assembly is a distinct immutable quiz and needs
+its own link.
 
 ### Question formats a recipient can be given
 

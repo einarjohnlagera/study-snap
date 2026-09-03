@@ -923,6 +923,32 @@ describe("Library page", () => {
     expect(pushMock).toHaveBeenCalledWith("/library/bulk-generate");
   });
 
+  it("lets an explicitly non-TEACHER user start an ungated combined quiz selection", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({
+      id: "supporter-1",
+      role: "USER",
+      profileType: "SUPPORTER",
+      planType: "FREE",
+    });
+
+    render(<LibraryPage />);
+
+    await screen.findByText("Cell Respiration");
+    fireEvent.click(screen.getByRole("button", { name: "Create options" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: /Combined quiz/ }));
+
+    expect(screen.getByRole("heading", { name: "Pick notes for your combined quiz" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Build quiz" })).toHaveAttribute("aria-disabled", "true");
+    fireEvent.click(screen.getByLabelText("Select Cell Respiration"));
+    fireEvent.click(screen.getByLabelText("Select Zygote Review"));
+    expect(screen.getByText(/1 selected note has no generated quiz and will not be included/)).toBeInTheDocument();
+    expect(screen.getByText(/1 with generated quizzes will contribute all of their questions/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Build quiz" })).toBeEnabled();
+    fireEvent.click(screen.getByRole("button", { name: "Build quiz" }));
+
+    expect(pushMock).toHaveBeenCalledWith("/library/combined-quiz?notes=note-42%2Cnote-99");
+  });
+
   it("shows a queued toast after a bulk-generate redirect", async () => {
     setBulkQueuedFlash(2);
 
