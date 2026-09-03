@@ -43,6 +43,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -88,6 +89,8 @@ public class QuickReviewAdaptivePracticeService {
     private static final String ANALYTICS_METADATA_ENTRY = "entry";
     private static final String ANALYTICS_METADATA_SOURCE_SCOPE = "sourceScope";
     private static final String SUB_MODE_INTERVIEW = "INTERVIEW";
+    private static final String ADAPTIVE_SESSION_ELSEWHERE_MESSAGE =
+        "You have another Adaptive Practice session in progress on one of this plan's notes. Finish or end it to practise across the plan.";
     private static final String INTERVIEW_SESSION_ACTIVE_MESSAGE =
         "You have an Interview Practice session in progress on this note. Finish or end it before starting Adaptive Practice.";
     private static final int MAX_PLAN_SOURCE_PACKS = 3;
@@ -348,14 +351,42 @@ public class QuickReviewAdaptivePracticeService {
             return emptyCollectionResponse(collection, NO_WEAK_CONCEPTS_MESSAGE);
         }
 
-        List<LongExamPlanSourceSampler.EligiblePlanSource> focusEligible = orderedEligible.stream()
+        List<LongExamPlanSourceSampler.EligiblePlanSource> withFocus = orderedEligible.stream()
                 .filter(source -> reasonByFocus.keySet().stream()
                         .anyMatch(key -> key.studyPackId().equals(source.studyPack().getId())))
-                .filter(source -> activeAdaptiveSessions.stream().noneMatch(session ->
-                        isInterviewSession(session) && source.studyPack().getId().equals(session.getStudyPackId())))
+                .toList();
+        if (withFocus.isEmpty()) {
+            return emptyCollectionResponse(collection, NO_WEAK_CONCEPTS_MESSAGE);
+        }
+
+        // A pack already carrying an active ADAPTIVE session cannot anchor this one: V41 allows a
+        // single active session per (user_id, study_pack_id, session_mode), and all three session
+        // kinds share the ADAPTIVE discriminator.
+        //
+        // ⚠️ EVERY session still live at this point is FOREIGN. This plan's own session was resumed
+        // and returned above, by recorded sourceCollectionId. So the occupant is either an Interview
+        // Practice session, a note-scoped Adaptive session, or ANOTHER plan's -- and anchoring here
+        // previously RETURNED THAT FOREIGN SESSION as if it were this plan's, which made plan-scoped
+        // practice a permanent dead end while the plan's own in-progress endpoint reported nothing.
+        Map<UUID, QuickReviewSessionEntity> occupantByPackId = new LinkedHashMap<>();
+        for (QuickReviewSessionEntity active : activeAdaptiveSessions) {
+            if (active.getStudyPackId() != null) {
+                occupantByPackId.putIfAbsent(active.getStudyPackId(), active);
+            }
+        }
+        List<LongExamPlanSourceSampler.EligiblePlanSource> focusEligible = withFocus.stream()
+                .filter(source -> !occupantByPackId.containsKey(source.studyPack().getId()))
                 .toList();
         if (focusEligible.isEmpty()) {
-            return emptyCollectionResponse(collection, NO_WEAK_CONCEPTS_MESSAGE);
+            // Everything worth practising is occupied. Say WHICH kind of session is in the way --
+            // reporting "no weak concepts" here is false, and it is what the learner used to see.
+            boolean blockedByInterview = withFocus.stream()
+                    .map(source -> occupantByPackId.get(source.studyPack().getId()))
+                    .filter(Objects::nonNull)
+                    .anyMatch(this::isInterviewSession);
+            return emptyCollectionResponse(
+                    collection,
+                    blockedByInterview ? INTERVIEW_SESSION_ACTIVE_MESSAGE : ADAPTIVE_SESSION_ELSEWHERE_MESSAGE);
         }
         UUID sessionId = UUID.randomUUID();
         StudyPackEntity primary = focusEligible.getFirst().studyPack();
@@ -368,12 +399,15 @@ public class QuickReviewAdaptivePracticeService {
                 .findTopByUserIdAndStudyPackIdAndSessionModeAndStatusInOrderByCreatedAtDesc(
                         userId, primary.getId(), QuickReviewSessionMode.ADAPTIVE, ACTIVE_GENERATION_STATUSES)
                 .orElse(null);
-        if (anchorCollision != null && !isInterviewSession(anchorCollision)) {
-            return toAdaptiveResponse(anchorCollision, primary);
-        }
         if (anchorCollision != null) {
-            // Not "no weak concepts" -- the anchor pack is occupied by an Interview Practice session.
-            return emptyCollectionResponse(collection, INTERVIEW_SESSION_ACTIVE_MESSAGE);
+            // Pure race guard now: a session appeared on the chosen anchor between the snapshot above
+            // and this read. It is never this plan's session -- that was returned earlier -- so it
+            // must NOT be handed back as though it were.
+            return emptyCollectionResponse(
+                    collection,
+                    isInterviewSession(anchorCollision)
+                            ? INTERVIEW_SESSION_ACTIVE_MESSAGE
+                            : ADAPTIVE_SESSION_ELSEWHERE_MESSAGE);
         }
 
         assertAdaptivePracticeQuotaAvailable(userId, planType);
@@ -637,6 +671,7 @@ public class QuickReviewAdaptivePracticeService {
                 userId,
                 QuickReviewSessionMode.ADAPTIVE
             )
+            .filter(candidate -> !isInterviewSession(candidate))
             .orElseThrow(AdaptivePracticeSessionNotFoundException::new);
 
         if (session.getStatus() != QuickReviewSessionStatus.IN_PROGRESS) {
@@ -737,6 +772,7 @@ public class QuickReviewAdaptivePracticeService {
                 userId,
                 QuickReviewSessionMode.ADAPTIVE
             )
+            .filter(candidate -> !isInterviewSession(candidate))
             .orElseThrow(AdaptivePracticeSessionNotFoundException::new);
 
         if (session.getStatus() != QuickReviewSessionStatus.IN_PROGRESS) {

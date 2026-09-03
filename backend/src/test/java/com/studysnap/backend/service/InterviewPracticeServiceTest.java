@@ -29,6 +29,7 @@ import com.studysnap.backend.entity.QuickReviewSessionEntity;
 import com.studysnap.backend.entity.QuickReviewSessionMode;
 import com.studysnap.backend.entity.QuickReviewSessionStatus;
 import com.studysnap.backend.entity.StudyPackEntity;
+import com.studysnap.backend.exception.AdaptivePracticeSessionActiveException;
 import com.studysnap.backend.entity.StudyPackStatus;
 import com.studysnap.backend.exception.InterviewPracticeQuotaExhaustedException;
 import com.studysnap.backend.exception.InvalidInterviewPracticeRequestException;
@@ -98,6 +99,35 @@ class InterviewPracticeServiceTest {
                 generationContextResolver,
                 conceptHealthService
         );
+    }
+
+    @Test
+    void startSession_doesNotForfeitAnActiveAdaptivePracticeSession() {
+        // The reverse direction of the v0.107.0 item 4 guard, and the destructive one: Interview
+        // Practice used to markForfeited() whatever ADAPTIVE session it found on the note, silently
+        // ending a note- or plan-scoped Adaptive Practice session it does not own.
+        UUID userId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        StudyPackEntity studyPack = buildStudyPack(userId, noteId, studyPackId);
+        QuickReviewSessionEntity adaptive = buildSession(userId, noteId, studyPackId, List.of());
+        adaptive.setStatus(QuickReviewSessionStatus.IN_PROGRESS);
+        // No subMode key: this is a plain Adaptive Practice session, not an interview one.
+        adaptive.setSessionState(new java.util.LinkedHashMap<>());
+
+        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.PRO);
+        when(studyPackRepository.findByOwnerUserIdAndNoteIdForUpdate(userId, noteId))
+                .thenReturn(Optional.of(studyPack));
+        when(quickReviewSessionRepository.findTopByUserIdAndStudyPackIdAndSessionModeAndStatusInOrderByCreatedAtDesc(
+                eq(userId), eq(studyPackId), eq(QuickReviewSessionMode.ADAPTIVE), any()))
+                .thenReturn(Optional.of(adaptive));
+
+        assertThatThrownBy(() -> service.startSession(userId, new InterviewPracticeStartRequest(noteId, 5, null)))
+                .isInstanceOf(AdaptivePracticeSessionActiveException.class);
+
+        assertThat(adaptive.getStatus()).isEqualTo(QuickReviewSessionStatus.IN_PROGRESS);
+        verify(quickReviewSessionRepository, never()).save(any(QuickReviewSessionEntity.class));
+        verify(userUsageService, never()).incrementInterviewPracticeGeneration(any(), any());
     }
 
     @Test
