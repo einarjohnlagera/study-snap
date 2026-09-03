@@ -14,6 +14,11 @@ Board Exam reserves and reverses its Challenge Quiz and Board Exam meters togeth
 `ChallengeQuizService.BOARD_EXAM_QUOTA_UNITS_PER_SESSION` and one idempotency stamp. Both meter decrements
 must clamp in SQL; never rely on the Challenge-meter CHECK constraint to make a partial refund safe.
 
+`combined_quizzes` rows are immutable snapshots: never update, re-assemble, append, or delete their
+questions in place. `quiz_share_links` is one exclusive target arc — exactly one of `generated_quiz_id` and
+`combined_quiz_id` must be populated — so do not split the token space or share-link counter into a second
+table.
+
 You are an AI coding agent helping implement NoteLib.
 Follow these rules to keep the codebase consistent and shippable.
 

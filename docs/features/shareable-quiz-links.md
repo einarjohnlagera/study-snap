@@ -11,7 +11,9 @@ An onboarded user generates a quiz from a note, reviews it on the quiz preview p
 Rules:
 
 - link generation is available to any onboarded user; it is not gated by profile type
-- share links are created from `GeneratedQuizEntity`
+- a link targets exactly one immutable quiz snapshot: either a single-note `GeneratedQuizEntity` or a
+  `combined_quizzes` row. `quiz_share_links.generated_quiz_id` and `combined_quiz_id` are an exclusive
+  arc, enforced by PostgreSQL, so token lookup and the share-link meter remain singular
 - each link uses a 16-character URL-safe token stored in `quiz_share_links`
 - the quiz owner can toggle a link on or off from the preview page
 - inactive or missing links return `404` from the public quiz endpoint
@@ -30,6 +32,19 @@ Rules:
 - the results screen prompts signup instead of persisting anonymous performance
 
 This keeps public play lightweight and avoids creating student-owned history before authentication.
+
+## Combined Quiz Snapshots
+
+A combined quiz assembles selected questions from already-generated per-note quizzes into ordered sections.
+Each section copies the source note title and its selected `QuizItem`s into `combined_quizzes.sections`; it
+never retains a reference to a source note. The snapshot is immutable: there is no update, re-assembly, or
+question-edit operation. Creating another assembly makes a new row and therefore needs a separate link.
+
+This is what lets an active combined link survive source-note deletion and source-quiz regeneration. The
+public endpoint still receives a flat question list in section order, so `/quiz/{token}` treats either arc
+identically. Per-item `sourceStudyPackId` is retained through `QuizItem.withSourceStudyPackId`, but is inert
+for anonymous shared play because that path creates no quiz session or Concept Health signal; copied section
+titles are the source identity the recipient sees.
 
 ### Question formats a recipient can be given
 
