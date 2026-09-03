@@ -66,6 +66,6 @@ public class QuizShareController {
             @PathVariable String token,
             @Valid @RequestBody SharedQuizResultsRequest request
     ) {
-        return quizShareLinkService.getSharedQuizResults(token, request.answers());
+        return quizShareLinkService.getSharedQuizResults(token, request.answers(), request.multiAnswers());
     }
 }

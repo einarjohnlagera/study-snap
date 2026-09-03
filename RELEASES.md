@@ -149,6 +149,72 @@ directly, never through a pipe**; **COUNT executed tests from `target/surefire-r
 `npm test`**; **SWEEP BY SURFACE, not by diff**; **verify "X already does Y" against code BEFORE it reaches
 a prompt**; and **call `advisor()` BEFORE writing the Codex prompt.**
 
+### Shipped
+
+- **Item 1 — shared quizzes grade MULTI_SELECT questions correctly.** `getSharedQuizResults` compared
+  `answer == correctIndex`, and `QuizItem.correctIndex()` falls back to `correctIndices.getFirst()` for
+  MULTI_SELECT — so on a question whose correct answers were `[0, 2]`, a recipient selecting **both scored
+  zero** while one selecting **only choice 0 scored full marks**. `teacher-quiz-developer.txt` instructs
+  1–2 MULTI_SELECT questions per quiz, so this was live in effectively every shared quiz. Grading now routes
+  through `QuizSessionReviewUtils.isAnswerCorrect`, the same exact-set rule every in-app mode uses; the
+  bespoke comparison is gone.
+- **The recipient can now actually select several choices.** The defect had a second half nothing recorded:
+  `/quiz/[token]` held a single `selectedAnswer` and disabled the choice list after one click, so the
+  correct set was **unreachable from the UI even once the server graded it properly**. MULTI_SELECT
+  questions render checkboxes with *Select all that apply*, stay editable until Continue, and single-choice
+  questions keep their existing one-shot behaviour unchanged.
+- **`PublicQuizItem` carries `questionFormat`, and still carries no answer key.** The pre-answer payload
+  needed the format so the recipient could be given the right control. **`correctIndices` was deliberately
+  NOT added to it** — `shareable-quiz-links.md` requires that the initial response disclose no answer, and
+  the key reaches the recipient only through `SharedQuizResultItem` after they submit.
+- **`SharedQuizResultItem` gained `correctIndices`, populated only for MULTI_SELECT.** The review screen
+  previously highlighted a single correct choice, understating the answer key. The server emits an empty
+  list for every other format, so the frontend follows one rule — prefer the set when non-empty, else the
+  index — rather than branching on question format in a second place.
+- **The submission wire format is positional and additively versioned.** `answers` keeps one entry per
+  question and is null at a MULTI_SELECT position; the new `multiAnswers` is index-aligned and **optional**,
+  so a recipient mid-quiz on the pre-fix browser bundle still submits successfully. Both lists are rejected
+  at the wrong length, because a shorter `multiAnswers` would silently grade one question against another's
+  selections.
+- **⚠️ A new guard pins that the pre-answer payload discloses no answer, and it asserts on the SERIALIZED
+  response on purpose.** A field-level assertion had no reachable subject — `PublicQuizItem` has no answer
+  field to interrogate — so `getActivePublicQuizStripsAnswers` had been passing while asserting nothing about
+  answers, under a name that promised it did. Serializing gives the negative assertion a subject that exists
+  either way, so adding `correctIndices` back to that record now reds a named test. That is a live path
+  precisely because *"`PublicQuizItem` drops `correctIndices`"* is how this defect reads when written up.
+  The old test was renamed to what it actually checks.
+- **`QuizItem.isMultiSelect()` replaces a fourth `"MULTI_SELECT"` literal.** `AGENTS.md` requires a literal
+  appearing across classes to move somewhere shared; the DTO already owned the constant and already reasoned
+  about the format, so the predicate went there rather than a private copy in the service.
+- **Tests: 10 → 20 in `QuizShareLinkServiceTest`, plus 8 new page tests** at `app/quiz/[token]/page.test.tsx`
+  — the layer the UI half of the defect lives at. **Every assertion was mutation-verified with its killing
+  test named:** reverting the service to `answer == correctIndex` reds
+  `sharedQuizGradesMultiSelectAsAnExactSet`, `sharedQuizIgnoresOutOfRangeAndDuplicateMultiSelectIndexes` and
+  `sharedQuizAcceptsSubmissionsFromThePreFixBundle`; grading by "contains `correctIndex`" reds
+  `sharedQuizScoresZeroWhenOnlyTheFirstCorrectChoiceIsSelected`; grading by any overlap reds that plus
+  `sharedQuizScoresZeroWhenOnlyTheSecondCorrectChoiceIsSelected`; dropping the length check reds
+  `sharedQuizRejectsMultiAnswersOfTheWrongLength`; forcing `isMultiSelect` false reds five page tests; and
+  ignoring `correctIndices` on the review screen reds the review test; and restoring `correctIndices` to
+  `PublicQuizItem` reds `getActivePublicQuizNeverDisclosesTheAnswerKeyToTheRecipient`. **⚠️ The two partial-credit
+  assertions survive the first mutant** — under the new wire format a MULTI_SELECT position sends `null` in
+  `answers`, so the shipped defect also scored them zero. They are kept because they are the only guards
+  against a *lenient* reimplementation, and each has a named killing mutant above.
+- Backend `2029` tests green (counted from `target/surefire-reports/*.xml`, and including the
+  real-PostgreSQL `NativeQueryPostgresIntegrationTest`); frontend `2115` tests green across 195 suites;
+  `tsc --noEmit` clean and `npm run lint` at 0 errors.
+
+### Known limitations
+
+- **A MATCHING block loses its grouping on the shared quiz page.** `teacher-quiz-developer.txt` may emit one
+  block of 2–4 consecutive questions sharing a `questionGroup` and the same four choices; `/quiz/[token]`
+  renders each as a standalone question with no *Match each item to one option* header, unlike the in-app
+  `QuizMatchingGroup`. **⚠️ Found while fixing item 1 and deliberately NOT folded in: grading is unaffected**
+  — a MATCHING item carries a single `correctIndex` and grades like an MCQ — so this is presentation only,
+  and it is the sharing gap `assessment-architecture-audit.md` §15 already records. Item 1's scope was the
+  mis-grade.
+- **IDENTIFICATION and ENUMERATION remain ungradeable on the shared path.** Neither is reachable today —
+  the teacher-quiz prompt does not emit them — and the recipient has no text input to answer one with.
+
 **Routing: CODEX** — a migration plus a service and a surface. **⚠️ Re-run the routing test if item 1's
 migration turns out to be a one-column change and items 2 and 3 are already built.**
 
