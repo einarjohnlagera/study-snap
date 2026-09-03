@@ -1,5 +1,131 @@
 # RELEASES.md - NoteLib
 
+## v0.107.0 - Curriculum-Scale Remediation
+
+**Status: In Progress** (kicked off 2026-09-03, base branch `releases/v0.107.0`, cut from `main` after
+`v0.106.0` merged, tagged and deployed to production)
+
+Theme: once every mode attributes evidence honestly, remediation can finally be scoped to a whole Subject
+Plan or Review Set instead of a single note.
+
+### Why this version number, and not `v1.0.0`
+
+**⚠️ `v1.0.0` STAYS RESERVED (owner, 2026-07-23; re-confirmed 2026-09-01).** Conjunctive condition — live
+core **and** product success — and both halves are unmet.
+
+### Why this release exists
+
+**Slice 5 of the approved assessment sequence** (`docs/claude-plans/assessment-architecture-audit.md` §13),
+**folded with the provenance debt slice 5 depends on.** **⚠️ THE FOLD IS AN EXPLICIT OWNER DECISION
+(2026-09-03), TAKEN AGAINST A RECOMMENDATION TO SHIP THE FIX ALONE — and the cost was stated before it was
+accepted, not absorbed afterwards.** The recommendation was two small items; the owner chose to add slice 5.
+The reasoning that makes it coherent is recorded so it is not re-derived: slice 5 exists **only** to consume
+per-source evidence, and Interview Practice is the last mode still corrupting that evidence, so the two are
+one dependency chain rather than two adjacent features. **⚠️ THE COST IS THE FULL THREE-AGENT COLD PRESSURE
+TEST IN ISOLATED `git worktree`s (~490k tokens)** — folding is what forced the heaviest tier in `v0.105.0`,
+the most expensive release this project has run, and it forces it again here.
+
+**⚠️ THE PROVENANCE FIX IS PROSPECTIVE, AND SLICE 5 READS THE STORE IT DOES NOT REPAIR.** Verified against
+precedent rather than assumed: `v0.104.0` shipped **no backfill** — unstamped in-flight items kept the
+historical fallback and already-written contaminated rows were left alone. Interview Practice inherits that
+shape, so `ConceptHealth` rows written by past multi-source Interview Practice sessions stay
+over-attributed. **Slice 5's remediation therefore reads a partly contaminated store on day one, and that is
+ACCEPTED, not overlooked** — it is the direct argument for landing the fix now rather than deferring it a
+fourth time, since every release it slips adds more bad evidence.
+
+**⚠️ THE DEFECT WAS RE-VERIFIED BY READING CODE AT KICKOFF, and it is SMALLER than three releases of
+handoffs have implied.** `InterviewPracticeService.recordConceptsForSourcePacks:270-298` iterates
+`resolveSourceStudyPackIds(session)` and writes the **same concept list to every source pack**, filtered
+only by that pack's own `getKeyConcepts()` — byte-for-byte the shape `v0.104.0` replaced in `LongExamService`.
+`generateQuizForSources:573-604` stamps **nothing** (zero `withSourceStudyPackId` in the file). **⚠️ BUT THE
+HELPER ALREADY EXISTS: `QuizSessionReviewUtils.computeKeyConceptBreakdownBySourceStudyPack` (`:173`) is the
+`keyConcept`-variant per-source breakdown, already used by `LongExamService:508` with identical semantics.**
+So this is one stamp at the merge seam plus a near-verbatim port of `LongExamService:550-600` — **no new
+util, no new API, no DTO change, no migration.**
+
+**⚠️ A CORRECTNESS-SEMANTICS TRAP THAT THE MULTI-PACK FIXTURE CANNOT CATCH.** Interview Practice today calls
+the **3-arg** `computeFullyCorrectKeyConcepts(quiz, selectedChoices, Map.of())`, where that `Map.of()` is
+`selectedMultiChoices` and identification/enumeration default empty. The breakdown helper takes **5**. Both
+funnel through the same `effectiveKeyConcept` resolver, so semantics are preserved **only if** it is called
+as `(quiz, selectedChoices, Map.of(), Map.of(), Map.of())`. Get the mapping wrong and the release silently
+changes **what counts as correct** while appearing to change only attribution — and a multi-pack fixture will
+not catch it, because both packs move together. **⚠️ THE PINNING GUARD IS PRE-DECLARED: a SINGLE-SOURCE
+Interview Practice session must write byte-identical `ConceptHealth` before and after.** That isolates
+attribution (intended) from correctness computation (not intended).
+
+**⚠️ THE `2026-09-12` CHECKPOINT CONTRADICTS THIS RELEASE'S OWN DIRECTION AND FIRES MID-RELEASE.** Found by
+this kickoff's step 9 scan, un-actioned since it was written: the ratified *Adaptive Practice becomes the
+recommendation engine* row records that `[CHECKPOINT — due 2026-09-12]`'s kill criterion says to **"restore a
+demoted entry point"** if Adaptive Practice adoption fell — which **directly contradicts** the direction slice
+5 implements. The row itself says it *"must be re-specified now, or it will fire in September and someone will
+correctly follow an instruction that undoes a ratified direction."* Nobody did. **It is folded in as a
+DEPENDENCY of slice 5, not as a third feature** — docs-only, and the remedy becomes *accelerate the dashboard
+recommendation*, never *restore the entry point*.
+
+### Planned Scope
+
+- **(1) Interview Practice attributes `ConceptHealth` per source pack (backend).** Stamp `sourceStudyPackId`
+  at the `generateQuizForSources` merge seam, after per-source dedup and before `mergedQuiz.addAll`, mirroring
+  `LongExamService:1163`. Then replace the broadcast in `recordConceptsForSourcePacks` with the
+  `LongExamService:550-600` shape, bucketing by `(sourceStudyPackId, concept)` via
+  `computeKeyConceptBreakdownBySourceStudyPack`. **⚠️ `resolveSourceStudyPackIds` is DEMOTED TO FALLBACK-ONLY**
+  — reached only by unstamped (pre-release, in-flight) items. **Left ambiguous, both run — per-source
+  aggregation PLUS the old broadcast — which is WORSE THAN TODAY, and the obvious fixture does not catch it.**
+- **(2) Subject-Plan- and Review-Set-scoped Adaptive Practice remediation (backend + frontend).** Slice 5
+  proper: use the now-trustworthy per-source evidence to offer remediation scoped to a whole Subject Plan or
+  Review Set. **⚠️ EXISTING NOTE-SCOPED ADAPTIVE PRACTICE IS UNCHANGED** — this adds a scope, it does not
+  replace or re-point the one that ships today.
+- **(3) Re-specify `[CHECKPOINT — due 2026-09-12]` (docs only).** Its remedy becomes *accelerate the dashboard
+  recommendation*. **⚠️ A DEPENDENCY OF ITEM 2, NOT AN INDEPENDENT ITEM** — it fires 2026-09-12, inside this
+  release's window, and left alone it instructs a future reader to undo exactly what item 2 builds.
+
+### Anti-drift (locked for this release)
+
+- **⚠️ CROSS-PACK CANONICAL CONCEPT IDENTITY STAYS ADR-SIZED AND OUT.** `ConceptHealthEntity` stays keyed
+  `(user_id, study_pack_id, concept)` with free-text concept scoped per pack. **Plan- and Review-Set-scoped
+  remediation must AGGREGATE OVER packs, never MERGE concepts across them** — a Subject Plan's packs sharing
+  a concept string is exactly the case that is not yet decidable, and slice 5 must not quietly decide it.
+- **⚠️ NO NEW MODE AND NO NEW SUB-MODE.** `EXAM_MODES.md` is a locked five-mode contract. **Modes are never
+  differentiated primarily by question count.** Broader scope is a CAPABILITY of Adaptive Practice.
+- **⚠️ VIEWING MUST NEVER WRITE `ConceptHealth`** — locked since `v0.37.0` to move only from genuine
+  assessment. A remediation surface that reads evidence must write none.
+- **⚠️ PLAN-TIER ENTITLEMENTS UNCHANGED.** Separate monetization contract; *"nothing is gated"* is never
+  licence to add, widen or remove a subscription gate. No quota or meter change.
+- **⚠️ NO BACKFILL of historical `ConceptHealth`** — matching `v0.104.0`'s precedent; the contamination is
+  recorded as a Known limitation instead.
+- **⚠️ DO NOT REMOVE THE CHALLENGE QUIZ ADAPTIVE PRACTICE ENTRY POINT.** Standing constraint; item 3
+  re-specifies the checkpoint, it does not license the removal the checkpoint was guarding.
+- **⚠️ THE SESSION-ANCHORING QUESTION IS OPEN AND MUST BE RESOLVED BEFORE THE CODEX PROMPT — THE HANDOFF'S CLAIM THAT §15 IS "NOT NEEDED FOR SLICE 5" WAS INHERITED, RE-CHECKED AGAINST SCHEMA AT THIS KICKOFF, AND IS FALSE AS STATED.** Verified by reading migrations rather than trusting the handoff: `quick_review_sessions.study_pack_id` is **`NOT NULL`** (`V4:4`), and `V41` creates **TWO partial unique indexes on active sessions** — `(user_id, study_pack_id, session_mode)` and `(user_id, note_id, session_mode)`, both `WHERE status IN ('GENERATING','IN_PROGRESS')`. `QuickReviewSessionMode` has exactly four values and **`ADAPTIVE` is one of them**, so a plan-scoped Adaptive Practice session **shares a `session_mode` with the note-scoped one** (no new mode is permitted). **⚠️ THEREFORE A PLAN-SCOPED SESSION HAS NO CALLER-SUPPLIED PRIMARY PACK — the caller supplies a COLLECTION id — while the column it must fill is `NOT NULL` and uniquely indexed. Every available answer has a cost, and one of them silently BREAKS THIS RELEASE'S OWN ANTI-DRIFT:** anchoring on the plan's first pack means a learner who starts a plan-scoped session **can no longer start a note-scoped Adaptive Practice session on that pack**, which is precisely the *"existing Note-scoped Adaptive Practice is UNCHANGED"* guarantee, violated by an index rather than by code. Two plans sharing a first pack collide the same way — the named Known limitation `v0.105.0` accepted for Long Exam. **⚠️ DECIDE THE ANCHOR AT PROMPT TIME AND RECORD THE DECISION, exactly as `v0.105.0` resolved §7.5 at ITS kickoff rather than leaving it to implementation.** Do NOT assume a migration is unnecessary and do NOT assume one is required; the point is that **nobody has derived the answer**, and an anti-drift line that forecloses it is worse than an open question. **⚠️ If the resolution needs a migration, that is a SCOPE CHANGE and a routing re-run, not an implementation detail.**
+- **⚠️ Do NOT touch Long Exam's or Board Exam's sampler, thresholds or refund path** beyond reading them.
+- **⚠️ `frontend/app/onboarding` STAYS FROZEN until 2026-09-11** — `[CHECKPOINT — due 2026-09-11]` is 8 days
+  out. Do not add, remove or reorder an onboarding FLOW step.
+- **⚠️ Do NOT change `BOARD_EXAM_STARTED`'s `sourceScope` / `sourceCount` / `questionCount` /
+  `expectedQuestionCount` field names or firing condition** — `[CHECKPOINT — due 2026-10-06]` reads them.
+
+### Verification
+
+**FULL THREE-AGENT COLD PRESSURE TEST IN ISOLATED `git worktree`s.** Two independent triggers:
+production-data semantics on a shared evidence store (item 1) and a new learner-facing assessment scope
+consuming it (item 2). **⚠️ THE ISOLATION IS NOT OPTIONAL** — `v0.105.0` ran three mutating agents in one
+tree and they corrupted each other's builds; one agent's entire result set was discarded. **⚠️ ONE AGENT MUST
+BE POINTED AT THE BLIND SPOT, NOT THE FEATURE** — in the last three releases the worst defect was outside the
+stated scope every time.
+
+**Carried measured lessons:** **write the guard at the LAYER THE DEFECT LIVES AT** (four releases running);
+**MUTATE and confirm a NAMED test fails**; **ask what in the fixture is NEUTRALISING a surviving mutant**
+before weakening the assertion (a mock or a sampler quietly absorbed the effect twice in `v0.106.0`);
+**assertions can pass VACUOUSLY** — a bystander row must hold non-zero values it would lose; **read
+`./mvnw test-compile`'s EXIT STATUS directly, never through a pipe**; **COUNT executed tests from
+`target/surefire-reports/*.xml`**; **run `npm test`**; **sweep by SURFACE, not by diff**; and **call
+`advisor()` BEFORE writing the Codex prompt**, which is where the yield is.
+
+**Routing: CODEX.** Item 2 is multi-system. **⚠️ Item 1 alone would be inline** — re-run the routing test if
+implementation discovers a surface not in the agreed plan, which is how `v0.103.0` was mis-routed.
+
+### Shipped
+
+_(nothing yet)_
+
 ## v0.106.0 - Board Exam Review Set Identity
 
 **Status: Released** (kicked off 2026-09-02, signed off 2026-09-03, base branch `releases/v0.106.0`, cut
