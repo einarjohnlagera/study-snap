@@ -96,6 +96,19 @@ test if item 3's projection change grows past the selection phase.**
 
 ### Shipped
 
+- **The unconsumed collection in-progress endpoint is REMOVED, not carried (item 4).** Verified before
+  deciding: the **start** endpoint already resumes an existing plan-scoped session by recorded
+  `sourceCollectionId` and returns it with its anchor, so the CTA routes straight to the live session.
+  The `GET` duplicated that and had no consumer anywhere. Its only marginal value would have been
+  labelling the button *"Resume"* before the click — a request on every plan-page load, for a label.
+- **⚠️ AND THAT ANALYSIS SURFACED A LIVE DEFECT OF MY OWN, which is the more valuable half of item 4.**
+  The quota and rate-limit gates had been moved above the resume branch when they were moved ahead of
+  the expensive load, so **a learner at their monthly limit could not resume a session they had
+  already paid for**, and every resume burned a rate-limit token for a request that makes no LLM call.
+  The gates now sit **after** the resume return and **before** the eligibility load — both boundaries
+  matter. Mutation-verified: putting them back above the resume branch fails
+  `collectionScoped_resumesAnExistingSessionEvenWhenTheLearnerIsOutOfQuota`.
+
 - **Plan eligibility runs on projections, not full entities (item 3).** Choosing which packs a
   plan-scoped session draws from needs only `id`, `noteId`, `keyConcepts`, `ownerUserId` and `status`,
   so phase 1 now uses the existing `findProgressViewsByNoteIdIn`; phase 2 loads full entities **only
