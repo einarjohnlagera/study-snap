@@ -279,6 +279,13 @@ describe("AdaptivePracticePage", () => {
         correctAnswers: 1,
         totalQuestions: 1,
         correctConceptNames: ["Trigonometric derivatives"],
+        // ⚠️ LOAD-BEARING. Adaptive Practice has no progress endpoint, so nothing persists the
+        // learner's answers during the session. If the client stops sending them the server's
+        // per-source breakdown is empty, and a plan-scoped session silently attributes every
+        // concept to the anchor pack and records NO MISSES -- the over-attribution shape item 1
+        // removed. This assertion is what stops that regressing unnoticed.
+        selectedChoices: { 0: 0 },
+        selectedMultiChoices: {},
       }));
     });
   });

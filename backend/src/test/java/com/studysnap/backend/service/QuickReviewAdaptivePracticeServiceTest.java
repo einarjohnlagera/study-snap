@@ -1015,6 +1015,62 @@ class QuickReviewAdaptivePracticeServiceTest {
 
 
     /** An in-progress Interview Practice session anchored on one of the fixture's packs. */
+    @Test
+    void completeAdaptiveSession_attributesConceptsPerSourcePackWhenSelectionsAreSubmitted() {
+        // The substantive half of the wiring fix. Adaptive Practice has NO progress endpoint, so
+        // nothing persists selections during the session -- if the client does not submit them the
+        // breakdown is empty and everything lands on the anchor pack with no misses recorded.
+        // Two packs, the SAME concept in both, NON-UNIFORM answers: A correct, B wrong.
+        UUID userId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+        UUID packA = UUID.randomUUID();
+        UUID packB = UUID.randomUUID();
+        UUID noteA = UUID.randomUUID();
+        StudyPackEntity a = buildStudyPack(packA, noteA, userId);
+        StudyPackEntity b = buildStudyPack(packB, UUID.randomUUID(), userId);
+        a.setKeyConcepts(List.of("Shear Force"));
+        b.setKeyConcepts(List.of("Shear Force"));
+
+        QuickReviewSessionEntity session = buildInProgressAdaptiveSession(sessionId, userId, packA, noteA);
+        session.setSessionState(QuizSessionStateUtils.withQuiz(List.of(
+                stampedItem("A1", "Shear Force", packA),
+                stampedItem("B1", "Shear Force", packB)
+        ), session.getSessionState()));
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(
+                sessionId, userId, QuickReviewSessionMode.ADAPTIVE)).thenReturn(Optional.of(session));
+        when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        lenient().when(studyPackRepository.findByIdAndOwnerUserId(packA, userId)).thenReturn(Optional.of(a));
+        lenient().when(studyPackRepository.findByIdAndOwnerUserId(packB, userId)).thenReturn(Optional.of(b));
+
+        adaptivePracticeService.completeAdaptiveSession(
+                sessionId.toString(), userId, 1, 2, null, null,
+                Map.of(0, 0, 1, 1),   // index 0 correct, index 1 wrong
+                Map.of());
+
+        // Same concept string, opposite outcomes, kept apart by SOURCE PACK -- which is the whole
+        // point: merging them by name would record one pack's success against the other's failure.
+        //
+        // Note the methods: Adaptive Practice uses recordCorrect/IncorrectAnswers, NOT the
+        // ...ForKnownConcepts variants, so it applies no keyConcepts intersection. That asymmetry is
+        // pre-existing and shared with Board Exam (see docs/features/exam-hub.md); it is not
+        // introduced here, and bucketing by source pack is what keeps it safe.
+        verify(conceptHealthService).recordCorrectAnswers(
+                eq(userId), eq(packA), eq(List.of("Shear Force")), any());
+        verify(conceptHealthService).recordIncorrectAnswers(
+                eq(userId), eq(packB), eq(List.of("Shear Force")), any());
+        verify(conceptHealthService, never()).recordIncorrectAnswers(
+                eq(userId), eq(packA), any(), any());
+        verify(conceptHealthService, never()).recordCorrectAnswers(
+                eq(userId), eq(packB), any(), any());
+    }
+
+    private QuizItem stampedItem(String question, String keyConcept, UUID sourceStudyPackId) {
+        return new QuizItem(question, List.of("A", "B", "C", "D"), 0, keyConcept, "Explanation",
+                null, "MCQ", null, null, null, null, keyConcept, null, null)
+                .withSourceStudyPackId(sourceStudyPackId.toString());
+    }
+
     private QuickReviewSessionEntity interviewSessionOn(CollectionFixture f, int packIndex) {
         QuickReviewSessionEntity interview = buildInProgressAdaptiveSession(
                 UUID.randomUUID(), f.userId, f.packs.get(packIndex).getId(), f.noteIds.get(packIndex));

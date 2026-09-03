@@ -1305,6 +1305,17 @@ export type AdaptivePracticeCompleteRequest = {
   totalQuestions: number;
   durationSeconds?: number;
   correctConceptNames?: string[];
+  /**
+   * The learner's answers, keyed by ABSOLUTE index in the session's quiz array.
+   *
+   * ⚠️ These are what let the server attribute ConceptHealth PER SOURCE PACK. Adaptive Practice has
+   * no progress endpoint, so nothing persists selections into session state during the session --
+   * if the client does not send them here, the server's per-source breakdown is empty and it falls
+   * back to attributing everything to the anchor pack and recording NO MISSES at all. That fallback
+   * is correct for a single-note session and wrong for a plan-scoped one.
+   */
+  selectedChoices?: Record<number, number>;
+  selectedMultiChoices?: Record<number, number[]>;
 };
 
 export type AdaptivePracticeCompleteResponse = SimpleMessageResponse & {

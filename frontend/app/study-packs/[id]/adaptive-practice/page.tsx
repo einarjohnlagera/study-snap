@@ -576,6 +576,11 @@ export default function AdaptivePracticePage() {
           correctAnswers: score,
           totalQuestions: quiz.length,
           durationSeconds,
+          // Sent so the server can bucket ConceptHealth by (sourceStudyPackId, concept). Without
+          // them its breakdown is empty, and a plan-scoped session attributes every concept to the
+          // anchor pack and records no misses -- the exact over-attribution shape item 1 removed.
+          selectedChoices,
+          selectedMultiChoices,
         };
         if (correctConceptNames.length > 0) {
           completeRequest.correctConceptNames = correctConceptNames;

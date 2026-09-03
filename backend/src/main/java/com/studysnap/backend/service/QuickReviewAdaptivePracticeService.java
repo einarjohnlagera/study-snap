@@ -411,6 +411,11 @@ public class QuickReviewAdaptivePracticeService {
         }
 
         assertAdaptivePracticeQuotaAvailable(userId, planType);
+        // ⚠️ ONE rate-limit unit, deliberately, even though generateCollectionQuiz issues up to
+        // MAX_PLAN_SOURCE_PACKS LLM calls where the note path issues one. Decided (owner,
+        // 2026-09-03) rather than left implicit: checking per call would fail PART WAY THROUGH
+        // generation and strand a FAILED session, which is worse for the learner than a 3x
+        // allowance on a path whose fan-out is already bounded. Revisit only if the bound moves.
         aiRateLimitService.assertAllowed(userId, planType, AI_RATE_LIMIT_SCOPE);
         int questionCount = resolveAdaptiveQuestionCount(focusEntries.size());
         QuickReviewSessionEntity session = buildGeneratingSession(
