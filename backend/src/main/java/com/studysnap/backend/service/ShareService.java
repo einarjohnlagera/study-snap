@@ -214,42 +214,17 @@ public class ShareService {
                 .toList();
     }
 
+    /**
+     * ⚠️ A TRUSTED copy. Rebuilding through the public constructor re-ran the non-idempotent choice-label
+     * strip, so copying a note quietly truncated its choices — {@code "B. Smith"} became {@code "Smith"}.
+     *
+     * <p>Both former branches collapse into this: when {@code correctIndex} is null, {@code answer()} also
+     * returns null, so the legacy-answer re-derivation the second branch attempted could never fire.
+     * {@code sourceStudyPackId} is still dropped, which is correct — a copy belongs to a new owner with a
+     * new Study Pack, so the original's provenance must not travel with it.
+     */
     private QuizItem copyQuizItem(QuizItem item) {
-        List<String> copiedChoices = item.choices() == null ? List.of() : List.copyOf(item.choices());
-        if (item.correctIndex() != null) {
-            return new QuizItem(
-                    item.question(),
-                    copiedChoices,
-                    item.correctIndex(),
-                    item.concept(),
-                    item.explanation(),
-                    null,
-                    item.questionFormat(),
-                    item.questionType(),
-                    item.workingSolution(),
-                    item.correctIndices(),
-                    item.questionGroup(),
-                    item.keyConcept(),
-                    item.acceptableAnswers(),
-                    item.acceptableAnswerGroups()
-            );
-        }
-        return new QuizItem(
-                item.question(),
-                copiedChoices,
-                null,
-                item.concept(),
-                item.explanation(),
-                item.answer(),
-                item.questionFormat(),
-                item.questionType(),
-                item.workingSolution(),
-                item.correctIndices(),
-                item.questionGroup(),
-                item.keyConcept(),
-                item.acceptableAnswers(),
-                item.acceptableAnswerGroups()
-        );
+        return item.withSourceStudyPackId(null);
     }
 
     private String[] copyTags(String[] tags) {

@@ -1,5 +1,197 @@
 # RELEASES.md - NoteLib
 
+## v0.110.1 - Quiz Text Integrity
+
+**Status: Released** (kicked off and signed off 2026-09-04, base branch `releases/v0.110.1`, cut from `main` after
+`v0.110.0` merged and tagged)
+
+Theme: a quiz choice says what its author wrote, and a supporter can get back to a quiz they already shared.
+
+### Why this is a PATCH, and why `v0.110.1` rather than `v0.111.1`
+
+**It is corrective, not additive** — both items close defects rather than opening a rung, which is what the
+patch line has meant here (`v0.83.1` Note Creation Integrity, `v0.89.1` Birth Year Correction, `v0.95.1`
+Rendering and Reorder Fixes). **⚠️ The number was corrected at kickoff: `v0.111.1` was proposed, but all
+eight patches in this repo's history are a `.1`/`.2` of a `.0` that EXISTS, and `v0.111.0` does not — a
+`.1` without its base would permanently imply a release that never shipped.**
+
+### Why this release exists
+
+**⚠️ ITEM 1 IS THE ONLY CRITICAL FINDING FROM `v0.110.0`'s TWO-AGENT PRESSURE TEST, AND IT IS PRE-EXISTING
+AND PRODUCT-WIDE.** It was recorded rather than fixed there because the fix changes a contract six tables
+depend on, which is not a thing to fold into a release already closing.
+
+**⚠️ IT WAS REPRODUCED, NOT INFERRED.** `QuizItem`'s `@JsonCreator` routes into the sanitizing constructor,
+and `QuizValidationUtils.sanitizeChoiceTexts` strips a leading choice label with `replaceFirst` and is **NOT
+idempotent** — so the strip runs at generation AND AGAIN ON EVERY DESERIALIZATION:
+
+- `"A. B. Smith"` → stored `"B. Smith"` → read back `"Smith"`
+- `"B. D.C. generator"` → stored `"D.C. generator"` → read `"C. generator"` → read again `"generator"`
+
+**⚠️ IT COMPOUNDS: every read strips another token, so the damage grows with usage and waiting is not
+neutral.** Blast radius is every table holding a `QuizItem` — `generated_quizzes`, `study_packs`,
+`quick_review_sessions.session_state`, `exam_question_pool`, `challenge_quiz_question_bank`,
+`combined_quizzes` — in every quiz mode. **⚠️ AND IT LANDS ON THIS CATALOG SPECIFICALLY:** Electrical
+Engineering notation (`A.C.`, `D.C.`) and biology binomials (`C. elegans`, `B. subtilis`, `A. thaliana`) are
+squarely inside `[A-Da-d]`, and this is board-exam content.
+
+### Planned Scope
+
+- **(1) A stored quiz choice survives being read (backend).** Stop re-running the label sanitizer on
+  deserialization. **⚠️ The generation-time sanitizer is LOAD-BEARING and STAYS** — it exists because the
+  LLM genuinely emits `"A. Ohm's Law"` and the label must come off exactly once. **⚠️ Do NOT weaken, relax
+  or delete `sanitizeChoiceTexts`; do NOT change `LEADING_CHOICE_LABEL_PATTERN`.** The defect is WHERE it
+  runs, not WHAT it does.
+- **(2) A supporter can reach a combined quiz they already made (backend + frontend).** `/library/combined-quiz/{id}`
+  is currently reachable ONLY by the redirect immediately after assembling, so an owner who closes the tab
+  **cannot turn off a live public link**, cannot re-copy it, and re-assembling spends another share-link unit
+  against a FREE cap of 3/month. **⚠️ The evidence this is an omission rather than a decision is in the
+  schema: `V132` builds `idx_combined_quizzes_owner_created_at` and NOTHING QUERIES IT.**
+
+### Anti-drift (locked for this release)
+
+- **⚠️ THE ALREADY-CORRUPTED ROWS ARE UNRECOVERABLE AND MUST NOT BE "REPAIRED".** The original text is gone —
+  `"generator"` cannot be turned back into `"D.C. generator"` because nothing records what was stripped. **Do
+  NOT write a backfill that guesses**, and do NOT re-prefix labels. Item 1 stops the bleeding; it does not
+  heal the wound. **State the residual as a named Known limitation.**
+- **⚠️ Do NOT change what a stored `QuizItem` MEANS.** No new field, no migration, no re-serialization pass
+  over existing JSONB. A read must simply stop mutating what it read.
+- **⚠️ Item 2 does NOT make a combined quiz editable.** Rows stay IMMUTABLE — mutating one a recipient is
+  part-way through would 400 them mid-quiz, which is why refs were rejected in `v0.110.0`. Add a way to FIND
+  and REVOKE, never to edit or re-assemble.
+- **⚠️ Do NOT add a quota, meter or counter.** `QuizShareLimitService` still meters at link creation only, and
+  a second counter is an untaken pricing decision (`v0.92.0`).
+- **⚠️ Do NOT gate item 2 on `ProfileType` and do NOT require a Learning Connection** — `v0.89.0`'s axis error
+  is what this whole capability exists to correct.
+- **⚠️ No new quiz mode or sub-mode**; `EXAM_MODES.md` stays a locked five-mode contract.
+- **⚠️ Do NOT change `BOARD_EXAM_STARTED` or `ADAPTIVE_PRACTICE_STARTED`** — the two `2026-10-13` checkpoints
+  read them. **⚠️ Do NOT change `QUIZ_SHARE_LINK_CREATED`'s `scope` metadata or the
+  `generate-quiz-combined-multi-note` tip's id** — `[CHECKPOINT — due 2026-10-04]` and `[2026-11-03]` read both.
+- **⚠️ `frontend/app/onboarding` STAYS FROZEN until `[CHECKPOINT — due 2026-09-11]` is read** — 7 days out.
+
+### Verification
+
+**ONE SCOPED COLD AGENT, framed as FALSIFICATION.** Item 1 changes production-data semantics — what a read
+of six existing tables returns — which the gate names outright. **⚠️ THE PINNING GUARD IS PRE-DECLARED:
+a stored choice must round-trip BYTE-IDENTICALLY through serialize → deserialize, and the test must use a
+value that ALREADY LOOKS LABELLED** (`"B. Smith"`, `"D.C. generator"`), because a value without a leading
+label round-trips cleanly under both the defect and the fix and would prove nothing. **⚠️ A second guard is
+owed at the OTHER end: generation must still strip exactly one label**, or the fix trades a read defect for
+a write defect. **⚠️ ESCALATE if item 1 turns out to need a migration or a re-serialization pass.**
+
+### Shipped
+
+- **Item 1 — a stored quiz choice survives being read.** `QuizValidationUtils.sanitizeChoiceTexts` strips a
+  leading choice label with `replaceFirst` and is **not idempotent**, and it was running on every
+  construction rather than only when text first arrives from the LLM. The sanitizing constructor now takes
+  an explicit `stripChoiceLabels` switch: **generation passes `true`, every read/copy/rebuild passes
+  `false`.**
+- **⚠️ IT WAS FOUR PATHS, NOT ONE — AND THE SCOPE LINE SAID "DESERIALIZATION".** Fixing only `@JsonCreator`
+  would have left three live, which is the "fix that changes nothing" shape this project keeps paying for.
+  Each was confirmed corrupting by probe before being touched:
+  - `@JsonCreator` — every JSONB read (`generated_quizzes`, `combined_quizzes`, `study_packs`, …)
+  - `QuizSessionStateUtils.extractQuiz` — **every session load, in every mode**; a different route entirely,
+    reading a Map rather than using Jackson
+  - `ShareService.copyQuizItem` — copying a note's Study Pack
+  - `QuizVersionShuffleUtils` — generating a second exam version
+- **⚠️ ONLY THE LABEL STRIP WAS ISOLATED, NOT THE WHOLE CONSTRUCTOR.** `resolveCorrectIndex` is **derived on
+  read**, not stored — MULTI_SELECT and legacy `answer`/`answerIndex` rows depend on it — so bypassing the
+  constructor wholesale would have silently broken the MULTI_SELECT grading `v0.110.0` had just fixed. A
+  mutant that takes that shortcut is killed by two named tests.
+- **⚠️ AN EXISTING TEST WAS EXPIRED, NOT WRONG, AND THE DISTINCTION CHANGED THE FIX.**
+  `extractQuiz_stripsLegacyChoiceLabelsAndKeepsLetterAnswerMapping` pinned that session reads STRIP labels.
+  **Dating it settled the question:** commit `684e4ae2` (2026-04-08) added the write-side sanitizer **and**
+  that read-side strip **in the same change** — the read half was a **one-time repair for sessions in flight
+  that day, implemented as a permanent read transform.** That is the origin of the compounding corruption.
+  Any session it protected is now a five-month-abandoned in-progress quiz.
+- **⚠️ CORRECTION — the claim that the expired test's letter-answer half "was deliberately preserved" was
+  TRUE ONLY OF THE BARE-LETTER FORM, and the fixture edit is what hid the gap.** The replacement changed its
+  choices from labelled to clean, and with clean choices an `"answer": "A)"` resolves through
+  `answerLetterIndex`, which **never reads choice text** — so it passes identically under the defect and the
+  fix. The pre-signoff cold agent proved it: that test **survived** the mutant reverting `extractQuiz`. The
+  one input shape that actually regressed — a **full-text** answer against **labelled** choices — was
+  exactly what the fixture edit removed. Fixed below, and now pinned by a discriminating test.
+- **⚠️ THE POSITIONAL HEURISTIC WAS CONSIDERED AND REJECTED.** "Strip only when every choice carries its own
+  positional label" fails on `["A. thaliana", "B. subtilis"]` — two binomials in alphabetical order — which
+  is exactly the content this defect already damages. A heuristic that breaks on the motivating example is
+  worse than an honest either/or.
+- **Guards at BOTH ENDS, because the fix could be faked from either side.** A byte-identical round-trip
+  across three read cycles (fixture uses `"B. Smith"`, `"D.C. generator"`, `"A. thaliana"` — plain text
+  survives the defect *and* the fix and would prove nothing), **plus** a generation-side guard that a label
+  still comes off exactly once. Mutants: re-enabling the strip on read reds the round-trip test; disabling
+  the sanitizer entirely reds the generation test; and each of the four paths has its own killing test **at
+  the layer the defect lives at** — the shuffle guard was rewritten after a `QuizItem`-level test failed to
+  catch the utils class still rebuilding the wrong way.
+- Backend **2055** tests green (counted from `target/surefire-reports/*.xml`, real-PostgreSQL harness
+  included), `+6` from the guards above.
+
+- **Item 2 — an owner can find a combined quiz they already built.** `GET /combined-quizzes` returns the
+  caller's own snapshots newest-first, bounded at 50, using the `idx_combined_quizzes_owner_created_at`
+  index `V132` built and never queried. `/library/combined-quizzes` lists them and links to the existing
+  detail page; the Library header carries the entry point. **A live public link is reachable and revocable
+  again after closing the tab** — previously the only route to it was the post-assembly redirect.
+- **⚠️ "Find" was the whole fix, and the list deliberately has NO controls.** Toggling, copying and creating
+  all already live on the detail page with their error states tested; duplicating them in a list would have
+  added untested behaviour in a patch. Verified: the listing page references no toggle, clipboard or delete.
+- **⚠️ No field claims to be a source-note count, because none can be.** `CombinedQuizSection` stores only
+  `{title, questions}` — **no `noteId`** — and `assemble` does not dedupe sections, so two can carry the
+  same note. The summary exposes `sectionCount` and `questionCount`, both derived from the stored JSONB with
+  no extra query. **⚠️ Do NOT add a `noteId` to the stored section to get a nicer count; that changes what an
+  immutable snapshot means.**
+- **A separate summary DTO, not `CombinedQuizResponse`** — that one carries full `sections`, so listing ten
+  quizzes would have serialized ten complete answer keys to render ten titles.
+- **Share state resolves in ONE batched query, collapsed to the latest row per quiz.** The collapse is
+  load-bearing rather than tidy: toggling a link off and creating again mints a **new row**, so a quiz can
+  own several and a naive join renders two conflicting states.
+- **⚠️ AUDIT FINDING — THE OWNER SCOPE WAS UNTESTABLE AS DELIVERED, AND THE MOCKED TEST HID IT.**
+  `CombinedQuizServiceTest` mocks `CombinedQuizRepository`, so the derived query **never executes** there:
+  replacing it with one that ignores `ownerUserId` passed the entire suite, and the service's defensive Java
+  owner-filter would have masked it in production too. **This is the `v0.93.0` failure mode by name** — every
+  repository reference in the test tree being a Mockito mock, so a deleted predicate ships green. A
+  real-PostgreSQL test now seeds two owners and pins that the query returns one; the same mutant reds
+  `combinedQuizListReturnsOnlyTheOwnersRowsNewestFirst`.
+- **⚠️ THE PRE-SIGNOFF COLD AGENT FOUND TWO REGRESSIONS THIS RELEASE INTRODUCED, BOTH FIXED BEFORE SIGNOFF,
+  AND BOTH WORSE THAN THE LIMITATION FIRST WRITTEN.**
+  - **A legacy row lost its correct answer ENTIRELY — `correctIndex` went `null`, so the question graded
+    every response wrong.** Skipping the choice-label strip on read made `resolveCorrectIndex` disagree with
+    itself: it still stripped the **legacy answer** while leaving the **choices** alone, so a row holding
+    `"A. Encapsulation"` beside answer `"A. Encapsulation"` matched nothing and fell through to
+    `answerLetterIndex`, which returns null for anything longer than one character. **Reproduced against
+    both commits before fixing.** The fix normalizes **both sides for the comparison only** — the stored
+    text is still never rewritten.
+  - **Whitespace normalization was dropped from the read path unnecessarily**, so a stored
+    `"Ohm's   Law"` stopped matching a legacy `"Ohm's Law"` answer — again losing `correctIndex`, for a
+    reason unrelated to labels. **⚠️ `sanitizeChoiceTexts` does TWO things and only the label strip is
+    non-idempotent**; the class comment said exactly that while the implementation dropped both. Whitespace
+    normalization is now unconditional and the label strip alone is switched.
+- Backend **2061** tests green (surefire XML, real-PostgreSQL harness included), frontend **2134** across
+  198 suites, `tsc --noEmit` clean, `npm run lint` at 0 errors.
+- **Item 2 — owners can find combined quizzes they already built.** Library now links to a bounded,
+  newest-first list of the owner’s immutable combined-quiz snapshots. Each lightweight row carries only its
+  title, creation time, stored section/question counts, and the latest sharing state; opening it returns to
+  the existing detail page, which remains the sole place to copy a link or turn sharing off.
+
+### Known limitations
+
+- **⚠️ ALREADY-CORRUPTED ROWS ARE NOT REPAIRED, AND CANNOT BE.** The stripped token is gone and nothing
+  records it, so `"generator"` cannot be turned back into `"D.C. generator"`. Item 1 stops the bleeding; it
+  does not heal the wound. **No backfill was written, deliberately** — any repair would have to guess, and a
+  wrong guess is worse than visibly-truncated text. Affected rows are those whose choice text began with a
+  letter followed by `.` or `)`; the damage is proportional to how often each row was read.
+- **⚠️ A PRE-2026-04-08 ROW WITH LABELLED CHOICES NOW DISPLAYS THEM. ⚠️ THIS ENTRY WAS CORRECTED AT SIGNOFF
+  — the first version was narrower than the code on two axes, and the cold agent caught both.**
+  - **It is NOT session-only.** The skip applies to **every** JSONB read, so it reaches `study_packs`,
+    `generated_quizzes`, `exam_question_pool`, `challenge_quiz_question_bank` and `combined_quizzes` — not
+    just `quick_review_sessions`.
+  - **The DISPLAY artefact is worse than "renders its labels":** `lib/quiz.ts` and the shared-quiz page both
+    prepend a positional letter, so a legacy row renders **`"A. A. Encapsulation"`**.
+  - **The GRADING half is fixed rather than accepted** — see the two regressions above. A legacy row's
+    correct answer resolves again, so the residual is presentation only, which is what "cosmetic" was
+    wrongly claiming before the fix existed.
+  **⚠️ Still not verifiable from the repo — `git log` dates the code, not the data.** The discriminating
+  production read is rows whose choice text matches `^[A-Da-d][.)]`; those *also* lacking `correctIndex`
+  were the grading-affected population.
+
 ## v0.110.0 - Supporter Combined Quiz
 
 **Status: Released** (kicked off 2026-09-03, signed off 2026-09-04, base branch `releases/v0.110.0`, cut from `main` after
@@ -322,6 +514,19 @@ a prompt**; and **call `advisor()` BEFORE writing the Codex prompt.**
   learner. **⚠️ A tautological `tipId === "..."` assertion was considered and rejected** — it compares a
   literal to itself. Mutants: restoring the shipped copy reds the first test; reverting the tipId alone reds
   the second.
+- **⚠️ THE COMBINED-QUIZ LIST TRUNCATES SILENTLY AT 50, AND IT HIDES THE OLDEST ROWS — WHICH ARE THE ONES
+  THIS RELEASE EXISTS TO REACH.** Nothing caps combined quizzes per owner, the page shows no "showing 50 of
+  N", and there is no pagination. An owner past 50 cannot reach their earliest quizzes — precisely the
+  forgotten ones whose public links they might want revoked. **Recorded rather than fixed:** raising or
+  paginating the bound is a real decision and this is a patch. Owner call.
+- **Sharing state collapses to the NEWEST link row, so an older still-active link reads as "Sharing off".**
+  `quiz_share_links` has no uniqueness on `combined_quiz_id` and creating over an inactive link mints a new
+  row, while `getActivePublicQuiz` serves **any** active token. Reaching this needs direct API use — every UI
+  path holds only the newest link — so it is recorded, not fixed.
+- **The whole fix rests on a convention nothing enforces: "public constructor == generation."** Every
+  remaining public-constructor call site is genuine generation (verified by the cold agent, which searched
+  for a fifth path and found none), but a future call site rebuilding stored text through it would
+  reintroduce the corruption silently and no test would catch it.
 
 ### Pre-signoff pressure test — TWO COLD AGENTS, and what they found
 

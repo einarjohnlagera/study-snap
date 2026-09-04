@@ -1501,6 +1501,14 @@ export default function LibraryPage() {
         description="Browse and revisit all of your saved notes."
         actions={(
           <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full sm:w-auto"
+              onClick={() => router.push("/library/combined-quizzes")}
+            >
+              Combined quizzes
+            </Button>
             <CreateMenu
               className="w-full sm:w-auto"
               primaryLabel="New Note"

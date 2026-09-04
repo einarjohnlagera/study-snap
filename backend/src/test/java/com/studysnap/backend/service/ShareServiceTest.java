@@ -92,6 +92,34 @@ class ShareServiceTest {
         verify(activityTrackingService).recordActivity(currentUserId, ActivityType.CREATED_STUDY_PACK, savedStudyPack.getId());
     }
 
+    /**
+     * ⚠️ Copying a note used to rebuild each quiz item through the PUBLIC constructor, which re-ran the
+     * non-idempotent choice-label strip — so a copied Study Pack silently lost a token from its choices:
+     * {@code "B. Smith"} became {@code "Smith"}, and {@code "D.C. generator"} became {@code "C. generator"}.
+     *
+     * <p>⚠️ The fixture text must ALREADY look labelled or this proves nothing — plain text survives both
+     * the defect and the fix.
+     */
+    @Test
+    void remixSharedStudyPack_copiesChoiceTextVerbatim() {
+        UUID currentUserId = UUID.randomUUID();
+        StudyPackEntity source = buildSharedPack("Electrical Machines", "token-verbatim", UUID.randomUUID(), UUID.randomUUID());
+        List<String> labelLookingChoices = List.of("B. Smith", "D.C. generator", "A. thaliana", "Plain");
+        source.setQuiz(List.of(QuizItem.fromStoredComponents(
+                "Which one?", labelLookingChoices, 1, "Concept", "Because", null,
+                "MCQ", null, null, null, null, null, null, null, null)));
+        when(studyPackRepository.findByShareToken("token-verbatim")).thenReturn(Optional.of(source));
+
+        shareService.remixSharedStudyPack("token-verbatim", currentUserId);
+
+        ArgumentCaptor<StudyPackEntity> captor = ArgumentCaptor.forClass(StudyPackEntity.class);
+        verify(studyPackRepository).save(captor.capture());
+        assertThat(captor.getValue().getQuiz().getFirst().choices())
+                .containsExactlyElementsOf(labelLookingChoices);
+        // The copy still drops provenance: it belongs to a new owner with a new Study Pack.
+        assertThat(captor.getValue().getQuiz().getFirst().sourceStudyPackId()).isNull();
+    }
+
     @Test
     void remixSharedStudyPack_forOwnerDoesNotSetAttributionFields() {
         UUID ownerUserId = UUID.randomUUID();

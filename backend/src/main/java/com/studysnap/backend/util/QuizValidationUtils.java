@@ -123,12 +123,36 @@ public class QuizValidationUtils {
     }
 
     public String sanitizeChoiceText(String choice) {
+        return sanitizeChoiceText(choice, true);
+    }
+
+    /**
+     * ⚠️ This method does TWO things, and only ONE of them is unsafe to repeat.
+     *
+     * <p>{@code LEADING_CHOICE_LABEL_PATTERN.replaceFirst} is NOT idempotent — repeating it eats a second
+     * token ({@code "A. B. Smith"} → {@code "B. Smith"} → {@code "Smith"}). Whitespace normalization IS
+     * idempotent and must keep running on every path, or a stored {@code "Ohm's   Law"} stops matching a
+     * legacy {@code "Ohm's Law"} answer and the question loses its correct index entirely.
+     */
+    public String sanitizeChoiceText(String choice, boolean stripLeadingLabel) {
         if (choice == null) {
             return null;
         }
-        return StringNormalizationUtils.normalizeWhitespaceToSingleSpaceOrNull(
-                LEADING_CHOICE_LABEL_PATTERN.matcher(choice).replaceFirst("")
-        );
+        String withoutLabel = stripLeadingLabel
+                ? LEADING_CHOICE_LABEL_PATTERN.matcher(choice).replaceFirst("")
+                : choice;
+        return StringNormalizationUtils.normalizeWhitespaceToSingleSpaceOrNull(withoutLabel);
+    }
+
+    /** Whitespace-only normalization, for text whose label was already stripped when it was generated. */
+    public List<String> normalizeChoiceTexts(List<String> choices) {
+        if (choices == null) {
+            return List.of();
+        }
+        return choices.stream()
+                .map(choice -> sanitizeChoiceText(choice, false))
+                .map(choice -> choice == null ? "" : choice)
+                .toList();
     }
 
     private boolean isEffectivelyTrueFalse(List<String> choices, String questionFormat) {

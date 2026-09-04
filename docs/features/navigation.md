@@ -47,6 +47,7 @@ Rules:
 | Note Details | Library | Library |
 | Combined Quiz Builder (`/library/combined-quiz?notes=…`) | Library | Library |
 | Combined Quiz Share (`/library/combined-quiz/{combinedQuizId}`) | Library | Library |
+| Combined Quiz List (`/library/combined-quizzes`) | Library | Library |
 | Supporter progress (`/linked-learners/{id}/progress`) | Learning connections | `Learning connections` (`BackLink`, added `v0.90.0` — the success path previously had none, and the one place back navigation existed used a raw `<Link>` with a forbidden *"Back to"* prefix) |
 | Public Note Details | Public Library, or Explore if reached via `/explore`'s Notes tab | `Public Library`, or `Explore` when the stored return path starts with `/explore` (`PublicLibraryBackLink`, `frontend/components/notes/public-library-back-link.tsx`) |
 | Quiz pages (Quick Review, Challenge Quiz, Adaptive Practice) | Note Details | Note |

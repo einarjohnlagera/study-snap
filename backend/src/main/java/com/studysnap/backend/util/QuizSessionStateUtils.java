@@ -392,8 +392,11 @@ public class QuizSessionStateUtils {
             if (choices.isEmpty() && !isChoicelessFormat) {
                 continue;
             }
-            quiz.add(new QuizItem(question, choices, correctIndex, concept, explanation, answer, questionFormat, questionType, workingSolution, correctIndices, questionGroup, keyConcept, acceptableAnswers, acceptableAnswerGroups)
-                    .withSourceStudyPackId(sourceStudyPackId));
+            // ⚠️ fromStoredComponents, NOT the public constructor. This reads text we already stripped when
+            // it was generated; re-stripping eats a second token on EVERY session load, in every mode.
+            quiz.add(QuizItem.fromStoredComponents(question, choices, correctIndex, concept, explanation, answer,
+                    questionFormat, questionType, workingSolution, correctIndices, questionGroup, keyConcept,
+                    acceptableAnswers, acceptableAnswerGroups, sourceStudyPackId));
         }
 
         return quiz;
