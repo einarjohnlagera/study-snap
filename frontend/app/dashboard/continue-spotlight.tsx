@@ -1,6 +1,10 @@
 "use client";
 
-import { ADAPTIVE_PRACTICE_DASHBOARD_CONTINUE_ENTRY, buildAdaptivePracticeHref } from "@/lib/adaptive-practice-entry";
+import {
+  ADAPTIVE_PRACTICE_DASHBOARD_CONTINUE_ENTRY,
+  buildAdaptivePracticeHref,
+  buildAdaptivePracticeSessionHref,
+} from "@/lib/adaptive-practice-entry";
 import { useEffect } from "react";
 import { CheckCircle2, Sparkles, TrendingUp, Trophy } from "lucide-react";
 import { Card } from "@/components/ui/card";
@@ -152,20 +156,22 @@ function getCardTone(recommendation: ContinueStudyingResponse) {
 
 export function ContinueSpotlight({ recommendation, profileType }: Readonly<ContinueSpotlightProps>) {
   useEffect(() => {
-    if (!recommendation.noteId || !recommendation.reason) {
+    if ((!recommendation.noteId && !recommendation.sessionId) || !recommendation.reason) {
       return;
     }
     void trackAnalyticsEvent({
       eventType: "DASHBOARD_RECOMMENDATION_SHOWN",
-      entityId: recommendation.noteId,
+      entityId: recommendation.noteId ?? recommendation.sessionId,
       metadata: {
         reason: recommendation.reason,
         resumeType: recommendation.resumeType,
       },
     });
-  }, [recommendation.noteId, recommendation.reason, recommendation.resumeType]);
+  }, [recommendation.noteId, recommendation.reason, recommendation.resumeType, recommendation.sessionId]);
 
-  if (!recommendation.noteId) {
+  const hasSessionAddressedAdaptiveRoute = recommendation.resumeType === "ADAPTIVE"
+    && Boolean(recommendation.sessionId);
+  if (!recommendation.noteId && !hasSessionAddressedAdaptiveRoute) {
     return null;
   }
 
@@ -181,9 +187,16 @@ export function ContinueSpotlight({ recommendation, profileType }: Readonly<Cont
   // and therefore starts a fresh one, still attributes to the Dashboard. Without it those
   // starts record as "direct" and UNDERSTATE dashboard-originated discovery — the exact
   // metric the 2026-09-12 checkpoint exists to read.
-  const resumeHref = resumePresentation.hrefSuffix === "adaptive-practice"
-    ? buildAdaptivePracticeHref(recommendation.noteId, { entry: ADAPTIVE_PRACTICE_DASHBOARD_CONTINUE_ENTRY })
-    : `/notes/${recommendation.noteId}/${resumePresentation.hrefSuffix}`;
+  let resumeHref: string;
+  if (hasSessionAddressedAdaptiveRoute) {
+    resumeHref = buildAdaptivePracticeSessionHref(recommendation.sessionId!);
+  } else if (resumePresentation.hrefSuffix === "adaptive-practice") {
+    resumeHref = buildAdaptivePracticeHref(recommendation.noteId!, {
+      entry: ADAPTIVE_PRACTICE_DASHBOARD_CONTINUE_ENTRY,
+    });
+  } else {
+    resumeHref = `/notes/${recommendation.noteId!}/${resumePresentation.hrefSuffix}`;
+  }
 
   return (
     <Card className="space-y-4 p-4 sm:p-6">

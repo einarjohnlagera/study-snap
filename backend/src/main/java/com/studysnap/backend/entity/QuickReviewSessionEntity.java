@@ -1,10 +1,13 @@
 package com.studysnap.backend.entity;
 
+import com.studysnap.backend.exception.QuickReviewSessionAnchorException;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -29,11 +32,14 @@ public class QuickReviewSessionEntity {
     @Column(name = "user_id", nullable = false)
     private UUID userId;
 
-    @Column(name = "study_pack_id", nullable = false)
+    @Column(name = "study_pack_id", nullable = true)
     private UUID studyPackId;
 
-    @Column(name = "note_id", nullable = false)
+    @Column(name = "note_id", nullable = true)
     private UUID noteId;
+
+    @Column(name = "source_collection_id", nullable = true)
+    private UUID sourceCollectionId;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "session_mode", nullable = false, length = 32)
@@ -100,4 +106,15 @@ public class QuickReviewSessionEntity {
 
     @Column(name = "completed_at")
     private OffsetDateTime completedAt;
+
+    @PrePersist
+    @PreUpdate
+    void validateAnchor() {
+        boolean hasPackAndNote = studyPackId != null && noteId != null;
+        boolean hasPartialPackAndNote = (studyPackId == null) != (noteId == null);
+        boolean hasCollection = sourceCollectionId != null;
+        if (hasPartialPackAndNote || hasPackAndNote == hasCollection) {
+            throw new QuickReviewSessionAnchorException();
+        }
+    }
 }

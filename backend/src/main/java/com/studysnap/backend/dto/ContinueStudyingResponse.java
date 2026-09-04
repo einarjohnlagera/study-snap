@@ -24,6 +24,7 @@ public record ContinueStudyingResponse(
         Integer totalQuestions,
         QuickReviewRound currentRound,
         Integer remainingQuestions,
-        ContinueStudyingResumeState resumeState
+        ContinueStudyingResumeState resumeState,
+        String sessionId
 ) {
 }

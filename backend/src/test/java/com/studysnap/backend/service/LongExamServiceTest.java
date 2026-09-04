@@ -229,6 +229,9 @@ class LongExamServiceTest {
         assertThat(response.monthlyLimit()).isEqualTo(12);
         assertThat(dispatchedTask).isNotNull();
         QuickReviewSessionEntity generatingSession = savedSessions.getFirst();
+        assertThat(generatingSession.getStudyPackId()).isEqualTo(studyPackId);
+        assertThat(generatingSession.getNoteId()).isEqualTo(studyPack.getNoteId());
+        assertThat(generatingSession.getSourceCollectionId()).isNull();
         when(quickReviewSessionRepository.findById(response.sessionId())).thenReturn(Optional.of(generatingSession));
 
         dispatchedTask.run();

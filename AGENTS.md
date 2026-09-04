@@ -2,9 +2,15 @@
 
 **v0.105.0 implementation note:** `ExamSourceLimitResolver` still owns the sole `questionCount / 3`
 formula, but for Long Exam it now means **how many sources we sample from the eligible curriculum pool**,
-not how many notes a learner may pick. A plan session remains anchored on the caller-supplied primary Study
-Pack until the deferred §15 session-anchoring migration: the primary is force-included in the sample at
-index 0, and neither the active-session lookup nor its two partial unique indexes may change.
+not how many notes a learner may pick. A plan-sourced **Long Exam** remains anchored on the caller-supplied
+primary Study Pack: the primary is force-included in the sample at index 0. `v0.113.0` changes only
+plan-scoped Adaptive Practice anchoring; it does not move Long Exam or Board Exam anchors.
+
+**v0.113.0 implementation note:** a `quick_review_sessions` row has either a non-null
+`(study_pack_id, note_id)` pair or a `source_collection_id`. Plan-scoped Adaptive Practice writes the
+collection column and the existing `session_state.sourceCollectionId` key. Every reader must use the one
+column-first, JSONB-fallback resolver; the JSONB leg keeps pre-migration in-flight sessions resumable and must
+not be removed until no such row can remain active.
 
 Long Exam's quota charge and failure reversal must both derive from `LongExamService.QUOTA_UNITS_PER_SESSION`;
 the reservation and reversal session-state keys are public constants on that same class so the recovery sweeper

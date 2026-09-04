@@ -20,6 +20,7 @@ import com.studysnap.backend.entity.NoteCollectionEntity;
 import com.studysnap.backend.entity.NoteCollectionItemEntity;
 import com.studysnap.backend.entity.PlanType;
 import com.studysnap.backend.exception.AppException;
+import com.studysnap.backend.exception.QuickReviewSessionAnchorException;
 import com.studysnap.backend.service.model.StudyPackGenerationContext;
 import com.studysnap.backend.repository.QuickReviewSessionRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
@@ -287,6 +288,13 @@ class QuickReviewAdaptivePracticeServiceTest {
         assertThat(response.focusConcepts()).extracting("concept")
                 .containsExactly("Electrolyte Imbalance", "Fluid Shift");
         assertThat(response.quiz()).hasSize(5);
+        ArgumentCaptor<QuickReviewSessionEntity> sessionCaptor =
+                ArgumentCaptor.forClass(QuickReviewSessionEntity.class);
+        verify(quickReviewSessionRepository, times(2)).save(sessionCaptor.capture());
+        QuickReviewSessionEntity saved = sessionCaptor.getAllValues().getLast();
+        assertThat(saved.getStudyPackId()).isEqualTo(studyPackId);
+        assertThat(saved.getNoteId()).isEqualTo(noteId);
+        assertThat(saved.getSourceCollectionId()).isNull();
         verify(generationContextResolver).resolveForStudyPack(userId, studyPack);
         verify(llmStudyPackService, never()).generateAdaptivePracticeQuiz(any(), any(), any(), any(), any(), anyInt(), any());
     }
@@ -775,42 +783,46 @@ class QuickReviewAdaptivePracticeServiceTest {
     }
 
     @Test
-    void collectionScoped_reportsTheInterviewSessionWhenEveryEligiblePackIsOccupiedByOne() {
-        // ⚠️ REPLACES A VACUOUS TEST. The previous version used a SINGLE-pack fixture whose
-        // findTop...ByStudyPackId stub returned empty while the list query returned an active
-        // session -- a state no single table can produce -- so it exercised the focusEligible early
-        // return, not the guard, and its assertion (sessionId != interviewId) was satisfied by null.
-        // Stubs here are CONSISTENT: both queries see the same sessions.
-        CollectionFixture f = collectionFixture(1);
-        stubCollectionFocus(f, 0, List.of("Shear Force"), List.of());
-        QuickReviewSessionEntity interview = interviewSessionOn(f, 0);
-        seeActiveSessions(f, interview);
-
-        QuickReviewAdaptiveQuizResponse response =
-                adaptivePracticeService.generateAdaptiveQuizForCollection(
-                        f.collectionId.toString(), f.userId, "collection-detail");
-
-        // The dedicated message must actually be REACHABLE -- it used to be dead code behind the
-        // focusEligible filter, and the learner was told "no weak concepts" when they had some.
-        assertThat(response.message()).contains("Interview Practice session in progress");
-        assertThat(response.sessionId()).isNull();
-        verify(userUsageService, never()).incrementAdaptiveQuizGeneration(any(), any());
-    }
-
-    @Test
-    void collectionScoped_anchorsOnAnUnoccupiedPackRatherThanBlockingTheWholePlan() {
+    void collectionScoped_startsWhenEveryEligiblePackHasANoteScopedAdaptiveSession() {
+        // Payoff guard: unoccupied packs pass under both the borrowed-anchor defect and this fix.
+        // Every eligible source is occupied here, so only collection anchoring can start a session.
         CollectionFixture f = collectionFixture(2);
         stubCollectionFocus(f, 0, List.of("Shear Force"), List.of());
         stubCollectionFocus(f, 1, List.of("Bending Moment"), List.of());
-        seeActiveSessions(f, interviewSessionOn(f, 0));
-        stubCollectionGeneration(f, 1);
+        QuickReviewSessionEntity first = buildInProgressAdaptiveSession(
+                UUID.randomUUID(), f.userId, f.packs.get(0).getId(), f.noteIds.get(0));
+        QuickReviewSessionEntity second = buildInProgressAdaptiveSession(
+                UUID.randomUUID(), f.userId, f.packs.get(1).getId(), f.noteIds.get(1));
+        seeActiveSessions(f, first, second);
+        stubCollectionGeneration(f, 2);
 
         QuickReviewAdaptiveQuizResponse response =
                 adaptivePracticeService.generateAdaptiveQuizForCollection(
                         f.collectionId.toString(), f.userId, "collection-detail");
 
-        // Pack 0 is occupied, so the session anchors on pack 1 instead of refusing the whole plan.
-        assertThat(response.studyPackId()).isEqualTo(f.packs.get(1).getId().toString());
+        assertThat(response.sessionId()).isNotNull();
+        assertThat(response.studyPackId()).isNull();
+        assertThat(response.noteId()).isNull();
+        verify(userUsageService).incrementAdaptiveQuizGeneration(eq(f.userId), any());
+    }
+
+    @Test
+    void collectionScoped_andNoteScopedSessionsCoexistAndResumeAsThemselves() {
+        CollectionFixture f = collectionFixture(2);
+        stubCollectionFocus(f, 0, List.of("Shear Force"), List.of());
+        stubCollectionFocus(f, 1, List.of("Bending Moment"), List.of());
+        QuickReviewSessionEntity noteScoped = buildInProgressAdaptiveSession(
+                UUID.randomUUID(), f.userId, f.packs.get(0).getId(), f.noteIds.get(0));
+        seeActiveSessions(f, noteScoped);
+        stubCollectionGeneration(f, 2);
+
+        QuickReviewAdaptiveQuizResponse response =
+                adaptivePracticeService.generateAdaptiveQuizForCollection(
+                        f.collectionId.toString(), f.userId, "collection-detail");
+
+        assertThat(response.sessionId()).isNotEqualTo(noteScoped.getId().toString());
+        assertThat(response.studyPackId()).isNull();
+        assertThat(response.noteId()).isNull();
         verify(userUsageService).incrementAdaptiveQuizGeneration(eq(f.userId), any());
     }
 
@@ -824,15 +836,16 @@ class QuickReviewAdaptivePracticeServiceTest {
         QuickReviewSessionEntity noteScoped = buildInProgressAdaptiveSession(
                 UUID.randomUUID(), f.userId, f.packs.get(0).getId(), f.noteIds.get(0));
         seeActiveSessions(f, noteScoped);
+        stubCollectionGeneration(f, 1);
 
         QuickReviewAdaptiveQuizResponse response =
                 adaptivePracticeService.generateAdaptiveQuizForCollection(
                         f.collectionId.toString(), f.userId, "collection-detail");
 
         assertThat(response.sessionId()).isNotEqualTo(noteScoped.getId().toString());
-        assertThat(response.sessionId()).isNull();
-        assertThat(response.message()).contains("another Adaptive Practice session");
-        verify(userUsageService, never()).incrementAdaptiveQuizGeneration(any(), any());
+        assertThat(response.sessionId()).isNotNull();
+        assertThat(response.studyPackId()).isNull();
+        verify(userUsageService).incrementAdaptiveQuizGeneration(eq(f.userId), any());
     }
 
     @Test
@@ -940,14 +953,33 @@ class QuickReviewAdaptivePracticeServiceTest {
         when(quickReviewSessionRepository.findByUserIdAndSessionModeAndStatusInOrderByCreatedAtDesc(
                 eq(f.userId), eq(QuickReviewSessionMode.ADAPTIVE), any()))
                 .thenReturn(List.of(existing));
-        when(studyPackRepository.findByIdAndOwnerUserId(f.packs.get(1).getId(), f.userId))
-                .thenReturn(Optional.of(f.packs.get(1)));
-
         QuickReviewAdaptiveQuizResponse response =
                 adaptivePracticeService.generateAdaptiveQuizForCollection(
                         f.collectionId.toString(), f.userId, "collection-detail");
 
         assertThat(response.sessionId()).isEqualTo(existingId.toString());
+        verify(userUsageService, never()).incrementAdaptiveQuizGeneration(any(), any());
+    }
+
+    @Test
+    void collectionScoped_prefersTheAnchorColumnOverAConflictingLegacyJsonValue() {
+        CollectionFixture f = collectionFixture(1);
+        UUID existingId = UUID.randomUUID();
+        QuickReviewSessionEntity existing = buildInProgressAdaptiveSession(
+                existingId, f.userId, f.packs.getFirst().getId(), f.noteIds.getFirst());
+        existing.setSourceCollectionId(f.collectionId);
+        Map<String, Object> existingState = new LinkedHashMap<>(existing.getSessionState());
+        existingState.put("sourceCollectionId", UUID.randomUUID().toString());
+        existing.setSessionState(existingState);
+        when(quickReviewSessionRepository.findByUserIdAndSessionModeAndStatusInOrderByCreatedAtDesc(
+                eq(f.userId), eq(QuickReviewSessionMode.ADAPTIVE), any()))
+                .thenReturn(List.of(existing));
+
+        QuickReviewAdaptiveQuizResponse response = adaptivePracticeService.generateAdaptiveQuizForCollection(
+                f.collectionId.toString(), f.userId, "collection-detail");
+
+        assertThat(response.sessionId()).isEqualTo(existingId.toString());
+        verify(quickReviewSessionRepository, never()).save(any());
         verify(userUsageService, never()).incrementAdaptiveQuizGeneration(any(), any());
     }
 
@@ -1016,6 +1048,101 @@ class QuickReviewAdaptivePracticeServiceTest {
         assertThat(response.quiz()).isEmpty();
     }
 
+    @Test
+    void getAdaptiveSessionById_entersACollectionSessionWithBothNoteAnchorsNull() {
+        UUID userId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+        UUID collectionId = UUID.randomUUID();
+        UUID sourcePackId = UUID.randomUUID();
+        QuickReviewSessionEntity session = buildInProgressAdaptiveSession(
+                sessionId, userId, sourcePackId, UUID.randomUUID());
+        session.setStudyPackId(null);
+        session.setNoteId(null);
+        session.setSourceCollectionId(collectionId);
+        session.setSessionState(QuizSessionStateUtils.withQuiz(
+                List.of(stampedItem("Plan question", "Shear Force", sourcePackId)),
+                Map.of(
+                        "sourceCollectionId", collectionId.toString(),
+                        "adaptiveFocusConcepts", List.of(Map.of(
+                                "concept", "Shear Force",
+                                "sourceStudyPackId", sourcePackId.toString(),
+                                "sourceTitle", "Statics"
+                        ))
+                )
+        ));
+        NoteCollectionEntity collection = new NoteCollectionEntity();
+        collection.setId(collectionId);
+        collection.setOwnerUserId(userId);
+        collection.setTitle("Structural Engineering Plan");
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(
+                sessionId, userId, QuickReviewSessionMode.ADAPTIVE)).thenReturn(Optional.of(session));
+        when(noteCollectionRepository.findByIdAndOwnerUserId(collectionId, userId))
+                .thenReturn(Optional.of(collection));
+
+        QuickReviewAdaptiveQuizResponse response = adaptivePracticeService
+                .getAdaptiveSessionById(sessionId.toString(), userId);
+
+        assertThat(response.sessionId()).isEqualTo(sessionId.toString());
+        assertThat(response.studyPackId()).isNull();
+        assertThat(response.noteId()).isNull();
+        assertThat(response.title()).isEqualTo("Structural Engineering Plan");
+        assertThat(response.quiz()).hasSize(1);
+    }
+
+    @Test
+    void getAdaptiveSessionById_resolvesLegacyJsonOnlyCollectionScope() {
+        UUID userId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+        UUID collectionId = UUID.randomUUID();
+        UUID packId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        QuickReviewSessionEntity legacy = buildInProgressAdaptiveSession(sessionId, userId, packId, noteId);
+        legacy.setSessionState(new LinkedHashMap<>(legacy.getSessionState()));
+        legacy.getSessionState().put("sourceCollectionId", collectionId.toString());
+        NoteCollectionEntity collection = new NoteCollectionEntity();
+        collection.setId(collectionId);
+        collection.setOwnerUserId(userId);
+        collection.setTitle("Legacy Plan");
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(
+                sessionId, userId, QuickReviewSessionMode.ADAPTIVE)).thenReturn(Optional.of(legacy));
+        when(noteCollectionRepository.findByIdAndOwnerUserId(collectionId, userId))
+                .thenReturn(Optional.of(collection));
+
+        QuickReviewAdaptiveQuizResponse response = adaptivePracticeService
+                .getAdaptiveSessionById(sessionId.toString(), userId);
+
+        assertThat(response.sessionId()).isEqualTo(sessionId.toString());
+        assertThat(response.title()).isEqualTo("Legacy Plan");
+        assertThat(response.studyPackId()).isEqualTo(packId.toString());
+    }
+
+    @Test
+    void getAdaptiveSessionById_hidesUnknownAndOtherUsersSessionsBehindTheSameNotFoundContract() {
+        UUID userId = UUID.randomUUID();
+        UUID unknown = UUID.randomUUID();
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(
+                unknown, userId, QuickReviewSessionMode.ADAPTIVE)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> adaptivePracticeService.getAdaptiveSessionById(unknown.toString(), userId))
+                .isInstanceOf(AdaptivePracticeSessionNotFoundException.class)
+                .hasMessage("Adaptive Practice session not found.");
+    }
+
+    @Test
+    void getAdaptiveSessionById_doesNotReturnInterviewPractice() {
+        UUID userId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+        QuickReviewSessionEntity interview = buildInProgressAdaptiveSession(
+                sessionId, userId, UUID.randomUUID(), UUID.randomUUID());
+        interview.setSessionState(new LinkedHashMap<>(interview.getSessionState()));
+        interview.getSessionState().put("subMode", "INTERVIEW");
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(
+                sessionId, userId, QuickReviewSessionMode.ADAPTIVE)).thenReturn(Optional.of(interview));
+
+        assertThatThrownBy(() -> adaptivePracticeService.getAdaptiveSessionById(sessionId.toString(), userId))
+                .isInstanceOf(AdaptivePracticeSessionNotFoundException.class);
+    }
+
 
     /** An in-progress Interview Practice session anchored on one of the fixture's packs. */
     @Test
@@ -1035,6 +1162,9 @@ class QuickReviewAdaptivePracticeServiceTest {
         b.setKeyConcepts(List.of("Shear Force"));
 
         QuickReviewSessionEntity session = buildInProgressAdaptiveSession(sessionId, userId, packA, noteA);
+        session.setStudyPackId(null);
+        session.setNoteId(null);
+        session.setSourceCollectionId(UUID.randomUUID());
         session.setSessionState(QuizSessionStateUtils.withQuiz(List.of(
                 stampedItem("A1", "Shear Force", packA),
                 stampedItem("B1", "Shear Force", packB)
@@ -1066,6 +1196,28 @@ class QuickReviewAdaptivePracticeServiceTest {
                 eq(userId), eq(packA), any(), any());
         verify(conceptHealthService, never()).recordCorrectAnswers(
                 eq(userId), eq(packB), any(), any());
+    }
+
+    @Test
+    void completeCollectionAdaptiveSession_failsLoudlyBeforeANullConceptHealthWrite() {
+        UUID userId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+        QuickReviewSessionEntity session = buildInProgressAdaptiveSession(
+                sessionId, userId, UUID.randomUUID(), UUID.randomUUID());
+        session.setStudyPackId(null);
+        session.setNoteId(null);
+        session.setSourceCollectionId(UUID.randomUUID());
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(
+                sessionId, userId, QuickReviewSessionMode.ADAPTIVE)).thenReturn(Optional.of(session));
+        when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        assertThatThrownBy(() -> adaptivePracticeService.completeAdaptiveSession(
+                sessionId.toString(), userId, 1, 1, null, List.of("Unstamped concept"), null, null))
+                .isInstanceOf(QuickReviewSessionAnchorException.class);
+
+        verify(conceptHealthService, never()).recordCorrectAnswers(any(), any(), any(), any());
+        verify(conceptHealthService, never()).recordIncorrectAnswers(any(), any(), any(), any());
     }
 
     private QuizItem stampedItem(String question, String keyConcept, UUID sourceStudyPackId) {
@@ -1134,10 +1286,7 @@ class QuickReviewAdaptivePracticeServiceTest {
     }
 
     @Test
-    void collectionScoped_returnsTheServerDerivedAnchorNoteIdForNavigation() {
-        // T3.1 -- noteId was asserted NOWHERE in the stack, yet it is what the new plan-scoped
-        // navigation routes on. Nulling it at all 7 construction sites left the whole suite green,
-        // and it was inserted by a regex that over-matched once during development.
+    void collectionScoped_writesOnlyTheCollectionAnchorAndKeepsTheLegacyJsonKey() {
         CollectionFixture f = collectionFixture(1);
         stubCollectionFocus(f, 0, List.of("Shear Force"), List.of());
         stubCollectionGeneration(f, 1);
@@ -1146,8 +1295,14 @@ class QuickReviewAdaptivePracticeServiceTest {
                 adaptivePracticeService.generateAdaptiveQuizForCollection(
                         f.collectionId.toString(), f.userId, "collection-detail");
 
-        assertThat(response.noteId()).isEqualTo(f.noteIds.get(0).toString());
-        assertThat(response.studyPackId()).isEqualTo(f.packs.get(0).getId().toString());
+        assertThat(response.noteId()).isNull();
+        assertThat(response.studyPackId()).isNull();
+        ArgumentCaptor<QuickReviewSessionEntity> sessionCaptor =
+                ArgumentCaptor.forClass(QuickReviewSessionEntity.class);
+        verify(quickReviewSessionRepository, times(2)).save(sessionCaptor.capture());
+        QuickReviewSessionEntity created = sessionCaptor.getAllValues().getFirst();
+        assertThat(created.getSourceCollectionId()).isEqualTo(f.collectionId);
+        assertThat(created.getSessionState()).containsEntry("sourceCollectionId", f.collectionId.toString());
     }
 
     @Test
@@ -1311,7 +1466,7 @@ class QuickReviewAdaptivePracticeServiceTest {
         collection.setOwnerUserId(userId);
         collection.setTitle("Structural Engineering");
 
-        when(noteCollectionRepository.findByIdAndOwnerUserId(collectionId, userId))
+        when(noteCollectionRepository.findByIdAndOwnerUserIdForUpdate(collectionId, userId))
                 .thenReturn(Optional.of(collection));
         lenient().when(noteCollectionRepository
                         .findOrderedChildrenByParentCollectionIdAndOwnerUserId(collectionId, userId))

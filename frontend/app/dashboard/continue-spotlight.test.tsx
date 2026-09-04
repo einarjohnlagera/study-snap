@@ -112,6 +112,39 @@ describe("ContinueSpotlight", () => {
     );
   });
 
+  it("routes a collection-anchored adaptive resume by session id when noteId is null", () => {
+    render(
+      <ContinueSpotlight
+        recommendation={{
+          sessionId: "adaptive-session-1",
+          studyPackId: null,
+          noteId: null,
+          noteTitle: "Structural Engineering Plan",
+          subject: null,
+          courseProgram: "Civil Engineering",
+          summaryPreview: null,
+          resumeType: "ADAPTIVE",
+          reason: "RESUME_REVIEW",
+          lastScorePercentage: null,
+          lastReviewedAt: null,
+          lastOpenedAt: null,
+          createdAt: "2026-09-04T09:00:00Z",
+          currentQuestionIndex: 1,
+          totalQuestions: 5,
+          currentRound: "INITIAL",
+          remainingQuestions: 4,
+          resumeState: "QUESTION_IN_PROGRESS",
+        }}
+      />,
+    );
+
+    expect(screen.getByText("Structural Engineering Plan")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Resume Adaptive Practice" })).toHaveAttribute(
+      "href",
+      "/adaptive-practice/sessions/adaptive-session-1",
+    );
+  });
+
   it("uses professional label overrides for challenge and long exam resumes", () => {
     const baseRecommendation = {
       studyPackId: "pack-3",

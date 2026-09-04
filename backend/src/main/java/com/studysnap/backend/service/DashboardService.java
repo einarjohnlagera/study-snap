@@ -100,6 +100,7 @@ public class DashboardService {
     private final ConceptHealthService conceptHealthService;
     private final UserUsageService userUsageService;
     private final BillingUsagePeriodService billingUsagePeriodService;
+    private final QuickReviewAdaptivePracticeService adaptivePracticeService;
 
     public ContinueStudyingResponse getContinueStudyingRecommendation(UUID userId) {
         // Priority 1: resume the latest unfinished review session when available.
@@ -146,12 +147,14 @@ public class DashboardService {
                     null,
                     null,
                     null,
-                    ContinueStudyingResumeType.QUICK_REVIEW
+                    ContinueStudyingResumeType.QUICK_REVIEW,
+                    null
             );
         }
 
         // No Study Packs or usable activity context -> no recommendation.
         return new ContinueStudyingResponse(
+                null,
                 null,
                 null,
                 null,
@@ -567,6 +570,14 @@ public class DashboardService {
 
     private Optional<ContinueStudyingResponse> resolveInProgressRecommendation(UUID userId) {
         for (QuickReviewSessionEntity session : findInProgressSessionsByRecency(userId)) {
+            if (session.getStudyPackId() == null) {
+                Optional<ContinueStudyingResponse> collectionSession =
+                        resolveCollectionAdaptiveRecommendation(session, userId);
+                if (collectionSession.isPresent()) {
+                    return collectionSession;
+                }
+                continue;
+            }
             Optional<StudyPackEntity> studyPack = studyPackRepository.findByIdAndOwnerUserId(session.getStudyPackId(), userId);
             if (studyPack.isEmpty()) {
                 continue;
@@ -593,10 +604,57 @@ public class DashboardService {
                     currentRound,
                     remainingQuestions,
                     resumeState,
-                    resolveResumeType(session)
+                    resolveResumeType(session),
+                    session.getId().toString()
             ));
         }
         return Optional.empty();
+    }
+
+    private Optional<ContinueStudyingResponse> resolveCollectionAdaptiveRecommendation(
+            QuickReviewSessionEntity session,
+            UUID userId
+    ) {
+        if (session.getSessionMode() != QuickReviewSessionMode.ADAPTIVE) {
+            return Optional.empty();
+        }
+        UUID collectionId = adaptivePracticeService.resolveSourceCollectionId(session);
+        if (collectionId == null) {
+            return Optional.empty();
+        }
+        return noteCollectionRepository.findByIdAndOwnerUserId(collectionId, userId)
+                .map(collection -> {
+                    int currentQuestionIndex = session.getCurrentQuestionIndex() == null
+                            ? 0 : session.getCurrentQuestionIndex();
+                    int totalQuestions = session.getTotalQuestions() == null ? 0 : session.getTotalQuestions();
+                    int remainingQuestions = calculateRemainingQuestions(
+                            session,
+                            currentQuestionIndex,
+                            totalQuestions
+                    );
+                    return new ContinueStudyingResponse(
+                            null,
+                            null,
+                            collection.getTitle(),
+                            null,
+                            collection.getCourseProgram(),
+                            null,
+                            collection.getLearnerLevel() == null ? null : collection.getLearnerLevel().name(),
+                            SummaryPreviewUtils.buildSummaryPreview(collection.getDescription(), 140),
+                            ContinueStudyingResumeType.ADAPTIVE,
+                            ContinueStudyingReason.RESUME_REVIEW,
+                            null,
+                            session.getCreatedAt(),
+                            null,
+                            session.getCreatedAt(),
+                            currentQuestionIndex,
+                            totalQuestions,
+                            session.getCurrentRound(),
+                            remainingQuestions,
+                            determineResumeState(session, currentQuestionIndex, totalQuestions),
+                            session.getId().toString()
+                    );
+                });
     }
 
     private Optional<ContinueStudyingResponse> resolveLowScoreRecentRecommendation(UUID userId) {
@@ -647,7 +705,8 @@ public class DashboardService {
                     null,
                     null,
                     null,
-                    ContinueStudyingResumeType.QUICK_REVIEW
+                    ContinueStudyingResumeType.QUICK_REVIEW,
+                    null
             ));
         }
 
@@ -693,7 +752,8 @@ public class DashboardService {
                         null,
                         null,
                         null,
-                        ContinueStudyingResumeType.CHALLENGE
+                        ContinueStudyingResumeType.CHALLENGE,
+                        null
                 ));
     }
 
@@ -929,7 +989,8 @@ public class DashboardService {
                     null,
                     null,
                     null,
-                    ContinueStudyingResumeType.QUICK_REVIEW
+                    ContinueStudyingResumeType.QUICK_REVIEW,
+                    null
             ));
         }
 
@@ -959,7 +1020,8 @@ public class DashboardService {
             QuickReviewRound currentRound,
             Integer remainingQuestions,
             ContinueStudyingResumeState resumeState,
-            ContinueStudyingResumeType resumeType
+            ContinueStudyingResumeType resumeType,
+            String sessionId
     ) {
         ContinueStudyingNoteMetadata noteMetadata = resolveNoteMetadata(studyPack);
         return new ContinueStudyingResponse(
@@ -981,7 +1043,8 @@ public class DashboardService {
                 totalQuestions,
                 currentRound,
                 remainingQuestions,
-                resumeState
+                resumeState,
+                sessionId
         );
     }
 
