@@ -67,6 +67,11 @@ not consume a second share link. The owner can copy the link and toggle it on or
 regenerate, re-assemble, or export action because another assembly is a distinct immutable quiz and needs
 its own link.
 
+Owners can later return through **Library → Combined quizzes** at `/library/combined-quizzes`. This bounded
+newest-first list exposes only snapshot metadata (title, when it was made, stored section/question counts,
+and whether sharing is on, off, or not created), then links to the existing detail page. The list never
+duplicates share controls: revoking or copying remains on `/library/combined-quiz/{combinedQuizId}`.
+
 ### Question formats a recipient can be given
 
 `teacher-quiz-developer.txt` can emit four formats, and the shared path handles them differently:

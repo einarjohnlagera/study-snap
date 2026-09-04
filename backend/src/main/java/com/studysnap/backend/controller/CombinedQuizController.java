@@ -1,6 +1,7 @@
 package com.studysnap.backend.controller;
 
 import com.studysnap.backend.dto.CombinedQuizResponse;
+import com.studysnap.backend.dto.CombinedQuizSummaryResponse;
 import com.studysnap.backend.dto.CreateCombinedQuizRequest;
 import com.studysnap.backend.security.AuthenticatedUser;
 import com.studysnap.backend.service.CombinedQuizService;
@@ -16,6 +17,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.UUID;
+import java.util.List;
 
 @RestController
 @RequestMapping("/combined-quizzes")
@@ -30,6 +32,11 @@ public class CombinedQuizController {
             @AuthenticationPrincipal AuthenticatedUser user
     ) {
         return combinedQuizService.assemble(request, user.userId());
+    }
+
+    @GetMapping
+    public List<CombinedQuizSummaryResponse> list(@AuthenticationPrincipal AuthenticatedUser user) {
+        return combinedQuizService.list(user.userId());
     }
 
     @GetMapping("/{combinedQuizId}")

@@ -1,6 +1,7 @@
 package com.studysnap.backend.service;
 
 import com.studysnap.backend.dto.CombinedQuizResponse;
+import com.studysnap.backend.dto.CombinedQuizSummaryResponse;
 import com.studysnap.backend.dto.CreateCombinedQuizRequest;
 import com.studysnap.backend.dto.QuizItem;
 import com.studysnap.backend.entity.GeneratedQuizEntity;
@@ -14,17 +15,20 @@ import com.studysnap.backend.dto.CombinedQuizSection;
 import com.studysnap.backend.repository.CombinedQuizRepository;
 import com.studysnap.backend.repository.GeneratedQuizRepository;
 import com.studysnap.backend.repository.NoteRepository;
+import com.studysnap.backend.repository.QuizShareLinkRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
+import com.studysnap.backend.entity.QuizShareLinkEntity;
+import org.springframework.data.domain.Pageable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.List;
 import java.util.Optional;
 import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -34,6 +38,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.inOrder;
 
 @ExtendWith(MockitoExtension.class)
 class CombinedQuizServiceTest {
@@ -41,6 +46,7 @@ class CombinedQuizServiceTest {
     @Mock private NoteRepository noteRepository;
     @Mock private GeneratedQuizRepository generatedQuizRepository;
     @Mock private StudyPackRepository studyPackRepository;
+    @Mock private QuizShareLinkRepository quizShareLinkRepository;
     @Mock private AuthService authService;
     @Mock private OnboardingGuardService onboardingGuardService;
 
@@ -49,7 +55,7 @@ class CombinedQuizServiceTest {
     @BeforeEach
     void setUp() {
         service = new CombinedQuizService(combinedQuizRepository, noteRepository, generatedQuizRepository,
-                studyPackRepository, authService, onboardingGuardService);
+                studyPackRepository, quizShareLinkRepository, authService, onboardingGuardService);
     }
 
     @Test
@@ -164,6 +170,81 @@ class CombinedQuizServiceTest {
         verify(noteRepository, never()).findByOwnerUserIdAndIdIn(any(), any());
     }
 
+    /** Killing test for removing either the owner predicate or the defensive owner check in the list path. */
+    @Test
+    void list_returnsOnlyCallerOwnedQuizzesNewestFirstAndUsesTheBoundedOwnerQuery() {
+        UUID owner = UUID.randomUUID();
+        CombinedQuizEntity newest = combinedQuiz(UUID.randomUUID(), owner, "Newest", "2026-09-04T12:00:00Z", List.of());
+        CombinedQuizEntity anotherOwnersQuiz = combinedQuiz(UUID.randomUUID(), UUID.randomUUID(), "Not mine", "2026-09-04T11:00:00Z", List.of());
+        CombinedQuizEntity oldest = combinedQuiz(UUID.randomUUID(), owner, "Oldest", "2026-09-04T10:00:00Z", List.of());
+        when(combinedQuizRepository.findByOwnerUserIdOrderByCreatedAtDesc(eq(owner), any(Pageable.class)))
+                .thenReturn(List.of(newest, anotherOwnersQuiz, oldest));
+        when(quizShareLinkRepository.findByCombinedQuizIdInAndOwnerUserId(any(), eq(owner))).thenReturn(List.of());
+
+        List<CombinedQuizSummaryResponse> summaries = service.list(owner);
+
+        assertThat(summaries).extracting(CombinedQuizSummaryResponse::id)
+                .containsExactly(newest.getId(), oldest.getId());
+        assertThat(summaries).extracting(CombinedQuizSummaryResponse::title).doesNotContain("Not mine");
+        org.mockito.ArgumentCaptor<Pageable> page = org.mockito.ArgumentCaptor.forClass(Pageable.class);
+        verify(combinedQuizRepository).findByOwnerUserIdOrderByCreatedAtDesc(eq(owner), page.capture());
+        assertThat(page.getValue().getPageSize()).isEqualTo(CombinedQuizService.MAX_LIST_RESULTS);
+        // The repository method owns `created_at DESC`, matching V132's index; Pageable only owns the cap.
+        assertThat(page.getValue().getSort().isUnsorted()).isTrue();
+        org.mockito.InOrder guardsThenRead = inOrder(authService, onboardingGuardService, combinedQuizRepository);
+        guardsThenRead.verify(authService).requireEmailVerified(owner);
+        guardsThenRead.verify(onboardingGuardService).assertProfileComplete(owner);
+        guardsThenRead.verify(combinedQuizRepository).findByOwnerUserIdOrderByCreatedAtDesc(eq(owner), any(Pageable.class));
+    }
+
+    /** Killing test for taking the first batch link instead of collapsing a quiz's links to its newest row. */
+    @Test
+    void list_countsStoredSectionsAndQuestionsAndUsesTheLatestShareLinkState() {
+        UUID owner = UUID.randomUUID();
+        CombinedQuizEntity repeatedSourceSections = combinedQuiz(
+                UUID.randomUUID(), owner, "Repeated source snapshot", "2026-09-04T12:00:00Z",
+                List.of(
+                        new CombinedQuizSection("One source note", List.of(storedItem("One"), storedItem("Two"))),
+                        new CombinedQuizSection("One source note", List.of(storedItem("Three")))
+                )
+        );
+        CombinedQuizEntity sharingOff = combinedQuiz(UUID.randomUUID(), owner, "Off", "2026-09-04T11:00:00Z", List.of());
+        CombinedQuizEntity noLink = combinedQuiz(UUID.randomUUID(), owner, "No link", "2026-09-04T10:00:00Z", List.of());
+        when(combinedQuizRepository.findByOwnerUserIdOrderByCreatedAtDesc(eq(owner), any(Pageable.class)))
+                .thenReturn(List.of(repeatedSourceSections, sharingOff, noLink));
+        when(quizShareLinkRepository.findByCombinedQuizIdInAndOwnerUserId(any(), eq(owner))).thenReturn(List.of(
+                shareLink(repeatedSourceSections.getId(), owner, false, "2026-09-04T09:00:00Z"),
+                shareLink(repeatedSourceSections.getId(), owner, true, "2026-09-04T10:00:00Z"),
+                shareLink(sharingOff.getId(), owner, false, "2026-09-04T10:00:00Z")
+        ));
+
+        List<CombinedQuizSummaryResponse> summaries = service.list(owner);
+
+        assertThat(summaries).extracting(CombinedQuizSummaryResponse::sharing).containsExactly(
+                CombinedQuizSummaryResponse.Sharing.SHARING_ON,
+                CombinedQuizSummaryResponse.Sharing.SHARING_OFF,
+                CombinedQuizSummaryResponse.Sharing.NO_LINK
+        );
+        assertThat(summaries.getFirst().sectionCount()).isEqualTo(2);
+        assertThat(summaries.getFirst().questionCount()).isEqualTo(3);
+    }
+
+    /** Killing test for replacing the one batch link read with a per-quiz lookup. */
+    @Test
+    void list_readsShareLinksOnceForMultipleQuizzes() {
+        UUID owner = UUID.randomUUID();
+        when(combinedQuizRepository.findByOwnerUserIdOrderByCreatedAtDesc(eq(owner), any(Pageable.class))).thenReturn(List.of(
+                combinedQuiz(UUID.randomUUID(), owner, "One", "2026-09-04T12:00:00Z", List.of()),
+                combinedQuiz(UUID.randomUUID(), owner, "Two", "2026-09-04T11:00:00Z", List.of())
+        ));
+        when(quizShareLinkRepository.findByCombinedQuizIdInAndOwnerUserId(any(), eq(owner))).thenReturn(List.of());
+
+        service.list(owner);
+
+        verify(quizShareLinkRepository).findByCombinedQuizIdInAndOwnerUserId(any(), eq(owner));
+        verify(quizShareLinkRepository, never()).findFirstByCombinedQuizIdAndOwnerUserIdOrderByCreatedAtDesc(any(), any());
+    }
+
     private static NoteEntity note(UUID id, UUID owner, String title) {
         NoteEntity note = new NoteEntity();
         note.setId(id);
@@ -189,5 +270,38 @@ class CombinedQuizServiceTest {
 
     private static QuizItem item(String question, String firstChoice) {
         return new QuizItem(question, List.of(firstChoice, "Other"), 0, "Concept", "Explanation");
+    }
+
+    private static CombinedQuizEntity combinedQuiz(
+            UUID id,
+            UUID owner,
+            String title,
+            String createdAt,
+            List<CombinedQuizSection> sections
+    ) {
+        CombinedQuizEntity quiz = new CombinedQuizEntity();
+        quiz.setId(id);
+        quiz.setOwnerUserId(owner);
+        quiz.setTitle(title);
+        quiz.setCreatedAt(OffsetDateTime.parse(createdAt).withOffsetSameInstant(ZoneOffset.UTC));
+        quiz.setSections(sections);
+        return quiz;
+    }
+
+    private static QuizShareLinkEntity shareLink(UUID combinedQuizId, UUID owner, boolean active, String createdAt) {
+        QuizShareLinkEntity link = new QuizShareLinkEntity();
+        link.setId(UUID.randomUUID());
+        link.setCombinedQuizId(combinedQuizId);
+        link.setOwnerUserId(owner);
+        link.setActive(active);
+        link.setCreatedAt(OffsetDateTime.parse(createdAt).withOffsetSameInstant(ZoneOffset.UTC));
+        return link;
+    }
+
+    private static QuizItem storedItem(String question) {
+        return QuizItem.fromStoredComponents(
+                question, List.of("Choice"), 0, "Concept", "Explanation", null,
+                "MCQ", null, null, null, null, null, null, null, null
+        );
     }
 }

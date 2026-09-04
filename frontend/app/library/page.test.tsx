@@ -923,6 +923,15 @@ describe("Library page", () => {
     expect(pushMock).toHaveBeenCalledWith("/library/bulk-generate");
   });
 
+  it("opens the existing combined quiz listing from the Library header", async () => {
+    render(<LibraryPage />);
+
+    await screen.findByText("Cell Respiration");
+    fireEvent.click(screen.getByRole("button", { name: "Combined quizzes" }));
+
+    expect(pushMock).toHaveBeenCalledWith("/library/combined-quizzes");
+  });
+
   it("lets an explicitly non-TEACHER user start an ungated combined quiz selection", async () => {
     (getAuthUser as jest.Mock).mockReturnValue({
       id: "supporter-1",
