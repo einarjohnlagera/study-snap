@@ -278,6 +278,23 @@ public final class QuizItem {
         return questionFormat;
     }
 
+    /**
+     * MULTI_SELECT is the one format whose answer is a SET rather than an index, so callers outside this
+     * class must be able to ask without minting another {@code "MULTI_SELECT"} literal (AGENTS.md forbids
+     * a repeated literal spreading across classes).
+     *
+     * <p>⚠️ {@code @JsonIgnore} is REQUIRED, for the same reason {@link #answer()} carries it. Jackson
+     * treats an {@code isX()} method as a property, so without this the derived key {@code "multiSelect"}
+     * is written into every serialized QuizItem — widening the persisted JSONB in {@code generated_quizzes},
+     * {@code study_packs}, {@code quick_review_sessions.session_state}, {@code exam_question_pool},
+     * {@code challenge_quiz_question_bank} and {@code combined_quizzes}, in every quiz mode. Adding a
+     * getter here is not a read-only act.
+     */
+    @JsonIgnore
+    public boolean isMultiSelect() {
+        return MULTI_SELECT_FORMAT.equals(questionFormat);
+    }
+
     public String questionType() {
         return questionType;
     }

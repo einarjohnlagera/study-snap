@@ -8,17 +8,20 @@ import com.studysnap.backend.dto.QuizShareLinkResponse;
 import com.studysnap.backend.dto.SharedQuizResultItem;
 import com.studysnap.backend.dto.SharedQuizResultsResponse;
 import com.studysnap.backend.entity.GeneratedQuizEntity;
+import com.studysnap.backend.entity.CombinedQuizEntity;
 import com.studysnap.backend.entity.NoteEntity;
 import com.studysnap.backend.entity.QuizShareLinkEntity;
 import com.studysnap.backend.exception.GeneratedQuizNotFoundException;
+import com.studysnap.backend.exception.CombinedQuizNotFoundException;
 import com.studysnap.backend.exception.InvalidSharedQuizAnswersException;
-import com.studysnap.backend.exception.NoteNotFoundException;
 import com.studysnap.backend.exception.QuizShareLinkNotAllowedException;
 import com.studysnap.backend.exception.QuizShareLinkNotFoundException;
 import com.studysnap.backend.exception.QuizShareLinkTokenGenerationException;
 import com.studysnap.backend.repository.GeneratedQuizRepository;
+import com.studysnap.backend.repository.CombinedQuizRepository;
 import com.studysnap.backend.repository.NoteRepository;
 import com.studysnap.backend.repository.QuizShareLinkRepository;
+import com.studysnap.backend.util.QuizSessionReviewUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,7 +30,9 @@ import java.security.SecureRandom;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 
@@ -42,6 +47,7 @@ public class QuizShareLinkService {
 
     private final QuizShareLinkRepository quizShareLinkRepository;
     private final GeneratedQuizRepository generatedQuizRepository;
+    private final CombinedQuizRepository combinedQuizRepository;
     private final NoteRepository noteRepository;
     private final OnboardingGuardService onboardingGuardService;
     private final QuizShareLimitService quizShareLimitService;
@@ -77,6 +83,51 @@ public class QuizShareLinkService {
         return toResponse(saved);
     }
 
+    /**
+     * Sibling of the single-note creation path. Do not merge the nullable target ids: each target needs its
+     * own idempotency lookup, or an existing link on the other arc would be checked accidentally.
+     */
+    @Transactional
+    public QuizShareLinkResponse createCombinedQuizShareLink(UUID combinedQuizId, UUID ownerUserId) {
+        authService.requireEmailVerified(ownerUserId);
+        onboardingGuardService.assertProfileComplete(ownerUserId);
+        CombinedQuizEntity combinedQuiz = combinedQuizRepository.findByIdAndOwnerUserId(combinedQuizId, ownerUserId)
+                .orElseThrow(CombinedQuizNotFoundException::new);
+        QuizShareLinkEntity existing = quizShareLinkRepository
+                .findFirstByCombinedQuizIdAndOwnerUserIdOrderByCreatedAtDesc(combinedQuiz.getId(), ownerUserId)
+                .orElse(null);
+        if (existing != null && Boolean.TRUE.equals(existing.getActive())) {
+            return toResponse(existing);
+        }
+        quizShareLimitService.assertShareLinkQuotaNotExceeded(ownerUserId);
+
+        OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
+        QuizShareLinkEntity entity = new QuizShareLinkEntity();
+        entity.setId(UUID.randomUUID());
+        entity.setCombinedQuizId(combinedQuiz.getId());
+        entity.setOwnerUserId(ownerUserId);
+        entity.setToken(generateUniqueToken());
+        entity.setActive(true);
+        entity.setCreatedAt(now);
+        QuizShareLinkEntity saved = quizShareLinkRepository.save(entity);
+        userUsageService.incrementQuizShareLinkCreated(ownerUserId, now);
+        return toResponse(saved);
+    }
+
+    /**
+     * Sibling of {@link #getShareLinkByQuizId}. Without it a client can only recover an existing link by
+     * POSTing, which is a write to read state -- and on a link the owner has toggled OFF that POST mints a
+     * NEW link and spends share-link quota, because the idempotent early return requires an ACTIVE link.
+     */
+    @Transactional(readOnly = true)
+    public QuizShareLinkResponse getCombinedQuizShareLink(UUID combinedQuizId, UUID ownerUserId) {
+        onboardingGuardService.assertProfileComplete(ownerUserId);
+        return quizShareLinkRepository
+                .findFirstByCombinedQuizIdAndOwnerUserIdOrderByCreatedAtDesc(combinedQuizId, ownerUserId)
+                .map(this::toResponse)
+                .orElseThrow(QuizShareLinkNotFoundException::new);
+    }
+
     @Transactional(readOnly = true)
     public QuizShareLinkResponse getShareLinkByQuizId(UUID generatedQuizId, UUID ownerUserId) {
         onboardingGuardService.assertProfileComplete(ownerUserId);
@@ -101,46 +152,108 @@ public class QuizShareLinkService {
     @Transactional(readOnly = true)
     public PublicSharedQuizResponse getActivePublicQuiz(String token) {
         QuizShareLinkEntity link = findActiveLink(token);
-        GeneratedQuizEntity generatedQuiz = generatedQuizRepository.findById(link.getGeneratedQuizId())
-                .orElseThrow(QuizShareLinkNotFoundException::new);
-        NoteEntity note = noteRepository.findById(generatedQuiz.getNoteId())
-                .orElseThrow(NoteNotFoundException::new);
-        List<PublicQuizItem> questions = generatedQuiz.getQuestions().stream()
+        SharedQuiz sharedQuiz = resolveSharedQuiz(link);
+        List<PublicQuizItem> questions = sharedQuiz.questions().stream()
                 .map(question -> new PublicQuizItem(
                         question.question(),
                         question.choices(),
-                        question.concept()
+                        question.concept(),
+                        question.questionFormat()
                 ))
                 .toList();
         return new PublicSharedQuizResponse(
-                generatedQuiz.getId(),
-                resolveNoteTitle(note),
+                sharedQuiz.id(),
+                sharedQuiz.title(),
                 questions
         );
     }
 
+    /**
+     * Grades a recipient's submission.
+     *
+     * <p>⚠️ Grading MUST route through {@link QuizSessionReviewUtils#isAnswerCorrect}, the same rule every
+     * in-app mode uses. The bespoke {@code answer == correctIndex} comparison this replaced silently
+     * mis-graded every MULTI_SELECT question: {@code QuizItem.correctIndex()} falls back to
+     * {@code correctIndices.getFirst()} for that format, so on correct answers {@code [0, 2]} a recipient
+     * picking 2 scored zero and one picking only 0 scored full marks. {@code teacher-quiz-developer.txt}
+     * instructs 1-2 MULTI_SELECT questions per quiz, so it was live in effectively every shared quiz.
+     */
     @Transactional(readOnly = true)
-    public SharedQuizResultsResponse getSharedQuizResults(String token, List<Integer> answers) {
+    public SharedQuizResultsResponse getSharedQuizResults(
+            String token,
+            List<Integer> answers,
+            List<List<Integer>> multiAnswers
+    ) {
         QuizShareLinkEntity link = findActiveLink(token);
-        GeneratedQuizEntity generatedQuiz = generatedQuizRepository.findById(link.getGeneratedQuizId())
-                .orElseThrow(QuizShareLinkNotFoundException::new);
-        List<QuizItem> questions = generatedQuiz.getQuestions();
+        List<QuizItem> questions = resolveSharedQuestions(link);
         if (answers == null || answers.size() != questions.size()) {
             throw new InvalidSharedQuizAnswersException();
         }
+        // multiAnswers is optional -- a recipient on the pre-fix bundle sends none -- but when it is sent it
+        // is read positionally, so a length mismatch would silently grade one question against another's
+        // selections rather than failing.
+        if (multiAnswers != null && multiAnswers.size() != questions.size()) {
+            throw new InvalidSharedQuizAnswersException();
+        }
+
+        Map<Integer, Integer> selectedChoices = new HashMap<>();
+        Map<Integer, List<Integer>> selectedMultiChoices = new HashMap<>();
+        for (int index = 0; index < questions.size(); index++) {
+            Integer answer = answers.get(index);
+            if (answer != null) {
+                selectedChoices.put(index, answer);
+            }
+            List<Integer> selectedMultiChoice = normalizeSelectedIndices(
+                    multiAnswers == null ? null : multiAnswers.get(index),
+                    questions.get(index)
+            );
+            if (!selectedMultiChoice.isEmpty()) {
+                selectedMultiChoices.put(index, selectedMultiChoice);
+            }
+        }
+
         List<SharedQuizResultItem> items = new ArrayList<>();
         int score = 0;
         for (int index = 0; index < questions.size(); index++) {
             QuizItem question = questions.get(index);
-            int correctIndex = question.correctIndex() == null ? -1 : question.correctIndex();
-            Integer answer = answers != null && index < answers.size() ? answers.get(index) : null;
-            boolean correct = answer != null && answer == correctIndex;
+            boolean correct = QuizSessionReviewUtils.isAnswerCorrect(question, index, selectedChoices, selectedMultiChoices);
             if (correct) {
                 score++;
             }
-            items.add(new SharedQuizResultItem(correct, correctIndex, question.explanation()));
+            int correctIndex = question.correctIndex() == null ? -1 : question.correctIndex();
+            items.add(new SharedQuizResultItem(
+                    correct,
+                    correctIndex,
+                    resolveCorrectIndices(question),
+                    question.explanation()
+            ));
         }
         return new SharedQuizResultsResponse(score, questions.size(), items);
+    }
+
+    /**
+     * Only MULTI_SELECT questions disclose a correct-answer set, so the review screen can read
+     * "non-empty means use these" without re-deriving the format. Every other format keeps its single
+     * {@code correctIndex}.
+     */
+    private List<Integer> resolveCorrectIndices(QuizItem question) {
+        if (!question.isMultiSelect() || question.correctIndices() == null) {
+            return List.of();
+        }
+        return List.copyOf(question.correctIndices());
+    }
+
+    /** Mirrors {@code QuizSessionStateUtils.resolveSelectedChoiceIndexes}: in-range and de-duplicated. */
+    private List<Integer> normalizeSelectedIndices(List<Integer> selectedIndices, QuizItem question) {
+        if (selectedIndices == null || selectedIndices.isEmpty() || question.choices() == null) {
+            return List.of();
+        }
+        int choiceCount = question.choices().size();
+        return selectedIndices.stream()
+                .filter(Objects::nonNull)
+                .filter(index -> index >= 0 && index < choiceCount)
+                .distinct()
+                .toList();
     }
 
     private QuizShareLinkEntity findActiveLink(String token) {
@@ -150,6 +263,48 @@ public class QuizShareLinkService {
             throw new QuizShareLinkNotFoundException();
         }
         return link;
+    }
+
+    private SharedQuiz resolveSharedQuiz(QuizShareLinkEntity link) {
+        if (link.getGeneratedQuizId() != null) {
+            GeneratedQuizEntity generatedQuiz = generatedQuizRepository.findById(link.getGeneratedQuizId())
+                    .orElseThrow(QuizShareLinkNotFoundException::new);
+            NoteEntity note = noteRepository.findById(generatedQuiz.getNoteId())
+                    .orElseThrow(QuizShareLinkNotFoundException::new);
+            return new SharedQuiz(generatedQuiz.getId(), resolveNoteTitle(note), generatedQuiz.getQuestions());
+        }
+        if (link.getCombinedQuizId() != null) {
+            CombinedQuizEntity combinedQuiz = combinedQuizRepository.findById(link.getCombinedQuizId())
+                    .orElseThrow(QuizShareLinkNotFoundException::new);
+            List<QuizItem> questions = flattenCombinedQuestions(combinedQuiz);
+            return new SharedQuiz(combinedQuiz.getId(), combinedQuiz.getTitle(), questions);
+        }
+        // V132's exclusive-arc check rejects this in PostgreSQL; keep public lookup fail-closed for corrupt rows.
+        throw new QuizShareLinkNotFoundException();
+    }
+
+    private List<QuizItem> resolveSharedQuestions(QuizShareLinkEntity link) {
+        if (link.getGeneratedQuizId() != null) {
+            return generatedQuizRepository.findById(link.getGeneratedQuizId())
+                    .map(GeneratedQuizEntity::getQuestions)
+                    .orElseThrow(QuizShareLinkNotFoundException::new);
+        }
+        if (link.getCombinedQuizId() != null) {
+            return combinedQuizRepository.findById(link.getCombinedQuizId())
+                    .map(this::flattenCombinedQuestions)
+                    .orElseThrow(QuizShareLinkNotFoundException::new);
+        }
+        throw new QuizShareLinkNotFoundException();
+    }
+
+    private List<QuizItem> flattenCombinedQuestions(CombinedQuizEntity combinedQuiz) {
+        return combinedQuiz.getSections() == null ? List.of() : combinedQuiz.getSections().stream()
+                .filter(Objects::nonNull)
+                .flatMap(section -> section.questions() == null ? java.util.stream.Stream.empty() : section.questions().stream())
+                .toList();
+    }
+
+    private record SharedQuiz(UUID id, String title, List<QuizItem> questions) {
     }
 
     private String generateUniqueToken() {

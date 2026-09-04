@@ -1,5 +1,448 @@
 # RELEASES.md - NoteLib
 
+## v0.110.0 - Supporter Combined Quiz
+
+**Status: Released** (kicked off 2026-09-03, signed off 2026-09-04, base branch `releases/v0.110.0`, cut from `main` after
+`v0.109.0` merged and tagged)
+
+Theme: someone helping a learner can build one quiz from several notes and hand it over, without either
+of them needing a Learning Connection.
+
+### Why this version number, and not `v1.0.0`
+
+**⚠️ `v1.0.0` STAYS RESERVED (owner, 2026-07-23; re-confirmed 2026-09-01).** Conjunctive condition — live
+core **and** product success — and both halves are unmet.
+
+### Why this release exists
+
+**Slice 6 of the approved assessment sequence — the LAST one** (`docs/claude-plans/assessment-architecture-audit.md`
+§13). Slices 1–5 shipped across `v0.104.0`–`v0.107.0` and were announced in `v0.109.0`.
+
+**⚠️ THIS RELEASE IS SMALLER THAN THE ROADMAP IMPLIED, AND THE CORRECTION IS THE REASON IT OPENS NOW.**
+§13 recorded the sequence as *"at least four releases"* and §15 said the session-anchoring migration was
+deferred *"until slice 6 forces it"* — so slice 6 read as a `quick_review_sessions` migration touching
+`V41`'s two partial unique indexes, i.e. a full-pressure-test release. **That premise was checked against
+code on 2026-09-03 and is FALSE: `GeneratedQuizService` and `QuizShareLinkService` reference
+`quick_review_sessions` ZERO times.** The supporter quiz path persists to `generated_quizzes` and is taken
+by a recipient who needs no account, so it creates no session and session anchoring cannot bind on it.
+§15 is corrected.
+
+**⚠️ THE REAL CONSTRAINT IS A DIFFERENT TABLE, AND IT IS SHARP:** `generated_quizzes.note_id` is
+`NOT NULL` with a **unique index** (`uq_generated_quizzes_note_id`, `V43`), so **exactly one generated
+quiz exists per note.** A *combined* quiz spanning several notes has no `note_id` it can legally take, and
+anchoring it on one note would collide with any quiz already generated for that note. **⚠️ So this release
+does owe a migration — on `generated_quizzes`, not on `quick_review_sessions`.**
+
+**⚠️ HALF OF THIS IS ALREADY BUILT, AND `v0.89.0` AUDITED IT RATHER THAN TRUSTING THE ROADMAP — DO THE
+SAME BEFORE SCOPING ANY ITEM.** Generating a quiz for someone else is already ungated, `/quiz/share/**` is
+already `permitAll` so the recipient needs no account, and `QuizShareLimitService` already meters share
+links per plan. **What is missing is the COMBINED part**, not the sharing.
+
+### Planned Scope
+
+**⚠️ AMENDED 2026-09-03 AFTER A COLD AUDIT OF ITEMS 2 AND 3, AND THE RELEASE ROUGHLY DOUBLED. THE COST IS
+STATED, NOT ABSORBED (owner):** this is the `v0.107.0` fold shape — three items became five, and that
+release then needed a four-batch remediation. It also mixes a **correctness fix** with a **design
+decision**, which is what made that one expensive. Taken deliberately.
+
+**⚠️ THREE OF THE KICKOFF'S FOUR CLAIMS WERE WRONG OR WRONGLY FRAMED. Do NOT re-derive them:**
+- **The named reusable surfaces do NOT exist.** `collection-exam.ts` is 54 lines of collection-scoped
+  helpers with **no UI**; the "Challenge multi-note picker" is **inline JSX** selecting `studyPackId`, not
+  `noteId`. The real precedent is `/library/exam-builder` — **`TEACHER`-gated and DOCX-only**, so it is the
+  MODEL, not the artifact.
+- **`note_id NOT NULL` is not *the* blocker.** `exportCombinedDocx` (`GeneratedQuizService:265-321`)
+  **already assembles a combined quiz over N notes** from `(noteId, questionIndex)` refs, with no schema
+  change. The constraint binds only under one of two designs.
+- **⚠️ Dropping `uq_generated_quizzes_note_id` would break `NoteService.mapToResponse:1529` on EVERY
+  note-detail load** — an owner-unscoped `findByNoteId` returning `Optional`, safe today only because of
+  that index.
+
+**⚠️ STORAGE DECIDED (owner, 2026-09-03): SNAPSHOT INTO A NEW TABLE.** A combined quiz owns its copied
+questions; `generated_quizzes` and its unique index are **untouched**, so `NoteService:1529` is unaffected.
+**⚠️ REJECTED — refs:** regenerating a source note would mutate a live shared quiz, and
+`getSharedQuizResults`' exact `answers.size() != questions.size()` check (`:128-130`) then **400s a
+recipient mid-quiz**. **⚠️ REJECTED — nullable `note_id`:** breaks the read above.
+
+- **(1) LIVE DEFECT — shared quizzes silently mis-grade MULTI_SELECT questions.** Proven by probe, not
+  inferred: `teacher-quiz-developer.txt` instructs 1–2 MULTI_SELECT per quiz and the schema allows it, but
+  `PublicQuizItem` (`dto/PublicQuizItem.java:5-9`) carries **only** `question, choices, concept` — dropping
+  `questionFormat` and `correctIndices` — and `getSharedQuizResults` grades `answer == correctIndex`, which
+  for MULTI_SELECT resolves to `correctIndices.getFirst()`. On a question whose correct answers are
+  `[0, 2]`, **picking 2 scores zero.** **⚠️ Live today on the single-note path, in every shared quiz, and
+  invisible to all 10 existing `QuizShareLinkServiceTest` tests** (zero references to `MULTI_SELECT`,
+  `MATCHING` or `correctIndices`). **A combined quiz multiplies the exposure, so this is fixed FIRST.**
+- **(2) LIVE DEFECT — a PLUS/PRO supporter picks 30 questions and silently gets 10.**
+  `resolveQuestionCount:351-363` returns the default for any `profileType != TEACHER`, **ignoring the
+  request**, while the modal renders a 10/20/30 selector with a lock badge only for FREE. **⚠️ Whether the
+  cap moves is a PRICING DECISION and is NOT assumed here** — the defect is the silent discard. Honour it
+  or stop offering it; **do not quietly raise the cap.**
+- **(3) LIVE FALSEHOOD — the product already advertises this feature to the audience that cannot use it.**
+  A guidance tip (`private-note-detail-page-client.tsx:3249-3252`, `tipId="teacher-generate-quiz-multi-note"`,
+  rendered **unconditionally**) tells the learner to *"select multiple notes to build a quiz from a full
+  unit"* — the library CTA it names is `TEACHER`-gated.
+- **(4) A combined quiz spanning several notes**, snapshotted into its own table, reachable by a supporter.
+  **⚠️ `QuizItem.sourceStudyPackId` (from `v0.104.0`) carries per-item provenance — do NOT invent a second
+  mechanism.**
+- **(5) A supporter-reachable multi-note picker and a share surface not routed under `/notes/[id]`.**
+  **⚠️ The library's `selectionMode` multi-select is already UNGATED and reusable; the exam-builder is
+  not.** A combined quiz also needs a title that is not a note title.
+
+**⚠️ ALSO FOUND, AND OWED A DECISION RATHER THAN A DEFAULT:** `notes(id) ON DELETE CASCADE` plus
+`quiz_share_links.generated_quiz_id ON DELETE CASCADE` (`V65:3`) mean deleting **one** source note today
+destroys a whole quiz and its live share link, silently. **The snapshot design removes this for combined
+quizzes; it remains true for single-note ones.** **⚠️ And a 6-note combined quiz costs SIX Study Pack
+generations plus SIX quiz generations before combining** (`openGenerateQuizModal:1843-1855` auto-triggers
+Study Pack generation) — state that cost, do not hide it.
+
+### Anti-drift (locked for this release)
+
+- **⚠️ ITEM 2 IS NOT A LICENCE TO RAISE THE QUESTION CAP.** The defect is the SILENT DISCARD — a selector
+  that offers 30 and delivers 10. Honouring the cap or withdrawing the choice both fix it; **raising it is a
+  pricing decision nobody has taken**, and `v0.92.0` records that adding capacity to this audience without a
+  pricing call is how a meter quietly becomes a second product tier.
+- **⚠️ Do NOT generate fresh questions across N notes.** A combined quiz assembles from per-note quizzes that
+  already exist. Generating would fire `incrementChallengeQuizGeneration` N times against a single
+  `assertQuizCreditAvailable` check — a quota-semantics change this release does not take.
+- **⚠️ Do NOT drop or weaken `uq_generated_quizzes_note_id`.** `NoteService.mapToResponse:1529` is an
+  owner-unscoped `findByNoteId` returning `Optional`; a second row for one note throws on **every**
+  note-detail load. The snapshot design exists partly to avoid touching it.
+- **⚠️ NO SESSION-ANCHORING MIGRATION.** It has **no forcing slice any more** — that is this release's own
+  finding — so the plan/note session collision stays a **named Known limitation** and its fix is a
+  separate decision. **⚠️ Do NOT take it opportunistically because a migration is already in the diff.**
+- **⚠️ Do NOT touch `quick_review_sessions` at all.** If an item appears to need a session, that is the
+  signal the scope is wrong — the supporter path deliberately has none.
+- **⚠️ NO Learning Connection requirement**, which is the slice's whole point. Sharing stays open to a
+  recipient with no account, and **⚠️ do NOT gate it on `ProfileType`** — `v0.89.0` records that as the
+  axis error this capability exists to correct.
+- **⚠️ Invitations stay ONE-AT-A-TIME** (`v0.90.0`); the quiz share link stays the many-recipient
+  mechanism, and the two are not merged.
+- **⚠️ NO new mode and NO new sub-mode.** `EXAM_MODES.md` stays a locked five-mode contract; a combined
+  supporter quiz is a **capability**, and by `v0.103.0`'s own sub-mode test it has no label, entry point
+  or differentiator of its own.
+- **⚠️ NO quota, limit or meter change.** `QuizShareLimitService` already meters share links per plan;
+  **do NOT add a second counter** — `v0.92.0` rejected that as an untaken pricing decision.
+- **⚠️ Keep DOCX export and multi-version exports `TEACHER`-gated** (`v0.89.0`).
+- **⚠️ `frontend/app/onboarding` STAYS FROZEN — `[CHECKPOINT — due 2026-09-11]` is 8 DAYS OUT.**
+- **⚠️ Do NOT change `BOARD_EXAM_STARTED` or `ADAPTIVE_PRACTICE_STARTED` fields** — the two `2026-10-13`
+  checkpoints re-armed in `v0.109.0` own those metrics.
+
+### Verification
+
+**ONE SCOPED COLD AGENT, framed as FALSIFICATION.** The trigger is named by the gate outright: this
+release changes **production-data semantics via a migration**. **⚠️ RE-EVALUATED after the scope amendment
+and it HOLDS at one agent rather than three:** the new table is additive, `generated_quizzes` is untouched,
+taking a shared quiz still creates no session and writes no `ConceptHealth` (audit confirmed, grep count 0
+in both services), and items 1–3 are correctness fixes on a shipped path rather than new semantics. **⚠️ The
+tier would escalate if the combined quiz GENERATES fresh questions across N notes** — `assertQuizCreditAvailable`
+is checked once while `incrementChallengeQuizGeneration` would fire N times — **so it reuses already-generated
+per-note quizzes, and that is a scope rule, not an optimisation.** It is **not** the three-agent test — there
+is no permission substrate, no cross-user read beyond the sharing that already ships, and no money or
+quota change.
+
+**⚠️ ESCALATE TO THE FULL TEST IF** the migration turns out to need `quick_review_sessions` after all, or
+if item 2 discovers the share path is not already complete.
+
+**⚠️ CARRIED LESSONS, EVERY ONE OF WHICH THIS SESSION PAID FOR: a negative assertion must have a REACHABLE
+subject**; **write the guard at the LAYER THE DEFECT LIVES AT**; **a test can survive its own mutation** if
+the fixture cannot discriminate; **MUTATE and confirm a NAMED test fails**; **read `./mvnw`'s EXIT STATUS
+directly, never through a pipe**; **COUNT executed tests from `target/surefire-reports/*.xml`**; **run
+`npm test`**; **SWEEP BY SURFACE, not by diff**; **verify "X already does Y" against code BEFORE it reaches
+a prompt**; and **call `advisor()` BEFORE writing the Codex prompt.**
+
+### Shipped
+
+- **Item 1 — shared quizzes grade MULTI_SELECT questions correctly.** `getSharedQuizResults` compared
+  `answer == correctIndex`, and `QuizItem.correctIndex()` falls back to `correctIndices.getFirst()` for
+  MULTI_SELECT — so on a question whose correct answers were `[0, 2]`, a recipient selecting **both scored
+  zero** while one selecting **only choice 0 scored full marks**. `teacher-quiz-developer.txt` instructs
+  1–2 MULTI_SELECT questions per quiz, so this was live in effectively every shared quiz. Grading now routes
+  through `QuizSessionReviewUtils.isAnswerCorrect`, the same exact-set rule every in-app mode uses; the
+  bespoke comparison is gone.
+- **The recipient can now actually select several choices.** The defect had a second half nothing recorded:
+  `/quiz/[token]` held a single `selectedAnswer` and disabled the choice list after one click, so the
+  correct set was **unreachable from the UI even once the server graded it properly**. MULTI_SELECT
+  questions render checkboxes with *Select all that apply*, stay editable until Continue, and single-choice
+  questions keep their existing one-shot behaviour unchanged.
+- **`PublicQuizItem` carries `questionFormat`, and still carries no answer key.** The pre-answer payload
+  needed the format so the recipient could be given the right control. **`correctIndices` was deliberately
+  NOT added to it** — `shareable-quiz-links.md` requires that the initial response disclose no answer, and
+  the key reaches the recipient only through `SharedQuizResultItem` after they submit.
+- **`SharedQuizResultItem` gained `correctIndices`, populated only for MULTI_SELECT.** The review screen
+  previously highlighted a single correct choice, understating the answer key. The server emits an empty
+  list for every other format, so the frontend follows one rule — prefer the set when non-empty, else the
+  index — rather than branching on question format in a second place.
+- **The submission wire format is positional and additively versioned.** `answers` keeps one entry per
+  question and is null at a MULTI_SELECT position; the new `multiAnswers` is index-aligned and **optional**,
+  so a recipient mid-quiz on the pre-fix browser bundle still submits successfully. Both lists are rejected
+  at the wrong length, because a shorter `multiAnswers` would silently grade one question against another's
+  selections.
+- **⚠️ A new guard pins that the pre-answer payload discloses no answer, and it asserts on the SERIALIZED
+  response on purpose.** A field-level assertion had no reachable subject — `PublicQuizItem` has no answer
+  field to interrogate — so `getActivePublicQuizStripsAnswers` had been passing while asserting nothing about
+  answers, under a name that promised it did. Serializing gives the negative assertion a subject that exists
+  either way, so adding `correctIndices` back to that record now reds a named test. That is a live path
+  precisely because *"`PublicQuizItem` drops `correctIndices`"* is how this defect reads when written up.
+  The old test was renamed to what it actually checks.
+- **`QuizItem.isMultiSelect()` replaces a fourth `"MULTI_SELECT"` literal.** `AGENTS.md` requires a literal
+  appearing across classes to move somewhere shared; the DTO already owned the constant and already reasoned
+  about the format, so the predicate went there rather than a private copy in the service.
+- **Tests: 10 → 20 in `QuizShareLinkServiceTest`, plus 8 new page tests** at `app/quiz/[token]/page.test.tsx`
+  — the layer the UI half of the defect lives at. **Every assertion was mutation-verified with its killing
+  test named:** reverting the service to `answer == correctIndex` reds
+  `sharedQuizGradesMultiSelectAsAnExactSet`, `sharedQuizIgnoresOutOfRangeAndDuplicateMultiSelectIndexes` and
+  `sharedQuizAcceptsSubmissionsFromThePreFixBundle`; grading by "contains `correctIndex`" reds
+  `sharedQuizScoresZeroWhenOnlyTheFirstCorrectChoiceIsSelected`; grading by any overlap reds that plus
+  `sharedQuizScoresZeroWhenOnlyTheSecondCorrectChoiceIsSelected`; dropping the length check reds
+  `sharedQuizRejectsMultiAnswersOfTheWrongLength`; forcing `isMultiSelect` false reds five page tests; and
+  ignoring `correctIndices` on the review screen reds the review test; and restoring `correctIndices` to
+  `PublicQuizItem` reds `getActivePublicQuizNeverDisclosesTheAnswerKeyToTheRecipient`. **⚠️ The two partial-credit
+  assertions survive the first mutant** — under the new wire format a MULTI_SELECT position sends `null` in
+  `answers`, so the shipped defect also scored them zero. They are kept because they are the only guards
+  against a *lenient* reimplementation, and each has a named killing mutant above.
+- Backend `2049` tests green (counted from `target/surefire-reports/*.xml`, and including the
+  real-PostgreSQL `NativeQueryPostgresIntegrationTest`); frontend `2130` tests green across 197 suites;
+  `tsc --noEmit` clean and `npm run lint` at 0 errors.
+
+- **Item 2 — a supporter is no longer offered a question count the backend discards.**
+  `resolveQuestionCount` honours a requested count for the `TEACHER` profile alone and **returned the
+  default `10` for everyone else**, so a Plus/Pro supporter who picked 30 in the Generate Quiz modal
+  received 10 with no error. Two changes, because the defect had two ends.
+- **The backend now REJECTS rather than silently clamping**, with a new
+  `QuestionCountNotSelectableException`. Silent-discard is the pattern `v0.103.0` recorded as how a cap
+  gets bypassed, and **item 5 adds a second caller on this exact path**, so the guard belongs at the layer
+  the discard lives at rather than only in the UI. Raised before `assertQuizCreditAvailable` and the LLM
+  call, so nothing is charged; a caller sending nothing, or `10`, is unaffected.
+- **⚠️ The new exception is deliberately NOT `QuestionCountNotAllowedForPlanException`.** That one carries
+  `UPGRADE_TO_PLUS` and `PAYMENT_REQUIRED` — correct for a Teacher on Free, who can actually buy the
+  capability. Question count is gated on the **profile**, so no plan grants it; reusing the plan exception
+  would have put a money-surface falsehood into the API. The new one is `FORBIDDEN` with **no action**.
+- **The modal shows the count selector to `TEACHER` only** — the same gate Target Level directly beside it
+  has carried all along; the count control simply never got it.
+- **⚠️ A SHARPER DEFECT WAS FOUND INSIDE ITEM 2 AND IS FIXED BY THE SAME GATE: the product was selling an
+  upgrade for a capability the upgrade does not grant.** The lock badge (`:3259`) and its copy
+  (*"Plus unlocks 20 and 30 questions"*) keyed on **plan with no profile check**, so a supporter on `FREE`
+  clicking 20 was routed to `openPaywallModal("teacher-quiz-question-count", …)`. That is worse than the
+  silent discard — it asks for money against a promise the backend cannot keep. **Nothing reads that
+  paywall's analytics** (`private_note_detail_teacher_quiz_question_count`), verified against the Backlog
+  Index, so **no deploy-split caveat is owed** despite non-teacher impressions having inflated it.
+- **⚠️ THE CAP DID NOT MOVE.** Honouring 20/30 for non-teachers would raise it, which `v0.92.0` records as
+  an untaken pricing decision. The choice was withdrawn, not granted.
+- **Tests: +3 in `GeneratedQuizServiceTest`, +2 in `private-note-detail-page-client.test.tsx`.** The
+  discriminating fixture stubs an **explicitly non-`TEACHER`** profile and sends a **non-default** count —
+  a fixture sending `null`, or asserting only "a non-teacher gets 10", passes identically under the silent
+  discard and proves nothing. Deleting the throw reds
+  `generate_refusesToSilentlyShrinkANonTeacherQuestionCount` (both parameterized cases); forcing the modal
+  gate true reds both page tests.
+
+- **Item 4 — combined supporter quizzes are immutable snapshots.** `combined_quizzes` stores ordered
+  sections with copied note titles and copied generated-quiz questions; it has no foreign key to `notes`, so
+  deleting or regenerating a source note cannot alter or remove a live combined quiz. Each copied item is
+  stamped through `QuizItem.withSourceStudyPackId`; that provenance is **inert on this path** because a
+  shared quiz creates no session and writes no `ConceptHealth`. `quiz_share_links` now has one exclusive
+  target arc — exactly one of `generated_quiz_id` or `combined_quiz_id` — preserving one token namespace and
+  one share-link meter.
+- **⚠️ CORRECTION to this item's own first write-up: copied section titles are OWNER-visible only.** It
+  claimed they "carry the source identity a recipient can actually read." **They do not.**
+  `PublicSharedQuizResponse` is `{ quizId, noteTitle, questions }` and `PublicQuizItem` is
+  `{ question, choices, concept, questionFormat }` — **neither carries a section or source title**, so a
+  recipient sees one flat question list under the combined quiz's single title, and the section titles reach
+  only the owner through `GET /combined-quizzes/{id}`. Caught while self-reviewing item 5's prompt, before
+  the false claim could be built on. **Giving the recipient section headers needs a field on the public
+  payload and is a separate decision, not a bug** — recorded below.
+- **Item 4 exposes an API and no UI, deliberately.** `RELEASES.md`'s "reachable by a supporter" is the
+  release's commitment across items 4 **and** 5; item 5 owns the picker and the share surface. **Zero files
+  changed under `frontend/`.** The public payload stays a **flat** `List<PublicQuizItem>` in section order,
+  which is what lets `/quiz/[token]` render a combined quiz with no frontend change at all.
+- **⚠️ FOUR DEFECTS WERE FOUND IN THE DELIVERED DIFF AND FIXED BEFORE IT WAS COMMITTED.** Recorded because
+  three of them are the categories the audit step exists for, and one was a test passing for the wrong reason.
+  - **A null-injecting constructor had been added to production code to avoid editing a test fixture.**
+    `@RequiredArgsConstructor` was replaced by two hand-written constructors, the shorter passing `null` for
+    `combinedQuizRepository` "for the pre-V132 unit fixture". That leaves a permanent NPE hazard in a
+    Spring-managed service to save a one-line test change. Lombok restored; the fixture takes the new mock.
+  - **No read endpoint for a combined quiz's share link — the load-on-refresh gap.** The only route back to
+    an existing link was to POST, and on a link the owner had toggled **off** that POST does not return it
+    (the idempotent early return requires an *active* link), so a page refresh would **mint a new link and
+    spend share-link quota**. `GET /combined-quiz-share/{id}` added, mirroring `getShareLinkByQuizId`.
+  - **⚠️ THE EXCLUSIVE-ARC TEST ASSERTED NOTHING ON ITS SECOND HALF.** Both violations were asserted in one
+    test against a bare `RuntimeException`. PostgreSQL aborts the transaction on the first constraint
+    violation, so the second insert failed with SQLSTATE **25P02** (*"current transaction is aborted"*) and
+    never reached the CHECK — green, and blind. Split into two tests, each asserting
+    `DataIntegrityViolationException` **and the constraint name**. The tightened assertion is what exposed it.
+  - **A dead `NoteNotFoundException` import**, left when the single-note path was unified onto the
+    share-link not-found contract. **That unification is a behaviour change on a shipped path and is kept
+    deliberately** — it removes a note-existence oracle from an anonymous endpoint and matches the single
+    not-found contract the release already requires — but it was not requested, so it is recorded here
+    rather than left silent.
+- **Every guard has a named killing mutant:** dropping the count-match ownership gate reds
+  `assemble_rejectsAnExistingButUnownedNoteThroughTheCountMatchGate`; truncating instead of rejecting an
+  over-cap selection reds `assemble_rejectsAnOverCapSelectionWithoutPersisting`; removing the combined
+  share-link idempotency guard reds `combinedShareLinkReturnsAnExistingActiveLinkWithoutQuotaOrUsage` and
+  `combinedShareLinkReusesOnlyAnActiveLinkAndKeepsTheGuardAndUsageOrder`; and copying items through the
+  public `QuizItem` constructor instead of `withSourceStudyPackId` reds
+  `assemble_snapshotsOrderedSectionsCopiedTitlesAndTrustedProvenanceCopies` — the non-idempotent
+  choice-sanitizer trap.
+- **Request-safety bounds are plan-agnostic, so they are not a pricing decision:** 20 sections, 20 source
+  notes, 100 total questions. An over-cap request is **rejected, never truncated** — silent truncation is
+  the defect item 2 of this release just fixed.
+- **Item 5 — the combined quiz is reachable from Library for every onboarded, email-verified user.** The
+  Create menu starts an intent-aware multi-select, so its card says *combined quiz* rather than promising a
+  Study Plan. Quiz-ready selected notes contribute all of their questions; notes without a generated quiz
+  are named as excluded, and the UI blocks the 20-source-note / 100-question request bounds before POSTing.
+  It also states the real prerequisite cost: each source still needs one Study Pack generation and one quiz
+  generation; assembling costs nothing.
+- **The owner flow survives refresh as two Library sub-pages, not a note-detail action:**
+  `/library/combined-quiz?notes=…` takes the required standalone title and creates one immutable snapshot;
+  `/library/combined-quiz/{id}` reads that snapshot and reads any existing share link. The latter never
+  POSTs merely to discover a link — including an inactive one — so refresh cannot mint a replacement or
+  spend quota. The share card reuses the existing link meter and events with `scope=combined_quiz` metadata;
+  it adds no entitlement, counter, quiz mode, DOCX action, connection requirement, or `ProfileType` gate.
+
+- **Item 3 — the product stops advertising a capability to people who could not use it.** The Generate
+  Quiz modal's guidance tip was rendered **unconditionally** and told every reader to *"select multiple
+  notes to build a quiz from a full unit — use the note checkboxes in your library first."* The only
+  multi-note quiz CTA there was `TEACHER`-gated, so for most of its audience it advertised something
+  unreachable. It now names the path item 5 shipped: *"Building a quiz for a whole unit? In your Library,
+  choose Combined quiz to pick several notes and share one quiz."*
+- **⚠️ The `tipId` changed deliberately, which re-shows the tip once to everyone who dismissed the old
+  one.** They dismissed a **different, false** message, so they were never told about a capability that now
+  exists — and `v0.109.0` records that shipping a capability without announcing it produces a false demand
+  signal. The old `teacher-` prefix was dropped because the path is not teacher-gated; keeping it would
+  re-encode the `ProfileType` axis error `v0.89.0` exists to correct.
+- **⚠️ SWEPT BY SURFACE, NOT BY DIFF, AND THE OTHER THREE CANDIDATES WERE VERIFIED RATHER THAN ASSUMED.**
+  `v0.109.0`'s lesson is that a file explaining a feature is exactly the file that never changes when the
+  feature does. Grepping every frontend surface for multi-note quiz copy found three more candidates —
+  `library/page.tsx:1473`'s `teacher-library-multi-note-select` tip, `library/page.tsx:1596`'s empty-library
+  copy, and `dashboard/page.tsx:1049`'s teaching-workspace card — and **all three are correctly
+  `isTeacherProfile`-gated**, so they describe the teacher path to teachers and are not falsehoods.
+  **Exactly one live instance existed, and it is the one item 3 named.**
+- **Two tests pin what nothing else executes**, which is the guard `v0.109.0` asked for on copy: one asserts
+  the tip names the ungated path and no longer says *"note checkboxes"* (both negative assertions have
+  reachable subjects — those strings were in the shipped message, so the test would have failed before the
+  fix); the other seeds the **old** tipId as dismissed and proves the corrected tip still reaches that
+  learner. **⚠️ A tautological `tipId === "..."` assertion was considered and rejected** — it compares a
+  literal to itself. Mutants: restoring the shipped copy reds the first test; reverting the tipId alone reds
+  the second.
+
+### Pre-signoff pressure test — TWO COLD AGENTS, and what they found
+
+**Tier stated rather than inherited.** The single-agent triggers fired several times over (a migration
+altering a live table; two PRs touching `QuizShareLinkService`; delivery introducing defects the same
+session). The three-agent triggers did not — no permission substrate, no new cross-user read, no money or
+quota change. So **two** agents ran in **isolated `git worktree`s**: one falsifying the release's specific
+claims, one pointed at the **blind spot** rather than the feature, because in the last three releases the
+worst defect was outside the stated scope every time.
+
+**All five claims survived falsification**, each re-verified by mutation rather than reading. **The
+blind-spot agent found eight real issues, four of them surviving mutants.** Fixed here:
+
+- **⚠️ `QuizItem.isMultiSelect()` was silently widening the persisted JSONB in SIX TABLES — a defect this
+  release INTRODUCED, during its own item 1 audit.** Jackson treats `isX()` as a property, so every
+  serialized `QuizItem` carried a derived `"multiSelect"` key — in `generated_quizzes`, `study_packs`,
+  `quick_review_sessions.session_state`, `exam_question_pool`, `challenge_quiz_question_bank` and
+  `combined_quizzes`, across every quiz mode, plus every API response. `answer()` carries `@JsonIgnore` for
+  exactly this reason and the new getter did not. **A derived getter is not a read-only addition.** Now
+  annotated, and pinned by a test asserting the SERIALIZED SHAPE rather than the annotation, so it also
+  catches the next getter added without one.
+- **Three assertions had no reachable subject and are now discriminating.** (a) The ownership scope on
+  `GET /combined-quizzes/{id}` had **no coverage at all** — swapping `findByIdAndOwnerUserId` for `findById`
+  passed the entire suite, with a full answer key for up to 100 questions behind that one predicate. (b)
+  `getActivePublicQuizRejectsInactiveLink` passed **vacuously**: with the `isActive` guard deleted, the
+  unstubbed repository returned `Optional.empty()` and `orElseThrow` raised the very exception the test
+  asserted. (c) `sharedQuizStillGradesSingleChoiceQuestions` asserted `correctIndices().isEmpty()` against a
+  fixture whose `correctIndices` was empty **by construction**. The combined arc also had no inactive-link
+  test at all — every fixture built an active link.
+- **A combined-quiz title over 512 characters was a 500, not a 400** — `@NotBlank` with no `@Size` against a
+  `VARCHAR(512)` column, on a directly callable endpoint where the frontend's `maxLength` is not a bound.
+
+### Known limitations
+
+- **A MATCHING block loses its grouping on the shared quiz page.** `teacher-quiz-developer.txt` may emit one
+  block of 2–4 consecutive questions sharing a `questionGroup` and the same four choices; `/quiz/[token]`
+  renders each as a standalone question with no *Match each item to one option* header, unlike the in-app
+  `QuizMatchingGroup`. **⚠️ Found while fixing item 1 and deliberately NOT folded in: grading is unaffected**
+  — a MATCHING item carries a single `correctIndex` and grades like an MCQ — so this is presentation only,
+  and it is the sharing gap `assessment-architecture-audit.md` §15 already records. Item 1's scope was the
+  mis-grade.
+- **IDENTIFICATION and ENUMERATION remain ungradeable on the shared path.** Neither is reachable today —
+  the teacher-quiz prompt does not emit them — and the recipient has no text input to answer one with.
+- **⚠️ AUDIT OF THE DELIVERED DIFF — two changes, and one of them was reverting my own.**
+  - **The request bounds had landed in THREE places, one as bare literals.** `app/library/page.tsx` compared
+    against inline `20` and `100` while the builder page declared its own constants and the server holds the
+    authority. Extracted to `frontend/lib/combined-quiz.ts` so the two surfaces cannot drift — `v0.103.0`
+    records a standalone constant beside a derived cap as exactly how that leakage returns. The
+    frontend/server duplication remains by necessity (no endpoint publishes the bounds) and is commented as
+    the server being authoritative.
+  - **⚠️ A double-submit guard I wrote was REMOVED BY ITS OWN MUTATION TEST.** A duplicate POST orphans an
+    immutable row permanently, so a ref-based guard looked obviously right. Mutation said otherwise:
+    reverting to the delivered state guard **still passed**, because `canAssemble` reads `assembling` and
+    `Button` already applies `disabled={loading || disabled}`. Removing **both** reds the test, so the
+    guarantee is held jointly and the ref added nothing. It was deleted rather than shipped as code whose
+    necessity could not be demonstrated — the same discipline that catches a fix which changes nothing,
+    pointed at my own work. The test stays, with its subject and the mutation result recorded in a comment.
+- **Verification:** frontend **2130** tests green across 197 suites, `tsc --noEmit` clean, `npm run lint` at
+  0 errors, and the backend suite unchanged at **2044** (zero backend files touched). Mutants and their
+  killing tests: replacing the share step's read with a POST on load reds all four
+  `CombinedQuizSharePage` tests; removing both assemble guards reds
+  *assembles once when the button is double-clicked before the first request settles*.
+- **A combined quiz's section structure is invisible to the recipient.** The snapshot stores a title per
+  source note, but the public payload carries no section field, so the recipient takes the questions as one
+  flat list. **Grading and ordering are unaffected** — section order is preserved in the flattened list.
+  Showing the recipient which note each question came from would need a new field on `PublicQuizItem` and is
+  an unmade product decision, not an oversight.
+- **⚠️ CRITICAL, PRE-EXISTING, PRODUCT-WIDE AND NOT FIXED HERE: quiz choice text is re-sanitized on every
+  read and degrades progressively.** `QuizItem`'s `@JsonCreator` routes into the sanitizing constructor, and
+  `QuizValidationUtils.sanitizeChoiceTexts` strips a leading choice label with `replaceFirst` and is **not
+  idempotent** — so the strip runs at generation AND again on every deserialization. **Reproduced directly
+  at signoff, not inferred:** an LLM choice `"A. B. Smith"` is stored as `"B. Smith"` and read back as
+  `"Smith"`; `"B. D.C. generator"` is stored as `"D.C. generator"`, read back as `"C. generator"`, and after
+  a further round-trip as `"generator"`. It **compounds with each read**. Blast radius is every table
+  holding a `QuizItem` and every quiz mode — Electrical Engineering (`A.C.`/`D.C.`) and biology binomials
+  (`C. elegans`, `B. subtilis`) are squarely in `[A-D]`, and this catalog is board-exam content.
+  **⚠️ The mechanism predates this release, but this release makes it WORSE and asserted the opposite:** a
+  combined quiz adds a storage round-trip, and `CombinedQuizServiceTest` asserted `"B. Smith"` survives —
+  true in memory, false end-to-end, because its repository is mocked. **That test now carries the correction
+  rather than the claim.** The trusted-copy helpers do NOT close this; they only prevent a further strip
+  within one in-memory copy. **Fixing it is its own release** — the sanitizer is load-bearing at generation,
+  so the fix is to stop re-running it on deserialization, which changes a contract six tables depend on.
+- **⚠️ NO IN-PRODUCT PATH REACHES AN EXISTING COMBINED QUIZ OR ITS SHARE LINK — an owner-control gap, and
+  an OWNER DECISION IS OWED.** `/library/combined-quiz/{id}` is reachable only by the redirect immediately
+  after assembling. There is no listing endpoint (`CombinedQuizRepository` declares only
+  `findByIdAndOwnerUserId`), no Library section and no nav entry. **The tell is in the schema:** `V132`
+  creates `idx_combined_quizzes_owner_created_at` and **nothing queries it** — an index shaped for a listing
+  that was never built, which is evidence of an omission rather than a decision. So a supporter who closes
+  the tab cannot turn sharing off, cannot re-copy the URL, and re-assembling spends a second share-link unit
+  against a FREE allowance of 3/month. **The single-note arc always recovers** via
+  `getQuizShareLinkByQuizId` from `/notes/{id}/quiz`. **Recommended: build the listing the index already
+  anticipates.**
+- **The recipient page has no resume, and this release raised the ceiling from ~30 to 100 questions.**
+  Anonymous recipients deliberately get no session rows, so answers live in React state; a refresh at
+  question 90 of 100 discards everything, and neither page says so. The decision is locked; the **scale** is
+  new, and the gap is copy.
+- **A recipient still on the pre-fix browser bundle now scores ZERO on every MULTI_SELECT question**, where
+  before item 1 picking `correctIndices.getFirst()` scored full marks. Transitional and strictly more
+  honest — they could never select the full set — but it is a behaviour change for in-flight recipients.
+- **`combined_quizzes` is purged by cascade only.** `AccountPurgeService.deletePersonalRows` enumerates 20
+  user-owned tables explicitly and does not name it; the rows die via `owner_user_id ... ON DELETE CASCADE`.
+  **Verified against real PostgreSQL that deletion leaves zero rows — there is no retention leak** — but it
+  is undocumented on a retention document that spells out every other table.
+- **⚠️ A non-teacher still persists a Target Level they never chose — FOUND DURING ITEM 2, DELIBERATELY NOT
+  FOLDED IN, AND AN OWNER DECISION IS OWED.** `openGenerateQuizModal:1855` sets `selectedQuizLearnerLevel`
+  unconditionally and `handleGenerateTeacherQuiz:1880` sends it for **every** profile, while the Target
+  Level control renders for `TEACHER` only. `withLearnerLevelOverride` applies no profile check, so
+  `entity.setTargetLearnerLevel(...)` writes the supporter's own profile level. The comment at
+  `GeneratedQuizService:144-149` states exactly why that matters: it destroys the "never targeted" state
+  `findByNoteIdAndTargetLearnerLevelIsNotNullOrderByGeneratedAtDesc` encodes, which feeds
+  `lastUsedTargetLearnerLevel` and pre-fills the teacher UI *"as though it had been selected."*
+  **It is the same one-line profile gate as item 2 and was left out on purpose:** it changes what gets
+  **persisted**, so rows written before and after would mean different things, and whether to backfill is a
+  data decision this release has not taken. **Recommended fix: stop sending the level for non-teachers, no
+  backfill** — but that is the owner's call, not a default.
+
+**Routing: CODEX** — a migration plus a service and a surface. **⚠️ Re-run the routing test if item 1's
+migration turns out to be a one-column change and items 2 and 3 are already built.**
+
+### Shipped
+
 ## v0.109.0 - Assessment Discoverability
 
 **Status: Released** (kicked off and signed off 2026-09-03, base branch `releases/v0.109.0`, cut from `main` after

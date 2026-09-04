@@ -14,6 +14,11 @@ Board Exam reserves and reverses its Challenge Quiz and Board Exam meters togeth
 `ChallengeQuizService.BOARD_EXAM_QUOTA_UNITS_PER_SESSION` and one idempotency stamp. Both meter decrements
 must clamp in SQL; never rely on the Challenge-meter CHECK constraint to make a partial refund safe.
 
+`combined_quizzes` rows are immutable snapshots: never update, re-assemble, append, or delete their
+questions in place. `quiz_share_links` is one exclusive target arc — exactly one of `generated_quiz_id` and
+`combined_quiz_id` must be populated — so do not split the token space or share-link counter into a second
+table.
+
 You are an AI coding agent helping implement NoteLib.
 Follow these rules to keep the codebase consistent and shippable.
 
@@ -21,7 +26,7 @@ Rebrand note: StudySnap has been renamed to NoteLib. Keep existing database sche
 
 Current documentation baseline:
 
-- `v0.109.0 - Assessment Discoverability` (Released); previous: `v0.108.0 - Session Identity` (Released, deployed); previous: `v0.107.0 - Curriculum-Scale Remediation` (Released, deployed); previous: `v0.106.0 - Board Exam Review Set Identity` (Released, deployed); previous: `v0.105.0 - Curriculum-Scale Exams` (Released, deployed)
+- `v0.110.0 - Supporter Combined Quiz` (Released); previous: `v0.109.0 - Assessment Discoverability` (Released, deployed); previous: `v0.108.0 - Session Identity` (Released, deployed); previous: `v0.107.0 - Curriculum-Scale Remediation` (Released, deployed); previous: `v0.106.0 - Board Exam Review Set Identity` (Released, deployed); previous: `v0.105.0 - Curriculum-Scale Exams` (Released, deployed)
 
 Implementation status: Phases 1-4 are **Released** (`v0.91.0`-`v0.94.0`), with **Phase 4 PARTIAL**: shareable invitation links and connection management shipped in `v0.94.0`; **supporter onboarding did NOT**. **⚠️ The reason it did not is an ASSUMPTION nobody has checked, found at the `v0.95.0` kickoff (2026-08-29):** `v0.94.0` blocked it on the onboarding freeze, but `[CHECKPOINT — due 2026-09-11]` is the **signup funnel read alone** (375 signups against a 62.4% completion baseline, measuring `app/onboarding/page.tsx`), **"supporter onboarding" has no definition anywhere in the plan**, and the redemption page already treats `/onboarding` as a waypoint it carries a token through rather than a surface it edits. **It is NOT claimed unblocked — it is claimed unchecked.** The discriminating test is whether the work edits the signup → verify-email → onboarding path; it needs a definition step, which is **`v0.97.0` item 3 — docs only, no code on the frozen path**. **No public people search is in Phase 4 at all.** **Phase 5 remains uncommitted and must not be stubbed.** **⚠️ An `ACCEPTED` relationship implies no access of any kind** — material, activity and progress each need their own live grant, and streaks/study days are reachable only through `ACTIVITY`.
 

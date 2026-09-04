@@ -630,6 +630,167 @@ describe("PrivateNoteDetailPageClient", () => {
     expect(screen.queryByRole("button", { name: /^Quiz for someone$/i })).not.toBeInTheDocument();
   });
 
+  it("does not offer a supporter a question count the backend will discard", async () => {
+    // ⚠️ THE DEFECT, ON A PRO ACCOUNT SO NOTHING IS PLAN-LOCKED. resolveQuestionCount honours a requested
+    // count for the TEACHER profile ALONE, so this modal offered a supporter 10/20/30 with no lock badge,
+    // they picked 30, and they silently received 10. The count control is now gated the way Target Level
+    // beside it always was.
+    (getAuthUser as jest.Mock).mockReturnValue({
+      planType: "PRO",
+      emailVerifiedAt: "2026-03-21T09:00:00Z",
+      profileType: "STUDENT",
+    });
+    (getNote as jest.Mock).mockResolvedValue({
+      ...baseNote,
+      studyPackStatus: "STUDY_PACK_READY",
+      studyPackId: "sp-1",
+      generatedQuiz: null,
+    });
+
+    render(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Open note actions" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: /Quiz for someone/i }));
+
+    expect(await screen.findByRole("dialog", { name: "Generate quiz" })).toBeInTheDocument();
+    expect(screen.queryByRole("group", { name: "Quiz question count" })).not.toBeInTheDocument();
+    expect(screen.queryByText(/Higher counts cover more material/i)).not.toBeInTheDocument();
+    // Target Level is teacher-only too, and stays that way.
+    expect(screen.queryByText("Target Level")).not.toBeInTheDocument();
+    // ⚠️ The supporter path itself stays UNGATED -- what was withdrawn is the CHOICE, never the capability.
+    expect(screen.getByText(/Questions and answers are AI-generated from your note/i)).toBeInTheDocument();
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Generate Quiz" }).at(-1) as HTMLButtonElement);
+
+    await waitFor(() => {
+      expect(generateGeneratedQuiz).toHaveBeenCalledWith("note-1", 10, "COLLEGE");
+    });
+  });
+
+  /**
+   * ⚠️ PINNED COPY, because nothing else executes it. This tip told every reader to "use the note
+   * checkboxes in your library" while the only multi-note quiz CTA there was TEACHER-gated — a live
+   * falsehood for most of its audience. v0.110.0 item 5 made a combined quiz reachable for everyone, so
+   * the tip now names that path.
+   *
+   * <p>The two negative assertions have REACHABLE subjects: both strings were in the shipped message, so
+   * this test would have failed before the fix rather than passing vacuously.
+   */
+  it("points every learner at the ungated combined-quiz path, not the teacher-gated checkboxes", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({
+      planType: "FREE",
+      emailVerifiedAt: "2026-03-21T09:00:00Z",
+      profileType: "STUDENT",
+    });
+    (getNote as jest.Mock).mockResolvedValue({
+      ...baseNote,
+      studyPackStatus: "STUDY_PACK_READY",
+      studyPackId: "sp-1",
+      generatedQuiz: null,
+    });
+
+    render(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Open note actions" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: /Quiz for someone/i }));
+    expect(await screen.findByRole("dialog", { name: "Generate quiz" })).toBeInTheDocument();
+
+    // "Combined quiz" must match the Library Create-menu item label verbatim, or the tip names a control
+    // that does not exist.
+    expect(screen.getByText(/In your Library, choose Combined quiz/i)).toBeInTheDocument();
+    expect(screen.queryByText(/note checkboxes/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/full unit — use/i)).not.toBeInTheDocument();
+  });
+
+  /**
+   * ⚠️ Without this impression event a zero reading on the v0.110.0 checkpoint is UNINTERPRETABLE — it
+   * cannot separate "nobody was told" from "nobody wanted it", which is the exact confound that made
+   * v0.109.0 lift two dated reads instead of letting them fire. The signoff gate requires instrumentation
+   * shipped in the same release and verified EMITTING, so this asserts the fire, not enum membership.
+   */
+  it("emits a tip impression so the combined-quiz read has a denominator", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({
+      planType: "FREE",
+      emailVerifiedAt: "2026-03-21T09:00:00Z",
+      profileType: "STUDENT",
+    });
+    (getNote as jest.Mock).mockResolvedValue({
+      ...baseNote,
+      studyPackStatus: "STUDY_PACK_READY",
+      studyPackId: "sp-1",
+      generatedQuiz: null,
+    });
+
+    render(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Open note actions" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: /Quiz for someone/i }));
+    expect(await screen.findByRole("dialog", { name: "Generate quiz" })).toBeInTheDocument();
+
+    await waitFor(() => expect(trackAnalyticsEvent).toHaveBeenCalledWith(expect.objectContaining({
+      eventType: "GUIDANCE_TIP_SHOWN",
+      metadata: expect.objectContaining({ tipId: "generate-quiz-combined-multi-note" }),
+    })));
+  });
+
+  /**
+   * ⚠️ This pins the RE-ANNOUNCEMENT, which is the only part of the tipId change with a real failure mode.
+   * Asserting the tipId string directly would be tautological — it would compare a literal to itself. This
+   * instead seeds the OLD id as dismissed and proves the corrected tip still reaches that learner, so
+   * reverting the tipId reds it. Everyone who dismissed the old message dismissed a false one, and
+   * v0.109.0 records that a capability shipped without announcement produces a false demand signal.
+   */
+  it("still shows the corrected tip to a learner who dismissed the old false one", async () => {
+    window.localStorage.setItem("notelib-guidance-dismissed-teacher-generate-quiz-multi-note", "1");
+    (getAuthUser as jest.Mock).mockReturnValue({
+      planType: "FREE",
+      emailVerifiedAt: "2026-03-21T09:00:00Z",
+      profileType: "STUDENT",
+    });
+    (getNote as jest.Mock).mockResolvedValue({
+      ...baseNote,
+      studyPackStatus: "STUDY_PACK_READY",
+      studyPackId: "sp-1",
+      generatedQuiz: null,
+    });
+
+    render(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Open note actions" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: /Quiz for someone/i }));
+    expect(await screen.findByRole("dialog", { name: "Generate quiz" })).toBeInTheDocument();
+
+    expect(screen.getByText(/In your Library, choose Combined quiz/i)).toBeInTheDocument();
+  });
+
+  it("never sells a supporter on Free an upgrade for a count Plus would not give them", async () => {
+    // The lock badge and its copy keyed on PLAN with no profile check, so a Free supporter clicking 20 was
+    // shown "Plus unlocks 20 and 30 questions" and an upgrade prompt -- for a capability gated on the
+    // TEACHER profile, which no plan buys. That is worse than the silent discard: it asks for money against
+    // a promise the backend cannot keep.
+    (getAuthUser as jest.Mock).mockReturnValue({
+      planType: "FREE",
+      emailVerifiedAt: "2026-03-21T09:00:00Z",
+      profileType: "STUDENT",
+    });
+    (getNote as jest.Mock).mockResolvedValue({
+      ...baseNote,
+      studyPackStatus: "STUDY_PACK_READY",
+      studyPackId: "sp-1",
+      generatedQuiz: null,
+    });
+
+    render(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Open note actions" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: /Quiz for someone/i }));
+
+    expect(await screen.findByRole("dialog", { name: "Generate quiz" })).toBeInTheDocument();
+    expect(screen.queryByText(/Plus unlocks 20 and 30 questions/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^20$/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^30$/ })).not.toBeInTheDocument();
+  });
+
   it("still gives a learner an editable Course / Program when the note is not shadowed", async () => {
     // The ordinary learner case, which lost coverage when the default mock started returning
     // courseProgramShadowed: true for every test. It also proves the #note-course-program-inline

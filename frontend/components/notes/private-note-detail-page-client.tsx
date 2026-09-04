@@ -3246,10 +3246,40 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
               ) : null}
             </div>
           ) : null}
+          {/*
+            ⚠️ The tipId CHANGED on purpose, which re-shows this once to everyone who dismissed the old one.
+            They dismissed a DIFFERENT, false message: it told every reader to "use the note checkboxes in
+            your library", and the only multi-note quiz CTA there was TEACHER-gated, so for most readers it
+            advertised something unreachable. v0.110.0 item 5 made a combined quiz reachable for every
+            onboarded user, and v0.109.0 records that shipping a capability without announcing it produces a
+            false demand signal — so this re-announces rather than silently correcting itself.
+            ⚠️ The old "teacher-" prefix is dropped because the path is not teacher-gated; keeping it would
+            re-encode the ProfileType axis error v0.89.0 exists to correct.
+            ⚠️ The named entry point is the Library Create menu item, labelled exactly "Combined quiz"
+            (library/page.tsx). If that label changes, this copy is falsified — a pinned test guards it.
+          */}
           <GuidanceTip
-            tipId="teacher-generate-quiz-multi-note"
-            message="You can select multiple notes to build a quiz from a full unit — use the note checkboxes in your library first."
+            tipId="generate-quiz-combined-multi-note"
+            message="Building a quiz for a whole unit? In your Library, choose Combined quiz to pick several notes and share one quiz."
+            // ⚠️ trackAnalytics is ON for this tip specifically, and it is what makes the v0.110.0 checkpoint
+            // readable. The outcome metric (QUIZ_SHARE_LINK_CREATED with scope=combined_quiz) alone cannot
+            // separate "nobody was told" from "nobody wanted it" — and that exact confound is why v0.109.0
+            // LIFTED two dated reads rather than letting them fire on evidence they were not designed to
+            // weigh. GUIDANCE_TIP_SHOWN supplies the denominator.
+            trackAnalytics
           />
+          {/*
+            ⚠️ TEACHER-ONLY, and the gate is the fix rather than a refinement. resolveQuestionCount honours a
+            requested count for the TEACHER profile alone, so rendering this to anyone else offered a choice
+            the backend discarded: a Plus/Pro supporter picked 30 and silently received 10. Worse, the lock
+            badge and the copy below key on PLAN, not profile -- so a non-teacher on Free clicking 20 was
+            shown an upgrade prompt for a capability Plus does not grant them either. Target Level directly
+            below has been gated this way all along; the count selector simply never was.
+            ⚠️ Do NOT "fix" this by honouring the count for non-teachers -- that raises the cap, which is a
+            pricing decision nobody has taken.
+          */}
+          {profileType === "TEACHER" ? (
+          <>
           <div
             className="flex w-full gap-1 rounded-lg border border-border bg-muted/30 p-1"
             role="group"
@@ -3285,6 +3315,8 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
             Higher counts cover more material.
             {currentPlan === "FREE" ? " Plus unlocks 20 and 30 questions." : null}
           </p>
+          </>
+          ) : null}
           {profileType === "TEACHER" ? (
             <div className="space-y-2">
               <label htmlFor="teacher-quiz-target-level" className="block text-sm font-medium text-foreground">

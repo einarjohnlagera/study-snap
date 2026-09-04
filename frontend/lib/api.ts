@@ -50,10 +50,35 @@ export type QuizShareLinkResponse = {
   createdAt: string;
 };
 
+export type CombinedQuizSection = {
+  title: string;
+  questions: QuizItem[];
+};
+
+export type CombinedQuizResponse = {
+  id: string;
+  title: string;
+  sections: CombinedQuizSection[];
+  createdAt: string;
+};
+
+export type CreateCombinedQuizRequest = {
+  title: string;
+  sections: Array<{
+    noteId: string;
+    questionIndexes: number[];
+  }>;
+};
+
 export type PublicQuizItem = {
   question: string;
   choices: string[];
   concept?: string | null;
+  /**
+   * Present so a recipient can be given the right control. It never carries the answer key --
+   * correctIndex/correctIndices/explanation reach them only in SharedQuizResultItem, after submitting.
+   */
+  questionFormat?: string | null;
 };
 
 export type PublicSharedQuizResponse = {
@@ -65,6 +90,8 @@ export type PublicSharedQuizResponse = {
 export type SharedQuizResultItem = {
   correct: boolean;
   correctIndex: number;
+  /** Non-empty only for MULTI_SELECT. Prefer it when non-empty; otherwise use correctIndex. */
+  correctIndices?: number[] | null;
   explanation?: string | null;
 };
 
@@ -4566,6 +4593,54 @@ export async function createQuizShareLink(generatedQuizId: string): Promise<Quiz
   return parseApiResponse<QuizShareLinkResponse>(response, "Could not create share link.");
 }
 
+export async function createCombinedQuiz(request: CreateCombinedQuizRequest): Promise<CombinedQuizResponse> {
+  const response = await fetchWithAuth(
+    "/combined-quizzes",
+    {
+      method: "POST",
+      headers: buildAuthHeaders("application/json"),
+      body: JSON.stringify(request),
+    },
+    true,
+  );
+  return parseApiResponse<CombinedQuizResponse>(response, "Could not assemble combined quiz.");
+}
+
+export async function getCombinedQuiz(combinedQuizId: string): Promise<CombinedQuizResponse> {
+  const response = await fetchWithAuth(
+    `/combined-quizzes/${combinedQuizId}`,
+    { method: "GET", headers: buildAuthHeaders() },
+    true,
+  );
+  return parseApiResponse<CombinedQuizResponse>(response, "Could not load combined quiz.");
+}
+
+export async function createCombinedQuizShareLink(combinedQuizId: string): Promise<QuizShareLinkResponse> {
+  const response = await fetchWithAuth(
+    "/combined-quiz-share",
+    {
+      method: "POST",
+      headers: buildAuthHeaders("application/json"),
+      body: JSON.stringify({ combinedQuizId }),
+    },
+    true,
+  );
+  return parseApiResponse<QuizShareLinkResponse>(response, "Could not create share link.");
+}
+
+/** A 404 is the normal no-link-yet state; this read must never create a replacement link. */
+export async function getCombinedQuizShareLink(combinedQuizId: string): Promise<QuizShareLinkResponse | null> {
+  const response = await fetchWithAuth(
+    `/combined-quiz-share/${combinedQuizId}`,
+    { method: "GET", headers: buildAuthHeaders() },
+    true,
+  );
+  if (response.status === 404) {
+    return null;
+  }
+  return parseApiResponse<QuizShareLinkResponse>(response, "Could not load share link.");
+}
+
 export async function getQuizShareLinkByQuizId(generatedQuizId: string): Promise<QuizShareLinkResponse | null> {
   const response = await fetchWithAuth(
     `/quiz-share/${generatedQuizId}`,
@@ -4597,16 +4672,21 @@ export async function getPublicSharedQuiz(token: string): Promise<PublicSharedQu
   return parseApiResponse<PublicSharedQuizResponse>(response, "Could not load shared quiz.");
 }
 
+/**
+ * `answers` holds one entry per question and is null at a MULTI_SELECT position, whose selections travel
+ * in the index-aligned `multiAnswers`. The server rejects either list at the wrong length.
+ */
 export async function getSharedQuizResults(
   token: string,
-  answers: number[],
+  answers: (number | null)[],
+  multiAnswers: (number[] | null)[],
 ): Promise<SharedQuizResultsResponse> {
   const response = await fetch(buildUrl(`/quiz/share/${token}/results`), {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ answers }),
+    body: JSON.stringify({ answers, multiAnswers }),
   });
   return parseApiResponse<SharedQuizResultsResponse>(response, "Could not check quiz results.");
 }

@@ -82,6 +82,16 @@ Current active one-time tips:
 | `library-first-note-organization` | Library | notes 1–3 | `Add a subject and tags when editing a note — it makes filtering your library much easier as it grows.` |
 | `library-organization-habits` | Library | notes ≥ 5 | `You're building a solid library. Try filtering by subject to find related notes quickly.` |
 | `teacher-library-multi-note-select` | Library | teacher, not in selection mode, notes ≥ 1 | `Select multiple notes with the checkboxes, then add them to a lesson plan or build an exam from quiz-ready notes.` |
+| `generate-quiz-combined-multi-note` | Generate Quiz modal (Note Detail) | always | `Building a quiz for a whole unit? In your Library, choose Combined quiz to pick several notes and share one quiz.` (trackAnalytics) |
+
+**⚠️ `generate-quiz-combined-multi-note` REPLACED `teacher-generate-quiz-multi-note` in `v0.110.0`, and the
+id change is deliberate.** The old tip rendered unconditionally while naming a `TEACHER`-gated CTA, so most
+of its readers were told to do something they could not. Changing the id re-shows the corrected tip once to
+everyone who dismissed the false one. The `teacher-` prefix was dropped because the path is not
+teacher-gated. **⚠️ Its copy names the Library Create-menu item by its exact label, "Combined quiz" — rename
+that control and this tip becomes false.** A test pins the pairing, and `trackAnalytics` is on so a dated
+read can tell "nobody was told" from "nobody wanted it".
+
 
 The Library tips (`teacher-library-multi-note-select`, `library-study-plan-grouping`, `library-organization-habits`, `library-first-note-organization`) are selected by a single `pickActiveGuidance` rule set so only one shows at a time; Study Plan grouping is prioritized for non-teachers as the v0.28.0 activation lever. The `{Study Plan}` label is profile-aware via `getCollectionLabels` (STUDENT → Study Plan, BOARD_EXAM → Review Set, PROFESSIONAL → Collection).
 

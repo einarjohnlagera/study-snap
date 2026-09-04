@@ -43,6 +43,7 @@ import org.springframework.core.io.Resource;
 import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
 import org.springframework.context.annotation.Import;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Propagation;
@@ -1659,6 +1660,92 @@ class NativeQueryPostgresIntegrationTest {
         assertThat(jdbcTemplate.queryForObject(
                 "select status from notes where id = ?", String.class, noteId
         )).isEqualTo("DRAFT");
+    }
+
+    /**
+     * V132's snapshot property, against the database engine: a combined quiz has no notes FK, so deleting
+     * its source note cannot cascade either the snapshot or its active share link. The public-service test
+     * separately proves that the remaining link is rendered and graded from the copied JSON.
+     */
+    @Test
+    void deletingASourceNoteLeavesTheCombinedQuizAndItsShareLinkIntact() {
+        UUID owner = seedUser("combined-snapshot-owner");
+        UUID sourceNote = UUID.randomUUID();
+        UUID combinedQuiz = UUID.randomUUID();
+        UUID shareLink = UUID.randomUUID();
+        jdbcTemplate.update(
+                "insert into notes (id, owner_user_id, title, content, visibility, tags, target_profile_type, status, created_at, updated_at)"
+                        + " values (?, ?, 'Deleted source', 'body', 'PRIVATE', '{}', 'STUDENT', 'DRAFT', now(), now())",
+                sourceNote, owner);
+        jdbcTemplate.update(
+                "insert into combined_quizzes (id, owner_user_id, title, sections, created_at) values (?, ?, 'Unit snapshot', ?::jsonb, now())",
+                combinedQuiz, owner, "[{\"title\":\"Deleted source\",\"questions\":[]}]");
+        jdbcTemplate.update(
+                "insert into quiz_share_links (id, combined_quiz_id, owner_user_id, token, is_active, created_at)"
+                        + " values (?, ?, ?, 'combined-snapshot-token', true, now())",
+                shareLink, combinedQuiz, owner);
+
+        jdbcTemplate.update("delete from notes where id = ?", sourceNote);
+
+        assertThat(jdbcTemplate.queryForObject(
+                "select count(*) from combined_quizzes where id = ?", Integer.class, combinedQuiz)).isOne();
+        assertThat(jdbcTemplate.queryForObject(
+                "select count(*) from quiz_share_links where id = ? and is_active", Integer.class, shareLink)).isOne();
+    }
+
+    /**
+     * Killing test for weakening V132's exclusive arc: both targets set must be rejected.
+     *
+     * <p>⚠️ The two arc violations are SEPARATE tests on purpose. PostgreSQL aborts the whole transaction on
+     * a constraint violation, so a second insert in the same test fails with SQLSTATE 25P02
+     * ("current transaction is aborted") rather than the CHECK — it asserts nothing about the arc while
+     * still throwing. That is exactly how a test passes for the wrong reason.
+     */
+    @Test
+    void quizShareLinkExclusiveArcRejectsBothTargets() {
+        UUID owner = seedUser("combined-arc-both-owner");
+        UUID generatedQuiz = seedArcGeneratedQuiz(owner, "Arc source both");
+        UUID combinedQuiz = seedArcCombinedQuiz(owner, "Arc snapshot both");
+
+        assertThatThrownBy(() -> jdbcTemplate.update(
+                "insert into quiz_share_links (id, generated_quiz_id, combined_quiz_id, owner_user_id, token, is_active, created_at)"
+                        + " values (?, ?, ?, ?, 'both-arc-targets', true, now())",
+                UUID.randomUUID(), generatedQuiz, combinedQuiz, owner))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("chk_quiz_share_links_exactly_one_quiz");
+    }
+
+    /** Killing test for weakening V132's exclusive arc: neither target set must be rejected. */
+    @Test
+    void quizShareLinkExclusiveArcRejectsNoTarget() {
+        UUID owner = seedUser("combined-arc-none-owner");
+
+        assertThatThrownBy(() -> jdbcTemplate.update(
+                "insert into quiz_share_links (id, owner_user_id, token, is_active, created_at) values (?, ?, 'no-arc-target', true, now())",
+                UUID.randomUUID(), owner))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("chk_quiz_share_links_exactly_one_quiz");
+    }
+
+    private UUID seedArcGeneratedQuiz(UUID owner, String noteTitle) {
+        UUID note = UUID.randomUUID();
+        UUID generatedQuiz = UUID.randomUUID();
+        jdbcTemplate.update(
+                "insert into notes (id, owner_user_id, title, content, visibility, tags, target_profile_type, status, created_at, updated_at)"
+                        + " values (?, ?, ?, 'body', 'PRIVATE', '{}', 'STUDENT', 'DRAFT', now(), now())",
+                note, owner, noteTitle);
+        jdbcTemplate.update(
+                "insert into generated_quizzes (id, owner_user_id, note_id, questions, generated_at, updated_at)"
+                        + " values (?, ?, ?, '[]'::jsonb, now(), now())", generatedQuiz, owner, note);
+        return generatedQuiz;
+    }
+
+    private UUID seedArcCombinedQuiz(UUID owner, String title) {
+        UUID combinedQuiz = UUID.randomUUID();
+        jdbcTemplate.update(
+                "insert into combined_quizzes (id, owner_user_id, title, sections, created_at) values (?, ?, ?, '[]'::jsonb, now())",
+                combinedQuiz, owner, title);
+        return combinedQuiz;
     }
 
     private PublicLibraryFilterCriteria publicTagCriteria(List<String> tagSlugs) {
