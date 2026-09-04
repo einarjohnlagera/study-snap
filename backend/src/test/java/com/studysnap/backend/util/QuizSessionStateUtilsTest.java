@@ -35,6 +35,30 @@ class QuizSessionStateUtilsTest {
                 .isNull();
     }
 
+    /**
+     * ⚠️ EVERY SESSION LOAD went through this path, and it rebuilt through the sanitizing constructor — so a
+     * quiz choice lost a token each time the session was opened, in every mode. This is the compounding
+     * half of the defect, and it is a DIFFERENT route from the JSONB {@code @JsonCreator} one.
+     *
+     * <p>⚠️ The fixture text must ALREADY look labelled. {@code "Smith"} survives both the defect and the
+     * fix; only {@code "B. Smith"} and {@code "D.C. generator"} discriminate.
+     */
+    @Test
+    void extractQuiz_doesNotReStripChoiceLabelsOnRepeatedSessionLoads() {
+        List<String> stored = List.of("B. Smith", "D.C. generator");
+        QuizItem item = QuizItem.fromStoredComponents("Question", stored, 0, "Concept", "Explanation",
+                null, "MCQ", null, null, null, null, null, null, null, null);
+        Map<String, Object> state = QuizSessionStateUtils.withQuiz(List.of(item), Map.of());
+
+        List<QuizItem> firstLoad = QuizSessionStateUtils.extractQuiz(state);
+        Map<String, Object> rewritten = QuizSessionStateUtils.withQuiz(firstLoad, state);
+        List<QuizItem> secondLoad = QuizSessionStateUtils.extractQuiz(rewritten);
+
+        assertThat(firstLoad.getFirst().choices()).containsExactlyElementsOf(stored);
+        // The session is re-read and re-written on every answer, so stability across cycles is the property.
+        assertThat(secondLoad.getFirst().choices()).containsExactlyElementsOf(stored);
+    }
+
     @Test
     void withQuiz_andExtractQuiz_roundTripPreservesQuizAndBaseState() {
         List<QuizItem> quiz = List.of(
@@ -250,14 +274,30 @@ class QuizSessionStateUtilsTest {
         assertThat(restored.getFirst().answer()).isEqualTo("Pigment");
     }
 
+    /**
+     * ⚠️ REPLACES {@code extractQuiz_stripsLegacyChoiceLabelsAndKeepsLetterAnswerMapping}, which was EXPIRED
+     * rather than wrong. That test pinned TWO behaviours; only one of them has ended.
+     *
+     * <p>Commit {@code 684e4ae2} (2026-04-08) added the write-side choice sanitizer AND a read-side strip in
+     * {@code extractQuiz} in the SAME change — the read-side half was a ONE-TIME REPAIR for sessions already
+     * in flight that day, implemented as a PERMANENT read transform. That is the origin of the compounding
+     * corruption: because {@code sanitizeChoiceTexts} is not idempotent, every subsequent session load ate
+     * another token from choices that were already clean. Any session the repair protected is now a
+     * five-month-abandoned in-progress quiz.
+     *
+     * <p>⚠️ The LETTER-ANSWER MAPPING it also covered is NOT expired and is preserved below: a legacy row
+     * storing {@code "answer": "A)"} with no {@code correctIndex} must still resolve to index 0. That runs
+     * through {@code resolveCorrectIndex}/{@code answerLetterIndex}, which the trusted read path
+     * deliberately keeps. **Do not drop this coverage while removing the label expectation.**
+     */
     @Test
-    void extractQuiz_stripsLegacyChoiceLabelsAndKeepsLetterAnswerMapping() {
+    void extractQuiz_resolvesALegacyLetterAnswerWithoutRewritingChoiceText() {
         Map<String, Object> state = Map.of(
                 "quiz",
                 List.of(
                         Map.of(
                                 "question", "Which concept hides implementation details?",
-                                "choices", List.of("A. Encapsulation", "B) Abstraction", "C. Inheritance", "D) Polymorphism"),
+                                "choices", List.of("Encapsulation", "Abstraction", "Inheritance", "Polymorphism"),
                                 "answer", "A)",
                                 "concept", "OOP",
                                 "explanation", "Encapsulation hides implementation details."
@@ -268,10 +308,10 @@ class QuizSessionStateUtilsTest {
         List<QuizItem> restored = QuizSessionStateUtils.extractQuiz(state);
 
         assertThat(restored).hasSize(1);
-        assertThat(restored.getFirst().choices())
-                .containsExactly("Encapsulation", "Abstraction", "Inheritance", "Polymorphism");
         assertThat(restored.getFirst().correctIndex()).isZero();
         assertThat(restored.getFirst().answer()).isEqualTo("Encapsulation");
+        assertThat(restored.getFirst().choices())
+                .containsExactly("Encapsulation", "Abstraction", "Inheritance", "Polymorphism");
     }
 
     private QuizItem identificationItem() {

@@ -21,6 +21,28 @@ class QuizVersionShuffleUtilsTest {
         assertThat(third).isNotEqualTo(first);
     }
 
+    /**
+     * ⚠️ AT THE LAYER THE DEFECT LIVES AT. Shuffling rebuilt each item through the PUBLIC constructor, which
+     * re-ran the non-idempotent choice-label strip — so generating a second exam version silently truncated
+     * its choices. A test that exercises {@code QuizItem.withShuffledChoices} directly does NOT catch this:
+     * it passes while this class still rebuilds the wrong way (verified by mutation).
+     *
+     * <p>⚠️ The fixture text must ALREADY look labelled, or it survives both the defect and the fix.
+     */
+    @Test
+    void shuffleQuestionsAndChoices_doesNotReStripChoiceLabels() {
+        List<String> labelLooking = List.of("B. Smith", "D.C. generator", "A. thaliana", "Plain");
+        QuizItem item = QuizItem.fromStoredComponents(
+                "Which one?", labelLooking, 0, "Concept", "Because", null,
+                "MCQ", null, null, null, null, null, null, null, null);
+
+        List<QuizItem> shuffled = QuizVersionShuffleUtils.shuffleQuestionsAndChoices(List.of(item), "B", "seed-1");
+
+        assertThat(shuffled).hasSize(1);
+        // Order may change; the TEXT must not.
+        assertThat(shuffled.getFirst().choices()).containsExactlyInAnyOrderElementsOf(labelLooking);
+    }
+
     @Test
     void shuffleQuestionsAndChoices_keepsCorrectChoiceIndexAlignedToShuffledChoices() {
         QuizItem question = new QuizItem(

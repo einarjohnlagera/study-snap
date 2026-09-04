@@ -116,7 +116,9 @@ public final class QuizItem {
             List<Integer> correctIndices,
             String questionGroup
     ) {
+        // true: a public constructor is the GENERATION path, where the label must come off once.
         this(
+                true,
                 question,
                 choices,
                 correctIndex,
@@ -151,7 +153,9 @@ public final class QuizItem {
             List<String> acceptableAnswers,
             List<List<String>> acceptableAnswerGroups
     ) {
+        // true: a public constructor is the GENERATION path, where the label must come off once.
         this(
+                true,
                 question,
                 choices,
                 correctIndex,
@@ -170,7 +174,58 @@ public final class QuizItem {
         );
     }
 
+    /**
+     * Rebuilds an item whose choice text has ALREADY had its label stripped — a row read back from storage,
+     * a session-state map, or another {@code QuizItem}. This is the path that must NOT strip again.
+     */
+    public static QuizItem fromStoredComponents(
+            String question,
+            List<String> choices,
+            Integer correctIndex,
+            String concept,
+            String explanation,
+            String legacyAnswer,
+            String questionFormat,
+            String questionType,
+            String workingSolution,
+            List<Integer> correctIndices,
+            String questionGroup,
+            String keyConcept,
+            List<String> acceptableAnswers,
+            List<List<String>> acceptableAnswerGroups,
+            String sourceStudyPackId
+    ) {
+        return new QuizItem(false, question, choices, correctIndex, concept, explanation, legacyAnswer,
+                questionFormat, questionType, workingSolution, correctIndices, questionGroup, keyConcept,
+                acceptableAnswers, acceptableAnswerGroups, sourceStudyPackId);
+    }
+
+    /**
+     * Trusted rebuild with a different choice ORDER, for exam-version shuffling. The text is unchanged and
+     * already stripped, so it must not be re-sanitized.
+     */
+    public QuizItem withShuffledChoices(List<String> shuffledChoices, Integer newCorrectIndex, List<Integer> newCorrectIndices) {
+        return fromStoredComponents(question, shuffledChoices, newCorrectIndex, concept, explanation, null,
+                questionFormat, questionType, workingSolution, newCorrectIndices, questionGroup, keyConcept,
+                acceptableAnswers, acceptableAnswerGroups, sourceStudyPackId);
+    }
+
+    /**
+     * ⚠️ {@code stripChoiceLabels} exists because {@code sanitizeChoiceTexts} is the ONE operation here that
+     * is NOT idempotent: it strips a leading choice label with {@code replaceFirst}, so a second pass eats a
+     * second token — {@code "A. B. Smith"} becomes {@code "B. Smith"} and then {@code "Smith"}, and
+     * {@code "D.C. generator"} degrades to {@code "C. generator"} and then {@code "generator"}.
+     *
+     * <p>It must run EXACTLY ONCE, when text first arrives from the LLM. Every later construction — reading
+     * a row back, rebuilding from session state, copying, shuffling — handles text that was already
+     * stripped and must pass {@code false}.
+     *
+     * <p>⚠️ Everything else here stays in BOTH paths. {@code resolveCorrectIndex} in particular is DERIVED,
+     * not stored: MULTI_SELECT and legacy {@code answer}/{@code answerIndex} rows depend on it running on
+     * read, so bypassing the whole constructor to skip one line would silently break MULTI_SELECT grading.
+     */
     private QuizItem(
+            boolean stripChoiceLabels,
             String question,
             List<String> choices,
             Integer correctIndex,
@@ -188,7 +243,9 @@ public final class QuizItem {
             String sourceStudyPackId
     ) {
         this.question = question;
-        this.choices = choices == null ? List.of() : List.copyOf(QuizValidationUtils.sanitizeChoiceTexts(choices));
+        this.choices = choices == null
+                ? List.of()
+                : List.copyOf(stripChoiceLabels ? QuizValidationUtils.sanitizeChoiceTexts(choices) : choices);
         this.correctIndices = sanitizeCorrectIndices(correctIndices, this.choices.size());
         this.correctIndex = resolveCorrectIndex(this.choices, correctIndex, null, null, legacyAnswer, questionFormat, this.correctIndices);
         this.concept = concept;
@@ -223,7 +280,10 @@ public final class QuizItem {
             @JsonProperty("acceptableAnswerGroups") List<List<String>> acceptableAnswerGroups,
             @JsonProperty("sourceStudyPackId") String sourceStudyPackId
     ) {
+        // ⚠️ false: this is the DESERIALIZATION path. The stored text already had its choice
+        // label stripped when it was generated, so stripping again eats a second token.
         this(
+                false,
                 question,
                 choices,
                 resolveCorrectIndex(choices == null ? List.of() : List.copyOf(choices), correctIndex, legacyAnswerIndex, legacyCorrectAnswerIndex, legacyAnswer, questionFormat, correctIndices),
