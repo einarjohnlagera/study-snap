@@ -1,5 +1,91 @@
 # RELEASES.md - NoteLib
 
+## v0.114.0 - Connection Evidence
+
+**Status: In Progress** (kicked off 2026-09-04, base branch `releases/v0.114.0`, cut from `main`
+after `v0.113.1` merged and tagged)
+
+Theme: settle, with a direct reading rather than an argument from defaults, whether a database
+connection is released when its transaction commits — the one fact that decides whether `v0.112.0`
+Phase 3 would fix the outage or merely look like it did.
+
+### Planned Scope
+
+**⚠️ THIS RELEASE EXISTS BECAUSE THE KICKOFF SCAN FOUND A CHECKPOINT THAT WOULD HAVE COME DUE
+UNANSWERABLE.** `[CHECKPOINT — due 2026-10-04]` is named in `v0.112.0`'s own anti-drift as **"THE
+DECIDING INPUT FOR PHASE 3, AND THE REASON PHASE 3 IS DEFERRED RATHER THAN BUILT"**, and it is 30 days
+out. **Phase 1 shipped in full** — verified at this kickoff by reading `application.yaml`:
+`leak-detection-threshold: 60000` (`:22`), `maximum-pool-size: 20` (`:30`), `connection-timeout: 5000`
+(`:37`), each with its reasoning in a comment. **Phase 2 did NOT.** Its PRIMARY observation — logging
+the effective `hibernate.connection.handling_mode` — returns **ZERO matches across
+`backend/src/main/java` and `backend/src/main/resources`**, and `spring.jpa.open-in-view` is still
+unset (Spring Boot default `true`). **⚠️ The comment at `application.yaml:21` literally says leak
+detection is "the instrument Phase 2 reads to settle the open-in-view question" — an instruction
+recorded and never executed.** So the checkpoint has a date, a kill criterion and a row, and **no
+working metric**, which is the *decorative checkpoint* failure the signoff gate names outright.
+
+1. **Log the effective `hibernate.connection.handling_mode` from the `EntityManagerFactory`
+   properties at startup.** **⚠️ THIS IS PHASE 2's PRIMARY OBSERVATION AND IT IS SPECIFIED THAT WAY
+   FOR A REASON `v0.112.0` ALREADY WROTE DOWN: "read the leak logs" comes back AMBIGUOUS.** Leak
+   detection reports that a connection was held past 60 s **and by whom**; it does **not** report
+   whether the connection stayed bound **after the transaction closed**, which is the actual OSIV
+   question. This is a direct read of the setting that decides it.
+2. **Sample Hikari's `active` count against a request whose transaction commits early and whose
+   response is slow to serialize.** **⚠️ CONFIRMS ONLY — item 1 is primary.** **⚠️ Do NOT substitute
+   an argument from Spring Boot defaults for either**; that substitution is explicitly forbidden by
+   `v0.112.0`'s anti-drift.
+3. **Run the seven read-only falsification queries** — §5's five plus the two the cold re-read found
+   missing — and record whether the cause is CONFIRMED or still a hypothesis.
+4. **Read Render request-rate data for 05:55–05:57 UTC on 2026-09-04.** **⚠️ THIS IS THE ITEM MOST
+   LIKELY TO CHANGE PHASE 3's TARGET, AND IT IS NOT OPTIONAL:** `v0.112.0` recorded that **all five
+   §5 queries read tables that record WRITES, so none of them can detect an anonymous READ burst** —
+   *"zero rows refutes it"* is FALSE there; they would merely fail to see it. The only path the outage
+   log names as starved is `NoteCollectionService.listPublic:206`, which is `permitAll`, unpaginated
+   and read-only, and this repo has a documented precedent of public-endpoint fetches saturating the
+   backend. **⚠️ Run this BEFORE Phase 3 is shaped, not after.**
+
+### Anti-drift
+
+- **⚠️ DO NOT SET `open-in-view: false` IN THIS RELEASE.** It has a **real blast radius**
+  (`LazyInitializationException` wherever a lazy association is touched during serialization) and
+  `v0.112.0` ruled it **wants a STAGING run, never a direct production edit**. This release
+  **measures**; the decision is Phase 3's and belongs to the owner.
+- **⚠️ DO NOT START PHASE 3.** It is gated on `[CHECKPOINT — due 2026-10-04]` **and** on this
+  release's evidence, and it restructures six services and twelve quota sites. **⚠️ Do NOT take it
+  opportunistically because the instrumentation makes the problem legible.**
+- **⚠️ NO quota, entitlement, limit or meter change**, and **⚠️ do NOT change what
+  `BOARD_EXAM_STARTED`, `ADAPTIVE_PRACTICE_STARTED` or `QUIZ_SHARE_LINK_CREATED` record** — several
+  dated checkpoints read them.
+- **⚠️ `frontend/app/onboarding` STAYS FROZEN** (lifts 2026-09-11) and **twelve dated reads fall
+  between 2026-09-10 and 2026-09-17** — this release must touch none of the surfaces they measure. It
+  is backend instrumentation and production reads, so it does not approach them.
+- **⚠️ NO MIGRATION.** If an item appears to need one, the scope is wrong.
+- **⚠️ PgBouncer IS NOT THE FIX and must not be proposed as one** — it solves *too many clients*
+  while this was *ten connections held too long*, and transaction-mode pooling breaks session
+  variables, temp tables, `LISTEN`/`NOTIFY` and session-level advisory locks.
+- **⚠️ PRODUCTION DATABASE IS READ-ONLY.** Items 3 and 4 are `SELECT`s and dashboard/metric reads.
+  **Any write, env-var change or deploy is the OWNER's** — hand over a `docs/claude-plans/*.sql` file
+  and stop.
+
+### Verification
+
+**A single `advisor()` call on the diff.** No permission substrate, no cross-user read, no money or
+quota semantics, no migration; items 1 and 2 are instrumentation and items 3 and 4 are read-only.
+**⚠️ ESCALATE TO ONE SCOPED COLD AGENT IF** item 1's reading turns out to contradict `v0.112.0`'s
+premise — that is, if the connection is *not* held past commit — because Phase 3's entire shape then
+changes and the release stops being observation.
+
+**⚠️ PRE-DECLARED GUARD, aimed at what this release could silently get wrong: the logged value must be
+the EFFECTIVE one read back from the `EntityManagerFactory`, not the configured or defaulted one.** A
+test asserting the constant we passed in **passes under both the defect and the fix and proves
+nothing** — it is the same shape as `v0.105.0`'s schema test with hardcoded booleans instead of the
+derivation.
+
+### Shipped
+
+_(nothing yet)_
+
+
 ## v0.113.1 - Anchoring Hardening
 
 **Status: Released** (kicked off and signed off 2026-09-04, base branch `releases/v0.113.1`, cut from `main`
