@@ -150,6 +150,12 @@ The result screen should stay focused and should not compete with unrelated acti
   idempotent; after it returns a session id, enter and reload are session-addressed. The
   session-addressed read serves only `GENERATING`, `IN_PROGRESS` and `FAILED` sessions, matching the
   note-addressed read — a finished session is not resumable.
+- **A LEGACY plan-scoped session whose collection was deleted falls back to its pack anchor** rather
+  than 404ing, so the session-addressed route agrees with the note-addressed one about the same row.
+  Legacy means pre-`V133`: those rows carry both a collection reference and a still-valid pack/note
+  pair. **⚠️ A post-migration plan-scoped row has NO pack anchor and still 404s** — correctly, since
+  `ON DELETE SET NULL` has left it with nothing to resume from. Added in `v0.113.1`; `v0.113.0` 404'd
+  both.
 - **A plan-scoped completion credits every note it sampled.** The session has no note anchor, so it
   records its sampled notes in `session_state.sourceNoteRefs` and rides the same second pass Long Exam
   and Board Exam use. Each of those notes gets `lastSessionCompletedAt`, so Study Plan progress
@@ -166,7 +172,7 @@ The result screen should stay focused and should not compete with unrelated acti
   state during a session. If the client omits them the server's per-source breakdown is empty and it
   falls back to attributing everything to the anchor pack with **no misses recorded at all** — which
   is valid only for a single-note session. A collection session has no anchor pack to
-  fall back to, so an item whose source cannot be resolved is **skipped and logged at WARN, never
+  fall back to, so an item whose source cannot be resolved is **skipped and logged at ERROR, never
   recorded against an empty key** — the completion still succeeds and every resolvable item is still
   written. **⚠️ This was a hard throw when `v0.113.0` shipped, and `v0.113.1` changed it
   deliberately:** the throw rolled back a session already marked `COMPLETED`, so one unresolvable item

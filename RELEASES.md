@@ -2,7 +2,7 @@
 
 ## v0.113.1 - Anchoring Hardening
 
-**Status: In Progress** (kicked off 2026-09-04, base branch `releases/v0.113.1`, cut from `main`
+**Status: Released** (kicked off and signed off 2026-09-04, base branch `releases/v0.113.1`, cut from `main`
 after `v0.113.0` merged, tagged and deployed to production)
 
 Theme: close the residuals `v0.113.0`'s pressure test found and deliberately left, so the anchor
@@ -118,6 +118,29 @@ not by diff.
 - **The real-row harness runs PostgreSQL 18, matching production**, instead of pinning 16. All 51
   guards — including the migration, the three partial indexes and the anchor `CHECK` — pass on the
   version that actually serves them, so the escalation trigger did not fire.
+
+### Known limitations
+
+- **Item 3 skips an unattributable item; it does not explain one.** If that path is ever reachable,
+  the skip masks an upstream defect at the stamping seam rather than fixing it. **The signal is a
+  production `ERROR` log** (`QuickReviewAdaptivePracticeService.logUnattributableConcepts`), and
+  `[CHECKPOINT — due 2026-10-05]` carries a second kill criterion that fires if it has appeared even
+  once. **⚠️ Zero firings is not a pass while the eligible population is 3 users** — that is a
+  re-date, per the same row's first criterion.
+- **H2 cannot express a partial unique index**, verified by probe rather than assumed. `V133`'s three
+  active-session indexes therefore remain exercised only against real PostgreSQL, in
+  `NativeQueryPostgresIntegrationTest`. The fixtures now say so rather than silently omitting them.
+- **The plan-scoped start still holds a `PESSIMISTIC_WRITE` on the collection row across up to three
+  sequential LLM calls** — carried unchanged from `v0.113.0` and deliberately out of scope. The lock
+  prevents a double charge; its **duration** is the shape `v0.107.0` rejected, and the remedy is a
+  transaction-boundary move, which is `v0.112.0` Phase 3's territory and gated on
+  `[CHECKPOINT — due 2026-10-04]`.
+- **The pre-declared escalation trigger fired and was resolved deliberately rather than by a cold
+  agent.** The kickoff said to escalate if item 1 changed *which* shapes are rejected rather than
+  merely where; it does (the partial-with-collection shape). **It was not escalated because the
+  newly-rejected shape is unreachable through JPA** — the entity validator already rejected it on
+  `@PrePersist` — so no row that previously persisted can now fail. Recorded so the decision is
+  auditable rather than silent.
 
 
 ## v0.113.0 - Session Anchoring
@@ -360,16 +383,24 @@ were scoped into this release rather than deferred** — see Shipped. What remai
 - The anchor `CHECK` is a disjunction with a terminal branch, while `QuickReviewSessionEntity`'s
   `@PrePersist` validator encodes the same rule in Java and `assertValidAnchor` is a third, narrower
   copy. All three agree on what they permit, but the rule lives in three places. Unreachable through
-  JPA — the entity fires first and there are no native writes to this table.
+  JPA — the entity fires first and there are no native writes to this table. **✅ CLOSED by `v0.113.1`
+  item 1 — and the "all three agree" claim above was FALSE: `assertValidAnchor` tested only
+  `hasPackAndNote == hasCollection`, so a PARTIAL pack/note pair beside a collection anchor passed it
+  and failed the entity.**
 - A pre-migration plan-scoped session whose collection was later deleted 404s on the new
   session-addressed route, which does not fall through to its still-valid pack anchor. The
-  note-addressed route still resumes it.
+  note-addressed route still resumes it. **✅ CLOSED by `v0.113.1` item 2.**
 - `requireSourceStudyPackId` throwing at completion would roll back the completion and leave the
   session `IN_PROGRESS`, and the recovery sweeper covers only `LONG_EXAM` and `CHALLENGE`. Two
   independent reviewers failed to find a reachable unstamped item, so this is latent hardening.
+  **✅ CLOSED by `v0.113.1` item 3 — the throw became a skip-and-log at ERROR. ⚠️ The ROOT CAUSE is
+  still unknown, and the skip could be masking it; `[CHECKPOINT — due 2026-10-05]` now carries a
+  second kill criterion that fires if that log ever appears.**
 - The nine H2 fixtures mirror `V133`'s **columns**, not its constraints; the anchor `CHECK` and the
   three partial unique indexes are exercised only against real PostgreSQL. The harness pins
-  `postgres:16` while production runs PostgreSQL 18.
+  `postgres:16` while production runs PostgreSQL 18. **✅ CLOSED by `v0.113.1` items 4 and 5 — the
+  `CHECK` is now in all nine fixtures and the harness runs `postgres:18`. ⚠️ PARTIALLY: H2 was probed
+  and CANNOT express a partial unique index, so those three remain PostgreSQL-only by necessity.**
 - The plan-scoped start holds a `PESSIMISTIC_WRITE` on the collection row across up to three
   sequential LLM calls. The lock is what prevents a double charge on concurrent starts, but its
   **duration** is the shape `v0.107.0` rejected. **Not fixed here: the remedy is a
