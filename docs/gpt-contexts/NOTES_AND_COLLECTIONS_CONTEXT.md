@@ -48,7 +48,7 @@ Every note carries four durable metadata axes (a fifth, Target Audience, was ret
 
 1. **Title**
 2. **Subject** — specific. If the subject you'd write is the same as the Domain Context, it is too broad to be a useful shelf. `Algebra`, not `Engineering Mathematics`.
-3. **Domain Context** — one of the **8 ratified values**, below. This is what makes generated content sound like it belongs to the field.
+3. **Domain Context** — one of the **11 ratified values**, below. This is what makes generated content sound like it belongs to the field.
 4. **Note Learner Level** — `GRADE_SCHOOL` · `JUNIOR_HIGH` · `SENIOR_HIGH` · `COLLEGE` · `BOARD_EXAM_REVIEW` · `PROFESSIONAL`. This is the curriculum **floor**: a reader at a lower level gets softer scaffolding and wording, never easier curriculum.
 5. **Applicable Programs** — one or more catalog names, below. **Say all of them.** Under-listing recreates the duplication problem; you cannot "add the others later" without a curator editing every note by hand.
 6. ~~**Target Audience**~~ — **DO NOT SUPPLY IT. Removed in `v0.83.0`** from every request, response and authoring surface; the API ignores it. The server still writes the underlying column from the owner's profile to satisfy `NOT NULL`, and that is the only thing keeping it alive. **Why it was retired:** absent from every prompt, and its access-control purpose was never implemented. **⚠️ The ~99.3% Course/Program correlation is explicitly NOT the justification** — a board-heavy-catalog artifact, not semantic equivalence, and it must not be cited to justify dropping the column. **`v0.82.0`'s `V117` migrated its information into Authored Depth for curator-owned notes only** (`BOARD_TAKER`→`BOARD_EXAM_REVIEW`, `PROFESSIONAL`→`PROFESSIONAL`; **`STUDENT` stays NULL**, spanning four depths; 4,645 learner-owned notes never touched). **⚠️ `BOARD_TAKER` is NOT self-certifying — it failed in both programs anyone audited**, so `V117` excludes a **denylist** of non-licensure program values, **never derived from `exam_goal_slug`**. **Dropping the column waits on `[CHECKPOINT — due 2026-09-16]`**, which needs it to run the kill criterion, and it must **never** become a runtime depth fallback. **What replaced it for discovery:** an Authored Depth `?level=` filter — but it is **partially populated**, since 80 of 120 curator public notes formerly tagged `STUDENT` still have NULL depth and are unreachable by it. Full audit: `docs/claude-plans/target-audience-removal-proposal.md`.
@@ -57,15 +57,21 @@ Every note carries four durable metadata axes (a fifth, Target Audience, was ret
 
 **Hard rule: if a note has more than one Applicable Program, Domain Context is required TO GENERATE — not to save.** A note serving several programs has no single program to infer its authoring domain from, so it must be stated before a Study Pack can be produced. **⚠️ Changed in `v0.100.0` (owner ruling, 2026-09-01): *note validity is not generation readiness*.** The save now succeeds; every note-to-Study-Pack path rejects the state with `MultiProgramDomainContextRequiredException` **before** a `GENERATING` status, quota spend, rate-limit spend or LLM call. **⚠️ This file said *"the API rejects the save"* for the whole of `v0.100.0` and was never in one of its diffs** — it is a snapshot describing behaviour, which is exactly the kind of file that goes stale silently when the behaviour changes.
 
-### The 8 ratified Domain Context values
+### The 11 ratified Domain Context values
 
-`Engineering Mathematics` · `Engineering Sciences` · `Civil Engineering` · `Professional Practice & Regulation` · `General Education` · `Professional Education` · `Nursing` · `Accountancy`
+`Engineering Mathematics` · `Engineering Sciences` · `Civil Engineering` · `Professional Practice & Regulation` · `General Education` · `Professional Education` · `Nursing` · `Accountancy` · `Architectural Design` · `History and Theory of Architecture` · `Planning and Site Development`
 
-**Do not invent a ninth.** `Architecture` is deliberately *not* a Domain Context despite carrying ~837 notes across five subject plans — a program can be among the largest in the library and still not warrant one. Notes in a domain with no ratified value fall back to the program name, which is a supported path, not a failure. Adding a value is a governance decision, not an authoring one.
+**⚠️ The last three were added in `v0.111.0` (2026-09-04)** on ALE curation evidence: 132 of 364 rows had no honest value under the previous eight, and 8 multi-program notes could not be generated at all.
 
-### The 21 catalog programs
+**Do not invent a twelfth.** **⚠️ `Architecture` is still deliberately *not* a Domain Context, and `v0.111.0` did NOT reverse that** — it was rejected again on the naming rule, because it equals a catalog program name exactly and would merge three different treatments. What shipped is three *treatment-based* values, not a program identity promoted to a context. A program can be among the largest in the library and still not warrant one. Notes in a domain with no ratified value fall back to the program name, which is a supported path, not a failure. Adding a value is a governance decision, not an authoring one.
 
-`Education` · `Architecture` · `Nursing` · `Accountancy` · `Civil Engineering` · `Information Technology` · `Pharmacy` · `Electrical Engineering` · `Mechanical Engineering` · `Physical Therapy` · `Senior High – ABM` · `Senior High – STEM` · `Senior High – HUMSS` · `Medicine` · `Criminology` · `Law` · `Aviation` · `Business Administration` · `Psychology` · `Radiologic Technology` · `Special Needs Education – Generalist`
+### The 41 catalog programs
+
+**⚠️ Corrected 2026-09-04 from a production read — this list said 21, which was `V106`'s SEED and had been stale for a month.** The catalog is admin-manageable and 20 programs were added at runtime between 2026-08-11 and 2026-08-29. Proposing against the old list is what produced off-catalog recommendations in the ALE pass.
+
+`Education` · `Architecture` · `Nursing` · `Accountancy` · `Civil Engineering` · `Information Technology` · `Pharmacy` · `Electrical Engineering` · `Mechanical Engineering` · `Physical Therapy` · `Senior High – ABM` · `Senior High – STEM` · `Senior High – HUMSS` · `Medicine` · `Criminology` · `Law` · `Aviation` · `Business Administration` · `Psychology` · `Radiologic Technology` · `Special Needs Education – Generalist` · `Electronics Engineering` · `Computer Engineering` · `Industrial Engineering` · `Chemical Engineering` · `Agricultural and Biosystems Engineering` · `Geodetic Engineering` · `Mining Engineering` · `Sanitary Engineering` · `Marine Engineering` · `Geotechnical Engineer` · `Architectural Engineering` · `Geological Engineering` · `Aeronautical Engineering` · `Environmental Engineering` · `Chemistry` · `Biology` · `Construction Engineering and Management` · `Urban and Regional Planning` · `Software Engineering` · `Computer Science`
+
+**⚠️ NOT in the catalog, and repeatedly recommended by the ALE strategist pass:** `Interior Design`, `Landscape Architecture`, `Environmental Planning`, `Construction Management`. Treat them as catalog requests, never as usable names — and note that `Construction Management` and `Environmental Planning` are NEAR-matches for `Construction Engineering and Management` and `Urban and Regional Planning`, which is exactly where a silent substitution happens.
 
 **The catalog follows authoring, it does not lead it.** A program earns an entry once legitimate canonical notes are applicable to it — pre-seeding every PRC program was explicitly rejected as premature. So: if the notes you are proposing genuinely need a program that is not on this list, **say so explicitly as a catalog request**, with what notes would justify it. Do not quietly use a name that isn't there; a non-catalog name is stored as personal free text and will not appear on the program shelves.
 
@@ -92,7 +98,7 @@ Backend: `NoteEntity` (`backend/src/main/java/com/studysnap/backend/entity/NoteE
 | `content` | String | the note body itself — this is the source of truth users write |
 | `subject` | String, ≤64 chars | free text, see taxonomy section below |
 | `courseProgram` | String, ≤120 chars | the learner's **personal** free-text program. Since `v0.71.0` this is one of two representations — see §2 |
-| `domainContext` | enum, nullable | **the sole LLM domain constraint** (`v0.69.0`). 8 ratified values, see §0 |
+| `domainContext` | enum, nullable | **the sole LLM domain constraint** (`v0.69.0`). 11 ratified values, see §0 |
 | `learnerLevel` | enum, nullable | the note's own authored depth (`v0.69.0`). See correction below |
 | `tags` | `text[]` | free-form tag list |
 | `status` | enum `NoteStatus` | `DRAFT` / `GENERATING` / `FAILED` / `GENERATED` |

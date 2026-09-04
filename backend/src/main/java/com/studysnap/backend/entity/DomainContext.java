@@ -16,7 +16,20 @@ public enum DomainContext {
     GENERAL_EDUCATION("General Education", false),
     PROFESSIONAL_EDUCATION("Professional Education", false),
     NURSING("Nursing", true),
-    ACCOUNTANCY("Accountancy", true);
+    ACCOUNTANCY("Accountancy", true),
+    // Added in v0.111.0. Appended rather than inserted: DomainContextTest asserts labels with
+    // containsExactly, and @Enumerated(EnumType.STRING) persists the NAME, so ordinal position
+    // carries no data -- but keeping declaration order stable keeps the assertion readable.
+    // ⚠️ All three ship quantitative = false, and that is a decision rather than a default. The
+    // computational architecture material -- bioclimatic design, passive cooling, drainage,
+    // building services -- already routes to ENGINEERING_SCIENCES, which is true. Per v0.85.0,
+    // false is a no-op that falls through to the untouched QUANTITATIVE_KEYWORDS scan, while true
+    // is a new signal that is PERMANENT PER NOTE because Study Packs never auto-regenerate.
+    // PROFESSIONAL_EDUCATION and PROFESSIONAL_PRACTICE_AND_REGULATION were both delivered true and
+    // had to be corrected. Do not flip one of these to true without an owner decision.
+    ARCHITECTURAL_DESIGN("Architectural Design", false),
+    ARCHITECTURAL_HISTORY_AND_THEORY("History and Theory of Architecture", false),
+    PLANNING_AND_SITE_DEVELOPMENT("Planning and Site Development", false);
 
     private final String label;
     private final boolean quantitative;

@@ -270,7 +270,86 @@ that is not in the agreed plan** — that is how `v0.103.0` was mis-routed.
 
 ### Shipped
 
-_(nothing yet)_
+**Phase 3 approved by the owner 2026-09-04 — OPTION A: all three values ship now.** The Phase 2
+recommendation was Option B (ship `ARCHITECTURAL_DESIGN`, hold the other two pending the catalog
+decision); **the owner chose A with the one-live-program fact stated in front of them**, and that is
+recorded in `ADR-001`'s revision log rather than left in conversation.
+
+- **Three Domain Context values added, taking the taxonomy 8 → 11 (backend).** `ARCHITECTURAL_DESIGN`
+  *(Architectural Design)*, `ARCHITECTURAL_HISTORY_AND_THEORY` *(History and Theory of Architecture)*
+  and `PLANNING_AND_SITE_DEVELOPMENT` *(Planning and Site Development)*, **all `quantitative = false`**.
+  Appended to the enum rather than inserted — `@Enumerated(EnumType.STRING)` persists the name, so
+  ordinal position carries no data, and `DomainContextTest` asserts labels with `containsExactly`.
+- **Curator-facing descriptions (frontend).** Each names what belongs **and routes the adjacent
+  material away** — *"belongs in Engineering Sciences instead"*, *"not General Education"* — because the
+  defect that produced 215 unset ALE rows was a description enumerating a **narrower** value than the
+  one it named.
+- **Strategist rules updated in the same release (docs).** `REVIEW_SET_SHAPING_CONTEXT.md` now says
+  eleven, keeps the *do not propose a new value* prohibition re-anchored, and gains three routing rules
+  plus a warning that misrouting a computational note into the new values **silently removes its
+  computation guidance**, since all three are `false` and `ENGINEERING_SCIENCES` is `true`.
+- **`ADR-001` amended — both obligations discharged, named, reasoned and dated.** (a) The failure
+  condition's bare ratio is **demoted to a watch figure**: the `8:21` denominator was itself stale, the
+  live catalog holds **41**, and a denominator that grows by curator action is *easier to satisfy by
+  adding programs* — the exact failure the ADR's own note warns of. The operative guard becomes the
+  naming rule **plus** a composition matrix computed **against programs that exist** plus clause (a)/(b).
+  **A ratio crossing 0.40 re-opens the amendment;** it now stands at `11:41` = **0.268**. (b) The owner
+  decision is recorded in the revision log with both honest limits attached.
+- **⚠️ The 2026-08-03 decision that `Architecture` is NOT a Domain Context STILL STANDS.**
+  `ARCHITECTURE` was reconsidered and **rejected again** on the naming rule — it equals a live catalog
+  program name exactly and would merge three demonstrably different treatments. **What shipped is three
+  treatment-based values, not a program identity promoted to a context.**
+- **Two stale strategist-facing facts corrected while in the file.** `NOTES_AND_COLLECTIONS_CONTEXT.md`
+  listed **21 catalog programs** — `V106`'s seed, stale for a month against a live **41** — and that
+  list is what produced off-catalog recommendations in the ALE pass. It now carries all 41 plus an
+  explicit *not in the catalog* list. **⚠️ Scope note: this is a docs correction of a fact verified
+  against production this session, not a catalog change; no catalog row was added, renamed or removed.**
+- **Sweep by surface, not by diff.** `notes.md`, `challenge-quiz.md`, `GPT_CONTEXT.md`,
+  `NOTES_AND_COLLECTIONS_CONTEXT.md` and `REVIEW_SET_SHAPING_CONTEXT.md` all enumerated the count or the
+  values; `GPT_CONTEXT.md`'s *"do not propose a 9th Domain Context value"* is marked **DISCHARGED**
+  rather than deleted, so the next reader sees a bar that was met rather than a rule that was broken.
+
+**Verification — the pre-declared tier, taken as declared.** All three ship `quantitative = false`, so
+this resolves to **a single `advisor()` call on the diff**, not a cold agent.
+
+- `./mvnw test-compile` **exit status read directly, never through a pipe** — 0.
+- Full backend suite: **2069 tests across 203 files, 0 failures**, counted from
+  `target/surefire-reports/*.xml` rather than read off the console.
+- `tsc --noEmit` exit 0; `npm test` **2138 tests / 198 suites**, all passing.
+- **⚠️ MUTATION VERIFIED WITH THE KILLING TEST NAMED.** Flipping `ARCHITECTURAL_DESIGN` to
+  `quantitative = true` fails
+  `DomainContextTest.declaresWhetherEachDomainContextIsQuantitative(DomainContext, boolean)[9]` at
+  `DomainContextTest.java:57`. **The flag is pinned, not merely asserted.**
+- **⚠️ A stale-class trap was hit and is recorded because it nearly passed as green in the wrong
+  direction.** Restoring the mutated file with `mv` gave it an mtime OLDER than the compiled `.class`,
+  so Maven skipped recompiling and the suite kept failing against a source that was already correct.
+  `touch` plus a re-run resolved it. **Reading the exit status directly is what caught it.**
+
+### Known limitations
+
+- **⚠️ The subject-equals-Domain-Context advisory now fires on the largest family in the ALE set.** A
+  note with `subject = "Architectural Design"` and Domain Context *Architectural Design* triggers the
+  amber *"Subject matches the Domain Context, so it is probably too broad"* nudge — about **51 ALE
+  notes**. **This is accepted, not overlooked:** the advisory is explicitly *"never a validation error,
+  never a save block"*, and `NURSING`, `ACCOUNTANCY` and `CIVIL_ENGINEERING` already carry the same
+  property — the doc comment's own worked example is `subject = Nursing` + `NURSING`. **The advisory was
+  deliberately NOT suppressed per-value**; renaming to dodge it would have traded approved curriculum
+  vocabulary for cosmetics, and the naming rule is the harder constraint.
+- **⚠️ And the advisory is arguably RIGHT, which is a curation follow-on rather than this release's
+  work.** `Architectural Design` may genuinely be too broad a Subject when its own sections — Human
+  Factors, Design Process, Space Planning — are the better shelves. That is the same class as the ~334
+  program-name-as-subject rows `ADR-001` already flags. **No action taken here.**
+- **⚠️ Two of the three values serve exactly ONE live catalog program today.**
+  `ARCHITECTURAL_HISTORY_AND_THEORY` and `PLANNING_AND_SITE_DEVELOPMENT` reach only `Architecture`,
+  because `Interior Design`, `Landscape Architecture` and `Environmental Planning` are **absent from the
+  catalog**. By the amended guard 2 they are presumed program mirrors; they shipped anyway on an
+  explicit owner decision with that fact stated. **They leave that shape when those programs are added,
+  and adding them is a curator decision this release did not take.**
+- **⚠️ 85 of the 93 ALE context gaps remain LATENT rather than fixed.** Those notes carry one live
+  program today, so they were never blocked; they become generable-with-an-honest-value only once the
+  curator applies the new values. **8 notes that could not be generated at all are unblocked now.**
+- **No backfill.** Existing notes keep their current `domain_context`; the ALE values are applied by
+  curator action through the workbook, not by migration.
 
 ## v0.110.2 - Shared Link Integrity
 

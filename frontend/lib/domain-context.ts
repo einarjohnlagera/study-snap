@@ -73,6 +73,24 @@ export const DOMAIN_CONTEXT_OPTIONS: Array<{ value: DomainContext; label: string
     label: "Accountancy",
     description: "FAR, Taxation, Auditing, MAS, RFBT, and Financial Management.",
   },
+  // ⚠️ Added in v0.111.0. Each description names what belongs here AND routes the adjacent material
+  // away, because the defect that produced 215 unset ALE rows was a description that enumerated a
+  // NARROWER value than the one it named -- a curator reading it never picked it.
+  {
+    value: "ARCHITECTURAL_DESIGN",
+    label: "Architectural Design",
+    description: "Design process and human factors: architectural programming, space planning and circulation, anthropometrics and ergonomics, universal design, and design concept development. Climate- and comfort-driven treatment — bioclimatic design, passive cooling, and building services — belongs in Engineering Sciences instead.",
+  },
+  {
+    value: "ARCHITECTURAL_HISTORY_AND_THEORY",
+    label: "History and Theory of Architecture",
+    description: "Chronological and stylistic treatment: history of architecture across periods and regions, Philippine architecture, architectural theory and criticism, and heritage conservation. This is disciplinary history, not General Education.",
+  },
+  {
+    value: "PLANNING_AND_SITE_DEVELOPMENT",
+    label: "Planning and Site Development",
+    description: "Site- and district-scale planning: site selection and analysis, topography and orientation, solar and wind siting, land use and zoning, parking provision, urban planning, and landscape architecture. Hydraulic, structural or utility treatment of a site problem belongs in Engineering Sciences.",
+  },
 ];
 
 export function getDomainContextLabel(value: DomainContext): string {

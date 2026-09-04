@@ -515,7 +515,10 @@ export type DomainContext =
   | "GENERAL_EDUCATION"
   | "PROFESSIONAL_EDUCATION"
   | "NURSING"
-  | "ACCOUNTANCY";
+  | "ACCOUNTANCY"
+  | "ARCHITECTURAL_DESIGN"
+  | "ARCHITECTURAL_HISTORY_AND_THEORY"
+  | "PLANNING_AND_SITE_DEVELOPMENT";
 export type PaidPlanType = "PLUS" | "PRO";
 export type LearnerLevel =
   | "GRADE_SCHOOL"
