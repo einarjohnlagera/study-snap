@@ -290,10 +290,78 @@ Codex case. **⚠️ Re-run the routing test if Phase 2's evidence changes Phase
   `spring.config.import` and `server.port`, so a pool key added there would win in production while
   every assertion here still passed against the base file. **That is the exact shape
   `ScheduledJobCronContractTest` records a cold agent falsifying its predecessor with.**
-- Verified: backend **2076 tests across 205 classes, 0 failures / 0 errors / 0 skipped**, counted from
-  `target/surefire-reports/*.xml`, with `NativeQueryPostgresIntegrationTest` executing 43 real-row
-  tests against PostgreSQL 16; frontend **2139 tests across 198 suites**. `./mvnw` exit status read
-  directly, not through a pipe.
+- Verified after both phases, from a CLEAN build: backend **2080 tests across 205 classes, 0 failures /
+  0 errors / 0 skipped**, counted from `target/surefire-reports/*.xml`, with
+  `NativeQueryPostgresIntegrationTest` executing 43 real-row tests against PostgreSQL 16; frontend
+  **2139 tests across 198 suites**. `./mvnw` exit status read directly, not through a pipe.
+  **⚠️ A COUNTING TRAP WORTH RECORDING, BECAUSE THE CARRIED LESSON SAYS TO COUNT FROM SUREFIRE AND DOES
+  NOT SAY THIS: `-Dtest=` RUNS LEAVE THEIR REPORTS BEHIND, AND A LATER FULL RUN DOES NOT REMOVE THEM.**
+  Phase 1 was reported here as *2077 tests across 205 classes*; that figure was inflated by stray
+  reports from single-test and mutation runs, including a throwaway probe class that no longer exists.
+  Nothing was ever red — but the count was wrong, and only `./mvnw clean install` gives a trustworthy
+  one. **Count from a CLEAN build, or the number includes classes that are no longer in the tree.**
+
+- **Phase 2 — evidence. ⚠️ §7's HYPOTHESIS IS CONFIRMED, NOT REFUTED, AND IT RESHAPES PHASE 3.** Both
+  reads were taken in the order the release requires, and neither was substituted with an argument from
+  Spring Boot defaults:
+  - **PRIMARY (the setting).** The effective `hibernate.connection.handling_mode` is
+    **`DELAYED_ACQUISITION_AND_HOLD`**. **⚠️ IT IS NOT A HIBERNATE DEFAULT** — Spring's
+    `HibernateJpaVendorAdapter:190-192` sets it **unconditionally** whenever `prepareConnection` is true
+    and the persistence unit is non-JTA, which is this application. Traced by reading Spring's own
+    source, so it is **not dialect-specific and not an artefact of the H2 test profile**.
+  - **CONFIRMING (the behaviour).** Measured directly against Hikari's checked-out count: with the
+    `EntityManager` still open, **the connection is STILL HELD after the transaction commits** (delta 1),
+    and it is the `EntityManager` close — the end of the HTTP request under OSIV — that returns it.
+  - **⚠️ CONSEQUENCE: PHASE 3 CANNOT FIX THE EXHAUSTION ON ITS OWN.** `spring.jpa.open-in-view` is unset
+    and defaults to `true`, so the `EntityManager` is bound for the whole request. Relocating the LLM
+    call outside `@Transactional` releases the **transaction** while the **connection** stays bound.
+    **Phase 3 would land, look correct, and not fix the exhaustion** — exactly as §7 predicted.
+- **⚠️ THE REMEDY IS AN OWNER DECISION AND IS DELIBERATELY NOT PRE-SELECTED — the tidier-looking option
+  is not established as the safer one.**
+  - `spring.jpa.open-in-view: false` has a **known, named** blast radius (`LazyInitializationException`
+    wherever a lazy association is touched during serialization), already priced in and **routed to a
+    staging run, never a direct production edit**.
+  - `hibernate.connection.handling_mode: DELAYED_ACQUISITION_AND_RELEASE_AFTER_TRANSACTION` was
+    **measured** to release the connection at commit (delta 0) while the `EntityManager` stays open, and
+    a user property **does** override Spring's forced `HOLD` (its javadoc claims this at `:101-103`;
+    verified rather than trusted). **⚠️ BUT ITS BLAST RADIUS IS UNKNOWN**, and Spring's javadoc advises
+    pairing a mode override with `prepareConnection=false` — **which is NOT free here: 124 methods use
+    `@Transactional(readOnly = true)`** (no explicit isolation levels, no `pg_advisory` locks).
+    **⚠️ AND THE DELTA-0 RESULT WAS MEASURED IN THE *UNPAIRED* FORM — `prepareConnection` LEFT AT ITS
+    DEFAULT, WHICH IS NOT THE VARIANT SPRING'S JAVADOC DESCRIBES.** Stated because "measured to release
+    at commit" would otherwise read as covering the recommended shape, which nobody has measured.
+    **Cheaper-looking is not the same as cheaper.**
+- **⚠️ THE THREE REMEDIES ARE NOT ON EQUAL EVIDENTIAL FOOTING, AND THAT ASYMMETRY IS STRUCTURAL RATHER
+  THAN AN OVERSIGHT — STATED SO THE OPTION WITH NUMBERS IS NOT READ AS THE BETTER ONE MERELY FOR HAVING
+  THEM.** `open-in-view: false` has **no measured delta and cannot get one from this harness**, and that
+  is now pinned by `OpenInViewMeasurementBoundaryTest` rather than asserted: the delta harness binds an
+  `EntityManager` by hand, **which is exactly what `OpenEntityManagerInViewInterceptor` does**, so it
+  simulates the OSIV-enabled case *by construction* and is blind to the flag — measured, and the delta
+  is still 1 with `open-in-view: false`. What that flag changes only happens inside a real servlet
+  request, and its blast radius (`LazyInitializationException` during response serialization) is by
+  definition reachable only when something serializes a lazy association after the transaction closed.
+  **That is precisely why the release routes it to a STAGING RUN and never to a direct production edit.**
+- **Guards, mutation-verified:** `ConnectionHandlingModeContractTest` pins both the effective mode and
+  the held-after-commit behaviour; `ConnectionHandlingModeReleaseOverrideTest` measures the candidate
+  remedy. **⚠️ BOTH ASSERT ON A DELTA, NOT AN ABSOLUTE COUNT** — `getActiveConnections()` is pool-wide,
+  so an absolute assertion would pass or fail on whatever else the shared context holds. **The
+  discriminating mutations swapped the MODE itself**, not the assertion: giving the HOLD test the
+  override drops its delta to 0 and giving the override test the default raises it to 1, each killing a
+  named test. **⚠️ `ConnectionHandlingModeReleaseOverrideTest` DECLARES THE OVERRIDE LOCALLY AS A
+  MEASUREMENT AND DOES NOT SHIP IT** — nothing in `src/main/resources` sets the mode.
+- **⚠️ PHASE 2's FALSIFICATION HALF IS OWED BY THE OWNER AND IS NOT DONE.** §5's five read-only
+  production queries are written and runnable at
+  `docs/claude-plans/v0.112.0-outage-falsification-read.sql`, with the read criteria stated **before**
+  the read so the answer is not fitted to the hypothesis. **They decide whether §3's root-cause class is
+  CONFIRMED or still a hypothesis, and Phase 3 is sized on the answer.** **⚠️ A defect was found in the
+  finding while making them runnable: §5 query 4 names `notes.generation_status_at`, which does not
+  exist and would have errored** — `V118` puts `generation_status_at` on `exam_question_pool` and
+  `generation_enqueued_at` on `notes`, two clocks kept separate because pool rows are reused. Corrected
+  in both the SQL file and the finding.
+- **⚠️ ROUTING RE-RUN, AS THE RELEASE REQUIRES WHEN PHASE 2's EVIDENCE CHANGES PHASE 3's SHAPE.** It
+  has: Phase 3 is no longer "relocate transaction boundaries on six services" — it is that **plus** an
+  OSIV or connection-handling change, **without which the relocation does not fix the exhaustion**.
+  Phase 3 stays **CODEX**; Phase 2's own deliverable was Claude Code inline.
 
 **Known limitations (Phase 1)**
 

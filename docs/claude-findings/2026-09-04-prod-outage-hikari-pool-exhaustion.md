@@ -117,7 +117,12 @@ Window `2026-09-04 05:45` – `05:56` UTC.
 3. `SELECT generation_status, count(*) FROM exam_question_pool WHERE generation_status_at BETWEEN … GROUP BY 1;`
    — tests whether `GenerationRecoveryJob` (fired 05:50:00, `0 */10 * * * *`) marked pools `FAILED`, causing a
    later `refreshPool` to fill the generation executor.
-4. `SELECT count(*) FROM notes WHERE status='GENERATING' AND generation_status_at BETWEEN …;`
+4. `SELECT count(*) FROM notes WHERE status='GENERATING' AND generation_enqueued_at BETWEEN …;`
+   — **⚠️ CORRECTED 2026-09-04 (v0.112.0 Phase 2): this line originally read `generation_status_at`,
+   which does not exist on `notes` and would have errored.** `V118` adds `generation_status_at` to
+   `exam_question_pool` (query 3) but `generation_enqueued_at` to `notes` — two different clocks,
+   deliberately, because pool rows are reused and note rows are not. Runnable form:
+   `docs/claude-plans/v0.112.0-outage-falsification-read.sql`.
 5. `SELECT count(*) FROM study_pack_drafts WHERE created_at BETWEEN …;` — tests the document-import path.
 
 **Zero rows across 1, 2 and 4 refutes it** and redirects toward a slow query or lock on a large table
@@ -148,7 +153,37 @@ class-level transaction across `PDDocument.load(file.getBytes())` (up to 10 MB i
 now fails fast rather than grinding. Same shape for DOCX (`:202`), smaller. **Ranks well below the LLM
 paths.**
 
-## 7. ⚠️ OPEN HYPOTHESIS, NOT A FINDING — Open Session In View
+## 7. ⚠️ ~~OPEN HYPOTHESIS~~ — SETTLED 2026-09-04 (v0.112.0 Phase 2): CONFIRMED
+
+**⚠️ THIS SECTION'S HYPOTHESIS WAS MEASURED AND HELD. Read the resolution first; the original text
+below is preserved because its reasoning is still the reason the measurement was specified this way.**
+
+Both reads the release required were taken, in order, and neither was substituted with an argument
+from Spring Boot defaults:
+
+- **PRIMARY (the setting).** The effective `hibernate.connection.handling_mode` is
+  **`DELAYED_ACQUISITION_AND_HOLD`**. It is **not** a Hibernate default — Spring's
+  `HibernateJpaVendorAdapter:190-192` sets it unconditionally whenever `prepareConnection` is true and
+  the persistence unit is non-JTA, which is this application. Not dialect-specific, not a test artefact.
+- **CONFIRMING (the behaviour).** Measured directly against Hikari's checked-out count: with the
+  `EntityManager` still open, **the connection is still held after the transaction commits** (delta 1),
+  and it is the `EntityManager` close — the end of the request under OSIV — that returns it.
+
+**⚠️ CONSEQUENCE: PHASE 3 CANNOT FIX THE EXHAUSTION ON ITS OWN.** Relocating the LLM call outside
+`@Transactional` releases the *transaction* while the *connection* stays bound to the request. The
+prediction in this section was correct.
+
+**Remedy is an OWNER DECISION and is deliberately not pre-selected.** `open-in-view: false` has a
+**known** blast radius already priced in and routed to staging.
+`hibernate.connection.handling_mode: DELAYED_ACQUISITION_AND_RELEASE_AFTER_TRANSACTION` was measured to
+release at commit (delta 0) and a user property does override Spring's forced `HOLD` — but its blast
+radius is **unknown**, and Spring's javadoc (`:101-103`) advises pairing a mode override with
+`prepareConnection=false`, which is **not free here: 124 methods use `@Transactional(readOnly = true)`**.
+**Cheaper-looking is not the same as cheaper.**
+
+Guards: `ConnectionHandlingModeContractTest`, `ConnectionHandlingModeReleaseOverrideTest`.
+
+### Original hypothesis, preserved
 
 **`spring.jpa.open-in-view` is not set anywhere in `backend/src/main/`**, so it takes Spring Boot's default
 of `true`. Verified by grep; the startup warning is absent from the log, but the log **ends 9 seconds after
