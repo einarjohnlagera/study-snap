@@ -38,6 +38,11 @@ Every `quick_review_sessions` row has exactly one usable anchor shape:
 
 `chk_quick_review_sessions_anchor` enforces that an **active** row cannot be anchorless, while entity
 lifecycle validation also rejects partial or mixed shapes with `INVALID_QUIZ_SESSION_ANCHOR`.
+**⚠️ `QuickReviewSessionEntity.validateAnchor()` is the SINGLE application-side authority for that
+rule** — it runs on `@PrePersist`/`@PreUpdate` and is called directly wherever a service must reject
+an anchor before persisting. Do not reintroduce a second service-local copy: `v0.113.0` shipped one
+that was strictly weaker than the entity's (it accepted a partial pack/note pair whenever a collection
+anchor was present), and `v0.113.1` deleted it rather than keep two rules in sync.
 Active-session exclusivity is enforced by three partial unique indexes keyed by user, mode and
 respectively pack, note or collection; each predicate explicitly excludes a null key.
 

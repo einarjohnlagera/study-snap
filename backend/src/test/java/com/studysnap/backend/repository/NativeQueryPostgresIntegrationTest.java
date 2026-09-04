@@ -110,7 +110,7 @@ class NativeQueryPostgresIntegrationTest {
 
     @Container
     @ServiceConnection
-    private static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:16");
+    private static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:18");
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
