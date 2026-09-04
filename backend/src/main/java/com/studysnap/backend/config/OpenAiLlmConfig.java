@@ -22,8 +22,8 @@ public class OpenAiLlmConfig {
     @Bean
     public RestClient openAiRestClient(StudySnapProperties properties) {
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
-        factory.setConnectTimeout(Duration.ofSeconds(10));
-        factory.setReadTimeout(Duration.ofSeconds(180));
+        factory.setConnectTimeout(Duration.ofSeconds(properties.getLlm().getApi().getConnectTimeoutSeconds()));
+        factory.setReadTimeout(Duration.ofSeconds(properties.getLlm().getApi().getReadTimeoutSeconds()));
         return RestClient.builder()
                 .requestFactory(factory)
                 .baseUrl(properties.getLlm().getApi().getBaseUrl())

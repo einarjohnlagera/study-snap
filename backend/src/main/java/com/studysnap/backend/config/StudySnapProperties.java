@@ -75,6 +75,17 @@ public class StudySnapProperties {
         private String provider = "openai";
         private String apiKey = "";
         private String baseUrl = "https://api.openai.com/v1";
+        private int connectTimeoutSeconds = 10;
+        /**
+         * ⚠️ THE DEFAULT IS UNCHANGED AT 180 s, DELIBERATELY — it was made overridable, not shortened
+         * (owner decision, 2026-09-04). The 2026-09-04 outage finding suggests cutting it "toward
+         * ~90 s" to halve the worst-case connection hold, but argues no specific number and we have no
+         * latency data. ONE {@code RestClient} serves every LLM call, including the largest Study Pack
+         * generation, so an unevidenced cut converts working generations into failures. Extracting it
+         * here means the number can be dialled down from the environment once leak detection reports
+         * real hold durations — which is exactly what Phase 2 collects.
+         */
+        private int readTimeoutSeconds = 180;
     }
 
     @Getter

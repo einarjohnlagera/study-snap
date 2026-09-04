@@ -7,6 +7,34 @@ spring:
     url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:study_snap}
     username: ${DB_USER}
     password: ${DB_PASSWORD}
+    # ⚠️ THESE THREE KEYS DID NOT EXIST BEFORE v0.112.0, AND THEIR ABSENCE IS WHAT TOOK PRODUCTION
+    # DOWN ON 2026-09-04. There was no HikariCP configuration anywhere, so `total=10` was Hikari's
+    # DEFAULT maximumPoolSize and `30001 ms` its DEFAULT connectionTimeout — nobody chose either.
+    # The pool was exhausted and DataSourceHealthIndicator then starved on the same pool: it needs a
+    # connection to answer /actuator/health, queued behind the same 30 s acquisition timeout, failed
+    # at 30,002 ms, and Render replaced the instance ~65 s later. The server did not crash; it was
+    # killed for failing a health check it could no longer answer.
+    # Full diagnosis: docs/claude-findings/2026-09-04-prod-outage-hikari-pool-exhaustion.md
+    hikari:
+      # Logs a full stack trace for any connection held past 60 s, naming the offending path the next
+      # time this happens. Zero behaviour change. §8a rates this above the pool bump, and it is the
+      # instrument Phase 2 reads to settle the open-in-view question.
+      leak-detection-threshold: ${DB_POOL_LEAK_DETECTION_MS:60000}
+      # ⚠️ THE CEILING IS A DEPLOY-OVERLAP BOUND, NOT A PERFORMANCE KNOB. Render runs the NEW instance
+      # alongside the OLD during a deploy, each with its own pool, so the safe bound is roughly
+      # `N <= (max_connections - reserved) / 2`. Render Postgres allows >=100 connections on every
+      # plan minus ~10 reserved, so 20 is safe on the SMALLEST plan (needs only max_connections >= 50)
+      # and does not depend on which plan is live. Raising this past 45 requires reading the real
+      # limit from the Render dashboard and confirming with `SHOW max_connections;` first —
+      # DataSourcePoolContractTest enforces that bound.
+      maximum-pool-size: ${DB_POOL_MAX_SIZE:20}
+      # ⚠️ A DELIBERATE TRADE, NOT AN OPTIMISATION (owner decision, 2026-09-04). Waiters now fail fast
+      # with a 500 instead of queueing 30 s. That queueing is precisely what let the health check blow
+      # past Render's probe threshold and get the instance killed, so this trades user-visible errors
+      # for staying up. It was shipped WITH the pool bump rather than deferred to Phase 3, accepting
+      # that until Phase 3 shortens the holds, some requests that would have queued-then-succeeded
+      # now return 500 instead.
+      connection-timeout: ${DB_POOL_CONNECTION_TIMEOUT_MS:5000}
   jpa:
     hibernate:
       ddl-auto: none
@@ -88,6 +116,15 @@ studysnap:
       provider: ${LLM_PROVIDER:openai}
       api-key: ${LLM_API_KEY:}
       base-url: ${LLM_BASE_URL:https://api.openai.com/v1}
+      connect-timeout-seconds: ${LLM_CONNECT_TIMEOUT_SECONDS:10}
+      # ⚠️ UNCHANGED AT 180 s — made overridable, NOT shortened. Every path that holds a JDBC
+      # connection across an LLM call holds it for up to this long, so this is the ceiling on a
+      # connection hold until Phase 3 removes the hold entirely. The 2026-09-04 finding suggests
+      # ~90 s but argues no specific number; one RestClient serves every call including the largest
+      # Study Pack generation, so cutting it without latency data would convert working generations
+      # into failures. Dial it down from the environment once Phase 2's leak-detection output shows
+      # what real holds actually cost.
+      read-timeout-seconds: ${LLM_READ_TIMEOUT_SECONDS:180}
   quiz-generation:
     mode: ${QUIZ_GENERATION_MODE:real}
     mock-delay-ms: ${QUIZ_GENERATION_MOCK_DELAY_MS:0}

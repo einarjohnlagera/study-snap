@@ -12,6 +12,17 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class AppConfigTest {
 
+    /**
+     * ⚠️ THE STUDY-PACK NUMBERS MOVED FROM 3/6 TO 2/2 IN v0.112.0, AND THAT IS POOL CONTENTION RATHER
+     * THAN TUNING. Threads on that executor hold a JDBC connection for the whole of a generation
+     * ({@code LongExamService.generateLongExamAsync} wraps a transaction AROUND the LLM call), so at
+     * max 6 it could claim six of the ten connections Hikari defaulted to on 2026-09-04 — the day
+     * production was killed for failing a health check that had starved on the same exhausted pool.
+     *
+     * <p>This test failing on that edit is the test working. The numbers are a decision about how much
+     * of the pool background generation may hold, so moving them again means editing this assertion
+     * deliberately — not discovering afterwards that a default drifted.
+     */
     @Test
     void generationExecutorsKeepMainDispatchAndLlmFanOutSeparate() {
         AppConfig config = new AppConfig();
@@ -21,9 +32,12 @@ class AppConfigTest {
         try {
             assertThat(studyPackExecutor)
                     .isNotSameAs(llmParallelExecutor);
-            assertThat(studyPackExecutor.getCorePoolSize()).isEqualTo(3);
-            assertThat(studyPackExecutor.getMaxPoolSize()).isEqualTo(6);
-            assertThat(studyPackExecutor.getQueueCapacity()).isEqualTo(100);
+            assertThat(studyPackExecutor.getCorePoolSize()).isEqualTo(2);
+            assertThat(studyPackExecutor.getMaxPoolSize()).isEqualTo(2);
+            assertThat(studyPackExecutor.getQueueCapacity())
+                    .as("work is DELAYED when both threads are busy, never dropped — a smaller queue "
+                            + "would turn pool protection into lost generations")
+                    .isEqualTo(100);
 
             assertThat(llmParallelExecutor.getCorePoolSize()).isEqualTo(4);
             assertThat(llmParallelExecutor.getMaxPoolSize()).isEqualTo(8);
