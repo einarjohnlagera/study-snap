@@ -662,15 +662,25 @@ public class QuickReviewAdaptivePracticeService {
 
     @Transactional(readOnly = true)
     public QuickReviewAdaptiveQuizResponse getAdaptiveSessionById(String sessionIdRaw, UUID userId) {
+        // Mirrors getAdaptiveQuizSession's identity gate. The FEATURE gate is deliberately NOT taken
+        // here: completeAdaptiveSession and forfeitAdaptiveSession carry no feature check, so gating
+        // only the read would let a learner whose plan lapsed mid-session finish a session they can
+        // no longer see. Stated as a decision rather than left as an omission.
+        authService.requireEmailVerified(userId);
         UUID sessionId = UuidParsingUtils.parseUuidOrThrow(
                 sessionIdRaw,
                 AdaptivePracticeSessionNotFoundException::new
         );
+        // OBSERVABLE_STATUSES, matching the note-addressed read: a COMPLETED or FORFEITED session is
+        // not resumable. Without this filter the client renders its "Start Adaptive Practice" card
+        // for a finished session -- currentIndex resets to 0 on load, so isComplete is false and the
+        // results branch is unreachable -- and the start button dead-ends on a null note.
         QuickReviewSessionEntity session = quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(
                         sessionId,
                         userId,
                         QuickReviewSessionMode.ADAPTIVE
                 )
+                .filter(candidate -> OBSERVABLE_STATUSES.contains(candidate.getStatus()))
                 .filter(candidate -> !isInterviewSession(candidate))
                 .orElseThrow(AdaptivePracticeSessionNotFoundException::new);
 

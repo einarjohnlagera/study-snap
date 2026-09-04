@@ -169,7 +169,11 @@ export function ContinueSpotlight({ recommendation, profileType }: Readonly<Cont
     });
   }, [recommendation.noteId, recommendation.reason, recommendation.resumeType, recommendation.sessionId]);
 
+  // The session route is for a session with NO note anchor. Gating on sessionId alone sent
+  // note-scoped resumes down it too -- dropping ?entry=dashboard-continue and understating
+  // dashboard-originated starts, which is the exact metric the 2026-09-12 checkpoint reads.
   const hasSessionAddressedAdaptiveRoute = recommendation.resumeType === "ADAPTIVE"
+    && !recommendation.noteId
     && Boolean(recommendation.sessionId);
   if (!recommendation.noteId && !hasSessionAddressedAdaptiveRoute) {
     return null;

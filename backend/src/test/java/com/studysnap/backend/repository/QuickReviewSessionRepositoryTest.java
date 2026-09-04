@@ -63,7 +63,6 @@ class QuickReviewSessionRepositoryTest {
                 )
                 """);
         jdbcTemplate.execute("delete from quick_review_sessions");
-        jdbcTemplate.execute("alter table quick_review_sessions alter column note_id set not null");
         jdbcTemplate.execute("alter table quick_review_sessions add column if not exists quota_exempt boolean not null default false");
     }
 

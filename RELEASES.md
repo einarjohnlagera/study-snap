@@ -231,6 +231,55 @@ wrong.
 kickoff, and it holds: a migration, an entity contract change, a 54-site sweep across six services,
 and now a backend endpoint plus a frontend route.
 
+### Known limitations
+
+Found by the three-agent cold pressure test (2026-09-04), recorded rather than silently dropped.
+
+- **⚠️ Deleting a Study Plan now deletes the plan-scoped sessions anchored on it, including
+  COMPLETED ones — OWNER DECISION OWED.** `source_collection_id` is `ON DELETE CASCADE`, and the
+  kickoff's justification for that cascade was **falsified**: account deletion was already covered by
+  `quick_review_sessions.user_id … ON DELETE CASCADE` (`V4:3`), so the new FK adds no orphan
+  protection — it adds a second, user-facing deletion trigger. Proven on real PostgreSQL: three
+  sessions on a plan, zero after `DELETE /collections/{id}`. The `ConceptHealth` rows those sessions
+  wrote **survive**, so the evidence persists while the history explaining it does not. `ON DELETE
+  SET NULL` would violate the anchor `CHECK`, so this needs a decision (keep and document, restrict
+  deletion, or redesign), not a one-word swap.
+- **⚠️ A completed plan-scoped session credits no note, so Study Plan progress never advances —
+  OWNER DECISION OWED.** With `note_id` NULL, `findLatestCompletedAtByUserIdAndNoteIdIn` matches
+  nothing and `QuizSessionHistoryService.findParticipatingNoteIds` returns an empty set (`ADAPTIVE`
+  is absent from `MULTI_NOTE_SESSION_MODES`), and there is no user-scoped session-history endpoint —
+  every one is note- or pack-addressed. So the session appears in no Recent Sessions list and
+  `notesPracticed` (keyed on `lastSessionCompletedAt != null`) never moves. **The previous behaviour
+  was also wrong** — it credited exactly one note while up to three packs were sampled — so the fix
+  is a product decision: credit all sampled notes, or credit none and say so. `ConceptHealth` is
+  unaffected, so the remediation loop itself still works. Same root cause makes
+  `RetentionService:267-276` still send a weak-concept reminder to a learner who cleared those
+  concepts through plan-scoped practice.
+- **⚠️ The plan-scoped start holds a `PESSIMISTIC_WRITE` on the collection row across up to three
+  sequential LLM calls.** `findByIdAndOwnerUserIdForUpdate` inside the class-level `@Transactional`,
+  with an LLM read timeout of 180 s and no `lock_timeout` set. The lock does real work — it is what
+  prevents a double charge on concurrent starts — but its **duration** is the shape `v0.107.0`
+  rejected, one release after `v0.112.0` shipped about connection holds across OpenAI calls. It
+  blocks learner-triggered writers on the same plan (rename, Save order, Add Notes, visibility,
+  companion) and fully serialises Ask Companion on that collection, each blocking while holding a
+  pool connection. **Not fixed here: the remedy is a transaction-boundary move, which is `v0.112.0`
+  Phase 3's territory and gated on `[CHECKPOINT — due 2026-10-04]`.**
+- The anchor `CHECK` is a disjunction ("at least one anchor") while `QuickReviewSessionEntity`'s
+  `@PrePersist` validator is an XOR ("exactly one"), and `assertValidAnchor` is a third, weaker copy
+  that misses the partial pack/note case. Unreachable through JPA — the entity fires first and there
+  are no native writes to this table — so this is a defence-in-depth gap, not a live defect.
+- A pre-migration plan-scoped session whose collection was later deleted 404s on the new
+  session-addressed route, which does not fall through to its still-valid pack anchor. The
+  note-addressed route still resumes it.
+- `requireSourceStudyPackId` throwing at completion would roll back the completion and leave the
+  session `IN_PROGRESS`, and the recovery sweeper covers only `LONG_EXAM` and `CHALLENGE`. Two
+  independent reviewers failed to find a reachable unstamped item, so this is latent hardening, not a
+  live path.
+- The nine H2 fixtures mirror `V133`'s **columns**, not its constraints; the anchor `CHECK` and the
+  three partial unique indexes are exercised only against real PostgreSQL, which is where a
+  constraint can actually be tested. Note the harness pins `postgres:16` while production runs
+  PostgreSQL 18.
+
 ### Shipped
 
 - `V133__session_anchoring.sql` makes the pack/note pair nullable together, adds the cascading

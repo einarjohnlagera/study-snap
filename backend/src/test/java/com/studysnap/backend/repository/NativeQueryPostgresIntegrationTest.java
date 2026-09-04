@@ -183,9 +183,13 @@ class NativeQueryPostgresIntegrationTest {
     }
 
     /**
-     * Killing test for accidentally retaining a borrowed pack anchor on plan-scoped Adaptive Practice.
-     * Both active rows use ADAPTIVE and the collection contains the note, yet their distinct anchor
-     * shapes must coexist.
+     * Pins that the SCHEMA permits a collection-anchored and a note-anchored ADAPTIVE session to be
+     * active at once -- the contention this release exists to end.
+     *
+     * <p>⚠️ This is NOT a killing test for the service accidentally retaining a borrowed pack anchor.
+     * Both rows are inserted here with their anchor shapes hardcoded, so reverting the service would
+     * not fail it. That property is guarded one layer up, where the defect would actually live:
+     * {@code QuickReviewAdaptivePracticeServiceTest.collectionScoped_writesOnlyTheCollectionAnchorAndKeepsTheLegacyJsonKey}.
      */
     @Test
     void activeCollectionAndNoteScopedAdaptiveSessionsCoexist() {

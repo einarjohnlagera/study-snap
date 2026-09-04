@@ -72,11 +72,11 @@ describe("DashboardFocusAreasCard", () => {
         }}
         onUnlockAdaptivePractice={jest.fn()}
         onPracticeAcrossPlan={jest.fn()}
-        planPracticeNotice="You have another Adaptive Practice session in progress on one of this plan's notes."
+        planPracticeNotice="No weak concepts found from your latest review."
       />,
     );
     expect(
-      screen.getByText(/another Adaptive Practice session in progress/i),
+      screen.getByText(/No weak concepts found from your latest review/i),
     ).toBeInTheDocument();
   });
 

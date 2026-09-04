@@ -81,12 +81,17 @@ describe("ContinueSpotlight", () => {
     );
   });
 
-  it("switches the label and route for adaptive practice", () => {
+  // ⚠️ sessionId is present DELIBERATELY. DashboardService supplies one on the pack-anchored
+  // branch too, so a fixture that omits it takes a branch production never takes -- which is
+  // exactly how a regression that dropped ?entry=dashboard-continue for note-scoped resumes
+  // passed this suite. The note anchor, not the session id, decides the route.
+  it("keeps the entry-marked note route for adaptive practice even when a session id is present", () => {
     render(
       <ContinueSpotlight
         recommendation={{
           studyPackId: "pack-2",
           noteId: "note-2",
+          sessionId: "sess-note-2",
           noteTitle: "Statics Midterm Review",
           subject: "Engineering Mechanics",
           courseProgram: "Civil Engineering",

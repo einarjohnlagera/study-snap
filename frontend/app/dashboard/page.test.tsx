@@ -1454,7 +1454,7 @@ describe("DashboardPage profile variants", () => {
       title: "CE Board Review",
       focusConcepts: [],
       quiz: [],
-      message: "You have another Adaptive Practice session in progress on one of this plan's notes.",
+      message: "No weak concepts found from your latest review.",
     });
 
     (getMe as jest.Mock).mockResolvedValue({
@@ -1472,7 +1472,7 @@ describe("DashboardPage profile variants", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Practice Across This Plan" }));
 
     expect(
-      await screen.findByText(/another Adaptive Practice session in progress/i),
+      await screen.findByText(/No weak concepts found from your latest review/i),
     ).toBeInTheDocument();
   });
 
