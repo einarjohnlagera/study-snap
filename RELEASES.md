@@ -1,5 +1,88 @@
 # RELEASES.md - NoteLib
 
+## v0.110.1 - Quiz Text Integrity
+
+**Status: In Progress** (kicked off 2026-09-04, base branch `releases/v0.110.1`, cut from `main` after
+`v0.110.0` merged and tagged)
+
+Theme: a quiz choice says what its author wrote, and a supporter can get back to a quiz they already shared.
+
+### Why this is a PATCH, and why `v0.110.1` rather than `v0.111.1`
+
+**It is corrective, not additive** — both items close defects rather than opening a rung, which is what the
+patch line has meant here (`v0.83.1` Note Creation Integrity, `v0.89.1` Birth Year Correction, `v0.95.1`
+Rendering and Reorder Fixes). **⚠️ The number was corrected at kickoff: `v0.111.1` was proposed, but all
+eight patches in this repo's history are a `.1`/`.2` of a `.0` that EXISTS, and `v0.111.0` does not — a
+`.1` without its base would permanently imply a release that never shipped.**
+
+### Why this release exists
+
+**⚠️ ITEM 1 IS THE ONLY CRITICAL FINDING FROM `v0.110.0`'s TWO-AGENT PRESSURE TEST, AND IT IS PRE-EXISTING
+AND PRODUCT-WIDE.** It was recorded rather than fixed there because the fix changes a contract six tables
+depend on, which is not a thing to fold into a release already closing.
+
+**⚠️ IT WAS REPRODUCED, NOT INFERRED.** `QuizItem`'s `@JsonCreator` routes into the sanitizing constructor,
+and `QuizValidationUtils.sanitizeChoiceTexts` strips a leading choice label with `replaceFirst` and is **NOT
+idempotent** — so the strip runs at generation AND AGAIN ON EVERY DESERIALIZATION:
+
+- `"A. B. Smith"` → stored `"B. Smith"` → read back `"Smith"`
+- `"B. D.C. generator"` → stored `"D.C. generator"` → read `"C. generator"` → read again `"generator"`
+
+**⚠️ IT COMPOUNDS: every read strips another token, so the damage grows with usage and waiting is not
+neutral.** Blast radius is every table holding a `QuizItem` — `generated_quizzes`, `study_packs`,
+`quick_review_sessions.session_state`, `exam_question_pool`, `challenge_quiz_question_bank`,
+`combined_quizzes` — in every quiz mode. **⚠️ AND IT LANDS ON THIS CATALOG SPECIFICALLY:** Electrical
+Engineering notation (`A.C.`, `D.C.`) and biology binomials (`C. elegans`, `B. subtilis`, `A. thaliana`) are
+squarely inside `[A-Da-d]`, and this is board-exam content.
+
+### Planned Scope
+
+- **(1) A stored quiz choice survives being read (backend).** Stop re-running the label sanitizer on
+  deserialization. **⚠️ The generation-time sanitizer is LOAD-BEARING and STAYS** — it exists because the
+  LLM genuinely emits `"A. Ohm's Law"` and the label must come off exactly once. **⚠️ Do NOT weaken, relax
+  or delete `sanitizeChoiceTexts`; do NOT change `LEADING_CHOICE_LABEL_PATTERN`.** The defect is WHERE it
+  runs, not WHAT it does.
+- **(2) A supporter can reach a combined quiz they already made (backend + frontend).** `/library/combined-quiz/{id}`
+  is currently reachable ONLY by the redirect immediately after assembling, so an owner who closes the tab
+  **cannot turn off a live public link**, cannot re-copy it, and re-assembling spends another share-link unit
+  against a FREE cap of 3/month. **⚠️ The evidence this is an omission rather than a decision is in the
+  schema: `V132` builds `idx_combined_quizzes_owner_created_at` and NOTHING QUERIES IT.**
+
+### Anti-drift (locked for this release)
+
+- **⚠️ THE ALREADY-CORRUPTED ROWS ARE UNRECOVERABLE AND MUST NOT BE "REPAIRED".** The original text is gone —
+  `"generator"` cannot be turned back into `"D.C. generator"` because nothing records what was stripped. **Do
+  NOT write a backfill that guesses**, and do NOT re-prefix labels. Item 1 stops the bleeding; it does not
+  heal the wound. **State the residual as a named Known limitation.**
+- **⚠️ Do NOT change what a stored `QuizItem` MEANS.** No new field, no migration, no re-serialization pass
+  over existing JSONB. A read must simply stop mutating what it read.
+- **⚠️ Item 2 does NOT make a combined quiz editable.** Rows stay IMMUTABLE — mutating one a recipient is
+  part-way through would 400 them mid-quiz, which is why refs were rejected in `v0.110.0`. Add a way to FIND
+  and REVOKE, never to edit or re-assemble.
+- **⚠️ Do NOT add a quota, meter or counter.** `QuizShareLimitService` still meters at link creation only, and
+  a second counter is an untaken pricing decision (`v0.92.0`).
+- **⚠️ Do NOT gate item 2 on `ProfileType` and do NOT require a Learning Connection** — `v0.89.0`'s axis error
+  is what this whole capability exists to correct.
+- **⚠️ No new quiz mode or sub-mode**; `EXAM_MODES.md` stays a locked five-mode contract.
+- **⚠️ Do NOT change `BOARD_EXAM_STARTED` or `ADAPTIVE_PRACTICE_STARTED`** — the two `2026-10-13` checkpoints
+  read them. **⚠️ Do NOT change `QUIZ_SHARE_LINK_CREATED`'s `scope` metadata or the
+  `generate-quiz-combined-multi-note` tip's id** — `[CHECKPOINT — due 2026-10-04]` and `[2026-11-03]` read both.
+- **⚠️ `frontend/app/onboarding` STAYS FROZEN until `[CHECKPOINT — due 2026-09-11]` is read** — 7 days out.
+
+### Verification
+
+**ONE SCOPED COLD AGENT, framed as FALSIFICATION.** Item 1 changes production-data semantics — what a read
+of six existing tables returns — which the gate names outright. **⚠️ THE PINNING GUARD IS PRE-DECLARED:
+a stored choice must round-trip BYTE-IDENTICALLY through serialize → deserialize, and the test must use a
+value that ALREADY LOOKS LABELLED** (`"B. Smith"`, `"D.C. generator"`), because a value without a leading
+label round-trips cleanly under both the defect and the fix and would prove nothing. **⚠️ A second guard is
+owed at the OTHER end: generation must still strip exactly one label**, or the fix trades a read defect for
+a write defect. **⚠️ ESCALATE if item 1 turns out to need a migration or a re-serialization pass.**
+
+### Shipped
+
+_(nothing yet)_
+
 ## v0.110.0 - Supporter Combined Quiz
 
 **Status: Released** (kicked off 2026-09-03, signed off 2026-09-04, base branch `releases/v0.110.0`, cut from `main` after
