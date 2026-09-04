@@ -53,6 +53,22 @@ Context"* (**zero matches**). **⚠️ CONSEQUENCE: Phase 1 — the targeted Dom
 release. It is not gated on it.** What still blocks is the multi-program case above, which needs a
 taxonomy value.
 
+**⚠️ THE BLOCKER IS A CLASS, NOT AN INCIDENT — SIZED FROM THE ALE WORKBOOK AT KICKOFF.**
+`docs/curriculum/ale-comprehensive-review.tsv` holds **364 rows**, and its distribution was
+**re-derived from the file rather than taken from the plan**: `(unset)` **215** · `PPR` 77 ·
+`ENG_SCI` 50 · `CIVIL` 16 · `ENG_MATH` 6. **57 of those 215 carry the exact `note_subject` of the
+reported blocked note — `Architectural Design` — and every one of them is unset** (12 already exist
+as notes, 45 are still to author). **⚠️ How many of the 57 carry a SECOND Applicable Program is a
+PRODUCTION fact the TSV does not hold**, so the count of currently-ungeneratable notes is **bounded
+above by 57, not established at 57.** What the file does establish is that the reported failure is a
+class of notes, not a one-off.
+
+**⚠️ The two already-classified groups were checked against the CORRECTED descriptions and hold, so
+the targeted pass is the right shape and a full rerun is not owed:** all 16 `CIVIL_ENGINEERING` rows
+are Foundation Engineering, which the corrected description explicitly names (*Geotechnical,
+Foundation, Soil Mechanics*), and all 6 `ENGINEERING_MATHEMATICS` rows are Construction Cost
+Engineering, which is engineering economics. **Neither group is disturbed by this release.**
+
 ### The governing plan, and the sequencing gate
 
 `docs/claude-plans/ale-let-review-set-unblock-and-domain-context-evidence-plan.md` — revised 2026-09-03,
