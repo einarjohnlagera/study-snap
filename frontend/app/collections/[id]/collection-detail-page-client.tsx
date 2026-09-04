@@ -19,6 +19,7 @@ import { ResponsiveActionButton, ResponsiveActionContent, ResponsiveActionLink }
 import {
   ADAPTIVE_PRACTICE_COLLECTION_DETAIL_ENTRY,
   buildAdaptivePracticeHref,
+  buildAdaptivePracticeSessionHref,
 } from "@/lib/adaptive-practice-entry";
 import { SummaryMarkdown } from "@/components/ui/summary-markdown";
 import { ToastMessage } from "@/components/ui/toast-message";
@@ -3093,14 +3094,16 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
     : null;
 
   // Plan-level sibling of the per-note "Review due concepts" action above. It starts a session
-  // scoped to the WHOLE plan; the server derives which pack the session is anchored on and returns
-  // it, so this never computes an anchor itself.
+  // scoped to the WHOLE plan; the collection is the server-owned anchor, so this client never
+  // computes one from mutable item order.
   const [planPracticePending, setPlanPracticePending] = useState(false);
+  const [planPracticeError, setPlanPracticeError] = useState<string | null>(null);
   const startPlanScopedPractice = useCallback(async () => {
     if (planPracticePending) {
       return;
     }
     setPlanPracticePending(true);
+    setPlanPracticeError(null);
     try {
       const session = await generateAdaptivePracticeForCollection(
         collectionId,
@@ -3112,27 +3115,36 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
         }));
         return;
       }
-      showActionToast(session.message);
-    } catch (error) {
-      showActionToast("Could not start practice for this plan.");
+      if (session.sessionId) {
+        router.push(buildAdaptivePracticeSessionHref(session.sessionId));
+        return;
+      }
+      setPlanPracticeError(session.message || "The practice session could not be opened.");
+    } catch {
+      setPlanPracticeError("Could not start practice for this plan.");
     } finally {
       setPlanPracticePending(false);
     }
-  }, [collectionId, planPracticePending, router, showActionToast]);
+  }, [collectionId, planPracticePending, router]);
 
   // ⚠️ NOT gated on dueConceptReviewItem. That is a DUE-count item, while server eligibility is
   // due OR persistently weak, so a plan whose weakness is all incorrect_streak >= 2 with nothing
   // due would show no button while the server would happily start a session.
   const planPracticeAction = items.length > 0 ? (
-    <ResponsiveActionButton
-      action="adaptivePractice"
-      label={planPracticePending ? "Starting…" : PRACTICE_WHOLE_PLAN_LABEL}
-      variant="outline"
-      size="sm"
-      className="w-full sm:w-auto"
-      disabled={planPracticePending}
-      onClick={startPlanScopedPractice}
-    />
+    <div className="space-y-2">
+      <ResponsiveActionButton
+        action="adaptivePractice"
+        label={planPracticePending ? "Starting…" : PRACTICE_WHOLE_PLAN_LABEL}
+        variant="outline"
+        size="sm"
+        className="w-full sm:w-auto"
+        disabled={planPracticePending}
+        onClick={startPlanScopedPractice}
+      />
+      {planPracticeError ? (
+        <p role="alert" className="text-sm text-red-600 dark:text-red-400">{planPracticeError}</p>
+      ) : null}
+    </div>
   ) : null;
   const primaryStudyAction = useMemo<ResolvedPrimaryAction | null>(() => {
     if (continueAction) {

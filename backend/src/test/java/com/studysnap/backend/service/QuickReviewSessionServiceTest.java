@@ -967,6 +967,8 @@ class QuickReviewSessionServiceTest {
         assertThat(saved.getId()).isNotNull();
         assertThat(saved.getUserId()).isEqualTo(userId);
         assertThat(saved.getStudyPackId()).isEqualTo(studyPackId);
+        assertThat(saved.getNoteId()).isEqualTo(studyPack.getNoteId());
+        assertThat(saved.getSourceCollectionId()).isNull();
         assertThat(saved.getStatus()).isEqualTo(QuickReviewSessionStatus.IN_PROGRESS);
         assertThat(saved.getCurrentQuestionIndex()).isZero();
         assertThat(saved.getCurrentRound()).isEqualTo(QuickReviewRound.INITIAL);

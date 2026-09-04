@@ -4,6 +4,7 @@ import {
   ADAPTIVE_PRACTICE_DASHBOARD_TODAY_FOCUS_ENTRY,
   ADAPTIVE_PRACTICE_INTERVIEW_PRACTICE_GAP_ENTRY,
   buildAdaptivePracticeHref,
+  buildAdaptivePracticeSessionHref,
   normalizeAdaptivePracticeEntry,
   type AdaptivePracticeEntry,
 } from "./adaptive-practice-entry";
@@ -26,5 +27,10 @@ describe("adaptive practice entry", () => {
     expect(buildAdaptivePracticeHref("note-1")).toBe("/notes/note-1/adaptive-practice");
     expect(normalizeAdaptivePracticeEntry(null)).toBeNull();
     expect(normalizeAdaptivePracticeEntry("caller-controlled-value")).toBeNull();
+  });
+
+  it("builds the session-addressed route for collection-anchored practice", () => {
+    expect(buildAdaptivePracticeSessionHref("session-1"))
+      .toBe("/adaptive-practice/sessions/session-1");
   });
 });

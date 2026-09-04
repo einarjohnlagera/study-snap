@@ -1,10 +1,13 @@
 package com.studysnap.backend.entity;
 
+import com.studysnap.backend.exception.QuickReviewSessionAnchorException;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -29,11 +32,14 @@ public class QuickReviewSessionEntity {
     @Column(name = "user_id", nullable = false)
     private UUID userId;
 
-    @Column(name = "study_pack_id", nullable = false)
+    @Column(name = "study_pack_id", nullable = true)
     private UUID studyPackId;
 
-    @Column(name = "note_id", nullable = false)
+    @Column(name = "note_id", nullable = true)
     private UUID noteId;
+
+    @Column(name = "source_collection_id", nullable = true)
+    private UUID sourceCollectionId;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "session_mode", nullable = false, length = 32)
@@ -100,4 +106,23 @@ public class QuickReviewSessionEntity {
 
     @Column(name = "completed_at")
     private OffsetDateTime completedAt;
+
+    @PrePersist
+    @PreUpdate
+    void validateAnchor() {
+        // A TERMINAL session is history and may legitimately be anchorless: deleting a Study Plan sets
+        // source_collection_id to NULL rather than destroying the learner's completed sessions, and
+        // session_state.sourceNoteRefs is what keeps them reachable. Mirrors
+        // chk_quick_review_sessions_anchor, which carries the same terminal branch -- without this the
+        // first save of an orphaned row would throw where the database would not.
+        if (status == QuickReviewSessionStatus.COMPLETED || status == QuickReviewSessionStatus.FORFEITED) {
+            return;
+        }
+        boolean hasPackAndNote = studyPackId != null && noteId != null;
+        boolean hasPartialPackAndNote = (studyPackId == null) != (noteId == null);
+        boolean hasCollection = sourceCollectionId != null;
+        if (hasPartialPackAndNote || hasPackAndNote == hasCollection) {
+            throw new QuickReviewSessionAnchorException();
+        }
+    }
 }

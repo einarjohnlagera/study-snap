@@ -50,6 +50,7 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -169,6 +170,13 @@ class InterviewPracticeServiceTest {
         assertThat(response.questionCount()).isEqualTo(5);
         assertThat(response.question()).isNotNull();
         assertThat(response.sourceNoteRefs()).isEmpty();
+        ArgumentCaptor<QuickReviewSessionEntity> sessionCaptor =
+                ArgumentCaptor.forClass(QuickReviewSessionEntity.class);
+        verify(quickReviewSessionRepository, times(2)).save(sessionCaptor.capture());
+        QuickReviewSessionEntity saved = sessionCaptor.getAllValues().getLast();
+        assertThat(saved.getStudyPackId()).isEqualTo(studyPackId);
+        assertThat(saved.getNoteId()).isEqualTo(noteId);
+        assertThat(saved.getSourceCollectionId()).isNull();
         verify(featureGateService).checkFeatureAccess(PlanType.PRO, Feature.INTERVIEW_PRACTICE);
         verify(userUsageService).incrementInterviewPracticeGeneration(eq(userId), any());
     }

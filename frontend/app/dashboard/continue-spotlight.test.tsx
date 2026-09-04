@@ -81,12 +81,17 @@ describe("ContinueSpotlight", () => {
     );
   });
 
-  it("switches the label and route for adaptive practice", () => {
+  // ⚠️ sessionId is present DELIBERATELY. DashboardService supplies one on the pack-anchored
+  // branch too, so a fixture that omits it takes a branch production never takes -- which is
+  // exactly how a regression that dropped ?entry=dashboard-continue for note-scoped resumes
+  // passed this suite. The note anchor, not the session id, decides the route.
+  it("keeps the entry-marked note route for adaptive practice even when a session id is present", () => {
     render(
       <ContinueSpotlight
         recommendation={{
           studyPackId: "pack-2",
           noteId: "note-2",
+          sessionId: "sess-note-2",
           noteTitle: "Statics Midterm Review",
           subject: "Engineering Mechanics",
           courseProgram: "Civil Engineering",
@@ -109,6 +114,39 @@ describe("ContinueSpotlight", () => {
     expect(screen.getByRole("link", { name: "Resume Adaptive Practice" })).toHaveAttribute(
       "href",
       "/notes/note-2/adaptive-practice?entry=dashboard-continue",
+    );
+  });
+
+  it("routes a collection-anchored adaptive resume by session id when noteId is null", () => {
+    render(
+      <ContinueSpotlight
+        recommendation={{
+          sessionId: "adaptive-session-1",
+          studyPackId: null,
+          noteId: null,
+          noteTitle: "Structural Engineering Plan",
+          subject: null,
+          courseProgram: "Civil Engineering",
+          summaryPreview: null,
+          resumeType: "ADAPTIVE",
+          reason: "RESUME_REVIEW",
+          lastScorePercentage: null,
+          lastReviewedAt: null,
+          lastOpenedAt: null,
+          createdAt: "2026-09-04T09:00:00Z",
+          currentQuestionIndex: 1,
+          totalQuestions: 5,
+          currentRound: "INITIAL",
+          remainingQuestions: 4,
+          resumeState: "QUESTION_IN_PROGRESS",
+        }}
+      />,
+    );
+
+    expect(screen.getByText("Structural Engineering Plan")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Resume Adaptive Practice" })).toHaveAttribute(
+      "href",
+      "/adaptive-practice/sessions/adaptive-session-1",
     );
   });
 

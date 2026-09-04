@@ -46,6 +46,10 @@ export function buildAdaptivePracticeHref(
   return `${basePath}?${searchParams.toString()}`;
 }
 
+export function buildAdaptivePracticeSessionHref(sessionId: string): string {
+  return `/adaptive-practice/sessions/${sessionId}`;
+}
+
 export function normalizeAdaptivePracticeEntry(
   value: string | null | undefined,
 ): AdaptivePracticeEntry | null {

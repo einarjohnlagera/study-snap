@@ -6,6 +6,7 @@ import {
   completeAdaptivePracticeSession,
   forfeitAdaptivePracticeSession,
   generateAdaptiveQuickReviewQuiz,
+  getAdaptivePracticeSession,
   getCollectionGoal,
   getInProgressAdaptivePracticeSession,
   getMe,
@@ -18,10 +19,11 @@ const routerMock = {
   replace: jest.fn(),
 };
 let searchParamsMock = new URLSearchParams();
+let pathnameMock = "/notes/note-1/adaptive-practice";
 
 jest.mock("next/navigation", () => ({
   useRouter: () => routerMock,
-  usePathname: () => "/notes/note-1/adaptive-practice",
+  usePathname: () => pathnameMock,
   useParams: () => ({ id: "note-1" }),
   useSearchParams: () => searchParamsMock,
 }));
@@ -42,6 +44,7 @@ jest.mock("@/lib/api", () => ({
   completeAdaptivePracticeSession: jest.fn(),
   forfeitAdaptivePracticeSession: jest.fn(),
   generateAdaptiveQuickReviewQuiz: jest.fn(),
+  getAdaptivePracticeSession: jest.fn(),
   getCollectionGoal: jest.fn(),
   getInProgressAdaptivePracticeSession: jest.fn(),
   getMe: jest.fn(),
@@ -56,6 +59,7 @@ describe("AdaptivePracticePage", () => {
   beforeEach(() => {
     window.localStorage.clear();
     searchParamsMock = new URLSearchParams();
+    pathnameMock = "/notes/note-1/adaptive-practice";
     routerMock.push.mockReset();
     routerMock.replace.mockReset();
     (useBillingUsageSummary as jest.Mock).mockReset();
@@ -87,6 +91,7 @@ describe("AdaptivePracticePage", () => {
     (getAuthUser as jest.Mock).mockReset();
     (getNote as jest.Mock).mockReset();
     (generateAdaptiveQuickReviewQuiz as jest.Mock).mockReset();
+    (getAdaptivePracticeSession as jest.Mock).mockReset();
     (getInProgressAdaptivePracticeSession as jest.Mock).mockReset();
     (getInProgressAdaptivePracticeSession as jest.Mock).mockResolvedValue({
       sessionId: null,
@@ -105,6 +110,44 @@ describe("AdaptivePracticePage", () => {
     (getCollectionGoal as jest.Mock).mockReset();
     (forfeitAdaptivePracticeSession as jest.Mock).mockReset();
     (forfeitAdaptivePracticeSession as jest.Mock).mockResolvedValue({ message: "Adaptive Practice session forfeited." });
+  });
+
+  it("reloads a collection-anchored session by session id with both note anchors absent", async () => {
+    pathnameMock = "/adaptive-practice/sessions/note-1";
+    (getAuthUser as jest.Mock).mockReturnValue({
+      id: "user-1",
+      emailVerifiedAt: "2026-03-21T09:00:00Z",
+    });
+    (getAdaptivePracticeSession as jest.Mock).mockResolvedValue({
+      sessionId: "note-1",
+      status: "IN_PROGRESS",
+      studyPackId: null,
+      noteId: null,
+      title: "Structural Engineering Plan",
+      focusConcepts: [{
+        concept: "Shear Force",
+        sourceStudyPackId: "pack-1",
+        sourceTitle: "Statics",
+        selectionReason: "DUE",
+      }],
+      message: "Focusing on concepts you need to improve.",
+      quiz: [{
+        question: "Where is shear highest?",
+        choices: ["A", "B", "C", "D"],
+        correctIndex: 0,
+        concept: "Shear Force",
+        explanation: "At the support.",
+        sourceStudyPackId: "pack-1",
+      }],
+    });
+
+    render(<AdaptivePracticePage />);
+
+    expect(await screen.findByText("Structural Engineering Plan")).toBeInTheDocument();
+    expect(screen.getByText(/Where is shear highest\?/)).toBeInTheDocument();
+    expect(getAdaptivePracticeSession).toHaveBeenCalledWith("note-1");
+    expect(getInProgressAdaptivePracticeSession).not.toHaveBeenCalled();
+    expect(getNote).not.toHaveBeenCalled();
   });
 
   function setupGeneratedAdaptiveQuiz() {

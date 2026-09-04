@@ -153,6 +153,85 @@ class NativeQueryPostgresIntegrationTest {
     @Autowired
     private LinkedLearnerRequestExpiryWorker requestExpiryWorker;
 
+    /** Killing test for removing the pack index or changing its non-null predicate to the wrong leg. */
+    @Test
+    void activeNoteScopedSessionsOnTheSamePackStillCollide() {
+        UUID userId = seedUser("session-pack-collision");
+        UUID noteA = seedPublicNote(userId, "Pack collision A", new String[] {});
+        UUID noteB = seedPublicNote(userId, "Pack collision B", new String[] {});
+        UUID packId = seedStudyPack(userId, noteA, "Pack collision");
+        seedQuizSession(userId, packId, noteA, null);
+
+        assertThatThrownBy(() -> seedQuizSession(userId, packId, noteB, null))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("idx_quick_review_sessions_one_active_generation");
+    }
+
+    /** Killing test for removing the note index or changing its non-null predicate to the wrong leg. */
+    @Test
+    void activeNoteScopedSessionsOnTheSameNoteStillCollide() {
+        UUID userId = seedUser("session-note-collision");
+        UUID noteA = seedPublicNote(userId, "Note collision A", new String[] {});
+        UUID noteB = seedPublicNote(userId, "Note collision B", new String[] {});
+        UUID packA = seedStudyPack(userId, noteA, "Note collision pack A");
+        UUID packB = seedStudyPack(userId, noteB, "Note collision pack B");
+        seedQuizSession(userId, packA, noteA, null);
+
+        assertThatThrownBy(() -> seedQuizSession(userId, packB, noteA, null))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("idx_quick_review_sessions_one_active_generation_note");
+    }
+
+    /**
+     * Pins that the SCHEMA permits a collection-anchored and a note-anchored ADAPTIVE session to be
+     * active at once -- the contention this release exists to end.
+     *
+     * <p>⚠️ This is NOT a killing test for the service accidentally retaining a borrowed pack anchor.
+     * Both rows are inserted here with their anchor shapes hardcoded, so reverting the service would
+     * not fail it. That property is guarded one layer up, where the defect would actually live:
+     * {@code QuickReviewAdaptivePracticeServiceTest.collectionScoped_writesOnlyTheCollectionAnchorAndKeepsTheLegacyJsonKey}.
+     */
+    @Test
+    void activeCollectionAndNoteScopedAdaptiveSessionsCoexist() {
+        UUID userId = seedUser("session-anchor-coexist");
+        UUID noteId = seedPublicNote(userId, "Shared source", new String[] {});
+        UUID packId = seedStudyPack(userId, noteId, "Shared source pack");
+        UUID collectionId = seedCollection(userId, "Shared source plan");
+        seedCollectionItem(collectionId, noteId);
+
+        UUID noteSession = seedQuizSession(userId, packId, noteId, null);
+        UUID collectionSession = seedQuizSession(userId, null, null, collectionId);
+
+        assertThat(jdbcTemplate.queryForList(
+                "select id from quick_review_sessions where id in (?, ?)",
+                UUID.class,
+                noteSession,
+                collectionSession
+        )).containsExactlyInAnyOrder(noteSession, collectionSession);
+    }
+
+    /** Killing test for removing V133's collection-scoped partial unique index. */
+    @Test
+    void activeCollectionScopedSessionsOnTheSamePlanStillCollide() {
+        UUID userId = seedUser("session-collection-collision");
+        UUID collectionId = seedCollection(userId, "Collision plan");
+        seedQuizSession(userId, null, null, collectionId);
+
+        assertThatThrownBy(() -> seedQuizSession(userId, null, null, collectionId))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("idx_quick_review_sessions_one_active_generation_collection");
+    }
+
+    /** Killing test for removing V133's anchor CHECK entirely. */
+    @Test
+    void anchorlessQuizSessionIsRejected() {
+        UUID userId = seedUser("session-anchorless");
+
+        assertThatThrownBy(() -> seedQuizSession(userId, null, null, null))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("chk_quick_review_sessions_anchor");
+    }
+
     /**
      * Killing test for changing {@code <=} to {@code <}, dropping the PENDING predicate, or selecting
      * a future request. The exact-boundary row is deliberate: an "old enough" fixture cannot
@@ -1803,6 +1882,72 @@ class NativeQueryPostgresIntegrationTest {
         return id;
     }
 
+    private UUID seedStudyPack(UUID ownerUserId, UUID noteId, String title) {
+        UUID id = UUID.randomUUID();
+        jdbcTemplate.update(
+                "insert into study_packs"
+                        + " (id, owner_user_id, note_id, input_type, title, summary, key_concepts, quiz,"
+                        + " model_used, status, created_at, updated_at)"
+                        + " values (?, ?, ?, 'TEXT', ?, 'summary', '[]'::jsonb, '[]'::jsonb,"
+                        + " 'test-model', 'DONE', now(), now())",
+                id, ownerUserId, noteId, title
+        );
+        return id;
+    }
+
+    private UUID seedCollection(UUID ownerUserId, String title) {
+        UUID id = UUID.randomUUID();
+        jdbcTemplate.update(
+                "insert into note_collections (id, owner_user_id, title, created_at, updated_at)"
+                        + " values (?, ?, ?, now(), now())",
+                id, ownerUserId, title
+        );
+        return id;
+    }
+
+    private void seedCollectionItem(UUID collectionId, UUID noteId) {
+        jdbcTemplate.update(
+                "insert into note_collection_items (id, collection_id, note_id, position, created_at)"
+                        + " values (?, ?, ?, 0, now())",
+                UUID.randomUUID(), collectionId, noteId
+        );
+    }
+
+    private UUID seedQuizSession(
+            UUID userId,
+            UUID studyPackId,
+            UUID noteId,
+            UUID sourceCollectionId
+    ) {
+        UUID id = UUID.randomUUID();
+        jdbcTemplate.update(
+                "insert into quick_review_sessions"
+                        + " (id, user_id, study_pack_id, note_id, source_collection_id, session_mode, status,"
+                        + " current_question_index, current_round, total_questions, created_at)"
+                        + " values (?, ?, ?, ?, ?, 'ADAPTIVE', 'IN_PROGRESS', 0, 'INITIAL', 1, now())",
+                id, userId, studyPackId, noteId, sourceCollectionId
+        );
+        return id;
+    }
+
+    private UUID seedQuizSession(
+            UUID userId,
+            UUID studyPackId,
+            UUID noteId,
+            UUID sourceCollectionId,
+            String status
+    ) {
+        UUID id = UUID.randomUUID();
+        jdbcTemplate.update(
+                "insert into quick_review_sessions"
+                        + " (id, user_id, study_pack_id, note_id, source_collection_id, session_mode, status,"
+                        + " current_question_index, current_round, total_questions, created_at, completed_at)"
+                        + " values (?, ?, ?, ?, ?, 'ADAPTIVE', ?, 0, 'INITIAL', 1, now(), now())",
+                id, userId, studyPackId, noteId, sourceCollectionId, status
+        );
+        return id;
+    }
+
     private void prepare(NativeQueryMethod query, int index) {
         String statementName = "notelib_native_query_" + index;
         String sql = positionalParameters(query.sql());
@@ -1969,5 +2114,57 @@ class NativeQueryPostgresIntegrationTest {
             return ENABLED;
         }
     }
-}
 
+    /**
+     * ⚠️ Deleting a Study Plan must ORPHAN a learner's completed plan-scoped sessions, never destroy
+     * them. The v0.113.0 pressure test proved the original ON DELETE CASCADE hard-deleted COMPLETED
+     * rows while the ConceptHealth rows they produced survived -- evidence without the history that
+     * explains it. Reverting the FK to CASCADE fails this test.
+     */
+    @Test
+    void deletingAPlanOrphansItsCompletedSessionsInsteadOfDeletingThem() {
+        UUID userId = seedUser("plan-delete-history");
+        UUID collectionId = seedCollection(userId, "CE Board Review");
+        UUID completed = seedQuizSession(userId, null, null, collectionId, "COMPLETED");
+        UUID forfeited = seedQuizSession(userId, null, null, collectionId, "FORFEITED");
+
+        jdbcTemplate.update("delete from note_collections where id = ?", collectionId);
+
+        assertThat(jdbcTemplate.queryForObject(
+                "select count(*) from quick_review_sessions where id in (?, ?)",
+                Integer.class, completed, forfeited)).isEqualTo(2);
+        assertThat(jdbcTemplate.queryForObject(
+                "select count(*) from quick_review_sessions where id = ? and source_collection_id is null",
+                Integer.class, completed)).isEqualTo(1);
+    }
+
+    /**
+     * The other half of the same constraint: an ACTIVE session may never be anchorless, because
+     * nothing could reach it. This is why NoteCollectionService.delete clears non-terminal
+     * plan-scoped sessions BEFORE deleting the plan -- without that sweep this SET NULL would violate
+     * the anchor CHECK and the delete would fail outright.
+     */
+    @Test
+    void anchorlessActiveSessionIsRejected() {
+        UUID userId = seedUser("anchorless-active");
+
+        assertThatThrownBy(() -> seedQuizSession(userId, null, null, null, "IN_PROGRESS"))
+                .hasMessageContaining("chk_quick_review_sessions_anchor");
+    }
+
+    /**
+     * Separate test on purpose: the rejection above aborts its transaction, so a terminal insert in
+     * the same method would fail for the wrong reason (25P02) and prove nothing.
+     */
+    @Test
+    void anchorlessTerminalSessionIsAllowedBecauseItIsHistory() {
+        UUID userId = seedUser("anchorless-terminal");
+
+        UUID terminal = seedQuizSession(userId, null, null, null, "COMPLETED");
+
+        assertThat(jdbcTemplate.queryForObject(
+                "select count(*) from quick_review_sessions where id = ?",
+                Integer.class, terminal)).isEqualTo(1);
+    }
+
+}

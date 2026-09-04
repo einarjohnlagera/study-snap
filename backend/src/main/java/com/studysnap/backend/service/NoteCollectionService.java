@@ -29,6 +29,7 @@ import com.studysnap.backend.entity.AnalyticsEventType;
 import com.studysnap.backend.entity.CollectionVisibility;
 import com.studysnap.backend.entity.LearnerLevel;
 import com.studysnap.backend.entity.NoteCollectionEntity;
+import com.studysnap.backend.entity.QuickReviewSessionStatus;
 import com.studysnap.backend.entity.NoteCollectionItemEntity;
 import com.studysnap.backend.entity.NoteEntity;
 import com.studysnap.backend.entity.NoteVisibility;
@@ -48,6 +49,7 @@ import com.studysnap.backend.repository.NoteCollectionItemCountProjection;
 import com.studysnap.backend.repository.NoteCollectionItemNoteProjection;
 import com.studysnap.backend.repository.NoteCollectionItemRepository;
 import com.studysnap.backend.repository.NoteCollectionRepository;
+import com.studysnap.backend.repository.QuickReviewSessionRepository;
 import com.studysnap.backend.repository.NoteCollectionNoteProjection;
 import com.studysnap.backend.repository.NoteRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
@@ -136,7 +138,15 @@ public class NoteCollectionService {
     private static final String ADD_SOURCE_INTERACTIVE = "interactive";
     private static final String ADD_SOURCE_BULK_GENERATION = "bulk_generation";
 
+    // Sessions that are HISTORY. Everything else is in flight and is cleared when its plan is
+    // deleted; see delete(...) and chk_quick_review_sessions_anchor.
+    private static final List<QuickReviewSessionStatus> TERMINAL_SESSION_STATUSES = List.of(
+            QuickReviewSessionStatus.COMPLETED,
+            QuickReviewSessionStatus.FORFEITED
+    );
+
     private final NoteCollectionRepository collectionRepository;
+    private final QuickReviewSessionRepository quickReviewSessionRepository;
     private final NoteCollectionItemRepository itemRepository;
     private final NoteRepository noteRepository;
     private final StudyPackRepository studyPackRepository;
@@ -930,6 +940,16 @@ public class NoteCollectionService {
     public void delete(UUID collectionId, UUID userId) {
         NoteCollectionEntity collection = getOwnedCollectionOrThrow(collectionId, userId);
         boolean wasTopLevel = collection.getParentCollectionId() == null;
+        // ⚠️ v0.113.0. quick_review_sessions.source_collection_id is ON DELETE SET NULL, and the anchor
+        // CHECK permits an anchorless row only when the session is COMPLETED or FORFEITED. A
+        // GENERATING, FAILED, IN_PROGRESS or PAUSED plan-scoped session would therefore make this
+        // delete fail on a constraint violation, so those are cleared first. COMPLETED and FORFEITED
+        // sessions are LEFT for the FK to orphan on purpose -- they are the learner's history, and
+        // session_state.sourceNoteRefs keeps them reachable from every note they sampled.
+        quickReviewSessionRepository.deleteBySourceCollectionIdAndStatusNotIn(
+                collectionId,
+                TERMINAL_SESSION_STATUSES
+        );
         collectionRepository.delete(collection);
         if (wasTopLevel) {
             reassertPrimaryInvariant(userId);

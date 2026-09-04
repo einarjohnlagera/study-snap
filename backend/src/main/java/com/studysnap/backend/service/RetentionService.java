@@ -3,7 +3,9 @@ package com.studysnap.backend.service;
 import com.studysnap.backend.config.StudySnapProperties;
 import com.studysnap.backend.entity.ActivityType;
 import com.studysnap.backend.entity.EmailLogEntity;
+import com.studysnap.backend.entity.QuickReviewSessionEntity;
 import com.studysnap.backend.entity.QuickReviewSessionMode;
+import com.studysnap.backend.entity.QuickReviewSessionStatus;
 import com.studysnap.backend.entity.RetentionEmailType;
 import com.studysnap.backend.entity.StudyPackEntity;
 import com.studysnap.backend.entity.UserActivityEventEntity;
@@ -39,6 +41,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 @Service
@@ -46,6 +49,9 @@ import java.util.UUID;
 @Slf4j
 public class RetentionService {
     private static final int SESSION_LOOKBACK_LIMIT = 10;
+    private static final String SESSION_STATE_FOCUS_CONCEPTS = "focusConcepts";
+    private static final String FOCUS_SOURCE_STUDY_PACK_ID_KEY = "sourceStudyPackId";
+    private static final String FOCUS_CONCEPT_KEY = "concept";
     private static final int KNOWLEDGE_IMPACT_WINDOW_DAYS = 30;
     private static final String FIRST_NAME_PARAMETER = "firstName";
     private static final String DASHBOARD_URL_PARAMETER = "dashboardUrl";
@@ -275,6 +281,19 @@ public class RetentionService {
             }
             extractWeakConcepts(session.sessionMetadata()).forEach(remainingWeakConcepts::remove);
         });
+
+        // ⚠️ v0.113.0. The query above is keyed on study_pack_id, which a PLAN-SCOPED Adaptive session
+        // does not have -- so without this a learner who cleared these concepts through
+        // "Practice Across This Plan" would still be nagged about them.
+        // ⚠️ Concepts are matched by their SOURCE-PACK STAMP, never by name alone: concept strings are
+        // free text scoped per pack, and treating two packs' "Shear Force" as one concept would be the
+        // cross-pack canonical identity claim that stays ADR-sized and out of scope.
+        removeConceptsPractisedInPlanScopedSessions(
+                user.getId(),
+                latestChallenge.studyPackId(),
+                latestChallenge.completedAt(),
+                remainingWeakConcepts
+        );
 
         if (remainingWeakConcepts.isEmpty()) {
             return Optional.empty();
@@ -810,4 +829,61 @@ public class RetentionService {
             int weeklySummarySent
     ) {
     }
+
+    /**
+     * Removes the weak concepts a learner already practised through a PLAN-SCOPED Adaptive session.
+     *
+     * <p>Those sessions carry no {@code study_pack_id}, so the pack-keyed lookup above cannot see them.
+     * Each focus concept is stamped with the pack it came from, and only concepts stamped with
+     * {@code studyPackId} are removed -- matching on the concept STRING alone would silently equate two
+     * packs' identically-named concepts.
+     */
+    private void removeConceptsPractisedInPlanScopedSessions(
+            UUID userId,
+            UUID studyPackId,
+            OffsetDateTime challengeCompletedAt,
+            Set<String> remainingWeakConcepts
+    ) {
+        if (studyPackId == null || remainingWeakConcepts.isEmpty()) {
+            return;
+        }
+        for (QuickReviewSessionEntity session : quickReviewSessionRepository
+                .findByUserIdAndStatusAndSessionModeInAndCompletedAtIsNotNullOrderByCompletedAtDesc(
+                        userId,
+                        QuickReviewSessionStatus.COMPLETED,
+                        List.of(QuickReviewSessionMode.ADAPTIVE)
+                )) {
+            if (session.getSourceCollectionId() == null) {
+                continue;
+            }
+            if (session.getCompletedAt() == null || session.getCompletedAt().isBefore(challengeCompletedAt)) {
+                continue;
+            }
+            for (String concept : extractFocusConceptsForStudyPack(session, studyPackId)) {
+                remainingWeakConcepts.remove(concept);
+            }
+        }
+    }
+
+    private List<String> extractFocusConceptsForStudyPack(QuickReviewSessionEntity session, UUID studyPackId) {
+        Map<String, Object> state = session.getSessionState();
+        if (state == null || !(state.get(SESSION_STATE_FOCUS_CONCEPTS) instanceof List<?> rawEntries)) {
+            return List.of();
+        }
+        String targetStudyPackId = studyPackId.toString();
+        List<String> concepts = new ArrayList<>();
+        for (Object rawEntry : rawEntries) {
+            if (!(rawEntry instanceof Map<?, ?> entry)) {
+                continue;
+            }
+            if (!targetStudyPackId.equals(entry.get(FOCUS_SOURCE_STUDY_PACK_ID_KEY))
+                    || !(entry.get(FOCUS_CONCEPT_KEY) instanceof String concept)
+                    || concept.isBlank()) {
+                continue;
+            }
+            concepts.add(concept);
+        }
+        return concepts;
+    }
+
 }

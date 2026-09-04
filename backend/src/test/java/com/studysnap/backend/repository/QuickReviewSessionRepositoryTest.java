@@ -37,8 +37,9 @@ class QuickReviewSessionRepositoryTest {
                 create table if not exists quick_review_sessions (
                     id uuid primary key,
                     user_id uuid not null,
-                    study_pack_id uuid not null,
-                    note_id uuid not null,
+                    study_pack_id uuid,
+                    note_id uuid,
+                    source_collection_id uuid,
                     session_mode varchar(32) not null,
                     status varchar(32) not null,
                     current_question_index integer not null,
@@ -62,7 +63,6 @@ class QuickReviewSessionRepositoryTest {
                 )
                 """);
         jdbcTemplate.execute("delete from quick_review_sessions");
-        jdbcTemplate.execute("alter table quick_review_sessions alter column note_id set not null");
         jdbcTemplate.execute("alter table quick_review_sessions add column if not exists quota_exempt boolean not null default false");
     }
 

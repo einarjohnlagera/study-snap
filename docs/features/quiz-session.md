@@ -28,9 +28,31 @@ Shared session status values:
 
 Quick Review, standard Challenge Quiz, Adaptive Practice, and Board Exam Mode's own result branch preserve their mode-owned score and weak-area outcome content, then group the existing post-session cards by the learner decision they support: `PostSessionNextStep`, `GoalNudgeCard`, and `WeeklyPacingEchoCard` share one "what to do next" visual block; `CompanionResultBridgeCard` and (outside Board Exam Mode) `TwiceMissedAskCompanionCard` share a separate Companion-guidance block. Board Exam Mode's Companion-guidance block only ever contains `CompanionResultBridgeCard` — it has never shown the twice-missed CTA, and this pass does not change that. Each child keeps its own existing condition (`hasCompanionResultBridgeExcerpt`/`getAskableTwiceMissedConcept` exported from their respective components so pages can pre-check without duplicating each card's internal gate) and can render independently inside its group, so a result with no applicable guidance renders no empty block. Answer review and back actions remain after these groups. This is presentation-only: it does not change actions, data fetches, session state, scoring, or analytics. Board Exam Mode's feedback-free *in-session* view (not its result screen) and Long Exam's forfeit-only flow do not use this grouped result treatment.
 
+## Anchor Contract
+
+Every `quick_review_sessions` row has exactly one usable anchor shape:
+
+- `study_pack_id` and `note_id` are both non-null for Quick Review, Challenge Quiz, Long Exam,
+  Board Exam, Interview Practice and note-scoped Adaptive Practice; or
+- `source_collection_id` is non-null for plan-scoped Adaptive Practice.
+
+`chk_quick_review_sessions_anchor` enforces that an **active** row cannot be anchorless, while entity
+lifecycle validation also rejects partial or mixed shapes with `INVALID_QUIZ_SESSION_ANCHOR`.
+Active-session exclusivity is enforced by three partial unique indexes keyed by user, mode and
+respectively pack, note or collection; each predicate explicitly excludes a null key.
+
+A **terminal** row (`COMPLETED` or `FORFEITED`) may be anchorless, and that is deliberate: the
+collection FK is **`ON DELETE SET NULL`, not cascade**, so deleting a Study Plan orphans the sessions
+run against it rather than destroying the learner's history. Those sessions stay reachable through
+`session_state.sourceNoteRefs`, which credits every note the session sampled. Account-deletion cleanup
+does not depend on this — `user_id` has cascaded since `V4`. Non-terminal plan-scoped sessions are
+cleared by `NoteCollectionService.delete` before the plan is removed, because an anchorless active
+session would be unreachable and the `SET NULL` would otherwise violate the constraint.
+
 ## Dashboard Resume Metadata
 
-Dashboard resume recommendations must stay note-based even though session data lives on quiz-session rows.
+Dashboard resume recommendations are note-addressed for pack/note sessions and session-addressed for
+collection-anchored Adaptive Practice.
 
 The backend should join:
 
@@ -40,7 +62,7 @@ The backend should join:
 
 Required resume metadata:
 
-- `noteId`
+- `noteId` for pack/note sessions, or `sessionId` for collection sessions
 - `noteTitle`
 - `subject`
 - optional `courseProgram`

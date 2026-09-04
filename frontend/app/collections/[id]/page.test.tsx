@@ -11,6 +11,7 @@ import {
   clearCompanion,
   clearPrimaryCollection,
   generateCompanion,
+  generateAdaptivePracticeForCollection,
   getCollection,
   getCollectionGoal,
   getActiveAskCompanionSession,
@@ -70,6 +71,7 @@ jest.mock("@/lib/api", () => {
     clearCompanion: jest.fn(),
     clearPrimaryCollection: jest.fn(),
     generateCompanion: jest.fn(),
+    generateAdaptivePracticeForCollection: jest.fn(),
     deleteCollection: jest.fn(),
     getCollection: jest.fn(),
     getCollectionGoal: jest.fn(),
@@ -288,6 +290,7 @@ describe("CollectionDetailPageClient", () => {
     (clearCompanion as jest.Mock).mockReset();
     (clearPrimaryCollection as jest.Mock).mockReset();
     (generateCompanion as jest.Mock).mockReset();
+    (generateAdaptivePracticeForCollection as jest.Mock).mockReset();
     (getCollection as jest.Mock).mockReset();
     (getCollectionGoal as jest.Mock).mockReset();
     (getActiveAskCompanionSession as jest.Mock).mockReset();
@@ -3073,6 +3076,47 @@ describe("CollectionDetailPageClient", () => {
     expect(
       screen.getByRole("button", { name: /Practice Weak Areas Across This Plan/i }),
     ).toBeInTheDocument();
+  });
+
+  it("enters a collection-anchored practice session through its session id", async () => {
+    (getCollection as jest.Mock).mockResolvedValue(collection());
+    (generateAdaptivePracticeForCollection as jest.Mock).mockResolvedValue({
+      sessionId: "adaptive-session-1",
+      status: "IN_PROGRESS",
+      studyPackId: null,
+      noteId: null,
+      title: "Cell Biology",
+      focusConcepts: [],
+      quiz: [],
+      message: "Focusing on concepts you need to improve.",
+    });
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+    fireEvent.click(await screen.findByRole("button", { name: /Practice Weak Areas Across This Plan/i }));
+
+    await waitFor(() => expect(pushMock).toHaveBeenCalledWith(
+      "/adaptive-practice/sessions/adaptive-session-1",
+    ));
+  });
+
+  it("renders an error when a charged practice response has no usable route", async () => {
+    (getCollection as jest.Mock).mockResolvedValue(collection());
+    (generateAdaptivePracticeForCollection as jest.Mock).mockResolvedValue({
+      sessionId: null,
+      status: "IN_PROGRESS",
+      studyPackId: null,
+      noteId: null,
+      title: "Cell Biology",
+      focusConcepts: [],
+      quiz: [],
+      message: "The practice session could not be opened.",
+    });
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+    fireEvent.click(await screen.findByRole("button", { name: /Practice Weak Areas Across This Plan/i }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("could not be opened");
+    expect(pushMock).not.toHaveBeenCalled();
   });
 
 });

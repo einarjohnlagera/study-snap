@@ -331,7 +331,11 @@ Collections remain owner-private by default.
 - A note may belong to multiple collections.
 - A note may appear at most once in a single collection.
 - Adding an already-present note is idempotent and silently skipped.
-- Deleting a collection deletes only the collection and item rows.
+- Deleting a collection deletes only the collection and item rows, plus any **non-terminal**
+  plan-scoped Adaptive Practice session anchored on it. **A `COMPLETED` or `FORFEITED` plan-scoped
+  session is NOT deleted** — the collection anchor is `ON DELETE SET NULL`, so the learner's history
+  survives the plan and stays reachable through the notes that session sampled. Notes are never
+  deleted.
 - Deleting a note removes that note's collection item rows through the `note_collection_items.note_id` FK cascade.
 - Deleting a collection must never delete notes.
 - Existing owner-scoped endpoints must use `findByIdAndOwnerUserId` semantics and must not expose private collections to other users.
@@ -465,6 +469,13 @@ Collection detail items also expose a read-only weak-area signal from the existi
 - The signal is populated only when the user has a Plus or Pro plan and the existing `Feature.ADAPTIVE_QUIZ` entitlement is available, matching the Note Detail concept-health surface.
 - Free users and notes without a Study Pack receive `0` and an empty list. Lookup failures also degrade to empty weak-area data without failing collection detail.
 - The backend remains profile-agnostic and does not branch on `ProfileType`.
+
+The collection-level Adaptive Practice action starts or resumes a session anchored on that collection,
+not on a pack chosen from its mutable item order. Source packs remain independently sampled and stamped
+for ConceptHealth attribution, including packs that currently have their own note-scoped Adaptive
+session. The start response routes by `sessionId`; enter and refresh resolve through
+`GET /adaptive-practice/sessions/{sessionId}`. There is deliberately no restored
+collection-addressed in-progress endpoint and the client never computes an anchor.
 
 The detail response also exposes neutral hierarchy metadata:
 

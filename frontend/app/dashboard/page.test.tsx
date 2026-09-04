@@ -227,6 +227,7 @@ describe("DashboardPage profile variants", () => {
     (getMe as jest.Mock).mockReset();
     (getContinueStudyingRecommendation as jest.Mock).mockReset();
     (getDashboardOverview as jest.Mock).mockReset();
+    (generateAdaptivePracticeForCollection as jest.Mock).mockReset();
     (getFeedbackPromptContext as jest.Mock).mockReset();
     (getCollectionGoal as jest.Mock).mockReset();
     (getGoalSummary as jest.Mock).mockReset();
@@ -1453,7 +1454,7 @@ describe("DashboardPage profile variants", () => {
       title: "CE Board Review",
       focusConcepts: [],
       quiz: [],
-      message: "You have another Adaptive Practice session in progress on one of this plan's notes.",
+      message: "No weak concepts found from your latest review.",
     });
 
     (getMe as jest.Mock).mockResolvedValue({
@@ -1471,8 +1472,48 @@ describe("DashboardPage profile variants", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Practice Across This Plan" }));
 
     expect(
-      await screen.findByText(/another Adaptive Practice session in progress/i),
+      await screen.findByText(/No weak concepts found from your latest review/i),
     ).toBeInTheDocument();
+  });
+
+  it("routes a collection-anchored plan session by session id", async () => {
+    (getMe as jest.Mock).mockResolvedValue({
+      firstName: "Note",
+      displayName: "Note",
+      emailVerifiedAt: "2026-03-20T00:00:00Z",
+      productOnboardingCompletedAt: "2026-03-21T00:00:00Z",
+      studyPackCount: 2,
+      profileType: "STUDENT",
+      courseProgram: "PNLE",
+      onboardingCompletedAt: "2026-03-20T00:00:00Z",
+      primaryCollectionId: null,
+    });
+    (getDashboardOverview as jest.Mock).mockResolvedValue({
+      ...overview,
+      focusAreas: {
+        ...overview.focusAreas,
+        practiceCollectionId: "collection-1",
+        practiceCollectionTitle: "CE Board Review",
+        adaptivePracticeAvailable: true,
+      },
+    });
+    (generateAdaptivePracticeForCollection as jest.Mock).mockResolvedValue({
+      sessionId: "adaptive-session-1",
+      status: "IN_PROGRESS",
+      studyPackId: null,
+      noteId: null,
+      title: "CE Board Review",
+      focusConcepts: [],
+      quiz: [],
+      message: "Focusing on concepts you need to improve.",
+    });
+
+    render(<DashboardPage />);
+    fireEvent.click(await screen.findByRole("button", { name: "Practice Across This Plan" }));
+
+    await waitFor(() => expect(routerMock.push).toHaveBeenCalledWith(
+      "/adaptive-practice/sessions/adaptive-session-1",
+    ));
   });
 
 });

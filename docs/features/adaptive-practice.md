@@ -11,13 +11,13 @@ takes no `subMode` value and adds no row to `EXAM_MODES.md`.
 
 ### Plan scope, and the rules that constrain it
 
-- **The session is anchored on a primary pack: the plan's lowest-position eligible pack.** The route
-  is collection-addressed (`/collections/{id}/adaptive-practice/...`) and **the server derives the
-  anchor** — a client must never compute and send one, because a plan's item order is mutable and a
-  client-computed anchor drifts.
-- **Resume is resolved by the recorded source collection id, filtered in Java**, never by recomputing
-  the anchor. Recomputing would miss a live session after a reorder and start a second one, leaving
-  the first unreachable.
+- **The session is anchored on the collection itself.** Its `study_pack_id` and `note_id` are null and
+  `source_collection_id` identifies the Subject Plan or Review Set. The collection start endpoint is
+  collection-addressed, while enter/reload uses `GET /adaptive-practice/sessions/{sessionId}` and the
+  session-addressed frontend route. A client must never compute a pack anchor from mutable item order.
+- **Resume uses one column-first resolver with a JSONB fallback.** New rows write both
+  `source_collection_id` and the legacy `session_state.sourceCollectionId` key. The fallback keeps
+  in-flight rows created before `V133` reachable; it must remain until none can still be active.
 - **Concepts are never merged across packs.** Two packs weak on the same concept string stay **two**
   focus entries, each carrying its source pack. Concept identity is scoped per Study Pack, so merging
   would assert a cross-pack identity the product does not have. The focus structure is keyed by
@@ -27,10 +27,10 @@ takes no `subMode` value and adds no row to `EXAM_MODES.md`.
   charges. **Do not move generation off the transaction** — doing so destroys that guarantee.
 - **Both the sampled pack count and the focus-concept list are bounded.** The question-count cap
   bounds only the output; the focus list feeds the prompt and needs its own bound.
-- **Three session types share the `ADAPTIVE` discriminator** — note-scoped Adaptive Practice,
-  Interview Practice, and plan-scoped Adaptive Practice — and `V41` allows one active session per
-  `(user, pack)`. So they contend: a plan-scoped session active on a pack makes a note-scoped request
-  on that pack resume the plan session, and vice versa. **Known limitation, accepted deliberately.**
+- **Three session types still share the `ADAPTIVE` discriminator**, but their anchors no longer
+  contend. Note-scoped Adaptive Practice and Interview Practice keep the pack/note indexes;
+  plan-scoped Adaptive Practice uses the collection index. A learner may therefore keep a plan
+  session and a note session on a source pack active at the same time, and each resumes as itself.
 - **Adaptive Practice and Interview Practice never consume each other's sessions.** Both the start
   and the read path skip a session carrying `subMode: "INTERVIEW"` and return an explanatory message
   instead. They do **not** start a new session in that case — the unique index would reject it — and
@@ -132,7 +132,7 @@ The result screen should stay focused and should not compete with unrelated acti
 
 ## Session rules
 
-- sessions are note-owned
+- sessions are anchored either to one owned pack/note pair or, for plan scope, one owned collection
 - generation and resume flow must be idempotent
 - active generation uses the shared generation lock
 - leaving an active Adaptive Practice session forfeits that session without refunding quota
@@ -146,14 +146,27 @@ The result screen should stay focused and should not compete with unrelated acti
   can still resume a session they have already paid for, and a resume consumes no rate-limit budget.
   **⚠️ Those gates sit AFTER the resume branch and BEFORE the eligibility load — both boundaries
   matter, and moving them above the resume branch is a defect that shipped once.**
-- **There is no separate in-progress endpoint for a collection.** The start endpoint resumes, so a
-  `GET .../adaptive-practice/in-progress` for a collection would duplicate it; it was removed rather
-  than left unconsumed.
+- **There is no collection-addressed in-progress endpoint.** The collection start endpoint remains
+  idempotent; after it returns a session id, enter and reload are session-addressed. The
+  session-addressed read serves only `GENERATING`, `IN_PROGRESS` and `FAILED` sessions, matching the
+  note-addressed read — a finished session is not resumable.
+- **A plan-scoped completion credits every note it sampled.** The session has no note anchor, so it
+  records its sampled notes in `session_state.sourceNoteRefs` and rides the same second pass Long Exam
+  and Board Exam use. Each of those notes gets `lastSessionCompletedAt`, so Study Plan progress
+  advances. **⚠️ Note-scoped Adaptive is unchanged and still credits only its own note** — the
+  discriminator is the collection anchor, never the mode alone.
+- **Deleting a Study Plan does not delete the sessions run against it.** The collection anchor is
+  `ON DELETE SET NULL`, so a `COMPLETED` or `FORFEITED` session is orphaned rather than destroyed and
+  stays visible through the notes it sampled. Non-terminal sessions on that plan are cleared first,
+  because an anchorless active session would be unreachable.
+- **The weak-concept retention email accounts for plan-scoped practice.** Concepts cleared in a
+  plan-scoped session are suppressed by their **source-pack stamp**, never by concept name alone.
 - **⚠️ Both writes depend on the CLIENT submitting `selectedChoices` / `selectedMultiChoices` on
   completion.** Adaptive Practice has no progress endpoint, so nothing persists answers into session
   state during a session. If the client omits them the server's per-source breakdown is empty and it
   falls back to attributing everything to the anchor pack with **no misses recorded at all** — which
-  is correct for a single-note session and wrong for a plan-scoped one. Pinned on both sides.
+  is valid only for a single-note session. A collection session requires stamped source provenance
+  and fails loudly if a null source key would otherwise reach ConceptHealth.
 - **Attribution is bucketed by `(sourceStudyPackId, concept)`**, so two packs weak on the same
   concept string are recorded separately. Note the API: Adaptive Practice uses
   `recordCorrect/IncorrectAnswers`, **not** the `...ForKnownConcepts` variants, so it applies no
