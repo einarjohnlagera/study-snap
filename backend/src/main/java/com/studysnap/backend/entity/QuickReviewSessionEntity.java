@@ -107,9 +107,22 @@ public class QuickReviewSessionEntity {
     @Column(name = "completed_at")
     private OffsetDateTime completedAt;
 
+    /**
+     * The ONE anchor rule. Enforced here rather than duplicated per service.
+     *
+     * <p>⚠️ `v0.113.1` collapsed three copies of this contract into one. The database
+     * {@code chk_quick_review_sessions_anchor} stays — it is the only rule a future native or bulk
+     * write would meet — but no SERVICE may carry its own version: the copy this replaced was
+     * strictly weaker, accepting a partial pack/note shape alongside a collection anchor, which this
+     * method rejects.
+     *
+     * <p>Public because callers invoke it eagerly at build time. That is deliberate rather than
+     * redundant: a mocked repository never triggers {@code @PrePersist}, so without an explicit call
+     * the service test suite would validate no anchor at all.
+     */
     @PrePersist
     @PreUpdate
-    void validateAnchor() {
+    public void validateAnchor() {
         // A TERMINAL session is history and may legitimately be anchorless: deleting a Study Plan sets
         // source_collection_id to NULL rather than destroying the learner's completed sessions, and
         // session_state.sourceNoteRefs is what keeps them reachable. Mirrors

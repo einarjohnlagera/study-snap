@@ -165,8 +165,14 @@ The result screen should stay focused and should not compete with unrelated acti
   completion.** Adaptive Practice has no progress endpoint, so nothing persists answers into session
   state during a session. If the client omits them the server's per-source breakdown is empty and it
   falls back to attributing everything to the anchor pack with **no misses recorded at all** — which
-  is valid only for a single-note session. A collection session requires stamped source provenance
-  and fails loudly if a null source key would otherwise reach ConceptHealth.
+  is valid only for a single-note session. A collection session has no anchor pack to
+  fall back to, so an item whose source cannot be resolved is **skipped and logged at WARN, never
+  recorded against an empty key** — the completion still succeeds and every resolvable item is still
+  written. **⚠️ This was a hard throw when `v0.113.0` shipped, and `v0.113.1` changed it
+  deliberately:** the throw rolled back a session already marked `COMPLETED`, so one unresolvable item
+  bricked the plan permanently — Adaptive Practice is not covered by the recovery sweeper, and the
+  active-session index then refused every retry. Losing one item's evidence is recoverable; losing the
+  session is not.
 - **Attribution is bucketed by `(sourceStudyPackId, concept)`**, so two packs weak on the same
   concept string are recorded separately. Note the API: Adaptive Practice uses
   `recordCorrect/IncorrectAnswers`, **not** the `...ForKnownConcepts` variants, so it applies no

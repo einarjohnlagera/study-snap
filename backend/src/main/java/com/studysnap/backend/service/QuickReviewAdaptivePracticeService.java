@@ -52,6 +52,7 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -60,6 +61,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @Transactional
 @RequiredArgsConstructor
+@Slf4j
 public class QuickReviewAdaptivePracticeService {
 
     private static final int BASE_QUESTION_COUNT = 5;
@@ -696,10 +698,20 @@ public class QuickReviewAdaptivePracticeService {
 
         UUID sourceCollectionId = resolveSourceCollectionId(session);
         if (sourceCollectionId != null) {
-            NoteCollectionEntity collection = noteCollectionRepository
-                    .findByIdAndOwnerUserId(sourceCollectionId, userId)
-                    .orElseThrow(AdaptivePracticeSessionNotFoundException::new);
-            return toAdaptiveResponse(session, null, collection);
+            Optional<NoteCollectionEntity> collection = noteCollectionRepository
+                    .findByIdAndOwnerUserId(sourceCollectionId, userId);
+            if (collection.isPresent()) {
+                return toAdaptiveResponse(session, null, collection.get());
+            }
+            // ⚠️ The collection is gone but the session may still be usable. A PRE-MIGRATION
+            // plan-scoped row is pack-anchored AND carries a JSONB collection id, so deleting that
+            // collection leaves a perfectly resumable session -- and the note-addressed route DOES
+            // resume it. Throwing here made the two routes disagree about the same row.
+            // A post-migration row has no pack anchor and genuinely cannot be resolved, so it still
+            // 404s below.
+            if (session.getStudyPackId() == null) {
+                throw new AdaptivePracticeSessionNotFoundException();
+            }
         }
         if (session.getStudyPackId() == null) {
             throw new QuickReviewSessionAnchorException();
@@ -807,17 +819,31 @@ public class QuickReviewAdaptivePracticeService {
             // No stored quiz/selections to derive a breakdown — fall back to the frontend-reported
             // correct concepts and record no misses (they cannot be computed reliably).
             List<String> correctConcepts = correctConceptNames == null ? List.of() : correctConceptNames;
-            if (!correctConcepts.isEmpty()) {
+            UUID fallbackStudyPackId = parseSourceStudyPackId(null, session.getStudyPackId());
+            if (!correctConcepts.isEmpty() && fallbackStudyPackId != null) {
                 conceptHealthService.recordCorrectAnswers(
                         userId,
-                        requireSourceStudyPackId(null, session),
+                        fallbackStudyPackId,
                         correctConcepts,
                         now
                 );
+            } else if (!correctConcepts.isEmpty()) {
+                logUnattributableConcepts(session, null, correctConcepts.size());
             }
         } else {
             for (Map.Entry<String, List<ChallengeQuizConceptStatResponse>> entry : breakdownBySource.entrySet()) {
-                UUID sourceStudyPackId = requireSourceStudyPackId(entry.getKey(), session);
+                UUID sourceStudyPackId = parseSourceStudyPackId(entry.getKey(), session.getStudyPackId());
+                if (sourceStudyPackId == null) {
+                    // ⚠️ SKIP the unattributable entry; do NOT abort the completion. The guarantee
+                    // that matters is that a null key never reaches ConceptHealth, and skipping
+                    // preserves it. Throwing here rolled back a session that had already reached
+                    // COMPLETED, leaving it IN_PROGRESS -- where the retry failed identically, the
+                    // recovery sweeper covers only LONG_EXAM and CHALLENGE, and the row kept
+                    // occupying the collection index, so the learner could not start a new
+                    // plan-scoped session either. One unattributable item must not brick a plan.
+                    logUnattributableConcepts(session, entry.getKey(), entry.getValue().size());
+                    continue;
+                }
                 List<String> correctConcepts = QuizSessionReviewUtils.computeFullyCorrectConcepts(entry.getValue());
                 List<String> missedConcepts = QuizSessionReviewUtils.computeConceptsWithMisses(entry.getValue());
                 if (!correctConcepts.isEmpty()) {
@@ -870,12 +896,21 @@ public class QuickReviewAdaptivePracticeService {
         }
     }
 
-    private UUID requireSourceStudyPackId(String raw, QuickReviewSessionEntity session) {
-        UUID sourceStudyPackId = parseSourceStudyPackId(raw, session.getStudyPackId());
-        if (sourceStudyPackId == null) {
-            throw new QuickReviewSessionAnchorException();
-        }
-        return sourceStudyPackId;
+    /**
+     * Records that concept evidence could not be attributed, loudly, without destroying the session.
+     *
+     * <p>⚠️ This REPLACED a thrown {@code QuickReviewSessionAnchorException}. The fail-loud guarantee
+     * is unchanged in the sense that matters — a null study-pack key still never reaches
+     * {@code ConceptHealth} — but the failure is no longer allowed to roll back a completion that
+     * already succeeded. Two independent reviewers could not reach an unstamped item, so this is a
+     * latent path; if it ever fires, this log is the signal that the stamping seam has regressed.
+     */
+    private void logUnattributableConcepts(QuickReviewSessionEntity session, String rawKey, int conceptCount) {
+        log.error(
+                "Adaptive Practice session {} could not attribute {} concept stat(s) to a source study pack"
+                        + " (rawKey={}, studyPackId={}, sourceCollectionId={}). Evidence skipped; the session"
+                        + " still completes. This means the source stamp is missing at the generation seam.",
+                session.getId(), conceptCount, rawKey, session.getStudyPackId(), session.getSourceCollectionId());
     }
 
     private StudyPackEntity findOwnedStudyPackOrThrow(UUID studyPackId, UUID userId) {
@@ -933,16 +968,11 @@ public class QuickReviewAdaptivePracticeService {
         session.setSessionState(initialState);
         session.setCreatedAt(OffsetDateTime.now());
         session.setCompletedAt(null);
-        assertValidAnchor(session);
+        // ⚠️ The ENTITY owns the anchor rule; this call is eager invocation, not a second copy.
+        // Without it a mocked repository would never fire @PrePersist and the service tests would
+        // validate nothing.
+        session.validateAnchor();
         return session;
-    }
-
-    private void assertValidAnchor(QuickReviewSessionEntity session) {
-        boolean hasPackNoteAnchor = session.getStudyPackId() != null && session.getNoteId() != null;
-        boolean hasCollectionAnchor = session.getSourceCollectionId() != null;
-        if (hasPackNoteAnchor == hasCollectionAnchor) {
-            throw new QuickReviewSessionAnchorException();
-        }
     }
 
     private void markSessionReady(

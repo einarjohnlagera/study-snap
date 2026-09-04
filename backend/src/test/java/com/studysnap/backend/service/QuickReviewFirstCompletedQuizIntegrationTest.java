@@ -74,6 +74,13 @@ class QuickReviewFirstCompletedQuizIntegrationTest {
                     completed_at timestamp with time zone
                 )
                 """);
+        // ⚠️ v0.113.1. Mirrors V133's chk_quick_review_sessions_anchor so a test cannot persist an
+        // anchor shape the real database rejects. H2 supports CHECK but NOT partial unique indexes
+        // (verified empirically), so V133's three active-session indexes are not expressible here —
+        // NativeQueryPostgresIntegrationTest is their only authority.
+        jdbcTemplate.execute("alter table quick_review_sessions add constraint if not exists"
+                + " chk_quick_review_sessions_anchor check ((study_pack_id is not null and note_id is not null)"
+                + " or source_collection_id is not null or status in ('COMPLETED', 'FORFEITED'))");
         jdbcTemplate.execute("""
                 create table user_activity_events (
                     id uuid primary key,

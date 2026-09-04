@@ -51,6 +51,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -1116,6 +1117,41 @@ class QuickReviewAdaptivePracticeServiceTest {
         assertThat(response.studyPackId()).isEqualTo(packId.toString());
     }
 
+
+    /**
+     * ⚠️ A PRE-MIGRATION plan-scoped session is pack-anchored AND carries a JSONB collection id, so
+     * deleting that collection leaves a session the note-addressed route still resumes happily. The
+     * session-addressed route used to 404 it, making the two routes disagree about one row.
+     */
+    @Test
+    void getAdaptiveSessionById_fallsBackToThePackAnchorWhenALegacyCollectionIsGone() {
+        UUID userId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+        UUID deletedCollectionId = UUID.randomUUID();
+        UUID packId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        QuickReviewSessionEntity legacy = buildInProgressAdaptiveSession(sessionId, userId, packId, noteId);
+        legacy.setSessionState(new LinkedHashMap<>(legacy.getSessionState()));
+        legacy.getSessionState().put("sourceCollectionId", deletedCollectionId.toString());
+        StudyPackEntity studyPack = new StudyPackEntity();
+        studyPack.setId(packId);
+        studyPack.setNoteId(noteId);
+        studyPack.setTitle("Legacy Pack");
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(
+                sessionId, userId, QuickReviewSessionMode.ADAPTIVE)).thenReturn(Optional.of(legacy));
+        when(noteCollectionRepository.findByIdAndOwnerUserId(deletedCollectionId, userId))
+                .thenReturn(Optional.empty());
+        when(studyPackRepository.findByIdAndOwnerUserId(packId, userId))
+                .thenReturn(Optional.of(studyPack));
+
+        QuickReviewAdaptiveQuizResponse response = adaptivePracticeService
+                .getAdaptiveSessionById(sessionId.toString(), userId);
+
+        assertThat(response.sessionId()).isEqualTo(sessionId.toString());
+        assertThat(response.studyPackId()).isEqualTo(packId.toString());
+        assertThat(response.title()).isEqualTo("Legacy Pack");
+    }
+
     @Test
     void getAdaptiveSessionById_hidesUnknownAndOtherUsersSessionsBehindTheSameNotFoundContract() {
         UUID userId = UUID.randomUUID();
@@ -1198,8 +1234,18 @@ class QuickReviewAdaptivePracticeServiceTest {
                 eq(userId), eq(packB), any(), any());
     }
 
+    /**
+     * ⚠️ RENAMED AND RE-AIMED IN `v0.113.1`, NOT WEAKENED. The guarantee this protects is unchanged —
+     * a null study-pack key must never reach ConceptHealth — but it used to be enforced by throwing
+     * INSIDE the completion transaction, which rolled back a session that had already reached
+     * COMPLETED. The row went back to IN_PROGRESS, the retry failed identically, the recovery sweeper
+     * covers only LONG_EXAM and CHALLENGE, and it kept occupying the collection unique index, so the
+     * learner could start no new plan-scoped session either. One unattributable item bricked a plan.
+     *
+     * <p>Now the entry is skipped and logged: no null key is written AND the completion survives.
+     */
     @Test
-    void completeCollectionAdaptiveSession_failsLoudlyBeforeANullConceptHealthWrite() {
+    void completeCollectionAdaptiveSession_skipsUnattributableEvidenceWithoutLosingTheSession() {
         UUID userId = UUID.randomUUID();
         UUID sessionId = UUID.randomUUID();
         QuickReviewSessionEntity session = buildInProgressAdaptiveSession(
@@ -1212,12 +1258,64 @@ class QuickReviewAdaptivePracticeServiceTest {
         when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
-        assertThatThrownBy(() -> adaptivePracticeService.completeAdaptiveSession(
-                sessionId.toString(), userId, 1, 1, null, List.of("Unstamped concept"), null, null))
-                .isInstanceOf(QuickReviewSessionAnchorException.class);
+        AdaptivePracticeCompleteResponse response = adaptivePracticeService.completeAdaptiveSession(
+                sessionId.toString(), userId, 1, 1, null, List.of("Unstamped concept"), null, null);
 
+        // The session survives -- this is the half that used to fail.
+        assertThat(response).isNotNull();
+        assertThat(session.getStatus()).isEqualTo(QuickReviewSessionStatus.COMPLETED);
+        // And the original guarantee still holds: nothing was written against a null key.
         verify(conceptHealthService, never()).recordCorrectAnswers(any(), any(), any(), any());
         verify(conceptHealthService, never()).recordIncorrectAnswers(any(), any(), any(), any());
+    }
+
+    /**
+     * ⚠️ SITE 2, the per-source loop — a DIFFERENT branch from the empty-breakdown fallback above,
+     * and it was unguarded. Verified by mutation: dropping the loop's null check passed the whole
+     * suite, because that fixture sends no selections and therefore never builds a breakdown at all.
+     *
+     * <p>Here one item IS stamped and one is NOT, so the breakdown is non-empty and the loop runs
+     * with a null source for the unstamped entry. The stamped pack must still be recorded, the
+     * unstamped one must be skipped rather than written against a null key, and the session must
+     * still complete.
+     */
+    @Test
+    void completeCollectionAdaptiveSession_skipsOnlyTheUnstampedEntryAndKeepsTheStampedOne() {
+        UUID userId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+        UUID packA = UUID.randomUUID();
+        UUID noteA = UUID.randomUUID();
+        StudyPackEntity a = buildStudyPack(packA, noteA, userId);
+        a.setKeyConcepts(List.of("Shear Force"));
+
+        QuickReviewSessionEntity session = buildInProgressAdaptiveSession(sessionId, userId, packA, noteA);
+        session.setStudyPackId(null);
+        session.setNoteId(null);
+        session.setSourceCollectionId(UUID.randomUUID());
+        QuizItem unstamped = new QuizItem("U1", List.of("A", "B", "C", "D"), 0, "Moment", "Explanation",
+                null, "MCQ", null, null, null, null, "Moment", null, null);
+        session.setSessionState(QuizSessionStateUtils.withQuiz(List.of(
+                stampedItem("A1", "Shear Force", packA),
+                unstamped
+        ), session.getSessionState()));
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(
+                sessionId, userId, QuickReviewSessionMode.ADAPTIVE)).thenReturn(Optional.of(session));
+        when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        lenient().when(studyPackRepository.findByIdAndOwnerUserId(packA, userId)).thenReturn(Optional.of(a));
+
+        adaptivePracticeService.completeAdaptiveSession(
+                sessionId.toString(), userId, 1, 2, null, null,
+                Map.of(0, 0, 1, 0),
+                Map.of());
+
+        assertThat(session.getStatus()).isEqualTo(QuickReviewSessionStatus.COMPLETED);
+        verify(conceptHealthService).recordCorrectAnswers(
+                eq(userId), eq(packA), eq(List.of("Shear Force")), any());
+        // ⚠️ The null key never reaches ConceptHealth, and the unstamped concept is not smuggled
+        // onto the stamped pack either.
+        verify(conceptHealthService, never()).recordCorrectAnswers(eq(userId), isNull(), any(), any());
+        verify(conceptHealthService, never()).recordIncorrectAnswers(eq(userId), isNull(), any(), any());
     }
 
     private QuizItem stampedItem(String question, String keyConcept, UUID sourceStudyPackId) {

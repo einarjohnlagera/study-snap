@@ -51,9 +51,20 @@ so this release is scoped to work that touches none of the surfaces they measure
 
 - **⚠️ NO MIGRATION.** `V133` shipped and is deployed; every item here is code or test. **If an item
   appears to need a migration, the scope is wrong** — bring it back rather than adding `V134`.
-- **⚠️ NO BEHAVIOUR CHANGE to what `v0.113.0` shipped.** The anchor semantics, the `SET NULL`
-  cascade, note credit and the retention suppression are all settled; this release changes where a
-  rule is enforced and what the tests cover, never what the product does.
+- **⚠️ NO BEHAVIOUR CHANGE to what `v0.113.0` shipped, WITH TWO STATED EXCEPTIONS — amended at
+  signoff rather than left contradicting the Shipped list below.** The anchor semantics, the
+  `SET NULL` cascade, note credit and the retention suppression are all settled, and items 1, 4 and 5
+  change only where a rule is enforced and what the tests cover. **Items 2 and 3 do change what the
+  product does, and both are recoveries from a dead end rather than new capability:** item 3 turns a
+  hard throw on an unresolvable source into a skip-and-log, so a completion that previously 500'd and
+  rolled back an already-`COMPLETED` session now succeeds with the resolvable evidence written; item 2
+  makes the session-addressed read of a legacy plan-scoped session whose collection was deleted fall
+  back to its pack anchor instead of 404ing. **⚠️ Neither widens what a learner may do — each restores
+  a path `v0.113.0` closed by accident**, which is the only kind of behaviour change a patch of this
+  shape may take. **Item 1 narrows what the ENTITY accepts** (a partial pack/note pair beside a
+  collection anchor was accepted by the deleted service-local copy) but changes nothing observable:
+  the entity validator already rejected that shape on `@PrePersist`, so no row that previously
+  persisted can now fail.
 - **⚠️ Do NOT touch `frontend/app/onboarding`** — the freeze lifts 2026-09-11 and twelve dated reads
   fall between 2026-09-10 and 2026-09-17.
 - **⚠️ Do NOT change `ADAPTIVE_PRACTICE_STARTED`'s `entry`/`sourceScope` values or firing
@@ -84,7 +95,30 @@ not by diff.
 
 ### Shipped
 
-_(nothing yet)_
+- **One anchor rule, not three.** `QuickReviewSessionEntity.validateAnchor` is now the single
+  implementation and the service's weaker copy is gone. **It was not a no-op:** the removed copy
+  tested only `hasPackAndNote == hasCollection`, so a *partial* pack/note shape alongside a collection
+  anchor evaluated `false == true` and **passed**, while the entity rejects it. The rule is invoked
+  eagerly at build time as well as by `@PrePersist` — deliberate, because a mocked repository never
+  fires the callback and the service suite would otherwise validate nothing.
+- **A legacy plan-scoped session whose collection was deleted resumes again.** The
+  session-addressed read falls through to the row's still-valid pack anchor instead of 404ing, so it
+  agrees with the note-addressed route about the same row. A post-migration row has no pack anchor
+  and still 404s.
+- **An unattributable concept can no longer brick a plan.** The completion path skips the entry and
+  logs it loudly rather than throwing. **The guarantee is unchanged — a null key still never reaches
+  `ConceptHealth`** — but the failure no longer rolls back a session that already reached `COMPLETED`,
+  which left it `IN_PROGRESS`, failed identically on retry, sat outside the recovery sweeper's
+  `LONG_EXAM`/`CHALLENGE` scope, and kept occupying the collection unique index so no new plan-scoped
+  session could start.
+- **The nine H2 fixtures carry the anchor `CHECK`**, so a test can no longer persist a shape the real
+  database rejects. **H2's capability was probed, not assumed: it supports `CHECK` but NOT partial
+  unique indexes**, so `V133`'s three active-session indexes remain expressible only against real
+  PostgreSQL, and that is now stated in each fixture rather than silently omitted.
+- **The real-row harness runs PostgreSQL 18, matching production**, instead of pinning 16. All 51
+  guards — including the migration, the three partial indexes and the anchor `CHECK` — pass on the
+  version that actually serves them, so the escalation trigger did not fire.
+
 
 ## v0.113.0 - Session Anchoring
 
