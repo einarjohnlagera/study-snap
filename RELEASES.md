@@ -1,5 +1,213 @@
 # RELEASES.md - NoteLib
 
+## v0.114.0 - Connection Evidence
+
+**Status: Released** (kicked off and signed off 2026-09-04, base branch `releases/v0.114.0`, cut from
+`main` after `v0.113.1` merged and tagged)
+
+Theme: settle, with a direct reading rather than an argument from defaults, whether a database
+connection is released when its transaction commits — the one fact that decides whether `v0.112.0`
+Phase 3 would fix the outage or merely look like it did.
+
+### Planned Scope
+
+**⚠️ THIS RELEASE EXISTS BECAUSE THE KICKOFF SCAN FOUND A CHECKPOINT THAT WOULD HAVE COME DUE
+UNANSWERABLE.** `[CHECKPOINT — due 2026-10-04]` is named in `v0.112.0`'s own anti-drift as **"THE
+DECIDING INPUT FOR PHASE 3, AND THE REASON PHASE 3 IS DEFERRED RATHER THAN BUILT"**, and it is 30 days
+out. **Phase 1 shipped in full** — verified at this kickoff by reading `application.yaml`:
+`leak-detection-threshold: 60000` (`:22`), `maximum-pool-size: 20` (`:30`), `connection-timeout: 5000`
+(`:37`), each with its reasoning in a comment. **Phase 2 did NOT.** Its PRIMARY observation — logging
+the effective `hibernate.connection.handling_mode` — returns **ZERO matches across
+`backend/src/main/java` and `backend/src/main/resources`**, and `spring.jpa.open-in-view` is still
+unset (Spring Boot default `true`). **⚠️ The comment at `application.yaml:21` literally says leak
+detection is "the instrument Phase 2 reads to settle the open-in-view question" — an instruction
+recorded and never executed.** So the checkpoint has a date, a kill criterion and a row, and **no
+working metric**, which is the *decorative checkpoint* failure the signoff gate names outright.
+
+1. **Log the effective `hibernate.connection.handling_mode` from the `EntityManagerFactory`
+   properties at startup.** **⚠️ THIS IS PHASE 2's PRIMARY OBSERVATION AND IT IS SPECIFIED THAT WAY
+   FOR A REASON `v0.112.0` ALREADY WROTE DOWN: "read the leak logs" comes back AMBIGUOUS.** Leak
+   detection reports that a connection was held past 60 s **and by whom**; it does **not** report
+   whether the connection stayed bound **after the transaction closed**, which is the actual OSIV
+   question. This is a direct read of the setting that decides it.
+2. **Sample Hikari's `active` count against a request whose transaction commits early and whose
+   response is slow to serialize.** **⚠️ CONFIRMS ONLY — item 1 is primary.** **⚠️ Do NOT substitute
+   an argument from Spring Boot defaults for either**; that substitution is explicitly forbidden by
+   `v0.112.0`'s anti-drift.
+3. **Run the seven read-only falsification queries** — §5's five plus the two the cold re-read found
+   missing — and record whether the cause is CONFIRMED or still a hypothesis.
+4. **Read Render request-rate data for 05:55–05:57 UTC on 2026-09-04.** **⚠️ THIS IS THE ITEM MOST
+   LIKELY TO CHANGE PHASE 3's TARGET, AND IT IS NOT OPTIONAL:** `v0.112.0` recorded that **all five
+   §5 queries read tables that record WRITES, so none of them can detect an anonymous READ burst** —
+   *"zero rows refutes it"* is FALSE there; they would merely fail to see it. The only path the outage
+   log names as starved is `NoteCollectionService.listPublic:206`, which is `permitAll`, unpaginated
+   and read-only, and this repo has a documented precedent of public-endpoint fetches saturating the
+   backend. **⚠️ Run this BEFORE Phase 3 is shaped, not after.**
+
+### ⚠️ PREMISE CORRECTION, MADE DURING IMPLEMENTATION (2026-09-04) — TWO OF THE FOUR ITEMS WERE ALREADY DELIVERED
+
+**⚠️ READ THIS BEFORE ACTING ON THE PLANNED SCOPE ABOVE.** The kickoff concluded *"Phase 2 did NOT
+ship"* from a grep returning **zero matches across `backend/src/main/java` and
+`backend/src/main/resources`**. **The grep is correct and the conclusion drawn from it is false: Phase 2's
+measurement shipped in `v0.112.0`, under `src/test/java`** (commit `3ff8ec35`, *"test: settle the OSIV
+question"*). **The evidence was never in `src/main`, so a grep scoped to `src/main` could not have found
+it.** The scope is amended here rather than swapped silently, which is the same correction this repo made
+mid-`v0.113.0` when the cascade justification turned out false.
+
+- **Item 1 — PARTLY DELIVERED.** `ConnectionHandlingModeContractTest` already reads
+  `entityManagerFactory.getProperties().get("hibernate.connection.handling_mode")` — **the effective value,
+  from the `EntityManagerFactory`, exactly as this release's pre-declared guard demands** — and pins it at
+  **`DELAYED_ACQUISITION_AND_HOLD`**. **⚠️ WHAT REMAINS IS THE PRODUCTION HALF, AND IT IS NOT CEREMONIAL:**
+  that test runs against the **H2 test profile**, which `src/test/resources/application.yaml` shadows
+  `src/main/resources` with entirely, so it proves the mode **in a test context**. A
+  `spring.jpa.properties.hibernate.connection.handling_mode` key in `application-prod.yaml` — or an
+  environment variable — would win in production while the whole suite stayed green, because
+  `DataSourcePoolContractTest`'s overlay guard covered `spring.datasource.` **only**.
+- **Item 2 — DELIVERED.** `ConnectionHandlingModeContractTest.connectionStaysCheckedOutAfterTheTransactionCommits`
+  measures Hikari's checked-out count directly across a commit with the `EntityManager` still bound:
+  **delta 1 after commit, back to baseline on close.** `ConnectionHandlingModeReleaseOverrideTest` and
+  `OpenInViewMeasurementBoundaryTest` bound the alternatives.
+- **Item 3 — GENUINELY UNRUN, and it is the item that produced this release's finding.**
+- **Item 4 — DELIVERED** as §11 of the outage finding (commit `a58096df`), which read Render metrics,
+  logs, deploy history and `SHOW max_connections`.
+
+**⚠️ THE PRE-DECLARED ESCALATION TRIGGER DID NOT FIRE.** It reads *"escalate if item 1's reading
+CONTRADICTS `v0.112.0`'s premise — the connection is NOT held past commit."* The reading **confirms**
+HOLD. Verification stays at a single `advisor()` call.
+
+### Anti-drift
+
+- **⚠️ DO NOT SET `open-in-view: false` IN THIS RELEASE.** It has a **real blast radius**
+  (`LazyInitializationException` wherever a lazy association is touched during serialization) and
+  `v0.112.0` ruled it **wants a STAGING run, never a direct production edit**. This release
+  **measures**; the decision is Phase 3's and belongs to the owner.
+- **⚠️ DO NOT START PHASE 3.** It is gated on `[CHECKPOINT — due 2026-10-04]` **and** on this
+  release's evidence, and it restructures six services and twelve quota sites. **⚠️ Do NOT take it
+  opportunistically because the instrumentation makes the problem legible.**
+- **⚠️ NO quota, entitlement, limit or meter change**, and **⚠️ do NOT change what
+  `BOARD_EXAM_STARTED`, `ADAPTIVE_PRACTICE_STARTED` or `QUIZ_SHARE_LINK_CREATED` record** — several
+  dated checkpoints read them.
+- **⚠️ `frontend/app/onboarding` STAYS FROZEN** (lifts 2026-09-11) and **twelve dated reads fall
+  between 2026-09-10 and 2026-09-17** — this release must touch none of the surfaces they measure. It
+  is backend instrumentation and production reads, so it does not approach them.
+- **⚠️ NO MIGRATION.** If an item appears to need one, the scope is wrong.
+- **⚠️ PgBouncer IS NOT THE FIX and must not be proposed as one** — it solves *too many clients*
+  while this was *ten connections held too long*, and transaction-mode pooling breaks session
+  variables, temp tables, `LISTEN`/`NOTIFY` and session-level advisory locks.
+- **⚠️ PRODUCTION DATABASE IS READ-ONLY.** Items 3 and 4 are `SELECT`s and dashboard/metric reads.
+  **Any write, env-var change or deploy is the OWNER's** — hand over a `docs/claude-plans/*.sql` file
+  and stop.
+
+### Verification
+
+**A single `advisor()` call on the diff.** No permission substrate, no cross-user read, no money or
+quota semantics, no migration; items 1 and 2 are instrumentation and items 3 and 4 are read-only.
+**⚠️ ESCALATE TO ONE SCOPED COLD AGENT IF** item 1's reading turns out to contradict `v0.112.0`'s
+premise — that is, if the connection is *not* held past commit — because Phase 3's entire shape then
+changes and the release stops being observation.
+
+**⚠️ PRE-DECLARED GUARD, aimed at what this release could silently get wrong: the logged value must be
+the EFFECTIVE one read back from the `EntityManagerFactory`, not the configured or defaulted one.** A
+test asserting the constant we passed in **passes under both the defect and the fix and proves
+nothing** — it is the same shape as `v0.105.0`'s schema test with hardcoded booleans instead of the
+derivation.
+
+### Shipped
+
+- **The effective connection lifetime is reported by the running production instance, not only by a test
+  against H2 (item 1's production half).** `ConnectionLifetimeStartupLogger` emits one INFO line on
+  `ApplicationReadyEvent` carrying both settings that together decide how long a JDBC connection is held:
+  the **effective** `hibernate.connection.handling_mode` read back from `EntityManagerFactory.getProperties()`,
+  and the **effective** open-in-view state read from whether `OpenEntityManagerInViewInterceptor` is
+  registered as a bean. Observed in every Spring context in the suite:
+  `connection lifetime: hibernate.connection.handling_mode=DELAYED_ACQUISITION_AND_HOLD (effective, read
+  from EntityManagerFactory), open-in-view=ON (OpenEntityManagerInViewInterceptor registered) — a
+  connection is held until the HTTP request ends, NOT until the transaction commits`.
+  **⚠️ EVERY CLAUSE IS DERIVED, INCLUDING THE CONSEQUENCE SENTENCE.** Printing
+  `open-in-view=true (Spring Boot default)` would be the argument-from-defaults `v0.112.0`'s anti-drift
+  forbids substituting for either observation; bean presence is a read of the request lifecycle itself.
+- **The pre-declared guard, mutation-verified with the killing test named in each case.** The release
+  pre-declared that *"a test asserting the constant we passed in passes under both the defect and the fix
+  and proves nothing."* `ConnectionLifetimeStartupLoggerTest` therefore supplies **sentinel values that are
+  deliberately not real Hibernate modes**, so only a logger that actually reads the factory can emit them.
+  Four mutants, four kills: hardcoding the mode →
+  `theHandlingModeIsReadFromTheEntityManagerFactoryRatherThanDeclaredInCode`; hardcoding the consequence →
+  `theConsequenceFollowsTheModeThatWasActuallyRead`; hardcoding open-in-view →
+  `openInViewIsReadFromInterceptorRegistrationRatherThanFromADefaultedProperty`; declaring
+  `spring.jpa.open-in-view` in the prod overlay → `theProdProfileOverlayDoesNotSilentlyShadowThePinnedPoolSettings`.
+  **⚠️ THE FIRST MUTANT LEFT `ConnectionLifetimeStartupLoggerWiringTest` GREEN**, which is precisely why the
+  two tests are split: the wiring test proves the component is registered, and only the sentinel test proves
+  it derives rather than declares.
+- **`DataSourcePoolContractTest`'s overlay guard widened from `spring.datasource.` to `spring.jpa.` as
+  well.** How long a connection is held is decided one namespace over from how many there are, and the
+  overlay could have moved it in production with nothing in the build to disagree.
+- **§5's falsification queries finally run (item 3), and Q2 reopens the hypothesis §11 refuted.** Full
+  results, method and verdict: **§12 of the outage finding**. **⚠️ THE WRITE SIDE IS EMPTY ON A
+  DELIBERATELY WIDENED WINDOW** — Q1/Q3/Q4/Q5 all zero, **and Q7 returns zero on all seven baseline days,
+  so Q1's zero is the NORMAL state for that hour and says nothing on its own.** Widening it does: **zero
+  sessions 05:00–05:56 and zero notes enqueued 04:00–05:56**, against a root-cause class that needs ~7
+  concurrent generations. **⚠️ Q2 IS THE ONE THAT MATTERS, §11 NEVER CONSULTED IT, AND IT ONLY YIELDS
+  ITS FINDING AT RAW-TIMESTAMP RESOLUTION — the minute bucket actively misleads.** A first pass read
+  *"12 events at 05:54, 12× the run-up rate"* as broad anonymous traffic; **the raw rows falsify that.** It
+  is **ONE note hit sixteen times in seventy-eight seconds** (twelve of them inside eight seconds, at
+  0.3–1.7 s intervals), all anonymous, all `pathType: seo` — on a page otherwise viewed **1–2 times an
+  hour across eleven days**, a pattern that occurs **once in that whole span** and does so during the
+  outage. **It begins 05:54:28.436, ~15 s BEFORE the saturation signature** (dated ~05:54:43 from the
+  23,672 ms health check at 05:55:07). **§11 refuted the read burst from `http_request_count` alone — a
+  metric §11 ITSELF recorded as possibly binning by COMPLETION rather than arrival, on a service whose
+  request logs are not retained.** That refutation is **withdrawn.** **⚠️ THE HYPOTHESIS IS NOT THEREBY
+  CONFIRMED AND ITS DIRECTION IS NOT SETTLED:** a stalled client reloading would produce a similar shape,
+  and the trailing 3 s/8 s/8 s/18 s intervals read as backoff. Cutting the other way, the event fires
+  **client-side after render**, so each row is a load that completed. Argued both ways in §12 rather than
+  resolved.
+- **The verdict is the one the `.sql` file pre-declared, not a rounded-up one.** *"Anything in between →
+  still a hypothesis. Say so; do not round up."* **§3's root cause — connections held across slow external
+  calls, the hypothesis Phase 3 is built to address — is NOT CONFIRMED and is now positively
+  unsupported.** §11's connection-leak alternative is untouched either way. **⚠️ Recorded because
+  `[CHECKPOINT — due 2026-10-04]` must not be answered by argument, and Phase 3's sizing rests on it.**
+- **The leak-detection read has a live instrument and no window yet.** Phase 1 reached production at
+  **2026-09-04 10:33:49 UTC** (v0.112.0), current deploy v0.113.1 at **15:35:08 UTC**. A log query for
+  `Apparent connection leak` over **10:33 → 15:50 UTC returns ZERO**. **⚠️ THAT CLEARS NOTHING** — 5.3
+  hours of a quiet afternoon is what *both* surviving hypotheses predict, and the incident itself was
+  preceded by five minutes of silence. `[CHECKPOINT — due 2026-10-04]` is updated with the deploy
+  timestamp rather than a new date being minted.
+
+**Known limitations**
+
+- **The cause of the 2026-09-04 outage is still not established, and this release deliberately does not
+  establish it.** It removes support from (a) and reopens the read-burst hypothesis; (b), a connection
+  leak, remains untested until the leak-detection window closes. **⚠️ Finding the leak is Phase 3's
+  territory or a new release — the anti-drift forbids taking it opportunistically because the
+  instrumentation has made the problem legible.**
+- **Item 2 is delivered as a test measurement, never as a production sample.** Nothing samples Hikari's
+  `active` count against a live commit-early/serialize-slow request in production. The startup line reports
+  the *settings* that decide the behaviour; the behaviour itself is measured only in the suite.
+  **⚠️ AND THE PAIRING ITSELF WAS NEVER MEASURED — IT IS DERIVED FROM TWO SEPARATELY-ESTABLISHED FACTS.**
+  `OpenInViewMeasurementBoundaryTest` records that the sibling tests bind an `EntityManager` by hand and so
+  **simulate the OSIV-enabled case by construction, making them blind to the flag** — the delta-1 result is
+  therefore evidence about the *handling mode* alone. The startup line reports both values because both are
+  needed to state the consequence; it does not report a measured pairing, and must not be cited as one.
+- **No frontend test run, because no frontend file was touched.** The diff is one backend component, three
+  test files, one yaml comment and four documents.
+
+### Scope completeness, item by item
+
+**⚠️ RECORDED BECAUSE TWO OF THE FOUR WERE ALREADY DONE AND THE RELEASE ALMOST REBUILT THEM.** The gate
+asks for shipped-with-evidence, not-shipped-with-reason, or changed-with-decision. Every item has one.
+
+| Planned item | Verdict |
+|---|---|
+| **1. Log the effective `handling_mode` at startup** | **SHIPPED — production half only.** `ConnectionLifetimeStartupLogger` + two guard tests. **⚠️ The test-side half was ALREADY DELIVERED in `v0.112.0`** (`ConnectionHandlingModeContractTest`), which the kickoff's `src/main`-scoped grep could not see. |
+| **2. Sample Hikari's `active` count across an early commit** | **DELIVERED IN `v0.112.0`, NOT HERE**, by `ConnectionHandlingModeContractTest.connectionStaysCheckedOutAfterTheTransactionCommits` (delta 1 after commit, baseline after close). **⚠️ The PRODUCTION sample was NOT built and is a stated Known limitation** — the startup line reports the settings, never a live sample. |
+| **3. Run the seven falsification queries** | **SHIPPED.** All seven run read-only against production; results, method and verdict in §12 of the outage finding. **This is the item that produced the release's finding.** |
+| **4. Read Render request-rate data for 05:55–05:57 UTC** | **DELIVERED IN `v0.112.0`** as §11 (commit `a58096df`). **⚠️ This release read Render again for a DIFFERENT purpose** — deploy history, to date the Phase 1 rollout, and the leak-detection log window. |
+
+**⚠️ NO FEATURE DOC WAS TOUCHED OR NEEDED TOUCHING, AND THAT WAS CHECKED RATHER THAN ASSUMED.** A grep for
+`open-in-view`, `HikariCP`, `connection pool`, `handling_mode` and `pool exhaustion` across
+`docs/features/`, `docs/architecture/` and `SPEC.md` returns **zero matches** — the release changes no
+user-visible behaviour and no documented contract.
+
+
 ## v0.113.1 - Anchoring Hardening
 
 **Status: Released** (kicked off and signed off 2026-09-04, base branch `releases/v0.113.1`, cut from `main`

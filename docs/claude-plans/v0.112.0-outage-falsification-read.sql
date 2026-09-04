@@ -1,3 +1,15 @@
+-- ⚠️⚠️ RUN 2026-09-04 (v0.114.0). RESULTS AND VERDICT: see §12 of the finding named below.
+-- ⚠️ DO NOT RE-RUN THIS AS IF IT WERE STILL OPEN, AND DO NOT TRUST §11's "Refuted" LIST WITHOUT §12.
+-- Q1, Q3, Q4, Q5 and Q7 all returned ZERO — and Q7's zero means Q1's zero is the NORMAL state for that
+-- clock hour, so the window was widened (05:00-05:56 sessions, 04:00-05:56 enqueued notes) and stayed
+-- zero. **Q2 is the one that matters**, and ONLY once the RAW TIMESTAMPS are pulled — the minute bucket
+-- misleads. It is not 12 visitors: it is ONE note hit SIXTEEN times in 78 seconds (twelve of them in
+-- eight), on a page otherwise viewed 1-2 times an HOUR across eleven days, starting ~15 s BEFORE the
+-- saturation signature. That REOPENS the read-burst hypothesis §11 refuted from a metric §11 itself
+-- recorded as unreliable here. ⚠️ DIRECTION IS NOT SETTLED — symptom-vs-cause is argued both ways in §12.
+-- VERDICT: "anything in between" — still a hypothesis, NOT rounded up. §3's cause is now positively
+-- unsupported, which matters because Phase 3 is built to address it.
+--
 -- v0.112.0 — Connection Pool Integrity: §5 falsification read for the 2026-09-04 outage
 -- READ-ONLY. Run against PRODUCTION. Paste all five result blocks back verbatim.
 -- Source: docs/claude-findings/2026-09-04-prod-outage-hikari-pool-exhaustion.md §5
@@ -25,6 +37,13 @@
 -- Q1-Q5 all read GENERATION, SESSION, POOL and DRAFT tables — every one of them is a record of a
 -- WRITE. **None of them can detect an anonymous READ burst**, because reads leave no row anywhere.
 -- So "zero rows across Q1, Q2 and Q4" does NOT refute a read-burst cause. IT FAILS TO SEE IT.
+-- ⚠️⚠️ CORRECTED 2026-09-04 (v0.114.0), AND THE CORRECTION IS WHY THIS READ WAS WORTH RUNNING: THE
+-- SENTENCE ABOVE IS WRONG ABOUT Q2. `analytics_events` is NOT a write-record of a learner action — it
+-- records PAGE VIEWS, including anonymous ones, and it DID see the read activity. Q2 is therefore the
+-- LOAD-BEARING query in this file, not a corroborating one. A later session reading only the banner
+-- above would discount §12's finding, which is the opposite of what this banner was written to prevent.
+-- ⚠️ THE LIMIT THAT DOES HOLD: an ISR revalidation, a crawler or any non-browser client runs no
+-- client-side JavaScript and leaves no row, so Q2 is a FLOOR on read activity and never a total.
 --
 -- ⚠️ THIS IS NOT A HYPOTHETICAL ALTERNATIVE, AND THREE FACTS MAKE IT LIVE:
 --   1. THE ONLY PATH THE LOG ACTUALLY NAMES AS STARVED IS SUCH AN ENDPOINT. The one stack trace in

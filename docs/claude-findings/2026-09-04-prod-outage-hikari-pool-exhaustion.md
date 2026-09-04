@@ -399,3 +399,127 @@ services' transaction boundaries and twelve quota sites addresses (a) and **does
 60 s — it separates (a) from (b) outright. **It is merged to `releases/v0.112.0` but NOT to `main`, so
 it is not in production. Deploying Phase 1 is now the highest-value next action in this release —
 higher than building Phase 3.**
+
+## 12. ⚠️ §5 RUN AT LAST (v0.114.0, 2026-09-04) — AND Q2 REOPENS THE HYPOTHESIS §11 REFUTED
+
+**⚠️ READ THIS BEFORE ACTING ON §11's "Refuted" LIST.** §11 called these queries *"largely moot"* and
+they were left unrun; §10 recorded them as owed. They were finally run — read-only, against production,
+via the Render MCP query tool — and **one of them contradicts §11 on the single most consequential
+point.** The queries were not moot. They were unread.
+
+### The write side: hypothesis (a) has ZERO supporting rows, on a deliberately widened window
+
+| Query | Result |
+|---|---|
+| **Q1** quiz sessions started 05:45–05:56 by mode/status | **0 rows** |
+| **Q3** `exam_question_pool` by `generation_status_at` 05:45–05:56 | **0 rows** |
+| **Q4** notes `GENERATING` enqueued 05:45–05:56 | **0** |
+| **Q5** `study_pack_drafts` created 05:45–05:56 | **0** |
+| **Q7** sessions in the same clock window, 7 preceding days | **0 rows — every day** |
+
+**⚠️ Q7's EMPTINESS IS A TRAP AND IS RECORDED AS ONE.** It was written as the baseline that gives Q1 a
+meaning. It returns nothing, so **Q1's zero is the normal state for that hour, not an anomaly** — on its
+own it therefore says *nothing* about the incident. That is why the window was widened rather than the
+result rounded up:
+
+- sessions created **05:00–05:56**: **0**
+- notes enqueued **04:00–05:56**: **0**
+- notes still `GENERATING` at read time: **0**
+
+**⚠️ SO THE WIDENED READ IS THE ONE THAT CARRIES WEIGHT, AND IT IS UNAMBIGUOUS: no generation-bearing
+work of any kind existed in or before the window.** §3's root-cause class requires roughly seven
+concurrent synchronous generations. There were **none, for at least an hour and fifty-six minutes**.
+
+### Q2 — ⚠️ THE READ BURST §11 REFUTED IS BACK, AND IT IS ONE CLIENT HAMMERING ONE PAGE
+
+Q2 was specified merely to corroborate Q1 from an independent table. It does something else: **it is the
+only instrument in this file that can see READS, and §11 never consulted it.**
+
+**⚠️ THE FIRST DRAFT OF THIS SECTION OVERSTATED IT AND IS CORRECTED HERE RATHER THAN QUIETLY REWRITTEN.**
+It reported *"12 events at 05:54, 12× the run-up rate"* from a minute-bucketed count and read that as broad
+anonymous traffic. **Pulling the raw timestamps falsifies that reading.** The minute bucket is not twelve
+visitors:
+
+| Time (UTC) | Event | Note |
+|---|---|---|
+| 05:47:13 → 05:50:26 | `PUBLIC_NOTE_VIEWED` ×7 | **seven different notes**, one every ~30 s — ordinary browsing |
+| **05:54:28.436 → 05:54:36.434** | `PUBLIC_NOTE_VIEWED` **×12** | **ALL the same note**, `landmark-works-of-modern-architecture` |
+| 05:54:44.477 | `EXPLORE_VIEWED` | `referrerSource: social` |
+| 05:55:09 → 05:55:46 | `PUBLIC_NOTE_VIEWED` ×5 | **the same note again** |
+
+**⚠️ SO IT IS SIXTEEN HITS ON ONE NOTE IN SEVENTY-EIGHT SECONDS, TWELVE OF THEM IN EIGHT SECONDS**, at
+intervals of 0.6 s, 0.7 s, 1.1 s, 1.7 s, 0.3 s. Every row is anonymous, and every one carries
+`pathType: seo`.
+
+**⚠️ AND IT IS ANOMALOUS RATHER THAN NORMAL FOR THAT PAGE — CHECKED, NOT ASSUMED.** Over 2026-08-25 →
+2026-09-04 that note was viewed **1 hit in the 08-31 13:00 hour, 1 in the 14:00 hour, and 2 in the 09-04
+09:00 hour.** The outage hour holds **16**. The pattern occurs **once in eleven days**, and it is during the
+outage.
+
+**⚠️ TEMPORAL PRECEDENCE RUNS THE RIGHT WAY, BY ABOUT FIFTEEN SECONDS.** Saturation is dated ~05:54:43,
+back-dated from the 23,672 ms health check logged at 05:55:07. **The burst begins at 05:54:28.436** — before
+the health check started queueing — and the trailing hits at 05:55:09 → 05:55:46 lengthen to 3 s, 8 s, 8 s,
+18 s, which reads as a client backing off against a struggling server.
+
+### ⚠️ WHAT THIS DOES AND DOES NOT ESTABLISH — the direction is NOT settled
+
+**⚠️ THE OBVIOUS ALTERNATIVE WAS RAISED BEFORE THIS WAS WRITTEN DOWN, AND IT IS NOT ELIMINATED: the burst
+could be a SYMPTOM.** A client whose page load stalled may simply have reloaded, in which case the repeats
+are downstream of the exhaustion rather than its cause. Two facts bear on it and they do not agree:
+
+- **For cause:** the burst starts ~15 s *before* the saturation signature, the page is otherwise hit 1–2
+  times an hour, and the endpoint class is exactly the one the log's only stack trace names as starved
+  (`NoteCollectionService.listPublic:206` — `permitAll`, `@Transactional(readOnly = true)`, unpaginated,
+  several repository calls per invocation). With `open-in-view=ON` and `DELAYED_ACQUISITION_AND_HOLD`
+  (§7), **each in-flight request holds a connection for its whole duration** — so sixteen overlapping slow
+  reads against a pool that was then **10** is sufficient on its own.
+- **Against cause:** the backoff-shaped tail is what a retry loop looks like.
+- **⚠️ Cutting slightly toward cause:** `PUBLIC_NOTE_VIEWED` is fired **client-side after the page
+  renders**, so each row is a load that *completed*. A server too starved to answer would produce no row.
+  **This is suggestive, not conclusive** — it constrains the retry story without killing it.
+
+**⚠️ AND ONE INSTRUMENT LIMIT REMAINS DECISIVE: an ISR revalidation, a crawler or any non-browser client
+runs no client-side JavaScript and leaves NO ROW HERE.** Q6's own note says so. `revalidate = 300` means
+public pages are re-fetched every ~5 minutes independently of any deploy, and **none of that traffic is
+visible in this table at all.** So the 16 rows are a *floor* on read activity in the window, never a total.
+
+**⚠️ THE `.sql` FILE'S COLD-RE-READ BANNER IS ALSO FALSIFIED BY THIS AND IS CORRECTED THERE.** It states
+that *"Q1-Q5 all read GENERATION, SESSION, POOL and DRAFT tables… none of them can detect an anonymous READ
+burst, because reads leave no row anywhere."* **That is wrong about Q2:** `analytics_events` recorded
+anonymous read activity, which is why Q2 turned out load-bearing rather than corroborating. A later session
+reading only that banner would discount this finding.
+
+### Verdict — pre-declared in the `.sql` file, and applied rather than rounded up
+
+The file pre-declared: *"a cluster of CHALLENGE rows → CONFIRMS … zero rows across Q1, Q2 AND Q4 →
+REFUTES … anything in between → still a hypothesis. Say so; do not round up."* This is **anything in
+between**, and it is stated as such:
+
+- **§3's root cause (a), connections held across slow external calls: NOT CONFIRMED, and now
+  positively unsupported.** Zero generation rows across a widened window is the strongest evidence yet
+  taken against it, and **it is the hypothesis Phase 3 is built to address.**
+- **(b), a connection leak** (§11's newly-raised alternative): **still live, still untested.** Nothing
+  here touches it either way.
+- **A read burst on unpaginated public endpoints: back on the table, and it is the ONLY hypothesis
+  here with any positive evidence** — an anomalous, once-in-eleven-days repeat-hit pattern on the exact
+  endpoint class the log names as starved, beginning ~15 s before saturation. **⚠️ Its DIRECTION is not
+  established** (symptom-versus-cause is argued both ways above), and it is a floor rather than a total
+  because ISR and crawler traffic leave no row.
+
+**⚠️ CONSEQUENCE FOR PHASE 3, STATED PLAINLY: it is aimed at the one hypothesis the data now argues
+against.** That is not a reason to redesign it here — this release measures — but it **is** the reason
+`[CHECKPOINT — due 2026-10-04]` must not be answered by argument.
+
+### The leak-detection read — the discriminating instrument, now live but with no window
+
+§11 named Phase 1's `leak-detection-threshold: 60000` as the instrument that separates (a) from (b), and
+recorded that it was **not in production**. It is now: v0.112.0 went live **2026-09-04 10:33:49 UTC**,
+and v0.113.1 (current) at **15:35:08 UTC**.
+
+A log query for leak reports over **10:33 → 15:50 UTC returns ZERO.**
+
+**⚠️ THAT SETTLES NOTHING AND MUST NOT BE READ AS CLEARING (b).** It is ~5.3 hours of a low-traffic
+afternoon, not the 05:55 traffic profile, and the incident itself was preceded by five minutes of total
+silence. **Zero leak reports over a quiet window is exactly what both hypotheses predict.** What it
+needs is a window that includes real load — which is a dated read, recorded as a Backlog Index
+checkpoint rather than concluded here.

@@ -17,8 +17,15 @@ spring:
     # Full diagnosis: docs/claude-findings/2026-09-04-prod-outage-hikari-pool-exhaustion.md
     hikari:
       # Logs a full stack trace for any connection held past 60 s, naming the offending path the next
-      # time this happens. Zero behaviour change. §8a rates this above the pool bump, and it is the
-      # instrument Phase 2 reads to settle the open-in-view question.
+      # time this happens. Zero behaviour change. §8a rates this above the pool bump.
+      # ⚠️ CORRECTED v0.114.0: this comment used to call leak detection "the instrument Phase 2 reads to
+      # settle the open-in-view question", and reading that literally is what led a later kickoff to
+      # conclude Phase 2 had never run. It had. Phase 2 settled the question with a DIRECT read of the
+      # effective handling mode (ConnectionHandlingModeContractTest, v0.112.0) plus the startup line from
+      # ConnectionLifetimeStartupLogger — because leak detection reports that a connection was held past
+      # 60 s and BY WHOM, and never whether it stayed bound AFTER the transaction closed, which was the
+      # actual question. What leak detection is for is the SEPARATE question [CHECKPOINT — due 2026-10-04]
+      # asks: whether the holds are across slow external calls, or an outright leak.
       leak-detection-threshold: ${DB_POOL_LEAK_DETECTION_MS:60000}
       # ⚠️ THE CEILING IS A DEPLOY-OVERLAP BOUND, NOT A PERFORMANCE KNOB. Render runs the NEW instance
       # alongside the OLD during a deploy, each with its own pool, so the safe bound is roughly
