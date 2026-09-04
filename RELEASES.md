@@ -45,13 +45,29 @@ and adds a separate index for the new scope.
 | The entity declares both anchors non-nullable | `QuickReviewSessionEntity:32-36` |
 | `sourceCollectionId` exists **only as a request field**, no column anywhere | `LongExamStartRequest`, `ChallengeQuizStartRequest`, `PlanSourcedExamVerifier` |
 | Three session types share `ADAPTIVE` | `QuickReviewAdaptivePracticeService:162,292,468,636,721,822`; `InterviewPracticeService:57,121,387,411` |
-| **`getStudyPackId()` has 52 session-scoped call sites across nine services** | `ChallengeQuizService`, `ConceptHealthService`, `DashboardService`, `ExamQuestionPoolService`, `InterviewPracticeService`, `LongExamService`, `ProgressReportService`, `QuickReviewAdaptivePracticeService`, `QuickReviewSessionService` |
+| ~~`getStudyPackId()` has 52 session-scoped call sites across nine services~~ **CORRECTED — see below** | The kickoff figure came from a heuristic grep and was both low and pointed at the wrong services |
+| **`getStudyPackId()` has 54 session-scoped call sites across SIX services** | `ChallengeQuizService` (20), `QuickReviewSessionService` (13), `LongExamService` (8), `QuickReviewAdaptivePracticeService` (5), `InterviewPracticeService` (5), `DashboardService` (3) — exact enumeration of all 63 occurrences by receiver type, 2026-09-04 |
+| Nine of those 63 are **not sessions** and are unaffected | `ConceptHealthEntity` (`ConceptHealthService:179,:225`, `ProgressReportService:200,:229`); `ExamQuestionPoolEntity` (`ExamQuestionPoolService:158`); `UserActivityEventEntity` (`DashboardService:533,:723,:900`, already null-checked); `SharedNoteListProjection:15` (interface declaration) |
+| **`note_id` goes nullable too — session-scoped `getNoteId()` is 4 sites across 2 services** | `InterviewPracticeService:436,:483` (not null-guarded); `QuizSessionHistoryService:129,:130` (guarded) — **a seventh service the `getStudyPackId()` sweep cannot reach** |
+| Plan scope **already has a source of truth in JSONB** | `QuickReviewAdaptivePracticeService:86` (`SESSION_STATE_SOURCE_COLLECTION_ID`), written `:886`, read `:606-610`, resume filter `:296` |
+| The plan-scoped **enter/resume path is entirely note-keyed** | `collection-detail-page-client.tsx:3110`; `app/study-packs/[id]/adaptive-practice/page.tsx:135,:245,:402`; only `/notes/{id}/adaptive-practice/in-progress` survives (`NoteController:536`) |
 
-**⚠️ THE PRIMARY HAZARD IS THE LAST ROW, NOT THE MIGRATION.** Making the column nullable turns 52
-call sites that cannot fail today into potential NPEs. **`ConceptHealthService` and
-`ExamQuestionPoolService` are the sharp ones**, because a null anchor there writes or reads
-**evidence** against the wrong key rather than throwing. The migration is the small half; the sweep
-is the large one — stated at kickoff rather than discovered mid-implementation.
+**⚠️ THE PRIMARY HAZARD IS THE CALL-SITE SWEEP, NOT THE MIGRATION** — but the kickoff's account of
+*which* sites was wrong, and one pressure-test agent is aimed at them, so the correction is
+load-bearing. The true figure is **54 across six services**. **`ConceptHealthService`,
+`ExamQuestionPoolService` and `ProgressReportService` have zero session-scoped call sites** and
+cannot exhibit the defect; they read their own entities' `study_pack_id`, which this release does not
+touch. **The hazard lives at the caller seam** — the sites that pass a session anchor *into* a
+`ConceptHealth` write — and the sharpest is `QuickReviewAdaptivePracticeService:797`, where the
+*fallback default* of `parseSourceStudyPackId(entry.getKey(), session.getStudyPackId())` becomes
+null, so an unstamped item attributes to nothing rather than throwing.
+
+**⚠️ The sweep is made tractable by a reachability partition, not by 54 uniform null checks.** Only
+**plan-scoped Adaptive Practice** ever goes NULL-anchored — Long Exam and Board Exam keep
+caller-supplied primaries, Quick Review and Interview Practice are note-scoped. Every other creation
+path continues to set both anchors non-null, and that is an **invariant pinned by a test** over the
+five construction sites (`ChallengeQuizService:2570`, `InterviewPracticeService:374`,
+`LongExamService:750`, `QuickReviewAdaptivePracticeService:871`, `QuickReviewSessionService:107`).
 
 ### Planned Scope
 
@@ -68,10 +84,60 @@ is the large one — stated at kickoff rather than discovered mid-implementation
   source_collection_id IS NOT NULL`. **No sentinel, no `COALESCE`, no generated column** — PostgreSQL
   already treats NULLs as distinct, so the predicates are belt-and-braces that make the intent
   readable and survive a future `NULLS NOT DISTINCT`. **Do not "simplify" them away.**
-- **4. The 52-call-site sweep across nine services**, so a plan-scoped session is handled everywhere
-  a pack-scoped one is.
+- **4. The 54-call-site sweep across six services** (plus `QuizSessionHistoryService` via
+  `getNoteId()`), so a plan-scoped session is handled everywhere a pack-scoped one is. **Partitioned
+  by reachability** — only plan-scoped Adaptive Practice ever goes NULL-anchored, so the rest is an
+  invariant test over the five construction sites rather than 54 defensive null checks.
 - **5. The three-way `ADAPTIVE` collision dissolves**, closing `v0.107.0`'s two named Known
   limitations and the mutable-`position` anchor hazard with them.
+- **6. The plan-scoped enter/resume path (added 2026-09-04, owner decision).** **Not optional
+  polish — without it the release charges a learner for a session they cannot enter.** The path is
+  entirely note-keyed today: `collection-detail-page-client.tsx:3110` routes on `if (session.noteId)`
+  and otherwise falls through to a toast; the practice page is note-addressed and resolves its
+  session via `getInProgressAdaptivePracticeSession(noteId)`; and the collection-addressed
+  in-progress endpoint **is gone**, removed by `v0.108.0` item 4. So a NULL-anchored session cannot be
+  navigated to and cannot be found, **while quota is charged before the response returns**. The fix
+  reuses what already exists — `QuickReviewAdaptiveQuizResponse` already carries `sessionId`,
+  `findByIdAndUserIdAndSessionMode` already resolves an ADAPTIVE session by id, and
+  `AdaptivePracticeController` already uses session-addressed routes for complete/forfeit — so what
+  is owed is a `GET /adaptive-practice/sessions/{sessionId}`, a frontend route rendering from a
+  `sessionId`, and `toAdaptiveResponse` tolerating a null anchor. **Do not restore the
+  collection-addressed endpoint `v0.108.0` deliberately removed, and do not let the client compute an
+  anchor.**
+- **7. One resolver for plan scope, because this release creates a dual source of truth.** Plan scope
+  is **already** recorded in `session_state` JSONB (`QuickReviewAdaptivePracticeService:86`, written
+  `:886`, read `:606-610`), and the resume filter at `:296` reads it. Since anti-drift forbids a
+  backfill, an in-flight plan-scoped session has the JSONB key and a NULL column — **so repointing
+  `:296` at the column makes the lookup miss, a second session inserts, and NULLs being distinct
+  means the new third index does not catch it: two active plan-scoped sessions, the first permanently
+  unreachable.** Required shape: **column first, JSONB fallback second, every reader routed through
+  one resolver, new rows writing both.** The JSONB key becomes legacy-fallback; removing it is a
+  later decision. **This Java-side fallback is not a violation of "no sentinel, no `COALESCE`" —
+  that rule governs the index predicates.**
+
+### ⚠️ The borrowed-anchor machinery must be retired with the migration
+
+**Found 2026-09-04 by reading the start path rather than the migration, and it is the most likely way
+this release ships green and delivers nothing.**
+
+`generateAdaptiveQuizForCollection` (`QuickReviewAdaptivePracticeService`, ~`:395-470`) is built end
+to end around finding an **unoccupied pack to borrow as an anchor**: it builds `occupantByPackId`
+from every pack carrying an active `ADAPTIVE` session (`:414-419`), filters those out of
+`focusEligiblePackIds` (`:420-422`), **returns an error response when nothing survives** (`:423-433`),
+picks the borrowed primary (`:459`), and re-checks it via `anchorCollision` (`:465-470`).
+
+**A collection-anchored session needs no free pack, so all five are obsolete — and if they survive,
+plan-scoped practice still refuses to start whenever the learner has note-scoped sessions on their
+weak packs, which is exactly the contention this release exists to end.** The migration, indexes,
+`CHECK` and sweep would land and change nothing observable.
+
+Collision for plan scope is now **the third index**. The `:405-414` comment must be rewritten — its
+premise is what this release falsifies.
+
+**Keep what is not part of the borrowed anchor:** source sampling and the `MAX_PLAN_SOURCE_PACKS`
+bound (a `v0.107.0` precondition for keeping generation inside the transaction), per-source focus
+stamping, and the `!isInterviewSession` filtering. **A pack occupied by a note-scoped session becomes
+a legitimate source — the intended behaviour change, not a regression.**
 
 ### The semantic consequence, stated rather than absorbed
 
@@ -112,9 +178,12 @@ the other — the `v0.107.0` limitation whose worse leg makes plan scope *look b
 **FULL THREE-AGENT COLD PRESSURE TEST IN ISOLATED `git worktree`s, declared not inherited** — a
 migration plus production-data semantics on the one table every quiz mode shares, which is the gate's
 named trigger twice over. **The isolation is not optional** (`v0.105.0` lost an agent's entire result
-set to shared-tree corruption), and **one agent must be pointed at the 52 call sites, not at the
+set to shared-tree corruption), and **one agent must be pointed at the 54 call sites, not at the
 migration** — in the last four releases the worst defect was outside the stated scope every time, and
-here the stated scope is the half that is easy to review.
+here the stated scope is the half that is easy to review. **⚠️ Brief that agent off the corrected
+service list above, not the kickoff's** — it named nine services including three with zero
+session-scoped call sites, and an agent aimed at `ConceptHealthService` or `ExamQuestionPoolService`
+is aimed at code this release does not touch.
 
 **⚠️ Pre-declared discriminating guard, aimed at what the change could silently destroy rather than at
 what it adds: two note-scoped sessions on the SAME pack must STILL COLLIDE after the columns become
@@ -122,13 +191,45 @@ nullable.** A fixture exercising only the new plan-scoped path passes under both
 fix and proves nothing. **It must be a real-row test in `NativeQueryPostgresIntegrationTest` — a
 mocked repository cannot test a unique index**; `v0.93.0` records a cold agent deleting a predicate
 and passing 1,760 tests for exactly this reason, and `PREPARE` validates syntax and arbiter
-resolution but never predicate correctness.
+resolution but never predicate correctness. **⚠️ The harness was checked rather than assumed and it
+supports this, but not for free:** `NativeQueryPostgresIntegrationTest` **is** a real-row harness
+(Testcontainers PostgreSQL 16, full Flyway, `jdbcTemplate` fixtures) and not merely a `PREPARE`
+sweep — **but `quick_review_sessions` appears in it zero times**, so a new fixture chain is owed
+(`users` → `notes` → `study_packs` → `quick_review_sessions`), following the existing
+`seedUser` / `seedPublicNote` / `seedArcGeneratedQuiz` pattern. **Do not bolt the assertion onto the
+`PREPARE` sweep**, which would pass under both the defect and the fix.
 
-**⚠️ A second guard is owed at the call-site end:** a plan-scoped session must reach `ConceptHealth`
-and `ExamQuestionPoolService` without a pack anchor and either attribute correctly or **fail loudly**
-— never write against a null key.
+**⚠️ A second guard is owed at the call-site end, and its subject is corrected by the enumeration
+above:** a plan-scoped session must reach the **`ConceptHealth` write seam** without a pack anchor
+and either attribute correctly or **fail loudly** — never write against a null key. **Aim it at
+`QuickReviewAdaptivePracticeService:793` and `:797`, the caller sites that pass the anchor in — not
+at `ConceptHealthService` or `ExamQuestionPoolService`, which have no session-scoped call sites and
+cannot exhibit the defect.**
 
-**Routing: CODEX** — a migration, an entity contract change and a 52-site sweep across nine services.
+**⚠️ A third guard is owed at the new enter/resume path (scope item 6):** a plan-scoped session
+started from a collection must be **enterable end to end with both anchors NULL**. A fixture that
+starts one and asserts a 200 on the start call passes under the dead end and proves nothing — the
+failure is at the navigate-and-resolve step.
+
+**⚠️ A fourth guard is owed at the JSONB seam (scope item 7):** a session carrying **only** the legacy
+`session_state.sourceCollectionId` with a NULL column must still resolve on resume. That fixture is
+the only thing standing between this release and two active plan-scoped sessions with the first
+unreachable.
+
+**⚠️ A fifth guard — the payoff guard, and the only one that proves the release did anything at
+all:** a learner holding an active **note-scoped** Adaptive session on **every** focus-eligible pack
+in the plan must **still** be able to start plan-scoped practice and receive a real session, not
+`ADAPTIVE_SESSION_ELSEWHERE_MESSAGE`. **Guards one to four all pass while the borrowed-anchor
+machinery is still in place**, and a fixture whose packs happen to be unoccupied proves nothing.
+
+**⚠️ Guard one has two legs.** `note_id` goes nullable too and
+`idx_..._one_active_generation_note` keys on it, so **two note-scoped sessions on the same NOTE must
+also still collide** — a fixture exercising only the pack index passes while the note predicate is
+wrong.
+
+**Routing: CODEX** — re-run at prompt time on the scope-item-6 discovery rather than inherited from
+kickoff, and it holds: a migration, an entity contract change, a 54-site sweep across six services,
+and now a backend endpoint plus a frontend route.
 
 ### Shipped
 
