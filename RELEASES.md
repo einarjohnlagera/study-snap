@@ -2,8 +2,8 @@
 
 ## v0.114.0 - Connection Evidence
 
-**Status: In Progress** (kicked off 2026-09-04, base branch `releases/v0.114.0`, cut from `main`
-after `v0.113.1` merged and tagged)
+**Status: Released** (kicked off and signed off 2026-09-04, base branch `releases/v0.114.0`, cut from
+`main` after `v0.113.1` merged and tagged)
 
 Theme: settle, with a direct reading rather than an argument from defaults, whether a database
 connection is released when its transaction commits — the one fact that decides whether `v0.112.0`
@@ -189,6 +189,23 @@ derivation.
   needed to state the consequence; it does not report a measured pairing, and must not be cited as one.
 - **No frontend test run, because no frontend file was touched.** The diff is one backend component, three
   test files, one yaml comment and four documents.
+
+### Scope completeness, item by item
+
+**⚠️ RECORDED BECAUSE TWO OF THE FOUR WERE ALREADY DONE AND THE RELEASE ALMOST REBUILT THEM.** The gate
+asks for shipped-with-evidence, not-shipped-with-reason, or changed-with-decision. Every item has one.
+
+| Planned item | Verdict |
+|---|---|
+| **1. Log the effective `handling_mode` at startup** | **SHIPPED — production half only.** `ConnectionLifetimeStartupLogger` + two guard tests. **⚠️ The test-side half was ALREADY DELIVERED in `v0.112.0`** (`ConnectionHandlingModeContractTest`), which the kickoff's `src/main`-scoped grep could not see. |
+| **2. Sample Hikari's `active` count across an early commit** | **DELIVERED IN `v0.112.0`, NOT HERE**, by `ConnectionHandlingModeContractTest.connectionStaysCheckedOutAfterTheTransactionCommits` (delta 1 after commit, baseline after close). **⚠️ The PRODUCTION sample was NOT built and is a stated Known limitation** — the startup line reports the settings, never a live sample. |
+| **3. Run the seven falsification queries** | **SHIPPED.** All seven run read-only against production; results, method and verdict in §12 of the outage finding. **This is the item that produced the release's finding.** |
+| **4. Read Render request-rate data for 05:55–05:57 UTC** | **DELIVERED IN `v0.112.0`** as §11 (commit `a58096df`). **⚠️ This release read Render again for a DIFFERENT purpose** — deploy history, to date the Phase 1 rollout, and the leak-detection log window. |
+
+**⚠️ NO FEATURE DOC WAS TOUCHED OR NEEDED TOUCHING, AND THAT WAS CHECKED RATHER THAN ASSUMED.** A grep for
+`open-in-view`, `HikariCP`, `connection pool`, `handling_mode` and `pool exhaustion` across
+`docs/features/`, `docs/architecture/` and `SPEC.md` returns **zero matches** — the release changes no
+user-visible behaviour and no documented contract.
 
 
 ## v0.113.1 - Anchoring Hardening
