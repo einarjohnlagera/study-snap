@@ -79,7 +79,47 @@ path — and the assertion is that the link is no longer active.
 
 ### Shipped
 
-_(nothing yet)_
+- **Regenerating a shared quiz turns its live share link off** instead of silently swapping the questions
+  underneath a recipient. `GeneratedQuizService.generate` now deactivates on the **update** branch only —
+  a first generation has no links to touch.
+- **⚠️ IT DEACTIVATES EVERY LIVE LINK, NOT JUST THE NEWEST, AND THAT IS LOAD-BEARING.** Verified rather than
+  assumed: only `token` is UNIQUE on `quiz_share_links`, `createShareLink` mints a **new row** whenever the
+  latest is inactive, and `findActiveLink` accepts **ANY** active token. So one quiz can own several live
+  links, and turning off only the most recent would leave the defect reachable through an older one.
+- **⚠️ DEACTIVATED, NEVER DELETED.** Removing the row would force the owner to create a new link and spend
+  share-link quota because of our fix. Left inactive, they can turn it back on knowingly — at which point it
+  serves the new questions as their informed choice.
+- **The owner is told before and after.** The confirmation warns only when a live link actually exists, and
+  the toast afterwards says the link was turned off and can be turned back on.
+- **⚠️ A SECOND DEFECT WAS FOUND WHILE WIRING THAT UP: the share panel would have gone STALE.** Its effect
+  keys on `generatedQuiz.id`, and **regeneration reuses the same row**, so the id never changes and the
+  effect never re-runs — the owner would have kept seeing *"Sharing on"* for a link the server had just
+  turned off. The load is now a callable that runs again after regenerating, and it **re-reads rather than
+  assuming** the outcome.
+- **⚠️ THE SHARED TEST FIXTURE WAS UNFAITHFUL ON EXACTLY THE POINT AT ISSUE.** The default
+  `generateGeneratedQuiz` mock returns a **different** quiz id (`quiz-2`), which would let an id-keyed
+  effect re-fetch on its own and make the re-read assertion pass without the fix. The new test overrides it
+  to keep the id, matching production.
+- **Guards, each mutation-verified:** removing the deactivation reds two named tests; deactivating only the
+  first live link reds the multi-link assertion; deactivating on a first generation reds the no-op test;
+  dropping the post-regeneration re-read reds the stale-panel test; making the warning unconditional reds
+  the no-live-link test.
+- **⚠️ THE DISCRIMINATING FIXTURE REGENERATES THE SAME NUMBER OF QUESTIONS**, as pre-declared at kickoff. A
+  count-changing fixture is caught by `getSharedQuizResults`' size check with or without this fix and would
+  prove nothing; the silent path — same count, different questions — is the one every non-`TEACHER` hits.
+- Backend **2063** tests green (counted from `target/surefire-reports/*.xml`, real-PostgreSQL harness
+  included); frontend **2136** across 198 suites; `tsc --noEmit` clean; `npm run lint` at 0 errors.
+
+### Known limitations
+
+- **⚠️ Turning the link back on serves the NEW questions under the SAME token.** That is deliberate — it is
+  the owner's informed choice, made visibly — but a recipient who kept the old URL sees different questions
+  than they started with. **The permanent fix is snapshotting the single-note shared quiz at share time**, the
+  `combined_quizzes` model, which is a migration plus a table and is recorded as the larger alternative.
+- **A recipient part-way through when the owner regenerates loses their progress**, because the link goes
+  inactive and the recipient page holds answers in React state. That is strictly better than being graded
+  against questions they never saw, but it is a real interruption and it is not communicated to them beyond
+  the existing *"no longer active"* screen.
 
 ## v0.110.1 - Quiz Text Integrity
 

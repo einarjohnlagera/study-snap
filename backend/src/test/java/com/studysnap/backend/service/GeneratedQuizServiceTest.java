@@ -10,6 +10,7 @@ import com.studysnap.backend.entity.GeneratedQuizEntity;
 import com.studysnap.backend.entity.LearnerLevel;
 import com.studysnap.backend.exception.MultiProgramDomainContextRequiredException;
 import com.studysnap.backend.entity.NoteEntity;
+import com.studysnap.backend.entity.QuizShareLinkEntity;
 import com.studysnap.backend.entity.NoteStatus;
 import com.studysnap.backend.entity.NoteVisibility;
 import com.studysnap.backend.entity.PlanType;
@@ -24,6 +25,7 @@ import com.studysnap.backend.exception.QuestionCountNotAllowedForPlanException;
 import com.studysnap.backend.exception.QuestionCountNotSelectableException;
 import com.studysnap.backend.repository.GeneratedQuizRepository;
 import com.studysnap.backend.repository.NoteRepository;
+import com.studysnap.backend.repository.QuizShareLinkRepository;
 import com.studysnap.backend.repository.UserRepository;
 import com.studysnap.backend.security.AiRateLimitService;
 import com.studysnap.backend.service.model.StudyPackGenerationContext;
@@ -78,6 +80,8 @@ class GeneratedQuizServiceTest {
     private QuizDocxExportService quizDocxExportService;
     @Mock
     private ExportUsageProtectionService exportUsageProtectionService;
+    @Mock
+    private QuizShareLinkRepository quizShareLinkRepository;
 
     private GeneratedQuizService generatedQuizService;
 
@@ -95,7 +99,8 @@ class GeneratedQuizServiceTest {
                 generationContextResolver,
                 userRepository,
                 quizDocxExportService,
-                exportUsageProtectionService
+                exportUsageProtectionService,
+                quizShareLinkRepository
         );
     }
 
@@ -289,6 +294,124 @@ class GeneratedQuizServiceTest {
         GeneratedQuizResponse response = generatedQuizService.generate(noteId.toString(), userId, 10);
 
         assertThat(response.questions()).hasSize(10);
+    }
+
+    /**
+     * ⚠️ THE DISCRIMINATING FIXTURE, AND IT REGENERATES THE SAME NUMBER OF QUESTIONS ON PURPOSE.
+     *
+     * <p>A regeneration that CHANGES the count is caught downstream anyway — {@code getSharedQuizResults}'
+     * exact size check 400s the recipient with or without this fix, so such a fixture would pass either
+     * way. The silent path is a regeneration returning the SAME count, where the recipient is graded
+     * against questions they never saw and nothing errors. That is what this pins, and it is the case
+     * every non-TEACHER hits, since they always receive 10.
+     */
+    @Test
+    void generate_turnsOffALiveShareLinkWhenRegeneratingTheSameNumberOfQuestions() {
+        UUID userId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        UUID quizId = UUID.randomUUID();
+        NoteEntity note = buildNote(noteId, userId);
+        GeneratedQuizEntity existing = new GeneratedQuizEntity();
+        existing.setId(quizId);
+        existing.setOwnerUserId(userId);
+        existing.setNoteId(noteId);
+        existing.setQuestions(buildQuestions(10));
+        existing.setGeneratedAt(OffsetDateTime.now().minusDays(1));
+        existing.setUpdatedAt(OffsetDateTime.now().minusDays(1));
+
+        QuizShareLinkEntity activeLink = shareLink(quizId, userId, true);
+        QuizShareLinkEntity olderActiveLink = shareLink(quizId, userId, true);
+        QuizShareLinkEntity alreadyOff = shareLink(quizId, userId, false);
+
+        when(noteRepository.findByIdAndOwnerUserId(noteId, userId)).thenReturn(Optional.of(note));
+        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.PLUS);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(buildUser(userId, UserRole.USER, ProfileType.STUDENT)));
+        when(generatedQuizRepository.findByNoteIdAndOwnerUserId(noteId, userId)).thenReturn(Optional.of(existing));
+        when(userUsageService.getMonthlyUsage(eq(userId), any(OffsetDateTime.class))).thenReturn(
+                new UserUsageService.MonthlyUsage(OffsetDateTime.now().minusDays(1), OffsetDateTime.now().plusDays(29), 0, 0, 0, 0, 0, 0)
+        );
+        when(generationContextResolver.resolve(userId, note)).thenReturn(
+                new StudyPackGenerationContext(null, "Biology", "Biology", List.of("cells"))
+        );
+        // SAME count as before -- the silent path.
+        when(quizGenerationService.generateTeacherQuiz(any(), any(), any(), eq(10), any(StudyPackGenerationContext.class)))
+                .thenReturn(buildRegeneratedQuestions(10));
+        when(generatedQuizRepository.save(any(GeneratedQuizEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(noteRepository.save(any(NoteEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(quizShareLinkRepository.findByGeneratedQuizIdAndOwnerUserId(quizId, userId))
+                .thenReturn(List.of(activeLink, olderActiveLink, alreadyOff));
+
+        generatedQuizService.generate(noteId.toString(), userId, null);
+
+        // ⚠️ BOTH live links, not just the newest: createShareLink mints a new row over an inactive one and
+        // findActiveLink accepts ANY active token, so one quiz can have several live links.
+        assertThat(activeLink.getActive()).isFalse();
+        assertThat(olderActiveLink.getActive()).isFalse();
+
+        ArgumentCaptor<List<QuizShareLinkEntity>> captor = ArgumentCaptor.forClass(List.class);
+        verify(quizShareLinkRepository).saveAll(captor.capture());
+        assertThat(captor.getValue()).containsExactlyInAnyOrder(activeLink, olderActiveLink);
+    }
+
+    @Test
+    void generate_doesNotWriteShareLinksWhenThereIsNoLiveOne() {
+        UUID userId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        UUID quizId = UUID.randomUUID();
+        NoteEntity note = buildNote(noteId, userId);
+        GeneratedQuizEntity existing = new GeneratedQuizEntity();
+        existing.setId(quizId);
+        existing.setOwnerUserId(userId);
+        existing.setNoteId(noteId);
+        existing.setQuestions(buildQuestions(10));
+        existing.setGeneratedAt(OffsetDateTime.now().minusDays(1));
+        existing.setUpdatedAt(OffsetDateTime.now().minusDays(1));
+
+        when(noteRepository.findByIdAndOwnerUserId(noteId, userId)).thenReturn(Optional.of(note));
+        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.PLUS);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(buildUser(userId, UserRole.USER, ProfileType.STUDENT)));
+        when(generatedQuizRepository.findByNoteIdAndOwnerUserId(noteId, userId)).thenReturn(Optional.of(existing));
+        when(userUsageService.getMonthlyUsage(eq(userId), any(OffsetDateTime.class))).thenReturn(
+                new UserUsageService.MonthlyUsage(OffsetDateTime.now().minusDays(1), OffsetDateTime.now().plusDays(29), 0, 0, 0, 0, 0, 0)
+        );
+        when(generationContextResolver.resolve(userId, note)).thenReturn(
+                new StudyPackGenerationContext(null, "Biology", "Biology", List.of("cells"))
+        );
+        when(quizGenerationService.generateTeacherQuiz(any(), any(), any(), eq(10), any(StudyPackGenerationContext.class)))
+                .thenReturn(buildRegeneratedQuestions(10));
+        when(generatedQuizRepository.save(any(GeneratedQuizEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(noteRepository.save(any(NoteEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(quizShareLinkRepository.findByGeneratedQuizIdAndOwnerUserId(quizId, userId))
+                .thenReturn(List.of(shareLink(quizId, userId, false)));
+
+        generatedQuizService.generate(noteId.toString(), userId, null);
+
+        // An already-off link is left alone -- no pointless write, and no reactivation.
+        verify(quizShareLinkRepository, never()).saveAll(any());
+    }
+
+    /** Distinct from {@link #buildQuestions(int)}, because regeneration deduplicates against the old set. */
+    private List<QuizItem> buildRegeneratedQuestions(int questionCount) {
+        return java.util.stream.IntStream.range(0, questionCount)
+                .mapToObj(index -> new QuizItem(
+                        "Replacement question " + index + "?",
+                        List.of("A", "B", "C", "D"),
+                        0,
+                        "Cells",
+                        "Replacement explanation " + index
+                ))
+                .toList();
+    }
+
+    private QuizShareLinkEntity shareLink(UUID generatedQuizId, UUID ownerUserId, boolean active) {
+        QuizShareLinkEntity link = new QuizShareLinkEntity();
+        link.setId(UUID.randomUUID());
+        link.setGeneratedQuizId(generatedQuizId);
+        link.setOwnerUserId(ownerUserId);
+        link.setToken(UUID.randomUUID().toString().substring(0, 16));
+        link.setActive(active);
+        link.setCreatedAt(OffsetDateTime.now());
+        return link;
     }
 
     @Test
