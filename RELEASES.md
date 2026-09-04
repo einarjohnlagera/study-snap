@@ -81,7 +81,59 @@ a write defect. **⚠️ ESCALATE if item 1 turns out to need a migration or a r
 
 ### Shipped
 
-_(nothing yet)_
+- **Item 1 — a stored quiz choice survives being read.** `QuizValidationUtils.sanitizeChoiceTexts` strips a
+  leading choice label with `replaceFirst` and is **not idempotent**, and it was running on every
+  construction rather than only when text first arrives from the LLM. The sanitizing constructor now takes
+  an explicit `stripChoiceLabels` switch: **generation passes `true`, every read/copy/rebuild passes
+  `false`.**
+- **⚠️ IT WAS FOUR PATHS, NOT ONE — AND THE SCOPE LINE SAID "DESERIALIZATION".** Fixing only `@JsonCreator`
+  would have left three live, which is the "fix that changes nothing" shape this project keeps paying for.
+  Each was confirmed corrupting by probe before being touched:
+  - `@JsonCreator` — every JSONB read (`generated_quizzes`, `combined_quizzes`, `study_packs`, …)
+  - `QuizSessionStateUtils.extractQuiz` — **every session load, in every mode**; a different route entirely,
+    reading a Map rather than using Jackson
+  - `ShareService.copyQuizItem` — copying a note's Study Pack
+  - `QuizVersionShuffleUtils` — generating a second exam version
+- **⚠️ ONLY THE LABEL STRIP WAS ISOLATED, NOT THE WHOLE CONSTRUCTOR.** `resolveCorrectIndex` is **derived on
+  read**, not stored — MULTI_SELECT and legacy `answer`/`answerIndex` rows depend on it — so bypassing the
+  constructor wholesale would have silently broken the MULTI_SELECT grading `v0.110.0` had just fixed. A
+  mutant that takes that shortcut is killed by two named tests.
+- **⚠️ AN EXISTING TEST WAS EXPIRED, NOT WRONG, AND THE DISTINCTION CHANGED THE FIX.**
+  `extractQuiz_stripsLegacyChoiceLabelsAndKeepsLetterAnswerMapping` pinned that session reads STRIP labels.
+  **Dating it settled the question:** commit `684e4ae2` (2026-04-08) added the write-side sanitizer **and**
+  that read-side strip **in the same change** — the read half was a **one-time repair for sessions in flight
+  that day, implemented as a permanent read transform.** That is the origin of the compounding corruption.
+  Any session it protected is now a five-month-abandoned in-progress quiz. **⚠️ Its LETTER-ANSWER half is
+  NOT expired and was deliberately preserved** in the replacement test — a legacy row storing
+  `"answer": "A)"` with no `correctIndex` must still resolve to index 0.
+- **⚠️ THE POSITIONAL HEURISTIC WAS CONSIDERED AND REJECTED.** "Strip only when every choice carries its own
+  positional label" fails on `["A. thaliana", "B. subtilis"]` — two binomials in alphabetical order — which
+  is exactly the content this defect already damages. A heuristic that breaks on the motivating example is
+  worse than an honest either/or.
+- **Guards at BOTH ENDS, because the fix could be faked from either side.** A byte-identical round-trip
+  across three read cycles (fixture uses `"B. Smith"`, `"D.C. generator"`, `"A. thaliana"` — plain text
+  survives the defect *and* the fix and would prove nothing), **plus** a generation-side guard that a label
+  still comes off exactly once. Mutants: re-enabling the strip on read reds the round-trip test; disabling
+  the sanitizer entirely reds the generation test; and each of the four paths has its own killing test **at
+  the layer the defect lives at** — the shuffle guard was rewritten after a `QuizItem`-level test failed to
+  catch the utils class still rebuilding the wrong way.
+- Backend **2055** tests green (counted from `target/surefire-reports/*.xml`, real-PostgreSQL harness
+  included), `+6` from the guards above.
+
+### Known limitations
+
+- **⚠️ ALREADY-CORRUPTED ROWS ARE NOT REPAIRED, AND CANNOT BE.** The stripped token is gone and nothing
+  records it, so `"generator"` cannot be turned back into `"D.C. generator"`. Item 1 stops the bleeding; it
+  does not heal the wound. **No backfill was written, deliberately** — any repair would have to guess, and a
+  wrong guess is worse than visibly-truncated text. Affected rows are those whose choice text began with a
+  letter followed by `.` or `)`; the damage is proportional to how often each row was read.
+- **⚠️ A PRE-2026-04-08 SESSION ROW, IF ANY STILL EXISTS, NOW RENDERS ITS LABELS.** Session reads no longer
+  repair legacy unstripped choices, so such a row would display `"A. Encapsulation"` rather than
+  `"Encapsulation"`. **This is a stated trade, not an oversight:** a visible cosmetic artefact on a
+  five-month-stale in-progress quiz, against ongoing compounding corruption of every current session load.
+  **⚠️ It could not be verified from the repo — `git log` dates the code, not the data.** It is checkable
+  with a one-line production read: `session_state` choices matching `^[A-Da-d][.)]` on rows older than
+  2026-04-08.
 
 ## v0.110.0 - Supporter Combined Quiz
 

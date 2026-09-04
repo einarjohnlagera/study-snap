@@ -165,22 +165,8 @@ public final class QuizVersionShuffleUtils {
             Integer correctIndex,
             List<Integer> correctIndices
     ) {
-        return new QuizItem(
-                question.question(),
-                choices,
-                correctIndex,
-                question.concept(),
-                question.explanation(),
-                null,
-                question.questionFormat(),
-                question.questionType(),
-                question.workingSolution(),
-                correctIndices,
-                question.questionGroup(),
-                question.keyConcept(),
-                question.acceptableAnswers(),
-                question.acceptableAnswerGroups()
-        );
+        // ⚠️ Only the ORDER changes; the text is already stripped, so this must not re-sanitize.
+        return question.withShuffledChoices(choices, correctIndex, correctIndices);
     }
 
     private static Random randomFor(String quizIdSeed, String versionLetter, String scope) {

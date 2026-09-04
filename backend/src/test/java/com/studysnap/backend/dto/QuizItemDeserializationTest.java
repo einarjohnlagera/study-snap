@@ -385,6 +385,59 @@ class QuizItemDeserializationTest {
         assertThat(json).contains("question").contains("choices").contains("correctIndex");
     }
 
+    /**
+     * ⚠️ THE FIXTURE MUST ALREADY LOOK LABELLED, or this proves nothing. A choice like {@code "Smith"}
+     * round-trips cleanly under BOTH the defect and the fix; only text that still matches
+     * {@code ^\s*[A-Da-d]\s*[.)]\s*} can tell them apart. {@code "D.C. generator"} and {@code "B. Smith"}
+     * are exactly the shapes this catalog produces — Electrical notation and biology binomials.
+     */
+    @Test
+    void storedChoicesRoundTripByteIdentically() throws Exception {
+        ObjectMapper mapper = new ObjectMapper();
+        List<String> stored = List.of("B. Smith", "D.C. generator", "A. thaliana", "Plain text");
+        String json = mapper.writeValueAsString(
+                QuizItem.fromStoredComponents("Q?", stored, 0, "Concept", "Because", null,
+                        "MCQ", null, null, null, null, null, null, null, null));
+
+        QuizItem once = mapper.readValue(json, QuizItem.class);
+        QuizItem twice = mapper.readValue(mapper.writeValueAsString(once), QuizItem.class);
+        QuizItem thrice = mapper.readValue(mapper.writeValueAsString(twice), QuizItem.class);
+
+        // Byte-identical, and stable across REPEATED reads -- the defect compounded on each one.
+        assertThat(once.choices()).containsExactlyElementsOf(stored);
+        assertThat(twice.choices()).containsExactlyElementsOf(stored);
+        assertThat(thrice.choices()).containsExactlyElementsOf(stored);
+    }
+
+    /**
+     * ⚠️ THE GUARD AT THE OTHER END. The fix must not be achieved by weakening generation: a label arriving
+     * from the LLM still has to come off EXACTLY ONCE. Without this, removing the strip entirely would pass
+     * the round-trip test above while shipping "A. Ohm's Law" to learners.
+     */
+    @Test
+    void generationStillStripsExactlyOneChoiceLabel() {
+        QuizItem generated = new QuizItem(
+                "Q?",
+                List.of("A. B. Smith", "B. D.C. generator", "C. Plain", "D. Other"),
+                0,
+                "Concept",
+                "Because");
+
+        assertThat(generated.choices()).containsExactly("B. Smith", "D.C. generator", "Plain", "Other");
+    }
+
+    /**
+     * The trusted rebuild used by exam-version shuffling reorders choices without re-sanitizing them.
+     */
+    @Test
+    void shuffledChoicesAreNotReSanitized() {
+        QuizItem generated = new QuizItem("Q?", List.of("A. B. Smith", "B. Other"), 0, "Concept", "Because");
+
+        QuizItem shuffled = generated.withShuffledChoices(List.of("Other", "B. Smith"), 1, null);
+
+        assertThat(shuffled.choices()).containsExactly("Other", "B. Smith");
+    }
+
     private QuizItem identificationItem(List<String> acceptableAnswers) {
         return new QuizItem(
                 "Identify the law that relates voltage, current, and resistance.",
