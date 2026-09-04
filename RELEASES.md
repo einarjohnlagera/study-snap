@@ -78,16 +78,34 @@ this release. **⚠️ IT IS A SOLID PLAN. EXECUTE ITS PHASES; DO NOT RE-DERIVE 
 **read that table before proposing anything.**
 
 **⚠️ PHASES 0 AND 1 ARE OWNER/CURATOR WORK WITH NO CODE, AND NO IMPLEMENTATION MAY BEGIN BEFORE PHASE 3
-APPROVAL.** The plan says so explicitly. Order is **Phase 0 → 1 → 2 → 3**, and Phase 2 is genuinely
-blocked on two owner-executed inputs it cannot proceed without:
+APPROVAL.** The plan says so explicitly. Order is **Phase 0 → 1 → 2 → 3**. **⚠️ PHASE 0 IS NOW COMPLETE
+(2026-09-04) and Phase 2 is blocked on ONE remaining input, not two:**
 
-- **Phase 0.3 — capture the LIVE course-program catalog.** **⚠️ LOAD-BEARING, NOT BOOKKEEPING.** It is the
-  denominator of `ADR-001`'s failure-condition ratio, and **the recorded figure of 21 is stale**: `V106`
-  seeds 21, the catalog is admin-manageable at runtime, and production already holds **at least 22**
-  (`Architectural Engineering` is a live chip and appears in **no migration**). A larger denominator makes
-  the ratio move less, and the amendment must be argued against the real number. **⚠️ This is the same
-  error `ADR-001` was corrected for once already on 2026-08-31** — *"that figure is the PRE-CATALOG
-  FREE-TEXT SPREAD … not catalog rows."* **⚠️ Do NOT compute or quote the ratio from 21.**
+- **✅ Phase 0.3 — capture the LIVE course-program catalog. RUN 2026-09-04; the answer is bigger than the
+  plan assumed and it CHANGES THE PLAN'S OWN ARITHMETIC.** The catalog holds **41 programs, not 21** —
+  `V106` seeds 21 and **20 were added at runtime** between 2026-08-11 and 2026-08-29. Against the real
+  denominator, today is **`8:41` = 0.195** and a four-value Phase 2 output is **`12:41` = 0.293**.
+  **⚠️ THAT IS LOWER THAN THE 0.381 (`8:21`) THE ADR RECORDS AS ITS OWN BASELINE**, so the failure
+  condition is **nowhere near tripping** and the plan's feared *0.38 → 0.57, past 0.65* never occurs.
+  **⚠️ THE AMENDMENT IS STILL OWED, AND THIS STRENGTHENS THE CASE RATHER THAN DISSOLVING IT — do not read
+  *"the ratio is comfortable"* as *"the tension went away."*** The catalog nearly **doubled in under a
+  month**, **18 of 41 rows are now Engineering-family**, and essentially all the growth is curator-added
+  at runtime — so the ratio is **easy to satisfy by adding programs**, which is exactly the failure
+  `ADR-001`'s own note names (*"the catalog growing is not evidence for the taxonomy growing"*). **The
+  ratio has become WEAKER as a guard, not safer**, which is a better argument for restating the condition
+  as the naming rule plus the composition matrix, with the bare ratio demoted to a watch figure.
+- **✅ Phase 0.1 and 0.2 — answered.** `Architectural Engineering` is confirmed in the live catalog
+  (added at runtime **2026-08-29 03:31**, Engineering family, in no migration), and **Medicine is seeded
+  at `V106` id `…-014`**, verified in the repo — a current design problem, not a horizon item.
+- **⚠️ A NAMING CONSTRAINT SURFACED BY PHASE 0.3, RECORDED AS A PHASE 2 QUESTION AND DELIBERATELY NOT
+  ANSWERED HERE.** The live catalog carries **`Architecture`**, **`Urban and Regional Planning`** and
+  **`Construction Engineering and Management`** as *programs*, so several plausible names for the ALE
+  residue would **equal a catalog program name** — precisely what the proposed naming rule forbids unless
+  the name is a board subject-area name. **⚠️ It must be answered against Phase 1's actual residue;
+  resolving it now is the same pre-commitment that produced the 215 unset rows.**
+- **Logged, out of scope, no action:** the catalog contains **`Geotechnical Engineer`** (missing *"ing"*,
+  and arguably a civil sub-discipline rather than a program). **No catalog row is rewritten in this
+  release** — recorded so it is not rediscovered as a finding.
 - **Phase 1 — the corrected ALE distribution plus its residue list.** Before is `(unset) 215 · PPR 77 ·
   ENG_SCI 50 · CIVIL 16 · ENG_MATH 6`; the after and the residue are Phase 2 inputs.
 

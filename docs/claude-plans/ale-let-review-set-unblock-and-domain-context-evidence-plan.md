@@ -111,6 +111,16 @@ difference · programs served · ≥5 notes that SHOULD use it · ≥3 notes fro
 should NOT · Automatic failure case · quantitative flag · evidence source · confidence. **No
 Low-confidence value ships.**
 
+**⚠️ A NAMING CONSTRAINT SURFACED BY PHASE 0.3 — A QUESTION PHASE 2 MUST ANSWER, NOT A VERDICT
+TAKEN NOW.** The live catalog contains **`Architecture`**, **`Urban and Regional Planning`** and
+**`Construction Engineering and Management`** as *programs*. Several plausible names for the ALE
+residue would therefore **equal a catalog program name**, which is exactly what the proposed naming
+rule forbids *unless the name is a board subject-area name*. ALE's own subject areas are *History and
+Theory of Architecture*, *Building Utilities*, *Planning and Site Development*, *Building Materials
+and Construction* and *Professional Practice* — **not `Architecture` flat.** **⚠️ This must be
+answered against Phase 1's actual residue, and NOT resolved before that residue exists** — resolving
+it early is the same pre-commitment that produced the 215 unset rows.
+
 **Plus the Program → Domain Context composition matrix** (owner §15) — the guard against recreating the
 program catalog inside the enum. Healthy: one program → several contexts, one context → several programs.
 
@@ -154,6 +164,29 @@ read** — see §Contradictions (2).
 
 A plausible Phase 2 output — `ARCHITECTURE`, a biomedical value, a clinical value, a computing value —
 takes **8:21 → 12:21**, moving 0.38 → 0.57. Four more takes it past 0.65.
+
+**⚠️ AMENDMENT — PHASE 0.3 RAN 2026-09-04 AND THE ARITHMETIC ABOVE IS SUPERSEDED. The paragraph is
+left standing rather than rewritten, so the correction stays visible to the next reader.**
+The live catalog holds **41 programs, not 21** — `V106` seeds 21 and **20 were added at runtime**
+between 2026-08-11 and 2026-08-29 (`docs/claude-plans/v0.111.0-phase-0-3-catalog-capture.sql`).
+Against the real denominator: **today is `8:41` = 0.195**, and a four-value Phase 2 output is
+**`12:41` = 0.293**. **⚠️ That is LOWER than the 0.381 (`8:21`) the ADR currently records as its own
+baseline** — so the failure condition is **nowhere near tripping**, and the feared 0.57 and
+"past 0.65" never occur.
+
+**⚠️ THE AMENDMENT IS STILL OWED, AND THIS RESULT STRENGTHENS THE CASE FOR IT RATHER THAN DISSOLVING
+IT — do not read "the ratio is comfortable" as "the tension went away."** The catalog nearly doubled
+in under a month, **18 of 41 rows are now Engineering-family**, and essentially all of that growth is
+curator-added at runtime rather than seeded. A denominator that moves that fast makes the ratio
+**easy to satisfy by adding programs** — which is precisely the failure `ADR-001`'s own note names:
+*"A new Course / Program does NOT imply a new Domain Context … The catalog growing is not evidence
+for the taxonomy growing."* **So the ratio has become WEAKER as a guard, not safer**, and that is a
+better argument for restating the condition as **the naming rule plus the composition matrix**, with
+the bare ratio demoted to a watch figure, than the one this section originally made.
+
+**Logged, out of scope, no action this release:** the catalog contains **`Geotechnical Engineer`**
+(missing *"ing"*, and arguably a civil sub-discipline rather than a program). **⚠️ No catalog row is
+rewritten in `v0.111.0`** — recorded here only so it is not rediscovered as a finding.
 
 **This is a genuine contradiction, and it is not fatal — but it must be resolved explicitly, not
 silently.** The owner's intent (*durable authoring traditions, not program mirrors*) is aligned with the
