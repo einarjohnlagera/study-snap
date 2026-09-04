@@ -36,7 +36,9 @@ restart ended the incident.**
 finding:**
 
 - **There is no HikariCP configuration anywhere** — zero matches across `application.yaml` and
-  `application-prod.yaml`. `total=10` is Hikari's **default** `maximumPoolSize` and `30001 ms` its
+  `application-prod.yaml`. **⚠️ TRUE AS OF KICKOFF AND NO LONGER TRUE — Phase 1 added all three keys
+  to `application.yaml`; read this bullet as the state that CAUSED the outage, not as current
+  config.** `total=10` is Hikari's **default** `maximumPoolSize` and `30001 ms` its
   **default** `connectionTimeout`. **Nobody chose 10.**
 - `server.tomcat.threads.max: 25` (`application.yaml:35`), deliberately sized for Render's 0.5 CPU.
   **So the ratio is 25 request threads against 10 connections**, and `active=10 + waiting=15 = 25` is
@@ -250,6 +252,80 @@ Codex case. **⚠️ Re-run the routing test if Phase 2's evidence changes Phase
 - Kickoff: opened `v0.112.0`, bumped all seven version references, added Backlog Index rows for both
   production-incident files and for the deferred concept-identity release, and deferred the concept
   vocabulary sizing read to `docs/claude-plans/v0.113.0-concept-vocabulary-sizing.sql`.
+- **Phase 1 — config-only mitigation, in §8a's order.** The pool is configured for the first time:
+  `leak-detection-threshold: 60000`, `maximum-pool-size: 20`, `connection-timeout: 5000`, all three as
+  `${ENV:default}` placeholders so Phase 2 can tune them without a code change. Plus
+  `studyPackGenerationTaskExecutor` to core 2 / max 2 (`AppConfig.java`), and the LLM read timeout
+  extracted from a hardcoded `Duration.ofSeconds(180)` into `studysnap.llm.api.read-timeout-seconds`.
+  **⚠️ Before this, there was no HikariCP configuration anywhere — `total=10` and `30001 ms` were
+  framework defaults nobody chose.**
+- **Three owner decisions taken at prompt time (2026-09-04), recorded because two of them were owed
+  explicitly and neither had a default:**
+  - **`maximum-pool-size: 20`.** Chosen because it is safe on **every** Render Postgres plan — it needs
+    only `max_connections >= 50` against the deploy-overlap bound `(max_connections − reserved) / 2`,
+    and the smallest plan gives 100. **⚠️ SO THE RENDER DASHBOARD READ IS NO LONGER A BLOCKER FOR
+    PHASE 1, but it becomes one again above 45**, which `DataSourcePoolContractTest` now enforces.
+  - **`connection-timeout: 5000` SHIPPED NOW rather than deferred until after Phase 3.** **⚠️ THIS IS A
+    DELIBERATE TRADE AND IS NOT AN OPTIMISATION:** until Phase 3 shortens the holds, some requests that
+    would today queue for 30 s and then succeed will instead return a **500 within 5 s**. That is
+    accepted because the 30 s queueing is precisely what let the health check blow past Render's probe
+    threshold and get the instance killed. **It trades user-visible errors for staying up.**
+  - **The LLM read timeout was made overridable, NOT shortened — the default stays 180 s.** §8a suggests
+    cutting it "toward ~90 s" but argues no specific number, and **one `RestClient` serves every LLM
+    call including the largest Study Pack generation**, so an unevidenced cut would convert working
+    generations into failures. It can now be dialled from the environment once Phase 2's leak-detection
+    output shows what real holds cost.
+- **Guards, each mutation-verified with the killing test named** — six mutations run, all six killed:
+  `DataSourcePoolContractTest` (new) pins the three Hikari keys against
+  `src/main/resources/application.yaml` **read as text, because `src/test/resources/application.yaml`
+  shadows it entirely on the test classpath and a running context here is H2-backed**; it also enforces
+  the deploy-overlap ceiling and that acquisition fails fast. `OpenAiLlmConfigTest` (new) pins the read
+  timeout **behaviourally against a slow local `HttpServer`, with a generous-timeout control** —
+  **⚠️ ADDED BECAUSE A MUTATION FOUND THE OBVIOUS GUARD INSUFFICIENT: hardcoding the timeout back still
+  compiles and still leaves the yaml key declared**, so the property would have become dead config and
+  every environment override would have silently done nothing, with the config test green.
+  `AppConfigTest`'s pinned executor sizes were updated deliberately, with the reason (long connection
+  holds, not tuning) recorded in the test. A seventh guard asserts **`application-prod.yaml` declares
+  no `spring.datasource.*` key** — that overlay is an active profile that already overrides
+  `spring.config.import` and `server.port`, so a pool key added there would win in production while
+  every assertion here still passed against the base file. **That is the exact shape
+  `ScheduledJobCronContractTest` records a cold agent falsifying its predecessor with.**
+- Verified: backend **2076 tests across 205 classes, 0 failures / 0 errors / 0 skipped**, counted from
+  `target/surefire-reports/*.xml`, with `NativeQueryPostgresIntegrationTest` executing 43 real-row
+  tests against PostgreSQL 16; frontend **2139 tests across 198 suites**. `./mvnw` exit status read
+  directly, not through a pipe.
+
+**Known limitations (Phase 1)**
+
+- **Background generation throughput is reduced, and this is the intended cost rather than a side
+  effect.** `studyPackGenerationTaskExecutor` is shared by Study Pack generation, async Long Exam,
+  exam-pool refresh, async Challenge Quiz and bulk generation, so at core 2 / max 2 **at most two
+  background generations run concurrently app-wide**, down from six. The queue stays at 100, so work is
+  **delayed, never dropped**. A single curator's bulk batch is unaffected — `NoteBulkGenerationService`
+  queues **one** task per batch and iterates topics inside it — so what narrows is concurrency across
+  users, not throughput within a batch.
+  **⚠️ THE NUMBER IS JUSTIFIED BY HOLD DURATION, NOT BY A RATIO AGAINST THE POOL — DO NOT RE-DERIVE IT
+  FROM `maximum-pool-size`.** §8a proposed core 2 / max 2 against a pool of **10**, where max 6 was 60%
+  of it; against the 20 now configured, max 6 would be 30%, so the original ratio argument no longer
+  reaches the same answer. **Two is right anyway, for a different reason: until Phase 3 relocates the
+  LLM call each of these threads can hold its connection for the full 180 s read timeout**, so a
+  handful of them occupy the pool for minutes. That justification survives the pool being raised or
+  lowered. **⚠️ Revisit only after Phase 3 removes the holds.**
+- **`connect-timeout-seconds` is NOT behaviourally pinned, deliberately.** `OpenAiLlmConfigTest` proves
+  the **read** timeout is honoured from configuration; hardcoding the **connect** timeout back survives
+  every test. Pinning it needs an unroutable address and a ~10 s wait, and the connect timeout is not
+  what holds a JDBC connection — it is not the value Phase 2 tunes. **Stated rather than implied, so
+  nobody reads `OpenAiLlmConfigTest` as covering both.**
+- **⚠️ PHASE 2 IS NOT ENTIRELY BLOCKED ON WAITING FOR A DEPLOY, AND IT WOULD READ THAT WAY.** Leak
+  detection only produces data after a deploy under load, but **Phase 2's PRIMARY read — logging the
+  effective `hibernate.connection.handling_mode` from the `EntityManagerFactory` properties at
+  startup — is a direct read of the setting that decides the `open-in-view` question and is not gated
+  on the deploy at all.** It can be added independently, and §7 explicitly warns against substituting
+  an argument from Spring Boot defaults for it. **The leak-detection sampling is the CONFIRMING half.**
+- **Phase 1 mitigates; it does not fix.** Fourteen code paths still hold a JDBC connection across an
+  OpenAI call for up to 180 s. Twenty connections raises the concurrency needed to exhaust the pool
+  from seven synchronous generations to roughly fourteen — **it moves the cliff, it does not remove
+  it.** The structural fix is Phase 3, and it must not start before Phase 2's evidence.
 
 ## v0.111.0 - Multidisciplinary Domain Context
 
