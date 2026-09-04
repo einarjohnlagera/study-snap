@@ -245,7 +245,9 @@ public final class QuizItem {
         this.question = question;
         this.choices = choices == null
                 ? List.of()
-                : List.copyOf(stripChoiceLabels ? QuizValidationUtils.sanitizeChoiceTexts(choices) : choices);
+                : List.copyOf(stripChoiceLabels
+                        ? QuizValidationUtils.sanitizeChoiceTexts(choices)
+                        : QuizValidationUtils.normalizeChoiceTexts(choices));
         this.correctIndices = sanitizeCorrectIndices(correctIndices, this.choices.size());
         this.correctIndex = resolveCorrectIndex(this.choices, correctIndex, null, null, legacyAnswer, questionFormat, this.correctIndices);
         this.concept = concept;
@@ -477,8 +479,13 @@ public final class QuizItem {
         if (normalizedLegacyAnswer == null) {
             return answerLetterIndex(legacyAnswer, choices.size());
         }
+        // ⚠️ BOTH SIDES are label-stripped FOR THE COMPARISON ONLY -- the stored choice text is never
+        // rewritten here. A legacy row can hold labelled choices ("A. Encapsulation") beside a full-text
+        // answer ("A. Encapsulation"); stripping only the answer made the two disagree, so the match failed,
+        // answerLetterIndex returned null for the multi-character value, and the question ended up with NO
+        // correct answer at all -- grading every response wrong.
         for (int index = 0; index < choices.size(); index++) {
-            if (Objects.equals(choices.get(index), normalizedLegacyAnswer)) {
+            if (Objects.equals(QuizValidationUtils.sanitizeChoiceText(choices.get(index)), normalizedLegacyAnswer)) {
                 return index;
             }
         }

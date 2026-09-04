@@ -2,7 +2,7 @@
 
 ## v0.110.1 - Quiz Text Integrity
 
-**Status: In Progress** (kicked off 2026-09-04, base branch `releases/v0.110.1`, cut from `main` after
+**Status: Released** (kicked off and signed off 2026-09-04, base branch `releases/v0.110.1`, cut from `main` after
 `v0.110.0` merged and tagged)
 
 Theme: a quiz choice says what its author wrote, and a supporter can get back to a quiz they already shared.
@@ -103,9 +103,14 @@ a write defect. **⚠️ ESCALATE if item 1 turns out to need a migration or a r
   **Dating it settled the question:** commit `684e4ae2` (2026-04-08) added the write-side sanitizer **and**
   that read-side strip **in the same change** — the read half was a **one-time repair for sessions in flight
   that day, implemented as a permanent read transform.** That is the origin of the compounding corruption.
-  Any session it protected is now a five-month-abandoned in-progress quiz. **⚠️ Its LETTER-ANSWER half is
-  NOT expired and was deliberately preserved** in the replacement test — a legacy row storing
-  `"answer": "A)"` with no `correctIndex` must still resolve to index 0.
+  Any session it protected is now a five-month-abandoned in-progress quiz.
+- **⚠️ CORRECTION — the claim that the expired test's letter-answer half "was deliberately preserved" was
+  TRUE ONLY OF THE BARE-LETTER FORM, and the fixture edit is what hid the gap.** The replacement changed its
+  choices from labelled to clean, and with clean choices an `"answer": "A)"` resolves through
+  `answerLetterIndex`, which **never reads choice text** — so it passes identically under the defect and the
+  fix. The pre-signoff cold agent proved it: that test **survived** the mutant reverting `extractQuiz`. The
+  one input shape that actually regressed — a **full-text** answer against **labelled** choices — was
+  exactly what the fixture edit removed. Fixed below, and now pinned by a discriminating test.
 - **⚠️ THE POSITIONAL HEURISTIC WAS CONSIDERED AND REJECTED.** "Strip only when every choice carries its own
   positional label" fails on `["A. thaliana", "B. subtilis"]` — two binomials in alphabetical order — which
   is exactly the content this defect already damages. A heuristic that breaks on the motivating example is
@@ -145,8 +150,22 @@ a write defect. **⚠️ ESCALATE if item 1 turns out to need a migration or a r
   repository reference in the test tree being a Mockito mock, so a deleted predicate ships green. A
   real-PostgreSQL test now seeds two owners and pins that the query returns one; the same mutant reds
   `combinedQuizListReturnsOnlyTheOwnersRowsNewestFirst`.
-- Backend **2059** tests green, frontend **2134** across 198 suites, `tsc --noEmit` clean, `npm run lint` at
-  0 errors.
+- **⚠️ THE PRE-SIGNOFF COLD AGENT FOUND TWO REGRESSIONS THIS RELEASE INTRODUCED, BOTH FIXED BEFORE SIGNOFF,
+  AND BOTH WORSE THAN THE LIMITATION FIRST WRITTEN.**
+  - **A legacy row lost its correct answer ENTIRELY — `correctIndex` went `null`, so the question graded
+    every response wrong.** Skipping the choice-label strip on read made `resolveCorrectIndex` disagree with
+    itself: it still stripped the **legacy answer** while leaving the **choices** alone, so a row holding
+    `"A. Encapsulation"` beside answer `"A. Encapsulation"` matched nothing and fell through to
+    `answerLetterIndex`, which returns null for anything longer than one character. **Reproduced against
+    both commits before fixing.** The fix normalizes **both sides for the comparison only** — the stored
+    text is still never rewritten.
+  - **Whitespace normalization was dropped from the read path unnecessarily**, so a stored
+    `"Ohm's   Law"` stopped matching a legacy `"Ohm's Law"` answer — again losing `correctIndex`, for a
+    reason unrelated to labels. **⚠️ `sanitizeChoiceTexts` does TWO things and only the label strip is
+    non-idempotent**; the class comment said exactly that while the implementation dropped both. Whitespace
+    normalization is now unconditional and the label strip alone is switched.
+- Backend **2061** tests green (surefire XML, real-PostgreSQL harness included), frontend **2134** across
+  198 suites, `tsc --noEmit` clean, `npm run lint` at 0 errors.
 - **Item 2 — owners can find combined quizzes they already built.** Library now links to a bounded,
   newest-first list of the owner’s immutable combined-quiz snapshots. Each lightweight row carries only its
   title, creation time, stored section/question counts, and the latest sharing state; opening it returns to
@@ -159,13 +178,19 @@ a write defect. **⚠️ ESCALATE if item 1 turns out to need a migration or a r
   does not heal the wound. **No backfill was written, deliberately** — any repair would have to guess, and a
   wrong guess is worse than visibly-truncated text. Affected rows are those whose choice text began with a
   letter followed by `.` or `)`; the damage is proportional to how often each row was read.
-- **⚠️ A PRE-2026-04-08 SESSION ROW, IF ANY STILL EXISTS, NOW RENDERS ITS LABELS.** Session reads no longer
-  repair legacy unstripped choices, so such a row would display `"A. Encapsulation"` rather than
-  `"Encapsulation"`. **This is a stated trade, not an oversight:** a visible cosmetic artefact on a
-  five-month-stale in-progress quiz, against ongoing compounding corruption of every current session load.
-  **⚠️ It could not be verified from the repo — `git log` dates the code, not the data.** It is checkable
-  with a one-line production read: `session_state` choices matching `^[A-Da-d][.)]` on rows older than
-  2026-04-08.
+- **⚠️ A PRE-2026-04-08 ROW WITH LABELLED CHOICES NOW DISPLAYS THEM. ⚠️ THIS ENTRY WAS CORRECTED AT SIGNOFF
+  — the first version was narrower than the code on two axes, and the cold agent caught both.**
+  - **It is NOT session-only.** The skip applies to **every** JSONB read, so it reaches `study_packs`,
+    `generated_quizzes`, `exam_question_pool`, `challenge_quiz_question_bank` and `combined_quizzes` — not
+    just `quick_review_sessions`.
+  - **The DISPLAY artefact is worse than "renders its labels":** `lib/quiz.ts` and the shared-quiz page both
+    prepend a positional letter, so a legacy row renders **`"A. A. Encapsulation"`**.
+  - **The GRADING half is fixed rather than accepted** — see the two regressions above. A legacy row's
+    correct answer resolves again, so the residual is presentation only, which is what "cosmetic" was
+    wrongly claiming before the fix existed.
+  **⚠️ Still not verifiable from the repo — `git log` dates the code, not the data.** The discriminating
+  production read is rows whose choice text matches `^[A-Da-d][.)]`; those *also* lacking `correctIndex`
+  were the grading-affected population.
 
 ## v0.110.0 - Supporter Combined Quiz
 
@@ -489,6 +514,19 @@ a prompt**; and **call `advisor()` BEFORE writing the Codex prompt.**
   learner. **⚠️ A tautological `tipId === "..."` assertion was considered and rejected** — it compares a
   literal to itself. Mutants: restoring the shipped copy reds the first test; reverting the tipId alone reds
   the second.
+- **⚠️ THE COMBINED-QUIZ LIST TRUNCATES SILENTLY AT 50, AND IT HIDES THE OLDEST ROWS — WHICH ARE THE ONES
+  THIS RELEASE EXISTS TO REACH.** Nothing caps combined quizzes per owner, the page shows no "showing 50 of
+  N", and there is no pagination. An owner past 50 cannot reach their earliest quizzes — precisely the
+  forgotten ones whose public links they might want revoked. **Recorded rather than fixed:** raising or
+  paginating the bound is a real decision and this is a patch. Owner call.
+- **Sharing state collapses to the NEWEST link row, so an older still-active link reads as "Sharing off".**
+  `quiz_share_links` has no uniqueness on `combined_quiz_id` and creating over an inactive link mints a new
+  row, while `getActivePublicQuiz` serves **any** active token. Reaching this needs direct API use — every UI
+  path holds only the newest link — so it is recorded, not fixed.
+- **The whole fix rests on a convention nothing enforces: "public constructor == generation."** Every
+  remaining public-constructor call site is genuine generation (verified by the cold agent, which searched
+  for a fifth path and found none), but a future call site rebuilding stored text through it would
+  reintroduce the corruption silently and no test would catch it.
 
 ### Pre-signoff pressure test — TWO COLD AGENTS, and what they found
 

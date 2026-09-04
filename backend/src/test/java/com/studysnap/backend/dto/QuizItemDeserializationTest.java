@@ -438,6 +438,46 @@ class QuizItemDeserializationTest {
         assertThat(shuffled.choices()).containsExactly("Other", "B. Smith");
     }
 
+    /**
+     * ⚠️ REGRESSION GUARD FOUND BY THE PRE-SIGNOFF COLD AGENT. Skipping the choice-label strip on read made
+     * {@code resolveCorrectIndex} disagree with itself: it still stripped the LEGACY ANSWER while the
+     * CHOICES were left alone, so a pre-2026-04-08 row holding labelled choices beside a full-text answer
+     * matched nothing, fell through to {@code answerLetterIndex}, and got {@code correctIndex == null}.
+     *
+     * <p>A question with no correct index grades EVERY response wrong. That is a correctness regression,
+     * not the cosmetic one the first write-up described.
+     */
+    @Test
+    void aLegacyFullTextAnswerStillResolvesAgainstLabelledStoredChoices() throws Exception {
+        String legacyRow = "{\"question\":\"Q?\","
+                + "\"choices\":[\"A. Encapsulation\",\"B) Abstraction\"],"
+                + "\"answer\":\"A. Encapsulation\",\"concept\":\"OOP\",\"explanation\":\"e\"}";
+
+        QuizItem item = new ObjectMapper().readValue(legacyRow, QuizItem.class);
+
+        assertThat(item.correctIndex()).isZero();
+        assertThat(item.answer()).isEqualTo("A. Encapsulation");
+        // ⚠️ The stored text is still NOT rewritten -- the match is label-insensitive, the storage is not.
+        assertThat(item.choices()).containsExactly("A. Encapsulation", "B) Abstraction");
+    }
+
+    /**
+     * ⚠️ {@code sanitizeChoiceTexts} does TWO things and only the label strip is unsafe to repeat.
+     * Whitespace normalization is idempotent, and dropping it from the read path made a stored
+     * {@code "Ohm's   Law"} stop matching a legacy {@code "Ohm's Law"} answer — losing the correct index
+     * for a reason that had nothing to do with labels.
+     */
+    @Test
+    void whitespaceIsStillNormalizedOnRead() throws Exception {
+        String row = "{\"question\":\"Q?\",\"choices\":[\"Ohm's   Law\",\"Other\"],"
+                + "\"answer\":\"Ohm's Law\",\"concept\":\"c\",\"explanation\":\"e\"}";
+
+        QuizItem item = new ObjectMapper().readValue(row, QuizItem.class);
+
+        assertThat(item.choices()).containsExactly("Ohm's Law", "Other");
+        assertThat(item.correctIndex()).isZero();
+    }
+
     private QuizItem identificationItem(List<String> acceptableAnswers) {
         return new QuizItem(
                 "Identify the law that relates voltage, current, and resistance.",
