@@ -167,6 +167,21 @@ The Generate Quiz modal carries a one-time tip pointing at the Library's **Combi
 test in `private-note-detail-page-client.test.tsx` guards the pairing. The tip is **not** profile-gated,
 because the combined path is not either.
 
+### ⚠️ Regenerating a shared quiz turns its live link OFF
+
+The quiz behind a share link is **mutable**: `GeneratedQuizService.generate` reuses the existing row and
+overwrites its questions, so the id never changes and `quiz_share_links.generated_quiz_id` keeps pointing at
+it. Before `v0.110.2` that meant a regeneration silently swapped the questions under anyone mid-quiz — a
+changed count 400'd them on submit, and an **unchanged** count graded them against questions they never saw.
+
+- Regeneration now deactivates **every live link** for that quiz. **⚠️ Not just the newest:** only `token` is
+  unique, `createShareLink` mints a new row over an inactive one, and `findActiveLink` accepts any active
+  token, so several live links can point at one quiz.
+- **⚠️ It deactivates, never deletes.** Deleting would force a new link and spend share-link quota. The owner
+  can turn it back on — which then serves the new questions under the same token, as their informed choice.
+- The owner is warned beforehand only when a live link exists, and the panel **re-reads** the link afterwards
+  rather than assuming: the effect keys on the quiz id, which a regeneration does not change.
+
 ## Known limitations
 
 - **A MATCHING block loses its grouping.** `teacher-quiz-developer.txt` may emit one block of 2–4
