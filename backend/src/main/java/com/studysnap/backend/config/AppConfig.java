@@ -48,12 +48,35 @@ public class AppConfig {
         return executor;
     }
 
+    /**
+     * ⚠️ SIZED AGAINST THE CONNECTION POOL, NOT AGAINST CPU — v0.112.0, after the 2026-09-04 outage.
+     * Threads on this executor hold a JDBC connection for the whole of a generation, because
+     * {@code LongExamService.generateLongExamAsync} wraps {@code execute(...)} AROUND the LLM call.
+     * "Dispatches after commit" is not the same as "does not hold a connection", and Hikari does not
+     * care which thread holds one.
+     *
+     * <p>⚠️ THE BOUND IS JUSTIFIED BY HOLD DURATION, NOT BY A RATIO AGAINST THE POOL SIZE — do not
+     * re-derive it from {@code maximum-pool-size}. Until Phase 3 relocates the LLM call, each of these
+     * threads can hold its connection for the full LLM read timeout (180 s), so a handful of them
+     * occupy the pool for minutes at a time. Two is conservative BECAUSE the holds are long, and it
+     * stays correct if the pool is later raised or lowered. The queue stays at 100: work is delayed,
+     * never dropped.
+     *
+     * <p>⚠️ Raising this is a PHASE 3 decision, not a capacity one. Once the two-short-transactions
+     * shape lands and generation no longer holds a connection, the constraint that produced this
+     * number is gone and it should be revisited deliberately — raising it before then re-creates the
+     * exposure it exists to reduce.
+     *
+     * <p>⚠️ Max equals core deliberately. A {@link ThreadPoolTaskExecutor} only grows past its core
+     * size once the queue is FULL, so with a 100-deep queue a larger max is nearly unreachable anyway
+     * — stating 2 makes the real concurrency bound visible instead of implied.
+     */
     @Bean
     public AsyncTaskExecutor studyPackGenerationTaskExecutor() {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
         executor.setThreadNamePrefix("study-pack-generation-");
-        executor.setCorePoolSize(3);
-        executor.setMaxPoolSize(6);
+        executor.setCorePoolSize(2);
+        executor.setMaxPoolSize(2);
         executor.setQueueCapacity(100);
         executor.initialize();
         return executor;
