@@ -306,6 +306,64 @@ describe("GeneratedQuizPreviewPageClient", () => {
     expect(await screen.findByText("What does the membrane do?")).toBeInTheDocument();
   });
 
+  /**
+   * ⚠️ Regeneration reuses the SAME quiz row, so `generatedQuiz.id` never changes — an id-keyed effect
+   * cannot refresh the share panel, and the owner would keep seeing "Sharing on" for a link the server has
+   * just turned off. This pins the re-read, and that the owner is told what happened.
+   */
+  it("re-reads the share link after regenerating and says it was turned off", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ id: "user-2", role: "USER", profileType: "STUDENT" });
+    (getQuizShareLinkByQuizId as jest.Mock)
+      .mockResolvedValueOnce({
+        id: "link-1", token: "token-1", shareUrl: "https://notelib.app/quiz/token-1",
+        isActive: true, createdAt: "2026-04-17T09:00:00Z",
+      })
+      .mockResolvedValueOnce({
+        id: "link-1", token: "token-1", shareUrl: "https://notelib.app/quiz/token-1",
+        isActive: false, createdAt: "2026-04-17T09:00:00Z",
+      });
+
+    // ⚠️ The regenerated quiz keeps the SAME id, because regeneration reuses the row — that is the whole
+    // premise of the defect. The shared default returns "quiz-2", which would let an id-keyed effect
+    // re-fetch on its own and make this assertion pass without the explicit re-read.
+    (generateGeneratedQuiz as jest.Mock).mockResolvedValue({
+      id: "quiz-1",
+      questions: [{ question: "What does the membrane do?", choices: ["A", "B", "C", "D"], correctIndex: 0, concept: "Cells", explanation: "It controls entry." }],
+      generatedAt: "2026-04-18T09:00:00Z",
+    });
+
+    render(<GeneratedQuizPreviewPageClient noteId="note-1" />);
+    await screen.findByText("https://notelib.app/quiz/token-1");
+
+    fireEvent.click(screen.getByRole("button", { name: "More quiz actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Regenerate quiz" }));
+    // Told BEFORE, and only because a live link exists.
+    expect(screen.getByText(/Your share link will be turned off/i)).toBeInTheDocument();
+    fireEvent.click(screen.getAllByRole("button", { name: "Regenerate Quiz" }).at(-1) as HTMLButtonElement);
+
+    // Told AFTER, from a re-read rather than an assumption.
+    expect(await screen.findByText(/share link was turned off/i)).toBeInTheDocument();
+    // Exactly two: once on mount, once after regenerating. The id is unchanged, so the effect
+    // cannot supply the second call -- only the explicit re-read can.
+    await waitFor(() => expect(getQuizShareLinkByQuizId).toHaveBeenCalledTimes(2));
+  });
+
+  it("does not warn about a share link when there is no live one", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ id: "user-2", role: "USER", profileType: "STUDENT" });
+    (getQuizShareLinkByQuizId as jest.Mock).mockResolvedValue(null);
+
+    render(<GeneratedQuizPreviewPageClient noteId="note-1" />);
+    await screen.findByText("What is the nucleus?");
+
+    fireEvent.click(screen.getByRole("button", { name: "More quiz actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Regenerate quiz" }));
+
+    // ⚠️ Reachable subject: the string exists in the other branch, so this fails if the copy is
+    // unconditional rather than passing vacuously.
+    expect(screen.queryByText(/Your share link will be turned off/i)).not.toBeInTheDocument();
+    expect(screen.getByText(/counts toward your monthly quiz generation limit/i)).toBeInTheDocument();
+  });
+
   it("shows the paywall modal instead of regenerating when free teacher quiz credits are exhausted", async () => {
     (useBillingUsageSummary as jest.Mock).mockReturnValue({
       usageSummary: {

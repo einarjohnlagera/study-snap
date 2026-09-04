@@ -9,6 +9,7 @@ import com.studysnap.backend.dto.QuizItem;
 import com.studysnap.backend.entity.GeneratedQuizEntity;
 import com.studysnap.backend.entity.LearnerLevel;
 import com.studysnap.backend.entity.NoteEntity;
+import com.studysnap.backend.entity.QuizShareLinkEntity;
 import com.studysnap.backend.entity.PlanType;
 import com.studysnap.backend.entity.ProfileType;
 import com.studysnap.backend.entity.UserEntity;
@@ -27,6 +28,7 @@ import com.studysnap.backend.exception.QuestionCountNotAllowedForPlanException;
 import com.studysnap.backend.exception.QuestionCountNotSelectableException;
 import com.studysnap.backend.repository.GeneratedQuizRepository;
 import com.studysnap.backend.repository.NoteRepository;
+import com.studysnap.backend.repository.QuizShareLinkRepository;
 import com.studysnap.backend.repository.UserRepository;
 import com.studysnap.backend.security.AiRateLimitService;
 import com.studysnap.backend.service.model.StudyPackGenerationContext;
@@ -69,6 +71,7 @@ public class GeneratedQuizService {
     private final UserRepository userRepository;
     private final QuizDocxExportService quizDocxExportService;
     private final ExportUsageProtectionService exportUsageProtectionService;
+    private final QuizShareLinkRepository quizShareLinkRepository;
 
     @Transactional(readOnly = true)
     public GeneratedQuizResponse getByNoteId(String noteIdRaw, UUID userId) {
@@ -153,6 +156,16 @@ public class GeneratedQuizService {
             entity.setGeneratedAt(now);
             entity.setUpdatedAt(now);
             GeneratedQuizEntity saved = generatedQuizRepository.save(entity);
+
+            // ⚠️ A REGENERATION MUTATES THE ROW A RECIPIENT MAY BE PART-WAY THROUGH. The quiz keeps its id
+            // (see the `existing` reuse above) and quiz_share_links points at that id, so without this a
+            // live link silently starts serving different questions: a changed question count 400s the
+            // recipient on submit, and an UNCHANGED count grades them against questions they never saw with
+            // no error at all. Turning the link off hands them the existing "no longer active" screen
+            // instead of a wrong score.
+            if (existing != null) {
+                deactivateShareLinksFor(saved.getId(), userId);
+            }
 
             note.setUpdatedAt(now);
             noteRepository.save(note);
@@ -319,6 +332,28 @@ public class GeneratedQuizService {
                 quizDocxExportService.buildCombinedFilename(includeAnswerKey, includeExplanations),
                 content
         );
+    }
+
+    /**
+     * ⚠️ DEACTIVATES, never deletes. Removing the row would force the owner to create a new link and spend
+     * share-link quota because of our fix; leaving it inactive lets them turn it back on knowingly, at which
+     * point it serves the new questions as their informed choice.
+     *
+     * <p>⚠️ ALL active rows, not just the newest. {@code createShareLink} mints a new row over an inactive
+     * one and {@code findActiveLink} accepts ANY active token, so a quiz can have several live links and
+     * deactivating one would leave the defect reachable through another.
+     */
+    private void deactivateShareLinksFor(UUID generatedQuizId, UUID ownerUserId) {
+        List<QuizShareLinkEntity> links = quizShareLinkRepository
+                .findByGeneratedQuizIdAndOwnerUserId(generatedQuizId, ownerUserId);
+        List<QuizShareLinkEntity> active = links.stream()
+                .filter(link -> Boolean.TRUE.equals(link.getActive()))
+                .toList();
+        if (active.isEmpty()) {
+            return;
+        }
+        active.forEach(link -> link.setActive(false));
+        quizShareLinkRepository.saveAll(active);
     }
 
     private int assertQuizCreditAvailable(UUID userId, PlanType planType) {

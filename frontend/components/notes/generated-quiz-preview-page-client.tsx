@@ -152,16 +152,25 @@ export function GeneratedQuizPreviewPageClient({ noteId }: Readonly<GeneratedQui
   const canExportDocx = authUser?.role === "ADMIN" || authUser?.profileType === "TEACHER";
   const canShareQuiz = Boolean(authUser);
 
-  useEffect(() => {
+  /**
+   * ⚠️ Must be callable AFTER a regeneration, not only on mount. Regenerating reuses the same quiz row, so
+   * `generatedQuiz.id` is UNCHANGED and an id-keyed effect never re-runs — the panel would keep showing
+   * "Sharing on" for a link the server has just turned off.
+   */
+  const loadShareLink = useCallback(async () => {
     if (!generatedQuiz?.id || !canShareQuiz) {
       return;
     }
-    void getQuizShareLinkByQuizId(generatedQuiz.id).then((link) => {
-      if (link) {
-        setShareLink(link);
-      }
-    });
+    try {
+      setShareLink(await getQuizShareLinkByQuizId(generatedQuiz.id));
+    } catch {
+      // A failed refresh must not clobber what is on screen; the panel keeps its last known state.
+    }
   }, [canShareQuiz, generatedQuiz?.id]);
+
+  useEffect(() => {
+    void loadShareLink();
+  }, [loadShareLink]);
 
   const generatedQuestionCount = generatedQuiz?.questions.length ?? 0;
   const generatedQuestionCountLabel = `${generatedQuestionCount} question${generatedQuestionCount === 1 ? "" : "s"}`;
@@ -240,10 +249,16 @@ export function GeneratedQuizPreviewPageClient({ noteId }: Readonly<GeneratedQui
     setRegenerating(true);
     setError(null);
     try {
+      const hadLiveShareLink = Boolean(shareLink?.isActive);
       const nextQuiz = await generateGeneratedQuiz(noteId);
       setGeneratedQuiz(nextQuiz);
       setShowRegenerateConfirm(false);
-      setToast("Quiz regenerated.");
+      // The server turns a live link off, because the old link would otherwise serve the NEW questions to
+      // someone part-way through the old ones. Re-read rather than assume, then say so.
+      await loadShareLink();
+      setToast(hadLiveShareLink
+        ? "Quiz regenerated. Your share link was turned off — turn it back on to share the new questions."
+        : "Quiz regenerated.");
     } catch (err) {
       const message = err instanceof Error ? err.message : "Could not regenerate quiz.";
       if (usageSummary?.plan === "FREE" && isQuizLimitReachedMessage(message)) {
@@ -256,7 +271,7 @@ export function GeneratedQuizPreviewPageClient({ noteId }: Readonly<GeneratedQui
     } finally {
       setRegenerating(false);
     }
-  }, [hasReachedChallengeQuizLimit, noteId, quizGenerationPaywallVariant, refreshUsageSummary, regenerating, usageSummary?.plan]);
+  }, [hasReachedChallengeQuizLimit, loadShareLink, noteId, quizGenerationPaywallVariant, refreshUsageSummary, regenerating, shareLink?.isActive, usageSummary?.plan]);
 
   const handleCreateShareLink = useCallback(async () => {
     if (!generatedQuiz?.id || creatingShareLink) {
@@ -591,7 +606,9 @@ export function GeneratedQuizPreviewPageClient({ noteId }: Readonly<GeneratedQui
       <AppModal
         isOpen={showRegenerateConfirm}
         title="Regenerate quiz?"
-        description="This will create a new set of questions and counts toward your monthly quiz generation limit."
+        description={shareLink?.isActive
+          ? "This will create a new set of questions and counts toward your monthly quiz generation limit. Your share link will be turned off, so anyone taking the quiz right now keeps the questions they started with."
+          : "This will create a new set of questions and counts toward your monthly quiz generation limit."}
         onClose={() => {
           if (!regenerating) {
             setShowRegenerateConfirm(false);

@@ -16,6 +16,14 @@ public interface QuizShareLinkRepository extends JpaRepository<QuizShareLinkEnti
             UUID ownerUserId
     );
 
+    /**
+     * ⚠️ ALL rows for a quiz, not just the newest. {@code createShareLink} mints a NEW row whenever the
+     * latest one is inactive, only {@code token} is unique, and {@code findActiveLink} accepts ANY active
+     * token — so several live links can point at one quiz, and a caller that only handles the newest would
+     * leave the others serving.
+     */
+    List<QuizShareLinkEntity> findByGeneratedQuizIdAndOwnerUserId(UUID generatedQuizId, UUID ownerUserId);
+
     Optional<QuizShareLinkEntity> findFirstByCombinedQuizIdAndOwnerUserIdOrderByCreatedAtDesc(
             UUID combinedQuizId,
             UUID ownerUserId
