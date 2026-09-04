@@ -363,6 +363,44 @@ Codex case. **⚠️ Re-run the routing test if Phase 2's evidence changes Phase
   OSIV or connection-handling change, **without which the relocation does not fix the exhaustion**.
   Phase 3 stays **CODEX**; Phase 2's own deliverable was Claude Code inline.
 
+- **Phase 2 — Render evidence, read 2026-09-04 (read-only). ⚠️ IT REFUTES TWO HYPOTHESES AND CONFIRMS
+  NEITHER OF THE TWO THAT REMAIN. §11 of the finding carries the detail.**
+  - **`max_connections = 103`, 3 reserved → ceiling 50.** **⚠️ PHASE 1'S ONE ASSUMED NUMBER IS NOW
+    MEASURED: `maximum-pool-size: 20` is verified safe**, and the 45 ceiling in
+    `DataSourcePoolContractTest` is correctly conservative.
+  - **THE DATABASE WAS IDLE AND HEALTHY THROUGHOUT** — CPU 0.008–0.021 of a core, memory 140–171 MB of
+    256 MB, flat across the window. **The stall was NOT database-side**, which refutes §5's own named
+    redirect target (a slow query or lock).
+  - **DB connections flat at 11 all window; no app log output for the five minutes 05:50:00 → 05:55:07;
+    the scheduled jobs found nothing stuck** (`pools=0 longExamSessions=0 boardExamSessions=0 notes=0`).
+  - **NO DEPLOY AT 05:56, CONFIRMED FROM RENDER'S DEPLOY HISTORY** (last finished 03:09:44, next began
+    06:24:18). With the owner confirming no manual restart, **both named alternatives are now eliminated
+    from Render's own records**; a health-check auto-restart is what remains, still not directly
+    attributed by any platform line.
+  - **⚠️ THE DEPLOY-OVERLAP EFFECT WAS OBSERVED DIRECTLY:** during the 06:27 v0.111.0 deploy, DB
+    connections rose **11 → 21** — two instances, two pools. **Empirical confirmation of the reasoning
+    behind the pool ceiling**, which had been argued from documentation alone.
+- **⚠️ THE ANONYMOUS READ-BURST HYPOTHESIS IS WITHDRAWN ON EVIDENCE.** Completed-request counts in the
+  run-up were **0–9 per minute** (05:52 → 0, 05:53 → 0, 05:54 → 0). There was no burst. **The §5 gap it
+  identified was real and the SQL fix stands; the hypothesis it pointed at does not.**
+- **⚠️ TWO INSTRUMENT LIMITS, STATED BECAUSE ABSENCE WAS NEARLY MISREAD AS EVIDENCE.** **Request logs
+  are NOT retained for this service** — a query over the outage window returns zero rows, but so does
+  one over 06:27, when the metric records **101 requests**; the silence proves nothing, and this was
+  checked before being relied on. And **`http_request_count` may bin by COMPLETION rather than arrival**,
+  so the low counts are evidence against a *large burst*, **not proof of zero arrivals**.
+- **⚠️ §3 IS NOT CONFIRMED AND PHASE 3 REMAINS UNVALIDATED AS THE RIGHT TARGET.** The pool was fully
+  checked out while **the database was idle and doing no work** — the signature of connections held but
+  not used. Two explanations survive and this evidence does not separate them: **(a)** connections held
+  across slow external calls, which is what Phase 3 addresses; or **(b)** a **connection LEAK** draining
+  the pool over time, which **has never been considered and fits exhaustion under near-zero traffic at
+  least as well**, without requiring ~7 concurrent generations for which there is no evidence.
+  **⚠️ PHASE 3 DOES NOTHING FOR (b).**
+- **⚠️ THE DISCRIMINATING INSTRUMENT IS ALREADY BUILT AND IS NOT IN PRODUCTION.** Phase 1's
+  `leak-detection-threshold: 60000` logs a stack trace naming any path holding a connection past 60 s,
+  which separates (a) from (b) outright. It is merged to `releases/v0.112.0` but **NOT to `main`**.
+  **DEPLOYING PHASE 1 IS NOW THE HIGHEST-VALUE NEXT ACTION IN THIS RELEASE — HIGHER THAN BUILDING
+  PHASE 3.**
+
 **Known limitations (Phase 1)**
 
 - **Background generation throughput is reduced, and this is the intended cost rather than a side

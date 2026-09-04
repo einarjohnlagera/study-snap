@@ -327,3 +327,75 @@ Recorded so they are not re-derived:
   **never got one** — the same failure mode, twice.
 - §5's queries are **unrun**. Until they are, §3 is a well-supported hypothesis, not a confirmed cause.
 - §7 is unresolved and should be settled by §8a item 1 rather than by argument.
+
+## 11. ⚠️ RENDER EVIDENCE, READ 2026-09-04 — THE §5 QUERIES ARE NOW LARGELY MOOT, AND §3 IS NOT CONFIRMED
+
+Read directly from Render (read-only: metrics, logs, deploy history, and `SHOW max_connections`).
+**⚠️ THIS SECTION REMOVES TWO HYPOTHESES AND CONFIRMS NEITHER OF THE REMAINING ONES.**
+
+### Established
+
+1. **`max_connections = 103`, `superuser_reserved_connections = 3`** → the deploy-overlap ceiling is
+   `(103 − 3) / 2 = 50`. **Phase 1's `maximum-pool-size: 20` is verified safe**, and the 45 ceiling
+   pinned in `DataSourcePoolContractTest` is correctly conservative. **This was Phase 1's one assumed
+   number and it is now measured.**
+2. **THE DATABASE WAS IDLE AND HEALTHY THROUGHOUT.** CPU **0.008–0.021** of a core (0.017 at 05:55) and
+   memory **140–171 MB of 256 MB**, flat across 05:30–06:10. **⚠️ SO THE STALL WAS NOT ON THE DATABASE
+   SIDE**, and a slow-query/lock cause — §5's own named redirect target — is refuted.
+3. **Database connection count was FLAT AT 11** for the entire window (05:00–06:30). The pool neither
+   grew nor collapsed. **The connections stayed OPEN and did NO WORK.**
+4. **NO APPLICATION LOG OUTPUT BETWEEN 05:50:00.028 AND 05:55:07.057** — five minutes of complete
+   silence immediately before the first symptom.
+5. **THE SCHEDULED JOBS FOUND NOTHING STUCK.** `GenerationRecoveryJob` at 05:40 and 05:50, and
+   `BulkGenerationResultCleanupJob` at 05:45, all reported zeros:
+   `pools=0 longExamSessions=0 boardExamSessions=0 notes=0`.
+6. **NO DEPLOY AT 05:56 — CONFIRMED FROM RENDER'S DEPLOY HISTORY, NOT INFERRED FROM THE LOG.** The last
+   deploy finished **03:09:44** (v0.110.2) and the next began **06:24:18** (v0.111.0). Together with the
+   owner confirming they did **not** restart manually, **both named alternatives are eliminated from
+   Render's own records.** A Render-side health-check auto-restart is what remains — still not directly
+   attributed by any platform line.
+7. **THE DEPLOY-OVERLAP EFFECT IS REAL AND WAS OBSERVED.** At **06:27**, during the v0.111.0 deploy,
+   database connections rose **11 → 21** — two instances, each with its own pool. **This is direct
+   empirical confirmation of the reasoning behind the pool ceiling**, previously argued from Render's
+   documentation alone.
+
+### ⚠️ Refuted
+
+- **THE ANONYMOUS READ-BURST HYPOTHESIS (§0's "most consequential finding") IS NOT SUPPORTED.**
+  Completed-request counts in the run-up were **0–9 per minute** (05:52 → 0, 05:53 → 0, 05:54 → 0).
+  There was no burst. **Raised in good faith and withdrawn on evidence; the §5 gap it identified was
+  still real, but the hypothesis it pointed at does not hold.**
+- **A database-side stall** — refuted by (2).
+- **A deploy-triggered build** — refuted by (6).
+
+### ⚠️ What the instruments CANNOT show — stated because absence was nearly misread as evidence
+
+- **REQUEST LOGS ARE NOT RETAINED FOR THIS SERVICE.** A query over the outage window returns zero rows —
+  **but so does a query over 06:27, when the metric records 101 requests.** The silence proves nothing.
+  **Verified before being relied on; the empty result was very nearly read as "no traffic".**
+- **`http_request_count` may bin by COMPLETION, not arrival.** So "0 requests at 05:54" is weaker than
+  it looks: requests that arrived then and hung for 30 s would be binned at 05:55–05:56. The low counts
+  are evidence against a *large burst*, **not proof of zero arrivals.**
+
+### ⚠️ Where this leaves the cause — and Phase 3
+
+The pool was fully checked out (`active=10`) while **the database was idle and doing no work**. That is
+the signature of connections **held but not used**. Two explanations remain and this evidence does
+**not** separate them:
+
+- **(a) Connections held across slow external calls** — §3's hypothesis, the one Phase 3 addresses.
+- **(b) A connection LEAK** — connections checked out and never returned, draining the pool over time
+  until the next caller, however light the traffic, found nothing available.
+
+**⚠️ (b) FITS THE OBSERVATIONS AT LEAST AS WELL AS (a) AND HAS NEVER BEEN CONSIDERED.** It explains
+exhaustion under near-zero traffic without requiring ~7 concurrent generations for which there is no
+evidence: no request burst, no generation activity, five minutes of silence.
+
+**⚠️ SO §3 IS NOT CONFIRMED, AND PHASE 3 REMAINS UNVALIDATED AS THE RIGHT TARGET.** Restructuring six
+services' transaction boundaries and twelve quota sites addresses (a) and **does nothing for (b)**.
+
+**⚠️ THE DISCRIMINATING INSTRUMENT IS ALREADY BUILT AND HAS NOT SHIPPED.** Phase 1's
+`leak-detection-threshold: 60000` logs a full stack trace naming any path holding a connection past
+60 s — it separates (a) from (b) outright. **It is merged to `releases/v0.112.0` but NOT to `main`, so
+it is not in production. Deploying Phase 1 is now the highest-value next action in this release —
+higher than building Phase 3.**
