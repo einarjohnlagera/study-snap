@@ -153,6 +153,81 @@ class NativeQueryPostgresIntegrationTest {
     @Autowired
     private LinkedLearnerRequestExpiryWorker requestExpiryWorker;
 
+    /** Killing test for removing the pack index or changing its non-null predicate to the wrong leg. */
+    @Test
+    void activeNoteScopedSessionsOnTheSamePackStillCollide() {
+        UUID userId = seedUser("session-pack-collision");
+        UUID noteA = seedPublicNote(userId, "Pack collision A", new String[] {});
+        UUID noteB = seedPublicNote(userId, "Pack collision B", new String[] {});
+        UUID packId = seedStudyPack(userId, noteA, "Pack collision");
+        seedQuizSession(userId, packId, noteA, null);
+
+        assertThatThrownBy(() -> seedQuizSession(userId, packId, noteB, null))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("idx_quick_review_sessions_one_active_generation");
+    }
+
+    /** Killing test for removing the note index or changing its non-null predicate to the wrong leg. */
+    @Test
+    void activeNoteScopedSessionsOnTheSameNoteStillCollide() {
+        UUID userId = seedUser("session-note-collision");
+        UUID noteA = seedPublicNote(userId, "Note collision A", new String[] {});
+        UUID noteB = seedPublicNote(userId, "Note collision B", new String[] {});
+        UUID packA = seedStudyPack(userId, noteA, "Note collision pack A");
+        UUID packB = seedStudyPack(userId, noteB, "Note collision pack B");
+        seedQuizSession(userId, packA, noteA, null);
+
+        assertThatThrownBy(() -> seedQuizSession(userId, packB, noteA, null))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("idx_quick_review_sessions_one_active_generation_note");
+    }
+
+    /**
+     * Killing test for accidentally retaining a borrowed pack anchor on plan-scoped Adaptive Practice.
+     * Both active rows use ADAPTIVE and the collection contains the note, yet their distinct anchor
+     * shapes must coexist.
+     */
+    @Test
+    void activeCollectionAndNoteScopedAdaptiveSessionsCoexist() {
+        UUID userId = seedUser("session-anchor-coexist");
+        UUID noteId = seedPublicNote(userId, "Shared source", new String[] {});
+        UUID packId = seedStudyPack(userId, noteId, "Shared source pack");
+        UUID collectionId = seedCollection(userId, "Shared source plan");
+        seedCollectionItem(collectionId, noteId);
+
+        UUID noteSession = seedQuizSession(userId, packId, noteId, null);
+        UUID collectionSession = seedQuizSession(userId, null, null, collectionId);
+
+        assertThat(jdbcTemplate.queryForList(
+                "select id from quick_review_sessions where id in (?, ?)",
+                UUID.class,
+                noteSession,
+                collectionSession
+        )).containsExactlyInAnyOrder(noteSession, collectionSession);
+    }
+
+    /** Killing test for removing V133's collection-scoped partial unique index. */
+    @Test
+    void activeCollectionScopedSessionsOnTheSamePlanStillCollide() {
+        UUID userId = seedUser("session-collection-collision");
+        UUID collectionId = seedCollection(userId, "Collision plan");
+        seedQuizSession(userId, null, null, collectionId);
+
+        assertThatThrownBy(() -> seedQuizSession(userId, null, null, collectionId))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("idx_quick_review_sessions_one_active_generation_collection");
+    }
+
+    /** Killing test for removing V133's anchor CHECK entirely. */
+    @Test
+    void anchorlessQuizSessionIsRejected() {
+        UUID userId = seedUser("session-anchorless");
+
+        assertThatThrownBy(() -> seedQuizSession(userId, null, null, null))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("chk_quick_review_sessions_anchor");
+    }
+
     /**
      * Killing test for changing {@code <=} to {@code <}, dropping the PENDING predicate, or selecting
      * a future request. The exact-boundary row is deliberate: an "old enough" fixture cannot
@@ -1803,6 +1878,54 @@ class NativeQueryPostgresIntegrationTest {
         return id;
     }
 
+    private UUID seedStudyPack(UUID ownerUserId, UUID noteId, String title) {
+        UUID id = UUID.randomUUID();
+        jdbcTemplate.update(
+                "insert into study_packs"
+                        + " (id, owner_user_id, note_id, input_type, title, summary, key_concepts, quiz,"
+                        + " model_used, status, created_at, updated_at)"
+                        + " values (?, ?, ?, 'TEXT', ?, 'summary', '[]'::jsonb, '[]'::jsonb,"
+                        + " 'test-model', 'DONE', now(), now())",
+                id, ownerUserId, noteId, title
+        );
+        return id;
+    }
+
+    private UUID seedCollection(UUID ownerUserId, String title) {
+        UUID id = UUID.randomUUID();
+        jdbcTemplate.update(
+                "insert into note_collections (id, owner_user_id, title, created_at, updated_at)"
+                        + " values (?, ?, ?, now(), now())",
+                id, ownerUserId, title
+        );
+        return id;
+    }
+
+    private void seedCollectionItem(UUID collectionId, UUID noteId) {
+        jdbcTemplate.update(
+                "insert into note_collection_items (id, collection_id, note_id, position, created_at)"
+                        + " values (?, ?, ?, 0, now())",
+                UUID.randomUUID(), collectionId, noteId
+        );
+    }
+
+    private UUID seedQuizSession(
+            UUID userId,
+            UUID studyPackId,
+            UUID noteId,
+            UUID sourceCollectionId
+    ) {
+        UUID id = UUID.randomUUID();
+        jdbcTemplate.update(
+                "insert into quick_review_sessions"
+                        + " (id, user_id, study_pack_id, note_id, source_collection_id, session_mode, status,"
+                        + " current_question_index, current_round, total_questions, created_at)"
+                        + " values (?, ?, ?, ?, ?, 'ADAPTIVE', 'IN_PROGRESS', 0, 'INITIAL', 1, now())",
+                id, userId, studyPackId, noteId, sourceCollectionId
+        );
+        return id;
+    }
+
     private void prepare(NativeQueryMethod query, int index) {
         String statementName = "notelib_native_query_" + index;
         String sql = positionalParameters(query.sql());
@@ -1970,4 +2093,3 @@ class NativeQueryPostgresIntegrationTest {
         }
     }
 }
-

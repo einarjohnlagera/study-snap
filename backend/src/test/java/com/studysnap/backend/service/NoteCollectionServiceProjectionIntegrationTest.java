@@ -181,8 +181,9 @@ class NoteCollectionServiceProjectionIntegrationTest {
                 create table if not exists quick_review_sessions (
                     id uuid primary key,
                     user_id uuid not null,
-                    study_pack_id uuid not null,
-                    note_id uuid not null,
+                    study_pack_id uuid,
+                    note_id uuid,
+                    source_collection_id uuid,
                     session_mode varchar(32) not null,
                     status varchar(32) not null,
                     current_question_index integer not null,

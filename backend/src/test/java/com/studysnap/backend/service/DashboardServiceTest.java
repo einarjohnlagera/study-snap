@@ -95,6 +95,8 @@ class DashboardServiceTest {
     private UserUsageService userUsageService;
     @Mock
     private BillingUsagePeriodService billingUsagePeriodService;
+    @Mock
+    private QuickReviewAdaptivePracticeService adaptivePracticeService;
 
     private DashboardService dashboardService;
 
@@ -114,7 +116,8 @@ class DashboardServiceTest {
                 featureGateService,
                 conceptHealthService,
                 userUsageService,
-                billingUsagePeriodService
+                billingUsagePeriodService,
+                adaptivePracticeService
         );
         lenient().when(subscriptionService.resolvePlan(any(UUID.class))).thenReturn(PlanType.PRO);
         OffsetDateTime periodStart = OffsetDateTime.now().minusDays(10);
@@ -788,6 +791,41 @@ class DashboardServiceTest {
         assertThat(response.studyPackId()).isEqualTo(adaptivePackId.toString());
         assertThat(response.currentQuestionIndex()).isEqualTo(1);
         assertThat(response.totalQuestions()).isEqualTo(8);
+    }
+
+    @Test
+    void getContinueStudyingRecommendation_keepsCollectionAdaptiveSessionEnterable() {
+        UUID userId = UUID.randomUUID();
+        UUID collectionId = UUID.randomUUID();
+        QuickReviewSessionEntity session = buildInProgressSession(
+                userId,
+                UUID.randomUUID(),
+                1,
+                5,
+                QuickReviewRound.INITIAL,
+                Map.of(),
+                OffsetDateTime.now().minusMinutes(2)
+        );
+        session.setSessionMode(QuickReviewSessionMode.ADAPTIVE);
+        session.setStudyPackId(null);
+        session.setNoteId(null);
+        session.setSourceCollectionId(collectionId);
+        NoteCollectionEntity collection = new NoteCollectionEntity();
+        collection.setId(collectionId);
+        collection.setOwnerUserId(userId);
+        collection.setTitle("Structural Engineering Plan");
+        stubLatestInProgressSession(userId, session);
+        when(adaptivePracticeService.resolveSourceCollectionId(session)).thenReturn(collectionId);
+        when(noteCollectionRepository.findByIdAndOwnerUserId(collectionId, userId))
+                .thenReturn(Optional.of(collection));
+
+        ContinueStudyingResponse response = dashboardService.getContinueStudyingRecommendation(userId);
+
+        assertThat(response.resumeType()).isEqualTo(ContinueStudyingResumeType.ADAPTIVE);
+        assertThat(response.studyPackId()).isNull();
+        assertThat(response.noteId()).isNull();
+        assertThat(response.noteTitle()).isEqualTo("Structural Engineering Plan");
+        assertThat(response.sessionId()).isEqualTo(session.getId().toString());
     }
 
     @Test

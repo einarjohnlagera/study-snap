@@ -265,6 +265,7 @@ export type ContinueStudyingResponse = {
   currentRound: "INITIAL" | "RETRY" | null;
   remainingQuestions: number | null;
   resumeState: ContinueStudyingResumeState | null;
+  sessionId?: string | null;
 };
 
 export type TodayFocusResponse = {
@@ -1329,11 +1330,9 @@ export type AdaptivePracticeFocusConcept = {
 export type QuickReviewAdaptiveQuizResponse = {
   sessionId: string | null;
   status: QuizSessionStatus | null;
-  /** Null when the server declined to start a session (nothing due, or every eligible pack is
-   *  occupied) -- emptyCollectionResponse returns nulls for the whole identity block. */
+  /** Null for a collection-anchored session or when the server declined to start one. */
   studyPackId: string | null;
-  /** The anchor note, DERIVED BY THE SERVER. Clients must route with this rather than computing an
-   *  anchor themselves -- a plan's item order is mutable, so a client-computed anchor drifts. */
+  /** Null for a collection-anchored session. Use sessionId for its enter/resume route. */
   noteId: string | null;
   title: string;
   focusConcepts: AdaptivePracticeFocusConcept[];
@@ -1637,7 +1636,7 @@ export type InterviewReadinessReportResponse = {
   strengths: string[];
   gaps: Array<{
     concept: string;
-    noteId: string;
+    noteId: string | null;
   }>;
   talkingPoints: string[];
   pacingNotes: number[];
@@ -3851,9 +3850,8 @@ export async function generateAdaptiveQuickReviewQuiz(
 /**
  * Plan- and Review-Set-scoped Adaptive Practice.
  *
- * Collection-addressed on purpose: the server derives the session's anchor pack from the
- * collection. The client must NOT compute and send an anchor -- a plan's item order is mutable, so a
- * client-computed anchor drifts and the resume lookup would miss a live session.
+ * Collection-addressed on purpose: the collection is the session anchor. The client must NOT
+ * compute and send a pack anchor -- a plan's item order is mutable.
  */
 export async function generateAdaptivePracticeForCollection(
   collectionId: string,
@@ -3883,6 +3881,23 @@ export async function getInProgressAdaptivePracticeSession(
 ): Promise<QuickReviewAdaptiveQuizResponse> {
   const response = await fetchWithAuth(
     `/notes/${noteId}/adaptive-practice/in-progress`,
+    {
+      method: "GET",
+      headers: buildAuthHeaders(),
+    },
+    true,
+  );
+  return parseApiResponse<QuickReviewAdaptiveQuizResponse>(
+    response,
+    "Could not load Adaptive Practice session.",
+  );
+}
+
+export async function getAdaptivePracticeSession(
+  sessionId: string,
+): Promise<QuickReviewAdaptiveQuizResponse> {
+  const response = await fetchWithAuth(
+    `/adaptive-practice/sessions/${sessionId}`,
     {
       method: "GET",
       headers: buildAuthHeaders(),

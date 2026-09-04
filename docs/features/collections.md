@@ -466,6 +466,13 @@ Collection detail items also expose a read-only weak-area signal from the existi
 - Free users and notes without a Study Pack receive `0` and an empty list. Lookup failures also degrade to empty weak-area data without failing collection detail.
 - The backend remains profile-agnostic and does not branch on `ProfileType`.
 
+The collection-level Adaptive Practice action starts or resumes a session anchored on that collection,
+not on a pack chosen from its mutable item order. Source packs remain independently sampled and stamped
+for ConceptHealth attribution, including packs that currently have their own note-scoped Adaptive
+session. The start response routes by `sessionId`; enter and refresh resolve through
+`GET /adaptive-practice/sessions/{sessionId}`. There is deliberately no restored
+collection-addressed in-progress endpoint and the client never computes an anchor.
+
 The detail response also exposes neutral hierarchy metadata:
 
 - `parentCollectionId`

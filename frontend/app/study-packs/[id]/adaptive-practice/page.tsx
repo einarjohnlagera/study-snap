@@ -31,6 +31,7 @@ import {
   completeAdaptivePracticeSession,
   forfeitAdaptivePracticeSession,
   generateAdaptiveQuickReviewQuiz,
+  getAdaptivePracticeSession,
   getCollectionGoal,
   getInProgressAdaptivePracticeSession,
   getMe,
@@ -99,6 +100,7 @@ function formatSelectionRationale(
 export default function AdaptivePracticePage() {
   const router = useRouter();
   const pathname = usePathname();
+  const sessionAddressed = pathname.startsWith("/adaptive-practice/sessions/");
   const params = useParams<{ id: string }>();
   const searchParams = useSearchParams();
   const requestInFlightRef = useRef(false);
@@ -128,13 +130,18 @@ export default function AdaptivePracticePage() {
   const [primaryCollectionCompanion, setPrimaryCollectionCompanion] = useState<CompanionContent | null>(null);
   const { usageSummary } = useBillingUsageSummary();
 
-  const noteId = useMemo(() => {
+  const routeId = useMemo(() => {
     if (!params?.id) {
       return "";
     }
     return Array.isArray(params.id) ? params.id[0] : params.id;
   }, [params]);
-  const noteDetailHref = useMemo(() => (note ? `/notes/${note.id}` : "/library"), [note]);
+  const noteId = sessionAddressed ? adaptiveQuiz?.noteId ?? "" : routeId;
+  const noteDetailHref = useMemo(
+    () => sessionAddressed ? "/dashboard" : note ? `/notes/${note.id}` : "/library",
+    [note, sessionAddressed],
+  );
+  const backLabel = sessionAddressed ? "Dashboard" : "Note";
   const adaptivePracticeEntry = useMemo(
     () => normalizeAdaptivePracticeEntry(searchParams.get(ADAPTIVE_PRACTICE_ENTRY_QUERY_PARAM)),
     [searchParams],
@@ -197,13 +204,13 @@ export default function AdaptivePracticePage() {
     if (requestInFlightRef.current) {
       return;
     }
-    if (!noteId) {
-      setError("Note not found.");
+    if (!routeId) {
+      setError(sessionAddressed ? "Adaptive Practice session not found." : "Note not found.");
       setLoading(false);
       return;
     }
 
-    if (!force && loadedForNoteRef.current === noteId) {
+    if (!force && loadedForNoteRef.current === routeId) {
       return;
     }
 
@@ -227,8 +234,19 @@ export default function AdaptivePracticePage() {
     }
 
     try {
+      if (sessionAddressed) {
+        const response = await getAdaptivePracticeSession(routeId);
+        loadedForNoteRef.current = routeId;
+        if (response.noteId) {
+          setNote(await getNote(response.noteId).catch(() => null));
+        } else {
+          setNote(null);
+        }
+        applyAdaptiveSession(response);
+        return;
+      }
       const detail = await getNote(noteId);
-      loadedForNoteRef.current = noteId;
+      loadedForNoteRef.current = routeId;
       if (detail.studyPackStatus !== "STUDY_PACK_READY") {
         setNote(detail);
         setError("Generate a Study Pack first.");
@@ -254,7 +272,7 @@ export default function AdaptivePracticePage() {
       }
       applyAdaptiveSession(response);
     } catch (err) {
-      if (pathname.startsWith("/study-packs/")) {
+      if (!sessionAddressed && pathname.startsWith("/study-packs/")) {
         const byStudyPack = await getMyStudyPack(noteId).catch(() => null);
         if (byStudyPack?.noteId) {
           const nextQuery = searchParams.toString();
@@ -283,20 +301,20 @@ export default function AdaptivePracticePage() {
       setLoading(false);
       requestInFlightRef.current = false;
     }
-  }, [applyAdaptiveSession, hasReachedAdaptivePracticeLimit, noteId, pathname, router, searchParams, shouldUpgradeForAdaptivePracticeLimit]);
+  }, [applyAdaptiveSession, hasReachedAdaptivePracticeLimit, noteId, pathname, routeId, router, searchParams, sessionAddressed, shouldUpgradeForAdaptivePracticeLimit]);
 
   useEffect(() => {
-    if (!noteId) {
+    if (!routeId) {
       return;
     }
-    if (loadedForNoteRef.current === noteId) {
+    if (loadedForNoteRef.current === routeId) {
       return;
     }
     void loadAdaptiveQuiz();
-  }, [loadAdaptiveQuiz, noteId]);
+  }, [loadAdaptiveQuiz, routeId]);
 
   useEffect(() => {
-    if (!hasReachedAdaptivePracticeLimit || adaptiveQuiz?.sessionId) {
+    if (sessionAddressed || !hasReachedAdaptivePracticeLimit || adaptiveQuiz?.sessionId) {
       return;
     }
     if (shouldUpgradeForAdaptivePracticeLimit) {
@@ -308,7 +326,7 @@ export default function AdaptivePracticePage() {
     setPremiumLocked(false);
     setShowPremiumPaywall(false);
     setShowLimitReachedState(true);
-  }, [adaptiveQuiz?.sessionId, hasReachedAdaptivePracticeLimit, shouldUpgradeForAdaptivePracticeLimit]);
+  }, [adaptiveQuiz?.sessionId, hasReachedAdaptivePracticeLimit, sessionAddressed, shouldUpgradeForAdaptivePracticeLimit]);
 
   const quiz = useMemo(() => adaptiveQuiz?.quiz ?? [], [adaptiveQuiz]);
   const hasQuestions = quiz.length > 0;
@@ -392,14 +410,16 @@ export default function AdaptivePracticePage() {
   }, [isComplete]);
 
   useEffect(() => {
-    if (adaptiveQuiz?.status !== "GENERATING" || !note) {
+    if (adaptiveQuiz?.status !== "GENERATING" || (!sessionAddressed && !note)) {
       return;
     }
 
     let isMounted = true;
     const pollGenerationStatus = async () => {
       try {
-        const response = await getInProgressAdaptivePracticeSession(note.id);
+        const response = sessionAddressed
+          ? await getAdaptivePracticeSession(adaptiveQuiz.sessionId ?? routeId)
+          : await getInProgressAdaptivePracticeSession(note!.id);
         if (!isMounted) {
           return;
         }
@@ -422,10 +442,13 @@ export default function AdaptivePracticePage() {
       isMounted = false;
       globalThis.clearInterval(intervalId);
     };
-  }, [adaptiveQuiz?.status, applyAdaptiveSession, note]);
+  }, [adaptiveQuiz?.sessionId, adaptiveQuiz?.status, applyAdaptiveSession, note, routeId, sessionAddressed]);
 
   const handleStartAdaptivePractice = useCallback(async () => {
     if (!note || requestInFlightRef.current) {
+      if (sessionAddressed) {
+        setError("Start a new plan-scoped practice session from its plan.");
+      }
       return;
     }
 
@@ -477,7 +500,7 @@ export default function AdaptivePracticePage() {
       requestInFlightRef.current = false;
       setStartingAdaptive(false);
     }
-  }, [adaptivePracticeEntry, applyAdaptiveSession, currentPlan, hasReachedAdaptivePracticeLimit, note, openAdaptivePracticePaywall, shouldUpgradeForAdaptivePracticeLimit]);
+  }, [adaptivePracticeEntry, applyAdaptiveSession, currentPlan, hasReachedAdaptivePracticeLimit, note, openAdaptivePracticePaywall, sessionAddressed, shouldUpgradeForAdaptivePracticeLimit]);
 
   const adaptiveGenerationLocked = startingAdaptive || adaptiveQuiz?.status === "GENERATING";
   // Display names for the focus list. Duplicates are preserved DELIBERATELY: two packs weak on the
@@ -561,7 +584,7 @@ export default function AdaptivePracticePage() {
       return;
     }
     const nextIndex = currentMatchingGroup ? currentMatchingGroup.endIndex + 1 : currentIndex + 1;
-    if (nextIndex >= quiz.length && !completionTracked && noteId) {
+    if (nextIndex >= quiz.length && !completionTracked && adaptiveQuiz?.sessionId) {
       setCompletionTracked(true);
       void trackAnalyticsEvent({
         eventType: "ADAPTIVE_PRACTICE_COMPLETED",
@@ -602,9 +625,8 @@ export default function AdaptivePracticePage() {
           .then((completed) => {
             setCompletionResult(completed);
             setCompletionSignalLoaded(true);
-            // studyPackId is null only on a declined start, which carries no session to complete,
-            // so this branch is unreachable from here -- but the type now says so rather than
-            // relying on a cast that hid it.
+            // Collection-anchored sessions have no single Study Pack, so their shared next-step
+            // lookup is intentionally omitted rather than inventing a mutable source-pack anchor.
             return adaptiveQuiz.studyPackId
               ? getPostSessionNextStep(adaptiveQuiz.studyPackId)
               : Promise.resolve(null);
@@ -636,7 +658,7 @@ export default function AdaptivePracticePage() {
             </Button>
           </>
         ) : (
-          <BackLink href={noteDetailHref} label="Note" />
+          <BackLink href={noteDetailHref} label={backLabel} />
         )}
       </div>
 
@@ -653,7 +675,7 @@ export default function AdaptivePracticePage() {
           </p>
           <h1 className="text-xl font-semibold sm:text-2xl">You’ve reached your quiz limit for this month</h1>
           <p className="text-sm text-foreground/75">Your Adaptive Practice limit resets on your next billing cycle.</p>
-          <BackLink href={noteDetailHref} label="Note" />
+          <BackLink href={noteDetailHref} label={backLabel} />
         </Card>
       ) : error ? (
         <Card className="space-y-4 p-4 sm:p-6">
@@ -689,14 +711,18 @@ export default function AdaptivePracticePage() {
           <p className="text-sm text-foreground/75">
             {adaptiveQuiz.message}
           </p>
-          <Button
-            type="button"
-            className="w-full sm:w-auto"
-            onClick={() => void handleStartAdaptivePractice()}
-            disabled={adaptiveGenerationLocked}
-          >
-            {adaptiveGenerationLocked ? "Starting..." : "Try Again"}
-          </Button>
+          {sessionAddressed ? (
+            <BackLink href={noteDetailHref} label={backLabel} />
+          ) : (
+            <Button
+              type="button"
+              className="w-full sm:w-auto"
+              onClick={() => void handleStartAdaptivePractice()}
+              disabled={adaptiveGenerationLocked}
+            >
+              {adaptiveGenerationLocked ? "Starting..." : "Try Again"}
+            </Button>
+          )}
         </Card>
       ) : !adaptiveQuiz || (!hasQuestions && adaptiveFocusConceptNames.length === 0) ? (
         <Card className="space-y-4 p-4 sm:p-6">
@@ -839,7 +865,7 @@ export default function AdaptivePracticePage() {
             </ResultGuidanceGroup>
           ) : null}
           <div className="flex flex-col gap-2 sm:flex-row">
-            {nextStepResponse === null ? (
+            {nextStepResponse === null && !sessionAddressed ? (
               <Button
                 type="button"
                 className="w-full sm:w-auto"
@@ -859,7 +885,7 @@ export default function AdaptivePracticePage() {
             </Button>
           </div>
           <div className="pt-1">
-            <BackLink href={noteDetailHref} label="Note" />
+            <BackLink href={noteDetailHref} label={backLabel} />
           </div>
           {showAnswerReview ? (
             <QuizAnswerReview

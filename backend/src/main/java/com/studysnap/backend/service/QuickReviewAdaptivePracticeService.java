@@ -23,6 +23,7 @@ import com.studysnap.backend.exception.AdaptivePracticeSessionNotFoundException;
 import com.studysnap.backend.exception.AppException;
 import com.studysnap.backend.exception.StudyPackNotFoundException;
 import com.studysnap.backend.exception.CollectionNotFoundException;
+import com.studysnap.backend.exception.QuickReviewSessionAnchorException;
 import com.studysnap.backend.repository.NoteCollectionItemRepository;
 import com.studysnap.backend.repository.NoteCollectionRepository;
 import com.studysnap.backend.repository.QuickReviewSessionRepository;
@@ -90,8 +91,6 @@ public class QuickReviewAdaptivePracticeService {
     private static final String ANALYTICS_METADATA_ENTRY = "entry";
     private static final String ANALYTICS_METADATA_SOURCE_SCOPE = "sourceScope";
     private static final String SUB_MODE_INTERVIEW = "INTERVIEW";
-    private static final String ADAPTIVE_SESSION_ELSEWHERE_MESSAGE =
-        "You have another Adaptive Practice session in progress on one of this plan's notes. Finish or end it to practise across the plan.";
     private static final String INTERVIEW_SESSION_ACTIVE_MESSAGE =
         "You have an Interview Practice session in progress on this note. Finish or end it before starting Adaptive Practice.";
     private static final int MAX_PLAN_SOURCE_PACKS = 3;
@@ -283,7 +282,7 @@ public class QuickReviewAdaptivePracticeService {
     ) {
         authService.requireEmailVerified(userId);
         UUID collectionId = UuidParsingUtils.parseUuidOrThrow(collectionIdRaw, CollectionNotFoundException::new);
-        NoteCollectionEntity collection = noteCollectionRepository.findByIdAndOwnerUserId(collectionId, userId)
+        NoteCollectionEntity collection = noteCollectionRepository.findByIdAndOwnerUserIdForUpdate(collectionId, userId)
                 .orElseThrow(CollectionNotFoundException::new);
         PlanType planType = subscriptionService.resolvePlan(userId);
         featureGateService.checkFeatureAccess(planType, Feature.ADAPTIVE_QUIZ);
@@ -293,12 +292,11 @@ public class QuickReviewAdaptivePracticeService {
         QuickReviewSessionEntity collectionSession = activeAdaptiveSessions
                 .stream()
                 .filter(session -> !isInterviewSession(session))
-                .filter(session -> collectionId.equals(extractSourceCollectionId(session)))
+                .filter(session -> collectionId.equals(resolveSourceCollectionId(session)))
                 .findFirst()
                 .orElse(null);
         if (collectionSession != null) {
-            StudyPackEntity anchor = findOwnedStudyPackOrThrow(collectionSession.getStudyPackId(), userId);
-            return toAdaptiveResponse(collectionSession, anchor);
+            return toAdaptiveResponse(collectionSession, null, collection);
         }
 
         // ⚠️ GATES SIT HERE ON PURPOSE: AFTER the resume return, BEFORE the expensive load.
@@ -340,7 +338,7 @@ public class QuickReviewAdaptivePracticeService {
         // it selects `key_concepts` and never `quiz` or `summary`.
         //
         // ⚠️ THIS IS A REDUCTION, NOT A BOUND, and that distinction is load-bearing. Phase 2 below
-        // loads entities for the packs that survive focus and occupancy filtering — typically a small
+        // loads entities for the packs that survive focus filtering — typically a small
         // fraction. In the worst case, where EVERY pack has a due-or-weak concept, phase 2 loads what
         // phase 1 used to and this has bought a query. A true bound needs
         // LongExamPlanSourceSampler.EligiblePlanSource to stop taking a StudyPackEntity, and that
@@ -402,37 +400,13 @@ public class QuickReviewAdaptivePracticeService {
             return emptyCollectionResponse(collection, NO_WEAK_CONCEPTS_MESSAGE);
         }
 
-        // A pack already carrying an active ADAPTIVE session cannot anchor this one: V41 allows a
-        // single active session per (user_id, study_pack_id, session_mode), and all three session
-        // kinds share the ADAPTIVE discriminator.
-        //
-        // ⚠️ EVERY session still live at this point is FOREIGN. This plan's own session was resumed
-        // and returned above, by recorded sourceCollectionId. So the occupant is either an Interview
-        // Practice session, a note-scoped Adaptive session, or ANOTHER plan's -- and anchoring here
-        // previously RETURNED THAT FOREIGN SESSION as if it were this plan's, which made plan-scoped
-        // practice a permanent dead end while the plan's own in-progress endpoint reported nothing.
-        Map<UUID, QuickReviewSessionEntity> occupantByPackId = new LinkedHashMap<>();
-        for (QuickReviewSessionEntity active : activeAdaptiveSessions) {
-            if (active.getStudyPackId() != null) {
-                occupantByPackId.putIfAbsent(active.getStudyPackId(), active);
-            }
-        }
-        List<UUID> focusEligiblePackIds = withFocus.stream()
-                .filter(packId -> !occupantByPackId.containsKey(packId))
-                .toList();
-        if (focusEligiblePackIds.isEmpty()) {
-            // Everything worth practising is occupied. Say WHICH kind of session is in the way --
-            // reporting "no weak concepts" here is false, and it is what the learner used to see.
-            boolean blockedByInterview = withFocus.stream()
-                    .map(occupantByPackId::get)
-                    .filter(Objects::nonNull)
-                    .anyMatch(this::isInterviewSession);
-            return emptyCollectionResponse(
-                    collection,
-                    blockedByInterview ? INTERVIEW_SESSION_ACTIVE_MESSAGE : ADAPTIVE_SESSION_ELSEWHERE_MESSAGE);
-        }
+        // Plan-scoped practice is anchored on the collection, not on one of its source packs. An
+        // active note-scoped Adaptive or Interview session therefore does not make that pack
+        // ineligible as a source. The collection row lock plus the collection partial unique index
+        // serialise concurrent starts for this plan; source sampling remains independently bounded.
+        List<UUID> focusEligiblePackIds = List.copyOf(withFocus);
 
-        // ⚠️ PHASE 2 — full entities, ONLY for the packs that survived focus and occupancy filtering.
+        // ⚠️ PHASE 2 — full entities, ONLY for the packs that survived focus filtering.
         // Owner and status stay in SQL here (findByOwnerUserIdAndNoteIdInAndStatus), so this is a
         // second, independent access check rather than a repeat of phase 1's Java-side one.
         List<UUID> focusEligibleNoteIds = focusEligiblePackIds.stream()
@@ -457,26 +431,11 @@ public class QuickReviewAdaptivePracticeService {
             return emptyCollectionResponse(collection, NO_SOURCE_SESSION_MESSAGE);
         }
         UUID sessionId = UUID.randomUUID();
-        StudyPackEntity primary = focusEligible.getFirst().studyPack();
+        StudyPackEntity samplingSeed = focusEligible.getFirst().studyPack();
         List<LongExamPlanSourceSampler.EligiblePlanSource> sampled = longExamPlanSourceSampler.sample(
-                focusEligible, primary.getId(), MAX_PLAN_SOURCE_PACKS, sessionId);
+                focusEligible, samplingSeed.getId(), MAX_PLAN_SOURCE_PACKS, sessionId);
         List<AdaptivePracticeFocusConceptResponse> focusEntries = buildBoundedFocusEntries(
                 sampled, reasonByFocus, eligibleByPack);
-
-        QuickReviewSessionEntity anchorCollision = quickReviewSessionRepository
-                .findTopByUserIdAndStudyPackIdAndSessionModeAndStatusInOrderByCreatedAtDesc(
-                        userId, primary.getId(), QuickReviewSessionMode.ADAPTIVE, ACTIVE_GENERATION_STATUSES)
-                .orElse(null);
-        if (anchorCollision != null) {
-            // Pure race guard now: a session appeared on the chosen anchor between the snapshot above
-            // and this read. It is never this plan's session -- that was returned earlier -- so it
-            // must NOT be handed back as though it were.
-            return emptyCollectionResponse(
-                    collection,
-                    isInterviewSession(anchorCollision)
-                            ? INTERVIEW_SESSION_ACTIVE_MESSAGE
-                            : ADAPTIVE_SESSION_ELSEWHERE_MESSAGE);
-        }
 
         // ⚠️ ONE rate-limit unit, deliberately, even though generateCollectionQuiz issues up to
         // MAX_PLAN_SOURCE_PACKS LLM calls where the note path issues one. Decided (owner,
@@ -485,7 +444,7 @@ public class QuickReviewAdaptivePracticeService {
         // allowance on a path whose fan-out is already bounded. Revisit only if the bound moves.
         int questionCount = resolveAdaptiveQuestionCount(focusEntries.size());
         QuickReviewSessionEntity session = buildGeneratingSession(
-                userId, primary.getId(), primary, focusEntries, collectionId);
+                userId, null, null, focusEntries, collectionId);
         session.setId(sessionId);
         session = quickReviewSessionRepository.save(session);
         try {
@@ -498,8 +457,8 @@ public class QuickReviewAdaptivePracticeService {
             QuickReviewSessionEntity saved = quickReviewSessionRepository.save(session);
             userUsageService.incrementAdaptiveQuizGeneration(userId, saved.getCreatedAt());
             try {
-                activityTrackingService.recordActivity(userId, ActivityType.STARTED_ADAPTIVE_PRACTICE, primary.getId());
-                analyticsService.trackEvent(userId, AnalyticsEventType.ADAPTIVE_PRACTICE_STARTED, primary.getId(), Map.of(
+                activityTrackingService.recordActivity(userId, ActivityType.STARTED_ADAPTIVE_PRACTICE, samplingSeed.getId());
+                analyticsService.trackEvent(userId, AnalyticsEventType.ADAPTIVE_PRACTICE_STARTED, samplingSeed.getId(), Map.of(
                         ANALYTICS_METADATA_SESSION_ID, saved.getId().toString(),
                         ANALYTICS_METADATA_WEAK_CONCEPT_COUNT, focusEntries.size(),
                         ANALYTICS_METADATA_ENTRY, normalizeAdaptivePracticeEntry(entry),
@@ -507,10 +466,10 @@ public class QuickReviewAdaptivePracticeService {
             } catch (RuntimeException ignored) {
                 // Activity/analytics failures must not turn a generated quiz into a failed session.
             }
-            return toAdaptiveResponse(saved, primary);
+            return toAdaptiveResponse(saved, null, collection);
         } catch (RuntimeException failure) {
             markSessionFailed(session);
-            return toAdaptiveResponse(quickReviewSessionRepository.save(session), primary);
+            return toAdaptiveResponse(quickReviewSessionRepository.save(session), null, collection);
         }
     }
 
@@ -603,6 +562,15 @@ public class QuickReviewAdaptivePracticeService {
         return SUB_MODE_INTERVIEW.equals(QuizSessionStateUtils.extractSubMode(session.getSessionState()));
     }
 
+    public UUID resolveSourceCollectionId(QuickReviewSessionEntity session) {
+        UUID persistedCollectionId = session.getSourceCollectionId();
+        return persistedCollectionId != null ? persistedCollectionId : extractSourceCollectionId(session);
+    }
+
+    /**
+     * Legacy fallback for plan-scoped sessions created before V133. Do not remove this JSONB read
+     * while a pre-migration in-flight session can still need to resume.
+     */
     private UUID extractSourceCollectionId(QuickReviewSessionEntity session) {
         if (session.getSessionState() == null) {
             return null;
@@ -690,6 +658,36 @@ public class QuickReviewAdaptivePracticeService {
             List.of(),
             FOCUS_MESSAGE
         );
+    }
+
+    @Transactional(readOnly = true)
+    public QuickReviewAdaptiveQuizResponse getAdaptiveSessionById(String sessionIdRaw, UUID userId) {
+        UUID sessionId = UuidParsingUtils.parseUuidOrThrow(
+                sessionIdRaw,
+                AdaptivePracticeSessionNotFoundException::new
+        );
+        QuickReviewSessionEntity session = quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(
+                        sessionId,
+                        userId,
+                        QuickReviewSessionMode.ADAPTIVE
+                )
+                .filter(candidate -> !isInterviewSession(candidate))
+                .orElseThrow(AdaptivePracticeSessionNotFoundException::new);
+
+        UUID sourceCollectionId = resolveSourceCollectionId(session);
+        if (sourceCollectionId != null) {
+            NoteCollectionEntity collection = noteCollectionRepository
+                    .findByIdAndOwnerUserId(sourceCollectionId, userId)
+                    .orElseThrow(AdaptivePracticeSessionNotFoundException::new);
+            return toAdaptiveResponse(session, null, collection);
+        }
+        if (session.getStudyPackId() == null) {
+            throw new QuickReviewSessionAnchorException();
+        }
+        StudyPackEntity studyPack = studyPackRepository
+                .findByIdAndOwnerUserId(session.getStudyPackId(), userId)
+                .orElseThrow(AdaptivePracticeSessionNotFoundException::new);
+        return toAdaptiveResponse(session, studyPack);
     }
 
     public AdaptivePracticeCompleteResponse completeAdaptiveSession(
@@ -790,11 +788,16 @@ public class QuickReviewAdaptivePracticeService {
             // correct concepts and record no misses (they cannot be computed reliably).
             List<String> correctConcepts = correctConceptNames == null ? List.of() : correctConceptNames;
             if (!correctConcepts.isEmpty()) {
-                conceptHealthService.recordCorrectAnswers(userId, session.getStudyPackId(), correctConcepts, now);
+                conceptHealthService.recordCorrectAnswers(
+                        userId,
+                        requireSourceStudyPackId(null, session),
+                        correctConcepts,
+                        now
+                );
             }
         } else {
             for (Map.Entry<String, List<ChallengeQuizConceptStatResponse>> entry : breakdownBySource.entrySet()) {
-                UUID sourceStudyPackId = parseSourceStudyPackId(entry.getKey(), session.getStudyPackId());
+                UUID sourceStudyPackId = requireSourceStudyPackId(entry.getKey(), session);
                 List<String> correctConcepts = QuizSessionReviewUtils.computeFullyCorrectConcepts(entry.getValue());
                 List<String> missedConcepts = QuizSessionReviewUtils.computeConceptsWithMisses(entry.getValue());
                 if (!correctConcepts.isEmpty()) {
@@ -847,6 +850,14 @@ public class QuickReviewAdaptivePracticeService {
         }
     }
 
+    private UUID requireSourceStudyPackId(String raw, QuickReviewSessionEntity session) {
+        UUID sourceStudyPackId = parseSourceStudyPackId(raw, session.getStudyPackId());
+        if (sourceStudyPackId == null) {
+            throw new QuickReviewSessionAnchorException();
+        }
+        return sourceStudyPackId;
+    }
+
     private StudyPackEntity findOwnedStudyPackOrThrow(UUID studyPackId, UUID userId) {
         return studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId)
             .orElseThrow(StudyPackNotFoundException::new);
@@ -867,8 +878,14 @@ public class QuickReviewAdaptivePracticeService {
         QuickReviewSessionEntity session = new QuickReviewSessionEntity();
         session.setId(UUID.randomUUID());
         session.setUserId(userId);
-        session.setStudyPackId(studyPackId);
-        session.setNoteId(studyPack.getNoteId());
+        if (sourceCollectionId == null) {
+            session.setStudyPackId(studyPackId);
+            session.setNoteId(studyPack == null ? null : studyPack.getNoteId());
+        } else {
+            session.setStudyPackId(null);
+            session.setNoteId(null);
+        }
+        session.setSourceCollectionId(sourceCollectionId);
         session.setSessionMode(QuickReviewSessionMode.ADAPTIVE);
         session.setStatus(QuickReviewSessionStatus.GENERATING);
         session.setCurrentQuestionIndex(0);
@@ -888,7 +905,16 @@ public class QuickReviewAdaptivePracticeService {
         session.setSessionState(initialState);
         session.setCreatedAt(OffsetDateTime.now());
         session.setCompletedAt(null);
+        assertValidAnchor(session);
         return session;
+    }
+
+    private void assertValidAnchor(QuickReviewSessionEntity session) {
+        boolean hasPackNoteAnchor = session.getStudyPackId() != null && session.getNoteId() != null;
+        boolean hasCollectionAnchor = session.getSourceCollectionId() != null;
+        if (hasPackNoteAnchor == hasCollectionAnchor) {
+            throw new QuickReviewSessionAnchorException();
+        }
     }
 
     private void markSessionReady(
@@ -923,6 +949,14 @@ public class QuickReviewAdaptivePracticeService {
         QuickReviewSessionEntity session,
         StudyPackEntity studyPack
     ) {
+        return toAdaptiveResponse(session, studyPack, null);
+    }
+
+    private QuickReviewAdaptiveQuizResponse toAdaptiveResponse(
+        QuickReviewSessionEntity session,
+        StudyPackEntity studyPack,
+        NoteCollectionEntity sourceCollection
+    ) {
         List<QuizItem> quiz = QuizSessionStateUtils.extractQuiz(session.getSessionState());
         String message = switch (session.getStatus()) {
             case GENERATING -> ADAPTIVE_GENERATING_MESSAGE;
@@ -932,13 +966,20 @@ public class QuickReviewAdaptivePracticeService {
         return new QuickReviewAdaptiveQuizResponse(
             session.getId().toString(),
             session.getStatus(),
-            studyPack.getId().toString(),
-            studyPack.getNoteId() == null ? null : studyPack.getNoteId().toString(),
-            studyPack.getTitle(),
+            session.getStudyPackId() == null ? null : session.getStudyPackId().toString(),
+            session.getNoteId() == null ? null : session.getNoteId().toString(),
+            sourceCollection == null ? requireStudyPack(studyPack).getTitle() : sourceCollection.getTitle(),
             extractFocusConcepts(session, studyPack),
             quiz,
             message
         );
+    }
+
+    private StudyPackEntity requireStudyPack(StudyPackEntity studyPack) {
+        if (studyPack == null) {
+            throw new QuickReviewSessionAnchorException();
+        }
+        return studyPack;
     }
 
     private List<AdaptivePracticeFocusConceptResponse> toFocusEntries(StudyPackEntity studyPack, AdaptiveFocus focus) {
@@ -972,13 +1013,20 @@ public class QuickReviewAdaptivePracticeService {
             } else if (value instanceof Map<?, ?> map && map.get("concept") instanceof String concept) {
                 result.add(new AdaptivePracticeFocusConceptResponse(
                         concept,
-                        map.get("sourceStudyPackId") instanceof String id ? id : fallbackStudyPack.getId().toString(),
-                        map.get("sourceTitle") instanceof String title ? title : fallbackStudyPack.getTitle(),
+                        map.get("sourceStudyPackId") instanceof String id
+                                ? id
+                                : fallbackStudyPack == null ? null : fallbackStudyPack.getId().toString(),
+                        map.get("sourceTitle") instanceof String title
+                                ? title
+                                : fallbackStudyPack == null ? null : fallbackStudyPack.getTitle(),
                         map.get("selectionReason") instanceof String reason ? reason : null
                 ));
             } else if (value instanceof String concept && !concept.isBlank()) {
                 result.add(new AdaptivePracticeFocusConceptResponse(
-                        concept.trim(), fallbackStudyPack.getId().toString(), fallbackStudyPack.getTitle(), null));
+                        concept.trim(),
+                        fallbackStudyPack == null ? null : fallbackStudyPack.getId().toString(),
+                        fallbackStudyPack == null ? null : fallbackStudyPack.getTitle(),
+                        null));
             }
         }
         return List.copyOf(result);

@@ -605,9 +605,16 @@ export default function InterviewPracticePage() {
                   <button
                     key={`${gap.noteId}-${gap.concept}`}
                     type="button"
-                    onClick={() => router.push(buildAdaptivePracticeHref(gap.noteId, {
-                      entry: ADAPTIVE_PRACTICE_INTERVIEW_PRACTICE_GAP_ENTRY,
-                    }))}
+                    disabled={!gap.noteId}
+                    onClick={() => {
+                      if (!gap.noteId) {
+                        setError("Could not open Adaptive Practice for this interview gap.");
+                        return;
+                      }
+                      router.push(buildAdaptivePracticeHref(gap.noteId, {
+                        entry: ADAPTIVE_PRACTICE_INTERVIEW_PRACTICE_GAP_ENTRY,
+                      }));
+                    }}
                     className="block text-left text-sm text-primary hover:underline"
                   >
                     {gap.concept}
@@ -617,6 +624,7 @@ export default function InterviewPracticePage() {
             ) : (
               <p className="text-sm text-foreground/60">No weak gaps flagged.</p>
             )}
+            {error ? <p className="text-sm text-red-600 dark:text-red-400">{error}</p> : null}
           </div>
           <ReportList title="Talking Points" items={report.talkingPoints} emptyText="Complete more answers to build talking points." />
           {report.pacingNotes.length > 0 ? (

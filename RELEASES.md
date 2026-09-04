@@ -233,7 +233,33 @@ and now a backend endpoint plus a frontend route.
 
 ### Shipped
 
-_(nothing yet)_
+- `V133__session_anchoring.sql` makes the pack/note pair nullable together, adds the cascading
+  collection anchor and validated anchor `CHECK`, preserves both note-scoped active-session
+  predicates, and adds collection-scoped uniqueness and FK indexes without rewriting existing rows.
+- Plan-scoped Adaptive Practice now writes a collection anchor (plus the legacy JSONB compatibility
+  key), resolves it column-first with JSONB fallback, and no longer borrows or excludes source packs
+  merely because they carry note-scoped sessions. Source sampling, its three-pack bound, focus
+  provenance and transaction/quota semantics are unchanged.
+- `GET /adaptive-practice/sessions/{sessionId}` and the session-addressed frontend route make a
+  collection-anchored session enterable and reloadable. Ownership and Interview Practice are hidden
+  behind the existing Adaptive Practice 404 contract.
+- Dashboard and collection launch/resume consumers now route collection sessions by `sessionId`;
+  note-scoped consumers retain note-addressed routes, and an unrouteable response is surfaced as an
+  error instead of silently stranding the learner. `DashboardService` reads plan scope through
+  `QuickReviewAdaptivePracticeService.resolveSourceCollectionId`, which is widened to `public` for
+  that one caller — a deliberate consequence of the Dashboard sweep, and the single resolver every
+  reader must use rather than a second copy of the column-first/JSONB-fallback rule.
+- H2 fixtures in nine integration tests gained `source_collection_id` and dropped `not null` from
+  both anchors, mirroring `V133` so the shared test schema does not contradict the migration this
+  release ships. The anchor `CHECK` itself is exercised only against real PostgreSQL, which is where
+  a constraint can actually be tested.
+- ConceptHealth completion resolves every plan-scoped result through stamped source-pack provenance
+  and fails with a named anchor error rather than writing a null key. Entity lifecycle validation
+  similarly prevents an invalid anchor shape from reaching persistence as a raw integrity failure.
+- Real-PostgreSQL fixtures pin both original partial unique-index legs, collection uniqueness,
+  note/collection coexistence and the anchor `CHECK`; service and frontend guards pin the
+  all-packs-occupied payoff, legacy JSONB resume, null-anchor entry/reload, source attribution,
+  non-null construction invariant and 404 boundaries.
 
 ## v0.112.0 - Connection Pool Integrity
 

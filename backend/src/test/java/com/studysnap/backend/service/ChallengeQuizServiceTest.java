@@ -1157,6 +1157,9 @@ class ChallengeQuizServiceTest {
         ArgumentCaptor<QuickReviewSessionEntity> sessionCaptor = ArgumentCaptor.forClass(QuickReviewSessionEntity.class);
         verify(quickReviewSessionRepository, atLeastOnce()).save(sessionCaptor.capture());
         QuickReviewSessionEntity savedSession = sessionCaptor.getAllValues().getLast();
+        assertThat(savedSession.getStudyPackId()).isEqualTo(studyPackId);
+        assertThat(savedSession.getNoteId()).isEqualTo(studyPack.getNoteId());
+        assertThat(savedSession.getSourceCollectionId()).isNull();
         assertThat(savedSession.getModelUsed()).isEqualTo("gpt-4.1-mini");
         assertThat(savedSession.getInputTokens()).isEqualTo(120);
         assertThat(savedSession.getOutputTokens()).isEqualTo(60);

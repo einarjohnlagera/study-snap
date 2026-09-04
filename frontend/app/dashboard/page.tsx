@@ -78,6 +78,7 @@ import {
   ADAPTIVE_PRACTICE_DASHBOARD_FOCUS_AREAS_ENTRY,
   ADAPTIVE_PRACTICE_DASHBOARD_PLAN_ENTRY,
   buildAdaptivePracticeHref,
+  buildAdaptivePracticeSessionHref,
 } from "@/lib/adaptive-practice-entry";
 import { GuidanceTip } from "@/components/ui/guidance-tip";
 import { pickActiveGuidance, type GuidanceRule } from "@/lib/guidance-engine";
@@ -325,9 +326,8 @@ export default function DashboardPage() {
 
   // Starts a plan-scoped Adaptive Practice session from the dashboard. The collection id comes from
   // the SERVER (focusAreas.practiceCollectionId); the client never picks a plan, so this cannot
-  // disagree with the session the server would actually start. The anchor comes back on the
-  // response for the same reason -- a plan's item order is mutable, so a client-derived anchor
-  // would drift.
+  // disagree with the session the server would actually start. The collection is the anchor; a
+  // plan's mutable item order never participates in routing.
   const [planPracticePending, setPlanPracticePending] = useState(false);
   const [planPracticeNotice, setPlanPracticeNotice] = useState<string | null>(null);
   const handlePracticeAcrossPlan = useCallback(
@@ -350,8 +350,12 @@ export default function DashboardPage() {
           );
           return;
         }
-        // ⚠️ NO SILENT NO-OP. The server can legitimately decline to start (nothing due, or every
-        // eligible pack occupied by another session) and answers with a message. The button's
+        if (session.sessionId) {
+          router.push(buildAdaptivePracticeSessionHref(session.sessionId));
+          return;
+        }
+        // ⚠️ NO SILENT NO-OP. The server can legitimately decline to start (for example, nothing
+        // is due or persistently weak) and answers with a message. The button's
         // render predicate is WIDER than server eligibility -- it shows whenever the weakest note
         // belongs to any plan, while the server needs ConceptHealth due-or-weak concepts across
         // that plan -- so this branch is reachable, and without it the button just un-spins forever.
