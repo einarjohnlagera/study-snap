@@ -1,5 +1,6 @@
 package com.studysnap.backend.repository;
 
+import com.studysnap.backend.entity.CombinedQuizEntity;
 import com.studysnap.backend.entity.LearnerLevel;
 import com.studysnap.backend.entity.LinkedLearnerGrantScope;
 import com.studysnap.backend.entity.LinkedLearnerInvitationLinkEntity;
@@ -43,6 +44,7 @@ import org.springframework.core.io.Resource;
 import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
 import org.springframework.context.annotation.Import;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -119,6 +121,8 @@ class NativeQueryPostgresIntegrationTest {
     @Autowired
     private PublicLibraryRepositoryImpl publicLibraryRepository;
 
+    @Autowired
+    private CombinedQuizRepository combinedQuizRepository;
     @Autowired
     private LinkedLearnerGrantRepository grantRepository;
 
@@ -1748,6 +1752,39 @@ class NativeQueryPostgresIntegrationTest {
         return combinedQuiz;
     }
 
+    /**
+     * ⚠️ THE OWNER SCOPE ON THE COMBINED-QUIZ LIST, AGAINST THE REAL DATABASE.
+     *
+     * <p>{@code CombinedQuizServiceTest} MOCKS this repository, so the derived query never executes there —
+     * dropping {@code OwnerUserId} from the method name passes that whole suite, and the service's
+     * defensive Java filter would mask it too. This is the `v0.93.0` failure mode the project recorded:
+     * every repository reference in the test tree being a Mockito mock, so a deleted predicate ships green.
+     * Only a real query against real rows can pin it.
+     */
+    @Test
+    void combinedQuizListReturnsOnlyTheOwnersRowsNewestFirst() {
+        UUID owner = seedUser("combined-list-owner");
+        UUID otherOwner = seedUser("combined-list-other");
+        UUID older = UUID.randomUUID();
+        UUID newer = UUID.randomUUID();
+        UUID foreign = UUID.randomUUID();
+        jdbcTemplate.update(
+                "insert into combined_quizzes (id, owner_user_id, title, sections, created_at)"
+                        + " values (?, ?, 'Older', '[]'::jsonb, now() - interval '1 day')", older, owner);
+        jdbcTemplate.update(
+                "insert into combined_quizzes (id, owner_user_id, title, sections, created_at)"
+                        + " values (?, ?, 'Newer', '[]'::jsonb, now())", newer, owner);
+        jdbcTemplate.update(
+                "insert into combined_quizzes (id, owner_user_id, title, sections, created_at)"
+                        + " values (?, ?, 'Someone else', '[]'::jsonb, now())", foreign, otherOwner);
+
+        List<CombinedQuizEntity> rows = combinedQuizRepository
+                .findByOwnerUserIdOrderByCreatedAtDesc(owner, PageRequest.of(0, 50));
+
+        assertThat(rows).extracting(CombinedQuizEntity::getId).containsExactly(newer, older);
+        assertThat(rows).extracting(CombinedQuizEntity::getOwnerUserId).containsOnly(owner);
+    }
+
     private PublicLibraryFilterCriteria publicTagCriteria(List<String> tagSlugs) {
         return new PublicLibraryFilterCriteria(
                 null, null, null, null, tagSlugs, null, null, null, false,
@@ -1933,3 +1970,4 @@ class NativeQueryPostgresIntegrationTest {
         }
     }
 }
+

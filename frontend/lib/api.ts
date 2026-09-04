@@ -62,6 +62,15 @@ export type CombinedQuizResponse = {
   createdAt: string;
 };
 
+export type CombinedQuizSummaryResponse = {
+  id: string;
+  title: string;
+  createdAt: string;
+  sectionCount: number;
+  questionCount: number;
+  sharing: "NO_LINK" | "SHARING_ON" | "SHARING_OFF";
+};
+
 export type CreateCombinedQuizRequest = {
   title: string;
   sections: Array<{
@@ -4613,6 +4622,15 @@ export async function getCombinedQuiz(combinedQuizId: string): Promise<CombinedQ
     true,
   );
   return parseApiResponse<CombinedQuizResponse>(response, "Could not load combined quiz.");
+}
+
+export async function listCombinedQuizzes(): Promise<CombinedQuizSummaryResponse[]> {
+  const response = await fetchWithAuth(
+    "/combined-quizzes",
+    { method: "GET", headers: buildAuthHeaders() },
+    true,
+  );
+  return parseApiResponse<CombinedQuizSummaryResponse[]>(response, "Could not load combined quizzes.");
 }
 
 export async function createCombinedQuizShareLink(combinedQuizId: string): Promise<QuizShareLinkResponse> {

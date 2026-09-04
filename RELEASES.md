@@ -120,6 +120,38 @@ a write defect. **⚠️ ESCALATE if item 1 turns out to need a migration or a r
 - Backend **2055** tests green (counted from `target/surefire-reports/*.xml`, real-PostgreSQL harness
   included), `+6` from the guards above.
 
+- **Item 2 — an owner can find a combined quiz they already built.** `GET /combined-quizzes` returns the
+  caller's own snapshots newest-first, bounded at 50, using the `idx_combined_quizzes_owner_created_at`
+  index `V132` built and never queried. `/library/combined-quizzes` lists them and links to the existing
+  detail page; the Library header carries the entry point. **A live public link is reachable and revocable
+  again after closing the tab** — previously the only route to it was the post-assembly redirect.
+- **⚠️ "Find" was the whole fix, and the list deliberately has NO controls.** Toggling, copying and creating
+  all already live on the detail page with their error states tested; duplicating them in a list would have
+  added untested behaviour in a patch. Verified: the listing page references no toggle, clipboard or delete.
+- **⚠️ No field claims to be a source-note count, because none can be.** `CombinedQuizSection` stores only
+  `{title, questions}` — **no `noteId`** — and `assemble` does not dedupe sections, so two can carry the
+  same note. The summary exposes `sectionCount` and `questionCount`, both derived from the stored JSONB with
+  no extra query. **⚠️ Do NOT add a `noteId` to the stored section to get a nicer count; that changes what an
+  immutable snapshot means.**
+- **A separate summary DTO, not `CombinedQuizResponse`** — that one carries full `sections`, so listing ten
+  quizzes would have serialized ten complete answer keys to render ten titles.
+- **Share state resolves in ONE batched query, collapsed to the latest row per quiz.** The collapse is
+  load-bearing rather than tidy: toggling a link off and creating again mints a **new row**, so a quiz can
+  own several and a naive join renders two conflicting states.
+- **⚠️ AUDIT FINDING — THE OWNER SCOPE WAS UNTESTABLE AS DELIVERED, AND THE MOCKED TEST HID IT.**
+  `CombinedQuizServiceTest` mocks `CombinedQuizRepository`, so the derived query **never executes** there:
+  replacing it with one that ignores `ownerUserId` passed the entire suite, and the service's defensive Java
+  owner-filter would have masked it in production too. **This is the `v0.93.0` failure mode by name** — every
+  repository reference in the test tree being a Mockito mock, so a deleted predicate ships green. A
+  real-PostgreSQL test now seeds two owners and pins that the query returns one; the same mutant reds
+  `combinedQuizListReturnsOnlyTheOwnersRowsNewestFirst`.
+- Backend **2059** tests green, frontend **2134** across 198 suites, `tsc --noEmit` clean, `npm run lint` at
+  0 errors.
+- **Item 2 — owners can find combined quizzes they already built.** Library now links to a bounded,
+  newest-first list of the owner’s immutable combined-quiz snapshots. Each lightweight row carries only its
+  title, creation time, stored section/question counts, and the latest sharing state; opening it returns to
+  the existing detail page, which remains the sole place to copy a link or turn sharing off.
+
 ### Known limitations
 
 - **⚠️ ALREADY-CORRUPTED ROWS ARE NOT REPAIRED, AND CANNOT BE.** The stripped token is gone and nothing
