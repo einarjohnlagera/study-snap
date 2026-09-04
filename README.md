@@ -2,7 +2,7 @@
 
 > Rebrand update: this project was renamed from StudySnap to NoteLib. Core behavior and database schema remain unchanged.
 
-Current release baseline: `v0.112.0 - Connection Pool Integrity` (In Progress); previous: `v0.111.0 - Multidisciplinary Domain Context` (Released); previous: `v0.110.2 - Shared Link Integrity` (Released); previous: `v0.110.1 - Quiz Text Integrity` (Released, deployed); previous: `v0.110.0 - Supporter Combined Quiz` (Released, deployed); previous: `v0.109.0 - Assessment Discoverability` (Released, deployed)
+Current release baseline: `v0.112.0 - Connection Pool Integrity` (Released); previous: `v0.111.0 - Multidisciplinary Domain Context` (Released); previous: `v0.110.2 - Shared Link Integrity` (Released); previous: `v0.110.1 - Quiz Text Integrity` (Released, deployed); previous: `v0.110.0 - Supporter Combined Quiz` (Released, deployed); previous: `v0.109.0 - Assessment Discoverability` (Released, deployed)
 
 NoteLib turns notes into exam-ready study materials. Students and board exam takers paste or generate notes, then use summaries, key concepts, quizzes, and adaptive practice to understand and retain what matters.
 

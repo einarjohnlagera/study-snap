@@ -2,8 +2,28 @@
 
 ## v0.112.0 - Connection Pool Integrity
 
-**Status: In Progress** (kicked off 2026-09-04, base branch `releases/v0.112.0`, cut from `main`
-after `v0.111.0` merged and tagged)
+**Status: Released** (kicked off and signed off 2026-09-04, base branch `releases/v0.112.0`, cut from
+`main` after `v0.111.0` merged and tagged)
+
+**⚠️ CLOSED AS PHASES 1 AND 2. PHASE 3 IS NOT SHIPPED, AND THAT IS THE RELEASE'S OWN FINDING RATHER
+THAN AN OMISSION — SCOPE-COMPLETENESS RECORD:**
+
+| Planned item | Outcome |
+|---|---|
+| 1. Phase 1 — config-only mitigation | **SHIPPED.** `application.yaml` (3 Hikari keys), `AppConfig.java`, `OpenAiLlmConfig.java`, `StudySnapProperties.java`. |
+| 2. Phase 2 — evidence | **SHIPPED.** `ConnectionHandlingModeContractTest`, `ConnectionHandlingModeReleaseOverrideTest`, `OpenInViewMeasurementBoundaryTest`, plus the Render read recorded in §11 of the finding. |
+| 3. Phase 3 — the structural fix | **NOT SHIPPED — DEFERRED ON EVIDENCE.** Phase 2 established that Phase 3 alone cannot fix the exhaustion (the connection outlives the transaction), and the Render read established that **§3's cause is not confirmed**: the pool was fully checked out while the database was idle, under near-zero traffic, which fits an unconsidered **connection leak** at least as well as the LLM-hold hypothesis Phase 3 addresses. **Building it now would restructure six services and twelve quota sites against a cause the evidence does not support.** It moves to its own release, gated on the leak-detection output this release ships. |
+| 4. Backlog Index rows for both incident files and the deferred concept-identity release | **SHIPPED** in the kickoff commit. |
+
+**⚠️ VERIFICATION TIER RE-DECLARED, NOT INHERITED.** The kickoff declared a **full three-agent cold
+pressure test**, and that was correct for **Phase 3** — twelve charge sites, money semantics, two
+recorded landmines. **Phase 3 is not in this release.** What ships is configuration, tests and
+documentation: **no money or quota semantics, no migration, no permission substrate, no cross-user
+read, and no production-data semantics change.** Under the gate that resolves to a single `advisor()`
+call — which ran, repeatedly and before the work rather than after. **One cold agent additionally ran
+against the outage log** (not required by the tier, but the release is an incident response), and it
+found six overstatements plus the §5 refutation gap. **⚠️ THE HEAVY TIER IS NOT DISCHARGED — IT IS
+CARRIED FORWARD AND IS STILL OWED BY THE RELEASE THAT SHIPS PHASE 3.**
 
 **⚠️ THIS RELEASE WAS REPOINTED AT ITS OWN KICKOFF, AND THE REASON IS RECORDED BECAUSE THE SWAP WAS
 NOT ROUTINE.** It opened as *Canonical Concept Identity* — the ADR-sized item six releases had
