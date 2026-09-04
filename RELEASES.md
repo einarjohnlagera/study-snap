@@ -351,6 +351,31 @@ this resolves to **a single `advisor()` call on the diff**, not a cold agent.
 - **No backfill.** Existing notes keep their current `domain_context`; the ALE values are applied by
   curator action through the workbook, not by migration.
 
+### Added after signoff, on the release branch (owner-authorised 2026-09-04)
+
+**⚠️ THIS IS CURRICULUM DATA AND A CURRICULUM TOOL, NOT A CHANGE TO THE RELEASE'S PRODUCT SCOPE** — it
+rides in the same branch because the release PR had not merged. Recorded here rather than folded into
+the scope above, so the signed-off scope stays exactly what it was when it was verified.
+
+- **The approved Phase 2 mapping is applied to `ale-comprehensive-review.tsv`: all 132 remaining
+  `(unset)` rows now carry a value, and the file has ZERO unset for the first time.** 51 →
+  `ARCHITECTURAL_DESIGN`, 48 → `ARCHITECTURAL_HISTORY_AND_THEORY`, 33 →
+  `PLANNING_AND_SITE_DEVELOPMENT`, keyed on `note_subject`. **⚠️ The 232 rows the strategist had already
+  valued were left byte-identical** — an assertion enforced that before any write — so the strategist's
+  own splits survive: *Architectural Design* still divides 51 / 6 between the new value and
+  `ENGINEERING_SCIENCES`, and *Site Planning* still divides 16 / 2 / 2.
+- **⚠️ PRODUCTION IS UNCHANGED, AND THE DISTINCTION MATTERS.** The workbook is the curator's authoring
+  **plan**; `notes.domain_context` in production is untouched. **Nothing was backfilled and no note was
+  reclassified** — the curator applies these values as they author. The 8 previously ungeneratable notes
+  are unblocked by the enum, not by this file.
+- **`build_review_set_workbook.py` gained an OPTIONAL `applicable_programs` column**, emitted on the
+  Domain Context sheet when the plan file carries it. **⚠️ This closes a real trap: that column
+  previously existed only as a HAND-EDIT of the `.xlsx`, which any regeneration silently destroyed** —
+  the exact thing `docs/curriculum/README.md` warns against. It is now generated, and note-level rather
+  than subject-level. **The superseded hand-added column remains recoverable from git history.**
+  **⚠️ Regression-checked against the CE set, which has no such column and still builds** (10 plans,
+  568 rows).
+
 ## v0.110.2 - Shared Link Integrity
 
 **Status: Released** (kicked off and signed off 2026-09-04, base branch `releases/v0.110.2`, cut from `main` after
