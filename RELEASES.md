@@ -1,5 +1,139 @@
 # RELEASES.md - NoteLib
 
+## v0.113.0 - Session Anchoring
+
+**Status: In Progress** (kicked off 2026-09-04, base branch `releases/v0.113.0`, cut from `main`
+after `v0.112.0` merged, tagged and deployed to production)
+
+Theme: a quiz session is keyed on what it is actually about, so three session types stop fighting
+over one anchor.
+
+### Why this release exists, and why it overrides three recorded rulings
+
+`quick_review_sessions` anchors every session on a `(study_pack_id, note_id)` pair that is
+**`NOT NULL` on both columns**, and `V41` enforces one active session per anchor with two partial
+unique indexes. That was correct when a session was always about one note. It is no longer true:
+**three different session types share the `ADAPTIVE` discriminator** — note-scoped Adaptive Practice,
+Interview Practice and plan-scoped Adaptive Practice — so a plan-scoped session has to borrow a
+"primary pack" it does not conceptually have, and then contends with any note-scoped session on that
+pack.
+
+**⚠️ THREE PREVIOUS RELEASES RULED AGAINST THIS MIGRATION, AND THE OVERRIDE IS RECORDED RATHER THAN
+ROUTED AROUND.** `v0.105.0`: *"the session stays anchored on the CALLER-SUPPLIED primary … No
+migration, no index change, no lookup change."* `v0.107.0`: **"REJECTED WITH REASONS, DO NOT
+RE-PROPOSE: widening the partial unique index with a scope discriminator."** `v0.110.0`: the
+migration *"has no forcing slice any more"*, left as *"a separate decision"*.
+
+**None of the three is a technical objection.** Every one objects to taking the migration **without a
+forcing reason**, and `v0.110.0` parked it explicitly as an owner decision. **The owner took it on
+2026-09-04**, and the reason is verification budget rather than product: this release fires the full
+three-agent pressure test, and that capacity is available now.
+
+**⚠️ The shape `v0.107.0` rejected is not the shape this release builds.** It rejected adding a
+nullable scope discriminator **to the existing index key** — `(user_id, study_pack_id, session_mode,
+source_collection_id)` — which genuinely breaks one-active-per-pack, because two rows sharing a pack
+but differing in a NULL collection id stop colliding. This release **leaves the existing key alone**
+and adds a separate index for the new scope.
+
+### Verified at kickoff (code and migrations, not handoffs)
+
+| Claim | Evidence |
+|---|---|
+| `study_pack_id` is `NOT NULL`, FK to `study_packs`, `ON DELETE CASCADE` | `V4:4` |
+| `note_id` added, backfilled from `study_packs.note_id`, then set `NOT NULL`; FK to `notes`, `ON DELETE CASCADE` | `V19:152-153`, `V19:161-162`, `V19:172-174` |
+| Two partial unique indexes, both `WHERE status IN ('GENERATING','IN_PROGRESS')` | `V41` — `(user_id, study_pack_id, session_mode)` and `(user_id, note_id, session_mode)` |
+| The entity declares both anchors non-nullable | `QuickReviewSessionEntity:32-36` |
+| `sourceCollectionId` exists **only as a request field**, no column anywhere | `LongExamStartRequest`, `ChallengeQuizStartRequest`, `PlanSourcedExamVerifier` |
+| Three session types share `ADAPTIVE` | `QuickReviewAdaptivePracticeService:162,292,468,636,721,822`; `InterviewPracticeService:57,121,387,411` |
+| **`getStudyPackId()` has 52 session-scoped call sites across nine services** | `ChallengeQuizService`, `ConceptHealthService`, `DashboardService`, `ExamQuestionPoolService`, `InterviewPracticeService`, `LongExamService`, `ProgressReportService`, `QuickReviewAdaptivePracticeService`, `QuickReviewSessionService` |
+
+**⚠️ THE PRIMARY HAZARD IS THE LAST ROW, NOT THE MIGRATION.** Making the column nullable turns 52
+call sites that cannot fail today into potential NPEs. **`ConceptHealthService` and
+`ExamQuestionPoolService` are the sharp ones**, because a null anchor there writes or reads
+**evidence** against the wrong key rather than throwing. The migration is the small half; the sweep
+is the large one — stated at kickoff rather than discovered mid-implementation.
+
+### Planned Scope
+
+- **1. Nullable anchors plus a real one (migration).** `study_pack_id` and `note_id` become nullable
+  **together**; `source_collection_id UUID REFERENCES note_collections(id) ON DELETE CASCADE` is
+  added. **The FK cascade is not optional** — both existing anchors cascade today, and a plan-scoped
+  session must inherit the same cleanup guarantee or account deletion leaves orphans.
+- **2. A `CHECK` constraint that a session always has exactly one anchor.**
+  `(study_pack_id IS NOT NULL AND note_id IS NOT NULL) OR source_collection_id IS NOT NULL` — an
+  anchorless row is unreachable by every lookup and invisible to every sweep.
+- **3. The index shape, decided at kickoff.** The two existing partial indexes gain
+  `AND study_pack_id IS NOT NULL` / `AND note_id IS NOT NULL`; a third is added on
+  `(user_id, source_collection_id, session_mode) WHERE status IN ('GENERATING','IN_PROGRESS') AND
+  source_collection_id IS NOT NULL`. **No sentinel, no `COALESCE`, no generated column** — PostgreSQL
+  already treats NULLs as distinct, so the predicates are belt-and-braces that make the intent
+  readable and survive a future `NULLS NOT DISTINCT`. **Do not "simplify" them away.**
+- **4. The 52-call-site sweep across nine services**, so a plan-scoped session is handled everywhere
+  a pack-scoped one is.
+- **5. The three-way `ADAPTIVE` collision dissolves**, closing `v0.107.0`'s two named Known
+  limitations and the mutable-`position` anchor hazard with them.
+
+### The semantic consequence, stated rather than absorbed
+
+**After this release a learner may hold an active plan-scoped session AND an active note-scoped
+session on a pack inside that plan at the same time.** Today they collide and one silently resumes
+the other — the `v0.107.0` limitation whose worse leg makes plan scope *look broken in production*.
+**That contention ending is the release. It is not a regression, and no copy may describe it as one.**
+
+### Anti-drift
+
+- **⚠️ EXISTING ROWS ARE LEFT ALONE — no backfill, no rewrite, no `source_collection_id` inferred for
+  any historical session.** The migration widens what is permitted and changes nothing that exists.
+  `v0.99.0` records getting a backfill shape wrong twice by writing a timestamp onto rows that should
+  have had none; do not repeat it in the other direction by inventing a collection id.
+- **⚠️ `QuickReviewSessionMode` stays at four values.** No new mode, no new sub-mode;
+  `SUB_MODE_INTERVIEW` stays the Interview Practice discriminator. This release changes the
+  **anchor**, never the mode taxonomy, and `EXAM_MODES.md` is a locked five-mode contract.
+- **⚠️ No quota, entitlement, limit or meter change.**
+- **⚠️ Do not change `BOARD_EXAM_STARTED`, `ADAPTIVE_PRACTICE_STARTED`'s `entry`/`sourceScope` values
+  or firing conditions, or `QUIZ_SHARE_LINK_CREATED`** — several dated checkpoints read them, and an
+  anchor change is exactly the edit that moves a firing condition by accident.
+- **⚠️ `frontend/app/onboarding` stays frozen** — dated reads fall between `2026-09-10` and
+  `2026-09-17`.
+- **⚠️ Do not fold `v0.112.0` Phase 3 into this release.** They both touch session and transaction
+  plumbing and are **orthogonal**: Phase 3 is about how long a *connection* is held, this is about
+  what a *session* is keyed on. Phase 3 is independently gated on `[CHECKPOINT — due 2026-10-04]`
+  plus an OSIV decision `v0.112.0` Phase 2 proved it needs.
+- **⚠️ Canonical concept identity is not this release, and its sizing read came back against it.**
+  `v0.112.0`'s kickoff earmarked `v0.113.0` for it; the owner-executed read ran 2026-09-04
+  (`docs/claude-plans/v0.113.0-concept-vocabulary-sizing.sql`) and **Q5 — the justifying number —
+  returned 6 user-concept pairs across 5 users, 0.4%.** Q2 returned **10,361** distinct authored
+  concepts, so the `ADR-001` curated-catalog pattern does not transfer (41 rows versus five figures).
+  Q4's 34.8% authored sharing is genuine per Q6 rather than generic-string noise. **It is premature,
+  not wrong — rescoped and re-read later, not cancelled.**
+
+### Verification
+
+**FULL THREE-AGENT COLD PRESSURE TEST IN ISOLATED `git worktree`s, declared not inherited** — a
+migration plus production-data semantics on the one table every quiz mode shares, which is the gate's
+named trigger twice over. **The isolation is not optional** (`v0.105.0` lost an agent's entire result
+set to shared-tree corruption), and **one agent must be pointed at the 52 call sites, not at the
+migration** — in the last four releases the worst defect was outside the stated scope every time, and
+here the stated scope is the half that is easy to review.
+
+**⚠️ Pre-declared discriminating guard, aimed at what the change could silently destroy rather than at
+what it adds: two note-scoped sessions on the SAME pack must STILL COLLIDE after the columns become
+nullable.** A fixture exercising only the new plan-scoped path passes under both the defect and the
+fix and proves nothing. **It must be a real-row test in `NativeQueryPostgresIntegrationTest` — a
+mocked repository cannot test a unique index**; `v0.93.0` records a cold agent deleting a predicate
+and passing 1,760 tests for exactly this reason, and `PREPARE` validates syntax and arbiter
+resolution but never predicate correctness.
+
+**⚠️ A second guard is owed at the call-site end:** a plan-scoped session must reach `ConceptHealth`
+and `ExamQuestionPoolService` without a pack anchor and either attribute correctly or **fail loudly**
+— never write against a null key.
+
+**Routing: CODEX** — a migration, an entity contract change and a 52-site sweep across nine services.
+
+### Shipped
+
+_(nothing yet)_
+
 ## v0.112.0 - Connection Pool Integrity
 
 **Status: Released** (kicked off and signed off 2026-09-04, base branch `releases/v0.112.0`, cut from
