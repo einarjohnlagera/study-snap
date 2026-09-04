@@ -2,7 +2,7 @@
 
 ## v0.110.2 - Shared Link Integrity
 
-**Status: In Progress** (kicked off 2026-09-04, base branch `releases/v0.110.2`, cut from `main` after
+**Status: Released** (kicked off and signed off 2026-09-04, base branch `releases/v0.110.2`, cut from `main` after
 `v0.110.1` merged and tagged)
 
 Theme: regenerating a quiz stops silently corrupting the copy someone else is already taking.
@@ -107,6 +107,15 @@ path — and the assertion is that the link is no longer active.
 - **⚠️ THE DISCRIMINATING FIXTURE REGENERATES THE SAME NUMBER OF QUESTIONS**, as pre-declared at kickoff. A
   count-changing fixture is caught by `getSharedQuizResults`' size check with or without this fix and would
   prove nothing; the silent path — same count, different questions — is the one every non-`TEACHER` hits.
+- **The deactivation is TRANSACTIONAL with the quiz write, and the failure direction is the safe one.**
+  `GeneratedQuizService` is class-level `@Transactional` and both catch blocks rethrow, so if anything
+  after the deactivation fails — including `incrementChallengeQuizGeneration` — the whole transaction
+  rolls back and the link stays live. **A link is never turned off for a regeneration that did not
+  land.** Recorded because it is a property a later refactor would break silently.
+- **⚠️ VERIFIED AT SIGNOFF: there is no second write path.** `GeneratedQuizService:155` is the only
+  writer of `GeneratedQuizEntity.questions` and `:158` the only save, so no other route can mutate a
+  shared quiz without deactivating its links. That was the kickoff's named escalation trigger, and it
+  did not fire — the tier held at a single `advisor()` call.
 - Backend **2063** tests green (counted from `target/surefire-reports/*.xml`, real-PostgreSQL harness
   included); frontend **2136** across 198 suites; `tsc --noEmit` clean; `npm run lint` at 0 errors.
 

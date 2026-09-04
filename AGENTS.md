@@ -19,6 +19,15 @@ questions in place. `quiz_share_links` is one exclusive target arc — exactly o
 `combined_quiz_id` must be populated — so do not split the token space or share-link counter into a second
 table.
 
+**⚠️ ASK WHAT IN THE FIXTURE WOULD HAVE TO CHANGE FOR THIS TEST TO FAIL — three fixtures in one session were
+unfaithful in the same direction, each caught by MUTATION rather than review.** A mocked repository whose
+derived query never executes (so a dropped owner predicate passes the suite); a `generateGeneratedQuiz` mock
+returning a DIFFERENT quiz id when production reuses the row (so an id-keyed effect re-fetched on its own and
+the assertion passed without the fix); and a round-trip fixture whose choice text did not actually look
+labelled (so it survived the defect and the fix alike). **The common shape: the fixture differs from
+production on exactly the property under test.** Naming the mutant you expect to kill, before writing the
+assertion, is what catches it.
+
 You are an AI coding agent helping implement NoteLib.
 Follow these rules to keep the codebase consistent and shippable.
 
@@ -26,7 +35,7 @@ Rebrand note: StudySnap has been renamed to NoteLib. Keep existing database sche
 
 Current documentation baseline:
 
-- `v0.110.2 - Shared Link Integrity` (In Progress); previous: `v0.110.1 - Quiz Text Integrity` (Released, deployed); previous: `v0.110.0 - Supporter Combined Quiz` (Released, deployed); previous: `v0.109.0 - Assessment Discoverability` (Released, deployed); previous: `v0.108.0 - Session Identity` (Released, deployed); previous: `v0.107.0 - Curriculum-Scale Remediation` (Released, deployed); previous: `v0.106.0 - Board Exam Review Set Identity` (Released, deployed); previous: `v0.105.0 - Curriculum-Scale Exams` (Released, deployed)
+- `v0.110.2 - Shared Link Integrity` (Released); previous: `v0.110.1 - Quiz Text Integrity` (Released, deployed); previous: `v0.110.0 - Supporter Combined Quiz` (Released, deployed); previous: `v0.109.0 - Assessment Discoverability` (Released, deployed); previous: `v0.108.0 - Session Identity` (Released, deployed); previous: `v0.107.0 - Curriculum-Scale Remediation` (Released, deployed); previous: `v0.106.0 - Board Exam Review Set Identity` (Released, deployed); previous: `v0.105.0 - Curriculum-Scale Exams` (Released, deployed)
 
 Implementation status: Phases 1-4 are **Released** (`v0.91.0`-`v0.94.0`), with **Phase 4 PARTIAL**: shareable invitation links and connection management shipped in `v0.94.0`; **supporter onboarding did NOT**. **⚠️ The reason it did not is an ASSUMPTION nobody has checked, found at the `v0.95.0` kickoff (2026-08-29):** `v0.94.0` blocked it on the onboarding freeze, but `[CHECKPOINT — due 2026-09-11]` is the **signup funnel read alone** (375 signups against a 62.4% completion baseline, measuring `app/onboarding/page.tsx`), **"supporter onboarding" has no definition anywhere in the plan**, and the redemption page already treats `/onboarding` as a waypoint it carries a token through rather than a surface it edits. **It is NOT claimed unblocked — it is claimed unchecked.** The discriminating test is whether the work edits the signup → verify-email → onboarding path; it needs a definition step, which is **`v0.97.0` item 3 — docs only, no code on the frozen path**. **No public people search is in Phase 4 at all.** **Phase 5 remains uncommitted and must not be stubbed.** **⚠️ An `ACCEPTED` relationship implies no access of any kind** — material, activity and progress each need their own live grant, and streaks/study days are reachable only through `ACTIVITY`.
 
