@@ -31,6 +31,7 @@ import com.studysnap.backend.entity.AnalyticsEventType;
 import com.studysnap.backend.entity.CollectionVisibility;
 import com.studysnap.backend.entity.LearnerLevel;
 import com.studysnap.backend.entity.GeneratedQuizEntity;
+import com.studysnap.backend.entity.QuickReviewSessionStatus;
 import com.studysnap.backend.entity.NoteCollectionEntity;
 import com.studysnap.backend.entity.NoteCollectionItemEntity;
 import com.studysnap.backend.entity.NoteEntity;
@@ -54,6 +55,7 @@ import com.studysnap.backend.repository.NoteCollectionItemCountProjection;
 import com.studysnap.backend.repository.NoteCollectionItemNoteProjection;
 import com.studysnap.backend.repository.NoteCollectionItemRepository;
 import com.studysnap.backend.repository.NoteCollectionRepository;
+import com.studysnap.backend.repository.QuickReviewSessionRepository;
 import com.studysnap.backend.repository.NoteCollectionNoteProjection;
 import com.studysnap.backend.repository.NoteRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
@@ -74,6 +76,7 @@ import java.time.DayOfWeek;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -126,6 +129,9 @@ class NoteCollectionServiceTest {
     private NoteCollectionRepository collectionRepository;
 
     @Mock
+    private QuickReviewSessionRepository quickReviewSessionRepository;
+
+    @Mock
     private NoteCollectionItemRepository itemRepository;
 
     @Mock
@@ -168,6 +174,7 @@ class NoteCollectionServiceTest {
         });
         service = new NoteCollectionService(
                 collectionRepository,
+                quickReviewSessionRepository,
                 itemRepository,
                 noteRepository,
                 studyPackRepository,
@@ -3613,6 +3620,34 @@ class NoteCollectionServiceTest {
 
         verify(collectionRepository).delete(collection);
         verify(noteRepository, never()).delete(any(NoteEntity.class));
+    }
+
+    /**
+     * ⚠️ Load-bearing, and the failure it prevents is a hard one. source_collection_id is
+     * ON DELETE SET NULL and chk_quick_review_sessions_anchor permits an anchorless row only when the
+     * session is COMPLETED or FORFEITED, so a plan carrying a GENERATING, FAILED, IN_PROGRESS or
+     * PAUSED session could not be deleted AT ALL without this sweep -- the SET NULL would violate the
+     * constraint and DELETE /collections/{id} would 500. Terminal sessions are deliberately NOT swept:
+     * they are the learner's history and the FK orphans them on purpose.
+     */
+    @Test
+    void delete_clearsNonTerminalPlanScopedSessionsSoTheAnchorCheckCannotBlockTheDelete() {
+        UUID userId = UUID.randomUUID();
+        UUID collectionId = UUID.randomUUID();
+        NoteCollectionEntity collection = buildCollection(collectionId, userId, COLLECTION_TITLE, Instant.now());
+        when(collectionRepository.findByIdAndOwnerUserId(collectionId, userId)).thenReturn(Optional.of(collection));
+
+        service.delete(collectionId, userId);
+
+        ArgumentCaptor<Collection<QuickReviewSessionStatus>> statuses =
+                ArgumentCaptor.forClass(Collection.class);
+        verify(quickReviewSessionRepository)
+                .deleteBySourceCollectionIdAndStatusNotIn(eq(collectionId), statuses.capture());
+        assertThat(statuses.getValue())
+                .containsExactlyInAnyOrder(
+                        QuickReviewSessionStatus.COMPLETED,
+                        QuickReviewSessionStatus.FORFEITED
+                );
     }
 
     @Test

@@ -445,12 +445,17 @@ Quick Review sessions:
 
 - stored in `quick_review_sessions` and linked to a user
 - anchored by either the non-null `study_pack_id`/`note_id` pair or `source_collection_id`; the
-  validated `chk_quick_review_sessions_anchor` prevents anchorless rows
+  validated `chk_quick_review_sessions_anchor` prevents anchorless **active** rows (a `COMPLETED` or
+  `FORFEITED` session may be anchorless: it is history, orphaned by the collection FK's `SET NULL`)
 - active-session partial unique indexes independently enforce one active row per
   `(user_id, study_pack_id, session_mode)`, `(user_id, note_id, session_mode)`, and
   `(user_id, source_collection_id, session_mode)`, each with an explicit non-null anchor predicate
-- all three anchor FKs use `ON DELETE CASCADE`; no historical rows were backfilled for the collection
-  anchor
+- the pack/note anchor FKs use `ON DELETE CASCADE`; the collection anchor uses **`ON DELETE SET NULL`**,
+  so deleting a Study Plan orphans a learner's completed sessions rather than destroying them — they
+  stay reachable through `session_state.sourceNoteRefs`. Account deletion is unaffected: `user_id` has
+  cascaded since `V4`. Non-terminal plan-scoped sessions are cleared by `NoteCollectionService.delete`
+  before the plan goes, because the anchor `CHECK` permits an anchorless row only when the session is
+  `COMPLETED` or `FORFEITED`. No historical rows were backfilled for the collection anchor
 - store progress/completion, score, retry count, confidence feedback
 
 Challenge Quiz sessions:

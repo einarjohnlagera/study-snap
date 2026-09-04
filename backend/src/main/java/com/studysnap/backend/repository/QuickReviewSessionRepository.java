@@ -114,6 +114,22 @@ public interface QuickReviewSessionRepository extends JpaRepository<QuickReviewS
 
     void deleteByUserId(UUID userId);
 
+    /**
+     * Clears the non-terminal plan-scoped sessions on a collection before that collection is deleted.
+     *
+     * <p>⚠️ Load-bearing for {@code DELETE /collections/{id}}. {@code source_collection_id} is
+     * {@code ON DELETE SET NULL}, and {@code chk_quick_review_sessions_anchor} permits an anchorless
+     * row only when the session is {@code COMPLETED} or {@code FORFEITED}. Without this sweep a plan
+     * carrying a GENERATING, FAILED, IN_PROGRESS or PAUSED session could not be deleted at all -- the
+     * SET NULL would violate the constraint. Terminal sessions are deliberately left for the FK to
+     * orphan, because they are the learner's history and stay reachable through
+     * {@code session_state.sourceNoteRefs}.
+     */
+    void deleteBySourceCollectionIdAndStatusNotIn(
+            UUID sourceCollectionId,
+            Collection<QuickReviewSessionStatus> statuses
+    );
+
     Optional<QuickReviewSessionEntity> findByIdAndUserIdAndSessionMode(UUID id, UUID userId, QuickReviewSessionMode sessionMode);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)

@@ -331,7 +331,11 @@ Collections remain owner-private by default.
 - A note may belong to multiple collections.
 - A note may appear at most once in a single collection.
 - Adding an already-present note is idempotent and silently skipped.
-- Deleting a collection deletes only the collection and item rows.
+- Deleting a collection deletes only the collection and item rows, plus any **non-terminal**
+  plan-scoped Adaptive Practice session anchored on it. **A `COMPLETED` or `FORFEITED` plan-scoped
+  session is NOT deleted** — the collection anchor is `ON DELETE SET NULL`, so the learner's history
+  survives the plan and stays reachable through the notes that session sampled. Notes are never
+  deleted.
 - Deleting a note removes that note's collection item rows through the `note_collection_items.note_id` FK cascade.
 - Deleting a collection must never delete notes.
 - Existing owner-scoped endpoints must use `findByIdAndOwnerUserId` semantics and must not expose private collections to other users.

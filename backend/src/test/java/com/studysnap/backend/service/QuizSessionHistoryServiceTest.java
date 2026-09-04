@@ -414,4 +414,75 @@ class QuizSessionHistoryServiceTest {
     private OffsetDateTime latest(OffsetDateTime left, OffsetDateTime right) {
         return left.isAfter(right) ? left : right;
     }
+
+    @Test
+    void findLatestSessionCompletedAtByNoteIds_creditsEveryNoteAPlanScopedSessionSampled() {
+        UUID userId = UUID.randomUUID();
+        UUID collectionId = UUID.randomUUID();
+        UUID sampledA = UUID.randomUUID();
+        UUID sampledB = UUID.randomUUID();
+        UUID sampledC = UUID.randomUUID();
+        UUID untouchedNoteId = UUID.randomUUID();
+        OffsetDateTime completedAt = OffsetDateTime.parse("2026-05-21T10:00:00Z");
+
+        savePlanScopedSession(userId, collectionId, completedAt, sampledA, sampledB, sampledC);
+
+        Map<UUID, OffsetDateTime> latest = quizSessionHistoryService.findLatestSessionCompletedAtByNoteIds(
+                userId,
+                List.of(sampledA, sampledB, sampledC, untouchedNoteId)
+        );
+
+        // Before v0.113.0 a plan-scoped session borrowed one pack anchor and credited exactly ONE of
+        // these; with the anchor gone it would credit NONE and Study Plan progress would never move.
+        assertThat(latest).containsOnlyKeys(sampledA, sampledB, sampledC);
+        assertThat(latest.get(sampledA)).isEqualTo(completedAt);
+        assertThat(latest.get(sampledB)).isEqualTo(completedAt);
+        assertThat(latest.get(sampledC)).isEqualTo(completedAt);
+        // A note that was never sampled must not be credited by a plan-wide session.
+        assertThat(latest).doesNotContainKey(untouchedNoteId);
+    }
+
+    @Test
+    void findLatestSessionCompletedAtByNoteIds_noteScopedAdaptiveStillCreditsOnlyItsOwnNote() {
+        UUID userId = UUID.randomUUID();
+        UUID ownNoteId = UUID.randomUUID();
+        UUID strayNoteId = UUID.randomUUID();
+        OffsetDateTime completedAt = OffsetDateTime.parse("2026-05-21T11:00:00Z");
+
+        // ⚠️ Discriminating negative. ADAPTIVE is now in MULTI_NOTE_SESSION_MODES, so this session IS a
+        // candidate for the second pass. It carries sourceNoteRefs naming another note but has a NOTE
+        // ANCHOR and no collection, so isMultiNoteMode must reject it. Widening that predicate to all
+        // of ADAPTIVE would credit strayNoteId and this test is what catches it.
+        Map<String, Object> state = new HashMap<>(sourceRefsState(strayNoteId));
+        saveSession(userId, ownNoteId, QuickReviewSessionMode.ADAPTIVE, completedAt, state, null);
+
+        Map<UUID, OffsetDateTime> latest = quizSessionHistoryService.findLatestSessionCompletedAtByNoteIds(
+                userId,
+                List.of(ownNoteId, strayNoteId)
+        );
+
+        assertThat(latest).containsOnlyKeys(ownNoteId);
+        assertThat(latest).doesNotContainKey(strayNoteId);
+    }
+
+    private QuickReviewSessionEntity savePlanScopedSession(
+            UUID userId,
+            UUID collectionId,
+            OffsetDateTime completedAt,
+            UUID... sampledNoteIds
+    ) {
+        QuickReviewSessionEntity session = QuickReviewSessionEntityBuilder.anInProgressSession()
+                .withId(UUID.randomUUID())
+                .withUserId(userId)
+                .withStudyPackId(null)
+                .withNoteId(null)
+                .withSessionMode(QuickReviewSessionMode.ADAPTIVE)
+                .withStatus(QuickReviewSessionStatus.COMPLETED)
+                .build();
+        session.setSourceCollectionId(collectionId);
+        session.setCompletedAt(completedAt);
+        session.setSessionState(new HashMap<>(sourceRefsState(sampledNoteIds)));
+        return quickReviewSessionRepository.save(session);
+    }
+
 }

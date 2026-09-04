@@ -72,8 +72,9 @@ five construction sites (`ChallengeQuizService:2570`, `InterviewPracticeService:
 ### Planned Scope
 
 - **1. Nullable anchors plus a real one (migration).** `study_pack_id` and `note_id` become nullable
-  **together**; `source_collection_id UUID REFERENCES note_collections(id) ON DELETE CASCADE` is
-  added. **The FK cascade is not optional** — both existing anchors cascade today, and a plan-scoped
+  **together**; `source_collection_id UUID REFERENCES note_collections(id) ON DELETE SET NULL` is
+  added. **⚠️ Amended 2026-09-04 by the pressure test — the kickoff called the CASCADE "not optional"
+  and that justification was false** — both existing anchors cascade today, and a plan-scoped
   session must inherit the same cleanup guarantee or account deletion leaves orphans.
 - **2. A `CHECK` constraint that a session always has exactly one anchor.**
   `(study_pack_id IS NOT NULL AND note_id IS NOT NULL) OR source_collection_id IS NOT NULL` — an
@@ -233,55 +234,45 @@ and now a backend endpoint plus a frontend route.
 
 ### Known limitations
 
-Found by the three-agent cold pressure test (2026-09-04), recorded rather than silently dropped.
+Found by the three-agent cold pressure test (2026-09-04). **The three items that were owner decisions
+were scoped into this release rather than deferred** — see Shipped. What remains:
 
-- **⚠️ Deleting a Study Plan now deletes the plan-scoped sessions anchored on it, including
-  COMPLETED ones — OWNER DECISION OWED.** `source_collection_id` is `ON DELETE CASCADE`, and the
-  kickoff's justification for that cascade was **falsified**: account deletion was already covered by
-  `quick_review_sessions.user_id … ON DELETE CASCADE` (`V4:3`), so the new FK adds no orphan
-  protection — it adds a second, user-facing deletion trigger. Proven on real PostgreSQL: three
-  sessions on a plan, zero after `DELETE /collections/{id}`. The `ConceptHealth` rows those sessions
-  wrote **survive**, so the evidence persists while the history explaining it does not. `ON DELETE
-  SET NULL` would violate the anchor `CHECK`, so this needs a decision (keep and document, restrict
-  deletion, or redesign), not a one-word swap.
-- **⚠️ A completed plan-scoped session credits no note, so Study Plan progress never advances —
-  OWNER DECISION OWED.** With `note_id` NULL, `findLatestCompletedAtByUserIdAndNoteIdIn` matches
-  nothing and `QuizSessionHistoryService.findParticipatingNoteIds` returns an empty set (`ADAPTIVE`
-  is absent from `MULTI_NOTE_SESSION_MODES`), and there is no user-scoped session-history endpoint —
-  every one is note- or pack-addressed. So the session appears in no Recent Sessions list and
-  `notesPracticed` (keyed on `lastSessionCompletedAt != null`) never moves. **The previous behaviour
-  was also wrong** — it credited exactly one note while up to three packs were sampled — so the fix
-  is a product decision: credit all sampled notes, or credit none and say so. `ConceptHealth` is
-  unaffected, so the remediation loop itself still works. Same root cause makes
-  `RetentionService:267-276` still send a weak-concept reminder to a learner who cleared those
-  concepts through plan-scoped practice.
-- **⚠️ The plan-scoped start holds a `PESSIMISTIC_WRITE` on the collection row across up to three
-  sequential LLM calls.** `findByIdAndOwnerUserIdForUpdate` inside the class-level `@Transactional`,
-  with an LLM read timeout of 180 s and no `lock_timeout` set. The lock does real work — it is what
-  prevents a double charge on concurrent starts — but its **duration** is the shape `v0.107.0`
-  rejected, one release after `v0.112.0` shipped about connection holds across OpenAI calls. It
-  blocks learner-triggered writers on the same plan (rename, Save order, Add Notes, visibility,
-  companion) and fully serialises Ask Companion on that collection, each blocking while holding a
-  pool connection. **Not fixed here: the remedy is a transaction-boundary move, which is `v0.112.0`
-  Phase 3's territory and gated on `[CHECKPOINT — due 2026-10-04]`.**
-- The anchor `CHECK` is a disjunction ("at least one anchor") while `QuickReviewSessionEntity`'s
-  `@PrePersist` validator is an XOR ("exactly one"), and `assertValidAnchor` is a third, weaker copy
-  that misses the partial pack/note case. Unreachable through JPA — the entity fires first and there
-  are no native writes to this table — so this is a defence-in-depth gap, not a live defect.
+- The anchor `CHECK` is a disjunction with a terminal branch, while `QuickReviewSessionEntity`'s
+  `@PrePersist` validator encodes the same rule in Java and `assertValidAnchor` is a third, narrower
+  copy. All three agree on what they permit, but the rule lives in three places. Unreachable through
+  JPA — the entity fires first and there are no native writes to this table.
 - A pre-migration plan-scoped session whose collection was later deleted 404s on the new
   session-addressed route, which does not fall through to its still-valid pack anchor. The
   note-addressed route still resumes it.
 - `requireSourceStudyPackId` throwing at completion would roll back the completion and leave the
   session `IN_PROGRESS`, and the recovery sweeper covers only `LONG_EXAM` and `CHALLENGE`. Two
-  independent reviewers failed to find a reachable unstamped item, so this is latent hardening, not a
-  live path.
+  independent reviewers failed to find a reachable unstamped item, so this is latent hardening.
 - The nine H2 fixtures mirror `V133`'s **columns**, not its constraints; the anchor `CHECK` and the
-  three partial unique indexes are exercised only against real PostgreSQL, which is where a
-  constraint can actually be tested. Note the harness pins `postgres:16` while production runs
-  PostgreSQL 18.
+  three partial unique indexes are exercised only against real PostgreSQL. The harness pins
+  `postgres:16` while production runs PostgreSQL 18.
+- The plan-scoped start holds a `PESSIMISTIC_WRITE` on the collection row across up to three
+  sequential LLM calls. The lock is what prevents a double charge on concurrent starts, but its
+  **duration** is the shape `v0.107.0` rejected. **Not fixed here: the remedy is a
+  transaction-boundary move, which is `v0.112.0` Phase 3's territory and gated on
+  `[CHECKPOINT — due 2026-10-04]`.**
 
 ### Shipped
 
+- **Plan deletion no longer destroys a learner's quiz history.** `source_collection_id` is
+  `ON DELETE SET NULL`, not `CASCADE`, and the anchor `CHECK` carries a terminal branch so an orphaned
+  `COMPLETED`/`FORFEITED` session is legal. `NoteCollectionService.delete` first clears the
+  non-terminal plan-scoped sessions, without which the `SET NULL` would violate the constraint and
+  deleting a plan would fail outright. The kickoff's justification for the cascade was falsified:
+  account deletion has cascaded from `user_id` since `V4:3`.
+- **A plan-scoped completion now credits every note it sampled**, so Study Plan progress advances.
+  This reuses the existing two-pass mechanism — the SQL pass on `note_id`, then the Java pass over
+  `session_state.sourceNoteRefs` that Long Exam and Board Exam already ride — rather than inventing a
+  second one. Note-scoped Adaptive is unchanged and still credits only its own note. The previous
+  behaviour credited exactly one of up to three sampled packs; crediting all of them is what the
+  learner actually practised.
+- **The weak-concept retention email stops nagging about concepts cleared through plan-scoped
+  practice.** Suppression matches on each focus concept's **source-pack stamp**, never on the concept
+  string alone — two packs' identically-named concepts stay distinct, per the cross-pack identity rule.
 - `V133__session_anchoring.sql` makes the pack/note pair nullable together, adds the cascading
   collection anchor and validated anchor `CHECK`, preserves both note-scoped active-session
   predicates, and adds collection-scoped uniqueness and FK indexes without rewriting existing rows.
