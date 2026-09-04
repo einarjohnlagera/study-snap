@@ -1,5 +1,381 @@
 # RELEASES.md - NoteLib
 
+## v0.111.0 - Multidisciplinary Domain Context
+
+**Status: Released** (kicked off and signed off 2026-09-04, base branch `releases/v0.111.0`)
+
+**⚠️ CUT FROM `docs/correct-architecture-domain-context-verdict`, NOT FROM `main` — a deliberate
+exception, recorded because every other section here says *"cut from `main` after … merged and tagged"*
+and leaving that boilerplate would make this one false.** That branch carried a single docs commit — the
+corrected Architecture Domain Context verdict plus the `v0.111.0` handoff — and **PR #1260 was open
+against `main`**. **Owner ruled 2026-09-04 to carry it in this release rather than merge it separately**,
+so PR #1260 is closed unmerged and the commit reaches `main` through this release's PR. `main` was at
+`v0.110.2`, merged and tagged, with no other divergence; all seven version references were in sync at
+`v0.110.2` before the bump.
+
+Theme: a curator can honestly classify a note that belongs to two programs, instead of being unable to
+generate it at all.
+
+### Why this release exists
+
+**⚠️ A REPORTED, REPRODUCED OWNER BLOCKER ON THE ALE REVIEW SET — NOT A HYPOTHETICAL.** A note with
+Subject *Architectural Design* and two Applicable Programs — `Architecture` + `Architectural
+Engineering` — **cannot be generated at all.** Every premise re-verified by reading code at kickoff
+rather than trusted from the handoff:
+
+- `StudyPackGenerationContextResolver.resolveCourseProgram:143` returns the joined catalog program name
+  **only when `joinedPrograms.size() == 1`**. With two programs the fallback cannot fire.
+- `assertGenerationReady:33-39` throws `MultiProgramDomainContextRequiredException` when a note has 2+
+  Applicable Programs and a null `domain_context`.
+- **No existing value honestly fits.** `ENGINEERING_SCIENCES` is shared engineering knowledge,
+  `CIVIL_ENGINEERING` is civil-specific, `PROFESSIONAL_PRACTICE_AND_REGULATION` is codes and ethics.
+
+So the curator has no honest value to pick, and generation is refused outright.
+
+**⚠️ `CLAUDE.md`'s "PROVABLE NO-OP" VERDICT DOES NOT COVER THIS, AND THE TRAP IS LIVE.** That verdict —
+`ARCHITECTURE` is rejected not because it failed the bar but because a single-program Architecture note
+**already** sends `Domain: Architecture` through the fallback, so a new value would emit a byte-identical
+line — is **TRUE, and entirely about single-program notes.** It cannot survive a second program, because
+the fallback is gated on `size() == 1`. The paragraph reads persuasively and a fresh session will
+re-reject on it. **⚠️ Do NOT re-reject `ARCHITECTURE` on the strength of that paragraph** — the governing
+plan already records it as *"Superseded. Re-opened on the multi-program case specifically."* **The no-op
+finding is TRUE for single-program notes and IRRELEVANT to multi-program ones — which is exactly the
+criterion the expansion bar names: *Automatic cannot express it in the relevant multi-program cases*.**
+
+**⚠️ THE CURATOR-COPY BLOCKER IS ALREADY CLOSED, AND `CLAUDE.md` CARRIED IT AS STILL-OWED WORK.** All
+three copy fixes have shipped — verified against code at kickoff, not inherited from the handoff:
+`ENGINEERING_SCIENCES`' description now names plumbing, HVAC, electrical distribution, lighting,
+acoustics, fire protection and vertical transportation; `CIVIL_ENGINEERING` no longer claims Surveying or
+Construction Management and routes shared knowledge to Engineering Sciences; and
+`REVIEW_SET_SHAPING_CONTEXT.md` no longer contains *"Architecture, notably, deliberately has no Domain
+Context"* (**zero matches**). **⚠️ CONSEQUENCE: Phase 1 — the targeted Domain Context pass over the 215
+`(unset)` ALE rows — is curator work with NO CODE and NO RELEASE, and can run NOW, in parallel with this
+release. It is not gated on it.** What still blocks is the multi-program case above, which needs a
+taxonomy value.
+
+**⚠️ THE BLOCKER IS A CLASS, NOT AN INCIDENT — SIZED FROM THE ALE WORKBOOK AT KICKOFF.**
+`docs/curriculum/ale-comprehensive-review.tsv` holds **364 rows**, and its distribution was
+**re-derived from the file rather than taken from the plan**: `(unset)` **215** · `PPR` 77 ·
+`ENG_SCI` 50 · `CIVIL` 16 · `ENG_MATH` 6. **57 of those 215 carry the exact `note_subject` of the
+reported blocked note — `Architectural Design` — and every one of them is unset** (12 already exist
+as notes, 45 are still to author). **⚠️ How many of the 57 carry a SECOND Applicable Program is a
+PRODUCTION fact the TSV does not hold**, so the count of currently-ungeneratable notes is **bounded
+above by 57, not established at 57.** What the file does establish is that the reported failure is a
+class of notes, not a one-off.
+
+**⚠️ The two already-classified groups were checked against the CORRECTED descriptions and hold, so
+the targeted pass is the right shape and a full rerun is not owed:** all 16 `CIVIL_ENGINEERING` rows
+are Foundation Engineering, which the corrected description explicitly names (*Geotechnical,
+Foundation, Soil Mechanics*), and all 6 `ENGINEERING_MATHEMATICS` rows are Construction Cost
+Engineering, which is engineering economics. **Neither group is disturbed by this release.**
+
+### The governing plan, and the sequencing gate
+
+`docs/claude-plans/ale-let-review-set-unblock-and-domain-context-evidence-plan.md` — revised 2026-09-03,
+worked through by a prior Claude session **and** GPT Product UX, and **ratified by the owner** — governs
+this release. **⚠️ IT IS A SOLID PLAN. EXECUTE ITS PHASES; DO NOT RE-DERIVE ITS CONCLUSIONS.** Its
+*Superseded assumptions* table exists precisely to stop a fresh session re-litigating settled ground —
+**read that table before proposing anything.**
+
+**⚠️ PHASES 0 AND 1 ARE OWNER/CURATOR WORK WITH NO CODE, AND NO IMPLEMENTATION MAY BEGIN BEFORE PHASE 3
+APPROVAL.** The plan says so explicitly. Order is **Phase 0 → 1 → 2 → 3**. **⚠️ PHASES 0 AND 1 ARE BOTH COMPLETE (2026-09-04). Phase 2's inputs are in hand; what remains is
+Phase 2 itself and then Phase 3 approval:**
+
+- **✅ Phase 0.3 — capture the LIVE course-program catalog. RUN 2026-09-04; the answer is bigger than the
+  plan assumed and it CHANGES THE PLAN'S OWN ARITHMETIC.** The catalog holds **41 programs, not 21** —
+  `V106` seeds 21 and **20 were added at runtime** between 2026-08-11 and 2026-08-29. Against the real
+  denominator, today is **`8:41` = 0.195** and a four-value Phase 2 output is **`12:41` = 0.293**.
+  **⚠️ THAT IS LOWER THAN THE 0.381 (`8:21`) THE ADR RECORDS AS ITS OWN BASELINE**, so the failure
+  condition is **nowhere near tripping** and the plan's feared *0.38 → 0.57, past 0.65* never occurs.
+  **⚠️ THE AMENDMENT IS STILL OWED, AND THIS STRENGTHENS THE CASE RATHER THAN DISSOLVING IT — do not read
+  *"the ratio is comfortable"* as *"the tension went away."*** The catalog nearly **doubled in under a
+  month**, **18 of 41 rows are now Engineering-family**, and essentially all the growth is curator-added
+  at runtime — so the ratio is **easy to satisfy by adding programs**, which is exactly the failure
+  `ADR-001`'s own note names (*"the catalog growing is not evidence for the taxonomy growing"*). **The
+  ratio has become WEAKER as a guard, not safer**, which is a better argument for restating the condition
+  as the naming rule plus the composition matrix, with the bare ratio demoted to a watch figure.
+- **✅ Phase 0.1 and 0.2 — answered.** `Architectural Engineering` is confirmed in the live catalog
+  (added at runtime **2026-08-29 03:31**, Engineering family, in no migration), and **Medicine is seeded
+  at `V106` id `…-014`**, verified in the repo — a current design problem, not a horizon item.
+- **⚠️ A NAMING CONSTRAINT SURFACED BY PHASE 0.3, RECORDED AS A PHASE 2 QUESTION AND DELIBERATELY NOT
+  ANSWERED HERE.** The live catalog carries **`Architecture`**, **`Urban and Regional Planning`** and
+  **`Construction Engineering and Management`** as *programs*, so several plausible names for the ALE
+  residue would **equal a catalog program name** — precisely what the proposed naming rule forbids unless
+  the name is a board subject-area name. **⚠️ It must be answered against Phase 1's actual residue;
+  resolving it now is the same pre-commitment that produced the 215 unset rows.**
+- **Logged, out of scope, no action:** the catalog contains **`Geotechnical Engineer`** (missing *"ing"*,
+  and arguably a civil sub-discipline rather than a program). **No catalog row is rewritten in this
+  release** — recorded so it is not rediscovered as a finding.
+- **✅ Phase 1 — RUN 2026-09-04. The corrected distribution and the residue both exist.** `(unset)`
+  **215 → 132**: 83 rows moved to a real value (**80 to `ENGINEERING_SCIENCES`**, 3 to `PPR`), so
+  `ENG_SCI` goes 50 → 130 and `PPR` 77 → 80 while `CIVIL` 16 and `ENG_MATH` 6 are untouched. The
+  residue splits into **39 `UNSET_VALID`** (single program, honest no-fit — legal today) and
+  **93 `CONTEXT_GAP`** (2+ programs and no honest value — illegal today). Carried in
+  `docs/curriculum/ale-comprehensive-review.tsv` (which gains `applicable_programs` and
+  `curation_status`) and `ale-applicable-programs-domain-context-implementation.xlsx`.
+
+**⚠️ THE GAP HAS TWO HORIZONS AND BOTH NUMBERS ARE REAL — reporting either alone misleads.** Of the
+93 `CONTEXT_GAP` rows:
+
+- **8 are BLOCKED TODAY** — `Architecture + Architectural Engineering`, both live in the catalog, so
+  the note has 2+ programs and a null Domain Context and `assertGenerationReady` throws. **This is the
+  reported blocker, now counted rather than estimated.**
+- **85 are BLOCKED WHEN THE CATALOG IS EXTENDED** — their second program (`Interior Design`,
+  `Landscape Architecture`, `Environmental Planning`) is **absent from the live catalog**, so today
+  those notes carry one program, the `size() == 1` fallback fires, and they generate fine.
+  **⚠️ This is latency, not safety: 20 programs were added at runtime in the month to 2026-08-29, and
+  `Interior Design` is the SECOND most-recommended program in the strategist's own output (104 rows).**
+
+**⚠️ Do NOT compress this to *"the blocker is only 8 notes"*** — that reads the release as near-pointless
+— **or to *"93 notes are blocked"***, which claims evidence that is not yet reachable. **8 now, 93 on a
+curator action that takes seconds.**
+
+**⚠️ PHASE 2 EVIDENCE, RECORDED WITHOUT NAMING CANDIDATE VALUES:** 93 rows clears `ADR-001` clause (a)'s
+~10-note floor **nine times over**, and the strategist's own program combinations show the gap is **not
+one family** — `Architecture + Interior Design` (52) is interior/spatial, `Architecture + Landscape
+Architecture + Environmental Planning` (37) is site/landscape/planning, and `Architecture +
+Architectural Engineering` (8) is the building-systems overlap. **Three distinct reuse patterns, which
+is the one-value-or-several question stated in evidence rather than in opinion.**
+
+**⚠️ A SECOND, SEPARATE GAP SURFACED AND IT IS NOT A TAXONOMY PROBLEM:** 4 of the 10 programs the
+strategist recommends are **not in the catalog** — `Interior Design` (104 rows), `Landscape
+Architecture` (51), `Environmental Planning` (33), `Construction Management` (23). They are preserved
+and flagged `CATALOG_GAP`, **never substituted**. **⚠️ Two are NEAR-matches, which is exactly where a
+silent substitution happens:** `Construction Management` against catalog `Construction Engineering and
+Management`, and `Environmental Planning` against `Urban and Regional Planning` / `Environmental
+Engineering`. **Whether to add these four is a curator/catalog decision, NOT part of this release's
+taxonomy scope** — but it is what converts 85 latent gaps into live ones, so it must be taken
+knowingly.
+
+**⚠️ Phase 0.1 is ANSWERED and does not need re-running: `Architectural Engineering` IS in the production
+catalog** (owner screenshot; absent from `db/migration/`, so added through the admin-manageable catalog at
+runtime). **Phase 1b's precondition is met.**
+
+### Planned Scope
+
+**⚠️ THIS SECTION RECORDS THE RELEASE'S SHAPE, NOT ITS VALUES.** Which enum values ship is **Phase 2's
+output and Phase 3's owner decision**. Naming candidates here would pre-commit Phase 2's answer —
+structurally the same defect the plan diagnoses as having produced the 215 `(unset)` rows, where a shaping
+module pre-committed *"Architecture, notably, deliberately has no Domain Context"* and the strategist
+duly returned unset.
+
+- **(1) New Domain Context enum values, labels and `quantitative` flags (backend).** `DomainContext.java`
+  carries **eight** values today: `ENGINEERING_MATHEMATICS`, `ENGINEERING_SCIENCES`, `CIVIL_ENGINEERING`,
+  `PROFESSIONAL_PRACTICE_AND_REGULATION`, `GENERAL_EDUCATION`, `PROFESSIONAL_EDUCATION`, `NURSING`,
+  `ACCOUNTANCY`.
+- **(2) Curator-facing descriptions for every value the release touches (frontend).**
+  `frontend/lib/domain-context.ts`.
+- **(3) Strategist rules (docs).** `docs/gpt-contexts/REVIEW_SET_SHAPING_CONTEXT.md` §Domain Context.
+- **(4) The `ADR-001` amendment (docs)** — **two distinct obligations, not one**; see below.
+- **(5) Tests.**
+
+**⚠️ NO MIGRATION.** `notes.domain_context` is **`VARCHAR(64)` with no CHECK constraint** (`V102:2`,
+verified at kickoff), so adding values is **code and docs only** — no backfill, no schema risk. `ADR-001`
+constraints 1, 4 and 7 are preserved.
+
+**⚠️ IT SHIPS AS ONE RELEASE (owner, 2026-09-04, because it blocks the ALE Review Set update), and the
+plan independently reaches the same conclusion.** Splitting it would ship a taxonomy whose curator-facing
+descriptions and strategist rules **lag the enum** — the precise defect that produced the 215 unset rows.
+
+### `ADR-001` — TWO obligations, and they are different
+
+**⚠️ Do NOT let this release quietly blow through a kickoff-reviewed gate.** The next kickoff scan will
+flag it and the reasoning will have to be reconstructed. Raise both the way `v0.95.0`'s column-prohibition
+amendments were raised: **named, reasoned, dated.**
+
+1. **The amendment to the failure condition.** `ADR-001`'s *"Failure condition, reviewed at every
+   `/kickoff`"* is a **bare ratio** — contexts against course programs — and a ratio cannot tell a durable
+   authoring tradition from a program mirror, which is exactly the distinction this release turns on. The
+   owner's intent is aligned with the ADR's **spirit** and in tension with its **letter**. Restate the
+   condition in terms the new posture can be held to — a ceiling ratio **plus** the naming rule **plus**
+   the Program → Domain Context composition matrix as standing evidence. **⚠️ Argue it against the LIVE
+   catalog count from Phase 0.3, never against 21.**
+2. **Clause (b)'s explicit owner decision, recorded in the ADR's revision log.** A new value may be
+   introduced only when **both** hold: (a) a sustained body of canonical knowledge — **~10 or more notes
+   already authored or firmly planned** — whose treatment no existing value represents, **and** (b) an
+   explicit owner decision recorded in `ADR-001`. **⚠️ Clause (a)'s ~10-note floor is a bar every Phase 2
+   candidate must clear on real ALE evidence, and it belongs in the per-candidate proof table.**
+
+### Anti-drift (locked for this release)
+
+- **⚠️ THE `quantitative` FLAG IS THE ONE IRREVERSIBLE THING IN THE RELEASE. EVERY NEW VALUE DEFAULTS TO
+  `false`.** `false` is a **no-op** that falls through to the untouched keyword scan; `true` is a **new
+  signal that is permanent per note**, because Study Packs never auto-regenerate. `PROFESSIONAL_EDUCATION`
+  and `PROFESSIONAL_PRACTICE_AND_REGULATION` were both delivered `true` and corrected for exactly this.
+  **Getting a flag wrong is not fixable by a later release for notes already generated.** Ship `true` only
+  where computation guidance is affirmatively wanted for that tradition.
+- **⚠️ Do NOT extend `QUANTITATIVE_KEYWORDS`** — that restores the guess the declared flag replaced
+  (`v0.85.0`).
+- **⚠️ NO EXISTING VALUE IS REMOVED.** Removal can lock existing multi-program rows out of generation.
+- **⚠️ NAMING RULE, BINDING: borrow real curriculum vocabulary; never invent.** `GENERAL_ENGINEERING`,
+  `Built Environment`, `Health Sciences`, `Health Sciences Foundation` and `Computing` were rejected on
+  this test — plausible groupings nobody teaches under, instructing the model toward no particular
+  treatment. **⚠️ Name rejection ≠ family rejection**: the underlying gap may be re-examined, but any
+  replacement must be vocabulary a curriculum actually uses.
+- **⚠️ Stripping a program from Applicable Programs to fit the enum is an EMERGENCY WORKAROUND ONLY and is
+  never institutionalized.** Applicable Programs means *where this knowledge applies*; making it less
+  accurate to fit the authoring enum is an architecture workaround, not a model. **Log every note where it
+  was used — that list is Phase 2 input.**
+- **⚠️ `NURSING`, `ACCOUNTANCY` and `PROFESSIONAL_EDUCATION` have ZERO production usage, and Phase 2 must
+  STATE which explanation it assumes** (authoring order vs. wrong shape) rather than assuming silently.
+  Designing health or business siblings around them presumes they are correctly shaped. **⚠️ Do NOT
+  resolve the zero-usage question by reasoning** — that is the `v0.96.0` ruling and it still binds.
+- **⚠️ Do NOT write a second rubric — R4's exists.** Supplement it with the ratified expansion criteria;
+  do not replace it.
+- **⚠️ No migration, no backfill, no mass regeneration, no re-classification of existing rows.**
+  Normalization stays **on touch**.
+- **⚠️ The taxonomy stays single-valued, closed and NOT admin-editable.** Adding a value is architecture,
+  not authoring; do not open it to curators.
+- **⚠️ No Subject, Authored Depth or Review Set redesign, and no arbitrary program chosen from a
+  multi-program note.**
+- **⚠️ `frontend/app/onboarding` STAYS FROZEN, and this was VERIFIED rather than assumed:** the directory
+  holds exactly two files and the only Domain Context reference in either is `domainContext: null` passed
+  as a payload field (`page.tsx:1336`, `page.test.tsx:754`) — **no label, description or picker is
+  rendered there**, so no item in this release can reach it. **⚠️ TWELVE dated checkpoint reads fall
+  between `2026-09-10` and `2026-09-17`**, and `2026-09-11` both reads the onboarding funnel against its
+  62.4% baseline **and lifts the freeze**. This release must not touch a surface those reads measure.
+- **⚠️ No quota, meter or counter change; no `ProfileType` gate; no new quiz mode or sub-mode.**
+
+### Verification
+
+**⚠️ THE TIER IS DECLARED CONDITIONALLY, ON A PHASE 3 DECISION, RATHER THAN GUESSED NOW:**
+
+- **If every new value ships `quantitative = false`** — a no-op that falls through to the untouched keyword
+  scan, with no migration, no permission substrate, no cross-user read and no money semantics — **a single
+  `advisor()` call on the diff** is the correct tier.
+- **If any new value ships `quantitative = true`**, it changes what reaches the prompt for a whole class of
+  notes, **permanently per note**. That is production-data semantics: **escalate to ONE SCOPED COLD AGENT
+  framed as falsification.**
+
+**⚠️ PRE-DECLARED GUARD: a discriminating test must pin the multi-program case end to end** — a note with
+2+ Applicable Programs and the new value set must **generate**, and the same note with `domain_context`
+null must still **throw `MultiProgramDomainContextRequiredException`**. A single-program fixture passes
+under both the defect and the fix and proves nothing, which is the fixture-faithfulness lesson this cycle
+paid for three times.
+
+### Checkpoints owed at signoff
+
+- **⚠️ `[CHECKPOINT — due 2026-09-28]` is RETIRED by this release, not confounded — and that is a CHOICE
+  being made now, not a discovery in three weeks.** It asks whether the **eight-value** vocabulary is the
+  right shape to author against; changing the vocabulary first means the original question cannot be
+  recovered afterwards. **Record the retirement on the row**, and **⚠️ re-specify Phase 5's query before it
+  runs** — it becomes a different, still-useful read: *is the new taxonomy used as designed?*
+- Any value shipped ahead of its own authoring evidence owes its own dated row.
+
+### Routing
+
+**CLAUDE CODE inline** on current scope — one enum, one frontend constant file, two docs, tests; no
+endpoint, no migration, no service logic. **⚠️ Re-run the routing test if Phase 3 approval adds a surface
+that is not in the agreed plan** — that is how `v0.103.0` was mis-routed.
+
+### Shipped
+
+**Phase 3 approved by the owner 2026-09-04 — OPTION A: all three values ship now.** The Phase 2
+recommendation was Option B (ship `ARCHITECTURAL_DESIGN`, hold the other two pending the catalog
+decision); **the owner chose A with the one-live-program fact stated in front of them**, and that is
+recorded in `ADR-001`'s revision log rather than left in conversation.
+
+- **Three Domain Context values added, taking the taxonomy 8 → 11 (backend).** `ARCHITECTURAL_DESIGN`
+  *(Architectural Design)*, `ARCHITECTURAL_HISTORY_AND_THEORY` *(History and Theory of Architecture)*
+  and `PLANNING_AND_SITE_DEVELOPMENT` *(Planning and Site Development)*, **all `quantitative = false`**.
+  Appended to the enum rather than inserted — `@Enumerated(EnumType.STRING)` persists the name, so
+  ordinal position carries no data, and `DomainContextTest` asserts labels with `containsExactly`.
+- **Curator-facing descriptions (frontend).** Each names what belongs **and routes the adjacent
+  material away** — *"belongs in Engineering Sciences instead"*, *"not General Education"* — because the
+  defect that produced 215 unset ALE rows was a description enumerating a **narrower** value than the
+  one it named.
+- **Strategist rules updated in the same release (docs).** `REVIEW_SET_SHAPING_CONTEXT.md` now says
+  eleven, keeps the *do not propose a new value* prohibition re-anchored, and gains three routing rules
+  plus a warning that misrouting a computational note into the new values **silently removes its
+  computation guidance**, since all three are `false` and `ENGINEERING_SCIENCES` is `true`.
+- **`ADR-001` amended — both obligations discharged, named, reasoned and dated.** (a) The failure
+  condition's bare ratio is **demoted to a watch figure**: the `8:21` denominator was itself stale, the
+  live catalog holds **41**, and a denominator that grows by curator action is *easier to satisfy by
+  adding programs* — the exact failure the ADR's own note warns of. The operative guard becomes the
+  naming rule **plus** a composition matrix computed **against programs that exist** plus clause (a)/(b).
+  **A ratio crossing 0.40 re-opens the amendment;** it now stands at `11:41` = **0.268**. (b) The owner
+  decision is recorded in the revision log with both honest limits attached.
+- **⚠️ The 2026-08-03 decision that `Architecture` is NOT a Domain Context STILL STANDS.**
+  `ARCHITECTURE` was reconsidered and **rejected again** on the naming rule — it equals a live catalog
+  program name exactly and would merge three demonstrably different treatments. **What shipped is three
+  treatment-based values, not a program identity promoted to a context.**
+- **Two stale strategist-facing facts corrected while in the file.** `NOTES_AND_COLLECTIONS_CONTEXT.md`
+  listed **21 catalog programs** — `V106`'s seed, stale for a month against a live **41** — and that
+  list is what produced off-catalog recommendations in the ALE pass. It now carries all 41 plus an
+  explicit *not in the catalog* list. **⚠️ Scope note: this is a docs correction of a fact verified
+  against production this session, not a catalog change; no catalog row was added, renamed or removed.**
+- **Sweep by surface, not by diff.** `notes.md`, `challenge-quiz.md`, `GPT_CONTEXT.md`,
+  `NOTES_AND_COLLECTIONS_CONTEXT.md` and `REVIEW_SET_SHAPING_CONTEXT.md` all enumerated the count or the
+  values; `GPT_CONTEXT.md`'s *"do not propose a 9th Domain Context value"* is marked **DISCHARGED**
+  rather than deleted, so the next reader sees a bar that was met rather than a rule that was broken.
+
+**Verification — the pre-declared tier, taken as declared.** All three ship `quantitative = false`, so
+this resolves to **a single `advisor()` call on the diff**, not a cold agent.
+
+- `./mvnw test-compile` **exit status read directly, never through a pipe** — 0.
+- Full backend suite: **2069 tests across 203 files, 0 failures**, counted from
+  `target/surefire-reports/*.xml` rather than read off the console.
+- `tsc --noEmit` exit 0; `npm test` **2138 tests / 198 suites**, all passing.
+- **⚠️ MUTATION VERIFIED WITH THE KILLING TEST NAMED.** Flipping `ARCHITECTURAL_DESIGN` to
+  `quantitative = true` fails
+  `DomainContextTest.declaresWhetherEachDomainContextIsQuantitative(DomainContext, boolean)[9]` at
+  `DomainContextTest.java:57`. **The flag is pinned, not merely asserted.**
+- **⚠️ A stale-class trap was hit and is recorded because it nearly passed as green in the wrong
+  direction.** Restoring the mutated file with `mv` gave it an mtime OLDER than the compiled `.class`,
+  so Maven skipped recompiling and the suite kept failing against a source that was already correct.
+  `touch` plus a re-run resolved it. **Reading the exit status directly is what caught it.**
+
+### Known limitations
+
+- **⚠️ The subject-equals-Domain-Context advisory now fires on the largest family in the ALE set.** A
+  note with `subject = "Architectural Design"` and Domain Context *Architectural Design* triggers the
+  amber *"Subject matches the Domain Context, so it is probably too broad"* nudge — about **51 ALE
+  notes**. **This is accepted, not overlooked:** the advisory is explicitly *"never a validation error,
+  never a save block"*, and `NURSING`, `ACCOUNTANCY` and `CIVIL_ENGINEERING` already carry the same
+  property — the doc comment's own worked example is `subject = Nursing` + `NURSING`. **The advisory was
+  deliberately NOT suppressed per-value**; renaming to dodge it would have traded approved curriculum
+  vocabulary for cosmetics, and the naming rule is the harder constraint.
+- **⚠️ And the advisory is arguably RIGHT, which is a curation follow-on rather than this release's
+  work.** `Architectural Design` may genuinely be too broad a Subject when its own sections — Human
+  Factors, Design Process, Space Planning — are the better shelves. That is the same class as the ~334
+  program-name-as-subject rows `ADR-001` already flags. **No action taken here.**
+- **⚠️ Two of the three values serve exactly ONE live catalog program today.**
+  `ARCHITECTURAL_HISTORY_AND_THEORY` and `PLANNING_AND_SITE_DEVELOPMENT` reach only `Architecture`,
+  because `Interior Design`, `Landscape Architecture` and `Environmental Planning` are **absent from the
+  catalog**. By the amended guard 2 they are presumed program mirrors; they shipped anyway on an
+  explicit owner decision with that fact stated. **They leave that shape when those programs are added,
+  and adding them is a curator decision this release did not take.**
+- **⚠️ 85 of the 93 ALE context gaps remain LATENT rather than fixed.** Those notes carry one live
+  program today, so they were never blocked; they become generable-with-an-honest-value only once the
+  curator applies the new values. **8 notes that could not be generated at all are unblocked now.**
+- **No backfill.** Existing notes keep their current `domain_context`; the ALE values are applied by
+  curator action through the workbook, not by migration.
+
+### Added after signoff, on the release branch (owner-authorised 2026-09-04)
+
+**⚠️ THIS IS CURRICULUM DATA AND A CURRICULUM TOOL, NOT A CHANGE TO THE RELEASE'S PRODUCT SCOPE** — it
+rides in the same branch because the release PR had not merged. Recorded here rather than folded into
+the scope above, so the signed-off scope stays exactly what it was when it was verified.
+
+- **The approved Phase 2 mapping is applied to `ale-comprehensive-review.tsv`: all 132 remaining
+  `(unset)` rows now carry a value, and the file has ZERO unset for the first time.** 51 →
+  `ARCHITECTURAL_DESIGN`, 48 → `ARCHITECTURAL_HISTORY_AND_THEORY`, 33 →
+  `PLANNING_AND_SITE_DEVELOPMENT`, keyed on `note_subject`. **⚠️ The 232 rows the strategist had already
+  valued were left byte-identical** — an assertion enforced that before any write — so the strategist's
+  own splits survive: *Architectural Design* still divides 51 / 6 between the new value and
+  `ENGINEERING_SCIENCES`, and *Site Planning* still divides 16 / 2 / 2.
+- **⚠️ PRODUCTION IS UNCHANGED, AND THE DISTINCTION MATTERS.** The workbook is the curator's authoring
+  **plan**; `notes.domain_context` in production is untouched. **Nothing was backfilled and no note was
+  reclassified** — the curator applies these values as they author. The 8 previously ungeneratable notes
+  are unblocked by the enum, not by this file.
+- **`build_review_set_workbook.py` gained an OPTIONAL `applicable_programs` column**, emitted on the
+  Domain Context sheet when the plan file carries it. **⚠️ This closes a real trap: that column
+  previously existed only as a HAND-EDIT of the `.xlsx`, which any regeneration silently destroyed** —
+  the exact thing `docs/curriculum/README.md` warns against. It is now generated, and note-level rather
+  than subject-level. **The superseded hand-added column remains recoverable from git history.**
+  **⚠️ Regression-checked against the CE set, which has no such column and still builds** (10 plans,
+  568 rows).
+
 ## v0.110.2 - Shared Link Integrity
 
 **Status: Released** (kicked off and signed off 2026-09-04, base branch `releases/v0.110.2`, cut from `main` after

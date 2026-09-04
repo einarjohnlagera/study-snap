@@ -20,7 +20,7 @@ class DomainContextTest {
     }
 
     @Test
-    void valuesExposeTheEightRatifiedLabels() {
+    void valuesExposeTheElevenRatifiedLabels() {
         assertThat(DomainContext.values()).extracting(DomainContext::getLabel).containsExactly(
                 "Engineering Mathematics",
                 "Engineering Sciences",
@@ -29,7 +29,10 @@ class DomainContextTest {
                 "General Education",
                 "Professional Education",
                 "Nursing",
-                "Accountancy"
+                "Accountancy",
+                "Architectural Design",
+                "History and Theory of Architecture",
+                "Planning and Site Development"
         );
     }
 
@@ -42,7 +45,13 @@ class DomainContextTest {
             "GENERAL_EDUCATION, false",
             "PROFESSIONAL_EDUCATION, false",
             "NURSING, true",
-            "ACCOUNTANCY, true"
+            "ACCOUNTANCY, true",
+            // ⚠️ v0.111.0's three values are false BY DECISION. Flipping one to true is
+            // irreversible for every note generated meanwhile, because Study Packs never
+            // auto-regenerate. This row is the guard: mutate the enum and this test names itself.
+            "ARCHITECTURAL_DESIGN, false",
+            "ARCHITECTURAL_HISTORY_AND_THEORY, false",
+            "PLANNING_AND_SITE_DEVELOPMENT, false"
     })
     void declaresWhetherEachDomainContextIsQuantitative(DomainContext domainContext, boolean quantitative) {
         assertThat(domainContext.isQuantitative()).isEqualTo(quantitative);

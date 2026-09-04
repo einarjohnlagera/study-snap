@@ -40,12 +40,16 @@ Four rules that constrain any proposal:
 
 ## Domain Context — the closed vocabulary
 
-Only these eight values exist. **Adding one is an architecture decision, not a curation call — do
+Only these eleven values exist. **Adding one is an architecture decision, not a curation call — do
 not propose a new value.**
 
 `ENGINEERING_MATHEMATICS` · `ENGINEERING_SCIENCES` · `CIVIL_ENGINEERING` ·
 `PROFESSIONAL_PRACTICE_AND_REGULATION` · `GENERAL_EDUCATION` · `PROFESSIONAL_EDUCATION` ·
-`NURSING` · `ACCOUNTANCY`
+`NURSING` · `ACCOUNTANCY` · `ARCHITECTURAL_DESIGN` · `ARCHITECTURAL_HISTORY_AND_THEORY` ·
+`PLANNING_AND_SITE_DEVELOPMENT`
+
+**⚠️ The last three were added in `v0.111.0`** to close a real gap: 132 of 364 ALE rows had no honest
+value under the previous eight, and 8 notes carrying two programs could not be generated at all.
 
 Choosing one — ADR-001's rule is **the coarsest label under which the note's treatment is
 identical**, with a binary test: *would a student in a sibling program be served by this exact
@@ -55,6 +59,17 @@ note, unchanged?* Yes → the shared value. No → the program-specific one.
 - Computational method, including engineering economics and cost → `ENGINEERING_MATHEMATICS`
 - Codes, law, ethics, contracts, licensure, safety → `PROFESSIONAL_PRACTICE_AND_REGULATION`
 - Material genuinely specific to one program that has a value → that value
+- Design process and human factors — architectural programming, space planning and circulation,
+  anthropometrics, ergonomics, universal design, concept development → `ARCHITECTURAL_DESIGN`
+- Chronological or stylistic treatment — history of architecture, Philippine architecture,
+  architectural theory and criticism, heritage conservation → `ARCHITECTURAL_HISTORY_AND_THEORY`
+- Site- and district-scale planning — site selection and analysis, topography, solar and wind
+  siting, land use and zoning, parking provision, urban planning, landscape architecture →
+  `PLANNING_AND_SITE_DEVELOPMENT`
+  **⚠️ These three are NOT a licence to move existing engineering material.** Bioclimatic design,
+  passive cooling, drainage, building services and construction materials stay
+  `ENGINEERING_SCIENCES`, which is quantitative; the three new values are not, so misrouting a
+  computational note into them SILENTLY REMOVES its computation guidance.
 - **No honest fit → leave it unset**, which falls back to the program name. An honest unset is a
   findable backlog marker; a forced value is a decision that only looks made.
   **⚠️ Do NOT assume any particular program is expected to come back unset.** An earlier version

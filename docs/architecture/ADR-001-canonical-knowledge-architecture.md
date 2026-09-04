@@ -335,6 +335,21 @@ This is the clearest worked example of the rule, and it is worth preserving as o
 
 **Applicability defaults for these values are NOT yet verified against current PRC board syllabi** and must be curator-checked before family-expansion defaults are set. Whether `Engineering Sciences` spans 8 or 11 engineering programs is a curriculum fact, not an architecture decision.
 
+### Amended to 11 values — `v0.111.0`, owner decision 2026-09-04
+
+**Three values added:** `Architectural Design` · `History and Theory of Architecture` · `Planning and Site Development`. **All three ship `quantitative = false`.** Evidence and proof tables: `docs/claude-plans/v0.111.0-phase-2-taxonomy-calibration.md`.
+
+**⚠️ THE 2026-08-03 DECISION THAT `Architecture` IS NOT A DOMAIN CONTEXT STILL STANDS AND IS NOT REVERSED.** `ARCHITECTURE` was considered and **rejected** here on the naming rule — it equals the live catalog program name exactly, it is not a subject area, and it would merge three demonstrably different treatments into one instruction. **What shipped is not a program identity promoted to a context; it is three treatment-based values**, which is what the governance rule has always asked for. The section above anticipated exactly this: *"the Architecture rebuild gathers evidence AGAINST this floor."* This is that evidence arriving.
+
+**Why the "would reduce nothing" reasoning no longer holds for these three families.** At ratification, Architecture's subject plans were assessed as Architecture-specific. The ALE curation pass shows otherwise: the three families are recommended for reuse across **Architecture, Architectural Engineering, Interior Design and Landscape Architecture**, and the shared-treatment test is met on the strategist's own note-level judgment rather than on note volume. **Note volume remains explicitly NOT a qualifying criterion.**
+
+**⚠️ Two honest limits on this evidence, recorded rather than smoothed over:**
+
+- **Two of the three serve exactly ONE live catalog program today** (`History and Theory of Architecture` and `Planning and Site Development` → Architecture only), because `Interior Design`, `Landscape Architecture` and `Environmental Planning` are **absent from the catalog**. By guard 2 above they are presumed program mirrors, and they ship anyway on an **explicit owner decision (Option A, 2026-09-04)** taken with that fact stated. **They leave that shape when those programs are added.**
+- **All three lean on clause (a)'s *"firmly planned"* reading** — the ALE Review Set is 241 `New`, 63 `Existing`, 47 `Reuse`. On *"already authored"* alone, none would have cleared the floor on 2026-09-04.
+
+**Scope of what this changes:** 132 of 364 ALE rows gain an honest value, and **8 notes that could not be generated at all** — two live programs with a null Domain Context — become generable. **No migration** (`notes.domain_context` is `VARCHAR(64)` with no CHECK), no backfill, and **no existing value is removed or redefined.**
+
 ### R4 verification — RESOLVED 2026-08-04. The 8-value set is not amended.
 
 **Risk R4 (`01`): a Domain Context is often broader than the `course_program` it replaces, and a vaguer domain constraint could make generated content drift generic.** No automated test can detect this — the prompt-building tests assert which values reach the model, never whether the output is good. The check was owed as a post-deploy checkpoint from `v0.69.0`, carried through `v0.70.0`, and run against production on 2026-08-04 once `v0.70.0` deployed. Runbook and scoring rubric: `docs/claude-prompt/canonical-knowledge-architecture-out/17-r4-verification-runbook.md`.
@@ -376,6 +391,14 @@ one explanation as settled would make that read unfalsifiable before it runs. **
 > **⚠️ A new Course / Program does NOT imply a new Domain Context (owner, 2026-08-29).** This ADR governs promotion by *shared treatment*, and never stated the converse — which matters now that the catalog is expanding. Programs are added as curriculum and discovery facts; a Domain Context is added only on the evidence bar above. **The catalog growing is not evidence for the taxonomy growing.**
 >
 > **Failure condition, reviewed at every `/kickoff`:** if the number of Domain Context values ever approaches the number of course programs, the taxonomy has failed and has collapsed back into the free-text field it replaced. Baseline at ratification: **8 contexts against 27+ programs.** **⚠️ Corrected 2026-08-31: that figure is the PRE-CATALOG FREE-TEXT SPREAD** (32 distinct values audited at ratification), **not catalog rows.** `V106` seeds a **21-row** catalog, so the ratio this condition actually watches is **8:21**. The correction matters because the whole condition is a ratio and it was being read against the wrong denominator. A ratio trending toward 1:1 is the signal to stop and consolidate, not to keep adding.
+>
+> **⚠️ AMENDED 2026-09-04 (`v0.111.0`, owner decision — this entry is clause (b)'s record). THE RATIO IS DEMOTED TO A WATCH FIGURE AND IS NO LONGER THE OPERATIVE GUARD.** The `8:21` denominator was itself stale: a production read on 2026-09-04 found the live catalog holds **41 programs**, 20 of them added at runtime, so the real ratio was **`8:41` = 0.195** and this condition was never close to tripping. **The correction is not "the taxonomy has more room" — it is that the ratio measures the wrong thing.** A denominator that grows by ordinary curator action makes the condition **easier to satisfy by adding programs**, which is precisely the failure the paragraph directly above this one names. The operative guard is now conjunctive:
+>
+> 1. **The naming rule.** No Domain Context may equal a live catalog program name unless it is a documented subject area of a licensure curriculum. Names are **borrowed from real curriculum vocabulary and never invented** — `GENERAL_ENGINEERING`, `Built Environment`, `Health Sciences` and `Computing` were rejected on this test.
+> 2. **The Program → Domain Context composition matrix, computed against programs that EXIST.** Healthy is one program → several contexts and one context → several programs. **A value serving exactly one live program is presumed a program mirror** and must be justified explicitly or deferred.
+> 3. **Clause (a)'s note floor and clause (b)'s recorded owner decision, unchanged.**
+>
+> The ratio is still reported at every `/kickoff`. **A ratio crossing 0.40 re-opens this amendment.** After `v0.111.0` it stands at **`11:41` = 0.268**.
 
 ### Program-name fallback is a transitional state, not the end state
 

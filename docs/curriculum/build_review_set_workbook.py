@@ -15,6 +15,9 @@ INPUT COLUMNS (tab-separated, header row required, order irrelevant):
     note_title         the note
     note_subject       canonical Subject metadata (NOT the section name)
     domain_context     enum value, or "(unset)"
+    applicable_programs  OPTIONAL, comma-separated catalog program names. When present, the
+                       Domain Context sheet gains an Applicable Programs column aggregated per
+                       (note subject, Domain Context).
     status             Existing | Reuse | New | Excluded | Unmapped
                        Unmapped = a target shape not yet reconciled against production. Use it
                        when reshaping a set whose notes already exist but have not been matched
@@ -105,26 +108,41 @@ def build(rows, out, set_title, set_desc):
     dc["A1"] = "Domain Context by Subject"; dc["A1"].font = Font(size=14, bold=True)
     _banner(dc, "A2", "RULE 1 — (unset) is only legal on a note with ONE Applicable Program. "
             "NoteApplicableProgramsService rejects a save with 2+ programs and no Domain Context "
-            "(MultiProgramDomainContextRequiredException).", "A2:C2", 44, color="B06000", bold=True)
+            "(MultiProgramDomainContextRequiredException).", "A2:D2", 44, color="B06000", bold=True)
     _banner(dc, "A3", "RULE 2 — Existing and Reuse notes ALREADY have a Domain Context. The value here is a "
             "recommendation, not a blank field; changing it is a separate decision from placing the note, and "
-            "it affects FUTURE generation only.", "A3:C3", 44, color="B06000", bold=True)
+            "it affects FUTURE generation only.", "A3:D3", 44, color="B06000", bold=True)
     _banner(dc, "A4", "NOTE — (unset) falls back to the program name. If that name matches no quantitative "
-            "keyword, computation guidance stays OFF for every quiz generated from the note.", "A4:C4", 30,
+            "keyword, computation guidance stays OFF for every quiz generated from the note.", "A4:D4", 30,
             italic=True, color="666666")
-    _head(dc, 6, ["Note subject", "Domain Context", "Notes in set"])
+    # Applicable Programs is OPTIONAL: emitted only when the input carries the column, so a plan
+    # file without it (the CE set) still builds. Added 2026-09-04 -- this column previously existed
+    # only as a HAND-EDIT of the .xlsx, which regenerating silently destroyed. Generating it from
+    # the plan file is what makes the workbook safe to rebuild.
+    has_programs = "applicable_programs" in rows[0]
+    _head(dc, 6, ["Note subject", "Domain Context", "Notes in set"]
+          + (["Applicable Programs"] if has_programs else []))
     per = collections.OrderedDict()
+    progs = collections.defaultdict(set)
     for r_ in rows:
-        per.setdefault((r_["note_subject"], r_["domain_context"]), 0)
-        per[(r_["note_subject"], r_["domain_context"])] += 1
+        key = (r_["note_subject"], r_["domain_context"])
+        per.setdefault(key, 0)
+        per[key] += 1
+        if has_programs:
+            for prog in (r_.get("applicable_programs") or "").split(","):
+                if prog.strip():
+                    progs[key].add(prog.strip())
     r = 7
     for (subj, v), n in sorted(per.items()):
-        for i, x in enumerate([subj, v, n], 1):
+        vals = [subj, v, n] + ([" · ".join(sorted(progs[(subj, v)]))] if has_programs else [])
+        for i, x in enumerate(vals, 1):
             c = dc.cell(row=r, column=i, value=x); c.border = BOX
             if i == 2:
                 c.fill = PatternFill("solid", fgColor=DC_FILL.get(v, "FFFFFF")); c.font = Font(bold=True)
+            if i == 4:
+                c.alignment = Alignment(wrap_text=True, vertical="top")
         r += 1
-    _widths(dc, [34, 40, 14]); dc.freeze_panes = "A7"
+    _widths(dc, [34, 40, 14, 64]); dc.freeze_panes = "A7"
 
     for pno, p in plans.items():
         ws = wb.create_sheet(sheet_name(pno, p["title"]))
