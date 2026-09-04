@@ -1,5 +1,86 @@
 # RELEASES.md - NoteLib
 
+## v0.110.2 - Shared Link Integrity
+
+**Status: In Progress** (kicked off 2026-09-04, base branch `releases/v0.110.2`, cut from `main` after
+`v0.110.1` merged and tagged)
+
+Theme: regenerating a quiz stops silently corrupting the copy someone else is already taking.
+
+### Why this release exists
+
+**⚠️ A LIVE DEFECT, FOUND DURING `v0.110.0`'s ITEM 4 AUDIT AND CARRIED UNFIXED THROUGH TWO RELEASES.**
+Re-verified against `main` at kickoff rather than trusted from the note:
+
+- `GeneratedQuizService.generate:139` reuses the **existing entity** when a quiz already exists
+  (`existing == null ? new GeneratedQuizEntity() : existing`) and `:152` overwrites its questions — **the
+  row id never changes.**
+- `quiz_share_links.generated_quiz_id` points at that id, and **`GeneratedQuizService` references share
+  links ZERO times.**
+
+So regenerating a quiz that is already shared mutates the quiz **a recipient may be part-way through**,
+and it fails in two ways depending on a detail the owner never sees:
+
+- **The question count changed** (a `TEACHER` picking 10/20/30) → `getSharedQuizResults`' exact
+  `answers.size() != questions.size()` check (`QuizShareLinkService:189`) **400s the recipient on submit**,
+  after they have answered everything.
+- **The count stayed the same** (every non-`TEACHER`, who always gets 10) → **no error at all.** They are
+  graded against **questions they never saw**, and nobody finds out.
+
+**⚠️ THE SECOND IS THE WORSE ONE AND THE REASON THIS IS NOT COSMETIC:** a wrong score is returned as a
+correct one, to the person the quiz was made for.
+
+**⚠️ THIS IS THE EXACT HAZARD `v0.110.0` REJECTED REFS TO AVOID** — *"regenerating a source note would
+mutate a live shared quiz, and `getSharedQuizResults`' exact size check then 400s a recipient mid-quiz."*
+The combined-quiz snapshot design removed it for combined quizzes. **It was never removed for single-note
+ones, which is the path that actually ships today.**
+
+### Planned Scope
+
+- **(1) Regenerating a shared quiz turns its live share link OFF, rather than silently swapping the
+  questions underneath it (backend).** The recipient then meets the **existing, already-built** *"no longer
+  active"* screen — an honest dead end instead of a wrong score.
+- **(2) The owner is told before it happens, and told after (frontend).** The regenerate confirmation says
+  a live link will stop working; the quiz preview reflects the link's new state on return.
+
+### Anti-drift (locked for this release)
+
+- **⚠️ Do NOT DELETE the share-link row — deactivate it.** The owner can turn it back on knowingly, and it
+  then serves the new questions under the same token, which is their informed choice. **Deleting the row
+  would force a NEW link and spend share-link quota**, punishing the owner for a fix.
+- **⚠️ Do NOT ADD a quota, meter or counter, and do not change when `quiz_share_links_created` is
+  incremented.** Deactivating and re-enabling an existing row must cost nothing.
+- **⚠️ Do NOT snapshot the single-note shared quiz in this release.** Copying questions at share time (the
+  `combined_quizzes` model) is the architecturally cleaner fix and is a **migration plus a new table** —
+  not a patch. It is recorded as the larger alternative, deliberately not taken here.
+- **⚠️ Do NOT drop or weaken `uq_generated_quizzes_note_id`.** Versioning the quiz — a new row per
+  regeneration, with the link left on the old one — is blocked by that index, and `NoteService.mapToResponse`
+  is an owner-unscoped `findByNoteId` returning `Optional` that throws on a second row.
+- **⚠️ Do NOT change what `getSharedQuizResults` does on a size mismatch.** The exact check is correct; the
+  defect is that a live link can point at a changed quiz at all.
+- **⚠️ Do NOT gate on `ProfileType` and do NOT require a Learning Connection** (`v0.89.0`'s axis error).
+- **⚠️ Do NOT change `QUIZ_SHARE_LINK_CREATED`'s `scope` metadata, the `generate-quiz-combined-multi-note`
+  tip id, `BOARD_EXAM_STARTED` or `ADAPTIVE_PRACTICE_STARTED`** — four dated checkpoints read them.
+- **⚠️ `frontend/app/onboarding` STAYS FROZEN — `[CHECKPOINT — due 2026-09-11]` is 7 DAYS OUT**, and a dense
+  cluster of twelve dated reads falls between `2026-09-10` and `2026-09-17`. **This release must not touch
+  any surface those reads measure.**
+
+### Verification
+
+**A single `advisor()` call on the diff.** No migration, no permission substrate, no cross-user read, no
+money or quota semantics — the change is *when an existing row's boolean flips*. **⚠️ ESCALATE TO ONE
+SCOPED COLD AGENT IF** the fix needs to alter `QuizShareLinkService`'s active-link semantics, or if a second
+write path to `generated_quizzes.questions` turns up that also needs the deactivation.
+
+**⚠️ THE PINNING GUARD IS PRE-DECLARED, AND THE OBVIOUS TEST DOES NOT DISCRIMINATE:** a fixture where
+regeneration changes the question count would fail on the size check **with or without** the fix. The
+discriminating case is a regeneration that returns the **SAME NUMBER** of questions — that is the silent
+path — and the assertion is that the link is no longer active.
+
+### Shipped
+
+_(nothing yet)_
+
 ## v0.110.1 - Quiz Text Integrity
 
 **Status: Released** (kicked off and signed off 2026-09-04, base branch `releases/v0.110.1`, cut from `main` after
