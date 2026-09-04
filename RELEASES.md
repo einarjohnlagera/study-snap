@@ -78,8 +78,8 @@ this release. **⚠️ IT IS A SOLID PLAN. EXECUTE ITS PHASES; DO NOT RE-DERIVE 
 **read that table before proposing anything.**
 
 **⚠️ PHASES 0 AND 1 ARE OWNER/CURATOR WORK WITH NO CODE, AND NO IMPLEMENTATION MAY BEGIN BEFORE PHASE 3
-APPROVAL.** The plan says so explicitly. Order is **Phase 0 → 1 → 2 → 3**. **⚠️ PHASE 0 IS NOW COMPLETE
-(2026-09-04) and Phase 2 is blocked on ONE remaining input, not two:**
+APPROVAL.** The plan says so explicitly. Order is **Phase 0 → 1 → 2 → 3**. **⚠️ PHASES 0 AND 1 ARE BOTH COMPLETE (2026-09-04). Phase 2's inputs are in hand; what remains is
+Phase 2 itself and then Phase 3 approval:**
 
 - **✅ Phase 0.3 — capture the LIVE course-program catalog. RUN 2026-09-04; the answer is bigger than the
   plan assumed and it CHANGES THE PLAN'S OWN ARITHMETIC.** The catalog holds **41 programs, not 21** —
@@ -106,8 +106,46 @@ APPROVAL.** The plan says so explicitly. Order is **Phase 0 → 1 → 2 → 3**.
 - **Logged, out of scope, no action:** the catalog contains **`Geotechnical Engineer`** (missing *"ing"*,
   and arguably a civil sub-discipline rather than a program). **No catalog row is rewritten in this
   release** — recorded so it is not rediscovered as a finding.
-- **Phase 1 — the corrected ALE distribution plus its residue list.** Before is `(unset) 215 · PPR 77 ·
-  ENG_SCI 50 · CIVIL 16 · ENG_MATH 6`; the after and the residue are Phase 2 inputs.
+- **✅ Phase 1 — RUN 2026-09-04. The corrected distribution and the residue both exist.** `(unset)`
+  **215 → 132**: 83 rows moved to a real value (**80 to `ENGINEERING_SCIENCES`**, 3 to `PPR`), so
+  `ENG_SCI` goes 50 → 130 and `PPR` 77 → 80 while `CIVIL` 16 and `ENG_MATH` 6 are untouched. The
+  residue splits into **39 `UNSET_VALID`** (single program, honest no-fit — legal today) and
+  **93 `CONTEXT_GAP`** (2+ programs and no honest value — illegal today). Carried in
+  `docs/curriculum/ale-comprehensive-review.tsv` (which gains `applicable_programs` and
+  `curation_status`) and `ale-applicable-programs-domain-context-implementation.xlsx`.
+
+**⚠️ THE GAP HAS TWO HORIZONS AND BOTH NUMBERS ARE REAL — reporting either alone misleads.** Of the
+93 `CONTEXT_GAP` rows:
+
+- **8 are BLOCKED TODAY** — `Architecture + Architectural Engineering`, both live in the catalog, so
+  the note has 2+ programs and a null Domain Context and `assertGenerationReady` throws. **This is the
+  reported blocker, now counted rather than estimated.**
+- **85 are BLOCKED WHEN THE CATALOG IS EXTENDED** — their second program (`Interior Design`,
+  `Landscape Architecture`, `Environmental Planning`) is **absent from the live catalog**, so today
+  those notes carry one program, the `size() == 1` fallback fires, and they generate fine.
+  **⚠️ This is latency, not safety: 20 programs were added at runtime in the month to 2026-08-29, and
+  `Interior Design` is the SECOND most-recommended program in the strategist's own output (104 rows).**
+
+**⚠️ Do NOT compress this to *"the blocker is only 8 notes"*** — that reads the release as near-pointless
+— **or to *"93 notes are blocked"***, which claims evidence that is not yet reachable. **8 now, 93 on a
+curator action that takes seconds.**
+
+**⚠️ PHASE 2 EVIDENCE, RECORDED WITHOUT NAMING CANDIDATE VALUES:** 93 rows clears `ADR-001` clause (a)'s
+~10-note floor **nine times over**, and the strategist's own program combinations show the gap is **not
+one family** — `Architecture + Interior Design` (52) is interior/spatial, `Architecture + Landscape
+Architecture + Environmental Planning` (37) is site/landscape/planning, and `Architecture +
+Architectural Engineering` (8) is the building-systems overlap. **Three distinct reuse patterns, which
+is the one-value-or-several question stated in evidence rather than in opinion.**
+
+**⚠️ A SECOND, SEPARATE GAP SURFACED AND IT IS NOT A TAXONOMY PROBLEM:** 4 of the 10 programs the
+strategist recommends are **not in the catalog** — `Interior Design` (104 rows), `Landscape
+Architecture` (51), `Environmental Planning` (33), `Construction Management` (23). They are preserved
+and flagged `CATALOG_GAP`, **never substituted**. **⚠️ Two are NEAR-matches, which is exactly where a
+silent substitution happens:** `Construction Management` against catalog `Construction Engineering and
+Management`, and `Environmental Planning` against `Urban and Regional Planning` / `Environmental
+Engineering`. **Whether to add these four is a curator/catalog decision, NOT part of this release's
+taxonomy scope** — but it is what converts 85 latent gaps into live ones, so it must be taken
+knowingly.
 
 **⚠️ Phase 0.1 is ANSWERED and does not need re-running: `Architectural Engineering` IS in the production
 catalog** (owner screenshot; absent from `db/migration/`, so added through the admin-manageable catalog at
