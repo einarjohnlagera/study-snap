@@ -85,6 +85,11 @@ public class QuickReviewAdaptivePracticeService {
     private static final String AI_RATE_LIMIT_SCOPE = "adaptive-practice";
     private static final String SESSION_METADATA_WEAK_CONCEPTS = "weakConcepts";
     private static final String SESSION_STATE_SOURCE_COLLECTION_ID = "sourceCollectionId";
+    // Same key and shape LongExamService and ChallengeQuizService already write, and that
+    // QuizSessionHistoryService.findParticipatingNoteIds already reads. Plan-scoped Adaptive has no
+    // note anchor, so this is the ONLY thing that credits its source notes with the completion.
+    private static final String SESSION_STATE_SOURCE_NOTE_REFS = "sourceNoteRefs";
+    private static final String SOURCE_NOTE_ID_KEY = "noteId";
     private static final String SESSION_STATE_FOCUS_CONCEPTS = "adaptiveFocusConcepts";
     private static final String ANALYTICS_METADATA_SESSION_ID = "sessionId";
     private static final String ANALYTICS_METADATA_WEAK_CONCEPT_COUNT = "weakConceptCount";
@@ -225,7 +230,8 @@ public class QuickReviewAdaptivePracticeService {
             studyPackId,
             studyPack,
             focusEntries,
-            null
+            null,
+            List.of()
         ));
         List<String> disallowedQuestions = extractQuestionTexts(studyPack.getQuiz());
         StudyPackGenerationContext generationContext = buildQuizGenerationContext(userId, studyPack);
@@ -444,7 +450,11 @@ public class QuickReviewAdaptivePracticeService {
         // allowance on a path whose fan-out is already bounded. Revisit only if the bound moves.
         int questionCount = resolveAdaptiveQuestionCount(focusEntries.size());
         QuickReviewSessionEntity session = buildGeneratingSession(
-                userId, null, null, focusEntries, collectionId);
+                userId, null, null, focusEntries, collectionId, sampled.stream()
+                        .map(source -> source.studyPack().getNoteId())
+                        .filter(Objects::nonNull)
+                        .distinct()
+                        .toList());
         session.setId(sessionId);
         session = quickReviewSessionRepository.save(session);
         try {
@@ -883,7 +893,8 @@ public class QuickReviewAdaptivePracticeService {
         UUID studyPackId,
         StudyPackEntity studyPack,
         List<AdaptivePracticeFocusConceptResponse> focusConcepts,
-        UUID sourceCollectionId
+        UUID sourceCollectionId,
+        List<UUID> sourceNoteIds
     ) {
         QuickReviewSessionEntity session = new QuickReviewSessionEntity();
         session.setId(UUID.randomUUID());
@@ -911,6 +922,13 @@ public class QuickReviewAdaptivePracticeService {
         initialState.put(SESSION_STATE_FOCUS_CONCEPTS, focusConcepts);
         if (sourceCollectionId != null) {
             initialState.put(SESSION_STATE_SOURCE_COLLECTION_ID, sourceCollectionId.toString());
+            // Every sampled note, not one borrowed anchor. Before v0.113.0 a plan-scoped session
+            // carried the primary pack's note_id and credited exactly ONE of up to
+            // MAX_PLAN_SOURCE_PACKS notes; with the anchor gone it would otherwise credit NONE and
+            // Study Plan progress would never advance.
+            initialState.put(SESSION_STATE_SOURCE_NOTE_REFS, sourceNoteIds.stream()
+                    .map(noteId -> Map.<String, Object>of(SOURCE_NOTE_ID_KEY, noteId.toString()))
+                    .toList());
         }
         session.setSessionState(initialState);
         session.setCreatedAt(OffsetDateTime.now());

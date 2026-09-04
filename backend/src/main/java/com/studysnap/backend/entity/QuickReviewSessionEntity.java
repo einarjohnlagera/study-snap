@@ -110,6 +110,14 @@ public class QuickReviewSessionEntity {
     @PrePersist
     @PreUpdate
     void validateAnchor() {
+        // A TERMINAL session is history and may legitimately be anchorless: deleting a Study Plan sets
+        // source_collection_id to NULL rather than destroying the learner's completed sessions, and
+        // session_state.sourceNoteRefs is what keeps them reachable. Mirrors
+        // chk_quick_review_sessions_anchor, which carries the same terminal branch -- without this the
+        // first save of an orphaned row would throw where the database would not.
+        if (status == QuickReviewSessionStatus.COMPLETED || status == QuickReviewSessionStatus.FORFEITED) {
+            return;
+        }
         boolean hasPackAndNote = studyPackId != null && noteId != null;
         boolean hasPartialPackAndNote = (studyPackId == null) != (noteId == null);
         boolean hasCollection = sourceCollectionId != null;

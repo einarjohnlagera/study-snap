@@ -46,9 +46,14 @@ public class QuizSessionHistoryService {
     private static final int EXCELLENT_SCORE_THRESHOLD = 90;
     private static final int GOOD_SCORE_THRESHOLD = 75;
     private static final int FAIR_SCORE_THRESHOLD = 50;
+    // ⚠️ ADAPTIVE is here for COLLECTION-ANCHORED plan-scoped sessions only. This constant widens the
+    // candidate QUERY; isMultiNoteMode below is what actually discriminates, and note-scoped Adaptive
+    // still returns just its own note there. Widening the query alone is safe because the second pass
+    // merges with `latest` and the SQL pass already credited a note-anchored session.
     private static final List<QuickReviewSessionMode> MULTI_NOTE_SESSION_MODES = List.of(
             QuickReviewSessionMode.LONG_EXAM,
-            QuickReviewSessionMode.CHALLENGE
+            QuickReviewSessionMode.CHALLENGE,
+            QuickReviewSessionMode.ADAPTIVE
     );
 
     private final QuickReviewSessionRepository quickReviewSessionRepository;
@@ -129,8 +134,14 @@ public class QuizSessionHistoryService {
         if (session.getNoteId() != null) {
             noteIds.add(session.getNoteId());
         }
+        // A plan-scoped Adaptive session has NO note anchor and carries its sampled notes in
+        // sourceNoteRefs. A note-scoped Adaptive session has an anchor and no refs, so it must fall
+        // through with just its own note -- widening this to all of ADAPTIVE would be wrong.
+        boolean isCollectionScopedAdaptive = session.getSessionMode() == QuickReviewSessionMode.ADAPTIVE
+                && session.getSourceCollectionId() != null;
         boolean isMultiNoteMode = session.getSessionMode() == QuickReviewSessionMode.LONG_EXAM
-                || (session.getSessionMode() == QuickReviewSessionMode.CHALLENGE && isBoardExam(session.getSessionState()));
+                || (session.getSessionMode() == QuickReviewSessionMode.CHALLENGE && isBoardExam(session.getSessionState()))
+                || isCollectionScopedAdaptive;
         if (!isMultiNoteMode) {
             return noteIds;
         }

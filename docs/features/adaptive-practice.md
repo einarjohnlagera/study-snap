@@ -147,7 +147,20 @@ The result screen should stay focused and should not compete with unrelated acti
   **⚠️ Those gates sit AFTER the resume branch and BEFORE the eligibility load — both boundaries
   matter, and moving them above the resume branch is a defect that shipped once.**
 - **There is no collection-addressed in-progress endpoint.** The collection start endpoint remains
-  idempotent; after it returns a session id, enter and reload are session-addressed.
+  idempotent; after it returns a session id, enter and reload are session-addressed. The
+  session-addressed read serves only `GENERATING`, `IN_PROGRESS` and `FAILED` sessions, matching the
+  note-addressed read — a finished session is not resumable.
+- **A plan-scoped completion credits every note it sampled.** The session has no note anchor, so it
+  records its sampled notes in `session_state.sourceNoteRefs` and rides the same second pass Long Exam
+  and Board Exam use. Each of those notes gets `lastSessionCompletedAt`, so Study Plan progress
+  advances. **⚠️ Note-scoped Adaptive is unchanged and still credits only its own note** — the
+  discriminator is the collection anchor, never the mode alone.
+- **Deleting a Study Plan does not delete the sessions run against it.** The collection anchor is
+  `ON DELETE SET NULL`, so a `COMPLETED` or `FORFEITED` session is orphaned rather than destroyed and
+  stays visible through the notes it sampled. Non-terminal sessions on that plan are cleared first,
+  because an anchorless active session would be unreachable.
+- **The weak-concept retention email accounts for plan-scoped practice.** Concepts cleared in a
+  plan-scoped session are suppressed by their **source-pack stamp**, never by concept name alone.
 - **⚠️ Both writes depend on the CLIENT submitting `selectedChoices` / `selectedMultiChoices` on
   completion.** Adaptive Practice has no progress endpoint, so nothing persists answers into session
   state during a session. If the client omits them the server's per-source breakdown is empty and it

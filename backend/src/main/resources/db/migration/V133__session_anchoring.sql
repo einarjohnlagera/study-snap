@@ -15,14 +15,27 @@
 ALTER TABLE quick_review_sessions
     ALTER COLUMN study_pack_id DROP NOT NULL,
     ALTER COLUMN note_id DROP NOT NULL,
+    -- ⚠️ SET NULL, NOT CASCADE. A cascade here would make deleting a Study Plan -- an ORGANISATIONAL
+    -- act, where "Remove never means canonical note deletion" is standing doctrine -- hard-delete the
+    -- learner's COMPLETED quiz history for that plan, while the ConceptHealth rows those sessions
+    -- wrote survive (that table is keyed per pack and has no collection FK). Evidence would persist
+    -- while the history explaining it vanished.
+    -- Account deletion does NOT depend on this: quick_review_sessions.user_id has cascaded since
+    -- V4:3, so orphan cleanup was already covered and the cascade added only a second, user-facing
+    -- deletion trigger.
     ADD COLUMN source_collection_id UUID
-        REFERENCES note_collections(id) ON DELETE CASCADE;
+        REFERENCES note_collections(id) ON DELETE SET NULL;
 
+-- An ACTIVE session must be reachable, so it must carry an anchor. A TERMINAL one is history: it is
+-- surfaced through session_state.sourceNoteRefs, which credits every note the session sampled, so it
+-- stays reachable after ON DELETE SET NULL has cleared its collection. Without the terminal branch
+-- that SET NULL would violate this constraint and deleting a plan would fail outright.
 ALTER TABLE quick_review_sessions
     ADD CONSTRAINT chk_quick_review_sessions_anchor
         CHECK (
             (study_pack_id IS NOT NULL AND note_id IS NOT NULL)
             OR source_collection_id IS NOT NULL
+            OR status IN ('COMPLETED', 'FORFEITED')
         ) NOT VALID;
 
 ALTER TABLE quick_review_sessions

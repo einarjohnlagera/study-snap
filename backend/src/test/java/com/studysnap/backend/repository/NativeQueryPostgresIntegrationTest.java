@@ -1930,6 +1930,24 @@ class NativeQueryPostgresIntegrationTest {
         return id;
     }
 
+    private UUID seedQuizSession(
+            UUID userId,
+            UUID studyPackId,
+            UUID noteId,
+            UUID sourceCollectionId,
+            String status
+    ) {
+        UUID id = UUID.randomUUID();
+        jdbcTemplate.update(
+                "insert into quick_review_sessions"
+                        + " (id, user_id, study_pack_id, note_id, source_collection_id, session_mode, status,"
+                        + " current_question_index, current_round, total_questions, created_at, completed_at)"
+                        + " values (?, ?, ?, ?, ?, 'ADAPTIVE', ?, 0, 'INITIAL', 1, now(), now())",
+                id, userId, studyPackId, noteId, sourceCollectionId, status
+        );
+        return id;
+    }
+
     private void prepare(NativeQueryMethod query, int index) {
         String statementName = "notelib_native_query_" + index;
         String sql = positionalParameters(query.sql());
@@ -2096,4 +2114,57 @@ class NativeQueryPostgresIntegrationTest {
             return ENABLED;
         }
     }
+
+    /**
+     * ⚠️ Deleting a Study Plan must ORPHAN a learner's completed plan-scoped sessions, never destroy
+     * them. The v0.113.0 pressure test proved the original ON DELETE CASCADE hard-deleted COMPLETED
+     * rows while the ConceptHealth rows they produced survived -- evidence without the history that
+     * explains it. Reverting the FK to CASCADE fails this test.
+     */
+    @Test
+    void deletingAPlanOrphansItsCompletedSessionsInsteadOfDeletingThem() {
+        UUID userId = seedUser("plan-delete-history");
+        UUID collectionId = seedCollection(userId, "CE Board Review");
+        UUID completed = seedQuizSession(userId, null, null, collectionId, "COMPLETED");
+        UUID forfeited = seedQuizSession(userId, null, null, collectionId, "FORFEITED");
+
+        jdbcTemplate.update("delete from note_collections where id = ?", collectionId);
+
+        assertThat(jdbcTemplate.queryForObject(
+                "select count(*) from quick_review_sessions where id in (?, ?)",
+                Integer.class, completed, forfeited)).isEqualTo(2);
+        assertThat(jdbcTemplate.queryForObject(
+                "select count(*) from quick_review_sessions where id = ? and source_collection_id is null",
+                Integer.class, completed)).isEqualTo(1);
+    }
+
+    /**
+     * The other half of the same constraint: an ACTIVE session may never be anchorless, because
+     * nothing could reach it. This is why NoteCollectionService.delete clears non-terminal
+     * plan-scoped sessions BEFORE deleting the plan -- without that sweep this SET NULL would violate
+     * the anchor CHECK and the delete would fail outright.
+     */
+    @Test
+    void anchorlessActiveSessionIsRejected() {
+        UUID userId = seedUser("anchorless-active");
+
+        assertThatThrownBy(() -> seedQuizSession(userId, null, null, null, "IN_PROGRESS"))
+                .hasMessageContaining("chk_quick_review_sessions_anchor");
+    }
+
+    /**
+     * Separate test on purpose: the rejection above aborts its transaction, so a terminal insert in
+     * the same method would fail for the wrong reason (25P02) and prove nothing.
+     */
+    @Test
+    void anchorlessTerminalSessionIsAllowedBecauseItIsHistory() {
+        UUID userId = seedUser("anchorless-terminal");
+
+        UUID terminal = seedQuizSession(userId, null, null, null, "COMPLETED");
+
+        assertThat(jdbcTemplate.queryForObject(
+                "select count(*) from quick_review_sessions where id = ?",
+                Integer.class, terminal)).isEqualTo(1);
+    }
+
 }

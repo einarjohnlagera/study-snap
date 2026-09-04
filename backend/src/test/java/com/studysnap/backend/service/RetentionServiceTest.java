@@ -6,6 +6,7 @@ import com.studysnap.backend.entity.EmailLogEntity;
 import com.studysnap.backend.entity.NoteEntity;
 import com.studysnap.backend.entity.QuickReviewSessionEntity;
 import com.studysnap.backend.entity.QuickReviewSessionMode;
+import com.studysnap.backend.entity.QuickReviewSessionStatus;
 import com.studysnap.backend.entity.RetentionEmailType;
 import com.studysnap.backend.entity.StudyPackEntity;
 import com.studysnap.backend.entity.UserActivityEventEntity;
@@ -202,6 +203,71 @@ class RetentionServiceTest {
         assertThat(candidates.getFirst().weakConcepts()).containsExactly("DNA replication");
         assertThat(candidates.getFirst().adaptivePracticeUrl())
                 .isEqualTo("https://www.notelib.app/notes/" + challengeSession.getNoteId() + "/adaptive-practice");
+    }
+
+
+    /**
+     * ⚠️ A plan-scoped Adaptive session has NO study_pack_id, so the pack-keyed follow-up query cannot
+     * see it and the learner was nagged about concepts they had just practised.
+     *
+     * <p>The second concept is the discriminating half: "Mitosis" is stamped with the CHALLENGED pack
+     * and must be suppressed, while an identically-named concept stamped with a DIFFERENT pack must
+     * NOT be -- concept strings are free text scoped per pack, and merging them would be the
+     * cross-pack canonical identity claim that stays out of scope.
+     */
+    @Test
+    void findUsersWithWeakConcepts_suppressesConceptsPractisedInAPlanScopedSessionByPackStamp() {
+        OffsetDateTime now = OffsetDateTime.parse("2026-03-25T00:00:00Z");
+        UserEntity user = verifiedUser();
+        UUID challengedPackId = UUID.fromString("00000000-0000-0000-0000-000000000101");
+        UUID otherPackId = UUID.fromString("00000000-0000-0000-0000-000000000999");
+
+        when(userRepository.findByStatusAndEmailVerifiedAtIsNotNullAndWeakConceptRemindersEnabledTrue(UserStatus.ACTIVE))
+                .thenReturn(List.of(user));
+        when(emailLogRepository.existsByUserIdAndEmailTypeAndSentAtAfter(
+                user.getId(), RetentionEmailType.WEAK_CONCEPT, now.minusDays(5))).thenReturn(false);
+
+        QuickReviewSessionEntity challengeSession = completedSession(
+                user.getId(),
+                QuickReviewSessionMode.CHALLENGE,
+                now.minusDays(4),
+                Map.of("weakConcepts", List.of("Mitosis", "DNA replication"))
+        );
+        challengeSession.setStudyPackId(challengedPackId);
+        challengeSession.setNoteId(UUID.fromString("00000000-0000-0000-0000-000000000202"));
+        when(quickReviewSessionRepository.findCompletedSessionMetadataByUserIdAndSessionModeOrderByCompletedAtDesc(
+                user.getId(), QuickReviewSessionMode.CHALLENGE, PageRequest.of(0, 1)))
+                .thenReturn(List.of(toMetadataProjection(challengeSession)));
+
+        // No pack-anchored follow-up exists -- only the plan-scoped one below.
+        when(quickReviewSessionRepository.findCompletedSessionMetadataByUserIdAndStudyPackIdAndSessionModeOrderByCompletedAtDesc(
+                user.getId(), challengedPackId, QuickReviewSessionMode.ADAPTIVE, PageRequest.of(0, 10)))
+                .thenReturn(List.of());
+
+        QuickReviewSessionEntity planScoped = completedSession(
+                user.getId(), QuickReviewSessionMode.ADAPTIVE, now.minusDays(2), Map.of());
+        planScoped.setStudyPackId(null);
+        planScoped.setNoteId(null);
+        planScoped.setSourceCollectionId(UUID.randomUUID());
+        planScoped.setSessionState(Map.of("focusConcepts", List.of(
+                Map.of("concept", "Mitosis", "sourceStudyPackId", challengedPackId.toString()),
+                Map.of("concept", "DNA replication", "sourceStudyPackId", otherPackId.toString())
+        )));
+        when(quickReviewSessionRepository.findByUserIdAndStatusAndSessionModeInAndCompletedAtIsNotNullOrderByCompletedAtDesc(
+                user.getId(), QuickReviewSessionStatus.COMPLETED, List.of(QuickReviewSessionMode.ADAPTIVE)))
+                .thenReturn(List.of(planScoped));
+
+        StudyPackEntity studyPack = new StudyPackEntity();
+        studyPack.setId(challengedPackId);
+        studyPack.setTitle("Cell Biology");
+        when(studyPackRepository.findById(challengedPackId)).thenReturn(Optional.of(studyPack));
+
+        List<RetentionService.WeakConceptReminder> candidates = retentionService.findUsersWithWeakConcepts(now);
+
+        assertThat(candidates).hasSize(1);
+        // "Mitosis" suppressed via its stamp; "DNA replication" survives because it was practised
+        // against a DIFFERENT pack despite sharing the name.
+        assertThat(candidates.getFirst().weakConcepts()).containsExactly("DNA replication");
     }
 
     @Test
