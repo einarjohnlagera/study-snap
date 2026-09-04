@@ -6,6 +6,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.regex.Matcher;
@@ -58,6 +59,13 @@ class DataSourcePoolContractTest {
 
     /** Hikari's own default, and the value that let the health check starve. */
     private static final int HIKARI_DEFAULT_CONNECTION_TIMEOUT_MS = 30_000;
+
+    /**
+     * Key prefixes the production overlay must not declare. Both decide how long a connection is held —
+     * {@code spring.datasource.} how many there are and how long a waiter queues, {@code spring.jpa.}
+     * when an acquired one is given back.
+     */
+    private static final List<String> SHADOWABLE_PREFIXES = List.of("spring.datasource.", "spring.jpa.");
 
     /** Every pinned key and its PRODUCTION default. Changing one means changing this map too. */
     private static final Map<String, String> EXPECTED_DEFAULTS = new TreeMap<>(Map.of(
@@ -143,16 +151,24 @@ class DataSourcePoolContractTest {
      * its predecessor in exactly this shape — the annotation default was pinned, a yaml value shadowed
      * it, the suite stayed green and the real dispatch time moved. If the overlay ever needs its own
      * pool settings, pin them here too rather than deleting this test.
+     *
+     * <p>⚠️ {@code spring.jpa.} IS GUARDED ALONGSIDE {@code spring.datasource.} SINCE v0.114.0, AND THE
+     * REASON IS THE SAME MECHANISM ONE LEVEL OVER. How long a connection is held is decided by
+     * {@code spring.jpa.properties.hibernate.connection.handling_mode} and {@code spring.jpa.open-in-view},
+     * and v0.112.0 measured both — but that measurement runs against the H2 test profile, so an overlay
+     * key would move production's connection lifetime while every assertion in the suite stayed green.
+     * {@code ConnectionLifetimeStartupLogger} reports the effective values from the running instance;
+     * this stops the overlay changing them silently in the first place.
      */
     @Test
     void theProdProfileOverlayDoesNotSilentlyShadowThePinnedPoolSettings() throws IOException {
         Map<String, String> overlay = rawKeysDeclaredIn(PROD_PROFILE_OVERLAY);
 
         assertThat(overlay.keySet())
-                .as("a pool key declared in application-prod.yaml OVERRIDES the base profile in "
+                .as("a pool or JPA key declared in application-prod.yaml OVERRIDES the base profile in "
                         + "production while this test reads only the base file — pin it here before "
                         + "adding it there")
-                .noneMatch(key -> key.startsWith("spring.datasource."));
+                .noneMatch(key -> SHADOWABLE_PREFIXES.stream().anyMatch(key::startsWith));
     }
 
     /**
