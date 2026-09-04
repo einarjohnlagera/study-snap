@@ -1,5 +1,256 @@
 # RELEASES.md - NoteLib
 
+## v0.112.0 - Connection Pool Integrity
+
+**Status: In Progress** (kicked off 2026-09-04, base branch `releases/v0.112.0`, cut from `main`
+after `v0.111.0` merged and tagged)
+
+**⚠️ THIS RELEASE WAS REPOINTED AT ITS OWN KICKOFF, AND THE REASON IS RECORDED BECAUSE THE SWAP WAS
+NOT ROUTINE.** It opened as *Canonical Concept Identity* — the ADR-sized item six releases had
+deferred by name, chosen by the owner on 2026-09-04 as a deliberately expensive release. **Kickoff
+step 8's Backlog Index scan then surfaced two untracked files dated the same day: a production
+outage and its diagnosis.** The owner ruled to swap. **⚠️ Concept identity is NOT cancelled — it
+becomes `v0.113.0`, loses nothing by moving, and its Phase 0 sizing read is owner-executed and runs
+in parallel** (`docs/claude-plans/v0.113.0-concept-vocabulary-sizing.sql`).
+
+**⚠️ THE SCAN IS WHAT CAUGHT THIS, WHICH IS THE PROCESS WORKING AND IS WORTH RECORDING.** The
+diagnosis file's own §10 says *"This file needs a Backlog Index row in `ROADMAP.md` per kickoff step
+8"*, and notes that the previous incident file in that directory
+(`2026-09-01-prod-frontend-build-failure-public-notes-2mb.md`) **was written mid-release and never
+got one — the same failure mode, twice.** Both rows are added in this kickoff commit.
+
+### What happened, and why it will happen again
+
+Source: `docs/claude-findings/2026-09-04-prod-outage-hikari-pool-exhaustion.md` and the 763-line
+`docs/20260904_prod-issue-down.log` (05:55:07–05:57:00 UTC).
+
+**The pool was exhausted and the health check then starved on the same pool.** At 05:55:14 Hikari
+reported `total=10, active=10, idle=0, waiting=15`. Spring Boot's `DataSourceHealthIndicator` needs a
+pool connection to answer `/actuator/health`, so it queued behind the same 30 s acquisition timeout
+as everything else, failed at 30,002 ms, and Render replaced the instance ~65 s later.
+**⚠️ THE SERVER DID NOT CRASH — IT WAS KILLED FOR FAILING A HEALTH CHECK IT COULD NO LONGER ANSWER.**
+The shutdown was graceful, with no OOM. **Nothing in the application recovered on its own; the
+restart ended the incident.**
+
+**Every load-bearing claim was re-verified by reading code at this kickoff, not trusted from the
+finding:**
+
+- **There is no HikariCP configuration anywhere** — zero matches across `application.yaml` and
+  `application-prod.yaml`. `total=10` is Hikari's **default** `maximumPoolSize` and `30001 ms` its
+  **default** `connectionTimeout`. **Nobody chose 10.**
+- `server.tomcat.threads.max: 25` (`application.yaml:35`), deliberately sized for Render's 0.5 CPU.
+  **So the ratio is 25 request threads against 10 connections**, and `active=10 + waiting=15 = 25` is
+  exactly the thread cap.
+- `ChallengeQuizService` is class-level `@Transactional` (`:84`) with the LLM call **inside** it
+  (`:449`). The LLM read timeout is **180 s** (`OpenAiLlmConfig.java:26`) against a **30 s**
+  acquisition timeout.
+- `spring.jpa.open-in-view` is **unset**, so it takes Spring Boot's default of `true`.
+
+**⚠️ FOURTEEN CODE PATHS HOLD A JDBC CONNECTION ACROSS AN OPENAI CALL, so seven concurrent
+synchronous generations exhaust a pool of ten.** **⚠️ Render was never the constraint** — Render
+Postgres allows ≥100 connections on every plan; the app was configured for 10.
+
+### ⚠️ The consequence the diagnosis does not see, found at this kickoff and verified in code
+
+The finding was written from the **pool's** perspective. Read from the **quota's**, §8b is far more
+dangerous than it looks.
+
+**TWELVE quota-increment sites sit INSIDE the six class-level `@Transactional` boundaries §8b would
+move** — `ChallengeQuizService:342,343,384,385,484,486,492`,
+`QuickReviewAdaptivePracticeService:257,499`, `InterviewPracticeService:154`,
+`GeneratedQuizService:172`, `StudyPackService:612`.
+
+**⚠️ AND ONLY THREE OF THE TWELVE HAVE ANY REVERSAL TO EXTEND — VERIFIED BY OPENING
+`UserUsageService`, NOT INFERRED FROM THE PRECEDENT.** `UserUsageRepository` exposes exactly two
+decrements, `decrementLongExamUsageNotBelowZero:120` and `decrementBoardExamUsageNotBelowZero:144`,
+built by `v0.105.0` and `v0.106.0` for those two meters alone:
+
+| Site | Meter | Reversal exists? |
+|---|---|---|
+| `ChallengeQuizService:343`, `:385`, `:492` | `board_exam` | **YES** |
+| `ChallengeQuizService:342`, `:384`, `:484`, `GeneratedQuizService:172` | `challenge_quiz` | **NO** |
+| `QuickReviewAdaptivePracticeService:257`, `:499` | `adaptive_quiz` | **NO** |
+| `ChallengeQuizService:486` | `multi_note` | **NO** |
+| `InterviewPracticeService:154` | `interview_practice` | **NO** |
+| `StudyPackService:612` | `study_pack` | **NO** |
+
+**⚠️ SO "EXTEND THE EXISTING MACHINERY" IS A MATERIALLY LARGER JOB THAN THE PHRASE IMPLIES: NINE OF
+TWELVE SITES HAVE NO REVERSAL, ACROSS FIVE METERS THAT NEED NEW DECREMENTS** — `challenge_quiz`,
+`adaptive_quiz`, `multi_note`, `interview_practice`, `study_pack`. That is five repository methods and
+five service methods, each needing the same properties the two existing ones have. **This resizes
+Phase 3 and is stated at kickoff rather than discovered mid-implementation.**
+
+**⚠️ EVERY ONE OF THE TWELVE CURRENTLY ROLLS BACK AUTOMATICALLY ON A GENERATION FAILURE, AND THAT IS
+NOT A DESIGN — IT IS AN ACCIDENT OF ORDERING PLUS THE TRANSACTION.** This repo has recorded it twice
+already, in the opposite direction: `v0.106.0` found that *"Board Exam's quota safety is an accident
+of its transaction — moving generation off the transaction DESTROYS that implicit rollback"*, and
+shipped the reversal machinery precisely because of it; `v0.107.0` then ruled *"DO NOT copy the
+refund machinery into Adaptive Practice — the refund question opens ONLY if the transaction boundary
+moves, so DO NOT MOVE IT."*
+
+**⚠️ §8b IS EXACTLY THAT MOVE, ON SIX SERVICES AT ONCE. SO THE REFUND QUESTION IS RE-OPENED BY THIS
+RELEASE, DELIBERATELY, AND IT IS RE-OPENED EVERYWHERE.** A structural fix that relocates the LLM call
+without extending quota reversal to each relocated path **silently converts twelve auto-reversing
+charges into permanent-on-failure charges** — charging learners for generations they never received,
+on paid paths, with no error. **⚠️ THIS IS A MONEY-SEMANTICS CHANGE HIDING INSIDE A PERFORMANCE FIX,
+and it is the single most likely way this release does harm.**
+
+### Phases — and the sequencing is a dependency, not a preference
+
+**⚠️ PHASE 1 → 2 → 3, AND PHASE 3 MUST NOT START BEFORE PHASE 2'S EVIDENCE.** This is not caution;
+Phase 2 answers a question that determines whether Phase 3 works at all.
+
+**Phase 1 — config-only mitigation, ships immediately.** Per §8a, in order:
+`leak-detection-threshold: 60000` **first**; a `maximum-pool-size` raise; `connection-timeout: 5000`;
+plus two one-line code changes — `studyPackGenerationTaskExecutor` to core 2 / max 2
+(`AppConfig.java:55-56`) and the LLM read timeout from 180 s toward ~90 s.
+**⚠️ THE POOL BUMP HAS A CEILING THAT MUST BE CHECKED, NOT ASSUMED: Render runs the new instance
+alongside the old during a deploy, each with its own pool, so the safe bound is roughly
+`N ≤ (max_connections − reserved) / 2`.** Read it from the dashboard and confirm with
+`SHOW max_connections;`.
+**⚠️ `connection-timeout: 5000` IS A DELIBERATE TRADE, NOT AN OPTIMISATION** — waiters fail fast with
+a 500 instead of queueing 30 s, and that queueing is what let the health check blow past Render's
+probe threshold. **It trades user-visible errors for staying up. State it as such; do not ship it as
+a tuning tweak.**
+**⚠️ AND PHASE 1'S THREE ITEMS HAVE DIFFERENT RISK PROFILES — DO NOT SHIP THEM AS ONE BLOCK MERELY
+BECAUSE THE FINDING LISTED THEM TOGETHER.** Items 1 and 2 (leak detection, pool size) are pure upside
+with no behaviour change. **Item 3 is the exception, and its timing is wrong in the obvious ordering:
+it converts today's 30 s-queue-then-succeed requests into immediate 500s, and the window where it
+would be live is precisely the window where holds are still 180 s, because Phase 3 has not yet removed
+them.** **⚠️ SO ITEM 3 IS A CANDIDATE FOR DEFERRAL UNTIL AFTER PHASE 3, and that is an owner decision
+owed at prompt time — not a default either way.**
+
+**Phase 2 — evidence, and it is the reason the phases are ordered.**
+**⚠️ `spring.jpa.open-in-view` DEFAULTS TO `true`, AND IF THE CONNECTION FOLLOWS THE ENTITYMANAGER
+THEN PHASE 3 CAN LAND, LOOK CORRECT, AND NOT FIX THE EXHAUSTION** — because moving the LLM outside
+`@Transactional` releases the *transaction* while the connection stays bound until the response is
+written. **⚠️ THE OBSERVATION THAT SETTLES IT IS SPECIFIED HERE, BECAUSE "READ THE LEAK LOGS" WOULD COME BACK
+AMBIGUOUS AND LEAVE SOMEONE REASONING TO AN ANSWER — WHICH IS EXACTLY WHAT §7 WARNS AGAINST.** Leak
+detection reports that a connection was held past 60 s **and by whom**; it does **not** report whether
+the connection stayed bound **after the transaction closed**, which is the actual OSIV question. The
+two discriminating reads are: **(a) log the EFFECTIVE `hibernate.connection.handling_mode` from the
+`EntityManagerFactory` properties at startup** — a direct read of the setting that decides this, not
+an inference from behaviour; and **(b)** sample Hikari's `active` count against a request in a known
+state — one whose transaction commits early and whose response is slow to serialize — and see whether
+it is still counted. **⚠️ (a) IS THE PRIMARY AND (b) CONFIRMS IT; do NOT substitute an argument from
+Spring Boot defaults for either.** Phase 2 also runs §5's five read-only falsification queries, which
+decide whether §3 is a confirmed cause or still a hypothesis.
+**⚠️ `open-in-view: false` HAS A REAL BLAST RADIUS** — it surfaces `LazyInitializationException`
+wherever a lazy association is touched during serialization — **so it wants a staging run, never a
+direct production edit.**
+
+**Phase 3 — the structural fix, in exposure order.** **⚠️ THE CORRECT PATTERN ALREADY EXISTS IN THIS
+REPO THREE TIMES AND MUST NOT BE RE-INVENTED: two short transactions with the LLM call between them**
+— `StudyPackService` (LLM `:688`, then `execute(...)` `:692`), `ExamQuestionPoolService` (`execute`
+`:148`, LLM `:175`, `execute` `:185`), `OfficialChallengeQuizTemplateService` (`:214` / `:236` /
+`:245`). Order: (1) `ChallengeQuizService:449` and `:1157`; (2) `QuickReviewAdaptivePracticeService`
+`:234`/`:539`; (3) `InterviewPracticeService` `:604`/`:615` — which must **additionally stop holding
+`findByIdAndOwnerUserIdForUpdate` across the LLM call** — and `:193`; (4) `GeneratedQuizService:126`,
+`StudyPackService:130`/`:274`/`:326`, `AskCompanionService:147`; (5) the executor-side holders at
+`ChallengeQuizService:611` and `LongExamService:317`.
+
+**⚠️ "DISPATCHES AFTER COMMIT" ≠ "DOES NOT HOLD A CONNECTION", AND THIS TRAP HAS ALREADY MISLED
+RELEASE-SEQUENCING ADVICE ONCE.** `LongExamService.startSession` is `@Transactional(NOT_SUPPORTED)`
+and is safe **for request latency only**; `generateLongExamAsync` then wraps
+`studyPackGenerationTransactionOperations.execute(...)` (`:317`) **around** the LLM call at `:1151`.
+The connection is held for the whole generation, by a `study-pack-generation-` thread rather than a
+Tomcat thread. **Hikari does not care which thread.**
+
+### ⚠️ Two recorded landmines — both broke production while every test passed
+
+**Neither shape is safe. Use the two-short-transactions shape only.**
+
+1. `ChallengeQuizService:370-384` documents that a previous **afterCommit restructuring broke every
+   Board Exam start in production while every test passed** — `MockitoExtension` has no transaction
+   manager, so the tests took the inline fallback and never exercised the real path.
+2. `v0.81.0` records that **`REQUIRES_NEW` for bank inserts broke every Challenge start** on FK
+   visibility across connections, and was reverted after a cold pressure test two earlier reviews
+   had missed. **⚠️ Do NOT propose `REQUIRES_NEW` as the fix.**
+
+**⚠️ A THIRD, SMALLER AMPLIFIER, NAMED SO IT IS NOT DISCOVERED LATE:**
+`ActivityTrackingEventListener.java:43-44` is `@Transactional(REQUIRES_NEW)` on an `AFTER_COMMIT`
+listener and runs synchronously while the outer connection is still bound, so quiz start/completion
+briefly holds **two** connections.
+
+### Anti-drift
+
+- **⚠️ EVERY RELOCATED PATH MUST CARRY ITS QUOTA REVERSAL, OR THE CHARGE BECOMES PERMANENT ON
+  FAILURE.** Reuse `v0.105.0`/`v0.106.0`'s existing machinery — **do NOT invent a second reversal
+  shape** — and per that precedent it must fire at **every** transition into `FAILED` including the
+  recovery sweeper, be **idempotent**, and **never drive usage below zero**.
+- **⚠️ NO ENTITLEMENT, PLAN-TIER, LIMIT OR METER CHANGE.** This release changes **when a charge is
+  reversed**, never what anyone is entitled to or what a unit buys.
+- **⚠️ PgBouncer IS NOT THE FIX AND MUST NOT BE PROPOSED AS ONE.** It solves *too many clients*; this
+  was *ten connections held too long*. It is transaction-mode only, which breaks session variables,
+  temp tables, `LISTEN`/`NOTIFY` and **session-level advisory locks** — grep for those before ever
+  enabling it.
+- **⚠️ DO NOT TOUCH `ExamQuestionPoolService`'s pool refresh** — the finding records it as **already
+  correct**, with the LLM between two short transactions. It is a reference implementation here, not
+  a target.
+- **⚠️ THE OCR FINDING IS RETRACTED AND MUST NOT BE RE-DERIVED AS A DEFECT.** `NoteTextExtractionService`
+  reads as the worst connection-hold ceiling in the codebase, but **Vision is disabled in production**
+  (`OCR_ENABLED=false`) and `extractFromPdfViaOcr:144-146` throws immediately. **The code-level
+  observation stands and the production conclusion does not.** Recorded so re-enabling Vision is a
+  decision made with that in view.
+- **⚠️ NO NEW MODE OR SUB-MODE; NO `ProfileType` GATE; `frontend/app/onboarding` STAYS FROZEN** —
+  dated reads still fall between `2026-09-10` and `2026-09-17`.
+- **⚠️ NO MIGRATION.** If one appears to be needed, the scope is wrong.
+- **⚠️ THE DOMAIN CONTEXT TAXONOMY AND CONCEPT IDENTITY ARE BOTH OUT.** `v0.111.0` closed the
+  taxonomy at eleven values; canonical concept identity is `v0.113.0`.
+- **⚠️ Do NOT change what `BOARD_EXAM_STARTED`, `ADAPTIVE_PRACTICE_STARTED` or
+  `QUIZ_SHARE_LINK_CREATED` record** — several dated checkpoints read them, and a transaction-boundary
+  change is exactly the kind of edit that can move an event's firing condition by accident.
+
+### Verification
+
+**FULL THREE-AGENT COLD PRESSURE TEST IN ISOLATED `git worktree`s.** Declared, not inherited, and
+this release fires the gate's triggers more clearly than most: **it changes money/quota semantics on
+twelve charge sites**, it **restructures transaction boundaries on production paths**, and **two
+recorded landmines in this exact area each broke production while the whole suite stayed green.**
+
+- **⚠️ THE ISOLATION IS NOT OPTIONAL** — `v0.105.0` ran three mutating agents in one tree and they
+  corrupted each other's builds, costing one agent's entire result set.
+- **⚠️ ONE AGENT MUST BE POINTED AT THE BLIND SPOT, NOT THE FEATURE.** In `v0.104.0`, `v0.106.0`,
+  `v0.107.0` and `v0.110.0` the worst defect was outside the stated scope every time.
+- **⚠️ PRE-DECLARED DISCRIMINATING GUARD, AND IT IS AIMED AT THE LANDMINE RATHER THAN THE FEATURE: a
+  test asserting the new transaction shape MUST FAIL under `MockitoExtension`'s inline fallback.**
+  That fallback is exactly what let a previous afterCommit restructuring pass every test while
+  breaking every Board Exam start in production. **A test that passes with no transaction manager
+  present proves nothing about this release.**
+- **⚠️ A SECOND GUARD IS OWED AT THE MONEY END: a generation that FAILS after the boundary moves must
+  leave usage UNCHANGED**, pinned per relocated path. **A fixture whose generation succeeds passes
+  under both the defect and the fix and proves nothing.**
+- **Carried measured lessons:** a negative assertion must have a **reachable** subject; write the
+  guard at the **layer the defect lives at**; **mutate and confirm a NAMED test fails**; read
+  `./mvnw`'s **exit status directly, never through a pipe**; **count executed tests from
+  `target/surefire-reports/*.xml`**; **run `npm test`**; **sweep by SURFACE, not by diff**; verify
+  *"X already does Y"* against code **before it reaches a prompt**; and call **`advisor()` BEFORE
+  writing the Codex prompt**.
+
+**Routing: SPLIT, and stated explicitly rather than resolved once for the whole release.**
+**Phase 1 is CLAUDE CODE inline** — config plus two one-line changes. **Phase 3 is CODEX** — six
+services, relocated transaction boundaries and twelve quota sites is the routing table's clearest
+Codex case. **⚠️ Re-run the routing test if Phase 2's evidence changes Phase 3's shape.**
+
+### Planned Scope
+
+1. **Phase 1 — config-only mitigation**, in §8a's stated order, with the pool ceiling **read from
+   Render and confirmed with `SHOW max_connections;`** rather than assumed.
+2. **Phase 2 — evidence**: settle `open-in-view` empirically from Phase 1's leak-detection output,
+   and run §5's five read-only falsification queries.
+3. **Phase 3 — the structural fix** in exposure order, using the two-short-transactions shape,
+   **with quota reversal on every relocated path — which means BUILDING it for five meters that have
+   none (`challenge_quiz`, `adaptive_quiz`, `multi_note`, `interview_practice`, `study_pack`), not
+   merely calling the two that exist.**
+4. **Backlog Index rows** for both incident files in `docs/claude-findings/`, and for the deferred
+   `v0.113.0` concept-identity release.
+
+### Shipped
+
+- Kickoff: opened `v0.112.0`, bumped all seven version references, added Backlog Index rows for both
+  production-incident files and for the deferred concept-identity release, and deferred the concept
+  vocabulary sizing read to `docs/claude-plans/v0.113.0-concept-vocabulary-sizing.sql`.
+
 ## v0.111.0 - Multidisciplinary Domain Context
 
 **Status: Released** (kicked off and signed off 2026-09-04, base branch `releases/v0.111.0`)
