@@ -2,8 +2,8 @@
 
 ## v0.113.0 - Session Anchoring
 
-**Status: In Progress** (kicked off 2026-09-04, base branch `releases/v0.113.0`, cut from `main`
-after `v0.112.0` merged, tagged and deployed to production)
+**Status: Released** (kicked off and signed off 2026-09-04, base branch `releases/v0.113.0`, cut from
+`main` after `v0.112.0` merged, tagged and deployed to production)
 
 Theme: a quiz session is keyed on what it is actually about, so three session types stop fighting
 over one anchor.

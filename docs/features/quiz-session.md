@@ -36,11 +36,18 @@ Every `quick_review_sessions` row has exactly one usable anchor shape:
   Board Exam, Interview Practice and note-scoped Adaptive Practice; or
 - `source_collection_id` is non-null for plan-scoped Adaptive Practice.
 
-`chk_quick_review_sessions_anchor` enforces that a row cannot be anchorless, while entity lifecycle
-validation also rejects partial or mixed shapes with `INVALID_QUIZ_SESSION_ANCHOR`. Active-session
-exclusivity is enforced by three partial unique indexes keyed by user, mode and respectively pack,
-note or collection; each predicate explicitly excludes a null key. The collection FK cascades on
-delete, matching the cleanup guarantees of both existing anchors.
+`chk_quick_review_sessions_anchor` enforces that an **active** row cannot be anchorless, while entity
+lifecycle validation also rejects partial or mixed shapes with `INVALID_QUIZ_SESSION_ANCHOR`.
+Active-session exclusivity is enforced by three partial unique indexes keyed by user, mode and
+respectively pack, note or collection; each predicate explicitly excludes a null key.
+
+A **terminal** row (`COMPLETED` or `FORFEITED`) may be anchorless, and that is deliberate: the
+collection FK is **`ON DELETE SET NULL`, not cascade**, so deleting a Study Plan orphans the sessions
+run against it rather than destroying the learner's history. Those sessions stay reachable through
+`session_state.sourceNoteRefs`, which credits every note the session sampled. Account-deletion cleanup
+does not depend on this — `user_id` has cascaded since `V4`. Non-terminal plan-scoped sessions are
+cleared by `NoteCollectionService.delete` before the plan is removed, because an anchorless active
+session would be unreachable and the `SET NULL` would otherwise violate the constraint.
 
 ## Dashboard Resume Metadata
 
