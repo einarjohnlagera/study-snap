@@ -2,6 +2,36 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## ⚠️ PRODUCTION DATABASE: READ-ONLY, ALWAYS, NO EXCEPTIONS
+
+**Claude executes READ-ONLY queries against the production database. Ever. Only the OWNER executes
+writes.** Owner rule, stated 2026-09-04 during `v0.112.0` while connecting the Render MCP server.
+
+This is not a per-task permission that a later session can re-negotiate, and it is **not** softened by
+any of the usual justifications: not by a request being urgent, not by an incident being in progress,
+not by a fix being "obviously correct", not by the write being small, reversible, or already agreed in
+principle, and **not by the owner approving a plan that happens to contain one** — approving a plan is
+not approving Claude to execute its writes.
+
+**Read-only means:** `SELECT`, `SHOW`, `EXPLAIN` (without `ANALYZE`, which executes the statement),
+and reads of catalog/stats views such as `pg_stat_activity`. **Everything else is the owner's to run** —
+`INSERT`, `UPDATE`, `DELETE`, `TRUNCATE`, every DDL statement, every Flyway migration, `VACUUM`,
+`REINDEX`, session/database `SET`, `SELECT … FOR UPDATE`, and anything calling a function that writes.
+
+**⚠️ THIS BINDS EVERY ROUTE TO PRODUCTION DATA, NOT JUST A SQL PROMPT** — the Render MCP server (or any
+future database MCP/tool), `psql`, a JDBC or script connection, a one-off endpoint, and an admin
+surface that performs the write on Claude's behalf. **Routing a write through a tool does not make it
+Claude's to run.** The Render MCP server can also modify environment variables and trigger deploys;
+those are the same class of action and are the owner's, not Claude's.
+
+**When a write is genuinely needed:** write the exact statement into a `docs/claude-plans/*.sql` file
+with the expected row count and how to verify it, hand it to the owner, and stop. That is the whole
+protocol — **do not run it and then report it.**
+
+**⚠️ IF A PRODUCTION WRITE HAS ALREADY HAPPENED, SAY SO IMMEDIATELY AND PLAINLY.** An unreported write
+to production is far worse than a reported one, and concealment is the failure this rule exists to make
+impossible.
+
 ## What this project is
 
 **NoteLib** (rebranded from StudySnap — db/package names still use `studysnap`) is a notes-first study workspace. Users capture notes, generate AI-powered Study Packs, and practice with quizzes. Database schema uses the old name; do not rename unless explicitly asked.

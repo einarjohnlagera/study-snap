@@ -99,6 +99,11 @@ Use these skills before writing prompts, before starting new features, and after
 
 ## Implementation Workflow Rules
 
+- **⚠️ PRODUCTION DATABASE IS READ-ONLY FOR CLAUDE, ALWAYS. Only the OWNER executes writes.** The rule,
+  its definition of read-only, and the hand-it-over protocol live in **`CLAUDE.md`** — read it there
+  rather than restating it here, because two wordings of one rule is how a rule degrades. It binds every
+  route to production data, the Render MCP server included.
+
 - After every completed prompt/task that results in code or doc changes, always include a suggested commit message in the final response.
 - Format the suggested commit message as a copy-friendly plain-text block:
   - first line: `type: concise subject`
