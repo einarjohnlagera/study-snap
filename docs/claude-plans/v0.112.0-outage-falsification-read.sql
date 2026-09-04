@@ -20,6 +20,41 @@
 --     Render-side database event — and RE-SCOPE PHASE 3 BEFORE BUILDING IT.
 --   * Anything in between                               -> still a hypothesis. Say so; do not round up.
 --
+-- ⚠️⚠️ THE REFUTATION BRANCH ABOVE HAS A HOLE, FOUND BY A COLD RE-READ OF THE LOG ON 2026-09-04 AND
+-- VERIFIED AGAINST CODE. READ THIS BEFORE CONCLUDING ANYTHING FROM ZERO ROWS.
+-- Q1-Q5 all read GENERATION, SESSION, POOL and DRAFT tables — every one of them is a record of a
+-- WRITE. **None of them can detect an anonymous READ burst**, because reads leave no row anywhere.
+-- So "zero rows across Q1, Q2 and Q4" does NOT refute a read-burst cause. IT FAILS TO SEE IT.
+--
+-- ⚠️ THIS IS NOT A HYPOTHETICAL ALTERNATIVE, AND THREE FACTS MAKE IT LIVE:
+--   1. THE ONLY PATH THE LOG ACTUALLY NAMES AS STARVED IS SUCH AN ENDPOINT. The one stack trace in
+--      the log (`CannotCreateTransactionException`, log L381-L391) is
+--      `NoteCollectionController.listPublic` -> `NoteCollectionService.listPublic:206`, which is
+--      `@Transactional(readOnly = true)`, runs several unpaginated repository calls per invocation,
+--      and is `permitAll` (`SecurityConfig:60`, alongside `/notes/public/**` :50 and `/public/**` :49).
+--      The log names a VICTIM and names ZERO holders.
+--   2. THIS REPO HAS ALREADY HAD PUBLIC-ENDPOINT FETCHES SATURATE THE BACKEND. See
+--      `docs/claude-findings/2026-09-01-prod-frontend-build-failure-public-notes-2mb.md` and CLAUDE.md:
+--      "~250 static pages each issue their own 2.5 MB request in one build UNTIL THE BACKEND SATURATES."
+--      ⚠️ That specific pathology WAS FIXED in v0.100.0 — verified in code, not assumed:
+--      `generateStaticParams` now reads `/subjects?scope=public` and `getServerPublicNotes()` paginates.
+--      It is cited as PRECEDENT for the class, not as a live defect.
+--   3. THESE ENDPOINTS ARE RE-FETCHED ON A SCHEDULE, INDEPENDENT OF DEPLOYS.
+--      `app/public/library/[subject]/page.tsx:28` sets `export const revalidate = 300` and
+--      `lib/server-public-notes.ts:57,189` fetch with `next: { revalidate: 300 }`. So public-endpoint
+--      load recurs every ~5 minutes as pages go stale — it does NOT require a deploy or a build.
+--
+-- ⚠️ A DEPLOY-TRIGGERED BUILD IS RULED OUT FOR THIS INCIDENT, so do not spend time on it: the last
+-- merge to `main` before the outage was `e513f867` at 2026-09-04 **03:07:21 UTC**, two hours 48 minutes
+-- earlier, and the restarted JVM reports the SAME version (`v0.110.2`) with no deploy line in the log.
+--
+-- ⚠️ THE DATABASE CANNOT SETTLE THIS. Q6 below is a WEAK PROXY only. The decisive evidence is
+-- REQUEST-RATE DATA, which lives in Render, not Postgres: pull request logs for `/collections/public`,
+-- `/notes/public` and `/public/**` over 05:45-05:56 UTC, plus datastore connection counts. If those
+-- show a burst, the cause is a read burst on unpaginated public endpoints and **Phase 3 — which
+-- restructures six services' transaction boundaries and twelve quota sites — is aimed at the wrong
+-- target.**
+--
 -- ⚠️ CRON TIMING DOES NOT LINE UP AND THAT IS ALREADY CHECKED — do not re-derive it.
 -- GenerationRecoveryJob fired 05:50:00 and BulkGenerationResultCleanupJob 05:45:00; everything else
 -- runs 01:15–03:30 UTC. Saturation began ~05:54:43, back-dated from the 23,672 ms health check logged
@@ -89,3 +124,30 @@ SELECT COUNT(*) AS drafts_created
 FROM study_pack_drafts
 WHERE created_at BETWEEN TIMESTAMPTZ '2026-09-04 05:45:00+00'
                      AND TIMESTAMPTZ '2026-09-04 05:56:00+00';
+
+-- Q6 — WEAK PROXY for anonymous traffic in the window. ⚠️ READ THE LIMITS BEFORE USING IT.
+-- `AnalyticsController` records `user_id` as NULL for anonymous callers, so this counts anonymous
+-- BROWSER activity. It does NOT see the traffic most likely to matter here: a server-side ISR
+-- revalidation, a crawler, or any non-browser client fetches the API directly and runs no client-side
+-- JavaScript, so it fires NO analytics event and leaves NO row.
+-- ⚠️ THEREFORE: a non-zero result is informative; A ZERO RESULT REFUTES NOTHING AT ALL.
+SELECT
+    COUNT(*)                                   AS anonymous_events,
+    COUNT(DISTINCT event_type)                 AS distinct_event_types
+FROM analytics_events
+WHERE user_id IS NULL
+  AND created_at BETWEEN TIMESTAMPTZ '2026-09-04 05:45:00+00'
+                     AND TIMESTAMPTZ '2026-09-04 05:56:00+00';
+
+-- Q7 — Baseline for Q1-Q6. ⚠️ WITHOUT THIS, "12 sessions" MEANS NOTHING — it could be a quiet Tuesday
+-- or ten times normal. Same clock-hour on the seven preceding days, so the incident window can be
+-- compared against its own normal rather than against an intuition.
+SELECT
+    date_trunc('day', created_at)::date        AS day,
+    COUNT(*)                                   AS sessions_0545_0556
+FROM quick_review_sessions
+WHERE created_at >= TIMESTAMPTZ '2026-08-28 00:00:00+00'
+  AND created_at <  TIMESTAMPTZ '2026-09-05 00:00:00+00'
+  AND created_at::time BETWEEN TIME '05:45' AND TIME '05:56'
+GROUP BY 1
+ORDER BY 1;

@@ -11,6 +11,66 @@ Source: `docs/20260904_prod-issue-down.log` (763 lines, 05:55:07–05:57:00 UTC)
 
 ---
 
+## 0. ⚠️ COLD RE-READ, 2026-09-04 — SIX CLAIMS BELOW ARE CORRECTED. READ THIS FIRST.
+
+A cold investigator re-mined the 763-line log with no inherited context. **Pool exhaustion itself
+stands** — `waiting=15` at L379 and a request that could not open a transaction at all (L381) are
+direct evidence the pool was dry. What follows corrects the NARRATIVE and EVIDENTIAL overstatements
+around it. Each was verified independently before being recorded here.
+
+1. **"Render REPLACED the instance" → it RESTARTED it, and there was NO deploy.** The only platform
+   line in the file is `L732: ==> Instance srv-…-q9cbh restarted`. There is no `Deploying`, no build
+   output, and the new JVM reports the **same version** (`L730: Starting BackendApplication v0.110.2`).
+   **It was also not a rolling replacement** — `L721` Hikari shutdown completed at 05:56:28.939 and
+   `L730` starts at 05:56:33.334: **a 4.4-second window with no process at all.** ⚠️ §8a's
+   deploy-overlap pool ceiling is still correct *for deploys*; it simply was not this event's shape.
+   **Corroborated independently from git: the last merge to `main` before the outage was `e513f867` at
+   03:07:21 UTC — 2 h 48 m earlier.**
+2. **"It was KILLED FOR failing a health check" is an INFERENCE printed under a heading that says it is
+   not.** The log contains **no Render line attributing the restart to anything**. ⚠️ **A MANUAL
+   RESTART BY THE OWNER FITS EVERY OBSERVATION AND WAS NEVER CONSIDERED** — SIGTERM → shutdown hook →
+   graceful shutdown → `restarted`. OOM stays ruled out (an OOM `SIGKILL` runs no shutdown hook, and
+   L717-721 show an orderly one).
+   **⚠️ ANSWERED 2026-09-04 — THE OWNER DID NOT RESTART IT MANUALLY. That branch is CLOSED**, which
+   leaves a Render-side action (health-check auto-restart being the leading candidate) as what
+   remains. **⚠️ THIS RAISES CONFIDENCE IN §1's CLAIM WITHOUT PROVING IT: eliminating the one
+   alternative anybody named is not evidence FOR the survivor, and the log still attributes the
+   restart to nothing.** Render's own event history for 05:55-05:57 UTC would settle it outright and
+   has not been read. Until then it stays an inference — better supported, still not a mechanism.
+3. **"Zero INFO lines before the restart / WARN-ERROR-filtered" is FALSE, and this one matters
+   evidentially.** `L717`/`L718` are INFO graceful-shutdown lines *before* `L730`, and
+   `application-prod.yaml:10` sets root level **INFO** in production. **So the log is NOT
+   level-filtered.** §4 used that filtering as the reason absent generation-thread activity could be
+   waved off — **that reason does not exist.** The correct statement is weaker and different: a Spring
+   Boot app emits nothing at INFO while serving requests, so a quiet INFO window carries **no
+   information either way.**
+4. **The `study-pack-generation-` search could not have matched what it looked for.** Spring Boot's
+   console pattern is `[%15.15t]` — **15 characters, truncated from the FRONT** (confirmed in-file:
+   `ionShutdownHook` is `SpringApplicationShutdownHook`; `io-10000-exec-7` is
+   `http-nio-10000-exec-7`). `study-pack-generation-1` therefore renders as **`ck-generation-1`**, and
+   a literal grep for the full prefix can never match in any log. ⚠️ **The conclusion survives the bad
+   method** — a re-search on truncated forms found no generation thread either, and `llm-parallel-1` is
+   14 chars so *would* render in full. It remains absence of evidence.
+5. **"Saturation began ~05:54:43" → NO LATER THAN 05:54:43.** The arithmetic is right, but **the file's
+   first line IS 05:55:07.057**, so anything earlier is outside the excerpt. Independent support that
+   it started earlier: the first broken pipe (`L2`, 05:55:08.006) means a client had **already given
+   up**, 6.5 s before the first logged pool timeout.
+6. **"Nothing recovered on its own" is NOT ESTABLISHED, and the evidence leans mildly the other way.**
+   65 s of total silence (L716 05:55:23.456 → L717 05:56:28.272); `waiting` fell **15 → 11** with
+   **zero** further logged timeouts although `GlobalExceptionHandler:92` logs every unmapped exception;
+   and graceful shutdown completed in **20 ms**, which Spring only reports when in-flight requests reach
+   **zero**. ⚠️ **BUT THE LOG CANNOT DISTINGUISH RECOVERY FROM DE-ROUTING** — Render pulls a failing
+   instance from the load balancer, and clients were demonstrably abandoning requests. So the honest
+   form is *"not established"*, not *"it recovered."*
+
+**⚠️ THE MOST CONSEQUENTIAL FINDING IS ABOUT §5, NOT §1 — SEE `docs/claude-plans/v0.112.0-outage-falsification-read.sql`.**
+All five falsification queries read tables that record **writes**. **None can detect an anonymous READ
+burst**, so "zero rows refutes it" is wrong — it would merely fail to see it. The one path the log
+actually names as starved (`NoteCollectionService.listPublic:206`) is `permitAll`, unpaginated and
+read-only, and `revalidate = 300` means public endpoints are re-fetched every ~5 minutes independent of
+any deploy. **If that is the cause, Phase 3 is aimed at the wrong target.** The decisive evidence is
+Render request-rate data, not Postgres.
+
 ## 1. What happened — mechanism, not guesswork
 
 The pool was exhausted, and **the health check then starved on the same pool**:
