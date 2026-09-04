@@ -2,7 +2,7 @@
 
 ## v0.111.0 - Multidisciplinary Domain Context
 
-**Status: In Progress** (kicked off 2026-09-04, base branch `releases/v0.111.0`)
+**Status: Released** (kicked off and signed off 2026-09-04, base branch `releases/v0.111.0`)
 
 **⚠️ CUT FROM `docs/correct-architecture-domain-context-verdict`, NOT FROM `main` — a deliberate
 exception, recorded because every other section here says *"cut from `main` after … merged and tagged"*
