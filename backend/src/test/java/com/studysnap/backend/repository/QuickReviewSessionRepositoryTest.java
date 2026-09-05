@@ -33,6 +33,17 @@ class QuickReviewSessionRepositoryTest {
 
     @BeforeEach
     void initSchema() {
+        // findQuizMasteredAt reads notes.generation_enqueued_at through a subquery, so the table has to
+        // exist for the statement to run. Only the two columns the subquery touches are declared: this
+        // class hand-rolls its schema, and mirroring more of production here would be drift waiting to
+        // happen. The REAL-ROW guards for the regeneration clock live in NativeQueryPostgresIntegrationTest
+        // against the actual Flyway schema, which is where a persisted-state assertion belongs.
+        jdbcTemplate.execute("""
+                create table if not exists notes (
+                    id uuid primary key,
+                    generation_enqueued_at timestamp with time zone
+                )
+                """);
         jdbcTemplate.execute("""
                 create table if not exists quick_review_sessions (
                     id uuid primary key,
@@ -334,7 +345,7 @@ class QuickReviewSessionRepositoryTest {
         challengeQuiz.setVerifiedCorrectAnswers(5);
         quickReviewSessionRepository.save(challengeQuiz);
 
-        assertThat(quickReviewSessionRepository.findQuizMasteredAt(userId, studyPackId, 5)).isNull();
+        assertThat(quickReviewSessionRepository.findQuizMasteredAt(userId, studyPackId, 5, studyPackId)).isNull();
 
         QuickReviewSessionEntity masteredQuickReview = saveSession(
                 userId,
@@ -347,9 +358,9 @@ class QuickReviewSessionRepositoryTest {
         masteredQuickReview.setVerifiedCorrectAnswers(5);
         quickReviewSessionRepository.save(masteredQuickReview);
 
-        assertThat(quickReviewSessionRepository.findQuizMasteredAt(userId, studyPackId, 5))
+        assertThat(quickReviewSessionRepository.findQuizMasteredAt(userId, studyPackId, 5, studyPackId))
                 .isEqualTo(masteredQuickReview.getCompletedAt());
-        assertThat(quickReviewSessionRepository.findQuizMasteredAt(userId, studyPackId, 6)).isNull();
+        assertThat(quickReviewSessionRepository.findQuizMasteredAt(userId, studyPackId, 6, studyPackId)).isNull();
     }
 
     @Test

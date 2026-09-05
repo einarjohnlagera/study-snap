@@ -51,7 +51,10 @@ public class StudyPackQuizMasteryService {
             OffsetDateTime masteredAt = quickReviewSessionRepository.findQuizMasteredAt(
                     userId,
                     studyPack.getId(),
-                    currentQuizSize
+                    currentQuizSize,
+                    // Carries the regeneration clock into the query so mastery cannot survive a quiz it
+                    // was never earned on. See the repository Javadoc -- this argument is load-bearing.
+                    studyPack.getNoteId()
             );
             return Optional.of(masteredAt == null
                     ? StudyPackQuizMastery.notMastered()

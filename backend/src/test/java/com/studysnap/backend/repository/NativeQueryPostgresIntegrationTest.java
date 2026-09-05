@@ -147,6 +147,8 @@ class NativeQueryPostgresIntegrationTest {
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
+    @Autowired
+    private QuickReviewSessionRepository quickReviewSessionRepository;
 
     @Autowired
     private NoteLibraryRepositoryImpl noteLibraryRepository;
@@ -2577,6 +2579,132 @@ class NativeQueryPostgresIntegrationTest {
 
     // --- regeneration fixture helpers -----------------------------------------------------------------
 
+    /**
+     * ⚠️ THE INTERLOCK'S ORDERING, WHICH NOTHING PINNED. A cold falsification pass moved the content
+     * write ABOVE the status re-check, and skipped the interlock for combined runs, and all 236 tests
+     * stayed green -- the ordering was asserted only in a comment.
+     *
+     * <p>It is reachable, not theoretical: {@code resolveSourceNoteForGeneration} reads {@code status}
+     * WITHOUT a lock, so two concurrent regenerations can both pass and both set {@code GENERATING}.
+     * Once the first commits, the second's worker finds the note {@code GENERATED}, and the interlock is
+     * the only thing standing between that worker and a second content overwrite plus a SECOND charge on
+     * BOTH meters.
+     *
+     * <p>The fixture drives a combined run whose note is flipped out of {@code GENERATING} before the
+     * worker's transaction opens, and asserts nothing was written and nothing was charged.
+     */
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void aLateCombinedWorkerPersistsNothingAndChargesNothingWhenTheNoteIsNoLongerGenerating() {
+        UUID owner = seedUser("regen-interlock");
+        UUID noteId = seedRegenerationNote(owner, "Shear and Moment", "ORIGINAL BODY.");
+        UUID packId = seedStudyPack(owner, noteId, "Original pack title");
+
+        RegenerationHarness harness = new RegenerationHarness();
+        harness.noteContent = "Body from a worker that lost the race.";
+        // Fires between the two LLM calls and the commit transaction -- exactly the window a recovery
+        // sweep, a mid-generation delete, or a second concurrent worker occupies.
+        harness.beforeCommit = () -> jdbcTemplate.update(
+                "update notes set status = 'GENERATED' where id = ?", noteId);
+
+        harness.service().startAsyncNoteAndStudyPackRegeneration(noteId.toString(), owner);
+
+        assertThat(readNoteColumn(noteId, "content"))
+                .as("a declined worker must not overwrite the note")
+                .isEqualTo("ORIGINAL BODY.");
+        assertThat(jdbcTemplate.queryForObject(
+                "select title from study_packs where id = ?", String.class, packId))
+                .as("a declined worker must not replace the pack")
+                .isEqualTo("Original pack title");
+        assertThat(persistedUsage(owner, "note_generations"))
+                .as("a declined worker must not charge the note-generation meter")
+                .isZero();
+        assertThat(persistedUsage(owner, "study_pack_generations"))
+                .as("a declined worker must not charge the Study Pack meter")
+                .isZero();
+    }
+
+    /**
+     * ⚠️ REAL-ROW GUARD FOR THE REGENERATION CLOCK, and it is the discriminating one. Quiz mastery is
+     * DERIVED, never stored, and regeneration preserves {@code study_packs.id} on purpose -- so without
+     * the {@code generation_enqueued_at} clause the session that mastered the OLD quiz keeps matching the
+     * NEW one (equal sizes by construction, the prompt asks for {@code exactly {QUIZ_COUNT}}), leaving the
+     * Quiz tab unlocked WITH ITS ANSWER KEY on questions the learner has never seen. Combined Note +
+     * Study Pack regeneration widened that: the answer key would belong to content the learner never read.
+     *
+     * <p>Three legs, because a one-legged fixture proves nothing here: mastery holds before the clock
+     * moves, is revoked once it moves, and is re-earned by a perfect score afterwards.
+     */
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void quizMasteryDoesNotSurviveARegenerationOfTheQuizItWasEarnedOn() {
+        UUID owner = seedUser("regen-mastery");
+        UUID noteId = seedRegenerationNote(owner, "Development Length", "Body.");
+        UUID packId = seedStudyPack(owner, noteId, "Pack");
+        OffsetDateTime enqueuedAt = OffsetDateTime.now(ZoneOffset.UTC).minusHours(1);
+        jdbcTemplate.update("update notes set generation_enqueued_at = ? where id = ?",
+                enqueuedAt.minusHours(5), noteId);
+
+        OffsetDateTime firstMastery = enqueuedAt.minusHours(4);
+        seedCompletedQuickReview(owner, packId, noteId, firstMastery, 5);
+
+        assertThat(quickReviewSessionRepository.findQuizMasteredAt(owner, packId, 5, noteId))
+                .as("mastered against the quiz that was current when the session ran")
+                .isNotNull();
+
+        // Regeneration: the clock moves, the pack id does not, the quiz size is unchanged.
+        jdbcTemplate.update("update notes set generation_enqueued_at = ? where id = ?", enqueuedAt, noteId);
+
+        assertThat(quickReviewSessionRepository.findQuizMasteredAt(owner, packId, 5, noteId))
+                .as("the old perfect score must NOT unlock the regenerated quiz")
+                .isNull();
+
+        seedCompletedQuickReview(owner, packId, noteId, OffsetDateTime.now(ZoneOffset.UTC), 5);
+
+        assertThat(quickReviewSessionRepository.findQuizMasteredAt(owner, packId, 5, noteId))
+                .as("mastery is re-earned by a perfect score on the NEW quiz")
+                .isNotNull();
+    }
+
+    /**
+     * A note generated before {@code V118} added the column carries a NULL clock. Revoking mastery for
+     * that entire population would be a silent regression for every existing learner, so the rule is
+     * deliberately null-tolerant. Without this test the fix could ship as a mass re-lock.
+     */
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void quizMasterySurvivesWhenTheNoteCarriesNoGenerationClock() {
+        UUID owner = seedUser("regen-mastery-legacy");
+        UUID noteId = seedRegenerationNote(owner, "Legacy note", "Body.");
+        UUID packId = seedStudyPack(owner, noteId, "Pack");
+        seedCompletedQuickReview(owner, packId, noteId, OffsetDateTime.now(ZoneOffset.UTC).minusDays(3), 5);
+
+        assertThat(readNoteColumn(noteId, "generation_enqueued_at"))
+                .as("the fixture really is the legacy shape this guard is about")
+                .isNull();
+        assertThat(quickReviewSessionRepository.findQuizMasteredAt(owner, packId, 5, noteId))
+                .as("a legacy note keeps the mastery the learner already earned")
+                .isNotNull();
+    }
+
+    private void seedCompletedQuickReview(
+            UUID userId,
+            UUID studyPackId,
+            UUID noteId,
+            OffsetDateTime completedAt,
+            int verifiedCorrectAnswers
+    ) {
+        jdbcTemplate.update(
+                "insert into quick_review_sessions (id, user_id, study_pack_id, note_id, session_mode,"
+                        + " status, current_round, current_question_index, total_questions,"
+                        + " quota_exempt, verified_correct_answers, created_at, completed_at)"
+                        + " values (?, ?, ?, ?, 'QUICK_REVIEW', 'COMPLETED', 'INITIAL', 0, ?, false,"
+                        + " ?, ?, ?)",
+                UUID.randomUUID(), userId, studyPackId, noteId, verifiedCorrectAnswers,
+                verifiedCorrectAnswers, completedAt, completedAt
+        );
+    }
+
     private UUID seedRegenerationNote(UUID ownerUserId, String title, String content) {
         UUID id = UUID.randomUUID();
         jdbcTemplate.update(
@@ -2679,16 +2807,22 @@ class NativeQueryPostgresIntegrationTest {
         private String noteContent = "Regenerated body.";
         private List<String> keyConcepts = List.of("Regenerated concept");
         private RuntimeException studyPackFailure;
+        /** Runs after the second LLM call returns and before the commit transaction opens. */
+        private Runnable beforeCommit;
 
         private StudyPackService service() {
             LlmStudyPackService llm = mock(LlmStudyPackService.class);
             lenient().when(llm.generateNoteFromTopic(anyString(), any())).thenAnswer(invocation -> noteContent);
             if (studyPackFailure == null) {
-                lenient().when(llm.generateStudyPack(anyString(), any())).thenAnswer(invocation ->
-                        new GeneratedStudyPackContent(
+                lenient().when(llm.generateStudyPack(anyString(), any())).thenAnswer(invocation -> {
+                        if (beforeCommit != null) {
+                            beforeCommit.run();
+                        }
+                        return new GeneratedStudyPackContent(
                                 "Regenerated pack", "Regenerated summary", "Engineering",
                                 List.of("regenerated"), keyConcepts, List.of(),
-                                "test-model", 1, 1, 0, BigDecimal.ZERO));
+                                "test-model", 1, 1, 0, BigDecimal.ZERO);
+                });
             } else {
                 lenient().when(llm.generateStudyPack(anyString(), any())).thenThrow(studyPackFailure);
             }
