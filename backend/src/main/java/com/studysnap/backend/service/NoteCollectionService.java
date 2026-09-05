@@ -927,6 +927,8 @@ public class NoteCollectionService {
             }
         }
 
+        // After the children exist, so the baseline records child ids rather than an empty structure.
+        stampCompanionBaseline(persistedGoal.collection(), userId);
         trackStudyGoalAdopted(
                 userId,
                 sourceGoalId,
@@ -966,6 +968,7 @@ public class NoteCollectionService {
         int notesAdded = 0;
         int subjectPlansAdded = 0;
         int additionsResolvedByConcurrentPass = 0;
+        Set<UUID> appliedPlanIds = new HashSet<>();
         int skipped = (int) inspection.changes().stream()
                 .filter(change -> "SKIPPED_NOT_PUBLIC".equals(change.type()))
                 .count();
@@ -1036,6 +1039,7 @@ public class NoteCollectionService {
                             pending.sourcePlan().getId(),
                             pending.sourceItem().getNoteId()
                     ));
+                    appliedPlanIds.add(pending.adoptedPlan().getId());
                 } else {
                     additionsResolvedByConcurrentPass++;
                 }
@@ -1068,7 +1072,7 @@ public class NoteCollectionService {
             );
         }
 
-        acknowledgeSourceSnapshots(inspection);
+        acknowledgeSourceSnapshots(inspection, appliedPlanIds);
         int additionsRemaining = Math.max(
                 0,
                 inspection.additionsAvailable()
@@ -1364,6 +1368,54 @@ public class NoteCollectionService {
         }
         CompanionStructureSnapshot currentSnapshot = computeCompanionStructureSnapshot(collection, children);
         return !currentSnapshot.equals(collection.getCompanionStructureSnapshot());
+    }
+
+    /**
+     * Records the structure an adopted Companion was written against, so staleness becomes DETECTABLE.
+     *
+     * <p>⚠️ WITHOUT THIS, SCOPE ITEM 4 CHANGES THE ANSWER FOR ZERO ROWS. Adoption copies
+     * {@code companion} ({@code :1650}) but never the snapshot, and the snapshot's only other writer is
+     * {@code setCompanion}, which is {@code assertAdmin}. So {@code companionMayBeOutdated} returned
+     * {@code false} at its FIRST guard for every learner — production carries 523 adopted collections,
+     * 82 with a copied Companion and ZERO with a snapshot. Widening the curator predicate beneath that
+     * guard was observably nothing.
+     *
+     * <p>⚠️ THE BASELINE IS THE LEARNER'S OWN STRUCTURE, NEVER THE SOURCE'S. Copying the curator's
+     * snapshot would compare against ids that can never match — the copies carry fresh ids — which
+     * {@code docs/features/companion.md:154} already argues correctly. What was missing is that nothing
+     * COMPUTED a fresh one.
+     *
+     * <p>The semantic is therefore "this Companion was written for the plan as it stood when you adopted
+     * it": any later change, whether the learner's own edit or an applied upstream addition, is genuine
+     * drift and should say so.
+     */
+    private void stampCompanionBaseline(NoteCollectionEntity collection, UUID userId) {
+        if (!carriesCompanionBaseline(collection)) {
+            return;
+        }
+        List<NoteCollectionEntity> children = collectionRepository
+                .findOrderedChildrenByParentCollectionIdAndOwnerUserId(collection.getId(), userId);
+        saveCompanionBaseline(collection, computeCompanionStructureSnapshot(collection, children));
+    }
+
+    /** The leaf-adoption variant: the note ids are already in hand, so nothing is re-queried. */
+    private void stampCompanionBaselineFromNoteIds(NoteCollectionEntity collection, List<UUID> noteIds) {
+        if (!carriesCompanionBaseline(collection)) {
+            return;
+        }
+        List<UUID> memberIds = noteIds.stream().sorted().toList();
+        saveCompanionBaseline(collection, new CompanionStructureSnapshot(memberIds.size(), memberIds));
+    }
+
+    /** Companion is a top-level-only field, so nothing nested ever carries a baseline. */
+    private boolean carriesCompanionBaseline(NoteCollectionEntity collection) {
+        return collection.getCompanion() != null && collection.getParentCollectionId() == null;
+    }
+
+    private void saveCompanionBaseline(NoteCollectionEntity collection, CompanionStructureSnapshot snapshot) {
+        collection.setCompanionStructureSnapshot(snapshot);
+        touch(collection);
+        collectionRepository.save(collection);
     }
 
     private CompanionStructureSnapshot computeCompanionStructureSnapshot(
@@ -1665,6 +1717,14 @@ public class NoteCollectionService {
 
             List<NoteCollectionItemEntity> items = buildAdoptedItems(saved.getId(), copiedItems, now);
             itemRepository.saveAll(items);
+            // ⚠️ Computed from the in-memory list, NOT re-queried. The items were just written in this
+            // same transaction, so a read-back would depend on flush timing for a value that is already
+            // in hand -- and returning an empty baseline here would silently mean "no structure", which
+            // is indistinguishable from the null-snapshot bug this replaces.
+            stampCompanionBaselineFromNoteIds(
+                    saved,
+                    items.stream().map(NoteCollectionItemEntity::getNoteId).toList()
+            );
             trackStudyPlanAdopted(userId, source.getId(), saved.getId(), items.size(), skippedCount, false);
             if (reassertPrimaryAfterPersist) {
                 reassertPrimaryInvariant(userId);
@@ -1774,9 +1834,19 @@ public class NoteCollectionService {
                 : sourceChildren;
         List<NoteCollectionEntity> adoptedChildren = collectionRepository
                 .findOrderedChildrenByParentCollectionIdAndOwnerUserId(adoptedRoot.getId(), userId);
-        List<NoteCollectionEntity> adoptedPlans = sourceChildren.isEmpty()
-                ? List.of(adoptedRoot)
-                : adoptedChildren;
+        // ⚠️ THE LEARNER'S OWN STRUCTURE, ALWAYS -- NEVER KEYED ON THE SOURCE'S SHAPE. This previously
+        // read `sourceChildren.isEmpty() ? List.of(adoptedRoot) : adoptedChildren`, so which of the
+        // LEARNER's plans were examined was decided by what the CURATOR's plan looks like today. When
+        // the two shapes disagreed the learner's own placements became invisible to the diff, every
+        // source item looked new, and copyNote handed back the copy they already held -- which then
+        // inserted into a different collection, where UNIQUE (collection_id, note_id) cannot catch it.
+        // Four CPALE learners were in exactly that state: they adopted a FLAT plan, the curator added
+        // seven child Subject Plans afterwards, and one Apply would have re-placed all 19 notes they
+        // already held. Scanning the root as well costs one query on a nested adoption, where the goal
+        // holds no direct items, and is what lets an already-held note resolve as MOVED.
+        List<NoteCollectionEntity> adoptedPlans = new ArrayList<>();
+        adoptedPlans.add(adoptedRoot);
+        adoptedPlans.addAll(adoptedChildren);
         Map<UUID, NoteCollectionEntity> adoptedBySourcePlan = adoptedPlans.stream()
                 .filter(plan -> plan.getSourcePlanId() != null)
                 .collect(Collectors.toMap(
@@ -1820,9 +1890,13 @@ public class NoteCollectionService {
 
         Map<UUID, Map<UUID, AdoptedPlacement>> adoptedPlacementsByPlan = new HashMap<>();
         Map<UUID, Set<UUID>> adoptedLocationsBySourceNote = new HashMap<>();
+        int adoptedRootDirectItemCount = 0;
         for (NoteCollectionEntity adoptedPlan : adoptedPlans) {
             List<NoteCollectionItemEntity> adoptedItems =
                     itemRepository.findByCollectionIdOrderByPositionAsc(adoptedPlan.getId());
+            if (adoptedPlan.getId().equals(adoptedRoot.getId())) {
+                adoptedRootDirectItemCount = adoptedItems.size();
+            }
             Map<UUID, NoteEntity> adoptedNotes = noteRepository.findAllById(
                     adoptedItems.stream().map(NoteCollectionItemEntity::getNoteId).toList()
             ).stream().collect(Collectors.toMap(NoteEntity::getId, Function.identity()));
@@ -1852,6 +1926,25 @@ public class NoteCollectionService {
 
         for (NoteCollectionEntity sourcePlan : sourcePlans) {
             NoteCollectionEntity adoptedPlan = adoptedBySourcePlan.get(sourcePlan.getId());
+            if (adoptedPlan == null && adoptedRootDirectItemCount > 0) {
+                // ⚠️ THE CURATOR RESTRUCTURED A FLAT PLAN INTO SUBJECT PLANS, AND THAT IS A MOVE -- WHICH
+                // THIS RELEASE REPORTS AND NEVER APPLIES. Creating the child here would nest it under an
+                // adopted root that still holds direct notes: a shape addItems:1135 and
+                // validateParentCanAcceptChild:1501 both forbid, that no database constraint enforces,
+                // and that the collection page cannot render -- isGoalView switches to the goal branch,
+                // which has no direct-items list, so the learner's own notes would vanish from the page.
+                addChange(changes, emittedChanges, new ReviewSetUpdateChange(
+                        "MOVED",
+                        sourcePlan.getId(),
+                        null,
+                        sourcePlan.getTitle(),
+                        null,
+                        sourceRoot.get().getTitle(),
+                        sourcePlan.getTitle(),
+                        false
+                ));
+                continue;
+            }
             if (adoptedPlan == null) {
                 Optional<NoteCollectionEntity> adoptedElsewhere =
                         collectionRepository.findByOwnerUserIdAndSourcePlanId(userId, sourcePlan.getId());
@@ -2133,17 +2226,25 @@ public class NoteCollectionService {
         }
     }
 
-    private void acknowledgeSourceSnapshots(SourceUpdateInspection inspection) {
+    /**
+     * ⚠️ THIS RE-BASELINES ONLY WHAT THE PASS ACTUALLY APPLIED, AND THE DISTINCTION IS THE WHOLE POINT.
+     *
+     * <p>It previously stamped the current source facts onto the root and EVERY matched plan and
+     * placement on any non-detached apply — including one that added nothing. So a learner who saw
+     * "renamed upstream" alongside three new notes, and pressed Apply additions to get the notes,
+     * silently acknowledged the rename as their new baseline. It was never applied and never shown
+     * again, and the pre-sync value was overwritten, so it could not be recovered. That directly
+     * contradicts the contract in {@code docs/features/collections.md}, which promises rename, reorder,
+     * retire and move stay SURFACED until acted on.
+     *
+     * <p>Additions are the only thing this release applies, so they are the only thing it may
+     * acknowledge. A structural change the learner has not acted on stays reported on every visit.
+     */
+    private void acknowledgeSourceSnapshots(SourceUpdateInspection inspection, Set<UUID> appliedPlanIds) {
         Instant now = Instant.now();
-        inspection.adoptedRoot().setSourceTitleAtSync(inspection.sourceRoot().getTitle());
-        inspection.adoptedRoot().setSourceParentIdAtSync(inspection.sourceRoot().getParentCollectionId());
-        inspection.adoptedRoot().setSourcePositionAtSync(inspection.sourceRoot().getSiblingPosition());
-        inspection.adoptedRoot().setSourceSyncedAt(now);
-        collectionRepository.save(inspection.adoptedRoot());
-
         for (NoteCollectionEntity sourcePlan : inspection.sourcePlans()) {
             NoteCollectionEntity adoptedPlan = inspection.adoptedBySourcePlan().get(sourcePlan.getId());
-            if (adoptedPlan == null) {
+            if (adoptedPlan == null || !appliedPlanIds.contains(adoptedPlan.getId())) {
                 continue;
             }
             adoptedPlan.setSourceTitleAtSync(sourcePlan.getTitle());
@@ -2186,7 +2287,14 @@ public class NoteCollectionService {
                     false
             ));
         }
+        // ⚠️ The guard names the field that is DEREFERENCED below, not merely that a sync happened.
+        // Guarding on getSourceSyncedAt() alone let Objects.equals(null, non-null) return false, enter
+        // the branch, and NPE on .toString() -- and V134's backfill arms exactly that shape, because it
+        // stamps source_synced_at on every adoption while sibling_position is NULL on every top-level
+        // source collection. A null baseline is not drift: we never recorded a position to compare.
+        // The parent change that accompanies it is reported by the MOVED branch below.
         if (adopted.getSourceSyncedAt() != null
+                && adopted.getSourcePositionAtSync() != null
                 && !Objects.equals(adopted.getSourcePositionAtSync(), source.getSiblingPosition())) {
             addChange(changes, emitted, new ReviewSetUpdateChange(
                     "REORDERED",
@@ -2199,7 +2307,9 @@ public class NoteCollectionService {
                     false
             ));
         }
+        // Same shape as the position guard above: guard the dereferenced field, not the sync marker.
         if (adopted.getSourceSyncedAt() != null
+                && adopted.getSourceParentIdAtSync() != null
                 && !Objects.equals(adopted.getSourceParentIdAtSync(), source.getParentCollectionId())) {
             addChange(changes, emitted, new ReviewSetUpdateChange(
                     "MOVED",
