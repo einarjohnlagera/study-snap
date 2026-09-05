@@ -100,7 +100,63 @@ the way production reaches it.**
 
 ### Shipped
 
-_(nothing yet)_
+- **A Challenge Quiz assertion question no longer reads as one run-on statement.** The `Statement N:`
+  splitter pairs each label with everything up to the next one, so the closing interrogative was
+  swallowed onto the last statement's line. Fixed at **both** ends: the prompt now asks for a real
+  newline between statements and the question, and a narrow presentation path breaks a trailing
+  interrogative off the **final** segment for the questions already generated. **⚠️ It bypasses entirely
+  when the text already carries a newline**, so a compliant question is untouched. **⚠️ PRESENTATION
+  ONLY — it returns nodes and never rewrites stored text**, which is `v0.110.1`'s lesson: a sanitizer
+  that re-ran on every read progressively destroyed stored choice text. **⚠️ A legacy-compatibility path,
+  not a text-repair framework** — do not generalize it or add a second heuristic beside it. Guards pin
+  the fix, the newline bypass, and that an ordinary period-ending statement is left alone.
+- **The section drag preview no longer swallows the page.** Two causes: `closestCenter` compares rect
+  centres, and a tall dragged section's centre sits far below the cursor, so upward targets could never
+  win — the reported asymmetry; and the overlay rendered every note. Now `closestCorners` on the **leaf**
+  context only (the subject-level context drags uniform rows, where centres are fine), with the overlay
+  cut to title and count. **⚠️ "First 3 notes + N more" was explicitly REJECTED: preview height IS the
+  diagnosed failure, so a smaller oversized preview reintroduces the same geometry.**
+- **Choosing an existing section commits it immediately.** The debounced writer is gated on `editing`,
+  so a dropdown click rode the same blur path as free typing and appeared to do nothing. The shared
+  combobox gained an `onOptionSelect` that fires only on an option click, and the builder commits from
+  it directly. **⚠️ THE `editing`-GATED WRITER AND ITS COMMENT ARE UNTOUCHED** — a `v0.88.0` mechanism
+  whose comment records a REPRODUCED defect (typing *"Week"*, pausing, then *" 1"* created a section
+  called *"Week"* and dropped the rest). Item 4 adds a path **beside** it. **⚠️ NAMED CONSEQUENCE (plan
+  §10, Finding A): immediate commit makes an existing flush reachable in ONE CLICK rather than on blur,
+  so the sticky unsaved-arrangement bar now disappears the moment a section is picked.** Behaviour is
+  unchanged and the work is saved — but it is visible, and it is why plan items 4 and 5 do not share a
+  release.
+- **Adopting a Goal no longer erases a learner's own exam date.** `adoptGoal`'s reparent branch runs on
+  a **pre-existing** standalone adoption, so the `targetCompletionDate` it cleared was one the learner
+  set for themselves. The child-cannot-carry-a-date invariant is real and is kept; the date is now
+  **promoted to the Goal** instead, **earliest winning, because a completion target is a deadline and
+  the nearest one binds.** A Goal with its own date keeps it — a freshly adopted Goal never copies one,
+  so in practice this fills an empty field. **⚠️ The guard's fixture gives two pre-existing adoptions
+  dates ALREADY: a fresh adoption has none to lose and passes under the defect.**
+- **A plan-scoped Adaptive Practice session no longer presents itself as a single note.** Both
+  note-addressed routes — `POST /notes/{id}/adaptive-practice/start`'s resume branch and
+  `GET /notes/{id}/adaptive-practice/in-progress` — now resolve the source collection through the same
+  column-then-JSONB resolver the session-addressed read uses, so all three routes describe one row the
+  same way. **⚠️ CORRECTION TO THE PLANNED-SCOPE PREMISE, RECORDED RATHER THAN QUIETLY RECONCILED: the
+  defect's population is PRE-`V133` LEGACY ROWS ONLY.** `buildGeneratingSession` has set both note
+  anchors to NULL for every collection session since `v0.113.0`, so a post-migration plan-scoped row
+  cannot be returned by a pack-keyed lookup at all; the reachable subject is a pre-migration row that is
+  pack-anchored and carries its plan id only in `session_state.sourceCollectionId`. The scope claim
+  "anchored on a primary pack (`v0.107.0`)" was true through `v0.112.x` and is stale. **The fix and its
+  guards are unchanged — only the fixture shape is, and that is the whole of the carried `v0.116.0`
+  lesson.** The plan named `:183` alone; `:624` had the identical defect on the identical population and
+  is fixed with it. **⚠️ ONE NAMED CONSEQUENCE:** when the collection resolves, the response is built
+  with no fallback Study Pack — mirroring the session-addressed route — so a legacy row that stored its
+  focus concepts as BARE STRINGS (pre-`v0.104.0`, before per-source stamping) now shows them
+  unattributed rather than attributing all of them to the one borrowed pack. Honest, and the two routes
+  agree; rows stamped by `generateAdaptiveQuizForCollection` are unaffected.
+- **The Adaptive Practice header communicates five layers instead of one run-on list**: mode, scope
+  title, a compact `N weak concepts across M notes` summary, concepts grouped under their source Study
+  Pack, and progressive disclosure behind `Show all concepts`. **⚠️ Grouping keys on
+  `sourceStudyPackId`, never on the concept string** — keying on the name would merge two packs' shared
+  concept and assert cross-pack canonical concept identity, which is out of scope (`v0.107.0`). The
+  in-quiz header's `focusConcepts.join(", ")` was the live instance of that merge and now reports
+  per-source counts whenever a session spans more than one pack.
 
 ## v0.116.0 - Additive Review Set Updates
 
