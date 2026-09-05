@@ -419,9 +419,25 @@ The combined scope also lists what it writes from — Topic, Subject, Writing co
 regeneration starts. **Applicable Programs appears nowhere, not even read-only**: it is discovery
 metadata that never reaches a prompt, and showing it there would misrepresent it as an input.
 
-The post-generation metadata suggestion is **not** armed for a combined run — note metadata is an input
-to that operation, so proposing a rewrite of it immediately afterwards would contradict the modal the
-learner just confirmed. Study Pack regeneration keeps its existing behaviour.
+### When the metadata suggestion appears
+
+**Only when a note has no Study Pack yet.** No regeneration offers it, in either scope.
+
+The suggestion belongs to creation: the learner typed a rough title and the LLM produced a better one
+that nothing has consumed yet. On a regeneration the metadata is an **input** — the title is the topic
+we wrote from — and the scope modal has just shown it with *Edit Note details →*, which is the moment
+the learner is actually deciding. A post-hoc suggestion competes with that surface at the wrong end, and
+accepting it would not change the output just produced; it would change the input for the next run.
+
+**⚠️ The rule is gated on the absence of a Study Pack, NOT on which handler fired.** `handleGenerate` is
+reachable with an existing pack (`canTriggerStudyPackGeneration` admits `isStudyPackReady`, and the
+failed-generation retry lands there), so a handler-scoped rule leaves a hole. Gating on the pack also
+resolves the retry cases correctly: a failed **first** generation left no pack and still suggests; a
+failed **regeneration** left the original pack and does not.
+
+**⚠️ Bulk generation is a different mechanism and is unchanged.** It auto-applies the generated title and
+tags server-side via `applyBulkGeneratedMetadataToNote`, **preserving the curator's Subject**, and never
+used the suggestion modal at all.
 
 ### What regeneration does not do
 
