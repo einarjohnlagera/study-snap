@@ -84,8 +84,14 @@ export function RegenerateScopeModal({
     combinedDisabledReason = "This note has no Study Pack to regenerate yet.";
   } else if (missingTitle) {
     combinedDisabledReason = "Add a title first -- the title is the topic we write from.";
-  } else {
+  } else if (outOfNoteGenerations) {
     combinedDisabledReason = "You have no topic note allowance left this cycle.";
+  } else {
+    // ⚠️ THE STUDY PACK METER NEEDS ITS OWN BRANCH. Falling through to the topic-note wording told a
+    // learner with 25 topic notes left that they had none, while the banner directly beneath said the
+    // Study Pack meter was the empty one -- two contradictory sentences on the surface built to stop
+    // exactly that. Reachable on PLUS, where the two meters differ and many other paths spend this one.
+    combinedDisabledReason = "You have no Study Pack allowance left this cycle.";
   }
 
   const isPublic = note?.visibility === "PUBLIC";

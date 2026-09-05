@@ -818,7 +818,19 @@ public class StudyPackService {
             // failure after this point leaves BOTH meters untouched.
             String rawGeneratedNoteBody = regeneratingNoteContent
                     ? noteGenerationService
-                            .generateFromTopic(noteContentRegenerationRequest, ownerUserId, generationContext, false)
+                            // ⚠️ THE LAST ARGUMENT IS enforceLimits, ARRIVING HERE AS recordUsage.
+                            // On the regeneration path the caller passes enforceLimits into that
+                            // parameter, so the two are the same value; the fourth argument stays
+                            // false because THIS class charges the note meter at commit, not
+                            // generateFromTopic.
+                            // ⚠️ Until v0.119.0 generateFromTopic asserted the note-generation quota
+                            // UNCONDITIONALLY, so an ADMIN who had skipped the request-side check
+                            // still hit it here — and because the exception surfaces on the generation
+                            // thread it was swallowed, marking every combined item FAILED with no
+                            // reason. Found by the v0.119.0 pressure test.
+                            .generateFromTopic(
+                                    noteContentRegenerationRequest, ownerUserId, generationContext,
+                                    false, recordUsage)
                             .content()
                     : null;
             // ⚠️ TWO VALUES FROM ONE GENERATION, AND CONFLATING THEM SILENTLY RUINS THE NOTE.

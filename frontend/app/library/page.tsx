@@ -691,6 +691,10 @@ export default function LibraryPage() {
     courseProgram: libraryFilterParams.courseProgram,
     tags: libraryFilterParams.tags,
     visibility: libraryFilterParams.visibility,
+    // ⚠️ Omitting this made the subject chips count across the WHOLE library while the list showed one
+    // Review Set -- "Mathematics · 40" that yields 3 notes on click. It typechecks either way because
+    // every field of the params type is optional, which is exactly why it was missed.
+    collectionId: libraryFilterParams.collectionId,
   }), [libraryFilterParams]);
 
   const loadLibrary = useCallback(async () => {
@@ -1217,7 +1221,13 @@ export default function LibraryPage() {
     || visibilityFilter !== "ALL"
     || selectedCourseProgram !== ALL_COURSE_PROGRAMS
     || selectedSubject !== ALL_SUBJECTS
-    || selectedTags.length > 0;
+    || selectedTags.length > 0
+    // ⚠️ WITHOUT THIS a Review Set with no matches renders the EMPTY-LIBRARY onboarding screen
+    // ("Create Your First Note / Try Demo") instead of "No notes match these filters" -- and the
+    // *Open more filters* button lives inside the hasItems branch, so the only control that can clear
+    // the chip becomes unreachable. The curator's whole library appears to have vanished.
+    // A filter that matches nothing is still a filter (v0.95.1 recorded the same lesson).
+    || selectedCollectionId !== ALL_COLLECTIONS;
   const hasItems = items.length > 0 || hasActiveFilters;
   const currentSavedFilterState = useMemo(() => buildSavedFilterState(
     searchQuery,
@@ -1256,6 +1266,9 @@ export default function LibraryPage() {
     const nextTags = readSavedTags(filterState.tags);
     const nextReadinessFilter = readSavedReadinessFilter(filterState.status);
     const nextVisibilityFilter = readSavedVisibilityFilter(filterState.visibility);
+    // Saved filters carry no Review Set axis, so applying one must CLEAR it rather than silently keep
+    // it -- otherwise the restored view is not the view that was saved.
+    setSelectedCollectionId(ALL_COLLECTIONS);
     const nextSort = readSavedSortOption(filterState.sort);
 
     setSearchQuery(nextSearch);

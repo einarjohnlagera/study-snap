@@ -200,4 +200,12 @@ describe("RegenerateScopeModal quota disclosure", () => {
     expect(screen.queryByText(/left this cycle/i)).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: /^Regenerate$/i })).toBeEnabled();
   });
+
+  it("names the Study Pack meter when that is the exhausted one, not the topic-note meter", () => {
+    // The untested direction: plenty of topic notes, no Study Packs. Falling through to the topic-note
+    // wording contradicted the banner directly beneath it.
+    renderModal({ noteGenerationsRemaining: 25, studyPacksRemaining: 0 });
+    expect(screen.getByText(/no Study Pack allowance left this cycle\./i)).toBeInTheDocument();
+    expect(screen.queryByText(/no topic note allowance left/i)).not.toBeInTheDocument();
+  });
 });

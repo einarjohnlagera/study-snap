@@ -229,6 +229,47 @@ inline** for B3-B5.
     driver's existing catch already records `BLOCKED` with the same code. It cost an extra quota read
     per item and bought nothing. Recorded in code so it is not re-added.
 
+- **Pressure-test fixes (PR #1291).** The full three-agent cold test in isolated worktrees found six
+  confirmed defects, two of which would have hit the owner first. **Two claims in this file were
+  falsified by it and are corrected below rather than left standing.**
+  - **⚠️ THE ADMIN QUOTA BYPASS DID NOT BYPASS.** Skipping the request-side assert was not enough:
+    `NoteGenerationService.generateFromTopic` asserted the note-generation quota **again,
+    unconditionally**, on the generation thread — where the worker swallows the exception and marks the
+    note `FAILED`. **So an ADMIN whose meter was full had EVERY combined item fail with no reason
+    recorded, on the exact account this feature was built for.** Fixed by threading `enforceQuota`
+    through, in the service that owns the quota concern. Mutation reproduces the production symptom
+    exactly: `expected "REGENERATED" but was "FAILED"`.
+  - **The sibling meter was misclassified.** `assertMonthlyStudyPackQuotaAvailable` throws a **bare
+    `AppException`** while the note meter throws a typed one, so a Study-Pack shortfall fell through to
+    the generic branch as `FAILED` — and the receipt offers `FAILED` items as **retryable**, inviting a
+    retry that cannot succeed until the cycle resets. Now classified by **code, not type**.
+  - **A zero-match Review Set rendered the empty-library onboarding screen.** `selectedCollectionId` was
+    missing from `hasActiveFilters`, and the *Open more filters* button that would clear the chip lives
+    inside the `hasItems` branch — so the curator's whole library appeared to vanish with no way back.
+    Trivially reachable with any empty Review Set.
+  - **⚠️ CORRECTION: this file claimed the subject facets honoured `?collectionId=`. They did not.** The
+    backend did; the frontend rebuilt a 5-key subset that omitted it, which typechecks because every
+    field is optional. Chips counted across the whole library while the list showed one Review Set.
+    Fixed, and now guarded.
+  - **The Study Pack meter was an observable no-op.** `studyPackUnitsRequired`/`Remaining` were computed
+    server-side, typed on the client and **rendered nowhere**, so the default Study-Pack-only scope had
+    no disclosure at all — `quotaExceeded` reads only the note meter and is structurally always false
+    there. Both meters are now disclosed, with a shortfall warning that does not block, matching §E's
+    soft-floor policy.
+  - **⚠️ CORRECTION: "you can close this and come back" was false.** The batch id lived in component
+    state and the modal unmounts on close; there is no list-my-batches endpoint, so the id was
+    unrecoverable. Worse, reopening returned to the START screen with the same selection — **a second
+    batch over already-regenerated notes, charging both meters again**. The id now persists for the
+    session and reopening resumes the receipt.
+  - **The wrong meter was named on the live v0.118.0 surface.** `combinedDisabledReason` had no branch
+    for an exhausted Study Pack meter, so it told a learner with 25 topic notes left that they had none
+    while the banner beneath said otherwise.
+  - **Two guards that would have survived their own deletion.** The controller's `enforceLimits`
+    expression was unpinned — mutating it to a flat `false`, granting every TEACHER unlimited free units,
+    survived all 2,178 tests — and the curator gate's fixture could not discriminate
+    `CuratorAuthoringPredicate` from a bare role check. Both now pinned, the second by the cohort they
+    actually disagree about: a **TEACHER-profile account mid-onboarding**.
+
 ### Known limitations (B1/B2)
 
 - **Nothing sweeps a lost batch.** A driver thread killed mid-loop leaves `RUNNING`/`PENDING` rows until
@@ -248,6 +289,15 @@ inline** for B3-B5.
   money property**). **The async attribution branch is defensive and is NOT covered by a test** —
   reaching it needs quota to vanish inside a single item, a window this harness cannot open. Stated
   rather than implied.
+- **A transient 429 inside a batch is recorded as a permanent-looking `FAILED`, with no backoff.** The
+  AI rate limit (FREE 5/min) resets within the minute, so retry genuinely is the remedy and
+  `FAILED`/retryable is the honest classification — but a FREE-plan TEACHER on Study-Pack-only can
+  outrun it and see items shred. Not fixed; the driver has no backoff.
+- **A batch whose executor queue is full orphans its `PENDING` rows.** `queueBatch` writes up to 50 rows
+  before `taskDispatcher.execute`, and the driver pool is 2/2 with queue 8 under the default
+  `AbortPolicy`, so a burst of concurrent batches 500s with rows already written. Bounded by the 24h TTL.
+- **Select-all is blunt for the motivating workflow.** *Select all (N)* selects the whole filtered set,
+  and the 50 cap then disables *Review* — a 77-note Review Set needs 27 deselected by hand.
 - **The single-note failure reason is still not persisted.** `notes` has no failure-reason column and
   adding one is a migration this release's anti-drift forbids. A Backlog Index row carries it.
 - **`§J` row 10 (share-link deactivation fails after commit) is unreachable** in Phase 1's shape: the

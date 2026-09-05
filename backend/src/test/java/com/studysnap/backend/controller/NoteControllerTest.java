@@ -7,6 +7,9 @@ import com.studysnap.backend.dto.GenerateNoteFromTopicResponse;
 import com.studysnap.backend.dto.BulkImportResultResponse;
 import com.studysnap.backend.dto.BulkGenerateNotesRequest;
 import com.studysnap.backend.dto.BulkGenerateNotesResponse;
+import com.studysnap.backend.dto.BulkRegenerateNotesRequest;
+import com.studysnap.backend.dto.BulkRegenerateNotesResponse;
+import com.studysnap.backend.dto.NoteRegenerationPreflightRequest;
 import com.studysnap.backend.dto.NoteListItemResponse;
 import com.studysnap.backend.dto.NoteResponse;
 import com.studysnap.backend.dto.NoteStatusResponse;
@@ -124,9 +127,15 @@ class NoteControllerTest {
     private QuizSessionHistoryService quizSessionHistoryService;
 
     private NoteController noteController;
+    private com.studysnap.backend.service.NoteBulkRegenerationService noteBulkRegenerationService;
+    private com.studysnap.backend.service.NoteRegenerationPreflightService noteRegenerationPreflightService;
 
     @BeforeEach
     void setUp() {
+        noteBulkRegenerationService =
+                org.mockito.Mockito.mock(com.studysnap.backend.service.NoteBulkRegenerationService.class);
+        noteRegenerationPreflightService =
+                org.mockito.Mockito.mock(com.studysnap.backend.service.NoteRegenerationPreflightService.class);
         noteController = new NoteController(
                 authService,
                 bulkGenerationResultService,
@@ -134,9 +143,9 @@ class NoteControllerTest {
                 org.mockito.Mockito.mock(com.studysnap.backend.service.NoteShareService.class),
                 noteBulkImportService,
                 noteBulkGenerationService,
-                org.mockito.Mockito.mock(com.studysnap.backend.service.NoteBulkRegenerationService.class),
+                noteBulkRegenerationService,
                 org.mockito.Mockito.mock(com.studysnap.backend.service.NoteBulkRegenerationReceiptService.class),
-                org.mockito.Mockito.mock(com.studysnap.backend.service.NoteRegenerationPreflightService.class),
+                noteRegenerationPreflightService,
                 noteGenerationService,
                 noteTextExtractionService,
                 studyPackService,
@@ -147,6 +156,62 @@ class NoteControllerTest {
                 generatedQuizService,
                 quizSessionHistoryService
         );
+    }
+
+    /**
+     * ⚠️ THE CONTROLLER'S {@code enforceLimits} EXPRESSION WAS UNGUARDED. The `v0.119.0` pressure test
+     * mutated it to a flat {@code false} — granting every TEACHER curator unlimited free note-generation
+     * and Study Pack units on a paid account, which owner decision 1 forbids outright — and the ENTIRE
+     * suite stayed green. The service-layer guards could not see it because the harness writes the
+     * boolean into the test itself, so the expression is unreachable from them.
+     *
+     * <p>The twin for bulk GENERATION has existed all along (below); it was simply not copied when
+     * bulk regeneration was added. This is the `v0.115.0` lesson — a bare role substitution surviving
+     * 99 tests — reproduced on a new endpoint.
+     */
+    @Test
+    void bulkRegenerate_delegatesWithAdminQuotaBypass() {
+        UUID userId = UUID.randomUUID();
+        AuthenticatedUser user = new AuthenticatedUser(userId, UserRole.ADMIN, true, 1);
+        BulkRegenerateNotesRequest request =
+                new BulkRegenerateNotesRequest(List.of(UUID.randomUUID()), "NOTE_AND_STUDY_PACK");
+        BulkRegenerateNotesResponse expected =
+                new BulkRegenerateNotesResponse(UUID.randomUUID(), "NOTE_AND_STUDY_PACK", 1);
+        when(noteBulkRegenerationService.queueBatch(request, userId, false)).thenReturn(expected);
+
+        assertThat(noteController.bulkRegenerate(request, user)).isEqualTo(expected);
+        verify(noteBulkRegenerationService).queueBatch(request, userId, false);
+    }
+
+    @Test
+    void bulkRegenerate_delegatesWithQuotaEnforcementForANonAdminCurator() {
+        UUID userId = UUID.randomUUID();
+        // A TEACHER curator carries UserRole.USER — the profile is what makes them a curator, and the
+        // bypass is keyed on ROLE. This is the leg that must never become a bypass.
+        AuthenticatedUser user = new AuthenticatedUser(userId, UserRole.USER, true, 1);
+        BulkRegenerateNotesRequest request =
+                new BulkRegenerateNotesRequest(List.of(UUID.randomUUID()), "STUDY_PACK");
+        BulkRegenerateNotesResponse expected =
+                new BulkRegenerateNotesResponse(UUID.randomUUID(), "STUDY_PACK", 1);
+        when(noteBulkRegenerationService.queueBatch(request, userId, true)).thenReturn(expected);
+
+        assertThat(noteController.bulkRegenerate(request, user)).isEqualTo(expected);
+        verify(noteBulkRegenerationService).queueBatch(request, userId, true);
+    }
+
+    @Test
+    void regeneratePreflight_appliesTheSameQuotaExpressionAsTheBatch() {
+        UUID adminId = UUID.randomUUID();
+        UUID teacherId = UUID.randomUUID();
+        NoteRegenerationPreflightRequest request =
+                new NoteRegenerationPreflightRequest(List.of(UUID.randomUUID()), "NOTE_AND_STUDY_PACK");
+
+        noteController.regeneratePreflight(request, new AuthenticatedUser(adminId, UserRole.ADMIN, true, 1));
+        noteController.regeneratePreflight(request, new AuthenticatedUser(teacherId, UserRole.USER, true, 1));
+
+        // Disclosure must not describe a different allowance than enforcement applies.
+        verify(noteRegenerationPreflightService).preflight(request, adminId, false);
+        verify(noteRegenerationPreflightService).preflight(request, teacherId, true);
     }
 
     @Test

@@ -42,6 +42,10 @@ const NOTE_IDS = ["note-1", "note-2", "note-3"];
 
 beforeEach(() => {
   jest.clearAllMocks();
+  // The modal now persists an in-flight batch id so closing and reopening resumes the receipt rather
+  // than offering to run the same selection again. That storage is real, so it must be cleared between
+  // tests or a batch started in one test opens the next one straight into the progress view.
+  globalThis.sessionStorage?.clear();
   api.preflightNoteRegeneration.mockResolvedValue(buildPreflight());
 });
 
@@ -133,5 +137,24 @@ describe("BulkRegenerateModal", () => {
     await waitFor(() => {
       expect(screen.queryByText(/keeps running/i)).not.toBeInTheDocument();
     });
+  });
+
+  it("discloses the Study Pack meter and warns on a shortfall it cannot refuse", async () => {
+    // The soft floor: quotaExceeded is FALSE (that flag only reads the note-generation meter), so a
+    // fixture asserting only quotaExceeded passes under the defect where nothing is said at all.
+    api.preflightNoteRegeneration.mockResolvedValue(buildPreflight({
+      scope: "STUDY_PACK",
+      quotaExceeded: false,
+      noteGenerationUnitsRequired: 0,
+      studyPackUnitsRequired: 3,
+      studyPackUnitsRemaining: 1,
+    }));
+
+    render(<BulkRegenerateModal isOpen noteIds={NOTE_IDS} onClose={jest.fn()} />);
+
+    expect(await screen.findByText(/1 Study Pack generation left this cycle/i)).toBeInTheDocument();
+    expect(screen.getByText(/will stop rather than regenerate/i)).toBeInTheDocument();
+    // A soft floor never blocks the button.
+    expect(screen.getByRole("button", { name: /Regenerate 3 notes/i })).toBeEnabled();
   });
 });
