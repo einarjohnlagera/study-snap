@@ -160,6 +160,10 @@ class NoteCollectionServiceProjectionIntegrationTest {
                     companion json,
                     companion_structure_snapshot json,
                     source_plan_id uuid,
+                    source_title_at_sync varchar(150),
+                    source_parent_id_at_sync uuid,
+                    source_position_at_sync integer,
+                    source_synced_at timestamp with time zone,
                     parent_collection_id uuid,
                     sibling_position integer,
                     created_at timestamp with time zone not null,
@@ -174,6 +178,9 @@ class NoteCollectionServiceProjectionIntegrationTest {
                     note_id uuid not null,
                     label varchar(120),
                     position integer not null,
+                    source_label_at_sync varchar(120),
+                    source_position_at_sync integer,
+                    source_synced_at timestamp with time zone,
                     created_at timestamp with time zone not null
                 )
                 """);

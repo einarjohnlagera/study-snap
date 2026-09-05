@@ -2080,6 +2080,28 @@ export type AdoptGoalResponse = {
   alreadyAdopted: boolean;
 };
 
+export type ReviewSetUpdateChange = {
+  type: "ADDED_NOTE" | "ADDED_SUBJECT_PLAN" | "RENAMED" | "REORDERED" | "RETIRED" | "MOVED" | "SKIPPED_NOT_PUBLIC";
+  sourcePlanId: string;
+  sourceNoteId: string | null;
+  subjectTitle: string | null;
+  noteTitle: string | null;
+  previousValue: string | null;
+  currentValue: string | null;
+  applied: boolean;
+};
+
+export type ReviewSetUpdateResponse = {
+  collectionId: string;
+  sourceState: "CONNECTED" | "DETACHED";
+  status: "UPDATES_AVAILABLE" | "ALREADY_UP_TO_DATE" | "UPDATED" | "PARTIALLY_UPDATED" | "DETACHED_FROM_SOURCE";
+  additionsAvailable: number;
+  notesAdded: number;
+  subjectPlansAdded: number;
+  skippedCount: number;
+  changes: ReviewSetUpdateChange[];
+};
+
 export type SetCollectionItemOrderRequestItem = {
   noteId: string;
   label?: string | null;
@@ -5238,6 +5260,24 @@ export async function adoptGoal(id: string): Promise<AdoptGoalResponse> {
     true,
   );
   return parseApiResponse<AdoptGoalResponse>(response, "Could not start this Goal.");
+}
+
+export async function getReviewSetSourceUpdate(id: string): Promise<ReviewSetUpdateResponse> {
+  const response = await fetchWithAuth(
+    `/collections/${encodeURIComponent(id)}/source-update`,
+    { method: "GET", headers: buildAuthHeaders() },
+    true,
+  );
+  return parseApiResponse<ReviewSetUpdateResponse>(response, "Could not check this Review Set for updates.");
+}
+
+export async function applyReviewSetSourceUpdate(id: string): Promise<ReviewSetUpdateResponse> {
+  const response = await fetchWithAuth(
+    `/collections/${encodeURIComponent(id)}/source-update`,
+    { method: "POST", headers: buildAuthHeaders("application/json") },
+    true,
+  );
+  return parseApiResponse<ReviewSetUpdateResponse>(response, "Could not update this Review Set.");
 }
 
 export async function deleteCollection(id: string): Promise<void> {

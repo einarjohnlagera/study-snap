@@ -111,7 +111,77 @@ and a migration. If it deploys before 2026-09-18, that read is confounded and mu
 
 ### Shipped
 
-_(nothing yet)_
+- Added `V134` typed source-at-sync provenance for adopted collections and placements, plus a
+  source-FK-free composite removal tombstone that survives upstream deletion and has an intentionally
+  empty backfill.
+- Added inspect/apply source-update endpoints. They append public note, placement and Subject Plan
+  additions with per-item failure isolation and graceful concurrent no-ops; rename, reorder, retire and
+  move are reported without changing learner state.
+- Added first-class `Detached from source`, explicit already-up-to-date and partial-update responses,
+  including skipped reporting when a source note is no longer public.
+- Added the learner-facing update card with an explicit Apply additions action and ordinary detached
+  presentation; page load only previews the update.
+- Extended Companion staleness visibility to adopted learner plans while preserving both ADMIN and
+  TEACHER curator access through `CuratorAuthoringPredicate`.
+
+**Post-delivery audit (2026-09-05) — Codex stopped at its usage limit; the following was found and closed
+by the auditing session.**
+
+- **⚠️ THE DELIVERED TREE DID NOT BUILD: 11 ERRORS, ONE ROOT CAUSE — THE H2 FIXTURES.** The entities
+  gained the `source_*_at_sync` columns and `V134` adds them to PostgreSQL, but the H2 schemas are
+  **inline DDL hand-maintained inside three test classes** (`NoteCollectionRepositoryTest`,
+  `NoteCollectionItemRepositoryTest`, `NoteCollectionServiceProjectionIntegrationTest`), so every
+  Hibernate `SELECT` over `note_collections` failed with `Column "SOURCE_PARENT_ID_AT_SYNC" not found`.
+  **⚠️ THIS IS THE EXACT FIXTURE-DRIFT CLASS `v0.113.1` ITEM 4 EXISTS FOR, RECURRING ONE RELEASE LATER
+  ON A NEW TABLE** — the fixtures mirror a migration's shape and nothing makes them do so. Columns added
+  to all three; the 12 affected tests pass.
+- **⚠️ A MUTANT SURVIVED THE DELIVERED SUITE, AND IT WAS A SPECIFIED ERROR STATE WITH NO TEST.** Deleting
+  the `existing.isPresent()` early return from the apply path left **all 164 tests green**: the normal
+  flow never reaches that branch, because the diff has already excluded every placement the learner
+  holds, so the guard is pure defence-in-depth against a race that nothing exercised. Without it a
+  concurrent double-apply turns a no-op into a `DataIntegrityViolationException` on
+  `UNIQUE (collection_id, note_id)`. Closed by
+  `sourceUpdate_concurrentApplyLandingFirstMakesTheSecondPassANoOpRatherThanADuplicateInsert`, whose
+  fixture makes the branch reachable the only way production can — the diff computes the placement as
+  MISSING and a concurrent pass lands it first. **A fixture where the placement is absent at both points
+  passes under the defect.** Mutant re-applied and killed by that named test.
+- **⚠️ THE SHARPEST PRE-DECLARED TRAP WAS HANDLED CORRECTLY, AND THIS WAS VERIFIED BY MUTATION RATHER
+  THAN BY READING.** Because `copySourceItems` skips non-public notes and `buildAdoptedItems` renumbers
+  from zero over the survivors, an adopted plan's positions **already diverge from its source's at
+  adoption time**. Drift is computed source-at-sync vs source-now, never source vs learner. Swapping the
+  baseline to the learner's own position was killed by
+  `sourceUpdate_nonPublicSourceGapDoesNotReportLearnerReorder`.
+- **⚠️ THE `v0.115.0` CARRIED LESSON HELD.** A bare `role == ADMIN` substitution for
+  `CuratorAuthoringPredicate.isCurator` — the mutation that survived all 99 tests last release — is now
+  killed by `getGoal_returnsCompanionOutdatedTrueForTeacherCuratorWhenStructureChanged`. ADMIN legs were
+  already covered by pre-existing tests, so all three are pinned.
+- **⚠️ THE BINDING ANTI-DRIFT HELD, CHECKED BY ENUMERATION RATHER THAN BY TRUST:** the entire 806-line
+  service diff contains **exactly three deleted lines**, all required (the `role != ADMIN` check and the
+  two-arg `CopiedPlanItem`). **`adopt()`, its fast idempotency path and its
+  `DataIntegrityViolationException` race recovery are untouched.**
+- **Every column `V134` references was verified to exist** — `note_collections.sibling_position`
+  (`V84:2`), `notes.source_note_id` (`V19:39`), and `title VARCHAR(150)` matching
+  `source_title_at_sync` (`V72:4`). The backfill's
+  `COALESCE(copied_from_note_id, source_note_id)` correctly covers the owner-self-copy case, where
+  `copyNote`'s idempotency guard does not apply because it sits inside `if (!isOwner)`.
+- **Mutants applied: 4. Killed: 4** (one only after the guard above was written), each by a named test.
+- **Verification: `./mvnw clean install` → BUILD SUCCESS, 2132 tests, 0 failures**, counted from
+  `target/surefire-reports/*.xml` after a clean. **`npm test` → 2147 tests, 198 suites, all pass.**
+  **`tsc --noEmit` clean.**
+
+**Known limitations**
+
+- **A hard-deleted source note silently ends the update relationship for that placement, and the two
+  halves cancel rather than duplicating.** `deleteById:478` has **no visibility guard**, so a curator can
+  hard-delete a public source note; `notes.copied_from_note_id` is `ON DELETE SET NULL` (`V21:36`) so the
+  learner's copy loses its provenance link, while `note_collection_items.note_id` is `ON DELETE CASCADE`
+  (`V72:16`) so the source placement disappears too. The diff therefore never sees it as missing and **no
+  duplicate is created.** **⚠️ The residual is delete-then-recreate:** a curator who deletes a note and
+  re-adds equivalent content under a NEW note id produces a second copy beside the learner's orphan.
+  Stated rather than discovered later; it needs no migration to fix and no evidence says it has happened.
+- **The remaining Slice 2 surface is unstarted:** structural updates (Slices 4–5) and the Companion
+  remain deferred, and rename/reorder/retire/move stay surface-only until source-at-sync provenance has
+  production history behind it.
 
 ## v0.115.0 - Learner Publication Authority
 

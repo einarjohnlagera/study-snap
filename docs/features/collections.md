@@ -25,7 +25,7 @@ It is not:
 - a quota bucket
 - a directly shareable object in v1; any onboarded user may create quiz share links, independent of `ProfileType`
 
-Admin-published collections are the v0.31.0 exception: an admin can publish a collection as an adoptable study plan over already-public notes. Learners do not study the source plan directly; adopting creates a private snapshot copy in their own library.
+Admin-published collections are the v0.31.0 exception: an admin can publish a collection as an adoptable study plan over already-public notes. Learners do not study the source plan directly; adopting creates a private learner-owned copy in their own library that retains source identity for learner-chosen additive updates.
 
 The full published catalog is browseable to anonymous visitors both at `/collections/published` and in `/explore`'s default Review Sets tab. Preview and the Adopt affordance stay visible; authentication is gated only when Adopt is clicked. On Explore, that click stores the plan id, Goal-vs-leaf shape, and current Explore query context in the short-lived discovery-intent cookie, then routes to signup without calling the protected adopt endpoint. After verification and onboarding, Dashboard consumes the intent once and performs the existing authenticated adoption. An unavailable source clears the cookie and returns to Explore with a normal notice.
 
@@ -749,7 +749,7 @@ Behavior:
 - each source item is isolated; private, deleted, or otherwise unavailable notes are skipped and counted instead of failing the whole adoption
 - the personal collection is `PRIVATE`, keeps `sourcePlanId={source id}`, mirrors the source title/description/courseProgram/estimatedStudyHours, and preserves copied item order plus labels
 - adoption bills no quota and makes no AI calls
-- `sourcePlanId` is lineage/idempotency only; source edits never sync into adopted personal plans
+- `sourcePlanId` is lineage, first-adopt idempotency and ongoing source identity. Source changes never apply automatically; the separate source-update entry point can append additions after the learner chooses.
 - server analytics fires `STUDY_PLAN_ADOPTED` with `sourcePlanId`, `copiedCount`, `skippedCount`, and `alreadyAdopted`
 - **Ownership badge (frontend, v0.40.1).** An "Adopted" pill shows on the `/collections` list page cards and on a collection's own detail page (in the `PlanHeroCard` badge row, alongside Published/Private) whenever `sourcePlanId != null` — for both a leaf plan and a Goal. Nothing shows for self-created collections (unlabeled implies "yours"). No backend change; `sourcePlanId` already existed on every collection response. Showing the *original author's name* is separate, larger, later work — no `authorDisplayName`/`isOfficial`-type field exists on any collection response today.
 
@@ -778,6 +778,37 @@ Behavior:
 - adoption bills no quota and makes no AI calls
 - adopted notes and plans are immediately editable by the learner, matching leaf-plan adopt semantics
 - server analytics fires `STUDY_GOAL_ADOPTED` with adopted/skipped Subject counts, copied/skipped note totals, and `alreadyAdopted`
+
+### Additive Official Review Set Updates
+
+`GET /collections/{id}/source-update` inspects an owned adoption. It returns an explicit
+`UPDATES_AVAILABLE`, `ALREADY_UP_TO_DATE`, or `DETACHED_FROM_SOURCE` state and lists both additions and
+surface-only upstream changes. `POST /collections/{id}/source-update` is the learner's explicit choice
+to apply the additions. Page load only inspects; it never applies.
+
+| Source change | Behaviour |
+|---|---|
+| Add note, Subject Plan or placement | Offered, then appended when the learner chooses |
+| Rename | Surfaced; learner title/label is unchanged |
+| Reorder | Surfaced; learner order is unchanged |
+| Retire | Surfaced; learner note and history remain |
+| Move | Surfaced; learner structure is unchanged |
+
+The diff follows source placements to learner copies through `notes.copied_from_note_id` (with the
+existing `source_note_id` fallback for curator self-copies). It compares source label and position at the
+last sync with source label and position now. It never compares a source position with a learner
+position: adoption may already have renumbered the learner copy after a non-public source note was
+skipped. New placements append after the learner's current last position.
+
+Each placement copy/insert is isolated and rerunnable. A failed or newly-private note is reported as
+skipped; successful earlier additions remain valid, and the next pass resumes from the remaining set
+difference. A concurrent second insert resolves as a no-op through the collection/item uniqueness
+constraints. Removing an upstream-derived learner placement writes a tombstone, so later passes do not
+re-add it. Updates spend no quota.
+
+When the source collection no longer resolves, the adoption is `Detached from source`. It remains fully
+usable, presents the state as ordinary information, offers no update, and does not create a replacement
+source relationship.
 
 ### Delete Collection
 

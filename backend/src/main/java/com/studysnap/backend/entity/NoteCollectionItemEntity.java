@@ -33,6 +33,15 @@ public class NoteCollectionItemEntity {
     @Column(nullable = false)
     private int position;
 
+    @Column(name = "source_label_at_sync", length = 120)
+    private String sourceLabelAtSync;
+
+    @Column(name = "source_position_at_sync")
+    private Integer sourcePositionAtSync;
+
+    @Column(name = "source_synced_at")
+    private Instant sourceSyncedAt;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 }

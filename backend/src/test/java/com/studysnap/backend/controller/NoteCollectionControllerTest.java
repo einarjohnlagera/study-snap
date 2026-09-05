@@ -10,6 +10,7 @@ import com.studysnap.backend.dto.NoteCollectionDetailResponse;
 import com.studysnap.backend.dto.NoteCollectionSummaryResponse;
 import com.studysnap.backend.dto.NoteConceptCountsResponse;
 import com.studysnap.backend.dto.PlanReadinessResponse;
+import com.studysnap.backend.dto.ReviewSetUpdateResponse;
 import com.studysnap.backend.dto.GoalCollectionDetailResponse;
 import com.studysnap.backend.dto.SetNoteCollectionChildrenOrderRequest;
 import com.studysnap.backend.dto.SetNoteCollectionParentRequest;
@@ -81,6 +82,12 @@ class NoteCollectionControllerTest {
                 .getAnnotation(PreAuthorize.class).value()).isEqualTo(PREAUTHORIZE_ROLES);
         assertThat(NoteCollectionController.class
                 .getMethod("getGoal", String.class, AuthenticatedUser.class)
+                .getAnnotation(PreAuthorize.class).value()).isEqualTo(PREAUTHORIZE_ROLES);
+        assertThat(NoteCollectionController.class
+                .getMethod("getSourceUpdate", String.class, AuthenticatedUser.class)
+                .getAnnotation(PreAuthorize.class).value()).isEqualTo(PREAUTHORIZE_ROLES);
+        assertThat(NoteCollectionController.class
+                .getMethod("applySourceUpdate", String.class, AuthenticatedUser.class)
                 .getAnnotation(PreAuthorize.class).value()).isEqualTo(PREAUTHORIZE_ROLES);
         assertThat(NoteCollectionController.class
                 .getMethod("updateMetadata", String.class, UpdateNoteCollectionRequest.class, AuthenticatedUser.class)
@@ -375,6 +382,26 @@ class NoteCollectionControllerTest {
 
         assertThat(result).isEqualTo(response);
         verify(service).adoptGoal(UUID.fromString(COLLECTION_ID), user.userId());
+    }
+
+    @Test
+    void sourceUpdateEndpoints_delegateInspectionAndExplicitApplication() {
+        NoteCollectionController controller = new NoteCollectionController(service, adaptivePracticeService);
+        AuthenticatedUser user = authenticatedUser();
+        UUID collectionId = UUID.fromString(COLLECTION_ID);
+        ReviewSetUpdateResponse preview = new ReviewSetUpdateResponse(
+                collectionId, "CONNECTED", "UPDATES_AVAILABLE", 1, 0, 0, 0, List.of()
+        );
+        ReviewSetUpdateResponse applied = new ReviewSetUpdateResponse(
+                collectionId, "CONNECTED", "UPDATED", 0, 1, 0, 0, List.of()
+        );
+        when(service.getSourceUpdate(collectionId, user.userId())).thenReturn(preview);
+        when(service.applySourceUpdate(collectionId, user.userId())).thenReturn(applied);
+
+        assertThat(controller.getSourceUpdate(COLLECTION_ID, user)).isEqualTo(preview);
+        assertThat(controller.applySourceUpdate(COLLECTION_ID, user)).isEqualTo(applied);
+        verify(service).getSourceUpdate(collectionId, user.userId());
+        verify(service).applySourceUpdate(collectionId, user.userId());
     }
 
     @Test
