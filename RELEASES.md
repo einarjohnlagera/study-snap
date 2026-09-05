@@ -139,7 +139,58 @@ inline** for B3-B5.
 
 ### Shipped
 
-_(nothing yet)_
+- **B1 — the batch driver, its per-item record and the only migration (backend, PR #1288).**
+  `V135__note_bulk_regeneration_items.sql` adds `note_bulk_regeneration_item`, one row per item written
+  **as that item resolves** rather than a terminal blob, so a batch killed by a routine deploy keeps
+  everything it had already completed. `NoteBulkRegenerationService` drives items sequentially on its
+  own `bulkRegenerationTaskExecutor` (2/2/8) — `studyPackGenerationTaskExecutor` stays **2/2/100 and
+  untouched**, so the batch loop no longer occupies one of the two threads its own items need. The
+  500 ms throttle, the 50-item cap (under its own `note.bulk-regeneration.max-notes` key) and
+  continue-on-failure all behave as `§C`/`§D`/`§K` specify.
+  - **The outer-catch defect is not reproduced.** `NoteBulkGenerationService:232-246` rewrites *every*
+    topic as failed on an interruption while `created_count` keeps its partial value; the new driver
+    stops and touches nothing already recorded. Pinned by a guard that completes an item **before**
+    interrupting — a batch interrupted before anything finished passes under the defect.
+  - **Per-Note guards re-run at item start.** The preflight snapshot is never trusted: a Note that goes
+    `GENERATING` between preflight and its turn lands `BLOCKED` with a reason, never skipped and never
+    counted as regenerated. Quota exhaustion mid-batch is `BLOCKED`, not `FAILED`. A deleted Note is
+    `NOT_RUN`.
+  - **The item verdict is read from persisted `notes.status`, not from "the call did not throw."**
+    `generateStudyPackFromExistingNoteAsync` catches `Exception`, marks the note `FAILED` and returns
+    normally, so an outcome inferred from a clean return would report every async failure as a success —
+    `processItem`'s defect in a new file. Found by the implementing agent reading the code, not assumed.
+- **B2 — deterministic preflight (backend, PR #1288).** `POST /notes/regenerate/preflight` returns
+  per-Note readiness plus `§G`'s two exact counts (public Notes affected; live shared quizzes that will
+  be turned off, exact because `uq_generated_quizzes_note_id` gives one row per note).
+  `NoteRegenerationReadinessService` is the **single** guard implementation both preflight and the driver
+  call, so the two cannot drift. **"Review recommended" stays omitted** — a Note with a NULL Domain
+  Context and one program is fully generation-ready, so the state would require judging metadata quality.
+- **Metering.** A TEACHER curator's batch is metered normally under the settled block-and-reduce policy;
+  the ADMIN-only bypass is **not** widened to TEACHER. `startAsyncNoteAndStudyPackRegeneration` gained an
+  additive `enforceLimits` overload so bulk applies the same `role() != ADMIN` expression bulk
+  *generation* already applies at `NoteController:187` — the two-argument entry point that
+  `POST /notes/{id}/regenerate` uses still passes `true`, so v0.118.0's single-Note contract is
+  unchanged. An over-quota selection is rejected **422 before dispatch**, carrying how many notes to
+  remove.
+- **Not reachable from the UI.** Neither endpoint has an entry point; the Library selection intent, the
+  confirmation modal and the receipt are B3-B5. Irreversible content replacement across dozens of
+  canonical Notes must not be reachable without them.
+
+### Known limitations (B1/B2)
+
+- **Nothing sweeps a lost batch.** A driver thread killed mid-loop leaves `RUNNING`/`PENDING` rows until
+  the 24 h TTL expires them. The asymmetry is deliberate and recorded in code: `GenerationRecoveryService`
+  heals the stranded *note* at 120 minutes, so the note self-heals while its batch row does not. B5 must
+  render a `RUNNING` row older than the TTL as indeterminate rather than as in-flight.
+- **`writeItem` is find-then-save with no lock** against the unique `(batch_id, note_id)`. Safe in B1
+  because one driver thread owns a batch, but **B5's retry must mint a new batch id or make the write
+  conditional** — otherwise a retry running beside a timed-out worker gives one pair two writers and the
+  loser's constraint violation is swallowed.
+- **A note that is not the caller's reads `NOT_ELIGIBLE` in preflight and `NOT_RUN` in the driver** —
+  the same miss, named for when it is seen. B5 should collapse them if it renders both.
+- **`§J` row 10 (share-link deactivation fails after commit) is unreachable** in Phase 1's shape: the
+  deactivation is inside the single commit, so a failure rolls the whole item back. Its "record the
+  warning" path is deliberately not built.
 
 ## v0.118.0 - Note and Study Pack Regeneration
 

@@ -134,6 +134,8 @@ class NoteControllerTest {
                 org.mockito.Mockito.mock(com.studysnap.backend.service.NoteShareService.class),
                 noteBulkImportService,
                 noteBulkGenerationService,
+                org.mockito.Mockito.mock(com.studysnap.backend.service.NoteBulkRegenerationService.class),
+                org.mockito.Mockito.mock(com.studysnap.backend.service.NoteRegenerationPreflightService.class),
                 noteGenerationService,
                 noteTextExtractionService,
                 studyPackService,

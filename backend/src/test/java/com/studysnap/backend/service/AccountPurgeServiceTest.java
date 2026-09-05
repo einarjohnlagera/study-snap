@@ -121,6 +121,9 @@ class AccountPurgeServiceTest {
     private VoucherRedemptionRepository voucherRedemptionRepository;
 
     private StudySnapProperties properties;
+    @Mock
+    private com.studysnap.backend.repository.NoteBulkRegenerationItemRepository noteBulkRegenerationItemRepository;
+
     private AccountPurgeService accountPurgeService;
 
     @BeforeEach
@@ -139,6 +142,7 @@ class AccountPurgeServiceTest {
                 memorizationCardRepository,
                 activityEventRepository,
                 bulkGenerationResultRepository,
+                noteBulkRegenerationItemRepository,
                 quizShareLinkRepository,
                 publicNoteLikeRepository,
                 userLibraryFilterRepository,
@@ -202,6 +206,9 @@ class AccountPurgeServiceTest {
         verify(memorizationCardRepository).deleteByUserId(userId);
         verify(activityEventRepository).deleteByUserId(userId);
         verify(bulkGenerationResultRepository).deleteByOwnerUserId(userId);
+        // GUARD 8: the bulk regeneration receipt is personal data and must be purged with the
+        // account, exactly like the bulk generation one directly above it.
+        verify(noteBulkRegenerationItemRepository).deleteByOwnerUserId(userId);
         verify(publicNoteLikeRepository).deleteByUserId(userId);
         verify(userLibraryFilterRepository).deleteByUserId(userId);
         verify(userUsageRepository).deleteByUserId(userId);

@@ -17,6 +17,10 @@ import com.studysnap.backend.dto.RecentQuizSessionHistoryResponse;
 import com.studysnap.backend.dto.BulkImportResultResponse;
 import com.studysnap.backend.dto.BulkGenerateNotesRequest;
 import com.studysnap.backend.dto.BulkGenerateNotesResponse;
+import com.studysnap.backend.dto.BulkRegenerateNotesRequest;
+import com.studysnap.backend.dto.BulkRegenerateNotesResponse;
+import com.studysnap.backend.dto.NoteRegenerationPreflightRequest;
+import com.studysnap.backend.dto.NoteRegenerationPreflightResponse;
 import com.studysnap.backend.dto.ExtractedNoteTextResponse;
 import com.studysnap.backend.dto.GeneratedQuizResponse;
 import com.studysnap.backend.dto.GenerateGeneratedQuizRequest;
@@ -54,6 +58,8 @@ import com.studysnap.backend.service.ChallengeQuizService;
 import com.studysnap.backend.service.GeneratedQuizService;
 import com.studysnap.backend.service.NoteBulkImportService;
 import com.studysnap.backend.service.NoteBulkGenerationService;
+import com.studysnap.backend.service.NoteBulkRegenerationService;
+import com.studysnap.backend.service.NoteRegenerationPreflightService;
 import com.studysnap.backend.service.NoteService;
 import com.studysnap.backend.service.NoteShareService;
 import com.studysnap.backend.service.NoteGenerationService;
@@ -125,6 +131,8 @@ public class NoteController {
     private final NoteShareService noteShareService;
     private final NoteBulkImportService noteBulkImportService;
     private final NoteBulkGenerationService noteBulkGenerationService;
+    private final NoteBulkRegenerationService noteBulkRegenerationService;
+    private final NoteRegenerationPreflightService noteRegenerationPreflightService;
     private final NoteGenerationService noteGenerationService;
     private final NoteTextExtractionService noteTextExtractionService;
     private final StudyPackService studyPackService;
@@ -174,6 +182,52 @@ public class NoteController {
     ) {
         UUID userId = user.userId();
         return noteBulkImportService.importBatch(userId, files);
+    }
+
+    /**
+     * Deterministic preflight for a bulk regeneration selection: per-Note readiness plus the aggregate
+     * consequence and quota counts.
+     *
+     * <p>⚠️ POST rather than GET because the selection is a list of up to 50 ids, and the existing
+     * {@code GET /notes/library/ids} is what produces it. Nothing is written and nothing is dispatched.
+     *
+     * <p>⚠️ {@code enforceLimits} is the SAME expression bulk generation uses. It is not widened, and it
+     * is passed so the preflight tells a metered TEACHER curator the truth about their allowance before
+     * they commit.
+     */
+    @PostMapping("/regenerate/preflight")
+    @PreAuthorize("hasAnyRole('USER','ADMIN')")
+    public NoteRegenerationPreflightResponse regeneratePreflight(
+            @RequestBody NoteRegenerationPreflightRequest request,
+            @AuthenticationPrincipal AuthenticatedUser user
+    ) {
+        UUID userId = user.userId();
+        authService.requireEmailVerified(userId);
+        boolean enforceLimits = user.role() != UserRole.ADMIN;
+        return noteRegenerationPreflightService.preflight(request, userId, enforceLimits);
+    }
+
+    /**
+     * Queues a bulk regeneration batch.
+     *
+     * <p>⚠️ NOT REACHABLE FROM THE UI YET, exactly as {@code NOTE_AND_STUDY_PACK} on the single-Note
+     * route was when it shipped: the Library selection intent, the confirmation modal and the receipt
+     * are later slices, and irreversible content replacement across dozens of canonical Notes must not
+     * be reachable without them.
+     *
+     * <p>⚠️ The over-quota rejection is a 422 raised inside {@code queueBatch} BEFORE anything is
+     * dispatched, carrying how many notes to remove.
+     */
+    @PostMapping("/bulk-regenerate")
+    @PreAuthorize("hasAnyRole('USER','ADMIN')")
+    public BulkRegenerateNotesResponse bulkRegenerate(
+            @RequestBody BulkRegenerateNotesRequest request,
+            @AuthenticationPrincipal AuthenticatedUser user
+    ) {
+        UUID userId = user.userId();
+        authService.requireEmailVerified(userId);
+        boolean enforceLimits = user.role() != UserRole.ADMIN;
+        return noteBulkRegenerationService.queueBatch(request, userId, enforceLimits);
     }
 
     @PostMapping("/bulk-generate")
