@@ -894,6 +894,7 @@ public class NoteCollectionService {
             return alreadyAdoptedGoalResponse(userId, sourceGoalId, persistedGoal.collection());
         }
 
+        LocalDate earliestChildTargetDate = null;
         int adoptedSubjectCount = 0;
         int skippedSubjectCount = 0;
         int totalNotesCopied = 0;
@@ -916,6 +917,15 @@ public class NoteCollectionService {
                 child.setSiblingPosition(index);
                 // Same invariant as updateParent(): a collection that becomes a child must not
                 // keep carrying targetCompletionDate or Companion, both top-level-Goal-only fields.
+                // ⚠️ THE INVARIANT IS REAL; SILENTLY DESTROYING THE LEARNER'S OWN DATE WAS NOT. This
+                // branch runs on a PRE-EXISTING standalone adoption (findByOwnerUserIdAndSourcePlanId
+                // above finds an existing row, not a fresh copy), so the date being cleared here is one
+                // the learner set for themselves. It is carried up to the Goal below rather than lost.
+                if (child.getTargetCompletionDate() != null
+                        && (earliestChildTargetDate == null
+                            || child.getTargetCompletionDate().isBefore(earliestChildTargetDate))) {
+                    earliestChildTargetDate = child.getTargetCompletionDate();
+                }
                 child.setTargetCompletionDate(null);
                 child.setCompanion(null);
                 child.setCompanionStructureSnapshot(null);
@@ -927,6 +937,17 @@ public class NoteCollectionService {
             }
         }
 
+        // ⚠️ THE LEARNER'S OWN EXAM DATE IS PROMOTED, NOT DISCARDED. A Subject Plan they adopted
+        // standalone may already carry a date they chose; nesting it under a Goal clears that field by
+        // an invariant this code does not get to relax. The earliest such date wins, because a
+        // completion target is a DEADLINE and the nearest one is the binding one. A Goal that already
+        // has its own date keeps it -- a freshly adopted Goal never copies one (persistAdoptedGoal
+        // leaves it null deliberately), so in practice this fills an empty field rather than competing.
+        if (earliestChildTargetDate != null && persistedGoal.collection().getTargetCompletionDate() == null) {
+            persistedGoal.collection().setTargetCompletionDate(earliestChildTargetDate);
+            touch(persistedGoal.collection());
+            collectionRepository.save(persistedGoal.collection());
+        }
         // After the children exist, so the baseline records child ids rather than an empty structure.
         stampCompanionBaseline(persistedGoal.collection(), userId);
         trackStudyGoalAdopted(
