@@ -917,10 +917,15 @@ public class NoteCollectionService {
                 child.setSiblingPosition(index);
                 // Same invariant as updateParent(): a collection that becomes a child must not
                 // keep carrying targetCompletionDate or Companion, both top-level-Goal-only fields.
-                // ⚠️ THE INVARIANT IS REAL; SILENTLY DESTROYING THE LEARNER'S OWN DATE WAS NOT. This
-                // branch runs on a PRE-EXISTING standalone adoption (findByOwnerUserIdAndSourcePlanId
-                // above finds an existing row, not a fresh copy), so the date being cleared here is one
-                // the learner set for themselves. It is carried up to the Goal below rather than lost.
+                // ⚠️ THE INVARIANT IS REAL; SILENTLY DESTROYING THE LEARNER'S OWN DATE WAS NOT. The
+                // date cleared here can only ever be one the LEARNER set: adopt() above may have just
+                // created this child, but persistAdoptedPlan never copies targetCompletionDate from the
+                // source, so a freshly copied child's date is always null. A non-null date therefore
+                // means a pre-existing standalone adoption the learner dated themselves. It is carried
+                // up to the Goal below rather than lost.
+                // (Corrected 2026-09-05: an earlier version of this comment claimed the branch runs
+                // only on pre-existing rows, which is false — adopt() at :906 feeds it fresh copies too.
+                // The conclusion survives; the reason it survives is the null-copy above, not the path.)
                 if (child.getTargetCompletionDate() != null
                         && (earliestChildTargetDate == null
                             || child.getTargetCompletionDate().isBefore(earliestChildTargetDate))) {
