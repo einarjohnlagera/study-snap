@@ -1,5 +1,10 @@
 # AGENTS.md - NoteLib
 
+**v0.116.0 implementation note:** additive Review Set drift compares source facts at last sync with the
+source now. Never compare source label/position with the learner placement, because adoption may already
+have renumbered after filtering. Updates append additions only; learner removal writes the composite
+source-placement tombstone, and rename/reorder/retire/move remain surface-only.
+
 **v0.105.0 implementation note:** `ExamSourceLimitResolver` still owns the sole `questionCount / 3`
 formula, but for Long Exam it now means **how many sources we sample from the eligible curriculum pool**,
 not how many notes a learner may pick. A plan-sourced **Long Exam** remains anchored on the caller-supplied

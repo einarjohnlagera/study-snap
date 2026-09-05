@@ -8,6 +8,36 @@ This document defines the NoteLib data model direction for the note-first produc
 - Database schema/table names are preserved unless explicitly migrated.
 - Legacy table names such as `study_packs` may remain while domain ownership shifts to Notes.
 
+## Adopted Review Set Source Provenance
+
+An adopted Official Review Set is a learner-owned collection with an ongoing source relationship in
+`note_collections.source_plan_id`. The learner's notes, Study Packs, ordering, labels and study history
+remain independent. Source provenance exists only to compute and offer additive curriculum updates.
+
+`note_collections` records the source Subject Plan or Goal facts seen at the last successful sync:
+
+- `source_title_at_sync VARCHAR(150)`
+- `source_parent_id_at_sync UUID`
+- `source_position_at_sync INTEGER`, nullable and constrained non-negative
+- `source_synced_at TIMESTAMPTZ`
+
+`note_collection_items` records the source placement facts seen at the last successful sync:
+
+- `source_label_at_sync VARCHAR(120)`
+- `source_position_at_sync INTEGER`, nullable and constrained non-negative
+- `source_synced_at TIMESTAMPTZ`
+
+The source note identity remains `notes.copied_from_note_id`; curator self-copies use the already-stored
+`notes.source_note_id` fallback. Placement identity is the pair `(source Subject Plan, source Note)`.
+There is no surrogate source-placement id and no title matching. Drift compares a saved source fact with
+the current source fact. A learner item's current label and position are never inputs to that comparison.
+
+`note_collection_item_removals` is the prospective learner-removal tombstone. Its composite primary key
+is `(adopted_collection_id, source_plan_id, source_note_id)`, with `removed_at TIMESTAMPTZ`. The adopted
+collection FK cascades on deletion. Source ids deliberately have no FKs so the tombstone survives source
+retirement or deletion and continues to prevent re-adding an intentionally removed placement. `V134`
+performs no tombstone backfill.
+
 ## Core Entity: Note
 
 `notes` is the primary product entity.
