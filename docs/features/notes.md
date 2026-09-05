@@ -206,6 +206,35 @@ Profiles private confirm:
 - body: `You need to make this profile public before sharing. Anyone with the link will be able to view your public profile and notes.`
 - buttons: `Cancel` / `Make Public & Share`
 
+## Editing is blocked while a note is generating (v0.118.0)
+
+`PUT /notes/{id}` rejects with **409 `NOTE_GENERATION_IN_PROGRESS`** when the note's status is
+`GENERATING`. The stored content is unchanged, and the frontend surfaces a clear message **without
+discarding what the user typed** — a rejected save here is a timing problem, not a validation one.
+
+**⚠️ This closes a pre-existing race; it is not a new restriction.** `NoteService.update` had no status
+guard at all, so a note could already be edited mid-Study-Pack-generation and silently lose the edit
+when the generation transaction committed.
+
+**⚠️ It is also the narrowest rule this endpoint's contract permits — do not "simplify" it to a
+metadata-only exemption.** Two independent reasons:
+
+1. `PUT /notes/{id}` is the **only** note content/metadata endpoint and it is a single upsert with
+   **mandatory content** (`normalizeRequiredContent` throws `EMPTY_NOTE_CONTENT` on a blank body), so a
+   metadata-only edit is **not expressible** — every metadata save necessarily rewrites `content`.
+2. `saveStudyPack` re-reads the note's **Subject inside the commit transaction**, so a Subject edit
+   landing mid-generation would label the new Study Pack with a Subject its content was never generated
+   under.
+
+**Deliberately NOT blocked:** `PUT /notes/{id}/shares`, visibility changes, and collection/section
+placement. None is read by generation and none is written at commit.
+
+Note Detail's inline metadata editor and the note-actions `Edit` item are already unreachable while a
+note is generating (the menu item is disabled, and the `?edit=1` deep link declines because a generating
+note is never `STUDY_PACK_READY`). The reachable path is the full editor at `/notes/{id}/edit`, entered
+on a `DRAFT` note whose first Study Pack is still generating — that surface maps the 409 to a legible
+message and keeps the draft.
+
 ## Create and edit behavior
 
 Create mode:

@@ -8,16 +8,45 @@ import com.studysnap.backend.entity.LinkedLearnerRelationshipEntity;
 import com.studysnap.backend.entity.LinkedLearnerSide;
 import com.studysnap.backend.entity.LinkedLearnerStatus;
 import com.studysnap.backend.entity.NoteVisibility;
+import com.studysnap.backend.entity.PlanType;
 import com.studysnap.backend.entity.NoteEntity;
 import com.studysnap.backend.entity.NoteStatus;
 import com.studysnap.backend.dto.AcceptLinkedLearnerRequest;
+import com.studysnap.backend.security.AiRateLimitService;
+import com.studysnap.backend.security.OcrRateLimitService;
+import com.studysnap.backend.service.ActivityTrackingService;
+import com.studysnap.backend.service.AnalyticsService;
 import com.studysnap.backend.service.AuthService;
+import com.studysnap.backend.service.BillingUsagePeriodService;
+import com.studysnap.backend.service.ConceptHealthService;
+import com.studysnap.backend.service.ContentModerationService;
 import com.studysnap.backend.service.EmailService;
+import com.studysnap.backend.service.ExamQuestionPoolService;
+import com.studysnap.backend.service.ExportUsageProtectionService;
+import com.studysnap.backend.service.FeatureGateService;
+import com.studysnap.backend.service.GeneratedQuizService;
 import com.studysnap.backend.service.EmailTemplateService;
 import com.studysnap.backend.service.GuardianConsentPolicy;
 import com.studysnap.backend.service.LinkedLearnerService;
+import com.studysnap.backend.service.LlmStudyPackService;
+import com.studysnap.backend.service.NoteGenerationService;
+import com.studysnap.backend.service.NoteGenerationUsageProtectionService;
+import com.studysnap.backend.service.NoteShareService;
+import com.studysnap.backend.service.OcrService;
+import com.studysnap.backend.service.OcrUsageProtectionService;
+import com.studysnap.backend.service.OfficialChallengeQuizTemplateService;
 import com.studysnap.backend.service.OnboardingGuardService;
+import com.studysnap.backend.service.QuizDocxExportService;
+import com.studysnap.backend.service.QuizGenerationService;
 import com.studysnap.backend.service.StudyPackGenerationContextResolver;
+import com.studysnap.backend.service.StudyPackGenerationTaskDispatcher;
+import com.studysnap.backend.service.StudyPackQuizMasteryService;
+import com.studysnap.backend.service.StudyPackService;
+import com.studysnap.backend.service.StudyPackUsageService;
+import com.studysnap.backend.service.SubscriptionService;
+import com.studysnap.backend.service.UserUsageService;
+import com.studysnap.backend.service.model.GeneratedStudyPackContent;
+import com.studysnap.backend.service.model.StudyPackGenerationContext;
 import com.studysnap.backend.service.jobs.LinkedLearnerRequestExpiryWorker;
 import com.studysnap.backend.exception.LinkedLearnerBirthYearRequiredException;
 import com.studysnap.backend.exception.LinkedLearnerInvalidStateException;
@@ -57,6 +86,7 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.io.IOException;
+import java.math.BigDecimal;
 import java.lang.reflect.Method;
 import java.net.URI;
 import java.time.OffsetDateTime;
@@ -77,6 +107,9 @@ import java.util.concurrent.TimeUnit;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.tuple;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 
 /**
@@ -146,6 +179,24 @@ class NativeQueryPostgresIntegrationTest {
 
     @Autowired
     private LinkedLearnerInvitationLinkRepository invitationLinkRepository;
+
+    @Autowired
+    private NoteRepository noteRepository;
+
+    @Autowired
+    private StudyPackRepository studyPackRepository;
+
+    @Autowired
+    private GeneratedQuizRepository generatedQuizRepository;
+
+    @Autowired
+    private QuizShareLinkRepository quizShareLinkRepository;
+
+    @Autowired
+    private SubscriptionRepository subscriptionRepository;
+
+    @Autowired
+    private ConceptHealthRepository conceptHealthRepository;
 
     @Autowired
     private PlatformTransactionManager transactionManager;
@@ -2216,4 +2267,481 @@ class NativeQueryPostgresIntegrationTest {
         )).isZero();
     }
 
+    // ------------------------------------------------------------------------------------------------
+    // v0.118.0 — Note + Study Pack regeneration. Guards 1, 2, 3 and 11 assert PERSISTED state.
+    //
+    // ⚠️ WHY THESE LIVE HERE AND NOT IN StudyPackServiceTest. Guard 2 says "both meters unchanged after a
+    // failure". With MockitoExtension the only way to write that is verify(userUsageService, never()),
+    // which asserts a CALL and passes under a version that charges through some other path. These read the
+    // counter columns back out of PostgreSQL instead.
+    //
+    // ⚠️ EVERY ONE OF THEM IS @Transactional(propagation = NOT_SUPPORTED), AND THAT IS LOAD-BEARING, NOT
+    // STYLE. Under @DataJpaTest's default rollback transaction, dispatchAfterCommit registers an
+    // afterCommit synchronization that NEVER FIRES, so the async worker would never run and a guard
+    // asserting "content unchanged / meters unchanged" would pass because NOTHING HAPPENED AT ALL.
+    // ------------------------------------------------------------------------------------------------
+
+    /**
+     * GUARD 1 + GUARD 2 (pre-declared). The pairing invariant and quota-on-failure, in one run.
+     *
+     * <p>The fixture is the one that discriminates: <strong>note content generation SUCCEEDS and Study Pack
+     * generation then FAILS</strong> — row 4 of the failure matrix. A fixture whose generation succeeds
+     * passes under both the defect and the fix and proves nothing.
+     *
+     * <p>Asserted: the note's original {@code content} and the original {@code study_packs} row (id, title,
+     * summary, key_concepts, quiz) survive, and BOTH persisted meters are still zero.
+     *
+     * <p>⚠️ Deliberately NOT asserted: {@code notes.status} and {@code notes.updated_at}. The request thread
+     * legitimately writes GENERATING/enqueued/updated before dispatch and the failure path legitimately
+     * writes FAILED — that is already true of today's Study Pack regeneration, and asserting otherwise
+     * would invite "fixing" production to match the test.
+     */
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void failedStudyPackGenerationLeavesTheOriginalNoteContentPackAndBothMetersUntouched() {
+        UUID owner = seedUser("regen-pairing");
+        UUID noteId = seedRegenerationNote(owner, "Shear and Moment Diagrams", "ORIGINAL BODY, hand written.");
+        UUID packId = seedStudyPack(owner, noteId, "Original pack title");
+
+        RegenerationHarness harness = new RegenerationHarness();
+        harness.noteContent = "Regenerated body that must never be persisted.";
+        harness.studyPackFailure = new IllegalStateException("study pack generation exploded");
+
+        harness.service().startAsyncNoteAndStudyPackRegeneration(noteId.toString(), owner);
+
+        assertThat(readNoteColumn(noteId, "content"))
+                .as("the note keeps its ORIGINAL content when the Study Pack half fails")
+                .isEqualTo("ORIGINAL BODY, hand written.");
+        assertThat(jdbcTemplate.queryForMap("select id, title, summary, key_concepts::text as key_concepts,"
+                + " quiz::text as quiz from study_packs where id = ?", packId))
+                .as("the original Study Pack row is untouched")
+                .containsEntry("id", packId)
+                .containsEntry("title", "Original pack title")
+                .containsEntry("summary", "summary")
+                .containsEntry("key_concepts", "[]")
+                .containsEntry("quiz", "[]");
+        assertThat(jdbcTemplate.queryForObject(
+                "select count(*) from study_packs where note_id = ?", Integer.class, noteId))
+                .as("no second Study Pack row was minted")
+                .isOne();
+
+        assertThat(persistedUsage(owner, "note_generations"))
+                .as("GUARD 2: the note-generation meter is not charged for a run that failed")
+                .isZero();
+        assertThat(persistedUsage(owner, "study_pack_generations"))
+                .as("GUARD 2: the Study Pack meter is not charged for a run that failed")
+                .isZero();
+    }
+
+    /**
+     * GUARD 3 (pre-declared) — identity preservation on a SUCCESSFUL run, plus the positive half of
+     * guard 2 without which guard 2 could pass vacuously (a build that never charges anything at all).
+     */
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void successfulRegenerationPreservesNoteAndPackIdentityAndChargesBothMetersExactlyOnce() {
+        UUID owner = seedUser("regen-identity");
+        UUID noteId = seedRegenerationNote(owner, "Reinforced Concrete Design", "Old body.");
+        UUID packId = seedStudyPack(owner, noteId, "Old pack title");
+        UUID collectionId = seedCollection(owner, "Structural plan");
+        jdbcTemplate.update(
+                "insert into note_collection_items (id, collection_id, note_id, position, label, created_at)"
+                        + " values (?, ?, ?, 7, 'Structural Analysis', now())",
+                UUID.randomUUID(), collectionId, noteId);
+        OffsetDateTime createdAtBefore = jdbcTemplate.queryForObject(
+                "select created_at from notes where id = ?", OffsetDateTime.class, noteId);
+
+        // ⚠️ MULTI-LINE ON PURPOSE, AND IT IS WHAT MAKES THIS ASSERTION DISCRIMINATING. A generated note
+        // body is a structured document (title, blank line, section headers, bullet lines), and the note
+        // body is persisted trimmed-only while the Study Pack's source text is whitespace-collapsed. A
+        // single-line fixture is byte-identical under both, so it passes whether or not the note is
+        // flattened — which is exactly how the flattening reached this test suite green in the first place.
+        String generatedBody = String.join("\n",
+                "Development Length of Reinforced Bars",
+                "",
+                "📘 Overview",
+                "Development length is the embedment needed to yield a bar.",
+                "",
+                "⚔️ Core Details",
+                "- Bond stress governs the transfer.",
+                "- Hooks reduce the required straight length.");
+
+        RegenerationHarness harness = new RegenerationHarness();
+        harness.noteContent = generatedBody;
+        harness.service().startAsyncNoteAndStudyPackRegeneration(noteId.toString(), owner);
+
+        assertThat(readNoteColumn(noteId, "content"))
+                .as("the note's content really was replaced, with its line structure intact")
+                .isEqualTo(generatedBody);
+        assertThat(readNoteColumn(noteId, "content"))
+                .as("the body is NOT whitespace-collapsed the way the Study Pack's source text is")
+                .contains("\n\n📘 Overview\n");
+        assertThat(jdbcTemplate.queryForObject(
+                "select count(*) from notes where id = ?", Integer.class, noteId))
+                .as("notes.id survives — regeneration mutates columns, never identity")
+                .isOne();
+        assertThat(jdbcTemplate.queryForObject(
+                "select created_at from notes where id = ?", OffsetDateTime.class, noteId))
+                .as("notes.created_at is never rewritten")
+                .isEqualTo(createdAtBefore);
+        assertThat(jdbcTemplate.queryForObject(
+                "select id from study_packs where note_id = ?", UUID.class, noteId))
+                .as("study_packs.id survives — saveStudyPack mutates the row in place")
+                .isEqualTo(packId);
+        assertThat(jdbcTemplate.queryForObject(
+                "select title from study_packs where id = ?", String.class, packId))
+                .as("the pack really was regenerated")
+                .isEqualTo("Regenerated pack");
+
+        Map<String, Object> placement = jdbcTemplate.queryForMap(
+                "select position, label from note_collection_items where note_id = ?", noteId);
+        assertThat(placement)
+                .as("the note keeps its place in the Study Plan, with position AND label")
+                .containsEntry("position", 7)
+                .containsEntry("label", "Structural Analysis");
+
+        assertThat(persistedUsage(owner, "note_generations"))
+                .as("the note-generation meter IS charged, exactly once, on success")
+                .isOne();
+        assertThat(persistedUsage(owner, "study_pack_generations"))
+                .as("the Study Pack meter IS charged, exactly once, on success")
+                .isOne();
+    }
+
+    /**
+     * GUARD 11 (pre-declared). Every previously-active share link for the note is DEACTIVATED and every
+     * row still EXISTS. Deleting would force the owner to mint a new link and spend share-link quota —
+     * punishing them for our fix.
+     *
+     * <p>Two active links, not one: {@code createShareLink} mints a new row over an inactive one and
+     * {@code findActiveLink} accepts ANY active token, so a version that deactivated only the newest would
+     * leave the defect reachable through the other.
+     */
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void successfulRegenerationDeactivatesEveryLiveShareLinkAndDeletesNone() {
+        UUID owner = seedUser("regen-sharelinks");
+        UUID noteId = seedRegenerationNote(owner, "Fluid Mechanics", "Old body.");
+        seedStudyPack(owner, noteId, "Old pack title");
+        UUID generatedQuizId = UUID.randomUUID();
+        jdbcTemplate.update(
+                "insert into generated_quizzes (id, owner_user_id, note_id, questions, generated_at, updated_at)"
+                        + " values (?, ?, ?, '[]'::jsonb, now(), now())", generatedQuizId, owner, noteId);
+        UUID activeOne = seedQuizShareLink(generatedQuizId, owner, "regen-link-active-one", true);
+        UUID activeTwo = seedQuizShareLink(generatedQuizId, owner, "regen-link-active-two", true);
+        UUID alreadyOff = seedQuizShareLink(generatedQuizId, owner, "regen-link-already-off", false);
+
+        RegenerationHarness harness = new RegenerationHarness();
+        harness.noteContent = "Freshly generated body.";
+        harness.service().startAsyncNoteAndStudyPackRegeneration(noteId.toString(), owner);
+
+        assertThat(jdbcTemplate.queryForObject(
+                "select count(*) from quiz_share_links where generated_quiz_id = ?", Integer.class, generatedQuizId))
+                .as("DEACTIVATED, never deleted — all three rows survive")
+                .isEqualTo(3);
+        assertThat(readShareLinkActive(activeOne)).as("first live link is off").isFalse();
+        assertThat(readShareLinkActive(activeTwo)).as("second live link is off too, not just the newest").isFalse();
+        assertThat(readShareLinkActive(alreadyOff)).as("an already-inactive link stays inactive").isFalse();
+    }
+
+    /** GUARD 11, second half: a note with a quiz but no live links is a clean no-op, not an error. */
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void regenerationWithNoLiveShareLinksIsACleanNoOp() {
+        UUID owner = seedUser("regen-nolinks");
+        UUID noteId = seedRegenerationNote(owner, "Hydraulics", "Old body.");
+        seedStudyPack(owner, noteId, "Old pack title");
+        jdbcTemplate.update(
+                "insert into generated_quizzes (id, owner_user_id, note_id, questions, generated_at, updated_at)"
+                        + " values (?, ?, ?, '[]'::jsonb, now(), now())", UUID.randomUUID(), owner, noteId);
+
+        RegenerationHarness harness = new RegenerationHarness();
+        harness.noteContent = "Freshly generated body.";
+        harness.service().startAsyncNoteAndStudyPackRegeneration(noteId.toString(), owner);
+
+        assertThat(readNoteColumn(noteId, "content")).isEqualTo("Freshly generated body.");
+        assertThat(readNoteColumn(noteId, "status")).isEqualTo("GENERATED");
+    }
+
+    /**
+     * GUARD 4. Existing learner copies are byte-identical after the canonical note is regenerated. There is
+     * no propagation mechanism and there must never be one — this pins the absence.
+     */
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void regeneratingACanonicalNoteLeavesEveryLearnerCopyByteIdentical() {
+        UUID owner = seedUser("regen-copy-owner");
+        UUID copier = seedUser("regen-copy-learner");
+        UUID noteId = seedRegenerationNote(owner, "Steel Design", "Canonical body.");
+        seedStudyPack(owner, noteId, "Old pack title");
+        UUID copyId = UUID.randomUUID();
+        jdbcTemplate.update(
+                "insert into notes (id, owner_user_id, title, content, visibility, tags, target_profile_type,"
+                        + " status, copied_from_note_id, created_at, updated_at)"
+                        + " values (?, ?, 'Steel Design', 'Canonical body.', 'PRIVATE', '{}', 'STUDENT',"
+                        + " 'DRAFT', ?, now(), now())",
+                copyId, copier, noteId);
+        Map<String, Object> copyBefore = jdbcTemplate.queryForMap(
+                "select title, content, subject, status, updated_at from notes where id = ?", copyId);
+
+        RegenerationHarness harness = new RegenerationHarness();
+        harness.noteContent = "Regenerated canonical body.";
+        harness.service().startAsyncNoteAndStudyPackRegeneration(noteId.toString(), owner);
+
+        assertThat(readNoteColumn(noteId, "content"))
+                .as("the canonical note DID change — otherwise the copy assertion is vacuous")
+                .isEqualTo("Regenerated canonical body.");
+        assertThat(jdbcTemplate.queryForMap(
+                "select title, content, subject, status, updated_at from notes where id = ?", copyId))
+                .as("the learner's copy is byte-identical: no sync, no inheritance, no live fork")
+                .isEqualTo(copyBefore);
+    }
+
+    /**
+     * GUARD 5. ConceptHealth honesty. A regenerated pack that DROPS one key concept and KEEPS another must
+     * still surface the kept concept's history and surface nothing for the dropped one — and neither row may
+     * be deleted or rewritten.
+     *
+     * <p>The kept concept carries a recent {@code last_correct_at}, so "history is still read" is
+     * observable: if regeneration had wiped the row the concept would come back as DUE.
+     */
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void regenerationLeavesConceptHealthRowsIntactAndSurfacesOnlySurvivingConcepts() {
+        UUID owner = seedUser("regen-concepts");
+        UUID noteId = seedRegenerationNote(owner, "Structural Analysis", "Old body.");
+        UUID packId = seedStudyPack(owner, noteId, "Old pack title");
+        seedConceptHealth(owner, packId, "Shear Force");
+        seedConceptHealth(owner, packId, "Moment Distribution");
+
+        RegenerationHarness harness = new RegenerationHarness();
+        harness.noteContent = "Regenerated body.";
+        // The regenerated pack keeps Shear Force and drops Moment Distribution.
+        harness.keyConcepts = List.of("Shear Force", "Influence Lines");
+        harness.service().startAsyncNoteAndStudyPackRegeneration(noteId.toString(), owner);
+
+        assertThat(jdbcTemplate.queryForObject(
+                "select count(*) from concept_health where study_pack_id = ?", Integer.class, packId))
+                .as("no concept_health row is deleted — a dropped concept's row is inert, not cleaned up")
+                .isEqualTo(2);
+
+        ConceptHealthService conceptHealthService = new ConceptHealthService(
+                conceptHealthRepository, studyPackRepository, mock(SubscriptionService.class),
+                mock(FeatureGateService.class), mock(NoteShareService.class));
+        List<String> due = conceptHealthService.getDueConceptsByStudyPackIds(
+                owner,
+                Map.of(packId, List.of("Shear Force", "Influence Lines")),
+                OffsetDateTime.now(ZoneOffset.UTC)
+        ).get(packId);
+
+        assertThat(due)
+                .as("the KEPT concept still carries its history, so it is not due; the DROPPED one is never"
+                        + " read at all; a brand-new concept starts with no history and is due")
+                .containsExactly("Influence Lines");
+    }
+
+    /**
+     * GUARD 7. Applicable Programs isolation. Two joined catalog programs plus a set Domain Context must
+     * resolve a context whose {@code courseProgram} is neither program concatenated — and must not throw.
+     * A single-program fixture passes under a concatenation bug and proves nothing.
+     */
+    @Test
+    void twoApplicableProgramsNeverConcatenateIntoTheGenerationCourseProgram() {
+        UUID owner = seedUser("regen-programs");
+        UUID noteId = UUID.randomUUID();
+        jdbcTemplate.update(
+                "insert into notes (id, owner_user_id, title, content, visibility, tags, target_profile_type,"
+                        + " status, subject, course_program, domain_context, created_at, updated_at)"
+                        + " values (?, ?, 'Building Utilities', 'body', 'PRIVATE', '{}', 'STUDENT', 'DRAFT',"
+                        + " 'Utilities', 'Architectural Engineering', 'ENGINEERING_SCIENCES', now(), now())",
+                noteId, owner);
+        jdbcTemplate.update(
+                "insert into note_course_program (id, note_id, course_program_id) values (?, ?, ?), (?, ?, ?)",
+                UUID.randomUUID(), noteId, UUID.fromString("20000000-0000-0000-0000-000000000002"),
+                UUID.randomUUID(), noteId, UUID.fromString("20000000-0000-0000-0000-000000000005"));
+
+        NoteEntity note = noteRepository.findById(noteId).orElseThrow();
+        StudyPackGenerationContextResolver resolver = new StudyPackGenerationContextResolver(
+                userRepository, noteRepository, new NoteCourseProgramRepository(jdbcTemplate), null);
+
+        resolver.assertGenerationReady(note);
+        StudyPackGenerationContext context = resolver.resolve(owner, note);
+
+        assertThat(context.courseProgram())
+                .as("a LIST may never reach a prompt as the domain; with 2+ joined programs the resolver"
+                        + " falls back to the note's own single string")
+                .isEqualTo("Architectural Engineering")
+                .doesNotContain("Architecture")
+                .doesNotContain("Civil Engineering");
+    }
+
+    // --- regeneration fixture helpers -----------------------------------------------------------------
+
+    private UUID seedRegenerationNote(UUID ownerUserId, String title, String content) {
+        UUID id = UUID.randomUUID();
+        jdbcTemplate.update(
+                "insert into notes (id, owner_user_id, title, content, visibility, tags,"
+                        + " target_profile_type, status, subject, created_at, updated_at)"
+                        + " values (?, ?, ?, ?, 'PRIVATE', '{}', 'STUDENT', 'GENERATED', 'Engineering',"
+                        + " now(), now())",
+                id, ownerUserId, title, content
+        );
+        return id;
+    }
+
+    private UUID seedQuizShareLink(UUID generatedQuizId, UUID ownerUserId, String token, boolean active) {
+        UUID id = UUID.randomUUID();
+        jdbcTemplate.update(
+                "insert into quiz_share_links (id, generated_quiz_id, owner_user_id, token, is_active, created_at)"
+                        + " values (?, ?, ?, ?, ?, now())",
+                id, generatedQuizId, ownerUserId, token, active
+        );
+        return id;
+    }
+
+    private void seedConceptHealth(UUID userId, UUID studyPackId, String concept) {
+        jdbcTemplate.update(
+                "insert into concept_health (id, user_id, study_pack_id, concept, incorrect_streak,"
+                        + " last_correct_at, created_at, updated_at)"
+                        + " values (?, ?, ?, ?, 0, now(), now(), now())",
+                UUID.randomUUID(), userId, studyPackId, concept
+        );
+    }
+
+    private boolean readShareLinkActive(UUID shareLinkId) {
+        return Boolean.TRUE.equals(jdbcTemplate.queryForObject(
+                "select is_active from quiz_share_links where id = ?", Boolean.class, shareLinkId));
+    }
+
+    private String readNoteColumn(UUID noteId, String column) {
+        return jdbcTemplate.queryForObject(
+                "select " + column + " from notes where id = ?", String.class, noteId);
+    }
+
+    /**
+     * Sums across every usage period rather than reading one row, so the assertion cannot be quietly
+     * satisfied by a charge that landed in a period the test did not predict.
+     */
+    private int persistedUsage(UUID userId, String column) {
+        Integer value = jdbcTemplate.queryForObject(
+                "select coalesce(sum(" + column + "), 0) from user_usage where user_id = ?",
+                Integer.class, userId);
+        return value == null ? 0 : value;
+    }
+
+    /**
+     * ⚠️ REPRODUCES PRODUCTION'S TRANSACTION SEMANTICS, AND THIS IS NOT COSMETIC — WITHOUT IT GUARD 2
+     * PASSES FOR THE WRONG REASON.
+     *
+     * <p>A hand-built {@link UserUsageService} is not a Spring proxy, so its {@code @Transactional} is
+     * inert. Its increments are {@code @Modifying} native upserts, which throw
+     * {@code TransactionRequiredException} when no transaction is active — so a mutant that charges the
+     * note-generation meter OUTSIDE the commit transaction would blow up harmlessly here and guard 2
+     * would stay green while the defect was live in production, where the proxy opens a transaction and
+     * the charge really lands. Verified by mutation: with the plain constructor the "charge eagerly"
+     * mutant SURVIVED; with this wrapper it is killed.
+     *
+     * <p>Default REQUIRED propagation, exactly like the annotation: it joins the commit transaction when
+     * one is active and opens its own when one is not.
+     */
+    private UserUsageService transactionalUserUsageService() {
+        TransactionTemplate template = new TransactionTemplate(transactionManager);
+        return new UserUsageService(
+                userUsageRepository,
+                new BillingUsagePeriodService(subscriptionRepository, userRepository)) {
+            @Override
+            public void incrementNoteGeneration(UUID userId, OffsetDateTime occurredAt) {
+                template.execute(status -> {
+                    super.incrementNoteGeneration(userId, occurredAt);
+                    return null;
+                });
+            }
+
+            @Override
+            public void incrementStudyPackGeneration(UUID userId, OffsetDateTime occurredAt) {
+                template.execute(status -> {
+                    super.incrementStudyPackGeneration(userId, occurredAt);
+                    return null;
+                });
+            }
+        };
+    }
+
+    /**
+     * Hand-builds a real {@link StudyPackService} over the real database, following the
+     * {@code LinkedLearnerService} precedent in this class. Repositories, {@link UserUsageService},
+     * {@link NoteGenerationUsageProtectionService} and {@link NoteGenerationService} are REAL, because the
+     * guards assert persisted counters; only the LLM and the fire-and-forget collaborators are mocked.
+     *
+     * <p>The task dispatcher is synchronous so the async worker actually runs inside the test.
+     */
+    private final class RegenerationHarness {
+        private String noteContent = "Regenerated body.";
+        private List<String> keyConcepts = List.of("Regenerated concept");
+        private RuntimeException studyPackFailure;
+
+        private StudyPackService service() {
+            LlmStudyPackService llm = mock(LlmStudyPackService.class);
+            lenient().when(llm.generateNoteFromTopic(anyString(), any())).thenAnswer(invocation -> noteContent);
+            if (studyPackFailure == null) {
+                lenient().when(llm.generateStudyPack(anyString(), any())).thenAnswer(invocation ->
+                        new GeneratedStudyPackContent(
+                                "Regenerated pack", "Regenerated summary", "Engineering",
+                                List.of("regenerated"), keyConcepts, List.of(),
+                                "test-model", 1, 1, 0, BigDecimal.ZERO));
+            } else {
+                lenient().when(llm.generateStudyPack(anyString(), any())).thenThrow(studyPackFailure);
+            }
+
+            SubscriptionService subscriptionService = mock(SubscriptionService.class);
+            lenient().when(subscriptionService.resolvePlan(any(UUID.class))).thenReturn(PlanType.FREE);
+
+            StudySnapProperties properties = new StudySnapProperties();
+            UserUsageService userUsageService = transactionalUserUsageService();
+            StudyPackGenerationContextResolver resolver = new StudyPackGenerationContextResolver(
+                    userRepository, noteRepository, new NoteCourseProgramRepository(jdbcTemplate),
+                    new CourseProgramCatalogRepository(jdbcTemplate));
+            NoteGenerationUsageProtectionService noteGenerationUsage =
+                    new NoteGenerationUsageProtectionService(properties, userUsageService);
+            NoteGenerationService noteGenerationService = new NoteGenerationService(
+                    userRepository, subscriptionService, noteGenerationUsage, llm,
+                    mock(ContentModerationService.class), mock(OnboardingGuardService.class),
+                    resolver, new CourseProgramCatalogRepository(jdbcTemplate));
+            GeneratedQuizService generatedQuizService = new GeneratedQuizService(
+                    noteRepository, generatedQuizRepository, mock(QuizGenerationService.class),
+                    subscriptionService, properties, userUsageService, mock(AuthService.class),
+                    mock(AiRateLimitService.class), resolver, userRepository,
+                    mock(QuizDocxExportService.class), mock(ExportUsageProtectionService.class),
+                    quizShareLinkRepository);
+
+            return new StudyPackService(
+                    studyPackRepository,
+                    mock(StudyPackDraftRepository.class),
+                    noteRepository,
+                    userRepository,
+                    mock(OcrService.class),
+                    llm,
+                    properties,
+                    mock(ActivityTrackingService.class),
+                    mock(AnalyticsService.class),
+                    subscriptionService,
+                    userUsageService,
+                    new StudyPackUsageService(userUsageService, studyPackRepository),
+                    mock(OcrRateLimitService.class),
+                    mock(OcrUsageProtectionService.class),
+                    mock(AiRateLimitService.class),
+                    resolver,
+                    new TransactionTemplate(transactionManager),
+                    new StudyPackGenerationTaskDispatcher(Runnable::run),
+                    mock(ContentModerationService.class),
+                    mock(ExamQuestionPoolService.class),
+                    mock(OfficialChallengeQuizTemplateService.class),
+                    mock(OnboardingGuardService.class),
+                    mock(StudyPackQuizMasteryService.class),
+                    noteGenerationService,
+                    noteGenerationUsage,
+                    generatedQuizService
+            );
+        }
+    }
 }

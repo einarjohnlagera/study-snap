@@ -71,7 +71,67 @@ defect:**
 
 ### Shipped
 
-_(nothing yet)_
+- **A Note and its Study Pack can regenerate as one operation, preserving both identities.** New
+  `POST /notes/{id}/regenerate` carrying a scope of `STUDY_PACK` | `NOTE_AND_STUDY_PACK`. `STUDY_PACK`
+  delegates to the existing `startAsyncGenerationFromNote` call unchanged, so it is behaviourally
+  identical to `POST /notes/{id}/generate`, which is untouched. An absent body or absent scope resolves
+  to `STUDY_PACK`; an unrecognised value is a 400 with a named exception.
+- **The pairing invariant is structural, not compensating.** On the combined path both LLM calls run on
+  the generation executor with no transaction and no JDBC connection held, and only then does a single
+  transaction open to write the note content, mutate the existing `study_packs` row in place, mark the
+  note generated, charge both meters and deactivate the note's live quiz share links. Nothing is
+  persisted until both artifacts exist in memory, so *"new content beside a Study Pack built from the
+  content it replaced"* is unreachable rather than cleaned up afterwards.
+- **A failure charges nothing.** Both meter increments live inside that one transaction, so a failure at
+  any point — note generation, Study Pack generation, or the commit — leaves the original content, the
+  original pack and both persisted counters exactly as they were. `NoteGenerationService.generateFromTopic`
+  gained a `recordUsage` parameter (the idiom `saveStudyPack(..., boolean recordUsage)` already uses) so
+  the note-generation meter can be deferred into that transaction; **the existing 2-arg and 3-arg
+  overloads charge exactly as they did before.**
+- **The status interlock runs first inside that transaction** — before the content write, before
+  `saveStudyPack`, before either increment and before share-link deactivation — so a late worker whose
+  note is no longer `GENERATING` persists nothing, charges nothing and deactivates nothing.
+- **A combined regeneration is rejected before any LLM call when it cannot be honest.** A note with no
+  existing Study Pack is refused (this is regeneration, not a first generation that would overwrite the
+  learner's own typed content), and so is a note with no title (the title *is* the topic; subject and
+  content are deliberately not a fallback). Neither rejection moves the note to `GENERATING` or charges
+  anything.
+- **Regenerating a Note turns off its live quiz share links rather than swapping questions underneath a
+  recipient**, reusing `v0.110.2`'s rule and its single implementation: deactivate every active row,
+  never delete one — deleting would force the owner to mint a new link and spend share-link quota
+  because of our fix. A note with no generated quiz, or no active links, is a clean no-op.
+- **`PUT /notes/{id}` now returns 409 `NOTE_GENERATION_IN_PROGRESS` while a note is generating, which
+  closes a pre-existing race rather than adding a restriction.** That endpoint had no status guard at
+  all, so a note could already be edited mid-Study-Pack-generation and silently lose the edit at commit.
+  It is also the narrowest rule the endpoint's contract permits: it is a single upsert with mandatory
+  content, so a metadata-only edit is not expressible, and `saveStudyPack` re-reads the note's Subject
+  *inside* the commit transaction. Shares, visibility and collection/section placement stay unblocked —
+  none is read by generation. The frontend explains the 409 without discarding the user's edits.
+- **`NOTE_AND_STUDY_PACK` is deliberately not reachable from the UI.** No scope selector, no warnings,
+  no metadata summary and no API client function were added; product behaviour is unchanged for learners.
+  Those land with the UX that explains content replacement (plan §19 slices 3-5).
+- Nothing was migrated, backfilled or propagated: no schema change, no learner copy touched, no
+  historical session rewritten, no `ConceptHealth` row deleted or rewritten, no analytics event added,
+  removed or altered.
+
+### Known limitations
+
+Three audited residuals, deliberately left rather than built for:
+
+1. **A renamed key concept silently loses its history and leaves an inert `ConceptHealth` row behind.**
+   Rows are keyed `(user_id, study_pack_id, concept)` on free text, so a concept that survives
+   regeneration byte-identically keeps its evidence, one that is renamed or dropped is never read again,
+   and a new one starts empty. **This already happens on every Study Pack regeneration today and is not
+   introduced here.** A rename-matcher is the same class of claim as cross-pack canonical concept
+   identity, which is ADR-sized and out (`v0.107.0`).
+2. **A failed `NOTE_AND_STUDY_PACK` run leaves the note `FAILED` while its original Study Pack is intact
+   at the database level.** That is the intended data outcome — the whole point is that nothing is lost.
+   Whether the note-detail surface should still *offer* that intact pack while the note reads `FAILED`
+   is a later-slice question and was not decided here.
+3. **One combined run holds a generation-executor thread across TWO LLM calls instead of one**, on
+   `studyPackGenerationTaskExecutor` (core 2 / max 2 since `v0.112.0` Phase 1), so its wall time is the
+   sum of both. This is inherent to the feature (plan §10) and is recorded plainly rather than left to
+   surprise a later session — it is also half of why curator bulk regeneration is a separate release.
 
 ## v0.117.0 - Authoring and Quiz Legibility
 
