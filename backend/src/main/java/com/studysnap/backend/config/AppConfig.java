@@ -82,6 +82,38 @@ public class AppConfig {
         return executor;
     }
 
+    /**
+     * ⚠️ THE BULK REGENERATION DRIVER GETS ITS OWN POOL, AND THAT IS THE WHOLE FIX FOR A MEASURED
+     * STARVATION. Bulk *generation* dispatches its batch loop onto
+     * {@link #studyPackGenerationTaskExecutor()}, so the loop permanently occupies 1 of only 2 threads
+     * for the batch's entire duration while every item it produces queues onto that same pool. Bulk
+     * regeneration must not repeat it: the driver thread here waits on each item, so it would hold a
+     * generation thread for minutes at a time doing nothing but waiting.
+     *
+     * <p>⚠️ SIZE 2 IS A CONCURRENCY BOUND, NOT A THROUGHPUT SETTING — it caps how many batches can be
+     * in flight at once. Items inside a batch stay strictly sequential; the driver never fans out per
+     * Note. A queue of 8 means a third batch waits rather than being rejected.
+     *
+     * <p>⚠️ {@code setWaitForTasksToCompleteOnShutdown} is deliberately NOT set. Verified against
+     * spring-context, that flag runs the ENTIRE queue uninterrupted, which is the opposite of what a
+     * killed deploy should do — {@code main} auto-deploys on merge, so a deploy mid-batch is routine.
+     * The batch is not drained; items already resolved survive in {@code note_bulk_regeneration_item}
+     * and unresolved ones are read honestly.
+     *
+     * <p>⚠️ This does NOT touch {@link #studyPackGenerationTaskExecutor()}'s 2/2/100 bound, which stays
+     * a v0.112.0 Phase 3 decision gated on its own checkpoint.
+     */
+    @Bean
+    public AsyncTaskExecutor bulkRegenerationTaskExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setThreadNamePrefix("bulk-regeneration-");
+        executor.setCorePoolSize(2);
+        executor.setMaxPoolSize(2);
+        executor.setQueueCapacity(8);
+        executor.initialize();
+        return executor;
+    }
+
     @Bean
     public AsyncTaskExecutor llmParallelTaskExecutor() {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
