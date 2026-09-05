@@ -64,6 +64,7 @@ jest.mock("@/lib/api", () => ({
   getMyPlan: jest.fn(),
   getNote: jest.fn(),
   getNoteApplicablePrograms: jest.fn(),
+  isNoteGenerationInProgressError: (error: unknown) => error instanceof Error && error.message === "NOTE_GENERATION_IN_PROGRESS",
   isNoteGenerationLimitReachedError: (error: unknown) => error instanceof Error && error.message === "NOTE_GENERATION_LIMIT_REACHED",
   listCoursePrograms: jest.fn(),
   listSubjects: jest.fn(),
@@ -740,6 +741,27 @@ describe("NoteEditorPageClient", () => {
     );
     expect(screen.getByLabelText("Domain Context (optional)")).toHaveValue("ENGINEERING_MATHEMATICS");
     expect(screen.getByLabelText("Authored Depth (optional)")).toHaveValue("COLLEGE");
+  });
+
+  /**
+   * v0.118.0 §20a. PUT /notes/{id} now returns 409 NOTE_GENERATION_IN_PROGRESS while the note is
+   * generating. This route is reachable in that state — a DRAFT note generating its FIRST Study Pack is
+   * `isDraft`, so the note-detail Edit action routes here — and a bare server message would read as a
+   * validation failure. The user's typing must survive; the save is only mistimed.
+   */
+  it("explains the 409 and keeps the draft when a save lands mid-generation", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ emailVerifiedAt: "2026-03-21T09:00:00Z" });
+    (getNote as jest.Mock).mockResolvedValue({ ...baseNote, studyPackStatus: "DRAFT" });
+    (updateNote as jest.Mock).mockRejectedValueOnce(new Error("NOTE_GENERATION_IN_PROGRESS"));
+
+    render(<NoteEditorPageClient noteId="note-1" />);
+
+    const content = await screen.findByLabelText("Content");
+    fireEvent.change(content, { target: { value: "Edited while a Study Pack was generating." } });
+    fireEvent.click(screen.getByRole("button", { name: "Save Note" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(/being regenerated/i);
+    expect(screen.getByLabelText("Content")).toHaveValue("Edited while a Study Pack was generating.");
   });
 
   it("saves the note, starts generation, and redirects without requiring Add details", async () => {

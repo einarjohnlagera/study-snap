@@ -14,6 +14,8 @@ import static org.mockito.Mockito.when;
 
 import com.studysnap.backend.config.StudySnapProperties;
 import com.studysnap.backend.dto.CreateStudyPackRequest;
+import com.studysnap.backend.dto.GenerateNoteFromTopicRequest;
+import com.studysnap.backend.dto.GenerateNoteFromTopicResponse;
 import com.studysnap.backend.dto.QuizItem;
 import com.studysnap.backend.dto.StudyPackListPageResponse;
 import com.studysnap.backend.dto.StudyPackResponse;
@@ -30,7 +32,11 @@ import com.studysnap.backend.entity.StudyPackEntity;
 import com.studysnap.backend.entity.StudyPackStatus;
 import com.studysnap.backend.exception.AppException;
 import com.studysnap.backend.exception.OcrDisabledException;
+import com.studysnap.backend.exception.MonthlyNoteGenerationLimitReachedException;
 import com.studysnap.backend.exception.MultiProgramDomainContextRequiredException;
+import com.studysnap.backend.exception.NoteGenerationInProgressException;
+import com.studysnap.backend.exception.NoteRegenerationStudyPackRequiredException;
+import com.studysnap.backend.exception.NoteRegenerationTopicRequiredException;
 import com.studysnap.backend.exception.ProfileSetupRequiredException;
 import com.studysnap.backend.exception.SubjectTooLongException;
 import com.studysnap.backend.repository.NoteRepository;
@@ -106,6 +112,12 @@ class StudyPackServiceTest {
     private OnboardingGuardService onboardingGuardService;
     @Mock
     private StudyPackQuizMasteryService studyPackQuizMasteryService;
+    @Mock
+    private NoteGenerationService noteGenerationService;
+    @Mock
+    private NoteGenerationUsageProtectionService noteGenerationUsageProtectionService;
+    @Mock
+    private GeneratedQuizService generatedQuizService;
 
     private StudyPackService studyPackService;
     private static final TransactionOperations TEST_TRANSACTION_OPERATIONS = new TransactionOperations() {
@@ -140,7 +152,10 @@ class StudyPackServiceTest {
                 examQuestionPoolService,
                 officialChallengeQuizTemplateService,
                 onboardingGuardService,
-                studyPackQuizMasteryService
+                studyPackQuizMasteryService,
+                noteGenerationService,
+                noteGenerationUsageProtectionService,
+                generatedQuizService
         );
         lenient().when(studyPackRepository.save(any(StudyPackEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
         lenient().when(noteRepository.save(any(NoteEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
@@ -673,7 +688,10 @@ class StudyPackServiceTest {
                 examQuestionPoolService,
                 officialChallengeQuizTemplateService,
                 onboardingGuardService,
-                studyPackQuizMasteryService
+                studyPackQuizMasteryService,
+                noteGenerationService,
+                noteGenerationUsageProtectionService,
+                generatedQuizService
         );
         MockMultipartFile image = new MockMultipartFile("image", "note.png", "image/png", "fake-image".getBytes());
 
@@ -718,7 +736,10 @@ class StudyPackServiceTest {
                 examQuestionPoolService,
                 officialChallengeQuizTemplateService,
                 onboardingGuardService,
-                studyPackQuizMasteryService
+                studyPackQuizMasteryService,
+                noteGenerationService,
+                noteGenerationUsageProtectionService,
+                generatedQuizService
         );
         when(studyPackUsageService.resolveUsage(eq(userId), any(OffsetDateTime.class)))
                 .thenReturn(new StudyPackUsageService.UsageSnapshot(
@@ -798,7 +819,10 @@ class StudyPackServiceTest {
                 examQuestionPoolService,
                 officialChallengeQuizTemplateService,
                 onboardingGuardService,
-                studyPackQuizMasteryService
+                studyPackQuizMasteryService,
+                noteGenerationService,
+                noteGenerationUsageProtectionService,
+                generatedQuizService
         );
 
         when(noteRepository.findByIdAndOwnerUserId(noteId, userId)).thenReturn(Optional.of(draftNote));
@@ -878,7 +902,10 @@ class StudyPackServiceTest {
                 examQuestionPoolService,
                 officialChallengeQuizTemplateService,
                 onboardingGuardService,
-                studyPackQuizMasteryService
+                studyPackQuizMasteryService,
+                noteGenerationService,
+                noteGenerationUsageProtectionService,
+                generatedQuizService
         );
         when(noteRepository.findByIdAndOwnerUserId(noteId, userId)).thenReturn(Optional.of(failedNote));
         when(studyPackRepository.findByOwnerUserIdAndNoteId(userId, noteId)).thenReturn(Optional.empty());
@@ -926,7 +953,10 @@ class StudyPackServiceTest {
                 examQuestionPoolService,
                 officialChallengeQuizTemplateService,
                 onboardingGuardService,
-                studyPackQuizMasteryService
+                studyPackQuizMasteryService,
+                noteGenerationService,
+                noteGenerationUsageProtectionService,
+                generatedQuizService
         );
         when(noteRepository.findByIdAndOwnerUserId(noteId, userId)).thenReturn(Optional.of(draftNote));
         when(studyPackRepository.findByOwnerUserIdAndNoteId(userId, noteId)).thenReturn(Optional.empty());
@@ -1346,4 +1376,166 @@ class StudyPackServiceTest {
     ) {
         return new StudyPackListItemProjection(id, title, summary, subject, tags, createdAt);
     }
+
+    // ---------------------------------------------------------------------------------------------
+    // v0.118.0 — combined Note + Study Pack regeneration, pre-LLM rejections.
+    // The persisted-state guards (1, 2, 3, 11) live in NativeQueryPostgresIntegrationTest: a mocked
+    // UserUsageService cannot express "the counter did not move", only "the method was not called".
+    // ---------------------------------------------------------------------------------------------
+
+    /**
+     * GUARD 9. A note with NO existing Study Pack is rejected before any LLM call. This is regeneration,
+     * not first generation: without a prior pack it would silently become "first generation that
+     * overwrites the learner's typed content".
+     */
+    @Test
+    void noteAndStudyPackRegeneration_rejectsANoteThatHasNoStudyPackYet() {
+        UUID ownerUserId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        NoteEntity note = regenerationNote(noteId, ownerUserId, "Shear Force Diagrams");
+        when(noteRepository.findByIdAndOwnerUserId(noteId, ownerUserId)).thenReturn(Optional.of(note));
+        when(studyPackRepository.findByOwnerUserIdAndNoteId(ownerUserId, noteId)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> studyPackService.startAsyncNoteAndStudyPackRegeneration(noteId.toString(), ownerUserId))
+                .isInstanceOf(NoteRegenerationStudyPackRequiredException.class);
+
+        assertThat(note.getStatus())
+                .as("the note is NOT moved to GENERATING by a rejected request")
+                .isEqualTo(NoteStatus.GENERATED);
+        verify(llmStudyPackService, never()).generateNoteFromTopic(anyString(), any());
+        verify(llmStudyPackService, never()).generateStudyPack(anyString(), any());
+        verify(noteGenerationUsageProtectionService, never()).recordUsage(any(UUID.class), any());
+        verify(userUsageService, never()).incrementStudyPackGeneration(any(UUID.class), any());
+        verify(userUsageService, never()).incrementNoteGeneration(any(UUID.class), any());
+    }
+
+    /**
+     * GUARD 8. A blank/null title is rejected before any LLM call. The note title IS the topic, and
+     * because the service builds GenerateNoteFromTopicRequest internally the DTO's @NotBlank never fires.
+     * Subject and content are deliberately NOT a fallback topic.
+     */
+    @Test
+    void noteAndStudyPackRegeneration_rejectsANoteWithNoTitleBeforeAnyLlmCall() {
+        UUID ownerUserId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        NoteEntity note = regenerationNote(noteId, ownerUserId, "   ");
+        note.setSubject("Structural Engineering");
+        when(noteRepository.findByIdAndOwnerUserId(noteId, ownerUserId)).thenReturn(Optional.of(note));
+        StudyPackEntity existingPack = new StudyPackEntity();
+        existingPack.setId(UUID.randomUUID());
+        when(studyPackRepository.findByOwnerUserIdAndNoteId(ownerUserId, noteId)).thenReturn(Optional.of(existingPack));
+
+        assertThatThrownBy(() -> studyPackService.startAsyncNoteAndStudyPackRegeneration(noteId.toString(), ownerUserId))
+                .isInstanceOf(NoteRegenerationTopicRequiredException.class);
+
+        assertThat(note.getStatus())
+                .as("the note is NOT moved to GENERATING by a rejected request")
+                .isEqualTo(NoteStatus.GENERATED);
+        verify(llmStudyPackService, never()).generateNoteFromTopic(anyString(), any());
+        verify(noteGenerationUsageProtectionService, never()).recordUsage(any(UUID.class), any());
+        verify(userUsageService, never()).incrementStudyPackGeneration(any(UUID.class), any());
+    }
+
+    /** A note already GENERATING is rejected with the existing 409 contract, on the new path too. */
+    @Test
+    void noteAndStudyPackRegeneration_rejectsANoteThatIsAlreadyGenerating() {
+        UUID ownerUserId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        NoteEntity note = regenerationNote(noteId, ownerUserId, "Shear Force Diagrams");
+        note.setStatus(NoteStatus.GENERATING);
+        when(noteRepository.findByIdAndOwnerUserId(noteId, ownerUserId)).thenReturn(Optional.of(note));
+
+        assertThatThrownBy(() -> studyPackService.startAsyncNoteAndStudyPackRegeneration(noteId.toString(), ownerUserId))
+                .isInstanceOf(NoteGenerationInProgressException.class)
+                .extracting(error -> ((AppException) error).getCode())
+                .isEqualTo("NOTE_GENERATION_IN_PROGRESS");
+    }
+
+    /**
+     * The note-generation meter is asserted FIRST. The learner-facing copy is "Uses 1 topic note and 1
+     * Study Pack", so which limit reports back when both are exhausted is observable.
+     */
+    @Test
+    void noteAndStudyPackRegeneration_assertsTheNoteGenerationQuotaBeforeTheStudyPackQuota() {
+        UUID ownerUserId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        NoteEntity note = regenerationNote(noteId, ownerUserId, "Shear Force Diagrams");
+        when(noteRepository.findByIdAndOwnerUserId(noteId, ownerUserId)).thenReturn(Optional.of(note));
+        StudyPackEntity existingPack = new StudyPackEntity();
+        existingPack.setId(UUID.randomUUID());
+        when(studyPackRepository.findByOwnerUserIdAndNoteId(ownerUserId, noteId)).thenReturn(Optional.of(existingPack));
+        when(subscriptionService.resolvePlan(ownerUserId)).thenReturn(PlanType.FREE);
+        doThrow(new MonthlyNoteGenerationLimitReachedException())
+                .when(noteGenerationUsageProtectionService).assertQuotaAvailable(ownerUserId, PlanType.FREE);
+
+        assertThatThrownBy(() -> studyPackService.startAsyncNoteAndStudyPackRegeneration(noteId.toString(), ownerUserId))
+                .isInstanceOf(MonthlyNoteGenerationLimitReachedException.class);
+
+        assertThat(note.getStatus()).isEqualTo(NoteStatus.GENERATED);
+        verify(studyPackUsageService, never()).resolveUsage(any(UUID.class), any(OffsetDateTime.class));
+        verify(llmStudyPackService, never()).generateNoteFromTopic(anyString(), any());
+    }
+
+    /**
+     * ⚠️ PINS THE POST-COMMIT SIDE EFFECTS ON THE COMBINED PATH — the prompt names this the most likely
+     * silent defect in the whole change, and it is silent by construction.
+     *
+     * <p>⚠️ CORRECTED after a cold falsification pass. An earlier version of this comment claimed
+     * {@code initiatePool} REFRESHES a pool built from the replaced content. IT DOES NOT, and the claim
+     * was wrong in the implementation prompt, here, and in the feature doc:
+     * {@code ExamQuestionPoolService} returns early when a pool row already exists with status
+     * {@code READY}, {@code PENDING} or {@code GENERATING}, and every note on this path already has a
+     * pack, so any pool it has is one of those. What this test actually pins is that the combined path
+     * still performs the SAME post-commit side effects as the existing path — no more, no less. The
+     * stale pool is a REAL, SEPARATE limitation recorded in {@code RELEASES.md}; do not re-derive this
+     * comment into a claim that this call fixes it.
+     *
+     * <p>The combined path inherits all three by extending the shared async method rather than adding a
+     * sibling, which is precisely the shape that drops them. This test pins that inheritance.
+     */
+    @Test
+    void noteAndStudyPackRegeneration_performsTheSamePostCommitSideEffectsAsTheExistingPath() {
+        UUID ownerUserId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        NoteEntity note = regenerationNote(noteId, ownerUserId, "Shear Force Diagrams");
+        when(noteRepository.findByIdAndOwnerUserId(noteId, ownerUserId)).thenReturn(Optional.of(note));
+        StudyPackEntity existingPack = new StudyPackEntity();
+        existingPack.setId(UUID.randomUUID());
+        existingPack.setNoteId(noteId);
+        existingPack.setCreatedAt(OffsetDateTime.now().minusDays(2));
+        when(studyPackRepository.findByOwnerUserIdAndNoteId(ownerUserId, noteId)).thenReturn(Optional.of(existingPack));
+        when(studyPackRepository.findByNoteId(noteId)).thenReturn(Optional.of(existingPack));
+        when(noteRepository.findById(noteId)).thenReturn(Optional.of(note));
+        when(subscriptionService.resolvePlan(ownerUserId)).thenReturn(PlanType.FREE);
+        when(studyPackUsageService.resolveUsage(eq(ownerUserId), any(OffsetDateTime.class)))
+                .thenReturn(new StudyPackUsageService.UsageSnapshot(
+                        OffsetDateTime.now().minusDays(1), OffsetDateTime.now().plusDays(29), 0));
+        when(noteGenerationService.generateFromTopic(any(GenerateNoteFromTopicRequest.class), eq(ownerUserId), any(), eq(false)))
+                .thenReturn(new GenerateNoteFromTopicResponse("Regenerated body."));
+        when(llmStudyPackService.generateStudyPack(anyString(), any())).thenReturn(generatedContent("Regenerated pack"));
+
+        studyPackService.startAsyncNoteAndStudyPackRegeneration(noteId.toString(), ownerUserId);
+
+        verify(examQuestionPoolService).initiatePool(any(StudyPackEntity.class), eq(ownerUserId));
+        verify(analyticsService).trackEvent(
+                eq(ownerUserId), eq(AnalyticsEventType.STUDY_PACK_GENERATED), any(UUID.class), any());
+        verify(officialChallengeQuizTemplateService).queueSeedIfEligible(any(NoteEntity.class), any(StudyPackEntity.class));
+        // The content really was replaced, so the assertions above are not describing a no-op run.
+        assertThat(note.getContent()).isEqualTo("Regenerated body.");
+        assertThat(note.getStatus()).isEqualTo(NoteStatus.GENERATED);
+    }
+
+    private NoteEntity regenerationNote(UUID noteId, UUID ownerUserId, String title) {
+        NoteEntity note = new NoteEntity();
+        note.setId(noteId);
+        note.setOwnerUserId(ownerUserId);
+        note.setTitle(title);
+        note.setContent("Existing body.");
+        note.setStatus(NoteStatus.GENERATED);
+        note.setVisibility(NoteVisibility.PRIVATE);
+        note.setCreatedAt(OffsetDateTime.now().minusDays(2));
+        note.setUpdatedAt(OffsetDateTime.now().minusDays(1));
+        return note;
+    }
+
 }

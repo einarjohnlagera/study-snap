@@ -23,6 +23,7 @@ import { ResponsiveActionButton, ResponsiveActionContent } from "@/components/ui
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { AppModal } from "@/components/ui/app-modal";
+import { RegenerateScopeModal } from "@/components/notes/regenerate-scope-modal";
 import { DeleteConfirmationModal } from "@/components/notes/delete-confirmation-modal";
 import { QuizSessionHistory } from "@/components/notes/quiz-session-history";
 import { SubjectCombobox } from "@/components/notes/subject-combobox";
@@ -74,6 +75,9 @@ import {
   startQuickReviewSession,
   updateNote,
   updateNoteVisibility,
+  regenerateNote,
+  type NoteRegenerationScope,
+  isNoteGenerationInProgressError,
   type ChallengeQuizPerformanceSummaryResponse,
   type CourseProgramCatalogItem,
   type ConceptHealthEntry,
@@ -466,6 +470,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
   const [showSharePrivateConfirm, setShowSharePrivateConfirm] = useState(false);
   const [showShareLinkModal, setShowShareLinkModal] = useState(false);
   const [showRegenerateConfirm, setShowRegenerateConfirm] = useState(false);
+  const [regenerateError, setRegenerateError] = useState<string | null>(null);
   const [addToCollectionModalOpen, setAddToCollectionModalOpen] = useState(false);
   const [activePaywallModal, setActivePaywallModal] = useState<PaywallModalVariant | null>(null);
   const [showLimitReachedModal, setShowLimitReachedModal] = useState(false);
@@ -863,6 +868,10 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
     const saved = searchParams.get("saved") === "1";
     const generationQueued = searchParams.get("generating") === "1";
     if (generationQueued) {
+      // Always a FIRST generation: this flag is set by the editor's redirect, and the editor cannot
+      // generate for a note that already has a Study Pack -- assertNoteEditable throws NOTE_LOCKED.
+      // The note is not loaded yet here, so the rule cannot be re-checked against it; it holds by
+      // construction at this entry point instead.
       awaitingGeneratedMetadataSuggestionRef.current = true;
       globalThis.sessionStorage?.setItem(`notelib-awaiting-suggestion:${normalizedRouteId}`, "1");
     }
@@ -1336,8 +1345,16 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
 
     setGenerating(true);
     try {
-      awaitingGeneratedMetadataSuggestionRef.current = true;
-      globalThis.sessionStorage?.setItem(`notelib-awaiting-suggestion:${note.id}`, "1");
+      // Only a note that has no Study Pack yet gets the suggestion. Expressed as the RULE rather than
+      // as "this handler is the create path", because this handler is NOT only the create path:
+      // canTriggerStudyPackGeneration admits isStudyPackReady, and the failed-generation retry lands
+      // here too. Gating on the pack makes the rule true at every entry point, now and later -- and it
+      // gets the retry cases right for free: a failed FIRST generation left no pack, so retrying it
+      // still suggests, while a failed regeneration left the original pack, so retrying it does not.
+      if (!note.studyPackId) {
+        awaitingGeneratedMetadataSuggestionRef.current = true;
+        globalThis.sessionStorage?.setItem(`notelib-awaiting-suggestion:${note.id}`, "1");
+      }
       const queued = await createStudyPackFromNote(note.id);
       setNote(queued);
       setToast("Study Pack generation started.");
@@ -1397,6 +1414,10 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
 
   useEffect(() => {
     const shouldAutoEdit = searchParams.get("edit") === "1";
+    // ⚠️ No isGeneratingStudyPack clause here, deliberately: `isDraft` is `!isStudyPackReady`, and a note
+    // cannot be STUDY_PACK_READY and GENERATING at once, so this already declines every generating note.
+    // Adding the explicit check was tried and reverted — it is unreachable, and an unreachable guard
+    // cannot be tested and reads as protection that is not doing anything.
     if (!shouldAutoEdit || autoEditHandledRef.current || !note || isDraft) {
       return;
     }
@@ -1699,6 +1720,13 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
         );
       }
     } catch (err) {
+      // The draft is deliberately left intact on every branch here: nothing below clears
+      // metadataDraft or leaves edit mode, so the user's typing survives a rejected save.
+      if (isNoteGenerationInProgressError(err)) {
+        setToastTone("warning");
+        setToast("This note is being regenerated. Your edits are still here — save again once it finishes.");
+        return;
+      }
       const message = err instanceof Error ? err.message : "Could not update note details.";
       if (message.includes("Subject must be 64 characters or less")) {
         setMetadataSubjectError(message);
@@ -1732,6 +1760,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
     if (!isStudyPackReady || isGeneratingStudyPack || generating) {
       return;
     }
+    setRegenerateError(null);
     setShowRegenerateConfirm(true);
   };
 
@@ -1739,13 +1768,68 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
     if (generating) {
       return;
     }
+    setRegenerateError(null);
     setShowRegenerateConfirm(false);
   };
 
-  const handleConfirmRegenerate = () => {
-    setShowRegenerateConfirm(false);
-    void handleGenerate();
-  };
+  const handleConfirmRegenerate = useCallback(async (scope: NoteRegenerationScope) => {
+    if (!note || generating) {
+      return;
+    }
+    if (!isEmailVerified) {
+      setToast("Email verification is required before generating Study Packs.");
+      return;
+    }
+    if (hasReachedStudyPackLimit) {
+      setShowRegenerateConfirm(false);
+      openStudyPackLimitModal("private_note_detail_regenerate");
+      return;
+    }
+
+    setGenerating(true);
+    try {
+      // ⚠️ REGENERATION NEVER ARMS THE METADATA SUGGESTION, EITHER SCOPE. The suggestion belongs to
+      // CREATION, where the learner typed a rough title and the LLM produced a better one that nothing
+      // has consumed yet. On a regeneration the metadata is an INPUT -- the title is the topic we wrote
+      // from -- and the learner has just reviewed it in the scope modal, which offers "Edit Note
+      // details" at the moment they are actually deciding. Suggesting a rewrite afterwards competes
+      // with that surface at the wrong end, and accepting it would not change the output they just
+      // got: it would silently change the input for the NEXT regeneration.
+      const queued = await regenerateNote(note.id, scope);
+      setNote(queued);
+      setShowRegenerateConfirm(false);
+      setToast(scope === "NOTE_AND_STUDY_PACK"
+        ? "Regenerating this note and its Study Pack."
+        : "Study Pack generation started.");
+    } catch (err) {
+      awaitingGeneratedMetadataSuggestionRef.current = false;
+      globalThis.sessionStorage?.removeItem(`notelib-awaiting-suggestion:${note.id}`);
+      if (isEmailNotVerifiedError(err)) {
+        setToast("Email verification is required before generating Study Packs.");
+        return;
+      }
+      const message = err instanceof Error ? err.message : "Could not regenerate this note.";
+      if (isStudyPackLimitReachedMessage(message)) {
+        void refreshUsageSummary();
+        setShowRegenerateConfirm(false);
+        openStudyPackLimitModal("private_note_detail_regenerate_error");
+        return;
+      }
+      // Everything else -- note-generation quota, a blank title, a missing pack, a 409 because
+      // generation is already running -- is shown in the modal so the learner can adjust and retry
+      // without losing the scope they picked.
+      setRegenerateError(message);
+    } finally {
+      setGenerating(false);
+    }
+  }, [
+    generating,
+    hasReachedStudyPackLimit,
+    isEmailVerified,
+    note,
+    openStudyPackLimitModal,
+    refreshUsageSummary,
+  ]);
 
   useEffect(() => {
     const shouldAutoStartQuickReview = searchParams.get(PUBLIC_NOTE_COPY_QUERY_PARAMS.startQuickReview) === "1";
@@ -3354,31 +3438,26 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
         </div>
       </AppModal>
 
-      <AppModal
+      {/* Unmounted while closed on purpose: that is what resets the scope selection to the safe
+          default on every open. See the comment on `scope` in RegenerateScopeModal. */}
+      {showRegenerateConfirm ? (
+      <RegenerateScopeModal
         isOpen={showRegenerateConfirm}
-        title="Regenerate Study Pack?"
-        description="This will replace the current summary, key concepts, and quiz with a new version tailored to your level. Your quiz history is preserved."
+        note={note}
+        isCurator={canEditAuthoringMetadata}
+        busy={generating}
+        errorMessage={regenerateError}
         onClose={handleCancelRegenerate}
-        actions={(
-          <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={handleCancelRegenerate}
-              disabled={generating}
-            >
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              onClick={handleConfirmRegenerate}
-              disabled={generating}
-            >
-              {generating ? "Regenerating..." : "Regenerate"}
-            </Button>
-          </div>
-        )}
+        onConfirm={(scope) => void handleConfirmRegenerate(scope)}
+        onEditDetails={() => {
+          // Closes first on purpose: the guidance flow runs BEFORE regeneration starts, and editing
+          // behind an open dialog is exactly the state plan section 20a rules out.
+          setShowRegenerateConfirm(false);
+          setRegenerateError(null);
+          setIsInlineMetadataEditMode(true);
+        }}
       />
+      ) : null}
 
       {note ? (
         <AddToCollectionModal

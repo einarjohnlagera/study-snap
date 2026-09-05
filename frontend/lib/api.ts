@@ -3266,6 +3266,35 @@ export async function createStudyPackFromNote(
   );
 }
 
+export type NoteRegenerationScope = "STUDY_PACK" | "NOTE_AND_STUDY_PACK";
+
+/**
+ * Regenerates a note's Study Pack, and with `NOTE_AND_STUDY_PACK` its content too, as one operation.
+ *
+ * Both scopes go through this one endpoint on purpose: `STUDY_PACK` delegates server-side to the same
+ * call `POST /notes/{id}/generate` makes, so the scope selector has a single code path rather than two
+ * behind one control. First generation on a DRAFT note still uses `createStudyPackFromNote` — that is a
+ * different control, not a scope choice.
+ */
+export async function regenerateNote(
+  noteId: string,
+  scope: NoteRegenerationScope,
+): Promise<NoteResponse> {
+  const response = await fetchWithAuth(
+    `/notes/${noteId}/regenerate`,
+    {
+      method: "POST",
+      headers: { ...buildAuthHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ scope }),
+    },
+    true,
+  );
+  return parseApiResponse<NoteResponse>(
+    response,
+    "We could not regenerate this note right now. Please try again.",
+  );
+}
+
 export async function generateNoteFromTopic(
   topic: string,
   courseProgram?: string,
@@ -5683,6 +5712,16 @@ export function isOcrDisabledError(error: unknown): error is ApiRequestError {
 
 export function isNoteGenerationLimitReachedError(error: unknown): error is ApiRequestError {
   return error instanceof ApiRequestError && error.code === "NOTE_GENERATION_LIMIT_REACHED";
+}
+
+/**
+ * A note edit was rejected because a Study Pack is being generated for that note right now.
+ *
+ * Callers must surface this WITHOUT discarding what the user typed: the edit is still valid, it is
+ * only the timing that is wrong.
+ */
+export function isNoteGenerationInProgressError(error: unknown): error is ApiRequestError {
+  return error instanceof ApiRequestError && error.code === "NOTE_GENERATION_IN_PROGRESS";
 }
 
 export function isExportLimitReachedError(error: unknown): error is ApiRequestError {

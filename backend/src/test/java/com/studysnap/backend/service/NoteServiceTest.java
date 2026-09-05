@@ -26,6 +26,7 @@ import com.studysnap.backend.exception.AppException;
 import com.studysnap.backend.exception.CourseProgramSelectionRequiredException;
 import com.studysnap.backend.exception.CourseProgramTooLongException;
 import com.studysnap.backend.exception.InvalidDomainContextException;
+import com.studysnap.backend.exception.NoteGenerationInProgressException;
 import com.studysnap.backend.exception.InvalidNoteLearnerLevelException;
 import com.studysnap.backend.exception.MultiProgramDomainContextRequiredException;
 import com.studysnap.backend.exception.NoteNotFoundException;
@@ -623,6 +624,58 @@ class NoteServiceTest {
                 .isEqualTo(org.springframework.http.HttpStatus.BAD_REQUEST);
 
         verify(noteRepository, never()).save(any(NoteEntity.class));
+    }
+
+    /**
+     * GUARD 6 (v0.118.0 §20a). A note edit issued WHILE the note is GENERATING is rejected with 409 and the
+     * stored content is left exactly as it was.
+     *
+     * <p>⚠️ The fixture must set the status to GENERATING BEFORE the call. A fixture that edits before
+     * generation starts passes under both the defect and the fix.
+     *
+     * <p>⚠️ The primary assertion is on the ENTITY'S CONTENT, not on a `verify(...)`. NoteService.update
+     * mutates the loaded entity in place and then saves it, so a missing guard shows up as the field
+     * having been overwritten — which is the state a real database would then hold.
+     */
+    @Test
+    void update_rejectedWithConflictAndLeavesContentUntouchedWhileTheNoteIsGenerating() {
+        UUID ownerUserId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        NoteEntity note = buildNote(noteId, ownerUserId, NoteStatus.GENERATING, NoteVisibility.PRIVATE, "original content");
+        when(noteRepository.findByIdAndOwnerUserId(noteId, ownerUserId)).thenReturn(Optional.of(note));
+        UpsertNoteRequest request = new UpsertNoteRequest(
+                "Edited title", "Edited subject", null, null, null, List.of(), "edited content"
+        );
+
+        assertThatThrownBy(() -> noteService.update(noteId.toString(), request, ownerUserId))
+                .isInstanceOf(NoteGenerationInProgressException.class)
+                .extracting(error -> ((AppException) error).getCode())
+                .isEqualTo("NOTE_GENERATION_IN_PROGRESS");
+
+        assertThat(note.getContent())
+                .as("the stored content is untouched — the whole point of the guard")
+                .isEqualTo("original content");
+        assertThat(note.getTitle())
+                .as("and so is every other field this upsert would have rewritten")
+                .isEqualTo("Title");
+        verify(noteRepository, never()).save(any(NoteEntity.class));
+    }
+
+    @Test
+    void update_stillSucceedsOnANoteThatIsNotGenerating() {
+        UUID ownerUserId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        NoteEntity note = buildNote(noteId, ownerUserId, NoteStatus.GENERATED, NoteVisibility.PRIVATE, "original content");
+        when(noteRepository.findByIdAndOwnerUserId(noteId, ownerUserId)).thenReturn(Optional.of(note));
+        UpsertNoteRequest request = new UpsertNoteRequest(
+                "Edited title", "Edited subject", null, null, null, List.of(), "edited content"
+        );
+
+        noteService.update(noteId.toString(), request, ownerUserId);
+
+        assertThat(note.getContent())
+                .as("the guard is scoped to GENERATING and does not lock ordinary editing")
+                .isEqualTo("edited content");
     }
 
     @Test

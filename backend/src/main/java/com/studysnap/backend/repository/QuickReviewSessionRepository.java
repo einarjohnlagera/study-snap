@@ -18,6 +18,30 @@ import java.util.UUID;
 
 public interface QuickReviewSessionRepository extends JpaRepository<QuickReviewSessionEntity, UUID> {
 
+    /**
+     * When the learner last earned a perfect Quick Review on the Study Pack's CURRENT quiz.
+     *
+     * <p>⚠️ THE {@code generationEnqueuedAt} CLAUSE IS THE WHOLE POINT AND MUST NOT BE DROPPED.
+     * Mastery is derived, never stored, and {@code saveStudyPack} preserves {@code study_packs.id} on
+     * regeneration by design. Without this clause a session that mastered the OLD quiz keeps matching
+     * the new one -- the sizes are equal by construction, because the prompt asks for
+     * {@code exactly {QUIZ_COUNT}} questions -- so the Quiz tab, which renders with {@code revealAnswer},
+     * stays unlocked on questions the learner has never seen. Quick Review then administers those same
+     * questions and writes {@code ConceptHealth} from them. That is exactly the defect {@code v0.74.0}
+     * shipped to close, and combined Note + Study Pack regeneration widened it: the answer key would
+     * belong to content the learner never read.
+     *
+     * <p>⚠️ {@code notes.generation_enqueued_at} is the discriminator rather than
+     * {@code study_packs.updated_at} BECAUSE IT MOVES ONLY ON GENERATION. It has exactly two writers,
+     * both generation starts. {@code updated_at} looks equivalent and is not: {@code updateTags},
+     * {@code updateMetadata} and share-link creation all bump it without touching the quiz, so using it
+     * would silently re-lock the Quiz tab when a learner merely renames or shares a pack.
+     *
+     * <p>The {@code coalesce} makes the rule null-tolerant in both directions: a pack with no note, or a
+     * note generated before {@code V118} added the column, compares {@code completedAt >= completedAt}
+     * and keeps today's behaviour. That is deliberate -- a strict rule would revoke mastery for every
+     * learner whose note predates the column.
+     */
     @Query("""
             select min(q.completedAt)
             from QuickReviewSessionEntity q
@@ -27,8 +51,11 @@ public interface QuickReviewSessionRepository extends JpaRepository<QuickReviewS
               and q.status = com.studysnap.backend.entity.QuickReviewSessionStatus.COMPLETED
               and q.completedAt is not null
               and q.verifiedCorrectAnswers = :quizSize
+              and q.completedAt >= coalesce(
+                    (select n.generationEnqueuedAt from NoteEntity n where n.id = :noteId),
+                    q.completedAt)
             """)
-    OffsetDateTime findQuizMasteredAt(UUID userId, UUID studyPackId, int quizSize);
+    OffsetDateTime findQuizMasteredAt(UUID userId, UUID studyPackId, int quizSize, UUID noteId);
     String SESSION_SUMMARY_PROJECTION = """
              new com.studysnap.backend.repository.QuickReviewSessionSummaryProjection(
                 q.id,

@@ -1,5 +1,237 @@
 # RELEASES.md - NoteLib
 
+## v0.118.0 - Note and Study Pack Regeneration
+
+**Status: Released** (kicked off and signed off 2026-09-05, base branch `releases/v0.118.0`, cut from
+`main` after `v0.117.0` merged and tagged)
+
+Theme: a Note whose source material has moved on can be regenerated — content and Study Pack together —
+without losing the note's identity, its place in a plan, or the learner's history against it.
+
+### Planned Scope
+
+**⚠️ PHASE 1 ONLY — THE SINGLE-NOTE PRIMITIVE.** Governed by
+`docs/claude-plans/note-and-study-pack-regeneration-stage1.md`, **owner-ratified 2026-09-05 (§20)** and
+ready for implementation-prompt drafting. **⚠️ EXECUTE ITS DECISIONS; DO NOT RE-DERIVE THEM.**
+
+**⚠️ THE AUDIT'S HEADLINE IS THAT THE FEATURE IS SUBSTANTIALLY SMALLER THAN THE BRIEF ASSUMED, ON ONE
+FACT: `NoteGenerationService.generateFromTopic` DOES NOT CREATE A NOTE.** It returns a content string
+and the frontend saves it through the ordinary create path — so the brief's headline prohibition
+(*"do not delete and recreate the Note"*) guards a risk that does not exist in the code. **No migration
+is required by anything in the audit.**
+
+1. **A Note's content and its Study Pack regenerate as one operation**, preserving `notes.id`,
+   `notes.created_at`, `study_packs.id`, and the note's `note_collection_items` row with its `position`
+   and `label` intact.
+2. **The pairing is atomic in the sense that matters: a failed Study Pack generation leaves the ORIGINAL
+   content and the ORIGINAL pack in place.** A half-regenerated note is the failure mode this exists to
+   prevent.
+3. **Both meters are left unchanged when the operation fails**, asserted on the persisted counters
+   rather than on the call.
+
+### Anti-drift
+
+- **⚠️ THE VERIFICATION TRIGGER IS MONEY/QUOTA SEMANTICS — A SINGLE OPERATION CHARGES TWO METERS.**
+  That is why this could not be folded into `v0.117.0`, whose anti-drift forbade quota change.
+- **⚠️ CURATOR BULK REGENERATION IS NOT IN THIS RELEASE AND MUST NOT BE FOLDED IN.**
+  `docs/claude-plans/curator-bulk-regeneration-stage1.md` §29 rules it *"NOT safe to ship in the same
+  release as the single-Note primitive"*, and names two reasons that are arithmetic rather than opinion:
+  the existing bulk receipt **cannot report a batch this long** (the poller abandons after ~5 minutes
+  while regeneration is strictly slower per item — two LLM calls, not one — so a 50-note batch
+  guarantees the curator never learns the outcome), and **the batch loop occupies one of only two
+  threads on the same executor each item's generation is dispatched onto.** Both need solving before
+  bulk, and neither is this release's problem.
+- **⚠️ Do NOT build a concept-migration engine.** Stale `ConceptHealth` rows are already inert. No
+  rename matching, no canonical concept identity — all three are named and rejected in the audit.
+- **⚠️ NO MIGRATION** (the audit states none is required; if one appears needed the scope is wrong);
+  **no pricing or entitlement change, no new plan gate, no new quiz mode or sub-mode.**
+- **⚠️ `frontend/app/onboarding` STAYS FROZEN.** The freeze lifted 2026-09-11 in principle, but **live
+  dated reads run through 2026-09-19** and more land after; verify before touching it, do not assume.
+- **⚠️ Do NOT change what `BOARD_EXAM_STARTED`, `ADAPTIVE_PRACTICE_STARTED` or `QUIZ_SHARE_LINK_CREATED`
+  record.**
+- **⚠️ Do NOT start Slices 4-5 of the Review Set overhaul** (gated on `[CHECKPOINT — due 2026-10-05]`)
+  **or `v0.112.0` Phase 3** (gated on `[CHECKPOINT — due 2026-10-04]`).
+
+### Verification
+
+**ONE SCOPED COLD AGENT framed as FALSIFICATION.** Trigger named by the gate: **money/quota semantics —
+one operation charges two meters.** Not the three-agent test: no permission substrate, no cross-user
+read, no migration.
+
+**⚠️ PRE-DECLARED GUARDS, taken from the audit and each naming the fixture that would pass under the
+defect:**
+- **Pairing** — a run whose **Study Pack generation fails** must leave the note's original content AND
+  original pack intact. *A fixture whose generation succeeds passes under both the defect and the fix.*
+- **Quota on failure** — the same failing run leaves **both** meters unchanged. **Assert the persisted
+  counters, not the call.**
+- **Identity** — after a successful run, assert the **persisted** `notes.id`, `notes.created_at`,
+  `study_packs.id`, and a surviving `note_collection_items` row with `position` and `label` unchanged.
+
+**Routing: CODEX** — two services, an existing quota path, and a frontend surface.
+
+### Shipped
+
+- **A Note and its Study Pack can regenerate as one operation, preserving both identities.** New
+  `POST /notes/{id}/regenerate` carrying a scope of `STUDY_PACK` | `NOTE_AND_STUDY_PACK`. `STUDY_PACK`
+  delegates to the existing `startAsyncGenerationFromNote` call unchanged, so it is behaviourally
+  identical to `POST /notes/{id}/generate`, which is untouched. An absent body or absent scope resolves
+  to `STUDY_PACK`; an unrecognised value is a 400 with a named exception.
+- **The pairing invariant is structural, not compensating.** On the combined path both LLM calls run on
+  the generation executor with no transaction and no JDBC connection held, and only then does a single
+  transaction open to write the note content, mutate the existing `study_packs` row in place, mark the
+  note generated, charge both meters and deactivate the note's live quiz share links. Nothing is
+  persisted until both artifacts exist in memory, so *"new content beside a Study Pack built from the
+  content it replaced"* is unreachable rather than cleaned up afterwards.
+- **A failure charges nothing.** Both meter increments live inside that one transaction, so a failure at
+  any point — note generation, Study Pack generation, or the commit — leaves the original content, the
+  original pack and both persisted counters exactly as they were. `NoteGenerationService.generateFromTopic`
+  gained a `recordUsage` parameter (the idiom `saveStudyPack(..., boolean recordUsage)` already uses) so
+  the note-generation meter can be deferred into that transaction; **the existing 2-arg and 3-arg
+  overloads charge exactly as they did before.**
+- **The status interlock runs first inside that transaction** — before the content write, before
+  `saveStudyPack`, before either increment and before share-link deactivation — so a late worker whose
+  note is no longer `GENERATING` persists nothing, charges nothing and deactivates nothing.
+- **A combined regeneration is rejected before any LLM call when it cannot be honest.** A note with no
+  existing Study Pack is refused (this is regeneration, not a first generation that would overwrite the
+  learner's own typed content), and so is a note with no title (the title *is* the topic; subject and
+  content are deliberately not a fallback). Neither rejection moves the note to `GENERATING` or charges
+  anything.
+- **Regenerating a Note turns off its live quiz share links rather than swapping questions underneath a
+  recipient**, reusing `v0.110.2`'s rule and its single implementation: deactivate every active row,
+  never delete one — deleting would force the owner to mint a new link and spend share-link quota
+  because of our fix. A note with no generated quiz, or no active links, is a clean no-op.
+- **`PUT /notes/{id}` now returns 409 `NOTE_GENERATION_IN_PROGRESS` while a note is generating, which
+  closes a pre-existing race rather than adding a restriction.** That endpoint had no status guard at
+  all, so a note could already be edited mid-Study-Pack-generation and silently lose the edit at commit.
+  It is also the narrowest rule the endpoint's contract permits: it is a single upsert with mandatory
+  content, so a metadata-only edit is not expressible, and `saveStudyPack` re-reads the note's Subject
+  *inside* the commit transaction. Shares, visibility and collection/section placement stay unblocked —
+  none is read by generation. The frontend explains the 409 without discarding the user's edits.
+- **`NOTE_AND_STUDY_PACK` is deliberately not reachable from the UI.** No scope selector, no warnings,
+  no metadata summary and no API client function were added; product behaviour is unchanged for learners.
+  Those land with the UX that explains content replacement (plan §19 slices 3-5).
+- Nothing was migrated, backfilled or propagated: no schema change, no learner copy touched, no
+  historical session rewritten, no `ConceptHealth` row deleted or rewritten, no analytics event added,
+  removed or altered.
+
+- **The learner can now choose what a regeneration replaces (plan slices 3-5).** The Regenerate modal
+  became a two-card scope selector — *Study Pack* (default) and *Note + Study Pack* — as a real
+  single-choice control: `role="radiogroup"` with `role="radio"`/`aria-checked`, arrow-key and
+  Home/End navigation and a roving tabindex, with selection shown by border **and** icon rather than
+  colour alone. The selected card carries `tabindex="0"` from first render, because `AppModal`'s focus
+  trap filters out `tabIndex === -1` and two `-1` cards would drop the group out of the Tab cycle.
+  This is a new pattern in the codebase — there was no `role="radiogroup"` anywhere — and the visual
+  language is borrowed from `quiz-choice-list`.
+- **Both scopes go through the one `POST /notes/{id}/regenerate` endpoint.** `STUDY_PACK` delegates
+  server-side to the call the old endpoint made, so the selector has a single client path rather than
+  two behind one control. First generation on a DRAFT note still uses `createStudyPackFromNote` — a
+  different control, not a scope choice.
+- **The combined scope shows what it will write from, and nothing it will not.** Topic, Subject,
+  Writing context and Depth, with *Edit Note details →* which closes the modal before opening the
+  editor, since the guidance flow runs **before** regeneration starts. **Applicable Programs appears
+  nowhere, not even read-only** — it is discovery metadata that never reaches a prompt, and showing it
+  there would misrepresent it as a generation input.
+- **Contextual protections, most severe first.** A learner-owned note shows the strong overwrite
+  warning and the CTA becomes **Regenerate Note + Study Pack**; a curator's canonical note keeps the
+  routine framing and the plain **Regenerate**. A public note additionally carries the ratified
+  *"This Note is public"* notice. There is no second confirmation modal in any case. Because the
+  product cannot distinguish a generated note from a hand-written one, **every** non-curator note gets
+  the strong warning — the conservative fallback, not an approximation to be refined with a new field.
+- **The combined scope is unselectable, with a reason, where the backend would reject it** — a note
+  with no title (the title *is* the topic) or no existing Study Pack. That is the difference between an
+  explained limit and a 400 after the learner commits. Other server rejections render inside the modal
+  so the chosen scope survives a retry.
+- **Quota is disclosed on the card**: *Uses 1 Study Pack* / *Uses 1 topic note and 1 Study Pack*.
+  Until Settings exposes the topic-note meter, this modal is the only place a learner learns it exists.
+- **The post-generation metadata suggestion now belongs to CREATION only — no regeneration offers it,
+  in either scope.** Corrected from an earlier, narrower rule in this same release that suppressed it
+  for combined runs but kept it for Study Pack regeneration; owner-ruled 2026-09-05 after trying it.
+  The suggestion earns its place on a first generation, where the learner typed a rough title and the
+  LLM produced a better one that nothing has consumed yet. On a regeneration the metadata is an
+  **input** — the title is the topic we wrote from — and the learner has just reviewed it in the scope
+  modal, which offers *Edit Note details →* at the moment they are actually deciding. Suggesting a
+  rewrite afterwards competes with that surface at the wrong end, and accepting it would not change the
+  output they just received: it would silently change the input for the **next** regeneration.
+  - **⚠️ This REMOVES an existing behaviour**: plain Study Pack regeneration used to show the
+    suggestion. Stated as a change rather than left to be discovered.
+  - **⚠️ The rule is expressed as "the note has no Study Pack yet", not as "this handler is the create
+    path".** `handleGenerate` is reachable with an existing pack — `canTriggerStudyPackGeneration`
+    admits `isStudyPackReady`, and the failed-generation retry lands there — so a handler-scoped rule
+    would have left that hole open. Gating on the pack also gets the retry cases right for free: a
+    failed FIRST generation left no pack and still suggests, while a failed regeneration left the
+    original pack and does not.
+  - **⚠️ Bulk generation is UNCHANGED and is a different mechanism.** It auto-applies generated title
+    and tags server-side while preserving the curator's Subject (`applyBulkGeneratedMetadataToNote`);
+    it never used the suggestion modal, and nothing here touches it.
+
+- **Quiz mastery no longer survives a regeneration of the quiz it was earned on.** Found by the
+  release's own cold falsification pass, and it is the defect `v0.74.0` shipped to close, reopened by a
+  side door. Mastery is DERIVED, never stored, and regeneration preserves `study_packs.id` by design —
+  so the session that mastered the OLD quiz kept matching the NEW one, because the sizes are equal by
+  construction (the prompt asks for `exactly {QUIZ_COUNT}`). The Quiz tab, which renders with
+  `revealAnswer`, stayed unlocked on questions the learner had never seen, and Quick Review then
+  administered those same questions and wrote `ConceptHealth` from them. **Pre-existing for plain Study
+  Pack regeneration; combined regeneration widened it**, because the answer key then belonged to content
+  the learner never read. `findQuizMasteredAt` now additionally requires the mastering session to be no
+  older than the note's `generation_enqueued_at`.
+  - **⚠️ `notes.generation_enqueued_at` is the discriminator, and `study_packs.updated_at` is NOT.** The
+    clock has exactly two writers, both generation starts. `updated_at` looks equivalent and is not:
+    `updateTags`, `updateMetadata` and share-link creation all bump it without touching the quiz, so
+    using it would silently re-lock the Quiz tab when a learner merely renames or shares a pack.
+  - **⚠️ The rule is null-tolerant, deliberately.** A pack with no note, or a note generated before
+    `V118` added the column, keeps today's behaviour. A strict rule would have revoked mastery for every
+    learner whose note predates the column — a fix shipping as a mass re-lock.
+- **The combined path's status interlock is now pinned.** The falsification pass moved the content write
+  above the interlock, and skipped it for combined runs, with all 236 tests green — its ordering was
+  asserted only in a comment. It matters because `resolveSourceNoteForGeneration` reads status without a
+  lock, so two concurrent regenerations both pass, and the interlock is the only thing preventing a
+  second content overwrite and a second charge on BOTH meters.
+- **A false claim about `initiatePool` was corrected in the prompt, the test and the feature doc.** It
+  does not refresh a pool built from replaced content — `ExamQuestionPoolService` returns early when a
+  pool row already exists as `READY`, `PENDING` or `GENERATING`, which every pack on this path has. The
+  call is still required and still pinned; only the reason attached to it was wrong.
+
+### Known limitations
+
+**⚠️ Added after the cold falsification pass:**
+
+- **The exam question pool and the Challenge question bank keep serving questions built from replaced
+  content.** `initiatePool` cannot refresh an existing pool (above), `refreshPool` has no caller outside
+  its own service, and `sampleQuestions` refreshes only on a `FAILED` status or a learner-level mismatch
+  — never on content change. `ChallengeQuizQuestionBankService.claimEligibleQuestions` serves stored
+  bank rows and `StudyPackService` references the bank zero times. Same root cause as the mastery defect
+  — three artifacts key on the deliberately-preserved `study_packs.id` — and this is the leg that was
+  **not** fixed here, because invalidation is new behaviour on exam machinery this release did not scope.
+- **A regeneration whose worker dies can block note edits for up to ~130 minutes.** The new 409 rejects
+  `PUT /notes/{id}` while a note is `GENERATING`, and `GenerationRecoveryService` sweeps stale notes only
+  past `note-bound-minutes` (default **120**) on a 10-minute cron. Before this release the learner could
+  still save. The guard is right and the frontend explains it without losing the draft, but nothing
+  shortens that worst case.
+- **The unlocked concurrent-start window is now a two-meter risk.** `resolveSourceNoteForGeneration`
+  reads status without a lock, so two concurrent starts both pass; a losing combined worker would charge
+  **two** meters rather than one, prevented today only by the interlock now pinned above. Pre-existing
+  and named rather than introduced.
+- **A curator sees no overwrite warning on a combined regeneration.** This is plan §17 as ratified, not
+  an oversight — but the exposed case is an ADMIN regenerating a canonical **public** note, which
+  replaces the catalog content and the source every future adopter copies from.
+
+Three audited residuals, deliberately left rather than built for:
+
+1. **A renamed key concept silently loses its history and leaves an inert `ConceptHealth` row behind.**
+   Rows are keyed `(user_id, study_pack_id, concept)` on free text, so a concept that survives
+   regeneration byte-identically keeps its evidence, one that is renamed or dropped is never read again,
+   and a new one starts empty. **This already happens on every Study Pack regeneration today and is not
+   introduced here.** A rename-matcher is the same class of claim as cross-pack canonical concept
+   identity, which is ADR-sized and out (`v0.107.0`).
+2. **A failed `NOTE_AND_STUDY_PACK` run leaves the note `FAILED` while its original Study Pack is intact
+   at the database level.** That is the intended data outcome — the whole point is that nothing is lost.
+   Whether the note-detail surface should still *offer* that intact pack while the note reads `FAILED`
+   is a later-slice question and was not decided here.
+3. **One combined run holds a generation-executor thread across TWO LLM calls instead of one**, on
+   `studyPackGenerationTaskExecutor` (core 2 / max 2 since `v0.112.0` Phase 1), so its wall time is the
+   sum of both. This is inherent to the feature (plan §10) and is recorded plainly rather than left to
+   surprise a later session — it is also half of why curator bulk regeneration is a separate release.
+
 ## v0.117.0 - Authoring and Quiz Legibility
 
 **Status: Released** (kicked off and signed off 2026-09-05, base branch `releases/v0.117.0`, cut from

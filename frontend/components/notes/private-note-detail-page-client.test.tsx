@@ -31,6 +31,7 @@ import {
   replaceNoteShares,
   startQuickReviewSession,
   trackAnalyticsEvent,
+  regenerateNote,
   updateNote,
   updateNoteVisibility,
 } from "@/lib/api";
@@ -78,6 +79,8 @@ jest.mock("@/components/ui/summary-markdown", () => ({
 
 jest.mock("@/lib/api", () => ({
   addCollectionItems: jest.fn(),
+  regenerateNote: jest.fn(),
+  isNoteGenerationInProgressError: (error: unknown) => error instanceof Error && error.message === "NOTE_GENERATION_IN_PROGRESS",
   completeProductOnboarding: jest.fn(),
   copyNote: jest.fn(),
   createCollection: jest.fn(),
@@ -1098,6 +1101,36 @@ describe("PrivateNoteDetailPageClient", () => {
     expect(screen.getByRole("button", { name: "Cancel" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Remove Nursing" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Remove Pharmacy" })).toBeInTheDocument();
+  });
+
+  // v0.118.0 §20a: PUT /notes/{id} now returns 409 NOTE_GENERATION_IN_PROGRESS while the note is being
+  // regenerated. The message must be legible AND the user's typing must survive — a rejected save is a
+  // timing problem, not a validation one.
+  it("explains the 409 and keeps the metadata draft when a save lands mid-regeneration", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({
+      planType: "PRO",
+      emailVerifiedAt: "2026-03-21T09:00:00Z",
+      profileType: "STUDENT",
+    });
+    (getNote as jest.Mock).mockResolvedValue({
+      ...baseNote,
+      studyPackStatus: "STUDY_PACK_READY" as const,
+      studyPackId: "sp-1",
+    });
+    (updateNote as jest.Mock).mockRejectedValue(new Error("NOTE_GENERATION_IN_PROGRESS"));
+
+    render(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    await screen.findByText("Test Note");
+    fireEvent.click(screen.getByRole("button", { name: "Open note actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Edit" }));
+    const titleField = await screen.findByLabelText("Title");
+    fireEvent.change(titleField, { target: { value: "Edited while regenerating" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(await screen.findByText(/being regenerated/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Cancel" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Title")).toHaveValue("Edited while regenerating");
   });
 
   it("exposes the authoring axes to an admin on a non-teacher profile", async () => {
@@ -2547,7 +2580,7 @@ describe("PrivateNoteDetailPageClient", () => {
       quickReviewAvailable: true,
       challengeQuizAvailable: true,
     });
-    (createStudyPackFromNote as jest.Mock).mockResolvedValue({
+    (regenerateNote as jest.Mock).mockResolvedValue({
       ...baseNote,
       studyPackStatus: "GENERATING",
       studyPackId: "sp-1",
@@ -2557,18 +2590,129 @@ describe("PrivateNoteDetailPageClient", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: "Open note actions" }));
     fireEvent.click(screen.getByRole("menuitem", { name: "Regenerate" }));
-    expect(screen.getByRole("dialog", { name: "Regenerate Study Pack?" })).toBeInTheDocument();
-    expect(screen.getByText("This will replace the current summary, key concepts, and quiz with a new version tailored to your level. Your quiz history is preserved.")).toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: "Regenerate this note?" })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
-    expect(createStudyPackFromNote).not.toHaveBeenCalled();
+    expect(regenerateNote).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole("button", { name: "Open note actions" }));
     fireEvent.click(screen.getByRole("menuitem", { name: "Regenerate" }));
     fireEvent.click(screen.getByRole("button", { name: "Regenerate" }));
 
+    // Both scopes go through the ONE regenerate endpoint -- STUDY_PACK delegates server-side, so the
+    // selector must not keep a second client path for the scope it did not change.
+    await waitFor(() => {
+      expect(regenerateNote).toHaveBeenCalledWith("note-1", "STUDY_PACK");
+    });
+    expect(createStudyPackFromNote).not.toHaveBeenCalled();
+  });
+
+  it("sends the combined scope when the learner picks Note + Study Pack", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ planType: "FREE", emailVerifiedAt: "2026-03-21T09:00:00Z" });
+    (getNote as jest.Mock).mockResolvedValue({
+      ...baseNote,
+      studyPackStatus: "STUDY_PACK_READY",
+      studyPackId: "sp-1",
+      quickReviewAvailable: true,
+      challengeQuizAvailable: true,
+    });
+    (regenerateNote as jest.Mock).mockResolvedValue({
+      ...baseNote,
+      studyPackStatus: "GENERATING",
+      studyPackId: "sp-1",
+    });
+
+    render(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Open note actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Regenerate" }));
+    fireEvent.click(screen.getByRole("radio", { name: /Rewrites the note itself/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Regenerate Note + Study Pack" }));
+
+    await waitFor(() => {
+      expect(regenerateNote).toHaveBeenCalledWith("note-1", "NOTE_AND_STUDY_PACK");
+    });
+  });
+
+  it("does not offer the metadata suggestion after a regeneration, in either scope", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ planType: "FREE", emailVerifiedAt: "2026-03-21T09:00:00Z" });
+    (getNote as jest.Mock).mockResolvedValue({
+      ...baseNote,
+      studyPackStatus: "STUDY_PACK_READY",
+      studyPackId: "sp-1",
+      quickReviewAvailable: true,
+      challengeQuizAvailable: true,
+    });
+    (regenerateNote as jest.Mock).mockResolvedValue({ ...baseNote, studyPackStatus: "GENERATING", studyPackId: "sp-1" });
+
+    render(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Open note actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Regenerate" }));
+    fireEvent.click(screen.getByRole("radio", { name: /Rewrites the note itself/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Regenerate Note + Study Pack" }));
+
+    await waitFor(() => {
+      expect(regenerateNote).toHaveBeenCalledWith("note-1", "NOTE_AND_STUDY_PACK");
+    });
+    // The suggestion belongs to CREATION. Arming it here would resurface it after a regeneration,
+    // competing with the scope modal's own "Edit Note details" at the wrong end of the decision.
+    expect(window.sessionStorage.getItem("notelib-awaiting-suggestion:note-1")).toBeNull();
+  });
+
+  it("still offers the metadata suggestion for a note that has no Study Pack yet", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ planType: "FREE", emailVerifiedAt: "2026-03-21T09:00:00Z" });
+    (getNote as jest.Mock).mockResolvedValue({
+      ...baseNote,
+      studyPackStatus: "DRAFT",
+      studyPackId: null,
+    });
+    (createStudyPackFromNote as jest.Mock).mockResolvedValue({
+      ...baseNote,
+      studyPackStatus: "GENERATING",
+      studyPackId: null,
+    });
+
+    render(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /Generate Study Pack/i }));
+
     await waitFor(() => {
       expect(createStudyPackFromNote).toHaveBeenCalledWith("note-1");
+    });
+    // The discriminating half: without it, "never suggests" would pass by suggesting nowhere at all.
+    expect(window.sessionStorage.getItem("notelib-awaiting-suggestion:note-1")).toBe("1");
+  });
+
+  it("resets the scope to Study Pack when the modal is reopened", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ planType: "FREE", emailVerifiedAt: "2026-03-21T09:00:00Z" });
+    (getNote as jest.Mock).mockResolvedValue({
+      ...baseNote,
+      studyPackStatus: "STUDY_PACK_READY",
+      studyPackId: "sp-1",
+      quickReviewAvailable: true,
+      challengeQuizAvailable: true,
+    });
+    (regenerateNote as jest.Mock).mockResolvedValue({ ...baseNote, studyPackStatus: "GENERATING", studyPackId: "sp-1" });
+
+    render(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    // Pick the destructive scope, back out, come back in. A learner who once chose Note + Study Pack
+    // must not get it again from a control they only glanced at -- the reset depends on the modal
+    // being UNMOUNTED while closed, so this fails the moment someone keeps it mounted.
+    fireEvent.click(await screen.findByRole("button", { name: "Open note actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Regenerate" }));
+    fireEvent.click(screen.getByRole("radio", { name: /Rewrites the note itself/i }));
+    expect(screen.getByRole("button", { name: "Regenerate Note + Study Pack" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+
+    fireEvent.click(screen.getByRole("button", { name: "Open note actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Regenerate" }));
+    expect(screen.getByRole("radio", { name: /Rewrites the summary/i })).toHaveAttribute("aria-checked", "true");
+    fireEvent.click(screen.getByRole("button", { name: "Regenerate" }));
+
+    await waitFor(() => {
+      expect(regenerateNote).toHaveBeenCalledWith("note-1", "STUDY_PACK");
     });
   });
 

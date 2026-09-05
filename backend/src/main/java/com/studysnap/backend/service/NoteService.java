@@ -36,6 +36,7 @@ import com.studysnap.backend.exception.InvalidPublicLibraryQueryException;
 import com.studysnap.backend.exception.CourseProgramSelectionRequiredException;
 import com.studysnap.backend.exception.CourseProgramTooLongException;
 import com.studysnap.backend.exception.DuplicateCourseProgramException;
+import com.studysnap.backend.exception.NoteGenerationInProgressException;
 import com.studysnap.backend.exception.NoteNotFoundException;
 import com.studysnap.backend.exception.SubjectTooLongException;
 import com.studysnap.backend.exception.UnknownCourseProgramException;
@@ -220,6 +221,24 @@ public class NoteService {
         UUID noteId = UuidParsingUtils.parseUuidOrThrow(id, NoteNotFoundException::new);
         NoteEntity entity = noteRepository.findByIdAndOwnerUserId(noteId, ownerUserId)
                 .orElseThrow(NoteNotFoundException::new);
+        // ⚠️ DO NOT "SIMPLIFY" THIS AWAY AS AN OVER-BROAD LOCK. It is the NARROWEST rule this endpoint's
+        // contract permits, for two independent reasons.
+        //
+        // 1. This is the ONLY note content/metadata endpoint and it is a single upsert with MANDATORY
+        //    content (normalizeRequiredContent throws EMPTY_NOTE_CONTENT on a blank body), so a
+        //    metadata-only edit is not expressible: every metadata save necessarily rewrites `content`.
+        //    Allowing "just metadata" through during generation would allow exactly the silent content
+        //    overwrite this guard exists to prevent.
+        // 2. saveStudyPack re-reads the note's Subject INSIDE the commit transaction, so a Subject edit
+        //    landing mid-generation would label the new Study Pack with a Subject its content was never
+        //    generated under.
+        //
+        // This also closes a PRE-EXISTING race: today's Study Pack regeneration has no guard here either.
+        // Deliberately NOT blocked: shares, visibility, and collection/section placement — none is read by
+        // generation and none is written at commit.
+        if (entity.getStatus() == NoteStatus.GENERATING) {
+            throw new NoteGenerationInProgressException();
+        }
         UserEntity owner = getOwnerOrThrow(ownerUserId);
         boolean curator = CuratorAuthoringPredicate.isCurator(owner);
         Set<UUID> courseProgramIds = curator ? validateCuratedProgramIds(request.courseProgramIds()) : Set.of();
