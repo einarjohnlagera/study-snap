@@ -1,5 +1,78 @@
 # RELEASES.md - NoteLib
 
+## v0.118.0 - Note and Study Pack Regeneration
+
+**Status: In Progress** (kicked off 2026-09-05, base branch `releases/v0.118.0`, cut from `main` after
+`v0.117.0` merged and tagged)
+
+Theme: a Note whose source material has moved on can be regenerated — content and Study Pack together —
+without losing the note's identity, its place in a plan, or the learner's history against it.
+
+### Planned Scope
+
+**⚠️ PHASE 1 ONLY — THE SINGLE-NOTE PRIMITIVE.** Governed by
+`docs/claude-plans/note-and-study-pack-regeneration-stage1.md`, **owner-ratified 2026-09-05 (§20)** and
+ready for implementation-prompt drafting. **⚠️ EXECUTE ITS DECISIONS; DO NOT RE-DERIVE THEM.**
+
+**⚠️ THE AUDIT'S HEADLINE IS THAT THE FEATURE IS SUBSTANTIALLY SMALLER THAN THE BRIEF ASSUMED, ON ONE
+FACT: `NoteGenerationService.generateFromTopic` DOES NOT CREATE A NOTE.** It returns a content string
+and the frontend saves it through the ordinary create path — so the brief's headline prohibition
+(*"do not delete and recreate the Note"*) guards a risk that does not exist in the code. **No migration
+is required by anything in the audit.**
+
+1. **A Note's content and its Study Pack regenerate as one operation**, preserving `notes.id`,
+   `notes.created_at`, `study_packs.id`, and the note's `note_collection_items` row with its `position`
+   and `label` intact.
+2. **The pairing is atomic in the sense that matters: a failed Study Pack generation leaves the ORIGINAL
+   content and the ORIGINAL pack in place.** A half-regenerated note is the failure mode this exists to
+   prevent.
+3. **Both meters are left unchanged when the operation fails**, asserted on the persisted counters
+   rather than on the call.
+
+### Anti-drift
+
+- **⚠️ THE VERIFICATION TRIGGER IS MONEY/QUOTA SEMANTICS — A SINGLE OPERATION CHARGES TWO METERS.**
+  That is why this could not be folded into `v0.117.0`, whose anti-drift forbade quota change.
+- **⚠️ CURATOR BULK REGENERATION IS NOT IN THIS RELEASE AND MUST NOT BE FOLDED IN.**
+  `docs/claude-plans/curator-bulk-regeneration-stage1.md` §29 rules it *"NOT safe to ship in the same
+  release as the single-Note primitive"*, and names two reasons that are arithmetic rather than opinion:
+  the existing bulk receipt **cannot report a batch this long** (the poller abandons after ~5 minutes
+  while regeneration is strictly slower per item — two LLM calls, not one — so a 50-note batch
+  guarantees the curator never learns the outcome), and **the batch loop occupies one of only two
+  threads on the same executor each item's generation is dispatched onto.** Both need solving before
+  bulk, and neither is this release's problem.
+- **⚠️ Do NOT build a concept-migration engine.** Stale `ConceptHealth` rows are already inert. No
+  rename matching, no canonical concept identity — all three are named and rejected in the audit.
+- **⚠️ NO MIGRATION** (the audit states none is required; if one appears needed the scope is wrong);
+  **no pricing or entitlement change, no new plan gate, no new quiz mode or sub-mode.**
+- **⚠️ `frontend/app/onboarding` STAYS FROZEN.** The freeze lifted 2026-09-11 in principle, but **live
+  dated reads run through 2026-09-19** and more land after; verify before touching it, do not assume.
+- **⚠️ Do NOT change what `BOARD_EXAM_STARTED`, `ADAPTIVE_PRACTICE_STARTED` or `QUIZ_SHARE_LINK_CREATED`
+  record.**
+- **⚠️ Do NOT start Slices 4-5 of the Review Set overhaul** (gated on `[CHECKPOINT — due 2026-10-05]`)
+  **or `v0.112.0` Phase 3** (gated on `[CHECKPOINT — due 2026-10-04]`).
+
+### Verification
+
+**ONE SCOPED COLD AGENT framed as FALSIFICATION.** Trigger named by the gate: **money/quota semantics —
+one operation charges two meters.** Not the three-agent test: no permission substrate, no cross-user
+read, no migration.
+
+**⚠️ PRE-DECLARED GUARDS, taken from the audit and each naming the fixture that would pass under the
+defect:**
+- **Pairing** — a run whose **Study Pack generation fails** must leave the note's original content AND
+  original pack intact. *A fixture whose generation succeeds passes under both the defect and the fix.*
+- **Quota on failure** — the same failing run leaves **both** meters unchanged. **Assert the persisted
+  counters, not the call.**
+- **Identity** — after a successful run, assert the **persisted** `notes.id`, `notes.created_at`,
+  `study_packs.id`, and a surviving `note_collection_items` row with `position` and `label` unchanged.
+
+**Routing: CODEX** — two services, an existing quota path, and a frontend surface.
+
+### Shipped
+
+_(nothing yet)_
+
 ## v0.117.0 - Authoring and Quiz Legibility
 
 **Status: Released** (kicked off and signed off 2026-09-05, base branch `releases/v0.117.0`, cut from
