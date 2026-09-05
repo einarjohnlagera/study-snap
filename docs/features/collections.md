@@ -794,6 +794,24 @@ to apply the additions. Page load only inspects; it never applies.
 | Retire | Surfaced; learner note and history remain |
 | Move | Surfaced; learner structure is unchanged |
 
+**⚠️ A RESTRUCTURE IS A MOVE, NOT AN ADDITION, AND THE DISTINCTION IS LOAD-BEARING.** When a curator
+reorganises a flat plan into Subject Plans, the notes are not new — a learner who adopted the flat
+version already holds them. That is reported as `MOVED` and nothing is applied. Treating it as an
+addition would re-place notes the learner already has and nest children under an adopted root that
+still holds direct notes: a shape `addItems` and `validateParentCanAcceptChild` both forbid, that no
+database constraint enforces, and that the collection page cannot render — `isGoalView` switches to the
+goal branch, which has no direct-items list, so the learner's own notes would disappear from the page.
+
+**⚠️ WHICH PLANS ARE EXAMINED COMES FROM THE LEARNER'S OWN STRUCTURE, NEVER THE SOURCE'S SHAPE.** Reading
+it from the source is what made the restructure case wrong: when the two shapes disagreed the learner's
+placements became invisible to the diff, so every source item looked new.
+
+**⚠️ APPLYING ACKNOWLEDGES ONLY WHAT IT APPLIED.** A pass re-baselines the source facts for plans that
+actually received an addition, and nothing else. Acknowledging every matched plan meant a learner who
+pressed *Apply additions* to get three new notes silently accepted an unrelated rename as their new
+baseline — never applied, never shown again, and unrecoverable because the previous value was
+overwritten. A structural change the learner has not acted on stays surfaced on every visit.
+
 The diff follows source placements to learner copies through `notes.copied_from_note_id` (with the
 existing `source_note_id` fallback for curator self-copies). It compares source label and position at the
 last sync with source label and position now. It never compares a source position with a learner

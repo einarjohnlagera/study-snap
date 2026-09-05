@@ -2,8 +2,8 @@
 
 ## v0.116.0 - Additive Review Set Updates
 
-**Status: In Progress** (kicked off 2026-09-05, base branch `releases/v0.116.0`, cut from `main` after
-`v0.115.0` merged and deployed)
+**Status: Released** (kicked off and signed off 2026-09-05, base branch `releases/v0.116.0`, cut from
+`main` after `v0.115.0` merged and deployed)
 
 Theme: an Official Review Set you adopted can gain the topics its curator has added since, without ever
 overwriting the work you have done in it.
