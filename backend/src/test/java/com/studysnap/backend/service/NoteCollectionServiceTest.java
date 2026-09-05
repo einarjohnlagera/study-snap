@@ -4092,6 +4092,11 @@ class NoteCollectionServiceTest {
         NoteCollectionEntity personalSecondChild = buildCollection(UUID.randomUUID(), userId, "Professional Education", Instant.now());
         personalFirstChild.setCompanion(companionContent());
         personalFirstChild.setCompanionStructureSnapshot(new CompanionStructureSnapshot(0, List.of()));
+        // ⚠️ THE PRE-DECLARED GUARD'S DISCRIMINATOR (v0.117.0 item 5): these are PRE-EXISTING standalone
+        // adoptions that ALREADY carry dates the learner set. A fresh adoption has no date to lose and
+        // passes under the defect. The EARLIER of the two must survive on the Goal.
+        personalFirstChild.setTargetCompletionDate(LocalDate.parse("2026-11-20"));
+        personalSecondChild.setTargetCompletionDate(LocalDate.parse("2026-10-15"));
         personalSecondChild.setCompanion(companionContent());
         personalSecondChild.setCompanionStructureSnapshot(new CompanionStructureSnapshot(0, List.of()));
 
@@ -4151,6 +4156,14 @@ class NoteCollectionServiceTest {
         assertThat(personalFirstChild.getCompanionStructureSnapshot()).isNull();
         assertThat(personalSecondChild.getCompanion()).isNull();
         assertThat(personalSecondChild.getCompanionStructureSnapshot()).isNull();
+        // The invariant still holds -- a child carries no date -- but the learner's own date is carried
+        // UP to the Goal rather than destroyed, and the EARLIER of the two wins because a completion
+        // target is a deadline and the nearest one binds.
+        assertThat(personalFirstChild.getTargetCompletionDate()).isNull();
+        assertThat(personalSecondChild.getTargetCompletionDate()).isNull();
+        assertThat(savedGoal[0].getTargetCompletionDate())
+                .as("adopting a Goal must not silently erase an exam date the learner set for themselves")
+                .isEqualTo(LocalDate.parse("2026-10-15"));
         ArgumentCaptor<NoteCollectionEntity> goalCaptor = ArgumentCaptor.forClass(NoteCollectionEntity.class);
         verify(collectionRepository, times(3)).saveAndFlush(goalCaptor.capture());
         assertThat(goalCaptor.getAllValues().getFirst().getEstimatedStudyHours()).isEqualTo(3);

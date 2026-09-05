@@ -1,5 +1,232 @@
 # RELEASES.md - NoteLib
 
+## v0.117.0 - Authoring and Quiz Legibility
+
+**Status: Released** (kicked off and signed off 2026-09-05, base branch `releases/v0.117.0`, cut from
+`main` after `v0.116.0` merged and tagged)
+
+Theme: four things the owner hit in real use — a quiz question that reads as one run-on statement, a
+plan-scoped session that calls itself a single note, a drag preview that swallows the page, and a
+section picker that drops what you chose — plus a learner's own exam date that adoption silently erases.
+
+### Planned Scope
+
+**⚠️ THIS IS THE FIRST RELEASE IN SOME TIME WHOSE EVIDENCE IS OWNER OBSERVATION RATHER THAN INFERENCE,
+AND THAT IS WHY IT RANKS ABOVE THE REST OF THE BACKLOG.** Five issues were reported from real use with
+screenshots on 2026-09-05, audited against code, tightened by the owner, then run through a GPT
+tightening pass. Plan: `docs/claude-plans/authoring-and-quiz-legibility-fix-plan.md` — **⚠️ READ ITS §10
+FIRST: two owner premises are contradicted by the code, reported rather than silently reconciled.
+Neither changes a product decision; both change what the plan can truthfully promise.**
+
+**⚠️ THIS IS "RELEASE A" OF THAT PLAN'S OWN SPLIT — ITEM 5 IS DELIBERATELY HELD BACK.** The plan
+separates the deferred save-order work because items 4 and 5 both touch persistence, and shipping them
+together would simultaneously change immediate section assignment AND deferred order state **in ways
+that are hard to falsify.** Do NOT fold item 5 in.
+
+1. **A Challenge Quiz assertion question stops reading as one run-on statement.** A `Statement N:`
+   splitter already ships (`quiz-question-text.tsx`), but `text.split(STATEMENT_RE)` pairs each label
+   with everything up to the next one, so **the trailing interrogative is swallowed onto the last
+   statement's line.** Both halves ship: the presentation fix, and the upstream prompt at
+   `challenge-quiz-developer.txt:46` that models the whole thing as one blob. **⚠️ PRESENTATION ONLY —
+   item 1 must NOT mutate stored or deserialized text** (`v0.110.1`'s non-idempotent-sanitizer lesson);
+   it is a legacy-compatibility path, not a text-repair framework.
+2. **A plan-scoped Adaptive Practice session stops presenting itself as a single note.** The backend
+   already picks the right title by scope (`QuickReviewAdaptivePracticeService:1037`), but **the
+   note-addressed read at `:183` never passes the collection** — it calls the 2-arg overload, which
+   hardcodes `sourceCollection = null` and applies no scope filter. Because a plan-scoped session is
+   anchored on a primary pack (`v0.107.0`), reading that note returns the plan-scoped session titled
+   with one pack. **That is the screenshot.** Then reduce the header's information density.
+   **⚠️ MUST NOT merge focus concepts across packs — group by `sourceTitle`** (`v0.107.0`).
+3. **The section drag preview stops swallowing the page.** Two causes in the Study Plan Builder:
+   `collisionDetection={closestCenter}` compares rect centres, which is wrong for a tall dragged block,
+   and the overlay renders at full size. **⚠️ The overlay must NOT regrow — no "first N notes" preview.**
+4. **Picking an existing section commits it immediately.** The debounced writer is gated on
+   `editing`, so **a dropdown selection rides the same blur path as free typing.** Free-text stays
+   protected. **⚠️ Do NOT remove the `editing`-gated debounced writer or its comment** — a `v0.88.0`
+   mechanism with a REPRODUCED defect recorded in it (typing *"Week"*, pausing, then *" 1"* created a
+   section called *"Week"* and dropped the rest), and CLAUDE.md forbids removing it. Item 4 adds a path
+   **beside** it.
+5. **Adopting a Goal stops erasing a learner's own exam date.** `NoteCollectionService:918` NULLs
+   `targetCompletionDate` on a pre-existing standalone adoption when the parent Goal is adopted
+   (`:907` finds an EXISTING row, so this is not a fresh copy). The child-cannot-carry-a-date invariant
+   is real; **silently destroying a date the learner set is not.** **⚠️ FOLDED IN DELIBERATELY, NOT
+   OPPORTUNISTICALLY: it is learner data loss, it sits in the adoption path item 4 is adjacent to, and it
+   was held out of `v0.116.0` on purpose** because that release's pressure test was aimed at update
+   idempotence and this would have blurred it.
+
+### Anti-drift
+
+- **⚠️ ITEM 5 OF THE PLAN (deferred save-order) IS NOT IN THIS RELEASE.** It is "Release B" and earns
+  its own focused verification. Do NOT revert to autosave-per-drop, and do NOT change the
+  flush-on-immediate-mutation behaviour (plan §10, Finding A — deliberate, and the safe direction).
+- **⚠️ Do NOT add a numeric pending-change count** (plan §6).
+- **⚠️ Do NOT change `ADAPTIVE_PRACTICE_STARTED`'s fields or firing conditions** — dated checkpoints read
+  them, and `[CHECKPOINT — due 2026-10-13]` reads `sourceScope`. **Item 2 changes a RESPONSE TITLE, not
+  an event.** This is the edit most likely to move a firing condition by accident.
+- **⚠️ Do NOT change `BOARD_EXAM_STARTED` or `QUIZ_SHARE_LINK_CREATED`.**
+- **⚠️ `frontend/app/onboarding` STAYS FROZEN.** The freeze lifts 2026-09-11, but **twelve dated reads
+  land 2026-09-10 → 2026-09-17** — verified: none of these five surfaces reach that directory.
+- **⚠️ NO MIGRATION** (if one appears needed the scope is wrong); **no new mode or sub-mode; no quota,
+  entitlement, limit or meter change; no `ProfileType` gate.**
+- **⚠️ Do NOT start Slices 4-5 of the Review Set overhaul** — gated on `[CHECKPOINT — due 2026-10-05]`'s
+  uptake criterion. **Do NOT start `v0.112.0` Phase 3** — gated on `[CHECKPOINT — due 2026-10-04]`, and
+  `v0.114.0`'s own evidence argues against its target.
+- **⚠️ Do NOT broaden beyond these five fixes.**
+
+### Verification
+
+**ONE SCOPED COLD AGENT framed as FALSIFICATION**, not the three-agent test: no migration, no permission
+substrate, no cross-user read, no money or quota semantics. **⚠️ The trigger that fires is item 2 —
+it crosses backend and frontend on a surface two dated checkpoints measure.**
+
+**⚠️ ESCALATE IF** item 2 turns out to need an event change, or item 5 (the folded data-loss fix) grows a
+second write path.
+
+**⚠️ PRE-DECLARED GUARDS, each naming the fixture that would pass under the defect:**
+- **Item 1: a question whose trailing interrogative follows the LAST `Statement N:` label.** One with the
+  question first parses correctly under both the defect and the fix.
+- **Item 2: a PLAN-SCOPED session read through the NOTE-ADDRESSED route.** A collection-addressed
+  fixture already passes today and proves nothing — the defect is entirely in the 2-arg overload.
+- **Item 5: a pre-existing standalone adoption that ALREADY carries a learner-set
+  `targetCompletionDate`.** A fresh adoption has no date to lose and passes under the defect.
+
+**⚠️ CARRIED LESSON FROM `v0.116.0`, AND IT IS THE SHARPEST ONE THIS ARC HAS PRODUCED: a guard whose
+fixture cannot occur in production proves nothing.** That release's item 4 was mutation-verified against
+a hand-set state adoption could never produce, and shipped as an observable no-op. **Reach each subject
+the way production reaches it.**
+
+**Routing: SPLIT** — items 1, 3, 4 and 5 are **CLAUDE CODE inline**; **item 2 is CODEX** (two systems).
+**⚠️ Re-run the routing test if implementation discovers a surface not in the agreed plan.**
+
+### Shipped
+
+- **A Challenge Quiz assertion question no longer reads as one run-on statement.** The `Statement N:`
+  splitter pairs each label with everything up to the next one, so the closing interrogative was
+  swallowed onto the last statement's line. Fixed at **both** ends: the prompt now asks for a real
+  newline between statements and the question, and a narrow presentation path breaks a trailing
+  interrogative off the **final** segment for the questions already generated. **⚠️ It bypasses entirely
+  when the text already carries a newline**, so a compliant question is untouched. **⚠️ PRESENTATION
+  ONLY — it returns nodes and never rewrites stored text**, which is `v0.110.1`'s lesson: a sanitizer
+  that re-ran on every read progressively destroyed stored choice text. **⚠️ A legacy-compatibility path,
+  not a text-repair framework** — do not generalize it or add a second heuristic beside it. Guards pin
+  the fix, the newline bypass, and that an ordinary period-ending statement is left alone.
+- **The section drag preview no longer swallows the page.** Two causes: `closestCenter` compares rect
+  centres, and a tall dragged section's centre sits far below the cursor, so upward targets could never
+  win — the reported asymmetry; and the overlay rendered every note. Now `closestCorners` on the **leaf**
+  context only (the subject-level context drags uniform rows, where centres are fine), with the overlay
+  cut to title and count. **⚠️ "First 3 notes + N more" was explicitly REJECTED: preview height IS the
+  diagnosed failure, so a smaller oversized preview reintroduces the same geometry.**
+- **Choosing an existing section commits it immediately.** The debounced writer is gated on `editing`,
+  so a dropdown click rode the same blur path as free typing and appeared to do nothing. The shared
+  combobox gained an `onOptionSelect` that fires only on an option click, and the builder commits from
+  it directly. **⚠️ THE `editing`-GATED WRITER AND ITS COMMENT ARE UNTOUCHED** — a `v0.88.0` mechanism
+  whose comment records a REPRODUCED defect (typing *"Week"*, pausing, then *" 1"* created a section
+  called *"Week"* and dropped the rest). Item 4 adds a path **beside** it. **⚠️ NAMED CONSEQUENCE (plan
+  §10, Finding A): immediate commit makes an existing flush reachable in ONE CLICK rather than on blur,
+  so the sticky unsaved-arrangement bar now disappears the moment a section is picked.** Behaviour is
+  unchanged and the work is saved — but it is visible, and it is why plan items 4 and 5 do not share a
+  release.
+- **Adopting a Goal no longer erases a learner's own exam date.** `adoptGoal`'s reparent branch runs on
+  a **pre-existing** standalone adoption, so the `targetCompletionDate` it cleared was one the learner
+  set for themselves. The child-cannot-carry-a-date invariant is real and is kept; the date is now
+  **promoted to the Goal** instead, **earliest winning, because a completion target is a deadline and
+  the nearest one binds.** A Goal with its own date keeps it — a freshly adopted Goal never copies one,
+  so in practice this fills an empty field. **⚠️ The guard's fixture gives two pre-existing adoptions
+  dates ALREADY: a fresh adoption has none to lose and passes under the defect.**
+- **A plan-scoped Adaptive Practice session no longer presents itself as a single note.** Both
+  note-addressed routes — `POST /notes/{id}/adaptive-practice/start`'s resume branch and
+  `GET /notes/{id}/adaptive-practice/in-progress` — now resolve the source collection through the same
+  column-then-JSONB resolver the session-addressed read uses, so all three routes describe one row the
+  same way. **⚠️ CORRECTION TO THE PLANNED-SCOPE PREMISE, RECORDED RATHER THAN QUIETLY RECONCILED: the
+  defect's population is PRE-`V133` LEGACY ROWS ONLY.** `buildGeneratingSession` has set both note
+  anchors to NULL for every collection session since `v0.113.0`, so a post-migration plan-scoped row
+  cannot be returned by a pack-keyed lookup at all; the reachable subject is a pre-migration row that is
+  pack-anchored and carries its plan id only in `session_state.sourceCollectionId`. The scope claim
+  "anchored on a primary pack (`v0.107.0`)" was true through `v0.112.x` and is stale. **The fix and its
+  guards are unchanged — only the fixture shape is, and that is the whole of the carried `v0.116.0`
+  lesson.** The plan named `:183` alone; `:624` had the identical defect on the identical population and
+  is fixed with it. **⚠️ ONE NAMED CONSEQUENCE:** when the collection resolves, the response is built
+  with no fallback Study Pack — mirroring the session-addressed route — so a legacy row that stored its
+  focus concepts as BARE STRINGS (pre-`v0.104.0`, before per-source stamping) now shows them
+  unattributed rather than attributing all of them to the one borrowed pack. Honest, and the two routes
+  agree; rows stamped by `generateAdaptiveQuizForCollection` are unaffected.
+- **The Adaptive Practice header communicates five layers instead of one run-on list**: mode, scope
+  title, a compact `N weak concepts across M notes` summary, concepts grouped under their source Study
+  Pack, and progressive disclosure behind `Show all concepts`. **⚠️ Grouping keys on
+  `sourceStudyPackId`, never on the concept string** — keying on the name would merge two packs' shared
+  concept and assert cross-pack canonical concept identity, which is out of scope (`v0.107.0`). The
+  in-quiz header's `focusConcepts.join(", ")` was the live instance of that merge and now reports
+  per-source counts whenever a session spans more than one pack.
+
+**Signoff gates**
+
+- **Scope-completeness: all five items verified present in merged code**, not assumed — the splitter and
+  its prompt half, both note-addressed resolutions, `closestCorners` on the leaf context, the
+  `onOptionSelect` path, and the date promotion.
+- **⚠️ FEATURE-DOC DRIFT GATE FOUND TWO STALE CLAIMS, NEITHER IN THE DIFF — the repo's named recurring
+  failure.** `docs/features/collections.md:76` said the Section control *"auto-saves on a 500 ms
+  debounce"*, which after item 4 is true only for TYPING; a chosen option now commits immediately, and
+  that commit also flushes pending drag ordering. `docs/features/quiz.md:194` described the
+  assertion-item format without the newline rule item 1 added to the prompt. Both corrected.
+- **⚠️ CHECKPOINT GATE: NONE OWED, ANSWERED RATHER THAN SKIPPED.** Nothing here shipped ahead of its own
+  evidence — the evidence PRECEDED the work in every case, since all five respond to owner observation
+  of a defect against known-correct behaviour. There is no pre-committed rule, no owner override on an
+  ambiguous read, and no metric a decision hangs on. **Two items target populations that DRAIN rather
+  than grow** — item 1's un-newlined questions and item 2's pre-`V133` legacy rows — but nothing is
+  gated on their disappearing, so a dated read would measure attrition nobody would act on.
+- **⚠️⚠️ THE COLD AGENT FOUND THAT ITEM 4 DID NOT SHIP AT ALL, AND IT WAS THIS SESSION'S OWN CODE.**
+  `SuggestionCombobox` renders options through **two disjoint branches** — grouped and ungrouped — and
+  the new `onOptionSelect` was added to the **grouped** one only (`:273`). **The builder passes no
+  `groupedOptions`, so it always renders the ungrouped branch (`:295`) and the callback could never
+  fire.** Everything compiled, all 2152 tests stayed green, and `RELEASES.md` described a behaviour that
+  did not exist — including a named consequence about the sticky bar that only materialises with the
+  missing line. **⚠️ THE ROOT CAUSE IS NOT THE MISSED BRANCH, IT IS THAT ITEMS 3 AND 4 SHIPPED WITH ZERO
+  TEST CHANGES to `builder/page.test.tsx` — a 1020-line suite that already contains a test for the
+  debounced combobox writer.** Fixed at `:296`, with a guard whose discriminator is that **nothing is
+  blurred and no timer is advanced**; a fixture that blurs passes under the pre-fix debounce and proves
+  nothing. Reverting the one line fails that named test. **⚠️ Deliberately NOT added to the
+  `Use "X"` create-option button — `allowCustom` defaults true, so that button renders in the builder
+  and it is the TYPING path the `editing`-gated debounce exists to protect.**
+- **⚠️ THIS IS THE SECOND RELEASE RUNNING WHERE AN ITEM 4 LOOKED CORRECT AND DELIVERED NOTHING**
+  (`v0.116.0`'s companion predicate was the first). Both passed a full suite; both were caught only by a
+  cold agent; **and this one was caught only because the tier was honoured rather than downgraded to an
+  `advisor()` call on a release with no migration and no money semantics.**
+- **Verification: ONE SCOPED COLD AGENT framed as falsification**, the tier pre-declared at kickoff and
+  honoured rather than downgraded. **⚠️ Its sharpest trigger was NOT the one the kickoff named:** items 3
+  and 4 both change `study-plan-builder-page-client.tsx`, and item 4's immediate commit reaches item 3's
+  pending drag state through `persistLeafItems`, which is the interaction with the least independent
+  verification behind it. **Final merged-state build, re-taken AFTER the item 4 fix rather than carried over: 2140 backend tests, 2153 frontend, 198 suites, `tsc --noEmit` clean, 0 failures.**
+
+**Known limitations**
+
+- **⚠️ ITEM 1 COVERS ONE PROMPT OF FIVE AND MISSES TWO RENDER SURFACES — the Study Pack Quiz tab is
+  missed at BOTH ends.** Five prompt files carry the identical assertion-style framing rule; only
+  `challenge-quiz-developer.txt` was taught the newline. `developer.txt` (the main Study Pack quiz, which
+  Quick Review administers), `long-exam-developer.txt`, `board-exam-developer.txt` and
+  `teacher-quiz-developer.txt` were not. Separately, `practice-quiz-card.tsx` and
+  `generated-quiz-preview-page-client.tsx` render with bare `renderMathText` rather than
+  `QuizQuestionText`, so they have no splitter. **Confirmed by render probe: the same stored string
+  renders correctly under `QuizQuestionText` and as one run-on line under `PracticeQuizCard`.**
+  Pre-existing, but squarely inside item 1's stated scope, so it is named rather than absorbed.
+- **The splitter is math-unaware in one contrived case.** `Statement 1: Refer to $\text{a. b}$ ok?`
+  splits at the period inside the math and shows raw `$`. It needs a `. ` inside math with no other
+  sentence punctuation after it; realistic cases (`Per Sec. 5 the load is factored. Which is correct?`)
+  split correctly because the match is greedy. A closing question containing a decimal suppresses the
+  split entirely and leaves the run-on — no corruption, the defect simply persists there.
+- **⚠️ ITEM 3 HAS NO AUTOMATED GUARD, AND THAT IS A DELIBERATE CHOICE RATHER THAN AN OVERSIGHT.**
+  Collision geometry and overlay height are not meaningfully testable in jsdom, and a test asserting
+  that `closestCorners` was passed would pin the CONSTANT rather than the behaviour — the same shape
+  `v0.114.0` records as *"a schema test with hardcoded booleans instead of the derivation"*. **It wants a
+  manual drag on a section with 10+ notes, dragged UPWARD**, which is the reported asymmetry and the
+  direction the old centre-based detection could never satisfy.
+- **Item 1 repairs display only; the stored text stays as generated.** A question written before the
+  prompt change keeps its run-on form in the database and is laid out correctly at render time. That is
+  the `v0.110.1` rule — a display path must never rewrite stored content — and it means the fix travels
+  with the renderer rather than with the data.
+- **Item 2's named consequence, carried forward:** when the collection resolves, the response is built
+  with no fallback Study Pack, so a legacy row that stored focus concepts as bare strings
+  (pre-`v0.104.0`) shows them unattributed rather than attributing all of them to one borrowed pack.
+
 ## v0.116.0 - Additive Review Set Updates
 
 **Status: Released** (kicked off and signed off 2026-09-05, base branch `releases/v0.116.0`, cut from

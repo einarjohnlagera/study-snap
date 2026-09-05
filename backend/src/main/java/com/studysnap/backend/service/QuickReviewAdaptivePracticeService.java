@@ -180,7 +180,7 @@ public class QuickReviewAdaptivePracticeService {
         if (existing != null) {
             List<QuizItem> existingQuiz = QuizSessionStateUtils.extractQuiz(existing.getSessionState());
             if (existing.getStatus() == QuickReviewSessionStatus.GENERATING || !existingQuiz.isEmpty()) {
-                return toAdaptiveResponse(existing, studyPack);
+                return toNoteAddressedAdaptiveResponse(existing, studyPack, userId);
             }
             markSessionForfeited(existing);
             quickReviewSessionRepository.save(existing);
@@ -621,7 +621,7 @@ public class QuickReviewAdaptivePracticeService {
             return interviewSessionActiveResponse(studyPack);
         }
         if (existing != null) {
-            return toAdaptiveResponse(existing, studyPack);
+            return toNoteAddressedAdaptiveResponse(existing, studyPack, userId);
         }
 
         QuickReviewSessionEntity latestCompletedSession = resolveLatestAdaptiveSourceSession(userId, studyPackId);
@@ -1008,6 +1008,36 @@ public class QuickReviewAdaptivePracticeService {
         StudyPackEntity studyPack
     ) {
         return toAdaptiveResponse(session, studyPack, null);
+    }
+
+    /**
+     * Resolves the displayed scope for a session reached through a NOTE-ADDRESSED lookup.
+     *
+     * <p>⚠️ THIS EXISTS ENTIRELY FOR THE PRE-V133 LEGACY POPULATION, and saying so prevents it being
+     * deleted as dead code. A plan-scoped session created before V133 is PACK-ANCHORED and carries
+     * its plan id only in {@code session_state.sourceCollectionId}, so
+     * {@code findTopByUserIdAndStudyPackId...} -- which keys on {@code study_pack_id} -- still
+     * returns it. Handing that row to the 2-arg overload titles a whole Subject Plan with one
+     * borrowed pack, which is the reported defect. A POST-V133 plan-scoped row sets both note
+     * anchors to NULL ({@code buildGeneratingSession}) and cannot be reached this way at all.
+     *
+     * <p>Mirrors {@link #getAdaptiveSessionById}'s resolution so both routes describe one row the
+     * same way. Its 404 branches are deliberately NOT copied: they exist because that route may hold
+     * no pack, whereas this one always does -- so a deleted plan degrades to the pack title here
+     * rather than making a resumable session unreachable.
+     */
+    private QuickReviewAdaptiveQuizResponse toNoteAddressedAdaptiveResponse(
+        QuickReviewSessionEntity session,
+        StudyPackEntity studyPack,
+        UUID userId
+    ) {
+        UUID sourceCollectionId = resolveSourceCollectionId(session);
+        if (sourceCollectionId == null) {
+            return toAdaptiveResponse(session, studyPack);
+        }
+        return noteCollectionRepository.findByIdAndOwnerUserId(sourceCollectionId, userId)
+                .map(collection -> toAdaptiveResponse(session, null, collection))
+                .orElseGet(() -> toAdaptiveResponse(session, studyPack));
     }
 
     private QuickReviewAdaptiveQuizResponse toAdaptiveResponse(

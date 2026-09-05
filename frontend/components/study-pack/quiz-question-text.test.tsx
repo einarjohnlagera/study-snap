@@ -109,6 +109,43 @@ describe("QuizQuestionText", () => {
     });
   });
 
+  // ⚠️ THE PRE-DECLARED GUARD FOR v0.117.0 ITEM 1, AND ITS FIXTURE IS THE POINT: the interrogative
+  // follows the LAST Statement label. `text.split(STATEMENT_RE)` pairs each label with everything up to
+  // the next one, so only the FINAL segment can swallow the question — a fixture with the question
+  // FIRST parses correctly under both the defect and the fix and proves nothing.
+  it("breaks a trailing question off the last statement instead of swallowing it", () => {
+    render(
+      <QuizQuestionText
+        text={"Statement 1: Water boils at 100C. Statement 2: Ice melts at 0C. Which statements are correct?"}
+      />,
+    );
+
+    // The question must be its own node, not tacked onto Statement 2's body.
+    expect(screen.getByText("Which statements are correct?")).toBeInTheDocument();
+    expect(screen.queryByText(/Ice melts at 0C\. Which statements are correct\?/)).not.toBeInTheDocument();
+  });
+
+  // A question the model generated correctly already carries a real newline, and the renderer honours
+  // it. The heuristic must not touch that path -- otherwise it becomes a general text-repair framework,
+  // which is exactly what this release forbids.
+  it("leaves a newline-separated question alone rather than re-splitting it", () => {
+    render(
+      <QuizQuestionText text={"Statement 1: Water boils at 100C.\nWhich statement is correct?"} />,
+    );
+
+    expect(screen.getByText("Which statement is correct?")).toBeInTheDocument();
+  });
+
+  // Narrowness, asserted directly: a statement body with no trailing interrogative must be left exactly
+  // as it is. Without this, a broadened heuristic could start splitting ordinary sentences apart.
+  it("leaves a statement that ends in a period untouched", () => {
+    render(
+      <QuizQuestionText text={"Statement 1: Water boils at 100C. Statement 2: Ice melts at 0C."} />,
+    );
+
+    expect(screen.getByText(/Ice melts at 0C\./)).toBeInTheDocument();
+  });
+
   it("still splits Statement-labelled prompts onto their own lines", () => {
     render(
       <QuizQuestionText text={"Evaluate both.\nStatement 1: Water boils at 100C.\nStatement 2: Ice melts at 0C."} />,

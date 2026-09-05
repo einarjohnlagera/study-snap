@@ -751,6 +751,41 @@ describe("StudyPlanBuilderPageClient", () => {
     }
   });
 
+  // ⚠️ THE GUARD ITEM 4 SHIPPED WITHOUT, AND ITS ABSENCE IS WHY THE ITEM WAS A NO-OP.
+  // The combobox renders options through TWO disjoint branches — grouped and ungrouped — and the fix
+  // was first added only to the grouped one. The builder passes no `groupedOptions`, so it always
+  // renders the ungrouped branch, and the callback could never fire. Everything still compiled, the
+  // whole suite stayed green, and the release notes described a behaviour that did not exist.
+  //
+  // ⚠️ THE DISCRIMINATOR IS THAT NOTHING IS BLURRED AND NO TIMER IS ADVANCED. A fixture that blurs, or
+  // advances 500 ms, passes under the debounced pre-fix behaviour and proves nothing — that is exactly
+  // what the test above this one does, deliberately, for the TYPING path.
+  it("commits a section chosen from the dropdown immediately, without a blur or a debounce", async () => {
+    jest.useFakeTimers();
+    try {
+      (getCollection as jest.Mock).mockResolvedValue(collectionDetail("leaf-1", "Anatomy Plan", [
+        { ...collectionItem("note-1", "Skeletal System", 0), label: "Algebra" },
+        { ...collectionItem("note-2", "Muscle Groups", 1), label: "Calculus" },
+      ], { parentCollectionId: null, childCount: 0 }));
+      render(<StudyPlanBuilderPageClient collectionId="leaf-1" />);
+
+      const combobox = await screen.findByLabelText("Section for Muscle Groups");
+      fireEvent.focus(combobox);
+      // Typing opens the list; it does NOT commit, because the debounced writer is gated on `editing`
+      // and the field still has focus. The commit under test is the CLICK below.
+      fireEvent.change(combobox, { target: { value: "Algebra" } });
+      fireEvent.click(await screen.findByRole("option", { name: "Algebra" }));
+
+      await waitFor(() => expect(setCollectionItemOrder).toHaveBeenCalledTimes(1));
+      expect((setCollectionItemOrder as jest.Mock).mock.calls[0][1]).toEqual([
+        { noteId: "note-1", label: "Algebra" },
+        { noteId: "note-2", label: "Algebra" },
+      ]);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
   it("sets every section from note subjects after confirmation", async () => {
     (getCollection as jest.Mock).mockResolvedValue(collectionDetail("leaf-1", "Anatomy Plan", [
       { ...collectionItem("note-1", "Skeletal System", 0), label: "Old", subject: "Biology" },
