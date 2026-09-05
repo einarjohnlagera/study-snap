@@ -3481,6 +3481,115 @@ class NoteCollectionServiceTest {
         verify(itemRepository, never()).saveAndFlush(any(NoteCollectionItemEntity.class));
     }
 
+    /**
+     * ⚠️ THE MID-PASS FAILURE-ISOLATION GUARD, AND IT COVERS A DELIVERED RESPONSE STATE THAT HAD NO TEST.
+     * {@code PARTIALLY_UPDATED} is emitted whenever {@code skipped > 0}, and the per-item
+     * {@code catch (RuntimeException)} blocks that produce it were shipped with zero coverage — so
+     * nothing proved that one failed copy leaves the other additions applied rather than aborting the
+     * pass, which is the whole point of following {@code adopt()}'s per-item isolation instead of
+     * wrapping the pass in one transaction.
+     *
+     * <p>⚠️ THE SECOND PASS IS THE HALF THAT MATTERS AND IS EASY TO OMIT: the contract is that a pass is
+     * RESUMABLE, so the item that failed must still be addable afterwards. A fixture that asserts only
+     * "one succeeded, one skipped" passes under an implementation that has corrupted the baseline and
+     * can never add the failed item at all.
+     */
+    @Test
+    void sourceUpdate_oneFailedCopyIsIsolatedAndTheFailedItemStillAppliesOnARerun() {
+        UUID userId = UUID.randomUUID();
+        UUID sourceOwnerId = UUID.randomUUID();
+        UUID sourcePlanId = UUID.randomUUID();
+        UUID adoptedPlanId = UUID.randomUUID();
+        UUID flakySourceNoteId = UUID.randomUUID();
+        UUID goodSourceNoteId = UUID.randomUUID();
+        UUID flakyLearnerNoteId = UUID.randomUUID();
+        UUID goodLearnerNoteId = UUID.randomUUID();
+        Instant now = Instant.now();
+        NoteCollectionEntity source = buildCollection(sourcePlanId, sourceOwnerId, "Official Biology", now);
+        source.setVisibility(CollectionVisibility.PUBLIC);
+        NoteCollectionEntity adopted = buildCollection(adoptedPlanId, userId, "My Biology", now);
+        adopted.setSourcePlanId(sourcePlanId);
+        adopted.setSourceTitleAtSync(source.getTitle());
+        NoteCollectionItemEntity flakySource = buildItem(sourcePlanId, flakySourceNoteId, 0, WEEK_ONE_LABEL);
+        NoteCollectionItemEntity goodSource = buildItem(sourcePlanId, goodSourceNoteId, 1, WEEK_ONE_LABEL);
+        NoteEntity flakySourceNote = buildNote(flakySourceNoteId, sourceOwnerId, "Flaky topic");
+        flakySourceNote.setVisibility(NoteVisibility.PUBLIC);
+        NoteEntity goodSourceNote = buildNote(goodSourceNoteId, sourceOwnerId, NOTE_TITLE_ONE);
+        goodSourceNote.setVisibility(NoteVisibility.PUBLIC);
+        NoteEntity flakyLearnerNote = buildNote(flakyLearnerNoteId, userId, "Flaky topic");
+        flakyLearnerNote.setCopiedFromNoteId(flakySourceNoteId);
+        NoteEntity goodLearnerNote = buildNote(goodLearnerNoteId, userId, NOTE_TITLE_ONE);
+        goodLearnerNote.setCopiedFromNoteId(goodSourceNoteId);
+        List<NoteCollectionItemEntity> learnerItems = new ArrayList<>();
+
+        when(collectionRepository.findByIdAndOwnerUserId(adoptedPlanId, userId)).thenReturn(Optional.of(adopted));
+        when(collectionRepository.findByIdAndVisibility(sourcePlanId, CollectionVisibility.PUBLIC))
+                .thenReturn(Optional.of(source));
+        when(collectionRepository.findOrderedChildrenByParentCollectionIdAndOwnerUserId(sourcePlanId, sourceOwnerId))
+                .thenReturn(List.of());
+        when(collectionRepository.findOrderedChildrenByParentCollectionIdAndOwnerUserId(adoptedPlanId, userId))
+                .thenReturn(List.of());
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(sourcePlanId))
+                .thenReturn(List.of(flakySource, goodSource));
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(adoptedPlanId))
+                .thenAnswer(ignored -> List.copyOf(learnerItems));
+        when(noteRepository.findAllById(any())).thenAnswer(invocation -> {
+            List<NoteEntity> found = new ArrayList<>();
+            for (UUID id : invocation.<Iterable<UUID>>getArgument(0)) {
+                if (id.equals(flakySourceNoteId)) {
+                    found.add(flakySourceNote);
+                } else if (id.equals(goodSourceNoteId)) {
+                    found.add(goodSourceNote);
+                } else if (id.equals(flakyLearnerNoteId)) {
+                    found.add(flakyLearnerNote);
+                } else if (id.equals(goodLearnerNoteId)) {
+                    found.add(goodLearnerNote);
+                }
+            }
+            return found;
+        });
+        when(itemRemovalRepository.findByAdoptedCollectionIdIn(List.of(adoptedPlanId))).thenReturn(List.of());
+        when(noteRepository.findByIdAndVisibility(flakySourceNoteId, NoteVisibility.PUBLIC))
+                .thenReturn(Optional.of(flakySourceNote));
+        when(noteRepository.findByIdAndVisibility(goodSourceNoteId, NoteVisibility.PUBLIC))
+                .thenReturn(Optional.of(goodSourceNote));
+        when(noteService.copyNote(goodSourceNoteId.toString(), userId, true))
+                .thenReturn(noteResponse(goodLearnerNoteId));
+        // Transient: the first attempt fails, a re-run succeeds.
+        when(noteService.copyNote(flakySourceNoteId.toString(), userId, true))
+                .thenThrow(new IllegalStateException("transient copy failure"))
+                .thenReturn(noteResponse(flakyLearnerNoteId));
+        when(itemRepository.findByCollectionIdAndNoteId(eq(adoptedPlanId), any(UUID.class)))
+                .thenAnswer(invocation -> learnerItems.stream()
+                        .filter(item -> item.getNoteId().equals(invocation.getArgument(1)))
+                        .findFirst());
+        when(itemRepository.saveAndFlush(any(NoteCollectionItemEntity.class))).thenAnswer(invocation -> {
+            NoteCollectionItemEntity saved = invocation.getArgument(0);
+            learnerItems.add(saved);
+            return saved;
+        });
+        when(collectionRepository.save(any(NoteCollectionEntity.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        ReviewSetUpdateResponse first = service.applySourceUpdate(adoptedPlanId, userId);
+
+        assertThat(first.status())
+                .as("one failed copy must not abort the pass")
+                .isEqualTo("PARTIALLY_UPDATED");
+        assertThat(first.notesAdded()).isOne();
+        assertThat(learnerItems).extracting(NoteCollectionItemEntity::getNoteId)
+                .containsExactly(goodLearnerNoteId);
+
+        ReviewSetUpdateResponse second = service.applySourceUpdate(adoptedPlanId, userId);
+
+        assertThat(second.notesAdded())
+                .as("the pass is resumable: the previously failed item still applies on a re-run")
+                .isOne();
+        assertThat(second.status()).isEqualTo("UPDATED");
+        assertThat(learnerItems).extracting(NoteCollectionItemEntity::getNoteId)
+                .containsExactlyInAnyOrder(goodLearnerNoteId, flakyLearnerNoteId);
+    }
+
     @Test
     void sourceUpdate_deletedSourceResolvesAsDetachedWithoutMutation() {
         UUID userId = UUID.randomUUID();

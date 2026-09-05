@@ -164,8 +164,20 @@ by the auditing session.**
   `source_title_at_sync` (`V72:4`). The backfill's
   `COALESCE(copied_from_note_id, source_note_id)` correctly covers the owner-self-copy case, where
   `copyNote`'s idempotency guard does not apply because it sits inside `if (!isOwner)`.
-- **Mutants applied: 4. Killed: 4** (one only after the guard above was written), each by a named test.
-- **Verification: `./mvnw clean install` → BUILD SUCCESS, 2132 tests, 0 failures**, counted from
+- **⚠️ A SECOND SPECIFIED ERROR STATE SHIPPED UNTESTED, FOUND BY THE SCOPE-COMPLETENESS GATE RATHER THAN
+  BY THE DIFF REVIEW.** `PARTIALLY_UPDATED` is emitted whenever `skipped > 0`, and the per-item
+  `catch (RuntimeException)` blocks that produce it — the failure isolation that makes a pass survive one
+  bad copy instead of aborting — had **zero coverage**. Closed by
+  `sourceUpdate_oneFailedCopyIsIsolatedAndTheFailedItemStillAppliesOnARerun`. **⚠️ Its second pass is the
+  half that matters and is the easy one to omit: the contract is that a pass is RESUMABLE, so a fixture
+  asserting only "one succeeded, one skipped" passes under an implementation that has corrupted the
+  baseline and can never add the failed item at all.**
+- **⚠️ TWO OF THE SIX SPECIFIED ERROR STATES SHIPPED WITH NO TEST, AND BOTH WERE IN THE SAME BLIND SPOT —
+  the branches the happy path cannot reach.** Recorded as a process finding, not just two fixes: a
+  delivered suite can be large, well-named and genuinely discriminating on the FEATURE while leaving
+  every defensive branch unexercised.
+- **Mutants applied: 5. Killed: 5** (two only after the guards above were written), each by a named test.
+- **Verification: `./mvnw clean install` → BUILD SUCCESS, 2133 tests, 0 failures**, counted from
   `target/surefire-reports/*.xml` after a clean. **`npm test` → 2147 tests, 198 suites, all pass.**
   **`tsc --noEmit` clean.**
 
