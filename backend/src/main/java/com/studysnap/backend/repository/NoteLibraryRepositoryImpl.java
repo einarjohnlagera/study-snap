@@ -42,6 +42,7 @@ public class NoteLibraryRepositoryImpl implements NoteLibraryRepository {
     private static final String LEARNER_LEVEL_ALIAS = "learnerLevel";
     private static final String SUBJECT_ALIAS = "subject";
     private static final String TAGS_ALIAS = "tags";
+    private static final String COLLECTION_ID_ALIAS = "collectionId";
     private static final String CONTENT_ALIAS = "content";
     private static final String STATUS_ALIAS = "status";
     private static final String VISIBILITY_ALIAS = "visibility";
@@ -348,6 +349,19 @@ public class NoteLibraryRepositoryImpl implements NoteLibraryRepository {
         if (criteria.visibility() != null) {
             where.append(" and n.visibility = :visibility");
             parameters.put("visibility", criteria.visibility().name());
+        }
+        if (criteria.collectionId() != null) {
+            // ⚠️ EXISTS over note_collection_items, not a join -- a note can sit in several Review Sets
+            // and a join would emit it once per membership row, inflating both the page and the count.
+            where.append("""
+                     and exists (
+                         select 1
+                         from note_collection_items nci
+                         where nci.note_id = n.id
+                           and nci.collection_id = :collectionId
+                     )
+                    """);
+            parameters.put(COLLECTION_ID_ALIAS, criteria.collectionId());
         }
         appendReadinessFilter(where, criteria.readiness());
         if (criteria.tags() != null && !criteria.tags().isEmpty()) {

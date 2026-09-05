@@ -1921,6 +1921,8 @@ export type LibraryFilterParams = {
   subject?: string;
   tags?: string[];
   visibility?: string;
+  /** Review Set membership. Undefined means no collection filter, never "notes in no collection". */
+  collectionId?: string;
 };
 
 export type LibraryPageParams = LibraryFilterParams & {
@@ -4851,6 +4853,7 @@ function buildLibraryFilterSearchParams(params: LibraryFilterParams): URLSearchP
   if (params.subject) searchParams.set("subject", params.subject);
   params.tags?.forEach((tag) => searchParams.append("tag", tag));
   if (params.visibility) searchParams.set("visibility", params.visibility);
+  if (params.collectionId) searchParams.set("collectionId", params.collectionId);
   return searchParams;
 }
 
@@ -6088,4 +6091,108 @@ export async function revokeLinkedLearner(relationshipId: string): Promise<Linke
     true,
   );
   return parseApiResponse<LinkedLearnerResponse>(response, "Could not revoke the connection.");
+}
+
+export type NoteRegenerationScopeValue = "STUDY_PACK" | "NOTE_AND_STUDY_PACK";
+
+export type NoteRegenerationPreflightItem = {
+  noteId: string;
+  title: string | null;
+  readiness: string;
+  reasonCode: string | null;
+  reason: string | null;
+};
+
+export type NoteRegenerationPreflightResponse = {
+  scope: NoteRegenerationScopeValue;
+  requestedCount: number;
+  readyCount: number;
+  blockedCount: number;
+  notEligibleCount: number;
+  publicNotesAffected: number;
+  sharedQuizzesToDeactivate: number;
+  noteGenerationUnitsRequired: number;
+  noteGenerationUnitsRemaining: number;
+  studyPackUnitsRequired: number;
+  studyPackUnitsRemaining: number;
+  quotaExceeded: boolean;
+  itemsToRemove: number;
+  maxBatchSize: number;
+  items: NoteRegenerationPreflightItem[];
+};
+
+export type BulkRegenerateNotesResponse = {
+  batchId: string;
+  scope: NoteRegenerationScopeValue;
+  acceptedCount: number;
+};
+
+export type NoteBulkRegenerationItemReceipt = {
+  noteId: string;
+  title: string | null;
+  state: "PENDING" | "RUNNING" | "REGENERATED" | "BLOCKED" | "FAILED" | "NOT_RUN";
+  reasonCode: string | null;
+  reason: string | null;
+  shareLinkDeactivated: boolean;
+};
+
+export type NoteBulkRegenerationReceiptResponse = {
+  batchId: string;
+  scope: NoteRegenerationScopeValue;
+  totalCount: number;
+  regeneratedCount: number;
+  blockedCount: number;
+  failedCount: number;
+  notRunCount: number;
+  pendingCount: number;
+  finished: boolean;
+  stale: boolean;
+  retryableNoteIds: string[];
+  items: NoteBulkRegenerationItemReceipt[];
+};
+
+export async function preflightNoteRegeneration(
+  noteIds: string[],
+  scope: NoteRegenerationScopeValue,
+): Promise<NoteRegenerationPreflightResponse> {
+  const response = await fetchWithAuth(
+    "/notes/regenerate/preflight",
+    {
+      method: "POST",
+      headers: buildAuthHeaders(),
+      body: JSON.stringify({ noteIds, scope }),
+    },
+    true,
+  );
+  return parseApiResponse<NoteRegenerationPreflightResponse>(response, "Could not check these notes.");
+}
+
+export async function bulkRegenerateNotes(
+  noteIds: string[],
+  scope: NoteRegenerationScopeValue,
+): Promise<BulkRegenerateNotesResponse> {
+  const response = await fetchWithAuth(
+    "/notes/bulk-regenerate",
+    {
+      method: "POST",
+      headers: buildAuthHeaders(),
+      body: JSON.stringify({ noteIds, scope }),
+    },
+    true,
+  );
+  return parseApiResponse<BulkRegenerateNotesResponse>(response, "Could not start regeneration.");
+}
+
+export async function getBulkRegenerationReceipt(
+  batchId: string,
+): Promise<NoteBulkRegenerationReceiptResponse> {
+  const response = await fetchWithAuth(
+    `/notes/bulk-regenerate/${batchId}`,
+    {
+      method: "GET",
+      headers: buildAuthHeaders(),
+    },
+    true,
+  );
+  return parseApiResponse<NoteBulkRegenerationReceiptResponse>(response, "Could not load the regeneration receipt.");
 }

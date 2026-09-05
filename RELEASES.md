@@ -176,6 +176,36 @@ inline** for B3-B5.
   confirmation modal and the receipt are B3-B5. Irreversible content replacement across dozens of
   canonical Notes must not be reachable without them.
 
+- **B3 — the Library entry point (PR #1289).** `LibrarySelectionIntent` gains a third value,
+  `regenerate`, offered only to curators (ADMIN by role or TEACHER by profile) — the backend gate is the
+  authority, and the client check only decides whether to offer the action. The note checkbox gains a
+  padded wrapper so its hit area reaches ~44px; the input stays 16px, and the padding is what makes
+  selecting dozens of notes on a phone workable.
+  - **A Review Set membership filter**, the one filter axis this feature owes: the Library's three
+    existing axes cannot express "the notes in this Review Set", which is the motivating workflow.
+    `?collectionId=` threads through the single `buildFilter` choke point, so the list, the count, the
+    subject facets and select-all-across-filters all honour it. **An `EXISTS` over
+    `note_collection_items`, never a join** — a note can belong to several Review Sets, and a join would
+    emit it once per membership row and inflate both the page and the count.
+- **B4 + B5 — preflight, confirmation, progress and receipt (PR #1289).** One modal covers the whole flow.
+  It opens on the non-destructive `STUDY_PACK` scope every time, and the reset is the caller unmounting
+  it rather than an effect, so a destructive choice can never be inherited by the next batch. It shows
+  ready/blocked/not-eligible counts, the public-note and shared-quiz consequences (combined scope only),
+  the quota shortfall with how many notes to remove, and blocked items behind a disclosure.
+  - **`GET /notes/bulk-regenerate/{batchId}`** was owed and did not exist — B1 built the receipt record
+    for TTL deletion only. It is owner-scoped at the query, so another user's batch is indistinguishable
+    from one that never existed, and **not consume-once**: a regeneration batch runs far past the five
+    minutes the bulk-generation poller tolerates, so the curator may navigate away and come back.
+  - **`finished` is derived** from "no item is still pending", never a stored end-of-batch flag — a driver
+    killed mid-batch writes no end marker, so a stored flag would leave a dead batch reporting itself in
+    flight forever. A batch that stops early reports **`stale`** and says so plainly.
+- **The curator gate was missing entirely and is now enforced (PR #1289).** The endpoints' `@PreAuthorize`
+  reads `hasAnyRole('USER','ADMIN')`, which **every authenticated account satisfies**, and neither service
+  checked curator status — so B1/B2 as merged were reachable by any learner, wider than the capability was
+  scoped to. `BulkRegenerationAccessGuard` now enforces `CuratorAuthoringPredicate` on **both** the batch
+  and the preflight; gating only the batch would leave a disclosure surface wider than the capability it
+  discloses. Not a cross-user exposure — every path was already owner-scoped and metered.
+
 ### Known limitations (B1/B2)
 
 - **Nothing sweeps a lost batch.** A driver thread killed mid-loop leaves `RUNNING`/`PENDING` rows until

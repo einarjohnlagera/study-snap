@@ -46,6 +46,7 @@ public class NoteRegenerationPreflightService {
     private final NoteBulkRegenerationService bulkRegenerationService;
     private final MePlanService mePlanService;
     private final OnboardingGuardService onboardingGuardService;
+    private final BulkRegenerationAccessGuard accessGuard;
 
     @Transactional(readOnly = true)
     public NoteRegenerationPreflightResponse preflight(
@@ -54,6 +55,9 @@ public class NoteRegenerationPreflightService {
             boolean enforceLimits
     ) {
         onboardingGuardService.assertProfileComplete(ownerUserId);
+        // ⚠️ Same curator gate as the batch itself — the disclosure surface must not be wider than
+        // the capability it discloses.
+        accessGuard.assertCurator(ownerUserId);
         if (request == null || request.noteIds() == null || request.noteIds().isEmpty()) {
             throw new InvalidBulkRegenerationRequestException(EMPTY_SELECTION_MESSAGE);
         }

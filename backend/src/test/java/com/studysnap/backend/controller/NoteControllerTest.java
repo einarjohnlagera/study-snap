@@ -135,6 +135,7 @@ class NoteControllerTest {
                 noteBulkImportService,
                 noteBulkGenerationService,
                 org.mockito.Mockito.mock(com.studysnap.backend.service.NoteBulkRegenerationService.class),
+                org.mockito.Mockito.mock(com.studysnap.backend.service.NoteBulkRegenerationReceiptService.class),
                 org.mockito.Mockito.mock(com.studysnap.backend.service.NoteRegenerationPreflightService.class),
                 noteGenerationService,
                 noteTextExtractionService,
@@ -253,13 +254,13 @@ class NoteControllerTest {
         AuthenticatedUser routeUser = new AuthenticatedUser(UUID.randomUUID(), UserRole.USER, true, 1);
         MockMvc mockMvc = buildMockMvc(routeUser);
         when(noteService.listLibraryPage(
-                routeUser.userId(), null, "ALL", null, null, null, "ALL", "RECENTLY_UPDATED", 0, 20
+                routeUser.userId(), null, "ALL", null, null, null, "ALL", null, "RECENTLY_UPDATED", 0, 20
         )).thenReturn(new NotesLibraryPageResponse(List.of(), 0, 20, 0, false));
         when(noteService.listLibraryMatchingIds(
-                routeUser.userId(), null, "ALL", null, null, null, "ALL"
+                routeUser.userId(), null, "ALL", null, null, null, "ALL", null
         )).thenReturn(new NotesLibraryIdsResponse(List.of(), 0, false));
         when(noteService.getLibrarySubjectStats(
-                routeUser.userId(), null, "ALL", null, null, "ALL"
+                routeUser.userId(), null, "ALL", null, null, "ALL", null
         )).thenReturn(new SubjectStatsResponse(List.of(), 0, 0));
         when(noteService.getLibraryFilterOptions(routeUser.userId()))
                 .thenReturn(new NotesLibraryFilterOptionsResponse(List.of(), List.of(), List.of()));
@@ -284,13 +285,13 @@ class NoteControllerTest {
                 .andExpect(jsonPath("$.tags").isArray());
 
         verify(noteService).listLibraryPage(
-                routeUser.userId(), null, "ALL", null, null, null, "ALL", "RECENTLY_UPDATED", 0, 20
+                routeUser.userId(), null, "ALL", null, null, null, "ALL", null, "RECENTLY_UPDATED", 0, 20
         );
         verify(noteService).listLibraryMatchingIds(
-                routeUser.userId(), null, "ALL", null, null, null, "ALL"
+                routeUser.userId(), null, "ALL", null, null, null, "ALL", null
         );
         verify(noteService).getLibrarySubjectStats(
-                routeUser.userId(), null, "ALL", null, null, "ALL"
+                routeUser.userId(), null, "ALL", null, null, "ALL", null
         );
         verify(noteService).getLibraryFilterOptions(routeUser.userId());
         verify(noteService, never()).getById("library", routeUser.userId());
@@ -302,16 +303,16 @@ class NoteControllerTest {
         AuthenticatedUser user = new AuthenticatedUser(userId, UserRole.USER, true, 1);
         NotesLibraryPageResponse expected = new NotesLibraryPageResponse(List.of(), 0, 100, 0, false);
         when(noteService.listLibraryPage(
-                userId, null, "ALL", null, null, null, "ALL", "RECENTLY_UPDATED", 0, 100
+                userId, null, "ALL", null, null, null, "ALL", null, "RECENTLY_UPDATED", 0, 100
         )).thenReturn(expected);
 
         NotesLibraryPageResponse response = noteController.listLibraryPage(
-                null, "ALL", null, null, null, "ALL", "RECENTLY_UPDATED", -1, 101, user
+                null, "ALL", null, null, null, "ALL", null, "RECENTLY_UPDATED", -1, 101, user
         );
 
         assertThat(response).isEqualTo(expected);
         verify(noteService).listLibraryPage(
-                userId, null, "ALL", null, null, null, "ALL", "RECENTLY_UPDATED", 0, 100
+                userId, null, "ALL", null, null, null, "ALL", null, "RECENTLY_UPDATED", 0, 100
         );
     }
 

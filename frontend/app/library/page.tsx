@@ -56,6 +56,8 @@ import {
   type SharedNoteListItemResponse,
   type SubjectStatsResponse,
   type NoteVisibility,
+  listCollections,
+  type NoteCollectionSummary,
 } from "@/lib/api";
 import {getBrowsingCardClassName, getSelectionCardClassName} from "@/lib/clickable-card";
 import {normalizeCourseProgram} from "@/lib/learning-profile";
@@ -63,6 +65,7 @@ import {getCollectionLabels} from "@/lib/collection-labels";
 import {shouldShowQuizReadyIndicator} from "@/lib/profile-mode";
 import {requireAuthenticatedOnboardedUser} from "@/lib/route-guards";
 import {isCombinedQuizSelectionOverCap} from "@/lib/combined-quiz";
+import {BulkRegenerateModal} from "@/components/library/bulk-regenerate-modal";
 import {normalizeSubject} from "@/lib/subjects";
 import {formatStudyPackScope, getStudyPackScope} from "@/lib/study-pack-scope";
 import {GuidanceTip} from "@/components/ui/guidance-tip";
@@ -79,7 +82,18 @@ type LibrarySortOption =
 
 type LibraryReadinessFilter = "ALL" | "DRAFT" | "QUIZ_READY" | "STUDY_PACK_READY";
 type LibraryVisibilityFilter = "ALL" | "PUBLIC" | "PRIVATE";
-type LibrarySelectionIntent = "collection" | "combined-quiz";
+type LibrarySelectionIntent = "collection" | "combined-quiz" | "regenerate";
+
+/**
+ * Mirrors the backend's `note.bulk-regeneration.max-notes` default. The server is the authority and
+ * rejects an over-cap batch on its own; this exists only so the toolbar can say so before the curator
+ * opens the modal.
+ */
+const ALL_COLLECTIONS = "__all__";
+
+const BULK_REGENERATE_MAX_NOTES = 50;
+
+const BULK_REGENERATE_STARTED_TOAST = "Regeneration started. It keeps running if you navigate away.";
 
 const LIBRARY_PAGE_SIZE = 20;
 const ALL_SUBJECTS = "__ALL_SUBJECTS__";
@@ -354,6 +368,7 @@ function buildLibraryFilterParams(
   tags: string[],
   readiness: LibraryReadinessFilter,
   visibility: LibraryVisibilityFilter,
+  collectionId: string,
 ): LibraryFilterParams {
   return {
     search: search.trim() || undefined,
@@ -362,6 +377,8 @@ function buildLibraryFilterParams(
     subject: subject === ALL_SUBJECTS ? undefined : subject,
     tags,
     visibility,
+    // ALL_COLLECTIONS means "no collection filter", never "notes in no collection".
+    collectionId: collectionId === ALL_COLLECTIONS ? undefined : collectionId,
   };
 }
 
@@ -613,6 +630,11 @@ export default function LibraryPage() {
   const [matchingSelectionIds, setMatchingSelectionIds] = useState<string[]>([]);
   const [selectingAll, setSelectingAll] = useState(false);
   const [createPlanOpen, setCreatePlanOpen] = useState(false);
+  const [bulkRegenerateOpen, setBulkRegenerateOpen] = useState(false);
+  const [selectedCollectionId, setSelectedCollectionId] = useState<string>(
+    () => searchParams.get("collection") ?? ALL_COLLECTIONS,
+  );
+  const [collectionOptions, setCollectionOptions] = useState<NoteCollectionSummary[]>([]);
   const [toast, setToast] = useState<ToastMessage | null>(null);
   const [pendingBulkResultId, setPendingBulkResultId] = useState<string | null>(null);
   const [bulkFailureBanner, setBulkFailureBanner] = useState<BulkGenerationFailureBanner | null>(null);
@@ -634,6 +656,11 @@ export default function LibraryPage() {
   const authUser = getAuthUser();
   const isTeacherExamBuilderEnabled = authUser?.profileType === "TEACHER";
   const isTeacherProfile = authUser?.profileType === "TEACHER";
+  // Mirrors CuratorAuthoringPredicate: ADMIN by role OR TEACHER by profile. The backend gate is the
+  // authority (BulkRegenerationAccessGuard); this only decides whether to OFFER the action, so a
+  // learner is never shown an entry point that would 403.
+  const isCurator = authUser?.role === "ADMIN" || authUser?.profileType === "TEACHER";
+  const selectionOverRegenerateCap = selectedNoteIds.length > BULK_REGENERATE_MAX_NOTES;
   const collectionLabels = getCollectionLabels(authUser?.profileType);
   const showQuizReadyIndicators = shouldShowQuizReadyIndicator(
     authUser?.profileType,
@@ -656,7 +683,8 @@ export default function LibraryPage() {
     selectedTags,
     effectiveReadinessFilter,
     visibilityFilter,
-  ), [effectiveReadinessFilter, searchQuery, selectedCourseProgram, selectedSubject, selectedTags, visibilityFilter]);
+    selectedCollectionId,
+  ), [effectiveReadinessFilter, searchQuery, selectedCollectionId, selectedCourseProgram, selectedSubject, selectedTags, visibilityFilter]);
   const subjectStatsFilterParams = useMemo(() => ({
     search: libraryFilterParams.search,
     readiness: libraryFilterParams.readiness,
@@ -1115,6 +1143,7 @@ export default function LibraryPage() {
     setTagSearchQuery("");
     setReadinessFilter("ALL");
     setVisibilityFilter("ALL");
+    setSelectedCollectionId(ALL_COLLECTIONS);
   }, []);
 
   const toggleDraftTag = useCallback((tag: string) => {
@@ -1362,6 +1391,29 @@ export default function LibraryPage() {
     startSelection("combined-quiz");
   }, [startSelection]);
 
+  const startRegenerateSelection = useCallback(() => {
+    startSelection("regenerate");
+  }, [startSelection]);
+
+  // The Review Set axis. Loaded once and failure-tolerant: an empty list simply means the filter
+  // offers nothing, never a broken Library.
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const collections = await listCollections();
+        if (!cancelled) {
+          setCollectionOptions(collections);
+        }
+      } catch {
+        // Non-fatal: the Library's three existing axes still work.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const handleNoteNavigate = useCallback((noteId: string) => {
     const returnUrl = buildLibraryUrl(searchQuery, selectedSubject, selectedCourseProgram, selectedTags, readinessFilter, sortBy, visibilityFilter);
     const params = new URLSearchParams({ from: "library", ref: returnUrl });
@@ -1524,6 +1576,14 @@ export default function LibraryPage() {
                 },
                 { key: "collection", label: collectionLabels.singular, description: `Pick notes for a new ${collectionLabels.singular.toLowerCase()}`, onSelect: startPlanSelection },
                 { key: "combined-quiz", label: "Combined quiz", description: "Build one shareable quiz from several notes", onSelect: startCombinedQuizSelection },
+                ...(isCurator
+                  ? [{
+                    key: "regenerate",
+                    label: "Regenerate notes",
+                    description: "Rebuild Study Packs, or notes and Study Packs, for several notes",
+                    onSelect: startRegenerateSelection,
+                  }]
+                  : []),
               ]}
             />
           </div>
@@ -1629,7 +1689,19 @@ export default function LibraryPage() {
             <Card className="space-y-3 p-4 sm:p-5">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="space-y-1">
-                  {selectionIntent === "collection" ? (
+                  {selectionIntent === "regenerate" ? (
+                    <>
+                      <h2 className="text-lg font-semibold">Pick notes to regenerate</h2>
+                      <p className="text-sm text-foreground/70">
+                        {selectedNoteIds.length} note{selectedNoteIds.length === 1 ? "" : "s"} selected · you choose what gets replaced, and what it costs, before anything is written.
+                      </p>
+                      {selectionOverRegenerateCap ? (
+                        <p className="text-xs font-medium text-amber-700 dark:text-amber-300">
+                          Up to {BULK_REGENERATE_MAX_NOTES} notes at a time. Deselect {selectedNoteIds.length - BULK_REGENERATE_MAX_NOTES} to continue.
+                        </p>
+                      ) : null}
+                    </>
+                  ) : selectionIntent === "collection" ? (
                     <>
                       <h2 className="text-lg font-semibold">Pick notes for your new {collectionLabels.singular}</h2>
                       <p className="text-sm text-foreground/70">
@@ -1701,7 +1773,8 @@ export default function LibraryPage() {
                     >
                       Create {collectionLabels.singular}
                     </Button>
-                  ) : (
+                  ) : null}
+                  {selectionIntent === "combined-quiz" ? (
                     <Button
                       type="button"
                       onClick={openCombinedQuizBuilder}
@@ -1710,8 +1783,17 @@ export default function LibraryPage() {
                     >
                       Build quiz
                     </Button>
-                  )}
-                  {isTeacherExamBuilderEnabled ? (
+                  ) : null}
+                  {selectionIntent === "regenerate" ? (
+                    <Button
+                      type="button"
+                      onClick={() => setBulkRegenerateOpen(true)}
+                      disabled={selectedNoteIds.length === 0 || selectionOverRegenerateCap}
+                    >
+                      Review {selectedNoteIds.length} {selectedNoteIds.length === 1 ? "note" : "notes"}
+                    </Button>
+                  ) : null}
+                  {isTeacherExamBuilderEnabled && selectionIntent !== "regenerate" ? (
                     <Button
                       type="button"
                       variant="outline"
@@ -2022,7 +2104,10 @@ export default function LibraryPage() {
                       contentPreview={item.contentPreview}
                       summaryPreview={item.summaryPreview}
                       titleTrailing={selectionMode ? (
-                        <span className="inline-flex items-center">
+                        // Padded wrapper, not a bigger box: a bare 16px input is a poor tap target for
+                        // a workflow whose premise is picking dozens of notes on a phone. The -m-2.5
+                        // keeps the card's own layout unchanged while the hit area reaches ~44px.
+                        <span className="-m-2.5 inline-flex items-center p-2.5">
                           <input
                             type="checkbox"
                             checked={isSelected}
@@ -2195,6 +2280,33 @@ export default function LibraryPage() {
         )}
       >
         <div className="space-y-6">
+          {collectionOptions.length > 0 ? (
+            <div className="space-y-3">
+              <p className="text-sm font-medium">{collectionLabels.singular}</p>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  className={getFilterChipClassName(selectedCollectionId === ALL_COLLECTIONS)}
+                  onClick={() => setSelectedCollectionId(ALL_COLLECTIONS)}
+                  aria-pressed={selectedCollectionId === ALL_COLLECTIONS}
+                >
+                  All
+                </button>
+                {collectionOptions.map((collection) => (
+                  <button
+                    key={collection.id}
+                    type="button"
+                    className={getFilterChipClassName(selectedCollectionId === collection.id)}
+                    onClick={() => setSelectedCollectionId(collection.id)}
+                    aria-pressed={selectedCollectionId === collection.id}
+                  >
+                    {collection.title}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
           <div className="space-y-3">
             <p className="text-sm font-medium">Status</p>
             <div className="flex flex-wrap gap-2">
@@ -2517,6 +2629,20 @@ export default function LibraryPage() {
         onClose={() => setCreatePlanOpen(false)}
         onCreated={handlePlanCreated}
       />
+
+      {/*
+        Unmounted while closed, which IS the scope reset: the modal always opens on the safe
+        Study Pack scope, so a destructive choice from a previous batch can never be inherited by
+        the next one.
+      */}
+      {bulkRegenerateOpen ? (
+        <BulkRegenerateModal
+          isOpen
+          noteIds={selectedNoteIds}
+          onClose={() => setBulkRegenerateOpen(false)}
+          onBatchStarted={() => setToast(BULK_REGENERATE_STARTED_TOAST)}
+        />
+      ) : null}
 
       {toast ? (
         <div role="status" aria-live="polite" className="fixed bottom-4 right-4 z-50 rounded-md border border-border bg-background px-3 py-2 text-sm shadow-sm">
