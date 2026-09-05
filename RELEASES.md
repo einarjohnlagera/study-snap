@@ -2,8 +2,8 @@
 
 ## v0.117.0 - Authoring and Quiz Legibility
 
-**Status: In Progress** (kicked off 2026-09-05, base branch `releases/v0.117.0`, cut from `main` after
-`v0.116.0` merged and tagged)
+**Status: Released** (kicked off and signed off 2026-09-05, base branch `releases/v0.117.0`, cut from
+`main` after `v0.116.0` merged and tagged)
 
 Theme: four things the owner hit in real use — a quiz question that reads as one run-on statement, a
 plan-scoped session that calls itself a single note, a drag preview that swallows the page, and a
@@ -157,6 +157,75 @@ the way production reaches it.**
   concept and assert cross-pack canonical concept identity, which is out of scope (`v0.107.0`). The
   in-quiz header's `focusConcepts.join(", ")` was the live instance of that merge and now reports
   per-source counts whenever a session spans more than one pack.
+
+**Signoff gates**
+
+- **Scope-completeness: all five items verified present in merged code**, not assumed — the splitter and
+  its prompt half, both note-addressed resolutions, `closestCorners` on the leaf context, the
+  `onOptionSelect` path, and the date promotion.
+- **⚠️ FEATURE-DOC DRIFT GATE FOUND TWO STALE CLAIMS, NEITHER IN THE DIFF — the repo's named recurring
+  failure.** `docs/features/collections.md:76` said the Section control *"auto-saves on a 500 ms
+  debounce"*, which after item 4 is true only for TYPING; a chosen option now commits immediately, and
+  that commit also flushes pending drag ordering. `docs/features/quiz.md:194` described the
+  assertion-item format without the newline rule item 1 added to the prompt. Both corrected.
+- **⚠️ CHECKPOINT GATE: NONE OWED, ANSWERED RATHER THAN SKIPPED.** Nothing here shipped ahead of its own
+  evidence — the evidence PRECEDED the work in every case, since all five respond to owner observation
+  of a defect against known-correct behaviour. There is no pre-committed rule, no owner override on an
+  ambiguous read, and no metric a decision hangs on. **Two items target populations that DRAIN rather
+  than grow** — item 1's un-newlined questions and item 2's pre-`V133` legacy rows — but nothing is
+  gated on their disappearing, so a dated read would measure attrition nobody would act on.
+- **⚠️⚠️ THE COLD AGENT FOUND THAT ITEM 4 DID NOT SHIP AT ALL, AND IT WAS THIS SESSION'S OWN CODE.**
+  `SuggestionCombobox` renders options through **two disjoint branches** — grouped and ungrouped — and
+  the new `onOptionSelect` was added to the **grouped** one only (`:273`). **The builder passes no
+  `groupedOptions`, so it always renders the ungrouped branch (`:295`) and the callback could never
+  fire.** Everything compiled, all 2152 tests stayed green, and `RELEASES.md` described a behaviour that
+  did not exist — including a named consequence about the sticky bar that only materialises with the
+  missing line. **⚠️ THE ROOT CAUSE IS NOT THE MISSED BRANCH, IT IS THAT ITEMS 3 AND 4 SHIPPED WITH ZERO
+  TEST CHANGES to `builder/page.test.tsx` — a 1020-line suite that already contains a test for the
+  debounced combobox writer.** Fixed at `:296`, with a guard whose discriminator is that **nothing is
+  blurred and no timer is advanced**; a fixture that blurs passes under the pre-fix debounce and proves
+  nothing. Reverting the one line fails that named test. **⚠️ Deliberately NOT added to the
+  `Use "X"` create-option button — `allowCustom` defaults true, so that button renders in the builder
+  and it is the TYPING path the `editing`-gated debounce exists to protect.**
+- **⚠️ THIS IS THE SECOND RELEASE RUNNING WHERE AN ITEM 4 LOOKED CORRECT AND DELIVERED NOTHING**
+  (`v0.116.0`'s companion predicate was the first). Both passed a full suite; both were caught only by a
+  cold agent; **and this one was caught only because the tier was honoured rather than downgraded to an
+  `advisor()` call on a release with no migration and no money semantics.**
+- **Verification: ONE SCOPED COLD AGENT framed as falsification**, the tier pre-declared at kickoff and
+  honoured rather than downgraded. **⚠️ Its sharpest trigger was NOT the one the kickoff named:** items 3
+  and 4 both change `study-plan-builder-page-client.tsx`, and item 4's immediate commit reaches item 3's
+  pending drag state through `persistLeafItems`, which is the interaction with the least independent
+  verification behind it. **Final merged-state build, re-taken AFTER the item 4 fix rather than carried over: 2140 backend tests, 2153 frontend, 198 suites, `tsc --noEmit` clean, 0 failures.**
+
+**Known limitations**
+
+- **⚠️ ITEM 1 COVERS ONE PROMPT OF FIVE AND MISSES TWO RENDER SURFACES — the Study Pack Quiz tab is
+  missed at BOTH ends.** Five prompt files carry the identical assertion-style framing rule; only
+  `challenge-quiz-developer.txt` was taught the newline. `developer.txt` (the main Study Pack quiz, which
+  Quick Review administers), `long-exam-developer.txt`, `board-exam-developer.txt` and
+  `teacher-quiz-developer.txt` were not. Separately, `practice-quiz-card.tsx` and
+  `generated-quiz-preview-page-client.tsx` render with bare `renderMathText` rather than
+  `QuizQuestionText`, so they have no splitter. **Confirmed by render probe: the same stored string
+  renders correctly under `QuizQuestionText` and as one run-on line under `PracticeQuizCard`.**
+  Pre-existing, but squarely inside item 1's stated scope, so it is named rather than absorbed.
+- **The splitter is math-unaware in one contrived case.** `Statement 1: Refer to $\text{a. b}$ ok?`
+  splits at the period inside the math and shows raw `$`. It needs a `. ` inside math with no other
+  sentence punctuation after it; realistic cases (`Per Sec. 5 the load is factored. Which is correct?`)
+  split correctly because the match is greedy. A closing question containing a decimal suppresses the
+  split entirely and leaves the run-on — no corruption, the defect simply persists there.
+- **⚠️ ITEM 3 HAS NO AUTOMATED GUARD, AND THAT IS A DELIBERATE CHOICE RATHER THAN AN OVERSIGHT.**
+  Collision geometry and overlay height are not meaningfully testable in jsdom, and a test asserting
+  that `closestCorners` was passed would pin the CONSTANT rather than the behaviour — the same shape
+  `v0.114.0` records as *"a schema test with hardcoded booleans instead of the derivation"*. **It wants a
+  manual drag on a section with 10+ notes, dragged UPWARD**, which is the reported asymmetry and the
+  direction the old centre-based detection could never satisfy.
+- **Item 1 repairs display only; the stored text stays as generated.** A question written before the
+  prompt change keeps its run-on form in the database and is laid out correctly at render time. That is
+  the `v0.110.1` rule — a display path must never rewrite stored content — and it means the fix travels
+  with the renderer rather than with the data.
+- **Item 2's named consequence, carried forward:** when the collection resolves, the response is built
+  with no fallback Study Pack, so a legacy row that stored focus concepts as bare strings
+  (pre-`v0.104.0`) shows them unattributed rather than attributing all of them to one borrowed pack.
 
 ## v0.116.0 - Additive Review Set Updates
 

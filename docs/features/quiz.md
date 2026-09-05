@@ -191,7 +191,7 @@ True/False rules:
 
 - `TRUE_FALSE` is only for a single declarative statement that the learner judges true or false.
 - Any stem that asks the learner to choose — "Which is correct?", "Which of the following...", "Which statement...", "Which one...", or "Which of these..." — must be `MCQ`, not `TRUE_FALSE`.
-- Multi-statement assertion items such as `Statement 1: ... Statement 2: ... Which is correct?` must be `MCQ` with four choices: `Both statements are correct`, `Only Statement 1 is correct`, `Only Statement 2 is correct`, and `Neither statement is correct`.
+- Multi-statement assertion items such as `Statement 1: ... Statement 2: ... Which is correct?` must be `MCQ` with four choices: `Both statements are correct`, `Only Statement 1 is correct`, `Only Statement 2 is correct`, and `Neither statement is correct`. **⚠️ SINCE `v0.117.0` the prompt also requires each statement and the closing question on its OWN LINE, separated by a real newline.** Without them the question runs on from the last statement and reads as part of it. Questions generated before that change are repaired at RENDER time only — a narrow presentation path splits a trailing interrogative off the final statement; **it never rewrites stored text**, per `v0.110.1`.
 - "All of the following ... except" stems are also MCQ-intent stems and must not use `TRUE_FALSE`.
 - Backend generation validation rejects any effectively true/false item whose stem matches those MCQ-intent patterns via `QuizValidationUtils.isFormatStemMismatch(...)`, forcing the existing LLM retry path instead of storing malformed quiz data.
 
