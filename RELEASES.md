@@ -2,8 +2,8 @@
 
 ## v0.115.0 - Learner Publication Authority
 
-**Status: In Progress** (kicked off 2026-09-05, base branch `releases/v0.115.0`, cut from `main` after
-`v0.114.0` merged and tagged)
+**Status: Released** (kicked off and signed off 2026-09-05, base branch `releases/v0.115.0`, cut from
+`main` after `v0.114.0` merged and tagged)
 
 Theme: when a learner publishes a note they copied from the curated library, the programs it is shelved
 under become theirs to state rather than the curator's to have decided for them.
