@@ -99,6 +99,7 @@ public class NoteBulkRegenerationService {
     private final OnboardingGuardService onboardingGuardService;
     private final BulkGenerationFailureReasonNormalizer failureReasonNormalizer;
     private final NoteBulkRegenerationTaskDispatcher taskDispatcher;
+    private final BulkRegenerationAccessGuard accessGuard;
     private final int maxNotes;
     private final int throttleDelayMs;
     private final int pollIntervalMs;
@@ -114,6 +115,7 @@ public class NoteBulkRegenerationService {
             OnboardingGuardService onboardingGuardService,
             BulkGenerationFailureReasonNormalizer failureReasonNormalizer,
             NoteBulkRegenerationTaskDispatcher taskDispatcher,
+            BulkRegenerationAccessGuard accessGuard,
             // ⚠️ ITS OWN CONFIG KEY, deliberately not note.bulk-generation.max-topics, so tuning the
             // regeneration cap never moves the bulk GENERATION cap. Both default to 50.
             @Value("${note.bulk-regeneration.max-notes:50}") int maxNotes,
@@ -132,6 +134,7 @@ public class NoteBulkRegenerationService {
         this.onboardingGuardService = onboardingGuardService;
         this.failureReasonNormalizer = failureReasonNormalizer;
         this.taskDispatcher = taskDispatcher;
+        this.accessGuard = accessGuard;
         this.maxNotes = Math.clamp(maxNotes, MIN_MAX_NOTES, Integer.MAX_VALUE);
         this.throttleDelayMs = Math.clamp(throttleDelayMs, MIN_THROTTLE_DELAY_MS, MAX_THROTTLE_DELAY_MS);
         this.pollIntervalMs = Math.clamp(pollIntervalMs, MIN_POLL_INTERVAL_MS, MAX_POLL_INTERVAL_MS);
@@ -153,6 +156,9 @@ public class NoteBulkRegenerationService {
             boolean enforceLimits
     ) {
         onboardingGuardService.assertProfileComplete(ownerUserId);
+        // ⚠️ BEFORE any request parsing or note lookup, so a non-curator learns nothing about the
+        // selection they submitted.
+        accessGuard.assertCurator(ownerUserId);
         if (request == null) {
             throw new InvalidBulkRegenerationRequestException(EMPTY_BATCH_MESSAGE);
         }

@@ -19,6 +19,7 @@ import com.studysnap.backend.dto.BulkGenerateNotesRequest;
 import com.studysnap.backend.dto.BulkGenerateNotesResponse;
 import com.studysnap.backend.dto.BulkRegenerateNotesRequest;
 import com.studysnap.backend.dto.BulkRegenerateNotesResponse;
+import com.studysnap.backend.dto.NoteBulkRegenerationReceiptResponse;
 import com.studysnap.backend.dto.NoteRegenerationPreflightRequest;
 import com.studysnap.backend.dto.NoteRegenerationPreflightResponse;
 import com.studysnap.backend.dto.ExtractedNoteTextResponse;
@@ -59,6 +60,7 @@ import com.studysnap.backend.service.GeneratedQuizService;
 import com.studysnap.backend.service.NoteBulkImportService;
 import com.studysnap.backend.service.NoteBulkGenerationService;
 import com.studysnap.backend.service.NoteBulkRegenerationService;
+import com.studysnap.backend.service.NoteBulkRegenerationReceiptService;
 import com.studysnap.backend.service.NoteRegenerationPreflightService;
 import com.studysnap.backend.service.NoteService;
 import com.studysnap.backend.service.NoteShareService;
@@ -116,6 +118,7 @@ public class NoteController {
     private static final String SUBJECT_REQUEST_PARAM = "subject";
     private static final String TAG_REQUEST_PARAM = "tag";
     private static final String VISIBILITY_REQUEST_PARAM = "visibility";
+    private static final String COLLECTION_REQUEST_PARAM = "collectionId";
     private static final String SORT_REQUEST_PARAM = "sort";
     private static final String PAGE_REQUEST_PARAM = "page";
     private static final String PAGE_SIZE_REQUEST_PARAM = "pageSize";
@@ -132,6 +135,7 @@ public class NoteController {
     private final NoteBulkImportService noteBulkImportService;
     private final NoteBulkGenerationService noteBulkGenerationService;
     private final NoteBulkRegenerationService noteBulkRegenerationService;
+    private final NoteBulkRegenerationReceiptService noteBulkRegenerationReceiptService;
     private final NoteRegenerationPreflightService noteRegenerationPreflightService;
     private final NoteGenerationService noteGenerationService;
     private final NoteTextExtractionService noteTextExtractionService;
@@ -218,6 +222,21 @@ public class NoteController {
      * <p>⚠️ The over-quota rejection is a 422 raised inside {@code queueBatch} BEFORE anything is
      * dispatched, carrying how many notes to remove.
      */
+    /**
+     * Progress and result for one batch, read by polling.
+     *
+     * <p>⚠️ NOT consume-once, unlike the bulk-generation receipt: a regeneration batch runs far past
+     * the five minutes that poller tolerates, so the curator may navigate away and come back.
+     */
+    @GetMapping("/bulk-regenerate/{batchId}")
+    @PreAuthorize("hasAnyRole('USER','ADMIN')")
+    public NoteBulkRegenerationReceiptResponse bulkRegenerationReceipt(
+            @PathVariable UUID batchId,
+            @AuthenticationPrincipal AuthenticatedUser user
+    ) {
+        return noteBulkRegenerationReceiptService.getReceipt(batchId, user.userId());
+    }
+
     @PostMapping("/bulk-regenerate")
     @PreAuthorize("hasAnyRole('USER','ADMIN')")
     public BulkRegenerateNotesResponse bulkRegenerate(
@@ -671,6 +690,7 @@ public class NoteController {
             @RequestParam(value = SUBJECT_REQUEST_PARAM, required = false) String subject,
             @RequestParam(value = TAG_REQUEST_PARAM, required = false) List<String> tags,
             @RequestParam(value = VISIBILITY_REQUEST_PARAM, defaultValue = LIBRARY_DEFAULT_FILTER) String visibility,
+            @RequestParam(value = COLLECTION_REQUEST_PARAM, required = false) UUID collectionId,
             @RequestParam(value = SORT_REQUEST_PARAM, defaultValue = LIBRARY_DEFAULT_SORT) String sort,
             @RequestParam(value = PAGE_REQUEST_PARAM, defaultValue = LIBRARY_DEFAULT_PAGE) Integer page,
             @RequestParam(value = PAGE_SIZE_REQUEST_PARAM, defaultValue = LIBRARY_DEFAULT_PAGE_SIZE) Integer pageSize,
@@ -684,6 +704,7 @@ public class NoteController {
                 subject,
                 tags,
                 visibility,
+                collectionId,
                 sort,
                 Math.clamp(page, LIBRARY_MIN_PAGE, LIBRARY_MAX_PAGE),
                 Math.clamp(pageSize, LIBRARY_MIN_PAGE_SIZE, LIBRARY_MAX_PAGE_SIZE)
@@ -699,10 +720,11 @@ public class NoteController {
             @RequestParam(value = SUBJECT_REQUEST_PARAM, required = false) String subject,
             @RequestParam(value = TAG_REQUEST_PARAM, required = false) List<String> tags,
             @RequestParam(value = VISIBILITY_REQUEST_PARAM, defaultValue = LIBRARY_DEFAULT_FILTER) String visibility,
+            @RequestParam(value = COLLECTION_REQUEST_PARAM, required = false) UUID collectionId,
             @AuthenticationPrincipal AuthenticatedUser user
     ) {
         return noteService.listLibraryMatchingIds(
-                user.userId(), search, readiness, courseProgram, subject, tags, visibility
+                user.userId(), search, readiness, courseProgram, subject, tags, visibility, collectionId
         );
     }
 
@@ -714,10 +736,11 @@ public class NoteController {
             @RequestParam(value = COURSE_PROGRAM_REQUEST_PARAM, required = false) String courseProgram,
             @RequestParam(value = TAG_REQUEST_PARAM, required = false) List<String> tags,
             @RequestParam(value = VISIBILITY_REQUEST_PARAM, defaultValue = LIBRARY_DEFAULT_FILTER) String visibility,
+            @RequestParam(value = COLLECTION_REQUEST_PARAM, required = false) UUID collectionId,
             @AuthenticationPrincipal AuthenticatedUser user
     ) {
         return noteService.getLibrarySubjectStats(
-                user.userId(), search, readiness, courseProgram, tags, visibility
+                user.userId(), search, readiness, courseProgram, tags, visibility, collectionId
         );
     }
 

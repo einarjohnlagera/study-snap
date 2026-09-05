@@ -18,6 +18,8 @@ import com.studysnap.backend.dto.NoteRegenerationPreflightResponse;
 import com.studysnap.backend.exception.BulkNoteRegenerationQuotaExceededException;
 import com.studysnap.backend.service.BulkGenerationFailureReasonNormalizer;
 import com.studysnap.backend.service.MePlanService;
+import com.studysnap.backend.exception.BulkRegenerationNotPermittedException;
+import com.studysnap.backend.service.BulkRegenerationAccessGuard;
 import com.studysnap.backend.service.NoteBulkRegenerationService;
 import com.studysnap.backend.service.NoteBulkRegenerationTaskDispatcher;
 import com.studysnap.backend.service.NoteRegenerationConsequenceService;
@@ -1657,6 +1659,19 @@ class NativeQueryPostgresIntegrationTest {
         return id;
     }
 
+    /**
+     * A curator account: ADMIN role AND completed onboarding, which is what
+     * {@code CuratorAuthoringPredicate.isCurator} actually requires. Bulk regeneration fixtures use
+     * this rather than {@link #seedUser(String)} because the plain seed is a non-onboarded USER — and
+     * a fixture that could not pass the gate would make every one of these guards pass vacuously.
+     */
+    private UUID seedCuratorUser(String handle) {
+        UUID id = seedUser(handle);
+        jdbcTemplate.update(
+                "update users set role = 'ADMIN', onboarding_completed_at = now() where id = ?", id);
+        return id;
+    }
+
     private UUID seedRelationship(UUID supporterUserId, UUID learnerUserId, String status) {
         return seedRelationship(supporterUserId, learnerUserId, status, LinkedLearnerSide.SUPPORTER.name());
     }
@@ -1690,7 +1705,10 @@ class NativeQueryPostgresIntegrationTest {
                     readiness,
                     "Nursing",
                     tags,
-                    NoteVisibility.PRIVATE
+                    NoteVisibility.PRIVATE,
+                    // Non-null so the collection-membership EXISTS branch is PREPAREd too; the
+                    // allOwned criteria below leaves it null so the other branch is covered as well.
+                    UUID.randomUUID()
             );
             noteLibraryRepository.findLibraryPage(criteria, NoteLibrarySort.RECENTLY_UPDATED, 0, 10);
             noteLibraryRepository.countLibraryMatches(criteria);
@@ -1700,7 +1718,7 @@ class NativeQueryPostgresIntegrationTest {
             noteLibraryRepository.findLibraryMatchingIds(criteria, 10);
         }
         NoteLibraryFilterCriteria allOwned = new NoteLibraryFilterCriteria(
-                ownerUserId, null, NoteLibraryReadiness.ALL, null, List.of(), null
+                ownerUserId, null, NoteLibraryReadiness.ALL, null, List.of(), null, null
         );
         for (NoteLibrarySort sort : NoteLibrarySort.values()) {
             if (sort != NoteLibrarySort.RECENTLY_REVIEWED) {
@@ -2723,6 +2741,94 @@ class NativeQueryPostgresIntegrationTest {
         );
     }
 
+    /**
+     * B3's collection filter, against real rows. The PREPARE sweep proves the SQL parses; only this
+     * proves it FILTERS.
+     *
+     * <p>⚠️ THE FIXTURE PUTS ONE NOTE IN TWO COLLECTIONS ON PURPOSE. A note can belong to several
+     * Review Sets, so a JOIN would emit it once per membership row and inflate both the page and the
+     * count — a fixture where every note sits in at most one collection passes under that defect and
+     * proves nothing.
+     */
+    @Test
+    void theCollectionFilterSelectsMembersOnlyAndNeverDuplicatesAMultiCollectionNote() {
+        UUID owner = seedUser("library-collection-filter");
+        UUID inBoth = seedRegenerationNote(owner, "Shear and Moment", "Body.");
+        UUID inTarget = seedRegenerationNote(owner, "Development Length", "Body.");
+        UUID outside = seedRegenerationNote(owner, "Fluid Mechanics", "Body.");
+        UUID target = seedCollection(owner, "CE Board Review");
+        UUID other = seedCollection(owner, "Structural Depth");
+        seedCollectionItem(target, inBoth);
+        seedCollectionItem(other, inBoth);
+        seedCollectionItem(target, inTarget);
+
+        NoteLibraryFilterCriteria filtered = new NoteLibraryFilterCriteria(
+                owner, null, NoteLibraryReadiness.ALL, null, List.of(), null, target
+        );
+
+        assertThat(noteLibraryRepository.findLibraryMatchingIds(filtered, 100))
+                .as("only the target collection's members, and the multi-collection note exactly once")
+                .containsExactlyInAnyOrder(inBoth, inTarget);
+        assertThat(noteLibraryRepository.countLibraryMatches(filtered))
+                .as("the count matches the page -- a join would double-count the multi-collection note")
+                .isEqualTo(2);
+        assertThat(noteLibraryRepository.findLibraryMatchingIds(filtered, 100))
+                .as("the note outside the collection is excluded")
+                .doesNotContain(outside);
+
+        NoteLibraryFilterCriteria unfiltered = new NoteLibraryFilterCriteria(
+                owner, null, NoteLibraryReadiness.ALL, null, List.of(), null, null
+        );
+        assertThat(noteLibraryRepository.findLibraryMatchingIds(unfiltered, 100))
+                .as("a null collectionId means NO filter -- never 'notes in no collection'")
+                .containsExactlyInAnyOrder(inBoth, inTarget, outside);
+    }
+
+    /**
+     * The curator gate, on BOTH surfaces.
+     *
+     * <p>⚠️ The endpoints' {@code @PreAuthorize} is {@code hasAnyRole('USER','ADMIN')}, which every
+     * authenticated account satisfies — so without this gate bulk regeneration is reachable by every
+     * learner, which is wider than the capability was scoped to. A fixture using a curator passes
+     * whether or not the gate exists, which is why the subject here is a plain non-onboarded USER.
+     *
+     * <p>⚠️ PREFLIGHT IS ASSERTED TOO. Gating only the batch would leave a disclosure surface wider
+     * than the capability, handing a non-curator per-Note readiness and quota figures for a batch they
+     * could never run.
+     */
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void bulkRegenerationRefusesANonCuratorOnBothTheBatchAndThePreflight() {
+        UUID learner = seedUser("bulk-regen-non-curator");
+        UUID note = seedRegenerationNote(learner, "Fluid Mechanics", "Body.");
+        seedStudyPack(learner, note, "Pack");
+
+        BulkRegenerationHarness harness = new BulkRegenerationHarness();
+
+        assertThatThrownBy(() -> harness.run(learner, List.of(note), true))
+                .as("a learner cannot run a batch")
+                .isInstanceOf(BulkRegenerationNotPermittedException.class);
+        assertThatThrownBy(() -> harness.preflight(learner, List.of(note), NoteRegenerationScope.NOTE_AND_STUDY_PACK, true))
+                .as("and cannot read the preflight either")
+                .isInstanceOf(BulkRegenerationNotPermittedException.class);
+
+        assertThat(readNoteColumn(note, "content"))
+                .as("nothing was regenerated")
+                .isEqualTo("Body.");
+        assertThat(jdbcTemplate.queryForObject(
+                "select count(*) from note_bulk_regeneration_item where owner_user_id = ?",
+                Integer.class, learner))
+                .as("and no batch row was written")
+                .isZero();
+
+        // The SAME selection succeeds once the account is a curator -- so the refusal is the gate,
+        // not some unrelated defect in the fixture.
+        jdbcTemplate.update("update users set role = 'ADMIN', onboarding_completed_at = now() where id = ?", learner);
+        assertThat(harness.preflight(learner, List.of(note), NoteRegenerationScope.NOTE_AND_STUDY_PACK, true).readyCount())
+                .as("a curator reads the same selection fine")
+                .isEqualTo(1);
+    }
+
     private UUID seedRegenerationNote(UUID ownerUserId, String title, String content) {
         UUID id = UUID.randomUUID();
         jdbcTemplate.update(
@@ -2925,7 +3031,7 @@ class NativeQueryPostgresIntegrationTest {
     @Test
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     void aFailedItemCostsNoUnitsAndDoesNotStopTheItemsAfterIt() {
-        UUID owner = seedUser("bulk-regen-quota");
+        UUID owner = seedCuratorUser("bulk-regen-quota");
         UUID first = seedRegenerationNote(owner, "Shear Force", "First body.");
         UUID second = seedRegenerationNote(owner, "Moment Distribution", "Second body.");
         UUID third = seedRegenerationNote(owner, "Influence Lines", "Third body.");
@@ -2965,13 +3071,13 @@ class NativeQueryPostgresIntegrationTest {
     @Test
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     void aTeacherBatchIsMeteredAndAnAdminBatchIsNot() {
-        UUID teacher = seedUser("bulk-regen-teacher");
+        UUID teacher = seedCuratorUser("bulk-regen-teacher");
         UUID teacherNoteA = seedRegenerationNote(teacher, "Steel Design", "Body A.");
         UUID teacherNoteB = seedRegenerationNote(teacher, "Timber Design", "Body B.");
         seedStudyPack(teacher, teacherNoteA, "Pack A");
         seedStudyPack(teacher, teacherNoteB, "Pack B");
 
-        UUID admin = seedUser("bulk-regen-admin");
+        UUID admin = seedCuratorUser("bulk-regen-admin");
         UUID adminNoteA = seedRegenerationNote(admin, "Hydraulics", "Body A.");
         UUID adminNoteB = seedRegenerationNote(admin, "Hydrology", "Body B.");
         seedStudyPack(admin, adminNoteA, "Pack A");
@@ -3012,7 +3118,7 @@ class NativeQueryPostgresIntegrationTest {
     @Test
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     void anOverQuotaSelectionIsRejectedBeforeAnythingIsGeneratedOrRecorded() {
-        UUID owner = seedUser("bulk-regen-overquota");
+        UUID owner = seedCuratorUser("bulk-regen-overquota");
         UUID first = seedRegenerationNote(owner, "Fluid Mechanics", "First body.");
         UUID second = seedRegenerationNote(owner, "Thermodynamics", "Second body.");
         UUID third = seedRegenerationNote(owner, "Statics", "Third body.");
@@ -3056,7 +3162,7 @@ class NativeQueryPostgresIntegrationTest {
     @Test
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     void anInterruptedBatchLeavesAlreadyCompletedItemsRecordedAsRegenerated() throws Exception {
-        UUID owner = seedUser("bulk-regen-interrupt");
+        UUID owner = seedCuratorUser("bulk-regen-interrupt");
         UUID first = seedRegenerationNote(owner, "Development Length", "First body.");
         UUID second = seedRegenerationNote(owner, "Bar Cut-off", "Second body.");
         seedStudyPack(owner, first, "Pack one");
@@ -3097,7 +3203,7 @@ class NativeQueryPostgresIntegrationTest {
     @Test
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     void aNoteThatBecomesGeneratingBeforeItsTurnIsBlockedRatherThanForcedOrSkipped() {
-        UUID owner = seedUser("bulk-regen-reguard");
+        UUID owner = seedCuratorUser("bulk-regen-reguard");
         UUID first = seedRegenerationNote(owner, "Slope Stability", "First body.");
         UUID second = seedRegenerationNote(owner, "Retaining Walls", "Second body.");
         seedStudyPack(owner, first, "Pack one");
@@ -3136,7 +3242,7 @@ class NativeQueryPostgresIntegrationTest {
     @Test
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     void preflightAndTheDriverAgreeOnEveryBlockedShape() {
-        UUID owner = seedUser("bulk-regen-agreement");
+        UUID owner = seedCuratorUser("bulk-regen-agreement");
 
         UUID ready = seedRegenerationNote(owner, "Ready note", "Body.");
         seedStudyPack(owner, ready, "Pack");
@@ -3158,7 +3264,7 @@ class NativeQueryPostgresIntegrationTest {
                 UUID.randomUUID(), multiProgram, UUID.fromString("20000000-0000-0000-0000-000000000002"),
                 UUID.randomUUID(), multiProgram, UUID.fromString("20000000-0000-0000-0000-000000000005"));
 
-        UUID notMine = seedRegenerationNote(seedUser("bulk-regen-someone-else"), "Not yours", "Body.");
+        UUID notMine = seedRegenerationNote(seedCuratorUser("bulk-regen-someone-else"), "Not yours", "Body.");
 
         List<UUID> selection = List.of(ready, generating, noPack, noTitle, multiProgram, notMine);
 
@@ -3218,7 +3324,7 @@ class NativeQueryPostgresIntegrationTest {
     @Test
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     void bulkRegenerationNeverOverwritesAnAuthoredTitleOrTags() {
-        UUID owner = seedUser("bulk-regen-metadata");
+        UUID owner = seedCuratorUser("bulk-regen-metadata");
         UUID noteId = seedRegenerationNote(owner, "Structural Applications of Differential Equations",
                 "Authored body.");
         seedStudyPack(owner, noteId, "Old pack");
@@ -3252,7 +3358,7 @@ class NativeQueryPostgresIntegrationTest {
     @Test
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     void eachNoteInABatchGeneratesAgainstItsOwnContext() {
-        UUID owner = seedUser("bulk-regen-context");
+        UUID owner = seedCuratorUser("bulk-regen-context");
         UUID civil = seedRegenerationNote(owner, "Reinforced Concrete", "Body.");
         UUID nursing = seedRegenerationNote(owner, "Pharmacology", "Body.");
         seedStudyPack(owner, civil, "Pack one");
@@ -3298,7 +3404,7 @@ class NativeQueryPostgresIntegrationTest {
     @Test
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     void studyPackScopePreservesAuthoredMetadataAndResolvesEachNotesOwnContext() {
-        UUID owner = seedUser("bulk-regen-blockers");
+        UUID owner = seedCuratorUser("bulk-regen-blockers");
         UUID civil = seedRegenerationNote(owner, "Structural Applications of Shear",
                 "Civil body, hand written.");
         UUID nursing = seedRegenerationNote(owner, "Pharmacokinetics in Practice",
@@ -3362,7 +3468,7 @@ class NativeQueryPostgresIntegrationTest {
     @Test
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     void studyPackOnlyScopeSpendsNoNoteGenerationUnitsAndDeactivatesNoShareLinks() {
-        UUID owner = seedUser("bulk-regen-scope");
+        UUID owner = seedCuratorUser("bulk-regen-scope");
         UUID noteId = seedRegenerationNote(owner, "Surveying", "Original body.");
         seedStudyPack(owner, noteId, "Old pack");
         UUID generatedQuizId = UUID.randomUUID();
@@ -3404,7 +3510,7 @@ class NativeQueryPostgresIntegrationTest {
     @Test
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     void combinedScopeCountsAndRecordsExactlyTheShareLinksItTurnsOff() {
-        UUID owner = seedUser("bulk-regen-consequences");
+        UUID owner = seedCuratorUser("bulk-regen-consequences");
         UUID shared = seedRegenerationNote(owner, "Shared note", "Body.");
         UUID unshared = seedRegenerationNote(owner, "Unshared note", "Body.");
         seedStudyPack(owner, shared, "Pack one");
@@ -3460,7 +3566,7 @@ class NativeQueryPostgresIntegrationTest {
     @Test
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     void anExpiredBatchIsSweptWholeRatherThanRowByRow() {
-        UUID owner = seedUser("bulk-regen-ttl");
+        UUID owner = seedCuratorUser("bulk-regen-ttl");
         UUID batchId = UUID.randomUUID();
         OffsetDateTime batchCreatedAt = OffsetDateTime.now(ZoneOffset.UTC).minusHours(30);
         seedBulkRegenerationItem(batchId, owner, UUID.randomUUID(), batchCreatedAt, batchCreatedAt);
@@ -3475,7 +3581,7 @@ class NativeQueryPostgresIntegrationTest {
         // exists: a hand-built service is not a Spring proxy, so its @Transactional is INERT here and the
         // bulk delete would throw instead of running. In production the proxy opens this transaction.
         NoteBulkRegenerationReceiptService receiptService =
-                new NoteBulkRegenerationReceiptService(bulkRegenerationItemRepository);
+                new NoteBulkRegenerationReceiptService(bulkRegenerationItemRepository, noteRepository);
         Long deleted = new TransactionTemplate(transactionManager).execute(status ->
                 receiptService.deleteExpiredItems(OffsetDateTime.now(ZoneOffset.UTC)));
 
@@ -3618,7 +3724,10 @@ class NativeQueryPostgresIntegrationTest {
                     consequences,
                     driver(readiness, consequences),
                     mePlanService(),
-                    mock(OnboardingGuardService.class)
+                    mock(OnboardingGuardService.class),
+                    // ⚠️ REAL, not mocked -- a mocked gate would let every one of these guards pass
+                    // against a non-curator and prove nothing about who may run a batch.
+                    new BulkRegenerationAccessGuard(userRepository)
             ).preflight(new NoteRegenerationPreflightRequest(noteIds, scope.name()),
                     ownerUserId, enforceLimits);
         }
@@ -3664,6 +3773,7 @@ class NativeQueryPostgresIntegrationTest {
                         driverThread.set(thread);
                         thread.start();
                     }),
+                    new BulkRegenerationAccessGuard(userRepository),
                     50,
                     throttleDelayMs,
                     10,

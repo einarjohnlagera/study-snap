@@ -562,12 +562,13 @@ public class NoteService {
             String subject,
             List<String> tags,
             String visibility,
+            UUID collectionId,
             String sort,
             int page,
             int pageSize
     ) {
         NoteLibraryFilterCriteria criteria = buildLibraryFilterCriteria(
-                ownerUserId, search, readiness, courseProgram, tags, visibility
+                ownerUserId, search, readiness, courseProgram, tags, visibility, collectionId
         );
         NoteLibrarySort librarySort = parseLibrarySort(sort);
         String subjectBucket = normalizeOptionalLibrarySubject(subject);
@@ -629,10 +630,11 @@ public class NoteService {
             String courseProgram,
             String subject,
             List<String> tags,
-            String visibility
+            String visibility,
+            UUID collectionId
     ) {
         NoteLibraryFilterCriteria criteria = buildLibraryFilterCriteria(
-                ownerUserId, search, readiness, courseProgram, tags, visibility
+                ownerUserId, search, readiness, courseProgram, tags, visibility, collectionId
         );
         String subjectBucket = normalizeOptionalLibrarySubject(subject);
         List<UUID> matchingIds;
@@ -665,10 +667,11 @@ public class NoteService {
             String readiness,
             String courseProgram,
             List<String> tags,
-            String visibility
+            String visibility,
+            UUID collectionId
     ) {
         NoteLibraryFilterCriteria criteria = buildLibraryFilterCriteria(
-                ownerUserId, search, readiness, courseProgram, tags, visibility
+                ownerUserId, search, readiness, courseProgram, tags, visibility, collectionId
         );
         return buildLibrarySubjectStats(noteRepository.findLibrarySubjectCandidates(criteria));
     }
@@ -1893,7 +1896,8 @@ public class NoteService {
             String readiness,
             String courseProgram,
             List<String> tags,
-            String visibility
+            String visibility,
+            UUID collectionId
     ) {
         return new NoteLibraryFilterCriteria(
                 ownerUserId,
@@ -1901,7 +1905,8 @@ public class NoteService {
                 parseLibraryReadiness(readiness),
                 normalizeOptionalText(courseProgram),
                 normalizeLibraryFilterTags(tags),
-                parseLibraryVisibility(visibility)
+                parseLibraryVisibility(visibility),
+                collectionId
         );
     }
 
