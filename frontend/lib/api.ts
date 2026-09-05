@@ -3266,6 +3266,35 @@ export async function createStudyPackFromNote(
   );
 }
 
+export type NoteRegenerationScope = "STUDY_PACK" | "NOTE_AND_STUDY_PACK";
+
+/**
+ * Regenerates a note's Study Pack, and with `NOTE_AND_STUDY_PACK` its content too, as one operation.
+ *
+ * Both scopes go through this one endpoint on purpose: `STUDY_PACK` delegates server-side to the same
+ * call `POST /notes/{id}/generate` makes, so the scope selector has a single code path rather than two
+ * behind one control. First generation on a DRAFT note still uses `createStudyPackFromNote` — that is a
+ * different control, not a scope choice.
+ */
+export async function regenerateNote(
+  noteId: string,
+  scope: NoteRegenerationScope,
+): Promise<NoteResponse> {
+  const response = await fetchWithAuth(
+    `/notes/${noteId}/regenerate`,
+    {
+      method: "POST",
+      headers: { ...buildAuthHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ scope }),
+    },
+    true,
+  );
+  return parseApiResponse<NoteResponse>(
+    response,
+    "We could not regenerate this note right now. Please try again.",
+  );
+}
+
 export async function generateNoteFromTopic(
   topic: string,
   courseProgram?: string,

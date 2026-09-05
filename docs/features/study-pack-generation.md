@@ -367,6 +367,56 @@ rows, never just the newest** — `createShareLink` mints a new row over an inac
 to mint a new link and spend share-link quota because of our fix. No generated quiz, or no active links,
 is a clean no-op.
 
+### Scope selector (the learner-facing half)
+
+The Regenerate action on Note Detail opens a scope selector rather than a confirm dialog. It is a real
+single-choice control: `role="radiogroup"` wrapping two `role="radio"` cards with `aria-checked`,
+arrow-key plus Home/End navigation, and a roving tabindex. **The selected card carries `tabindex="0"`
+from the first render** — `AppModal`'s focus trap filters out `tabIndex === -1`, so two `-1` cards would
+drop the whole group out of the Tab cycle. Selection is shown by border **and** a check icon, never by
+colour alone. This is the codebase's only `role="radiogroup"`; the visual language is borrowed from
+`quiz-choice-list`, whose `aria-pressed` toggle semantic is deliberately **not** copied.
+
+The default is always `STUDY_PACK`, re-applied every time the modal opens, so a learner who once chose
+the destructive scope does not get it again from a control they only glanced at.
+
+**Both scopes call `POST /notes/{id}/regenerate`.** `STUDY_PACK` delegates server-side, so the selector
+has one client path rather than two behind one control. First generation on a `DRAFT` note still uses
+`POST /notes/{id}/generate` — that is a different control, not a scope choice.
+
+The combined card is **disabled with a stated reason** where the service would reject it (no title, no
+existing Study Pack), rather than accepting the choice and failing afterwards. Other rejections render
+inside the modal so the chosen scope survives a retry.
+
+### Warnings and disclosure
+
+| Condition | Shown |
+|---|---|
+| Combined scope, **learner-owned** note | Strong overwrite warning; CTA becomes **Regenerate Note + Study Pack** |
+| Combined scope, **curator** note | Routine framing; CTA stays **Regenerate** |
+| `visibility = PUBLIC` (either scope) | *"This Note is public"* notice |
+| Study Pack scope | *"Your note won't change. Quiz history is preserved."* |
+
+Warnings render most severe first inside one `aria-live="polite"` region that stays mounted across scope
+changes — swapping the subtree wholesale can fail to announce the new consequence. **There is no second
+confirmation modal in any case.**
+
+Because the product cannot distinguish a generated note from a hand-written one, **every non-curator
+note gets the strong warning.** That is the conservative fallback, not an approximation to refine later
+with a provenance field. The predicate is the same curator check used for authoring metadata.
+
+Quota is disclosed on the card as *Uses 1 Study Pack* / *Uses 1 topic note and 1 Study Pack*. Until
+Settings exposes the topic-note meter, this modal is the only place a learner learns it exists.
+
+The combined scope also lists what it writes from — Topic, Subject, Writing context, Depth — with an
+*Edit Note details →* action that **closes the modal first**, because the guidance flow runs before
+regeneration starts. **Applicable Programs appears nowhere, not even read-only**: it is discovery
+metadata that never reaches a prompt, and showing it there would misrepresent it as an input.
+
+The post-generation metadata suggestion is **not** armed for a combined run — note metadata is an input
+to that operation, so proposing a rewrite of it immediately afterwards would contradict the modal the
+learner just confirmed. Study Pack regeneration keeps its existing behaviour.
+
 ### What regeneration does not do
 
 Identity is preserved because in-place regeneration mutates columns and never identity: `notes.id`,

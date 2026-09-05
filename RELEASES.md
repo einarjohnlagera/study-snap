@@ -114,6 +114,39 @@ defect:**
   historical session rewritten, no `ConceptHealth` row deleted or rewritten, no analytics event added,
   removed or altered.
 
+- **The learner can now choose what a regeneration replaces (plan slices 3-5).** The Regenerate modal
+  became a two-card scope selector — *Study Pack* (default) and *Note + Study Pack* — as a real
+  single-choice control: `role="radiogroup"` with `role="radio"`/`aria-checked`, arrow-key and
+  Home/End navigation and a roving tabindex, with selection shown by border **and** icon rather than
+  colour alone. The selected card carries `tabindex="0"` from first render, because `AppModal`'s focus
+  trap filters out `tabIndex === -1` and two `-1` cards would drop the group out of the Tab cycle.
+  This is a new pattern in the codebase — there was no `role="radiogroup"` anywhere — and the visual
+  language is borrowed from `quiz-choice-list`.
+- **Both scopes go through the one `POST /notes/{id}/regenerate` endpoint.** `STUDY_PACK` delegates
+  server-side to the call the old endpoint made, so the selector has a single client path rather than
+  two behind one control. First generation on a DRAFT note still uses `createStudyPackFromNote` — a
+  different control, not a scope choice.
+- **The combined scope shows what it will write from, and nothing it will not.** Topic, Subject,
+  Writing context and Depth, with *Edit Note details →* which closes the modal before opening the
+  editor, since the guidance flow runs **before** regeneration starts. **Applicable Programs appears
+  nowhere, not even read-only** — it is discovery metadata that never reaches a prompt, and showing it
+  there would misrepresent it as a generation input.
+- **Contextual protections, most severe first.** A learner-owned note shows the strong overwrite
+  warning and the CTA becomes **Regenerate Note + Study Pack**; a curator's canonical note keeps the
+  routine framing and the plain **Regenerate**. A public note additionally carries the ratified
+  *"This Note is public"* notice. There is no second confirmation modal in any case. Because the
+  product cannot distinguish a generated note from a hand-written one, **every** non-curator note gets
+  the strong warning — the conservative fallback, not an approximation to be refined with a new field.
+- **The combined scope is unselectable, with a reason, where the backend would reject it** — a note
+  with no title (the title *is* the topic) or no existing Study Pack. That is the difference between an
+  explained limit and a 400 after the learner commits. Other server rejections render inside the modal
+  so the chosen scope survives a retry.
+- **Quota is disclosed on the card**: *Uses 1 Study Pack* / *Uses 1 topic note and 1 Study Pack*.
+  Until Settings exposes the topic-note meter, this modal is the only place a learner learns it exists.
+- The post-generation metadata suggestion is deliberately **not** armed for a combined run: note
+  metadata is an *input* to that operation, so proposing a rewrite of it immediately afterwards would
+  contradict the modal the learner just confirmed. Study Pack regeneration keeps today's behaviour.
+
 ### Known limitations
 
 Three audited residuals, deliberately left rather than built for:

@@ -23,6 +23,7 @@ import { ResponsiveActionButton, ResponsiveActionContent } from "@/components/ui
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { AppModal } from "@/components/ui/app-modal";
+import { RegenerateScopeModal } from "@/components/notes/regenerate-scope-modal";
 import { DeleteConfirmationModal } from "@/components/notes/delete-confirmation-modal";
 import { QuizSessionHistory } from "@/components/notes/quiz-session-history";
 import { SubjectCombobox } from "@/components/notes/subject-combobox";
@@ -74,6 +75,8 @@ import {
   startQuickReviewSession,
   updateNote,
   updateNoteVisibility,
+  regenerateNote,
+  type NoteRegenerationScope,
   isNoteGenerationInProgressError,
   type ChallengeQuizPerformanceSummaryResponse,
   type CourseProgramCatalogItem,
@@ -467,6 +470,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
   const [showSharePrivateConfirm, setShowSharePrivateConfirm] = useState(false);
   const [showShareLinkModal, setShowShareLinkModal] = useState(false);
   const [showRegenerateConfirm, setShowRegenerateConfirm] = useState(false);
+  const [regenerateError, setRegenerateError] = useState<string | null>(null);
   const [addToCollectionModalOpen, setAddToCollectionModalOpen] = useState(false);
   const [activePaywallModal, setActivePaywallModal] = useState<PaywallModalVariant | null>(null);
   const [showLimitReachedModal, setShowLimitReachedModal] = useState(false);
@@ -1744,6 +1748,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
     if (!isStudyPackReady || isGeneratingStudyPack || generating) {
       return;
     }
+    setRegenerateError(null);
     setShowRegenerateConfirm(true);
   };
 
@@ -1751,13 +1756,69 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
     if (generating) {
       return;
     }
+    setRegenerateError(null);
     setShowRegenerateConfirm(false);
   };
 
-  const handleConfirmRegenerate = () => {
-    setShowRegenerateConfirm(false);
-    void handleGenerate();
-  };
+  const handleConfirmRegenerate = useCallback(async (scope: NoteRegenerationScope) => {
+    if (!note || generating) {
+      return;
+    }
+    if (!isEmailVerified) {
+      setToast("Email verification is required before generating Study Packs.");
+      return;
+    }
+    if (hasReachedStudyPackLimit) {
+      setShowRegenerateConfirm(false);
+      openStudyPackLimitModal("private_note_detail_regenerate");
+      return;
+    }
+
+    setGenerating(true);
+    try {
+      // The post-generation metadata suggestion is deliberately NOT armed for a combined run. Note
+      // metadata is an INPUT to that operation -- it is what we wrote from -- so turning around and
+      // proposing a rewrite of it immediately afterwards contradicts the modal the learner just
+      // confirmed. Study Pack regeneration keeps today's behaviour exactly.
+      if (scope === "STUDY_PACK") {
+        awaitingGeneratedMetadataSuggestionRef.current = true;
+        globalThis.sessionStorage?.setItem(`notelib-awaiting-suggestion:${note.id}`, "1");
+      }
+      const queued = await regenerateNote(note.id, scope);
+      setNote(queued);
+      setShowRegenerateConfirm(false);
+      setToast(scope === "NOTE_AND_STUDY_PACK"
+        ? "Regenerating this note and its Study Pack."
+        : "Study Pack generation started.");
+    } catch (err) {
+      awaitingGeneratedMetadataSuggestionRef.current = false;
+      globalThis.sessionStorage?.removeItem(`notelib-awaiting-suggestion:${note.id}`);
+      if (isEmailNotVerifiedError(err)) {
+        setToast("Email verification is required before generating Study Packs.");
+        return;
+      }
+      const message = err instanceof Error ? err.message : "Could not regenerate this note.";
+      if (isStudyPackLimitReachedMessage(message)) {
+        void refreshUsageSummary();
+        setShowRegenerateConfirm(false);
+        openStudyPackLimitModal("private_note_detail_regenerate_error");
+        return;
+      }
+      // Everything else -- note-generation quota, a blank title, a missing pack, a 409 because
+      // generation is already running -- is shown in the modal so the learner can adjust and retry
+      // without losing the scope they picked.
+      setRegenerateError(message);
+    } finally {
+      setGenerating(false);
+    }
+  }, [
+    generating,
+    hasReachedStudyPackLimit,
+    isEmailVerified,
+    note,
+    openStudyPackLimitModal,
+    refreshUsageSummary,
+  ]);
 
   useEffect(() => {
     const shouldAutoStartQuickReview = searchParams.get(PUBLIC_NOTE_COPY_QUERY_PARAMS.startQuickReview) === "1";
@@ -3366,31 +3427,26 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
         </div>
       </AppModal>
 
-      <AppModal
+      {/* Unmounted while closed on purpose: that is what resets the scope selection to the safe
+          default on every open. See the comment on `scope` in RegenerateScopeModal. */}
+      {showRegenerateConfirm ? (
+      <RegenerateScopeModal
         isOpen={showRegenerateConfirm}
-        title="Regenerate Study Pack?"
-        description="This will replace the current summary, key concepts, and quiz with a new version tailored to your level. Your quiz history is preserved."
+        note={note}
+        isCurator={canEditAuthoringMetadata}
+        busy={generating}
+        errorMessage={regenerateError}
         onClose={handleCancelRegenerate}
-        actions={(
-          <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={handleCancelRegenerate}
-              disabled={generating}
-            >
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              onClick={handleConfirmRegenerate}
-              disabled={generating}
-            >
-              {generating ? "Regenerating..." : "Regenerate"}
-            </Button>
-          </div>
-        )}
+        onConfirm={(scope) => void handleConfirmRegenerate(scope)}
+        onEditDetails={() => {
+          // Closes first on purpose: the guidance flow runs BEFORE regeneration starts, and editing
+          // behind an open dialog is exactly the state plan section 20a rules out.
+          setShowRegenerateConfirm(false);
+          setRegenerateError(null);
+          setIsInlineMetadataEditMode(true);
+        }}
       />
+      ) : null}
 
       {note ? (
         <AddToCollectionModal
