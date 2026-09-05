@@ -1,5 +1,146 @@
 # RELEASES.md - NoteLib
 
+## v0.119.0 - Curator Bulk Regeneration
+
+**Status: In Progress** (kicked off 2026-09-05, base branch `releases/v0.119.0`, cut from `main` after
+`v0.118.0` merged and tagged)
+
+Theme: a curator can regenerate a selected set of canonical Notes in one pass, with a truthful account
+of what happened to every one of them.
+
+### Planned Scope
+
+**PHASE 2 OF THE REGENERATION ARC.** Governed by `docs/claude-plans/curator-bulk-regeneration-stage1.md`
+— **execute its decisions, do not re-derive them.** Phase 1 (the single-Note primitive) shipped as
+`v0.118.0`.
+
+**⚠️ THIS RELEASE DELIBERATELY OVERRIDES ITS OWN PLAN'S §14 SEQUENCING, AND THE OVERRIDE IS WRITTEN
+DOWN RATHER THAN ROUTED AROUND.** §14 recommends: *Phase 1 ships **and deploys** → its behaviour is
+**observed on real canonical Notes** → Phase 2 opens, with B1's job record informed by what Phase 1
+actually did.* `v0.118.0` merged and was tagged 2026-09-05, minutes before this kickoff, and has not
+been observed on a single real canonical Note. **THE OWNER OVERRODE THAT SEQUENCE ON 2026-09-05 FOR A
+STATED REASON THAT IS NOT IMPATIENCE: updating the ALE Review Set is BLOCKED on bulk regeneration**, so
+the sequencing cost is being paid by real curator work that cannot proceed. **⚠️ A later session
+reading §14 in isolation must come here first — this is a recorded override, not drift.** **⚠️ THE
+RESIDUAL IS REAL AND IS ACCEPTED, NOT DISMISSED: B1's per-item job record was supposed to be shaped by
+observed Phase 1 behaviour, and it will instead be shaped by Phase 1's tests and code.** If production
+reveals something about combined regeneration that contradicts B1's design, **that is a re-open, not a
+surprise.**
+
+**⚠️ OWNER DECISION 1 TAKEN AT KICKOFF (2026-09-05), AGAINST THE PLAN'S RECOMMENDATION, AND IT MOVES
+THE VERIFICATION TIER.** §M asked who may run bulk regeneration in v1 and recommended **ADMIN only**;
+the owner ruled **ADMIN + TEACHER curators**. **⚠️ THE CONSEQUENCE IS PRICED IN, NOT DISCOVERED LATER:
+a single curator action now spends metered units on a TEACHER's paid account — up to 50 note-generation
+AND 50 Study Pack units for a full batch — which is a MONEY-SEMANTICS change and fires the full
+three-agent trigger.** **⚠️ AND THE SUB-DECISION IT FORCES IS ANSWERED HERE RATHER THAN LEFT OPEN:
+TEACHERs are METERED NORMALLY under §E's already-settled block-and-reduce policy. The ADMIN-only quota
+BYPASS IS NOT WIDENED** — §27 places that out of scope and it stays there — **so a TEACHER's batch is
+capped by their remaining allowance and the preflight must say so before they commit. No entitlement,
+plan-tier or limit change.** **⚠️ Do NOT "fix" a TEACHER's short allowance by extending the bypass.**
+
+**Owner decisions 2 and 3 take the plan's recommendations:** the batch cap is **50 under its own config
+key** (so tuning it never moves bulk *generation*), and **cancellation is NOT built in v1** — already
+dispatched LLM calls cannot be stopped, and **⚠️ do NOT offer a "Cancel batch" control that implies
+in-flight work stops.**
+
+**⚠️ TWO FINDINGS DECIDE THE SHAPE, AND BOTH ARE ARITHMETIC RATHER THAN OPINION — NEITHER IS OPTIONAL
+TO SOLVE:**
+
+1. **The existing bulk receipt CANNOT report a batch this long, so it must be REPLACED, not
+   inherited.** The client poller abandons after ~5 minutes and then tolerates only ~4 s of 404s, while
+   the receipt row is written **only** in `processBatch`'s `finally`. Bulk regeneration is strictly
+   slower per item than bulk generation — **two** LLM calls, not one — so a 50-Note batch runs well past
+   that ceiling and **the curator never learns the outcome.** **⚠️ Do NOT inherit the existing receipt
+   component.**
+2. **The batch loop and each item's Study Pack work share ONE 2-thread executor**, and the loop holds
+   one of those two threads for the batch's entire duration. That is starvation, not deadlock, and it
+   caps real throughput. **⚠️ Do NOT resolve it by raising `studyPackGenerationTaskExecutor`'s 2/2
+   bound** — that is a `v0.112.0` Phase 3 decision gated on `[CHECKPOINT — due 2026-10-04]`. The batch
+   driver needs its own executor.
+
+**SCOPE — the plan's five slices (§L):** **B1** per-item batch job record plus the release's only
+migration, a batch driver on its own executor, per-Note guards re-run at item start, continue-on-failure,
+and a fix to the outer catch so completed items are never reported failed; **B2** a preflight endpoint
+returning per-Note deterministic states plus aggregate public and shared-quiz counts; **B3** the Library
+`"regenerate"` selection intent with a collection-membership filter; **B4** the preflight/confirmation
+modal; **B5** progress, result receipt and retry-failed.
+
+**⚠️ RELEASE BOUNDARY: bulk regeneration must not be REACHABLE until B3-B5 land.** B1 and B2 are inert
+without an entry point, exactly as `v0.118.0`'s slices 1-2 were.
+
+### Anti-drift
+
+- **⚠️ ONLY B1 MAY ADD A MIGRATION.** If any other slice appears to need one, the scope is wrong.
+- **⚠️ Do NOT reuse `applyBulkGeneratedMetadataToNote`** — it unconditionally overwrites `title` and
+  `tags` and **would destroy curator-authored canonical titles.** This is the plan's §A blocker and the
+  single most destructive thing this release could do.
+- **⚠️ Do NOT resolve ONE generation context for the batch** — every Note resolves independently.
+- **⚠️ Do NOT infer or repair missing metadata to make a Note pass.** Block it with a reason.
+- **⚠️ Do NOT build a metadata-quality score, classifier, or AI "is this good enough" judgement.**
+- **⚠️ Do NOT build a second Note generation architecture** — the title-as-topic path is the method.
+- **⚠️ Do NOT send Applicable Programs to generation or display them as generation inputs.**
+- **⚠️ Do NOT change Review Set membership, Section, ordering, Subject, Domain Context, Depth or
+  Applicable Programs** — bulk changes CONTENT only.
+- **⚠️ Do NOT propagate to learner copies or notify copy owners.**
+- **⚠️ Do NOT copy `AdminStudyPackService.regenerateOfficialSummaries`** — it holds a transaction across
+  an LLM call. **⚠️ Do NOT hold a JDBC connection across either LLM call, and do NOT use
+  `REQUIRES_NEW`.**
+- **⚠️ Do NOT auto-select, auto-detect stale Notes, schedule regeneration, or regenerate on deploy,
+  metadata edit, or Review Set update** — selection stays explicitly human.
+- **⚠️ Do NOT offer whole-Review-Set one-click regeneration.** **⚠️ Do NOT re-run successful items on
+  retry.**
+- **⚠️ No pricing change, no new plan gate, no learner bulk regeneration, no content versioning, no
+  concept migration, no adopted-Review-Set synchronization.**
+- **⚠️ Do NOT change what `BOARD_EXAM_STARTED`, `ADAPTIVE_PRACTICE_STARTED` or `QUIZ_SHARE_LINK_CREATED`
+  record.** **⚠️ `frontend/app/onboarding` stays frozen** — live dated reads run through 2026-09-19.
+- **⚠️ The `v0.118.0` production outage fix is NOT in this release and is NEXT** — see its Backlog rows.
+  Do not fold it in because it also touches read paths.
+
+### Verification
+
+**FULL THREE-AGENT COLD PRESSURE TEST IN ISOLATED `git worktree`s**, declared not inherited. The plan
+rates B1+B2 at one scoped cold agent and states the escalation clause explicitly: extending beyond ADMIN
+adds money semantics. **Owner decision 1 fired that clause at kickoff.** Two independent triggers now
+hold: **production-data semantics at scale** — irreversible content replacement across up to 50 canonical
+Notes, plus a migration — **and money semantics on a paid account.**
+
+**⚠️ THE ISOLATION IS NOT OPTIONAL** (`v0.105.0` lost an agent's entire result set to shared-tree
+corruption), and **ONE AGENT MUST BE POINTED AT THE BLIND SPOT, NOT THE FEATURE** — in the last FIVE
+releases the worst defect was outside the stated scope every time, `v0.118.0` included.
+
+**⚠️ PRE-DECLARED DISCRIMINATING GUARDS, each naming the fixture that would pass under the defect:**
+
+1. **Metadata preservation** — a batch over a Note with an authored `title` and `tags` leaves **both
+   byte-identical**. *A fixture asserting only that content changed passes while titles are destroyed.*
+2. **Per-Note context** — a batch of two Notes with **different** Subjects and Domain Contexts generates
+   each against **its own** context. *A single-Note batch, or two Notes sharing metadata, proves nothing.*
+3. **Continue-on-failure and honest reporting** — with item 2 of 3 failing, items 1 and 3 are
+   `REGENERATED` and **item 1 is not reported failed.*
+4. **Restart survivability** — items resolved before an interrupt are still readable afterwards. *A batch
+   that runs to completion passes under the receipt defect.*
+5. **Blocked stays blocked** — a multi-program Note with a null Domain Context is `BLOCKED` with a reason,
+   is **not** regenerated, and its content is unchanged.
+6. **Retry excludes successes** — retry re-runs only `FAILED` items, with quota charged only for those.
+7. **⚠️ ADDED BY OWNER DECISION 1: a TEACHER whose remaining allowance is smaller than the selection is
+   BLOCKED-AND-REDUCED before any LLM call, and the units actually spent match the items actually
+   regenerated** — asserted on PERSISTED counters. *An ADMIN fixture bypasses quota entirely and proves
+   nothing about the path this decision opened.*
+
+**⚠️ CARRIED LESSONS: a guard must reach its subject the way production does; a hand-built service's
+`@Transactional` is INERT under `@DataJpaTest` and can make a "nothing was written" guard pass for the
+wrong reason (measured in `v0.118.0`); mutate and confirm a NAMED test fails; read `./mvnw`'s exit status
+directly, never through a pipe; COUNT executed tests from `target/surefire-reports/*.xml` after CLEANING
+it; run `npm test`; sweep by SURFACE, not by diff; VERIFY "X already does Y" AGAINST CODE BEFORE IT
+REACHES A PROMPT — `v0.118.0` shipped a false premise from its prompt into a test and a feature doc; and
+call `advisor()` BEFORE writing the Codex prompt for B1.**
+
+**Routing: CODEX** for B1 and B2 (a migration, batch orchestration, a preflight contract); **Claude Code
+inline** for B3-B5.
+
+### Shipped
+
+_(nothing yet)_
+
 ## v0.118.0 - Note and Study Pack Regeneration
 
 **Status: Released** (kicked off and signed off 2026-09-05, base branch `releases/v0.118.0`, cut from
