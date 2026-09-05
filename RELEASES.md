@@ -1,5 +1,94 @@
 # RELEASES.md - NoteLib
 
+## v0.115.0 - Learner Publication Authority
+
+**Status: In Progress** (kicked off 2026-09-05, base branch `releases/v0.115.0`, cut from `main` after
+`v0.114.0` merged and tagged)
+
+Theme: when a learner publishes a note they copied from the curated library, the programs it is shelved
+under become theirs to state rather than the curator's to have decided for them.
+
+### Planned Scope
+
+**⚠️ THIS IS SLICE 1 OF THE COMPREHENSIVE REVIEW SET OVERHAUL, AND ITS ORDER IS A CORRECTNESS
+CONSTRAINT RATHER THAN A PREFERENCE.** Full architecture: `docs/claude-plans/v0.115.0-stage1-master-architecture-reconciliation.md`,
+produced by three cold-agent audits and revised after owner/Product-UX tightening. **The audit set and
+the `ADR-001` corrections ride in this release** (PRs #1272, #1273) because they are the evidence this
+scope rests on.
+
+1. **A learner's copied applicability stops being curator-authored the moment they publish.** At the
+   `PRIVATE → PUBLIC` transition for **learner-owned** notes, clear the copied `note_course_program`
+   rows in `NoteService.updateVisibility`. That method **already computes the exact predicate** for
+   analytics, and it is the **sole** path to non-`PRIVATE` — every other `setVisibility` call writes
+   `PRIVATE`, and there is zero native SQL. **⚠️ Clearing UN-SHADOWS the learner's own field**, which
+   the client already renders and requires, so **authority is TRANSFERRED, not merely revoked.**
+2. **A null string stays null** — the note is public but **unshelved** until the learner answers.
+   **⚠️ Do NOT backfill from the joined catalog name**; that would relaunder curator classification
+   through a different column.
+3. **A companion server-side fix** so an omitted `courseProgramText` retains the stored value rather
+   than stamping the profile program.
+
+### Why now, and why this order
+
+**⚠️ MEASURED 2026-09-05, NOT INFERRED: 100% of adopted placements' source notes carry program join
+rows, against 11.8% of existing learner copies** — the older copies predate the copy behaviour at
+`NoteService:397`. Slice 2 (additive Review Set updates) mints learner notes **through `copyNote`**, so
+running it first would grow the affected population **~8x in a single batch**. **⚠️ Do NOT reverse this
+order.**
+
+**The hazard is real and entirely unrealised — 536 learner copies carry copied rows and ZERO are
+public.** This closes a live mechanism before it fires rather than repairing damage, which is why it is
+small and why it must not wait.
+
+**⚠️ The defect is sharper than "the learner never confirms": the learner CANNOT.** Shadowing is
+unconditional at one row and the Applicable Programs editor requires `isOwner && isCurator`, so both
+representations are frozen on 100% of the affected population. **This is a capability gap, not a consent
+gap.**
+
+### Anti-drift
+
+- **⚠️ DO NOT BROADEN THIS INTO A PUBLIC-DISCOVERY REDESIGN.** No new discovery authority tables, no new
+  provenance enums, no new publication workflow, **no new visibility state** — `NoteVisibility` stays
+  `PRIVATE | PUBLIC`. **If implementation exposes an unacceptable semantic edge case, ESCALATE
+  EXPLICITLY before changing the architecture.**
+- **⚠️ RESTRICT THE CLEARING TO NON-CURATORS** or it destroys the curated catalog.
+- **⚠️ NO new applicability provenance column and NO backfill.** On a learner-owned note every join row
+  is copy-inherited **by construction**, so the ambiguity was eliminated rather than merely
+  undetectable. **The rejected `source` column stays rejected.**
+- **⚠️ Options D and C stay REJECTED and must not be re-proposed** — `ADR-001` records the resolution as
+  of 2026-09-05. D fails on product semantics (608 null-string, 551 multi-program source notes); C is
+  rejected as a solution shape and additionally cannot fire at all under current shadowing. **They are
+  different rejections and must not be collapsed.**
+- **⚠️ NO MIGRATION.** If an item appears to need one, the scope is wrong.
+- **⚠️ DO NOT START SLICE 2** (additive Review Set updates). It needs application-layer placement
+  idempotence proven, the sync-provenance schema defined, a removal tombstone, detached-source
+  behaviour and traced readiness formulas — none of which are in this release.
+- **⚠️ Slices 0A and 0B (Domain Context classification) are OWNER-EXECUTED curator work and are NOT in
+  this release.** They are independent of it and must not gate it.
+- **⚠️ NO quota, entitlement, limit or meter change; no `ProfileType` gate; no new mode or sub-mode.**
+- **⚠️ `frontend/app/onboarding` STAYS FROZEN** — the freeze lifts 2026-09-11 and **twelve dated reads
+  land between 2026-09-10 and 2026-09-17.** This release must touch none of the surfaces they measure.
+- **⚠️ Do NOT change what `BOARD_EXAM_STARTED`, `ADAPTIVE_PRACTICE_STARTED` or `QUIZ_SHARE_LINK_CREATED`
+  record.**
+
+### Verification
+
+**A single `advisor()` call on the diff.** One method, no migration, no quota or permission substrate,
+and a **zero-row blast radius** — all 536 affected copies are private, so the change is inert on every
+existing row. **⚠️ ESCALATE TO ONE SCOPED COLD AGENT IF** the clearing turns out to need a second write
+path, or if `updateVisibility` proves not to be the sole route to non-`PRIVATE`.
+
+**⚠️ PRE-DECLARED GUARD, aimed at what this could silently get wrong: a CURATOR publishing a curated note
+must KEEP its join rows, and a learner publishing a copy must LOSE them.** A fixture that exercises only
+the learner path passes under a version that clears rows for everyone — which would destroy the curated
+catalog — and therefore proves nothing. **A second guard is owed at the null case: a copy whose source
+string was null must end up public and UNSHELVED, never backfilled from the joined name.**
+
+### Shipped
+
+_(nothing yet)_
+
+
 ## v0.114.0 - Connection Evidence
 
 **Status: Released** (kicked off and signed off 2026-09-04, base branch `releases/v0.114.0`, cut from
