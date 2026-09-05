@@ -2,8 +2,8 @@
 
 ## v0.118.0 - Note and Study Pack Regeneration
 
-**Status: In Progress** (kicked off 2026-09-05, base branch `releases/v0.118.0`, cut from `main` after
-`v0.117.0` merged and tagged)
+**Status: Released** (kicked off and signed off 2026-09-05, base branch `releases/v0.118.0`, cut from
+`main` after `v0.117.0` merged and tagged)
 
 Theme: a Note whose source material has moved on can be regenerated — content and Study Pack together —
 without losing the note's identity, its place in a plan, or the learner's history against it.

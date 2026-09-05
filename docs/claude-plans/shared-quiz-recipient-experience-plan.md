@@ -1,263 +1,373 @@
-# Shared Quiz — Recipient Experience Audit & Plan
+# Shared Quiz — Recipient Experience & Continue-Learning Loop
 
-**Status:** PLAN ONLY — nothing implemented. Written 2026-09-05.
-**Origin:** two owner screenshots from real use on mobile, taken while signed in.
-**Surface:** `/quiz/[token]` — the "Quiz for someone" recipient flow (`frontend/app/quiz/[token]/page.tsx`, 340 lines).
+**Status:** PLAN ONLY — nothing implemented. Written 2026-09-05, **revised 2026-09-05** to
+incorporate owner product tightening.
+**Companion:** `docs/claude-plans/supporter-progress-visibility-audit.md` (§8 here supersedes it
+where they differ).
 
-**⚠️ Two of the five items are not what the report describes, and the audit found a sixth the report
-did not mention.** Read §0 first.
-
----
-
-## §0. Executive summary
-
-| # | Reported as | Actually |
-|---|---|---|
-| 1 | Missing question navigation | **Design line is real** — navigator is exam-only — **but the shared quiz is *structurally* forward-only**, which is a separate and worse problem (§1) |
-| 2 | Bottom menu should be hidden on every quiz | **The mechanism already exists** and is applied to Board Exam + Long Exam only. Extending it is a product decision, not a bug fix — and for *this* surface it only affects signed-in recipients (§2) |
-| 3 | Broken CTA button | **Confirmed** — `whitespace-nowrap` + fixed `h-10` (§4) |
-| 4 | No way to copy the note(s) | **Not a missing menu** — the payload carries no note identity at all, deliberately (§5) |
-| 5 | — | **NEW: `questionGroup` is dropped from `PublicQuizItem`**, so matching questions are unanswerable on this surface (§3) |
-| 6 | — | **NEW: `concept` renders as bare grey text under the stem**, reading as part of the question (§3) |
-
-**Item 5 is the most serious** — it is the same defect class `v0.110.0` fixed for MULTI_SELECT, and it
-means a recipient can be scored on a question the surface cannot present.
+**⚠️ THREE OWNER DECISIONS ARE CONTRADICTED BY THE REPO. Read §1 before anything else.** None is a
+disagreement with the product direction; each is a missing substrate the direction assumes exists.
 
 ---
 
-## §1. Question navigation
+## 1. Executive judgment
 
-**The honest answer to "did we design it this way?" — yes, but the design line is exam-mode, not
-this surface.**
+The recipient direction — *Receive → Answer → Result → Learn more → Continue studying* — is
+**sound and mostly buildable on what exists.** Three contradictions must be resolved first.
 
-`QuestionNavigator` (`components/exam-mode/question-navigator.tsx`) has exactly **two** consumers:
-`app/notes/[id]/long-exam/page.tsx` and `app/study-packs/[id]/challenge-quiz/page.tsx:2377-2385`.
-Its tone type is `"challenge" | "long-exam" | "board-exam"` — all exam modes. **Quick Review,
-Adaptive Practice, Interview Practice and the shared quiz all lack it.** So the shared quiz is
-consistent with every non-exam surface.
-
-**⚠️ But that consistency hides the real problem, and it is worse than a missing grid: the shared
-quiz cannot go back at all, structurally.** Answers accumulate in an **append-only array**:
-
-```ts
-const nextAnswers = [...answers, isMultiSelect ? null : selectedAnswer];   // :99
-setCurrentIndex((index) => index + 1);                                     // :107
-```
-
-There is no index-keyed answer store, so revisiting question 3 would *append* rather than replace.
-**A misclick is therefore unrecoverable** — and unlike every in-app mode, there is no session row to
-fall back on (`GeneratedQuizService` and `QuizShareLinkService` reference `quick_review_sessions`
-zero times), so state is pure client React state and a refresh already loses the whole attempt.
-
-**Recommendation — and this is where I'd challenge the framing.** The ask is a navigator; the need is
-**back/forward**. Ship:
-
-- re-key `answers` / `multiAnswers` from append-only arrays to **index-addressed** storage;
-- add **Previous / Next**, with Next disabled until the current question is answered (preserving
-  today's "must answer to advance" rule);
-- keep the existing single primary button semantics on the last question (`Submit Answers`).
-
-**Do NOT add the full `QuestionNavigator` grid here in v1.** It is an exam affordance for 20–50
-question sessions with a time limit; this is a 10-question one-pass quiz often taken by someone
-without an account. Back/forward removes the trap; the grid adds a surface with no evidence behind
-it. **If the owner wants parity with Challenge Quiz, that is a deliberate scope call, not a defect
-fix** — say so rather than inferring it.
-
-**⚠️ Do not add answer persistence in this release.** It implies either a session row for an
-anonymous recipient or `localStorage`, and `AGENTS.md` records that public note pages must not
-persist anonymous session state. Out of scope; state the refresh-loses-progress residual as a Known
-limitation instead.
-
----
-
-## §2. Bottom navigation during quizzes
-
-**The mechanism already exists — this is not new construction.** `ExamFocusProvider` /
-`useExamFocusMode` (`components/exam-mode/exam-focus-context.tsx`) drives
-`shouldShowMobileBottomTabs = user.mobileTabBarEnabled && !isExamFocusActive && !isBottomViewportClaimed`
-(`app-shell.tsx:510`) and also collapses the sidebar, header and drawer (`:525-648`).
-
-**Where it is applied today — narrower than expected:**
-
-| Surface | Focus mode |
-|---|---|
-| Long Exam | **Yes** — `useExamFocusMode(phase === "running")` (`long-exam/page.tsx:255`) |
-| Challenge Quiz — Board Exam mode | **Yes** — `useExamFocusMode(isBoardExamMode && phase === "running")` (`:1502`) |
-| Challenge Quiz — ordinary | **No** |
-| Quick Review · Adaptive Practice · Interview Practice | **No** |
-| Shared quiz | **No** |
-
-**⚠️ So "the bottom menu should be hidden on every quiz" is a product change extending a
-Board-Exam-only affordance to every quiz — not a bug fix.** Stated plainly because it will otherwise
-be implemented as though something regressed.
-
-**⚠️ And for this surface specifically it is narrower than the screenshot suggests.** The shell only
-renders when `shouldUseAuthenticatedShell(hasAuthUser, pathname)` is true (`app-shell.tsx:63`), so an
-**anonymous recipient already sees no bottom nav.** Only a signed-in user taking someone else's
-shared quiz sees it — which is exactly the screenshot. The gap is real but affects a narrower
-population here than on Quick Review or ordinary Challenge Quiz, where *every* user sees it.
-
-**Recommendation:** apply `useExamFocusMode(true)` while a quiz is in progress on the shared quiz,
-Quick Review, Adaptive Practice, Interview Practice and ordinary Challenge Quiz — one hook call per
-page, no new mechanism.
-
-**⚠️ One trade to decide before implementing, not after: focus mode removes the escape route.** Board
-Exam and Long Exam can afford that because they are formal timed sessions with a `BackLink` in the
-page. **The shared quiz page renders no `BackLink` at all**, so hiding the tab bar leaves a signed-in
-recipient with the browser back button as the only exit. If focus mode is applied here, **the page
-owes an in-page exit affordance** — otherwise this fix trades one annoyance for a worse one.
-
----
-
-## §3. ⚠️ NEW — matching questions are unanswerable on this surface
-
-**Found during the audit; not in the report; the most serious item here.**
-
-`QuizItem` carries **`questionGroup`** (`dto/QuizItem.java:27`). `PublicQuizItem` carries only
-`question`, `choices`, `concept`, `questionFormat` — **`questionGroup` is dropped** at
-`QuizShareLinkService.java:157`.
-
-Matching questions in NoteLib are a **group of sibling questions** sharing a `questionGroup` label,
-rendered together by `components/study-pack/quiz-matching-group.tsx`; `ChallengeQuizService`'s
-`shuffleQuestionOrderPreservingMatchingGroups` exists specifically to keep those siblings contiguous.
-**With the group label stripped, the shared quiz page has no way to render them as a group** — it
-branches on exactly one format (`isMultiSelect = questionFormat === "MULTI_SELECT"`, `:82`) and
-treats everything else as single-choice.
-
-Screenshot 1 is exactly this: a stem listing four elements to match (*1) Grading 2) Lighting
-3) Native Planting 4) Circulation*) with four choices and a **single** selection. The recipient
-cannot express a matching answer, and is then scored on it.
-
-**This is the same defect class `v0.110.0` fixed** — that release added `questionFormat` to
-`PublicQuizItem` because MULTI_SELECT questions were silently mis-graded. `questionGroup` was missed
-in the same sweep.
-
-**Two candidate fixes — recommendation: (b) for v1.**
-
-- **(a) Support matching on the shared surface** — carry `questionGroup` and reuse
-  `QuizMatchingGroup`. Correct, larger, and touches grading (`getSharedQuizResults` is positional).
-- **(b) Exclude matching questions from shareable quizzes at generation time**, so the format never
-  reaches a surface that cannot present it. Smaller, and honest.
-  **⚠️ But it does nothing for already-shared quizzes**, which is the same residual shape
-  `v0.110.1` recorded — state it rather than implying a full fix.
-
-**⚠️ Do NOT "fix" this by hiding the concept line or rewording the stem.** The stem is correct; the
-presentation contract is what is missing.
-
-**Also in this item — §6 from the summary:** `currentQuestion.concept` renders as bare grey text
-directly beneath the stem (`:274-275`) with no label. In the screenshot *"environmental regulation"*
-reads as part of the question. Recommendation: label it or drop it — it is metadata, not question
-text, and no other quiz surface renders a bare concept under the stem.
-
----
-
-## §4. The broken CTA button — confirmed, root cause exact
-
-```tsx
-<TrackedLink ... className={buttonVariants({ className: "w-full sm:w-auto" })}>
-  Save your score and start studying with your own notes
-</TrackedLink>                                                    // :193-201
-```
-
-`buttonVariants`' base string contains **`whitespace-nowrap`** and `size="default"` resolves to
-**`h-10`** — a fixed height (`components/ui/button.tsx:18`, `:31`). A 54-character label inside
-`w-full` on a ~390px viewport can neither wrap nor grow, so it overflows both rounded edges. That is
-precisely screenshot 2.
-
-**Recommendation — do both:**
-
-1. **Shorten the label.** *"Save your score"* or *"Save your score — create a free account"*. The
-   current sentence tries to carry the whole value proposition in a button.
-2. **Allow wrapping for this instance** — override to `whitespace-normal h-auto py-2.5 text-center`.
-   The supporting sentence, if wanted, belongs in a `<p>` beneath the button, not inside it.
-
-**⚠️ Check for siblings before shipping.** Any other long-label `buttonVariants` call in a
-`w-full` mobile context has the same latent break; this is a sweep-by-surface item, not a one-line
-fix.
-
----
-
-## §5. "What's next" — copying the note(s)
-
-**⚠️ This is not a missing menu. The payload carries no note identity at all.**
+### ⚠️ Contradiction A — a combined quiz has NO source-note identity (blocks §9/§13 for multi-source)
 
 ```java
-public record PublicSharedQuizResponse(UUID quizId, String noteTitle, List<PublicQuizItem> questions)
+/** A stored snapshot section; {@code title} is copied from the source note, never resolved later. */
+public record CombinedQuizSection(String title, List<QuizItem> questions)
 ```
 
-There is **no note id, no visibility, and no source-note list** — only a display title. The endpoint
-is `permitAll`, so this is almost certainly deliberate: exposing note ids on an anonymous surface
-would leak the identity of what may be a **private** note. And `v0.110.0` shipped **combined**
-quizzes spanning several notes, which is why the owner's instinct says "note or notes" — but the
-response models neither.
+`CombinedQuizEntity` stores `sections` as JSONB of `(title, questions)`. **There is no note id
+anywhere in a combined quiz** — only a copied title string, and the comment says so deliberately.
 
-**So "add a copy menu" is a capability decision, not a fix.** Two constraints make it narrow:
-
-1. **Only PUBLIC source notes can be offered.** A shared quiz generated from a private note has
-   nothing the recipient may copy, and offering it would contradict the note-sharing model
-   (`v0.91.0`: sharing a note is an explicit grant, not a side effect of receiving a quiz).
-2. **Copying requires an account**, so for an anonymous recipient the honest next step is still
-   signup — which is what the CTA already is.
-
-**Recommendation for v1:** extend `PublicSharedQuizResponse` with
-`sourceNotes: [{ id, title }]` **filtered to PUBLIC notes only**, and render a *"Study these notes"*
-section on the results screen linking to the public note pages — where **Copy to my Library already
-exists**. Do not build a second copy mechanism on this surface.
-
-**⚠️ If the source notes are private, render nothing** — not a disabled control, not an explanation
-that reveals a private note exists.
-
-**⚠️ Do NOT propagate anything to the quiz owner, and do not notify them** — out of scope, and it is
-the adjacent shape `v0.115.0`/`v0.116.0` deliberately fence off.
-
----
-
-## §6. Slices and routing
-
-| Slice | Content | Route |
+| Quiz kind | Source identity | Continue-learning possible? |
 |---|---|---|
-| **1** | CTA fix + concept label (§4, §3 tail) | Claude Code inline |
-| **2** | Index-keyed answers + Previous/Next + in-page exit affordance (§1) | Claude Code inline |
-| **3** | Focus mode across quiz surfaces (§2) | Claude Code inline |
-| **4** | Matching-question exclusion **or** group support (§3) | **Codex** if (a); inline if (b) |
-| **5** | Public source notes on the results screen (§5) | **Codex** — DTO + service + UI |
+| **Single-note** shared quiz | `generated_quizzes.note_id` (NOT NULL, unique) | **Yes — no migration** |
+| **Combined** shared quiz | copied title strings only | **No — needs a migration** |
 
-**Not for v0.118.0.** That release is mid-flight on Note + Study Pack regeneration; these are an
-unrelated surface. Recommend **v0.119.0**.
+**So §13's "multiple eligible public sources" cannot ship for combined quizzes without storing
+source note ids.** **Recommendation: ship continue-learning for single-note quizzes in this release
+and treat multi-source as follow-up**, rather than adding a migration to a UX release. The
+one-source case in §13 is the common one and is free.
 
-**Slice 4 is the one to sequence first if only one ships** — it is the only item where a recipient is
-currently *scored on a question they cannot answer*.
+### ⚠️ Contradiction B — a shared quiz result is never recorded (blocks §18/§22's supporter loop)
+
+`getSharedQuizResults` (`QuizShareLinkService:182`) grades **in memory and returns**: zero `.save(`,
+zero analytics, zero activity tracking in the whole method. And a shared quiz creates **no session**
+— `GeneratedQuizService` and `QuizShareLinkService` reference `quick_review_sessions` zero times
+(`v0.110.0`).
+
+**So §18 is not a permission question. There is no record to permit.** Even a supporter holding a
+full `PROGRESS` grant would not see it, because a shared-quiz completion never enters the learner's
+progress data at all. Building it requires **new persistence** — a completion record — which is a
+migration and a genuine privacy decision (an anonymous recipient's score attributed to nobody, or a
+signed-in recipient's score attributed to them).
+
+**Recommendation: out of scope for this release; record as follow-up.** §18 asked what is already
+allowed — the honest answer is *nothing, because nothing is stored.*
+**⚠️ The privacy contract for it is now DECIDED (2026-09-05): signed-in recipients only, within an
+accepted relationship, anonymous completions never recorded.** That settles what a future build may
+do; it does not make it in scope here.
+
+### ⚠️ Contradiction C — readiness trend cannot be reconstructed (bounds §21)
+
+There is **no readiness history or snapshot table** (searched migrations: the only matches are an
+unrelated subscription-history guard and a collection-structure snapshot). `ConceptHealth` stores
+current state per concept only — `incorrect_streak`, `last_correct_at`, `last_incorrect_at` — with
+no historical series.
+
+**So "↑ 4% over the last 30 days" cannot be produced honestly**, exactly as §21 anticipated.
+
+**But quiz-performance history DOES exist and needs no migration:**
+`DashboardService.getMasterySnapshot` already reads `recentCompletedSessions` from
+`quickReviewSessionRepository` — completed sessions carrying timestamps — and collapses them into
+average/best. **§22's recent-results list is a projection change, not new data.**
 
 ---
 
-## §7. Verification
+## 2. Current defects confirmed from the repo
 
-**Tier: a single `advisor()` call** for slices 1–3 (presentation only, no permission substrate, no
-money semantics). **One scoped cold agent** if slice 5 ships, because it adds a new field to an
-anonymous `permitAll` payload — a cross-boundary read.
+| # | Defect | Anchor |
+|---|---|---|
+| 1 | **Matching questions are unanswerable.** `PublicQuizItem` drops `questionGroup` (present on `QuizItem:27`), and the recipient page branches on one format only (`isMultiSelect`, `:82`) | `QuizShareLinkService:157` |
+| 2 | **Answers are append-only** — `[...answers, x]` (`:99`), so a wrong answer cannot be corrected | `quiz/[token]/page.tsx:99,:107` |
+| 3 | **CTA overflows on mobile** — `buttonVariants` base carries `whitespace-nowrap`, `size=default` gives fixed `h-10`; a 54-char label in `w-full` can neither wrap nor grow | `button.tsx:18,:31`; `page.tsx:193-201` |
+| 4 | **Bare concept string under the stem**, unlabelled, reads as part of the question | `page.tsx:274-275` |
+| 5 | **Result screen ends at a score** — one signup CTA, no continuation | `page.tsx:181-201` |
+| 6 | Authenticated recipients see the app's bottom tab bar while answering | `app-shell.tsx:63,:510` |
+
+---
+
+## 3. Tightened recipient flow
+
+**The lightweight primitive is preserved (§1): no Learning Connection, no account, no Note share, no
+assignment is required to take a shared quiz.** Every addition below is *after* submission or is
+purely presentational.
+
+**Answering:** index-addressed answers replacing the append-only arrays, **Previous / Next** (not the
+Board Exam navigator), Next gated on the current question being answered, `Submit Answers` on the
+last. Concept metadata removed from the active-question surface (§4 of the response — **remove, do
+not relabel**; it provides no orientation the stem does not already give).
+
+**Matching (§3 of the response) — both options priced:**
+
+| Option | Work | Verdict |
+|---|---|---|
+| **A — exclude Matching from shareable quizzes** | One filter at share/generation time | **Recommended for this release.** Immediate, closes the integrity hole. **⚠️ Does nothing for already-shared quizzes** — same residual shape `v0.110.1` recorded; state it, do not imply a full fix |
+| **B — support Matching properly** | Carry `questionGroup` in `PublicQuizItem`, reuse `QuizMatchingGroup`, **and change grading** — `getSharedQuizResults` is positional and matching groups are multi-item | **Materially larger**, and it touches the grading path. Follow-up |
+
+**Recommendation: A now, B recorded as follow-up.** B is not modest — the grading contract is
+positional, so matching support is not a rendering change.
+
+---
+
+## 4. Perfect / non-perfect result contract
+
+**Two states only. No motivational tiers** (§6).
+
+| State | Framing | Continuation |
+|---|---|---|
+| **Perfect** | *"Great job — 10/10! You got every question right."* | **Keep this for later** — same source material, retention framing |
+| **Not perfect** | *"Nice work — 8/10. Review the source material if you'd like to strengthen the topics covered here."* | **Continue learning** — same source material, remediation framing |
+
+**Score changes tone only, never access.** Both states show identical continuation options when
+eligible public material exists.
+
+**⚠️ §14 respected: never say "review the Notes you struggled with."** Per-question source
+attribution does not survive to this surface — `QuizItem.sourceStudyPackId` exists but
+`PublicQuizItem` drops it, and a combined quiz's only grouping is a section title with no note id.
+Use **"Review the source material"** / **"Continue learning"**.
+
+---
+
+## 5. Public-source continuation architecture
+
+**Hard rule (§9, §10, §17): sharing a quiz never implicitly shares its source Note.**
+
+**Payload change — single-note quizzes only, no migration:**
+`PublicSharedQuizResponse` gains `sourceNotes: List<PublicSourceNote(id, title)>`, populated **only**
+from source notes whose `visibility == PUBLIC`, resolved server-side.
+
+**⚠️ Private sources are omitted entirely — not counted, not hinted, not placeheld.** No *"1 source
+is private"*, no *"2 of 3 available"*, no disabled card. If no source is public the field is an
+**empty list**, and the client must render nothing rather than an empty-state explaining absence
+(§15). **This rule holds even between accepted Learning Connections** (§17).
+
+**⚠️ Mixed public/private is therefore free for single-note quizzes** (there is one source) **and
+blocked for combined quizzes** (no ids to filter) — see Contradiction A.
+
+---
+
+## 6. Anonymous vs authenticated behaviour
+
+| Recipient | Primary source action | Why |
+|---|---|---|
+| **Anonymous** | **View Note** → the public note page | §11. **And there is a repo reason beyond preference:** the existing copy component routes anonymous users to `/signup?redirect=…` (`public-library-copy-action.tsx:161`), but `resolvePostLoginDestination` returns the **gated home** (verify-email → onboarding) *before* reading the redirect param — so a new signup **loses it**. A copy-first anonymous path dead-ends |
+| **Authenticated** | **Add to Library** | Reuse is safe and small — see below |
+
+**§12 / Q3 answered: yes, the existing copy action is reusable directly.**
+`POST /notes/{id}/copy` (`NoteController:329`) and `copyNote(noteId, options)` (`api.ts:5764`)
+already exist, and `public-library-copy-action.tsx` already uses `copyNote` for authenticated users
+under the exact label **"Add to Library"** (`:14`). **Reuse that component; do not write a second
+copy implementation.**
+
+**Signup CTA stays** as a separate pathway (§11) — but it must no longer be the only thing on the
+screen, and its label must shrink (defect 3).
+
+---
+
+## 7. Learning Connection-aware behaviour
+
+**Sender context (§16) — buildable, small, and it needs a lookup.** `PublicSharedQuizResponse`
+carries no owner identity (`quizId, noteTitle, questions`), so showing *"Quiz from Maria"* means
+resolving the quiz owner **and** confirming an accepted relationship with the viewer.
+
+**⚠️ It must be gated on an accepted relationship, not on quiz ownership alone** — otherwise the
+endpoint becomes an identity oracle on a `permitAll` route, disclosing the sender's display name to
+anyone holding a link. **For an anonymous or unrelated recipient, disclose nothing.**
+
+**Terminology (§16):** use **Learning Connection** / the person's name. **Do not use "Companion"** —
+`AskCompanionService` is an existing distinct product concept and the collision would be permanent.
+
+**§17 restated as code: connection grants nothing here.** The source-note filter is
+`visibility == PUBLIC`, full stop — relationship state is never an input to it.
+
+---
+
+## 8. Supporter progress audit (§19–§26)
+
+Full findings: `docs/claude-plans/supporter-progress-visibility-audit.md`. What that audit adds here:
+
+**Q8 — activity data that exists:** `LinkedLearnerActivityResponse(displayName, engagementMode,
+currentStreak, longestStreak, studyDaysThisWeek)` behind a separate `ACTIVITY` grant, rendered on
+`/linked-learners`, **not** on the progress page. §23's *Learning momentum* card is a **relocation**,
+not new data — and it **must disappear entirely when ACTIVITY is off**, which the existing grant
+check already enforces.
+
+**Q9 — plan-progress fields:** the progress payload exposes counts only (`collectionCount`,
+`totalItems`, `readyItems`, `practicedItems`). `NoteCollectionSummaryResponse` **does** carry `title`
+server-side, but the progress service aggregates it away.
+**⚠️ Recommendation: keep plan names hidden.** §20 forbids "private curriculum details", and a plan
+name is curriculum detail. §24's richer phrasing (*"46 of 210 practiced · 22% complete across 3
+plans"*) is a **pure formatting change over data already sent** — ship that, not names.
+
+**Q7 — trends:** readiness trend **impossible** (Contradiction C); quiz-performance history
+**available now** from completed sessions with timestamps. §22's recent-results list is a projection
+change with no migration. **⚠️ Do not add event sourcing or a snapshot table for readiness** (§21).
+
+**Q10 — "Quizzes you shared":** blocked by Contradiction B. **Not buildable without new persistence.**
+
+**Q11 — contextual "Create a quiz for {Name}" (§26):** the flow is a **note-actions menu item** on
+the private note detail page (`private-note-detail-page-client.tsx:2363`), so it starts from a note
+the supporter owns. A contextual CTA is therefore a **deep link into a note picker**, not a button
+that starts a quiz. Reusable, but it is an entry-point addition — price it as such, and it does not
+make quiz sharing connection-only (§26 respected).
+
+**Q12 — migrations:** **none required** for Slices 1–4. Slice 5's supporter enrichments also need
+none. Contradictions A and B each need one, which is why both are follow-ups.
+
+---
+
+## 9. Matrices
+
+### §31 — Recipient product-state matrix
+
+| Recipient | Connection? | Score | Public source? | Result framing | Source action |
+|---|---|---|---|---|---|
+| Anonymous | No | Perfect | Yes | Great job — 10/10 · **Keep this for later** | **View Note** |
+| Anonymous | No | Not perfect | Yes | Nice work — N/10 · **Continue learning** | **View Note** |
+| Anonymous | No | Any | No | Score + signup CTA only | none |
+| Signed in | No | Perfect | Yes | Great job · Keep this for later | **Add to Library** + View Note |
+| Signed in | No | Not perfect | Yes | Nice work · Continue learning | **Add to Library** + View Note |
+| Signed in | **Yes** | Perfect | Yes | *Quiz from {Name}* + Great job | **Add to Library** + View Note |
+| Signed in | **Yes** | Not perfect | Yes | *Quiz from {Name}* + Nice work | **Add to Library** + View Note |
+| Signed in | **Yes** | Any | No | *Quiz from {Name}* + score | none |
+
+**Mixed public/private multi-source:** public sources listed, private omitted **without trace**.
+**⚠️ Only reachable for single-note quizzes today** (Contradiction A), so in this release the
+"multiple sources" rows are unbuildable and the matrix collapses to one source or none.
+
+**Signup CTA** is present in every signed-out row as a separate pathway; **never** the only route to
+public material.
+
+### §32 — Supporter permission matrix
+
+| Activity | Progress | Supporter sees | A quiz they personally shared |
+|---|---|---|---|
+| OFF | OFF | Name + status only. Dashboard card says *"{Name} is not sharing progress with you."* | **Nothing** — never recorded |
+| **ON** | OFF | Streaks, longest streak, study days this week (on `/linked-learners`) | **Nothing** |
+| OFF | **ON** | Readiness · quiz performance · plan progress (`/progress`) | **Nothing** |
+| **ON** | **ON** | Both of the above, on two pages today | **Nothing** |
+
+**⚠️ The last column is uniform because of Contradiction B: a shared-quiz completion is never
+persisted, so no permission state can reveal it.** This is not a gap in the permission model — it is
+an absent record. Fixing it is new persistence plus a new privacy decision, not a grant change.
+
+**DECIDED 2026-09-05 (owner):** if shared-quiz completions are ever recorded, **signed-in
+recipients only**, surfaced to the sender **only where an accepted relationship exists**.
+**⚠️ Anonymous completions are never recorded** — not anonymised, not counted, not aggregated —
+because a `permitAll` link would otherwise become a tracking surface.
+**⚠️ The decision settles the privacy contract; it does not schedule the build.** The completion
+record is still new persistence and stays a follow-up (Contradiction B).
+
+---
+
+## 10. Mobile UX
+
+**Focus mode — narrowed per §5 of the response.** Apply `useExamFocusMode(true)` **to the shared quiz
+only** while answering. **Do NOT expand to Quick Review, Challenge Quiz, Adaptive Practice or
+Interview Practice** — recorded as a future audit, not this release.
+
+**⚠️ The exit affordance is mandatory, not polish.** The shared quiz page renders **no `BackLink`**,
+so hiding the tab bar leaves a signed-in recipient with only the browser back button. Ship an
+in-page Exit/Back with the focus change or not at all.
+
+**⚠️ Narrower than it looks:** the shell only renders when authenticated (`app-shell.tsx:63`), so an
+**anonymous recipient already sees no bottom nav.** This affects signed-in recipients only.
+
+**Result screen:** CTA label shortened **and** allowed to wrap (`whitespace-normal h-auto py-2.5`);
+supporting sentence moves to a `<p>` beneath. Source cards stack vertically; one card in the
+single-source case. **Sweep for sibling long-label full-width buttons** — the same latent break.
+
+---
+
+## 11. Revised implementation slices
+
+| Slice | Content | Migration | Route |
+|---|---|---|---|
+| **1 — Recipient assessment integrity** | Matching exclusion (option A); index-addressed answers; Previous/Next; remove the concept line | No | **Codex** (backend filter + frontend state) |
+| **2 — Shared-recipient mobile focus** | `useExamFocusMode` on this page only **+ explicit Exit** | No | Claude Code inline |
+| **3 — Result legibility** | CTA wrap/shorten; perfect vs non-perfect framing | No | Claude Code inline |
+| **4 — Continue learning** | `sourceNotes` (PUBLIC, **single-note quizzes only**); anonymous View Note; authenticated Add to Library via the existing component | No | **Codex** (DTO + service + UI) |
+| **5 — Learning Connection integration** | Sender context (gated on accepted relationship); §22 recent-results projection; §23 momentum relocation; §24 plan-progress phrasing; §26 contextual CTA | No | **Codex** |
+
+**⚠️ Recommendation: Slice 5 becomes its own follow-up release.** It touches the product's only
+cross-user read and a `permitAll` payload's identity disclosure — a different verification tier from
+four contained recipient fixes. §29 explicitly invites this call: *"Do not distort the smaller
+recipient fixes merely to ship everything together."* **Slices 1–4 ship first.**
+
+**Slice 1 is the one to ship first if only one ships** — it is the only place a recipient is
+currently scored on a question they cannot answer.
+
+**Follow-ups recorded, not built:** Matching support (option B); source note ids for combined
+quizzes; shared-quiz completion persistence; readiness trend architecture; repo-wide quiz focus-mode
+consistency.
+
+---
+
+## 12. Genuine remaining owner decisions
+
+1. **Matching — exclude now or build support now?** Recommendation: **exclude** (§3). B changes the
+   grading contract, so it is not modest.
+2. **Combined-quiz continue-learning — accept single-note-only for v1, or add the migration?**
+   Recommendation: **single-note only**; a UX release should not carry a schema change.
+3. ~~**Record shared-quiz completions at all?**~~ **SETTLED 2026-09-05** — not in this release; if
+   ever built, **signed-in recipients only, within an accepted relationship, anonymous never
+   recorded** (§9). See `supporter-progress-visibility-audit.md` §11.
+4. **Slice 5 in this release or its own?** Recommendation: **its own.**
+
+**Settled by the audit, not owner questions:** anonymous gets View Note (the signup redirect is lost,
+§6); copy reuse is safe (§6); plan names stay hidden (§8); readiness trend is impossible (§1C).
+
+---
+
+## 13. Anti-drift checklist
+
+- **⚠️ Do NOT implement Quiz Assignments** — no assignment entity, inbox, due dates, state,
+  notifications, rosters or multi-recipient assignment (§28).
+- **⚠️ Do NOT require a Learning Connection, account, Note share or assignment to take a shared
+  quiz** (§1).
+- **⚠️ Do NOT expose a private source Note — its id, title, existence, count, or a placeholder** —
+  even between accepted Learning Connections (§10, §17).
+- **⚠️ Do NOT expose `correctIndex`, `correctIndices` or `explanation` in `PublicQuizItem`** — its
+  javadoc records that the record is the only thing enforcing this.
+- **⚠️ Do NOT disclose sender identity to an anonymous or unrelated recipient** — gate on an accepted
+  relationship, or the `permitAll` route becomes an identity oracle (§7).
+- **⚠️ Do NOT use "Companion" for the human relationship** — it collides with `AskCompanionService`.
+- **⚠️ Do NOT invent score tiers** beyond perfect / not perfect (§6).
+- **⚠️ Do NOT claim per-source weakness** — item provenance does not reach this surface (§14).
+- **⚠️ Do NOT manufacture readiness trend data** (§21), and do not add event sourcing for it.
+- **⚠️ Do NOT infer activity from progress metrics** or show it under another label when ACTIVITY is
+  off (§23).
+- **⚠️ Do NOT expose plan names** on the supporter page (§20, §24).
+- **⚠️ Do NOT expand focus mode to other quiz modes in this release** (§5).
+- **⚠️ Do NOT persist anonymous recipient answers** — `AGENTS.md` forbids anonymous session state on
+  public surfaces; refresh-loses-progress stays a Known limitation.
+- **⚠️ Do NOT write a second Note-copy implementation** — reuse `copyNote` / the existing action.
+- **⚠️ Do NOT change `QUIZ_SHARE_LINK_CREATED` or `QUIZ_SHARE_LINK_OPENED`** — dated checkpoints read
+  them.
+- **⚠️ No quota, entitlement or meter change; no new quiz mode or sub-mode; onboarding untouched.**
+- **⚠️ No migration in Slices 1–5.** If one appears necessary, the scope has drifted into a recorded
+  follow-up.
+
+---
+
+## 14. Verification
+
+**Slices 1–4: a single `advisor()` call** — presentation plus one additive payload field, no money
+semantics, no migration. **⚠️ Escalate Slice 4 to one scoped cold agent**, because it adds a field to
+an anonymous `permitAll` payload — a cross-boundary disclosure. **Slice 5: one scoped cold agent**
+(sender identity on a `permitAll` route + the product's only cross-user read).
 
 **Pre-declared discriminating guards:**
 
-1. **§1** — answer question 1, advance, go **back**, change it, submit: the changed answer must be
-   graded. *A forward-only fixture passes under the append-only defect and proves nothing.*
-2. **§3** — a shared quiz containing a matching group must either render it as a group or **not
-   contain one**. Assert against a quiz that actually has `questionGroup` set.
-3. **§4** — assert the CTA's rendered label at a narrow viewport, or pin a shorter string. *A desktop
+1. **Private source invisibility** — a shared quiz whose source note is **PRIVATE** must return
+   `sourceNotes` **empty**, with no id, title or count anywhere in the response. *A public-note
+   fixture passes under a version that leaks private ids.*
+2. **Answer correction** — answer Q1, advance, go back, change it, submit: the **changed** answer
+   must be graded. *A forward-only fixture passes under the append-only defect.*
+3. **Matching integrity** — a generated quiz containing a `questionGroup` must not be shareable (or,
+   under option B, must render as a group). Assert against a quiz that actually has one set.
+4. **Sender identity gating** — an **anonymous** recipient and a **signed-in but unrelated**
+   recipient must both receive **no** sender identity. *An accepted-connection fixture passes under a
+   version that discloses to everyone.*
+5. **Activity separation** — with `ACTIVITY` off and `PROGRESS` on, the supporter response must carry
+   **no** streak, study-day or momentum-derived value. *Asserting the card is hidden in the UI is not
+   enough — assert the payload.*
+6. **CTA layout** — pin the shortened label, or assert wrapping at a narrow viewport. *A desktop
    fixture passes while mobile overflows.*
-4. **§5** — a shared quiz whose source note is **PRIVATE** must expose **no note id** in the response.
-   *A public-note fixture passes under a version that leaks private ids.*
-5. **§2** — the tab bar must be hidden while a quiz is running **and restored on exit**, including
-   when the recipient leaves mid-quiz.
-
-## §8. Anti-drift
-
-- **⚠️ Do NOT persist anonymous recipient answers** (session row or `localStorage`) — `AGENTS.md`
-  forbids anonymous session state on public surfaces. Refresh-loses-progress stays a Known limitation.
-- **⚠️ Do NOT expose `correctIndex`, `correctIndices` or `explanation` in `PublicQuizItem`** — the
-  record's own javadoc says it is the only thing enforcing that.
-- **⚠️ Do NOT expose private note ids or titles** on this surface (§5).
-- **⚠️ Do NOT change `QUIZ_SHARE_LINK_CREATED` or `QUIZ_SHARE_LINK_OPENED`** — dated checkpoints read
-  them; slice 5 adds a surface, not an event change.
-- **⚠️ Do NOT add the full QuestionNavigator grid** without an explicit owner decision (§1).
-- **⚠️ No quota, entitlement or meter change; no new quiz mode or sub-mode.**
-- **⚠️ `frontend/app/onboarding` is untouched.**
