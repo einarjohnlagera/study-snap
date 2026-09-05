@@ -46,6 +46,8 @@ function renderModal(props: Partial<React.ComponentProps<typeof RegenerateScopeM
       isOpen
       note={buildNote()}
       isCurator={false}
+      noteGenerationsRemaining={5}
+      studyPacksRemaining={5}
       busy={false}
       onClose={onClose}
       onConfirm={onConfirm}
@@ -172,5 +174,30 @@ describe("RegenerateScopeModal", () => {
   it("surfaces a server rejection in place instead of closing", () => {
     renderModal({ errorMessage: "A Study Pack is already being generated for this note." });
     expect(screen.getByRole("alert")).toHaveTextContent("A Study Pack is already being generated");
+  });
+});
+
+describe("RegenerateScopeModal quota disclosure", () => {
+  it("shows what is LEFT, not only what the scope costs", () => {
+    renderModal({ noteGenerationsRemaining: 3, studyPacksRemaining: 7 });
+    expect(screen.getByText(/7 Study Pack generations left this cycle/i)).toBeInTheDocument();
+  });
+
+  it("refuses the combined scope when the topic note allowance is gone, and still allows Study Pack only", () => {
+    renderModal({ noteGenerationsRemaining: 0, studyPacksRemaining: 4 });
+
+    // The discriminating half: Study-Pack-only spends NO topic note unit, so an exhausted note
+    // allowance must not block it. A fixture that exhausts both passes under a version that blocks
+    // everything and proves nothing.
+    const combined = screen.getByRole("radio", { name: /Note \+ Study Pack/i });
+    expect(combined).toBeDisabled();
+    expect(screen.getByText(/no topic note allowance left/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^Regenerate$/i })).toBeEnabled();
+  });
+
+  it("renders no quota copy at all before the plan summary loads", () => {
+    renderModal({ noteGenerationsRemaining: null, studyPacksRemaining: null });
+    expect(screen.queryByText(/left this cycle/i)).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^Regenerate$/i })).toBeEnabled();
   });
 });

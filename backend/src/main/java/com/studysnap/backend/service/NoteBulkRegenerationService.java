@@ -86,6 +86,9 @@ public class NoteBulkRegenerationService {
     private static final long MIN_ITEM_TIMEOUT_MS = 1_000L;
     private static final String EMPTY_BATCH_MESSAGE = "Select at least one note to regenerate.";
     private static final String MAX_NOTES_MESSAGE_TEMPLATE = "You can regenerate up to %d notes at once.";
+    private static final String QUOTA_BLOCKED_CODE = "NOTE_GENERATION_LIMIT_REACHED";
+    private static final String QUOTA_BLOCKED_MESSAGE =
+            "You have reached your note generation limit for this billing cycle.";
     private static final String GENERATION_FAILED_CODE = "NOTE_REGENERATION_FAILED";
     private static final String GENERATION_FAILED_MESSAGE =
             "Regeneration did not complete for this note. Nothing was changed and nothing was charged.";
@@ -230,6 +233,25 @@ public class NoteBulkRegenerationService {
         }
     }
 
+    /**
+     * Whether this item can no longer be paid for. Only the note-generation meter is consulted: a
+     * Study-Pack-only item never spends a topic note unit, so an exhausted note-generation allowance
+     * must not block it.
+     *
+     * <p>⚠️ An ADMIN batch ({@code enforceLimits == false}) is never quota-blocked, matching the bypass
+     * bulk generation already applies. The bypass is NOT widened by this method.
+     */
+    private boolean isNoteGenerationQuotaExhausted(
+            UUID ownerUserId,
+            NoteRegenerationScope scope,
+            boolean enforceLimits
+    ) {
+        if (!enforceLimits || scope != NoteRegenerationScope.NOTE_AND_STUDY_PACK) {
+            return false;
+        }
+        return mePlanService.getNoteGenerationsRemaining(ownerUserId) <= 0;
+    }
+
     private List<UUID> normalizeNoteIds(List<UUID> requested) {
         if (requested == null || requested.isEmpty()) {
             throw new InvalidBulkRegenerationRequestException(EMPTY_BATCH_MESSAGE);
@@ -337,6 +359,12 @@ public class NoteBulkRegenerationService {
         // and is not separately observable from out here.
         boolean hadLiveShareLink = consequenceService.hasLiveShareLink(ownerUserId, noteId, scope);
 
+        // ⚠️ NO PER-ITEM QUOTA PRE-CHECK HERE, AND THAT IS DELIBERATE. One was written and removed: the
+        // primitive's own synchronous assertQuotaAvailable already throws
+        // MonthlyNoteGenerationLimitReachedException on the CALLING thread, which the catch below
+        // already records as BLOCKED with the same code -- so a pre-check changed nothing observable
+        // while costing an extra quota read per item. Verified by mutation: with the pre-check
+        // disabled, quotaExhaustedDuringABatchIsReportedAsQuotaRatherThanAsABareFailure still passed.
         try {
             dispatchItem(noteId, ownerUserId, scope, enforceLimits);
         } catch (NoteNotFoundException notFound) {
@@ -377,6 +405,20 @@ public class NoteBulkRegenerationService {
                     NoteBulkRegenerationItemState.REGENERATED, null, null, hadLiveShareLink);
         }
         if (finalStatus == NoteStatus.FAILED) {
+            // ⚠️ THE CATCH ABOVE CANNOT SEE A QUOTA REJECTION THAT ARRIVES ON THE GENERATION THREAD.
+            // generateFromTopic asserts quota a SECOND time inside the async worker, and
+            // generateStudyPackFromExistingNoteAsync catches Exception and marks the note FAILED, so
+            // the exception never reaches this class. Reported in production as a bare "generation
+            // failed" with no reason recorded anywhere. If the meter is exhausted now, that is
+            // overwhelmingly what happened, and saying so is strictly better than a generic failure
+            // whose only remedy looks like "try again" -- which would spend a unit the curator has not
+            // got. Still a narrowing, not a proof: see the finding doc for why the exact reason cannot
+            // be persisted without a column this release may not add.
+            if (isNoteGenerationQuotaExhausted(ownerUserId, scope, enforceLimits)) {
+                return record(batchId, ownerUserId, noteId, scope, batchCreatedAt,
+                        NoteBulkRegenerationItemState.BLOCKED,
+                        QUOTA_BLOCKED_CODE, QUOTA_BLOCKED_MESSAGE, false);
+            }
             return record(batchId, ownerUserId, noteId, scope, batchCreatedAt,
                     NoteBulkRegenerationItemState.FAILED, GENERATION_FAILED_CODE, GENERATION_FAILED_MESSAGE,
                     false);

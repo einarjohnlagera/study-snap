@@ -1053,6 +1053,22 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
       usageSummary.remaining?.studyPacksRemaining,
     )
     : null;
+  // Both meters a combined regeneration spends. Surfaced so the curator sees what they have LEFT and
+  // not merely what the operation costs -- a burst of regenerations each pass the pre-dispatch check
+  // before any of them charge, so the honest fix is telling them the number before they start.
+  // ⚠️ An ABSENT limit means "not configured for this plan", which is NOT the same as zero. Reading it
+  // as zero would disable combined regeneration for anyone whose plan does not carry the field, so an
+  // absent limit resolves to null and the modal then shows no quota copy and gates nothing.
+  const noteGenerationsRemaining = usageSummary
+    && usageSummary.usage.noteGenerationsUsed !== undefined
+    && usageSummary.limits.noteGenerationsPerMonth !== undefined
+    ? resolveRemainingUsageCredits(
+      usageSummary.usage.noteGenerationsUsed,
+      usageSummary.limits.noteGenerationsPerMonth,
+      usageSummary.remaining?.noteGenerationsRemaining,
+    )
+    : null;
+
   const challengeQuizzesRemaining = usageSummary
     ? resolveRemainingUsageCredits(
       usageSummary.usage.challengeQuizzesUsed,
@@ -3445,6 +3461,8 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
         isOpen={showRegenerateConfirm}
         note={note}
         isCurator={canEditAuthoringMetadata}
+        noteGenerationsRemaining={noteGenerationsRemaining}
+        studyPacksRemaining={studyPacksRemaining}
         busy={generating}
         errorMessage={regenerateError}
         onClose={handleCancelRegenerate}
