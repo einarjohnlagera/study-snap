@@ -1199,7 +1199,12 @@ function MentorTipsGuideSection({
 function CompanionDisplayCard({
   companion,
   labels,
-}: Readonly<{ companion: CompanionContent | null; labels: ReturnType<typeof getCollectionLabels> }>) {
+  mayBeOutdated = false,
+}: Readonly<{
+  companion: CompanionContent | null;
+  labels: ReturnType<typeof getCollectionLabels>;
+  mayBeOutdated?: boolean;
+}>) {
   // Collapsed by default, regardless of viewport — unlike the note-list sections above, which
   // default to expanded on large screens. The authored Companion is reference material now (see
   // docs/product/ROADMAP.md's "Coach vs. Companion" refinement): the live-signal cluster is what a
@@ -1223,12 +1228,24 @@ function CompanionDisplayCard({
     .filter((item) => item.question || item.answer);
   const collapsedTeaser = stripMarkdownForPreview(overview || studyStrategy || commonMistakes);
 
+  // A learner cannot regenerate a Companion -- every write path is ADMIN-only -- so this is
+  // deliberately informational and offers no action. Saying nothing would be worse: the guide was
+  // written for an earlier shape of this plan, and a learner who does not know that over-trusts it.
+  const outdatedNotice = mayBeOutdated ? (
+    <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
+      This {labels.companionSingular.toLowerCase()} was written for an earlier version of this{" "}
+      {labels.singular.toLowerCase()}, which has changed since. Some guidance may no longer match what
+      is here now.
+    </p>
+  ) : null;
+
   return (
     <Card className="space-y-4 p-4 sm:p-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="space-y-2">
           <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">{labels.companionSingular}</p>
           <h2 className="text-lg font-semibold tracking-tight">Learning {labels.companionSingular}</h2>
+          {outdatedNotice}
         </div>
         <button
           type="button"
@@ -3591,7 +3608,11 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
         </section>
         {hasRenderableCompanionContent(collection.companion) ? (
           <section aria-label="Companion guidance" data-testid="goal-companion-guidance-stack" className="space-y-3">
-            <CompanionDisplayCard companion={collection.companion} labels={labels} />
+            <CompanionDisplayCard
+              companion={collection.companion}
+              labels={labels}
+              mayBeOutdated={goalDetail?.companionMayBeOutdated ?? false}
+            />
             <AskCompanionPanel
               collectionId={collectionId}
               currentPlan={currentPlan}
@@ -3791,7 +3812,11 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
         footer={<ReadinessCardFooter collectionId={collectionId} />}
       />
 
-      <CompanionDisplayCard companion={collection.companion} labels={labels} />
+      <CompanionDisplayCard
+        companion={collection.companion}
+        labels={labels}
+        mayBeOutdated={goalDetail?.companionMayBeOutdated ?? false}
+      />
       {hasRenderableCompanionContent(collection.companion) ? (
         <AskCompanionPanel
           collectionId={collectionId}

@@ -3114,7 +3114,12 @@ class NoteCollectionServiceTest {
         assertThat(collectionCaptor.getValue().getSourcePlanId()).isEqualTo(sourcePlanId);
         assertThat(collectionCaptor.getValue().getEstimatedStudyHours()).isEqualTo(2);
         assertThat(collectionCaptor.getValue().getCompanion()).isEqualTo(companionContent());
-        assertThat(collectionCaptor.getValue().getCompanionStructureSnapshot()).isNull();
+        // ⚠️ REWRITTEN, NOT DELETED, IN v0.116.0. This asserted the snapshot stayed NULL after
+        // adoption -- which was true, and was exactly why companionMayBeOutdated could never fire
+        // for a learner: it returns false at its FIRST guard on a null snapshot. Adoption now
+        // stamps a baseline from the LEARNER's own structure. Contents are pinned by
+        // adopt_stampsACompanionBaselineSoStalenessBecomesDetectableForTheLearner.
+        assertThat(collectionCaptor.getValue().getCompanionStructureSnapshot()).isNotNull();
     }
 
     @Test
@@ -3179,7 +3184,12 @@ class NoteCollectionServiceTest {
         ArgumentCaptor<NoteCollectionEntity> collectionCaptor = ArgumentCaptor.forClass(NoteCollectionEntity.class);
         verify(collectionRepository).saveAndFlush(collectionCaptor.capture());
         assertThat(collectionCaptor.getValue().getCompanion()).isEqualTo(companionContent());
-        assertThat(collectionCaptor.getValue().getCompanionStructureSnapshot()).isNull();
+        // ⚠️ REWRITTEN, NOT DELETED, IN v0.116.0. This asserted the snapshot stayed NULL after
+        // adoption -- which was true, and was exactly why companionMayBeOutdated could never fire
+        // for a learner: it returns false at its FIRST guard on a null snapshot. Adoption now
+        // stamps a baseline from the LEARNER's own structure. Contents are pinned by
+        // adopt_stampsACompanionBaselineSoStalenessBecomesDetectableForTheLearner.
+        assertThat(collectionCaptor.getValue().getCompanionStructureSnapshot()).isNotNull();
     }
 
     @Test
@@ -3470,8 +3480,8 @@ class NoteCollectionServiceTest {
         // The concurrent writer won: by the time this pass applies, the placement already exists.
         when(itemRepository.findByCollectionIdAndNoteId(adoptedPlanId, learnerNoteId))
                 .thenReturn(Optional.of(buildItem(adoptedPlanId, learnerNoteId, 0, WEEK_ONE_LABEL)));
-        when(collectionRepository.save(any(NoteCollectionEntity.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
+        // No collectionRepository.save stub: since v0.116.0 a pass that applies NOTHING acknowledges
+        // nothing, so it must not write. Mockito's strict stubbing enforces that here.
 
         ReviewSetUpdateResponse result = service.applySourceUpdate(adoptedPlanId, userId);
 
@@ -3588,6 +3598,208 @@ class NoteCollectionServiceTest {
         assertThat(second.status()).isEqualTo("UPDATED");
         assertThat(learnerItems).extracting(NoteCollectionItemEntity::getNoteId)
                 .containsExactlyInAnyOrder(goodLearnerNoteId, flakyLearnerNoteId);
+    }
+
+    /**
+     * ⚠️ THE SHAPE `V134` ARMS ON 92 PRODUCTION ROWS ON DAY ONE, AND ITS SYMPTOM IS SILENCE RATHER THAN A
+     * 500. The backfill stamps {@code source_synced_at} on every adoption while
+     * {@code note_collections.sibling_position} is NULL on every top-level source collection — so
+     * {@code sourceSyncedAt} is non-null and {@code sourcePositionAtSync} is null. Guarding only on the
+     * sync marker let {@code Objects.equals(null, non-null)} return false, enter the branch, and NPE on
+     * {@code .toString()} the moment a curator nested a previously standalone plan.
+     *
+     * <p>The frontend calls this on EVERY page load of an adopted collection and swallows the failure
+     * in a {@code .catch}, so the learner would have seen no card, no error, and no Apply button — the
+     * feature silently gone, with only a 500 in the logs. A fixture with a populated baseline passes
+     * under the defect, so this one leaves both nullable facts NULL on purpose.
+     */
+    @Test
+    void sourceUpdate_survivesANullPositionBaselineWhenTheCuratorNestsAPreviouslyStandalonePlan() {
+        UUID userId = UUID.randomUUID();
+        UUID sourceOwnerId = UUID.randomUUID();
+        UUID sourcePlanId = UUID.randomUUID();
+        UUID adoptedPlanId = UUID.randomUUID();
+        UUID newGoalId = UUID.randomUUID();
+        Instant now = Instant.now();
+        NoteCollectionEntity source = buildCollection(sourcePlanId, sourceOwnerId, "Official Biology", now);
+        source.setVisibility(CollectionVisibility.PUBLIC);
+        // The curator has since nested this plan under a Goal and given it a sibling position.
+        source.setParentCollectionId(newGoalId);
+        source.setSiblingPosition(0);
+        NoteCollectionEntity adopted = buildCollection(adoptedPlanId, userId, "My Biology", now);
+        adopted.setSourcePlanId(sourcePlanId);
+        adopted.setSourceTitleAtSync(source.getTitle());
+        // Exactly what V134's backfill writes for a then-top-level source: synced, but both nullable
+        // source facts NULL. Populating either one hides the defect.
+        adopted.setSourceSyncedAt(now);
+        adopted.setSourcePositionAtSync(null);
+        adopted.setSourceParentIdAtSync(null);
+
+        when(collectionRepository.findByIdAndOwnerUserId(adoptedPlanId, userId)).thenReturn(Optional.of(adopted));
+        when(collectionRepository.findByIdAndVisibility(sourcePlanId, CollectionVisibility.PUBLIC))
+                .thenReturn(Optional.of(source));
+        when(collectionRepository.findOrderedChildrenByParentCollectionIdAndOwnerUserId(sourcePlanId, sourceOwnerId))
+                .thenReturn(List.of());
+        when(collectionRepository.findOrderedChildrenByParentCollectionIdAndOwnerUserId(adoptedPlanId, userId))
+                .thenReturn(List.of());
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(sourcePlanId)).thenReturn(List.of());
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(adoptedPlanId)).thenReturn(List.of());
+        when(noteRepository.findAllById(any())).thenReturn(List.of());
+        when(itemRemovalRepository.findByAdoptedCollectionIdIn(List.of(adoptedPlanId))).thenReturn(List.of());
+
+        ReviewSetUpdateResponse result = service.getSourceUpdate(adoptedPlanId, userId);
+
+        assertThat(result).isNotNull();
+        assertThat(result.changes())
+                .as("a NULL baseline is not drift -- we never recorded a position to compare against")
+                .extracting(change -> change.type())
+                .doesNotContain("REORDERED", "MOVED");
+    }
+
+    /**
+     * ⚠️ THE GUARD FOR THE WORST DEFECT THIS RELEASE HAD, AND ITS FIXTURE IS THE WHOLE POINT: THE ADOPTED
+     * ROOT'S ITEM LIST IS NON-EMPTY. The release's own
+     * {@code sourceUpdate_addsNewSubjectPlanAndItsPublicPlacements} is this same scenario with that list
+     * stubbed to {@code List.of()}, and that empty stub is the only thing that hid the defect.
+     *
+     * <p>Real production history, not hypothetical: four learners adopted the CPALE plan while it was
+     * FLAT (19 direct notes, no children); the curator added its seven child Subject Plans afterwards.
+     * Because {@code adoptedPlans} was chosen by the SOURCE's shape, the learner's own placements were
+     * invisible to the diff, every source note looked new, and {@code copyNote} returned the copy they
+     * already held -- which then inserted into a different collection, where
+     * {@code UNIQUE (collection_id, note_id)} cannot catch it.
+     *
+     * <p>Two assertions, because the defect had two halves: the held note must resolve as MOVED rather
+     * than queue as an addition, AND the new Subject Plan must not be created under a root that still
+     * holds direct notes -- a shape no database constraint forbids and the collection page cannot render.
+     */
+    @Test
+    void sourceUpdate_curatorRestructuringAFlatPlanIsReportedAsMovedRatherThanReAddingHeldNotes() {
+        UUID userId = UUID.randomUUID();
+        UUID sourceOwnerId = UUID.randomUUID();
+        UUID sourceRootId = UUID.randomUUID();
+        UUID sourceChildId = UUID.randomUUID();
+        UUID sourceNoteId = UUID.randomUUID();
+        UUID adoptedRootId = UUID.randomUUID();
+        UUID learnerNoteId = UUID.randomUUID();
+        Instant now = Instant.now();
+
+        NoteCollectionEntity sourceRoot = buildCollection(sourceRootId, sourceOwnerId, "CPALE Review", now);
+        sourceRoot.setVisibility(CollectionVisibility.PUBLIC);
+        // The curator has since introduced a child Subject Plan and moved the note into it.
+        NoteCollectionEntity sourceChild = buildCollection(sourceChildId, sourceOwnerId, "Auditing", now);
+        sourceChild.setVisibility(CollectionVisibility.PUBLIC);
+        sourceChild.setParentCollectionId(sourceRootId);
+
+        // The learner adopted while it was FLAT: their notes sit directly on the adopted root.
+        NoteCollectionEntity adoptedRoot = buildCollection(adoptedRootId, userId, "My CPALE", now);
+        adoptedRoot.setSourcePlanId(sourceRootId);
+        adoptedRoot.setSourceTitleAtSync(sourceRoot.getTitle());
+
+        NoteCollectionItemEntity sourceItem = buildItem(sourceChildId, sourceNoteId, 0, WEEK_ONE_LABEL);
+        NoteCollectionItemEntity learnerItem = buildItem(adoptedRootId, learnerNoteId, 0, WEEK_ONE_LABEL);
+        NoteEntity sourceNote = buildNote(sourceNoteId, sourceOwnerId, NOTE_TITLE_ONE);
+        sourceNote.setVisibility(NoteVisibility.PUBLIC);
+        NoteEntity learnerNote = buildNote(learnerNoteId, userId, NOTE_TITLE_ONE);
+        learnerNote.setCopiedFromNoteId(sourceNoteId);
+
+        when(collectionRepository.findByIdAndOwnerUserId(adoptedRootId, userId)).thenReturn(Optional.of(adoptedRoot));
+        when(collectionRepository.findByIdAndVisibility(sourceRootId, CollectionVisibility.PUBLIC))
+                .thenReturn(Optional.of(sourceRoot));
+        when(collectionRepository.findOrderedChildrenByParentCollectionIdAndOwnerUserId(sourceRootId, sourceOwnerId))
+                .thenReturn(List.of(sourceChild));
+        when(collectionRepository.findOrderedChildrenByParentCollectionIdAndOwnerUserId(adoptedRootId, userId))
+                .thenReturn(List.of());
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(sourceChildId)).thenReturn(List.of(sourceItem));
+        // ⚠️ NON-EMPTY. This single stub is the difference between catching the defect and not.
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(adoptedRootId)).thenReturn(List.of(learnerItem));
+        when(noteRepository.findAllById(any())).thenAnswer(invocation -> {
+            List<NoteEntity> found = new ArrayList<>();
+            for (UUID id : invocation.<Iterable<UUID>>getArgument(0)) {
+                if (id.equals(sourceNoteId)) {
+                    found.add(sourceNote);
+                } else if (id.equals(learnerNoteId)) {
+                    found.add(learnerNote);
+                }
+            }
+            return found;
+        });
+        when(itemRemovalRepository.findByAdoptedCollectionIdIn(any())).thenReturn(List.of());
+
+        ReviewSetUpdateResponse result = service.getSourceUpdate(adoptedRootId, userId);
+
+        assertThat(result.changes()).extracting(change -> change.type())
+                .as("the learner already holds this note; re-adding it duplicates their own copy")
+                .doesNotContain("ADDED_NOTE", "ADDED_SUBJECT_PLAN")
+                .contains("MOVED");
+        assertThat(result.additionsAvailable())
+                .as("an upstream restructure is reported, never applied")
+                .isZero();
+    }
+
+    /**
+     * ⚠️ THE REACHABILITY GUARD FOR SCOPE ITEM 4, AND IT REACHES THE FLAG THROUGH ADOPTION RATHER THAN BY
+     * HAND-SETTING THE SNAPSHOT — WHICH IS THE WHOLE POINT.
+     *
+     * <p>Item 4 shipped as an observable no-op and no test caught it: adoption copied {@code companion}
+     * but never the snapshot, the snapshot's only other writer is {@code setCompanion} behind
+     * {@code assertAdmin}, and {@code companionMayBeOutdated} returns {@code false} at its FIRST guard on
+     * a null snapshot. Production carried 523 adopted collections, 82 with a copied Companion and ZERO
+     * with a snapshot. The tests that "proved" the widened curator predicate each called
+     * {@code setCompanionStructureSnapshot(...)} by hand — a state adoption could not produce — so a
+     * mutant died against a fixture that cannot occur. That is this repo's own recorded lesson: a
+     * negative assertion needs a REACHABLE subject.
+     *
+     * <p>This asserts the baseline exists after a real adopt() and records the learner's OWN note ids,
+     * never the curator's — the copies carry fresh ids, so a copied snapshot could never match.
+     */
+    @Test
+    void adopt_stampsACompanionBaselineSoStalenessBecomesDetectableForTheLearner() {
+        UUID userId = UUID.randomUUID();
+        UUID curatorId = UUID.randomUUID();
+        UUID sourcePlanId = UUID.randomUUID();
+        UUID sourceNoteId = UUID.randomUUID();
+        UUID learnerNoteId = UUID.randomUUID();
+        Instant now = Instant.now();
+        NoteCollectionEntity source = buildCollection(sourcePlanId, curatorId, "Official Biology", now);
+        source.setVisibility(CollectionVisibility.PUBLIC);
+        source.setCompanion(companionContent());
+        NoteCollectionItemEntity sourceItem = buildItem(sourcePlanId, sourceNoteId, 0, WEEK_ONE_LABEL);
+        NoteEntity sourceNote = buildNote(sourceNoteId, curatorId, NOTE_TITLE_ONE);
+        sourceNote.setVisibility(NoteVisibility.PUBLIC);
+
+        when(collectionRepository.findByIdAndVisibility(sourcePlanId, CollectionVisibility.PUBLIC))
+                .thenReturn(Optional.of(source));
+        when(collectionRepository.findByOwnerUserIdAndSourcePlanId(userId, sourcePlanId))
+                .thenReturn(Optional.empty());
+        when(collectionRepository.findByOwnerUserIdAndSourcePlanIdForUpdate(userId, sourcePlanId))
+                .thenReturn(Optional.empty());
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(sourcePlanId)).thenReturn(List.of(sourceItem));
+        when(noteRepository.findByIdAndVisibility(sourceNoteId, NoteVisibility.PUBLIC))
+                .thenReturn(Optional.of(sourceNote));
+        when(noteService.copyNote(sourceNoteId.toString(), userId, true))
+                .thenReturn(noteResponse(learnerNoteId));
+        when(collectionRepository.saveAndFlush(any(NoteCollectionEntity.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(collectionRepository.save(any(NoteCollectionEntity.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        service.adopt(sourcePlanId, userId);
+
+        ArgumentCaptor<NoteCollectionEntity> saved = ArgumentCaptor.forClass(NoteCollectionEntity.class);
+        verify(collectionRepository, org.mockito.Mockito.atLeastOnce()).save(saved.capture());
+        CompanionStructureSnapshot baseline = saved.getAllValues().stream()
+                .map(NoteCollectionEntity::getCompanionStructureSnapshot)
+                .filter(java.util.Objects::nonNull)
+                .findFirst()
+                .orElse(null);
+
+        assertThat(baseline)
+                .as("without a baseline, companionMayBeOutdated returns false at its first guard forever")
+                .isNotNull();
+        assertThat(baseline.memberIds())
+                .as("the baseline records the LEARNER's own copies; the curator's ids could never match")
+                .containsExactly(learnerNoteId);
     }
 
     @Test
@@ -3943,7 +4155,9 @@ class NoteCollectionServiceTest {
         verify(collectionRepository, times(3)).saveAndFlush(goalCaptor.capture());
         assertThat(goalCaptor.getAllValues().getFirst().getEstimatedStudyHours()).isEqualTo(3);
         assertThat(goalCaptor.getAllValues().getFirst().getCompanion()).isEqualTo(companionContent());
-        assertThat(goalCaptor.getAllValues().getFirst().getCompanionStructureSnapshot()).isNull();
+        // ⚠️ REWRITTEN, NOT DELETED, IN v0.116.0 -- see the note on the adopt() assertions. An adopted
+        // Goal is stamped after its children are reparented, so the baseline records child ids.
+        assertThat(goalCaptor.getAllValues().getFirst().getCompanionStructureSnapshot()).isNotNull();
         verify(analyticsService).trackEvent(
                 eq(userId),
                 eq(AnalyticsEventType.STUDY_GOAL_ADOPTED),

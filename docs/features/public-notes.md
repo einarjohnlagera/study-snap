@@ -121,7 +121,7 @@ Copying a public note:
 - does not copy generated outputs or quiz/performance history
 - preserves attribution through `copiedFromNoteId` and `copiedFromUserId`
 
-Adoptable study plans reuse the public-note copy spine per source item, with `includeStudyPack=true`, so adopted plan notes become normal owned notes and feed Progress through the existing practice loop. The published source plan remains a snapshot source, not a live link.
+Adoptable study plans reuse the public-note copy spine per source item, with `includeStudyPack=true`, so adopted plan notes become normal owned notes and feed Progress through the existing practice loop. The published source plan remains a snapshot source, not a live mirror. **Since `v0.116.0` a learner may PULL upstream ADDITIONS into their adopted copy on demand** (`docs/features/collections.md`); nothing syncs automatically, and rename, reorder, retire and move are reported without ever being applied.
 
 ## Copy On Signup
 

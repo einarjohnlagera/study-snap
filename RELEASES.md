@@ -181,8 +181,84 @@ by the auditing session.**
   `target/surefire-reports/*.xml` after a clean. **`npm test` → 2147 tests, 198 suites, all pass.**
   **`tsc --noEmit` clean.**
 
+**Three-agent cold pressure test (2026-09-05) — isolated `git worktree`s, no inherited context.**
+**⚠️ IT FOUND TWO BLOCKING DEFECTS THE IMPLEMENTATION AUDIT MISSED, AND ALL THREE AGENTS CONVERGED
+INDEPENDENTLY ON THE SAME LINE.**
+
+- **⚠️ BLOCKING, FIXED — a curator restructure duplicated the learner's entire Review Set.**
+  `inspectSourceUpdate` chose which of the **LEARNER's** plans to examine from the **SOURCE's** current
+  shape (`sourceChildren.isEmpty() ? List.of(adoptedRoot) : adoptedChildren`). When the shapes disagreed
+  the learner's own placements were invisible to the diff, every source item looked new, and `copyNote`
+  returned the copy they already held — which then inserted into a **different** collection, where
+  `UNIQUE (collection_id, note_id)` cannot catch it. **⚠️ NOT HYPOTHETICAL: four learners adopted the
+  CPALE plan on 2026-06-27→07-01 while it was FLAT (19 direct notes, 0 children), and the curator added
+  its seven child Subject Plans on 2026-07-01, AFTER every one of those adoptions.** One Apply would
+  have re-placed all 19 notes and nested seven children under a root still holding direct notes — a
+  shape `addItems:1135` and `validateParentCanAcceptChild:1501` both forbid, that **no database
+  constraint enforces**, and that the collection page cannot render: `isGoalView` switches to the goal
+  branch, which has no direct-items list, so **the learner's own notes would have vanished from the
+  page.** Fixed in two parts: the adopted structure is now read from the LEARNER, always; and a source
+  restructure is reported as `MOVED` rather than applied. **⚠️ THE RELEASE'S OWN TEST WAS THE SAME
+  SCENARIO WITH THE ADOPTED ROOT'S ITEM LIST STUBBED TO `List.of()` — that empty stub was the only thing
+  hiding it**, so the new guard's fixture is deliberately NON-EMPTY. Both halves independently
+  mutation-verified.
+- **⚠️ BLOCKING, FIXED — an NPE on a page-load path, silent by construction.** `addCollectionDrift`
+  guarded on `getSourceSyncedAt() != null` then dereferenced a **different** nullable field, so
+  `Objects.equals(null, non-null)` returned false, entered the branch and NPE'd. **`V134` armed the
+  shape on 92 rows on day one** — it stamps `source_synced_at` on every adoption while
+  `sibling_position` is NULL on every top-level source collection. The frontend calls this on **every
+  page load** and swallows it in a `.catch`, so the learner would have seen no card, no error and no
+  Apply button, with only a 500 in the logs. The source side WAS null-checked and the item-level
+  equivalent at `:1985` guards correctly — that asymmetry is what marks it a slip.
+- **⚠️ SCOPE ITEM 4 HAD DELIVERED NOTHING, AND THE PROOF WAS A FIXTURE THAT CANNOT OCCUR — NOW BUILT
+  PROPERLY.** Widening the curator predicate was observably a no-op: adoption copies `companion` but
+  never the structure snapshot, the snapshot's only other writer is `setCompanion` behind `assertAdmin`,
+  and `companionMayBeOutdated` returns `false` at its FIRST guard on a null snapshot. **Production: 523
+  adopted collections, 82 with a copied Companion, ZERO with a snapshot.** **⚠️ THE TESTS THAT "PROVED"
+  IT EACH CALLED `setCompanionStructureSnapshot(...)` BY HAND, SO A MUTANT DIED AGAINST AN UNREACHABLE
+  STATE — this repo's own "a negative assertion needs a REACHABLE subject" lesson, walked into while
+  citing it.** Adoption now stamps a baseline computed from the **learner's own** structure (never the
+  curator's, whose ids could never match — `docs/features/companion.md:154` already argued that
+  correctly; what was missing is that nothing COMPUTED a fresh one), and the flag renders for learners
+  as a **read-only notice**. **⚠️ Informational by owner decision (2026-09-05): a learner cannot
+  regenerate a Companion — every write path is `assertAdmin` — so the notice offers no action rather
+  than a dead-end button.** Three assertions pinning the old null-snapshot behaviour were **rewritten,
+  never deleted.**
+- **⚠️ FIXED — an Apply permanently erased the surface-only signals it was designed to preserve.**
+  `acknowledgeSourceSnapshots` re-baselined the root and **every** matched plan and placement on any
+  non-detached apply, including one that added nothing. A learner who saw *"renamed upstream"* beside
+  three new notes and pressed Apply silently acknowledged the rename, which was never applied and never
+  shown again — and the pre-sync value was overwritten, so it was unrecoverable. It now acknowledges
+  **only plans that actually received an addition.** Mockito's strict stubbing now enforces that a pass
+  applying nothing writes nothing.
+- **Four doc surfaces were false and none were in the diff** — the repo's named recurring failure.
+  Corrected: `docs/features/companion.md` (the file explaining the exact behaviour item 4 changed),
+  `docs/features/public-notes.md`, and two claims in `docs/gpt-contexts/NOTES_AND_COLLECTIONS_CONTEXT.md`
+  — **including *"re-adoption is a hard no-op"* and *"no code path anywhere adds a source note to an
+  existing adoption"*, which this session itself wrote at the `v0.115.0` signoff.**
+- **Verification: `./mvnw clean install` → BUILD SUCCESS, 2136 tests, 0 failures**; `npm test` → 2147
+  tests, 198 suites; `tsc --noEmit` clean. **Mutants applied across the release: 8. Killed: 8**, each by
+  a named test.
+
 **Known limitations**
 
+- **The learner-removal tombstone is enforced on ONE of three removal paths.** `removeItem` writes one;
+  deleting an adopted Subject Plan outright and deleting the copied note itself do not, so an upstream
+  re-add would return in both cases. **Prospective, and measured: of 1,204 missing placements across all
+  adoptions, 1,204 post-date their adoption and ZERO predate it — no learner has removed anything yet.**
+- **⚠️ An apply holds ONE pooled connection for the whole request**, read from this repo's own
+  instrumentation rather than from framework defaults (`DELAYED_ACQUISITION_AND_HOLD`, open-in-view ON).
+  Largest single apply available today is 43 notes; 1,204 `copyNote` calls if every learner applied, against
+  `maximum-pool-size: 20`. **`inspectSourceUpdate` is also N+1 by plan and runs on EVERY page load of all
+  523 adopted collections.** No LLM call is involved (verified: `copySourceStudyPack` copies stored
+  fields). **This is a new long-holding request path added one release after the pool-exhaustion outage,
+  and `[CHECKPOINT — due 2026-09-18]`'s deploy-split caveat should name it.**
+- **The `V134` backfill is unexercised** — both PostgreSQL tests run Flyway against an empty container,
+  so the half of the migration that touches production data has no test, and no H2 fixture creates
+  `note_collection_item_removals`.
+- **An apply fires no analytics of its own**, so `NOTE_ADDED_TO_COLLECTION` never fires for
+  update-added placements, while `copyNote` emits up to 74 `PUBLIC_NOTE_COPIED` per press. No dated
+  checkpoint reads either event today, so this is measurement hygiene rather than a confound.
 - **A hard-deleted source note silently ends the update relationship for that placement, and the two
   halves cancel rather than duplicating.** `deleteById:478` has **no visibility guard**, so a curator can
   hard-delete a public source note; `notes.copied_from_note_id` is `ON DELETE SET NULL` (`V21:36`) so the
