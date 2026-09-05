@@ -102,6 +102,30 @@ whole suite green.
 
 The Adaptive Practice page forwards a recognized marker only when the learner actually starts a new session. The backend validates the value independently against its own allowlist. **An absent marker records `direct`** — that means genuine direct navigation, such as a typed URL or a bookmark. An unknown or malformed marker **also** records `direct` and is never persisted verbatim. Resuming an existing session does not emit a new start event.
 
+## Practice-entry header
+
+The pre-start card communicates five layers separately (`v0.117.0`), because a plan-scoped session's
+focus list was previously one undifferentiated run of concept names:
+
+1. **Mode** — `Adaptive Practice`
+2. **Scope** — the session's title: the Subject Plan for plan scope, the Study Pack for note scope
+3. **Compact weakness summary** — e.g. `14 weak concepts across 4 notes`
+4. **Source grouping** — concepts grouped under their source Study Pack, with a per-group count
+5. **Progressive disclosure** — the first two groups and their first three concepts, behind a
+   `Show all concepts` toggle
+
+**⚠️ Grouping is keyed on `sourceStudyPackId`, NEVER on the concept string.** Two packs weak on the
+same concept are two distinct focus entries; keying on the name would merge them and thereby assert
+cross-pack canonical concept identity, which is ADR-sized and out of scope (`v0.107.0`). Entries with
+no source stamp share one unattributed bucket and are never folded into a real pack's group.
+
+**⚠️ This is a practice-entry surface, not a Progress report.** It shows enough to explain why this
+practice exists; it must not become a diagnostic inventory the learner reads before starting.
+
+The in-quiz header follows the same rule: a multi-source session reports per-source counts, and only
+a single-source session lists concept names on one comma-joined line — a joined line across several
+packs discards the source that disambiguates them.
+
 ## Active-question rationale
 
 Each targeted question may show a compact `Reviewing: {concept} — {reason}` tag above the question:
@@ -156,6 +180,22 @@ The result screen should stay focused and should not compete with unrelated acti
   pair. **⚠️ A post-migration plan-scoped row has NO pack anchor and still 404s** — correctly, since
   `ON DELETE SET NULL` has left it with nothing to resume from. Added in `v0.113.1`; `v0.113.0` 404'd
   both.
+- **The NOTE-addressed routes report a legacy plan-scoped session's SUBJECT PLAN, not the pack it is
+  anchored on** (`v0.117.0`). Both `POST /notes/{id}/adaptive-practice/start`'s resume branch and
+  `GET /notes/{id}/adaptive-practice/in-progress` resolve the collection through the same
+  column-then-JSONB resolver the session-addressed route uses, so all three routes describe one row
+  the same way. **⚠️ THIS EXISTS ENTIRELY FOR THE PRE-`V133` POPULATION and must not be deleted as
+  dead code:** those rows are pack-anchored and carry the plan id only in
+  `session_state.sourceCollectionId`, so the pack-keyed lookup still returns them and titling the
+  response with the borrowed pack presented a whole Subject Plan as one note. A post-`V133`
+  plan-scoped row sets both note anchors to NULL and is unreachable by that lookup. A deleted plan
+  degrades to the pack title here rather than 404ing, because this route always holds a pack anchor.
+- **Note-scoped sessions are unchanged** and still report their Study Pack title.
+- **When a collection resolves, the response carries no fallback Study Pack** — mirroring the
+  session-addressed route. A legacy row whose focus concepts were stored as BARE STRINGS
+  (pre-`v0.104.0`, before per-source stamping) therefore shows them unattributed rather than
+  attributing all of them to the one borrowed pack, which would be a guess about provenance. Rows
+  stamped by `generateAdaptiveQuizForCollection` carry their own source and are unaffected.
 - **A plan-scoped completion credits every note it sampled.** The session has no note anchor, so it
   records its sampled notes in `session_state.sourceNoteRefs` and rides the same second pass Long Exam
   and Board Exam use. Each of those notes gets `lastSessionCompletedAt`, so Study Plan progress

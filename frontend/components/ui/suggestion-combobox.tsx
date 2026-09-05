@@ -19,6 +19,15 @@ type SuggestionComboboxProps = {
   options: SuggestionComboboxOption[];
   groupedOptions?: SuggestionComboboxOptionGroup[];
   onChange: (value: string) => void;
+  /**
+   * Fires ONLY when the user picks an existing option from the list — never while typing.
+   *
+   * Typing and choosing are different acts: a half-typed name is genuinely provisional, while a
+   * clicked option is final at the moment of the click with nothing partial left to protect. A
+   * consumer that debounces `onChange` to protect the first act ends up delaying the second one for
+   * no reason, so this gives it a way to commit a selection immediately without weakening that guard.
+   */
+  onOptionSelect?: (value: string) => void;
   onInputValueChange?: (value: string) => void;
   ariaLabel?: string;
   placeholder?: string;
@@ -50,6 +59,7 @@ export function SuggestionCombobox({
   options,
   groupedOptions,
   onChange,
+  onOptionSelect,
   onInputValueChange,
   ariaLabel,
   placeholder,
@@ -260,6 +270,7 @@ export function SuggestionCombobox({
                           className="motion-lift flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-highlight active:bg-highlight-strong"
                           onClick={() => {
                             onChange(option.value);
+                            onOptionSelect?.(option.value);
                             setInputValue(option.label);
                             setOpen(false);
                             setHasTypedSinceOpen(false);

@@ -898,4 +898,105 @@ describe("AdaptivePracticePage", () => {
     expect(screen.getByText(/Reinforced Concrete/)).toBeInTheDocument();
   });
 
+  /**
+   * ⚠️ THE FIXTURE IS DELIBERATELY MULTI-SOURCE WITH UNIQUE CONCEPT NAMES, WHICH IS WHAT MAKES IT
+   * DISCRIMINATING. The previous surface showed a source label only when two packs shared a concept
+   * STRING, so a plan-scoped session whose 14 concepts happen to be distinct rendered as one
+   * undifferentiated 14-item list with no source anywhere and no idea how many notes it spanned --
+   * exactly the reported illegibility. A single-source fixture, or one relying on duplicate names,
+   * passes under both the defect and the fix and proves nothing.
+   */
+  it("summarises a plan-scoped session by source note instead of one undifferentiated concept list", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({
+      id: "user-1",
+      emailVerifiedAt: "2026-03-21T09:00:00Z",
+    });
+    (getNote as jest.Mock).mockResolvedValue({
+      id: "note-1",
+      title: "Derivatives",
+      studyPackStatus: "STUDY_PACK_READY",
+      keyConcepts: [],
+      adaptivePracticeAvailable: true,
+    });
+    (getInProgressAdaptivePracticeSession as jest.Mock).mockResolvedValue({
+      sessionId: null,
+      status: null,
+      studyPackId: "study-pack-1",
+      noteId: "note-1",
+      title: "Structural Engineering Plan",
+      focusConcepts: [
+        ...["Shear force", "Bending moment", "Influence lines", "Truss analysis", "Deflection"]
+          .map((concept) => ({ concept, sourceStudyPackId: "pack-a", sourceTitle: "Structural Analysis", selectionReason: null })),
+        ...["Flexural strength", "Development length", "Shear reinforcement", "Serviceability"]
+          .map((concept) => ({ concept, sourceStudyPackId: "pack-b", sourceTitle: "Reinforced Concrete", selectionReason: null })),
+        ...["Bearing capacity", "Consolidation", "Slope stability"]
+          .map((concept) => ({ concept, sourceStudyPackId: "pack-c", sourceTitle: "Soil Mechanics", selectionReason: null })),
+        ...["Flow nets", "Weir discharge"]
+          .map((concept) => ({ concept, sourceStudyPackId: "pack-d", sourceTitle: "Hydraulics", selectionReason: null })),
+      ],
+      message: "Focusing on concepts you need to improve.",
+      quiz: [],
+    });
+
+    render(<AdaptivePracticePage />);
+
+    // Layer 3 -- the compact weakness summary, which did not exist before.
+    expect(await screen.findByText("14 weak concepts across 4 notes")).toBeInTheDocument();
+    // Layer 2 -- scope. After the backend fix this is the Subject Plan, not one borrowed pack.
+    expect(screen.getByRole("heading", { name: "Structural Engineering Plan" })).toBeInTheDocument();
+    // Layer 4 -- source grouping, shown unconditionally rather than only on duplicate names.
+    expect(screen.getByText(/Structural Analysis/)).toBeInTheDocument();
+    expect(screen.getByText(/Reinforced Concrete/)).toBeInTheDocument();
+    // Layer 5 -- progressive disclosure: the later notes and the long tail of each group are held back.
+    expect(screen.queryByText(/Soil Mechanics/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Hydraulics/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Deflection/)).not.toBeInTheDocument();
+    expect(screen.getByText("+ 2 more notes")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Show all concepts" }));
+
+    expect(screen.getByText(/Soil Mechanics/)).toBeInTheDocument();
+    expect(screen.getByText(/Hydraulics/)).toBeInTheDocument();
+    expect(screen.getByText(/Deflection/)).toBeInTheDocument();
+    expect(screen.getByText(/Weir discharge/)).toBeInTheDocument();
+  });
+
+  /**
+   * The in-quiz header joined every concept name with ", " and discarded the source entirely, which
+   * merges two packs' identical concept into what reads as one duplicated entry -- the cross-pack
+   * merge the response shape exists to prevent. The fixture uses ONE concept string across TWO packs
+   * because that is the only shape in which the merge is observable.
+   */
+  it("does not merge two packs' identical concept into one line in the in-quiz header", async () => {
+    setupGeneratedAdaptiveQuiz();
+    (getInProgressAdaptivePracticeSession as jest.Mock).mockResolvedValue({
+      sessionId: "session-1",
+      status: "IN_PROGRESS",
+      studyPackId: "study-pack-1",
+      noteId: "note-1",
+      title: "Structural Engineering Plan",
+      focusConcepts: [
+        { concept: "Shear Force", sourceStudyPackId: "pack-a", sourceTitle: "Structural Analysis", selectionReason: null },
+        { concept: "Shear Force", sourceStudyPackId: "pack-b", sourceTitle: "Reinforced Concrete", selectionReason: null },
+      ],
+      message: "Focusing on concepts you need to improve.",
+      quiz: [
+        {
+          question: "Where is shear highest?",
+          choices: ["A", "B", "C", "D"],
+          correctIndex: 0,
+          concept: "Shear Force",
+          explanation: "At the support.",
+        },
+      ],
+    });
+
+    render(<AdaptivePracticePage />);
+
+    expect(
+      await screen.findByText("Focus: Structural Analysis (1) · Reinforced Concrete (1)"),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Focus concepts: Shear Force, Shear Force")).not.toBeInTheDocument();
+  });
+
 });

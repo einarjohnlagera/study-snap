@@ -1152,6 +1152,151 @@ class QuickReviewAdaptivePracticeServiceTest {
         assertThat(response.title()).isEqualTo("Legacy Pack");
     }
 
+    /**
+     * ⚠️ THE DISCRIMINATING FIXTURE, AND ITS SHAPE IS THE WHOLE POINT.
+     *
+     * <p>A plan-scoped session created BEFORE V133 is pack-anchored and carries its plan id only in
+     * {@code session_state.sourceCollectionId} -- the column is NULL, because v0.113.0 shipped no
+     * backfill. That is the ONLY production-reachable row the note-addressed lookup can return for a
+     * plan-scoped session: {@code buildGeneratingSession} sets both note anchors to NULL for every
+     * POST-V133 collection session, and {@code QuickReviewSessionEntity.validateAnchor} rejects a
+     * pack-anchor-plus-collection-column row outright, so a column-shaped fixture would test a state
+     * no path produces.
+     *
+     * <p>Before the fix this returned the borrowed pack's title -- a whole Subject Plan presented as
+     * one note.
+     */
+    @Test
+    void getAdaptiveQuizSession_titlesALegacyPlanScopedSessionWithItsSubjectPlan() {
+        UUID userId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        UUID collectionId = UUID.randomUUID();
+        StudyPackEntity studyPack = buildStudyPack(studyPackId, noteId, userId);
+        QuickReviewSessionEntity legacy =
+                buildInProgressAdaptiveSession(UUID.randomUUID(), userId, studyPackId, noteId);
+        legacy.setSessionState(new LinkedHashMap<>(legacy.getSessionState()));
+        legacy.getSessionState().put("sourceCollectionId", collectionId.toString());
+        assertThat(legacy.getSourceCollectionId()).isNull();
+        NoteCollectionEntity collection = new NoteCollectionEntity();
+        collection.setId(collectionId);
+        collection.setOwnerUserId(userId);
+        collection.setTitle("Structural Engineering Plan");
+
+        when(studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId))
+                .thenReturn(Optional.of(studyPack));
+        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.PRO);
+        when(quickReviewSessionRepository.findTopByUserIdAndStudyPackIdAndSessionModeAndStatusInOrderByCreatedAtDesc(
+                eq(userId), eq(studyPackId), eq(QuickReviewSessionMode.ADAPTIVE), any()))
+                .thenReturn(Optional.of(legacy));
+        when(noteCollectionRepository.findByIdAndOwnerUserId(collectionId, userId))
+                .thenReturn(Optional.of(collection));
+
+        QuickReviewAdaptiveQuizResponse response =
+                adaptivePracticeService.getAdaptiveQuizSession(studyPackId.toString(), userId);
+
+        assertThat(response.title()).isEqualTo("Structural Engineering Plan");
+        assertThat(response.title()).isNotEqualTo(studyPack.getTitle());
+    }
+
+    /**
+     * The other half of the guard: the fix must not have swapped one wrong answer for another. A
+     * note-scoped session carries no collection id by either route, so it keeps the pack title.
+     */
+    @Test
+    void getAdaptiveQuizSession_titlesANoteScopedSessionWithItsStudyPack() {
+        UUID userId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        StudyPackEntity studyPack = buildStudyPack(studyPackId, noteId, userId);
+        QuickReviewSessionEntity noteScoped =
+                buildInProgressAdaptiveSession(UUID.randomUUID(), userId, studyPackId, noteId);
+
+        when(studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId))
+                .thenReturn(Optional.of(studyPack));
+        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.PRO);
+        when(quickReviewSessionRepository.findTopByUserIdAndStudyPackIdAndSessionModeAndStatusInOrderByCreatedAtDesc(
+                eq(userId), eq(studyPackId), eq(QuickReviewSessionMode.ADAPTIVE), any()))
+                .thenReturn(Optional.of(noteScoped));
+
+        QuickReviewAdaptiveQuizResponse response =
+                adaptivePracticeService.getAdaptiveQuizSession(studyPackId.toString(), userId);
+
+        assertThat(response.title()).isEqualTo("Pack");
+        verify(noteCollectionRepository, never()).findByIdAndOwnerUserId(any(), any());
+    }
+
+    /**
+     * A legacy plan-scoped session whose plan was deleted still resumes, titled with the pack it is
+     * anchored on. Mirrors {@code getAdaptiveSessionById}'s fallback rather than 404ing, because this
+     * route always holds a pack anchor.
+     */
+    @Test
+    void getAdaptiveQuizSession_fallsBackToThePackTitleWhenALegacyPlanIsGone() {
+        UUID userId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        UUID deletedCollectionId = UUID.randomUUID();
+        StudyPackEntity studyPack = buildStudyPack(studyPackId, noteId, userId);
+        QuickReviewSessionEntity legacy =
+                buildInProgressAdaptiveSession(UUID.randomUUID(), userId, studyPackId, noteId);
+        legacy.setSessionState(new LinkedHashMap<>(legacy.getSessionState()));
+        legacy.getSessionState().put("sourceCollectionId", deletedCollectionId.toString());
+
+        when(studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId))
+                .thenReturn(Optional.of(studyPack));
+        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.PRO);
+        when(quickReviewSessionRepository.findTopByUserIdAndStudyPackIdAndSessionModeAndStatusInOrderByCreatedAtDesc(
+                eq(userId), eq(studyPackId), eq(QuickReviewSessionMode.ADAPTIVE), any()))
+                .thenReturn(Optional.of(legacy));
+        when(noteCollectionRepository.findByIdAndOwnerUserId(deletedCollectionId, userId))
+                .thenReturn(Optional.empty());
+
+        QuickReviewAdaptiveQuizResponse response =
+                adaptivePracticeService.getAdaptiveQuizSession(studyPackId.toString(), userId);
+
+        assertThat(response.title()).isEqualTo("Pack");
+    }
+
+    /**
+     * The START route's resume branch has the same defect and the same population. It sits AHEAD of
+     * the quota assert and of {@code ADAPTIVE_PRACTICE_STARTED}, so fixing the title cannot move an
+     * analytics firing condition -- asserted here rather than assumed.
+     */
+    @Test
+    void generateAdaptiveQuiz_titlesAResumedLegacyPlanScopedSessionWithItsSubjectPlan() {
+        UUID userId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        UUID collectionId = UUID.randomUUID();
+        StudyPackEntity studyPack = buildStudyPack(studyPackId, noteId, userId);
+        QuickReviewSessionEntity legacy =
+                buildInProgressAdaptiveSession(UUID.randomUUID(), userId, studyPackId, noteId);
+        legacy.setSessionState(new LinkedHashMap<>(legacy.getSessionState()));
+        legacy.getSessionState().put("sourceCollectionId", collectionId.toString());
+        NoteCollectionEntity collection = new NoteCollectionEntity();
+        collection.setId(collectionId);
+        collection.setOwnerUserId(userId);
+        collection.setTitle("Structural Engineering Plan");
+
+        when(studyPackRepository.findByIdAndOwnerUserIdForUpdate(studyPackId, userId))
+                .thenReturn(Optional.of(studyPack));
+        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.PRO);
+        when(quickReviewSessionRepository.findTopByUserIdAndStudyPackIdAndSessionModeAndStatusInOrderByCreatedAtDesc(
+                eq(userId), eq(studyPackId), eq(QuickReviewSessionMode.ADAPTIVE), any()))
+                .thenReturn(Optional.of(legacy));
+        when(noteCollectionRepository.findByIdAndOwnerUserId(collectionId, userId))
+                .thenReturn(Optional.of(collection));
+
+        QuickReviewAdaptiveQuizResponse response =
+                adaptivePracticeService.generateAdaptiveQuiz(studyPackId.toString(), userId, null);
+
+        assertThat(response.title()).isEqualTo("Structural Engineering Plan");
+        assertThat(response.title()).isNotEqualTo(studyPack.getTitle());
+        verify(analyticsService, never()).trackEvent(any(), any(), any(), any());
+        verify(userUsageService, never()).incrementAdaptiveQuizGeneration(any(), any());
+    }
+
     @Test
     void getAdaptiveSessionById_hidesUnknownAndOtherUsersSessionsBehindTheSameNotFoundContract() {
         UUID userId = UUID.randomUUID();

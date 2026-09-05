@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   closestCenter,
+  closestCorners,
   DndContext,
   DragOverlay,
   type DragEndEvent,
@@ -522,6 +523,20 @@ function LeafSortableNoteCard({
               // the pending timer persist that truncated string as a real label. The reserved name is
               // rejected in handleLeafLabelChange, which is the single place that decides.
               setLabelValue(nextValue.slice(0, LABEL_MAX_LENGTH));
+            }}
+            onOptionSelect={(selected) => {
+              // ⚠️ CHOOSING AN EXISTING SECTION COMMITS IMMEDIATELY; TYPING A NEW ONE DOES NOT.
+              // The debounced writer above is gated on `editing`, so a dropdown click rode the same
+              // blur path as free typing and appeared to do nothing until focus left the field. A
+              // clicked option is final at the moment of the click — there is no partial value to
+              // protect — so it bypasses the debounce here. ⚠️ The effect above and its comment are
+              // deliberately untouched: they guard TYPING, where mid-keystroke saves tear down the
+              // control and previously created a section called "Week" from "Week 1".
+              const nextLabel = selected.trim().replaceAll(/\s+/g, " ");
+              if ((item.label ?? "") === nextLabel) {
+                return;
+              }
+              onLabelChange(item.noteId, nextLabel);
             }}
           />
         </div>
@@ -2258,7 +2273,11 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
           ) : (
             <DndContext
               sensors={sensors}
-              collisionDetection={closestCenter}
+              // closestCorners, not closestCenter: this list is variable-height, and a tall dragged
+              // section's CENTRE sits far below the cursor, so upward targets could never win. That is
+              // the reported asymmetry. Only this context changes -- the subject-level DndContext below
+              // drags uniform rows, where centres are fine.
+              collisionDetection={closestCorners}
               modifiers={[restrictToVerticalAxis]}
               onDragStart={handleDragStart}
               onDragCancel={() => setActiveDrag(null)}
@@ -2298,6 +2317,11 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
                     }
                     return (
                       <div className="rounded-xl border border-blue-300 bg-surface-alt p-4 shadow-xl opacity-95">
+                        {/* Title and count only. ⚠️ PREVIEW HEIGHT *IS* THE DIAGNOSED FAILURE, so
+                            "first 3 notes + N more" was explicitly REJECTED — a smaller oversized preview
+                            reintroduces the same geometry problem. The overlay's only job is to answer
+                            "what am I moving?": the title gives identity, the count gives scope, and the
+                            list underneath already shows the contents. */}
                         <div className="flex items-center gap-3">
                           <div className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border bg-background text-foreground/60">
                             <GripVertical className="h-4 w-4" aria-hidden="true" />
@@ -2308,14 +2332,6 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
                               {draggedSection.items.length} {draggedSection.items.length === 1 ? "note" : "notes"}
                             </p>
                           </div>
-                        </div>
-                        <div className="mt-3 space-y-2">
-                          {draggedSection.items.map((item) => (
-                            <div key={item.noteId} className="rounded-lg border border-border bg-background px-3 py-2">
-                              <p className="line-clamp-1 text-sm font-medium text-foreground">{getNoteTitle(item)}</p>
-                              <p className="text-xs text-foreground/60">{getNoteMeta(item)}</p>
-                            </div>
-                          ))}
                         </div>
                       </div>
                     );

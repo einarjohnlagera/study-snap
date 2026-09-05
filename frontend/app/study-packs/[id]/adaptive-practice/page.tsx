@@ -41,6 +41,7 @@ import {
   isEmailNotVerifiedError,
   trackAnalyticsEvent,
   type AdaptiveConceptSelectionReason,
+  type AdaptivePracticeFocusConcept,
   type CompanionContent,
   type NoteResponse,
   type AdaptivePracticeCompleteResponse,
@@ -95,6 +96,123 @@ function formatSelectionRationale(
       return null;
   }
   return `Reviewing: ${normalizedConcept} — ${reasonLabel}`;
+}
+
+/**
+ * One source pack's slice of the focus list.
+ *
+ * ⚠️ KEYED ON THE SOURCE PACK, NEVER ON THE CONCEPT STRING. Two packs weak on "Shear Force" are two
+ * distinct focus entries; grouping by name would merge them and thereby assert cross-pack canonical
+ * concept identity, which is ADR-sized and explicitly out of scope (v0.107.0).
+ */
+type AdaptiveFocusGroup = {
+  key: string;
+  sourceTitle: string | null;
+  concepts: string[];
+};
+
+/** Groups whose concepts stay expanded before the learner asks for the rest. */
+const ADAPTIVE_FOCUS_VISIBLE_GROUPS = 2;
+/** Concepts shown per visible group in the compact view. */
+const ADAPTIVE_FOCUS_VISIBLE_CONCEPTS = 3;
+
+function buildAdaptiveFocusGroups(entries: AdaptivePracticeFocusConcept[]): AdaptiveFocusGroup[] {
+  const groups = new Map<string, AdaptiveFocusGroup>();
+  for (const entry of entries) {
+    // A legacy plan-scoped session can carry focus entries with no source stamp at all. They share
+    // one unattributed bucket rather than becoming one group each -- and they are NOT folded into a
+    // real pack's group, which would be a guess about provenance.
+    const key = entry.sourceStudyPackId ?? "__unattributed__";
+    const existing = groups.get(key);
+    if (existing) {
+      existing.concepts.push(entry.concept);
+      continue;
+    }
+    groups.set(key, {
+      key,
+      sourceTitle: entry.sourceStudyPackId ? entry.sourceTitle ?? null : null,
+      concepts: [entry.concept],
+    });
+  }
+  return [...groups.values()];
+}
+
+function formatAdaptiveFocusSummary(conceptCount: number, sourceCount: number) {
+  const concepts = `${conceptCount} weak ${conceptCount === 1 ? "concept" : "concepts"}`;
+  if (sourceCount <= 1) {
+    return concepts;
+  }
+  return `${concepts} across ${sourceCount} ${sourceCount === 1 ? "note" : "notes"}`;
+}
+
+/**
+ * The practice-entry overview: a compact weakness summary, concepts grouped by their source note,
+ * and progressive disclosure.
+ *
+ * ⚠️ THIS IS A PRACTICE-ENTRY SURFACE, NOT A PROGRESS REPORT. It shows enough to explain why this
+ * practice exists; it must not make the learner read a diagnostic inventory before they can start.
+ */
+function AdaptiveFocusOverview({ groups }: { groups: AdaptiveFocusGroup[] }) {
+  const [expanded, setExpanded] = useState(false);
+  const conceptCount = groups.reduce((total, group) => total + group.concepts.length, 0);
+  if (conceptCount === 0) {
+    return (
+      <p className="text-sm text-foreground/80">
+        No specific weak concepts were found. This set still focuses on recent review gaps.
+      </p>
+    );
+  }
+  const overflowsGroups = groups.length > ADAPTIVE_FOCUS_VISIBLE_GROUPS;
+  const overflowsConcepts = groups.some((group) => group.concepts.length > ADAPTIVE_FOCUS_VISIBLE_CONCEPTS);
+  const canExpand = overflowsGroups || overflowsConcepts;
+  const visibleGroups = expanded ? groups : groups.slice(0, ADAPTIVE_FOCUS_VISIBLE_GROUPS);
+  const hiddenGroupCount = groups.length - visibleGroups.length;
+  return (
+    <div className="space-y-3">
+      <p className="text-sm font-medium text-foreground">
+        {formatAdaptiveFocusSummary(conceptCount, groups.length)}
+      </p>
+      <ul className="space-y-3">
+        {visibleGroups.map((group) => {
+          const visibleConcepts = expanded
+            ? group.concepts
+            : group.concepts.slice(0, ADAPTIVE_FOCUS_VISIBLE_CONCEPTS);
+          const hiddenConceptCount = group.concepts.length - visibleConcepts.length;
+          return (
+            <li key={`adaptive-focus-group-${group.key}`} className="space-y-1">
+              <p className="text-sm font-medium text-foreground">
+                {group.sourceTitle ?? "Other notes"}
+                <span className="font-normal text-foreground/60">
+                  {" "}
+                  — {group.concepts.length} {group.concepts.length === 1 ? "concept" : "concepts"}
+                </span>
+              </p>
+              <p className="text-sm text-foreground/75">
+                {visibleConcepts.join(" · ")}
+                {hiddenConceptCount > 0 ? ` · +${hiddenConceptCount} more` : ""}
+              </p>
+            </li>
+          );
+        })}
+      </ul>
+      {canExpand ? (
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-sm text-foreground/60">
+            {hiddenGroupCount > 0
+              ? `+ ${hiddenGroupCount} more ${hiddenGroupCount === 1 ? "note" : "notes"}`
+              : ""}
+          </p>
+          <button
+            type="button"
+            onClick={() => setExpanded((current) => !current)}
+            className="text-sm font-medium text-blue-600 underline underline-offset-4 dark:text-blue-400"
+          >
+            {expanded ? "Show less" : "Show all concepts"}
+          </button>
+        </div>
+      ) : null}
+    </div>
+  );
 }
 
 export default function AdaptivePracticePage() {
@@ -522,6 +640,14 @@ export default function AdaptivePracticePage() {
     () => new Set(adaptiveFocusConceptNames).size !== adaptiveFocusConceptNames.length,
     [adaptiveFocusConceptNames],
   );
+  /**
+   * The focus list partitioned by SOURCE PACK, which is what makes a plan-scoped session legible:
+   * "14 weak concepts across 4 notes" instead of one undifferentiated run-on line.
+   */
+  const adaptiveFocusGroups = useMemo(
+    () => buildAdaptiveFocusGroups(adaptiveFocusEntries),
+    [adaptiveFocusEntries],
+  );
 
   const adaptiveQuizActive = Boolean(
     adaptiveQuiz?.sessionId
@@ -750,22 +876,8 @@ export default function AdaptivePracticePage() {
               Focusing on concepts you need to improve.
             </p>
           </div>
-          <div className="space-y-2 rounded-md border border-border bg-background p-3 text-sm text-foreground/80">
-            <p className="font-medium text-foreground">Weak concepts:</p>
-            {adaptiveFocusConceptNames.length > 0 ? (
-              <ul className="list-disc space-y-1 pl-5">
-                {adaptiveFocusEntries.map((entry) => (
-                  <li key={`weak-concept-${entry.sourceStudyPackId}-${entry.concept}`}>
-                    {entry.concept}
-                    {adaptiveFocusHasDuplicateNames && entry.sourceTitle ? (
-                      <span className="text-foreground/60"> · {entry.sourceTitle}</span>
-                    ) : null}
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p>No specific weak concepts were found. This set still focuses on recent review gaps.</p>
-            )}
+          <div className="rounded-md border border-border bg-background p-3 text-sm text-foreground/80">
+            <AdaptiveFocusOverview groups={adaptiveFocusGroups} />
           </div>
           <Button
             type="button"
@@ -918,8 +1030,16 @@ export default function AdaptivePracticePage() {
               New follow-up practice based on your weak areas.
             </p>
             {adaptiveFocusConceptNames.length > 0 ? (
+              // ⚠️ A single comma-joined line across several source packs MERGES them: two packs weak
+              // on one concept read as a duplicate, and the source that disambiguates them is
+              // discarded. Multi-source sessions therefore report per-source counts; a single-source
+              // session can still list names, because nothing can be merged across one pack.
               <p className="text-sm text-foreground/75">
-                Focus concepts: {adaptiveFocusConceptNames.join(", ")}
+                {adaptiveFocusGroups.length > 1
+                  ? `Focus: ${adaptiveFocusGroups
+                      .map((group) => `${group.sourceTitle ?? "Other notes"} (${group.concepts.length})`)
+                      .join(" · ")}`
+                  : `Focus concepts: ${adaptiveFocusConceptNames.join(", ")}`}
               </p>
             ) : null}
             <p className="text-sm text-foreground/75">
