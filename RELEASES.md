@@ -1,5 +1,118 @@
 # RELEASES.md - NoteLib
 
+## v0.116.0 - Additive Review Set Updates
+
+**Status: In Progress** (kicked off 2026-09-05, base branch `releases/v0.116.0`, cut from `main` after
+`v0.115.0` merged and deployed)
+
+Theme: an Official Review Set you adopted can gain the topics its curator has added since, without ever
+overwriting the work you have done in it.
+
+### Planned Scope
+
+**⚠️ THIS IS SLICE 2 OF THE COMPREHENSIVE REVIEW SET OVERHAUL, AND IT RUNS NOW BECAUSE SLICE 1 HAS
+DEPLOYED — THE ORDER WAS A CORRECTNESS CONSTRAINT, NOT A PREFERENCE.** Measured 2026-09-05: **100% of
+adopted placements' source notes carry program join rows against 11.8% of existing learner copies**, and
+Slice 2 mints learner notes **through `copyNote`** — so running it before Slice 1 would have grown the
+mis-shelving population **~8x in a single batch.** Slice 1 shipped as `v0.115.0` and is live. Full
+architecture: `docs/claude-plans/v0.115.0-stage1-master-architecture-reconciliation.md` §8.
+
+**⚠️ THIS IS LIVE PRODUCT DEBT, NOT A SPECULATIVE FEATURE — the numbers are measured, not projected.**
+**92 learners · 523 adopted collections · 4,374 placements.** **364 source placements and 68 whole
+Subject Plans are ALREADY STRANDED — 100% from post-adoption upstream growth, 0% from learner removal —
+and 10 no-op re-adopt attempts by 4 distinct users show learners are already asking and silently getting
+nothing.** `adopt()` bails before `copySourceItems` runs, so re-adoption is a hard no-op.
+
+1. **An adopted plan can take upstream ADDITIONS.** New notes, new Subject Plans and new placements
+   apply. **⚠️ NOTHING ELSE DOES:** rename, reorder, retire and move are **SURFACE-ONLY** — shown to the
+   learner, never applied. **The reason is a capability limit, not caution: until source-at-sync
+   provenance exists the system CANNOT DISTINGUISH learner customization from upstream change**, so
+   applying a structural mutation would overwrite learner work it cannot see.
+2. **Update provenance — five facts captured per placement at last sync.** Source Subject Plan identity
+   and source note identity already exist (`sourcePlanId`, `copied_from_note_id`). **NEW: source
+   section/label at sync, source position at sync, last-sync timestamp, and a learner-removal
+   tombstone.** **⚠️ Section and position are the genuinely UNRECONSTRUCTABLE facts** — both are mutable
+   upstream, so nothing can recover them after the fact. **⚠️ IF THESE LIVE IN ONE JSON SNAPSHOT ITS
+   SCHEMA IS DEFINED BEFORE IMPLEMENTATION, NOT DISCOVERED DURING IT.**
+3. **`Detached from source` becomes a real resolver state, not an error path.** Two adoptions already
+   point at source collections that no longer exist. The plan stays fully usable, no update is offered,
+   **no source relationship is fabricated**, and there is no repeated failure loop.
+4. **The learner is told when their adopted plan has drifted.** `companionMayBeOutdated:1193` returns
+   `false` for every non-`ADMIN` caller, so a learner never sees the staleness signal that already
+   exists. **⚠️ FOLDED IN AS COHERENCE, NOT CREEP: it is the same "surface the change, never apply it"
+   contract item 1 defines**, and fixing it anywhere else would build a second staleness surface beside
+   this one.
+
+### Anti-drift
+
+- **⚠️ ADDITIVE ONLY. An update MUST NOT replace** a learner note body, a learner Study Pack, a learner
+  edit, `ConceptHealth`, quiz or session history, or a learner-authored addition. **The learner note
+  stays independent; the PLAN source relationship persists. These two provenance semantics are separate
+  and must not be merged into one framework.**
+- **⚠️ THE INVARIANT IS "LEARNER STUDY HISTORY IS PRESERVED", NOT "the numerator never shrinks"** — that
+  broader phrasing was WITHDRAWN at the Stage 1 tightening because current-curriculum counts may
+  legitimately change when a topic is retired.
+- **⚠️ NO SYNCHRONIZATION ENGINE, NO EVENT SOURCING, NO CURRICULUM REVISION NUMBERS.** Snapshot plus
+  timestamp suffices; the Stage 1 audit rejected all three by name.
+- **⚠️ THE TOMBSTONE SHIPS WITH AN EMPTY BACKFILL AND THAT IS NOT A REASON TO OMIT IT.** Production shows
+  **zero** learner removals in the stale population — but if a learner intentionally removes an upstream
+  topic, a later update must not re-add it. Prospective by construction.
+- **⚠️ IDEMPOTENCE IS SETTLED AT THE STORAGE LAYER AND UNPROVEN AT THE APPLICATION LAYER, AND THE
+  DISTINCTION IS THE WHOLE RISK.** `note_collection_items` carries `UNIQUE (collection_id, note_id)`, so
+  durable placement identity IS `(source Subject Plan, source Note)` — **no new column, no title
+  matching.** But `persistAdoptedPlan:1460` returns `alreadyAdoptedResponse` and **never re-reaches the
+  insert**, so re-adopt short-circuits and proves nothing: **the update path does not exist yet, so its
+  idempotence is a property of code not yet written and must be DESIGNED IN, not discovered.** A repeated
+  -application regression test is owed before signoff.
+- **⚠️ SLICE 1 IS NOT RE-OPENED.** The publish-transition clearing, its curator exclusion and the
+  companion resolver fix are settled and shipped.
+- **⚠️ Slices 0A/0B (Domain Context classification) are OWNER-EXECUTED curator work, are NOT in this
+  release, and must NOT gate it.**
+- **⚠️ NO quota, entitlement, limit or meter change; no `ProfileType` gate; no new mode or sub-mode;
+  `NoteVisibility` stays `PRIVATE | PUBLIC`.**
+- **⚠️ `frontend/app/onboarding` STAYS FROZEN until 2026-09-11** — six days out, protecting the 62.4%
+  onboarding-completion baseline. This release does not approach it.
+- **⚠️ Do NOT change what `BOARD_EXAM_STARTED`, `ADAPTIVE_PRACTICE_STARTED` or `QUIZ_SHARE_LINK_CREATED`
+  record.**
+
+### Verification
+
+**FULL THREE-AGENT COLD PRESSURE TEST IN ISOLATED `git worktree`s, DECLARED NOT INHERITED.** Pre-declared
+at §446 of the Stage 1 architecture doc and re-confirmed here: a **migration** plus **production-data
+semantics across 92 learners and 4,374 placements** fires the gate's named triggers twice over.
+**⚠️ THE ISOLATION IS NOT OPTIONAL** — `v0.105.0` lost an agent's entire result set to shared-tree
+corruption. **⚠️ ONE AGENT MUST BE POINTED AT THE BLIND SPOT, NOT THE FEATURE.**
+
+**⚠️ PRE-DECLARED DISCRIMINATING GUARD, aimed at what this release could silently destroy rather than at
+what it adds: applying an update TWICE must add nothing the second time, AND must not disturb a learner's
+own reordering, renaming or removal.** A fixture that applies once and asserts the new placements arrived
+**passes under a non-idempotent implementation and proves nothing.**
+
+**⚠️ A SECOND GUARD IS OWED AT THE OWNERSHIP SEAM: a learner note that has been EDITED, and its
+`ConceptHealth` and session history, must be BYTE-IDENTICAL after an update pass.** A fixture using an
+untouched adopted note passes under an implementation that overwrites learner work.
+
+**⚠️ A THIRD GUARD IS OWED AT THE DETACHED STATE: an adoption whose source collection no longer exists
+must resolve, stay usable, and offer no update** — two such adoptions exist in production today, so the
+subject is REACHABLE rather than hypothetical.
+
+**⚠️ CARRIED LESSON FROM `v0.115.0`, AND IT IS THE SHARPEST ONE THIS ARC HAS PRODUCED: a bare
+`role == ADMIN` substitution for `CuratorAuthoringPredicate.isCurator` SURVIVED ALL 99 TESTS in
+`NoteServiceTest`** while it would have stripped authored applicability off every TEACHER-owned curated
+note — because the ADMIN fixture and the learner fixture between them satisfied both guards **without
+exercising the TEACHER leg**. **Item 4 touches that same predicate class. Pin BOTH legs.**
+
+**⚠️ DEPLOY-SPLIT CAVEAT, RECORDED BEFORE THE READ RATHER THAN DISCOVERED IN SEPTEMBER:
+`[CHECKPOINT — due 2026-09-18]` reads Render `http_request_count` by `statusCode` to decide whether
+`connection-timeout: 5000` converts load into user-visible errors. This release adds new request paths
+and a migration. If it deploys before 2026-09-18, that read is confounded and must say so.**
+
+**Routing: CODEX** — a migration, a new update path, a resolver state, and frontend.
+
+### Shipped
+
+_(nothing yet)_
+
 ## v0.115.0 - Learner Publication Authority
 
 **Status: Released** (kicked off and signed off 2026-09-05, base branch `releases/v0.115.0`, cut from
