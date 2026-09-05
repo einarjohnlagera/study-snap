@@ -294,6 +294,89 @@ User-facing generation statuses:
 - `STUDY_PACK_READY`: generated summary, key concepts, and quiz are available.
 - `FAILED`: generation did not complete and can be retried from Note Detail.
 
+## Combined Note + Study Pack regeneration (v0.118.0)
+
+`POST /notes/{id}/regenerate` takes a body of `{ "scope": "STUDY_PACK" | "NOTE_AND_STUDY_PACK" }`. It is
+email-verification gated, returns `NoteResponse` so the client can poll, and sits **alongside**
+`POST /notes/{id}/generate`, which is unchanged.
+
+- **Absent body, absent scope or blank scope → `STUDY_PACK`.** An unrecognised non-blank value is a 400
+  (`UNKNOWN_NOTE_REGENERATION_SCOPE`) rather than a silent downgrade.
+- **`STUDY_PACK` delegates to `startAsyncGenerationFromNote` unchanged** — same code path, same
+  semantics, one Study Pack unit charged, the note-generation meter untouched.
+- **`NOTE_AND_STUDY_PACK` regenerates the note's content and its Study Pack as one operation.** The note
+  **title is the topic, used verbatim**; the generation context is resolved **from the existing note**
+  (`StudyPackGenerationContextResolver.resolve`), so title, subject, tags, Domain Context, Authored Depth
+  and the single resolved Course / Program are **inputs**, never things regeneration rewrites.
+
+**⚠️ `NOTE_AND_STUDY_PACK` is not reachable from any UI surface as of v0.118.0.** No scope selector, no
+overwrite warnings and no API client function exist yet; they land with the UX that explains content
+replacement.
+
+### Preconditions, all checked before any LLM call and before any write
+
+| Condition | Result |
+|---|---|
+| Note already `GENERATING` | 409 `NOTE_GENERATION_IN_PROGRESS` |
+| Note has **no existing Study Pack** | 409 `NOTE_REGENERATION_STUDY_PACK_REQUIRED` — this is regeneration, not a first generation that would overwrite the learner's typed content |
+| Note has a **blank or null title** | 400 `NOTE_REGENERATION_TOPIC_REQUIRED` — the title is the topic; subject and content are deliberately **not** a fallback |
+| Note-generation quota exhausted | `NOTE_GENERATION_LIMIT_REACHED`. **Asserted first**, because the learner-facing copy is "Uses 1 topic note and 1 Study Pack" |
+| Study Pack quota exhausted | `MONTHLY_STUDY_PACK_LIMIT_REACHED` |
+
+None of these moves the note to `GENERATING` and none charges anything.
+
+### Two LLM calls, then one commit
+
+```
+Request thread:  resolve note → assert note quota, then Study Pack quota → assert generation readiness
+                 → resolve context from the note → status = GENERATING → dispatch after commit
+Async worker:    LLM 1 → new note content        (NO transaction, no JDBC connection held)
+                 LLM 2 → new Study Pack from it  (NO transaction, no JDBC connection held)
+                 ONE transaction:
+                   status interlock FIRST — not GENERATING? persist nothing, charge nothing, return
+                   note.content := new content
+                   saveStudyPack(...)  — mutates the existing row in place, same id, same created_at
+                   markNoteGenerated(...)
+                   record the note-generation meter
+                   deactivate the note's live quiz share links
+                 post-commit: STUDY_PACK_GENERATED → initiatePool → queueOfficialChallengeQuizTemplateSeed
+Any failure:     markNoteGenerationFailed — nothing else persisted, nothing charged
+```
+
+**⚠️ Nothing is written until both artifacts exist in memory**, which is what makes *"new content beside
+a Study Pack built from the content it replaced"* unreachable rather than something to clean up. It also
+means **both meters are charged inside that one transaction**, so a failure anywhere charges nothing —
+no refund path exists because none is needed. `NoteGenerationService.generateFromTopic` carries a
+`recordUsage` parameter for exactly this; **its 2-arg and 3-arg overloads charge as they always have.**
+
+**⚠️ The worker method is private and invoked through a lambda on the generation executor**, so
+`StudyPackService`'s class-level `@Transactional` proxy does not apply. Making it public, or calling it
+through the proxy, would silently wrap both LLM calls in one transaction (`v0.112.0`).
+
+**⚠️ The post-commit side effects are required, not optional.** `initiatePool` is the consequential one:
+the pack's `exam_question_pool` rows were built from the **replaced** content, and omitting the
+re-initiation would leave a stale pool with no refresh trigger — every exam start on that pack falling
+back to on-demand generation, which is verbatim the `v0.86.0` finding.
+
+### Live quiz share links
+
+A successful `NOTE_AND_STUDY_PACK` commit **deactivates** every active `quiz_share_links` row for the
+note's `generated_quizzes` row, reusing `GeneratedQuizService`'s single implementation. **All active
+rows, never just the newest** — `createShareLink` mints a new row over an inactive one and
+`findActiveLink` accepts any active token. **Deactivate, never delete**: deleting would force the owner
+to mint a new link and spend share-link quota because of our fix. No generated quiz, or no active links,
+is a clean no-op.
+
+### What regeneration does not do
+
+Identity is preserved because in-place regeneration mutates columns and never identity: `notes.id`,
+`notes.created_at`, `study_packs.id` and every `note_collection_items` row (with its `position` and
+`label`) survive by construction. Learner copies are independent rows and are untouched — there is no
+propagation, inheritance or live fork. Historical sessions snapshot their own questions in
+`quick_review_sessions.session_state` and are not rewritten. `ConceptHealth` rows are neither deleted
+nor rewritten: a concept whose string survives keeps its history, one renamed or dropped is simply never
+read again, and a new one starts empty.
+
 ### Age-based generation recovery
 
 The scheduled generation-recovery job covers three independently processed surfaces and moves stale work only into a status the existing product can recover from:

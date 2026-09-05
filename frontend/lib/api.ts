@@ -5685,6 +5685,16 @@ export function isNoteGenerationLimitReachedError(error: unknown): error is ApiR
   return error instanceof ApiRequestError && error.code === "NOTE_GENERATION_LIMIT_REACHED";
 }
 
+/**
+ * A note edit was rejected because a Study Pack is being generated for that note right now.
+ *
+ * Callers must surface this WITHOUT discarding what the user typed: the edit is still valid, it is
+ * only the timing that is wrong.
+ */
+export function isNoteGenerationInProgressError(error: unknown): error is ApiRequestError {
+  return error instanceof ApiRequestError && error.code === "NOTE_GENERATION_IN_PROGRESS";
+}
+
 export function isExportLimitReachedError(error: unknown): error is ApiRequestError {
   return error instanceof ApiRequestError && error.code === "MONTHLY_EXPORT_LIMIT_REACHED";
 }

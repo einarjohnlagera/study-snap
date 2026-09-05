@@ -202,6 +202,12 @@ Rules:
 - destructive actions such as `Delete` should stay visually distinct
 - study actions (Generate Study Pack, Start Quick Review, Challenge Quiz) must stay visually primary — the overflow menu is for secondary note-management actions only
 - inline `Save` / `Cancel` controls are still allowed while metadata edit mode is active
+- **(v0.118.0)** if an inline metadata save is rejected because the note began generating in the meantime
+  (`PUT /notes/{id}` → 409 `NOTE_GENERATION_IN_PROGRESS`), the panel **stays open with the draft intact**
+  and shows a warning that explains the timing rather than the raw server message. Nothing about the
+  draft is cleared — a rejected save here is mistimed, not invalid. The `Edit` menu item itself is
+  already disabled while a Study Pack is generating, and the `?edit=1` deep link cannot open the panel on
+  a generating note because a generating note is never `STUDY_PACK_READY`.
 
 ## Share Modal Pattern
 

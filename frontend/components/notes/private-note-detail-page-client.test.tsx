@@ -78,6 +78,7 @@ jest.mock("@/components/ui/summary-markdown", () => ({
 
 jest.mock("@/lib/api", () => ({
   addCollectionItems: jest.fn(),
+  isNoteGenerationInProgressError: (error: unknown) => error instanceof Error && error.message === "NOTE_GENERATION_IN_PROGRESS",
   completeProductOnboarding: jest.fn(),
   copyNote: jest.fn(),
   createCollection: jest.fn(),
@@ -1098,6 +1099,36 @@ describe("PrivateNoteDetailPageClient", () => {
     expect(screen.getByRole("button", { name: "Cancel" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Remove Nursing" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Remove Pharmacy" })).toBeInTheDocument();
+  });
+
+  // v0.118.0 §20a: PUT /notes/{id} now returns 409 NOTE_GENERATION_IN_PROGRESS while the note is being
+  // regenerated. The message must be legible AND the user's typing must survive — a rejected save is a
+  // timing problem, not a validation one.
+  it("explains the 409 and keeps the metadata draft when a save lands mid-regeneration", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({
+      planType: "PRO",
+      emailVerifiedAt: "2026-03-21T09:00:00Z",
+      profileType: "STUDENT",
+    });
+    (getNote as jest.Mock).mockResolvedValue({
+      ...baseNote,
+      studyPackStatus: "STUDY_PACK_READY" as const,
+      studyPackId: "sp-1",
+    });
+    (updateNote as jest.Mock).mockRejectedValue(new Error("NOTE_GENERATION_IN_PROGRESS"));
+
+    render(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    await screen.findByText("Test Note");
+    fireEvent.click(screen.getByRole("button", { name: "Open note actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Edit" }));
+    const titleField = await screen.findByLabelText("Title");
+    fireEvent.change(titleField, { target: { value: "Edited while regenerating" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(await screen.findByText(/being regenerated/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Cancel" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Title")).toHaveValue("Edited while regenerating");
   });
 
   it("exposes the authoring axes to an admin on a non-teacher profile", async () => {

@@ -40,8 +40,10 @@ import com.studysnap.backend.dto.CopyOnSignupResponse;
 import com.studysnap.backend.dto.QuickReviewAdaptiveQuizResponse;
 import com.studysnap.backend.dto.UpdateNoteVisibilityRequest;
 import com.studysnap.backend.dto.UpdateNoteSharesRequest;
+import com.studysnap.backend.dto.RegenerateNoteRequest;
 import com.studysnap.backend.dto.UpsertNoteRequest;
 import com.studysnap.backend.entity.LearnerLevel;
+import com.studysnap.backend.entity.NoteRegenerationScope;
 import com.studysnap.backend.entity.UserRole;
 import com.studysnap.backend.exception.NoteNotFoundException;
 import com.studysnap.backend.exception.SharedNoteNotFoundException;
@@ -217,6 +219,35 @@ public class NoteController {
         UUID userId = user.userId();
         authService.requireEmailVerified(userId);
         studyPackService.startAsyncGenerationFromNote(id, userId, autoApplyMetadata);
+        return noteService.getById(id, userId);
+    }
+
+    /**
+     * Regenerates a note's Study Pack, and — with {@code scope = NOTE_AND_STUDY_PACK} — its content too,
+     * as one operation that preserves note and Study Pack identity.
+     *
+     * <p>⚠️ {@code POST /notes/{id}/generate} is untouched and keeps its exact semantics. {@code STUDY_PACK}
+     * here delegates to the same service call it makes, so the two are behaviourally identical.
+     *
+     * <p>⚠️ {@code NOTE_AND_STUDY_PACK} is deliberately NOT reachable from the UI yet: the scope selector
+     * and its overwrite warnings are a later slice, and content replacement must not reach a learner
+     * without them.
+     */
+    @PostMapping("/{id}/regenerate")
+    @PreAuthorize("hasAnyRole('USER','ADMIN')")
+    public NoteResponse regenerate(
+            @PathVariable String id,
+            @RequestBody(required = false) RegenerateNoteRequest request,
+            @AuthenticationPrincipal AuthenticatedUser user
+    ) {
+        UUID userId = user.userId();
+        authService.requireEmailVerified(userId);
+        NoteRegenerationScope scope = NoteRegenerationScope.parseOrDefault(request == null ? null : request.scope());
+        if (scope == NoteRegenerationScope.NOTE_AND_STUDY_PACK) {
+            studyPackService.startAsyncNoteAndStudyPackRegeneration(id, userId);
+        } else {
+            studyPackService.startAsyncGenerationFromNote(id, userId, false);
+        }
         return noteService.getById(id, userId);
     }
 

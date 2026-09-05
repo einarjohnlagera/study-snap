@@ -48,6 +48,23 @@ public class NoteGenerationService {
             UUID userId,
             StudyPackGenerationContext resolvedContext
     ) {
+        return generateFromTopic(request, userId, resolvedContext, true);
+    }
+
+    /**
+     * @param recordUsage whether this call charges the note-generation meter here, immediately after the
+     *                    LLM returns and outside any transaction — which is what every existing caller
+     *                    wants. Combined Note + Study Pack regeneration passes {@code false} because it
+     *                    must charge BOTH meters together inside its single commit transaction, so that a
+     *                    Study Pack failure after this call charges the learner nothing. The quota
+     *                    ASSERTION below is unconditional either way.
+     */
+    public GenerateNoteFromTopicResponse generateFromTopic(
+            GenerateNoteFromTopicRequest request,
+            UUID userId,
+            StudyPackGenerationContext resolvedContext,
+            boolean recordUsage
+    ) {
         onboardingGuardService.assertProfileComplete(userId);
         UserEntity user = userRepository.findById(userId)
                 .orElseThrow(UserNotFoundException::new);
@@ -58,7 +75,9 @@ public class NoteGenerationService {
                 ? resolveAuthoringContext(request, user)
                 : resolvedContext;
         String generatedContent = llmStudyPackService.generateNoteFromTopic(normalizedTopic, context);
-        noteGenerationUsageProtectionService.recordUsage(userId, OffsetDateTime.now(ZoneOffset.UTC));
+        if (recordUsage) {
+            noteGenerationUsageProtectionService.recordUsage(userId, OffsetDateTime.now(ZoneOffset.UTC));
+        }
         return new GenerateNoteFromTopicResponse(generatedContent);
     }
 

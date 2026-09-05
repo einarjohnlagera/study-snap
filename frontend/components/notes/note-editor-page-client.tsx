@@ -19,6 +19,7 @@ import {
   getNoteApplicablePrograms,
   isEmailNotVerifiedError,
   isOcrDisabledError,
+  isNoteGenerationInProgressError,
   isNoteGenerationLimitReachedError,
   isOcrLimitReachedError,
   listCoursePrograms,
@@ -912,6 +913,15 @@ export function NoteEditorPageClient({
       }
       router.push(`/notes/${saved.id}`);
     } catch (error) {
+      // Nothing in this branch resets the draft, so a rejected save keeps everything the user typed.
+      if (isNoteGenerationInProgressError(error)) {
+        const inProgressMessage =
+          "This note is being regenerated. Your edits are still here — save again once it finishes.";
+        setFormError(inProgressMessage);
+        showToast(inProgressMessage, "info");
+        setSaveStateLabel(null);
+        return;
+      }
       const message = error instanceof Error ? error.message : "Could not save note.";
       if (message.includes("Subject must be 64 characters or less")) {
         setSubjectError(message);

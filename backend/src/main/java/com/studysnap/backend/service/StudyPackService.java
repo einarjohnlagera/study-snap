@@ -3,6 +3,7 @@ package com.studysnap.backend.service;
 import com.studysnap.backend.config.StudySnapProperties;
 import com.studysnap.backend.dto.ConfirmTextRequest;
 import com.studysnap.backend.dto.CreateStudyPackRequest;
+import com.studysnap.backend.dto.GenerateNoteFromTopicRequest;
 import com.studysnap.backend.dto.NeedsTextConfirmationResponse;
 import com.studysnap.backend.dto.StudyPackListPageResponse;
 import com.studysnap.backend.dto.StudyPackMeta;
@@ -24,7 +25,10 @@ import com.studysnap.backend.entity.StudyPackEntity;
 import com.studysnap.backend.entity.StudyPackStatus;
 import com.studysnap.backend.exception.AppException;
 import com.studysnap.backend.exception.DraftNotFoundException;
+import com.studysnap.backend.exception.NoteGenerationInProgressException;
 import com.studysnap.backend.exception.NoteNotFoundException;
+import com.studysnap.backend.exception.NoteRegenerationStudyPackRequiredException;
+import com.studysnap.backend.exception.NoteRegenerationTopicRequiredException;
 import com.studysnap.backend.exception.OcrDisabledException;
 import com.studysnap.backend.exception.StudyPackNotFoundException;
 import com.studysnap.backend.exception.SubjectTooLongException;
@@ -82,9 +86,7 @@ public class StudyPackService {
     private static final int MAX_TAGS_PER_STUDY_PACK = 30;
     private static final int GENERATED_SUBJECT_WORD_BOUNDARY_WINDOW = 8;
     private static final String STUDY_PACK = "study-pack";
-    private static final String ERROR_NOTE_GENERATION_IN_PROGRESS = "NOTE_GENERATION_IN_PROGRESS";
     private static final String ERROR_NOTE_ALREADY_HAS_STUDY_PACK = "NOTE_ALREADY_HAS_STUDY_PACK";
-    private static final String MESSAGE_NOTE_GENERATION_IN_PROGRESS = "A Study Pack is already being generated for this note.";
     private static final String MESSAGE_NOTE_ALREADY_HAS_STUDY_PACK = "This note already has a Study Pack. Use Regenerate Study Pack to replace it.";
     private static final Comparator<String> SUBJECT_DISPLAY_COMPARATOR = (left, right) -> {
         int caseInsensitive = left.compareToIgnoreCase(right);
@@ -114,6 +116,9 @@ public class StudyPackService {
     private final OfficialChallengeQuizTemplateService officialChallengeQuizTemplateService;
     private final OnboardingGuardService onboardingGuardService;
     private final StudyPackQuizMasteryService studyPackQuizMasteryService;
+    private final NoteGenerationService noteGenerationService;
+    private final NoteGenerationUsageProtectionService noteGenerationUsageProtectionService;
+    private final GeneratedQuizService generatedQuizService;
 
     public StudyPackResponse createFromText(CreateStudyPackRequest request, UUID ownerUserId) {
         long startedAt = System.currentTimeMillis();
@@ -226,12 +231,95 @@ public class StudyPackService {
                 autoApplyGeneratedMetadata,
                 enforceLimits,
                 preservedSubject,
+                null,
                 startedAt,
                 requestId
         );
         dispatchAfterCommit(generationTask);
 
         log.info("requestId={} action=start_async_studyPack_generation noteId={}", requestId, noteId);
+    }
+
+    /**
+     * Regenerates a note's CONTENT and its Study Pack as one operation, preserving both identities.
+     *
+     * <p>⚠️ THE PAIRING INVARIANT IS THE POINT. A regenerated note must never sit beside a Study Pack
+     * built from the content it replaced. That is guaranteed structurally rather than by compensation:
+     * BOTH LLM calls run on the async worker before anything is written, and the note content, the pack
+     * row and BOTH meters land in the single commit transaction inside
+     * {@link #generateStudyPackFromExistingNoteAsync}. A failure at any point therefore persists nothing
+     * and charges nothing — no refund path exists because none is needed.
+     *
+     * <p>⚠️ The quota assertions are ORDERED, and the order is observable: the note-generation meter is
+     * checked FIRST, because the learner-facing copy is "Uses 1 topic note and 1 Study Pack" and the
+     * first thing it names should be the first thing that blocks.
+     *
+     * <p>⚠️ A note with no existing Study Pack is REJECTED rather than treated as first generation.
+     * Without a prior pack this would silently become "first generation that overwrites the learner's
+     * typed content" — a different operation with different disclosure obligations.
+     */
+    public void startAsyncNoteAndStudyPackRegeneration(String noteIdRaw, UUID ownerUserId) {
+        onboardingGuardService.assertProfileComplete(ownerUserId);
+        long startedAt = System.currentTimeMillis();
+        String requestId = UUID.randomUUID().toString();
+        NoteEntity sourceNote = resolveSourceNoteForGeneration(noteIdRaw, ownerUserId, true);
+        if (sourceNote == null) {
+            throw new NoteNotFoundException();
+        }
+        UUID noteId = sourceNote.getId();
+        if (studyPackRepository.findByOwnerUserIdAndNoteId(ownerUserId, noteId).isEmpty()) {
+            throw new NoteRegenerationStudyPackRequiredException();
+        }
+        // The note TITLE is the regeneration topic, used verbatim. notes.title is nullable and the request
+        // is built here rather than bound from a body, so GenerateNoteFromTopicRequest's @NotBlank can
+        // never fire — this is the guard that replaces it. Subject and content are deliberately not a
+        // fallback: writing a whole note from a topic we inferred is not what the learner asked for.
+        String topic = sourceNote.getTitle() == null ? "" : sourceNote.getTitle().trim();
+        if (topic.isEmpty()) {
+            throw new NoteRegenerationTopicRequiredException();
+        }
+
+        PlanType planType = subscriptionService.resolvePlan(ownerUserId);
+        noteGenerationUsageProtectionService.assertQuotaAvailable(ownerUserId, planType);
+        PlanType studyPackPlanType = assertMonthlyStudyPackQuotaAvailable(ownerUserId);
+        aiRateLimitService.assertAllowed(ownerUserId, studyPackPlanType, STUDY_PACK);
+
+        generationContextResolver.assertGenerationReady(sourceNote);
+        // Resolved FROM THE EXISTING NOTE, so title, subject, tags, Domain Context, Authored Depth and the
+        // single resolved Course / Program are inputs to regeneration rather than things it rewrites.
+        StudyPackGenerationContext generationContext = generationContextResolver.resolve(ownerUserId, sourceNote);
+
+        OffsetDateTime generationEnqueuedAt = OffsetDateTime.now();
+        sourceNote.setStatus(NoteStatus.GENERATING);
+        sourceNote.setGenerationEnqueuedAt(generationEnqueuedAt);
+        sourceNote.setUpdatedAt(generationEnqueuedAt);
+        noteRepository.save(sourceNote);
+
+        GenerateNoteFromTopicRequest noteContentRequest =
+                new GenerateNoteFromTopicRequest(topic, null, null);
+        Runnable generationTask = () -> generateStudyPackFromExistingNoteAsync(
+                noteId,
+                ownerUserId,
+                // No stored text is carried: the worker generates the note body first and uses THAT as the
+                // Study Pack's source, which is exactly why nothing has to be persisted in between.
+                null,
+                studyPackPlanType,
+                generationContext,
+                // ⚠️ Never auto-apply LLM-suggested metadata here. Metadata is an INPUT to this operation.
+                false,
+                true,
+                null,
+                noteContentRequest,
+                startedAt,
+                requestId
+        );
+        dispatchAfterCommit(generationTask);
+
+        log.info(
+                "requestId={} action=start_async_note_and_studyPack_regeneration noteId={}",
+                requestId,
+                noteId
+        );
     }
 
     public Object createFromImage(MultipartFile image, String subject, UUID ownerUserId) {
@@ -627,11 +715,7 @@ public class StudyPackService {
 
         NoteStatus sourceStatus = sourceNote.getStatus() == null ? NoteStatus.DRAFT : sourceNote.getStatus();
         if (sourceStatus == NoteStatus.GENERATING) {
-            throw new AppException(
-                    ERROR_NOTE_GENERATION_IN_PROGRESS,
-                    MESSAGE_NOTE_GENERATION_IN_PROGRESS,
-                    HttpStatus.CONFLICT
-            );
+            throw new NoteGenerationInProgressException();
         }
 
         boolean hasExistingStudyPack = studyPackRepository.findByOwnerUserIdAndNoteId(ownerUserId, noteId).isPresent();
@@ -672,6 +756,19 @@ public class StudyPackService {
                 .ifPresent(note -> officialChallengeQuizTemplateService.queueSeedIfEligible(note, studyPack));
     }
 
+    /**
+     * @param noteContentRegenerationRequest when non-null, the note's own CONTENT is regenerated first and
+     *                                       becomes the Study Pack's source text, so one operation replaces
+     *                                       both artifacts. Null on every pre-existing path, which then
+     *                                       behaves exactly as before.
+     *                                       <p>⚠️ This method is deliberately PRIVATE and invoked through a
+     *                                       lambda on the generation executor, so the class-level
+     *                                       {@code @Transactional} proxy does NOT apply and both LLM calls
+     *                                       run with no transaction and no JDBC connection held
+     *                                       ({@code v0.112.0}). Making it public — or calling it through
+     *                                       the proxy — would silently wrap both LLM calls in one
+     *                                       transaction.
+     */
     private void generateStudyPackFromExistingNoteAsync(
             UUID noteId,
             UUID ownerUserId,
@@ -681,12 +778,38 @@ public class StudyPackService {
             boolean autoApplyGeneratedMetadata,
             boolean recordUsage,
             String preservedSubject,
+            GenerateNoteFromTopicRequest noteContentRegenerationRequest,
             long startedAt,
             String requestId
     ) {
+        boolean regeneratingNoteContent = noteContentRegenerationRequest != null;
         try {
+            // LLM call 1 (combined scope only). Charging is deferred: recordUsage=false here, and the
+            // note-generation meter is incremented inside the commit transaction below, so a Study Pack
+            // failure after this point leaves BOTH meters untouched.
+            String rawGeneratedNoteBody = regeneratingNoteContent
+                    ? noteGenerationService
+                            .generateFromTopic(noteContentRegenerationRequest, ownerUserId, generationContext, false)
+                            .content()
+                    : null;
+            // ⚠️ TWO VALUES FROM ONE GENERATION, AND CONFLATING THEM SILENTLY RUINS THE NOTE.
+            // normalizeAndValidateText collapses every run of whitespace to a single space — right for the
+            // LLM input and the study_packs.source_text column, and ruinous for the note BODY, which is a
+            // structured document (title, blank line, "📘 Overview", bullet lines; see
+            // OpenAiLlmStudyPackService#buildGeneratedNoteContent). Full Notes renders notes.content under
+            // `whitespace-pre-wrap`, and the ordinary topic → create path stores it trimmed only
+            // (NoteService#normalizeRequiredContent), so writing the collapsed form here would flatten a
+            // regenerated note into one unreadable paragraph while first generation kept its structure.
+            // Validation — blank, length and content moderation — still runs on the collapsed form, and
+            // runs FIRST, so a blank or oversized body throws before either value is used.
+            String sourceText = regeneratingNoteContent
+                    ? normalizeAndValidateText(rawGeneratedNoteBody)
+                    : normalizedText;
+            String regeneratedNoteBody = rawGeneratedNoteBody == null ? null : rawGeneratedNoteBody.trim();
+            // LLM call 2. On the combined path this reads the freshly generated body from memory — nothing
+            // has been persisted yet, which is what makes "new content beside an old pack" unreachable.
             GeneratedStudyPackContent generated = llmStudyPackService.generateStudyPack(
-                    normalizedText,
+                    sourceText,
                     generationContext
             );
             StudyPackEntity saved = studyPackGenerationTransactionOperations.execute(status -> {
@@ -695,6 +818,9 @@ public class StudyPackService {
                 if (sourceNote.getStatus() != NoteStatus.GENERATING) {
                     // Generation recovery safety interlock: a late worker must discard its result
                     // instead of resurrecting a note already resolved to FAILED for the learner.
+                    // ⚠️ It runs FIRST, before the content write, saveStudyPack, either meter and the
+                    // share-link deactivation, so a declined worker persists nothing, charges nothing and
+                    // deactivates nothing.
                     log.info(
                             "requestId={} action=complete_async_studyPack_generation noteId={} outcome=skipped status={}",
                             requestId,
@@ -703,17 +829,31 @@ public class StudyPackService {
                     );
                     return null;
                 }
+                if (regeneratingNoteContent) {
+                    // The BODY, not the collapsed LLM input — see the comment at the generation call above.
+                    sourceNote.setContent(regeneratedNoteBody);
+                    noteRepository.save(sourceNote);
+                }
                 StudyPackEntity savedEntity = saveStudyPack(
                         InputType.TEXT,
                         null,
                         generated,
-                        normalizedText,
+                        sourceText,
                         ownerUserId,
                         planType,
                         noteId,
                         recordUsage
                 );
                 markNoteGenerated(noteId, sourceNote);
+                if (regeneratingNoteContent) {
+                    // The second meter. saveStudyPack above charged the Study Pack one; both land in this
+                    // transaction so the operation is all-or-nothing on money as well as on content.
+                    noteGenerationUsageProtectionService.recordUsage(ownerUserId, OffsetDateTime.now(ZoneOffset.UTC));
+                    // The note's shared quiz was built from the content we just replaced. Deactivate its
+                    // live links rather than letting a recipient be graded against questions drawn from
+                    // material that no longer exists (v0.110.2's rule, reusing its implementation).
+                    generatedQuizService.deactivateShareLinksForNote(noteId, ownerUserId);
+                }
                 if (preservedSubject != null) {
                     applyBulkGeneratedMetadataToNote(sourceNote, generated, preservedSubject);
                 } else if (autoApplyGeneratedMetadata) {

@@ -74,6 +74,7 @@ import {
   startQuickReviewSession,
   updateNote,
   updateNoteVisibility,
+  isNoteGenerationInProgressError,
   type ChallengeQuizPerformanceSummaryResponse,
   type CourseProgramCatalogItem,
   type ConceptHealthEntry,
@@ -1397,6 +1398,10 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
 
   useEffect(() => {
     const shouldAutoEdit = searchParams.get("edit") === "1";
+    // ⚠️ No isGeneratingStudyPack clause here, deliberately: `isDraft` is `!isStudyPackReady`, and a note
+    // cannot be STUDY_PACK_READY and GENERATING at once, so this already declines every generating note.
+    // Adding the explicit check was tried and reverted — it is unreachable, and an unreachable guard
+    // cannot be tested and reads as protection that is not doing anything.
     if (!shouldAutoEdit || autoEditHandledRef.current || !note || isDraft) {
       return;
     }
@@ -1699,6 +1704,13 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
         );
       }
     } catch (err) {
+      // The draft is deliberately left intact on every branch here: nothing below clears
+      // metadataDraft or leaves edit mode, so the user's typing survives a rejected save.
+      if (isNoteGenerationInProgressError(err)) {
+        setToastTone("warning");
+        setToast("This note is being regenerated. Your edits are still here — save again once it finishes.");
+        return;
+      }
       const message = err instanceof Error ? err.message : "Could not update note details.";
       if (message.includes("Subject must be 64 characters or less")) {
         setMetadataSubjectError(message);

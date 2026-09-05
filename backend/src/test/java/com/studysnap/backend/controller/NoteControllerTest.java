@@ -18,6 +18,7 @@ import com.studysnap.backend.dto.PublicLibraryDiscoverySectionsResponse;
 import com.studysnap.backend.dto.PublicNoteListResponse;
 import com.studysnap.backend.dto.PublicNoteLikeResponse;
 import com.studysnap.backend.dto.RecentQuizSessionHistoryResponse;
+import com.studysnap.backend.dto.RegenerateNoteRequest;
 import com.studysnap.backend.dto.SubjectStatsResponse;
 import com.studysnap.backend.dto.UpdateNoteVisibilityRequest;
 import com.studysnap.backend.entity.NoteTargetProfileType;
@@ -25,6 +26,7 @@ import com.studysnap.backend.entity.LearnerLevel;
 import com.studysnap.backend.entity.UserRole;
 import com.studysnap.backend.exception.AppException;
 import com.studysnap.backend.exception.NoteNotFoundException;
+import com.studysnap.backend.exception.UnknownNoteRegenerationScopeException;
 import com.studysnap.backend.dto.CopyOnSignupRequest;
 import com.studysnap.backend.dto.CopyOnSignupResponse;
 import com.studysnap.backend.security.AuthenticatedUser;
@@ -70,6 +72,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.hamcrest.Matchers.nullValue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.never;
@@ -523,6 +526,80 @@ class NoteControllerTest {
         verify(studyPackService).startAsyncGenerationFromNote("note-1", userId, true);
         verify(noteService).getById("note-1", userId);
         assertThat(response).isEqualTo(expected);
+    }
+
+    /**
+     * GUARD 10. POST /notes/{id}/regenerate with STUDY_PACK scope is a TRUE PASSTHROUGH: it makes the same
+     * service call POST /notes/{id}/generate makes, so one Study Pack unit is charged and the
+     * note-generation meter is never involved. An absent body and an absent scope resolve the same way.
+     */
+    @Test
+    void regenerate_studyPackScopeDelegatesToTheExistingGenerationPathUnchanged() {
+        UUID userId = UUID.randomUUID();
+        AuthenticatedUser user = new AuthenticatedUser(userId, UserRole.USER, true, 1);
+        NoteResponse expected = regenerationNoteResponse();
+        when(noteService.getById("note-1", userId)).thenReturn(expected);
+
+        assertThat(noteController.regenerate("note-1", new RegenerateNoteRequest("STUDY_PACK"), user))
+                .isEqualTo(expected);
+        assertThat(noteController.regenerate("note-1", new RegenerateNoteRequest(null), user)).isEqualTo(expected);
+        assertThat(noteController.regenerate("note-1", null, user)).isEqualTo(expected);
+
+        verify(authService, times(3)).requireEmailVerified(userId);
+        verify(studyPackService, times(3)).startAsyncGenerationFromNote("note-1", userId, false);
+        verify(studyPackService, never()).startAsyncNoteAndStudyPackRegeneration(anyString(), any(UUID.class));
+    }
+
+    @Test
+    void regenerate_noteAndStudyPackScopeTakesTheCombinedPath() {
+        UUID userId = UUID.randomUUID();
+        AuthenticatedUser user = new AuthenticatedUser(userId, UserRole.USER, true, 1);
+        NoteResponse expected = regenerationNoteResponse();
+        when(noteService.getById("note-1", userId)).thenReturn(expected);
+
+        assertThat(noteController.regenerate("note-1", new RegenerateNoteRequest("NOTE_AND_STUDY_PACK"), user))
+                .isEqualTo(expected);
+
+        verify(authService).requireEmailVerified(userId);
+        verify(studyPackService).startAsyncNoteAndStudyPackRegeneration("note-1", userId);
+        verify(studyPackService, never()).startAsyncGenerationFromNote(anyString(), any(UUID.class), anyBoolean());
+    }
+
+    @Test
+    void regenerate_rejectsAnUnknownScopeWithoutStartingAnything() {
+        UUID userId = UUID.randomUUID();
+        AuthenticatedUser user = new AuthenticatedUser(userId, UserRole.USER, true, 1);
+
+        assertThatThrownBy(() -> noteController.regenerate("note-1", new RegenerateNoteRequest("EVERYTHING"), user))
+                .isInstanceOf(UnknownNoteRegenerationScopeException.class)
+                .extracting(error -> ((AppException) error).getStatus())
+                .isEqualTo(HttpStatus.BAD_REQUEST);
+
+        verify(studyPackService, never()).startAsyncGenerationFromNote(anyString(), any(UUID.class), anyBoolean());
+        verify(studyPackService, never()).startAsyncNoteAndStudyPackRegeneration(anyString(), any(UUID.class));
+    }
+
+    @Test
+    void regenerate_requiresEmailVerificationBeforeStartingAnything() {
+        UUID userId = UUID.randomUUID();
+        AuthenticatedUser user = new AuthenticatedUser(userId, UserRole.USER, false, 1);
+        AppException verificationError = new AppException(
+                "EMAIL_VERIFICATION_REQUIRED", "Email verification required.", HttpStatus.FORBIDDEN);
+        doThrow(verificationError).when(authService).requireEmailVerified(userId);
+
+        assertThatThrownBy(() ->
+                noteController.regenerate("note-1", new RegenerateNoteRequest("NOTE_AND_STUDY_PACK"), user))
+                .isSameAs(verificationError);
+
+        verify(studyPackService, never()).startAsyncNoteAndStudyPackRegeneration(anyString(), any(UUID.class));
+    }
+
+    private NoteResponse regenerationNoteResponse() {
+        return new NoteResponse(
+                "note-1", "Draft note", "Biology", "Nursing", null, null, List.of("tag"), "content",
+                "PRIVATE", OffsetDateTime.now(), OffsetDateTime.now(), null, null, null, false, null, null,
+                "GENERATING", null, List.of(), List.of(), null, 0, false, false, false
+        );
     }
 
     @Test

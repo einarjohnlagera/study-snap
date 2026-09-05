@@ -335,6 +335,25 @@ public class GeneratedQuizService {
     }
 
     /**
+     * Turns off every live quiz share link for a NOTE, reusing the single deactivation implementation below.
+     *
+     * <p>Called when combined Note + Study Pack regeneration replaces the note's content: the shared quiz
+     * row survives regeneration untouched (nothing in {@code StudyPackService} references it), so without
+     * this a live link keeps serving questions generated from the REPLACED content — the same hazard
+     * {@code v0.110.2} closed on the adjacent quiz-regeneration path.
+     *
+     * <p>A note with no generated quiz, or one whose links are all already inactive, is a clean no-op
+     * rather than an error.
+     */
+    public void deactivateShareLinksForNote(UUID noteId, UUID ownerUserId) {
+        if (noteId == null || ownerUserId == null) {
+            return;
+        }
+        generatedQuizRepository.findByNoteIdAndOwnerUserId(noteId, ownerUserId)
+                .ifPresent(quiz -> deactivateShareLinksFor(quiz.getId(), ownerUserId));
+    }
+
+    /**
      * ⚠️ DEACTIVATES, never deletes. Removing the row would force the owner to create a new link and spend
      * share-link quota because of our fix; leaving it inactive lets them turn it back on knowingly, at which
      * point it serves the new questions as their informed choice.
