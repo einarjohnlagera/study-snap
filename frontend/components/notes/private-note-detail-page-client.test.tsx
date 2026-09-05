@@ -2634,6 +2634,56 @@ describe("PrivateNoteDetailPageClient", () => {
     });
   });
 
+  it("does not offer the metadata suggestion after a regeneration, in either scope", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ planType: "FREE", emailVerifiedAt: "2026-03-21T09:00:00Z" });
+    (getNote as jest.Mock).mockResolvedValue({
+      ...baseNote,
+      studyPackStatus: "STUDY_PACK_READY",
+      studyPackId: "sp-1",
+      quickReviewAvailable: true,
+      challengeQuizAvailable: true,
+    });
+    (regenerateNote as jest.Mock).mockResolvedValue({ ...baseNote, studyPackStatus: "GENERATING", studyPackId: "sp-1" });
+
+    render(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Open note actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Regenerate" }));
+    fireEvent.click(screen.getByRole("radio", { name: /Rewrites the note itself/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Regenerate Note + Study Pack" }));
+
+    await waitFor(() => {
+      expect(regenerateNote).toHaveBeenCalledWith("note-1", "NOTE_AND_STUDY_PACK");
+    });
+    // The suggestion belongs to CREATION. Arming it here would resurface it after a regeneration,
+    // competing with the scope modal's own "Edit Note details" at the wrong end of the decision.
+    expect(window.sessionStorage.getItem("notelib-awaiting-suggestion:note-1")).toBeNull();
+  });
+
+  it("still offers the metadata suggestion for a note that has no Study Pack yet", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ planType: "FREE", emailVerifiedAt: "2026-03-21T09:00:00Z" });
+    (getNote as jest.Mock).mockResolvedValue({
+      ...baseNote,
+      studyPackStatus: "DRAFT",
+      studyPackId: null,
+    });
+    (createStudyPackFromNote as jest.Mock).mockResolvedValue({
+      ...baseNote,
+      studyPackStatus: "GENERATING",
+      studyPackId: null,
+    });
+
+    render(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /Generate Study Pack/i }));
+
+    await waitFor(() => {
+      expect(createStudyPackFromNote).toHaveBeenCalledWith("note-1");
+    });
+    // The discriminating half: without it, "never suggests" would pass by suggesting nowhere at all.
+    expect(window.sessionStorage.getItem("notelib-awaiting-suggestion:note-1")).toBe("1");
+  });
+
   it("resets the scope to Study Pack when the modal is reopened", async () => {
     (getAuthUser as jest.Mock).mockReturnValue({ planType: "FREE", emailVerifiedAt: "2026-03-21T09:00:00Z" });
     (getNote as jest.Mock).mockResolvedValue({

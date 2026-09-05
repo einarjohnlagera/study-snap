@@ -143,9 +143,26 @@ defect:**
   so the chosen scope survives a retry.
 - **Quota is disclosed on the card**: *Uses 1 Study Pack* / *Uses 1 topic note and 1 Study Pack*.
   Until Settings exposes the topic-note meter, this modal is the only place a learner learns it exists.
-- The post-generation metadata suggestion is deliberately **not** armed for a combined run: note
-  metadata is an *input* to that operation, so proposing a rewrite of it immediately afterwards would
-  contradict the modal the learner just confirmed. Study Pack regeneration keeps today's behaviour.
+- **The post-generation metadata suggestion now belongs to CREATION only — no regeneration offers it,
+  in either scope.** Corrected from an earlier, narrower rule in this same release that suppressed it
+  for combined runs but kept it for Study Pack regeneration; owner-ruled 2026-09-05 after trying it.
+  The suggestion earns its place on a first generation, where the learner typed a rough title and the
+  LLM produced a better one that nothing has consumed yet. On a regeneration the metadata is an
+  **input** — the title is the topic we wrote from — and the learner has just reviewed it in the scope
+  modal, which offers *Edit Note details →* at the moment they are actually deciding. Suggesting a
+  rewrite afterwards competes with that surface at the wrong end, and accepting it would not change the
+  output they just received: it would silently change the input for the **next** regeneration.
+  - **⚠️ This REMOVES an existing behaviour**: plain Study Pack regeneration used to show the
+    suggestion. Stated as a change rather than left to be discovered.
+  - **⚠️ The rule is expressed as "the note has no Study Pack yet", not as "this handler is the create
+    path".** `handleGenerate` is reachable with an existing pack — `canTriggerStudyPackGeneration`
+    admits `isStudyPackReady`, and the failed-generation retry lands there — so a handler-scoped rule
+    would have left that hole open. Gating on the pack also gets the retry cases right for free: a
+    failed FIRST generation left no pack and still suggests, while a failed regeneration left the
+    original pack and does not.
+  - **⚠️ Bulk generation is UNCHANGED and is a different mechanism.** It auto-applies generated title
+    and tags server-side while preserving the curator's Subject (`applyBulkGeneratedMetadataToNote`);
+    it never used the suggestion modal, and nothing here touches it.
 
 - **Quiz mastery no longer survives a regeneration of the quiz it was earned on.** Found by the
   release's own cold falsification pass, and it is the defect `v0.74.0` shipped to close, reopened by a

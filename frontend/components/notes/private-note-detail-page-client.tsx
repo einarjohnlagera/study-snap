@@ -868,6 +868,10 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
     const saved = searchParams.get("saved") === "1";
     const generationQueued = searchParams.get("generating") === "1";
     if (generationQueued) {
+      // Always a FIRST generation: this flag is set by the editor's redirect, and the editor cannot
+      // generate for a note that already has a Study Pack -- assertNoteEditable throws NOTE_LOCKED.
+      // The note is not loaded yet here, so the rule cannot be re-checked against it; it holds by
+      // construction at this entry point instead.
       awaitingGeneratedMetadataSuggestionRef.current = true;
       globalThis.sessionStorage?.setItem(`notelib-awaiting-suggestion:${normalizedRouteId}`, "1");
     }
@@ -1341,8 +1345,16 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
 
     setGenerating(true);
     try {
-      awaitingGeneratedMetadataSuggestionRef.current = true;
-      globalThis.sessionStorage?.setItem(`notelib-awaiting-suggestion:${note.id}`, "1");
+      // Only a note that has no Study Pack yet gets the suggestion. Expressed as the RULE rather than
+      // as "this handler is the create path", because this handler is NOT only the create path:
+      // canTriggerStudyPackGeneration admits isStudyPackReady, and the failed-generation retry lands
+      // here too. Gating on the pack makes the rule true at every entry point, now and later -- and it
+      // gets the retry cases right for free: a failed FIRST generation left no pack, so retrying it
+      // still suggests, while a failed regeneration left the original pack, so retrying it does not.
+      if (!note.studyPackId) {
+        awaitingGeneratedMetadataSuggestionRef.current = true;
+        globalThis.sessionStorage?.setItem(`notelib-awaiting-suggestion:${note.id}`, "1");
+      }
       const queued = await createStudyPackFromNote(note.id);
       setNote(queued);
       setToast("Study Pack generation started.");
@@ -1776,14 +1788,13 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
 
     setGenerating(true);
     try {
-      // The post-generation metadata suggestion is deliberately NOT armed for a combined run. Note
-      // metadata is an INPUT to that operation -- it is what we wrote from -- so turning around and
-      // proposing a rewrite of it immediately afterwards contradicts the modal the learner just
-      // confirmed. Study Pack regeneration keeps today's behaviour exactly.
-      if (scope === "STUDY_PACK") {
-        awaitingGeneratedMetadataSuggestionRef.current = true;
-        globalThis.sessionStorage?.setItem(`notelib-awaiting-suggestion:${note.id}`, "1");
-      }
+      // ⚠️ REGENERATION NEVER ARMS THE METADATA SUGGESTION, EITHER SCOPE. The suggestion belongs to
+      // CREATION, where the learner typed a rough title and the LLM produced a better one that nothing
+      // has consumed yet. On a regeneration the metadata is an INPUT -- the title is the topic we wrote
+      // from -- and the learner has just reviewed it in the scope modal, which offers "Edit Note
+      // details" at the moment they are actually deciding. Suggesting a rewrite afterwards competes
+      // with that surface at the wrong end, and accepting it would not change the output they just
+      // got: it would silently change the input for the NEXT regeneration.
       const queued = await regenerateNote(note.id, scope);
       setNote(queued);
       setShowRegenerateConfirm(false);
