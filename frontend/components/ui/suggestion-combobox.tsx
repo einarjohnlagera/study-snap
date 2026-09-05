@@ -294,6 +294,7 @@ export function SuggestionCombobox({
                       className="motion-lift flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-highlight active:bg-highlight-strong"
                       onClick={() => {
                         onChange(option.value);
+                        onOptionSelect?.(option.value);
                         setInputValue(option.label);
                         setOpen(false);
                         setHasTypedSinceOpen(false);
