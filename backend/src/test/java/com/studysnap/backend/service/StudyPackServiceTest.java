@@ -1480,17 +1480,21 @@ class StudyPackServiceTest {
      * ⚠️ PINS THE POST-COMMIT SIDE EFFECTS ON THE COMBINED PATH — the prompt names this the most likely
      * silent defect in the whole change, and it is silent by construction.
      *
-     * <p>{@code initiatePool} is the consequential one: the pack's {@code exam_question_pool} rows were
-     * built from the content this operation REPLACED, and the existing path re-initiates on every
-     * generation. Drop it and a regenerated pack keeps a stale pool with NO refresh trigger, so every
-     * exam start on it falls back to on-demand LLM generation — verbatim the {@code v0.86.0} finding.
-     * It compiles, the suite passes, and nothing surfaces.
+     * <p>⚠️ CORRECTED after a cold falsification pass. An earlier version of this comment claimed
+     * {@code initiatePool} REFRESHES a pool built from the replaced content. IT DOES NOT, and the claim
+     * was wrong in the implementation prompt, here, and in the feature doc:
+     * {@code ExamQuestionPoolService} returns early when a pool row already exists with status
+     * {@code READY}, {@code PENDING} or {@code GENERATING}, and every note on this path already has a
+     * pack, so any pool it has is one of those. What this test actually pins is that the combined path
+     * still performs the SAME post-commit side effects as the existing path — no more, no less. The
+     * stale pool is a REAL, SEPARATE limitation recorded in {@code RELEASES.md}; do not re-derive this
+     * comment into a claim that this call fixes it.
      *
      * <p>The combined path inherits all three by extending the shared async method rather than adding a
      * sibling, which is precisely the shape that drops them. This test pins that inheritance.
      */
     @Test
-    void noteAndStudyPackRegeneration_stillEmitsTheEventAndReInitiatesTheExamPoolAfterCommit() {
+    void noteAndStudyPackRegeneration_performsTheSamePostCommitSideEffectsAsTheExistingPath() {
         UUID ownerUserId = UUID.randomUUID();
         UUID noteId = UUID.randomUUID();
         NoteEntity note = regenerationNote(noteId, ownerUserId, "Shear Force Diagrams");

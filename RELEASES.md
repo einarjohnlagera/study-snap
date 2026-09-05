@@ -147,7 +147,56 @@ defect:**
   metadata is an *input* to that operation, so proposing a rewrite of it immediately afterwards would
   contradict the modal the learner just confirmed. Study Pack regeneration keeps today's behaviour.
 
+- **Quiz mastery no longer survives a regeneration of the quiz it was earned on.** Found by the
+  release's own cold falsification pass, and it is the defect `v0.74.0` shipped to close, reopened by a
+  side door. Mastery is DERIVED, never stored, and regeneration preserves `study_packs.id` by design —
+  so the session that mastered the OLD quiz kept matching the NEW one, because the sizes are equal by
+  construction (the prompt asks for `exactly {QUIZ_COUNT}`). The Quiz tab, which renders with
+  `revealAnswer`, stayed unlocked on questions the learner had never seen, and Quick Review then
+  administered those same questions and wrote `ConceptHealth` from them. **Pre-existing for plain Study
+  Pack regeneration; combined regeneration widened it**, because the answer key then belonged to content
+  the learner never read. `findQuizMasteredAt` now additionally requires the mastering session to be no
+  older than the note's `generation_enqueued_at`.
+  - **⚠️ `notes.generation_enqueued_at` is the discriminator, and `study_packs.updated_at` is NOT.** The
+    clock has exactly two writers, both generation starts. `updated_at` looks equivalent and is not:
+    `updateTags`, `updateMetadata` and share-link creation all bump it without touching the quiz, so
+    using it would silently re-lock the Quiz tab when a learner merely renames or shares a pack.
+  - **⚠️ The rule is null-tolerant, deliberately.** A pack with no note, or a note generated before
+    `V118` added the column, keeps today's behaviour. A strict rule would have revoked mastery for every
+    learner whose note predates the column — a fix shipping as a mass re-lock.
+- **The combined path's status interlock is now pinned.** The falsification pass moved the content write
+  above the interlock, and skipped it for combined runs, with all 236 tests green — its ordering was
+  asserted only in a comment. It matters because `resolveSourceNoteForGeneration` reads status without a
+  lock, so two concurrent regenerations both pass, and the interlock is the only thing preventing a
+  second content overwrite and a second charge on BOTH meters.
+- **A false claim about `initiatePool` was corrected in the prompt, the test and the feature doc.** It
+  does not refresh a pool built from replaced content — `ExamQuestionPoolService` returns early when a
+  pool row already exists as `READY`, `PENDING` or `GENERATING`, which every pack on this path has. The
+  call is still required and still pinned; only the reason attached to it was wrong.
+
 ### Known limitations
+
+**⚠️ Added after the cold falsification pass:**
+
+- **The exam question pool and the Challenge question bank keep serving questions built from replaced
+  content.** `initiatePool` cannot refresh an existing pool (above), `refreshPool` has no caller outside
+  its own service, and `sampleQuestions` refreshes only on a `FAILED` status or a learner-level mismatch
+  — never on content change. `ChallengeQuizQuestionBankService.claimEligibleQuestions` serves stored
+  bank rows and `StudyPackService` references the bank zero times. Same root cause as the mastery defect
+  — three artifacts key on the deliberately-preserved `study_packs.id` — and this is the leg that was
+  **not** fixed here, because invalidation is new behaviour on exam machinery this release did not scope.
+- **A regeneration whose worker dies can block note edits for up to ~130 minutes.** The new 409 rejects
+  `PUT /notes/{id}` while a note is `GENERATING`, and `GenerationRecoveryService` sweeps stale notes only
+  past `note-bound-minutes` (default **120**) on a 10-minute cron. Before this release the learner could
+  still save. The guard is right and the frontend explains it without losing the draft, but nothing
+  shortens that worst case.
+- **The unlocked concurrent-start window is now a two-meter risk.** `resolveSourceNoteForGeneration`
+  reads status without a lock, so two concurrent starts both pass; a losing combined worker would charge
+  **two** meters rather than one, prevented today only by the interlock now pinned above. Pre-existing
+  and named rather than introduced.
+- **A curator sees no overwrite warning on a combined regeneration.** This is plan §17 as ratified, not
+  an oversight — but the exposed case is an ADMIN regenerating a canonical **public** note, which
+  replaces the catalog content and the source every future adopter copies from.
 
 Three audited residuals, deliberately left rather than built for:
 

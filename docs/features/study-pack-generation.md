@@ -353,10 +353,16 @@ no refund path exists because none is needed. `NoteGenerationService.generateFro
 `StudyPackService`'s class-level `@Transactional` proxy does not apply. Making it public, or calling it
 through the proxy, would silently wrap both LLM calls in one transaction (`v0.112.0`).
 
-**⚠️ The post-commit side effects are required, not optional.** `initiatePool` is the consequential one:
-the pack's `exam_question_pool` rows were built from the **replaced** content, and omitting the
-re-initiation would leave a stale pool with no refresh trigger — every exam start on that pack falling
-back to on-demand generation, which is verbatim the `v0.86.0` finding.
+**⚠️ The post-commit side effects are required, not optional** — the combined path must perform exactly
+the same ones as the existing path, which it gets by extending the shared async method rather than adding
+a sibling. A sibling is the shape that drops them.
+
+**⚠️ `initiatePool` does NOT refresh a stale pool, and an earlier version of this document said it did.**
+`ExamQuestionPoolService` returns early when a pool row already exists with status `READY`, `PENDING` or
+`GENERATING`; every note on this path already has a Study Pack, so any pool it has is one of those. After
+a combined regeneration the exam question pool — and the Challenge question bank, which has no
+invalidation path at all — keep serving questions drawn from the replaced content. That is a **named
+Known limitation**, not something this call fixes.
 
 ### Live quiz share links
 
