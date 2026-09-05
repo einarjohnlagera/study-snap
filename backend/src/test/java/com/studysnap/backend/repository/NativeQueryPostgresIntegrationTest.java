@@ -2167,4 +2167,53 @@ class NativeQueryPostgresIntegrationTest {
                 Integer.class, terminal)).isEqualTo(1);
     }
 
+    /** Killing test for removing V134's per-placement non-negative source-position constraint. */
+    @Test
+    void reviewSetPlacementSourcePositionAtSyncRejectsNegativeValues() {
+        UUID userId = seedUser("review-sync-position");
+        UUID noteId = seedPublicNote(userId, "Source position", new String[] {});
+        UUID collectionId = seedCollection(userId, "Adopted Review Set");
+
+        assertThatThrownBy(() -> jdbcTemplate.update(
+                "insert into note_collection_items"
+                        + " (id, collection_id, note_id, position, source_position_at_sync, created_at)"
+                        + " values (?, ?, ?, 0, -1, now())",
+                UUID.randomUUID(), collectionId, noteId
+        )).isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("ck_note_collection_items_source_position_at_sync_non_negative");
+    }
+
+    /** Killing test for adding a source FK or removing the adopted-collection cascade on V134 tombstones. */
+    @Test
+    void reviewSetRemovalTombstoneSurvivesSourceDeletionAndCascadesWithAdoption() {
+        UUID curatorId = seedUser("review-sync-curator");
+        UUID learnerId = seedUser("review-sync-learner");
+        UUID sourceNoteId = seedPublicNote(curatorId, "Removed upstream topic", new String[] {});
+        UUID sourcePlanId = seedCollection(curatorId, "Official Review Set");
+        UUID adoptedPlanId = seedCollection(learnerId, "My Review Set");
+        jdbcTemplate.update(
+                "insert into note_collection_item_removals"
+                        + " (adopted_collection_id, source_plan_id, source_note_id, removed_at)"
+                        + " values (?, ?, ?, now())",
+                adoptedPlanId, sourcePlanId, sourceNoteId
+        );
+
+        jdbcTemplate.update("delete from note_collections where id = ?", sourcePlanId);
+        jdbcTemplate.update("delete from notes where id = ?", sourceNoteId);
+
+        assertThat(jdbcTemplate.queryForObject(
+                "select count(*) from note_collection_item_removals where adopted_collection_id = ?",
+                Integer.class,
+                adoptedPlanId
+        )).isOne();
+
+        jdbcTemplate.update("delete from note_collections where id = ?", adoptedPlanId);
+
+        assertThat(jdbcTemplate.queryForObject(
+                "select count(*) from note_collection_item_removals where adopted_collection_id = ?",
+                Integer.class,
+                adoptedPlanId
+        )).isZero();
+    }
+
 }

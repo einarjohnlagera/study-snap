@@ -35,6 +35,7 @@ import {
 } from "@/lib/collection-exam";
 import {
   addCollectionItems,
+  applyReviewSetSourceUpdate,
   ApiRequestError,
   clearCollectionTargetDate,
   clearCompanion,
@@ -45,6 +46,7 @@ import {
   getMe,
   getNoteConceptCounts,
   getPlanReadiness,
+  getReviewSetSourceUpdate,
   generateCompanion,
   listCoursePrograms,
   listNotes,
@@ -71,6 +73,8 @@ import {
   type NoteListItemResponse,
   type NoteVisibility,
   type PlanReadinessResponse,
+  type ReviewSetUpdateChange,
+  type ReviewSetUpdateResponse,
   generateAdaptivePracticeForCollection,
 } from "@/lib/api";
 import { getStudyPlanSkippedNotice } from "@/app/dashboard/dashboard-study-plan-section";
@@ -95,7 +99,7 @@ import { LEARNER_LEVEL_OPTIONS } from "@/lib/learning-profile";
 
 type LoadState = "loading" | "ready" | "error" | "not-found";
 type ReadinessLoadState = "idle" | "loading" | "ready" | "error";
-type MutationKind = "add" | "delete" | "edit" | "publish" | "remove" | "reorder" | null;
+type MutationKind = "add" | "delete" | "edit" | "publish" | "remove" | "reorder" | "source-update" | null;
 type NextPlanAction = {
   item: NoteCollectionItem;
   actionLabel: "Generate Study Pack" | "Study this note" | "Review due concepts";
@@ -618,6 +622,113 @@ function buildCountdownLine(
   return `${weekLabel} until ${formatLocalDate(targetCompletionDate)} · ${formatConceptCount(conceptsRemaining)} remaining`;
 }
 
+function sourceUpdateChangeText(change: ReviewSetUpdateChange): string {
+  const subject = change.subjectTitle ? ` in ${change.subjectTitle}` : "";
+  const note = change.noteTitle ?? "A topic";
+  switch (change.type) {
+    case "ADDED_NOTE":
+      return `${note}${subject}`;
+    case "ADDED_SUBJECT_PLAN":
+      return change.subjectTitle ?? "A new Subject Plan";
+    case "RENAMED":
+      return `${note}${subject} was renamed upstream`;
+    case "REORDERED":
+      return `${note}${subject} was reordered upstream`;
+    case "RETIRED":
+      return `${note}${subject} was retired upstream`;
+    case "MOVED":
+      return `${note}${subject} moved upstream`;
+    case "SKIPPED_NOT_PUBLIC":
+      return `${note}${subject} is no longer public and will be skipped`;
+  }
+}
+
+function ReviewSetSourceUpdateCard({
+  update,
+  loading,
+  applying,
+  onApply,
+}: Readonly<{
+  update: ReviewSetUpdateResponse | null;
+  loading: boolean;
+  applying: boolean;
+  onApply: () => void;
+}>) {
+  if (loading && !update) {
+    return <Card className="p-4 text-sm text-foreground/65">Checking the Official Review Set for updates…</Card>;
+  }
+  if (!update) {
+    return null;
+  }
+  if (update.sourceState === "DETACHED") {
+    return (
+      <Card className="p-4">
+        <CardTitle className="text-base">Detached from source</CardTitle>
+        <CardDescription className="mt-1">
+          This Review Set is still yours to use. Its original Official Review Set is no longer available, so updates are not offered.
+        </CardDescription>
+      </Card>
+    );
+  }
+
+  const additions = update.changes.filter((change) =>
+    change.type === "ADDED_NOTE" || change.type === "ADDED_SUBJECT_PLAN",
+  );
+  const upstreamOnly = update.changes.filter((change) =>
+    change.type !== "ADDED_NOTE" && change.type !== "ADDED_SUBJECT_PLAN",
+  );
+  const appliedSummary = update.notesAdded > 0 || update.subjectPlansAdded > 0
+    ? `${update.notesAdded} ${update.notesAdded === 1 ? "topic" : "topics"}${update.subjectPlansAdded > 0 ? ` and ${update.subjectPlansAdded} Subject ${update.subjectPlansAdded === 1 ? "Plan" : "Plans"}` : ""} added. Your existing work was kept.`
+    : null;
+
+  return (
+    <Card className="space-y-4 p-4" data-testid="review-set-source-update">
+      <div>
+        <CardTitle className="text-base">
+          {update.additionsAvailable > 0 ? "Official Review Set updates available" : "Official Review Set is up to date"}
+        </CardTitle>
+        <CardDescription className="mt-1">
+          {appliedSummary ?? (update.additionsAvailable > 0
+            ? "Choose whether to add new upstream topics. Your notes, sections, order, and study history stay unchanged."
+            : "There are no new upstream topics to add.")}
+        </CardDescription>
+      </div>
+
+      {additions.length > 0 ? (
+        <div>
+          <p className="text-sm font-medium">{additions.some((change) => change.applied) ? "Added" : "Would be added"}</p>
+          <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-foreground/75">
+            {additions.map((change) => (
+              <li key={`${change.type}:${change.sourcePlanId}:${change.sourceNoteId ?? "subject"}`}>
+                {sourceUpdateChangeText(change)}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      {upstreamOnly.length > 0 ? (
+        <div>
+          <p className="text-sm font-medium">Changed upstream — no action taken</p>
+          <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-foreground/75">
+            {upstreamOnly.map((change) => (
+              <li key={`${change.type}:${change.sourcePlanId}:${change.sourceNoteId ?? "subject"}`}>
+                {sourceUpdateChangeText(change)}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      {update.additionsAvailable > 0 ? (
+        <Button type="button" size="sm" disabled={applying} onClick={onApply}>
+          {applying ? "Applying updates…" : "Apply additions"}
+        </Button>
+      ) : null}
+    </Card>
+  );
+}
+
 function TodaysFocusCard({
   action,
   terminalAction,
@@ -1088,7 +1199,12 @@ function MentorTipsGuideSection({
 function CompanionDisplayCard({
   companion,
   labels,
-}: Readonly<{ companion: CompanionContent | null; labels: ReturnType<typeof getCollectionLabels> }>) {
+  mayBeOutdated = false,
+}: Readonly<{
+  companion: CompanionContent | null;
+  labels: ReturnType<typeof getCollectionLabels>;
+  mayBeOutdated?: boolean;
+}>) {
   // Collapsed by default, regardless of viewport — unlike the note-list sections above, which
   // default to expanded on large screens. The authored Companion is reference material now (see
   // docs/product/ROADMAP.md's "Coach vs. Companion" refinement): the live-signal cluster is what a
@@ -1112,12 +1228,24 @@ function CompanionDisplayCard({
     .filter((item) => item.question || item.answer);
   const collapsedTeaser = stripMarkdownForPreview(overview || studyStrategy || commonMistakes);
 
+  // A learner cannot regenerate a Companion -- every write path is ADMIN-only -- so this is
+  // deliberately informational and offers no action. Saying nothing would be worse: the guide was
+  // written for an earlier shape of this plan, and a learner who does not know that over-trusts it.
+  const outdatedNotice = mayBeOutdated ? (
+    <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
+      This {labels.companionSingular.toLowerCase()} was written for an earlier version of this{" "}
+      {labels.singular.toLowerCase()}, which has changed since. Some guidance may no longer match what
+      is here now.
+    </p>
+  ) : null;
+
   return (
     <Card className="space-y-4 p-4 sm:p-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="space-y-2">
           <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">{labels.companionSingular}</p>
           <h2 className="text-lg font-semibold tracking-tight">Learning {labels.companionSingular}</h2>
+          {outdatedNotice}
         </div>
         <button
           type="button"
@@ -2641,6 +2769,8 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
   const [loadError, setLoadError] = useState<string | null>(null);
   const [mutationError, setMutationError] = useState<string | null>(null);
   const [mutationKind, setMutationKind] = useState<MutationKind>(null);
+  const [sourceUpdate, setSourceUpdate] = useState<ReviewSetUpdateResponse | null>(null);
+  const [sourceUpdateLoading, setSourceUpdateLoading] = useState(false);
   const [actionToast, setActionToast] = useState<string | null>(null);
   const actionToastTimerRef = useRef<ReturnType<typeof globalThis.setTimeout> | null>(null);
 
@@ -2758,6 +2888,35 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
   useEffect(() => {
     setJustAdopted(getJustAdoptedNotice(collectionId));
   }, [collectionId]);
+
+  useEffect(() => {
+    if (!collection?.sourcePlanId) {
+      setSourceUpdate(null);
+      setSourceUpdateLoading(false);
+      return;
+    }
+    let mounted = true;
+    setSourceUpdateLoading(true);
+    void getReviewSetSourceUpdate(collectionId)
+      .then((result) => {
+        if (mounted) {
+          setSourceUpdate(result);
+        }
+      })
+      .catch(() => {
+        if (mounted) {
+          setSourceUpdate(null);
+        }
+      })
+      .finally(() => {
+        if (mounted) {
+          setSourceUpdateLoading(false);
+        }
+      });
+    return () => {
+      mounted = false;
+    };
+  }, [collection?.sourcePlanId, collectionId]);
 
   useEffect(() => {
     let mounted = true;
@@ -2940,6 +3099,23 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
     } catch (error) {
       await refetchAfterFailure(error instanceof Error ? error.message : "Could not add notes.");
       throw error;
+    } finally {
+      setMutationKind(null);
+    }
+  };
+
+  const handleSourceUpdate = async () => {
+    setMutationKind("source-update");
+    setMutationError(null);
+    try {
+      const result = await applyReviewSetSourceUpdate(collectionId);
+      setSourceUpdate(result);
+      await loadCollection();
+      if (result.notesAdded > 0 || result.subjectPlansAdded > 0) {
+        showActionToast("Review Set additions applied. Your existing work was kept.");
+      }
+    } catch (error) {
+      setMutationError(error instanceof Error ? error.message : "Could not update this Review Set.");
     } finally {
       setMutationKind(null);
     }
@@ -3385,6 +3561,15 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
           )}
         />
 
+        {collection.sourcePlanId ? (
+          <ReviewSetSourceUpdateCard
+            update={sourceUpdate}
+            loading={sourceUpdateLoading}
+            applying={mutationKind === "source-update"}
+            onApply={() => void handleSourceUpdate()}
+          />
+        ) : null}
+
         <section aria-label="Plan focus and readiness" data-testid="goal-focus-readiness-stack" className="space-y-3">
           <TodaysFocusCard
             action={primaryStudyAction}
@@ -3423,7 +3608,11 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
         </section>
         {hasRenderableCompanionContent(collection.companion) ? (
           <section aria-label="Companion guidance" data-testid="goal-companion-guidance-stack" className="space-y-3">
-            <CompanionDisplayCard companion={collection.companion} labels={labels} />
+            <CompanionDisplayCard
+              companion={collection.companion}
+              labels={labels}
+              mayBeOutdated={goalDetail?.companionMayBeOutdated ?? false}
+            />
             <AskCompanionPanel
               collectionId={collectionId}
               currentPlan={currentPlan}
@@ -3560,6 +3749,15 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
         )}
       />
 
+      {collection.sourcePlanId ? (
+        <ReviewSetSourceUpdateCard
+          update={sourceUpdate}
+          loading={sourceUpdateLoading}
+          applying={mutationKind === "source-update"}
+          onApply={() => void handleSourceUpdate()}
+        />
+      ) : null}
+
       {/* ⚠️ planPracticeAction was passed to the GOAL view only when it shipped in v0.107.0, so a
           leaf Subject Plan -- a plan with no children -- had no plan-scoped practice CTA at all.
           This is the SAME action, on the view it was omitted from; it is not a second entry point. */}
@@ -3614,7 +3812,11 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
         footer={<ReadinessCardFooter collectionId={collectionId} />}
       />
 
-      <CompanionDisplayCard companion={collection.companion} labels={labels} />
+      <CompanionDisplayCard
+        companion={collection.companion}
+        labels={labels}
+        mayBeOutdated={goalDetail?.companionMayBeOutdated ?? false}
+      />
       {hasRenderableCompanionContent(collection.companion) ? (
         <AskCompanionPanel
           collectionId={collectionId}

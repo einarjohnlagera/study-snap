@@ -1,5 +1,276 @@
 # RELEASES.md - NoteLib
 
+## v0.116.0 - Additive Review Set Updates
+
+**Status: Released** (kicked off and signed off 2026-09-05, base branch `releases/v0.116.0`, cut from
+`main` after `v0.115.0` merged and deployed)
+
+Theme: an Official Review Set you adopted can gain the topics its curator has added since, without ever
+overwriting the work you have done in it.
+
+### Planned Scope
+
+**⚠️ THIS IS SLICE 2 OF THE COMPREHENSIVE REVIEW SET OVERHAUL, AND IT RUNS NOW BECAUSE SLICE 1 HAS
+DEPLOYED — THE ORDER WAS A CORRECTNESS CONSTRAINT, NOT A PREFERENCE.** Measured 2026-09-05: **100% of
+adopted placements' source notes carry program join rows against 11.8% of existing learner copies**, and
+Slice 2 mints learner notes **through `copyNote`** — so running it before Slice 1 would have grown the
+mis-shelving population **~8x in a single batch.** Slice 1 shipped as `v0.115.0` and is live. Full
+architecture: `docs/claude-plans/v0.115.0-stage1-master-architecture-reconciliation.md` §8.
+
+**⚠️ THIS IS LIVE PRODUCT DEBT, NOT A SPECULATIVE FEATURE — the numbers are measured, not projected.**
+**92 learners · 523 adopted collections · 4,374 placements.** **364 source placements and 68 whole
+Subject Plans are ALREADY STRANDED — 100% from post-adoption upstream growth, 0% from learner removal —
+and 10 no-op re-adopt attempts by 4 distinct users show learners are already asking and silently getting
+nothing.** `adopt()` bails before `copySourceItems` runs, so re-adoption is a hard no-op.
+
+1. **An adopted plan can take upstream ADDITIONS.** New notes, new Subject Plans and new placements
+   apply. **⚠️ NOTHING ELSE DOES:** rename, reorder, retire and move are **SURFACE-ONLY** — shown to the
+   learner, never applied. **The reason is a capability limit, not caution: until source-at-sync
+   provenance exists the system CANNOT DISTINGUISH learner customization from upstream change**, so
+   applying a structural mutation would overwrite learner work it cannot see.
+2. **Update provenance — five facts captured per placement at last sync.** Source Subject Plan identity
+   and source note identity already exist (`sourcePlanId`, `copied_from_note_id`). **NEW: source
+   section/label at sync, source position at sync, last-sync timestamp, and a learner-removal
+   tombstone.** **⚠️ Section and position are the genuinely UNRECONSTRUCTABLE facts** — both are mutable
+   upstream, so nothing can recover them after the fact. **⚠️ IF THESE LIVE IN ONE JSON SNAPSHOT ITS
+   SCHEMA IS DEFINED BEFORE IMPLEMENTATION, NOT DISCOVERED DURING IT.**
+3. **`Detached from source` becomes a real resolver state, not an error path.** Two adoptions already
+   point at source collections that no longer exist. The plan stays fully usable, no update is offered,
+   **no source relationship is fabricated**, and there is no repeated failure loop.
+4. **The learner is told when their adopted plan has drifted.** `companionMayBeOutdated:1193` returns
+   `false` for every non-`ADMIN` caller, so a learner never sees the staleness signal that already
+   exists. **⚠️ FOLDED IN AS COHERENCE, NOT CREEP: it is the same "surface the change, never apply it"
+   contract item 1 defines**, and fixing it anywhere else would build a second staleness surface beside
+   this one.
+
+### Anti-drift
+
+- **⚠️ ADDITIVE ONLY. An update MUST NOT replace** a learner note body, a learner Study Pack, a learner
+  edit, `ConceptHealth`, quiz or session history, or a learner-authored addition. **The learner note
+  stays independent; the PLAN source relationship persists. These two provenance semantics are separate
+  and must not be merged into one framework.**
+- **⚠️ THE INVARIANT IS "LEARNER STUDY HISTORY IS PRESERVED", NOT "the numerator never shrinks"** — that
+  broader phrasing was WITHDRAWN at the Stage 1 tightening because current-curriculum counts may
+  legitimately change when a topic is retired.
+- **⚠️ NO SYNCHRONIZATION ENGINE, NO EVENT SOURCING, NO CURRICULUM REVISION NUMBERS.** Snapshot plus
+  timestamp suffices; the Stage 1 audit rejected all three by name.
+- **⚠️ THE TOMBSTONE SHIPS WITH AN EMPTY BACKFILL AND THAT IS NOT A REASON TO OMIT IT.** Production shows
+  **zero** learner removals in the stale population — but if a learner intentionally removes an upstream
+  topic, a later update must not re-add it. Prospective by construction.
+- **⚠️ IDEMPOTENCE IS SETTLED AT THE STORAGE LAYER AND UNPROVEN AT THE APPLICATION LAYER, AND THE
+  DISTINCTION IS THE WHOLE RISK.** `note_collection_items` carries `UNIQUE (collection_id, note_id)`, so
+  durable placement identity IS `(source Subject Plan, source Note)` — **no new column, no title
+  matching.** But `persistAdoptedPlan:1460` returns `alreadyAdoptedResponse` and **never re-reaches the
+  insert**, so re-adopt short-circuits and proves nothing: **the update path does not exist yet, so its
+  idempotence is a property of code not yet written and must be DESIGNED IN, not discovered.** A repeated
+  -application regression test is owed before signoff.
+- **⚠️ SLICE 1 IS NOT RE-OPENED.** The publish-transition clearing, its curator exclusion and the
+  companion resolver fix are settled and shipped.
+- **⚠️ Slices 0A/0B (Domain Context classification) are OWNER-EXECUTED curator work, are NOT in this
+  release, and must NOT gate it.**
+- **⚠️ NO quota, entitlement, limit or meter change; no `ProfileType` gate; no new mode or sub-mode;
+  `NoteVisibility` stays `PRIVATE | PUBLIC`.**
+- **⚠️ `frontend/app/onboarding` STAYS FROZEN until 2026-09-11** — six days out, protecting the 62.4%
+  onboarding-completion baseline. This release does not approach it.
+- **⚠️ Do NOT change what `BOARD_EXAM_STARTED`, `ADAPTIVE_PRACTICE_STARTED` or `QUIZ_SHARE_LINK_CREATED`
+  record.**
+
+### Verification
+
+**FULL THREE-AGENT COLD PRESSURE TEST IN ISOLATED `git worktree`s, DECLARED NOT INHERITED.** Pre-declared
+at §446 of the Stage 1 architecture doc and re-confirmed here: a **migration** plus **production-data
+semantics across 92 learners and 4,374 placements** fires the gate's named triggers twice over.
+**⚠️ THE ISOLATION IS NOT OPTIONAL** — `v0.105.0` lost an agent's entire result set to shared-tree
+corruption. **⚠️ ONE AGENT MUST BE POINTED AT THE BLIND SPOT, NOT THE FEATURE.**
+
+**⚠️ PRE-DECLARED DISCRIMINATING GUARD, aimed at what this release could silently destroy rather than at
+what it adds: applying an update TWICE must add nothing the second time, AND must not disturb a learner's
+own reordering, renaming or removal.** A fixture that applies once and asserts the new placements arrived
+**passes under a non-idempotent implementation and proves nothing.**
+
+**⚠️ A SECOND GUARD IS OWED AT THE OWNERSHIP SEAM: a learner note that has been EDITED, and its
+`ConceptHealth` and session history, must be BYTE-IDENTICAL after an update pass.** A fixture using an
+untouched adopted note passes under an implementation that overwrites learner work.
+
+**⚠️ A THIRD GUARD IS OWED AT THE DETACHED STATE: an adoption whose source collection no longer exists
+must resolve, stay usable, and offer no update** — two such adoptions exist in production today, so the
+subject is REACHABLE rather than hypothetical.
+
+**⚠️ CARRIED LESSON FROM `v0.115.0`, AND IT IS THE SHARPEST ONE THIS ARC HAS PRODUCED: a bare
+`role == ADMIN` substitution for `CuratorAuthoringPredicate.isCurator` SURVIVED ALL 99 TESTS in
+`NoteServiceTest`** while it would have stripped authored applicability off every TEACHER-owned curated
+note — because the ADMIN fixture and the learner fixture between them satisfied both guards **without
+exercising the TEACHER leg**. **Item 4 touches that same predicate class. Pin BOTH legs.**
+
+**⚠️ DEPLOY-SPLIT CAVEAT, RECORDED BEFORE THE READ RATHER THAN DISCOVERED IN SEPTEMBER:
+`[CHECKPOINT — due 2026-09-18]` reads Render `http_request_count` by `statusCode` to decide whether
+`connection-timeout: 5000` converts load into user-visible errors. This release adds new request paths
+and a migration. If it deploys before 2026-09-18, that read is confounded and must say so.**
+
+**Routing: CODEX** — a migration, a new update path, a resolver state, and frontend.
+
+### Shipped
+
+- Added `V134` typed source-at-sync provenance for adopted collections and placements, plus a
+  source-FK-free composite removal tombstone that survives upstream deletion and has an intentionally
+  empty backfill.
+- Added inspect/apply source-update endpoints. They append public note, placement and Subject Plan
+  additions with per-item failure isolation and graceful concurrent no-ops; rename, reorder, retire and
+  move are reported without changing learner state.
+- Added first-class `Detached from source`, explicit already-up-to-date and partial-update responses,
+  including skipped reporting when a source note is no longer public.
+- Added the learner-facing update card with an explicit Apply additions action and ordinary detached
+  presentation; page load only previews the update.
+- Extended Companion staleness visibility to adopted learner plans while preserving both ADMIN and
+  TEACHER curator access through `CuratorAuthoringPredicate`.
+
+**Post-delivery audit (2026-09-05) — Codex stopped at its usage limit; the following was found and closed
+by the auditing session.**
+
+- **⚠️ THE DELIVERED TREE DID NOT BUILD: 11 ERRORS, ONE ROOT CAUSE — THE H2 FIXTURES.** The entities
+  gained the `source_*_at_sync` columns and `V134` adds them to PostgreSQL, but the H2 schemas are
+  **inline DDL hand-maintained inside three test classes** (`NoteCollectionRepositoryTest`,
+  `NoteCollectionItemRepositoryTest`, `NoteCollectionServiceProjectionIntegrationTest`), so every
+  Hibernate `SELECT` over `note_collections` failed with `Column "SOURCE_PARENT_ID_AT_SYNC" not found`.
+  **⚠️ THIS IS THE EXACT FIXTURE-DRIFT CLASS `v0.113.1` ITEM 4 EXISTS FOR, RECURRING ONE RELEASE LATER
+  ON A NEW TABLE** — the fixtures mirror a migration's shape and nothing makes them do so. Columns added
+  to all three; the 12 affected tests pass.
+- **⚠️ A MUTANT SURVIVED THE DELIVERED SUITE, AND IT WAS A SPECIFIED ERROR STATE WITH NO TEST.** Deleting
+  the `existing.isPresent()` early return from the apply path left **all 164 tests green**: the normal
+  flow never reaches that branch, because the diff has already excluded every placement the learner
+  holds, so the guard is pure defence-in-depth against a race that nothing exercised. Without it a
+  concurrent double-apply turns a no-op into a `DataIntegrityViolationException` on
+  `UNIQUE (collection_id, note_id)`. Closed by
+  `sourceUpdate_concurrentApplyLandingFirstMakesTheSecondPassANoOpRatherThanADuplicateInsert`, whose
+  fixture makes the branch reachable the only way production can — the diff computes the placement as
+  MISSING and a concurrent pass lands it first. **A fixture where the placement is absent at both points
+  passes under the defect.** Mutant re-applied and killed by that named test.
+- **⚠️ THE SHARPEST PRE-DECLARED TRAP WAS HANDLED CORRECTLY, AND THIS WAS VERIFIED BY MUTATION RATHER
+  THAN BY READING.** Because `copySourceItems` skips non-public notes and `buildAdoptedItems` renumbers
+  from zero over the survivors, an adopted plan's positions **already diverge from its source's at
+  adoption time**. Drift is computed source-at-sync vs source-now, never source vs learner. Swapping the
+  baseline to the learner's own position was killed by
+  `sourceUpdate_nonPublicSourceGapDoesNotReportLearnerReorder`.
+- **⚠️ THE `v0.115.0` CARRIED LESSON HELD.** A bare `role == ADMIN` substitution for
+  `CuratorAuthoringPredicate.isCurator` — the mutation that survived all 99 tests last release — is now
+  killed by `getGoal_returnsCompanionOutdatedTrueForTeacherCuratorWhenStructureChanged`. ADMIN legs were
+  already covered by pre-existing tests, so all three are pinned.
+- **⚠️ THE BINDING ANTI-DRIFT HELD, CHECKED BY ENUMERATION RATHER THAN BY TRUST:** the entire 806-line
+  service diff contains **exactly three deleted lines**, all required (the `role != ADMIN` check and the
+  two-arg `CopiedPlanItem`). **`adopt()`, its fast idempotency path and its
+  `DataIntegrityViolationException` race recovery are untouched.**
+- **Every column `V134` references was verified to exist** — `note_collections.sibling_position`
+  (`V84:2`), `notes.source_note_id` (`V19:39`), and `title VARCHAR(150)` matching
+  `source_title_at_sync` (`V72:4`). The backfill's
+  `COALESCE(copied_from_note_id, source_note_id)` correctly covers the owner-self-copy case, where
+  `copyNote`'s idempotency guard does not apply because it sits inside `if (!isOwner)`.
+- **⚠️ A SECOND SPECIFIED ERROR STATE SHIPPED UNTESTED, FOUND BY THE SCOPE-COMPLETENESS GATE RATHER THAN
+  BY THE DIFF REVIEW.** `PARTIALLY_UPDATED` is emitted whenever `skipped > 0`, and the per-item
+  `catch (RuntimeException)` blocks that produce it — the failure isolation that makes a pass survive one
+  bad copy instead of aborting — had **zero coverage**. Closed by
+  `sourceUpdate_oneFailedCopyIsIsolatedAndTheFailedItemStillAppliesOnARerun`. **⚠️ Its second pass is the
+  half that matters and is the easy one to omit: the contract is that a pass is RESUMABLE, so a fixture
+  asserting only "one succeeded, one skipped" passes under an implementation that has corrupted the
+  baseline and can never add the failed item at all.**
+- **⚠️ TWO OF THE SIX SPECIFIED ERROR STATES SHIPPED WITH NO TEST, AND BOTH WERE IN THE SAME BLIND SPOT —
+  the branches the happy path cannot reach.** Recorded as a process finding, not just two fixes: a
+  delivered suite can be large, well-named and genuinely discriminating on the FEATURE while leaving
+  every defensive branch unexercised.
+- **Mutants applied: 5. Killed: 5** (two only after the guards above were written), each by a named test.
+- **Verification: `./mvnw clean install` → BUILD SUCCESS, 2133 tests, 0 failures**, counted from
+  `target/surefire-reports/*.xml` after a clean. **`npm test` → 2147 tests, 198 suites, all pass.**
+  **`tsc --noEmit` clean.**
+
+**Three-agent cold pressure test (2026-09-05) — isolated `git worktree`s, no inherited context.**
+**⚠️ IT FOUND TWO BLOCKING DEFECTS THE IMPLEMENTATION AUDIT MISSED, AND ALL THREE AGENTS CONVERGED
+INDEPENDENTLY ON THE SAME LINE.**
+
+- **⚠️ BLOCKING, FIXED — a curator restructure duplicated the learner's entire Review Set.**
+  `inspectSourceUpdate` chose which of the **LEARNER's** plans to examine from the **SOURCE's** current
+  shape (`sourceChildren.isEmpty() ? List.of(adoptedRoot) : adoptedChildren`). When the shapes disagreed
+  the learner's own placements were invisible to the diff, every source item looked new, and `copyNote`
+  returned the copy they already held — which then inserted into a **different** collection, where
+  `UNIQUE (collection_id, note_id)` cannot catch it. **⚠️ NOT HYPOTHETICAL: four learners adopted the
+  CPALE plan on 2026-06-27→07-01 while it was FLAT (19 direct notes, 0 children), and the curator added
+  its seven child Subject Plans on 2026-07-01, AFTER every one of those adoptions.** One Apply would
+  have re-placed all 19 notes and nested seven children under a root still holding direct notes — a
+  shape `addItems:1135` and `validateParentCanAcceptChild:1501` both forbid, that **no database
+  constraint enforces**, and that the collection page cannot render: `isGoalView` switches to the goal
+  branch, which has no direct-items list, so **the learner's own notes would have vanished from the
+  page.** Fixed in two parts: the adopted structure is now read from the LEARNER, always; and a source
+  restructure is reported as `MOVED` rather than applied. **⚠️ THE RELEASE'S OWN TEST WAS THE SAME
+  SCENARIO WITH THE ADOPTED ROOT'S ITEM LIST STUBBED TO `List.of()` — that empty stub was the only thing
+  hiding it**, so the new guard's fixture is deliberately NON-EMPTY. Both halves independently
+  mutation-verified.
+- **⚠️ BLOCKING, FIXED — an NPE on a page-load path, silent by construction.** `addCollectionDrift`
+  guarded on `getSourceSyncedAt() != null` then dereferenced a **different** nullable field, so
+  `Objects.equals(null, non-null)` returned false, entered the branch and NPE'd. **`V134` armed the
+  shape on 92 rows on day one** — it stamps `source_synced_at` on every adoption while
+  `sibling_position` is NULL on every top-level source collection. The frontend calls this on **every
+  page load** and swallows it in a `.catch`, so the learner would have seen no card, no error and no
+  Apply button, with only a 500 in the logs. The source side WAS null-checked and the item-level
+  equivalent at `:1985` guards correctly — that asymmetry is what marks it a slip.
+- **⚠️ SCOPE ITEM 4 HAD DELIVERED NOTHING, AND THE PROOF WAS A FIXTURE THAT CANNOT OCCUR — NOW BUILT
+  PROPERLY.** Widening the curator predicate was observably a no-op: adoption copies `companion` but
+  never the structure snapshot, the snapshot's only other writer is `setCompanion` behind `assertAdmin`,
+  and `companionMayBeOutdated` returns `false` at its FIRST guard on a null snapshot. **Production: 523
+  adopted collections, 82 with a copied Companion, ZERO with a snapshot.** **⚠️ THE TESTS THAT "PROVED"
+  IT EACH CALLED `setCompanionStructureSnapshot(...)` BY HAND, SO A MUTANT DIED AGAINST AN UNREACHABLE
+  STATE — this repo's own "a negative assertion needs a REACHABLE subject" lesson, walked into while
+  citing it.** Adoption now stamps a baseline computed from the **learner's own** structure (never the
+  curator's, whose ids could never match — `docs/features/companion.md:154` already argued that
+  correctly; what was missing is that nothing COMPUTED a fresh one), and the flag renders for learners
+  as a **read-only notice**. **⚠️ Informational by owner decision (2026-09-05): a learner cannot
+  regenerate a Companion — every write path is `assertAdmin` — so the notice offers no action rather
+  than a dead-end button.** Three assertions pinning the old null-snapshot behaviour were **rewritten,
+  never deleted.**
+- **⚠️ FIXED — an Apply permanently erased the surface-only signals it was designed to preserve.**
+  `acknowledgeSourceSnapshots` re-baselined the root and **every** matched plan and placement on any
+  non-detached apply, including one that added nothing. A learner who saw *"renamed upstream"* beside
+  three new notes and pressed Apply silently acknowledged the rename, which was never applied and never
+  shown again — and the pre-sync value was overwritten, so it was unrecoverable. It now acknowledges
+  **only plans that actually received an addition.** Mockito's strict stubbing now enforces that a pass
+  applying nothing writes nothing.
+- **Four doc surfaces were false and none were in the diff** — the repo's named recurring failure.
+  Corrected: `docs/features/companion.md` (the file explaining the exact behaviour item 4 changed),
+  `docs/features/public-notes.md`, and two claims in `docs/gpt-contexts/NOTES_AND_COLLECTIONS_CONTEXT.md`
+  — **including *"re-adoption is a hard no-op"* and *"no code path anywhere adds a source note to an
+  existing adoption"*, which this session itself wrote at the `v0.115.0` signoff.**
+- **Verification: `./mvnw clean install` → BUILD SUCCESS, 2136 tests, 0 failures**; `npm test` → 2147
+  tests, 198 suites; `tsc --noEmit` clean. **Mutants applied across the release: 8. Killed: 8**, each by
+  a named test.
+
+**Known limitations**
+
+- **The learner-removal tombstone is enforced on ONE of three removal paths.** `removeItem` writes one;
+  deleting an adopted Subject Plan outright and deleting the copied note itself do not, so an upstream
+  re-add would return in both cases. **Prospective, and measured: of 1,204 missing placements across all
+  adoptions, 1,204 post-date their adoption and ZERO predate it — no learner has removed anything yet.**
+- **⚠️ An apply holds ONE pooled connection for the whole request**, read from this repo's own
+  instrumentation rather than from framework defaults (`DELAYED_ACQUISITION_AND_HOLD`, open-in-view ON).
+  Largest single apply available today is 43 notes; 1,204 `copyNote` calls if every learner applied, against
+  `maximum-pool-size: 20`. **`inspectSourceUpdate` is also N+1 by plan and runs on EVERY page load of all
+  523 adopted collections.** No LLM call is involved (verified: `copySourceStudyPack` copies stored
+  fields). **This is a new long-holding request path added one release after the pool-exhaustion outage,
+  and `[CHECKPOINT — due 2026-09-18]`'s deploy-split caveat should name it.**
+- **The `V134` backfill is unexercised** — both PostgreSQL tests run Flyway against an empty container,
+  so the half of the migration that touches production data has no test, and no H2 fixture creates
+  `note_collection_item_removals`.
+- **An apply fires no analytics of its own**, so `NOTE_ADDED_TO_COLLECTION` never fires for
+  update-added placements, while `copyNote` emits up to 74 `PUBLIC_NOTE_COPIED` per press. No dated
+  checkpoint reads either event today, so this is measurement hygiene rather than a confound.
+- **A hard-deleted source note silently ends the update relationship for that placement, and the two
+  halves cancel rather than duplicating.** `deleteById:478` has **no visibility guard**, so a curator can
+  hard-delete a public source note; `notes.copied_from_note_id` is `ON DELETE SET NULL` (`V21:36`) so the
+  learner's copy loses its provenance link, while `note_collection_items.note_id` is `ON DELETE CASCADE`
+  (`V72:16`) so the source placement disappears too. The diff therefore never sees it as missing and **no
+  duplicate is created.** **⚠️ The residual is delete-then-recreate:** a curator who deletes a note and
+  re-adds equivalent content under a NEW note id produces a second copy beside the learner's orphan.
+  Stated rather than discovered later; it needs no migration to fix and no evidence says it has happened.
+- **The remaining Slice 2 surface is unstarted:** structural updates (Slices 4–5) and the Companion
+  remain deferred, and rename/reorder/retire/move stay surface-only until source-at-sync provenance has
+  production history behind it.
+
 ## v0.115.0 - Learner Publication Authority
 
 **Status: Released** (kicked off and signed off 2026-09-05, base branch `releases/v0.115.0`, cut from

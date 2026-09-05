@@ -22,6 +22,7 @@ import com.studysnap.backend.dto.NoteCollectionSummaryResponse;
 import com.studysnap.backend.dto.NoteConceptCountsResponse;
 import com.studysnap.backend.dto.NoteResponse;
 import com.studysnap.backend.dto.PlanReadinessResponse;
+import com.studysnap.backend.dto.ReviewSetUpdateResponse;
 import com.studysnap.backend.dto.SetNoteCollectionChildrenOrderRequest;
 import com.studysnap.backend.dto.SetNoteCollectionParentRequest;
 import com.studysnap.backend.dto.SetNoteCollectionOrderRequest;
@@ -34,10 +35,12 @@ import com.studysnap.backend.entity.GeneratedQuizEntity;
 import com.studysnap.backend.entity.QuickReviewSessionStatus;
 import com.studysnap.backend.entity.NoteCollectionEntity;
 import com.studysnap.backend.entity.NoteCollectionItemEntity;
+import com.studysnap.backend.entity.NoteCollectionItemRemovalEntity;
 import com.studysnap.backend.entity.NoteEntity;
 import com.studysnap.backend.entity.NoteStatus;
 import com.studysnap.backend.entity.NoteTargetProfileType;
 import com.studysnap.backend.entity.NoteVisibility;
+import com.studysnap.backend.entity.ProfileType;
 import com.studysnap.backend.entity.StudyPackEntity;
 import com.studysnap.backend.entity.StudyPackStatus;
 import com.studysnap.backend.entity.UserEntity;
@@ -54,6 +57,7 @@ import com.studysnap.backend.repository.NoteCollectionChildCountProjection;
 import com.studysnap.backend.repository.NoteCollectionItemCountProjection;
 import com.studysnap.backend.repository.NoteCollectionItemNoteProjection;
 import com.studysnap.backend.repository.NoteCollectionItemRepository;
+import com.studysnap.backend.repository.NoteCollectionItemRemovalRepository;
 import com.studysnap.backend.repository.NoteCollectionRepository;
 import com.studysnap.backend.repository.QuickReviewSessionRepository;
 import com.studysnap.backend.repository.NoteCollectionNoteProjection;
@@ -77,6 +81,8 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.Collection;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -92,6 +98,7 @@ import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -135,6 +142,9 @@ class NoteCollectionServiceTest {
     private NoteCollectionItemRepository itemRepository;
 
     @Mock
+    private NoteCollectionItemRemovalRepository itemRemovalRepository;
+
+    @Mock
     private NoteRepository noteRepository;
 
     @Mock
@@ -176,6 +186,7 @@ class NoteCollectionServiceTest {
                 collectionRepository,
                 quickReviewSessionRepository,
                 itemRepository,
+                itemRemovalRepository,
                 noteRepository,
                 studyPackRepository,
                 generatedQuizRepository,
@@ -1570,6 +1581,7 @@ class NoteCollectionServiceTest {
         UUID noteId = UUID.randomUUID();
         UserEntity user = buildUser(userId);
         user.setRole(UserRole.ADMIN);
+        user.setOnboardingCompletedAt(OffsetDateTime.parse(BASE_TIMESTAMP));
         NoteCollectionEntity goal = buildCollection(goalId, userId, "LET Mastery", Instant.now());
         goal.setCompanion(companionContent());
         goal.setCompanionStructureSnapshot(new CompanionStructureSnapshot(1, List.of(noteId)));
@@ -1593,6 +1605,7 @@ class NoteCollectionServiceTest {
         UUID noteId = UUID.randomUUID();
         UserEntity user = buildUser(userId);
         user.setRole(UserRole.ADMIN);
+        user.setOnboardingCompletedAt(OffsetDateTime.parse(BASE_TIMESTAMP));
         NoteCollectionEntity goal = buildCollection(goalId, userId, "LET Mastery", Instant.now());
         goal.setCompanion(new CompanionContent(
                 "Overview",
@@ -1630,6 +1643,7 @@ class NoteCollectionServiceTest {
         UUID secondNoteId = UUID.randomUUID();
         UserEntity user = buildUser(userId);
         user.setRole(UserRole.ADMIN);
+        user.setOnboardingCompletedAt(OffsetDateTime.parse(BASE_TIMESTAMP));
         NoteCollectionEntity goal = buildCollection(goalId, userId, "LET Mastery", Instant.now());
         goal.setCompanion(companionContent());
         goal.setCompanionStructureSnapshot(new CompanionStructureSnapshot(1, List.of(firstNoteId)));
@@ -1656,6 +1670,7 @@ class NoteCollectionServiceTest {
         UUID secondChildId = UUID.randomUUID();
         UserEntity user = buildUser(userId);
         user.setRole(UserRole.ADMIN);
+        user.setOnboardingCompletedAt(OffsetDateTime.parse(BASE_TIMESTAMP));
         NoteCollectionEntity goal = buildCollection(goalId, userId, "LET Mastery", Instant.now());
         goal.setCompanion(companionContent());
         goal.setCompanionStructureSnapshot(new CompanionStructureSnapshot(1, List.of(firstChildId)));
@@ -1681,7 +1696,7 @@ class NoteCollectionServiceTest {
     }
 
     @Test
-    void getGoal_returnsCompanionOutdatedFalseForNonAdminEvenWhenStructureChanged() {
+    void getGoal_returnsCompanionOutdatedFalseForLearnerAuthoredPlanEvenWhenStructureChanged() {
         UUID userId = UUID.randomUUID();
         UUID goalId = UUID.randomUUID();
         UUID firstNoteId = UUID.randomUUID();
@@ -1697,6 +1712,57 @@ class NoteCollectionServiceTest {
         GoalCollectionDetailResponse result = service.getGoal(goalId, userId);
 
         assertThat(result.companionMayBeOutdated()).isFalse();
+    }
+
+    @Test
+    void getGoal_returnsCompanionOutdatedTrueForLearnerAdoptedPlanWhenStructureChanged() {
+        UUID userId = UUID.randomUUID();
+        UUID goalId = UUID.randomUUID();
+        UUID firstNoteId = UUID.randomUUID();
+        UUID secondNoteId = UUID.randomUUID();
+        NoteCollectionEntity goal = buildCollection(goalId, userId, "LET Mastery", Instant.now());
+        goal.setSourcePlanId(UUID.randomUUID());
+        goal.setCompanion(companionContent());
+        goal.setCompanionStructureSnapshot(new CompanionStructureSnapshot(1, List.of(firstNoteId)));
+        when(collectionRepository.findByIdAndOwnerUserId(goalId, userId)).thenReturn(Optional.of(goal));
+        when(collectionRepository.findOrderedChildrenByParentCollectionIdAndOwnerUserId(goalId, userId))
+                .thenReturn(List.of());
+        when(itemRepository.countByCollectionId(goalId)).thenReturn(2L);
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(goalId)).thenReturn(List.of(
+                buildItem(goalId, firstNoteId, 0, null),
+                buildItem(goalId, secondNoteId, 1, null)
+        ));
+
+        GoalCollectionDetailResponse result = service.getGoal(goalId, userId);
+
+        assertThat(result.companionMayBeOutdated()).isTrue();
+    }
+
+    @Test
+    void getGoal_returnsCompanionOutdatedTrueForTeacherCuratorWhenStructureChanged() {
+        UUID userId = UUID.randomUUID();
+        UUID goalId = UUID.randomUUID();
+        UUID firstNoteId = UUID.randomUUID();
+        UUID secondNoteId = UUID.randomUUID();
+        UserEntity teacher = buildUser(userId);
+        teacher.setProfileType(ProfileType.TEACHER);
+        teacher.setOnboardingCompletedAt(OffsetDateTime.parse(BASE_TIMESTAMP));
+        NoteCollectionEntity goal = buildCollection(goalId, userId, "LET Mastery", Instant.now());
+        goal.setCompanion(companionContent());
+        goal.setCompanionStructureSnapshot(new CompanionStructureSnapshot(1, List.of(firstNoteId)));
+        when(userRepository.findById(userId)).thenReturn(Optional.of(teacher));
+        when(collectionRepository.findByIdAndOwnerUserId(goalId, userId)).thenReturn(Optional.of(goal));
+        when(collectionRepository.findOrderedChildrenByParentCollectionIdAndOwnerUserId(goalId, userId))
+                .thenReturn(List.of());
+        when(itemRepository.countByCollectionId(goalId)).thenReturn(2L);
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(goalId)).thenReturn(List.of(
+                buildItem(goalId, firstNoteId, 0, null),
+                buildItem(goalId, secondNoteId, 1, null)
+        ));
+
+        GoalCollectionDetailResponse result = service.getGoal(goalId, userId);
+
+        assertThat(result.companionMayBeOutdated()).isTrue();
     }
 
     @Test
@@ -3048,7 +3114,12 @@ class NoteCollectionServiceTest {
         assertThat(collectionCaptor.getValue().getSourcePlanId()).isEqualTo(sourcePlanId);
         assertThat(collectionCaptor.getValue().getEstimatedStudyHours()).isEqualTo(2);
         assertThat(collectionCaptor.getValue().getCompanion()).isEqualTo(companionContent());
-        assertThat(collectionCaptor.getValue().getCompanionStructureSnapshot()).isNull();
+        // ⚠️ REWRITTEN, NOT DELETED, IN v0.116.0. This asserted the snapshot stayed NULL after
+        // adoption -- which was true, and was exactly why companionMayBeOutdated could never fire
+        // for a learner: it returns false at its FIRST guard on a null snapshot. Adoption now
+        // stamps a baseline from the LEARNER's own structure. Contents are pinned by
+        // adopt_stampsACompanionBaselineSoStalenessBecomesDetectableForTheLearner.
+        assertThat(collectionCaptor.getValue().getCompanionStructureSnapshot()).isNotNull();
     }
 
     @Test
@@ -3113,7 +3184,12 @@ class NoteCollectionServiceTest {
         ArgumentCaptor<NoteCollectionEntity> collectionCaptor = ArgumentCaptor.forClass(NoteCollectionEntity.class);
         verify(collectionRepository).saveAndFlush(collectionCaptor.capture());
         assertThat(collectionCaptor.getValue().getCompanion()).isEqualTo(companionContent());
-        assertThat(collectionCaptor.getValue().getCompanionStructureSnapshot()).isNull();
+        // ⚠️ REWRITTEN, NOT DELETED, IN v0.116.0. This asserted the snapshot stayed NULL after
+        // adoption -- which was true, and was exactly why companionMayBeOutdated could never fire
+        // for a learner: it returns false at its FIRST guard on a null snapshot. Adoption now
+        // stamps a baseline from the LEARNER's own structure. Contents are pinned by
+        // adopt_stampsACompanionBaselineSoStalenessBecomesDetectableForTheLearner.
+        assertThat(collectionCaptor.getValue().getCompanionStructureSnapshot()).isNotNull();
     }
 
     @Test
@@ -3175,6 +3251,699 @@ class NoteCollectionServiceTest {
         ArgumentCaptor<List<NoteCollectionItemEntity>> itemsCaptor = ArgumentCaptor.forClass(List.class);
         verify(itemRepository).saveAll(itemsCaptor.capture());
         assertThat(itemsCaptor.getValue()).extracting(NoteCollectionItemEntity::getNoteId).containsExactly(copiedNoteId);
+    }
+
+    @Test
+    void sourceUpdate_secondPassPreservesLearnerReorderEditedNoteAndHistory() {
+        UUID userId = UUID.randomUUID();
+        UUID sourceOwnerId = UUID.randomUUID();
+        UUID sourcePlanId = UUID.randomUUID();
+        UUID adoptedPlanId = UUID.randomUUID();
+        UUID existingSourceNoteId = UUID.randomUUID();
+        UUID addedSourceNoteId = UUID.randomUUID();
+        UUID editedLearnerNoteId = UUID.randomUUID();
+        UUID addedLearnerNoteId = UUID.randomUUID();
+        Instant now = Instant.now();
+        NoteCollectionEntity source = buildCollection(sourcePlanId, sourceOwnerId, "Official Biology", now);
+        source.setVisibility(CollectionVisibility.PUBLIC);
+        NoteCollectionEntity adopted = buildCollection(adoptedPlanId, userId, "My Biology", now);
+        adopted.setSourcePlanId(sourcePlanId);
+        adopted.setSourceTitleAtSync(source.getTitle());
+        adopted.setSourceSyncedAt(now);
+        NoteCollectionItemEntity sourceExisting = buildItem(sourcePlanId, existingSourceNoteId, 0, WEEK_ONE_LABEL);
+        NoteCollectionItemEntity sourceAdded = buildItem(sourcePlanId, addedSourceNoteId, 1, WEEK_TWO_LABEL);
+        NoteCollectionItemEntity learnerExisting = buildItem(adoptedPlanId, editedLearnerNoteId, 0, "My section");
+        learnerExisting.setSourceLabelAtSync(WEEK_ONE_LABEL);
+        learnerExisting.setSourcePositionAtSync(0);
+        learnerExisting.setSourceSyncedAt(now);
+        NoteEntity sourceExistingNote = buildNote(existingSourceNoteId, sourceOwnerId, NOTE_TITLE_ONE);
+        sourceExistingNote.setVisibility(NoteVisibility.PUBLIC);
+        NoteEntity sourceAddedNote = buildNote(addedSourceNoteId, sourceOwnerId, NOTE_TITLE_TWO);
+        sourceAddedNote.setVisibility(NoteVisibility.PUBLIC);
+        NoteEntity editedLearnerNote = buildNote(editedLearnerNoteId, userId, "My edited title");
+        editedLearnerNote.setContent("learner-edited body bytes");
+        editedLearnerNote.setCopiedFromNoteId(existingSourceNoteId);
+        NoteEntity addedLearnerNote = buildNote(addedLearnerNoteId, userId, NOTE_TITLE_TWO);
+        addedLearnerNote.setCopiedFromNoteId(addedSourceNoteId);
+        List<NoteCollectionItemEntity> learnerItems = new ArrayList<>(List.of(learnerExisting));
+        Map<UUID, NoteEntity> notes = new HashMap<>();
+        notes.put(existingSourceNoteId, sourceExistingNote);
+        notes.put(addedSourceNoteId, sourceAddedNote);
+        notes.put(editedLearnerNoteId, editedLearnerNote);
+        notes.put(addedLearnerNoteId, addedLearnerNote);
+
+        when(collectionRepository.findByIdAndOwnerUserId(adoptedPlanId, userId)).thenReturn(Optional.of(adopted));
+        when(collectionRepository.findByIdAndVisibility(sourcePlanId, CollectionVisibility.PUBLIC))
+                .thenReturn(Optional.of(source));
+        when(collectionRepository.findOrderedChildrenByParentCollectionIdAndOwnerUserId(sourcePlanId, sourceOwnerId))
+                .thenReturn(List.of());
+        when(collectionRepository.findOrderedChildrenByParentCollectionIdAndOwnerUserId(adoptedPlanId, userId))
+                .thenReturn(List.of());
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(sourcePlanId))
+                .thenReturn(List.of(sourceExisting, sourceAdded));
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(adoptedPlanId))
+                .thenAnswer(ignored -> new ArrayList<>(learnerItems));
+        when(itemRemovalRepository.findByAdoptedCollectionIdIn(List.of(adoptedPlanId))).thenReturn(List.of());
+        when(noteRepository.findAllById(any())).thenAnswer(invocation -> {
+            List<NoteEntity> found = new ArrayList<>();
+            for (UUID id : invocation.<Iterable<UUID>>getArgument(0)) {
+                if (notes.containsKey(id)) {
+                    found.add(notes.get(id));
+                }
+            }
+            return found;
+        });
+        when(noteRepository.findByIdAndVisibility(addedSourceNoteId, NoteVisibility.PUBLIC))
+                .thenReturn(Optional.of(sourceAddedNote));
+        when(noteService.copyNote(addedSourceNoteId.toString(), userId, true))
+                .thenReturn(noteResponse(addedLearnerNoteId));
+        when(itemRepository.findByCollectionIdAndNoteId(adoptedPlanId, addedLearnerNoteId))
+                .thenAnswer(ignored -> learnerItems.stream()
+                        .filter(item -> item.getNoteId().equals(addedLearnerNoteId))
+                        .findFirst());
+        when(itemRepository.saveAndFlush(any(NoteCollectionItemEntity.class))).thenAnswer(invocation -> {
+            NoteCollectionItemEntity saved = invocation.getArgument(0);
+            learnerItems.add(saved);
+            return saved;
+        });
+        when(collectionRepository.save(any(NoteCollectionEntity.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(itemRepository.save(any(NoteCollectionItemEntity.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        ReviewSetUpdateResponse first = service.applySourceUpdate(adoptedPlanId, userId);
+
+        assertThat(first.notesAdded()).isOne();
+        assertThat(editedLearnerNote.getTitle()).isEqualTo("My edited title");
+        assertThat(editedLearnerNote.getContent()).isEqualTo("learner-edited body bytes");
+        NoteCollectionItemEntity addedPlacement = learnerItems.stream()
+                .filter(item -> item.getNoteId().equals(addedLearnerNoteId))
+                .findFirst()
+                .orElseThrow();
+        // Reachable discriminator: learner reorders BETWEEN passes. Rewriting learner positions on
+        // every sync makes the assertions below fail.
+        addedPlacement.setPosition(0);
+        learnerExisting.setPosition(1);
+
+        ReviewSetUpdateResponse second = service.applySourceUpdate(adoptedPlanId, userId);
+
+        assertThat(second.notesAdded()).isZero();
+        assertThat(second.status()).isEqualTo("ALREADY_UP_TO_DATE");
+        assertThat(addedPlacement.getPosition()).isZero();
+        assertThat(learnerExisting.getPosition()).isOne();
+        assertThat(learnerExisting.getLabel()).isEqualTo("My section");
+        assertThat(editedLearnerNote.getTitle()).isEqualTo("My edited title");
+        assertThat(editedLearnerNote.getContent()).isEqualTo("learner-edited body bytes");
+        verify(noteService, times(1)).copyNote(addedSourceNoteId.toString(), userId, true);
+        verify(noteService, never()).copyNote(existingSourceNoteId.toString(), userId, true);
+        verifyNoInteractions(conceptHealthService, quizSessionHistoryService);
+    }
+
+    @Test
+    void sourceUpdate_nonPublicSourceGapDoesNotReportLearnerReorder() {
+        UUID userId = UUID.randomUUID();
+        UUID sourceOwnerId = UUID.randomUUID();
+        UUID sourcePlanId = UUID.randomUUID();
+        UUID adoptedPlanId = UUID.randomUUID();
+        UUID privateSourceNoteId = UUID.randomUUID();
+        UUID publicSourceNoteId = UUID.randomUUID();
+        UUID learnerNoteId = UUID.randomUUID();
+        Instant now = Instant.now();
+        NoteCollectionEntity source = buildCollection(sourcePlanId, sourceOwnerId, "Official Biology", now);
+        source.setVisibility(CollectionVisibility.PUBLIC);
+        NoteCollectionEntity adopted = buildCollection(adoptedPlanId, userId, "My Biology", now);
+        adopted.setSourcePlanId(sourcePlanId);
+        adopted.setSourceTitleAtSync(source.getTitle());
+        NoteCollectionItemEntity privateSource = buildItem(sourcePlanId, privateSourceNoteId, 0, "Hidden");
+        NoteCollectionItemEntity publicSource = buildItem(sourcePlanId, publicSourceNoteId, 1, WEEK_ONE_LABEL);
+        NoteCollectionItemEntity learnerItem = buildItem(adoptedPlanId, learnerNoteId, 0, WEEK_ONE_LABEL);
+        learnerItem.setSourcePositionAtSync(1);
+        learnerItem.setSourceLabelAtSync(WEEK_ONE_LABEL);
+        learnerItem.setSourceSyncedAt(now);
+        NoteEntity privateSourceNote = buildNote(privateSourceNoteId, sourceOwnerId, "Private topic");
+        NoteEntity publicSourceNote = buildNote(publicSourceNoteId, sourceOwnerId, NOTE_TITLE_ONE);
+        publicSourceNote.setVisibility(NoteVisibility.PUBLIC);
+        NoteEntity learnerNote = buildNote(learnerNoteId, userId, NOTE_TITLE_ONE);
+        learnerNote.setCopiedFromNoteId(publicSourceNoteId);
+
+        when(collectionRepository.findByIdAndOwnerUserId(adoptedPlanId, userId)).thenReturn(Optional.of(adopted));
+        when(collectionRepository.findByIdAndVisibility(sourcePlanId, CollectionVisibility.PUBLIC))
+                .thenReturn(Optional.of(source));
+        when(collectionRepository.findOrderedChildrenByParentCollectionIdAndOwnerUserId(sourcePlanId, sourceOwnerId))
+                .thenReturn(List.of());
+        when(collectionRepository.findOrderedChildrenByParentCollectionIdAndOwnerUserId(adoptedPlanId, userId))
+                .thenReturn(List.of());
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(sourcePlanId))
+                .thenReturn(List.of(privateSource, publicSource));
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(adoptedPlanId)).thenReturn(List.of(learnerItem));
+        when(noteRepository.findAllById(any())).thenAnswer(invocation -> {
+            List<NoteEntity> found = new ArrayList<>();
+            for (UUID id : invocation.<Iterable<UUID>>getArgument(0)) {
+                if (id.equals(privateSourceNoteId)) {
+                    found.add(privateSourceNote);
+                } else if (id.equals(publicSourceNoteId)) {
+                    found.add(publicSourceNote);
+                } else if (id.equals(learnerNoteId)) {
+                    found.add(learnerNote);
+                }
+            }
+            return found;
+        });
+        when(itemRemovalRepository.findByAdoptedCollectionIdIn(List.of(adoptedPlanId))).thenReturn(List.of());
+
+        ReviewSetUpdateResponse result = service.getSourceUpdate(adoptedPlanId, userId);
+
+        assertThat(result.changes()).extracting(change -> change.type())
+                .contains("SKIPPED_NOT_PUBLIC")
+                .doesNotContain("REORDERED");
+    }
+
+    /**
+     * ⚠️ THE CONCURRENT DOUBLE-APPLY GUARD, AND IT EXISTS BECAUSE A MUTANT SURVIVED THE DELIVERED SUITE.
+     * Deleting the {@code existing.isPresent()} early return from the apply path left all 164 tests in
+     * this class green: the normal flow never reaches that branch, because the diff has already excluded
+     * every placement the learner holds, so the guard is pure defence-in-depth against a race and
+     * nothing exercised it.
+     *
+     * <p>This fixture reaches it the only way production can — the diff computes the placement as
+     * MISSING, and a concurrent pass lands it before this one applies. Without the guard the insert is
+     * attempted anyway and {@code UNIQUE (collection_id, note_id)} turns a no-op into a
+     * {@code DataIntegrityViolationException}. A fixture where the placement is absent at BOTH points
+     * passes under the defect and proves nothing.
+     */
+    @Test
+    void sourceUpdate_concurrentApplyLandingFirstMakesTheSecondPassANoOpRatherThanADuplicateInsert() {
+        UUID userId = UUID.randomUUID();
+        UUID sourceOwnerId = UUID.randomUUID();
+        UUID sourcePlanId = UUID.randomUUID();
+        UUID adoptedPlanId = UUID.randomUUID();
+        UUID sourceNoteId = UUID.randomUUID();
+        UUID learnerNoteId = UUID.randomUUID();
+        Instant now = Instant.now();
+        NoteCollectionEntity source = buildCollection(sourcePlanId, sourceOwnerId, "Official Biology", now);
+        source.setVisibility(CollectionVisibility.PUBLIC);
+        NoteCollectionEntity adopted = buildCollection(adoptedPlanId, userId, "My Biology", now);
+        adopted.setSourcePlanId(sourcePlanId);
+        adopted.setSourceTitleAtSync(source.getTitle());
+        NoteCollectionItemEntity sourceItem = buildItem(sourcePlanId, sourceNoteId, 0, WEEK_ONE_LABEL);
+        NoteEntity sourceNote = buildNote(sourceNoteId, sourceOwnerId, NOTE_TITLE_ONE);
+        sourceNote.setVisibility(NoteVisibility.PUBLIC);
+        NoteEntity learnerNote = buildNote(learnerNoteId, userId, NOTE_TITLE_ONE);
+        learnerNote.setCopiedFromNoteId(sourceNoteId);
+
+        when(collectionRepository.findByIdAndOwnerUserId(adoptedPlanId, userId)).thenReturn(Optional.of(adopted));
+        when(collectionRepository.findByIdAndVisibility(sourcePlanId, CollectionVisibility.PUBLIC))
+                .thenReturn(Optional.of(source));
+        when(collectionRepository.findOrderedChildrenByParentCollectionIdAndOwnerUserId(sourcePlanId, sourceOwnerId))
+                .thenReturn(List.of());
+        when(collectionRepository.findOrderedChildrenByParentCollectionIdAndOwnerUserId(adoptedPlanId, userId))
+                .thenReturn(List.of());
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(sourcePlanId)).thenReturn(List.of(sourceItem));
+        // The diff sees an EMPTY adopted plan, so the placement is computed as missing and the pass
+        // proceeds to apply it. This is what makes the guard reachable.
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(adoptedPlanId)).thenReturn(List.of());
+        when(noteRepository.findAllById(any())).thenAnswer(invocation -> {
+            List<NoteEntity> found = new ArrayList<>();
+            for (UUID id : invocation.<Iterable<UUID>>getArgument(0)) {
+                if (id.equals(sourceNoteId)) {
+                    found.add(sourceNote);
+                } else if (id.equals(learnerNoteId)) {
+                    found.add(learnerNote);
+                }
+            }
+            return found;
+        });
+        when(itemRemovalRepository.findByAdoptedCollectionIdIn(List.of(adoptedPlanId))).thenReturn(List.of());
+        when(noteRepository.findByIdAndVisibility(sourceNoteId, NoteVisibility.PUBLIC))
+                .thenReturn(Optional.of(sourceNote));
+        when(noteService.copyNote(sourceNoteId.toString(), userId, true)).thenReturn(noteResponse(learnerNoteId));
+        // The concurrent writer won: by the time this pass applies, the placement already exists.
+        when(itemRepository.findByCollectionIdAndNoteId(adoptedPlanId, learnerNoteId))
+                .thenReturn(Optional.of(buildItem(adoptedPlanId, learnerNoteId, 0, WEEK_ONE_LABEL)));
+        // No collectionRepository.save stub: since v0.116.0 a pass that applies NOTHING acknowledges
+        // nothing, so it must not write. Mockito's strict stubbing enforces that here.
+
+        ReviewSetUpdateResponse result = service.applySourceUpdate(adoptedPlanId, userId);
+
+        assertThat(result.notesAdded())
+                .as("the racing pass already landed this placement, so this pass must add nothing")
+                .isZero();
+        verify(itemRepository, never()).saveAndFlush(any(NoteCollectionItemEntity.class));
+    }
+
+    /**
+     * ⚠️ THE MID-PASS FAILURE-ISOLATION GUARD, AND IT COVERS A DELIVERED RESPONSE STATE THAT HAD NO TEST.
+     * {@code PARTIALLY_UPDATED} is emitted whenever {@code skipped > 0}, and the per-item
+     * {@code catch (RuntimeException)} blocks that produce it were shipped with zero coverage — so
+     * nothing proved that one failed copy leaves the other additions applied rather than aborting the
+     * pass, which is the whole point of following {@code adopt()}'s per-item isolation instead of
+     * wrapping the pass in one transaction.
+     *
+     * <p>⚠️ THE SECOND PASS IS THE HALF THAT MATTERS AND IS EASY TO OMIT: the contract is that a pass is
+     * RESUMABLE, so the item that failed must still be addable afterwards. A fixture that asserts only
+     * "one succeeded, one skipped" passes under an implementation that has corrupted the baseline and
+     * can never add the failed item at all.
+     */
+    @Test
+    void sourceUpdate_oneFailedCopyIsIsolatedAndTheFailedItemStillAppliesOnARerun() {
+        UUID userId = UUID.randomUUID();
+        UUID sourceOwnerId = UUID.randomUUID();
+        UUID sourcePlanId = UUID.randomUUID();
+        UUID adoptedPlanId = UUID.randomUUID();
+        UUID flakySourceNoteId = UUID.randomUUID();
+        UUID goodSourceNoteId = UUID.randomUUID();
+        UUID flakyLearnerNoteId = UUID.randomUUID();
+        UUID goodLearnerNoteId = UUID.randomUUID();
+        Instant now = Instant.now();
+        NoteCollectionEntity source = buildCollection(sourcePlanId, sourceOwnerId, "Official Biology", now);
+        source.setVisibility(CollectionVisibility.PUBLIC);
+        NoteCollectionEntity adopted = buildCollection(adoptedPlanId, userId, "My Biology", now);
+        adopted.setSourcePlanId(sourcePlanId);
+        adopted.setSourceTitleAtSync(source.getTitle());
+        NoteCollectionItemEntity flakySource = buildItem(sourcePlanId, flakySourceNoteId, 0, WEEK_ONE_LABEL);
+        NoteCollectionItemEntity goodSource = buildItem(sourcePlanId, goodSourceNoteId, 1, WEEK_ONE_LABEL);
+        NoteEntity flakySourceNote = buildNote(flakySourceNoteId, sourceOwnerId, "Flaky topic");
+        flakySourceNote.setVisibility(NoteVisibility.PUBLIC);
+        NoteEntity goodSourceNote = buildNote(goodSourceNoteId, sourceOwnerId, NOTE_TITLE_ONE);
+        goodSourceNote.setVisibility(NoteVisibility.PUBLIC);
+        NoteEntity flakyLearnerNote = buildNote(flakyLearnerNoteId, userId, "Flaky topic");
+        flakyLearnerNote.setCopiedFromNoteId(flakySourceNoteId);
+        NoteEntity goodLearnerNote = buildNote(goodLearnerNoteId, userId, NOTE_TITLE_ONE);
+        goodLearnerNote.setCopiedFromNoteId(goodSourceNoteId);
+        List<NoteCollectionItemEntity> learnerItems = new ArrayList<>();
+
+        when(collectionRepository.findByIdAndOwnerUserId(adoptedPlanId, userId)).thenReturn(Optional.of(adopted));
+        when(collectionRepository.findByIdAndVisibility(sourcePlanId, CollectionVisibility.PUBLIC))
+                .thenReturn(Optional.of(source));
+        when(collectionRepository.findOrderedChildrenByParentCollectionIdAndOwnerUserId(sourcePlanId, sourceOwnerId))
+                .thenReturn(List.of());
+        when(collectionRepository.findOrderedChildrenByParentCollectionIdAndOwnerUserId(adoptedPlanId, userId))
+                .thenReturn(List.of());
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(sourcePlanId))
+                .thenReturn(List.of(flakySource, goodSource));
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(adoptedPlanId))
+                .thenAnswer(ignored -> List.copyOf(learnerItems));
+        when(noteRepository.findAllById(any())).thenAnswer(invocation -> {
+            List<NoteEntity> found = new ArrayList<>();
+            for (UUID id : invocation.<Iterable<UUID>>getArgument(0)) {
+                if (id.equals(flakySourceNoteId)) {
+                    found.add(flakySourceNote);
+                } else if (id.equals(goodSourceNoteId)) {
+                    found.add(goodSourceNote);
+                } else if (id.equals(flakyLearnerNoteId)) {
+                    found.add(flakyLearnerNote);
+                } else if (id.equals(goodLearnerNoteId)) {
+                    found.add(goodLearnerNote);
+                }
+            }
+            return found;
+        });
+        when(itemRemovalRepository.findByAdoptedCollectionIdIn(List.of(adoptedPlanId))).thenReturn(List.of());
+        when(noteRepository.findByIdAndVisibility(flakySourceNoteId, NoteVisibility.PUBLIC))
+                .thenReturn(Optional.of(flakySourceNote));
+        when(noteRepository.findByIdAndVisibility(goodSourceNoteId, NoteVisibility.PUBLIC))
+                .thenReturn(Optional.of(goodSourceNote));
+        when(noteService.copyNote(goodSourceNoteId.toString(), userId, true))
+                .thenReturn(noteResponse(goodLearnerNoteId));
+        // Transient: the first attempt fails, a re-run succeeds.
+        when(noteService.copyNote(flakySourceNoteId.toString(), userId, true))
+                .thenThrow(new IllegalStateException("transient copy failure"))
+                .thenReturn(noteResponse(flakyLearnerNoteId));
+        when(itemRepository.findByCollectionIdAndNoteId(eq(adoptedPlanId), any(UUID.class)))
+                .thenAnswer(invocation -> learnerItems.stream()
+                        .filter(item -> item.getNoteId().equals(invocation.getArgument(1)))
+                        .findFirst());
+        when(itemRepository.saveAndFlush(any(NoteCollectionItemEntity.class))).thenAnswer(invocation -> {
+            NoteCollectionItemEntity saved = invocation.getArgument(0);
+            learnerItems.add(saved);
+            return saved;
+        });
+        when(collectionRepository.save(any(NoteCollectionEntity.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        ReviewSetUpdateResponse first = service.applySourceUpdate(adoptedPlanId, userId);
+
+        assertThat(first.status())
+                .as("one failed copy must not abort the pass")
+                .isEqualTo("PARTIALLY_UPDATED");
+        assertThat(first.notesAdded()).isOne();
+        assertThat(learnerItems).extracting(NoteCollectionItemEntity::getNoteId)
+                .containsExactly(goodLearnerNoteId);
+
+        ReviewSetUpdateResponse second = service.applySourceUpdate(adoptedPlanId, userId);
+
+        assertThat(second.notesAdded())
+                .as("the pass is resumable: the previously failed item still applies on a re-run")
+                .isOne();
+        assertThat(second.status()).isEqualTo("UPDATED");
+        assertThat(learnerItems).extracting(NoteCollectionItemEntity::getNoteId)
+                .containsExactlyInAnyOrder(goodLearnerNoteId, flakyLearnerNoteId);
+    }
+
+    /**
+     * ⚠️ THE SHAPE `V134` ARMS ON 92 PRODUCTION ROWS ON DAY ONE, AND ITS SYMPTOM IS SILENCE RATHER THAN A
+     * 500. The backfill stamps {@code source_synced_at} on every adoption while
+     * {@code note_collections.sibling_position} is NULL on every top-level source collection — so
+     * {@code sourceSyncedAt} is non-null and {@code sourcePositionAtSync} is null. Guarding only on the
+     * sync marker let {@code Objects.equals(null, non-null)} return false, enter the branch, and NPE on
+     * {@code .toString()} the moment a curator nested a previously standalone plan.
+     *
+     * <p>The frontend calls this on EVERY page load of an adopted collection and swallows the failure
+     * in a {@code .catch}, so the learner would have seen no card, no error, and no Apply button — the
+     * feature silently gone, with only a 500 in the logs. A fixture with a populated baseline passes
+     * under the defect, so this one leaves both nullable facts NULL on purpose.
+     */
+    @Test
+    void sourceUpdate_survivesANullPositionBaselineWhenTheCuratorNestsAPreviouslyStandalonePlan() {
+        UUID userId = UUID.randomUUID();
+        UUID sourceOwnerId = UUID.randomUUID();
+        UUID sourcePlanId = UUID.randomUUID();
+        UUID adoptedPlanId = UUID.randomUUID();
+        UUID newGoalId = UUID.randomUUID();
+        Instant now = Instant.now();
+        NoteCollectionEntity source = buildCollection(sourcePlanId, sourceOwnerId, "Official Biology", now);
+        source.setVisibility(CollectionVisibility.PUBLIC);
+        // The curator has since nested this plan under a Goal and given it a sibling position.
+        source.setParentCollectionId(newGoalId);
+        source.setSiblingPosition(0);
+        NoteCollectionEntity adopted = buildCollection(adoptedPlanId, userId, "My Biology", now);
+        adopted.setSourcePlanId(sourcePlanId);
+        adopted.setSourceTitleAtSync(source.getTitle());
+        // Exactly what V134's backfill writes for a then-top-level source: synced, but both nullable
+        // source facts NULL. Populating either one hides the defect.
+        adopted.setSourceSyncedAt(now);
+        adopted.setSourcePositionAtSync(null);
+        adopted.setSourceParentIdAtSync(null);
+
+        when(collectionRepository.findByIdAndOwnerUserId(adoptedPlanId, userId)).thenReturn(Optional.of(adopted));
+        when(collectionRepository.findByIdAndVisibility(sourcePlanId, CollectionVisibility.PUBLIC))
+                .thenReturn(Optional.of(source));
+        when(collectionRepository.findOrderedChildrenByParentCollectionIdAndOwnerUserId(sourcePlanId, sourceOwnerId))
+                .thenReturn(List.of());
+        when(collectionRepository.findOrderedChildrenByParentCollectionIdAndOwnerUserId(adoptedPlanId, userId))
+                .thenReturn(List.of());
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(sourcePlanId)).thenReturn(List.of());
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(adoptedPlanId)).thenReturn(List.of());
+        when(noteRepository.findAllById(any())).thenReturn(List.of());
+        when(itemRemovalRepository.findByAdoptedCollectionIdIn(List.of(adoptedPlanId))).thenReturn(List.of());
+
+        ReviewSetUpdateResponse result = service.getSourceUpdate(adoptedPlanId, userId);
+
+        assertThat(result).isNotNull();
+        assertThat(result.changes())
+                .as("a NULL baseline is not drift -- we never recorded a position to compare against")
+                .extracting(change -> change.type())
+                .doesNotContain("REORDERED", "MOVED");
+    }
+
+    /**
+     * ⚠️ THE GUARD FOR THE WORST DEFECT THIS RELEASE HAD, AND ITS FIXTURE IS THE WHOLE POINT: THE ADOPTED
+     * ROOT'S ITEM LIST IS NON-EMPTY. The release's own
+     * {@code sourceUpdate_addsNewSubjectPlanAndItsPublicPlacements} is this same scenario with that list
+     * stubbed to {@code List.of()}, and that empty stub is the only thing that hid the defect.
+     *
+     * <p>Real production history, not hypothetical: four learners adopted the CPALE plan while it was
+     * FLAT (19 direct notes, no children); the curator added its seven child Subject Plans afterwards.
+     * Because {@code adoptedPlans} was chosen by the SOURCE's shape, the learner's own placements were
+     * invisible to the diff, every source note looked new, and {@code copyNote} returned the copy they
+     * already held -- which then inserted into a different collection, where
+     * {@code UNIQUE (collection_id, note_id)} cannot catch it.
+     *
+     * <p>Two assertions, because the defect had two halves: the held note must resolve as MOVED rather
+     * than queue as an addition, AND the new Subject Plan must not be created under a root that still
+     * holds direct notes -- a shape no database constraint forbids and the collection page cannot render.
+     */
+    @Test
+    void sourceUpdate_curatorRestructuringAFlatPlanIsReportedAsMovedRatherThanReAddingHeldNotes() {
+        UUID userId = UUID.randomUUID();
+        UUID sourceOwnerId = UUID.randomUUID();
+        UUID sourceRootId = UUID.randomUUID();
+        UUID sourceChildId = UUID.randomUUID();
+        UUID sourceNoteId = UUID.randomUUID();
+        UUID adoptedRootId = UUID.randomUUID();
+        UUID learnerNoteId = UUID.randomUUID();
+        Instant now = Instant.now();
+
+        NoteCollectionEntity sourceRoot = buildCollection(sourceRootId, sourceOwnerId, "CPALE Review", now);
+        sourceRoot.setVisibility(CollectionVisibility.PUBLIC);
+        // The curator has since introduced a child Subject Plan and moved the note into it.
+        NoteCollectionEntity sourceChild = buildCollection(sourceChildId, sourceOwnerId, "Auditing", now);
+        sourceChild.setVisibility(CollectionVisibility.PUBLIC);
+        sourceChild.setParentCollectionId(sourceRootId);
+
+        // The learner adopted while it was FLAT: their notes sit directly on the adopted root.
+        NoteCollectionEntity adoptedRoot = buildCollection(adoptedRootId, userId, "My CPALE", now);
+        adoptedRoot.setSourcePlanId(sourceRootId);
+        adoptedRoot.setSourceTitleAtSync(sourceRoot.getTitle());
+
+        NoteCollectionItemEntity sourceItem = buildItem(sourceChildId, sourceNoteId, 0, WEEK_ONE_LABEL);
+        NoteCollectionItemEntity learnerItem = buildItem(adoptedRootId, learnerNoteId, 0, WEEK_ONE_LABEL);
+        NoteEntity sourceNote = buildNote(sourceNoteId, sourceOwnerId, NOTE_TITLE_ONE);
+        sourceNote.setVisibility(NoteVisibility.PUBLIC);
+        NoteEntity learnerNote = buildNote(learnerNoteId, userId, NOTE_TITLE_ONE);
+        learnerNote.setCopiedFromNoteId(sourceNoteId);
+
+        when(collectionRepository.findByIdAndOwnerUserId(adoptedRootId, userId)).thenReturn(Optional.of(adoptedRoot));
+        when(collectionRepository.findByIdAndVisibility(sourceRootId, CollectionVisibility.PUBLIC))
+                .thenReturn(Optional.of(sourceRoot));
+        when(collectionRepository.findOrderedChildrenByParentCollectionIdAndOwnerUserId(sourceRootId, sourceOwnerId))
+                .thenReturn(List.of(sourceChild));
+        when(collectionRepository.findOrderedChildrenByParentCollectionIdAndOwnerUserId(adoptedRootId, userId))
+                .thenReturn(List.of());
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(sourceChildId)).thenReturn(List.of(sourceItem));
+        // ⚠️ NON-EMPTY. This single stub is the difference between catching the defect and not.
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(adoptedRootId)).thenReturn(List.of(learnerItem));
+        when(noteRepository.findAllById(any())).thenAnswer(invocation -> {
+            List<NoteEntity> found = new ArrayList<>();
+            for (UUID id : invocation.<Iterable<UUID>>getArgument(0)) {
+                if (id.equals(sourceNoteId)) {
+                    found.add(sourceNote);
+                } else if (id.equals(learnerNoteId)) {
+                    found.add(learnerNote);
+                }
+            }
+            return found;
+        });
+        when(itemRemovalRepository.findByAdoptedCollectionIdIn(any())).thenReturn(List.of());
+
+        ReviewSetUpdateResponse result = service.getSourceUpdate(adoptedRootId, userId);
+
+        assertThat(result.changes()).extracting(change -> change.type())
+                .as("the learner already holds this note; re-adding it duplicates their own copy")
+                .doesNotContain("ADDED_NOTE", "ADDED_SUBJECT_PLAN")
+                .contains("MOVED");
+        assertThat(result.additionsAvailable())
+                .as("an upstream restructure is reported, never applied")
+                .isZero();
+    }
+
+    /**
+     * ⚠️ THE REACHABILITY GUARD FOR SCOPE ITEM 4, AND IT REACHES THE FLAG THROUGH ADOPTION RATHER THAN BY
+     * HAND-SETTING THE SNAPSHOT — WHICH IS THE WHOLE POINT.
+     *
+     * <p>Item 4 shipped as an observable no-op and no test caught it: adoption copied {@code companion}
+     * but never the snapshot, the snapshot's only other writer is {@code setCompanion} behind
+     * {@code assertAdmin}, and {@code companionMayBeOutdated} returns {@code false} at its FIRST guard on
+     * a null snapshot. Production carried 523 adopted collections, 82 with a copied Companion and ZERO
+     * with a snapshot. The tests that "proved" the widened curator predicate each called
+     * {@code setCompanionStructureSnapshot(...)} by hand — a state adoption could not produce — so a
+     * mutant died against a fixture that cannot occur. That is this repo's own recorded lesson: a
+     * negative assertion needs a REACHABLE subject.
+     *
+     * <p>This asserts the baseline exists after a real adopt() and records the learner's OWN note ids,
+     * never the curator's — the copies carry fresh ids, so a copied snapshot could never match.
+     */
+    @Test
+    void adopt_stampsACompanionBaselineSoStalenessBecomesDetectableForTheLearner() {
+        UUID userId = UUID.randomUUID();
+        UUID curatorId = UUID.randomUUID();
+        UUID sourcePlanId = UUID.randomUUID();
+        UUID sourceNoteId = UUID.randomUUID();
+        UUID learnerNoteId = UUID.randomUUID();
+        Instant now = Instant.now();
+        NoteCollectionEntity source = buildCollection(sourcePlanId, curatorId, "Official Biology", now);
+        source.setVisibility(CollectionVisibility.PUBLIC);
+        source.setCompanion(companionContent());
+        NoteCollectionItemEntity sourceItem = buildItem(sourcePlanId, sourceNoteId, 0, WEEK_ONE_LABEL);
+        NoteEntity sourceNote = buildNote(sourceNoteId, curatorId, NOTE_TITLE_ONE);
+        sourceNote.setVisibility(NoteVisibility.PUBLIC);
+
+        when(collectionRepository.findByIdAndVisibility(sourcePlanId, CollectionVisibility.PUBLIC))
+                .thenReturn(Optional.of(source));
+        when(collectionRepository.findByOwnerUserIdAndSourcePlanId(userId, sourcePlanId))
+                .thenReturn(Optional.empty());
+        when(collectionRepository.findByOwnerUserIdAndSourcePlanIdForUpdate(userId, sourcePlanId))
+                .thenReturn(Optional.empty());
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(sourcePlanId)).thenReturn(List.of(sourceItem));
+        when(noteRepository.findByIdAndVisibility(sourceNoteId, NoteVisibility.PUBLIC))
+                .thenReturn(Optional.of(sourceNote));
+        when(noteService.copyNote(sourceNoteId.toString(), userId, true))
+                .thenReturn(noteResponse(learnerNoteId));
+        when(collectionRepository.saveAndFlush(any(NoteCollectionEntity.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(collectionRepository.save(any(NoteCollectionEntity.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        service.adopt(sourcePlanId, userId);
+
+        ArgumentCaptor<NoteCollectionEntity> saved = ArgumentCaptor.forClass(NoteCollectionEntity.class);
+        verify(collectionRepository, org.mockito.Mockito.atLeastOnce()).save(saved.capture());
+        CompanionStructureSnapshot baseline = saved.getAllValues().stream()
+                .map(NoteCollectionEntity::getCompanionStructureSnapshot)
+                .filter(java.util.Objects::nonNull)
+                .findFirst()
+                .orElse(null);
+
+        assertThat(baseline)
+                .as("without a baseline, companionMayBeOutdated returns false at its first guard forever")
+                .isNotNull();
+        assertThat(baseline.memberIds())
+                .as("the baseline records the LEARNER's own copies; the curator's ids could never match")
+                .containsExactly(learnerNoteId);
+    }
+
+    @Test
+    void sourceUpdate_deletedSourceResolvesAsDetachedWithoutMutation() {
+        UUID userId = UUID.randomUUID();
+        UUID sourcePlanId = UUID.randomUUID();
+        UUID adoptedPlanId = UUID.randomUUID();
+        NoteCollectionEntity adopted = buildCollection(adoptedPlanId, userId, "My usable Review Set", Instant.now());
+        adopted.setSourcePlanId(sourcePlanId);
+        when(collectionRepository.findByIdAndOwnerUserId(adoptedPlanId, userId)).thenReturn(Optional.of(adopted));
+        when(collectionRepository.findByIdAndVisibility(sourcePlanId, CollectionVisibility.PUBLIC))
+                .thenReturn(Optional.empty());
+
+        ReviewSetUpdateResponse result = service.getSourceUpdate(adoptedPlanId, userId);
+
+        assertThat(result.sourceState()).isEqualTo("DETACHED");
+        assertThat(result.status()).isEqualTo("DETACHED_FROM_SOURCE");
+        assertThat(result.collectionId()).isEqualTo(adoptedPlanId);
+        assertThat(result.additionsAvailable()).isZero();
+        verifyNoInteractions(noteService, itemRemovalRepository);
+    }
+
+    @Test
+    void sourceUpdate_learnerRemovalTombstonePreventsReAddingUpstreamPlacement() {
+        UUID userId = UUID.randomUUID();
+        UUID sourceOwnerId = UUID.randomUUID();
+        UUID sourcePlanId = UUID.randomUUID();
+        UUID adoptedPlanId = UUID.randomUUID();
+        UUID sourceNoteId = UUID.randomUUID();
+        NoteCollectionEntity source = buildCollection(sourcePlanId, sourceOwnerId, "Official Biology", Instant.now());
+        source.setVisibility(CollectionVisibility.PUBLIC);
+        NoteCollectionEntity adopted = buildCollection(adoptedPlanId, userId, "My Biology", Instant.now());
+        adopted.setSourcePlanId(sourcePlanId);
+        adopted.setSourceTitleAtSync(source.getTitle());
+        NoteCollectionItemEntity sourceItem = buildItem(sourcePlanId, sourceNoteId, 0, WEEK_ONE_LABEL);
+        NoteEntity sourceNote = buildNote(sourceNoteId, sourceOwnerId, NOTE_TITLE_ONE);
+        sourceNote.setVisibility(NoteVisibility.PUBLIC);
+        NoteCollectionItemRemovalEntity removal = new NoteCollectionItemRemovalEntity();
+        removal.setAdoptedCollectionId(adoptedPlanId);
+        removal.setSourcePlanId(sourcePlanId);
+        removal.setSourceNoteId(sourceNoteId);
+        removal.setRemovedAt(Instant.now());
+        when(collectionRepository.findByIdAndOwnerUserId(adoptedPlanId, userId)).thenReturn(Optional.of(adopted));
+        when(collectionRepository.findByIdAndVisibility(sourcePlanId, CollectionVisibility.PUBLIC))
+                .thenReturn(Optional.of(source));
+        when(collectionRepository.findOrderedChildrenByParentCollectionIdAndOwnerUserId(sourcePlanId, sourceOwnerId))
+                .thenReturn(List.of());
+        when(collectionRepository.findOrderedChildrenByParentCollectionIdAndOwnerUserId(adoptedPlanId, userId))
+                .thenReturn(List.of());
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(sourcePlanId)).thenReturn(List.of(sourceItem));
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(adoptedPlanId)).thenReturn(List.of());
+        when(noteRepository.findAllById(any())).thenAnswer(invocation -> {
+            for (UUID id : invocation.<Iterable<UUID>>getArgument(0)) {
+                if (id.equals(sourceNoteId)) {
+                    return List.of(sourceNote);
+                }
+            }
+            return List.of();
+        });
+        when(itemRemovalRepository.findByAdoptedCollectionIdIn(List.of(adoptedPlanId)))
+                .thenReturn(List.of(removal));
+
+        ReviewSetUpdateResponse result = service.applySourceUpdate(adoptedPlanId, userId);
+
+        assertThat(result.status()).isEqualTo("ALREADY_UP_TO_DATE");
+        assertThat(result.notesAdded()).isZero();
+        verifyNoInteractions(noteService);
+    }
+
+    @Test
+    void sourceUpdate_addsNewSubjectPlanAndItsPublicPlacements() {
+        UUID userId = UUID.randomUUID();
+        UUID sourceOwnerId = UUID.randomUUID();
+        UUID sourceGoalId = UUID.randomUUID();
+        UUID sourceSubjectId = UUID.randomUUID();
+        UUID adoptedGoalId = UUID.randomUUID();
+        UUID sourceNoteId = UUID.randomUUID();
+        UUID copiedNoteId = UUID.randomUUID();
+        Instant now = Instant.now();
+        NoteCollectionEntity sourceGoal = buildCollection(sourceGoalId, sourceOwnerId, "Official Goal", now);
+        sourceGoal.setVisibility(CollectionVisibility.PUBLIC);
+        NoteCollectionEntity sourceSubject = buildCollection(sourceSubjectId, sourceOwnerId, "New Subject", now);
+        sourceSubject.setVisibility(CollectionVisibility.PUBLIC);
+        sourceSubject.setParentCollectionId(sourceGoalId);
+        sourceSubject.setSiblingPosition(2);
+        NoteCollectionEntity adoptedGoal = buildCollection(adoptedGoalId, userId, "My Goal", now);
+        adoptedGoal.setSourcePlanId(sourceGoalId);
+        adoptedGoal.setSourceTitleAtSync(sourceGoal.getTitle());
+        NoteCollectionItemEntity sourceItem = buildItem(sourceSubjectId, sourceNoteId, 0, WEEK_ONE_LABEL);
+        NoteEntity sourceNote = buildNote(sourceNoteId, sourceOwnerId, NOTE_TITLE_ONE);
+        sourceNote.setVisibility(NoteVisibility.PUBLIC);
+        NoteEntity copiedNote = buildNote(copiedNoteId, userId, NOTE_TITLE_ONE);
+        copiedNote.setCopiedFromNoteId(sourceNoteId);
+
+        when(collectionRepository.findByIdAndOwnerUserId(adoptedGoalId, userId)).thenReturn(Optional.of(adoptedGoal));
+        when(collectionRepository.findByIdAndVisibility(sourceGoalId, CollectionVisibility.PUBLIC))
+                .thenReturn(Optional.of(sourceGoal));
+        when(collectionRepository.findOrderedChildrenByParentCollectionIdAndOwnerUserId(sourceGoalId, sourceOwnerId))
+                .thenReturn(List.of(sourceSubject));
+        when(collectionRepository.findOrderedChildrenByParentCollectionIdAndOwnerUserId(adoptedGoalId, userId))
+                .thenReturn(List.of());
+        when(noteRepository.findAllById(any())).thenAnswer(invocation -> {
+            List<NoteEntity> found = new ArrayList<>();
+            for (UUID id : invocation.<Iterable<UUID>>getArgument(0)) {
+                if (id.equals(sourceNoteId)) {
+                    found.add(sourceNote);
+                } else if (id.equals(copiedNoteId)) {
+                    found.add(copiedNote);
+                }
+            }
+            return found;
+        });
+        when(collectionRepository.findByOwnerUserIdAndSourcePlanId(userId, sourceSubjectId))
+                .thenReturn(Optional.empty());
+        when(collectionRepository.findByOwnerUserIdAndSourcePlanIdForUpdate(userId, sourceSubjectId))
+                .thenReturn(Optional.empty());
+        when(collectionRepository.saveAndFlush(any(NoteCollectionEntity.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(noteRepository.findByIdAndVisibility(sourceNoteId, NoteVisibility.PUBLIC))
+                .thenReturn(Optional.of(sourceNote));
+        when(noteService.copyNote(sourceNoteId.toString(), userId, true)).thenReturn(noteResponse(copiedNoteId));
+        when(itemRepository.findByCollectionIdAndNoteId(any(UUID.class), eq(copiedNoteId)))
+                .thenReturn(Optional.empty());
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(any(UUID.class))).thenAnswer(invocation -> {
+            UUID id = invocation.getArgument(0);
+            return id.equals(sourceSubjectId) ? List.of(sourceItem) : List.of();
+        });
+        when(itemRepository.saveAndFlush(any(NoteCollectionItemEntity.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(collectionRepository.save(any(NoteCollectionEntity.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        ReviewSetUpdateResponse result = service.applySourceUpdate(adoptedGoalId, userId);
+
+        assertThat(result.subjectPlansAdded()).isOne();
+        assertThat(result.notesAdded()).isOne();
+        ArgumentCaptor<NoteCollectionEntity> subjectCaptor = ArgumentCaptor.forClass(NoteCollectionEntity.class);
+        verify(collectionRepository).saveAndFlush(subjectCaptor.capture());
+        assertThat(subjectCaptor.getValue().getParentCollectionId()).isEqualTo(adoptedGoalId);
+        assertThat(subjectCaptor.getValue().getSourcePlanId()).isEqualTo(sourceSubjectId);
+        ArgumentCaptor<NoteCollectionItemEntity> itemCaptor = ArgumentCaptor.forClass(NoteCollectionItemEntity.class);
+        verify(itemRepository).saveAndFlush(itemCaptor.capture());
+        assertThat(itemCaptor.getValue().getLabel()).isEqualTo(WEEK_ONE_LABEL);
+        assertThat(itemCaptor.getValue().getSourcePositionAtSync()).isZero();
     }
 
     @Test
@@ -3386,7 +4155,9 @@ class NoteCollectionServiceTest {
         verify(collectionRepository, times(3)).saveAndFlush(goalCaptor.capture());
         assertThat(goalCaptor.getAllValues().getFirst().getEstimatedStudyHours()).isEqualTo(3);
         assertThat(goalCaptor.getAllValues().getFirst().getCompanion()).isEqualTo(companionContent());
-        assertThat(goalCaptor.getAllValues().getFirst().getCompanionStructureSnapshot()).isNull();
+        // ⚠️ REWRITTEN, NOT DELETED, IN v0.116.0 -- see the note on the adopt() assertions. An adopted
+        // Goal is stamped after its children are reparented, so the baseline records child ids.
+        assertThat(goalCaptor.getAllValues().getFirst().getCompanionStructureSnapshot()).isNotNull();
         verify(analyticsService).trackEvent(
                 eq(userId),
                 eq(AnalyticsEventType.STUDY_GOAL_ADOPTED),
@@ -3916,6 +4687,35 @@ class NoteCollectionServiceTest {
         assertThat(firstItem.getPosition()).isZero();
         assertThat(thirdItem.getPosition()).isEqualTo(1);
         verify(itemRepository).saveAll(List.of(firstItem, thirdItem));
+    }
+
+    @Test
+    void removeItem_upstreamPlacementWritesDurableSourceTombstone() {
+        UUID userId = UUID.randomUUID();
+        UUID collectionId = UUID.randomUUID();
+        UUID sourcePlanId = UUID.randomUUID();
+        UUID sourceNoteId = UUID.randomUUID();
+        UUID learnerNoteId = UUID.randomUUID();
+        NoteCollectionEntity collection = buildCollection(collectionId, userId, COLLECTION_TITLE, Instant.now());
+        collection.setSourcePlanId(sourcePlanId);
+        NoteCollectionItemEntity item = buildItem(collectionId, learnerNoteId, 0, null);
+        item.setSourceSyncedAt(Instant.now());
+        NoteEntity learnerNote = buildNote(learnerNoteId, userId, NOTE_TITLE_ONE);
+        learnerNote.setCopiedFromNoteId(sourceNoteId);
+        when(collectionRepository.findByIdAndOwnerUserId(collectionId, userId)).thenReturn(Optional.of(collection));
+        when(itemRepository.findByCollectionIdAndNoteId(collectionId, learnerNoteId)).thenReturn(Optional.of(item));
+        when(noteRepository.findById(learnerNoteId)).thenReturn(Optional.of(learnerNote));
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(collectionId)).thenReturn(List.of());
+        when(collectionRepository.save(collection)).thenAnswer(invocation -> invocation.getArgument(0));
+
+        service.removeItem(collectionId, userId, learnerNoteId);
+
+        ArgumentCaptor<NoteCollectionItemRemovalEntity> removalCaptor =
+                ArgumentCaptor.forClass(NoteCollectionItemRemovalEntity.class);
+        verify(itemRemovalRepository).save(removalCaptor.capture());
+        assertThat(removalCaptor.getValue().getAdoptedCollectionId()).isEqualTo(collectionId);
+        assertThat(removalCaptor.getValue().getSourcePlanId()).isEqualTo(sourcePlanId);
+        assertThat(removalCaptor.getValue().getSourceNoteId()).isEqualTo(sourceNoteId);
     }
 
     @Test

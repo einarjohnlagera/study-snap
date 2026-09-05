@@ -12,6 +12,7 @@ import com.studysnap.backend.dto.NoteCollectionSummaryResponse;
 import com.studysnap.backend.dto.NoteConceptCountsResponse;
 import com.studysnap.backend.dto.PlanReadinessResponse;
 import com.studysnap.backend.dto.QuickReviewAdaptiveQuizResponse;
+import com.studysnap.backend.dto.ReviewSetUpdateResponse;
 import com.studysnap.backend.dto.GoalCollectionDetailResponse;
 import com.studysnap.backend.dto.SetNoteCollectionParentRequest;
 import com.studysnap.backend.dto.SetNoteCollectionChildrenOrderRequest;
@@ -261,6 +262,26 @@ public class NoteCollectionController {
     ) {
         UUID collectionId = UuidParsingUtils.parseUuidOrThrow(id, CollectionNotFoundException::new);
         return service.adoptGoal(collectionId, user.userId());
+    }
+
+    @GetMapping("/{id}/source-update")
+    @PreAuthorize("hasAnyRole('USER','ADMIN')")
+    public ReviewSetUpdateResponse getSourceUpdate(
+            @PathVariable String id,
+            @AuthenticationPrincipal AuthenticatedUser user
+    ) {
+        UUID collectionId = UuidParsingUtils.parseUuidOrThrow(id, CollectionNotFoundException::new);
+        return service.getSourceUpdate(collectionId, user.userId());
+    }
+
+    @PostMapping("/{id}/source-update")
+    @PreAuthorize("hasAnyRole('USER','ADMIN')")
+    public ReviewSetUpdateResponse applySourceUpdate(
+            @PathVariable String id,
+            @AuthenticationPrincipal AuthenticatedUser user
+    ) {
+        UUID collectionId = UuidParsingUtils.parseUuidOrThrow(id, CollectionNotFoundException::new);
+        return service.applySourceUpdate(collectionId, user.userId());
     }
 
     @DeleteMapping("/{id}")

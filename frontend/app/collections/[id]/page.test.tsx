@@ -6,6 +6,7 @@ import {
 } from "./collection-detail-page-client";
 import {
   addCollectionItems,
+  applyReviewSetSourceUpdate,
   ApiRequestError,
   clearCollectionTargetDate,
   clearCompanion,
@@ -18,6 +19,7 @@ import {
   getMe,
   getNoteConceptCounts,
   getPlanReadiness,
+  getReviewSetSourceUpdate,
   listCoursePrograms,
   listNotes,
   setCompanion,
@@ -66,6 +68,7 @@ jest.mock("@/lib/api", () => {
 
   return {
     addCollectionItems: jest.fn(),
+    applyReviewSetSourceUpdate: jest.fn(),
     ApiRequestError,
     clearCollectionTargetDate: jest.fn(),
     clearCompanion: jest.fn(),
@@ -81,6 +84,7 @@ jest.mock("@/lib/api", () => {
     getMe: jest.fn(),
     getNoteConceptCounts: jest.fn(),
     getPlanReadiness: jest.fn(),
+    getReviewSetSourceUpdate: jest.fn(),
     listCoursePrograms: jest.fn(),
     listNotes: jest.fn(),
     setCompanion: jest.fn(),
@@ -286,6 +290,7 @@ describe("CollectionDetailPageClient", () => {
     pushMock.mockReset();
     replaceMock.mockReset();
     (addCollectionItems as jest.Mock).mockReset();
+    (applyReviewSetSourceUpdate as jest.Mock).mockReset();
     (clearCollectionTargetDate as jest.Mock).mockReset();
     (clearCompanion as jest.Mock).mockReset();
     (clearPrimaryCollection as jest.Mock).mockReset();
@@ -297,6 +302,7 @@ describe("CollectionDetailPageClient", () => {
     (getMe as jest.Mock).mockReset();
     (getNoteConceptCounts as jest.Mock).mockReset();
     (getPlanReadiness as jest.Mock).mockReset();
+    (getReviewSetSourceUpdate as jest.Mock).mockReset();
     (listNotes as jest.Mock).mockReset();
     (setCompanion as jest.Mock).mockReset();
     (setPrimaryCollection as jest.Mock).mockReset();
@@ -342,6 +348,16 @@ describe("CollectionDetailPageClient", () => {
     (updateStudyDaysPerWeek as jest.Mock).mockResolvedValue({ studyDaysPerWeek: null });
     (getNoteConceptCounts as jest.Mock).mockResolvedValue({});
     (getPlanReadiness as jest.Mock).mockResolvedValue(planReadiness());
+    (getReviewSetSourceUpdate as jest.Mock).mockResolvedValue({
+      collectionId: "collection-1",
+      sourceState: "CONNECTED",
+      status: "ALREADY_UP_TO_DATE",
+      additionsAvailable: 0,
+      notesAdded: 0,
+      subjectPlansAdded: 0,
+      skippedCount: 0,
+      changes: [],
+    });
     Object.defineProperty(globalThis.window, "innerWidth", {
       configurable: true,
       value: 1024,
@@ -586,6 +602,82 @@ describe("CollectionDetailPageClient", () => {
 
     expect(await screen.findByRole("heading", { name: "LET Mastery" })).toBeInTheDocument();
     expect(screen.getByText("Adopted")).toBeInTheDocument();
+  });
+
+  it("previews additive and surface-only source changes and applies only after learner choice", async () => {
+    (getCollection as jest.Mock).mockResolvedValue(collection({ sourcePlanId: "source-1" }));
+    (getReviewSetSourceUpdate as jest.Mock).mockResolvedValue({
+      collectionId: "collection-1",
+      sourceState: "CONNECTED",
+      status: "UPDATES_AVAILABLE",
+      additionsAvailable: 1,
+      notesAdded: 0,
+      subjectPlansAdded: 0,
+      skippedCount: 0,
+      changes: [
+        {
+          type: "ADDED_NOTE",
+          sourcePlanId: "source-1",
+          sourceNoteId: "source-note-3",
+          subjectTitle: "Biology",
+          noteTitle: "Genetics",
+          previousValue: null,
+          currentValue: "Genetics",
+          applied: false,
+        },
+        {
+          type: "REORDERED",
+          sourcePlanId: "source-1",
+          sourceNoteId: "source-note-1",
+          subjectTitle: "Biology",
+          noteTitle: "Cell Respiration",
+          previousValue: "0",
+          currentValue: "1",
+          applied: false,
+        },
+      ],
+    });
+    (applyReviewSetSourceUpdate as jest.Mock).mockResolvedValue({
+      collectionId: "collection-1",
+      sourceState: "CONNECTED",
+      status: "UPDATED",
+      additionsAvailable: 0,
+      notesAdded: 1,
+      subjectPlansAdded: 0,
+      skippedCount: 0,
+      changes: [],
+    });
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    expect(await screen.findByText("Official Review Set updates available")).toBeInTheDocument();
+    expect(screen.getByText("Genetics in Biology")).toBeInTheDocument();
+    expect(screen.getByText("Changed upstream — no action taken")).toBeInTheDocument();
+    expect(applyReviewSetSourceUpdate).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Apply additions" }));
+
+    await waitFor(() => expect(applyReviewSetSourceUpdate).toHaveBeenCalledWith("collection-1"));
+  });
+
+  it("renders a detached adoption as usable ordinary information with no update action", async () => {
+    (getCollection as jest.Mock).mockResolvedValue(collection({ sourcePlanId: "deleted-source" }));
+    (getReviewSetSourceUpdate as jest.Mock).mockResolvedValue({
+      collectionId: "collection-1",
+      sourceState: "DETACHED",
+      status: "DETACHED_FROM_SOURCE",
+      additionsAvailable: 0,
+      notesAdded: 0,
+      subjectPlansAdded: 0,
+      skippedCount: 0,
+      changes: [],
+    });
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    expect(await screen.findByText("Detached from source")).toBeInTheDocument();
+    expect(screen.getByText(/still yours to use/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Apply additions" })).not.toBeInTheDocument();
   });
 
   it("keeps Adopted near the title and renders Primary as a hero accent", async () => {

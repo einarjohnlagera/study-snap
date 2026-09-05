@@ -65,6 +65,18 @@ public class NoteCollectionEntity {
     @Column(name = "source_plan_id")
     private UUID sourcePlanId;
 
+    @Column(name = "source_title_at_sync", length = 150)
+    private String sourceTitleAtSync;
+
+    @Column(name = "source_parent_id_at_sync")
+    private UUID sourceParentIdAtSync;
+
+    @Column(name = "source_position_at_sync")
+    private Integer sourcePositionAtSync;
+
+    @Column(name = "source_synced_at")
+    private Instant sourceSyncedAt;
+
     @Column(name = "parent_collection_id")
     private UUID parentCollectionId;
 

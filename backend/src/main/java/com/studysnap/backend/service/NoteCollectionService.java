@@ -19,6 +19,8 @@ import com.studysnap.backend.dto.NoteCollectionSummaryResponse;
 import com.studysnap.backend.dto.NoteConceptCountsResponse;
 import com.studysnap.backend.dto.NoteResponse;
 import com.studysnap.backend.dto.PlanReadinessResponse;
+import com.studysnap.backend.dto.ReviewSetUpdateChange;
+import com.studysnap.backend.dto.ReviewSetUpdateResponse;
 import com.studysnap.backend.dto.SetNoteCollectionParentRequest;
 import com.studysnap.backend.dto.SetNoteCollectionChildrenOrderRequest;
 import com.studysnap.backend.dto.SetNoteCollectionOrderRequest;
@@ -31,6 +33,7 @@ import com.studysnap.backend.entity.LearnerLevel;
 import com.studysnap.backend.entity.NoteCollectionEntity;
 import com.studysnap.backend.entity.QuickReviewSessionStatus;
 import com.studysnap.backend.entity.NoteCollectionItemEntity;
+import com.studysnap.backend.entity.NoteCollectionItemRemovalEntity;
 import com.studysnap.backend.entity.NoteEntity;
 import com.studysnap.backend.entity.NoteVisibility;
 import com.studysnap.backend.entity.UserEntity;
@@ -48,6 +51,7 @@ import com.studysnap.backend.repository.NoteCollectionChildCountProjection;
 import com.studysnap.backend.repository.NoteCollectionItemCountProjection;
 import com.studysnap.backend.repository.NoteCollectionItemNoteProjection;
 import com.studysnap.backend.repository.NoteCollectionItemRepository;
+import com.studysnap.backend.repository.NoteCollectionItemRemovalRepository;
 import com.studysnap.backend.repository.NoteCollectionRepository;
 import com.studysnap.backend.repository.QuickReviewSessionRepository;
 import com.studysnap.backend.repository.NoteCollectionNoteProjection;
@@ -128,6 +132,13 @@ public class NoteCollectionService {
     private static final String SOURCE_PLAN_ID_METADATA_KEY = "sourcePlanId";
     private static final String COPIED_COUNT_METADATA_KEY = "copiedCount";
     private static final String SKIPPED_COUNT_METADATA_KEY = "skippedCount";
+    private static final String SOURCE_CONNECTED = "CONNECTED";
+    private static final String SOURCE_DETACHED = "DETACHED";
+    private static final String UPDATE_AVAILABLE = "UPDATES_AVAILABLE";
+    private static final String UPDATE_CURRENT = "ALREADY_UP_TO_DATE";
+    private static final String UPDATE_DETACHED = "DETACHED_FROM_SOURCE";
+    private static final String SOURCE_UPDATE_REQUIRES_ADOPTED_MESSAGE =
+            "Only an adopted Review Set can check for source updates.";
     private static final String ALREADY_ADOPTED_METADATA_KEY = "alreadyAdopted";
     private static final String ADOPTED_SUBJECT_COUNT_METADATA_KEY = "adoptedSubjectCount";
     private static final String SKIPPED_SUBJECT_COUNT_METADATA_KEY = "skippedSubjectCount";
@@ -148,6 +159,7 @@ public class NoteCollectionService {
     private final NoteCollectionRepository collectionRepository;
     private final QuickReviewSessionRepository quickReviewSessionRepository;
     private final NoteCollectionItemRepository itemRepository;
+    private final NoteCollectionItemRemovalRepository itemRemovalRepository;
     private final NoteRepository noteRepository;
     private final StudyPackRepository studyPackRepository;
     private final GeneratedQuizRepository generatedQuizRepository;
@@ -915,6 +927,8 @@ public class NoteCollectionService {
             }
         }
 
+        // After the children exist, so the baseline records child ids rather than an empty structure.
+        stampCompanionBaseline(persistedGoal.collection(), userId);
         trackStudyGoalAdopted(
                 userId,
                 sourceGoalId,
@@ -933,6 +947,152 @@ public class NoteCollectionService {
                 totalNotesCopied,
                 totalNotesSkipped,
                 false
+        );
+    }
+
+    @Transactional(readOnly = true)
+    public ReviewSetUpdateResponse getSourceUpdate(UUID collectionId, UUID userId) {
+        return toUpdateResponse(inspectSourceUpdate(collectionId, userId), 0, 0, 0, Set.of());
+    }
+
+    /**
+     * Applies only source additions. Each note copy and placement insert is isolated so a later retry
+     * can resume after a transient failure without rolling back successful earlier additions.
+     */
+    public ReviewSetUpdateResponse applySourceUpdate(UUID collectionId, UUID userId) {
+        SourceUpdateInspection inspection = inspectSourceUpdate(collectionId, userId);
+        if (inspection.detached()) {
+            return toUpdateResponse(inspection, 0, 0, 0, Set.of());
+        }
+
+        int notesAdded = 0;
+        int subjectPlansAdded = 0;
+        int additionsResolvedByConcurrentPass = 0;
+        Set<UUID> appliedPlanIds = new HashSet<>();
+        int skipped = (int) inspection.changes().stream()
+                .filter(change -> "SKIPPED_NOT_PUBLIC".equals(change.type()))
+                .count();
+        Set<String> appliedKeys = new HashSet<>();
+
+        for (PendingSubjectAddition pending : inspection.subjectAdditions()) {
+            try {
+                CreatedSubjectAddition created = createSubjectAddition(
+                        inspection.adoptedRoot(),
+                        pending.sourcePlan(),
+                        userId
+                );
+                NoteCollectionEntity child = created.collection();
+                if (!Objects.equals(child.getParentCollectionId(), inspection.adoptedRoot().getId())) {
+                    continue;
+                }
+                if (created.created()) {
+                    subjectPlansAdded++;
+                    appliedKeys.add(changeKey("ADDED_SUBJECT_PLAN", pending.sourcePlan().getId(), null));
+                } else {
+                    additionsResolvedByConcurrentPass++;
+                }
+                for (NoteCollectionItemEntity sourceItem : pending.placements()) {
+                    try {
+                        if (applyPlacementAddition(
+                                new PendingPlacementAddition(child, pending.sourcePlan(), sourceItem),
+                                userId
+                        )) {
+                            notesAdded++;
+                            appliedKeys.add(changeKey(
+                                    "ADDED_NOTE",
+                                    pending.sourcePlan().getId(),
+                                    sourceItem.getNoteId()
+                            ));
+                        } else {
+                            additionsResolvedByConcurrentPass++;
+                        }
+                    } catch (RuntimeException exception) {
+                        skipped++;
+                        log.warn(
+                                "review_set_update_item_skipped adoptedCollectionId={} sourcePlanId={} noteId={} userId={}",
+                                child.getId(),
+                                pending.sourcePlan().getId(),
+                                sourceItem.getNoteId(),
+                                userId,
+                                exception
+                        );
+                    }
+                }
+            } catch (RuntimeException exception) {
+                skipped++;
+                log.warn(
+                        "review_set_update_subject_skipped adoptedCollectionId={} sourcePlanId={} userId={}",
+                        collectionId,
+                        pending.sourcePlan().getId(),
+                        userId,
+                        exception
+                );
+            }
+        }
+
+        for (PendingPlacementAddition pending : inspection.placementAdditions()) {
+            try {
+                if (applyPlacementAddition(pending, userId)) {
+                    notesAdded++;
+                    appliedKeys.add(changeKey(
+                            "ADDED_NOTE",
+                            pending.sourcePlan().getId(),
+                            pending.sourceItem().getNoteId()
+                    ));
+                    appliedPlanIds.add(pending.adoptedPlan().getId());
+                } else {
+                    additionsResolvedByConcurrentPass++;
+                }
+            } catch (RuntimeException exception) {
+                skipped++;
+                log.warn(
+                        "review_set_update_item_skipped adoptedCollectionId={} sourcePlanId={} noteId={} userId={}",
+                        pending.adoptedPlan().getId(),
+                        pending.sourcePlan().getId(),
+                        pending.sourceItem().getNoteId(),
+                        userId,
+                        exception
+                );
+            }
+        }
+
+        if (collectionRepository.findByIdAndVisibility(
+                inspection.sourceRoot().getId(),
+                CollectionVisibility.PUBLIC
+        ).isEmpty()) {
+            return new ReviewSetUpdateResponse(
+                    collectionId,
+                    SOURCE_DETACHED,
+                    UPDATE_DETACHED,
+                    0,
+                    notesAdded,
+                    subjectPlansAdded,
+                    skipped,
+                    markApplied(inspection.changes(), appliedKeys)
+            );
+        }
+
+        acknowledgeSourceSnapshots(inspection, appliedPlanIds);
+        int additionsRemaining = Math.max(
+                0,
+                inspection.additionsAvailable()
+                        - notesAdded
+                        - subjectPlansAdded
+                        - additionsResolvedByConcurrentPass
+        );
+        String status = skipped > 0 ? "PARTIALLY_UPDATED" : "UPDATED";
+        if (notesAdded == 0 && subjectPlansAdded == 0 && additionsRemaining == 0) {
+            status = UPDATE_CURRENT;
+        }
+        return new ReviewSetUpdateResponse(
+                collectionId,
+                SOURCE_CONNECTED,
+                status,
+                additionsRemaining,
+                notesAdded,
+                subjectPlansAdded,
+                skipped,
+                markApplied(inspection.changes(), appliedKeys)
         );
     }
 
@@ -1100,6 +1260,19 @@ public class NoteCollectionService {
         NoteCollectionEntity collection = getOwnedCollectionOrThrow(collectionId, userId);
         NoteCollectionItemEntity item = itemRepository.findByCollectionIdAndNoteId(collectionId, noteId)
                 .orElseThrow(CollectionItemNotFoundException::new);
+        if (collection.getSourcePlanId() != null && item.getSourceSyncedAt() != null) {
+            noteRepository.findById(noteId)
+                    .map(this::sourceNoteIdForAdoptedCopy)
+                    .flatMap(Function.identity())
+                    .ifPresent(sourceNoteId -> {
+                        NoteCollectionItemRemovalEntity removal = new NoteCollectionItemRemovalEntity();
+                        removal.setAdoptedCollectionId(collectionId);
+                        removal.setSourcePlanId(collection.getSourcePlanId());
+                        removal.setSourceNoteId(sourceNoteId);
+                        removal.setRemovedAt(Instant.now());
+                        itemRemovalRepository.save(removal);
+                    });
+        }
         itemRepository.delete(item);
 
         List<NoteCollectionItemEntity> remainingItems = itemRepository.findByCollectionIdOrderByPositionAsc(collectionId).stream()
@@ -1190,11 +1363,59 @@ public class NoteCollectionService {
             return false;
         }
         UserEntity user = getUserOrThrow(userId);
-        if (user.getRole() != UserRole.ADMIN) {
+        if (!CuratorAuthoringPredicate.isCurator(user) && collection.getSourcePlanId() == null) {
             return false;
         }
         CompanionStructureSnapshot currentSnapshot = computeCompanionStructureSnapshot(collection, children);
         return !currentSnapshot.equals(collection.getCompanionStructureSnapshot());
+    }
+
+    /**
+     * Records the structure an adopted Companion was written against, so staleness becomes DETECTABLE.
+     *
+     * <p>⚠️ WITHOUT THIS, SCOPE ITEM 4 CHANGES THE ANSWER FOR ZERO ROWS. Adoption copies
+     * {@code companion} ({@code :1650}) but never the snapshot, and the snapshot's only other writer is
+     * {@code setCompanion}, which is {@code assertAdmin}. So {@code companionMayBeOutdated} returned
+     * {@code false} at its FIRST guard for every learner — production carries 523 adopted collections,
+     * 82 with a copied Companion and ZERO with a snapshot. Widening the curator predicate beneath that
+     * guard was observably nothing.
+     *
+     * <p>⚠️ THE BASELINE IS THE LEARNER'S OWN STRUCTURE, NEVER THE SOURCE'S. Copying the curator's
+     * snapshot would compare against ids that can never match — the copies carry fresh ids — which
+     * {@code docs/features/companion.md:154} already argues correctly. What was missing is that nothing
+     * COMPUTED a fresh one.
+     *
+     * <p>The semantic is therefore "this Companion was written for the plan as it stood when you adopted
+     * it": any later change, whether the learner's own edit or an applied upstream addition, is genuine
+     * drift and should say so.
+     */
+    private void stampCompanionBaseline(NoteCollectionEntity collection, UUID userId) {
+        if (!carriesCompanionBaseline(collection)) {
+            return;
+        }
+        List<NoteCollectionEntity> children = collectionRepository
+                .findOrderedChildrenByParentCollectionIdAndOwnerUserId(collection.getId(), userId);
+        saveCompanionBaseline(collection, computeCompanionStructureSnapshot(collection, children));
+    }
+
+    /** The leaf-adoption variant: the note ids are already in hand, so nothing is re-queried. */
+    private void stampCompanionBaselineFromNoteIds(NoteCollectionEntity collection, List<UUID> noteIds) {
+        if (!carriesCompanionBaseline(collection)) {
+            return;
+        }
+        List<UUID> memberIds = noteIds.stream().sorted().toList();
+        saveCompanionBaseline(collection, new CompanionStructureSnapshot(memberIds.size(), memberIds));
+    }
+
+    /** Companion is a top-level-only field, so nothing nested ever carries a baseline. */
+    private boolean carriesCompanionBaseline(NoteCollectionEntity collection) {
+        return collection.getCompanion() != null && collection.getParentCollectionId() == null;
+    }
+
+    private void saveCompanionBaseline(NoteCollectionEntity collection, CompanionStructureSnapshot snapshot) {
+        collection.setCompanionStructureSnapshot(snapshot);
+        touch(collection);
+        collectionRepository.save(collection);
     }
 
     private CompanionStructureSnapshot computeCompanionStructureSnapshot(
@@ -1431,7 +1652,11 @@ public class NoteCollectionService {
                     continue;
                 }
                 NoteResponse copiedNote = noteService.copyNote(sourceItem.getNoteId().toString(), userId, true);
-                copiedItems.add(new CopiedPlanItem(UUID.fromString(copiedNote.id()), sourceItem.getLabel()));
+                copiedItems.add(new CopiedPlanItem(
+                        UUID.fromString(copiedNote.id()),
+                        sourceItem.getLabel(),
+                        sourceItem.getPosition()
+                ));
             } catch (RuntimeException exception) {
                 skippedCount++;
                 log.warn(
@@ -1480,6 +1705,10 @@ public class NoteCollectionService {
             // ownerUserId == source's owner) — a curator's or previous owner's target date means nothing to
             // the new owner, so it stays null on the fresh entity until the new owner sets their own.
             collection.setSourcePlanId(source.getId());
+            collection.setSourceTitleAtSync(source.getTitle());
+            collection.setSourceParentIdAtSync(source.getParentCollectionId());
+            collection.setSourcePositionAtSync(source.getSiblingPosition());
+            collection.setSourceSyncedAt(now);
             collection.setCreatedAt(now);
             collection.setUpdatedAt(now);
             // saveAndFlush so a concurrent first-adopt's unique-index violation surfaces here as a
@@ -1488,6 +1717,14 @@ public class NoteCollectionService {
 
             List<NoteCollectionItemEntity> items = buildAdoptedItems(saved.getId(), copiedItems, now);
             itemRepository.saveAll(items);
+            // ⚠️ Computed from the in-memory list, NOT re-queried. The items were just written in this
+            // same transaction, so a read-back would depend on flush timing for a value that is already
+            // in hand -- and returning an empty baseline here would silently mean "no structure", which
+            // is indistinguishable from the null-snapshot bug this replaces.
+            stampCompanionBaselineFromNoteIds(
+                    saved,
+                    items.stream().map(NoteCollectionItemEntity::getNoteId).toList()
+            );
             trackStudyPlanAdopted(userId, source.getId(), saved.getId(), items.size(), skippedCount, false);
             if (reassertPrimaryAfterPersist) {
                 reassertPrimaryInvariant(userId);
@@ -1525,6 +1762,10 @@ public class NoteCollectionService {
             // ownerUserId == source's owner) — a curator's or previous owner's target date means nothing to
             // the new owner, so it stays null on the fresh entity until the new owner sets their own.
             collection.setSourcePlanId(source.getId());
+            collection.setSourceTitleAtSync(source.getTitle());
+            collection.setSourceParentIdAtSync(source.getParentCollectionId());
+            collection.setSourcePositionAtSync(source.getSiblingPosition());
+            collection.setSourceSyncedAt(now);
             collection.setCreatedAt(now);
             collection.setUpdatedAt(now);
             NoteCollectionEntity saved = collectionRepository.saveAndFlush(collection);
@@ -1568,6 +1809,618 @@ public class NoteCollectionService {
 
     private boolean isPublicSourceNote(UUID noteId) {
         return noteRepository.findByIdAndVisibility(noteId, NoteVisibility.PUBLIC).isPresent();
+    }
+
+    private SourceUpdateInspection inspectSourceUpdate(UUID collectionId, UUID userId) {
+        NoteCollectionEntity adoptedRoot = getOwnedCollectionOrThrow(collectionId, userId);
+        if (adoptedRoot.getSourcePlanId() == null) {
+            throw new InvalidCollectionRequestException(SOURCE_UPDATE_REQUIRES_ADOPTED_MESSAGE);
+        }
+        Optional<NoteCollectionEntity> sourceRoot = collectionRepository.findByIdAndVisibility(
+                adoptedRoot.getSourcePlanId(),
+                CollectionVisibility.PUBLIC
+        );
+        if (sourceRoot.isEmpty()) {
+            return SourceUpdateInspection.detached(adoptedRoot);
+        }
+
+        List<NoteCollectionEntity> sourceChildren = collectionRepository
+                .findOrderedChildrenByParentCollectionIdAndOwnerUserId(
+                        sourceRoot.get().getId(),
+                        sourceRoot.get().getOwnerUserId()
+                );
+        List<NoteCollectionEntity> sourcePlans = sourceChildren.isEmpty()
+                ? List.of(sourceRoot.get())
+                : sourceChildren;
+        List<NoteCollectionEntity> adoptedChildren = collectionRepository
+                .findOrderedChildrenByParentCollectionIdAndOwnerUserId(adoptedRoot.getId(), userId);
+        // ⚠️ THE LEARNER'S OWN STRUCTURE, ALWAYS -- NEVER KEYED ON THE SOURCE'S SHAPE. This previously
+        // read `sourceChildren.isEmpty() ? List.of(adoptedRoot) : adoptedChildren`, so which of the
+        // LEARNER's plans were examined was decided by what the CURATOR's plan looks like today. When
+        // the two shapes disagreed the learner's own placements became invisible to the diff, every
+        // source item looked new, and copyNote handed back the copy they already held -- which then
+        // inserted into a different collection, where UNIQUE (collection_id, note_id) cannot catch it.
+        // Four CPALE learners were in exactly that state: they adopted a FLAT plan, the curator added
+        // seven child Subject Plans afterwards, and one Apply would have re-placed all 19 notes they
+        // already held. Scanning the root as well costs one query on a nested adoption, where the goal
+        // holds no direct items, and is what lets an already-held note resolve as MOVED.
+        List<NoteCollectionEntity> adoptedPlans = new ArrayList<>();
+        adoptedPlans.add(adoptedRoot);
+        adoptedPlans.addAll(adoptedChildren);
+        Map<UUID, NoteCollectionEntity> adoptedBySourcePlan = adoptedPlans.stream()
+                .filter(plan -> plan.getSourcePlanId() != null)
+                .collect(Collectors.toMap(
+                        NoteCollectionEntity::getSourcePlanId,
+                        Function.identity(),
+                        (first, ignored) -> first,
+                        LinkedHashMap::new
+                ));
+
+        Map<UUID, List<NoteCollectionItemEntity>> sourceItemsByPlan = new LinkedHashMap<>();
+        Set<UUID> sourceNoteIds = new LinkedHashSet<>();
+        Map<UUID, Set<UUID>> currentLocationsBySourceNote = new HashMap<>();
+        for (NoteCollectionEntity sourcePlan : sourcePlans) {
+            List<NoteCollectionItemEntity> sourceItems =
+                    itemRepository.findByCollectionIdOrderByPositionAsc(sourcePlan.getId());
+            sourceItemsByPlan.put(sourcePlan.getId(), sourceItems);
+            for (NoteCollectionItemEntity sourceItem : sourceItems) {
+                sourceNoteIds.add(sourceItem.getNoteId());
+                currentLocationsBySourceNote
+                        .computeIfAbsent(sourceItem.getNoteId(), ignored -> new LinkedHashSet<>())
+                        .add(sourcePlan.getId());
+            }
+        }
+        Map<UUID, NoteEntity> sourceNotesById = noteRepository.findAllById(sourceNoteIds).stream()
+                .collect(Collectors.toMap(NoteEntity::getId, Function.identity()));
+
+        List<UUID> adoptedPlanIds = adoptedPlans.stream().map(NoteCollectionEntity::getId).toList();
+        Map<UUID, Set<UUID>> tombstonesByAdoptedPlan = new HashMap<>();
+        Map<UUID, Set<UUID>> removedLocationsBySourceNote = new HashMap<>();
+        if (!adoptedPlanIds.isEmpty()) {
+            for (NoteCollectionItemRemovalEntity removal :
+                    itemRemovalRepository.findByAdoptedCollectionIdIn(adoptedPlanIds)) {
+                tombstonesByAdoptedPlan
+                        .computeIfAbsent(removal.getAdoptedCollectionId(), ignored -> new HashSet<>())
+                        .add(removal.getSourceNoteId());
+                removedLocationsBySourceNote
+                        .computeIfAbsent(removal.getSourceNoteId(), ignored -> new HashSet<>())
+                        .add(removal.getSourcePlanId());
+            }
+        }
+
+        Map<UUID, Map<UUID, AdoptedPlacement>> adoptedPlacementsByPlan = new HashMap<>();
+        Map<UUID, Set<UUID>> adoptedLocationsBySourceNote = new HashMap<>();
+        int adoptedRootDirectItemCount = 0;
+        for (NoteCollectionEntity adoptedPlan : adoptedPlans) {
+            List<NoteCollectionItemEntity> adoptedItems =
+                    itemRepository.findByCollectionIdOrderByPositionAsc(adoptedPlan.getId());
+            if (adoptedPlan.getId().equals(adoptedRoot.getId())) {
+                adoptedRootDirectItemCount = adoptedItems.size();
+            }
+            Map<UUID, NoteEntity> adoptedNotes = noteRepository.findAllById(
+                    adoptedItems.stream().map(NoteCollectionItemEntity::getNoteId).toList()
+            ).stream().collect(Collectors.toMap(NoteEntity::getId, Function.identity()));
+            Map<UUID, AdoptedPlacement> bySourceNote = new LinkedHashMap<>();
+            for (NoteCollectionItemEntity adoptedItem : adoptedItems) {
+                NoteEntity adoptedNote = adoptedNotes.get(adoptedItem.getNoteId());
+                if (adoptedNote == null) {
+                    continue;
+                }
+                sourceNoteIdForAdoptedCopy(adoptedNote).ifPresent(sourceNoteId -> {
+                    bySourceNote.put(sourceNoteId, new AdoptedPlacement(adoptedItem, adoptedNote));
+                    if (adoptedPlan.getSourcePlanId() != null) {
+                        adoptedLocationsBySourceNote
+                                .computeIfAbsent(sourceNoteId, ignored -> new LinkedHashSet<>())
+                                .add(adoptedPlan.getSourcePlanId());
+                    }
+                });
+            }
+            adoptedPlacementsByPlan.put(adoptedPlan.getId(), bySourceNote);
+        }
+
+        List<ReviewSetUpdateChange> changes = new ArrayList<>();
+        List<PendingSubjectAddition> subjectAdditions = new ArrayList<>();
+        List<PendingPlacementAddition> placementAdditions = new ArrayList<>();
+        Set<String> emittedChanges = new HashSet<>();
+        addCollectionDrift(changes, emittedChanges, adoptedRoot, sourceRoot.get());
+
+        for (NoteCollectionEntity sourcePlan : sourcePlans) {
+            NoteCollectionEntity adoptedPlan = adoptedBySourcePlan.get(sourcePlan.getId());
+            if (adoptedPlan == null && adoptedRootDirectItemCount > 0) {
+                // ⚠️ THE CURATOR RESTRUCTURED A FLAT PLAN INTO SUBJECT PLANS, AND THAT IS A MOVE -- WHICH
+                // THIS RELEASE REPORTS AND NEVER APPLIES. Creating the child here would nest it under an
+                // adopted root that still holds direct notes: a shape addItems:1135 and
+                // validateParentCanAcceptChild:1501 both forbid, that no database constraint enforces,
+                // and that the collection page cannot render -- isGoalView switches to the goal branch,
+                // which has no direct-items list, so the learner's own notes would vanish from the page.
+                addChange(changes, emittedChanges, new ReviewSetUpdateChange(
+                        "MOVED",
+                        sourcePlan.getId(),
+                        null,
+                        sourcePlan.getTitle(),
+                        null,
+                        sourceRoot.get().getTitle(),
+                        sourcePlan.getTitle(),
+                        false
+                ));
+                continue;
+            }
+            if (adoptedPlan == null) {
+                Optional<NoteCollectionEntity> adoptedElsewhere =
+                        collectionRepository.findByOwnerUserIdAndSourcePlanId(userId, sourcePlan.getId());
+                if (adoptedElsewhere.isPresent()) {
+                    addChange(changes, emittedChanges, new ReviewSetUpdateChange(
+                            "MOVED",
+                            sourcePlan.getId(),
+                            null,
+                            sourcePlan.getTitle(),
+                            null,
+                            adoptedElsewhere.get().getParentCollectionId() == null ? "Standalone" : "Another Goal",
+                            sourceRoot.get().getTitle(),
+                            false
+                    ));
+                    continue;
+                }
+                List<NoteCollectionItemEntity> additionsForSubject = new ArrayList<>();
+                for (NoteCollectionItemEntity sourceItem :
+                        sourceItemsByPlan.getOrDefault(sourcePlan.getId(), List.of())) {
+                    NoteEntity sourceNote = sourceNotesById.get(sourceItem.getNoteId());
+                    Set<UUID> previousLocations = new HashSet<>(adoptedLocationsBySourceNote
+                            .getOrDefault(sourceItem.getNoteId(), Set.of()));
+                    previousLocations.addAll(removedLocationsBySourceNote
+                            .getOrDefault(sourceItem.getNoteId(), Set.of()));
+                    boolean moved = previousLocations
+                            .stream()
+                            .anyMatch(previousPlan -> !currentLocationsBySourceNote
+                                    .getOrDefault(sourceItem.getNoteId(), Set.of())
+                                    .contains(previousPlan));
+                    if (moved) {
+                        addChange(changes, emittedChanges, placementChange(
+                                "MOVED", sourcePlan, sourceItem.getNoteId(),
+                                sourceNote == null ? null : sourceNote.getTitle(), null, sourcePlan.getTitle()
+                        ));
+                    } else if (sourceNote == null || sourceNote.getVisibility() != NoteVisibility.PUBLIC) {
+                        addChange(changes, emittedChanges, placementChange(
+                                "SKIPPED_NOT_PUBLIC", sourcePlan, sourceItem.getNoteId(),
+                                sourceNote == null ? null : sourceNote.getTitle(), null, null
+                        ));
+                    } else {
+                        additionsForSubject.add(sourceItem);
+                        addChange(changes, emittedChanges, placementChange(
+                                "ADDED_NOTE", sourcePlan, sourceItem.getNoteId(), sourceNote.getTitle(), null,
+                                sourceNote.getTitle()
+                        ));
+                    }
+                }
+                subjectAdditions.add(new PendingSubjectAddition(sourcePlan, additionsForSubject));
+                addChange(changes, emittedChanges, new ReviewSetUpdateChange(
+                        "ADDED_SUBJECT_PLAN",
+                        sourcePlan.getId(),
+                        null,
+                        sourcePlan.getTitle(),
+                        null,
+                        null,
+                        sourcePlan.getTitle(),
+                        false
+                ));
+                continue;
+            }
+            addCollectionDrift(changes, emittedChanges, adoptedPlan, sourcePlan);
+            Map<UUID, AdoptedPlacement> adoptedPlacements =
+                    adoptedPlacementsByPlan.getOrDefault(adoptedPlan.getId(), Map.of());
+            Set<UUID> currentSourceIds = sourceItemsByPlan.getOrDefault(sourcePlan.getId(), List.of()).stream()
+                    .map(NoteCollectionItemEntity::getNoteId)
+                    .collect(Collectors.toSet());
+
+            for (NoteCollectionItemEntity sourceItem :
+                    sourceItemsByPlan.getOrDefault(sourcePlan.getId(), List.of())) {
+                AdoptedPlacement adoptedPlacement = adoptedPlacements.get(sourceItem.getNoteId());
+                NoteEntity sourceNote = sourceNotesById.get(sourceItem.getNoteId());
+                String noteTitle = sourceNote == null ? null : sourceNote.getTitle();
+                if (adoptedPlacement == null) {
+                    if (tombstonesByAdoptedPlan.getOrDefault(adoptedPlan.getId(), Set.of())
+                            .contains(sourceItem.getNoteId())) {
+                        continue;
+                    }
+                    Set<UUID> previousLocations = new HashSet<>(adoptedLocationsBySourceNote
+                            .getOrDefault(sourceItem.getNoteId(), Set.of()));
+                    previousLocations.addAll(removedLocationsBySourceNote
+                            .getOrDefault(sourceItem.getNoteId(), Set.of()));
+                    boolean moved = previousLocations
+                            .stream()
+                            .anyMatch(previousPlan -> !currentLocationsBySourceNote
+                                    .getOrDefault(sourceItem.getNoteId(), Set.of())
+                                    .contains(previousPlan));
+                    if (moved) {
+                        addChange(changes, emittedChanges, placementChange(
+                                "MOVED",
+                                sourcePlan,
+                                sourceItem.getNoteId(),
+                                noteTitle,
+                                null,
+                                sourcePlan.getTitle()
+                        ));
+                    } else if (sourceNote == null || sourceNote.getVisibility() != NoteVisibility.PUBLIC) {
+                        addChange(changes, emittedChanges, placementChange(
+                                "SKIPPED_NOT_PUBLIC",
+                                sourcePlan,
+                                sourceItem.getNoteId(),
+                                noteTitle,
+                                null,
+                                null
+                        ));
+                    } else {
+                        placementAdditions.add(new PendingPlacementAddition(adoptedPlan, sourcePlan, sourceItem));
+                        addChange(changes, emittedChanges, placementChange(
+                                "ADDED_NOTE",
+                                sourcePlan,
+                                sourceItem.getNoteId(),
+                                noteTitle,
+                                null,
+                                noteTitle
+                        ));
+                    }
+                    continue;
+                }
+
+                NoteCollectionItemEntity synced = adoptedPlacement.item();
+                if (synced.getSourceSyncedAt() != null
+                        && !Objects.equals(synced.getSourceLabelAtSync(), sourceItem.getLabel())) {
+                    addChange(changes, emittedChanges, placementChange(
+                            "RENAMED",
+                            sourcePlan,
+                            sourceItem.getNoteId(),
+                            noteTitle,
+                            synced.getSourceLabelAtSync(),
+                            sourceItem.getLabel()
+                    ));
+                }
+                if (synced.getSourcePositionAtSync() != null
+                        && synced.getSourcePositionAtSync() != sourceItem.getPosition()) {
+                    addChange(changes, emittedChanges, placementChange(
+                            "REORDERED",
+                            sourcePlan,
+                            sourceItem.getNoteId(),
+                            noteTitle,
+                            synced.getSourcePositionAtSync().toString(),
+                            Integer.toString(sourceItem.getPosition())
+                    ));
+                }
+            }
+
+            for (Map.Entry<UUID, AdoptedPlacement> entry : adoptedPlacements.entrySet()) {
+                if (currentSourceIds.contains(entry.getKey())) {
+                    continue;
+                }
+                boolean moved = currentLocationsBySourceNote.containsKey(entry.getKey());
+                addChange(changes, emittedChanges, placementChange(
+                        moved ? "MOVED" : "RETIRED",
+                        sourcePlan,
+                        entry.getKey(),
+                        entry.getValue().note().getCopiedFromTitle(),
+                        sourcePlan.getTitle(),
+                        moved ? "Another Subject Plan" : null
+                ));
+            }
+        }
+
+        Set<UUID> currentSourcePlanIds = sourcePlans.stream()
+                .map(NoteCollectionEntity::getId)
+                .collect(Collectors.toSet());
+        for (NoteCollectionEntity adoptedPlan : adoptedPlans) {
+            if (adoptedPlan == adoptedRoot || adoptedPlan.getSourcePlanId() == null
+                    || currentSourcePlanIds.contains(adoptedPlan.getSourcePlanId())) {
+                continue;
+            }
+            Optional<NoteCollectionEntity> relocated = collectionRepository.findByIdAndVisibility(
+                    adoptedPlan.getSourcePlanId(),
+                    CollectionVisibility.PUBLIC
+            );
+            addChange(changes, emittedChanges, new ReviewSetUpdateChange(
+                    relocated.isPresent() ? "MOVED" : "RETIRED",
+                    adoptedPlan.getSourcePlanId(),
+                    null,
+                    adoptedPlan.getSourceTitleAtSync(),
+                    null,
+                    adoptedPlan.getSourceTitleAtSync(),
+                    relocated.map(NoteCollectionEntity::getTitle).orElse(null),
+                    false
+            ));
+        }
+
+        return new SourceUpdateInspection(
+                adoptedRoot,
+                sourceRoot.get(),
+                sourcePlans,
+                adoptedBySourcePlan,
+                sourceItemsByPlan,
+                adoptedPlacementsByPlan,
+                changes,
+                subjectAdditions,
+                placementAdditions,
+                false
+        );
+    }
+
+    private boolean applyPlacementAddition(PendingPlacementAddition pending, UUID userId) {
+        if (!isPublicSourceNote(pending.sourceItem().getNoteId())) {
+            throw new NoteNotFoundException();
+        }
+        NoteResponse copied = noteService.copyNote(pending.sourceItem().getNoteId().toString(), userId, true);
+        UUID copiedNoteId = UUID.fromString(copied.id());
+        try {
+            Boolean inserted = collectionTransactionOperations.execute(status -> {
+                Optional<NoteCollectionItemEntity> existing = itemRepository.findByCollectionIdAndNoteId(
+                        pending.adoptedPlan().getId(),
+                        copiedNoteId
+                );
+                if (existing.isPresent()) {
+                    return false;
+                }
+                List<NoteCollectionItemEntity> current = itemRepository.findByCollectionIdOrderByPositionAsc(
+                        pending.adoptedPlan().getId()
+                );
+                NoteCollectionItemEntity item = new NoteCollectionItemEntity();
+                item.setId(UUID.randomUUID());
+                item.setCollectionId(pending.adoptedPlan().getId());
+                item.setNoteId(copiedNoteId);
+                item.setLabel(pending.sourceItem().getLabel());
+                item.setPosition(current.stream().mapToInt(NoteCollectionItemEntity::getPosition).max().orElse(-1) + 1);
+                Instant now = Instant.now();
+                item.setSourceLabelAtSync(pending.sourceItem().getLabel());
+                item.setSourcePositionAtSync(pending.sourceItem().getPosition());
+                item.setSourceSyncedAt(now);
+                item.setCreatedAt(now);
+                itemRepository.saveAndFlush(item);
+                touch(pending.adoptedPlan(), now);
+                collectionRepository.save(pending.adoptedPlan());
+                return true;
+            });
+            return Boolean.TRUE.equals(inserted);
+        } catch (DataIntegrityViolationException raceLost) {
+            if (itemRepository.findByCollectionIdAndNoteId(pending.adoptedPlan().getId(), copiedNoteId).isPresent()) {
+                return false;
+            }
+            throw raceLost;
+        }
+    }
+
+    private CreatedSubjectAddition createSubjectAddition(
+            NoteCollectionEntity adoptedRoot,
+            NoteCollectionEntity sourcePlan,
+            UUID userId
+    ) {
+        try {
+            return collectionTransactionOperations.execute(status -> {
+                Optional<NoteCollectionEntity> existing =
+                        collectionRepository.findByOwnerUserIdAndSourcePlanIdForUpdate(userId, sourcePlan.getId());
+                if (existing.isPresent()) {
+                    return new CreatedSubjectAddition(existing.get(), false);
+                }
+                Instant now = Instant.now();
+                NoteCollectionEntity child = new NoteCollectionEntity();
+                child.setId(UUID.randomUUID());
+                child.setOwnerUserId(userId);
+                child.setTitle(sourcePlan.getTitle());
+                child.setDescription(sourcePlan.getDescription());
+                child.setVisibility(CollectionVisibility.PRIVATE);
+                child.setCourseProgram(sourcePlan.getCourseProgram());
+                child.setLearnerLevel(sourcePlan.getLearnerLevel());
+                child.setEstimatedStudyHours(sourcePlan.getEstimatedStudyHours());
+                child.setSourcePlanId(sourcePlan.getId());
+                child.setSourceTitleAtSync(sourcePlan.getTitle());
+                child.setSourceParentIdAtSync(sourcePlan.getParentCollectionId());
+                child.setSourcePositionAtSync(sourcePlan.getSiblingPosition());
+                child.setSourceSyncedAt(now);
+                child.setParentCollectionId(adoptedRoot.getId());
+                child.setSiblingPosition(nextChildPosition(adoptedRoot, userId));
+                child.setCreatedAt(now);
+                child.setUpdatedAt(now);
+                return new CreatedSubjectAddition(collectionRepository.saveAndFlush(child), true);
+            });
+        } catch (DataIntegrityViolationException raceLost) {
+            NoteCollectionEntity winner = collectionRepository
+                    .findByOwnerUserIdAndSourcePlanId(userId, sourcePlan.getId())
+                    .orElseThrow(() -> raceLost);
+            return new CreatedSubjectAddition(winner, false);
+        }
+    }
+
+    /**
+     * ⚠️ THIS RE-BASELINES ONLY WHAT THE PASS ACTUALLY APPLIED, AND THE DISTINCTION IS THE WHOLE POINT.
+     *
+     * <p>It previously stamped the current source facts onto the root and EVERY matched plan and
+     * placement on any non-detached apply — including one that added nothing. So a learner who saw
+     * "renamed upstream" alongside three new notes, and pressed Apply additions to get the notes,
+     * silently acknowledged the rename as their new baseline. It was never applied and never shown
+     * again, and the pre-sync value was overwritten, so it could not be recovered. That directly
+     * contradicts the contract in {@code docs/features/collections.md}, which promises rename, reorder,
+     * retire and move stay SURFACED until acted on.
+     *
+     * <p>Additions are the only thing this release applies, so they are the only thing it may
+     * acknowledge. A structural change the learner has not acted on stays reported on every visit.
+     */
+    private void acknowledgeSourceSnapshots(SourceUpdateInspection inspection, Set<UUID> appliedPlanIds) {
+        Instant now = Instant.now();
+        for (NoteCollectionEntity sourcePlan : inspection.sourcePlans()) {
+            NoteCollectionEntity adoptedPlan = inspection.adoptedBySourcePlan().get(sourcePlan.getId());
+            if (adoptedPlan == null || !appliedPlanIds.contains(adoptedPlan.getId())) {
+                continue;
+            }
+            adoptedPlan.setSourceTitleAtSync(sourcePlan.getTitle());
+            adoptedPlan.setSourceParentIdAtSync(sourcePlan.getParentCollectionId());
+            adoptedPlan.setSourcePositionAtSync(sourcePlan.getSiblingPosition());
+            adoptedPlan.setSourceSyncedAt(now);
+            collectionRepository.save(adoptedPlan);
+            Map<UUID, AdoptedPlacement> placements = inspection.adoptedPlacementsByPlan()
+                    .getOrDefault(adoptedPlan.getId(), Map.of());
+            for (NoteCollectionItemEntity sourceItem :
+                    inspection.sourceItemsByPlan().getOrDefault(sourcePlan.getId(), List.of())) {
+                AdoptedPlacement placement = placements.get(sourceItem.getNoteId());
+                if (placement == null) {
+                    continue;
+                }
+                placement.item().setSourceLabelAtSync(sourceItem.getLabel());
+                placement.item().setSourcePositionAtSync(sourceItem.getPosition());
+                placement.item().setSourceSyncedAt(now);
+                itemRepository.save(placement.item());
+            }
+        }
+    }
+
+    private void addCollectionDrift(
+            List<ReviewSetUpdateChange> changes,
+            Set<String> emitted,
+            NoteCollectionEntity adopted,
+            NoteCollectionEntity source
+    ) {
+        if (adopted.getSourceTitleAtSync() != null
+                && !Objects.equals(adopted.getSourceTitleAtSync(), source.getTitle())) {
+            addChange(changes, emitted, new ReviewSetUpdateChange(
+                    "RENAMED",
+                    source.getId(),
+                    null,
+                    source.getTitle(),
+                    null,
+                    adopted.getSourceTitleAtSync(),
+                    source.getTitle(),
+                    false
+            ));
+        }
+        // ⚠️ The guard names the field that is DEREFERENCED below, not merely that a sync happened.
+        // Guarding on getSourceSyncedAt() alone let Objects.equals(null, non-null) return false, enter
+        // the branch, and NPE on .toString() -- and V134's backfill arms exactly that shape, because it
+        // stamps source_synced_at on every adoption while sibling_position is NULL on every top-level
+        // source collection. A null baseline is not drift: we never recorded a position to compare.
+        // The parent change that accompanies it is reported by the MOVED branch below.
+        if (adopted.getSourceSyncedAt() != null
+                && adopted.getSourcePositionAtSync() != null
+                && !Objects.equals(adopted.getSourcePositionAtSync(), source.getSiblingPosition())) {
+            addChange(changes, emitted, new ReviewSetUpdateChange(
+                    "REORDERED",
+                    source.getId(),
+                    null,
+                    source.getTitle(),
+                    null,
+                    adopted.getSourcePositionAtSync().toString(),
+                    source.getSiblingPosition() == null ? null : source.getSiblingPosition().toString(),
+                    false
+            ));
+        }
+        // Same shape as the position guard above: guard the dereferenced field, not the sync marker.
+        if (adopted.getSourceSyncedAt() != null
+                && adopted.getSourceParentIdAtSync() != null
+                && !Objects.equals(adopted.getSourceParentIdAtSync(), source.getParentCollectionId())) {
+            addChange(changes, emitted, new ReviewSetUpdateChange(
+                    "MOVED",
+                    source.getId(),
+                    null,
+                    source.getTitle(),
+                    null,
+                    adopted.getSourceParentIdAtSync().toString(),
+                    source.getParentCollectionId() == null ? null : source.getParentCollectionId().toString(),
+                    false
+            ));
+        }
+    }
+
+    private ReviewSetUpdateChange placementChange(
+            String type,
+            NoteCollectionEntity sourcePlan,
+            UUID sourceNoteId,
+            String noteTitle,
+            String previousValue,
+            String currentValue
+    ) {
+        return new ReviewSetUpdateChange(
+                type,
+                sourcePlan.getId(),
+                sourceNoteId,
+                sourcePlan.getTitle(),
+                noteTitle,
+                previousValue,
+                currentValue,
+                false
+        );
+    }
+
+    private void addChange(
+            List<ReviewSetUpdateChange> changes,
+            Set<String> emitted,
+            ReviewSetUpdateChange change
+    ) {
+        if (emitted.add(changeKey(change.type(), change.sourcePlanId(), change.sourceNoteId()))) {
+            changes.add(change);
+        }
+    }
+
+    private String changeKey(String type, UUID sourcePlanId, UUID sourceNoteId) {
+        return type + ":" + sourcePlanId + ":" + sourceNoteId;
+    }
+
+    private List<ReviewSetUpdateChange> markApplied(
+            List<ReviewSetUpdateChange> changes,
+            Set<String> appliedKeys
+    ) {
+        return changes.stream().map(change -> new ReviewSetUpdateChange(
+                change.type(),
+                change.sourcePlanId(),
+                change.sourceNoteId(),
+                change.subjectTitle(),
+                change.noteTitle(),
+                change.previousValue(),
+                change.currentValue(),
+                appliedKeys.contains(changeKey(change.type(), change.sourcePlanId(), change.sourceNoteId()))
+        )).toList();
+    }
+
+    private ReviewSetUpdateResponse toUpdateResponse(
+            SourceUpdateInspection inspection,
+            int notesAdded,
+            int subjectPlansAdded,
+            int skipped,
+            Set<String> appliedKeys
+    ) {
+        if (inspection.detached()) {
+            return new ReviewSetUpdateResponse(
+                    inspection.adoptedRoot().getId(),
+                    SOURCE_DETACHED,
+                    UPDATE_DETACHED,
+                    0,
+                    notesAdded,
+                    subjectPlansAdded,
+                    skipped,
+                    List.of()
+            );
+        }
+        return new ReviewSetUpdateResponse(
+                inspection.adoptedRoot().getId(),
+                SOURCE_CONNECTED,
+                inspection.additionsAvailable() > 0 ? UPDATE_AVAILABLE : UPDATE_CURRENT,
+                inspection.additionsAvailable(),
+                notesAdded,
+                subjectPlansAdded,
+                skipped,
+                markApplied(inspection.changes(), appliedKeys)
+        );
+    }
+
+    private int nextChildPosition(NoteCollectionEntity adoptedRoot, UUID userId) {
+        return collectionRepository.findOrderedChildrenByParentCollectionIdAndOwnerUserId(
+                adoptedRoot.getId(),
+                userId
+        ).stream().map(NoteCollectionEntity::getSiblingPosition)
+                .filter(Objects::nonNull)
+                .mapToInt(Integer::intValue)
+                .max()
+                .orElse(-1) + 1;
+    }
+
+    private Optional<UUID> sourceNoteIdForAdoptedCopy(NoteEntity note) {
+        if (note.getCopiedFromNoteId() != null) {
+            return Optional.of(note.getCopiedFromNoteId());
+        }
+        return Optional.ofNullable(note.getSourceNoteId());
     }
 
     private void trackStudyPlanAdopted(
@@ -1896,6 +2749,9 @@ public class NoteCollectionService {
             item.setNoteId(copiedItem.noteId());
             item.setLabel(copiedItem.label());
             item.setPosition(index);
+            item.setSourceLabelAtSync(copiedItem.label());
+            item.setSourcePositionAtSync(copiedItem.sourcePosition());
+            item.setSourceSyncedAt(now);
             item.setCreatedAt(now);
             items.add(item);
         }
@@ -2271,7 +3127,61 @@ public class NoteCollectionService {
         );
     }
 
-    private record CopiedPlanItem(UUID noteId, String label) {
+    private record CopiedPlanItem(UUID noteId, String label, int sourcePosition) {
+    }
+
+    private record AdoptedPlacement(NoteCollectionItemEntity item, NoteEntity note) {
+    }
+
+    private record PendingSubjectAddition(
+            NoteCollectionEntity sourcePlan,
+            List<NoteCollectionItemEntity> placements
+    ) {
+    }
+
+    private record CreatedSubjectAddition(NoteCollectionEntity collection, boolean created) {
+    }
+
+    private record PendingPlacementAddition(
+            NoteCollectionEntity adoptedPlan,
+            NoteCollectionEntity sourcePlan,
+            NoteCollectionItemEntity sourceItem
+    ) {
+    }
+
+    private record SourceUpdateInspection(
+            NoteCollectionEntity adoptedRoot,
+            NoteCollectionEntity sourceRoot,
+            List<NoteCollectionEntity> sourcePlans,
+            Map<UUID, NoteCollectionEntity> adoptedBySourcePlan,
+            Map<UUID, List<NoteCollectionItemEntity>> sourceItemsByPlan,
+            Map<UUID, Map<UUID, AdoptedPlacement>> adoptedPlacementsByPlan,
+            List<ReviewSetUpdateChange> changes,
+            List<PendingSubjectAddition> subjectAdditions,
+            List<PendingPlacementAddition> placementAdditions,
+            boolean detached
+    ) {
+        private static SourceUpdateInspection detached(NoteCollectionEntity adoptedRoot) {
+            return new SourceUpdateInspection(
+                    adoptedRoot,
+                    null,
+                    List.of(),
+                    Map.of(),
+                    Map.of(),
+                    Map.of(),
+                    List.of(),
+                    List.of(),
+                    List.of(),
+                    true
+            );
+        }
+
+        private int additionsAvailable() {
+            return (int) changes.stream()
+                    .filter(change -> "ADDED_NOTE".equals(change.type())
+                            || "ADDED_SUBJECT_PLAN".equals(change.type()))
+                    .count();
+        }
     }
 
     private record ReadinessConceptTotals(
