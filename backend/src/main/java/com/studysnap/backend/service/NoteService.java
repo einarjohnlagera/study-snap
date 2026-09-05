@@ -253,7 +253,11 @@ public class NoteService {
             // courseProgramText arrives null and the profile program would be stamped onto the note --
             // exactly what docs/features/notes.md forbids on an edit.
             if (!courseProgramShadowed) {
-                entity.setCourseProgram(resolveRequestedCourseProgram(request.courseProgramText(), owner));
+                entity.setCourseProgram(resolveRequestedCourseProgram(
+                        request.courseProgramText(),
+                        owner,
+                        entity.getCourseProgram()
+                ));
             }
         }
         DomainContext previousDomainContext = entity.getDomainContext();
@@ -491,7 +495,11 @@ public class NoteService {
         entity.setVisibility(visibility);
         entity.setUpdatedAt(OffsetDateTime.now());
         NoteEntity saved = noteRepository.save(entity);
-        if (previousVisibility != NoteVisibility.PUBLIC && visibility == NoteVisibility.PUBLIC) {
+        boolean becomingPublic = previousVisibility != NoteVisibility.PUBLIC && visibility == NoteVisibility.PUBLIC;
+        if (becomingPublic) {
+            clearCopiedApplicabilityOnPublish(saved, ownerUserId);
+        }
+        if (becomingPublic) {
             analyticsService.trackEvent(
                     ownerUserId,
                     AnalyticsEventType.PUBLIC_NOTE_PUBLISHED,
@@ -1441,11 +1449,80 @@ public class NoteService {
                 .orElseThrow(UserNotFoundException::new);
     }
 
+    /**
+     * Publishing a copied note transfers its program classification from the curator to the learner.
+     *
+     * <p>⚠️ WHY THIS IS AT THE PUBLISH SEAM AND NOT AT COPY. A learner's copy inherits the curator's
+     * {@code note_course_program} rows verbatim ({@code copyNote}), and public discovery is join-first,
+     * so a learner who publishes their copy would have the CURATOR's rows decide which public shelves it
+     * appears on — for a note the curator never published. Clearing at copy instead was REJECTED: 44.7%
+     * of curated notes carry a NULL program string and 40.5% carry two or more join rows, so a copy
+     * would be left with no representation at all. See {@code ADR-001}, which records this resolution
+     * and the rejection of both previously-proposed options.
+     *
+     * <p>⚠️ IT TRANSFERS AUTHORITY RATHER THAN MERELY REVOKING IT. At zero join rows
+     * {@link NoteCourseProgramShadowing#isShadowed} is false, so clearing UN-SHADOWS the learner's own
+     * Course / Program field — the surface then renders it and the learner states their own
+     * classification. A null string is deliberately left null: the note is public but UNSHELVED until
+     * they answer. Backfilling it from the joined catalog name would relaunder curator classification
+     * through a different column and is forbidden.
+     *
+     * <p>⚠️ CURATORS ARE EXCLUDED, AND THAT EXCLUSION IS LOAD-BEARING RATHER THAN DEFENSIVE — without it
+     * this method would strip the authored applicability off every curated note on publication and
+     * destroy the catalog.
+     *
+     * <p>⚠️ IT IS NON-DESTRUCTIVE ONLY BECAUSE OF AN INVARIANT THAT LIVES ELSEWHERE, AND A FUTURE
+     * RELEASE COULD BREAK IT WITHOUT TOUCHING THIS FILE. Every join-row write path is curator-gated —
+     * {@code NoteApplicableProgramsService.findAuthorizedNote} requires {@code isOwner && isCurator},
+     * and both {@code create} and {@code update} guard on {@code curator} — or copy-inherited
+     * ({@code copyNote}). So on a learner-owned note EVERY row is copied and clearing destroys nothing
+     * the owner authored. **Give learners an Applicable Programs surface and this becomes data loss.**
+     * The one account that already escapes the invariant — one that authored rows while a curator and is
+     * no longer one — is pinned by
+     * {@code NoteServiceTest#updateVisibility_clearsRowsWhenAnOwnerWhoAuthoredThemIsNoLongerACurator}.
+     *
+     * <p>⚠️ The {@code getOwnerOrThrow} lookup is required, not incidental: the curator exclusion cannot
+     * be evaluated without it. It makes {@code UserNotFoundException} newly reachable from a publish —
+     * only if the owner row vanished mid-session — so do NOT "optimize" it away, which would silently
+     * restore the catalog-destroying behaviour above.
+     */
+    private void clearCopiedApplicabilityOnPublish(NoteEntity note, UUID ownerUserId) {
+        if (CuratorAuthoringPredicate.isCurator(getOwnerOrThrow(ownerUserId))) {
+            return;
+        }
+        noteRepository.flush();
+        noteCourseProgramRepository.replace(note.getId(), Set.of());
+    }
+
     private String resolveRequestedCourseProgram(String requestedCourseProgram, UserEntity owner) {
+        return resolveRequestedCourseProgram(requestedCourseProgram, owner, null);
+    }
+
+    /**
+     * ⚠️ {@code storedCourseProgram} EXISTS BECAUSE PUBLISHING NOW UN-SHADOWS THIS FIELD, WHICH MAKES A
+     * PREVIOUSLY UNREACHABLE BRANCH REACHABLE. Before a copied note could be published, it always
+     * carried a join row, so {@code isShadowed} was true and {@code update} skipped this resolver
+     * entirely. After {@link #clearCopiedApplicabilityOnPublish} the note has zero rows, is no longer
+     * shadowed, and every subsequent edit reaches here — so a client that omits
+     * {@code courseProgramText} for any reason would fall through to the profile program and STAMP it
+     * onto the note, which {@code docs/features/notes.md} forbids on an edit. Retaining the stored value
+     * is the correct answer: it is the learner's own, and it is what they were last shown.
+     *
+     * <p>The profile fallback is preserved for the case it was written for — a note with no stored value
+     * at all — so this narrows the branch rather than removing it.
+     */
+    private String resolveRequestedCourseProgram(
+            String requestedCourseProgram,
+            UserEntity owner,
+            String storedCourseProgram) {
         String normalizedRequested = normalizeOptionalCourseProgram(requestedCourseProgram);
         if (normalizedRequested != null) {
             assertCourseProgramFitsStorage(normalizedRequested);
             return normalizedRequested;
+        }
+        String normalizedStored = normalizeOptionalCourseProgram(storedCourseProgram);
+        if (normalizedStored != null) {
+            return normalizedStored;
         }
         String resolved = normalizeOptionalCourseProgram(owner.getCourseProgram());
         if (resolved == null) {

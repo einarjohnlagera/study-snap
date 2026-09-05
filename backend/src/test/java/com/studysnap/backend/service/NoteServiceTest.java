@@ -804,6 +804,176 @@ class NoteServiceTest {
         );
     }
 
+    /**
+     * ⚠️ THE COMPANION GUARD, AND THE BRANCH IT COVERS IS ONE v0.115.0 ITSELF MADE REACHABLE.
+     *
+     * <p>Before publishing cleared the copied rows, a copied note always carried at least one, so
+     * {@code NoteCourseProgramShadowing.isShadowed} was true and {@code update} skipped the resolver
+     * entirely. After clearing, the note has ZERO rows, is no longer shadowed, and every subsequent edit
+     * reaches {@code resolveRequestedCourseProgram} — where an omitted {@code courseProgramText} used to
+     * fall through to the OWNER'S PROFILE program and stamp it onto the note.
+     *
+     * <p>⚠️ THIS IS NOT HYPOTHETICAL: {@code UpsertNoteRequest} carries a {@code @JsonAlias} added
+     * specifically because a client on a stale bundle sends the old field name, {@code courseProgramText}
+     * reads as null, and the note is silently reassigned. That alias mitigates one cause; retaining the
+     * stored value fixes the resolver itself.
+     *
+     * <p>The fixture asserts the note keeps ITS OWN value rather than acquiring the profile's — the two
+     * are deliberately different strings, because a fixture where they match passes under both the defect
+     * and the fix.
+     */
+    @Test
+    void update_retainsTheNotesOwnCourseProgramWhenTheRequestOmitsItRatherThanStampingTheProfile() {
+        UUID ownerUserId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        UserEntity learner = buildUser(ownerUserId, "learner@example.com");
+        learner.setCourseProgram("Profile Program");
+        when(userRepository.findById(ownerUserId)).thenReturn(Optional.of(learner));
+        NoteEntity existing = buildNote(noteId, ownerUserId, NoteStatus.GENERATED, NoteVisibility.PUBLIC, "content");
+        existing.setCourseProgram("Learner Chosen Program");
+        existing.setDomainContext(null);
+        when(noteRepository.findByIdAndOwnerUserId(noteId, ownerUserId)).thenReturn(Optional.of(existing));
+        // Zero join rows is the post-publish state: not shadowed, so the resolver actually runs.
+        when(noteCourseProgramRepository.findIdsByNoteId(noteId)).thenReturn(Set.of());
+
+        noteService.update(
+                noteId.toString(),
+                new UpsertNoteRequest("Title", "Subject", null, null, null, List.of(), "content"),
+                ownerUserId
+        );
+
+        ArgumentCaptor<NoteEntity> savedNote = ArgumentCaptor.forClass(NoteEntity.class);
+        verify(noteRepository).save(savedNote.capture());
+        assertThat(savedNote.getValue().getCourseProgram())
+                .as("an omitted courseProgramText must retain the note's own stored value, never acquire "
+                        + "the owner's profile program")
+                .isEqualTo("Learner Chosen Program");
+    }
+
+    /**
+     * ⚠️ THE PRE-DECLARED DISCRIMINATING GUARD FOR v0.115.0, AND IT IS THE CURATOR HALF THAT DISCRIMINATES.
+     * A fixture that only exercises the learner path passes under a version that clears rows for EVERYONE
+     * — which would strip authored applicability off every curated note on publication and destroy the
+     * catalog — so it would prove nothing. This asserts the exclusion directly.
+     */
+    @Test
+    void updateVisibility_keepsAuthoredApplicabilityWhenACuratorPublishes() {
+        UUID ownerUserId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        UserEntity curator = buildUser(ownerUserId, "curator@example.com");
+        curator.setRole(UserRole.ADMIN);
+        when(userRepository.findById(ownerUserId)).thenReturn(Optional.of(curator));
+        NoteEntity existing = buildNote(noteId, ownerUserId, NoteStatus.GENERATED, NoteVisibility.PRIVATE, "content");
+        when(noteRepository.findByIdAndOwnerUserId(noteId, ownerUserId)).thenReturn(Optional.of(existing));
+
+        noteService.updateVisibility(noteId.toString(), "PUBLIC", ownerUserId);
+
+        verify(noteCourseProgramRepository, never()).replace(eq(noteId), any());
+    }
+
+    /**
+     * ⚠️ THE TEACHER LEG OF THE CURATOR PREDICATE, PINNED SEPARATELY BECAUSE THE ADMIN GUARD ABOVE DOES
+     * NOT COVER IT — AND THAT GAP WAS MEASURED, NOT ANTICIPATED. Replacing
+     * {@code CuratorAuthoringPredicate.isCurator} with a bare {@code role == ADMIN} check SURVIVED the
+     * whole 99-test class: the ADMIN fixture still kept its rows and the learner fixture still lost
+     * them, so both guards passed while every TEACHER-owned curated note would have had its authored
+     * applicability stripped on publication. Most of the public catalog is curator-authored, so that is
+     * the catalog-destroying mutation the exclusion exists to prevent, reaching production green.
+     */
+    @Test
+    void updateVisibility_keepsAuthoredApplicabilityWhenATeacherCuratorPublishes() {
+        UUID ownerUserId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        when(userRepository.findById(ownerUserId)).thenReturn(Optional.of(curator(ownerUserId)));
+        NoteEntity existing = buildNote(noteId, ownerUserId, NoteStatus.GENERATED, NoteVisibility.PRIVATE, "content");
+        when(noteRepository.findByIdAndOwnerUserId(noteId, ownerUserId)).thenReturn(Optional.of(existing));
+
+        noteService.updateVisibility(noteId.toString(), "PUBLIC", ownerUserId);
+
+        verify(noteCourseProgramRepository, never()).replace(eq(noteId), any());
+    }
+
+    /**
+     * ⚠️ THE CLEARING IS SAFE ONLY BECAUSE OF AN INVARIANT THAT LIVES ELSEWHERE, SO THE ONE CASE THAT
+     * ESCAPES IT IS PINNED AS A DECISION RATHER THAN LEFT AS AN ACCIDENT. Every join-row write path is
+     * curator-gated ({@code NoteApplicableProgramsService} requires {@code isOwner && isCurator},
+     * {@code create} and {@code update} both guard on {@code curator}) or copy-inherited
+     * ({@code copyNote}) — so on a learner-owned note every row is copied, and clearing destroys
+     * nothing the owner authored. An account that authored rows WHILE a curator and is no longer one
+     * is the sole exception: its own rows are cleared. That is intended (it is no longer a curator, and
+     * the string fallback un-shadows to carry discovery), but it is the reachable case, so it is
+     * asserted here. **If a future release gives learners an Applicable Programs surface, this method
+     * becomes destructive and must be narrowed first.**
+     */
+    @Test
+    void updateVisibility_clearsRowsWhenAnOwnerWhoAuthoredThemIsNoLongerACurator() {
+        UUID ownerUserId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        UserEntity formerCurator = buildUser(ownerUserId, "former-curator@example.com");
+        formerCurator.setProfileType(ProfileType.STUDENT);
+        when(userRepository.findById(ownerUserId)).thenReturn(Optional.of(formerCurator));
+        NoteEntity existing = buildNote(noteId, ownerUserId, NoteStatus.GENERATED, NoteVisibility.PRIVATE, "content");
+        when(noteRepository.findByIdAndOwnerUserId(noteId, ownerUserId)).thenReturn(Optional.of(existing));
+
+        noteService.updateVisibility(noteId.toString(), "PUBLIC", ownerUserId);
+
+        verify(noteCourseProgramRepository).replace(noteId, Set.of());
+    }
+
+    /**
+     * The learner half of the same guard. Publishing transfers program classification from the curator
+     * to the learner, so the copied rows are cleared and the learner's own field is un-shadowed.
+     */
+    @Test
+    void updateVisibility_clearsCopiedApplicabilityWhenALearnerPublishesTheirCopy() {
+        UUID ownerUserId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        NoteEntity existing = buildNote(noteId, ownerUserId, NoteStatus.GENERATED, NoteVisibility.PRIVATE, "content");
+        when(noteRepository.findByIdAndOwnerUserId(noteId, ownerUserId)).thenReturn(Optional.of(existing));
+
+        noteService.updateVisibility(noteId.toString(), "PUBLIC", ownerUserId);
+
+        verify(noteCourseProgramRepository).replace(noteId, Set.of());
+    }
+
+    /**
+     * ⚠️ The transition is what transfers authority, not the resulting state. A resave of an
+     * already-public note must not re-run the clearing — the learner may have set their own programs
+     * since publishing, and clearing again would silently destroy them on an unrelated action.
+     */
+    @Test
+    void updateVisibility_doesNotClearApplicabilityWhenTheNoteWasAlreadyPublic() {
+        UUID ownerUserId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        NoteEntity existing = buildNote(noteId, ownerUserId, NoteStatus.GENERATED, NoteVisibility.PUBLIC, "content");
+        when(noteRepository.findByIdAndOwnerUserId(noteId, ownerUserId)).thenReturn(Optional.of(existing));
+
+        noteService.updateVisibility(noteId.toString(), "PUBLIC", ownerUserId);
+
+        verify(noteCourseProgramRepository, never()).replace(eq(noteId), any());
+    }
+
+    /**
+     * ⚠️ THE SECOND PRE-DECLARED GUARD — the note goes public and UNSHELVED, never backfilled. A copy of
+     * a post-slice-4 curator note carries a NULL program string (44.7% of curated notes do), and
+     * publishing must leave it null so the learner answers for themselves. Filling it from the joined
+     * catalog name would relaunder curator classification through a different column.
+     */
+    @Test
+    void updateVisibility_leavesANullProgramStringNullWhenPublishingRatherThanBackfillingIt() {
+        UUID ownerUserId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        NoteEntity existing = buildNote(noteId, ownerUserId, NoteStatus.GENERATED, NoteVisibility.PRIVATE, "content");
+        existing.setCourseProgram(null);
+        when(noteRepository.findByIdAndOwnerUserId(noteId, ownerUserId)).thenReturn(Optional.of(existing));
+
+        noteService.updateVisibility(noteId.toString(), "PUBLIC", ownerUserId);
+
+        ArgumentCaptor<NoteEntity> savedNote = ArgumentCaptor.forClass(NoteEntity.class);
+        verify(noteRepository).save(savedNote.capture());
+        assertThat(savedNote.getValue().getCourseProgram()).isNull();
+    }
+
     @Test
     void updateVisibility_doesNotTrackPublicToPublicResave() {
         UUID ownerUserId = UUID.randomUUID();

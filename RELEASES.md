@@ -86,7 +86,94 @@ string was null must end up public and UNSHELVED, never backfilled from the join
 
 ### Shipped
 
-_(nothing yet)_
+- **Publishing a copied note transfers its program classification from the curator to the learner.** At
+  the `PRIVATE → PUBLIC` transition on a learner-owned note, `NoteService.updateVisibility` clears the
+  copied `note_course_program` rows. It reuses the transition predicate the method already computed for
+  analytics, and `replace(noteId, Set.of())` rather than a new repository method. **⚠️ Curators are
+  excluded, and that exclusion is load-bearing rather than defensive — without it this would strip
+  authored applicability off every curated note on publication and destroy the catalog.**
+- **Authority is TRANSFERRED, not merely revoked.** At zero join rows `NoteCourseProgramShadowing`
+  returns false, so clearing un-shadows the learner's own Course / Program field, which the client then
+  renders and requires. **A null string is left null — public but UNSHELVED until the learner answers**,
+  never backfilled from the joined catalog name.
+- **⚠️ THE COMPANION FIX TURNED OUT TO BE A BRANCH THIS RELEASE ITSELF MADE REACHABLE, which is the one
+  thing implementation found that the architecture had not fully traced.** Before clearing, a copied note
+  always carried at least one join row, so it was always shadowed and `update` skipped
+  `resolveRequestedCourseProgram` entirely. After clearing it has zero rows, is no longer shadowed, and
+  **every subsequent edit reaches that resolver — where an omitted `courseProgramText` fell through to
+  the owner's PROFILE program and stamped it onto the note.** The resolver now retains the note's own
+  stored value, with the profile fallback preserved only for a note that has none. **⚠️ Not hypothetical:
+  `UpsertNoteRequest` carries a `@JsonAlias` added precisely because a client on a stale bundle sends the
+  old field name and silently reassigns the note. That alias mitigated one cause; this fixes the resolver
+  itself.**
+- **Seven guards; five mutants applied, each killed by a NAMED test.** Removing the curator exclusion →
+  `updateVisibility_keepsAuthoredApplicabilityWhenACuratorPublishes`; removing the clearing →
+  `updateVisibility_clearsCopiedApplicabilityWhenALearnerPublishesTheirCopy`; clearing on every save
+  rather than the transition → `updateVisibility_doesNotClearApplicabilityWhenTheNoteWasAlreadyPublic`;
+  removing the stored-value retention →
+  `update_retainsTheNotesOwnCourseProgramWhenTheRequestOmitsItRatherThanStampingTheProfile`. **⚠️ The
+  curator guard is the discriminating one** — a learner-only fixture passes under a version that clears
+  rows for everyone and proves nothing. The companion fixture uses **deliberately different** stored and
+  profile strings, because one where they match passes under both the defect and the fix.
+- **⚠️ A FIFTH MUTANT SURVIVED THE FIRST FIVE GUARDS AND IS THE MOST IMPORTANT RESULT OF THE
+  VERIFICATION ROUND — IT IS THE CATALOG-DESTROYING ONE THE EXCLUSION EXISTS TO PREVENT.** Replacing
+  `CuratorAuthoringPredicate.isCurator` with a bare `role == ADMIN` check **passed all 99 tests in
+  `NoteServiceTest`**: the ADMIN fixture still kept its rows and the learner fixture still lost theirs,
+  so both guards were satisfied while **every TEACHER-owned curated note would have had its authored
+  applicability stripped on publication.** Most of the public catalog is curator-authored. Closed by
+  `updateVisibility_keepsAuthoredApplicabilityWhenATeacherCuratorPublishes`, which pins the TEACHER leg
+  separately — **the ADMIN guard cannot cover it, which is exactly the "a fixture can satisfy a guard
+  without exercising the branch that matters" shape this repo has now paid for across several
+  releases.**
+- **A seventh guard pins the one case that escapes the invariant, as a decision rather than an
+  accident.** `updateVisibility_clearsRowsWhenAnOwnerWhoAuthoredThemIsNoLongerACurator` — an account
+  that authored rows while a curator and is no longer one loses its OWN rows on republish. Intended (it
+  is no longer a curator, and the un-shadowed string carries discovery), but reachable, so it is
+  asserted rather than left to be discovered.
+- **⚠️ THE PRE-DECLARED ESCALATION TRIGGER WAS CHECKED RATHER THAN ASSUMED, AND DID NOT FIRE.** It was
+  *"escalate if the clearing needs a second write path, or if `updateVisibility` proves not to be the
+  sole route to non-`PRIVATE`."* Every `setVisibility` writer on a note was enumerated: `NoteService:194`
+  (create), `:369` (`copyNote` — the path this slice exists to cover, and it starts **PRIVATE**),
+  `StudyPackService:775` and `ShareService:127` all set `PRIVATE`; `NoteService:495` is inside
+  `updateVisibility` itself. **No native `UPDATE` touches `notes.visibility`**, and every other
+  `NoteVisibility.PUBLIC` reference is a read predicate. **⚠️ AND THE ONE BULK PUBLISHER GOES THROUGH
+  THIS METHOD: `NoteBulkGenerationService:337` calls `noteService.updateVisibility(...)`** — a curator
+  surface, correctly excluded, which is a second reason the TEACHER leg had to be pinned.
+- **⚠️ THE CLEARING WAS CONFIRMED TO ACTUALLY DELETE, WHICH SEVEN MOCKED GUARDS STRUCTURALLY CANNOT
+  SHOW.** `replace(noteId, Set.of())` computes `removedIds = existingIds` and calls
+  `delete(noteId, existingIds)`; the `isEmpty()` early-return sits in `delete` and is reached only when
+  there is nothing to remove. `insert` receives an empty collection and no-ops. **⚠️ It is
+  `jdbcTemplate`, not JPA — which is why the `noteRepository.flush()` before it is load-bearing rather
+  than defensive**, since a raw JDBC delete does not see the persistence context.
+- **`docs/features/notes.md` updated** with both behaviours, the curator exclusion and its reason, the
+  transition-only rule, and the separation of visibility from program-specific discovery.
+- **Verification: `./mvnw clean install` → BUILD SUCCESS, 2120 tests, 0 failures**, counted from
+  `target/surefire-reports/*.xml` after a clean. **No frontend test run: no frontend file was touched.**
+
+**Known limitations**
+
+- **The clearing is not retroactive, and deliberately so.** 536 existing learner copies carry copied
+  rows; **zero are public**, so none is currently mis-shelved. They are cleared if and when their owner
+  publishes. **⚠️ A backfill was rejected** — it would clear rows on private notes nobody can see, which
+  changes nothing observable while destroying the initialization value copy exists to provide.
+- **A public → private → public round trip loses the copied rows permanently.** The first publish clears
+  them and nothing restores them on unpublish. That is consistent with the model — authority transferred
+  at first publication — but it is a real one-way door, stated rather than discovered later.
+  **⚠️ WHAT BOUNDS THE DAMAGE IS AN INVARIANT ELSEWHERE, NOT ANYTHING IN THIS METHOD, AND IT WAS
+  VERIFIED RATHER THAN ASSUMED:** all four join-row write paths are curator-gated
+  (`NoteApplicableProgramsService:111` requires `isOwner && isCurator`; `NoteService:207` and `:273`
+  guard on `curator`) or copy-inherited (`NoteService:401`), **so a learner has no surface on which to
+  author a row and the clearing can only ever destroy copied ones.** A republish afterwards is a no-op
+  on zero rows, and the learner's own program STRING is never touched. **⚠️ ONE ACCOUNT ESCAPES THAT
+  INVARIANT — one that authored rows while a curator and is no longer one (a profile-type change, a
+  cleared onboarding marker) loses its OWN rows on republish.** Intended, since it is no longer a
+  curator and the un-shadowed string carries discovery, but reachable — so it is pinned by
+  `updateVisibility_clearsRowsWhenAnOwnerWhoAuthoredThemIsNoLongerACurator` as a decision rather than
+  left as an accident. **⚠️ A future release that gives learners an Applicable Programs surface makes
+  this method destructive and must narrow it first**; the javadoc says so at the method.
+- **Slice 2 (additive Review Set updates) is NOT started.** It still needs application-layer placement
+  idempotence proven, the sync-provenance schema defined, a removal tombstone, detached-source behaviour
+  and traced readiness formulas.
 
 
 ## v0.114.0 - Connection Evidence
