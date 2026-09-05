@@ -2829,6 +2829,62 @@ class NativeQueryPostgresIntegrationTest {
                 .isEqualTo(1);
     }
 
+    /**
+     * Quota exhaustion that arrives DURING a batch is reported as quota, never as a bare failure.
+     *
+     * <p>⚠️ THE FIXTURE EXHAUSTS QUOTA AFTER THE BATCH IS QUEUED, not before. A batch that is over
+     * quota at queue time is refused by the 422 and never reaches the driver at all, so it would pass
+     * under both the defect and the fix and prove nothing.
+     *
+     * <p>⚠️ WHAT THIS PINS, STATED HONESTLY: the SYNCHRONOUS leg. The primitive's own
+     * {@code assertQuotaAvailable} throws on the calling thread and the driver's existing catch records
+     * BLOCKED — behaviour that already worked, pinned here so it cannot regress into a bare FAILED. A
+     * per-item pre-check was written for this and REMOVED after mutation showed it changed nothing
+     * observable.
+     *
+     * <p>⚠️ WHAT THIS DOES NOT COVER: the ASYNC leg. Production showed the same exception arriving on
+     * the generation thread inside {@code generateFromTopic}, where
+     * {@code generateStudyPackFromExistingNoteAsync} swallows it and marks the note FAILED. Reaching
+     * that deterministically needs quota to vanish between the primitive's synchronous check and the
+     * worker's second assert — a window inside one item that this harness cannot open. The driver
+     * carries a defensive re-check for it; it is NOT proven by this test, and the finding doc says so
+     * rather than implying coverage that does not exist.
+     */
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void quotaExhaustedDuringABatchIsReportedAsQuotaRatherThanAsABareFailure() {
+        UUID owner = seedCuratorUser("bulk-regen-midbatch-quota");
+        UUID first = seedRegenerationNote(owner, "Site Grading", "First body.");
+        UUID second = seedRegenerationNote(owner, "Site Drainage", "Second body.");
+        seedStudyPack(owner, first, "Pack one");
+        seedStudyPack(owner, second, "Pack two");
+        // FREE allows 10; leave exactly 2 so the batch is accepted at queue time.
+        seedNoteGenerationUsage(owner, 8);
+
+        BulkRegenerationHarness harness = new BulkRegenerationHarness();
+        // Burn the remaining allowance WHILE item 1 is still running, which is what a concurrent
+        // regeneration on another surface does. By the time the driver reaches item 2 the meter is
+        // gone, and item 2 never had a chance to see that at queue time.
+        harness.beforeStudyPackForTitle = "Site Grading";
+        harness.beforeStudyPack = () -> seedNoteGenerationUsage(owner, 2);
+        UUID batchId = harness.run(owner, List.of(first, second), true);
+
+        assertThat(itemState(batchId, first))
+                .as("the item that fitted still regenerates")
+                .isEqualTo("REGENERATED");
+        assertThat(itemState(batchId, second))
+                .as("the item that ran out is BLOCKED, not FAILED -- retry must not re-run it blindly")
+                .isEqualTo("BLOCKED");
+        assertThat(jdbcTemplate.queryForObject(
+                "select reason_code from note_bulk_regeneration_item where batch_id = ? and note_id = ?",
+                String.class, batchId, second))
+                .as("and it says WHY, rather than a generic regeneration failure")
+                .isEqualTo("NOTE_GENERATION_LIMIT_REACHED");
+        assertThat(readNoteColumn(second, "content"))
+                .as("nothing was written for the blocked item")
+                .isEqualTo("Second body.");
+    }
+
     private UUID seedRegenerationNote(UUID ownerUserId, String title, String content) {
         UUID id = UUID.randomUUID();
         jdbcTemplate.update(

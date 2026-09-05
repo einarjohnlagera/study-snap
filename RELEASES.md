@@ -206,6 +206,29 @@ inline** for B3-B5.
   and the preflight; gating only the batch would leave a disclosure surface wider than the capability it
   discloses. Not a cross-user exposure — every path was already owner-scoped and metered.
 
+- **Regeneration quota is disclosed before you commit, and quota failures say so (PR #1290).** Folded in
+  after a production diagnosis: the owner regenerated ~14 canonical Site Planning notes and 3-4 failed
+  with no reason given. **The cause was quota exhaustion, not the pipeline and not the 2026-09-05
+  outage** — confirmed by reading production, which showed zero non-terminal `exam_question_pool` rows
+  and nothing stuck. Full write-up:
+  `docs/claude-findings/2026-09-05-regeneration-quota-failure-attribution.md`.
+  - **The regenerate modal now shows what you have LEFT**, not only what each scope costs, and refuses a
+    scope whose meter is exhausted — gated on **the meter that scope actually spends**, so an exhausted
+    topic-note allowance never blocks Study-Pack-only. Hidden entirely until the plan summary loads; a
+    guessed "0 left" would be worse than silence. `MePlanResponse.noteGenerationsRemaining` already
+    existed and was used nowhere in the frontend.
+  - **Bulk reports quota exhaustion as `BLOCKED`, not `FAILED`**, so retry does not re-run an item
+    blindly and spend a unit the curator has not got.
+  - **⚠️ The evidence nearly did not survive, which is the real lesson.** By diagnosis time the database
+    held **zero `FAILED` notes** (6,550 `GENERATED`, 17 `DRAFT`): regeneration mutates in place, the
+    owner's manual retries overwrote `status`, and the reason was never persisted. The incident was
+    reconstructable only because Render logs had not rotated. **This is `v0.87.0` — *Failure
+    Attribution* — repeating on the single-note surface.**
+  - **A per-item quota pre-check was written and REMOVED.** Mutation showed it changed nothing
+    observable: the primitive's own synchronous assert already throws on the calling thread and the
+    driver's existing catch already records `BLOCKED` with the same code. It cost an extra quota read
+    per item and bought nothing. Recorded in code so it is not re-added.
+
 ### Known limitations (B1/B2)
 
 - **Nothing sweeps a lost batch.** A driver thread killed mid-loop leaves `RUNNING`/`PENDING` rows until
@@ -218,6 +241,15 @@ inline** for B3-B5.
   loser's constraint violation is swallowed.
 - **A note that is not the caller's reads `NOT_ELIGIBLE` in preflight and `NOT_RUN` in the driver** —
   the same miss, named for when it is seen. B5 should collapse them if it renders both.
+- **The regeneration quota race is narrowed, not closed.** Quota is checked before dispatch and again
+  inside the async worker with the LLM call between them, and the charge lands only at commit — so a
+  burst passes the first check and some fail the second. Closing it needs either a user-row lock across
+  the LLM call (**forbidden by `v0.107.0`**) or reserve-then-refund (**breaks `v0.118.0`'s one-commit
+  money property**). **The async attribution branch is defensive and is NOT covered by a test** —
+  reaching it needs quota to vanish inside a single item, a window this harness cannot open. Stated
+  rather than implied.
+- **The single-note failure reason is still not persisted.** `notes` has no failure-reason column and
+  adding one is a migration this release's anti-drift forbids. A Backlog Index row carries it.
 - **`§J` row 10 (share-link deactivation fails after commit) is unreachable** in Phase 1's shape: the
   deactivation is inside the single commit, so a failure rolls the whole item back. Its "record the
   warning" path is deliberately not built.
