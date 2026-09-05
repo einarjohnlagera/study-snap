@@ -51,6 +51,29 @@ not propose a new value.**
 **⚠️ The last three were added in `v0.111.0`** to close a real gap: 132 of 364 ALE rows had no honest
 value under the previous eight, and 8 notes carrying two programs could not be generated at all.
 
+**⚠️ MEASURED 2026-09-05 — READ THIS BEFORE RECOMMENDING `(unset)` ANYWHERE. Leaving a note unset is
+NOT a neutral act, and the cost has already been paid at scale.**
+
+- **Classification is driven by the GENERATION GATE, not by curator judgement.** Every note with 2+
+  programs is classified because the server forces it; **699 of 809 single-program notes are NOT** —
+  they silently fall through to the program *name* as the authoring domain.
+- **~239 curator notes already generate with NO computation guidance** — **Nursing 106, Architecture
+  73, Accountancy 60** — because their program name contains no quantitative keyword and they are
+  unset. **This is permanent per note: Study Packs never auto-regenerate.**
+- **Civil Engineering is the control: 62/62 pass for free**, purely because `engineering` is a keyword.
+  That is the whole defect in one comparison — coverage tracks the program's NAME, not its content.
+- **⚠️ `Accountancy` is the trap case.** `ACCOUNTANCY` declares `quantitative = true`, but that flag is
+  **never reached on an unset note**, and the keyword scan does not rescue it either: the keyword is
+  `accounting`, and **`accountancy` does not contain `accounting`.** An unset Accountancy note on a
+  computational subject — taxation, budgeting, receivables, PPE — loses its computation guidance
+  outright.
+- **So for Nursing, Accountancy and Architecture subjects, `(unset)` is the WORST option**, not the
+  safe one. Classify them.
+
+**⚠️ The honest-unset rule still stands and is not weakened by any of the above** — a forced wrong value
+is worse than an honest gap. What changes is that you must now say *out loud* what an unset costs on a
+computational subject, rather than treating unset as cost-free.
+
 Choosing one — ADR-001's rule is **the coarsest label under which the note's treatment is
 identical**, with a binary test: *would a student in a sibling program be served by this exact
 note, unchanged?* Yes → the shared value. No → the program-specific one.
@@ -75,7 +98,8 @@ note, unchanged?* Yes → the shared value. No → the program-specific one.
   **⚠️ Do NOT assume any particular program is expected to come back unset.** An earlier version
   of this line named Architecture as deliberately having no Domain Context, and that instruction
   produced 215 `(unset)` rows in the ALE plan — the strategist reproducing a pre-committed answer
-  rather than assessing each note. That pre-empts the exact question
+  rather than assessing each note. **⚠️ That residue is now 88 rows, not 215** (~127 were classified
+  after `v0.111.0`), and a 2026-09-05 audit expects the targeted pass to take it to **0-3**. That pre-empts the exact question
   `[CHECKPOINT — due 2026-09-28]` exists to ask. Apply the rules above per note and let the
   distribution fall where it falls.
   **⚠️ Building services — plumbing, HVAC, electrical distribution, lighting, acoustics, fire
