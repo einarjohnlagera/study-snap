@@ -290,6 +290,20 @@ inline** for B3-B5.
     since retrying a Study-Pack-only batch as combined would replace note content nobody asked to
     replace.
 
+- **Bulk regeneration was broken end to end on the first real use, and is fixed (PR #1293).** Both JSON
+  POSTs sent **no `Content-Type`**: `buildAuthHeaders()` with no argument sets none, so the browser
+  defaulted to `text/plain;charset=UTF-8` and Spring rejected every request with
+  `HttpMediaTypeNotSupportedException` **before the controller was entered**. The preflight failed, so
+  the modal showed "Something went wrong" and a disabled *Regenerate 0 notes*.
+  - **⚠️ 2,182 frontend tests passed while the feature could not make a single successful request**,
+    because every component test mocks `lib/api` wholesale — so nothing executed header construction.
+    That is the release's own carried lesson landing on the release itself: a behaviour with no test
+    that runs it. `lib/api-bulk-regeneration.test.ts` now pins the request shape, and reproduces the
+    failure exactly when the header is removed.
+  - **Swept rather than spot-fixed:** the other three `fetchWithAuth` calls that omit the header all
+    send `FormData`, where omitting it is correct because the browser must set the multipart boundary.
+    These two were the only defects.
+
 ### Known limitations (B1/B2)
 
 - **Nothing sweeps a lost batch.** A driver thread killed mid-loop leaves `RUNNING`/`PENDING` rows until

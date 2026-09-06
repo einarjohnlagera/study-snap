@@ -6159,7 +6159,10 @@ export async function preflightNoteRegeneration(
     "/notes/regenerate/preflight",
     {
       method: "POST",
-      headers: buildAuthHeaders(),
+      // ⚠️ The content type is REQUIRED. buildAuthHeaders() with no argument sets none, so the browser
+      // defaults to text/plain and Spring rejects the body with HttpMediaTypeNotSupportedException
+      // before the controller is ever entered.
+      headers: buildAuthHeaders("application/json"),
       body: JSON.stringify({ noteIds, scope }),
     },
     true,
@@ -6175,7 +6178,10 @@ export async function bulkRegenerateNotes(
     "/notes/bulk-regenerate",
     {
       method: "POST",
-      headers: buildAuthHeaders(),
+      // ⚠️ The content type is REQUIRED. buildAuthHeaders() with no argument sets none, so the browser
+      // defaults to text/plain and Spring rejects the body with HttpMediaTypeNotSupportedException
+      // before the controller is ever entered.
+      headers: buildAuthHeaders("application/json"),
       body: JSON.stringify({ noteIds, scope }),
     },
     true,
