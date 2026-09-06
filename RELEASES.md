@@ -2,7 +2,7 @@
 
 ## v0.122.0 - Shared Quiz Discoverability
 
-**Status: In Progress** (kicked off 2026-09-06, base branch `releases/v0.122.0`, cut from `main` after `v0.121.0` merged and tagged)
+**Status: Released** (kicked off and signed off 2026-09-06, base branch `releases/v0.122.0`, cut from `main` after `v0.121.0` merged and tagged)
 
 **⚠️ THIS RELEASE EXISTS TO MAKE `v0.121.0`'s OWN CHECKPOINT ANSWERABLE, AND THAT IS A DEPENDENCY RATHER THAN A THEME.** `[CHECKPOINT — due 2026-10-07]` asks *"has the shared-quiz capability been PROMOTED, so that any recipient metric has a denominator at all?"* and its kill criterion states outright: **"if the capability has NOT been promoted by this date, the distal checkpoint is RE-DATED, never answered."** The distal row (`[CHECKPOINT — due 2026-12-04]`) carries `v0.121.0`'s entire thesis — that the recipient experience was what suppressed use. **⚠️ So shipping anything else next spends the window and answers neither row.**
 
