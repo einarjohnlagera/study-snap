@@ -272,13 +272,23 @@ coverage**; it pins the production-shaped four-program input and documents why t
 "simplified" to one id — `resolveBulkCourseProgram:155-160` RETURNS EARLY when `ids.size() == 1`, so a
 one-id fixture would never reach the guard and would silently become vacuous.
 
-**Suites:** backend **2187 executed, 0 failures** (counted from `target/surefire-reports/*.xml` after
+**Suites:** backend **2189 executed, 0 failures** (counted from `target/surefire-reports/*.xml` after
 clearing the directory; `./mvnw clean install` exit status read directly, not through a pipe); frontend
 **2190 passed across 201 suites**; `tsc --noEmit` exit 0; ESLint 0 errors.
 
-**⚠️ NO endpoint was added, so `CLAUDE.md`'s real-request/MockMvc rule did not apply** — stated so a later
-session reads it as considered rather than skipped. `NoteResponse.studyPackTitle` rides an existing response
-whose contract is already exercised.
+**⚠️ THE REAL-REQUEST TEST WAS WRITTEN ANYWAY, AND THE FIRST ANSWER HERE WAS TOO COMFORTABLE.** No endpoint
+was added, so `CLAUDE.md`'s rule did not literally apply — but a check before signoff found
+`studyPackTitle` asserted in **zero** backend tests, while the frontend tests mock `lib/api` wholesale. **So
+nothing in either suite executed the field's serialization**, which is precisely the `v0.119.0` blind spot:
+a three-agent pressure test found six defects and still missed that the feature could not make one successful
+request. `NoteControllerTest.noteDetailResponseCarriesTheStudyPackTitleSeparatelyFromTheNoteTitle` now issues
+a real MockMvc request and asserts the field over the wire, with the pack title DISTINCT from the note's.
+
+**⚠️ AND A SECOND GUARD CLOSES THE SILENT NO-OP, WHICH WAS THE LIKELIEST WAY THIS RELEASE SHIPS GREEN AND
+DELIVERS NOTHING.** `NoteServiceTest.getById_carriesTheStudyPackTitleRatherThanTheNoteTitle` pins that the
+response carries the PACK's title: the plausible copy-paste `entity.getTitle()` compiles, keeps every other
+test green, and makes the two titles always equal — so the suggestion card would simply never appear, with
+no error anywhere. **Mutation-verified: that substitution fails this named test.**
 
 **Frontend mutants, both killed by named tests:** making the dismissal in-memory fails `keeps the suggestion
 dismissed across a reload`; removing the title comparison fails `does not offer a suggestion when the
