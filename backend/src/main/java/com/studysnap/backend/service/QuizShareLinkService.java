@@ -3,6 +3,7 @@ package com.studysnap.backend.service;
 import com.studysnap.backend.config.StudySnapProperties;
 import com.studysnap.backend.dto.PublicQuizItem;
 import com.studysnap.backend.dto.PublicSharedQuizResponse;
+import com.studysnap.backend.dto.PublicSourceNote;
 import com.studysnap.backend.dto.QuizItem;
 import com.studysnap.backend.dto.QuizShareLinkResponse;
 import com.studysnap.backend.dto.SharedQuizResultItem;
@@ -10,6 +11,7 @@ import com.studysnap.backend.dto.SharedQuizResultsResponse;
 import com.studysnap.backend.entity.GeneratedQuizEntity;
 import com.studysnap.backend.entity.CombinedQuizEntity;
 import com.studysnap.backend.entity.NoteEntity;
+import com.studysnap.backend.entity.NoteVisibility;
 import com.studysnap.backend.entity.QuizShareLinkEntity;
 import com.studysnap.backend.exception.GeneratedQuizNotFoundException;
 import com.studysnap.backend.exception.CombinedQuizNotFoundException;
@@ -39,6 +41,7 @@ import java.util.UUID;
 @Service
 @RequiredArgsConstructor
 public class QuizShareLinkService {
+    private static final String MATCHING_FORMAT = "MATCHING";
     private static final char[] BASE62_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz".toCharArray();
     private static final int TOKEN_LENGTH = 16;
     private static final int MAX_TOKEN_ATTEMPTS = 10;
@@ -164,7 +167,8 @@ public class QuizShareLinkService {
         return new PublicSharedQuizResponse(
                 sharedQuiz.id(),
                 sharedQuiz.title(),
-                questions
+                questions,
+                sharedQuiz.sourceNotes()
         );
     }
 
@@ -271,30 +275,97 @@ public class QuizShareLinkService {
                     .orElseThrow(QuizShareLinkNotFoundException::new);
             NoteEntity note = noteRepository.findById(generatedQuiz.getNoteId())
                     .orElseThrow(QuizShareLinkNotFoundException::new);
-            return new SharedQuiz(generatedQuiz.getId(), resolveNoteTitle(note), generatedQuiz.getQuestions());
+            return new SharedQuiz(
+                    generatedQuiz.getId(),
+                    resolveNoteTitle(note),
+                    excludeUnanswerableFormats(generatedQuiz.getQuestions()),
+                    eligibleSources(note)
+            );
         }
         if (link.getCombinedQuizId() != null) {
             CombinedQuizEntity combinedQuiz = combinedQuizRepository.findById(link.getCombinedQuizId())
                     .orElseThrow(QuizShareLinkNotFoundException::new);
-            List<QuizItem> questions = flattenCombinedQuestions(combinedQuiz);
-            return new SharedQuiz(combinedQuiz.getId(), combinedQuiz.getTitle(), questions);
+            return new SharedQuiz(
+                    combinedQuiz.getId(),
+                    combinedQuiz.getTitle(),
+                    excludeUnanswerableFormats(flattenCombinedQuestions(combinedQuiz)),
+                    // ⚠️ NOT an isCombined special case -- a CombinedQuizSection carries a COPIED TITLE
+                    // STRING and no note id, so there is nothing here with durable identity to offer. The
+                    // rule yields nothing; it is not switched off. When combined quizzes gain provenance
+                    // they light up under the same rule with no branch to remove.
+                    List.of()
+            );
         }
         // V132's exclusive-arc check rejects this in PostgreSQL; keep public lookup fail-closed for corrupt rows.
         throw new QuizShareLinkNotFoundException();
     }
 
+    /**
+     * ⚠️ Delegates on purpose. This used to be an INDEPENDENT derivation of the same question list, and the
+     * duplication was load-bearing in the worst way: {@code getActivePublicQuiz} projects what the recipient
+     * SEES while {@code getSharedQuizResults} walks what the grader SCORES. Filtering only the projection
+     * left the grader on a longer list, so {@code answers.size() != questions.size()} threw and every submit
+     * 400'd -- the shape {@code v0.110.2} already shipped once.
+     *
+     * <p>⚠️ The extra {@code noteRepository.findById} that {@code resolveSharedQuiz} performs for the title
+     * is an ACCEPTED cost of that guarantee. Do NOT re-split these methods to avoid one lookup; re-splitting
+     * silently reintroduces the divergence.
+     */
     private List<QuizItem> resolveSharedQuestions(QuizShareLinkEntity link) {
-        if (link.getGeneratedQuizId() != null) {
-            return generatedQuizRepository.findById(link.getGeneratedQuizId())
-                    .map(GeneratedQuizEntity::getQuestions)
-                    .orElseThrow(QuizShareLinkNotFoundException::new);
+        return resolveSharedQuiz(link).questions();
+    }
+
+    /**
+     * Drops question formats a shared recipient has no control to answer.
+     *
+     * <p>A MATCHING block is 2-4 consecutive items sharing one option set, identified by {@code questionGroup}
+     * -- which {@link com.studysnap.backend.dto.PublicQuizItem} does not carry, and which the recipient page
+     * has no control for. {@code teacher-quiz-developer.txt} instructs the model to emit one such block, so
+     * these reach real shared quizzes and are scored as if they were independent MCQs.
+     *
+     * <p>⚠️ Excludes on {@code questionFormat}, never on {@code questionGroup} -- a non-matching item may
+     * legitimately carry a group, and filtering on the group would drop valid questions.
+     *
+     * <p>⚠️ Carrying matching through instead would change the GRADING CONTRACT on a {@code permitAll} route
+     * scored for an anonymous recipient. Recorded as a follow-up, not rejected on merit.
+     */
+    private List<QuizItem> excludeUnanswerableFormats(List<QuizItem> questions) {
+        List<QuizItem> answerable = questions == null
+                ? List.of()
+                : questions.stream()
+                        .filter(question -> !MATCHING_FORMAT.equalsIgnoreCase(question.questionFormat()))
+                        .toList();
+        if (answerable.isEmpty()) {
+            // Fail closed rather than serve a zero-question quiz that would score 0/0. The recipient meets
+            // the already-built "no longer active" screen.
+            throw new QuizShareLinkNotFoundException();
         }
-        if (link.getCombinedQuizId() != null) {
-            return combinedQuizRepository.findById(link.getCombinedQuizId())
-                    .map(this::flattenCombinedQuestions)
-                    .orElseThrow(QuizShareLinkNotFoundException::new);
+        return answerable;
+    }
+
+    /**
+     * The provenance capability rule, in one place.
+     *
+     * <p>A source is offered to a shared-quiz recipient only when BOTH hold: NoteLib has a DURABLE
+     * source-Note identity for it, and the source is LEGITIMATELY ACCESSIBLE to that recipient at
+     * read/result time. {@code /quiz/share/**} is {@code permitAll}, so the recipient may be anonymous --
+     * which makes {@code visibility == PUBLIC} the accessibility test, resolved server-side.
+     *
+     * <p>⚠️ PRIVATE SOURCES ARE OMITTED ENTIRELY -- not counted, not hinted, not placeheld. No
+     * "1 source is private", no "2 of 3 available", no disabled card. The caller renders NOTHING for an
+     * empty list.
+     *
+     * <p>⚠️ RELATIONSHIP STATE IS NEVER AN INPUT. An accepted Learning Connection grants nothing here; the
+     * test is {@code visibility == PUBLIC}, full stop.
+     */
+    private List<PublicSourceNote> eligibleSources(NoteEntity note) {
+        if (note == null || note.getVisibility() != NoteVisibility.PUBLIC) {
+            return List.of();
         }
-        throw new QuizShareLinkNotFoundException();
+        // ⚠️ resolveNoteTitle, not getTitle(): notes.title has no NOT NULL constraint and this response's
+        // sibling noteTitle field already defaults a blank one. Raw getTitle() would render a "Keep
+        // learning" card with an empty label beside an unlabelled action.
+        return List.of(new PublicSourceNote(note.getId(), resolveNoteTitle(note)));
     }
 
     private List<QuizItem> flattenCombinedQuestions(CombinedQuizEntity combinedQuiz) {
@@ -304,7 +375,7 @@ public class QuizShareLinkService {
                 .toList();
     }
 
-    private record SharedQuiz(UUID id, String title, List<QuizItem> questions) {
+    private record SharedQuiz(UUID id, String title, List<QuizItem> questions, List<PublicSourceNote> sourceNotes) {
     }
 
     private String generateUniqueToken() {

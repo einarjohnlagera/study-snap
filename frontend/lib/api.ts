@@ -90,10 +90,23 @@ export type PublicQuizItem = {
   questionFormat?: string | null;
 };
 
+export type PublicSourceNote = {
+  id: string;
+  title: string;
+};
+
 export type PublicSharedQuizResponse = {
   quizId: string;
   noteTitle: string;
   questions: PublicQuizItem[];
+  /**
+   * Sources the recipient may continue learning from, or an empty list.
+   *
+   * Populated server-side from PUBLIC sources only. Private sources are omitted entirely -- never
+   * counted, hinted or placeheld -- so an empty list means render nothing at all, not an empty state.
+   * Optional because an older cached bundle may not carry it.
+   */
+  sourceNotes?: PublicSourceNote[];
 };
 
 export type SharedQuizResultItem = {
@@ -668,6 +681,7 @@ export type AnalyticsEventType =
   | "QUIZ_SHARE_LINK_CREATED"
   | "QUIZ_SHARE_LINK_TOGGLED"
   | "QUIZ_SHARE_LINK_OPENED"
+  | "QUIZ_SHARE_LINK_COMPLETED"
   | "LOGIN"
   | "SIGNUP"
   | "LANDING_PAGE_VIEWED"

@@ -1,9 +1,33 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import SharedQuizPage from "./page";
-import { getPublicSharedQuiz, getSharedQuizResults } from "@/lib/api";
+import { getPublicSharedQuiz, getSharedQuizResults, trackAnalyticsEvent } from "@/lib/api";
 
 jest.mock("next/navigation", () => ({
   useParams: () => ({ token: "tok123" }),
+}));
+
+let mockAuthUser: unknown = null;
+
+jest.mock("@/lib/auth", () => ({
+  getAuthUser: () => mockAuthUser,
+}));
+
+jest.mock("@/components/notes/public-library-copy-action", () => ({
+  PublicLibraryCopyAction: ({
+    noteId,
+    onCopySuccess,
+  }: {
+    noteId: string;
+    onCopySuccess: (payload: { copiedNoteId: string; studyPackStatus: string }) => void;
+  }) => (
+    <button
+      type="button"
+      data-testid={`copy-action-${noteId}`}
+      onClick={() => onCopySuccess({ copiedNoteId: `copy-of-${noteId}`, studyPackStatus: "READY" })}
+    >
+      Add to Library
+    </button>
+  ),
 }));
 
 jest.mock("@/lib/api", () => ({
@@ -21,6 +45,7 @@ jest.mock("@/lib/api", () => ({
 
 const getPublicSharedQuizMock = getPublicSharedQuiz as jest.MockedFunction<typeof getPublicSharedQuiz>;
 const getSharedQuizResultsMock = getSharedQuizResults as jest.MockedFunction<typeof getSharedQuizResults>;
+const trackAnalyticsEventMock = trackAnalyticsEvent as jest.MockedFunction<typeof trackAnalyticsEvent>;
 
 const MULTI_SELECT_QUESTION = {
   question: "Which apply?",
@@ -36,20 +61,102 @@ const SINGLE_CHOICE_QUESTION = {
   questionFormat: "MCQ",
 };
 
-function stubQuiz(questions: unknown[]) {
+function stubQuiz(questions: unknown[], sourceNotes: unknown[] = []) {
   getPublicSharedQuizMock.mockResolvedValue({
     quizId: "quiz-1",
     noteTitle: "Cell Structure",
     questions,
+    sourceNotes,
   } as never);
+}
+
+async function completeSingleQuestionQuiz() {
+  await screen.findByText("Which one?");
+  fireEvent.click(screen.getByRole("button", { name: /Bravo/ }));
+  fireEvent.click(screen.getByRole("button", { name: "Submit Answers" }));
+  await screen.findByText("Quiz Complete");
 }
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockAuthUser = null;
   getSharedQuizResultsMock.mockResolvedValue({ score: 1, total: 1, items: [] } as never);
 });
 
+describe("shared quiz results — continue learning", () => {
+  // ⚠️ THE PRE-DECLARED DISCRIMINATING GUARD. A PUBLIC-source fixture passes under a version that leaks
+  // every source, so the EMPTY case is what pins the rule. Private sources are omitted entirely by the
+  // server, and an empty list must render NOTHING -- no heading, no placeholder, no "1 source is private".
+  it("renders no continue-learning affordance when there is no eligible source", async () => {
+    stubQuiz([SINGLE_CHOICE_QUESTION], []);
+    render(<SharedQuizPage />);
+    await completeSingleQuestionQuiz();
+
+    expect(screen.queryByText("Keep learning")).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "View Note" })).not.toBeInTheDocument();
+  });
+
+  it("offers an anonymous recipient the public note, never a copy action", async () => {
+    stubQuiz([SINGLE_CHOICE_QUESTION], [{ id: "note-9", title: "Cell Structure" }]);
+    render(<SharedQuizPage />);
+    await completeSingleQuestionQuiz();
+
+    const viewNote = screen.getByRole("link", { name: "View Note" });
+    expect(viewNote).toHaveAttribute("href", "/public/notes/note-9");
+    expect(screen.queryByTestId("copy-action-note-9")).not.toBeInTheDocument();
+  });
+
+  it("offers an authenticated recipient the copy action instead", async () => {
+    mockAuthUser = { id: "user-1" };
+    stubQuiz([SINGLE_CHOICE_QUESTION], [{ id: "note-9", title: "Cell Structure" }]);
+    render(<SharedQuizPage />);
+    await completeSingleQuestionQuiz();
+
+    expect(await screen.findByTestId("copy-action-note-9")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "View Note" })).not.toBeInTheDocument();
+  });
+
+  it("links to the copied note once an authenticated recipient saves it", async () => {
+    mockAuthUser = { id: "user-1" };
+    stubQuiz([SINGLE_CHOICE_QUESTION], [{ id: "note-9", title: "Cell Structure" }]);
+    render(<SharedQuizPage />);
+    await completeSingleQuestionQuiz();
+
+    fireEvent.click(await screen.findByTestId("copy-action-note-9"));
+
+    const saved = await screen.findByRole("link", { name: /Saved to your Library/ });
+    expect(saved).toHaveAttribute("href", "/notes/copy-of-note-9");
+  });
+
+  // ⚠️ THIS GUARD EXISTS BECAUSE ITS ABSENCE ALREADY COST A DEFECT. The v0.121.0 slice-2 change intended to
+  // make this 54-character CTA wrap, but the edit landed on the SHORT "Learn about NoteLib" button on the
+  // inactive-link screen instead. The buttonVariants unit tests passed because they exercise the helper
+  // directly; nothing asserted the CTA itself, so the real overflow shipped unfixed.
+  it("lets the long results call-to-action wrap instead of overflowing", async () => {
+    stubQuiz([SINGLE_CHOICE_QUESTION], []);
+    render(<SharedQuizPage />);
+    await completeSingleQuestionQuiz();
+
+    const cta = screen.getByRole("link", { name: /Save your score/ });
+    expect(cta.className).toContain("whitespace-normal");
+    expect(cta.className).not.toContain("whitespace-nowrap");
+  });
+});
+
 describe("shared quiz page", () => {
+  // The concept used to render as a bare string directly under the stem, so it read as a second sentence
+  // OF the question. Asserting only that the concept text appears would pass under that defect -- the
+  // label is the whole fix, so the label is what is asserted.
+  it("labels the concept so it does not read as part of the question", async () => {
+    stubQuiz([SINGLE_CHOICE_QUESTION]);
+
+    render(<SharedQuizPage />);
+
+    expect(await screen.findByText("Which one?")).toBeInTheDocument();
+    expect(screen.getByText("Topic")).toBeInTheDocument();
+    expect(screen.getByText("Concept")).toBeInTheDocument();
+  });
+
   it("lets a recipient select several choices on a MULTI_SELECT question and submits the whole set", async () => {
     stubQuiz([MULTI_SELECT_QUESTION]);
     render(<SharedQuizPage />);
@@ -98,19 +205,64 @@ describe("shared quiz page", () => {
     expect(screen.getByRole("button", { name: "Submit Answers" })).toBeEnabled();
   });
 
-  it("still commits a single-choice answer on click and sends it in the answers slot", async () => {
+  // ⚠️ REWRITTEN, NOT DELETED (v0.121.0). This test previously asserted
+  // `expect(getByRole("button", { name: /Charlie/ })).toBeDisabled()` under the comment "Single-choice
+  // selection stays one-shot, exactly as it shipped" -- i.e. it PINNED the defect. A single-choice answer
+  // locked every other choice the moment it was made, so a recipient who misclicked could never correct it.
+  // The answers-slot half of the assertion is genuine and is kept.
+  it("commits a single-choice answer to its slot and lets the recipient change it", async () => {
     stubQuiz([SINGLE_CHOICE_QUESTION]);
     render(<SharedQuizPage />);
     await screen.findByText("Which one?");
 
     expect(screen.queryByText("Select all that apply")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /Bravo/ }));
-    // Single-choice selection stays one-shot, exactly as it shipped.
-    expect(screen.getByRole("button", { name: /Charlie/ })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /Bravo/ })).toHaveAttribute("aria-pressed", "true");
+
+    // The correction the recipient could not previously make.
+    expect(screen.getByRole("button", { name: /Charlie/ })).not.toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: /Charlie/ }));
+    expect(screen.getByRole("button", { name: /Charlie/ })).toHaveAttribute("aria-pressed", "true");
 
     fireEvent.click(screen.getByRole("button", { name: "Submit Answers" }));
 
-    await waitFor(() => expect(getSharedQuizResultsMock).toHaveBeenCalledWith("tok123", [1], [null]));
+    await waitFor(() => expect(getSharedQuizResultsMock).toHaveBeenCalledWith("tok123", [2], [null]));
+  });
+
+  it("records a completion once a recipient's answers are graded", async () => {
+    stubQuiz([SINGLE_CHOICE_QUESTION]);
+    getSharedQuizResultsMock.mockResolvedValue({ score: 1, total: 1, items: [] } as never);
+    render(<SharedQuizPage />);
+    await screen.findByText("Which one?");
+
+    fireEvent.click(screen.getByRole("button", { name: /Bravo/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Submit Answers" }));
+
+    await waitFor(() => {
+      expect(trackAnalyticsEventMock).toHaveBeenCalledWith({
+        eventType: "QUIZ_SHARE_LINK_COMPLETED",
+        entityId: "quiz-1",
+        metadata: { token: "tok123", score: 1, total: 1 },
+      });
+    });
+  });
+
+  // ⚠️ The discriminating half. An event fired before/regardless of grading would satisfy the test above
+  // while inflating the completion rate with submissions that never produced a score -- which is exactly
+  // the metric the release checkpoint reads.
+  it("records no completion when grading fails", async () => {
+    stubQuiz([SINGLE_CHOICE_QUESTION]);
+    getSharedQuizResultsMock.mockRejectedValue(new Error("boom") as never);
+    render(<SharedQuizPage />);
+    await screen.findByText("Which one?");
+
+    fireEvent.click(screen.getByRole("button", { name: /Bravo/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Submit Answers" }));
+
+    expect(await screen.findByText("Could not submit answers. Please try again.")).toBeInTheDocument();
+    expect(
+      trackAnalyticsEventMock.mock.calls.some(([call]) => call?.eventType === "QUIZ_SHARE_LINK_COMPLETED"),
+    ).toBe(false);
   });
 
   it("aligns answers and multiAnswers positionally across a mixed quiz", async () => {
@@ -127,6 +279,156 @@ describe("shared quiz page", () => {
     fireEvent.click(screen.getByRole("button", { name: "Submit Answers" }));
 
     await waitFor(() => expect(getSharedQuizResultsMock).toHaveBeenCalledWith("tok123", [3, null], [null, [0, 1]]));
+  });
+
+  // ⚠️ THE DISCRIMINATING GUARD FOR INDEX-ADDRESSED ANSWERS. Under the previous append-only model
+  // (`[...answers, x]`) a revisited question appended a NEW entry instead of overwriting its own slot, so
+  // the array grew past `questions.length` and the server rejected the submit outright. A forward-only
+  // walk passes under an off-by-one in the index write and proves nothing.
+  it("grades the changed answer when a recipient goes back and corrects one", async () => {
+    stubQuiz([SINGLE_CHOICE_QUESTION, MULTI_SELECT_QUESTION]);
+    render(<SharedQuizPage />);
+    await screen.findByText("Which one?");
+
+    fireEvent.click(screen.getByRole("button", { name: /Alpha/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Next Question" }));
+
+    await screen.findByText("Select all that apply");
+    fireEvent.click(screen.getByRole("button", { name: /Bravo/ }));
+
+    fireEvent.click(screen.getByRole("button", { name: "Back" }));
+    await screen.findByText("Which one?");
+    // The prior selection is restored rather than lost.
+    expect(screen.getByRole("button", { name: /Alpha/ })).toHaveAttribute("aria-pressed", "true");
+
+    fireEvent.click(screen.getByRole("button", { name: /Delta/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Next Question" }));
+    await screen.findByText("Select all that apply");
+    // Returning forward restores the multi-select selection too.
+    expect(screen.getByRole("button", { name: /Bravo/ })).toHaveAttribute("aria-pressed", "true");
+
+    fireEvent.click(screen.getByRole("button", { name: "Submit Answers" }));
+
+    await waitFor(() => {
+      // Full-length, pairing intact, and the CHANGED single-choice answer (3, not 0) is the one sent.
+      expect(getSharedQuizResultsMock).toHaveBeenCalledWith("tok123", [3, null], [null, [1]]);
+    });
+  });
+
+  // The kickoff ruled answers CORRECTABLE but not SKIPPABLE. Before this release you could never return to
+  // a question, so emptying one was unreachable; Back makes it reachable for MULTI_SELECT (single-choice
+  // can only be re-set, never cleared). This pins that the no-skip gate still holds on the way back out.
+  it("re-gates Continue when a recipient empties an answer they returned to", async () => {
+    stubQuiz([MULTI_SELECT_QUESTION, SINGLE_CHOICE_QUESTION]);
+    render(<SharedQuizPage />);
+    await screen.findByText("Select all that apply");
+
+    fireEvent.click(screen.getByRole("button", { name: /Alpha/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Next Question" }));
+
+    await screen.findByText("Which one?");
+    fireEvent.click(screen.getByRole("button", { name: "Back" }));
+
+    await screen.findByText("Select all that apply");
+    expect(screen.getByRole("button", { name: /Alpha/ })).toHaveAttribute("aria-pressed", "true");
+
+    // Untick the only selection: the recipient has emptied their own answer.
+    fireEvent.click(screen.getByRole("button", { name: /Alpha/ }));
+
+    expect(screen.getByRole("button", { name: "Next Question" })).toBeDisabled();
+  });
+
+  // Exercises more than one hop in each direction. A single back-then-forward walk cannot catch a slot
+  // being written to the wrong index once the path is longer than the special case.
+  it("keeps every answer in its own slot across repeated navigation", async () => {
+    stubQuiz([SINGLE_CHOICE_QUESTION, MULTI_SELECT_QUESTION, SINGLE_CHOICE_QUESTION]);
+    render(<SharedQuizPage />);
+    await screen.findByText("Which one?");
+
+    fireEvent.click(screen.getByRole("button", { name: /Alpha/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Next Question" }));
+    await screen.findByText("Select all that apply");
+    fireEvent.click(screen.getByRole("button", { name: /Charlie/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Next Question" }));
+
+    // Two hops back to the first question.
+    fireEvent.click(screen.getByRole("button", { name: "Back" }));
+    await screen.findByText("Select all that apply");
+    fireEvent.click(screen.getByRole("button", { name: "Back" }));
+    await screen.findByText("Which one?");
+    expect(screen.getByRole("button", { name: /Alpha/ })).toHaveAttribute("aria-pressed", "true");
+
+    // And two hops forward again, with the middle answer intact.
+    fireEvent.click(screen.getByRole("button", { name: "Next Question" }));
+    await screen.findByText("Select all that apply");
+    expect(screen.getByRole("button", { name: /Charlie/ })).toHaveAttribute("aria-pressed", "true");
+    fireEvent.click(screen.getByRole("button", { name: "Next Question" }));
+
+    await screen.findByText("Which one?");
+    fireEvent.click(screen.getByRole("button", { name: /Delta/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Submit Answers" }));
+
+    await waitFor(() => {
+      expect(getSharedQuizResultsMock).toHaveBeenCalledWith("tok123", [0, null, 3], [null, [2], null]);
+    });
+  });
+
+  // ⚠️ Finding 7 from the slice 1-3 falsification pass: deleting this reduce's non-current-index branch
+  // left all 19 tests green, because the only counter assertion never left question 0. The value is the
+  // release's own rewrite and nothing exercised its actual job.
+  it("counts answers from questions the recipient has already left", async () => {
+    stubQuiz([SINGLE_CHOICE_QUESTION, MULTI_SELECT_QUESTION, SINGLE_CHOICE_QUESTION]);
+    render(<SharedQuizPage />);
+    await screen.findByText("Which one?");
+
+    expect(screen.getByText(/0 answered/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /Alpha/ }));
+    expect(screen.getByText(/1 answered/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Next Question" }));
+    await screen.findByText("Select all that apply");
+    // The first question is now behind us: its answer must still be counted.
+    expect(screen.getByText(/1 answered/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /Charlie/ }));
+    expect(screen.getByText(/2 answered/)).toBeInTheDocument();
+  });
+
+  // ⚠️ Finding 2: setSubmitError(null) sat after the isLastQuestion early return and handleBack never
+  // touched it, so a failed submit's message followed the recipient onto an unrelated question. Only
+  // reachable because Back now exists.
+  it("clears a failed submit's error when the recipient navigates away", async () => {
+    stubQuiz([SINGLE_CHOICE_QUESTION, MULTI_SELECT_QUESTION]);
+    getSharedQuizResultsMock.mockRejectedValue(new Error("boom") as never);
+    render(<SharedQuizPage />);
+    await screen.findByText("Which one?");
+
+    fireEvent.click(screen.getByRole("button", { name: /Alpha/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Next Question" }));
+    await screen.findByText("Select all that apply");
+    fireEvent.click(screen.getByRole("button", { name: /Bravo/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Submit Answers" }));
+
+    expect(await screen.findByText("Could not submit answers. Please try again.")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Back" }));
+    await screen.findByText("Which one?");
+
+    expect(screen.queryByText("Could not submit answers. Please try again.")).not.toBeInTheDocument();
+  });
+
+  it("offers no Back control on the first question", async () => {
+    stubQuiz([SINGLE_CHOICE_QUESTION, MULTI_SELECT_QUESTION]);
+    render(<SharedQuizPage />);
+    await screen.findByText("Which one?");
+
+    expect(screen.queryByRole("button", { name: "Back" })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /Alpha/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Next Question" }));
+
+    expect(await screen.findByRole("button", { name: "Back" })).toBeInTheDocument();
   });
 
   it("counts a MULTI_SELECT question as answered once any box is checked", async () => {

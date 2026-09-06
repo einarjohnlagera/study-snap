@@ -1,5 +1,241 @@
 # RELEASES.md - NoteLib
 
+## v0.121.0 - Shared Quiz Recipient Experience
+
+**Status: Released** (kicked off and signed off 2026-09-06, base branch `releases/v0.121.0`, cut from `main` after `v0.120.0` merged and tagged)
+
+**SLICES 1-4 of `docs/claude-plans/shared-quiz-recipient-experience-plan.md` — EXECUTE ITS DECISIONS, DO NOT RE-DERIVE THEM.** Its companion is `docs/claude-plans/supporter-progress-visibility-audit.md`, and **the recipient plan's §8 supersedes the audit where they differ.**
+
+**⚠️ THE ROADMAP BLOCKED THIS ON AN OWNER CONVERSATION, AND THAT CONVERSATION HAPPENED AT KICKOFF — the three contradictions in §1 are resolved below and MUST NOT BE RE-OPENED MID-IMPLEMENTATION.** (A) A combined quiz has **no source-note identity** — `CombinedQuizSection(String title, List<QuizItem> questions)` carries a copied title string and nothing else — so §13's *"multiple eligible public sources"* cannot ship for combined quizzes without storing note ids. (B) **Shared quiz results are never recorded** — `getSharedQuizResults` (`QuizShareLinkService:182`) grades in memory with zero `.save(`, so a readiness trend has no substrate; recording is **OUT OF SCOPE** (migration plus a privacy decision). (C) **No readiness history exists**, so a trend is impossible; §22's recent-results view is a projection change needing no migration.
+
+**⚠️ THE JUSTIFICATION IS FIX-BEFORE-PROMOTE, NOT A LIVE DEFECT POPULATION — STATED AT KICKOFF RATHER THAN IMPLIED, AND MEASURED RATHER THAN ASSUMED.** A read-only production query on 2026-09-06 returned **8 `generated_quizzes` from ONE distinct generator** (2026-04-17 → 2026-09-05), **1 `quiz_share_links` row** (active, single-note, source note `PUBLIC`), and **0 `combined_quizzes`**. **⚠️ THE COMBINED-QUIZ ZERO IS UNINFORMATIVE — `v0.110.0` shipped that capability on 2026-09-04, two days before this read.** So the §2 defects are **confirmed in code and reachable**, but they are not currently harming a population: this is the `v0.109.0` shape, where *a read on an unpromoted capability measures DISCOVERABILITY, NOT DEMAND.* **⚠️ CONSEQUENCE FOR SIGNOFF: any checkpoint on recipient behaviour has a denominator near ZERO and needs the gate's TWO-TIER design — a proximal rate with a readable denominator carrying the kill criterion, plus a distal outcome carrying a denominator clause that says "not yet measurable" is a RE-DATE, not a verdict.** **⚠️ Do NOT let this become an argument for skipping the release — fixing a recipient path BEFORE promoting it is the correct order, and slice 1 is a correctness defect nobody should meet.**
+
+**⚠️ SLICE 1'S DEFECT WAS PROVEN REACHABLE AT KICKOFF, NOT ASSUMED FROM THE DTO — this repo has twice paid for a guard whose subject could never fire (`v0.116.0`'s predicate, `v0.117.0`'s unrendered branch).** `generated_quizzes` is populated via `quizGenerationService.generateTeacherQuiz` (`GeneratedQuizService:126`), and **`teacher-quiz-developer.txt:23-26` EXPLICITLY INSTRUCTS the model to emit a matching block** — *"You may include 1 MATCHING block … set the same short `questionGroup` id such as `group-1` on each item."* `PublicQuizItem` is `(question, choices, concept, questionFormat)` with **no `questionGroup`** (present on `QuizItem:27`), and the recipient page branches on `isMultiSelect` alone (`quiz/[token]/page.tsx:82`). **So a matching block reaches a recipient as 2-4 consecutive MCQs with identical choices and no indication they form a block, each scored independently.**
+
+### Planned Scope
+
+**(1) Recipient assessment integrity — slice 1.** **⚠️ DECISION TAKEN AT KICKOFF: matching questions are EXCLUDED from shared quizzes, server-side.** Option B (carry `questionGroup`, reuse `QuizMatchingGroup`, change grading) is **REJECTED FOR THIS RELEASE WITH THE REASON RECORDED** — it pulls `isAnswerCorrect`'s matching path onto a `permitAll` route scored for an anonymous recipient and **changes the grading contract**, a verification-tier escalation rather than a preference; recorded as a follow-up, not rejected on merit.
+
+**⚠️ THE FILTER POINT IS DECIDED AT KICKOFF, NOT LEFT TO IMPLEMENTATION, BECAUSE THE OBVIOUS PLACE IS WRONG AND FAILS LOUDLY ON EVERY SUBMIT — verified by reading both methods, not inferred.** `getActivePublicQuiz:156` builds the `PublicQuizItem` projection the recipient sees, while `getSharedQuizResults:188` **re-derives its own list** via `resolveSharedQuestions(link)` — the UNFILTERED `List<QuizItem>`. **So filtering in the projection alone leaves the grader walking a longer list, `answers.size() != questions.size()` (`:189`) throws `InvalidSharedQuizAnswersException`, and EVERY recipient submit 400s** — verbatim the `v0.110.2` shape. **⚠️ THE EXCLUSION MUST THEREFORE LAND ON THE SHARED DERIVATION (`resolveSharedQuiz` / `resolveSharedQuestions`) SO BOTH THE PROJECTION AND THE GRADER WALK THE SAME FILTERED LIST.** **⚠️ Do NOT filter in `getActivePublicQuiz`; do NOT relax the size check to paper over a divergence — the check is correct and is the thing that would catch this.** **⚠️ The stored owner-facing quiz is UNCHANGED — this is a projection, not a mutation (`v0.110.1`).**
+
+**⚠️ THE SECOND HALF IS UNAMBIGUOUSLY LIVE AND NEEDS NO WIRE CHANGE, WHICH WAS CHECKED RATHER THAN ASSUMED: answers are APPEND-ONLY** (`const nextAnswers = [...answers, ...]`, `quiz/[token]/page.tsx:99`), so a recipient cannot correct a wrong answer. **The fix is an INDEX-ADDRESSED, FULL-LENGTH array, and the existing contract already accepts it** — the grader reads positionally and explicitly tolerates a null slot (`if (answer != null)`, `:203`), so **`null` is the representation of an unanswered question and `answers.size() == questions.size()` still holds.** **⚠️ Do NOT send a sparse or short array (the size check rejects it), and do NOT "fix" correctability by adding a confirm step.**
+
+**(2) Mobile focus — slice 2, inline.** The result CTA overflows: `buttonVariants` carries `whitespace-nowrap` with a fixed `h-10` at `size=default` (`button.tsx:18,:31`), so a 54-character label in `w-full` can neither wrap nor grow. Authenticated recipients also see the app's bottom tab bar while answering (`app-shell.tsx:63,:510`).
+
+**(3) Result legibility — slice 3, inline.** The bare concept string renders unlabelled directly under the stem (`page.tsx:274-275`) and reads as part of the question.
+
+**(4) Continue learning — slice 4, and its shape is an OWNER-RULED CAPABILITY RULE rather than a product distinction.** **⚠️ RULED 2026-09-06: continue-learning may surface a source ONLY when NoteLib has a DURABLE source-Note identity AND the source is LEGITIMATELY ACCESSIBLE TO THE RECIPIENT at read/result time. NEVER infer source identity from a copied title.** Under today's architecture `generated_quizzes.note_id` qualifies (`V43:4`, `NOT NULL` with `uq_generated_quizzes_note_id`) and `CombinedQuizSection` does not, so combined recipients simply receive the normal result experience. **⚠️ IMPLEMENT THIS AS A PROVENANCE CAPABILITY, NOT A HARD-CODED SINGLE-NOTE BRANCH — the plan's §5 shape already fits: `PublicSharedQuizResponse` gains `sourceNotes: List<PublicSourceNote(id, title)>`, a LIST populated from whatever has durable identity, so a combined quiz yields an EMPTY list with no `isCombined` test anywhere.** **⚠️ THE ACCESSIBILITY HALF IS NOT OPTIONAL AND THE PLAN ALREADY ENCODES IT VERBATIM: populate ONLY from sources whose `visibility == PUBLIC`, resolved SERVER-SIDE (§5) — *"`visibility == PUBLIC`, full stop — relationship state is never an input to it"* (§8). ⚠️ PRIVATE SOURCES ARE OMITTED ENTIRELY — not counted, not hinted, not placeheld: no *"1 source is private"*, no *"2 of 3 available"*, no disabled card. If no source is public the field is empty and no continue-learning affordance renders.** **⚠️ When combined quizzes later gain trustworthy provenance, extend the SAME rule source-by-source rather than adding a second one. ⚠️ Do NOT add sharer-facing warning copy about the limitation (owner, explicitly); record combined source identity as a Known limitation and a follow-up row.**
+
+### Anti-drift
+
+**⚠️ SLICE 5 (Learning Connection integration) IS ITS OWN FOLLOW-UP RELEASE AND IS NOT IN THIS ONE — the plan's §11, its §29 and the ROADMAP sequencing all say so independently, and folding it would put a CROSS-USER READ and an IDENTITY DISCLOSURE into a UX release.** **⚠️ Do NOT record shared quiz results** — that is contradiction (B), needs a migration and a privacy decision, and the privacy half is already settled as *signed-in recipients only, within an accepted relationship, anonymous NEVER recorded*; it does not become in-scope because slice 4 is nearby. **⚠️ NO MIGRATION** (if one appears needed the scope is wrong). **⚠️ No quota, entitlement, limit or meter change; no new mode or sub-mode; `NoteVisibility` stays `PRIVATE | PUBLIC`.** **⚠️ Do NOT change `QUIZ_SHARE_LINK_CREATED`, `BOARD_EXAM_STARTED` or `ADAPTIVE_PRACTICE_STARTED` — several dated checkpoints read them.** **⚠️ `frontend/app/onboarding` STAYS FROZEN** — twelve dated reads fall between `2026-09-10` and `2026-09-17`, and the cluster is FOUR DAYS OUT. **⚠️ Do NOT scope `docs/claude-plans/quiz-assignments-learning-connections-stage1.md`** — its own author marks it NOT IMPLEMENTED, NOT SCHEDULED, and it exists precisely to stop this work drifting into the wrong abstraction (*"Sharing is lightweight. Assignment is relational."*). **⚠️ Do NOT re-open `v0.110.2`'s regenerate-deactivates-the-link decision, and do NOT drop or weaken `uq_generated_quizzes_note_id`.**
+
+### Verification
+
+**Slices 1-3: a single `advisor()` call on the diff** — no permission substrate, no cross-user read, no money semantics, no migration. **⚠️ SLICE 4 ESCALATES TO ONE SCOPED COLD AGENT framed as FALSIFICATION**, because it adds a field to an **anonymous `permitAll` payload** and the field's whole correctness is a visibility predicate. **⚠️ PRE-DECLARED GUARDS, each naming the fixture that would pass under the defect: a shared quiz whose source note is PRIVATE must return an EMPTY `sourceNotes` and render NO affordance — a public-source fixture passes under a version that leaks every source and proves nothing; a MIXED public/private multi-source case must list the public and omit the private WITHOUT TRACE; a recipient must be able to CHANGE an earlier answer and have the CHANGED value graded, not the first one; and a quiz whose generation emitted a MATCHING block must reach the recipient with those items ABSENT rather than ungrouped.** **⚠️ AND THE TRANSPORT LESSON FROM `v0.119.0` BINDS AT EVERY TIER: any new or changed endpoint owes ONE test that issues a REAL REQUEST** — `MockMvc` with `.contentType(MediaType.APPLICATION_JSON)` and a body, as `NoteControllerTest` already does — because a direct handler call bypasses content negotiation and passes under the defect by construction; on the client side `lib/api-*.test.ts` pins request shape, and a component test that mocks `lib/api` wholesale proves nothing about it. **⚠️ CARRIED LESSONS: a negative assertion needs a REACHABLE subject; write the guard at the LAYER THE DEFECT LIVES AT; MUTATE and confirm a NAMED test fails; read `./mvnw`'s EXIT STATUS directly, never through a pipe; COUNT executed tests from `target/surefire-reports/*.xml` and CLEAN the directory first; run `npm test`; SWEEP BY SURFACE, not by diff; and if a diff changes behaviour while no test beside it moves, either write the guard or say plainly that the item is unverified.**
+
+**⚠️ THE CHECKPOINT'S INSTRUMENTATION IS SCOPE AND IS DECIDED NOW, BECAUSE THE SIGNOFF GATE REQUIRES IT SHIPPED IN THIS RELEASE AND VERIFIED *EMITTING*, AND TODAY THERE IS NO RECIPIENT COMPLETION EVENT.** Verified in the enum: `QUIZ_SHARE_LINK_CREATED`, `QUIZ_SHARE_LINK_OPENED` and `QUIZ_SHARE_LINK_TOGGLED` exist, and `QUIZ_SHARE_LINK_OPENED` **already fires from the recipient page** (`quiz/[token]/page.tsx:58`) — **so the OPEN half of the funnel is instrumented and the COMPLETE half is not.** **⚠️ THIS RELEASE SHIPS ONE NEW EVENT — a recipient COMPLETED a shared quiz — with a real fire site, enum value first per the standing convention.** That gives the proximal tier a rate with a readable denominator (**opened → completed**, which the §2 defects directly suppress) while the distal tier carries the near-zero-denominator clause. **⚠️ Without it the checkpoint is DECORATIVE by the gate's own definition — enum membership is not instrumentation. ⚠️ Do NOT change `QUIZ_SHARE_LINK_CREATED` or `QUIZ_SHARE_LINK_OPENED`'s fields or firing conditions while adding it.**
+
+**Routing: SPLIT — slices 2 and 3 inline; slices 1 and 4 CODEX** (slice 1 changes a serialization contract plus the recipient answer model; slice 4 spans a backend DTO, a visibility predicate and the recipient result screen).
+
+### Shipped
+
+**Slice 2 — mobile focus (inline).**
+
+- A signed-in recipient answering a shared quiz now gets the same focused page an anonymous one does.
+  `AppShell.shouldUseAuthenticatedShell` excluded nothing under `/quiz/`, so an authenticated recipient was
+  served the full app shell **including the mobile bottom tab bar** while taking a scored assessment — the
+  same link behaving differently depending on whether the viewer happened to be logged in, with navigation
+  escape hatches mid-quiz. **⚠️ The exclusion is the `/quiz/` recipient route ONLY; the in-app quiz surfaces
+  under `/notes/…` and `/study-packs/…` keep the shell, and a second test pins that side** — a guard
+  asserting only the `/quiz/` case would pass under a predicate that matched both.
+- The results call-to-action stops overflowing on a narrow screen. `buttonVariants` gains an opt-in `wrap`
+  that swaps `whitespace-nowrap` for `whitespace-normal text-center` and the fixed `h-10`/`h-9` for
+  `min-h-10`/`min-h-9`. **⚠️ It is an OPTION rather than a call-site override for a reason that is easy to
+  get wrong: `cn` is a plain join, NOT tailwind-merge** (`frontend/lib/utils.ts`), so passing
+  `whitespace-normal` through `className` would leave **both** classes in the list and let stylesheet order
+  decide. Defaults are unchanged, so every existing button renders byte-identically.
+
+**Slice 3 — result legibility (inline).**
+
+- The concept under the question stem is now a labelled *Topic* chip. It rendered as a bare grey string
+  directly beneath the question, where it read as a second sentence of the question itself.
+
+**Slice 4 — continue learning.** **⚠️ Implemented inline (no Codex token), then put through the scoped
+cold-agent falsification pass the kickoff declared owed.**
+
+- `PublicSharedQuizResponse` gains **`sourceNotes: List<PublicSourceNote>`**, populated server-side from
+  sources whose **`visibility == PUBLIC`** only. A recipient who did poorly now has somewhere to go.
+- **⚠️ IT IS IMPLEMENTED AS THE OWNER'S CAPABILITY RULE, NOT AS A SINGLE-NOTE SPECIAL CASE — a source is
+  offered only where there is DURABLE source-Note identity AND legitimate recipient accessibility, and
+  identity is NEVER inferred from a copied title.** `generated_quizzes.note_id` qualifies (`V43:4`);
+  `CombinedQuizSection` carries a copied title string and no id, so a combined quiz contributes nothing
+  **through the ordinary path — there is no `isCombined` branch anywhere**, and combined quizzes light up
+  under the same rule once they gain provenance.
+- **⚠️ PRIVATE SOURCES ARE OMITTED ENTIRELY** — not counted, not hinted, not placeheld. An empty list
+  renders **nothing**, not an empty state explaining the absence. **Relationship state is never an input**;
+  the test is `visibility == PUBLIC`, full stop.
+- Anonymous recipients get **View Note** (`/public/notes/{id}`); authenticated recipients get **Add to
+  Library**, reusing the existing `PublicLibraryCopyAction` rather than a second copy implementation.
+  **⚠️ Anonymous deliberately does NOT get copy-first, and the reason is a repo fact:**
+  `public-library-copy-action.tsx:161` routes them to `/signup?redirect=…`, but
+  `resolvePostLoginDestination` returns the gated home **before** reading the redirect param, so a new
+  signup loses it and the path dead-ends.
+- **⚠️ Sender context (the plan's §7 — *"Quiz from Maria"*) is deliberately NOT built.** It is slice 5's
+  cross-user read and identity disclosure, and it stays out of this release.
+
+**⚠️ A DEFECT THIS RELEASE SHIPPED AND THEN CORRECTED, RECORDED RATHER THAN QUIETLY FIXED.** Slice 2's CTA
+overflow fix **landed on the wrong button**: `wrap: true` was applied to the short *"Learn about NoteLib"*
+button on the inactive-link screen (`page.tsx:222`) instead of the 54-character results call-to-action
+(`:247`) that actually overflows. It merged in PR #1302 and the real defect stayed live. **The
+`buttonVariants` unit tests passed throughout because they exercise the helper directly and nothing
+asserted the CTA itself** — verbatim the standing rule that *a diff which changes behaviour while no test
+beside it moves is unverified, not verified*. Both the fix and **the missing guard** are in this release,
+and the guard was confirmed to fail against the state that shipped.
+
+**Slice 1 — recipient assessment integrity.** **⚠️ Implemented inline rather than by Codex: no Codex token
+was available, following the `v0.119.1` precedent that routed its Codex leg the same way.**
+
+- **Matching questions are no longer served to shared-quiz recipients.** `teacher-quiz-developer.txt:23-26`
+  instructs the model to emit a MATCHING block and `generated_quizzes` is populated through that very prompt
+  (`GeneratedQuizService:126`), but `PublicQuizItem` carries no `questionGroup` and the recipient page has no
+  control for one — so a block arrived as 2-4 consecutive MCQs with identical choices, scored independently.
+  Excluded on `questionFormat`, never on `questionGroup`, since a non-matching item may legitimately carry a
+  group. **⚠️ Carrying matching through instead would change the GRADING CONTRACT on a `permitAll` route
+  scored for an anonymous recipient; recorded as a follow-up, not rejected on merit.**
+- **⚠️ THE FILTER LIVES AT ONE POINT, AND THAT IS THE LOAD-BEARING PART.** `QuizShareLinkService` had **two
+  independent derivations of the same list** — `getActivePublicQuiz` projects what the recipient SEES,
+  `getSharedQuizResults` re-derived what the grader SCORES. Filtering only the projection would leave the
+  grader on a longer list, so `answers.size() != questions.size()` throws and **every submit 400s** — the
+  `v0.110.2` shape. `resolveSharedQuestions` now delegates to `resolveSharedQuiz(link).questions()`, making
+  divergence structurally impossible. **⚠️ The extra `noteRepository.findById` this puts on the grading path
+  is an ACCEPTED cost; do NOT re-split these methods to avoid one lookup.** It cannot fail in production:
+  `generated_quizzes.note_id` is `NOT NULL REFERENCES notes(id) ON DELETE CASCADE` (`V43:4`), so a quiz cannot
+  outlive its note.
+- A quiz consisting only of matching questions now fails closed to the existing *"no longer active"* screen
+  rather than serving a zero-question quiz that would score `0/0`.
+- **Answers are index-addressed instead of append-only**, and a **Back control** lets a recipient return and
+  correct one. The arrays are full-length and null-filled at load; the `answers[i]` / `multiAnswers[i]`
+  pairing (exactly one populated per question, decided by format) is preserved, so **no wire change was
+  needed** — the grader already tolerates a null slot.
+- **⚠️ A SECOND LOCK WAS FOUND THAT THE PLAN DOES NOT NAME, AND FIXING ONLY THE FIRST WOULD HAVE SHIPPED AN
+  OBSERVABLE NO-OP FOR SINGLE-CHOICE QUESTIONS.** `disabled={!isMultiSelect && selectedAnswer !== null}`
+  disabled **every** choice the moment a single-choice answer was picked, so Back would have landed on a
+  locked question. Removed. **⚠️ The test asserting that lock — commented *"Single-choice selection stays
+  one-shot, exactly as it shipped"* — was REWRITTEN, NOT DELETED**, since it pinned the defect; its
+  answers-slot half is genuine and was kept.
+- **⚠️ A REAL-REQUEST TEST NOW COVERS THE ROUTE, WHICH HAD NONE.** `QuizShareControllerTest` uses `MockMvc`
+  with `.contentType(MediaType.APPLICATION_JSON)` and a real body. Verified to catch the `v0.119.0` defect
+  class: removing the content type produces `HttpMediaTypeNotSupportedException` / 415 before the handler
+  runs. **⚠️ The pre-existing controller tests in this area call handlers as METHODS and pass under that
+  defect by construction.**
+
+**Post-implementation `advisor()` review of slices 1-3 (the declared tier), which added two guards.** The
+review pointed at slice 1's navigation state as the least-reviewed code in the release — the cold agent was
+scoped to slice 4's visibility predicate — and named two paths the existing tests did not walk. Both were
+checked in code and **neither was a defect**, but both are now pinned:
+
+- **Emptying an answer you returned to re-gates Continue.** Only MULTI_SELECT can be emptied (single-choice
+  can be re-set but never cleared), and `handleContinue` gates on `hasSelection`, so a recipient cannot
+  advance past a question they blanked. **⚠️ That upholds the kickoff's *correctable, not skippable* ruling
+  on a path that did not exist before this release** — you could never return to a question at all — so it
+  was unpinned rather than wrong.
+- **Repeated navigation keeps every answer in its own slot.** The prior guards walked forward, back once,
+  and forward again; a two-hop walk in each direction is what discriminates an off-by-one once the path is
+  longer than the special case. Mutating the slot index is killed by three named tests, including this one.
+
+**Recipient completion instrumentation (inline).**
+
+- `QUIZ_SHARE_LINK_COMPLETED` is added to `AnalyticsEventType` and fires from the recipient page **only
+  after grading succeeds**, carrying `token`, `score` and `total`. Paired with the existing
+  `QUIZ_SHARE_LINK_OPENED` (fired on load) this gives the funnel a readable **opened → completed** rate,
+  which is the proximal metric this release's checkpoint reads. **⚠️ Without it that checkpoint would be
+  DECORATIVE by the signoff gate's own definition — enum membership is not instrumentation.**
+- **⚠️ NO MIGRATION IS NEEDED AND THIS WAS VERIFIED, NOT ASSUMED:** `AnalyticsEventEntity` maps the enum
+  `@Enumerated(EnumType.STRING)` onto a plain `VARCHAR(64)` with no CHECK constraint (`V25:4`), so a new
+  value is safe to insert anywhere in the enum and no existing row is affected. No test pins the value
+  count.
+- The guard has two halves and the second is the discriminating one: a completion **is** recorded when
+  answers are graded, and **is not** recorded when grading fails — an event fired before the await would
+  satisfy the first while inflating the very rate the checkpoint reads.
+
+**Verification of the inline slices.** Five mutants planted and killed, each by a **named** test:
+reverting the `/quiz/` exclusion failed *AppShell › gives a signed-in shared-quiz recipient the focused
+page, not the authenticated shell*; making `wrap` emit the conflicting class anyway failed *buttonVariants
+› emits no conflicting nowrap class when wrapping is requested*; restoring the bare concept string failed
+*shared quiz page › labels the concept so it does not read as part of the question*. **⚠️ The button guard
+asserts `whitespace-nowrap` is ABSENT rather than that `whitespace-normal` is present — the latter passes
+under the plain-join bug and proves nothing.** `npx tsc --noEmit` clean, `npm run lint` 0 errors (18
+pre-existing warnings, none in touched files), the frontend suite green at **201 suites / 2,210 tests**
+and the backend suite at **2,198 tests / 0 failures** (counted from `target/surefire-reports/*.xml` after
+cleaning the directory first), each command's exit status read directly rather than through a pipe.
+Removing the completion event failed *shared quiz page › records a completion once a recipient's answers
+are graded*; firing it before the await failed *shared quiz page › records no completion when grading
+fails*. **⚠️ Slice 1's second mutant is the one worth recording: re-splitting `resolveSharedQuestions` onto its own unfiltered derivation was killed by EXACTLY ONE test — *sharedQuizGradesASubmissionSizedToTheFilteredQuestionList* — the guard that exists to prove the delegation matters.** Admitting every question format was killed by three. **⚠️ Slice 4's own mutants are recorded too, because the first draft of this paragraph omitted them:** making `eligibleSources` ignore visibility was killed by *aPrivateSourceNoteIsNeverOfferedToAShareRecipient* and *aPrivateSourceNoteIdNeverLeaksAnywhereInThePayload*; giving a combined quiz a title-inferred source — **the exact shape the owner rule forbids** — was killed by *combinedQuizIsFlatPublicPayloadWithoutAnswerKeyAndMultiSelectGradesExactly*; and reverting the results CTA to what shipped in PR #1302 was killed by *lets the long results call-to-action wrap instead of overflowing*.
+
+**⚠️ A SECOND SCOPED COLD AGENT RAN OVER SLICES 1-3 BEFORE SIGNOFF, AND IT FOUND A REAL DEFECT — THE
+ESCALATION WAS OWED AND HAD BEEN MISSED.** The gate escalates from `advisor()` to one scoped cold agent when
+**delivery introduces a defect the same session then fixes** — a measured blind-spot signal. That trigger
+fired when the CTA fix landed on the wrong button, and slices 1-3 were nonetheless given only the
+`advisor()` tier. The agent was briefed to hunt **the same shape**: a change correct in its mechanism but
+wrong or unobservable at the call site.
+
+- **⚠️ REMOVING THE AUTHENTICATED SHELL DID NOT MEAN "NO CHROME" — IT FELL THROUGH TO THE MARKETING
+  `<Navbar />`, WHICH HAS NO AUTH AWARENESS.** A signed-in recipient was shown **Login** and **Get Started**
+  — invited to log into the account they were already using — inside a sticky header carrying **eight
+  navigation destinations**, on desktop and mobile alike. **The mobile tab bar had simply been traded for a
+  marketing bar, so the release's own stated goal of "no escape hatches mid-assessment" was not met.** The
+  recipient page now renders with **no chrome at all**. **⚠️ Verbatim the shape that triggered this review:
+  the predicate was right and the `!shouldUseShell` call site was never examined.**
+- **A failed submit's error followed the recipient onto an unrelated question.** `setSubmitError(null)` sat
+  after the `isLastQuestion` early return and `handleBack` never cleared it — reachable **only because Back
+  now exists**, so it is a defect this release created.
+- **The misapplied `wrap: true` was supplemented, never reverted.** The earlier correction added it to the
+  real CTA and left it on the short *"Learn about NoteLib"* button, where a later reader would take the
+  mistake for a decision. Reverted.
+- **Dead code removed:** `Button`'s `wrap` prop had **zero call sites** (every caller styles a `<Link>`
+  through `buttonVariants`), and `disabled:hover:bg-background` outlived the `disabled` attribute it paired
+  with.
+- **⚠️ THREE TESTS WERE VACUOUS AND ONE MATTERS: deleting `answeredQuestions`' entire non-current-index
+  branch left all 19 tests green**, because the only counter assertion never left question 0 — the reduce is
+  this release's own rewrite and nothing exercised its actual job. Also unexercised: the `onCopySuccess` →
+  *"Saved to your Library"* path, and **what a recipient actually sees** (both app-shell guards asserted only
+  absences, which is why the `Navbar` defect was invisible to them).
+- **⚠️ A METRIC CORRECTION, MADE BEFORE THE READ RATHER THAN AFTER: the checkpoint's denominator was wrong.**
+  `QUIZ_SHARE_LINK_OPENED` fires **twice** from the recipient page — on load, and again from the
+  results-screen signup CTA, which fires **only after a recipient has already completed**. Counting both
+  inflates the denominator with a subset of completers and reads the rate low. The checkpoint row now
+  specifies **`metadata.source IS NULL`**. **Pre-existing mis-instrumentation, not a regression** — and the
+  CTA's event type was deliberately left alone, because this release's anti-drift forbids moving
+  `QUIZ_SHARE_LINK_OPENED`'s firing conditions.
+
+**⚠️ WHAT HELD UNDER ATTACK, recorded so it is not re-derived:** the `answers[i]`/`multiAnswers[i]` pairing
+survived every constructed path including failed-submit-then-retry and Back from the last question after a
+failure; `?? null` (not `||`) correctly preserves choice index `0`; the completion event cannot double-fire;
+and `isSharedQuizRoute` captures nothing it should not.
+
+### Known limitations
+
+- **Combined quizzes offer no continue-learning source.** `CombinedQuizSection` carries a copied title
+  string and no note id, so there is no durable source identity — and none is inferred, which is the rule
+  rather than an omission. **Follow-up:** give combined quiz sections a source-note reference, after which
+  they light up under the existing rule with no branch to remove.
+- **The shared quiz TITLE is not visibility-gated, and it is PRE-EXISTING rather than introduced here.**
+  `PublicSharedQuizResponse.noteTitle` has always carried the source note's title regardless of visibility;
+  it names the quiz, and the sharer exposed it by choosing to share. What this release gates is the ability
+  to **read** the note — its id, which is what a link navigates by. Narrowing the title is a separate
+  product decision and is not taken here.
+- **⚠️ ONE PRE-DECLARED GUARD COULD NOT BE WRITTEN, AND IS STATED RATHER THAN SILENTLY DROPPED.** The
+  kickoff declared *"mixed public/private must omit the private WITHOUT TRACE"*. That fixture has **no
+  reachable subject today**: `generated_quizzes.note_id` is `NOT NULL` with `uq_generated_quizzes_note_id`,
+  so a single-note quiz has exactly one candidate source, and a combined quiz always yields an empty list.
+  **No unreachable fixture was written to fake it** — this repo's own carried lesson is that a negative
+  assertion needs a reachable subject. It becomes writable when combined quizzes gain provenance.
+- **The authenticated *Add to Library* branch is pinned by a mocked component.** `PublicLibraryCopyAction`
+  is `jest.mock`'d in the recipient page tests, so what is proven is **which branch renders**, not that the
+  component works on this page. Its own behaviour is covered where it lives.
+
+
 ## v0.120.0 - Canonical Note Title Integrity
 
 **Status: Released** (kicked off and signed off 2026-09-06, base branch `releases/v0.120.0`)

@@ -60,8 +60,21 @@ function isAuthRoute(pathname: string): boolean {
   return pathname === "/auth" || pathname === "/login" || pathname === "/signup";
 }
 
+// A shared quiz is answered by its RECIPIENT, who may or may not have an account, and the page is a
+// focused assessment. Before this, a signed-in recipient got the full authenticated shell -- including the
+// mobile bottom tab bar -- while answering, so the same link produced two different experiences depending
+// on whether the viewer happened to be logged in, and offered escape hatches mid-assessment. Anonymous and
+// authenticated recipients now both get the focused page. `/quiz/` is the recipient route only; the
+// authenticated in-app quiz surfaces live under `/study-packs` and `/notes` and are unaffected.
+function isSharedQuizRoute(pathname: string): boolean {
+  return pathname.startsWith("/quiz/");
+}
+
 function shouldUseAuthenticatedShell(hasAuthUser: boolean, pathname: string): boolean {
-  return hasAuthUser && !isMarketingPublicRoute(pathname) && !isAuthRoute(pathname);
+  return hasAuthUser
+    && !isMarketingPublicRoute(pathname)
+    && !isAuthRoute(pathname)
+    && !isSharedQuizRoute(pathname);
 }
 
 function isProtectedAppRoute(pathname: string): boolean {
@@ -508,6 +521,17 @@ export function AppShell({ children }: Readonly<AppShellProps>) {
 
   const { isBottomViewportClaimed, isExamFocusActive } = useExamFocusContext();
   const shouldShowMobileBottomTabs = user.mobileTabBarEnabled && !isExamFocusActive && !isBottomViewportClaimed;
+
+  // ⚠️ A SHARED QUIZ GETS NO CHROME AT ALL, AND THIS BRANCH IS WHY THE EXCLUSION ABOVE IS NOT SUFFICIENT
+  // ON ITS OWN. Dropping out of the authenticated shell does not mean "no navigation" -- it falls through
+  // to the MARKETING <Navbar />, which has no auth awareness whatsoever and unconditionally renders Login
+  // and Get Started plus eight destinations in a sticky header. A signed-in recipient was therefore invited
+  // to log in to an account they were already using, with no route back to their own dashboard, and the
+  // "focused assessment" goal was not met -- the mobile tab bar had simply been traded for a marketing bar
+  // on every breakpoint. The recipient page is a scored assessment reached by link, so it gets the page.
+  if (isSharedQuizRoute(pathname || "")) {
+    return <main className="min-h-screen bg-background text-foreground">{children}</main>;
+  }
 
   if (!shouldUseShell) {
     return (

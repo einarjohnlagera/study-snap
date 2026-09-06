@@ -33,6 +33,48 @@ Rules:
 
 This keeps public play lightweight and avoids creating student-owned history before authentication.
 
+### The recipient page is a focused assessment for signed-in recipients too
+
+`/quiz/{token}` is `permitAll`, so a recipient may or may not have an account — but until `v0.121.0` a
+**signed-in** recipient was given the whole authenticated app shell, mobile bottom tab bar included, while
+answering. The same link therefore produced two different experiences depending on whether the viewer
+happened to be logged in, and offered navigation escape hatches in the middle of a scored assessment.
+
+`AppShell.shouldUseAuthenticatedShell` now excludes any path under `/quiz/`, so anonymous and authenticated
+recipients get the identical focused page.
+
+- **⚠️ The exclusion is `/quiz/` ONLY — the recipient route.** The authenticated in-app quiz surfaces live
+  under `/notes/…` and `/study-packs/…` and must keep the shell; a test pins both sides, because a
+  predicate matching both would pass a guard that only asserted the `/quiz/` case.
+- the concept is rendered as a labelled *Topic* chip rather than a bare string under the question stem,
+  where it read as a second sentence of the question itself
+- the results call-to-action wraps rather than overflowing on a narrow screen, via `buttonVariants`'
+  opt-in `wrap`
+
+### Recipient funnel instrumentation
+
+- `QUIZ_SHARE_LINK_OPENED` fires when the recipient page loads a quiz.
+- `QUIZ_SHARE_LINK_COMPLETED` fires **only after grading succeeds**, carrying `token`, `score` and `total`.
+  Together they give an **opened → completed** rate with a readable denominator.
+- **⚠️ The completion event must stay on the success path.** Firing it before the `getSharedQuizResults`
+  await would count submissions that never produced a score, inflating the exact rate the `v0.121.0`
+  checkpoint reads. A test pins both halves — that it fires on success, and that it does **not** fire when
+  grading fails.
+- **⚠️ Adding an `AnalyticsEventType` value needs no migration:** `AnalyticsEventEntity` maps it
+  `@Enumerated(EnumType.STRING)` onto a plain `VARCHAR(64)` with no CHECK constraint (`V25:4`), so values
+  are stored by name and insertion order is irrelevant.
+
+### ⚠️ `cn` is a plain join, not tailwind-merge
+
+`frontend/lib/utils.ts`'s `cn` is `inputs.filter(Boolean).join(" ")`. It does **not** resolve conflicting
+Tailwind utilities, so passing `whitespace-normal` through a `className` leaves **both** it and
+`buttonVariants`' base `whitespace-nowrap` in the class list and lets stylesheet order decide the winner.
+That is why wrapping is an **option on `buttonVariants`** (`wrap`) that suppresses the conflicting class at
+source, rather than an override at the call site. Its guard asserts `whitespace-nowrap` is **absent**, not
+merely that `whitespace-normal` is present — the latter passes under the bug. **⚠️ Do not "simplify" this
+into a `className` override, and do not remove `whitespace-nowrap` from the shared base, which every other
+button in the app depends on.**
+
 ## Combined Quiz Snapshots
 
 A combined quiz assembles selected questions from already-generated per-note quizzes into ordered sections.
@@ -72,16 +114,88 @@ newest-first list exposes only snapshot metadata (title, when it was made, store
 and whether sharing is on, off, or not created), then links to the existing detail page. The list never
 duplicates share controls: revoking or copying remains on `/library/combined-quiz/{combinedQuizId}`.
 
+### ⚠️ Matching questions are excluded from shared quizzes
+
+`teacher-quiz-developer.txt:23-26` instructs the model to emit **one MATCHING block** — 2-4 consecutive
+items sharing an option set, tied together by `questionGroup`. `PublicQuizItem` does not carry
+`questionGroup` and the recipient page has no matching control, so those items reached recipients as
+independent MCQs with identical choices and were **scored as if they were independent**.
+
+Since `v0.121.0` they are filtered out of the shared payload.
+
+- **⚠️ The filter is applied at ONE point — inside `resolveSharedQuiz`, on the way into the `SharedQuiz`
+  record — and `resolveSharedQuestions` DELEGATES to it.** These were two independent derivations:
+  `getActivePublicQuiz` projects what the recipient *sees*, `getSharedQuizResults` walks what the grader
+  *scores*. Filtering only the projection leaves the grader on a longer list, so
+  `answers.size() != questions.size()` throws and **every submit 400s** — the `v0.110.2` shape.
+  **⚠️ Do NOT re-split these methods.** The extra `noteRepository.findById` the delegation puts on the
+  grading path is an accepted cost, and it cannot fail: `generated_quizzes.note_id` is
+  `NOT NULL REFERENCES notes(id) ON DELETE CASCADE` (`V43:4`).
+- **⚠️ Exclusion is on `questionFormat`, never on `questionGroup`** — a non-matching item may legitimately
+  carry a group, and filtering on the group would drop valid questions.
+- A quiz of nothing but matching questions **fails closed** to the existing *"no longer active"* screen
+  rather than serving a zero-question quiz that would score `0/0`.
+- **The stored owner-facing quiz is unchanged** — this is a projection, never a mutation.
+- Supporting matching properly would change the **grading contract** on a `permitAll` route scored for an
+  anonymous recipient. Recorded as a follow-up, not rejected on merit.
+
+### Continue learning — the provenance capability rule
+
+A shared-quiz result may offer the SOURCE material. The rule is a capability, not a single-note special case:
+
+> A source is surfaced only when NoteLib has **durable source-Note identity** for it AND the source is
+> **legitimately accessible to the recipient** at read/result time. **Never infer identity from a copied
+> title.**
+
+- `PublicSharedQuizResponse.sourceNotes` is a **list**, populated server-side in
+  `QuizShareLinkService.eligibleSources` from notes whose **`visibility == PUBLIC`** only. `/quiz/share/**`
+  is `permitAll`, so the recipient may be anonymous — which is what makes public visibility the
+  accessibility test.
+- **⚠️ PRIVATE SOURCES ARE OMITTED ENTIRELY** — not counted, not hinted, not placeheld. No *"1 source is
+  private"*, no *"2 of 3 available"*, no disabled card. **An empty list means the client renders nothing at
+  all**, never an empty state explaining the absence.
+- **⚠️ RELATIONSHIP STATE IS NEVER AN INPUT.** An accepted Learning Connection grants nothing here.
+- **⚠️ Combined quizzes contribute NOTHING, and there is deliberately no `isCombined` branch.**
+  `CombinedQuizSection` carries a copied title string and no note id, so the rule simply yields nothing for
+  them. When combined quizzes gain durable provenance they light up under the same rule, with no special
+  case to remove.
+- **Anonymous → View Note** (`/public/notes/{id}`). **Authenticated → Add to Library**, reusing
+  `PublicLibraryCopyAction`. **⚠️ Anonymous must NOT be given copy-first:**
+  `public-library-copy-action.tsx:161` sends them to `/signup?redirect=…`, but
+  `resolvePostLoginDestination` returns the gated home before reading the redirect param, so the intent is
+  lost and the path dead-ends.
+
+**Known limitation — the quiz TITLE is not gated, and this is pre-existing.**
+`PublicSharedQuizResponse.noteTitle` has always carried the source note's title regardless of visibility;
+it is how a recipient knows what the quiz is, and the sharer exposed it by choosing to share. What the rule
+above gates is the ability to **read** the note — the note **id**, which is what a link navigates by.
+Narrowing the title is a separate product decision, not part of this capability.
+
+### Recipient answers are correctable
+
+Answers are **index-addressed**: both arrays are full-length and null-filled at load, and a **Back** control
+returns the recipient to a previous question with their selection restored.
+
+- The `answers[i]` / `multiAnswers[i]` pairing is unchanged — exactly one is populated per question, decided
+  by whether that question is `MULTI_SELECT` — so **no wire change was needed**; the grader already tolerates
+  a null slot and still requires `answers.size() == questions.size()`.
+- **⚠️ There were TWO locks, and the second is easy to miss.** Besides the append-only array,
+  `disabled={!isMultiSelect && selectedAnswer !== null}` disabled every choice the instant a single-choice
+  answer was picked. Fixing only the array would have left single-choice answers uncorrectable and Back
+  landing on a locked question. **Do not reintroduce a per-question answer lock.**
+- Forward navigation past an **unanswered** question remains forbidden; this makes answers correctable, not
+  skippable.
+
 ### Question formats a recipient can be given
 
 `teacher-quiz-developer.txt` can emit four formats, and the shared path handles them differently:
 
 | Format | Graded | Rendered |
 |---|---|---|
-| `MCQ` | single `correctIndex` | one-shot choice, committed on click |
+| `MCQ` | single `correctIndex` | single choice, **changeable until submit** (`v0.121.0`) |
 | `TRUE_FALSE` | single `correctIndex` | same as MCQ, two choices |
 | `MULTI_SELECT` | **exact set** against `correctIndices` | checkboxes with *Select all that apply*; editable until Continue |
-| `MATCHING` | single `correctIndex` per item | ⚠️ as N unrelated MCQs — see Known limitations |
+| `MATCHING` | — | **⚠️ never reaches a recipient — excluded server-side (`v0.121.0`)** |
 
 ### ⚠️ MULTI_SELECT grading must route through `QuizSessionReviewUtils.isAnswerCorrect`
 
@@ -184,12 +298,19 @@ changed count 400'd them on submit, and an **unchanged** count graded them again
 
 ## Known limitations
 
-- **A MATCHING block loses its grouping.** `teacher-quiz-developer.txt` may emit one block of 2–4
-  consecutive questions sharing a `questionGroup` and the same four choices. The shared quiz page renders
-  each as a standalone question with no *Match each item to one option* header, unlike the in-app
-  `QuizMatchingGroup`. **Grading is unaffected** — a MATCHING item carries a single `correctIndex` and is
-  graded like an MCQ. This is presentation only, and is the sharing gap `assessment-architecture-audit.md`
-  §15 records.
+- **~~A MATCHING block loses its grouping.~~ CLOSED in `v0.121.0`** — and the old text was wrong in a way
+  worth recording, since it called this *"presentation only"* with *"grading unaffected"*. It was neither:
+  a recipient was **scored** on items whose matching constraint they could not see. Matching questions are
+  now **excluded server-side** and never reach a recipient. Supporting them properly would change the
+  grading contract on a `permitAll` route, and is a follow-up rather than a rejection on merit.
+- **Combined quizzes offer no continue-learning source.** `CombinedQuizSection` carries a copied title
+  string and no note id, so there is no durable source identity to surface and none is inferred. Their
+  recipients get the ordinary result screen. **Follow-up:** give combined quiz sections a source-note
+  reference, after which they light up under the existing rule with no branch to remove.
+- **The quiz title is not visibility-gated, and this is pre-existing.**
+  `PublicSharedQuizResponse.noteTitle` has always carried the source note's title regardless of
+  visibility — it names the quiz, and the sharer exposed it by sharing. What `v0.121.0` gates is the
+  ability to **read** the note (its id). Narrowing the title is a separate product decision.
 - **IDENTIFICATION and ENUMERATION cannot be graded on the shared path.** Neither format is reachable
   today — `teacher-quiz-developer.txt` does not emit them — but if one ever appeared it would score zero,
   because the recipient has no text input to answer it with.

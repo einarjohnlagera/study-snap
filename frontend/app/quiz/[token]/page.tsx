@@ -4,6 +4,8 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { TrackedLink } from "@/components/analytics/tracked-link";
+import { PublicLibraryCopyAction } from "@/components/notes/public-library-copy-action";
+import { getAuthUser } from "@/lib/auth";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { QuizQuestionText } from "@/components/study-pack/quiz-question-text";
@@ -37,6 +39,8 @@ export default function SharedQuizPage() {
   const [inactive, setInactive] = useState(false);
   const [fetchError, setFetchError] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [copiedNoteId, setCopiedNoteId] = useState<string | null>(null);
 
   const loadQuiz = useCallback(async () => {
     if (!token) {
@@ -50,8 +54,11 @@ export default function SharedQuizPage() {
     try {
       const loadedQuiz = await getPublicSharedQuiz(token);
       setQuiz(loadedQuiz);
-      setAnswers([]);
-      setMultiAnswers([]);
+      // Full-length and null-filled: the grader reads both arrays POSITIONALLY and requires
+      // `answers.size() == questions.size()`, so growing them by append is what made an earlier answer
+      // unreachable. Length is fixed at load; only the contents change.
+      setAnswers(new Array(loadedQuiz.questions.length).fill(null));
+      setMultiAnswers(new Array(loadedQuiz.questions.length).fill(null));
       setSelectedAnswer(null);
       setSelectedMultiAnswers([]);
       setCurrentIndex(0);
@@ -76,13 +83,27 @@ export default function SharedQuizPage() {
     void loadQuiz();
   }, [loadQuiz]);
 
+  // Read after mount: the page is permitAll and renders for anonymous recipients, so auth state must not
+  // influence the first paint.
+  useEffect(() => {
+    setIsAuthenticated(getAuthUser() !== null);
+  }, []);
+
   const currentQuestion = quiz?.questions[currentIndex] ?? null;
   const questionCount = quiz?.questions.length ?? 0;
   const progressLabel = questionCount > 0 ? `Question ${currentIndex + 1} of ${questionCount}` : "Shared quiz";
   const isMultiSelect = currentQuestion?.questionFormat === MULTI_SELECT_FORMAT;
   const hasSelection = isMultiSelect ? selectedMultiAnswers.length > 0 : selectedAnswer !== null;
   // hasSelection is recomputed every render, so memoizing this saved nothing.
-  const answeredQuestions = answers.length + (hasSelection ? 1 : 0);
+  // The arrays are now always full-length, so `answers.length` would report every question as answered.
+  const answeredQuestions = answers.reduce<number>((count, answer, index) => {
+    if (index === currentIndex) {
+      return count + (hasSelection ? 1 : 0);
+    }
+    const multi = multiAnswers[index];
+    const isAnswered = answer !== null || (Array.isArray(multi) && multi.length > 0);
+    return count + (isAnswered ? 1 : 0);
+  }, 0);
 
   const toggleMultiAnswer = useCallback((choiceIndex: number) => {
     setSelectedMultiAnswers((current) => (
@@ -92,19 +113,55 @@ export default function SharedQuizPage() {
     ));
   }, []);
 
+  // Writes the live selection into its OWN slot rather than appending, so revisiting a question overwrites
+  // that question instead of adding a new entry at the end.
+  const commitCurrentSelection = useCallback(() => {
+    const nextAnswers = [...answers];
+    const nextMultiAnswers = [...multiAnswers];
+    nextAnswers[currentIndex] = isMultiSelect ? null : selectedAnswer;
+    nextMultiAnswers[currentIndex] = isMultiSelect ? [...selectedMultiAnswers] : null;
+    return { nextAnswers, nextMultiAnswers };
+  }, [answers, currentIndex, isMultiSelect, multiAnswers, selectedAnswer, selectedMultiAnswers]);
+
+  // Exactly one of the two slots is populated per question, decided by format -- that pairing is the
+  // contract the grader relies on, so restoring reads both.
+  const restoreSelectionAt = useCallback((
+    index: number,
+    fromAnswers: (number | null)[],
+    fromMultiAnswers: (number[] | null)[],
+  ) => {
+    setSelectedAnswer(fromAnswers[index] ?? null);
+    setSelectedMultiAnswers(fromMultiAnswers[index] ?? []);
+  }, []);
+
+  const handleBack = useCallback(() => {
+    if (currentIndex === 0 || submitting) {
+      return;
+    }
+    const { nextAnswers, nextMultiAnswers } = commitCurrentSelection();
+    setAnswers(nextAnswers);
+    setMultiAnswers(nextMultiAnswers);
+    // Navigating away from a failed submit must clear its error, or the message follows the recipient onto
+    // an unrelated question. Reachable only since Back exists.
+    setSubmitError(null);
+    const previousIndex = currentIndex - 1;
+    restoreSelectionAt(previousIndex, nextAnswers, nextMultiAnswers);
+    setCurrentIndex(previousIndex);
+  }, [commitCurrentSelection, currentIndex, restoreSelectionAt, submitting]);
+
   const handleContinue = useCallback(async () => {
     if (!quiz || !hasSelection || submitting) {
       return;
     }
-    const nextAnswers = [...answers, isMultiSelect ? null : selectedAnswer];
-    const nextMultiAnswers = [...multiAnswers, isMultiSelect ? [...selectedMultiAnswers] : null];
+    const { nextAnswers, nextMultiAnswers } = commitCurrentSelection();
     const isLastQuestion = currentIndex >= quiz.questions.length - 1;
     if (!isLastQuestion) {
       setAnswers(nextAnswers);
       setMultiAnswers(nextMultiAnswers);
-      setSelectedAnswer(null);
-      setSelectedMultiAnswers([]);
-      setCurrentIndex((index) => index + 1);
+      const nextIndex = currentIndex + 1;
+      restoreSelectionAt(nextIndex, nextAnswers, nextMultiAnswers);
+      setCurrentIndex(nextIndex);
+      setSubmitError(null);
       return;
     }
 
@@ -115,20 +172,26 @@ export default function SharedQuizPage() {
       setAnswers(nextAnswers);
       setMultiAnswers(nextMultiAnswers);
       setResults(checkedResults);
+      // Fires only after grading SUCCEEDS, so a failed submit the recipient retries is not counted as a
+      // completion. Paired with QUIZ_SHARE_LINK_OPENED (fired on load) this gives the funnel a readable
+      // opened -> completed rate, which is the proximal metric the v0.121.0 checkpoint reads; without it
+      // that checkpoint would be decorative, since enum membership is not instrumentation.
+      void trackAnalyticsEvent({
+        eventType: "QUIZ_SHARE_LINK_COMPLETED",
+        entityId: quiz.quizId,
+        metadata: { token, score: checkedResults.score, total: checkedResults.total },
+      });
     } catch {
       setSubmitError("Could not submit answers. Please try again.");
     } finally {
       setSubmitting(false);
     }
   }, [
-    answers,
+    commitCurrentSelection,
     currentIndex,
     hasSelection,
-    isMultiSelect,
-    multiAnswers,
     quiz,
-    selectedAnswer,
-    selectedMultiAnswers,
+    restoreSelectionAt,
     submitting,
     token,
   ]);
@@ -190,12 +253,45 @@ export default function SharedQuizPage() {
             <p className="text-lg font-semibold">
               Score: {results.score} / {results.total} correct
             </p>
+            {(quiz.sourceNotes ?? []).length > 0 ? (
+              <div className="space-y-3 rounded-xl border border-border bg-muted/40 p-4">
+                <p className="text-sm font-semibold">Keep learning</p>
+                {(quiz.sourceNotes ?? []).map((source) => (
+                  <div key={source.id} className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <p className="min-w-0 text-sm text-foreground/75">{source.title}</p>
+                    {isAuthenticated ? (
+                      <PublicLibraryCopyAction
+                        noteId={source.id}
+                        isOwner={false}
+                        onCopySuccess={({ copiedNoteId: newNoteId }) => setCopiedNoteId(newNoteId)}
+                      />
+                    ) : (
+                      // ⚠️ Anonymous recipients get VIEW, never copy. The copy path routes them to
+                      // /signup?redirect=..., but resolvePostLoginDestination returns the gated home
+                      // (verify-email -> onboarding) BEFORE reading the redirect param, so a new signup
+                      // loses it and the path dead-ends.
+                      <Link
+                        href={`/public/notes/${source.id}`}
+                        className={buttonVariants({ variant: "outline", className: "w-full sm:w-auto" })}
+                      >
+                        View Note
+                      </Link>
+                    )}
+                  </div>
+                ))}
+                {copiedNoteId ? (
+                  <Link href={`/notes/${copiedNoteId}`} className="text-sm font-medium text-blue-600 dark:text-blue-400">
+                    Saved to your Library — open it
+                  </Link>
+                ) : null}
+              </div>
+            ) : null}
             <TrackedLink
               href="/signup"
               eventType="QUIZ_SHARE_LINK_OPENED"
               entityId={quiz.quizId}
               eventMetadata={{ token, source: "shared_quiz_results_signup_cta" }}
-              className={buttonVariants({ className: "w-full sm:w-auto" })}
+              className={buttonVariants({ wrap: true, className: "w-full sm:w-auto" })}
             >
               Save your score and start studying with your own notes
             </TrackedLink>
@@ -272,7 +368,11 @@ export default function SharedQuizPage() {
               <p className="text-xs font-semibold uppercase tracking-wide text-foreground/55">{progressLabel}</p>
               <h2 className="text-xl font-semibold leading-8"><QuizQuestionText text={currentQuestion.question} /></h2>
               {currentQuestion.concept ? (
-                <p className="text-sm text-foreground/60">{currentQuestion.concept}</p>
+                <p className="inline-flex w-fit items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 text-xs text-foreground/70">
+                  <span className="font-semibold uppercase tracking-wide text-foreground/55">Topic</span>
+                  <span aria-hidden="true">·</span>
+                  <span>{currentQuestion.concept}</span>
+                </p>
               ) : null}
               {isMultiSelect ? (
                 <p className="text-xs font-medium uppercase tracking-wide text-foreground/60">Select all that apply</p>
@@ -290,12 +390,9 @@ export default function SharedQuizPage() {
                       "motion-pressable flex w-full items-start gap-2 rounded-xl border px-4 py-3 text-left text-sm font-medium transition-colors",
                       isSelected
                         ? "border-primary bg-primary/10 text-foreground"
-                        : "border-border bg-background hover:bg-highlight disabled:hover:bg-background",
+                        : "border-border bg-background hover:bg-highlight",
                     ].join(" ")}
                     onClick={() => (isMultiSelect ? toggleMultiAnswer(index) : setSelectedAnswer(index))}
-                    // A single-choice answer is committed on click, as it always has been. A multi-select
-                    // answer stays editable until Continue, or the recipient could never pick a second one.
-                    disabled={!isMultiSelect && selectedAnswer !== null}
                   >
                     {isMultiSelect ? (
                       <span
@@ -321,7 +418,19 @@ export default function SharedQuizPage() {
             {submitError ? (
               <p className="text-sm text-red-600 dark:text-red-400">{submitError}</p>
             ) : null}
-            <div className="flex justify-end">
+            <div className="flex items-center justify-between gap-3">
+              {currentIndex > 0 ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={handleBack}
+                  disabled={submitting}
+                >
+                  Back
+                </Button>
+              ) : (
+                <span />
+              )}
               <Button
                 type="button"
                 onClick={() => void handleContinue()}
