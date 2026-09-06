@@ -44,7 +44,43 @@
 
 ### Shipped
 
-_(nothing yet)_
+**Items 1-2 — the batch read and its consumer.**
+
+- **`GET /collections/{id}/goal/child-items` returns every child Subject plan's items in ONE request**,
+  replacing the per-child `getCollection` fan-out in `refreshBuilder`. **⚠️ COUNTING CONVENTION, STATED
+  RATHER THAN LEFT IMPLICIT: the kickoff's "21 requests" counts the goal read plus 20 children and
+  EXCLUDES the builder's own initial `getCollection` on the Goal, which the fix does not remove.** Whole
+  render, 20 plans: **22 requests → 3** (`getCollection` on the Goal, `getCollectionGoal`, one batch
+  read). By the kickoff's convention it is 21 → 2. The lazy note list stays lazy either way (`v0.123.0`).
+  **⚠️ `GoalCollectionDetailResponse` was NOT widened** — a backend test pins its
+  exact 24-component list, because hanging items on the goal response is the cheapest way to make the
+  request count fall and is precisely what this release forbids.
+- **The response is deliberately minimal — `(collectionId, items[])` per child, and nothing else.**
+  `buildSubjects` never read anything more off a child detail, so returning N full
+  `NoteCollectionDetailResponse` payloads would have defeated much of the point. `items` is the same
+  `NoteCollectionItemResponse` shape `getCollection` already returns, so the rendered shape is unchanged.
+- **Authorization is exactly the fan-out's, because the endpoint takes no id list.** Child ids are
+  derived server-side from the owner-scoped parent lookup, and the children query is itself
+  owner-filtered. **⚠️ Do NOT add an id-list request shape** — that is the IDOR version of this endpoint
+  and would need per-id authorization.
+- **Items for all children are built in ONE `toItemResponses` pass**, so the read costs the same five
+  bulk queries at 2 children as at 20. **⚠️ `toItemResponses` is untouched** — the waste was the request
+  count, not the per-request work.
+- **Both calls sit BELOW `applyLeafDetail`'s early return.** Hoisting either into the opening
+  `Promise.all` would add a wasted request to every leaf-plan refresh — a regression on the path this
+  release's anti-drift says is untouched.
+
+**Known limitations.**
+
+- **The positional-partition guard is defensive and UNTESTED, and that is stated rather than papered
+  over.** `groupItemResponsesByCollectionId` throws if `toItemResponses` ever returns a different number
+  of responses than items — the shape that would silently misattribute an item to the wrong plan. It is
+  **unreachable today** (`toItemResponses` is a bare 1:1 `map`), so no mutant can kill it and no test
+  asserts it. It exists because its sibling `toPublicItemResponses` carries a `.filter()` and
+  `v0.104.0` already paid for this class once.
+- **`v0.123.0`'s residual stands: the release is sized from a static read.** It was not observed in
+  production before this release opened, so how much of the request cost a curator actually felt is
+  still unmeasured. The arithmetic is not in doubt.
 
 ## v0.123.0 - Collection Builder Integrity
 

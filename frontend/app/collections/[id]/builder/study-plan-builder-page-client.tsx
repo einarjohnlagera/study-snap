@@ -41,6 +41,7 @@ import {
   deleteCollection,
   getCollection,
   getCollectionGoal,
+  getGoalChildItems,
   listNotes,
   removeCollectionItem,
   reorderCollectionChildren,
@@ -50,6 +51,7 @@ import {
   updateCollection,
   type GoalCollectionChildResponse,
   type GoalCollectionDetailResponse,
+  type GoalChildItemsResponse,
   type NoteCollectionDetail,
   type NoteCollectionItem,
   type NoteListItemResponse,
@@ -1285,11 +1287,17 @@ function DeleteSubjectModal({
   );
 }
 
-function buildSubjects(goal: GoalCollectionDetailResponse, childDetails: NoteCollectionDetail[]): BuilderSubject[] {
-  const detailsById = new Map(childDetails.map((detail) => [detail.id, detail]));
+/**
+ * ⚠️ IT TAKES THE BATCH READ, NOT N CHILD DETAILS. Only `(collectionId, items)` was ever read off a
+ * child detail, which is why the batch response carries exactly that and nothing else — see
+ * `getGoalChildItems`. The rendered shape is unchanged: the same subjects, in `goal.children` order,
+ * with the same items in the same position order.
+ */
+function buildSubjects(goal: GoalCollectionDetailResponse, childItems: GoalChildItemsResponse[]): BuilderSubject[] {
+  const itemsByCollectionId = new Map(childItems.map((child) => [child.collectionId, child.items]));
   return goal.children.map((child) => ({
     ...child,
-    items: sortCollectionItemsByPosition(detailsById.get(child.collectionId)?.items ?? []),
+    items: sortCollectionItemsByPosition(itemsByCollectionId.get(child.collectionId) ?? []),
   }));
 }
 
@@ -1443,9 +1451,18 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
         return;
       }
       setCollection(collectionResult);
-      const goalResult = await getCollectionGoal(collectionId);
-      const childDetails = await Promise.all(goalResult.children.map((child) => getCollection(child.collectionId)));
-      const nextSubjects = buildSubjects(goalResult, childDetails);
+      // ⚠️ ONE BATCH READ, NOT ONE REQUEST PER CHILD. This used to be
+      // `Promise.all(goalResult.children.map(getCollection))` — 22 requests to render a 20-plan Review
+      // Set (this page's own getCollection, the goal read, and 20 child reads) against 3 now,
+      // concurrent against a connection pool of 20. The batch read does not depend on the goal
+      // response (the server derives the children itself), so the two run together.
+      // ⚠️ BOTH CALLS BELONG BELOW `applyLeafDetail`'s early return: a leaf plan has no children, and
+      // hoisting either into the opening Promise.all would add a wasted request to every leaf refresh.
+      const [goalResult, childItems] = await Promise.all([
+        getCollectionGoal(collectionId),
+        getGoalChildItems(collectionId),
+      ]);
+      const nextSubjects = buildSubjects(goalResult, childItems);
       setGoal(goalResult);
       setSubjects(nextSubjects);
       leafItemsRef.current = [];
