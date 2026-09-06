@@ -466,4 +466,44 @@ describe("AppShell", () => {
       expect(screen.getByTestId("mobile-bottom-tab-bar")).toBeInTheDocument();
     });
   });
+
+  // A shared quiz is a focused assessment taken by its RECIPIENT. Before v0.121.0 a signed-in recipient
+  // got the whole authenticated shell -- bottom tab bar included -- so the same link behaved differently
+  // depending on whether the viewer happened to be logged in, and offered escape hatches mid-assessment.
+  it("gives a signed-in shared-quiz recipient the focused page, not the authenticated shell", async () => {
+    currentPathname = "/quiz/share-token-123";
+
+    render(
+      <ExamFocusProvider>
+        <AppShell>
+          <div>Shared quiz content</div>
+        </AppShell>
+      </ExamFocusProvider>,
+    );
+
+    expect(await screen.findByText("Shared quiz content")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.queryByTestId("mobile-bottom-tab-bar")).not.toBeInTheDocument();
+    });
+    expect(screen.queryByLabelText("Open user menu")).not.toBeInTheDocument();
+  });
+
+  // Pins the boundary: the in-app quiz surfaces live under /notes and /study-packs and must KEEP the
+  // shell. A guard that only asserted the /quiz/ case would pass under a predicate that matched both.
+  it("keeps the authenticated shell on in-app quiz routes", async () => {
+    currentPathname = "/notes/note-1/challenge-quiz";
+
+    render(
+      <ExamFocusProvider>
+        <AppShell>
+          <div>Challenge Quiz content</div>
+        </AppShell>
+      </ExamFocusProvider>,
+    );
+
+    expect(await screen.findByText("Challenge Quiz content")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByTestId("mobile-bottom-tab-bar")).toBeInTheDocument();
+    });
+  });
 });

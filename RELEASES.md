@@ -38,6 +38,39 @@
 
 **Routing: SPLIT — slices 2 and 3 inline; slices 1 and 4 CODEX** (slice 1 changes a serialization contract plus the recipient answer model; slice 4 spans a backend DTO, a visibility predicate and the recipient result screen).
 
+### Shipped
+
+**Slice 2 — mobile focus (inline).**
+
+- A signed-in recipient answering a shared quiz now gets the same focused page an anonymous one does.
+  `AppShell.shouldUseAuthenticatedShell` excluded nothing under `/quiz/`, so an authenticated recipient was
+  served the full app shell **including the mobile bottom tab bar** while taking a scored assessment — the
+  same link behaving differently depending on whether the viewer happened to be logged in, with navigation
+  escape hatches mid-quiz. **⚠️ The exclusion is the `/quiz/` recipient route ONLY; the in-app quiz surfaces
+  under `/notes/…` and `/study-packs/…` keep the shell, and a second test pins that side** — a guard
+  asserting only the `/quiz/` case would pass under a predicate that matched both.
+- The results call-to-action stops overflowing on a narrow screen. `buttonVariants` gains an opt-in `wrap`
+  that swaps `whitespace-nowrap` for `whitespace-normal text-center` and the fixed `h-10`/`h-9` for
+  `min-h-10`/`min-h-9`. **⚠️ It is an OPTION rather than a call-site override for a reason that is easy to
+  get wrong: `cn` is a plain join, NOT tailwind-merge** (`frontend/lib/utils.ts`), so passing
+  `whitespace-normal` through `className` would leave **both** classes in the list and let stylesheet order
+  decide. Defaults are unchanged, so every existing button renders byte-identically.
+
+**Slice 3 — result legibility (inline).**
+
+- The concept under the question stem is now a labelled *Topic* chip. It rendered as a bare grey string
+  directly beneath the question, where it read as a second sentence of the question itself.
+
+**Verification of the inline slices.** Three mutants planted and killed, each by a **named** test:
+reverting the `/quiz/` exclusion failed *AppShell › gives a signed-in shared-quiz recipient the focused
+page, not the authenticated shell*; making `wrap` emit the conflicting class anyway failed *buttonVariants
+› emits no conflicting nowrap class when wrapping is requested*; restoring the bare concept string failed
+*shared quiz page › labels the concept so it does not read as part of the question*. **⚠️ The button guard
+asserts `whitespace-nowrap` is ABSENT rather than that `whitespace-normal` is present — the latter passes
+under the plain-join bug and proves nothing.** `npx tsc --noEmit` clean, `npm run lint` 0 errors (18
+pre-existing warnings, none in touched files), and the full suite green at **201 suites / 2,197 tests**,
+each command's exit status read directly rather than through a pipe.
+
 ## v0.120.0 - Canonical Note Title Integrity
 
 **Status: Released** (kicked off and signed off 2026-09-06, base branch `releases/v0.120.0`)

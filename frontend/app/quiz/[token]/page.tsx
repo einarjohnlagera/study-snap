@@ -170,7 +170,7 @@ export default function SharedQuizPage() {
           <p className="text-sm leading-6 text-foreground/75">
             The teacher may have turned sharing off, or the link may have been removed.
           </p>
-          <Link href="/" className={buttonVariants({ className: "w-full sm:w-auto" })}>
+          <Link href="/" className={buttonVariants({ wrap: true, className: "w-full sm:w-auto" })}>
             Learn about NoteLib
           </Link>
         </Card>
@@ -272,7 +272,11 @@ export default function SharedQuizPage() {
               <p className="text-xs font-semibold uppercase tracking-wide text-foreground/55">{progressLabel}</p>
               <h2 className="text-xl font-semibold leading-8"><QuizQuestionText text={currentQuestion.question} /></h2>
               {currentQuestion.concept ? (
-                <p className="text-sm text-foreground/60">{currentQuestion.concept}</p>
+                <p className="inline-flex w-fit items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 text-xs text-foreground/70">
+                  <span className="font-semibold uppercase tracking-wide text-foreground/55">Topic</span>
+                  <span aria-hidden="true">·</span>
+                  <span>{currentQuestion.concept}</span>
+                </p>
               ) : null}
               {isMultiSelect ? (
                 <p className="text-xs font-medium uppercase tracking-wide text-foreground/60">Select all that apply</p>

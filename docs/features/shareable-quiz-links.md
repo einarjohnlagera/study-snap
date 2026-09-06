@@ -33,6 +33,35 @@ Rules:
 
 This keeps public play lightweight and avoids creating student-owned history before authentication.
 
+### The recipient page is a focused assessment for signed-in recipients too
+
+`/quiz/{token}` is `permitAll`, so a recipient may or may not have an account — but until `v0.121.0` a
+**signed-in** recipient was given the whole authenticated app shell, mobile bottom tab bar included, while
+answering. The same link therefore produced two different experiences depending on whether the viewer
+happened to be logged in, and offered navigation escape hatches in the middle of a scored assessment.
+
+`AppShell.shouldUseAuthenticatedShell` now excludes any path under `/quiz/`, so anonymous and authenticated
+recipients get the identical focused page.
+
+- **⚠️ The exclusion is `/quiz/` ONLY — the recipient route.** The authenticated in-app quiz surfaces live
+  under `/notes/…` and `/study-packs/…` and must keep the shell; a test pins both sides, because a
+  predicate matching both would pass a guard that only asserted the `/quiz/` case.
+- the concept is rendered as a labelled *Topic* chip rather than a bare string under the question stem,
+  where it read as a second sentence of the question itself
+- the results call-to-action wraps rather than overflowing on a narrow screen, via `buttonVariants`'
+  opt-in `wrap`
+
+### ⚠️ `cn` is a plain join, not tailwind-merge
+
+`frontend/lib/utils.ts`'s `cn` is `inputs.filter(Boolean).join(" ")`. It does **not** resolve conflicting
+Tailwind utilities, so passing `whitespace-normal` through a `className` leaves **both** it and
+`buttonVariants`' base `whitespace-nowrap` in the class list and lets stylesheet order decide the winner.
+That is why wrapping is an **option on `buttonVariants`** (`wrap`) that suppresses the conflicting class at
+source, rather than an override at the call site. Its guard asserts `whitespace-nowrap` is **absent**, not
+merely that `whitespace-normal` is present — the latter passes under the bug. **⚠️ Do not "simplify" this
+into a `className` override, and do not remove `whitespace-nowrap` from the shared base, which every other
+button in the app depends on.**
+
 ## Combined Quiz Snapshots
 
 A combined quiz assembles selected questions from already-generated per-note quizzes into ordered sections.
