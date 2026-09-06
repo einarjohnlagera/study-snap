@@ -1,6 +1,6 @@
 # Note Collection & Builder — Performance Audit
 
-**Status:** AUDIT + PLAN ONLY — nothing implemented. Written 2026-09-06.
+**Status:** AUDIT + PLAN ONLY — nothing implemented, EXCEPT sequencing 1, 2, 3 and 5 (shipped in `v0.123.0`) and **sequencing 4 (the Goal-children batch read), shipped in `v0.124.0`**. ⚠️ The per-child fan-out and the "21 requests" figure described below are the PRE-`v0.124.0` state and no longer describe the code; see `docs/features/collections.md` for the current shape. Written 2026-09-06.
 **Scope:** the journey from opening a Note Collection through editing a section in the Builder.
 
 ---

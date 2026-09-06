@@ -1486,6 +1486,20 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
     }
   }, [collectionId]);
 
+  // ⚠️ THE LABEL IS READ THROUGH A REF, AND THAT IS A REQUEST-COUNT FIX RATHER THAN A STYLE CHOICE.
+  // `authUser` resolves in a mount effect, so `labels` is recomputed on the second render for any
+  // profile whose `goalSingular` differs from the unresolved default -- "Course" for TEACHER, while
+  // STUDENT and BOARD_EXAM both resolve to "Goal" and are referentially stable. As a dependency of
+  // `loadBuilder` that string changed the callback's identity, re-arming the load effect and running
+  // the ENTIRE builder load a SECOND time: 3 requests became 6, for exactly the curator persona that
+  // owns the large Review Sets v0.124.0 exists to make cheaper. The label is only ever read inside
+  // the catch below, so a ref serves it without putting it in the dependency array.
+  // ⚠️ Do NOT "simplify" this back to `[labels.goalSingular, refreshBuilder]`.
+  const labelsRef = useRef(labels);
+  useEffect(() => {
+    labelsRef.current = labels;
+  }, [labels]);
+
   const loadBuilder = useCallback(async () => {
     setLoadState("loading");
     setLoadError(null);
@@ -1498,10 +1512,10 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
         setLoadState("not-found");
         return;
       }
-      setLoadError(makeErrorMessage(error, `Could not load this ${labels.goalSingular.toLowerCase()}.`));
+      setLoadError(makeErrorMessage(error, `Could not load this ${labelsRef.current.goalSingular.toLowerCase()}.`));
       setLoadState("error");
     }
-  }, [labels.goalSingular, refreshBuilder]);
+  }, [refreshBuilder]);
 
   useEffect(() => {
     if (!requireAuthenticatedOnboardedUser(router)) {

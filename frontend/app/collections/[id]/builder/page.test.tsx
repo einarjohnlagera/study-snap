@@ -1343,6 +1343,42 @@ describe("StudyPlanBuilderPageClient", () => {
   });
 
   /**
+   * ⚠️ THE FIXTURE IS A TEACHER ON PURPOSE, AND A STUDENT FIXTURE PASSES UNDER THE DEFECT.
+   * `labels` is memoized on `authUser?.profileType`, and `authUser` resolves in a mount effect --
+   * so the first render sees `undefined` ("Goal") and the second sees the real profile. For STUDENT
+   * and BOARD_EXAM that string is also "Goal", the memo is referentially stable, and the load runs
+   * once. For TEACHER it becomes "Course", which changed `loadBuilder`'s identity and re-fired the
+   * load effect, running the ENTIRE builder load a SECOND time -- 3 requests becoming 6, for exactly
+   * the curator persona that owns the large Review Sets this release exists to make cheaper.
+   */
+  it("loads once for a curator, whose profile label resolves after the first render", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ profileType: "TEACHER", planType: "PRO" });
+    const children = [
+      goalChild("child-1", "Professional Education Mastery", 50),
+      goalChild("child-2", "General Education Mastery", 40),
+      goalChild("child-3", "Major Specialization Mastery", 30),
+    ];
+    (getCollectionGoal as jest.Mock).mockResolvedValue(goalDetail({ childCount: 3, children }));
+    (getCollection as jest.Mock).mockResolvedValue(collectionDetail("goal-1", "LET Mastery", [], {
+      parentCollectionId: null,
+      childCount: 3,
+    }));
+    (getGoalChildItems as jest.Mock).mockResolvedValue([
+      { collectionId: "child-1", items: [collectionItem("note-1", "Professional Foundations", 0)] },
+      { collectionId: "child-2", items: [collectionItem("note-2", "General Foundations", 0)] },
+      { collectionId: "child-3", items: [collectionItem("note-3", "Assessment Notes", 0)] },
+    ]);
+
+    render(<StudyPlanBuilderPageClient collectionId="goal-1" />);
+    await screen.findByDisplayValue("Major Specialization Mastery");
+
+    expect(getCollection).toHaveBeenCalledTimes(1);
+    expect(getCollectionGoal).toHaveBeenCalledTimes(1);
+    expect(getGoalChildItems).toHaveBeenCalledTimes(1);
+  });
+
+
+  /**
    * ⚠️ GUARD (b) — THE RENDERED SHAPE IS UNCHANGED.
    *
    * A request-count test alone passes while the page renders the wrong notes under the wrong plan, so
