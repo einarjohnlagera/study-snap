@@ -287,7 +287,7 @@ class NoteServiceListProjectionIntegrationTest {
         SqlCaptureStatementInspector.clear();
 
         NotesLibraryPageResponse response = noteService.listLibraryPage(
-                ownerUserId, null, "ALL", null, null, List.of(), "ALL", "RECENTLY_UPDATED", 0, 1
+                ownerUserId, null, "ALL", null, null, List.of(), "ALL", null, "RECENTLY_UPDATED", 0, 1
         );
 
         assertThat(response.items()).singleElement()

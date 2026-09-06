@@ -19,6 +19,17 @@ type RegenerateScopeModalProps = {
    * fallback the plan specifies, not an approximation to be refined later with a new field.
    */
   isCurator: boolean;
+  /**
+   * Remaining allowance on each meter a regeneration spends, or null when the plan summary has not
+   * loaded. Null renders no quota copy at all rather than a guessed "0 left".
+   *
+   * ⚠️ THIS IS DISCLOSURE, NOT ENFORCEMENT. The server checks quota before dispatch and again inside
+   * the async worker; a burst can still pass the first check and fail the second, because the charge
+   * only lands at commit. Surfacing the number is what stops a curator walking into that, but it does
+   * not close the race -- see docs/claude-findings/2026-09-05-regeneration-quota-failure-attribution.md.
+   */
+  noteGenerationsRemaining: number | null;
+  studyPacksRemaining: number | null;
   busy: boolean;
   /** Server-side rejections shown in place, so the learner keeps the scope they chose. */
   errorMessage?: string | null;
@@ -41,6 +52,8 @@ export function RegenerateScopeModal({
   isOpen,
   note,
   isCurator,
+  noteGenerationsRemaining,
+  studyPacksRemaining,
   busy,
   errorMessage,
   onClose,
@@ -59,12 +72,27 @@ export function RegenerateScopeModal({
   // The backend rejects both of these before any LLM call (NoteRegenerationTopicRequiredException /
   // NoteRegenerationStudyPackRequiredException). Surfacing them as a disabled card with a reason is the
   // difference between an explained limit and a 400 after the learner commits.
+  // Out of allowance for the meter a scope spends. Only ever true on a loaded summary.
+  const outOfStudyPacks = studyPacksRemaining !== null && studyPacksRemaining <= 0;
+  const outOfNoteGenerations = noteGenerationsRemaining !== null && noteGenerationsRemaining <= 0;
+
   const missingTitle = title.length === 0;
   const missingStudyPack = !note?.studyPackId;
-  const combinedDisabled = missingTitle || missingStudyPack;
-  const combinedDisabledReason = missingStudyPack
-    ? "This note has no Study Pack to regenerate yet."
-    : "Add a title first -- the title is the topic we write from.";
+  const combinedDisabled = missingTitle || missingStudyPack || outOfNoteGenerations || outOfStudyPacks;
+  let combinedDisabledReason: string;
+  if (missingStudyPack) {
+    combinedDisabledReason = "This note has no Study Pack to regenerate yet.";
+  } else if (missingTitle) {
+    combinedDisabledReason = "Add a title first -- the title is the topic we write from.";
+  } else if (outOfNoteGenerations) {
+    combinedDisabledReason = "You have no topic note allowance left this cycle.";
+  } else {
+    // ⚠️ THE STUDY PACK METER NEEDS ITS OWN BRANCH. Falling through to the topic-note wording told a
+    // learner with 25 topic notes left that they had none, while the banner directly beneath said the
+    // Study Pack meter was the empty one -- two contradictory sentences on the surface built to stop
+    // exactly that. Reachable on PLUS, where the two meters differ and many other paths spend this one.
+    combinedDisabledReason = "You have no Study Pack allowance left this cycle.";
+  }
 
   const isPublic = note?.visibility === "PUBLIC";
   const combinedSelected = scope === SCOPE_NOTE_AND_STUDY_PACK;
@@ -183,7 +211,13 @@ export function RegenerateScopeModal({
           <Button type="button" variant="outline" onClick={onClose} disabled={busy}>
             Cancel
           </Button>
-          <Button type="button" onClick={() => onConfirm(scope)} disabled={busy}>
+          {/* Gated on the meter THIS scope spends: Study-Pack-only never spends a topic note unit,
+              so an exhausted note-generation allowance must not block it. */}
+          <Button
+            type="button"
+            onClick={() => onConfirm(scope)}
+            disabled={busy || outOfStudyPacks || (combinedSelected && outOfNoteGenerations)}
+          >
             {busy
               ? "Regenerating..."
               : strongOverwrite
@@ -218,6 +252,29 @@ export function RegenerateScopeModal({
             combinedDisabled,
           )}
         </div>
+
+        {/* What you have LEFT, not merely what this costs. The pre-dispatch check and the charge are
+            separated by the LLM call, so a burst can pass the check and still run out mid-flight;
+            seeing the number beforehand is what prevents walking into that. Hidden entirely until the
+            plan summary loads -- a guessed "0 left" would be worse than silence. */}
+        {noteGenerationsRemaining !== null || studyPacksRemaining !== null ? (
+          <p className="text-xs text-foreground/60">
+            {combinedSelected && noteGenerationsRemaining !== null
+              ? `${noteGenerationsRemaining} topic note ${noteGenerationsRemaining === 1 ? "generation" : "generations"} and `
+              : ""}
+            {studyPacksRemaining !== null
+              ? `${studyPacksRemaining} Study Pack ${studyPacksRemaining === 1 ? "generation" : "generations"} left this cycle.`
+              : ""}
+          </p>
+        ) : null}
+
+        {outOfStudyPacks || (combinedSelected && outOfNoteGenerations) ? (
+          <p className="text-xs font-medium text-amber-700 dark:text-amber-300">
+            {outOfStudyPacks
+              ? "You have no Study Pack allowance left this cycle, so nothing can be regenerated right now."
+              : "You have no topic note allowance left this cycle. Study Pack only still works."}
+          </p>
+        ) : null}
 
         {/* One live region, kept mounted across scope changes -- swapping the subtree wholesale can
             fail to announce the new consequence. */}

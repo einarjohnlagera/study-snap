@@ -259,6 +259,29 @@ public class StudyPackService {
      * typed content" — a different operation with different disclosure obligations.
      */
     public void startAsyncNoteAndStudyPackRegeneration(String noteIdRaw, UUID ownerUserId) {
+        startAsyncNoteAndStudyPackRegeneration(noteIdRaw, ownerUserId, true);
+    }
+
+    /**
+     * Overload carrying the caller-supplied {@code enforceLimits}, so bulk regeneration can apply the
+     * SAME rule bulk generation already applies at {@code NoteController.bulkGenerate}:
+     * {@code user.role() != UserRole.ADMIN}.
+     *
+     * <p>⚠️ THIS WIDENS NOTHING. The ADMIN-only bypass is exactly the one that already exists on every
+     * other generation path ({@code startAsyncGenerationFromNote}, {@code NoteBulkGenerationService});
+     * a TEACHER curator is metered normally, and the two-argument entry point above — the one
+     * {@code POST /notes/&#123;id&#125;/regenerate} uses — still passes {@code true}, so the single-Note
+     * contract is byte-identical to what v0.118.0 shipped.
+     *
+     * <p>⚠️ {@code enforceLimits} gates the ASSERTIONS and the CHARGES together, and it must stay that
+     * way. Asserting without charging silently grants free generations; charging without asserting
+     * bills past the limit.
+     */
+    public void startAsyncNoteAndStudyPackRegeneration(
+            String noteIdRaw,
+            UUID ownerUserId,
+            boolean enforceLimits
+    ) {
         onboardingGuardService.assertProfileComplete(ownerUserId);
         long startedAt = System.currentTimeMillis();
         String requestId = UUID.randomUUID().toString();
@@ -280,9 +303,15 @@ public class StudyPackService {
         }
 
         PlanType planType = subscriptionService.resolvePlan(ownerUserId);
-        noteGenerationUsageProtectionService.assertQuotaAvailable(ownerUserId, planType);
-        PlanType studyPackPlanType = assertMonthlyStudyPackQuotaAvailable(ownerUserId);
-        aiRateLimitService.assertAllowed(ownerUserId, studyPackPlanType, STUDY_PACK);
+        if (enforceLimits) {
+            noteGenerationUsageProtectionService.assertQuotaAvailable(ownerUserId, planType);
+        }
+        PlanType studyPackPlanType = enforceLimits
+                ? assertMonthlyStudyPackQuotaAvailable(ownerUserId)
+                : planType;
+        if (enforceLimits) {
+            aiRateLimitService.assertAllowed(ownerUserId, studyPackPlanType, STUDY_PACK);
+        }
 
         generationContextResolver.assertGenerationReady(sourceNote);
         // Resolved FROM THE EXISTING NOTE, so title, subject, tags, Domain Context, Authored Depth and the
@@ -307,7 +336,7 @@ public class StudyPackService {
                 generationContext,
                 // ⚠️ Never auto-apply LLM-suggested metadata here. Metadata is an INPUT to this operation.
                 false,
-                true,
+                enforceLimits,
                 null,
                 noteContentRequest,
                 startedAt,
@@ -789,7 +818,19 @@ public class StudyPackService {
             // failure after this point leaves BOTH meters untouched.
             String rawGeneratedNoteBody = regeneratingNoteContent
                     ? noteGenerationService
-                            .generateFromTopic(noteContentRegenerationRequest, ownerUserId, generationContext, false)
+                            // ⚠️ THE LAST ARGUMENT IS enforceLimits, ARRIVING HERE AS recordUsage.
+                            // On the regeneration path the caller passes enforceLimits into that
+                            // parameter, so the two are the same value; the fourth argument stays
+                            // false because THIS class charges the note meter at commit, not
+                            // generateFromTopic.
+                            // ⚠️ Until v0.119.0 generateFromTopic asserted the note-generation quota
+                            // UNCONDITIONALLY, so an ADMIN who had skipped the request-side check
+                            // still hit it here — and because the exception surfaces on the generation
+                            // thread it was swallowed, marking every combined item FAILED with no
+                            // reason. Found by the v0.119.0 pressure test.
+                            .generateFromTopic(
+                                    noteContentRegenerationRequest, ownerUserId, generationContext,
+                                    false, recordUsage)
                             .content()
                     : null;
             // ⚠️ TWO VALUES FROM ONE GENERATION, AND CONFLATING THEM SILENTLY RUINS THE NOTE.
@@ -846,9 +887,17 @@ public class StudyPackService {
                 );
                 markNoteGenerated(noteId, sourceNote);
                 if (regeneratingNoteContent) {
-                    // The second meter. saveStudyPack above charged the Study Pack one; both land in this
-                    // transaction so the operation is all-or-nothing on money as well as on content.
-                    noteGenerationUsageProtectionService.recordUsage(ownerUserId, OffsetDateTime.now(ZoneOffset.UTC));
+                    if (recordUsage) {
+                        // The second meter. saveStudyPack above charged the Study Pack one; both land in
+                        // this transaction so the operation is all-or-nothing on money as well as on
+                        // content.
+                        // ⚠️ GATED ON THE SAME FLAG AS THE STUDY PACK METER, AND ON THE SAME FLAG THAT
+                        // GATED THE ASSERTIONS AT THE REQUEST SIDE. An ungated charge here would bill an
+                        // ADMIN bulk batch that was never quota-asserted; an over-eager gate would leave
+                        // a metered TEACHER batch free. Both directions are pinned by tests.
+                        noteGenerationUsageProtectionService.recordUsage(
+                                ownerUserId, OffsetDateTime.now(ZoneOffset.UTC));
+                    }
                     // The note's shared quiz was built from the content we just replaced. Deactivate its
                     // live links rather than letting a recipient be graded against questions drawn from
                     // material that no longer exists (v0.110.2's rule, reusing its implementation).

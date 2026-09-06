@@ -413,14 +413,14 @@ class NoteServiceLibraryPaginationIntegrationTest {
         NotesLibraryPageResponse nursingPage = page(ownerUserId, null, FILTER_ALL, null, "Nursing", List.of(),
                 FILTER_ALL, SORT_RECENTLY_UPDATED, 0, 20);
         NotesLibraryIdsResponse nursingIds = noteService.listLibraryMatchingIds(
-                ownerUserId, null, FILTER_ALL, null, "Nursing", List.of(), FILTER_ALL
+                ownerUserId, null, FILTER_ALL, null, "Nursing", List.of(), FILTER_ALL, null
         );
         assertThat(nursingIds.totalMatching()).isEqualTo(nursingPage.totalMatching()).isEqualTo(2);
         assertThat(nursingIds.noteIds()).containsExactlyInAnyOrderElementsOf(ids(nursingPage));
         assertThat(nursingIds.truncated()).isFalse();
 
         SubjectStatsResponse privateStats = noteService.getLibrarySubjectStats(
-                ownerUserId, null, FILTER_ALL, null, List.of(), "PRIVATE"
+                ownerUserId, null, FILTER_ALL, null, List.of(), "PRIVATE", null
         );
         assertThat(privateStats.total()).isEqualTo(9);
         assertThat(privateStats.topSubjects()).hasSize(6);
@@ -452,7 +452,7 @@ class NoteServiceLibraryPaginationIntegrationTest {
         entityManager.clear();
 
         NotesLibraryIdsResponse response = noteService.listLibraryMatchingIds(
-                ownerUserId, null, FILTER_ALL, null, "Cap Program", List.of(), FILTER_ALL
+                ownerUserId, null, FILTER_ALL, null, "Cap Program", List.of(), FILTER_ALL, null
         );
 
         assertThat(response.totalMatching()).isEqualTo(1001);
@@ -486,7 +486,7 @@ class NoteServiceLibraryPaginationIntegrationTest {
                 SORT_RECENTLY_UPDATED, 0, 20
         );
         SubjectStatsResponse stats = noteService.getLibrarySubjectStats(
-                ownerUserId, unmatchedSearch, FILTER_ALL, null, List.of(), FILTER_ALL
+                ownerUserId, unmatchedSearch, FILTER_ALL, null, List.of(), FILTER_ALL, null
         );
 
         assertThat(page.items()).isEmpty();
@@ -509,7 +509,7 @@ class NoteServiceLibraryPaginationIntegrationTest {
             int pageSize
     ) {
         return noteService.listLibraryPage(
-                ownerUserId, search, readiness, courseProgram, subject, tags, visibility, sort, page, pageSize
+                ownerUserId, search, readiness, courseProgram, subject, tags, visibility, null, sort, page, pageSize
         );
     }
 

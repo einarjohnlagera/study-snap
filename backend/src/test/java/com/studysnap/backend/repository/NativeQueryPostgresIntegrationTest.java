@@ -11,10 +11,28 @@ import com.studysnap.backend.entity.NoteVisibility;
 import com.studysnap.backend.entity.PlanType;
 import com.studysnap.backend.entity.NoteEntity;
 import com.studysnap.backend.entity.NoteStatus;
+import com.studysnap.backend.entity.NoteRegenerationScope;
+import com.studysnap.backend.dto.BulkRegenerateNotesRequest;
+import com.studysnap.backend.dto.NoteRegenerationPreflightRequest;
+import com.studysnap.backend.dto.NoteRegenerationPreflightResponse;
+import com.studysnap.backend.exception.BulkNoteRegenerationQuotaExceededException;
+import com.studysnap.backend.service.BulkGenerationFailureReasonNormalizer;
+import com.studysnap.backend.service.MePlanService;
+import com.studysnap.backend.exception.BulkRegenerationNotPermittedException;
+import com.studysnap.backend.exception.InvalidBulkRegenerationRequestException;
+import com.studysnap.backend.exception.NoteBulkRegenerationBatchNotFoundException;
+import com.studysnap.backend.service.BulkRegenerationAccessGuard;
+import com.studysnap.backend.service.NoteBulkRegenerationService;
+import com.studysnap.backend.service.NoteBulkRegenerationTaskDispatcher;
+import com.studysnap.backend.service.NoteRegenerationConsequenceService;
+import com.studysnap.backend.service.NoteRegenerationPreflightService;
+import com.studysnap.backend.service.NoteBulkRegenerationReceiptService;
+import com.studysnap.backend.service.NoteRegenerationReadinessService;
 import com.studysnap.backend.dto.AcceptLinkedLearnerRequest;
 import com.studysnap.backend.security.AiRateLimitService;
 import com.studysnap.backend.security.OcrRateLimitService;
 import com.studysnap.backend.service.ActivityTrackingService;
+import com.studysnap.backend.entity.AnalyticsEventType;
 import com.studysnap.backend.service.AnalyticsService;
 import com.studysnap.backend.service.AuthService;
 import com.studysnap.backend.service.BillingUsagePeriodService;
@@ -98,6 +116,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -108,9 +128,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
 
 /**
  * Executes the repository's native SQL against the production database engine and the full Flyway schema.
@@ -199,6 +222,9 @@ class NativeQueryPostgresIntegrationTest {
 
     @Autowired
     private ConceptHealthRepository conceptHealthRepository;
+
+    @Autowired
+    private NoteBulkRegenerationItemRepository bulkRegenerationItemRepository;
 
     @Autowired
     private PlatformTransactionManager transactionManager;
@@ -1639,6 +1665,19 @@ class NativeQueryPostgresIntegrationTest {
         return id;
     }
 
+    /**
+     * A curator account: ADMIN role AND completed onboarding, which is what
+     * {@code CuratorAuthoringPredicate.isCurator} actually requires. Bulk regeneration fixtures use
+     * this rather than {@link #seedUser(String)} because the plain seed is a non-onboarded USER — and
+     * a fixture that could not pass the gate would make every one of these guards pass vacuously.
+     */
+    private UUID seedCuratorUser(String handle) {
+        UUID id = seedUser(handle);
+        jdbcTemplate.update(
+                "update users set role = 'ADMIN', onboarding_completed_at = now() where id = ?", id);
+        return id;
+    }
+
     private UUID seedRelationship(UUID supporterUserId, UUID learnerUserId, String status) {
         return seedRelationship(supporterUserId, learnerUserId, status, LinkedLearnerSide.SUPPORTER.name());
     }
@@ -1672,7 +1711,10 @@ class NativeQueryPostgresIntegrationTest {
                     readiness,
                     "Nursing",
                     tags,
-                    NoteVisibility.PRIVATE
+                    NoteVisibility.PRIVATE,
+                    // Non-null so the collection-membership EXISTS branch is PREPAREd too; the
+                    // allOwned criteria below leaves it null so the other branch is covered as well.
+                    UUID.randomUUID()
             );
             noteLibraryRepository.findLibraryPage(criteria, NoteLibrarySort.RECENTLY_UPDATED, 0, 10);
             noteLibraryRepository.countLibraryMatches(criteria);
@@ -1682,7 +1724,7 @@ class NativeQueryPostgresIntegrationTest {
             noteLibraryRepository.findLibraryMatchingIds(criteria, 10);
         }
         NoteLibraryFilterCriteria allOwned = new NoteLibraryFilterCriteria(
-                ownerUserId, null, NoteLibraryReadiness.ALL, null, List.of(), null
+                ownerUserId, null, NoteLibraryReadiness.ALL, null, List.of(), null, null
         );
         for (NoteLibrarySort sort : NoteLibrarySort.values()) {
             if (sort != NoteLibrarySort.RECENTLY_REVIEWED) {
@@ -2705,6 +2747,397 @@ class NativeQueryPostgresIntegrationTest {
         );
     }
 
+    /**
+     * B3's collection filter, against real rows. The PREPARE sweep proves the SQL parses; only this
+     * proves it FILTERS.
+     *
+     * <p>⚠️ THE FIXTURE PUTS ONE NOTE IN TWO COLLECTIONS ON PURPOSE. A note can belong to several
+     * Review Sets, so a JOIN would emit it once per membership row and inflate both the page and the
+     * count — a fixture where every note sits in at most one collection passes under that defect and
+     * proves nothing.
+     */
+    @Test
+    void theCollectionFilterSelectsMembersOnlyAndNeverDuplicatesAMultiCollectionNote() {
+        UUID owner = seedUser("library-collection-filter");
+        UUID inBoth = seedRegenerationNote(owner, "Shear and Moment", "Body.");
+        UUID inTarget = seedRegenerationNote(owner, "Development Length", "Body.");
+        UUID outside = seedRegenerationNote(owner, "Fluid Mechanics", "Body.");
+        UUID target = seedCollection(owner, "CE Board Review");
+        UUID other = seedCollection(owner, "Structural Depth");
+        seedCollectionItem(target, inBoth);
+        seedCollectionItem(other, inBoth);
+        seedCollectionItem(target, inTarget);
+
+        NoteLibraryFilterCriteria filtered = new NoteLibraryFilterCriteria(
+                owner, null, NoteLibraryReadiness.ALL, null, List.of(), null, target
+        );
+
+        assertThat(noteLibraryRepository.findLibraryMatchingIds(filtered, 100))
+                .as("only the target collection's members, and the multi-collection note exactly once")
+                .containsExactlyInAnyOrder(inBoth, inTarget);
+        assertThat(noteLibraryRepository.countLibraryMatches(filtered))
+                .as("the count matches the page -- a join would double-count the multi-collection note")
+                .isEqualTo(2);
+        assertThat(noteLibraryRepository.findLibraryMatchingIds(filtered, 100))
+                .as("the note outside the collection is excluded")
+                .doesNotContain(outside);
+
+        NoteLibraryFilterCriteria unfiltered = new NoteLibraryFilterCriteria(
+                owner, null, NoteLibraryReadiness.ALL, null, List.of(), null, null
+        );
+        assertThat(noteLibraryRepository.findLibraryMatchingIds(unfiltered, 100))
+                .as("a null collectionId means NO filter -- never 'notes in no collection'")
+                .containsExactlyInAnyOrder(inBoth, inTarget, outside);
+    }
+
+    /**
+     * The curator gate, on BOTH surfaces.
+     *
+     * <p>⚠️ The endpoints' {@code @PreAuthorize} is {@code hasAnyRole('USER','ADMIN')}, which every
+     * authenticated account satisfies — so without this gate bulk regeneration is reachable by every
+     * learner, which is wider than the capability was scoped to. A fixture using a curator passes
+     * whether or not the gate exists, which is why the subject here is a plain non-onboarded USER.
+     *
+     * <p>⚠️ PREFLIGHT IS ASSERTED TOO. Gating only the batch would leave a disclosure surface wider
+     * than the capability, handing a non-curator per-Note readiness and quota figures for a batch they
+     * could never run.
+     */
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void bulkRegenerationRefusesANonCuratorOnBothTheBatchAndThePreflight() {
+        UUID learner = seedUser("bulk-regen-non-curator");
+        UUID note = seedRegenerationNote(learner, "Fluid Mechanics", "Body.");
+        seedStudyPack(learner, note, "Pack");
+
+        BulkRegenerationHarness harness = new BulkRegenerationHarness();
+
+        assertThatThrownBy(() -> harness.run(learner, List.of(note), true))
+                .as("a learner cannot run a batch")
+                .isInstanceOf(BulkRegenerationNotPermittedException.class);
+        assertThatThrownBy(() -> harness.preflight(learner, List.of(note), NoteRegenerationScope.NOTE_AND_STUDY_PACK, true))
+                .as("and cannot read the preflight either")
+                .isInstanceOf(BulkRegenerationNotPermittedException.class);
+
+        assertThat(readNoteColumn(note, "content"))
+                .as("nothing was regenerated")
+                .isEqualTo("Body.");
+        assertThat(jdbcTemplate.queryForObject(
+                "select count(*) from note_bulk_regeneration_item where owner_user_id = ?",
+                Integer.class, learner))
+                .as("and no batch row was written")
+                .isZero();
+
+        // ⚠️ THE DISCRIMINATING SUBJECT: a TEACHER-PROFILE ACCOUNT THAT HAS NOT FINISHED ONBOARDING.
+        // The v0.119.0 pressure test replaced CuratorAuthoringPredicate.isCurator with a bare
+        // `role == ADMIN || profileType == TEACHER` -- dropping the onboarding clause -- and the ENTIRE
+        // suite stayed green, because the only fixture was a plain USER whom both versions refuse and an
+        // onboarded ADMIN whom both admit. This cohort is the one they disagree about, and CLAUDE.md
+        // records it as live: nobody curates during onboarding.
+        jdbcTemplate.update(
+                "update users set profile_type = 'TEACHER', onboarding_completed_at = null where id = ?",
+                learner);
+        assertThatThrownBy(() -> harness.preflight(learner, List.of(note), NoteRegenerationScope.NOTE_AND_STUDY_PACK, true))
+                .as("a TEACHER mid-onboarding is NOT yet a curator")
+                .isInstanceOf(BulkRegenerationNotPermittedException.class);
+
+        // Finishing onboarding makes the same TEACHER a curator -- so the refusal above is the
+        // onboarding clause, not the profile check.
+        jdbcTemplate.update("update users set onboarding_completed_at = now() where id = ?", learner);
+        assertThat(harness.preflight(learner, List.of(note), NoteRegenerationScope.NOTE_AND_STUDY_PACK, true).readyCount())
+                .as("an onboarded TEACHER curator reads the selection fine")
+                .isEqualTo(1);
+
+        // And the same for ADMIN by role.
+        jdbcTemplate.update("update users set role = 'ADMIN', profile_type = null, onboarding_completed_at = now() where id = ?", learner);
+        assertThat(harness.preflight(learner, List.of(note), NoteRegenerationScope.NOTE_AND_STUDY_PACK, true).readyCount())
+                .as("a curator reads the same selection fine")
+                .isEqualTo(1);
+    }
+
+    /**
+     * Quota exhaustion that arrives DURING a batch is reported as quota, never as a bare failure.
+     *
+     * <p>⚠️ THE FIXTURE EXHAUSTS QUOTA AFTER THE BATCH IS QUEUED, not before. A batch that is over
+     * quota at queue time is refused by the 422 and never reaches the driver at all, so it would pass
+     * under both the defect and the fix and prove nothing.
+     *
+     * <p>⚠️ WHAT THIS PINS, STATED HONESTLY: the SYNCHRONOUS leg. The primitive's own
+     * {@code assertQuotaAvailable} throws on the calling thread and the driver's existing catch records
+     * BLOCKED — behaviour that already worked, pinned here so it cannot regress into a bare FAILED. A
+     * per-item pre-check was written for this and REMOVED after mutation showed it changed nothing
+     * observable.
+     *
+     * <p>⚠️ WHAT THIS DOES NOT COVER: the ASYNC leg. Production showed the same exception arriving on
+     * the generation thread inside {@code generateFromTopic}, where
+     * {@code generateStudyPackFromExistingNoteAsync} swallows it and marks the note FAILED. Reaching
+     * that deterministically needs quota to vanish between the primitive's synchronous check and the
+     * worker's second assert — a window inside one item that this harness cannot open. The driver
+     * carries a defensive re-check for it; it is NOT proven by this test, and the finding doc says so
+     * rather than implying coverage that does not exist.
+     */
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void quotaExhaustedDuringABatchIsReportedAsQuotaRatherThanAsABareFailure() {
+        UUID owner = seedCuratorUser("bulk-regen-midbatch-quota");
+        UUID first = seedRegenerationNote(owner, "Site Grading", "First body.");
+        UUID second = seedRegenerationNote(owner, "Site Drainage", "Second body.");
+        seedStudyPack(owner, first, "Pack one");
+        seedStudyPack(owner, second, "Pack two");
+        // FREE allows 10; leave exactly 2 so the batch is accepted at queue time.
+        seedNoteGenerationUsage(owner, 8);
+
+        BulkRegenerationHarness harness = new BulkRegenerationHarness();
+        // Burn the remaining allowance WHILE item 1 is still running, which is what a concurrent
+        // regeneration on another surface does. By the time the driver reaches item 2 the meter is
+        // gone, and item 2 never had a chance to see that at queue time.
+        harness.beforeStudyPackForTitle = "Site Grading";
+        harness.beforeStudyPack = () -> seedNoteGenerationUsage(owner, 2);
+        UUID batchId = harness.run(owner, List.of(first, second), true);
+
+        assertThat(itemState(batchId, first))
+                .as("the item that fitted still regenerates")
+                .isEqualTo("REGENERATED");
+        assertThat(itemState(batchId, second))
+                .as("the item that ran out is BLOCKED, not FAILED -- retry must not re-run it blindly")
+                .isEqualTo("BLOCKED");
+        assertThat(jdbcTemplate.queryForObject(
+                "select reason_code from note_bulk_regeneration_item where batch_id = ? and note_id = ?",
+                String.class, batchId, second))
+                .as("and it says WHY, rather than a generic regeneration failure")
+                .isEqualTo("NOTE_GENERATION_LIMIT_REACHED");
+        assertThat(readNoteColumn(second, "content"))
+                .as("nothing was written for the blocked item")
+                .isEqualTo("Second body.");
+    }
+
+    /**
+     * The SIBLING meter. Found by the v0.119.0 pressure test: the earlier quota fix caught the
+     * note-generation meter and missed this one.
+     *
+     * <p>⚠️ THE TWO METERS THROW DIFFERENT SHAPES FOR THE SAME CONDITION.
+     * {@code assertQuotaAvailable} throws the typed {@code MonthlyNoteGenerationLimitReachedException};
+     * {@code assertMonthlyStudyPackQuotaAvailable} throws a BARE {@code AppException} carrying
+     * {@code MONTHLY_STUDY_PACK_LIMIT_REACHED}. A catch on the typed exception alone let this one fall
+     * through as {@code FAILED} — and the receipt offers FAILED items as RETRYABLE, so the curator was
+     * invited into a retry that cannot succeed until the billing cycle resets.
+     *
+     * <p>⚠️ SCOPE IS STUDY_PACK-ONLY ON PURPOSE. That scope spends NO note-generation unit, so this
+     * fixture cannot pass by accidentally tripping the sibling meter — which is exactly how a
+     * combined-scope fixture would have hidden the defect.
+     */
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void studyPackQuotaExhaustionIsReportedAsBlockedAndIsNotOfferedForRetry() {
+        UUID owner = seedCuratorUser("bulk-regen-sp-quota");
+        UUID note = seedRegenerationNote(owner, "Site Utilities", "Body.");
+        seedStudyPack(owner, note, "Pack");
+        // FREE allows 10 Study Pack generations a month; burn all of them.
+        seedStudyPackUsage(owner, 10);
+
+        BulkRegenerationHarness harness = new BulkRegenerationHarness();
+        UUID batchId = harness.run(owner, List.of(note), NoteRegenerationScope.STUDY_PACK, true);
+
+        assertThat(itemState(batchId, note))
+                .as("BLOCKED, not FAILED -- the curator resolves this by waiting or upgrading")
+                .isEqualTo("BLOCKED");
+        assertThat(jdbcTemplate.queryForObject(
+                "select reason_code from note_bulk_regeneration_item where batch_id = ? and note_id = ?",
+                String.class, batchId, note))
+                .isEqualTo("MONTHLY_STUDY_PACK_LIMIT_REACHED");
+        assertThat(readNoteColumn(note, "content"))
+                .as("nothing was regenerated")
+                .isEqualTo("Body.");
+    }
+
+    /**
+     * The receipt is invisible to anyone but its owner.
+     *
+     * <p>⚠️ THIS PATH SHIPPED WITH NO COVERAGE AT ALL — found by the v0.119.0 pressure test, which
+     * deleted the owner predicate from the repository and watched the ENTIRE existing suite stay green.
+     * It is a cross-tenant read on a real table, and this repo's standing rule is that a guard is worth
+     * only what a test actually executes.
+     *
+     * <p>⚠️ ONE CONTRACT FOR THREE CASES — unknown id, another user's batch, and an expired batch all
+     * 404, so a batch id cannot be used to probe whether someone else ran one.
+     */
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void aBulkRegenerationReceiptIsNotReadableByAnotherUser() {
+        UUID owner = seedCuratorUser("bulk-regen-receipt-owner");
+        UUID stranger = seedCuratorUser("bulk-regen-receipt-stranger");
+        UUID note = seedRegenerationNote(owner, "Site Access", "Body.");
+        seedStudyPack(owner, note, "Pack");
+
+        BulkRegenerationHarness harness = new BulkRegenerationHarness();
+        UUID batchId = harness.run(owner, List.of(note), NoteRegenerationScope.STUDY_PACK, true);
+
+        NoteBulkRegenerationReceiptService receiptService =
+                new NoteBulkRegenerationReceiptService(bulkRegenerationItemRepository, noteRepository);
+
+        assertThat(receiptService.getReceipt(batchId, owner).totalCount())
+                .as("the owner reads their own batch")
+                .isEqualTo(1);
+        assertThatThrownBy(() -> receiptService.getReceipt(batchId, stranger))
+                .as("and nobody else can, by the same 404 an unknown id gets")
+                .isInstanceOf(NoteBulkRegenerationBatchNotFoundException.class);
+        assertThatThrownBy(() -> receiptService.getReceipt(UUID.randomUUID(), owner))
+                .as("an unknown batch is indistinguishable from someone else's")
+                .isInstanceOf(NoteBulkRegenerationBatchNotFoundException.class);
+    }
+
+    /**
+     * The ADMIN bypass must actually bypass.
+     *
+     * <p>⚠️ IT DID NOT, AND THIS IS THE DEFECT THAT WOULD HAVE HIT THE OWNER FIRST. Skipping the
+     * request-side quota assert was not enough: {@code NoteGenerationService.generateFromTopic}
+     * asserted the note-generation quota AGAIN, unconditionally, on the generation thread — where
+     * {@code generateStudyPackFromExistingNoteAsync} swallows the exception and marks the note FAILED.
+     * So an ADMIN whose meter was full had EVERY combined item fail, with no reason recorded anywhere,
+     * on the exact account bulk regeneration was built for. Found by the v0.119.0 pressure test.
+     *
+     * <p>⚠️ THE FIXTURE MUST EXHAUST THE METER FIRST. An ADMIN with allowance to spare regenerates
+     * fine either way, so a fresh-meter fixture passes under the defect and proves nothing — which is
+     * exactly why {@code aTeacherBatchIsMeteredAndAnAdminBatchIsNot} could not see this.
+     */
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void anAdminBatchStillRegeneratesWhenTheNoteGenerationMeterIsAlreadyFull() {
+        UUID admin = seedCuratorUser("bulk-regen-admin-exhausted");
+        UUID note = seedRegenerationNote(admin, "Site Grading", "Body.");
+        seedStudyPack(admin, note, "Pack");
+        // FREE allows 10; burn every one. A metered curator would be refused outright here.
+        seedNoteGenerationUsage(admin, 10);
+
+        BulkRegenerationHarness harness = new BulkRegenerationHarness();
+        UUID batchId = harness.run(admin, List.of(note), NoteRegenerationScope.NOTE_AND_STUDY_PACK, false);
+
+        assertThat(itemState(batchId, note))
+                .as("the bypass holds all the way through generation, not merely at the request edge")
+                .isEqualTo("REGENERATED");
+        assertThat(readNoteColumn(note, "content"))
+                .as("and the content really was replaced")
+                .isEqualTo("Regenerated body.");
+        assertThat(persistedUsage(admin, "note_generations"))
+                .as("a bypassed batch charges nothing on top of what was already spent")
+                .isEqualTo(10);
+    }
+
+    /**
+     * Retry re-runs the FAILED items and NOTHING ELSE.
+     *
+     * <p>⚠️ THE FIXTURE CARRIES ALL THREE OUTCOMES ON PURPOSE — one REGENERATED, one BLOCKED, one
+     * FAILED. A batch where everything failed passes under a retry that re-runs the whole batch, which
+     * is exactly the defect this guard exists to catch: re-running a REGENERATED item spends a unit and
+     * replaces good content with a second generation nobody asked for, and re-running a BLOCKED one
+     * fails again for the reason that blocked it.
+     *
+     * <p>⚠️ IT ALSO ASSERTS A NEW BATCH ID. Retrying INTO the original batch would put two writers on
+     * one {@code (batch_id, note_id)} pair whenever a timed-out RUNNING worker is still alive, and
+     * {@code writeItem} is find-then-save with no lock — the loser's constraint violation is swallowed.
+     */
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void retryReRunsOnlyTheFailedItemsAndMintsANewBatch() {
+        UUID owner = seedCuratorUser("bulk-regen-retry");
+        UUID succeeded = seedRegenerationNote(owner, "Site Grading", "Original A.");
+        UUID blocked = seedRegenerationNote(owner, "Site Drainage", "Original B.");
+        UUID failed = seedRegenerationNote(owner, "Site Utilities", "Original C.");
+        seedStudyPack(owner, succeeded, "Pack A");
+        seedStudyPack(owner, blocked, "Pack B");
+        seedStudyPack(owner, failed, "Pack C");
+        // Already GENERATING, which the per-item guard blocks.
+        jdbcTemplate.update("update notes set status = 'GENERATING' where id = ?", blocked);
+
+        BulkRegenerationHarness first = new BulkRegenerationHarness();
+        first.failStudyPackForTitle = "Site Utilities";
+        UUID firstBatch = first.run(owner, List.of(succeeded, blocked, failed),
+                NoteRegenerationScope.NOTE_AND_STUDY_PACK, true);
+
+        assertThat(itemState(firstBatch, succeeded)).isEqualTo("REGENERATED");
+        assertThat(itemState(firstBatch, blocked)).isEqualTo("BLOCKED");
+        assertThat(itemState(firstBatch, failed)).isEqualTo("FAILED");
+
+        BulkRegenerationHarness retry = new BulkRegenerationHarness();
+        UUID retryBatch = retry.retry(firstBatch, owner, true);
+
+        assertThat(retryBatch)
+                .as("a NEW batch id -- retrying into the original would give one row two writers")
+                .isNotEqualTo(firstBatch);
+        assertThat(jdbcTemplate.queryForObject(
+                "select count(*) from note_bulk_regeneration_item where batch_id = ?",
+                Integer.class, retryBatch))
+                .as("exactly one item: the failed one, never the regenerated or blocked ones")
+                .isEqualTo(1);
+        assertThat(itemState(retryBatch, failed))
+                .as("and it really ran")
+                .isEqualTo("REGENERATED");
+        assertThat(jdbcTemplate.queryForObject(
+                "select count(*) from note_bulk_regeneration_item where batch_id = ? and note_id in (?, ?)",
+                Integer.class, retryBatch, succeeded, blocked))
+                .as("the regenerated and blocked notes are not in the retry at all")
+                .isZero();
+
+        assertThat(itemState(firstBatch, succeeded))
+                .as("the original batch's receipt is left intact")
+                .isEqualTo("REGENERATED");
+    }
+
+    /**
+     * Retrying a batch with nothing failed is refused, rather than silently minting an empty batch that
+     * would read as a second run of work already done.
+     */
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void retryingABatchWithNoFailuresIsRefused() {
+        UUID owner = seedCuratorUser("bulk-regen-retry-clean");
+        UUID note = seedRegenerationNote(owner, "Site Access", "Body.");
+        seedStudyPack(owner, note, "Pack");
+
+        BulkRegenerationHarness harness = new BulkRegenerationHarness();
+        UUID batchId = harness.run(owner, List.of(note), NoteRegenerationScope.STUDY_PACK, true);
+        assertThat(itemState(batchId, note)).isEqualTo("REGENERATED");
+
+        assertThatThrownBy(() -> harness.retry(batchId, owner, true))
+                .isInstanceOf(InvalidBulkRegenerationRequestException.class);
+        assertThatThrownBy(() -> harness.retry(UUID.randomUUID(), owner, true))
+                .as("and an unknown batch keeps the receipt's 404 contract")
+                .isInstanceOf(NoteBulkRegenerationBatchNotFoundException.class);
+    }
+
+    /**
+     * The instrumentation the checkpoints read, verified EMITTING rather than merely present in the
+     * enum — which the signoff gate requires and which is the difference between a dated question and a
+     * decorative one.
+     *
+     * <p>⚠️ THERE IS NO OTHER DURABLE SIGNAL. {@code note_bulk_regeneration_item} is a receipt with a
+     * 24 h TTL, and nothing else distinguishes a bulk-regenerated note from a single-note one — both
+     * mutate {@code notes.updated_at} in place. Without this event, "did curators adopt bulk
+     * regeneration?" and "is a TEACHER's allowance enough for a real batch?" are unanswerable.
+     *
+     * <p>⚠️ {@code metered} IS ASSERTED, not just the event name. It is the field owner decision 1's
+     * money question is read through, and an event that fired without it would look like working
+     * instrumentation while answering nothing.
+     */
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void queueingABatchEmitsTheEventTheCheckpointsRead() {
+        UUID owner = seedCuratorUser("bulk-regen-analytics");
+        UUID note = seedRegenerationNote(owner, "Site Layout", "Body.");
+        seedStudyPack(owner, note, "Pack");
+
+        BulkRegenerationHarness harness = new BulkRegenerationHarness();
+        UUID batchId = harness.run(owner, List.of(note), NoteRegenerationScope.STUDY_PACK, true);
+
+        verify(harness.analyticsService).trackEvent(
+                eq(owner),
+                eq(AnalyticsEventType.BULK_REGENERATION_STARTED),
+                eq(batchId),
+                argThat(metadata -> "STUDY_PACK".equals(metadata.get("scope"))
+                        && Integer.valueOf(1).equals(metadata.get("requestedCount"))
+                        && Boolean.TRUE.equals(metadata.get("metered")))
+        );
+    }
+
     private UUID seedRegenerationNote(UUID ownerUserId, String title, String content) {
         UUID id = UUID.randomUUID();
         jdbcTemplate.update(
@@ -2826,6 +3259,896 @@ class NativeQueryPostgresIntegrationTest {
             } else {
                 lenient().when(llm.generateStudyPack(anyString(), any())).thenThrow(studyPackFailure);
             }
+
+            SubscriptionService subscriptionService = mock(SubscriptionService.class);
+            lenient().when(subscriptionService.resolvePlan(any(UUID.class))).thenReturn(PlanType.FREE);
+
+            StudySnapProperties properties = new StudySnapProperties();
+            UserUsageService userUsageService = transactionalUserUsageService();
+            StudyPackGenerationContextResolver resolver = new StudyPackGenerationContextResolver(
+                    userRepository, noteRepository, new NoteCourseProgramRepository(jdbcTemplate),
+                    new CourseProgramCatalogRepository(jdbcTemplate));
+            NoteGenerationUsageProtectionService noteGenerationUsage =
+                    new NoteGenerationUsageProtectionService(properties, userUsageService);
+            NoteGenerationService noteGenerationService = new NoteGenerationService(
+                    userRepository, subscriptionService, noteGenerationUsage, llm,
+                    mock(ContentModerationService.class), mock(OnboardingGuardService.class),
+                    resolver, new CourseProgramCatalogRepository(jdbcTemplate));
+            GeneratedQuizService generatedQuizService = new GeneratedQuizService(
+                    noteRepository, generatedQuizRepository, mock(QuizGenerationService.class),
+                    subscriptionService, properties, userUsageService, mock(AuthService.class),
+                    mock(AiRateLimitService.class), resolver, userRepository,
+                    mock(QuizDocxExportService.class), mock(ExportUsageProtectionService.class),
+                    quizShareLinkRepository);
+
+            return new StudyPackService(
+                    studyPackRepository,
+                    mock(StudyPackDraftRepository.class),
+                    noteRepository,
+                    userRepository,
+                    mock(OcrService.class),
+                    llm,
+                    properties,
+                    mock(ActivityTrackingService.class),
+                    mock(AnalyticsService.class),
+                    subscriptionService,
+                    userUsageService,
+                    new StudyPackUsageService(userUsageService, studyPackRepository),
+                    mock(OcrRateLimitService.class),
+                    mock(OcrUsageProtectionService.class),
+                    mock(AiRateLimitService.class),
+                    resolver,
+                    new TransactionTemplate(transactionManager),
+                    new StudyPackGenerationTaskDispatcher(Runnable::run),
+                    mock(ContentModerationService.class),
+                    mock(ExamQuestionPoolService.class),
+                    mock(OfficialChallengeQuizTemplateService.class),
+                    mock(OnboardingGuardService.class),
+                    mock(StudyPackQuizMasteryService.class),
+                    noteGenerationService,
+                    noteGenerationUsage,
+                    generatedQuizService
+            );
+        }
+    }
+
+    // ================================================================================================
+    // CURATOR BULK REGENERATION (v0.119.0, slices B1 + B2) -- REAL-ROW GUARDS.
+    //
+    // ⚠️ THEY LIVE HERE AND NOT IN A MOCKED TEST FOR A MEASURED REASON. The headline guard asserts
+    // PERSISTED usage counters, and a hand-built UserUsageService is not a Spring proxy, so its
+    // @Transactional is inert -- a "nothing was charged" assertion would pass for the wrong reason.
+    // BulkRegenerationHarness therefore reuses transactionalUserUsageService() exactly as
+    // RegenerationHarness does.
+    //
+    // ⚠️ EVERY ONE IS @Transactional(propagation = NOT_SUPPORTED), for the same reason the single-Note
+    // regeneration guards above are: under @DataJpaTest's rollback transaction dispatchAfterCommit
+    // registers a synchronization that never fires, so the worker would never run and every assertion
+    // would pass because nothing happened at all.
+    // ================================================================================================
+
+    /**
+     * GUARD 1 (quota) and GUARD 6 (continue-on-failure), in one run.
+     *
+     * <p>The fixture is the discriminating one: item 2 of 3 FAILS. A batch in which every item succeeds
+     * passes under a driver that charges per selected note rather than per regenerated note, and under
+     * one that stops at the first failure — it proves neither thing.
+     *
+     * <p>Asserted on PERSISTED counters: two units on each meter for two regenerated notes, and the
+     * failed note's unit is not spent. Asserted on rows: item 3 still ran.
+     */
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void aFailedItemCostsNoUnitsAndDoesNotStopTheItemsAfterIt() {
+        UUID owner = seedCuratorUser("bulk-regen-quota");
+        UUID first = seedRegenerationNote(owner, "Shear Force", "First body.");
+        UUID second = seedRegenerationNote(owner, "Moment Distribution", "Second body.");
+        UUID third = seedRegenerationNote(owner, "Influence Lines", "Third body.");
+        seedStudyPack(owner, first, "First pack");
+        seedStudyPack(owner, second, "Second pack");
+        seedStudyPack(owner, third, "Third pack");
+
+        BulkRegenerationHarness harness = new BulkRegenerationHarness();
+        harness.failStudyPackForTitle = "Moment Distribution";
+
+        UUID batchId = harness.run(owner, List.of(first, second, third), true);
+
+        assertThat(itemState(batchId, first)).as("item 1 regenerated").isEqualTo("REGENERATED");
+        assertThat(itemState(batchId, second)).as("item 2 failed").isEqualTo("FAILED");
+        assertThat(itemState(batchId, third))
+                .as("GUARD 6: one failing item must not prevent later items from running")
+                .isEqualTo("REGENERATED");
+        assertThat(readNoteColumn(second, "content"))
+                .as("the failed item's note keeps its original content -- nothing partial is written")
+                .isEqualTo("Second body.");
+
+        assertThat(persistedUsage(owner, "note_generations"))
+                .as("GUARD 1: exactly one note-generation unit per REGENERATED item, none for the failure")
+                .isEqualTo(2);
+        assertThat(persistedUsage(owner, "study_pack_generations"))
+                .as("GUARD 1: exactly one Study Pack unit per REGENERATED item, none for the failure")
+                .isEqualTo(2);
+    }
+
+    /**
+     * GUARD 2. A TEACHER curator's batch is metered; an ADMIN's is not.
+     *
+     * <p>⚠️ THIS IS THE GUARD AGAINST THE BYPASS BEING WIDENED, and it needs BOTH legs. An ADMIN-only
+     * fixture bypasses quota entirely and proves nothing about the metered path the owner's decision
+     * opened; a TEACHER-only fixture cannot tell "metered" from "the meter is broken for everyone".
+     */
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void aTeacherBatchIsMeteredAndAnAdminBatchIsNot() {
+        UUID teacher = seedCuratorUser("bulk-regen-teacher");
+        UUID teacherNoteA = seedRegenerationNote(teacher, "Steel Design", "Body A.");
+        UUID teacherNoteB = seedRegenerationNote(teacher, "Timber Design", "Body B.");
+        seedStudyPack(teacher, teacherNoteA, "Pack A");
+        seedStudyPack(teacher, teacherNoteB, "Pack B");
+
+        UUID admin = seedCuratorUser("bulk-regen-admin");
+        UUID adminNoteA = seedRegenerationNote(admin, "Hydraulics", "Body A.");
+        UUID adminNoteB = seedRegenerationNote(admin, "Hydrology", "Body B.");
+        seedStudyPack(admin, adminNoteA, "Pack A");
+        seedStudyPack(admin, adminNoteB, "Pack B");
+
+        // enforceLimits == true is exactly `user.role() != UserRole.ADMIN` for a TEACHER curator.
+        new BulkRegenerationHarness().run(teacher, List.of(teacherNoteA, teacherNoteB), true);
+        new BulkRegenerationHarness().run(admin, List.of(adminNoteA, adminNoteB), false);
+
+        assertThat(readNoteColumn(teacherNoteA, "content"))
+                .as("the TEACHER's batch really regenerated -- otherwise the meter assertion is vacuous")
+                .isEqualTo("Regenerated body.");
+        assertThat(readNoteColumn(adminNoteA, "content"))
+                .as("the ADMIN's batch really regenerated too")
+                .isEqualTo("Regenerated body.");
+
+        assertThat(persistedUsage(teacher, "note_generations"))
+                .as("a TEACHER curator is metered normally -- the ADMIN bypass is NOT widened to TEACHER")
+                .isEqualTo(2);
+        assertThat(persistedUsage(teacher, "study_pack_generations"))
+                .as("both meters charge a TEACHER")
+                .isEqualTo(2);
+        assertThat(persistedUsage(admin, "note_generations"))
+                .as("the pre-existing ADMIN bypass still applies to bulk regeneration")
+                .isZero();
+        assertThat(persistedUsage(admin, "study_pack_generations"))
+                .as("the ADMIN bypass covers BOTH meters, as it does on every other generation path")
+                .isZero();
+    }
+
+    /**
+     * GUARD 3. An over-quota selection is rejected with 422 BEFORE dispatch, carrying how many notes to
+     * remove — and nothing is generated and no item row is written.
+     *
+     * <p>⚠️ Asserted on persisted counters AND on the absence of rows. A test that only asserts the
+     * exception passes under a driver that throws after already dispatching half the batch.
+     */
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void anOverQuotaSelectionIsRejectedBeforeAnythingIsGeneratedOrRecorded() {
+        UUID owner = seedCuratorUser("bulk-regen-overquota");
+        UUID first = seedRegenerationNote(owner, "Fluid Mechanics", "First body.");
+        UUID second = seedRegenerationNote(owner, "Thermodynamics", "Second body.");
+        UUID third = seedRegenerationNote(owner, "Statics", "Third body.");
+        seedStudyPack(owner, first, "Pack one");
+        seedStudyPack(owner, second, "Pack two");
+        seedStudyPack(owner, third, "Pack three");
+        // FREE allows 10 note generations a month; burn 8 so only 2 of the 3 selected notes fit.
+        seedNoteGenerationUsage(owner, 8);
+
+        BulkRegenerationHarness harness = new BulkRegenerationHarness();
+
+        assertThatThrownBy(() -> harness.run(owner, List.of(first, second, third), true))
+                .isInstanceOf(BulkNoteRegenerationQuotaExceededException.class)
+                .hasMessageContaining("Remove 1 note to continue");
+
+        assertThat(readNoteColumn(first, "content"))
+                .as("nothing is generated when the selection is rejected")
+                .isEqualTo("First body.");
+        assertThat(jdbcTemplate.queryForObject(
+                "select count(*) from note_bulk_regeneration_item where owner_user_id = ?",
+                Integer.class, owner))
+                .as("no item row is written -- the rejection precedes the batch entirely")
+                .isZero();
+        assertThat(persistedUsage(owner, "note_generations"))
+                .as("the pre-existing usage is untouched by a rejected selection")
+                .isEqualTo(8);
+    }
+
+    /**
+     * GUARD 4 — the outer-catch regression, and the one this whole table exists for.
+     *
+     * <p>{@code NoteBulkGenerationService.processBatch}'s outer catch clears its partial lists and marks
+     * EVERY topic failed while {@code created_count} keeps its partial value. Reproduced here, a curator
+     * whose batch was interrupted by a routine deploy would be told to regenerate notes that had already
+     * succeeded — spending quota and replacing good content.
+     *
+     * <p>⚠️ THE FIXTURE MUST COMPLETE AT LEAST ONE ITEM BEFORE THE INTERRUPT. A batch interrupted before
+     * anything finished passes under the defect and proves nothing, which is why this waits for item 1
+     * to reach {@code REGENERATED} before interrupting the driver thread.
+     */
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void anInterruptedBatchLeavesAlreadyCompletedItemsRecordedAsRegenerated() throws Exception {
+        UUID owner = seedCuratorUser("bulk-regen-interrupt");
+        UUID first = seedRegenerationNote(owner, "Development Length", "First body.");
+        UUID second = seedRegenerationNote(owner, "Bar Cut-off", "Second body.");
+        seedStudyPack(owner, first, "Pack one");
+        seedStudyPack(owner, second, "Pack two");
+
+        BulkRegenerationHarness harness = new BulkRegenerationHarness();
+        // A wide throttle so the interrupt reliably lands in the pause BETWEEN items rather than inside
+        // a JDBC call, which is where a real deploy's interrupt lands too.
+        harness.throttleDelayMs = 4_000;
+        UUID batchId = harness.start(owner, List.of(first, second), true);
+
+        awaitItemState(batchId, first, "REGENERATED");
+        harness.driverThread.get().interrupt();
+        harness.driverThread.get().join(30_000);
+
+        assertThat(itemState(batchId, first))
+                .as("GUARD 4: an item that COMPLETED before the interrupt stays REGENERATED -- it is"
+                        + " never rewritten as failed by a terminal catch")
+                .isEqualTo("REGENERATED");
+        assertThat(readNoteColumn(first, "content"))
+                .as("and the completed item's new content really is persisted")
+                .isEqualTo("Regenerated body.");
+        assertThat(itemState(batchId, second))
+                .as("the item the batch never reached stays PENDING -- not FAILED, and not REGENERATED")
+                .isEqualTo("PENDING");
+        assertThat(readNoteColumn(second, "content"))
+                .as("an unreached note is untouched")
+                .isEqualTo("Second body.");
+    }
+
+    /**
+     * GUARD 5. The per-Note guards RE-RUN at item start, so a Note that passed preflight and then went
+     * into {@code GENERATING} lands {@code BLOCKED} with its reason.
+     *
+     * <p>The race is driven deterministically: note 2 is flipped to {@code GENERATING} while note 1 is
+     * still generating, which is exactly the window a single-Note regeneration occupies.
+     */
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void aNoteThatBecomesGeneratingBeforeItsTurnIsBlockedRatherThanForcedOrSkipped() {
+        UUID owner = seedCuratorUser("bulk-regen-reguard");
+        UUID first = seedRegenerationNote(owner, "Slope Stability", "First body.");
+        UUID second = seedRegenerationNote(owner, "Retaining Walls", "Second body.");
+        seedStudyPack(owner, first, "Pack one");
+        seedStudyPack(owner, second, "Pack two");
+
+        BulkRegenerationHarness harness = new BulkRegenerationHarness();
+        harness.throttleDelayMs = 0;
+        harness.beforeStudyPackForTitle = "Slope Stability";
+        harness.beforeStudyPack = () -> jdbcTemplate.update(
+                "update notes set status = 'GENERATING' where id = ?", second);
+
+        UUID batchId = harness.run(owner, List.of(first, second), true);
+
+        assertThat(itemState(batchId, second))
+                .as("GUARD 5: a Note blocked at its turn is BLOCKED -- never silently skipped, and"
+                        + " never counted as REGENERATED")
+                .isEqualTo("BLOCKED");
+        assertThat(itemReasonCode(batchId, second))
+                .as("and the curator is told WHY, so they can act on it")
+                .isEqualTo("NOTE_GENERATION_IN_PROGRESS");
+        assertThat(readNoteColumn(second, "content"))
+                .as("a blocked Note's content is not touched")
+                .isEqualTo("Second body.");
+        assertThat(persistedUsage(owner, "note_generations"))
+                .as("a blocked Note spends nothing -- only item 1 was charged")
+                .isEqualTo(1);
+    }
+
+    /**
+     * GUARD 7. Preflight and the driver return the SAME verdict for every blocked shape.
+     *
+     * <p>⚠️ ONE HAPPY NOTE PROVES NOTHING. Every deterministic blocked shape the driver can produce is
+     * run through both paths: if they can ever disagree, the curator confirms one batch and receives a
+     * different one.
+     */
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void preflightAndTheDriverAgreeOnEveryBlockedShape() {
+        UUID owner = seedCuratorUser("bulk-regen-agreement");
+
+        UUID ready = seedRegenerationNote(owner, "Ready note", "Body.");
+        seedStudyPack(owner, ready, "Pack");
+
+        UUID generating = seedRegenerationNote(owner, "Already generating", "Body.");
+        seedStudyPack(owner, generating, "Pack");
+        jdbcTemplate.update("update notes set status = 'GENERATING' where id = ?", generating);
+
+        UUID noPack = seedRegenerationNote(owner, "No Study Pack yet", "Body.");
+
+        UUID noTitle = seedRegenerationNote(owner, "Placeholder", "Body.");
+        seedStudyPack(owner, noTitle, "Pack");
+        jdbcTemplate.update("update notes set title = '   ' where id = ?", noTitle);
+
+        UUID multiProgram = seedRegenerationNote(owner, "Two programs, no Domain Context", "Body.");
+        seedStudyPack(owner, multiProgram, "Pack");
+        jdbcTemplate.update(
+                "insert into note_course_program (id, note_id, course_program_id) values (?, ?, ?), (?, ?, ?)",
+                UUID.randomUUID(), multiProgram, UUID.fromString("20000000-0000-0000-0000-000000000002"),
+                UUID.randomUUID(), multiProgram, UUID.fromString("20000000-0000-0000-0000-000000000005"));
+
+        UUID notMine = seedRegenerationNote(seedCuratorUser("bulk-regen-someone-else"), "Not yours", "Body.");
+
+        List<UUID> selection = List.of(ready, generating, noPack, noTitle, multiProgram, notMine);
+
+        BulkRegenerationHarness harness = new BulkRegenerationHarness();
+        harness.throttleDelayMs = 0;
+        NoteRegenerationPreflightResponse preflight =
+                harness.preflight(owner, selection, NoteRegenerationScope.NOTE_AND_STUDY_PACK, true);
+        UUID batchId = harness.run(owner, selection, true);
+
+        Map<UUID, String> preflightVerdicts = new LinkedHashMap<>();
+        preflight.items().forEach(item -> preflightVerdicts.put(item.noteId(), item.readiness()));
+
+        assertThat(preflightVerdicts)
+                .as("preflight names every deterministic blocked shape, and nothing else")
+                .containsEntry(ready, "READY")
+                .containsEntry(generating, "BLOCKED")
+                .containsEntry(noPack, "BLOCKED")
+                .containsEntry(noTitle, "BLOCKED")
+                .containsEntry(multiProgram, "BLOCKED")
+                .containsEntry(notMine, "NOT_ELIGIBLE");
+
+        assertThat(itemState(batchId, ready)).as("driver agrees: ready").isEqualTo("REGENERATED");
+        assertThat(itemState(batchId, generating)).as("driver agrees: generating").isEqualTo("BLOCKED");
+        assertThat(itemState(batchId, noPack)).as("driver agrees: no Study Pack").isEqualTo("BLOCKED");
+        assertThat(itemState(batchId, noTitle)).as("driver agrees: no title").isEqualTo("BLOCKED");
+        assertThat(itemState(batchId, multiProgram))
+                .as("driver agrees: multi-program with no Domain Context").isEqualTo("BLOCKED");
+        assertThat(itemState(batchId, notMine))
+                .as("a Note that is not the caller's is NOT_RUN at item time, matching preflight's"
+                        + " NOT_ELIGIBLE -- the same underlying miss, named for the moment it is seen")
+                .isEqualTo("NOT_RUN");
+
+        assertThat(preflight.readyCount()).as("only the ready note is counted as ready").isEqualTo(1);
+        assertThat(preflight.noteGenerationUnitsRequired())
+                .as("units are counted over the DISPATCHABLE set, not the raw selection -- otherwise a"
+                        + " mostly-blocked selection is refused for units it would never spend")
+                .isEqualTo(1);
+        assertThat(persistedUsage(owner, "note_generations"))
+                .as("and exactly that many units are actually spent")
+                .isEqualTo(1);
+        assertThat(readNoteColumn(noPack, "content"))
+                .as("every blocked Note keeps its content")
+                .isEqualTo("Body.");
+    }
+
+    /**
+     * ⚠️ THE §A BLOCKER, AND THE SINGLE MOST DESTRUCTIVE THING THIS FEATURE COULD DO.
+     * {@code NoteBulkGenerationService.processItem} always passes a non-null {@code preservedSubject},
+     * which routes into {@code applyBulkGeneratedMetadataToNote} and UNCONDITIONALLY overwrites the
+     * note's title and tags with LLM output. On a curator-authored canonical Note that destroys exactly
+     * the titles the canonical-title doctrine protects.
+     *
+     * <p>⚠️ A fixture asserting only that CONTENT changed passes while titles are being destroyed. This
+     * asserts title and tags are BYTE-IDENTICAL, on a Note whose regenerated pack carries a different
+     * title and different tags — so the fixture can actually tell the two apart.
+     */
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void bulkRegenerationNeverOverwritesAnAuthoredTitleOrTags() {
+        UUID owner = seedCuratorUser("bulk-regen-metadata");
+        UUID noteId = seedRegenerationNote(owner, "Structural Applications of Differential Equations",
+                "Authored body.");
+        seedStudyPack(owner, noteId, "Old pack");
+        jdbcTemplate.update("update notes set tags = '{\"curator-tag\",\"second-tag\"}' where id = ?", noteId);
+
+        BulkRegenerationHarness harness = new BulkRegenerationHarness();
+        harness.run(owner, List.of(noteId), true);
+
+        assertThat(readNoteColumn(noteId, "content"))
+                .as("the Note really was regenerated -- otherwise the metadata assertions are vacuous")
+                .isEqualTo("Regenerated body.");
+        assertThat(readNoteColumn(noteId, "title"))
+                .as("the curator's authored title survives byte-identical; the regenerated pack's title"
+                        + " ('Regenerated pack') must never be written onto the Note")
+                .isEqualTo("Structural Applications of Differential Equations");
+        assertThat(jdbcTemplate.queryForObject(
+                "select array_to_string(tags, ',') from notes where id = ?", String.class, noteId))
+                .as("and so do the curator's tags -- the LLM's tags never reach the Note")
+                .isEqualTo("curator-tag,second-tag");
+    }
+
+    /**
+     * ⚠️ THE SECOND §A BLOCKER. {@code NoteBulkGenerationService.processBatch} resolves ONE
+     * {@code StudyPackGenerationContext} for the whole batch and passes it as an override, which makes
+     * the primitive SKIP per-note resolution. Correct for "N topics under one authoring decision";
+     * structurally wrong here, where each Note owns its Subject, Domain Context, Depth and program.
+     *
+     * <p>⚠️ TWO NOTES WITH DIFFERENT METADATA, DELIBERATELY. A single-Note batch, or two Notes sharing
+     * metadata, passes under the batch-context defect and proves nothing.
+     */
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void eachNoteInABatchGeneratesAgainstItsOwnContext() {
+        UUID owner = seedCuratorUser("bulk-regen-context");
+        UUID civil = seedRegenerationNote(owner, "Reinforced Concrete", "Body.");
+        UUID nursing = seedRegenerationNote(owner, "Pharmacology", "Body.");
+        seedStudyPack(owner, civil, "Pack one");
+        seedStudyPack(owner, nursing, "Pack two");
+        jdbcTemplate.update(
+                "update notes set subject = 'Structural Engineering', domain_context = 'CIVIL_ENGINEERING',"
+                        + " course_program = 'Civil Engineering' where id = ?", civil);
+        jdbcTemplate.update(
+                "update notes set subject = 'Pharmacology', domain_context = 'NURSING',"
+                        + " course_program = 'Nursing' where id = ?", nursing);
+
+        BulkRegenerationHarness harness = new BulkRegenerationHarness();
+        harness.throttleDelayMs = 0;
+        harness.run(owner, List.of(civil, nursing), true);
+
+        assertThat(harness.contextsByTopic.get("Reinforced Concrete"))
+                .as("the civil Note generates against ITS OWN domain")
+                .extracting(StudyPackGenerationContext::courseProgram, StudyPackGenerationContext::subject)
+                .containsExactly("Civil Engineering", "Structural Engineering");
+        assertThat(harness.contextsByTopic.get("Pharmacology"))
+                .as("and the nursing Note against ITS OWN -- not the first note's, and not one"
+                        + " batch-wide context")
+                .extracting(StudyPackGenerationContext::courseProgram, StudyPackGenerationContext::subject)
+                .containsExactly("Nursing", "Pharmacology");
+    }
+
+    /**
+     * ⚠️ BOTH §A BLOCKERS ON THE SCOPE WHERE THEY ARE REACHABLE, AND THAT CHOICE IS THE POINT.
+     * {@code NoteBulkGenerationService.processItem} reaches the destructive branch by passing a non-null
+     * {@code preservedSubject} and a batch-wide {@code generationContextOverride} into
+     * {@code startAsyncGenerationFromNote} — which is exactly the call the Study-Pack-only scope makes.
+     * A combined-scope fixture cannot express either defect, so it would pass under both and prove
+     * nothing.
+     *
+     * <p>Blocker 1: {@code preservedSubject != null} routes into
+     * {@code applyBulkGeneratedMetadataToNote}, which UNCONDITIONALLY overwrites title and tags with LLM
+     * output — here, "Regenerated pack" and "llm-tag". Blocker 2: a non-null context override makes the
+     * primitive SKIP per-note resolution, so both notes would generate against one domain.
+     *
+     * <p>⚠️ TWO NOTES WITH DIFFERENT SUBJECTS AND DOMAINS, deliberately: two notes sharing metadata pass
+     * under the batch-context defect.
+     */
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void studyPackScopePreservesAuthoredMetadataAndResolvesEachNotesOwnContext() {
+        UUID owner = seedCuratorUser("bulk-regen-blockers");
+        UUID civil = seedRegenerationNote(owner, "Structural Applications of Shear",
+                "Civil body, hand written.");
+        UUID nursing = seedRegenerationNote(owner, "Pharmacokinetics in Practice",
+                "Nursing body, hand written.");
+        seedStudyPack(owner, civil, "Old pack one");
+        seedStudyPack(owner, nursing, "Old pack two");
+        jdbcTemplate.update(
+                "update notes set subject = 'Structural Engineering', domain_context = 'CIVIL_ENGINEERING',"
+                        + " course_program = 'Civil Engineering', tags = '{\"authored-civil\"}' where id = ?",
+                civil);
+        jdbcTemplate.update(
+                "update notes set subject = 'Pharmacology', domain_context = 'NURSING',"
+                        + " course_program = 'Nursing', tags = '{\"authored-nursing\"}' where id = ?",
+                nursing);
+
+        BulkRegenerationHarness harness = new BulkRegenerationHarness();
+        harness.throttleDelayMs = 0;
+        UUID batchId = harness.run(owner, List.of(civil, nursing), NoteRegenerationScope.STUDY_PACK, true);
+
+        assertThat(itemState(batchId, civil)).isEqualTo("REGENERATED");
+        assertThat(jdbcTemplate.queryForObject(
+                "select title from study_packs where note_id = ?", String.class, civil))
+                .as("the packs really were regenerated -- otherwise every assertion below is vacuous")
+                .isEqualTo("Regenerated pack");
+
+        assertThat(readNoteColumn(civil, "title"))
+                .as("BLOCKER 1: the curator's authored title survives; the pack's LLM title never"
+                        + " reaches the Note")
+                .isEqualTo("Structural Applications of Shear");
+        assertThat(readNoteColumn(nursing, "title"))
+                .as("BLOCKER 1: and so does the second note's")
+                .isEqualTo("Pharmacokinetics in Practice");
+        assertThat(jdbcTemplate.queryForObject(
+                "select array_to_string(tags, ',') from notes where id = ?", String.class, civil))
+                .as("BLOCKER 1: authored tags survive; the LLM's 'llm-tag' never reaches the Note")
+                .isEqualTo("authored-civil");
+        assertThat(jdbcTemplate.queryForObject(
+                "select array_to_string(tags, ',') from notes where id = ?", String.class, nursing))
+                .as("BLOCKER 1: and so do the second note's")
+                .isEqualTo("authored-nursing");
+
+        assertThat(harness.contextsByTopic.get("Civil body, hand written."))
+                .as("BLOCKER 2: the civil Note generates against ITS OWN domain and subject")
+                .extracting(StudyPackGenerationContext::courseProgram, StudyPackGenerationContext::subject)
+                .containsExactly("Civil Engineering", "Structural Engineering");
+        assertThat(harness.contextsByTopic.get("Nursing body, hand written."))
+                .as("BLOCKER 2: and the nursing Note against ITS OWN -- not the first note's, and not"
+                        + " one batch-wide context")
+                .extracting(StudyPackGenerationContext::courseProgram, StudyPackGenerationContext::subject)
+                .containsExactly("Nursing", "Pharmacology");
+    }
+
+    /**
+     * The Study-Pack-only scope spends NO note-generation units and deactivates NO share links, matching
+     * the single-Note primitive exactly.
+     *
+     * <p>⚠️ Without this, a scope-blind unit count would 422 a Study-Pack-only batch on a note-generation
+     * allowance it never touches, and the preflight would promise the curator a share-link consequence
+     * that never happens.
+     */
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void studyPackOnlyScopeSpendsNoNoteGenerationUnitsAndDeactivatesNoShareLinks() {
+        UUID owner = seedCuratorUser("bulk-regen-scope");
+        UUID noteId = seedRegenerationNote(owner, "Surveying", "Original body.");
+        seedStudyPack(owner, noteId, "Old pack");
+        UUID generatedQuizId = UUID.randomUUID();
+        jdbcTemplate.update(
+                "insert into generated_quizzes (id, owner_user_id, note_id, questions, generated_at, updated_at)"
+                        + " values (?, ?, ?, '[]'::jsonb, now(), now())", generatedQuizId, owner, noteId);
+        UUID liveLink = seedQuizShareLink(generatedQuizId, owner, "bulk-regen-scope-link", true);
+
+        BulkRegenerationHarness harness = new BulkRegenerationHarness();
+        NoteRegenerationPreflightResponse preflight =
+                harness.preflight(owner, List.of(noteId), NoteRegenerationScope.STUDY_PACK, true);
+        assertThat(preflight.noteGenerationUnitsRequired())
+                .as("Study-Pack-only regeneration asserts and charges only the Study Pack meter")
+                .isZero();
+        assertThat(preflight.sharedQuizzesToDeactivate())
+                .as("and it does not replace the Note content the shared quiz was built from")
+                .isZero();
+
+        UUID batchId = harness.run(owner, List.of(noteId), NoteRegenerationScope.STUDY_PACK, true);
+
+        assertThat(itemState(batchId, noteId)).isEqualTo("REGENERATED");
+        assertThat(readNoteColumn(noteId, "content"))
+                .as("Study-Pack-only regeneration leaves the Note body alone")
+                .isEqualTo("Original body.");
+        assertThat(persistedUsage(owner, "note_generations"))
+                .as("no note-generation unit is spent by the Study-Pack-only scope")
+                .isZero();
+        assertThat(persistedUsage(owner, "study_pack_generations")).isEqualTo(1);
+        assertThat(readShareLinkActive(liveLink))
+                .as("and the live share link stays live")
+                .isTrue();
+    }
+
+    /**
+     * The combined scope's consequence counts are EXACT and are recorded on the item that caused them.
+     * Two notes, only one of which carries a live share link, so a fixture where every note has one
+     * cannot pass by accident.
+     */
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void combinedScopeCountsAndRecordsExactlyTheShareLinksItTurnsOff() {
+        UUID owner = seedCuratorUser("bulk-regen-consequences");
+        UUID shared = seedRegenerationNote(owner, "Shared note", "Body.");
+        UUID unshared = seedRegenerationNote(owner, "Unshared note", "Body.");
+        seedStudyPack(owner, shared, "Pack one");
+        seedStudyPack(owner, unshared, "Pack two");
+        jdbcTemplate.update("update notes set visibility = 'PUBLIC' where id = ?", shared);
+        UUID sharedQuizId = UUID.randomUUID();
+        jdbcTemplate.update(
+                "insert into generated_quizzes (id, owner_user_id, note_id, questions, generated_at, updated_at)"
+                        + " values (?, ?, ?, '[]'::jsonb, now(), now())", sharedQuizId, owner, shared);
+        UUID liveLink = seedQuizShareLink(sharedQuizId, owner, "bulk-regen-consequence-link", true);
+        UUID unsharedQuizId = UUID.randomUUID();
+        jdbcTemplate.update(
+                "insert into generated_quizzes (id, owner_user_id, note_id, questions, generated_at, updated_at)"
+                        + " values (?, ?, ?, '[]'::jsonb, now(), now())", unsharedQuizId, owner, unshared);
+        seedQuizShareLink(unsharedQuizId, owner, "bulk-regen-consequence-inactive", false);
+
+        BulkRegenerationHarness harness = new BulkRegenerationHarness();
+        harness.throttleDelayMs = 0;
+        NoteRegenerationPreflightResponse preflight = harness.preflight(
+                owner, List.of(shared, unshared), NoteRegenerationScope.NOTE_AND_STUDY_PACK, true);
+
+        assertThat(preflight.publicNotesAffected())
+                .as("one of the two selected notes is public")
+                .isEqualTo(1);
+        assertThat(preflight.sharedQuizzesToDeactivate())
+                .as("EXACT, not an estimate: only the note with a LIVE link is counted")
+                .isEqualTo(1);
+
+        UUID batchId = harness.run(owner, List.of(shared, unshared), true);
+
+        assertThat(readShareLinkActive(liveLink))
+                .as("the live link really is turned off by the combined scope")
+                .isFalse();
+        assertThat(jdbcTemplate.queryForObject(
+                "select share_link_deactivated from note_bulk_regeneration_item"
+                        + " where batch_id = ? and note_id = ?", Boolean.class, batchId, shared))
+                .as("and the receipt records WHICH item did it")
+                .isTrue();
+        assertThat(jdbcTemplate.queryForObject(
+                "select share_link_deactivated from note_bulk_regeneration_item"
+                        + " where batch_id = ? and note_id = ?", Boolean.class, batchId, unshared))
+                .as("the item with no live link records none")
+                .isFalse();
+    }
+
+    /**
+     * The receipt expires on the BATCH's clock, so a batch disappears whole.
+     *
+     * <p>⚠️ THE FIXTURE MIXES CLOCKS ON PURPOSE. Sweeping on each row's own {@code updated_at} would
+     * keep the late item of an expired batch — a receipt with a hole in it — and a fixture whose rows
+     * share both timestamps passes under either implementation.
+     */
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void anExpiredBatchIsSweptWholeRatherThanRowByRow() {
+        UUID owner = seedCuratorUser("bulk-regen-ttl");
+        UUID batchId = UUID.randomUUID();
+        OffsetDateTime batchCreatedAt = OffsetDateTime.now(ZoneOffset.UTC).minusHours(30);
+        seedBulkRegenerationItem(batchId, owner, UUID.randomUUID(), batchCreatedAt, batchCreatedAt);
+        // Same batch, resolved 29 hours later than it started: fresh updated_at, expired batch clock.
+        seedBulkRegenerationItem(batchId, owner, UUID.randomUUID(), batchCreatedAt,
+                OffsetDateTime.now(ZoneOffset.UTC));
+        UUID freshBatchId = UUID.randomUUID();
+        seedBulkRegenerationItem(freshBatchId, owner, UUID.randomUUID(),
+                OffsetDateTime.now(ZoneOffset.UTC), OffsetDateTime.now(ZoneOffset.UTC));
+
+        // ⚠️ Driven through a TransactionTemplate for the same measured reason transactionalUserUsageService
+        // exists: a hand-built service is not a Spring proxy, so its @Transactional is INERT here and the
+        // bulk delete would throw instead of running. In production the proxy opens this transaction.
+        NoteBulkRegenerationReceiptService receiptService =
+                new NoteBulkRegenerationReceiptService(bulkRegenerationItemRepository, noteRepository);
+        Long deleted = new TransactionTemplate(transactionManager).execute(status ->
+                receiptService.deleteExpiredItems(OffsetDateTime.now(ZoneOffset.UTC)));
+
+        assertThat(deleted).as("both rows of the expired batch go, including the freshly updated one")
+                .isEqualTo(2);
+        assertThat(jdbcTemplate.queryForObject(
+                "select count(*) from note_bulk_regeneration_item where batch_id = ?",
+                Integer.class, batchId))
+                .as("no half-swept receipt survives")
+                .isZero();
+        assertThat(jdbcTemplate.queryForObject(
+                "select count(*) from note_bulk_regeneration_item where batch_id = ?",
+                Integer.class, freshBatchId))
+                .as("a batch inside the TTL is untouched")
+                .isEqualTo(1);
+    }
+
+    // --- bulk regeneration fixture helpers ------------------------------------------------------------
+
+    private void seedBulkRegenerationItem(
+            UUID batchId,
+            UUID ownerUserId,
+            UUID noteId,
+            OffsetDateTime batchCreatedAt,
+            OffsetDateTime updatedAt
+    ) {
+        jdbcTemplate.update(
+                "insert into note_bulk_regeneration_item (id, batch_id, owner_user_id, note_id, scope,"
+                        + " state, share_link_deactivated, batch_created_at, updated_at)"
+                        + " values (?, ?, ?, ?, 'NOTE_AND_STUDY_PACK', 'REGENERATED', false, ?, ?)",
+                UUID.randomUUID(), batchId, ownerUserId, noteId, batchCreatedAt, updatedAt);
+    }
+
+    /**
+     * ⚠️ Charged through the REAL usage service rather than an INSERT, so the seeded row carries exactly
+     * the shape and billing period production writes. A hand-built row that drifts from the real period
+     * resolution would leave the over-quota guard asserting against usage the service cannot see.
+     */
+    /**
+     * Study Pack usage is {@code max(tracked, persisted rows this month)}, so the tracked counter is
+     * what a fixture can drive; the persisted count rises on its own as the batch creates packs.
+     */
+    private void seedStudyPackUsage(UUID userId, int studyPackGenerations) {
+        UserUsageService usageService = transactionalUserUsageService();
+        for (int index = 0; index < studyPackGenerations; index++) {
+            usageService.incrementStudyPackGeneration(userId, OffsetDateTime.now(ZoneOffset.UTC));
+        }
+    }
+
+    private void seedNoteGenerationUsage(UUID userId, int noteGenerations) {
+        UserUsageService usageService = transactionalUserUsageService();
+        for (int index = 0; index < noteGenerations; index++) {
+            usageService.incrementNoteGeneration(userId, OffsetDateTime.now(ZoneOffset.UTC));
+        }
+    }
+
+    private String itemState(UUID batchId, UUID noteId) {
+        return jdbcTemplate.queryForObject(
+                "select state from note_bulk_regeneration_item where batch_id = ? and note_id = ?",
+                String.class, batchId, noteId);
+    }
+
+    private String itemReasonCode(UUID batchId, UUID noteId) {
+        return jdbcTemplate.queryForObject(
+                "select reason_code from note_bulk_regeneration_item where batch_id = ? and note_id = ?",
+                String.class, batchId, noteId);
+    }
+
+    private void awaitItemState(UUID batchId, UUID noteId, String expectedState) {
+        long deadline = System.currentTimeMillis() + 30_000;
+        while (System.currentTimeMillis() < deadline) {
+            if (expectedState.equals(itemState(batchId, noteId))) {
+                return;
+            }
+            try {
+                Thread.sleep(25);
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+                throw new IllegalStateException(interrupted);
+            }
+        }
+        throw new IllegalStateException(
+                "item " + noteId + " never reached " + expectedState + " (was " + itemState(batchId, noteId) + ")");
+    }
+
+    /**
+     * Builds a real {@link NoteBulkRegenerationService} over the real database and a real
+     * {@link StudyPackService}, following {@link RegenerationHarness} exactly. Only the LLM, the rate
+     * limiter and the fire-and-forget collaborators are mocked; every repository, both usage services
+     * and the readiness/consequence guards are real, because these guards assert persisted rows and
+     * persisted counters.
+     *
+     * <p>⚠️ {@code AiRateLimitService} is mocked deliberately. With a synchronous dispatcher a batch's
+     * items run back to back, so the real limiter's 5-per-minute FREE bucket would fail items for a
+     * reason production — where each item is two real LLM calls — never hits.
+     */
+    private final class BulkRegenerationHarness {
+        private final Map<String, StudyPackGenerationContext> contextsByTopic = new ConcurrentHashMap<>();
+        private final AtomicReference<Thread> driverThread = new AtomicReference<>();
+        /** Exposed so the instrumentation guard can assert the event actually fires. */
+        private final AnalyticsService analyticsService = mock(AnalyticsService.class);
+        private String failStudyPackForTitle;
+        private String beforeStudyPackForTitle;
+        private Runnable beforeStudyPack;
+        private int throttleDelayMs = 500;
+
+        private UUID run(UUID ownerUserId, List<UUID> noteIds, boolean enforceLimits) {
+            return run(ownerUserId, noteIds, NoteRegenerationScope.NOTE_AND_STUDY_PACK, enforceLimits);
+        }
+
+        private UUID run(
+                UUID ownerUserId,
+                List<UUID> noteIds,
+                NoteRegenerationScope scope,
+                boolean enforceLimits
+        ) {
+            UUID batchId = start(ownerUserId, noteIds, scope, enforceLimits);
+            try {
+                driverThread.get().join(120_000);
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+                throw new IllegalStateException(interrupted);
+            }
+            return batchId;
+        }
+
+        /** Retries a batch through the real service and waits for the new batch's driver to finish. */
+        private UUID retry(UUID batchId, UUID ownerUserId, boolean enforceLimits) {
+            UUID newBatchId = service().retryFailedItems(batchId, ownerUserId, enforceLimits).batchId();
+            try {
+                driverThread.get().join(120_000);
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+                throw new IllegalStateException(interrupted);
+            }
+            return newBatchId;
+        }
+
+        private UUID start(UUID ownerUserId, List<UUID> noteIds, boolean enforceLimits) {
+            return start(ownerUserId, noteIds, NoteRegenerationScope.NOTE_AND_STUDY_PACK, enforceLimits);
+        }
+
+        private UUID start(
+                UUID ownerUserId,
+                List<UUID> noteIds,
+                NoteRegenerationScope scope,
+                boolean enforceLimits
+        ) {
+            return service().queueBatch(
+                    new BulkRegenerateNotesRequest(noteIds, scope.name()), ownerUserId, enforceLimits
+            ).batchId();
+        }
+
+        private NoteRegenerationPreflightResponse preflight(
+                UUID ownerUserId,
+                List<UUID> noteIds,
+                NoteRegenerationScope scope,
+                boolean enforceLimits
+        ) {
+            NoteRegenerationReadinessService readiness = readinessService();
+            NoteRegenerationConsequenceService consequences = consequenceService();
+            return new NoteRegenerationPreflightService(
+                    noteRepository,
+                    readiness,
+                    consequences,
+                    driver(readiness, consequences),
+                    mePlanService(),
+                    mock(OnboardingGuardService.class),
+                    // ⚠️ REAL, not mocked -- a mocked gate would let every one of these guards pass
+                    // against a non-curator and prove nothing about who may run a batch.
+                    new BulkRegenerationAccessGuard(userRepository)
+            ).preflight(new NoteRegenerationPreflightRequest(noteIds, scope.name()),
+                    ownerUserId, enforceLimits);
+        }
+
+        private NoteRegenerationReadinessService readinessService() {
+            return new NoteRegenerationReadinessService(
+                    noteRepository, studyPackRepository, new NoteCourseProgramRepository(jdbcTemplate));
+        }
+
+        private NoteRegenerationConsequenceService consequenceService() {
+            return new NoteRegenerationConsequenceService(generatedQuizRepository, quizShareLinkRepository);
+        }
+
+        private MePlanService mePlanService() {
+            SubscriptionService subscriptionService = mock(SubscriptionService.class);
+            lenient().when(subscriptionService.resolvePlan(any(UUID.class))).thenReturn(PlanType.FREE);
+            UserUsageService userUsageService = transactionalUserUsageService();
+            return new MePlanService(
+                    subscriptionService,
+                    userUsageService,
+                    new StudyPackUsageService(userUsageService, studyPackRepository),
+                    userRepository,
+                    mock(FeatureGateService.class),
+                    new StudySnapProperties()
+            );
+        }
+
+        private NoteBulkRegenerationService driver(
+                NoteRegenerationReadinessService readiness,
+                NoteRegenerationConsequenceService consequences
+        ) {
+            return new NoteBulkRegenerationService(
+                    noteRepository,
+                    bulkRegenerationItemRepository,
+                    readiness,
+                    consequences,
+                    studyPackService(),
+                    mePlanService(),
+                    mock(OnboardingGuardService.class),
+                    new BulkGenerationFailureReasonNormalizer(),
+                    new NoteBulkRegenerationTaskDispatcher(task -> {
+                        Thread thread = new Thread(task, "test-bulk-regeneration-driver");
+                        driverThread.set(thread);
+                        thread.start();
+                    }),
+                    new BulkRegenerationAccessGuard(userRepository),
+                    analyticsService,
+                    50,
+                    throttleDelayMs,
+                    10,
+                    60_000L
+            );
+        }
+
+        private NoteBulkRegenerationService service() {
+            NoteRegenerationReadinessService readiness = readinessService();
+            return driver(readiness, consequenceService());
+        }
+
+        /**
+         * The same wiring as {@link RegenerationHarness}, with the LLM keyed by TOPIC so a batch can make
+         * one item fail while its neighbours succeed, and recording the context each topic was generated
+         * against so the per-note-context guard has something to assert on.
+         */
+        private StudyPackService studyPackService() {
+            LlmStudyPackService llm = mock(LlmStudyPackService.class);
+            lenient().when(llm.generateNoteFromTopic(anyString(), any())).thenAnswer(invocation -> {
+                String topic = invocation.getArgument(0);
+                contextsByTopic.put(topic, invocation.getArgument(1));
+                if (topic.equals(beforeStudyPackForTitle) && beforeStudyPack != null) {
+                    beforeStudyPack.run();
+                }
+                if (topic.equals(failStudyPackForTitle)) {
+                    throw new IllegalStateException("generation exploded for " + topic);
+                }
+                return "Regenerated body.";
+            });
+            lenient().when(llm.generateStudyPack(anyString(), any())).thenAnswer(invocation -> {
+                // Keyed by SOURCE TEXT as well as topic, so the per-note-context guard also covers the
+                // Study-Pack-only scope -- which is the scope where a batch-wide context override is
+                // actually passable, and therefore where the defect is reachable.
+                contextsByTopic.put(invocation.getArgument(0), invocation.getArgument(1));
+                return new GeneratedStudyPackContent(
+                        "Regenerated pack", "Regenerated summary", "Engineering",
+                        List.of("llm-tag"), List.of("Regenerated concept"), List.of(),
+                        "test-model", 1, 1, 0, BigDecimal.ZERO);
+            });
 
             SubscriptionService subscriptionService = mock(SubscriptionService.class);
             lenient().when(subscriptionService.resolvePlan(any(UUID.class))).thenReturn(PlanType.FREE);

@@ -121,6 +121,19 @@ public class MePlanService {
         return remaining(noteGenerationLimit, usage.noteGenerations());
     }
 
+    /**
+     * Mirrors {@link #getNoteGenerationsRemaining(UUID)} for the Study Pack meter, so bulk regeneration
+     * preflight can disclose BOTH costs of a combined batch from one place. Study Pack shortfall is a
+     * soft floor — surfaced, never used to reject a batch — because the per-item monthly assertion is
+     * what actually enforces it.
+     */
+    public int getStudyPackGenerationsRemaining(UUID userId) {
+        PlanType planType = subscriptionService.resolvePlan(userId);
+        OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
+        int studyPackLimit = properties.getPricing().resolveMonthlyStudyPackLimit(planType);
+        return remaining(studyPackLimit, studyPackUsageService.resolveUsage(userId, now).usedCount());
+    }
+
     private int remaining(int limit, int used) {
         return Math.clamp(limit - used, 0, Integer.MAX_VALUE);
     }

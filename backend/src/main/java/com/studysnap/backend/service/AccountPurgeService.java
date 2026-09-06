@@ -18,6 +18,7 @@ import com.studysnap.backend.repository.EmailVerificationTokenRepository;
 import com.studysnap.backend.repository.FeedbackRepository;
 import com.studysnap.backend.repository.GeneratedQuizRepository;
 import com.studysnap.backend.repository.MemorizationCardRepository;
+import com.studysnap.backend.repository.NoteBulkRegenerationItemRepository;
 import com.studysnap.backend.repository.NoteCollectionItemRepository;
 import com.studysnap.backend.repository.NoteCollectionRepository;
 import com.studysnap.backend.repository.NoteRepository;
@@ -68,6 +69,7 @@ public class AccountPurgeService {
     private final MemorizationCardRepository memorizationCardRepository;
     private final ActivityEventRepository activityEventRepository;
     private final BulkGenerationResultRepository bulkGenerationResultRepository;
+    private final NoteBulkRegenerationItemRepository noteBulkRegenerationItemRepository;
     private final QuizShareLinkRepository quizShareLinkRepository;
     private final PublicNoteLikeRepository publicNoteLikeRepository;
     private final UserLibraryFilterRepository userLibraryFilterRepository;
@@ -170,6 +172,9 @@ public class AccountPurgeService {
         memorizationCardRepository.deleteByUserId(userId);
         activityEventRepository.deleteByUserId(userId);
         bulkGenerationResultRepository.deleteByOwnerUserId(userId);
+        // Mirrors the line above: the bulk regeneration receipt is personal data with the same
+        // lifetime obligations as the bulk generation one.
+        noteBulkRegenerationItemRepository.deleteByOwnerUserId(userId);
         publicNoteLikeRepository.deleteByUserId(userId);
         userLibraryFilterRepository.deleteByUserId(userId);
         userUsageRepository.deleteByUserId(userId);

@@ -17,6 +17,11 @@ import com.studysnap.backend.dto.RecentQuizSessionHistoryResponse;
 import com.studysnap.backend.dto.BulkImportResultResponse;
 import com.studysnap.backend.dto.BulkGenerateNotesRequest;
 import com.studysnap.backend.dto.BulkGenerateNotesResponse;
+import com.studysnap.backend.dto.BulkRegenerateNotesRequest;
+import com.studysnap.backend.dto.BulkRegenerateNotesResponse;
+import com.studysnap.backend.dto.NoteBulkRegenerationReceiptResponse;
+import com.studysnap.backend.dto.NoteRegenerationPreflightRequest;
+import com.studysnap.backend.dto.NoteRegenerationPreflightResponse;
 import com.studysnap.backend.dto.ExtractedNoteTextResponse;
 import com.studysnap.backend.dto.GeneratedQuizResponse;
 import com.studysnap.backend.dto.GenerateGeneratedQuizRequest;
@@ -54,6 +59,9 @@ import com.studysnap.backend.service.ChallengeQuizService;
 import com.studysnap.backend.service.GeneratedQuizService;
 import com.studysnap.backend.service.NoteBulkImportService;
 import com.studysnap.backend.service.NoteBulkGenerationService;
+import com.studysnap.backend.service.NoteBulkRegenerationService;
+import com.studysnap.backend.service.NoteBulkRegenerationReceiptService;
+import com.studysnap.backend.service.NoteRegenerationPreflightService;
 import com.studysnap.backend.service.NoteService;
 import com.studysnap.backend.service.NoteShareService;
 import com.studysnap.backend.service.NoteGenerationService;
@@ -110,6 +118,7 @@ public class NoteController {
     private static final String SUBJECT_REQUEST_PARAM = "subject";
     private static final String TAG_REQUEST_PARAM = "tag";
     private static final String VISIBILITY_REQUEST_PARAM = "visibility";
+    private static final String COLLECTION_REQUEST_PARAM = "collectionId";
     private static final String SORT_REQUEST_PARAM = "sort";
     private static final String PAGE_REQUEST_PARAM = "page";
     private static final String PAGE_SIZE_REQUEST_PARAM = "pageSize";
@@ -125,6 +134,9 @@ public class NoteController {
     private final NoteShareService noteShareService;
     private final NoteBulkImportService noteBulkImportService;
     private final NoteBulkGenerationService noteBulkGenerationService;
+    private final NoteBulkRegenerationService noteBulkRegenerationService;
+    private final NoteBulkRegenerationReceiptService noteBulkRegenerationReceiptService;
+    private final NoteRegenerationPreflightService noteRegenerationPreflightService;
     private final NoteGenerationService noteGenerationService;
     private final NoteTextExtractionService noteTextExtractionService;
     private final StudyPackService studyPackService;
@@ -174,6 +186,86 @@ public class NoteController {
     ) {
         UUID userId = user.userId();
         return noteBulkImportService.importBatch(userId, files);
+    }
+
+    /**
+     * Deterministic preflight for a bulk regeneration selection: per-Note readiness plus the aggregate
+     * consequence and quota counts.
+     *
+     * <p>⚠️ POST rather than GET because the selection is a list of up to 50 ids, and the existing
+     * {@code GET /notes/library/ids} is what produces it. Nothing is written and nothing is dispatched.
+     *
+     * <p>⚠️ {@code enforceLimits} is the SAME expression bulk generation uses. It is not widened, and it
+     * is passed so the preflight tells a metered TEACHER curator the truth about their allowance before
+     * they commit.
+     */
+    @PostMapping("/regenerate/preflight")
+    @PreAuthorize("hasAnyRole('USER','ADMIN')")
+    public NoteRegenerationPreflightResponse regeneratePreflight(
+            @RequestBody NoteRegenerationPreflightRequest request,
+            @AuthenticationPrincipal AuthenticatedUser user
+    ) {
+        UUID userId = user.userId();
+        authService.requireEmailVerified(userId);
+        boolean enforceLimits = user.role() != UserRole.ADMIN;
+        return noteRegenerationPreflightService.preflight(request, userId, enforceLimits);
+    }
+
+    /**
+     * Progress and result for one batch, read by polling.
+     *
+     * <p>⚠️ NOT consume-once, unlike the bulk-generation receipt: a regeneration batch runs far past
+     * the five minutes that poller tolerates, so the curator may navigate away and come back.
+     */
+    @GetMapping("/bulk-regenerate/{batchId}")
+    @PreAuthorize("hasAnyRole('USER','ADMIN')")
+    public NoteBulkRegenerationReceiptResponse bulkRegenerationReceipt(
+            @PathVariable UUID batchId,
+            @AuthenticationPrincipal AuthenticatedUser user
+    ) {
+        return noteBulkRegenerationReceiptService.getReceipt(batchId, user.userId());
+    }
+
+    /**
+     * Re-runs the FAILED items of a previous batch, as a NEW batch.
+     *
+     * <p>⚠️ TAKES A BATCH ID, NEVER A NOTE LIST. The server derives which items failed, so "retry only
+     * the failed ones" is a guarantee rather than something the client is trusted to get right on a
+     * path that spends metered units.
+     */
+    @PostMapping("/bulk-regenerate/{batchId}/retry")
+    @PreAuthorize("hasAnyRole('USER','ADMIN')")
+    public BulkRegenerateNotesResponse retryBulkRegeneration(
+            @PathVariable UUID batchId,
+            @AuthenticationPrincipal AuthenticatedUser user
+    ) {
+        UUID userId = user.userId();
+        authService.requireEmailVerified(userId);
+        boolean enforceLimits = user.role() != UserRole.ADMIN;
+        return noteBulkRegenerationService.retryFailedItems(batchId, userId, enforceLimits);
+    }
+
+    /**
+     * Queues a bulk regeneration batch.
+     *
+     * <p>⚠️ The over-quota rejection is a 422 raised inside {@code queueBatch} BEFORE anything is
+     * dispatched, carrying how many notes to remove. It reads only the note-generation meter; the
+     * Study Pack meter is a SOFT floor, disclosed by the preflight and never used to refuse a batch.
+     *
+     * <p>⚠️ Curator-only, enforced by {@code BulkRegenerationAccessGuard} inside the service — the
+     * {@code @PreAuthorize} below CANNOT express it, since {@code hasAnyRole('USER','ADMIN')} is
+     * satisfied by every authenticated account.
+     */
+    @PostMapping("/bulk-regenerate")
+    @PreAuthorize("hasAnyRole('USER','ADMIN')")
+    public BulkRegenerateNotesResponse bulkRegenerate(
+            @RequestBody BulkRegenerateNotesRequest request,
+            @AuthenticationPrincipal AuthenticatedUser user
+    ) {
+        UUID userId = user.userId();
+        authService.requireEmailVerified(userId);
+        boolean enforceLimits = user.role() != UserRole.ADMIN;
+        return noteBulkRegenerationService.queueBatch(request, userId, enforceLimits);
     }
 
     @PostMapping("/bulk-generate")
@@ -617,6 +709,7 @@ public class NoteController {
             @RequestParam(value = SUBJECT_REQUEST_PARAM, required = false) String subject,
             @RequestParam(value = TAG_REQUEST_PARAM, required = false) List<String> tags,
             @RequestParam(value = VISIBILITY_REQUEST_PARAM, defaultValue = LIBRARY_DEFAULT_FILTER) String visibility,
+            @RequestParam(value = COLLECTION_REQUEST_PARAM, required = false) UUID collectionId,
             @RequestParam(value = SORT_REQUEST_PARAM, defaultValue = LIBRARY_DEFAULT_SORT) String sort,
             @RequestParam(value = PAGE_REQUEST_PARAM, defaultValue = LIBRARY_DEFAULT_PAGE) Integer page,
             @RequestParam(value = PAGE_SIZE_REQUEST_PARAM, defaultValue = LIBRARY_DEFAULT_PAGE_SIZE) Integer pageSize,
@@ -630,6 +723,7 @@ public class NoteController {
                 subject,
                 tags,
                 visibility,
+                collectionId,
                 sort,
                 Math.clamp(page, LIBRARY_MIN_PAGE, LIBRARY_MAX_PAGE),
                 Math.clamp(pageSize, LIBRARY_MIN_PAGE_SIZE, LIBRARY_MAX_PAGE_SIZE)
@@ -645,10 +739,11 @@ public class NoteController {
             @RequestParam(value = SUBJECT_REQUEST_PARAM, required = false) String subject,
             @RequestParam(value = TAG_REQUEST_PARAM, required = false) List<String> tags,
             @RequestParam(value = VISIBILITY_REQUEST_PARAM, defaultValue = LIBRARY_DEFAULT_FILTER) String visibility,
+            @RequestParam(value = COLLECTION_REQUEST_PARAM, required = false) UUID collectionId,
             @AuthenticationPrincipal AuthenticatedUser user
     ) {
         return noteService.listLibraryMatchingIds(
-                user.userId(), search, readiness, courseProgram, subject, tags, visibility
+                user.userId(), search, readiness, courseProgram, subject, tags, visibility, collectionId
         );
     }
 
@@ -660,10 +755,11 @@ public class NoteController {
             @RequestParam(value = COURSE_PROGRAM_REQUEST_PARAM, required = false) String courseProgram,
             @RequestParam(value = TAG_REQUEST_PARAM, required = false) List<String> tags,
             @RequestParam(value = VISIBILITY_REQUEST_PARAM, defaultValue = LIBRARY_DEFAULT_FILTER) String visibility,
+            @RequestParam(value = COLLECTION_REQUEST_PARAM, required = false) UUID collectionId,
             @AuthenticationPrincipal AuthenticatedUser user
     ) {
         return noteService.getLibrarySubjectStats(
-                user.userId(), search, readiness, courseProgram, tags, visibility
+                user.userId(), search, readiness, courseProgram, tags, visibility, collectionId
         );
     }
 

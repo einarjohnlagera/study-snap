@@ -1,5 +1,367 @@
 # RELEASES.md - NoteLib
 
+## v0.119.0 - Curator Bulk Regeneration
+
+**Status: Released** (kicked off 2026-09-05, signed off 2026-09-06, base branch `releases/v0.119.0`,
+cut from `main` after `v0.118.0` merged and tagged)
+
+Theme: a curator can regenerate a selected set of canonical Notes in one pass, with a truthful account
+of what happened to every one of them.
+
+### Planned Scope
+
+**PHASE 2 OF THE REGENERATION ARC.** Governed by `docs/claude-plans/curator-bulk-regeneration-stage1.md`
+— **execute its decisions, do not re-derive them.** Phase 1 (the single-Note primitive) shipped as
+`v0.118.0`.
+
+**⚠️ THIS RELEASE DELIBERATELY OVERRIDES ITS OWN PLAN'S §14 SEQUENCING, AND THE OVERRIDE IS WRITTEN
+DOWN RATHER THAN ROUTED AROUND.** §14 recommends: *Phase 1 ships **and deploys** → its behaviour is
+**observed on real canonical Notes** → Phase 2 opens, with B1's job record informed by what Phase 1
+actually did.* `v0.118.0` merged and was tagged 2026-09-05, minutes before this kickoff, and has not
+been observed on a single real canonical Note. **THE OWNER OVERRODE THAT SEQUENCE ON 2026-09-05 FOR A
+STATED REASON THAT IS NOT IMPATIENCE: updating the ALE Review Set is BLOCKED on bulk regeneration**, so
+the sequencing cost is being paid by real curator work that cannot proceed. **⚠️ A later session
+reading §14 in isolation must come here first — this is a recorded override, not drift.** **⚠️ THE
+RESIDUAL IS REAL AND IS ACCEPTED, NOT DISMISSED: B1's per-item job record was supposed to be shaped by
+observed Phase 1 behaviour, and it will instead be shaped by Phase 1's tests and code.** If production
+reveals something about combined regeneration that contradicts B1's design, **that is a re-open, not a
+surprise.**
+
+**⚠️ OWNER DECISION 1 TAKEN AT KICKOFF (2026-09-05), AGAINST THE PLAN'S RECOMMENDATION, AND IT MOVES
+THE VERIFICATION TIER.** §M asked who may run bulk regeneration in v1 and recommended **ADMIN only**;
+the owner ruled **ADMIN + TEACHER curators**. **⚠️ THE CONSEQUENCE IS PRICED IN, NOT DISCOVERED LATER:
+a single curator action now spends metered units on a TEACHER's paid account — up to 50 note-generation
+AND 50 Study Pack units for a full batch — which is a MONEY-SEMANTICS change and fires the full
+three-agent trigger.** **⚠️ AND THE SUB-DECISION IT FORCES IS ANSWERED HERE RATHER THAN LEFT OPEN:
+TEACHERs are METERED NORMALLY under §E's already-settled block-and-reduce policy. The ADMIN-only quota
+BYPASS IS NOT WIDENED** — §27 places that out of scope and it stays there — **so a TEACHER's batch is
+capped by their remaining allowance and the preflight must say so before they commit. No entitlement,
+plan-tier or limit change.** **⚠️ Do NOT "fix" a TEACHER's short allowance by extending the bypass.**
+
+**Owner decisions 2 and 3 take the plan's recommendations:** the batch cap is **50 under its own config
+key** (so tuning it never moves bulk *generation*), and **cancellation is NOT built in v1** — already
+dispatched LLM calls cannot be stopped, and **⚠️ do NOT offer a "Cancel batch" control that implies
+in-flight work stops.**
+
+**⚠️ TWO FINDINGS DECIDE THE SHAPE, AND BOTH ARE ARITHMETIC RATHER THAN OPINION — NEITHER IS OPTIONAL
+TO SOLVE:**
+
+1. **The existing bulk receipt CANNOT report a batch this long, so it must be REPLACED, not
+   inherited.** The client poller abandons after ~5 minutes and then tolerates only ~4 s of 404s, while
+   the receipt row is written **only** in `processBatch`'s `finally`. Bulk regeneration is strictly
+   slower per item than bulk generation — **two** LLM calls, not one — so a 50-Note batch runs well past
+   that ceiling and **the curator never learns the outcome.** **⚠️ Do NOT inherit the existing receipt
+   component.**
+2. **The batch loop and each item's Study Pack work share ONE 2-thread executor**, and the loop holds
+   one of those two threads for the batch's entire duration. That is starvation, not deadlock, and it
+   caps real throughput. **⚠️ Do NOT resolve it by raising `studyPackGenerationTaskExecutor`'s 2/2
+   bound** — that is a `v0.112.0` Phase 3 decision gated on `[CHECKPOINT — due 2026-10-04]`. The batch
+   driver needs its own executor.
+
+**SCOPE — the plan's five slices (§L):** **B1** per-item batch job record plus the release's only
+migration, a batch driver on its own executor, per-Note guards re-run at item start, continue-on-failure,
+and a fix to the outer catch so completed items are never reported failed; **B2** a preflight endpoint
+returning per-Note deterministic states plus aggregate public and shared-quiz counts; **B3** the Library
+`"regenerate"` selection intent with a collection-membership filter; **B4** the preflight/confirmation
+modal; **B5** progress, result receipt and retry-failed.
+
+**⚠️ RELEASE BOUNDARY: bulk regeneration must not be REACHABLE until B3-B5 land.** B1 and B2 are inert
+without an entry point, exactly as `v0.118.0`'s slices 1-2 were.
+
+### Anti-drift
+
+- **⚠️ ONLY B1 MAY ADD A MIGRATION.** If any other slice appears to need one, the scope is wrong.
+- **⚠️ Do NOT reuse `applyBulkGeneratedMetadataToNote`** — it unconditionally overwrites `title` and
+  `tags` and **would destroy curator-authored canonical titles.** This is the plan's §A blocker and the
+  single most destructive thing this release could do.
+- **⚠️ Do NOT resolve ONE generation context for the batch** — every Note resolves independently.
+- **⚠️ Do NOT infer or repair missing metadata to make a Note pass.** Block it with a reason.
+- **⚠️ Do NOT build a metadata-quality score, classifier, or AI "is this good enough" judgement.**
+- **⚠️ Do NOT build a second Note generation architecture** — the title-as-topic path is the method.
+- **⚠️ Do NOT send Applicable Programs to generation or display them as generation inputs.**
+- **⚠️ Do NOT change Review Set membership, Section, ordering, Subject, Domain Context, Depth or
+  Applicable Programs** — bulk changes CONTENT only.
+- **⚠️ Do NOT propagate to learner copies or notify copy owners.**
+- **⚠️ Do NOT copy `AdminStudyPackService.regenerateOfficialSummaries`** — it holds a transaction across
+  an LLM call. **⚠️ Do NOT hold a JDBC connection across either LLM call, and do NOT use
+  `REQUIRES_NEW`.**
+- **⚠️ Do NOT auto-select, auto-detect stale Notes, schedule regeneration, or regenerate on deploy,
+  metadata edit, or Review Set update** — selection stays explicitly human.
+- **⚠️ Do NOT offer whole-Review-Set one-click regeneration.** **⚠️ Do NOT re-run successful items on
+  retry.**
+- **⚠️ No pricing change, no new plan gate, no learner bulk regeneration, no content versioning, no
+  concept migration, no adopted-Review-Set synchronization.**
+- **⚠️ Do NOT change what `BOARD_EXAM_STARTED`, `ADAPTIVE_PRACTICE_STARTED` or `QUIZ_SHARE_LINK_CREATED`
+  record.** **⚠️ `frontend/app/onboarding` stays frozen** — live dated reads run through 2026-09-19.
+- **⚠️ The `v0.118.0` production outage fix is NOT in this release and is NEXT** — see its Backlog rows.
+  Do not fold it in because it also touches read paths.
+
+### Verification
+
+**FULL THREE-AGENT COLD PRESSURE TEST IN ISOLATED `git worktree`s**, declared not inherited. The plan
+rates B1+B2 at one scoped cold agent and states the escalation clause explicitly: extending beyond ADMIN
+adds money semantics. **Owner decision 1 fired that clause at kickoff.** Two independent triggers now
+hold: **production-data semantics at scale** — irreversible content replacement across up to 50 canonical
+Notes, plus a migration — **and money semantics on a paid account.**
+
+**⚠️ THE ISOLATION IS NOT OPTIONAL** (`v0.105.0` lost an agent's entire result set to shared-tree
+corruption), and **ONE AGENT MUST BE POINTED AT THE BLIND SPOT, NOT THE FEATURE** — in the last FIVE
+releases the worst defect was outside the stated scope every time, `v0.118.0` included.
+
+**⚠️ PRE-DECLARED DISCRIMINATING GUARDS, each naming the fixture that would pass under the defect:**
+
+1. **Metadata preservation** — a batch over a Note with an authored `title` and `tags` leaves **both
+   byte-identical**. *A fixture asserting only that content changed passes while titles are destroyed.*
+2. **Per-Note context** — a batch of two Notes with **different** Subjects and Domain Contexts generates
+   each against **its own** context. *A single-Note batch, or two Notes sharing metadata, proves nothing.*
+3. **Continue-on-failure and honest reporting** — with item 2 of 3 failing, items 1 and 3 are
+   `REGENERATED` and **item 1 is not reported failed.*
+4. **Restart survivability** — items resolved before an interrupt are still readable afterwards. *A batch
+   that runs to completion passes under the receipt defect.*
+5. **Blocked stays blocked** — a multi-program Note with a null Domain Context is `BLOCKED` with a reason,
+   is **not** regenerated, and its content is unchanged.
+6. **Retry excludes successes** — retry re-runs only `FAILED` items, with quota charged only for those.
+7. **⚠️ ADDED BY OWNER DECISION 1: a TEACHER whose remaining allowance is smaller than the selection is
+   BLOCKED-AND-REDUCED before any LLM call, and the units actually spent match the items actually
+   regenerated** — asserted on PERSISTED counters. *An ADMIN fixture bypasses quota entirely and proves
+   nothing about the path this decision opened.*
+
+**⚠️ CARRIED LESSONS: a guard must reach its subject the way production does; a hand-built service's
+`@Transactional` is INERT under `@DataJpaTest` and can make a "nothing was written" guard pass for the
+wrong reason (measured in `v0.118.0`); mutate and confirm a NAMED test fails; read `./mvnw`'s exit status
+directly, never through a pipe; COUNT executed tests from `target/surefire-reports/*.xml` after CLEANING
+it; run `npm test`; sweep by SURFACE, not by diff; VERIFY "X already does Y" AGAINST CODE BEFORE IT
+REACHES A PROMPT — `v0.118.0` shipped a false premise from its prompt into a test and a feature doc; and
+call `advisor()` BEFORE writing the Codex prompt for B1.**
+
+**Routing: CODEX** for B1 and B2 (a migration, batch orchestration, a preflight contract); **Claude Code
+inline** for B3-B5.
+
+### Shipped
+
+- **B1 — the batch driver, its per-item record and the only migration (backend, PR #1288).**
+  `V135__note_bulk_regeneration_items.sql` adds `note_bulk_regeneration_item`, one row per item written
+  **as that item resolves** rather than a terminal blob, so a batch killed by a routine deploy keeps
+  everything it had already completed. `NoteBulkRegenerationService` drives items sequentially on its
+  own `bulkRegenerationTaskExecutor` (2/2/8) — `studyPackGenerationTaskExecutor` stays **2/2/100 and
+  untouched**, so the batch loop no longer occupies one of the two threads its own items need. The
+  500 ms throttle, the 50-item cap (under its own `note.bulk-regeneration.max-notes` key) and
+  continue-on-failure all behave as `§C`/`§D`/`§K` specify.
+  - **The outer-catch defect is not reproduced.** `NoteBulkGenerationService:232-246` rewrites *every*
+    topic as failed on an interruption while `created_count` keeps its partial value; the new driver
+    stops and touches nothing already recorded. Pinned by a guard that completes an item **before**
+    interrupting — a batch interrupted before anything finished passes under the defect.
+  - **Per-Note guards re-run at item start.** The preflight snapshot is never trusted: a Note that goes
+    `GENERATING` between preflight and its turn lands `BLOCKED` with a reason, never skipped and never
+    counted as regenerated. Quota exhaustion mid-batch is `BLOCKED`, not `FAILED`. A deleted Note is
+    `NOT_RUN`.
+  - **The item verdict is read from persisted `notes.status`, not from "the call did not throw."**
+    `generateStudyPackFromExistingNoteAsync` catches `Exception`, marks the note `FAILED` and returns
+    normally, so an outcome inferred from a clean return would report every async failure as a success —
+    `processItem`'s defect in a new file. Found by the implementing agent reading the code, not assumed.
+- **B2 — deterministic preflight (backend, PR #1288).** `POST /notes/regenerate/preflight` returns
+  per-Note readiness plus `§G`'s two exact counts (public Notes affected; live shared quizzes that will
+  be turned off, exact because `uq_generated_quizzes_note_id` gives one row per note).
+  `NoteRegenerationReadinessService` is the **single** guard implementation both preflight and the driver
+  call, so the two cannot drift. **"Review recommended" stays omitted** — a Note with a NULL Domain
+  Context and one program is fully generation-ready, so the state would require judging metadata quality.
+- **Metering.** A TEACHER curator's batch is metered normally under the settled block-and-reduce policy;
+  the ADMIN-only bypass is **not** widened to TEACHER. `startAsyncNoteAndStudyPackRegeneration` gained an
+  additive `enforceLimits` overload so bulk applies the same `role() != ADMIN` expression bulk
+  *generation* already applies at `NoteController:187` — the two-argument entry point that
+  `POST /notes/{id}/regenerate` uses still passes `true`, so v0.118.0's single-Note contract is
+  unchanged. An over-quota selection is rejected **422 before dispatch**, carrying how many notes to
+  remove.
+- **Not reachable from the UI.** Neither endpoint has an entry point; the Library selection intent, the
+  confirmation modal and the receipt are B3-B5. Irreversible content replacement across dozens of
+  canonical Notes must not be reachable without them.
+
+- **B3 — the Library entry point (PR #1289).** `LibrarySelectionIntent` gains a third value,
+  `regenerate`, offered only to curators (ADMIN by role or TEACHER by profile) — the backend gate is the
+  authority, and the client check only decides whether to offer the action. The note checkbox gains a
+  padded wrapper so its hit area reaches ~44px; the input stays 16px, and the padding is what makes
+  selecting dozens of notes on a phone workable.
+  - **A Review Set membership filter**, the one filter axis this feature owes: the Library's three
+    existing axes cannot express "the notes in this Review Set", which is the motivating workflow.
+    `?collectionId=` threads through the single `buildFilter` choke point, so the list, the count, the
+    subject facets and select-all-across-filters all honour it. **An `EXISTS` over
+    `note_collection_items`, never a join** — a note can belong to several Review Sets, and a join would
+    emit it once per membership row and inflate both the page and the count.
+- **B4 + B5 — preflight, confirmation, progress and receipt (PR #1289).** One modal covers the whole flow.
+  It opens on the non-destructive `STUDY_PACK` scope every time, and the reset is the caller unmounting
+  it rather than an effect, so a destructive choice can never be inherited by the next batch. It shows
+  ready/blocked/not-eligible counts, the public-note and shared-quiz consequences (combined scope only),
+  the quota shortfall with how many notes to remove, and blocked items behind a disclosure.
+  - **`GET /notes/bulk-regenerate/{batchId}`** was owed and did not exist — B1 built the receipt record
+    for TTL deletion only. It is owner-scoped at the query, so another user's batch is indistinguishable
+    from one that never existed, and **not consume-once**: a regeneration batch runs far past the five
+    minutes the bulk-generation poller tolerates, so the curator may navigate away and come back.
+  - **`finished` is derived** from "no item is still pending", never a stored end-of-batch flag — a driver
+    killed mid-batch writes no end marker, so a stored flag would leave a dead batch reporting itself in
+    flight forever. A batch that stops early reports **`stale`** and says so plainly.
+- **The curator gate was missing entirely and is now enforced (PR #1289).** The endpoints' `@PreAuthorize`
+  reads `hasAnyRole('USER','ADMIN')`, which **every authenticated account satisfies**, and neither service
+  checked curator status — so B1/B2 as merged were reachable by any learner, wider than the capability was
+  scoped to. `BulkRegenerationAccessGuard` now enforces `CuratorAuthoringPredicate` on **both** the batch
+  and the preflight; gating only the batch would leave a disclosure surface wider than the capability it
+  discloses. Not a cross-user exposure — every path was already owner-scoped and metered.
+
+- **Regeneration quota is disclosed before you commit, and quota failures say so (PR #1290).** Folded in
+  after a production diagnosis: the owner regenerated ~14 canonical Site Planning notes and 3-4 failed
+  with no reason given. **The cause was quota exhaustion, not the pipeline and not the 2026-09-05
+  outage** — confirmed by reading production, which showed zero non-terminal `exam_question_pool` rows
+  and nothing stuck. Full write-up:
+  `docs/claude-findings/2026-09-05-regeneration-quota-failure-attribution.md`.
+  - **The regenerate modal now shows what you have LEFT**, not only what each scope costs, and refuses a
+    scope whose meter is exhausted — gated on **the meter that scope actually spends**, so an exhausted
+    topic-note allowance never blocks Study-Pack-only. Hidden entirely until the plan summary loads; a
+    guessed "0 left" would be worse than silence. `MePlanResponse.noteGenerationsRemaining` already
+    existed and was used nowhere in the frontend.
+  - **Bulk reports quota exhaustion as `BLOCKED`, not `FAILED`**, so retry does not re-run an item
+    blindly and spend a unit the curator has not got.
+  - **⚠️ The evidence nearly did not survive, which is the real lesson.** By diagnosis time the database
+    held **zero `FAILED` notes** (6,550 `GENERATED`, 17 `DRAFT`): regeneration mutates in place, the
+    owner's manual retries overwrote `status`, and the reason was never persisted. The incident was
+    reconstructable only because Render logs had not rotated. **This is `v0.87.0` — *Failure
+    Attribution* — repeating on the single-note surface.**
+  - **A per-item quota pre-check was written and REMOVED.** Mutation showed it changed nothing
+    observable: the primitive's own synchronous assert already throws on the calling thread and the
+    driver's existing catch already records `BLOCKED` with the same code. It cost an extra quota read
+    per item and bought nothing. Recorded in code so it is not re-added.
+
+- **Pressure-test fixes (PR #1291).** The full three-agent cold test in isolated worktrees found six
+  confirmed defects, two of which would have hit the owner first. **Two claims in this file were
+  falsified by it and are corrected below rather than left standing.**
+  - **⚠️ THE ADMIN QUOTA BYPASS DID NOT BYPASS.** Skipping the request-side assert was not enough:
+    `NoteGenerationService.generateFromTopic` asserted the note-generation quota **again,
+    unconditionally**, on the generation thread — where the worker swallows the exception and marks the
+    note `FAILED`. **So an ADMIN whose meter was full had EVERY combined item fail with no reason
+    recorded, on the exact account this feature was built for.** Fixed by threading `enforceQuota`
+    through, in the service that owns the quota concern. Mutation reproduces the production symptom
+    exactly: `expected "REGENERATED" but was "FAILED"`.
+  - **The sibling meter was misclassified.** `assertMonthlyStudyPackQuotaAvailable` throws a **bare
+    `AppException`** while the note meter throws a typed one, so a Study-Pack shortfall fell through to
+    the generic branch as `FAILED` — and the receipt offers `FAILED` items as **retryable**, inviting a
+    retry that cannot succeed until the cycle resets. Now classified by **code, not type**.
+  - **A zero-match Review Set rendered the empty-library onboarding screen.** `selectedCollectionId` was
+    missing from `hasActiveFilters`, and the *Open more filters* button that would clear the chip lives
+    inside the `hasItems` branch — so the curator's whole library appeared to vanish with no way back.
+    Trivially reachable with any empty Review Set.
+  - **⚠️ CORRECTION: this file claimed the subject facets honoured `?collectionId=`. They did not.** The
+    backend did; the frontend rebuilt a 5-key subset that omitted it, which typechecks because every
+    field is optional. Chips counted across the whole library while the list showed one Review Set.
+    Fixed, and now guarded.
+  - **The Study Pack meter was an observable no-op.** `studyPackUnitsRequired`/`Remaining` were computed
+    server-side, typed on the client and **rendered nowhere**, so the default Study-Pack-only scope had
+    no disclosure at all — `quotaExceeded` reads only the note meter and is structurally always false
+    there. Both meters are now disclosed, with a shortfall warning that does not block, matching §E's
+    soft-floor policy.
+  - **⚠️ CORRECTION: "you can close this and come back" was false.** The batch id lived in component
+    state and the modal unmounts on close; there is no list-my-batches endpoint, so the id was
+    unrecoverable. Worse, reopening returned to the START screen with the same selection — **a second
+    batch over already-regenerated notes, charging both meters again**. The id now persists for the
+    session and reopening resumes the receipt.
+  - **The wrong meter was named on the live v0.118.0 surface.** `combinedDisabledReason` had no branch
+    for an exhausted Study Pack meter, so it told a learner with 25 topic notes left that they had none
+    while the banner beneath said otherwise.
+  - **Two guards that would have survived their own deletion.** The controller's `enforceLimits`
+    expression was unpinned — mutating it to a flat `false`, granting every TEACHER unlimited free units,
+    survived all 2,178 tests — and the curator gate's fixture could not discriminate
+    `CuratorAuthoringPredicate` from a bare role check. Both now pinned, the second by the cohort they
+    actually disagree about: a **TEACHER-profile account mid-onboarding**.
+
+- **B5's retry-failed now exists (PR #1292).** The pressure test found it had never been built while
+  Planned Scope still claimed it and pre-declared guard 6 had no subject.
+  `POST /notes/bulk-regenerate/{batchId}/retry` re-runs the FAILED items **as a new batch**.
+  - **⚠️ IT TAKES A BATCH ID, NEVER A NOTE LIST.** The server derives the failed set, so "only the
+    failed ones" is a server guarantee rather than a client convention on a path that spends metered
+    units — a client sending the wrong ids would re-run `REGENERATED` notes, spending quota and
+    replacing good content with a second generation nobody asked for.
+  - **`REGENERATED` and `BLOCKED` are never retried.** A blocked item stays blocked until its condition
+    changes, so re-running it blindly fails again for the same reason; the curator fixes the cause and
+    re-selects deliberately. No auto-retry.
+  - **⚠️ A NEW BATCH ID IS MINTED, AND THAT IS LOAD-BEARING.** `writeItem` is find-then-save against the
+    unique `(batch_id, note_id)` with no lock, safe only while ONE driver owns a batch. Retrying into
+    the original would give one row two writers whenever a timed-out `RUNNING` worker is alive, and the
+    loser's violation is swallowed. This is the known limitation B1 recorded, closed rather than
+    inherited.
+  - It routes through `queueBatch`, so a retry re-runs the curator gate, the 422 and every per-item
+    guard — a retry can no more overspend than the original could — and inherits the original scope,
+    since retrying a Study-Pack-only batch as combined would replace note content nobody asked to
+    replace.
+
+- **Bulk regeneration was broken end to end on the first real use, and is fixed (PR #1293).** Both JSON
+  POSTs sent **no `Content-Type`**: `buildAuthHeaders()` with no argument sets none, so the browser
+  defaulted to `text/plain;charset=UTF-8` and Spring rejected every request with
+  `HttpMediaTypeNotSupportedException` **before the controller was entered**. The preflight failed, so
+  the modal showed "Something went wrong" and a disabled *Regenerate 0 notes*.
+  - **⚠️ 2,182 frontend tests passed while the feature could not make a single successful request**,
+    because every component test mocks `lib/api` wholesale — so nothing executed header construction.
+    That is the release's own carried lesson landing on the release itself: a behaviour with no test
+    that runs it. `lib/api-bulk-regeneration.test.ts` now pins the request shape, and reproduces the
+    failure exactly when the header is removed.
+  - **Swept rather than spot-fixed:** the other three `fetchWithAuth` calls that omit the header all
+    send `FormData`, where omitting it is correct because the browser must set the multipart boundary.
+    These two were the only defects.
+
+- **Every new endpoint now has a real-request test, and the pressure test's limit is written down
+  (PR #1294).** Follow-up to the `Content-Type` defect, closing the class rather than the instance.
+  - **Three `MockMvc` tests** post real JSON at `/notes/regenerate/preflight` and `/notes/bulk-regenerate`,
+    exercise retry's bodiless POST, and pin that the receipt `GET` resolves to its own handler rather
+    than `/notes/{id}`. **⚠️ A direct method call is not a substitute** — it bypasses content negotiation
+    entirely, which is exactly why the earlier `enforceLimits` tests passed while the endpoint was
+    unreachable. Verified by mutation: making the endpoint consume `application/xml` fails
+    `bulkRegenerationEndpointsAcceptARealJsonRequest` with **415**, the production symptom.
+  - **`CLAUDE.md`'s verification tiers now state what none of them do.** Every tier reads code; none
+    exercises transport, and a higher tier does not close that gap — measured here, where the full
+    three-agent test found six defects and could not see this one. The rule added: a new endpoint owes
+    one real-request test **at every tier including the cheapest**, plus the pressure-test prompt
+    instruction that would have caught it — *enumerate every file the release ADDED and name those with
+    no test that executes them.*
+
+- **Instrumentation added at signoff, because the checkpoint gate caught its absence (signoff commit).**
+  `BULK_REGENERATION_STARTED` fires when a batch is queued, carrying `scope`, `requestedCount` and
+  **`metered`**. **⚠️ There was NO durable signal that a batch had ever run:**
+  `note_bulk_regeneration_item` is a receipt with a 24 h TTL, and nothing else distinguishes a
+  bulk-regenerated note from a single-note one — both mutate `notes.updated_at` in place. Both
+  `[CHECKPOINT — due 2026-10-06]` rows would have been decorative, which the gate forbids. Verified
+  EMITTING rather than enum-present, asserting the `metered` field the money decision is read through,
+  and wrapped so analytics can never fail a batch (the `v0.101.0` rule).
+
+### Known limitations (B1/B2)
+
+- **Nothing sweeps a lost batch.** A driver thread killed mid-loop leaves `RUNNING`/`PENDING` rows until
+  the 24 h TTL expires them. The asymmetry is deliberate and recorded in code: `GenerationRecoveryService`
+  heals the stranded *note* at 120 minutes, so the note self-heals while its batch row does not. B5 must
+  render a `RUNNING` row older than the TTL as indeterminate rather than as in-flight.
+- **`writeItem` is find-then-save with no lock** against the unique `(batch_id, note_id)`. Safe in B1
+  because one driver thread owns a batch, but **B5's retry must mint a new batch id or make the write
+  conditional** — otherwise a retry running beside a timed-out worker gives one pair two writers and the
+  loser's constraint violation is swallowed.
+- **A note that is not the caller's reads `NOT_ELIGIBLE` in preflight and `NOT_RUN` in the driver** —
+  the same miss, named for when it is seen. B5 should collapse them if it renders both.
+- **The regeneration quota race is narrowed, not closed.** Quota is checked before dispatch and again
+  inside the async worker with the LLM call between them, and the charge lands only at commit — so a
+  burst passes the first check and some fail the second. Closing it needs either a user-row lock across
+  the LLM call (**forbidden by `v0.107.0`**) or reserve-then-refund (**breaks `v0.118.0`'s one-commit
+  money property**). **The async attribution branch is defensive and is NOT covered by a test** —
+  reaching it needs quota to vanish inside a single item, a window this harness cannot open. Stated
+  rather than implied.
+- **A transient 429 inside a batch is recorded as a permanent-looking `FAILED`, with no backoff.** The
+  AI rate limit (FREE 5/min) resets within the minute, so retry genuinely is the remedy and
+  `FAILED`/retryable is the honest classification — but a FREE-plan TEACHER on Study-Pack-only can
+  outrun it and see items shred. Not fixed; the driver has no backoff.
+- **A batch whose executor queue is full orphans its `PENDING` rows.** `queueBatch` writes up to 50 rows
+  before `taskDispatcher.execute`, and the driver pool is 2/2 with queue 8 under the default
+  `AbortPolicy`, so a burst of concurrent batches 500s with rows already written. Bounded by the 24h TTL.
+- **Select-all is blunt for the motivating workflow.** *Select all (N)* selects the whole filtered set,
+  and the 50 cap then disables *Review* — a 77-note Review Set needs 27 deselected by hand.
+- **The single-note failure reason is still not persisted.** `notes` has no failure-reason column and
+  adding one is a migration this release's anti-drift forbids. A Backlog Index row carries it.
+- **`§J` row 10 (share-link deactivation fails after commit) is unreachable** in Phase 1's shape: the
+  deactivation is inside the single commit, so a failure rolls the whole item back. Its "record the
+  warning" path is deliberately not built.
+
 ## v0.118.0 - Note and Study Pack Regeneration
 
 **Status: Released** (kicked off and signed off 2026-09-05, base branch `releases/v0.118.0`, cut from

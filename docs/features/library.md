@@ -70,6 +70,12 @@ Interaction:
 - note actions belong in Note Detail
 - Teacher/Admin Library adds a teacher-only `Select` mode instead of changing default card behavior:
   - each note shows a checkbox while selection mode is active
+  - selection mode carries an intent: `collection`, `combined-quiz`, or `regenerate` (v0.119.0). The
+    `regenerate` intent is offered only to curators (ADMIN by role or TEACHER by profile) and is the
+    entry point to bulk regeneration; the backend gate is the authority, and the client check only
+    decides whether to offer the action
+  - the note checkbox carries a padded wrapper so its hit area reaches ~44px. The input itself is still
+    16px; the padding is what makes selecting dozens of notes on a phone workable
   - the selection toolbar (shared by plan creation and teacher exam selection) has a `Select all` / `Deselect all` toggle scoped to the active filters; it resolves the complete matching id set through `GET /notes/library/ids` instead of selecting only the loaded page, with a stable 1,000-id cap and an explicit toast when the result is truncated. Deselect-all clears that resolved filtered set. Because selected ids can extend beyond loaded note cards, the teacher exam flow labels its quiz-ready count as covering only the selected notes currently loaded and suggests loading more or narrowing the filters when some selections are unresolved (v0.51.0).
   - only notes with a stored `generatedQuiz` can be selected for exam export
   - non-quiz-ready notes stay visible but show a disabled checkbox plus `Generate a quiz first` guidance
@@ -97,6 +103,16 @@ Private Library filters:
 - `Course / Program`
 - `Subject`
 - `Tags`
+- `Review Set` membership (`?collectionId=`, v0.119.0) — **⚠️ it counts as an ACTIVE filter**
+  (`hasActiveFilters`), or a Review Set with no matches renders the empty-library onboarding screen and
+  the *Open more filters* button that would clear it is itself inside the `hasItems` branch, so the
+  filter becomes unclearable. **⚠️ It is also passed to the subject-stats call**, or the subject chips
+  count across the whole library while the list shows one Review Set. **⚠️ Applying a saved filter
+  CLEARS it** — saved filters carry no collection axis, so inheriting it would restore a view that was
+  never saved — a note may belong to several Review Sets, so the
+  server filters with an `EXISTS` over `note_collection_items` rather than a join, which would emit the
+  note once per membership row and inflate both the page and the count. An absent value means **no
+  collection filter**, never "notes in no collection"
 - `Draft`
 - `Study Pack Ready`
 - `Quiz Ready` only for Teacher profile browsing and exam-export preparation

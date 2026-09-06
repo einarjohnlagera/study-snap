@@ -65,17 +65,50 @@ public class NoteGenerationService {
             StudyPackGenerationContext resolvedContext,
             boolean recordUsage
     ) {
+        return generateFromTopic(request, userId, resolvedContext, recordUsage, true);
+    }
+
+    /**
+     * @param enforceQuota when false, the note-generation quota is neither asserted nor charged — the
+     *                     ADMIN bypass that bulk paths already apply.
+     *
+     *                     <p>⚠️ THIS PARAMETER EXISTS BECAUSE THE ASSERT BELOW WAS UNCONDITIONAL AND
+     *                     SILENTLY DEFEATED THE BYPASS. A caller that had already skipped its own
+     *                     request-side quota check still reached this one, so an ADMIN whose meter was
+     *                     full had every item fail — and because the exception surfaces on the
+     *                     generation thread, it was swallowed and reported as a bare failure with no
+     *                     reason. Found by the `v0.119.0` pressure test.
+     *
+     *                     <p>⚠️ {@code NoteBulkGenerationService} avoids this by routing ADMIN around
+     *                     this method entirely ({@code generateAdminContent}). That works, but it
+     *                     duplicates moderation and the LLM call; this parameter is the same decision
+     *                     expressed once, in the service that owns the quota concern.
+     *
+     *                     <p>⚠️ Quota is asserted AND charged under one flag. Asserting without
+     *                     charging grants free generations; charging without asserting bills past the
+     *                     limit.
+     */
+    public GenerateNoteFromTopicResponse generateFromTopic(
+            GenerateNoteFromTopicRequest request,
+            UUID userId,
+            StudyPackGenerationContext resolvedContext,
+            boolean recordUsage,
+            boolean enforceQuota
+    ) {
         onboardingGuardService.assertProfileComplete(userId);
         UserEntity user = userRepository.findById(userId)
                 .orElseThrow(UserNotFoundException::new);
-        noteGenerationUsageProtectionService.assertQuotaAvailable(userId, subscriptionService.resolvePlan(userId));
+        if (enforceQuota) {
+            noteGenerationUsageProtectionService.assertQuotaAvailable(
+                    userId, subscriptionService.resolvePlan(userId));
+        }
         String normalizedTopic = request.topic().trim();
         contentModerationService.validateOrThrow(normalizedTopic);
         StudyPackGenerationContext context = resolvedContext == null
                 ? resolveAuthoringContext(request, user)
                 : resolvedContext;
         String generatedContent = llmStudyPackService.generateNoteFromTopic(normalizedTopic, context);
-        if (recordUsage) {
+        if (recordUsage && enforceQuota) {
             noteGenerationUsageProtectionService.recordUsage(userId, OffsetDateTime.now(ZoneOffset.UTC));
         }
         return new GenerateNoteFromTopicResponse(generatedContent);
