@@ -239,7 +239,11 @@ describe("StudyPlanBuilderPageClient", () => {
     (addCollectionItems as jest.Mock).mockResolvedValue(collectionDetail("child-1", "Professional Education Mastery"));
     (removeCollectionItem as jest.Mock).mockResolvedValue(undefined);
     (reorderCollectionChildren as jest.Mock).mockResolvedValue(goalDetail());
-    (setCollectionItemOrder as jest.Mock).mockResolvedValue(collectionDetail("child-1", "Professional Education Mastery"));
+    // ⚠️ THE PUT RETURNS THE SAME PAYLOAD A SUBSEQUENT GET WOULD, and since v0.123.0 the client
+    // CONSUMES it instead of refetching. A fixed unrelated detail here would feed the builder another
+    // collection's items -- so the default mock defers to whatever getCollection is configured to
+    // return for the same id, which is what the server actually does.
+    (setCollectionItemOrder as jest.Mock).mockImplementation((id: string) => (getCollection as jest.Mock)(id));
     (setCollectionParent as jest.Mock).mockResolvedValue(collectionDetail("child-3", "Major Specialization Mastery", []));
     (updateCollection as jest.Mock).mockResolvedValue(collectionDetail("child-1", "Professional Education Mastery"));
   });
@@ -1111,5 +1115,69 @@ describe("StudyPlanBuilderPageClient", () => {
     } finally {
       jest.useRealTimers();
     }
+  });
+
+  it("consumes the write's own response instead of refetching the collection and the note library", async () => {
+    // ⚠️ THE ASSERTION IS THE REQUEST COUNT, NOT THE SAVED VALUE, and that distinction is the guard:
+    // a test asserting the label saved correctly passes under the defect by construction, because the
+    // defect was never about correctness -- it was that ONE section edit cost up to four round trips,
+    // two of them recomputing the same payload and one downloading the curator's ENTIRE note library.
+    //
+    // PUT /collections/{id}/items/order already returns the same NoteCollectionDetailResponse that
+    // getCollection returns, and for a leaf plan the follow-up refresh set exactly the state that
+    // response already describes.
+    jest.useFakeTimers();
+    try {
+      // The PUT response must reflect the write, as the server's does -- a stale echo would revert the
+      // optimistic update and provoke a second write, which is a fixture bug rather than a defect.
+      let current = [{ ...collectionItem("note-1", "Skeletal System", 0), label: "Algebra" }];
+      (getCollection as jest.Mock).mockImplementation(async () =>
+        collectionDetail("leaf-1", "Anatomy Plan", current, { parentCollectionId: null, childCount: 0 }));
+      (setCollectionItemOrder as jest.Mock).mockImplementation(async (_id: string, payload: { noteId: string; label: string | null }[]) => {
+        const byNote = new Map(payload.map((e) => [e.noteId, e.label]));
+        current = current.map((i) => ({ ...i, label: byNote.get(i.noteId) ?? i.label }));
+        return collectionDetail("leaf-1", "Anatomy Plan", current, { parentCollectionId: null, childCount: 0 });
+      });
+      render(<StudyPlanBuilderPageClient collectionId="leaf-1" />);
+
+      const combobox = await screen.findByLabelText("Section for Skeletal System");
+      const collectionCallsBefore = (getCollection as jest.Mock).mock.calls.length;
+      const notesCallsBefore = (listNotes as jest.Mock).mock.calls.length;
+
+      fireEvent.focus(combobox);
+      fireEvent.change(combobox, { target: { value: "Calculus" } });
+      fireEvent.blur(combobox);
+      await act(async () => { jest.advanceTimersByTime(600); });
+      await act(async () => { await Promise.resolve(); });
+
+      expect(setCollectionItemOrder).toHaveBeenCalledTimes(1);
+      // The whole point: no second read of the collection, and no read of the note library at all.
+      expect((getCollection as jest.Mock).mock.calls.length).toBe(collectionCallsBefore);
+      expect((listNotes as jest.Mock).mock.calls.length).toBe(notesCallsBefore);
+      // ...and the edit still landed.
+      expect(await screen.findByLabelText("Section name Calculus")).toBeInTheDocument();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it("does not download the note library until a picker is opened", async () => {
+    // ⚠️ THE FIRST ASSERTION IS THE GUARD AND IT IS A NEGATIVE ONE. listNotes() fetches the ENTIRE
+    // library with no limit, each row carrying contentPreview and summaryPreview, and in the builder
+    // its only consumers are the "Add notes" picker and the handlers that read what it selected. It
+    // used to fire on page load whether or not the picker was ever opened.
+    //
+    // ⚠️ The SECOND assertion is what stops this being "fixed" into a regression: a lazy list that
+    // never loads makes notes unaddable, so the picker must still get one.
+    (getCollection as jest.Mock).mockResolvedValue(collectionDetail("leaf-1", "Anatomy Plan", [
+      { ...collectionItem("note-1", "Skeletal System", 0), label: "Algebra" },
+    ], { parentCollectionId: null, childCount: 0 }));
+    render(<StudyPlanBuilderPageClient collectionId="leaf-1" />);
+
+    await screen.findByLabelText("Section for Skeletal System");
+    expect(listNotes).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: /Add notes/i }));
+    await waitFor(() => expect(listNotes).toHaveBeenCalledTimes(1));
   });
 });

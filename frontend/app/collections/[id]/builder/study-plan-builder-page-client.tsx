@@ -1316,13 +1316,68 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
     setAuthUser(getAuthUser());
   }, []);
 
+  /**
+   * ⚠️ THE NOTE LIST IS LOADED LAZILY, ON PICKER OPEN, AND NOT ON PAGE LOAD. `listNotes()` fetches the
+   * user's ENTIRE library with no limit, each row carrying `contentPreview` and `summaryPreview` --
+   * the same two fields that pushed `/notes/public` past Next.js's 2 MB data-cache limit in the
+   * 2026-08-31 build failure. It used to fire on the collection page, again on the builder page, and
+   * again after every non-drag builder mutation, while in the builder its ONLY consumers are the
+   * "Add notes" picker and the two add-note handlers that read the ids that picker selected.
+   *
+   * ⚠️ EVERY CONSUMER IS DOWNSTREAM OF THE PICKER -- verified rather than assumed: the three
+   * `noteById` maps all sit on add-note paths, which cannot be reached without opening it. So no path
+   * can read an empty map expecting a note that is not in the collection.
+   */
+  const notesLoadedRef = useRef(false);
   const refreshNotes = useCallback(async () => {
     setRefreshingNotes(true);
     try {
       setNotes(await listNotes());
+      notesLoadedRef.current = true;
     } finally {
       setRefreshingNotes(false);
     }
+  }, []);
+
+  // Fetch the picker's note list the first time a picker is actually opened. Re-opening reuses what
+  // is already in state; the modal's own Refresh control is how a curator pulls a newer list.
+  useEffect(() => {
+    if (!leafAddNotesOpen && addNotesSubjectId === null) {
+      return;
+    }
+    if (notesLoadedRef.current || refreshingNotes) {
+      return;
+    }
+    void refreshNotes();
+  }, [addNotesSubjectId, leafAddNotesOpen, refreshNotes, refreshingNotes]);
+
+  /**
+   * Apply a collection detail payload to the LEAF view, returning false when the payload describes a
+   * Goal (which needs the child fan-out `refreshBuilder` performs).
+   *
+   * ⚠️ IT EXISTS SO A WRITE CAN CONSUME ITS OWN RESPONSE. `PUT /collections/{id}/items/order` returns
+   * the same `NoteCollectionDetailResponse` that `getCollection` returns, and the client used to
+   * DISCARD it and then refetch that payload plus the user's entire note library. For a leaf plan the
+   * refetch was entirely redundant: it set exactly the state this function sets.
+   */
+  const applyLeafDetail = useCallback((detail: NoteCollectionDetail): boolean => {
+    if (detail.childCount !== 0) {
+      return false;
+    }
+    setCollection(detail);
+    setGoal(null);
+    setSubjects([]);
+    const serverItems = sortCollectionItemsByPosition(detail.items);
+    // A background/auth-triggered refresh must never overwrite a visible pending order. Every
+    // deliberate non-drag mutation flushes first; this guard covers refreshes not initiated by
+    // a mutation (including the second auth/profile load on this client page).
+    if (!leafOrderDirtyRef.current) {
+      leafItemsRef.current = serverItems;
+      lastSavedLeafItemsRef.current = serverItems;
+      setLeafItems(serverItems);
+      setLastSavedLeafItems(serverItems);
+    }
+    return true;
   }, []);
 
   const refreshBuilder = useCallback(async (options?: { seedCollapsed?: boolean; skipNotes?: boolean }) => {
@@ -1334,27 +1389,18 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
       // can change the note set (add, remove, import) must NOT pass skipNotes.
       const [collectionResult, notesResult] = await Promise.all([
         getCollection(collectionId),
-        options?.skipNotes ? Promise.resolve(null) : listNotes(),
+        // ⚠️ `notesLoadedRef` is the LAZY half: before the picker has ever been opened there is no
+        // list to keep fresh, so a refresh must not fetch one. Paths that change the note SET still
+        // pass skipNotes: false and still refresh it -- but only once it actually exists.
+        options?.skipNotes || !notesLoadedRef.current ? Promise.resolve(null) : listNotes(),
       ]);
-      setCollection(collectionResult);
       if (notesResult) {
         setNotes(notesResult);
       }
-      if (collectionResult.childCount === 0) {
-        setGoal(null);
-        setSubjects([]);
-        const serverItems = sortCollectionItemsByPosition(collectionResult.items);
-        // A background/auth-triggered refresh must never overwrite a visible pending order. Every
-        // deliberate non-drag mutation flushes first; this guard covers refreshes not initiated by
-        // a mutation (including the second auth/profile load on this client page).
-        if (!leafOrderDirtyRef.current) {
-          leafItemsRef.current = serverItems;
-          lastSavedLeafItemsRef.current = serverItems;
-          setLeafItems(serverItems);
-          setLastSavedLeafItems(serverItems);
-        }
+      if (applyLeafDetail(collectionResult)) {
         return;
       }
+      setCollection(collectionResult);
       const goalResult = await getCollectionGoal(collectionId);
       const childDetails = await Promise.all(goalResult.children.map((child) => getCollection(child.collectionId)));
       const nextSubjects = buildSubjects(goalResult, childDetails);
@@ -1584,11 +1630,20 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
     leafItemsRef.current = nextItems;
     setLeafItems(nextItems);
     try {
-      await setCollectionItemOrder(collectionId, buildOrderPayload(nextItems));
+      const detail = await setCollectionItemOrder(collectionId, buildOrderPayload(nextItems));
       lastSavedLeafItemsRef.current = nextItems;
       leafOrderDirtyRef.current = false;
       setLastSavedLeafItems(nextItems);
-      await refreshBuilder();
+      // ⚠️ CONSUME THE WRITE'S OWN RESPONSE. This used to `await refreshBuilder()` unconditionally,
+      // which re-fetched the collection AND the user's entire note list -- so one section edit cost up
+      // to four round trips, two of them recomputing the same payload. A section label change cannot
+      // change the note SET, which is exactly the condition refreshBuilder's own comment names as safe.
+      //
+      // ⚠️ The Goal path still needs a refresh (the response does not carry the child fan-out), but it
+      // takes `skipNotes: true` for the same reason.
+      if (!applyLeafDetail(detail)) {
+        await refreshBuilder({ skipNotes: true });
+      }
       if (analyticsSource) {
         void trackAnalyticsEvent({
           eventType: "COLLECTION_SECTION_ASSIGNED",
