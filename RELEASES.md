@@ -2,7 +2,7 @@
 
 ## v0.123.0 - Collection Builder Integrity
 
-**Status: In Progress** (kicked off 2026-09-06, base branch `releases/v0.123.0`, cut from `main` after `v0.122.0` merged and tagged)
+**Status: Released** (kicked off and signed off 2026-09-06, base branch `releases/v0.123.0`, cut from `main` after `v0.122.0` merged and tagged)
 
 **⚠️ IT OPENS ON TWO UNTRACKED FILES THAT KICKOFF STEP 8 SURFACED, NOT ON A ROADMAP QUEUE — and both point at the SAME surface, which is why they are one release rather than two.** `docs/claude-findings/2026-09-06-study-plan-builder-section-label-refresh-loop.md` (an owner-reported incident, diagnosed from code) and `docs/claude-plans/note-collection-page-performance-audit.md`. **⚠️ Both were unindexed; both get Backlog Index rows in this kickoff commit** — the finding's own §8 says so outright, and `docs/claude-findings/` was added to step 8 at the `v0.112.0` kickoff precisely because incident files had gone unindexed there **four kickoffs running**.
 
@@ -83,7 +83,8 @@ UNREACHABLE.** Verified by reading, then empirically by a failing fixture:
 - **`v0.95.1`'s card key is `${noteId}:${item.label ?? ""}`, so ANY write that CHANGES the label REMOUNTS
   the card** with a fresh `labelValue` read from the new label — the guard clears on its own. **So every
   successful, value-changing write self-heals, under the defect as well as the fix.**
-- **Loop B (case-snap) CANNOT FIRE THROUGH THE COMBOBOX.** `SuggestionCombobox.handleInputChange` calls
+- **⚠️ SUPERSEDED AT SIGNOFF — READ THE COLD-AGENT SECTION BELOW BEFORE TRUSTING THIS BULLET. The claim is TRUE for the CASE axis and FALSE as a general statement about Loop B**, because the WHITESPACE axis was never checked and does not snap. Corrected in place rather than left standing, because this repo has already paid for one obligation described by two rows where only one carried the correction.
+- **Loop B cannot fire ON THE CASE AXIS, through the combobox.** `SuggestionCombobox.handleInputChange` calls
   `onChange(matchedOption?.value ?? nextValue)` — it **snaps a typed value to a matching option at the
   INPUT layer** — so `labelValue` can never diverge in case from an existing section. A fixture built to
   reproduce it issued **zero** writes, and instrumenting the source showed the guard returning early
@@ -92,7 +93,8 @@ UNREACHABLE.** Verified by reading, then empirically by a failing fixture:
   CASE:** the rollback leaves `item.label` untouched while the error state forces a re-render, so **any**
   failed section-label write retried forever. Not just an over-long label: a 500, a network failure or any
   validation refusal did it.
-- **⚠️ THE INGRESS REMAINS UNRESOLVED and is NOT closed by this PR.** Client and server both cap the label
+- **⚠️ SUPERSEDED AT SIGNOFF — THE INGRESS WAS FOUND AND CLOSED. It is `bulk-generation-page-client.tsx:416`/`:282`; see the cold-agent section below.** The reasoning that follows is kept because it is what NARROWED the search — ruling out a length refusal is why the bulk path was the remaining candidate.
+- **The ingress was unresolved as of this PR.** Client and server both cap the label
   at **120** (`LABEL_MAX_LENGTH`; `NoteCollectionService:2806`; `V72` `VARCHAR(120)`) and the input
   truncates on the way in, so a length refusal is not obviously reachable — which sharpens the open
   question rather than answering it. The finding's §7 detection query and its §8 bulk-path check are still
