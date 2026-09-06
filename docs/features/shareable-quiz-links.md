@@ -51,6 +51,19 @@ recipients get the identical focused page.
 - the results call-to-action wraps rather than overflowing on a narrow screen, via `buttonVariants`'
   opt-in `wrap`
 
+### Recipient funnel instrumentation
+
+- `QUIZ_SHARE_LINK_OPENED` fires when the recipient page loads a quiz.
+- `QUIZ_SHARE_LINK_COMPLETED` fires **only after grading succeeds**, carrying `token`, `score` and `total`.
+  Together they give an **opened → completed** rate with a readable denominator.
+- **⚠️ The completion event must stay on the success path.** Firing it before the `getSharedQuizResults`
+  await would count submissions that never produced a score, inflating the exact rate the `v0.121.0`
+  checkpoint reads. A test pins both halves — that it fires on success, and that it does **not** fire when
+  grading fails.
+- **⚠️ Adding an `AnalyticsEventType` value needs no migration:** `AnalyticsEventEntity` maps it
+  `@Enumerated(EnumType.STRING)` onto a plain `VARCHAR(64)` with no CHECK constraint (`V25:4`), so values
+  are stored by name and insertion order is irrelevant.
+
 ### ⚠️ `cn` is a plain join, not tailwind-merge
 
 `frontend/lib/utils.ts`'s `cn` is `inputs.filter(Boolean).join(" ")`. It does **not** resolve conflicting

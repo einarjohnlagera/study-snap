@@ -115,6 +115,15 @@ export default function SharedQuizPage() {
       setAnswers(nextAnswers);
       setMultiAnswers(nextMultiAnswers);
       setResults(checkedResults);
+      // Fires only after grading SUCCEEDS, so a failed submit the recipient retries is not counted as a
+      // completion. Paired with QUIZ_SHARE_LINK_OPENED (fired on load) this gives the funnel a readable
+      // opened -> completed rate, which is the proximal metric the v0.121.0 checkpoint reads; without it
+      // that checkpoint would be decorative, since enum membership is not instrumentation.
+      void trackAnalyticsEvent({
+        eventType: "QUIZ_SHARE_LINK_COMPLETED",
+        entityId: quiz.quizId,
+        metadata: { token, score: checkedResults.score, total: checkedResults.total },
+      });
     } catch {
       setSubmitError("Could not submit answers. Please try again.");
     } finally {

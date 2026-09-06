@@ -61,15 +61,34 @@
 - The concept under the question stem is now a labelled *Topic* chip. It rendered as a bare grey string
   directly beneath the question, where it read as a second sentence of the question itself.
 
-**Verification of the inline slices.** Three mutants planted and killed, each by a **named** test:
+**Recipient completion instrumentation (inline).**
+
+- `QUIZ_SHARE_LINK_COMPLETED` is added to `AnalyticsEventType` and fires from the recipient page **only
+  after grading succeeds**, carrying `token`, `score` and `total`. Paired with the existing
+  `QUIZ_SHARE_LINK_OPENED` (fired on load) this gives the funnel a readable **opened → completed** rate,
+  which is the proximal metric this release's checkpoint reads. **⚠️ Without it that checkpoint would be
+  DECORATIVE by the signoff gate's own definition — enum membership is not instrumentation.**
+- **⚠️ NO MIGRATION IS NEEDED AND THIS WAS VERIFIED, NOT ASSUMED:** `AnalyticsEventEntity` maps the enum
+  `@Enumerated(EnumType.STRING)` onto a plain `VARCHAR(64)` with no CHECK constraint (`V25:4`), so a new
+  value is safe to insert anywhere in the enum and no existing row is affected. No test pins the value
+  count.
+- The guard has two halves and the second is the discriminating one: a completion **is** recorded when
+  answers are graded, and **is not** recorded when grading fails — an event fired before the await would
+  satisfy the first while inflating the very rate the checkpoint reads.
+
+**Verification of the inline slices.** Five mutants planted and killed, each by a **named** test:
 reverting the `/quiz/` exclusion failed *AppShell › gives a signed-in shared-quiz recipient the focused
 page, not the authenticated shell*; making `wrap` emit the conflicting class anyway failed *buttonVariants
 › emits no conflicting nowrap class when wrapping is requested*; restoring the bare concept string failed
 *shared quiz page › labels the concept so it does not read as part of the question*. **⚠️ The button guard
 asserts `whitespace-nowrap` is ABSENT rather than that `whitespace-normal` is present — the latter passes
 under the plain-join bug and proves nothing.** `npx tsc --noEmit` clean, `npm run lint` 0 errors (18
-pre-existing warnings, none in touched files), and the full suite green at **201 suites / 2,197 tests**,
-each command's exit status read directly rather than through a pipe.
+pre-existing warnings, none in touched files), the frontend suite green at **201 suites / 2,199 tests**
+and the backend suite at **2,189 tests / 0 failures** (counted from `target/surefire-reports/*.xml` after
+cleaning the directory first), each command's exit status read directly rather than through a pipe.
+Removing the completion event failed *shared quiz page › records a completion once a recipient's answers
+are graded*; firing it before the await failed *shared quiz page › records no completion when grading
+fails*.
 
 ## v0.120.0 - Canonical Note Title Integrity
 
