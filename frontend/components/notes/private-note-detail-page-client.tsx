@@ -152,6 +152,8 @@ import Link from "next/link";
 
 const COPIED_STUDY_PACK_REGENERATE_HINT_ID = "copied-study-pack-regenerate-hint";
 const COPIED_STUDY_PACK_REGENERATE_HINT_MESSAGE = "This Study Pack was copied. If the difficulty doesn't match your level, regenerate it to get a version tailored to you.";
+const SHARE_QUIZ_ANNOUNCEMENT_ID = "note-detail-quiz-for-someone";
+const SHARE_QUIZ_ANNOUNCEMENT_MESSAGE = "You can turn this note into a quiz for someone else \u2014 a link anyone can open and answer without an account.";
 const QUIZ_FULL_NOTES_NUDGE_ID = "quiz-tab-full-notes-nudge";
 const QUIZ_FULL_NOTES_NUDGE_MESSAGE = "Haven't reviewed the full notes yet? Skim the source material before testing yourself.";
 const NOTE_READINESS_SUBJECT = "This note";
@@ -1014,7 +1016,11 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
       metadata: { noteId: note?.id ?? null },
     }).catch(() => undefined);
   }, [activeStudyPackTab, hasQuizQuestions, isStudyPackReady, note?.id, note?.quizMastered, note?.studyPackId, quizMasteryLockBypassed]);
-  const copiedStudyPackGuidance = useMemo(() => {
+  // ⚠️ ONE array, not two, and that is load-bearing rather than tidiness: pickActiveGuidance
+  // returns exactly one rule, so priority is the ONLY thing that can order these two. Split back into
+  // separate arrays and both render at once -- the announcement below would talk over the copied-pack
+  // hint on a copied, quiz-ready note, which is a state that genuinely occurs.
+  const noteDetailGuidance = useMemo(() => {
     const rules: GuidanceRule[] = [
       {
         id: COPIED_STUDY_PACK_REGENERATE_HINT_ID,
@@ -1022,9 +1028,33 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
         condition: () => note?.copiedFromPublic === true && isStudyPackReady,
         message: COPIED_STUDY_PACK_REGENERATE_HINT_MESSAGE,
       },
+      {
+        // ⚠️ ANNOUNCEMENT, NOT AN ENTRY POINT. Sharing a quiz has shipped since v0.110.0 and
+        // eleven guidance tips never once mentioned it, so a read on recipient behaviour was measuring
+        // our silence rather than demand -- which is why [CHECKPOINT -- due 2026-10-07] could not be
+        // answered at all.
+        //
+        // It deliberately has NO action button. The entry point already exists on this page (the
+        // "Quiz for someone" menu item for learners, the "Generate Quiz" button for teachers); adding a
+        // second click target for the same capability would confound the very read this un-blocks.
+        //
+        // ⚠️ The message does NOT name the control, and that is deliberate: the two populations
+        // reach this through DIFFERENT affordances, so naming either one makes the tip false for the
+        // other half of its own audience.
+        //
+        // Lower priority than the copied-pack hint, so a learner who copied a public note is told how to
+        // fix its difficulty first -- pickActiveGuidance shows exactly one, and ordering is how they
+        // coexist.
+        id: SHARE_QUIZ_ANNOUNCEMENT_ID,
+        priority: 20,
+        // The population that can act and has not: a quiz-ready note with no quiz made for anyone yet.
+        // Both inputs gate the affordance itself, so the tip cannot outrun what it announces.
+        condition: () => isStudyPackReady && !note?.generatedQuiz,
+        message: SHARE_QUIZ_ANNOUNCEMENT_MESSAGE,
+      },
     ];
     return pickActiveGuidance(rules);
-  }, [isStudyPackReady, note?.copiedFromPublic]);
+  }, [isStudyPackReady, note?.copiedFromPublic, note?.generatedQuiz]);
   const quizFullNotesNudgeGuidance = useMemo(() => {
     const rules: GuidanceRule[] = [
       {
@@ -2842,11 +2872,18 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                 message="Generate a Study Pack to unlock summary, key concepts, and quiz questions from this note."
               />
             ) : null}
-            {copiedStudyPackGuidance && !isInlineMetadataEditMode ? (
+            {noteDetailGuidance && !isInlineMetadataEditMode ? (
               <GuidanceTip
-                tipId={copiedStudyPackGuidance.id}
-                message={copiedStudyPackGuidance.message}
-                action={{ label: "Regenerate", onClick: handleOpenRegenerateConfirm }}
+                tipId={noteDetailGuidance.id}
+                message={noteDetailGuidance.message}
+                // ⚠️ The action belongs to the copied-pack hint ALONE. This slot now serves two rules,
+                // and passing it unconditionally would give the share announcement a Regenerate button
+                // wired to the wrong handler -- on a tip specified to have no action at all.
+                action={
+                  noteDetailGuidance.id === COPIED_STUDY_PACK_REGENERATE_HINT_ID
+                    ? { label: "Regenerate", onClick: handleOpenRegenerateConfirm }
+                    : undefined
+                }
               />
             ) : null}
             {!isInlineMetadataEditMode ? (

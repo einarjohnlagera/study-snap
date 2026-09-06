@@ -74,6 +74,7 @@ Current active one-time tips:
 |---|---|---|---|
 | `note-detail-generate-study-pack` | Note Detail draft state | always | `Generate a Study Pack to unlock summary, key concepts, and quiz questions from this note.` |
 | `copied-study-pack-regenerate-hint` | Note Detail copied ready state | `copiedFromPublic === true` and `studyPackStatus === STUDY_PACK_READY` | `This Study Pack was copied. If the difficulty doesn't match your level, regenerate it to get a version tailored to you.` |
+| `note-detail-quiz-for-someone` | Note Detail ready state | `studyPackStatus === STUDY_PACK_READY` and no `generatedQuiz` | `You can turn this note into a quiz for someone else — a link anyone can open and answer without an account.` |
 | `note-detail-try-quiz` | Note Detail performance section | always | `Try Quick Review or Challenge Quiz to start tracking your performance on this note.` |
 | `sessions-export-hint` | Session History empty state | always | `Complete a quiz session to unlock session review and export — download your results as a PDF for study or sharing.` |
 | `quiz-review-export` | Session Review screen (review loaded) | always | `Export this review as a PDF to study offline or share it — use the Export button on this page.` (trackAnalytics) |
@@ -92,6 +93,19 @@ teacher-gated. **⚠️ Its copy names the Library Create-menu item by its exact
 that control and this tip becomes false.** A test pins the pairing, and `trackAnalytics` is on so a dated
 read can tell "nobody was told" from "nobody wanted it".
 
+
+**⚠️ `note-detail-quiz-for-someone` (v0.122.0) SHARES ITS `pickActiveGuidance` RULE SET AND ITS RENDER
+SLOT WITH `copied-study-pack-regenerate-hint`, and both halves of that are load-bearing.** One rule set is
+what lets `priority` order them — split into two arrays and both render at once on a copied, quiz-ready
+note, a state that genuinely occurs. The shared slot is why the **Regenerate action is gated on the rule
+id**: passed unconditionally it would give the announcement a second click target wired to the wrong
+handler. **⚠️ It is an ANNOUNCEMENT and must never gain an action button** — the entry point already
+exists on the page, and a second one would confound `[CHECKPOINT — due 2026-10-07]`, the read it exists to
+make answerable. **⚠️ Its copy deliberately does NOT name the control**, because the two populations reach
+the capability through different affordances (the *Quiz for someone* menu item for learners, the *Generate
+Quiz* button for teachers), so naming either makes the tip false for the other half of its audience.
+**⚠️ Do NOT add a claim about seeing the recipient's score — shared quiz results are graded in memory and
+never recorded.**
 
 The Library tips (`teacher-library-multi-note-select`, `library-study-plan-grouping`, `library-organization-habits`, `library-first-note-organization`) are selected by a single `pickActiveGuidance` rule set so only one shows at a time; Study Plan grouping is prioritized for non-teachers as the v0.28.0 activation lever. The `{Study Plan}` label is profile-aware via `getCollectionLabels` (STUDENT → Study Plan, BOARD_EXAM → Review Set, PROFESSIONAL → Collection).
 
