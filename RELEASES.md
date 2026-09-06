@@ -46,6 +46,131 @@
 
 **Routing: CLAUDE CODE inline.**
 
+### Shipped
+
+**(1) The note detail page announces that you can send someone a quiz.** A one-time tip through
+`pickActiveGuidance()`, firing on `isStudyPackReady && !note?.generatedQuiz` — the population that can act
+and has not.
+
+- **⚠️ IT SHARES ONE RULE ARRAY WITH `copied-study-pack-regenerate-hint`, AND THAT IS LOAD-BEARING RATHER
+  THAN TIDINESS.** The two note-detail tips were in **separate** `pickActiveGuidance` calls, and
+  `priority` cannot order across arrays — the function returns exactly one rule *per array*. Left split,
+  both tips render at once on a **copied, quiz-ready note**, which is a state that genuinely occurs, and
+  the pre-declared ordering guard would have had **no subject to assert against**. `quiz-tab-full-notes-nudge`
+  keeps its own array: it renders inside the quiz tab beside `PracticeQuizCard`, and co-rendering there is
+  today's behaviour, not something this release introduced.
+- **⚠️ THE ANNOUNCEMENT HAS NO ACTION BUTTON, AND THE SHARED RENDER SLOT NEARLY TOOK THAT AWAY.** That slot
+  passed `action={{ label: "Regenerate", … }}` **unconditionally**; merging the arrays without gating it
+  would have shipped the announcement with a Regenerate button — an action on a tip specified to have none,
+  wired to the wrong handler. The action is now gated on the rule id, and **a guard pins its absence**.
+- **⚠️ THE COPY DELIBERATELY DOES NOT NAME THE CONTROL, which is a correction to the obvious
+  implementation.** The two populations reach this through **different** affordances — the *Quiz for
+  someone* menu item is gated `!isTeacherMode && isStudyPackReady` (`:2518`), while a teacher gets the
+  *Generate Quiz* button (`:2887`) — so naming either one makes the tip false for the other half of its own
+  audience. The condition covers both, so neither is told about something it cannot reach.
+- **⚠️ `trackAnalytics` is left OFF.** `GuidanceTip` offers it and the instinct in a release *about*
+  measurement is to turn it on; it is a new event stream in a release that states no behaviour change, and
+  it was not scoped.
+
+**(2) The marketing surfaces name the capability.**
+
+- `app/page.tsx` gains **one sibling line** in the mode showcase, beside the existing *Also: Interview
+  Practice* band. **⚠️ NOT a sixth `studyModes` card, and the reason is a false claim rather than the
+  locked contract alone:** that section's own heading reads **"Five study modes, one workspace"** and its
+  grid is `lg:grid-cols-5`, so an entry there would make the page **state something untrue** — in the one
+  release whose named risk is exactly that. **⚠️ It carries NO plan chip** (the capability is gated on
+  nothing) and uses the page's sky accent rather than the amber the Interview Practice band uses to mean
+  *Pro · Professional profile*.
+- `app/how-it-works/page.tsx` gains a fourth **value** entry. **⚠️ Deliberately in `valueSummaries` and not
+  in `steps`, whose heading counts its own items ("Simple 3-Step Flow") and whose cards render
+  `Step {n}`** — a fourth step would falsify the heading. The grid widens to `md:grid-cols-2 lg:grid-cols-4`
+  so the entry does not strand a card alone on a second row. **⚠️ DISCLOSED BECAUSE IT IS THE ONE EDIT IN
+  THE RELEASE THAT IS NOT STRICTLY COPY: that grid-arity change reflows the THREE PRE-EXISTING CARDS at the
+  `md` breakpoint (3-up becomes 2-up), not only the new one.** **Naming the capability was chosen over
+  extending a neighbouring description, because the point of the item is that it APPEARS AT ALL.**
+- **⚠️ NO CLAIM ABOUT SEEING THE RECIPIENT'S SCORE, ON ANY SURFACE, AND THIS IS THE COPY INSTINCT THAT WOULD
+  HAVE SHIPPED A LIE:** `getSharedQuizResults` grades **in memory with zero `.save(`** (`v0.121.0`'s
+  contradiction B), so *"see how they did"* is false. **⚠️ Nothing claims the capability is new** — it
+  shipped in `v0.110.0`. Both prohibitions are written into the code comments at each site.
+- **⚠️ ALL THREE STRINGS REUSE THE HELP CENTER'S CANONICAL WORDING VERBATIM** (`export-sharing-guide.tsx:18`)
+  — *"a link **anyone** can open and answer without an account"* — so one claim is not quietly two.
+  **`anyone` is the load-bearing word: it is the claim that a recipient needs NO ACCOUNT AND NO
+  RELATIONSHIP**, which is the property `v0.110.0` shipped and the note-detail menu item's own comment
+  protects. A first draft said *"they"*, which weakened it without looking like a change; **do not
+  re-soften it.**
+
+**(3) `docs/features/guidance.md`'s tip table is repaired to match code — added at owner request after the
+release's own doc re-read surfaced the drift.** **⚠️ THE FIRST COUNT WAS WRONG AND THE CORRECTION IS THE
+POINT: it was reported as FIVE missing tips and is EIGHT**, because the first sweep grepped literal
+`tipId="…"` strings and **rule-based tips pass `{rule.id}`**, so all three Dashboard tips were invisible to
+it. The table documented **11** of the **20** tips that ship.
+
+- Added: `dashboard-post-completion`, `teacher-dashboard-intro`, `dashboard-review-rhythm`,
+  `post-adopt-target-date`, `assessment-covers-whole-plan`, `quiz-tab-full-notes-nudge`,
+  `teacher-docx-export`, `teacher-note-content-quality`.
+- **⚠️ TWO EXISTING ROWS WERE WRONG, NOT MERELY ABSENT, AND BOTH OVERSTATED A TIP'S REACH.**
+  `note-detail-try-quiz` was documented as firing **always**; it actually requires the Performance Overview
+  to be **expanded** AND **zero attempts on both** Quick Review and Challenge Quiz — a first-run nudge, not
+  a permanent fixture, so anyone reasoning from the table had it backwards. `library-study-plan-grouping`
+  omitted its `!selectionMode` clause. Both corrections are recorded in the doc rather than quietly swapped.
+- The table is now **grouped by rule set with `priority` shown**, because within a set exactly one tip
+  renders and priority is the only thing ordering them — the fact this release had to discover by reading.
+- **Verified bidirectionally by script:** 20 ids in code, 20 rows in the doc, **nothing in code missing from
+  the table and nothing in the table absent from code.** Rule ids were extracted by bracket-matching each
+  `GuidanceRule[]` literal rather than by line-grep, which is what the first undercount got wrong.
+
+**(4) A FALSE INSTRUCTION IN THE HELP CENTER, FOUND BY SWEEPING BY SURFACE RATHER THAN BY DIFF.**
+`learning-connections-guide.tsx:35` read *"**From a note's actions menu**, choose Quiz for someone"* — but
+that menu item is gated `!isTeacherMode` (`private-note-detail-page-client.tsx:2548`), so **a teacher has no
+such item** and reaches the same capability through a button labelled **Generate Quiz**. The guide
+instructed teachers to do something they cannot.
+
+- **⚠️ THIS IS THE EXACT CLASS THE REPO ALREADY PAID FOR, MIRRORED.** `guidance.md` records
+  `teacher-generate-quiz-multi-note` being replaced in `v0.110.0` because it *"rendered unconditionally
+  while naming a `TEACHER`-gated CTA, so most of its readers were told to do something they could not."*
+  Here it was the **non-teacher** CTA, failing the other population.
+- **⚠️ THE RELEASE MADE IT WORSE BEFORE IT FOUND IT — which is why it is fixed here rather than deferred:**
+  this release exists to **promote** the capability, so it drives more readers into that instruction. It
+  was also **inconsistent with the release's own reasoning**, since the new tip deliberately does not name
+  the control for precisely this reason.
+- Fixed to name both: *"On a note with a ready Study Pack, choose Quiz for someone — teachers see the same
+  action as Generate Quiz."* **⚠️ An earlier draft of the fix said only *Quiz for someone* and was STILL
+  WRONG for teachers**, whose control carries a different label; the labels were read from code
+  (`:2565`, `:2931`) rather than assumed.
+- **⚠️ THE FILE WAS NOT IN THIS RELEASE'S DIFF and has never been in one when the behaviour it describes
+  changed** — the standing sweep-by-surface rule names exactly that pattern. A guard now pins it, and was
+  confirmed to **fail against the text that shipped**.
+- **⚠️ It does NOT contaminate `[CHECKPOINT — due 2026-09-19]`.** The sentence describes **shared quizzes**,
+  which require no connection; nothing about connection reachability changed, no nav item moved, and no tip
+  naming supporters or connections was added.
+
+**Guards — eight, all mutation-verified with the killing test named.** The pre-declared risk was a green
+no-op, so each mutant was run and the named failure recorded:
+
+| Mutant | Test that failed |
+|---|---|
+| drop `!note?.generatedQuiz` from the condition | *stops announcing … once a quiz for someone exists* |
+| drop `isStudyPackReady` from the condition | *does not announce … on a note with no Study Pack* |
+| `priority: 20` → `priority: 1` | *lets the copied-Study-Pack hint win over the share-a-quiz announcement* |
+| pass the Regenerate action unconditionally | *gives the share-a-quiz announcement no action button* |
+| remove the rule entirely | *announces the share-a-quiz capability on a quiz-ready note …* |
+| rename the landing sibling line | *names the share-a-quiz capability beside the study modes …* |
+| rename the how-it-works entry | *names the share-a-quiz capability without inflating the 3-step flow* |
+| restore the guide's *"From a note's actions menu"* instruction | *names the share-a-quiz control for BOTH populations, not just the learner one* |
+
+Each marketing guard also pins the **counting heading** beside its claim, so a later session that promotes
+the line into `studyModes` or `steps` fails a test rather than shipping a false count. **⚠️ `npm test`
+2217 passed / 201 suites (exit 0), `tsc --noEmit` exit 0, `npm run lint` 0 errors and the same 18
+pre-existing warnings as `HEAD`** — all four exit statuses read directly, not through a pipe.
+
+### Known limitations
+
+- **For a teacher the tip is redundant**, since *Generate Quiz* is already their primary button in exactly
+  the state the tip fires in. Recorded as an observation rather than narrowed inline: the condition is the
+  kickoff's verified one, and adding `!isTeacherMode` would be the larger deviation.
+- **The announcement and `quiz-tab-full-notes-nudge` can both be on screen** when the learner is on the quiz
+  tab. That is pre-existing behaviour for the copied-pack hint too, and is **not** a regression.
+
 ## v0.121.0 - Shared Quiz Recipient Experience
 
 **Status: Released** (kicked off and signed off 2026-09-06, base branch `releases/v0.121.0`, cut from `main` after `v0.120.0` merged and tagged)

@@ -25,6 +25,25 @@ describe("LearningConnectionsGuide", () => {
     ).toBeInTheDocument();
   });
 
+  it("names the share-a-quiz control for BOTH populations, not just the learner one", () => {
+    render(<LearningConnectionsGuide />);
+
+    // ⚠️ THE FIXED DEFECT: this read "From a note's actions menu, choose Quiz for someone", but that
+    // menu item is gated `!isTeacherMode` (private-note-detail-page-client.tsx:2548) -- a teacher has no
+    // such item and reaches the SAME capability through a button labelled "Generate Quiz". So the guide
+    // instructed teachers to do something they cannot.
+    //
+    // ⚠️ THIS IS THE EXACT CLASS `v0.110.0` ALREADY PAID FOR, MIRRORED: `guidance.md` records
+    // `teacher-generate-quiz-multi-note` being replaced because it "named a TEACHER-gated CTA, so most of
+    // its readers were told to do something they could not." Here it was the non-teacher CTA.
+    //
+    // Found by SWEEPING BY SURFACE in v0.122.0 rather than by diff -- this file was not in the release's
+    // diff and has never been in one when the behaviour it describes changed.
+    expect(screen.getByText(/choose Quiz for someone/i)).toBeInTheDocument();
+    expect(screen.getByText(/teachers see the same action as Generate Quiz/i)).toBeInTheDocument();
+    expect(screen.queryByText(/From a note's actions menu/i)).not.toBeInTheDocument();
+  });
+
   it("takes share-link numbers from pricing config rather than retyping them", () => {
     render(<LearningConnectionsGuide />);
 
