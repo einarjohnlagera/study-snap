@@ -6,7 +6,7 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-**Kicked off 2026-09-06.** `v0.124.0 — Goal Path Request Cost` is **IN PROGRESS** on `releases/v0.124.0`, cut from `main` after `v0.123.0` merged and tagged.
+**Kicked off 2026-09-06.** `v0.124.0 — Collection Path Performance` is **IN PROGRESS** on `releases/v0.124.0`, cut from `main` after `v0.123.0` merged and tagged.
 
 **⚠️ IT OVERRIDES ITS OWN GATE BY EXPLICIT OWNER DECISION (2026-09-06), RECORDED RATHER THAN ROUTED AROUND.** The performance-audit Backlog row says *"re-read after `v0.123.0` deploys"* before taking sequencing 4, and **`v0.123.0` has not been observed in production.** A later session reading that row in isolation must come here first. **⚠️ Accepted residual: sized from the audit's STATIC read, so if `v0.123.0`'s lazy note list already removed most of the felt cost, the benefit is smaller than the arithmetic implies.**
 
