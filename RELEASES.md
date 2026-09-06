@@ -1,5 +1,253 @@
 # RELEASES.md - NoteLib
 
+## v0.123.0 - Collection Builder Integrity
+
+**Status: Released** (kicked off and signed off 2026-09-06, base branch `releases/v0.123.0`, cut from `main` after `v0.122.0` merged and tagged)
+
+**⚠️ IT OPENS ON TWO UNTRACKED FILES THAT KICKOFF STEP 8 SURFACED, NOT ON A ROADMAP QUEUE — and both point at the SAME surface, which is why they are one release rather than two.** `docs/claude-findings/2026-09-06-study-plan-builder-section-label-refresh-loop.md` (an owner-reported incident, diagnosed from code) and `docs/claude-plans/note-collection-page-performance-audit.md`. **⚠️ Both were unindexed; both get Backlog Index rows in this kickoff commit** — the finding's own §8 says so outright, and `docs/claude-findings/` was added to step 8 at the `v0.112.0` kickoff precisely because incident files had gone unindexed there **four kickoffs running**.
+
+**THE DEFECT, OWNER-REPORTED 2026-09-06 AND SELF-RESOLVED BEFORE IT COULD BE READ:** `/collections/{id}/builder` *"keeps on refreshing"* after a section name was accidentally set to a long pasted value. **⚠️ THE SELF-RESOLUTION IS ITSELF EVIDENCE — deleting the note carrying the label stopped it, so the driver is a PER-CARD effect, not a page-level poller, an auth loop or ISR.** **⚠️ THE LOOP MECHANICS ARE PROVEN FROM CODE; THE INGRESS IS NOT.** The offending row was deleted before it could be read and the Render MCP was unreachable throughout, so **nothing rests on production data** and §4's ingress question stays **UNRESOLVED** rather than guessed.
+
+**THE STRUCTURAL DEFECT, IN ONE SENTENCE:** `LeafSortableNoteCard`'s auto-save effect (`:445-455`) decides whether a write is still pending by comparing `item.label` against a **locally normalised** form of its own input, while the value that actually reaches the server is chosen by a **different** normalisation in `handleLeafLabelChange` (`:1646`) — so when the two disagree the guard never clears, and there is **no attempt cap, no backoff and no failure short-circuit.**
+
+**⚠️ THE TWO DEFECTS COMPOUND, WHICH IS THE ARGUMENT FOR ONE RELEASE RATHER THAN TWO: the loop's DAMAGE MULTIPLIER IS THE PERFORMANCE AUDIT'S LEVER 1.** Each iteration calls `refreshBuilder`, which refetches the curator's **entire unbounded note list** — neither the failure path (`:1374`) nor `persistLeafItems` (`:1541`) passes `skipNotes`. **So a wedged page issues a heavy `listNotes()` every ~500 ms–1 s, from every affected client — a CLIENT-DRIVEN LOAD AMPLIFIER against the same backend the 2026-09-05 outage showed has no headroom.** **⚠️ And adoption propagates it: an uncollapsed label on a published source plan wedges every learner who adopts it.**
+
+### Planned Scope
+
+**(1) ONE CANONICAL NORMALISATION, applied on both sides**, so the effect's guard compares against the form the write path actually produces. **⚠️ The mismatch is the defect; whitespace is only how it surfaces.**
+
+**(2) BOUND THE RETRY.** A failed write must not be retried unconditionally. **⚠️ The pattern already exists in this repo — `LIBRARY_GENERATION_POLL_MAX_TICKS = 100`, commented *"Absolute backstop so a wedged backend can never poll forever."* Reuse that idea; do not invent a second shape.**
+
+**(3) MEMOIZE `handleLeafLabelChange` (`:1646`).** Re-creating it every render puts a changing identity in the effect's dependency array, which is what re-arms the write on every render.
+
+**(4) `persistLeafItems` PASSES `skipNotes: true`** (audit sequencing 1). One line; removes the heaviest fetch from every section edit. **⚠️ A section label change CANNOT change the note set — which is exactly the condition `refreshBuilder`'s own comment names as safe.**
+
+**(5) CONSUME THE PUT RESPONSE** (audit sequencing 2). `PUT /collections/{id}/items/order` **already returns `NoteCollectionDetailResponse`** — byte-for-byte what `getCollection` returns (`NoteCollectionController:322-324`) — and the client **discards it, then refetches the same payload plus the whole note list.** For a leaf collection the refresh is **entirely redundant**: `refreshBuilder` returns early once `childCount === 0`, after setting exactly the state the PUT response already describes.
+
+**(6) LAZY-LOAD AND BOUND THE PICKER NOTE LIST** (audit sequencing 3). `listNotes()` is called with **no limit** and the backend imposes none (`limit == null` means no cap), it carries `contentPreview` and `summaryPreview` per row, and **it fires three times in this journey** — while in the Builder its primary consumer is a modal that **may never be opened**. Fetch on picker open; pass an explicit `limit`. **⚠️ VERIFY EACH REMAINING `noteById` CONSUMER FIRST (`:1031`, `:1738`, `:1852`) — if any needs a note NOT in the collection, that path must TRIGGER the lazy load rather than read an empty map.**
+
+**(7) SWEEP THE DETAIL PAGE'S SIX REFETCH SITES** (audit sequencing 5) — `getCollection` at `:3000`, `:3081` and `getCollectionGoal` at `:3002`, `:3083`, `:3645`, `:4010`. Apply item 5's rule uniformly: after any mutation that returns `NoteCollectionDetailResponse`, consume it instead of refetching. **⚠️ AUDIT EACH SITE INDIVIDUALLY — some follow mutations that genuinely invalidate more than the collection.**
+
+### Anti-drift
+
+**⚠️ AUDIT SEQUENCING 4 (batch the Goal children read) IS OUT, AND THE REASON IS ITS SHAPE, NOT ITS VALUE.** The Goal path is a real HTTP N+1 — a Review Set with 20 plans costs **21 requests** and ~147 queries to render one page — but fixing it is a **RESPONSE-CONTRACT CHANGE** spanning a DTO, a service and the client, which is Codex-routed and a different verification tier. **⚠️ Do NOT take it opportunistically because `refreshBuilder` is already open in the diff.** It carries a Backlog Index row.
+
+**⚠️ FIVE THINGS THAT LOOK LIKE THE FIX AND ARE NOT — each rejected with its reason recorded, four of them load-bearing corrections this repo has already paid for:**
+- **Do NOT remove the case-snap (`:1652`).** It prevents lookalike sections, and its removal reintroduces a defect the code documents at `:1662-1664`.
+- **Do NOT "fix" this by collapsing whitespace in the BACKEND.** That silently rewrites stored learner data on an unrelated write path **and masks the ingress rather than closing it** — and the ingress is still unresolved.
+- **Do NOT restructure `toItemResponses`** — it issues **five bulk queries keyed by `noteIdIn` with no N+1 inside the item loop**, so one read costs the same at 5 notes or 500. It is the part that usually goes wrong and it is already right.
+- **`refreshBuilder`'s `skipNotes` OPTION AND ITS COMMENT STAY** — a recorded fix for a measured problem. **Paths that genuinely change the note set must keep passing `skipNotes: false`.**
+- **The DEFERRED-SAVE MODEL STAYS (`v0.96.0`)** — autosave-per-drop raced itself and was fixed at cost; **reducing requests must not reintroduce it** — and **KEEP the flush-first behaviour** (`savePendingLeafOrder({ refreshAfter: false })`), which is a correctness guard, not a spare request.
+
+**⚠️ The `editing`-gated debounced combobox writer STAYS (`v0.88.0`)** — `CLAUDE.md` forbids removing it and its comment, and it is 500 ms of exactly the machinery this release is touching.
+
+**⚠️ Do NOT raise the connection pool** — `AppConfig:52-72` records that bound as a `v0.112.0` Phase 3 decision gated on `[CHECKPOINT — due 2026-10-04]`. **⚠️ Do NOT trim `contentPreview`/`summaryPreview`** — `v0.100.0` rejected it because it only **moves the threshold**, which is what caused the 2026-08-31 build failure in the first place.
+
+**⚠️ `frontend/app/onboarding` STAYS FROZEN — `[CHECKPOINT — due 2026-09-11]` is FIVE DAYS OUT.** **⚠️ NO Learning Connections promotion before `2026-09-19`** — that kill criterion keys on `ACCEPTED` and is 13 days out. **⚠️ NO migration; no backend change beyond reading it; no quota, entitlement, limit or meter change; no new mode or sub-mode.**
+
+### Verification
+
+**ONE SCOPED COLD AGENT framed as FALSIFICATION.** **⚠️ THE TIER IS STATED AS A CONSEQUENCE OF AN OWNER DECISION RATHER THAN INHERITED: the recommendation was FOUR items (the loop fix plus sequencing 1 and 2), and the owner took SEVEN.** That fires the gate's named trigger outright — **two or more changes touching the same shared method**, here `refreshBuilder`, `persistLeafItems` and `handleLeafLabelChange`, which every one of the seven items reaches. **⚠️ It is NOT the three-agent tier:** frontend-only, no permission substrate, no cross-user read, no money or quota semantics, no migration.
+
+**⚠️ PRE-DECLARED GUARDS, AND THE FIRST ONE NAMES THE FIXTURE THAT PROVES NOTHING: a label already single-spaced and under 120 characters PASSES UNDER BOTH THE DEFECT AND THE FIX.** The discriminating fixtures are **(a)** a stored label containing a **double space**, asserting the write is issued **AT MOST ONCE**, and **(b)** a label whose write is **REJECTED**, asserting **NO second attempt**. **⚠️ A third is owed at the performance end and has the same shape: assert the REQUEST COUNT — that `listNotes` is NOT called on the section-edit path — because a test asserting the label saved correctly passes under the defect by construction.** **⚠️ CARRIED LESSON: this repo has shipped two silent no-ops (`v0.116.0`, `v0.117.0`) whose tell was a behaviour change with NO test exercising it.**
+
+**⚠️ A DEPLOY-SPLIT CAVEAT IS OWED AND IS RECORDED NOW, BEFORE THE READ, NOT DISCOVERED IN SEPTEMBER: `[CHECKPOINT — due 2026-09-18]` asks whether `connection-timeout: 5000` converts load into user-visible errors — and THIS RELEASE REDUCES CLIENT-DRIVEN BACKEND LOAD** (items 4-7 remove repeated unbounded `listNotes()` calls; items 1-3 remove an unbounded retry). **So a quiet read after this deploys is consistent with the timeout being adequate AND with the load simply having dropped, and the two cannot be separated after the fact.**
+
+**Routing: CLAUDE CODE inline** — one component, one handler, one shared helper, plus a bounded sweep of six known call sites.
+
+### Shipped
+
+**Items 1-3 — the loop (inline).**
+
+- **One canonical normalisation.** `canonicalSectionLabel` is now the single definition of the display
+  form (trim + collapse internal runs, case preserved) and **`normalizeSectionValue` is DERIVED from it**,
+  so the display and comparison forms cannot drift. It replaced **five duplicated copies** of
+  `.trim().replaceAll(/\s+/g, " ")` in the builder. **⚠️ A unit test pins the derivation, and the mutant
+  that re-inlines a divergent normalisation fails it.**
+- **The retry is bounded, and this is the load-bearing half.** The card records the one transition it has
+  already asked for as `(server label it saw) -> (label it requested)` and will not ask again until one of
+  them actually moves. **⚠️ Recorded at FIRE time, not arm time — a cleared timeout never asked for
+  anything, and recording it there would block a legitimate first attempt.**
+- **The handler no longer re-arms the effect.** `onLabelChange` moved into a ref and out of the dependency
+  array. **⚠️ THE FINDING ASKED FOR A `useCallback` AND THAT IS DELIBERATELY NOT WHAT SHIPPED — recorded so
+  a later session does not read item 3 as skipped:** `handleLeafLabelChange` closes over `moveLeafNote`,
+  itself a plain function, so memoizing it requires memoizing `moveLeafNote` → `persistLeafItems` →
+  `savePendingLeafOrder` — a cascade landing on the deferred-save model `v0.96.0` fixed at cost and this
+  release's anti-drift locks. The ref achieves the stated purpose (a stable dependency) without it.
+  **⚠️ It is a churn reduction, not the loop fix.**
+
+**⚠️ THE FINDING'S DIAGNOSIS IS NARROWED BY IMPLEMENTATION, AND THE CORRECTION IS THE MOST USEFUL THING
+THIS PR PRODUCED — its §4 left "which loop fired" open, and one of the two candidates turns out to be
+UNREACHABLE.** Verified by reading, then empirically by a failing fixture:
+
+- **`v0.95.1`'s card key is `${noteId}:${item.label ?? ""}`, so ANY write that CHANGES the label REMOUNTS
+  the card** with a fresh `labelValue` read from the new label — the guard clears on its own. **So every
+  successful, value-changing write self-heals, under the defect as well as the fix.**
+- **⚠️ SUPERSEDED AT SIGNOFF — READ THE COLD-AGENT SECTION BELOW BEFORE TRUSTING THIS BULLET. The claim is TRUE for the CASE axis and FALSE as a general statement about Loop B**, because the WHITESPACE axis was never checked and does not snap. Corrected in place rather than left standing, because this repo has already paid for one obligation described by two rows where only one carried the correction.
+- **Loop B cannot fire ON THE CASE AXIS, through the combobox.** `SuggestionCombobox.handleInputChange` calls
+  `onChange(matchedOption?.value ?? nextValue)` — it **snaps a typed value to a matching option at the
+  INPUT layer** — so `labelValue` can never diverge in case from an existing section. A fixture built to
+  reproduce it issued **zero** writes, and instrumenting the source showed the guard returning early
+  because `labelValue` had already been snapped to `"Algebra"`.
+- **⚠️ SO THE REACHABLE LOOP IS LOOP A — A WRITE THE SERVER REFUSES — AND IT IS MORE GENERAL THAN THE LABEL
+  CASE:** the rollback leaves `item.label` untouched while the error state forces a re-render, so **any**
+  failed section-label write retried forever. Not just an over-long label: a 500, a network failure or any
+  validation refusal did it.
+- **⚠️ SUPERSEDED AT SIGNOFF — THE INGRESS WAS FOUND AND CLOSED. It is `bulk-generation-page-client.tsx:416`/`:282`; see the cold-agent section below.** The reasoning that follows is kept because it is what NARROWED the search — ruling out a length refusal is why the bulk path was the remaining candidate.
+- **The ingress was unresolved as of this PR.** Client and server both cap the label
+  at **120** (`LABEL_MAX_LENGTH`; `NoteCollectionService:2806`; `V72` `VARCHAR(120)`) and the input
+  truncates on the way in, so a length refusal is not obviously reachable — which sharpens the open
+  question rather than answering it. The finding's §7 detection query and its §8 bulk-path check are still
+  owed.
+
+**Guards — two, both mutation-verified with the killing test named.** **⚠️ AND THE FIXTURE CHOICE IS THE
+GUARD: a SUCCEEDING write proves nothing here, because the remount clears the condition under the defect
+too.** An earlier draft of these tests passed against the un-fixed code for exactly that reason and was
+rewritten.
+
+| Mutant | Test that failed |
+|---|---|
+| remove the retry bound (restore the loop) | *does not retry a section-label write the server rejected* |
+| stop deriving `normalizeSectionValue` from the canonical form | *is exactly normalizeSectionValue without the lowercasing* |
+
+`tsc --noEmit` exit 0 · `npm run lint` exit 0 · `npm test` exit 0, **2224 passed / 201 suites**.
+
+**Items 4-7 — the request layer (inline).**
+
+- **The write consumes its own response (items 4 and 5, ONE mechanism, not two).** `PUT
+  /collections/{id}/items/order` already returns the same `NoteCollectionDetailResponse` that
+  `getCollection` returns; `persistLeafItems` **discarded it and then refetched that payload plus the
+  curator's entire note library.** It now applies the response directly through a new `applyLeafDetail`
+  helper, extracted from `refreshBuilder`'s own leaf branch so both paths set state identically.
+  **⚠️ ITEM 4 (`skipNotes: true`) IS THE AUDIT'S OWN "MINIMUM VIABLE VERSION" OF ITEM 5, so shipping
+  both on the same path would leave a redundant flag on a call that no longer happens.** The leaf path
+  takes item 5 and makes **no follow-up request at all**; the **Goal path keeps `refreshBuilder`** — the
+  response does not carry the child fan-out — **and takes `skipNotes: true` there**, which is where
+  item 4 actually lives.
+- **The note library is lazy (item 6).** `listNotes()` — unbounded, `contentPreview` and
+  `summaryPreview` per row — used to fire on collection load, on builder load, and again after every
+  non-drag mutation. It now loads **on picker open**. **⚠️ EVERY CONSUMER WAS VERIFIED DOWNSTREAM OF THE
+  PICKER rather than assumed**, which is the audit's own precondition: all three `noteById` maps sit on
+  add-note paths that cannot be reached without opening it, so nothing can read an empty map expecting a
+  note outside the collection. `refreshBuilder` still refreshes the list for paths that change the note
+  set — **but only once it exists**.
+- **⚠️ THE AUDIT'S "BOUND IT" SUB-ITEM IS DELIBERATELY NOT TAKEN, AND THE REASON IS A REGRESSION IT DOES
+  NOT RECKON WITH:** the picker filters **client-side over the whole library**, so passing a `limit`
+  would silently make notes beyond it **unaddable**. The audit names server-side picker search as the
+  longer-term fix; until that exists, bounding the fetch trades an invisible performance win for an
+  invisible correctness loss. Lazy loading already removes the fetch from both page loads.
+
+**⚠️ ITEM 7 IS CLOSED AS NOT-APPLICABLE, AND THIS IS AN EXECUTED RESULT RATHER THAN A SKIPPED ITEM.** The
+audit named six detail-page refetch sites and instructed that each be audited individually because "some
+may follow mutations that genuinely invalidate more than the collection." **All six turn out to be in that
+category, and the audit's premise — that they follow a mutation returning `NoteCollectionDetailResponse` —
+does not hold at any of them:**
+
+- **`:3000`, `:3002`** are inside `refetchAfterFailure`. There is **no successful mutation response to
+  consume** — resyncing after a failure is the whole point.
+- **`:3081`, `:3083`** follow `removeCollectionItem`, which is **`Promise<void>`** — the DELETE returns no
+  body, so there is nothing to consume. Making it return a detail is a **response-contract change**, which
+  is precisely the shape this release put out of scope for sequencing 4.
+- **`:3645`, `:4010`** are `getCollectionGoal` refetches that **already carry comments explaining why they
+  must stay**: `weeksRemaining`, `conceptsRemaining` and `todaysConceptBudget` exist **only** on
+  `GoalCollectionDetailResponse`, not on the `NoteCollectionDetail` the modal saves, so a client-side field
+  copy cannot refresh them.
+
+**⚠️ SO IMPLEMENTING ITEM 7 AS WRITTEN WOULD HAVE BEEN A NO-OP AT BEST AND A REGRESSION AT WORST** — the
+audit was written from a call-site list rather than from the mutations' return types. Recorded here so a
+later reader does not re-derive it, and its Backlog row is updated.
+
+**Guards — three, all mutation-verified with the killing test named.** **⚠️ The request-count assertion is
+the guard: a test asserting the label saved correctly passes under the defect by construction, because the
+defect was never about correctness.**
+
+| Mutant | Test that failed |
+|---|---|
+| restore the unconditional `refreshBuilder()` | *consumes the write's own response instead of refetching the collection and the note library* |
+| take item 4 alone (`skipNotes` but still refetch the collection) | *consumes the write's own response …* |
+| restore the eager note fetch on page load | *does not download the note library until a picker is opened* |
+| make the list lazy but never load it | *does not download the note library …* **and** *adds notes into one subject through the existing add-items endpoint* |
+
+**⚠️ ONE TEST-HARNESS CORRECTION WAS OWED AND IS RECORDED: the default `setCollectionItemOrder` mock
+returned a FIXED, UNRELATED collection's detail.** Harmless while the client discarded it; once the client
+consumes it, that mock fed the builder another collection's items. It now defers to whatever
+`getCollection` is configured to return for the same id, **which is what the server actually does** — and
+the `v0.95.1` stale-card-state guard passes unchanged against the faithful mock.
+
+`tsc --noEmit` exit 0 · `npm run lint` exit 0 · `npm test` exit 0, **2226 passed / 201 suites**.
+
+**Cold-agent findings — the declared verification, and it refuted two of six claims (inline).**
+
+**⚠️ THE WORST FINDING IS A DEFECT THIS RELEASE INTRODUCED, IN THE SAME CLASS IT EXISTS TO CLOSE.** Item 6's
+`refreshNotes` was `try/finally` with **no `catch`**, and `refreshingNotes` was a dependency of the
+picker-open effect: a REJECTED fetch cleared the flag in `finally`, the deps changed, the effect re-ran and
+refetched — **at event-loop speed, against the unbounded `listNotes()` endpoint, precisely when the backend
+is already failing.** The agent measured **3,743 calls in five seconds**. The pre-fix code could not do
+this: `listNotes()` lived inside `refreshBuilder`'s `Promise.all`, so a rejection propagated to the caller.
+**⚠️ It fires under exactly the conditions `[CHECKPOINT — due 2026-09-18]` exists to measure.** Fixed with a
+`catch` plus a one-attempt bound; the modal's Refresh control remains the deliberate retry.
+
+**⚠️ `C2` WAS WRONG, AND THE CORRECTION IS NARROWER THAN THE AGENT'S TOO — BOTH ARE RECORDED.** This release
+claimed the case-snap loop was unreachable. **The case axis is** (the combobox snaps typed input to a
+matching option), **but the WHITESPACE axis was not checked and does not snap:** `getSectionName` and
+`getSectionLabel` used bare `.trim()` and never collapsed internal runs, so a stored
+`"Cash  and Receivables"` was a section name the canonical form could never equal. **⚠️ BUT THE AGENT'S
+"the identical loop fires" IS ALSO OVERSTATED, AND THIS WAS ESTABLISHED BY MUTATION RATHER THAN ARGUMENT:
+the retry bound from items 1-3 ALREADY caps it at ONE write.** Its unbounded reproduction ran against
+`eb8d1940` — the kickoff commit, before the bound existed. **The true residual on merged code was one
+pointless no-op write per affected card per page load, plus a label that could not be repaired through the
+combobox** (every attempt was the suppressed transition). Both helpers now use `canonicalSectionLabel`,
+which completes scope item 1's *"one normalisation on both sides"*, **repairs such a label on its next
+write**, and folds lookalike sections.
+
+**⚠️ THE INGRESS IS CLOSED — the finding's §8 obligation, and it was the bulk path all along.**
+`bulk-generation-page-client.tsx:416` sent `sectionLabel.trim()` (no collapse) and **`:282` pre-fills that
+field from the free-text Subject**, so a doubled space in a pasted Subject minted the label with no action
+on the Section field at all. `buildAdoptedItems` copies labels verbatim, so a published source plan carrying
+one **propagated the wedge to every adopter** — the amplification this release's own scope names. Now
+canonicalised at the authoring surface. **⚠️ The BACKEND is deliberately unchanged and still stores what it
+is given**, per anti-drift: collapsing there would rewrite stored learner data on an unrelated write path.
+
+**Also fixed:** the picker rendered **`"No notes available."`** — a terminal claim about the library — during
+the async lazy load and permanently after a failed one; loading and failure now have their own copy. And a
+write the server REFUSED left that exact value **unsavable** (retyping the same name did nothing), so
+**focus now clears the retry bound** — the loop is render-driven and never touches focus, so it cannot
+reach that escape, while a curator refocusing the field unambiguously can.
+
+**⚠️ TWO PROCESS FAILURES, RECORDED BECAUSE THEY ARE THE REUSABLE PART. (1) THE PRE-DECLARED GUARD THAT WAS
+SKIPPED IS THE ONE THAT WOULD HAVE CAUGHT `C2`.** This release's own scope named two discriminating fixtures
+— *"(a) a stored label containing a DOUBLE SPACE … and (b) a label whose write is REJECTED"* — and **only
+(b) was written.** Fixture (a) is the whitespace case verbatim. **(2) THE REPLACEMENT GUARD THEN SURVIVED
+ITS OWN MUTATION TWICE BEFORE IT DISCRIMINATED.** The first draft advanced timers in **one large jump**,
+which fires only the first callback in a timer→write→re-render→timer chain; the second asserted a **call
+count**, which the retry bound already satisfies. Only asserting the **written payload** killed the mutant.
+**⚠️ Neither would have been caught by reading — both were found by running the mutant.**
+
+**Guards — four added, all mutation-verified with the killing test named.**
+
+| Mutant | Test that failed |
+|---|---|
+| revert `getSectionName`/`getSectionLabel` to bare `trim()` | *repairs a stored section label that differs only by internal whitespace, in one write* |
+| remove the lazy-load attempt bound / the `catch` | *stops re-fetching the note library after a failed lazy load* |
+| stop clearing the retry bound on focus | *lets a curator retry a section label the server refused* |
+
+**⚠️ ONE EXISTING ASSERTION IS VACUOUS AND IS ANNOTATED RATHER THAN DELETED:** in *consumes the write's own
+response*, the `listNotes` expectation cannot fail while item 6 ships (the list is lazy, so it is never
+fetched there either way). The `getCollection` assertion is what discriminates; the comment says so.
+
+**⚠️ CONFIRMED UNREFUTED: `C1`** (the retry bound works — `[1,1,1,…]` against `[2,3,4,…]` on pre-fix
+source), **`C3`** (the card key remounts on a value change), **`C4`** (`applyLeafDetail` matches the original
+leaf branch exactly; `childCount` 0→non-zero falls through to the Goal path), **`C6`** (item 7
+not-applicable, all six sites re-verified, no seventh site). **No anti-drift violations found.**
+
+**⚠️ ITEM 3 REMAINS UNGUARDED AND IS DISCLOSED RATHER THAN PINNED:** reverting `onLabelChangeRef` passes the
+whole suite. That is consistent with this release calling it *"a churn reduction, not the loop fix"*, but
+the repo has shipped two silent no-ops whose tell was exactly this, so it is stated plainly.
+
+`tsc --noEmit` exit 0 · `npm run lint` exit 0 · `npm test` exit 0, **2229 passed / 201 suites** (four
+consecutive clean full runs; one earlier run exited 139 on a worker crash with zero failing suites and did
+not reproduce).
+
 ## v0.122.0 - Shared Quiz Discoverability
 
 **Status: Released** (kicked off and signed off 2026-09-06, base branch `releases/v0.122.0`, cut from `main` after `v0.121.0` merged and tagged)

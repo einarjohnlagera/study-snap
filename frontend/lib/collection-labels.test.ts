@@ -1,4 +1,7 @@
-import { getCollectionLabels, getCollectionTerminalAction } from "./collection-labels";
+import { getCollectionLabels, getCollectionTerminalAction,
+  canonicalSectionLabel,
+  normalizeSectionValue,
+} from "./collection-labels";
 
 describe("getCollectionLabels", () => {
   it("returns teacher lesson-plan labels", () => {
@@ -90,5 +93,24 @@ describe("getCollectionTerminalAction", () => {
       label: "Start Challenge Quiz",
     });
     expect(getCollectionTerminalAction(null, "FREE")).toBeNull();
+  });
+});
+
+describe("canonicalSectionLabel", () => {
+  // ⚠️ THE POINT IS THE SECOND ASSERTION, NOT THE FIRST. This expression was duplicated at FIVE call
+  // sites in the builder, and a card's auto-save guard comparing against its own inline copy is what
+  // let an unbounded write loop exist. These pin that the DISPLAY form and the COMPARISON form stay
+  // one definition -- normalizeSectionValue is DERIVED from canonicalSectionLabel, so they cannot
+  // drift apart again without failing here.
+  it("collapses internal runs and trims, preserving case", () => {
+    expect(canonicalSectionLabel("  Cash   and  Receivables  ")).toBe("Cash and Receivables");
+    expect(canonicalSectionLabel("Algebra")).toBe("Algebra");
+    expect(canonicalSectionLabel("")).toBe("");
+  });
+
+  it("is exactly normalizeSectionValue without the lowercasing", () => {
+    for (const value of ["  Cash   and  Receivables ", "ALGEBRA", "not in a section", "a\tb"]) {
+      expect(normalizeSectionValue(value)).toBe(canonicalSectionLabel(value).toLowerCase());
+    }
   });
 });

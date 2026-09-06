@@ -28,7 +28,9 @@ import { Card, CardDescription, CardTitle } from "@/components/ui/card";
 import { SuggestionCombobox } from "@/components/ui/suggestion-combobox";
 import { PageHeader } from "@/components/page-header";
 import { getAuthUser, type AuthUser } from "@/lib/auth";
-import { getCollectionLabels, normalizeSectionValue, UNGROUPED_SECTION_NAME } from "@/lib/collection-labels";
+import { getCollectionLabels, normalizeSectionValue, UNGROUPED_SECTION_NAME,
+  canonicalSectionLabel,
+} from "@/lib/collection-labels";
 import { requireAuthenticatedOnboardedUser } from "@/lib/route-guards";
 import { sortCollectionItemsByPosition } from "@/lib/collection-exam";
 import { cn } from "@/lib/utils";
@@ -126,7 +128,15 @@ function leafOrdersMatch(left: NoteCollectionItem[], right: NoteCollectionItem[]
 }
 
 function getSectionName(label: string | null | undefined): string {
-  const trimmed = label?.trim();
+  // ⚠️ CANONICAL, NOT `trim()`, AND THIS IS THE OTHER HALF OF "ONE NORMALISATION ON BOTH SIDES".
+  // These two helpers are the SNAP-BACK path: the value a card requests goes through
+  // canonicalSectionLabel, but what actually gets STORED came back through here. While they only
+  // trimmed, a stored label carrying an internal double space named a section the canonical form
+  // could never equal -- so on PAGE LOAD, with no user interaction, a card computed a collapsed
+  // nextLabel, snapped back to the uncollapsed stored name, wrote the SAME value, never changed
+  // item.label, never remounted, and retried forever. Collapsing here also repairs such a label on
+  // its next write and folds lookalike sections that render identically.
+  const trimmed = canonicalSectionLabel(label ?? "");
   if (!trimmed) {
     return UNGROUPED_SECTION_NAME;
   }
@@ -141,7 +151,7 @@ function getSectionName(label: string | null | undefined): string {
 }
 
 function getSectionLabel(sectionName: string): string | null {
-  const trimmed = sectionName.trim();
+  const trimmed = canonicalSectionLabel(sectionName);
   return trimmed && normalizeSectionValue(trimmed) !== normalizeSectionValue(UNGROUPED_SECTION_NAME) ? trimmed : null;
 }
 
@@ -442,17 +452,65 @@ function LeafSortableNoteCard({
   // changes item.label, which changes this card's key AND moves it into a different section block.
   // Typing "Week", pausing, then " 1" used to create a section called "Week" and drop the rest.
   // The save now lands 500ms after focus LEAVES the field, which is also when the value is final.
+  // ⚠️ THE HANDLER LIVES IN A REF SO ITS IDENTITY IS NOT AN EFFECT DEPENDENCY. `handleLeafLabelChange`
+  // is re-created every render (it closes over `moveLeafNote`, itself a plain function), so having it
+  // in the array below re-armed this write on EVERY render.
+  //
+  // ⚠️ A `useCallback` on the handler would be INERT here and is deliberately not what shipped:
+  // memoizing it requires memoizing `moveLeafNote` -> `persistLeafItems` -> `savePendingLeafOrder`,
+  // which lands on the deferred-save model v0.96.0 fixed at cost. The ref achieves the stated purpose
+  // -- a stable dependency -- without that cascade.
+  const onLabelChangeRef = useRef(onLabelChange);
+  useEffect(() => {
+    onLabelChangeRef.current = onLabelChange;
+  }, [onLabelChange]);
+
+  // ⚠️ THE RETRY BOUND, AND IT IS THE LOAD-BEARING HALF OF THE LOOP FIX. Records the one transition
+  // this card has already asked for, as (server label it saw) -> (label it requested).
+  const lastRequestedLabelRef = useRef<{ from: string; requested: string } | null>(null);
+
+  // Gated on `editing` deliberately. Saving mid-keystroke tears down the control the curator is
+  // typing into: persistLeafItems flips `disabled` (a disabled input loses focus) and the write
+  // changes item.label, which changes this card's key AND moves it into a different section block.
+  // Typing "Week", pausing, then " 1" used to create a section called "Week" and drop the rest.
+  // The save now lands 500ms after focus LEAVES the field, which is also when the value is final.
+  //
+  // ⚠️ THE GUARD BELOW CANNOT BE "item.label === nextLabel" ALONE, AND ASSUMING IT COULD IS THE
+  // DEFECT THIS FIX EXISTS TO CLOSE. What this card requests is NOT always what gets stored, so the
+  // comparison can be permanently unequal while nothing is wrong with the write:
+  //   - CASE-SNAP: typing "algebra" beside an existing "Algebra" stores "Algebra" (handleLeafLabelChange
+  //     snaps to the existing section name). The guard then compares "Algebra" against "algebra" forever.
+  //   - RESERVED NAME: typing the ungrouped sentinel returns early with an error and writes NOTHING,
+  //     so item.label never moves at all.
+  //   - REJECTED WRITE: the server refuses (e.g. over LABEL_MAX_LENGTH) and the optimistic update
+  //     rolls back, leaving item.label exactly as it was.
+  // In all three the old guard never cleared, and there was no cap, no backoff and no failure
+  // short-circuit -- so the card retried every ~500ms, and each retry refetched the curator's ENTIRE
+  // note list through refreshBuilder. A wedged page was a client-driven load amplifier.
   useEffect(() => {
     if (disabled || editing) {
       return;
     }
-    const nextLabel = labelValue.trim().replaceAll(/\s+/g, " ");
-    if ((item.label ?? "") === nextLabel) {
+    const nextLabel = canonicalSectionLabel(labelValue);
+    const currentLabel = item.label ?? "";
+    if (currentLabel === nextLabel) {
       return;
     }
-    const handle = globalThis.setTimeout(() => onLabelChange(item.noteId, nextLabel), 500);
+    // Ask for a given transition at most once. Keyed on the CURRENT server label as well as the
+    // requested one, so a genuine later edit -- or a re-request after the server value actually
+    // moves -- is still allowed; only the unproductive repeat is suppressed.
+    const lastRequested = lastRequestedLabelRef.current;
+    if (lastRequested?.from === currentLabel && lastRequested.requested === nextLabel) {
+      return;
+    }
+    const handle = globalThis.setTimeout(() => {
+      // Recorded at FIRE time, not at arm time: a cleared timeout never asked for anything, and
+      // recording it there would block a legitimate first attempt.
+      lastRequestedLabelRef.current = { from: currentLabel, requested: nextLabel };
+      onLabelChangeRef.current(item.noteId, nextLabel);
+    }, 500);
     return () => globalThis.clearTimeout(handle);
-  }, [disabled, editing, item.label, item.noteId, labelValue, onLabelChange]);
+  }, [disabled, editing, item.label, item.noteId, labelValue]);
 
   return (
     <div
@@ -504,7 +562,15 @@ function LeafSortableNoteCard({
             combobox -- input or dropdown -- and releases it only when focus leaves the whole control. */}
         <div
           className="min-w-[220px] space-y-1.5"
-          onFocus={() => setEditing(true)}
+          onFocus={() => {
+            setEditing(true);
+            // ⚠️ A DELIBERATE RE-EDIT CLEARS THE RETRY BOUND, and the asymmetry is the whole design:
+            // the loop is driven by RE-RENDERS and never touches focus, so it can never reach this,
+            // while a curator who refocuses the field is unambiguously asking to try again. Without
+            // it, a write the server REFUSED left that exact value unsavable -- retyping the same
+            // name did nothing -- until they typed something else and came back.
+            lastRequestedLabelRef.current = null;
+          }}
           onBlur={() => setEditing(false)}
         >
           <span className="text-xs font-medium uppercase tracking-wide text-foreground/50">{sectionLabel}</span>
@@ -532,7 +598,7 @@ function LeafSortableNoteCard({
               // protect — so it bypasses the debounce here. ⚠️ The effect above and its comment are
               // deliberately untouched: they guard TYPING, where mid-keystroke saves tear down the
               // control and previously created a section called "Week" from "Week 1".
-              const nextLabel = selected.trim().replaceAll(/\s+/g, " ");
+              const nextLabel = canonicalSectionLabel(selected);
               if ((item.label ?? "") === nextLabel) {
                 return;
               }
@@ -1002,6 +1068,7 @@ function AddNotesModal({
   onAdd,
   onRefresh,
   refreshing,
+  notesError,
 }: Readonly<{
   isOpen: boolean;
   subject: { collectionId: string; items: NoteCollectionItem[]; title?: string } | null;
@@ -1011,6 +1078,7 @@ function AddNotesModal({
   onAdd: (subjectId: string, noteIds: string[]) => Promise<void>;
   onRefresh: () => Promise<void>;
   refreshing: boolean;
+  notesError: string | null;
 }>) {
   const [query, setQuery] = useState("");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -1132,7 +1200,17 @@ function AddNotesModal({
               </div>
             ) : (
               <p className="rounded-lg bg-muted px-3 py-3 text-sm text-foreground/70">
-                {query ? "No matching notes." : (hasSelection ? "No more notes to add." : "No notes available.")}
+                {/* ⚠️ "No notes available." is a TERMINAL CLAIM ABOUT THE LIBRARY, and since the list
+                    became lazy it is briefly false on every first open and permanently false after a
+                    failed fetch. Loading and failure get their own copy; only an actually-empty,
+                    actually-loaded library gets the terminal sentence. */}
+                {refreshing
+                  ? "Loading your notes…"
+                  : notesError
+                    ? notesError
+                    : query
+                      ? "No matching notes."
+                      : (hasSelection ? "No more notes to add." : "No notes available.")}
               </p>
             )}
           </div>
@@ -1266,13 +1344,82 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
     setAuthUser(getAuthUser());
   }, []);
 
+  /**
+   * ⚠️ THE NOTE LIST IS LOADED LAZILY, ON PICKER OPEN, AND NOT ON PAGE LOAD. `listNotes()` fetches the
+   * user's ENTIRE library with no limit, each row carrying `contentPreview` and `summaryPreview` --
+   * the same two fields that pushed `/notes/public` past Next.js's 2 MB data-cache limit in the
+   * 2026-08-31 build failure. It used to fire on the collection page, again on the builder page, and
+   * again after every non-drag builder mutation, while in the builder its ONLY consumers are the
+   * "Add notes" picker and the two add-note handlers that read the ids that picker selected.
+   *
+   * ⚠️ EVERY CONSUMER IS DOWNSTREAM OF THE PICKER -- verified rather than assumed: the three
+   * `noteById` maps all sit on add-note paths, which cannot be reached without opening it. So no path
+   * can read an empty map expecting a note that is not in the collection.
+   */
+  const notesLoadedRef = useRef(false);
+  // ⚠️ RECORDS THAT AN AUTOMATIC ATTEMPT WAS MADE, SUCCESS OR FAILURE, AND IT IS LOAD-BEARING.
+  // Without it this effect is itself an unbounded retry loop: `refreshingNotes` is a dependency, so a
+  // REJECTED fetch clears the flag in `finally`, the deps change, the effect re-runs, and it refetches
+  // -- at event-loop speed, against the unbounded note endpoint, precisely when the backend is already
+  // failing. Measured at 3,743 calls in five seconds before this existed. It is the same defect class
+  // as the section-label loop this release exists to close, and it was introduced by the fix for it.
+  const notesAutoLoadAttemptedRef = useRef(false);
+  const [notesError, setNotesError] = useState<string | null>(null);
   const refreshNotes = useCallback(async () => {
     setRefreshingNotes(true);
+    setNotesError(null);
     try {
       setNotes(await listNotes());
+      notesLoadedRef.current = true;
+    } catch (error) {
+      // Surface it ONCE. The modal's Refresh control is the deliberate retry; an automatic one here
+      // is what produced the loop.
+      setNotesError(makeErrorMessage(error, "Could not load your notes."));
     } finally {
       setRefreshingNotes(false);
     }
+  }, []);
+
+  // Fetch the picker's note list the first time a picker is actually opened. Re-opening reuses what
+  // is already in state; the modal's own Refresh control is how a curator pulls a newer list.
+  useEffect(() => {
+    if (!leafAddNotesOpen && addNotesSubjectId === null) {
+      return;
+    }
+    if (notesLoadedRef.current || notesAutoLoadAttemptedRef.current || refreshingNotes) {
+      return;
+    }
+    notesAutoLoadAttemptedRef.current = true;
+    void refreshNotes();
+  }, [addNotesSubjectId, leafAddNotesOpen, refreshNotes, refreshingNotes]);
+
+  /**
+   * Apply a collection detail payload to the LEAF view, returning false when the payload describes a
+   * Goal (which needs the child fan-out `refreshBuilder` performs).
+   *
+   * ⚠️ IT EXISTS SO A WRITE CAN CONSUME ITS OWN RESPONSE. `PUT /collections/{id}/items/order` returns
+   * the same `NoteCollectionDetailResponse` that `getCollection` returns, and the client used to
+   * DISCARD it and then refetch that payload plus the user's entire note library. For a leaf plan the
+   * refetch was entirely redundant: it set exactly the state this function sets.
+   */
+  const applyLeafDetail = useCallback((detail: NoteCollectionDetail): boolean => {
+    if (detail.childCount !== 0) {
+      return false;
+    }
+    setCollection(detail);
+    setGoal(null);
+    setSubjects([]);
+    const serverItems = sortCollectionItemsByPosition(detail.items);
+    // A background/auth-triggered refresh must never overwrite a visible pending order. Every
+    // deliberate non-drag mutation flushes first; this guard covers refreshes not initiated by
+    // a mutation (including the second auth/profile load on this client page).
+    if (!leafOrderDirtyRef.current) {
+      leafItemsRef.current = serverItems;
+      lastSavedLeafItemsRef.current = serverItems;
+      setLeafItems(serverItems);
+      setLastSavedLeafItems(serverItems);
+    }
+    return true;
   }, []);
 
   const refreshBuilder = useCallback(async (options?: { seedCollapsed?: boolean; skipNotes?: boolean }) => {
@@ -1284,27 +1431,18 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
       // can change the note set (add, remove, import) must NOT pass skipNotes.
       const [collectionResult, notesResult] = await Promise.all([
         getCollection(collectionId),
-        options?.skipNotes ? Promise.resolve(null) : listNotes(),
+        // ⚠️ `notesLoadedRef` is the LAZY half: before the picker has ever been opened there is no
+        // list to keep fresh, so a refresh must not fetch one. Paths that change the note SET still
+        // pass skipNotes: false and still refresh it -- but only once it actually exists.
+        options?.skipNotes || !notesLoadedRef.current ? Promise.resolve(null) : listNotes(),
       ]);
-      setCollection(collectionResult);
       if (notesResult) {
         setNotes(notesResult);
       }
-      if (collectionResult.childCount === 0) {
-        setGoal(null);
-        setSubjects([]);
-        const serverItems = sortCollectionItemsByPosition(collectionResult.items);
-        // A background/auth-triggered refresh must never overwrite a visible pending order. Every
-        // deliberate non-drag mutation flushes first; this guard covers refreshes not initiated by
-        // a mutation (including the second auth/profile load on this client page).
-        if (!leafOrderDirtyRef.current) {
-          leafItemsRef.current = serverItems;
-          lastSavedLeafItemsRef.current = serverItems;
-          setLeafItems(serverItems);
-          setLastSavedLeafItems(serverItems);
-        }
+      if (applyLeafDetail(collectionResult)) {
         return;
       }
+      setCollection(collectionResult);
       const goalResult = await getCollectionGoal(collectionId);
       const childDetails = await Promise.all(goalResult.children.map((child) => getCollection(child.collectionId)));
       const nextSubjects = buildSubjects(goalResult, childDetails);
@@ -1534,11 +1672,20 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
     leafItemsRef.current = nextItems;
     setLeafItems(nextItems);
     try {
-      await setCollectionItemOrder(collectionId, buildOrderPayload(nextItems));
+      const detail = await setCollectionItemOrder(collectionId, buildOrderPayload(nextItems));
       lastSavedLeafItemsRef.current = nextItems;
       leafOrderDirtyRef.current = false;
       setLastSavedLeafItems(nextItems);
-      await refreshBuilder();
+      // ⚠️ CONSUME THE WRITE'S OWN RESPONSE. This used to `await refreshBuilder()` unconditionally,
+      // which re-fetched the collection AND the user's entire note list -- so one section edit cost up
+      // to four round trips, two of them recomputing the same payload. A section label change cannot
+      // change the note SET, which is exactly the condition refreshBuilder's own comment names as safe.
+      //
+      // ⚠️ The Goal path still needs a refresh (the response does not carry the child fan-out), but it
+      // takes `skipNotes: true` for the same reason.
+      if (!applyLeafDetail(detail)) {
+        await refreshBuilder({ skipNotes: true });
+      }
       if (analyticsSource) {
         void trackAnalyticsEvent({
           eventType: "COLLECTION_SECTION_ASSIGNED",
@@ -1628,7 +1775,7 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
   };
 
   const handleRenameLeafSection = (oldName: string, newName: string) => {
-    const trimmedName = newName.trim().replaceAll(/\s+/g, " ");
+    const trimmedName = canonicalSectionLabel(newName);
     if (normalizeSectionValue(trimmedName) === normalizeSectionValue(UNGROUPED_SECTION_NAME)) {
       setMutationError(`"${UNGROUPED_SECTION_NAME}" is reserved for notes without a ${labels.sectionSingular.toLowerCase()}.`);
       return;
@@ -1644,7 +1791,7 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
   };
 
   const handleLeafLabelChange = (noteId: string, requestedLabel: string) => {
-    const trimmedLabel = requestedLabel.trim().replaceAll(/\s+/g, " ");
+    const trimmedLabel = canonicalSectionLabel(requestedLabel);
     if (normalizeSectionValue(trimmedLabel) === normalizeSectionValue(UNGROUPED_SECTION_NAME)) {
       setMutationError(`"${UNGROUPED_SECTION_NAME}" is reserved for notes without a ${labels.sectionSingular.toLowerCase()}.`);
       return;
@@ -1669,7 +1816,7 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
       }
     }
     const nextItems = leafItems.map((item) => {
-      const trimmed = (item.subject ?? "").trim().replaceAll(/\s+/g, " ");
+      const trimmed = canonicalSectionLabel(item.subject ?? "");
       const normalized = normalizeSectionValue(trimmed);
       if (!trimmed || normalized === normalizeSectionValue(UNGROUPED_SECTION_NAME)) {
         return { ...item, label: null };
@@ -2356,6 +2503,7 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
           onAdd={handleAddLeafNotes}
           onRefresh={refreshNotes}
           refreshing={refreshingNotes}
+          notesError={notesError}
         />
         <AddSubjectModal
           isOpen={addSubjectOpen}
@@ -2538,6 +2686,7 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
         onAdd={handleAddNotes}
         onRefresh={refreshNotes}
         refreshing={refreshingNotes}
+        notesError={notesError}
       />
       <DeleteSubjectModal
         subject={deleteSubject}
