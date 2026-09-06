@@ -114,6 +114,46 @@ newest-first list exposes only snapshot metadata (title, when it was made, store
 and whether sharing is on, off, or not created), then links to the existing detail page. The list never
 duplicates share controls: revoking or copying remains on `/library/combined-quiz/{combinedQuizId}`.
 
+### ⚠️ Matching questions are excluded from shared quizzes
+
+`teacher-quiz-developer.txt:23-26` instructs the model to emit **one MATCHING block** — 2-4 consecutive
+items sharing an option set, tied together by `questionGroup`. `PublicQuizItem` does not carry
+`questionGroup` and the recipient page has no matching control, so those items reached recipients as
+independent MCQs with identical choices and were **scored as if they were independent**.
+
+Since `v0.121.0` they are filtered out of the shared payload.
+
+- **⚠️ The filter is applied at ONE point — inside `resolveSharedQuiz`, on the way into the `SharedQuiz`
+  record — and `resolveSharedQuestions` DELEGATES to it.** These were two independent derivations:
+  `getActivePublicQuiz` projects what the recipient *sees*, `getSharedQuizResults` walks what the grader
+  *scores*. Filtering only the projection leaves the grader on a longer list, so
+  `answers.size() != questions.size()` throws and **every submit 400s** — the `v0.110.2` shape.
+  **⚠️ Do NOT re-split these methods.** The extra `noteRepository.findById` the delegation puts on the
+  grading path is an accepted cost, and it cannot fail: `generated_quizzes.note_id` is
+  `NOT NULL REFERENCES notes(id) ON DELETE CASCADE` (`V43:4`).
+- **⚠️ Exclusion is on `questionFormat`, never on `questionGroup`** — a non-matching item may legitimately
+  carry a group, and filtering on the group would drop valid questions.
+- A quiz of nothing but matching questions **fails closed** to the existing *"no longer active"* screen
+  rather than serving a zero-question quiz that would score `0/0`.
+- **The stored owner-facing quiz is unchanged** — this is a projection, never a mutation.
+- Supporting matching properly would change the **grading contract** on a `permitAll` route scored for an
+  anonymous recipient. Recorded as a follow-up, not rejected on merit.
+
+### Recipient answers are correctable
+
+Answers are **index-addressed**: both arrays are full-length and null-filled at load, and a **Back** control
+returns the recipient to a previous question with their selection restored.
+
+- The `answers[i]` / `multiAnswers[i]` pairing is unchanged — exactly one is populated per question, decided
+  by whether that question is `MULTI_SELECT` — so **no wire change was needed**; the grader already tolerates
+  a null slot and still requires `answers.size() == questions.size()`.
+- **⚠️ There were TWO locks, and the second is easy to miss.** Besides the append-only array,
+  `disabled={!isMultiSelect && selectedAnswer !== null}` disabled every choice the instant a single-choice
+  answer was picked. Fixing only the array would have left single-choice answers uncorrectable and Back
+  landing on a locked question. **Do not reintroduce a per-question answer lock.**
+- Forward navigation past an **unanswered** question remains forbidden; this makes answers correctable, not
+  skippable.
+
 ### Question formats a recipient can be given
 
 `teacher-quiz-developer.txt` can emit four formats, and the shared path handles them differently:

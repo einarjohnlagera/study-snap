@@ -50,8 +50,11 @@ export default function SharedQuizPage() {
     try {
       const loadedQuiz = await getPublicSharedQuiz(token);
       setQuiz(loadedQuiz);
-      setAnswers([]);
-      setMultiAnswers([]);
+      // Full-length and null-filled: the grader reads both arrays POSITIONALLY and requires
+      // `answers.size() == questions.size()`, so growing them by append is what made an earlier answer
+      // unreachable. Length is fixed at load; only the contents change.
+      setAnswers(new Array(loadedQuiz.questions.length).fill(null));
+      setMultiAnswers(new Array(loadedQuiz.questions.length).fill(null));
       setSelectedAnswer(null);
       setSelectedMultiAnswers([]);
       setCurrentIndex(0);
@@ -82,7 +85,15 @@ export default function SharedQuizPage() {
   const isMultiSelect = currentQuestion?.questionFormat === MULTI_SELECT_FORMAT;
   const hasSelection = isMultiSelect ? selectedMultiAnswers.length > 0 : selectedAnswer !== null;
   // hasSelection is recomputed every render, so memoizing this saved nothing.
-  const answeredQuestions = answers.length + (hasSelection ? 1 : 0);
+  // The arrays are now always full-length, so `answers.length` would report every question as answered.
+  const answeredQuestions = answers.reduce<number>((count, answer, index) => {
+    if (index === currentIndex) {
+      return count + (hasSelection ? 1 : 0);
+    }
+    const multi = multiAnswers[index];
+    const isAnswered = answer !== null || (Array.isArray(multi) && multi.length > 0);
+    return count + (isAnswered ? 1 : 0);
+  }, 0);
 
   const toggleMultiAnswer = useCallback((choiceIndex: number) => {
     setSelectedMultiAnswers((current) => (
@@ -92,19 +103,51 @@ export default function SharedQuizPage() {
     ));
   }, []);
 
+  // Writes the live selection into its OWN slot rather than appending, so revisiting a question overwrites
+  // that question instead of adding a new entry at the end.
+  const commitCurrentSelection = useCallback(() => {
+    const nextAnswers = [...answers];
+    const nextMultiAnswers = [...multiAnswers];
+    nextAnswers[currentIndex] = isMultiSelect ? null : selectedAnswer;
+    nextMultiAnswers[currentIndex] = isMultiSelect ? [...selectedMultiAnswers] : null;
+    return { nextAnswers, nextMultiAnswers };
+  }, [answers, currentIndex, isMultiSelect, multiAnswers, selectedAnswer, selectedMultiAnswers]);
+
+  // Exactly one of the two slots is populated per question, decided by format -- that pairing is the
+  // contract the grader relies on, so restoring reads both.
+  const restoreSelectionAt = useCallback((
+    index: number,
+    fromAnswers: (number | null)[],
+    fromMultiAnswers: (number[] | null)[],
+  ) => {
+    setSelectedAnswer(fromAnswers[index] ?? null);
+    setSelectedMultiAnswers(fromMultiAnswers[index] ?? []);
+  }, []);
+
+  const handleBack = useCallback(() => {
+    if (currentIndex === 0 || submitting) {
+      return;
+    }
+    const { nextAnswers, nextMultiAnswers } = commitCurrentSelection();
+    setAnswers(nextAnswers);
+    setMultiAnswers(nextMultiAnswers);
+    const previousIndex = currentIndex - 1;
+    restoreSelectionAt(previousIndex, nextAnswers, nextMultiAnswers);
+    setCurrentIndex(previousIndex);
+  }, [commitCurrentSelection, currentIndex, restoreSelectionAt, submitting]);
+
   const handleContinue = useCallback(async () => {
     if (!quiz || !hasSelection || submitting) {
       return;
     }
-    const nextAnswers = [...answers, isMultiSelect ? null : selectedAnswer];
-    const nextMultiAnswers = [...multiAnswers, isMultiSelect ? [...selectedMultiAnswers] : null];
+    const { nextAnswers, nextMultiAnswers } = commitCurrentSelection();
     const isLastQuestion = currentIndex >= quiz.questions.length - 1;
     if (!isLastQuestion) {
       setAnswers(nextAnswers);
       setMultiAnswers(nextMultiAnswers);
-      setSelectedAnswer(null);
-      setSelectedMultiAnswers([]);
-      setCurrentIndex((index) => index + 1);
+      const nextIndex = currentIndex + 1;
+      restoreSelectionAt(nextIndex, nextAnswers, nextMultiAnswers);
+      setCurrentIndex(nextIndex);
       return;
     }
 
@@ -130,14 +173,11 @@ export default function SharedQuizPage() {
       setSubmitting(false);
     }
   }, [
-    answers,
+    commitCurrentSelection,
     currentIndex,
     hasSelection,
-    isMultiSelect,
-    multiAnswers,
     quiz,
-    selectedAnswer,
-    selectedMultiAnswers,
+    restoreSelectionAt,
     submitting,
     token,
   ]);
@@ -306,9 +346,6 @@ export default function SharedQuizPage() {
                         : "border-border bg-background hover:bg-highlight disabled:hover:bg-background",
                     ].join(" ")}
                     onClick={() => (isMultiSelect ? toggleMultiAnswer(index) : setSelectedAnswer(index))}
-                    // A single-choice answer is committed on click, as it always has been. A multi-select
-                    // answer stays editable until Continue, or the recipient could never pick a second one.
-                    disabled={!isMultiSelect && selectedAnswer !== null}
                   >
                     {isMultiSelect ? (
                       <span
@@ -334,7 +371,19 @@ export default function SharedQuizPage() {
             {submitError ? (
               <p className="text-sm text-red-600 dark:text-red-400">{submitError}</p>
             ) : null}
-            <div className="flex justify-end">
+            <div className="flex items-center justify-between gap-3">
+              {currentIndex > 0 ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={handleBack}
+                  disabled={submitting}
+                >
+                  Back
+                </Button>
+              ) : (
+                <span />
+              )}
               <Button
                 type="button"
                 onClick={() => void handleContinue()}

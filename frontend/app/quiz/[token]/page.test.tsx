@@ -112,19 +112,28 @@ describe("shared quiz page", () => {
     expect(screen.getByRole("button", { name: "Submit Answers" })).toBeEnabled();
   });
 
-  it("still commits a single-choice answer on click and sends it in the answers slot", async () => {
+  // ⚠️ REWRITTEN, NOT DELETED (v0.121.0). This test previously asserted
+  // `expect(getByRole("button", { name: /Charlie/ })).toBeDisabled()` under the comment "Single-choice
+  // selection stays one-shot, exactly as it shipped" -- i.e. it PINNED the defect. A single-choice answer
+  // locked every other choice the moment it was made, so a recipient who misclicked could never correct it.
+  // The answers-slot half of the assertion is genuine and is kept.
+  it("commits a single-choice answer to its slot and lets the recipient change it", async () => {
     stubQuiz([SINGLE_CHOICE_QUESTION]);
     render(<SharedQuizPage />);
     await screen.findByText("Which one?");
 
     expect(screen.queryByText("Select all that apply")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /Bravo/ }));
-    // Single-choice selection stays one-shot, exactly as it shipped.
-    expect(screen.getByRole("button", { name: /Charlie/ })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /Bravo/ })).toHaveAttribute("aria-pressed", "true");
+
+    // The correction the recipient could not previously make.
+    expect(screen.getByRole("button", { name: /Charlie/ })).not.toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: /Charlie/ }));
+    expect(screen.getByRole("button", { name: /Charlie/ })).toHaveAttribute("aria-pressed", "true");
 
     fireEvent.click(screen.getByRole("button", { name: "Submit Answers" }));
 
-    await waitFor(() => expect(getSharedQuizResultsMock).toHaveBeenCalledWith("tok123", [1], [null]));
+    await waitFor(() => expect(getSharedQuizResultsMock).toHaveBeenCalledWith("tok123", [2], [null]));
   });
 
   it("records a completion once a recipient's answers are graded", async () => {
@@ -177,6 +186,53 @@ describe("shared quiz page", () => {
     fireEvent.click(screen.getByRole("button", { name: "Submit Answers" }));
 
     await waitFor(() => expect(getSharedQuizResultsMock).toHaveBeenCalledWith("tok123", [3, null], [null, [0, 1]]));
+  });
+
+  // ⚠️ THE DISCRIMINATING GUARD FOR INDEX-ADDRESSED ANSWERS. Under the previous append-only model
+  // (`[...answers, x]`) a revisited question appended a NEW entry instead of overwriting its own slot, so
+  // the array grew past `questions.length` and the server rejected the submit outright. A forward-only
+  // walk passes under an off-by-one in the index write and proves nothing.
+  it("grades the changed answer when a recipient goes back and corrects one", async () => {
+    stubQuiz([SINGLE_CHOICE_QUESTION, MULTI_SELECT_QUESTION]);
+    render(<SharedQuizPage />);
+    await screen.findByText("Which one?");
+
+    fireEvent.click(screen.getByRole("button", { name: /Alpha/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Next Question" }));
+
+    await screen.findByText("Select all that apply");
+    fireEvent.click(screen.getByRole("button", { name: /Bravo/ }));
+
+    fireEvent.click(screen.getByRole("button", { name: "Back" }));
+    await screen.findByText("Which one?");
+    // The prior selection is restored rather than lost.
+    expect(screen.getByRole("button", { name: /Alpha/ })).toHaveAttribute("aria-pressed", "true");
+
+    fireEvent.click(screen.getByRole("button", { name: /Delta/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Next Question" }));
+    await screen.findByText("Select all that apply");
+    // Returning forward restores the multi-select selection too.
+    expect(screen.getByRole("button", { name: /Bravo/ })).toHaveAttribute("aria-pressed", "true");
+
+    fireEvent.click(screen.getByRole("button", { name: "Submit Answers" }));
+
+    await waitFor(() => {
+      // Full-length, pairing intact, and the CHANGED single-choice answer (3, not 0) is the one sent.
+      expect(getSharedQuizResultsMock).toHaveBeenCalledWith("tok123", [3, null], [null, [1]]);
+    });
+  });
+
+  it("offers no Back control on the first question", async () => {
+    stubQuiz([SINGLE_CHOICE_QUESTION, MULTI_SELECT_QUESTION]);
+    render(<SharedQuizPage />);
+    await screen.findByText("Which one?");
+
+    expect(screen.queryByRole("button", { name: "Back" })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /Alpha/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Next Question" }));
+
+    expect(await screen.findByRole("button", { name: "Back" })).toBeInTheDocument();
   });
 
   it("counts a MULTI_SELECT question as answered once any box is checked", async () => {
