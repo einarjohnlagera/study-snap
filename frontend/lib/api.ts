@@ -2058,6 +2058,12 @@ export type NoteCollectionItem = {
   subject: string | null;
   courseProgram: string | null;
   studyPackStatus: NoteStudyPackStatus;
+  /**
+   * ⚠️ Present so the collection detail page can resolve its primary exam's Study Pack WITHOUT
+   * calling `listNotes()`, which is unbounded and carries `contentPreview`/`summaryPreview` per row.
+   * Do not remove it in favour of a note-list lookup -- that is the fetch `v0.124.0` removed.
+   */
+  studyPackId: string | null;
   generatedQuizId: string | null;
   lastSessionCompletedAt: string | null;
   dueConceptCount: number;

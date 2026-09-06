@@ -214,6 +214,7 @@ function toOptimisticItem(note: NoteListItemResponse, position: number): NoteCol
     subject: note.subject,
     courseProgram: note.courseProgram,
     studyPackStatus: note.studyPackStatus,
+    studyPackId: null,
     generatedQuizId: note.generatedQuizId ?? null,
     lastSessionCompletedAt: note.lastSessionCompletedAt ?? null,
     dueConceptCount: 0,
