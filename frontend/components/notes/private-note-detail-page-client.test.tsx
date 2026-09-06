@@ -3637,6 +3637,7 @@ describe("PrivateNoteDetailPageClient", () => {
     title: "Site Grading Principles",
     studyPackStatus: "STUDY_PACK_READY" as const,
     studyPackId: "sp-1",
+    studyPackTitle: "Site Grading Principles in Civil Engineering",
   };
 
   it("offers the generated title as an opt-in suggestion when it differs from the curator's", async () => {
@@ -3644,15 +3645,15 @@ describe("PrivateNoteDetailPageClient", () => {
       planType: "PRO", emailVerifiedAt: "2026-03-21T09:00:00Z", profileType: "TEACHER",
     });
     (getNote as jest.Mock).mockResolvedValue(curatorWithReadyPack);
-    (getMyStudyPack as jest.Mock).mockResolvedValue({
-      id: "sp-1", noteId: "note-1", title: "Site Grading Principles in Civil Engineering",
-      subject: "Site Planning", tags: [],
-    });
 
     render(<PrivateNoteDetailPageClient routeId="note-1" />);
 
     expect(await screen.findByText("Site Grading Principles in Civil Engineering")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Use this title" })).toBeInTheDocument();
+    // ⚠️ The suggestion must never cost a second request: GET /study-packs/{id} records
+    // OPENED_STUDY_PACK, which drives the Dashboard's last-opened pack, so fetching the pack here
+    // would let merely VIEWING a note rewrite that recommendation.
+    expect(getMyStudyPack).not.toHaveBeenCalled();
   });
 
   it("does not offer a suggestion when the generated title already matches the note's", async () => {
@@ -3661,20 +3662,19 @@ describe("PrivateNoteDetailPageClient", () => {
     (getAuthUser as jest.Mock).mockReturnValue({
       planType: "PRO", emailVerifiedAt: "2026-03-21T09:00:00Z", profileType: "TEACHER",
     });
-    (getNote as jest.Mock).mockResolvedValue(curatorWithReadyPack);
-    (getMyStudyPack as jest.Mock).mockResolvedValue({
-      id: "sp-1", noteId: "note-1", title: "Site Grading Principles", subject: "Site Planning", tags: [],
+    (getNote as jest.Mock).mockResolvedValue({
+      ...curatorWithReadyPack,
+      studyPackTitle: "Site Grading Principles",
     });
 
     render(<PrivateNoteDetailPageClient routeId="note-1" />);
 
-    await waitFor(() => expect(getMyStudyPack).toHaveBeenCalledWith("sp-1"));
+    await screen.findByText("Site Grading Principles");
     expect(screen.queryByRole("button", { name: "Use this title" })).not.toBeInTheDocument();
   });
 
-  it("never issues the suggestion read for a non-curator", async () => {
-    // Bulk Generate is curator-gated, so a learner can never be in this state -- and bounding the
-    // read is the reason the affordance costs a learner's note page nothing at all.
+  it("never offers the suggestion to a non-curator", async () => {
+    // Bulk Generate is curator-gated, so a learner can never be in the state this repairs.
     (getAuthUser as jest.Mock).mockReturnValue({
       planType: "FREE", emailVerifiedAt: "2026-03-21T09:00:00Z", profileType: "STUDENT",
     });
@@ -3683,7 +3683,6 @@ describe("PrivateNoteDetailPageClient", () => {
     render(<PrivateNoteDetailPageClient routeId="note-1" />);
 
     await screen.findByText("Site Grading Principles");
-    expect(getMyStudyPack).not.toHaveBeenCalled();
     expect(screen.queryByRole("button", { name: "Use this title" })).not.toBeInTheDocument();
   });
 
@@ -3696,10 +3695,6 @@ describe("PrivateNoteDetailPageClient", () => {
       planType: "PRO", emailVerifiedAt: "2026-03-21T09:00:00Z", profileType: "TEACHER",
     });
     (getNote as jest.Mock).mockResolvedValue(curatorWithReadyPack);
-    (getMyStudyPack as jest.Mock).mockResolvedValue({
-      id: "sp-1", noteId: "note-1", title: "Site Grading Principles in Civil Engineering",
-      subject: "Site Planning", tags: [],
-    });
 
     const first = render(<PrivateNoteDetailPageClient routeId="note-1" />);
     fireEvent.click(await screen.findByRole("button", { name: "Keep mine" }));

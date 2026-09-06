@@ -1770,6 +1770,12 @@ export type NoteResponse = {
   copiedAt: string | null;
   studyPackId?: string | null;
   studyPackStatus?: NoteStudyPackStatus;
+  /**
+   * The Study Pack's OWN generated title — not the note's. Since v0.120.0 the two can legitimately
+   * differ, and the note detail page offers this one as a dismissible, opt-in suggestion. Present on
+   * the detail response only; list responses omit it.
+   */
+  studyPackTitle?: string | null;
   summary: string | null;
   keyConcepts: string[];
   quiz: QuizItem[];

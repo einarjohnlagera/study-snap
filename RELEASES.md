@@ -193,6 +193,15 @@ the tags change turns into an edit to `resolveTags` itself.
 existing modal, apply path and API call. **⚠️ Re-run the routing test if item 3 discovers a surface not in
 this plan**, which is how `v0.103.0` was mis-routed.
 
+**⚠️ ROUTING RE-RUN AT DELIVERY, AS THAT CLAUSE REQUIRED, AND THE OUTCOME IS RECORDED RATHER THAN ASSUMED.**
+Item 3 did discover a surface not in this plan — avoiding the `OPENED_STUDY_PACK` write meant adding
+`NoteResponse.studyPackTitle`, so the release is frontend **and** backend rather than frontend-only. It was
+still completed inline: the addition is one record component, two convenience-constructor delegations passing
+`null`, and one populated call site the compiler located, with no new endpoint, no migration and no
+anti-drift rule spanning files. **The verification tier is unchanged** — the declared escalation trigger was
+*"a backend endpoint or a provenance field"*, and a nullable display field on an existing response is
+neither.
+
 ### Shipped
 
 **1. The core fix — a curator's typed topic is the canonical Note title.**
@@ -210,9 +219,23 @@ own tags win, as before.
 page, a curator whose note title differs from its Study Pack's title gets a dismissible card offering the
 generated title. **Non-modal by necessity:** the existing modal is armed only when generation starts from
 that page, and a 50-item batch cannot show 50 modals. **Dismissal persists across reloads** (owner decision,
-2026-09-06) in `localStorage` under `notelib-title-suggestion-dismissed:{noteId}`. **The read is bounded** —
-curators only, pack READY only, once per Study Pack id, and never again once dismissed, so a learner's note
-page issues no extra request.
+2026-09-06) in `localStorage` under `notelib-title-suggestion-dismissed:{noteId}`.
+
+**⚠️ THE OBVIOUS IMPLEMENTATION WAS WRONG AND WAS CAUGHT BEFORE SIGNOFF — RECORDED BECAUSE THE TRAP IS
+GENERAL.** The first version fetched the pack with `getMyStudyPack(studyPackId)` to compare titles. **That
+call is not free: `StudyPackService.getById` records an `OPENED_STUDY_PACK` activity event**, and
+`DashboardService.findLastOpenedStudyPack` reads exactly those rows to decide the Dashboard's last-opened
+pack. **So merely VIEWING a note would have rewritten what that curator's Dashboard recommends** — a write
+on a read path, the same class as `v0.91.0`'s rule that a recipient's Study Pack read must not
+`recordActivity`. **The suggestion now carries no request at all:** `NoteResponse` gained `studyPackTitle`
+(the detail response already carried the pack's `summary`, `keyConcepts` and `quiz` — the title was the
+conspicuous omission), and the card is a `useMemo` over `note`. **A test asserts `getMyStudyPack` is NOT
+called**, so the fetch cannot come back.
+
+**⚠️ Deriving at render also fixed a second defect the fetch version had:** it stamped a
+"already checked" ref before the async resolved, so renaming a note through the inline editor left a stale
+suggestion for the rest of the visit — and *Use this title* would then have overwritten a title the curator
+had just deliberately changed. The memo re-evaluates whenever `note` changes.
 
 **4. `createGeneratedNote` was checked and deliberately left alone.** It sets `note.setTitle(generated.title())`
 at `StudyPackService:958`, which is **correct**: that is the paste-text/image path, where no curator topic
@@ -254,7 +277,12 @@ clearing the directory; `./mvnw clean install` exit status read directly, not th
 **2190 passed across 201 suites**; `tsc --noEmit` exit 0; ESLint 0 errors.
 
 **⚠️ NO endpoint was added, so `CLAUDE.md`'s real-request/MockMvc rule did not apply** — stated so a later
-session reads it as considered rather than skipped.
+session reads it as considered rather than skipped. `NoteResponse.studyPackTitle` rides an existing response
+whose contract is already exercised.
+
+**Frontend mutants, both killed by named tests:** making the dismissal in-memory fails `keeps the suggestion
+dismissed across a reload`; removing the title comparison fails `does not offer a suggestion when the
+generated title already matches the note's`.
 
 ### Known limitations
 

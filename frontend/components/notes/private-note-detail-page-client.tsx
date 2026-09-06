@@ -503,10 +503,11 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
   const [showGenerateStudyPackGuide, setShowGenerateStudyPackGuide] = useState(false);
   const [showQuickReviewGuide, setShowQuickReviewGuide] = useState(false);
   const [pendingSuggestion, setPendingSuggestion] = useState<PendingSuggestion | null>(null);
-  // v0.120.0: the persistent, opt-in title suggestion. See the effect below for why it is non-modal.
-  const [packTitleSuggestion, setPackTitleSuggestion] = useState<string | null>(null);
+  // v0.120.0: the persistent, opt-in title suggestion. See the memo below for why it is non-modal.
+  // The dismissal is persisted in localStorage; this state mirrors it only so that dismissing
+  // re-renders immediately instead of waiting for a remount.
+  const [dismissedTitleSuggestionNoteId, setDismissedTitleSuggestionNoteId] = useState<string | null>(null);
   const [applyingPackTitle, setApplyingPackTitle] = useState(false);
-  const packTitleCheckedStudyPackRef = useRef<string | null>(null);
   const [resolvingGeneratedMetadataSuggestion, setResolvingGeneratedMetadataSuggestion] = useState(false);
   const [applyingSuggestion, setApplyingSuggestion] = useState(false);
   const [generationMessageIndex, setGenerationMessageIndex] = useState(0);
@@ -1530,43 +1531,27 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
    * never arms it, and a 50-item batch could not show 50 modals -- the curator is not sitting on any
    * one note's page while the batch runs. So the bulk case needs a standing affordance.
    *
-   * ⚠️ DERIVED FROM `note.title !== studyPack.title`, NEVER FROM BULK PROVENANCE. No new column and no
-   * new field, and it serves any note whose titles have diverged rather than only bulk-authored ones.
+   * ⚠️ DERIVED AT RENDER TIME FROM `note.studyPackTitle`, WITH NO SECOND REQUEST, AND BOTH HALVES OF
+   * THAT MATTER. Fetching the pack via getMyStudyPack would have been the obvious implementation and
+   * is WRONG: `GET /study-packs/{id}` records an OPENED_STUDY_PACK activity event, which drives the
+   * Dashboard's last-opened pack (`DashboardService.findLastOpenedStudyPack`) -- so merely VIEWING a
+   * note would have rewritten what the curator's Dashboard recommends. Deriving from the note
+   * response also means the comparison re-evaluates whenever `note` changes, so renaming the note
+   * through the inline editor updates the card immediately instead of leaving a stale suggestion.
    *
-   * ⚠️ THE READ IS BOUNDED ON PURPOSE, given this repo has twice paid for reads that grew without one:
-   * curators only (Bulk Generate is curator-gated), pack READY only, once per Study Pack id, and never
-   * again once dismissed. A learner's note detail page issues no extra request at all.
+   * ⚠️ Compared on `note.title`, NEVER on bulk provenance: no new column, and it serves any note
+   * whose titles have diverged.
    */
-  useEffect(() => {
+  const packTitleSuggestion = useMemo(() => {
     if (!note || !canEditAuthoringMetadata) {
-      return;
+      return null;
     }
-    const studyPackId = note.studyPackId;
-    if (note.studyPackStatus !== "STUDY_PACK_READY" || !studyPackId) {
-      return;
+    if (dismissedTitleSuggestionNoteId === note.id || isTitleSuggestionDismissed(note.id)) {
+      return null;
     }
-    if (packTitleCheckedStudyPackRef.current === studyPackId || isTitleSuggestionDismissed(note.id)) {
-      return;
-    }
-    packTitleCheckedStudyPackRef.current = studyPackId;
-    const noteTitle = (note.title ?? "").trim();
-    let cancelled = false;
-    void (async () => {
-      try {
-        const pack = await getMyStudyPack(studyPackId);
-        const packTitle = (pack.title ?? "").trim();
-        if (cancelled || !packTitle || packTitle === noteTitle) {
-          return;
-        }
-        setPackTitleSuggestion(packTitle);
-      } catch {
-        // Non-blocking: a suggestion the curator never asked for must never surface an error.
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [canEditAuthoringMetadata, note]);
+    const packTitle = (note.studyPackTitle ?? "").trim();
+    return packTitle && packTitle !== (note.title ?? "").trim() ? packTitle : null;
+  }, [canEditAuthoringMetadata, dismissedTitleSuggestionNoteId, note]);
 
   const applyPackTitleSuggestion = useCallback(async () => {
     if (!note || !packTitleSuggestion || applyingPackTitle) {
@@ -1585,8 +1570,8 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
         tags: note.tags,
         content: note.content,
       });
+      // No explicit clear: the updated note carries the applied title, so the memo re-derives to null.
       setNote(updated);
-      setPackTitleSuggestion(null);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Could not apply the suggested title.";
       setError(message);
@@ -1604,7 +1589,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
     } catch {
       // The suggestion still clears for this visit even when the choice cannot be persisted.
     }
-    setPackTitleSuggestion(null);
+    setDismissedTitleSuggestionNoteId(note.id);
   }, [note]);
 
   const keepMineAndContinue = useCallback(() => {

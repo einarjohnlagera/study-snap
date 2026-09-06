@@ -1522,7 +1522,13 @@ public class NoteService {
                 quizCount,
                 hasGeneratedQuiz,
                 hasGeneratedQuiz,
-                hasGeneratedQuiz && featureGateService.hasFeatureAccess(planType, Feature.ADAPTIVE_QUIZ)
+                hasGeneratedQuiz && featureGateService.hasFeatureAccess(planType, Feature.ADAPTIVE_QUIZ),
+                // The pack's OWN title, which since v0.120.0 may legitimately differ from the note's.
+                // Carried on the detail response so the suggestion can be offered without a second
+                // request -- GET /study-packs/{id} records OPENED_STUDY_PACK, which drives the
+                // Dashboard's last-opened pack, so fetching it to compare titles would let merely
+                // VIEWING a note rewrite that recommendation.
+                studyPack == null ? null : studyPack.getTitle()
         );
     }
 
