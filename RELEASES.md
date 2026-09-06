@@ -2,8 +2,8 @@
 
 ## v0.119.1 - Public Catalog Bounds
 
-**Status: In Progress** (kicked off 2026-09-06, base branch `releases/v0.119.1`, cut from `main` after
-`v0.119.0` merged and tagged)
+**Status: Released** (kicked off and signed off 2026-09-06, base branch `releases/v0.119.1`, cut from
+`main` after `v0.119.0` merged and tagged)
 
 Theme: an anonymous public read stops doing work proportional to the entire catalog, and a busy pool
 stops being mistaken for a dead application.
