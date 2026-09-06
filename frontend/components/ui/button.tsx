@@ -5,6 +5,9 @@ import { cn } from "@/lib/utils";
 type ButtonVariant = "default" | "secondary" | "outline" | "ghost" | "destructive" | "destructiveOutline";
 type ButtonSize = "default" | "sm";
 
+// `wrap` is an option on buttonVariants ONLY -- every current caller is a <Link> styled with the
+// helper, and threading an unused prop through <Button> would ship an untested path. Add it back when a
+// real <Button> needs to wrap.
 // `wrap` exists because `cn` is a plain join, NOT tailwind-merge -- passing `whitespace-normal` through
 // `className` would leave BOTH it and the base `whitespace-nowrap` in the class list and let stylesheet
 // order decide, which is not a contract we can rely on. So a wrapping button must not EMIT the conflicting
@@ -44,7 +47,6 @@ function Button({
   className,
   variant = "default",
   size = "default",
-  wrap = false,
   loading = false,
   loadingText,
   disabled,
@@ -53,13 +55,12 @@ function Button({
 }: React.ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: ButtonVariant;
   size?: ButtonSize;
-  wrap?: boolean;
   loading?: boolean;
   loadingText?: string;
 }) {
   return (
     <button
-      className={buttonVariants({ variant, size, wrap, className })}
+      className={buttonVariants({ variant, size, className })}
       disabled={loading || disabled}
       aria-busy={loading || undefined}
       {...props}

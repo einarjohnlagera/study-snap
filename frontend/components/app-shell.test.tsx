@@ -486,6 +486,11 @@ describe("AppShell", () => {
       expect(screen.queryByTestId("mobile-bottom-tab-bar")).not.toBeInTheDocument();
     });
     expect(screen.queryByLabelText("Open user menu")).not.toBeInTheDocument();
+    // ⚠️ ASSERTS WHAT THE RECIPIENT ACTUALLY GETS, NOT ONLY WHAT IS ABSENT. Leaving the authenticated
+    // shell does NOT mean "no chrome" -- it used to fall through to the MARKETING navbar, which has no
+    // auth awareness and unconditionally renders Login / Get Started. A signed-in recipient was being
+    // invited to log in to the account they were already using. Two absence assertions passed throughout.
+    expect(screen.queryByText("Public Navbar")).not.toBeInTheDocument();
   });
 
   // Pins the boundary: the in-app quiz surfaces live under /notes and /study-packs and must KEEP the

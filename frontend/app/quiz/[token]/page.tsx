@@ -141,6 +141,9 @@ export default function SharedQuizPage() {
     const { nextAnswers, nextMultiAnswers } = commitCurrentSelection();
     setAnswers(nextAnswers);
     setMultiAnswers(nextMultiAnswers);
+    // Navigating away from a failed submit must clear its error, or the message follows the recipient onto
+    // an unrelated question. Reachable only since Back exists.
+    setSubmitError(null);
     const previousIndex = currentIndex - 1;
     restoreSelectionAt(previousIndex, nextAnswers, nextMultiAnswers);
     setCurrentIndex(previousIndex);
@@ -158,6 +161,7 @@ export default function SharedQuizPage() {
       const nextIndex = currentIndex + 1;
       restoreSelectionAt(nextIndex, nextAnswers, nextMultiAnswers);
       setCurrentIndex(nextIndex);
+      setSubmitError(null);
       return;
     }
 
@@ -229,7 +233,7 @@ export default function SharedQuizPage() {
           <p className="text-sm leading-6 text-foreground/75">
             The teacher may have turned sharing off, or the link may have been removed.
           </p>
-          <Link href="/" className={buttonVariants({ wrap: true, className: "w-full sm:w-auto" })}>
+          <Link href="/" className={buttonVariants({ className: "w-full sm:w-auto" })}>
             Learn about NoteLib
           </Link>
         </Card>
@@ -386,7 +390,7 @@ export default function SharedQuizPage() {
                       "motion-pressable flex w-full items-start gap-2 rounded-xl border px-4 py-3 text-left text-sm font-medium transition-colors",
                       isSelected
                         ? "border-primary bg-primary/10 text-foreground"
-                        : "border-border bg-background hover:bg-highlight disabled:hover:bg-background",
+                        : "border-border bg-background hover:bg-highlight",
                     ].join(" ")}
                     onClick={() => (isMultiSelect ? toggleMultiAnswer(index) : setSelectedAnswer(index))}
                   >

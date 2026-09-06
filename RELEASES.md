@@ -166,12 +166,53 @@ page, not the authenticated shell*; making `wrap` emit the conflicting class any
 *shared quiz page › labels the concept so it does not read as part of the question*. **⚠️ The button guard
 asserts `whitespace-nowrap` is ABSENT rather than that `whitespace-normal` is present — the latter passes
 under the plain-join bug and proves nothing.** `npx tsc --noEmit` clean, `npm run lint` 0 errors (18
-pre-existing warnings, none in touched files), the frontend suite green at **201 suites / 2,205 tests**
+pre-existing warnings, none in touched files), the frontend suite green at **201 suites / 2,210 tests**
 and the backend suite at **2,198 tests / 0 failures** (counted from `target/surefire-reports/*.xml` after
 cleaning the directory first), each command's exit status read directly rather than through a pipe.
 Removing the completion event failed *shared quiz page › records a completion once a recipient's answers
 are graded*; firing it before the await failed *shared quiz page › records no completion when grading
 fails*. **⚠️ Slice 1's second mutant is the one worth recording: re-splitting `resolveSharedQuestions` onto its own unfiltered derivation was killed by EXACTLY ONE test — *sharedQuizGradesASubmissionSizedToTheFilteredQuestionList* — the guard that exists to prove the delegation matters.** Admitting every question format was killed by three. **⚠️ Slice 4's own mutants are recorded too, because the first draft of this paragraph omitted them:** making `eligibleSources` ignore visibility was killed by *aPrivateSourceNoteIsNeverOfferedToAShareRecipient* and *aPrivateSourceNoteIdNeverLeaksAnywhereInThePayload*; giving a combined quiz a title-inferred source — **the exact shape the owner rule forbids** — was killed by *combinedQuizIsFlatPublicPayloadWithoutAnswerKeyAndMultiSelectGradesExactly*; and reverting the results CTA to what shipped in PR #1302 was killed by *lets the long results call-to-action wrap instead of overflowing*.
+
+**⚠️ A SECOND SCOPED COLD AGENT RAN OVER SLICES 1-3 BEFORE SIGNOFF, AND IT FOUND A REAL DEFECT — THE
+ESCALATION WAS OWED AND HAD BEEN MISSED.** The gate escalates from `advisor()` to one scoped cold agent when
+**delivery introduces a defect the same session then fixes** — a measured blind-spot signal. That trigger
+fired when the CTA fix landed on the wrong button, and slices 1-3 were nonetheless given only the
+`advisor()` tier. The agent was briefed to hunt **the same shape**: a change correct in its mechanism but
+wrong or unobservable at the call site.
+
+- **⚠️ REMOVING THE AUTHENTICATED SHELL DID NOT MEAN "NO CHROME" — IT FELL THROUGH TO THE MARKETING
+  `<Navbar />`, WHICH HAS NO AUTH AWARENESS.** A signed-in recipient was shown **Login** and **Get Started**
+  — invited to log into the account they were already using — inside a sticky header carrying **eight
+  navigation destinations**, on desktop and mobile alike. **The mobile tab bar had simply been traded for a
+  marketing bar, so the release's own stated goal of "no escape hatches mid-assessment" was not met.** The
+  recipient page now renders with **no chrome at all**. **⚠️ Verbatim the shape that triggered this review:
+  the predicate was right and the `!shouldUseShell` call site was never examined.**
+- **A failed submit's error followed the recipient onto an unrelated question.** `setSubmitError(null)` sat
+  after the `isLastQuestion` early return and `handleBack` never cleared it — reachable **only because Back
+  now exists**, so it is a defect this release created.
+- **The misapplied `wrap: true` was supplemented, never reverted.** The earlier correction added it to the
+  real CTA and left it on the short *"Learn about NoteLib"* button, where a later reader would take the
+  mistake for a decision. Reverted.
+- **Dead code removed:** `Button`'s `wrap` prop had **zero call sites** (every caller styles a `<Link>`
+  through `buttonVariants`), and `disabled:hover:bg-background` outlived the `disabled` attribute it paired
+  with.
+- **⚠️ THREE TESTS WERE VACUOUS AND ONE MATTERS: deleting `answeredQuestions`' entire non-current-index
+  branch left all 19 tests green**, because the only counter assertion never left question 0 — the reduce is
+  this release's own rewrite and nothing exercised its actual job. Also unexercised: the `onCopySuccess` →
+  *"Saved to your Library"* path, and **what a recipient actually sees** (both app-shell guards asserted only
+  absences, which is why the `Navbar` defect was invisible to them).
+- **⚠️ A METRIC CORRECTION, MADE BEFORE THE READ RATHER THAN AFTER: the checkpoint's denominator was wrong.**
+  `QUIZ_SHARE_LINK_OPENED` fires **twice** from the recipient page — on load, and again from the
+  results-screen signup CTA, which fires **only after a recipient has already completed**. Counting both
+  inflates the denominator with a subset of completers and reads the rate low. The checkpoint row now
+  specifies **`metadata.source IS NULL`**. **Pre-existing mis-instrumentation, not a regression** — and the
+  CTA's event type was deliberately left alone, because this release's anti-drift forbids moving
+  `QUIZ_SHARE_LINK_OPENED`'s firing conditions.
+
+**⚠️ WHAT HELD UNDER ATTACK, recorded so it is not re-derived:** the `answers[i]`/`multiAnswers[i]` pairing
+survived every constructed path including failed-submit-then-retry and Back from the last question after a
+failure; `?? null` (not `||`) correctly preserves choice index `0`; the completion event cannot double-fire;
+and `isSharedQuizRoute` captures nothing it should not.
 
 ### Known limitations
 
