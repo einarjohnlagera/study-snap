@@ -12,6 +12,8 @@ import com.studysnap.backend.dto.NoteConceptCountsResponse;
 import com.studysnap.backend.dto.PlanReadinessResponse;
 import com.studysnap.backend.dto.ReviewSetUpdateResponse;
 import com.studysnap.backend.dto.GoalCollectionDetailResponse;
+import com.studysnap.backend.dto.GoalChildItemsResponse;
+import com.studysnap.backend.dto.NoteCollectionItemResponse;
 import com.studysnap.backend.dto.SetNoteCollectionChildrenOrderRequest;
 import com.studysnap.backend.dto.SetNoteCollectionParentRequest;
 import com.studysnap.backend.dto.SetNoteCollectionOrderRequest;
@@ -32,6 +34,12 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.core.MethodParameter;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.web.bind.support.WebDataBinderFactory;
+import org.springframework.web.context.request.NativeWebRequest;
+import org.springframework.web.method.support.HandlerMethodArgumentResolver;
+import org.springframework.web.method.support.ModelAndViewContainer;
 
 import java.time.Instant;
 import java.util.List;
@@ -43,6 +51,12 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.springframework.test.web.servlet.setup.MockMvcBuilders.standaloneSetup;
 
 @ExtendWith(MockitoExtension.class)
 class NoteCollectionControllerTest {
@@ -52,6 +66,7 @@ class NoteCollectionControllerTest {
     private static final String COLLECTION_ID = "e2163cd7-6bf7-45e9-8a01-14002a8fd8f6";
     private static final String NOTE_ID = "5940c881-7f8c-48cb-a00c-6ebe34872976";
     private static final String COLLECTION_TITLE = "Biology Unit";
+    private static final String WEEK_ONE_LABEL = "Week 1";
 
     @Mock
     private NoteCollectionService service;
@@ -82,6 +97,9 @@ class NoteCollectionControllerTest {
                 .getAnnotation(PreAuthorize.class).value()).isEqualTo(PREAUTHORIZE_ROLES);
         assertThat(NoteCollectionController.class
                 .getMethod("getGoal", String.class, AuthenticatedUser.class)
+                .getAnnotation(PreAuthorize.class).value()).isEqualTo(PREAUTHORIZE_ROLES);
+        assertThat(NoteCollectionController.class
+                .getMethod("getGoalChildItems", String.class, AuthenticatedUser.class)
                 .getAnnotation(PreAuthorize.class).value()).isEqualTo(PREAUTHORIZE_ROLES);
         assertThat(NoteCollectionController.class
                 .getMethod("getSourceUpdate", String.class, AuthenticatedUser.class)
@@ -592,6 +610,123 @@ class NoteCollectionControllerTest {
                 now,
                 List.of()
         );
+    }
+
+
+    /**
+     * ⚠️ GUARD (d) — THE ONE REAL-REQUEST TEST THIS RELEASE OWES.
+     *
+     * <p>Every other test in this class calls the handler AS A METHOD, which passes under the defect by
+     * construction: it never enters Spring's routing or content negotiation. {@code v0.119.0} shipped a
+     * feature whose every JSON POST omitted {@code Content-Type} — Spring rejected it before the
+     * controller was entered — with 2,182 frontend tests green and a full three-agent pressure test that
+     * could not see it, because every tier read code and none exercised transport.
+     *
+     * <p>⚠️ This endpoint is a GET with NO REQUEST BODY, so {@code .contentType(APPLICATION_JSON)} does
+     * not apply and is deliberately omitted rather than added meaninglessly. What transport proves here
+     * is the other half: that {@code /collections/{id}/goal/child-items} RESOLVES TO ITS OWN HANDLER
+     * rather than colliding with {@code /{id}/goal}, and that the nested {@code items} SERIALIZE over
+     * the wire.
+     */
+    @Test
+    void goalChildItemsResolveToTheirOwnHandlerAndSerializeOverTheWire() throws Exception {
+        AuthenticatedUser routeUser = new AuthenticatedUser(UUID.randomUUID(), UserRole.USER, true, 1);
+        UUID goalId = UUID.fromString(COLLECTION_ID);
+        UUID childId = UUID.randomUUID();
+        UUID noteId = UUID.fromString(NOTE_ID);
+        when(service.getGoalChildItems(goalId, routeUser.userId())).thenReturn(List.of(
+                new GoalChildItemsResponse(childId, List.of(new NoteCollectionItemResponse(
+                        noteId,
+                        WEEK_ONE_LABEL,
+                        0,
+                        COLLECTION_TITLE,
+                        null,
+                        null,
+                        null,
+                        null,
+                        "DRAFT",
+                        null,
+                        null,
+                        0,
+                        List.of(),
+                        null
+                )))
+        ));
+
+        buildMockMvc(routeUser)
+                .perform(get("/collections/" + goalId + "/goal/child-items"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].collectionId").value(childId.toString()))
+                .andExpect(jsonPath("$[0].items[0].noteId").value(noteId.toString()))
+                .andExpect(jsonPath("$[0].items[0].label").value(WEEK_ONE_LABEL))
+                .andExpect(jsonPath("$[0].items[0].position").value(0));
+
+        verify(service, never()).getGoal(any(), any());
+        verify(service, never()).get(any(), any());
+    }
+
+    /**
+     * ⚠️ GUARD (c) — {@code GoalCollectionDetailResponse} MUST NOT GROW.
+     *
+     * <p>The cheapest way to make the builder's request count fall is to hang the children's items on
+     * the goal response — which this release forbids, because six of that endpoint's SEVEN frontend
+     * consumers need the goal shape and not one child's items, so it would inflate the Dashboard and
+     * three exam prestart paths to serve the builder alone.
+     *
+     * <p>Pinned by exact component NAME and ORDER, so a rename or a reorder fails here too, not only an
+     * addition.
+     */
+    @Test
+    void goalDetailResponseFieldSetIsUnchanged() {
+        assertThat(GoalCollectionDetailResponse.class.getRecordComponents())
+                .extracting(java.lang.reflect.RecordComponent::getName)
+                .containsExactly(
+                        "collectionId",
+                        "title",
+                        "description",
+                        "visibility",
+                        "courseProgram",
+                        "targetCompletionDate",
+                        "companion",
+                        "companionMayBeOutdated",
+                        "sourcePlanId",
+                        "parentCollectionId",
+                        "itemCount",
+                        "childCount",
+                        "overallReadinessPercentage",
+                        "masteredConcepts",
+                        "dueConcepts",
+                        "notPracticedConcepts",
+                        "totalConcepts",
+                        "weeksRemaining",
+                        "conceptsRemaining",
+                        "todaysConceptBudget",
+                        "weeklyFocusByDay",
+                        "createdAt",
+                        "updatedAt",
+                        "children"
+                );
+    }
+
+    private MockMvc buildMockMvc(AuthenticatedUser routeUser) {
+        return standaloneSetup(new NoteCollectionController(service, adaptivePracticeService))
+                .setCustomArgumentResolvers(new HandlerMethodArgumentResolver() {
+                    @Override
+                    public boolean supportsParameter(MethodParameter parameter) {
+                        return parameter.getParameterType() == AuthenticatedUser.class;
+                    }
+
+                    @Override
+                    public Object resolveArgument(
+                            MethodParameter parameter,
+                            ModelAndViewContainer mavContainer,
+                            NativeWebRequest webRequest,
+                            WebDataBinderFactory binderFactory
+                    ) {
+                        return routeUser;
+                    }
+                })
+                .build();
     }
 
     private CompanionContent companionContent() {

@@ -472,6 +472,18 @@ export type GoalCollectionDetailResponse = {
   children: GoalCollectionChildResponse[];
 };
 
+/**
+ * The item detail of ONE child Subject Plan of a Goal.
+ *
+ * ⚠️ DELIBERATELY MINIMAL: the Goal builder reads only `(collectionId, items)` off a child, so this
+ * carries nothing else. `GoalCollectionDetailResponse` is NOT widened to hold it — six of its seven
+ * consumers need the goal shape and no child's items.
+ */
+export type GoalChildItemsResponse = {
+  collectionId: string;
+  items: NoteCollectionItem[];
+};
+
 export type DashboardConceptInsightResponse = {
   conceptName: string;
   accuracyPercentage: number;
@@ -5088,6 +5100,25 @@ export async function getCollectionGoal(id: string): Promise<GoalCollectionDetai
     true,
   );
   return parseApiResponse<GoalCollectionDetailResponse>(response, "Could not load goal details.");
+}
+
+/**
+ * Every child Subject Plan's items for a Goal, in ONE request.
+ *
+ * ⚠️ IT REPLACES A PER-CHILD FAN-OUT. A Review Set with 20 plans used to cost 22 requests to render
+ * the builder once, against 3 now; `Promise.all` made those concurrent, not cheap, against a pool of 20.
+ * ⚠️ It takes no id list — the server derives the children from the Goal it already authorized.
+ */
+export async function getGoalChildItems(id: string): Promise<GoalChildItemsResponse[]> {
+  const response = await fetchWithAuth(
+    `/collections/${id}/goal/child-items`,
+    {
+      method: "GET",
+      headers: buildAuthHeaders(),
+    },
+    true,
+  );
+  return parseApiResponse<GoalChildItemsResponse[]>(response, "Could not load goal details.");
 }
 
 export async function getActiveAskCompanionSession(

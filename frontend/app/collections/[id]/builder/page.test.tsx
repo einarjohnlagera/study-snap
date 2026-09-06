@@ -6,6 +6,7 @@ import {
   deleteCollection,
   getCollection,
   getCollectionGoal,
+  getGoalChildItems,
   listNotes,
   removeCollectionItem,
   reorderCollectionChildren,
@@ -55,6 +56,7 @@ jest.mock("@/lib/api", () => {
     deleteCollection: jest.fn(),
     getCollection: jest.fn(),
     getCollectionGoal: jest.fn(),
+    getGoalChildItems: jest.fn(),
     listNotes: jest.fn(),
     removeCollectionItem: jest.fn(),
     reorderCollectionChildren: jest.fn(),
@@ -204,6 +206,7 @@ describe("StudyPlanBuilderPageClient", () => {
     (deleteCollection as jest.Mock).mockReset();
     (getCollection as jest.Mock).mockReset();
     (getCollectionGoal as jest.Mock).mockReset();
+    (getGoalChildItems as jest.Mock).mockReset();
     (listNotes as jest.Mock).mockReset();
     (removeCollectionItem as jest.Mock).mockReset();
     (reorderCollectionChildren as jest.Mock).mockReset();
@@ -228,6 +231,27 @@ describe("StudyPlanBuilderPageClient", () => {
       return Promise.resolve(collectionDetail("child-2", "General Education Mastery", [
         collectionItem("note-2", "General Foundations", 0),
       ]));
+    });
+    // ⚠️ FIXTURE DEFAULT ONLY -- it derives the batch response from whatever `getCollection` is
+    // configured to return for each child, exactly as the server does, so every Goal test that
+    // configures a child through `getCollection` keeps working unchanged. It is the same pattern the
+    // `setCollectionItemOrder` default below uses. ⚠️ It is NOT the guard: because it calls
+    // `getCollection` per child it cannot tell a batch read from a fan-out, so the request-count test
+    // stubs `getGoalChildItems` DIRECTLY instead.
+    (getGoalChildItems as jest.Mock).mockImplementation(async (id: string) => {
+      // ⚠️ The goal's configured implementation is INVOKED DIRECTLY rather than through the mock, so
+      // deriving the fixture does not inflate `getCollectionGoal`'s own call count -- an existing test
+      // asserts that count exactly. ⚠️ It therefore does NOT see a `mockResolvedValueOnce` chain on
+      // `getCollectionGoal` (none exists today); a test that adds one must stub `getGoalChildItems`
+      // itself rather than debug a silent fixture mismatch here.
+      const goal = await (getCollectionGoal as jest.Mock).getMockImplementation()!(id);
+      const details = await Promise.all(
+        goal.children.map((child: { collectionId: string }) => (getCollection as jest.Mock)(child.collectionId)),
+      );
+      return details.map((detail: { id: string; items: NoteCollectionItem[] }) => ({
+        collectionId: detail.id,
+        items: detail.items,
+      }));
     });
     (listNotes as jest.Mock).mockResolvedValue([
       note("note-1", "Professional Foundations"),
@@ -1275,5 +1299,117 @@ describe("StudyPlanBuilderPageClient", () => {
     } finally {
       jest.useRealTimers();
     }
+  });
+
+  /**
+   * ⚠️ GUARD (a) — THE REQUEST COUNT, WITH THREE CHILDREN.
+   *
+   * A ONE-child fixture cannot tell a batch read from a fan-out and passes under both, so this uses
+   * three. `getGoalChildItems` is stubbed DIRECTLY here (not through the deriving default in
+   * `beforeEach`, which calls `getCollection` per child by design) so the `getCollection` count is the
+   * component's own.
+   *
+   * ⚠️ `getCollection` must be called EXACTLY ONCE, not zero: the Goal's own detail is still fetched.
+   * A `not.toHaveBeenCalled()` assertion here would fail for the wrong reason.
+   */
+  it("loads every subject plan's notes in one batch read instead of one request per plan", async () => {
+    const children = [
+      goalChild("child-1", "Professional Education Mastery", 50),
+      goalChild("child-2", "General Education Mastery", 40),
+      goalChild("child-3", "Major Specialization Mastery", 30),
+    ];
+    (getCollectionGoal as jest.Mock).mockResolvedValue(goalDetail({ childCount: 3, children }));
+    (getCollection as jest.Mock).mockResolvedValue(collectionDetail("goal-1", "LET Mastery", [], {
+      parentCollectionId: null,
+      childCount: 3,
+    }));
+    (getGoalChildItems as jest.Mock).mockResolvedValue([
+      { collectionId: "child-1", items: [collectionItem("note-1", "Professional Foundations", 0)] },
+      { collectionId: "child-2", items: [collectionItem("note-2", "General Foundations", 0)] },
+      { collectionId: "child-3", items: [collectionItem("note-3", "Assessment Notes", 0)] },
+    ]);
+
+    render(<StudyPlanBuilderPageClient collectionId="goal-1" />);
+    await screen.findByDisplayValue("Major Specialization Mastery");
+
+    expect(getGoalChildItems).toHaveBeenCalledTimes(1);
+    expect(getGoalChildItems).toHaveBeenCalledWith("goal-1");
+    // The Goal's own detail, and nothing per child.
+    expect(getCollection).toHaveBeenCalledTimes(1);
+    expect(getCollection).toHaveBeenCalledWith("goal-1");
+    expect(getCollection).not.toHaveBeenCalledWith("child-1");
+    expect(getCollection).not.toHaveBeenCalledWith("child-2");
+    expect(getCollection).not.toHaveBeenCalledWith("child-3");
+  });
+
+  /**
+   * ⚠️ GUARD (b) — THE RENDERED SHAPE IS UNCHANGED.
+   *
+   * A request-count test alone passes while the page renders the wrong notes under the wrong plan, so
+   * this asserts the subjects and their items directly. The fixture deliberately gives the batch
+   * response a DIFFERENT order from `goal.children` and puts each plan's items out of position order,
+   * because the contract is that subjects follow `goal.children` and items follow `position` -- a
+   * fixture already in both orders would pass under a lookup that ignored the collection id entirely.
+   */
+  it("renders each subject plan's own notes, in plan order and position order, from the batch read", async () => {
+    const children = [
+      goalChild("child-1", "Professional Education Mastery", 50),
+      goalChild("child-2", "General Education Mastery", 40),
+      goalChild("child-3", "Major Specialization Mastery", 30),
+    ];
+    (getCollectionGoal as jest.Mock).mockResolvedValue(goalDetail({ childCount: 3, children }));
+    (getCollection as jest.Mock).mockResolvedValue(collectionDetail("goal-1", "LET Mastery", [], {
+      parentCollectionId: null,
+      childCount: 3,
+    }));
+    (getGoalChildItems as jest.Mock).mockResolvedValue([
+      { collectionId: "child-3", items: [collectionItem("note-5", "Specialization Core", 0)] },
+      {
+        collectionId: "child-1",
+        items: [
+          collectionItem("note-2", "Assessment of Learning", 1),
+          collectionItem("note-1", "Professional Foundations", 0),
+        ],
+      },
+      { collectionId: "child-2", items: [collectionItem("note-4", "General Foundations", 0)] },
+    ]);
+
+    render(<StudyPlanBuilderPageClient collectionId="goal-1" />);
+    await screen.findByDisplayValue("Professional Education Mastery");
+
+    const renderedSubjects = screen
+      .getAllByLabelText("Subject Plan title")
+      .map((input) => (input as HTMLInputElement).value);
+    expect(renderedSubjects).toEqual([
+      "Professional Education Mastery",
+      "General Education Mastery",
+      "Major Specialization Mastery",
+    ]);
+
+    fireEvent.click(screen.getByRole("button", { name: "Expand all" }));
+
+    const professional = subjectBlock("Professional Education Mastery");
+    expect(within(professional).getByText("Professional Foundations")).toBeInTheDocument();
+    expect(within(professional).getByText("Assessment of Learning")).toBeInTheDocument();
+    expect(within(professional).queryByText("General Foundations")).not.toBeInTheDocument();
+    expect(within(professional).queryByText("Specialization Core")).not.toBeInTheDocument();
+    const professionalNotes = within(professional)
+      .getAllByLabelText(/^Drag /)
+      .map((element) => element.getAttribute("aria-label"));
+    // The block's own drag handle leads; the two note handles follow in POSITION order, not in the
+    // order the batch response listed them.
+    expect(professionalNotes).toEqual([
+      "Drag Professional Education Mastery",
+      "Drag Professional Foundations",
+      "Drag Assessment of Learning",
+    ]);
+
+    const general = subjectBlock("General Education Mastery");
+    expect(within(general).getByText("General Foundations")).toBeInTheDocument();
+    expect(within(general).queryByText("Professional Foundations")).not.toBeInTheDocument();
+
+    const specialization = subjectBlock("Major Specialization Mastery");
+    expect(within(specialization).getByText("Specialization Core")).toBeInTheDocument();
+    expect(within(specialization).queryByText("Professional Foundations")).not.toBeInTheDocument();
   });
 });

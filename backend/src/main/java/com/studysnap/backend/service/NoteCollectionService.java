@@ -12,6 +12,7 @@ import com.studysnap.backend.dto.GenerateCompanionRequest;
 import com.studysnap.backend.dto.GeneratedCompanionContentResponse;
 import com.studysnap.backend.dto.GoalCollectionChildResponse;
 import com.studysnap.backend.dto.GoalCollectionDetailResponse;
+import com.studysnap.backend.dto.GoalChildItemsResponse;
 import com.studysnap.backend.dto.NoteCollectionDetailResponse;
 import com.studysnap.backend.dto.NoteCollectionItemResponse;
 import com.studysnap.backend.dto.NoteCollectionProgressResponse;
@@ -118,6 +119,8 @@ public class NoteCollectionService {
     private static final String PARENT_WITH_NOTES_MESSAGE = "A collection must be empty before it can become a goal.";
     private static final String CHILD_ORDER_SET_MISMATCH_MESSAGE = "Child order must include exactly the current child plans.";
     private static final String CHILD_ID_REQUIRED_MESSAGE = "Child collection id is required.";
+    private static final String ITEM_RESPONSE_ALIGNMENT_MESSAGE =
+            "Collection item responses must align positionally with their items.";
     private static final String PRIMARY_REQUIRES_TOP_LEVEL_GOAL_MESSAGE = "Only a top-level Goal can be primary.";
     private static final String TARGET_DATE_REQUIRES_TOP_LEVEL_GOAL_MESSAGE = "Only a top-level Goal can have a target completion date.";
     private static final String COMPANION_REQUIRES_TOP_LEVEL_GOAL_MESSAGE = "Only a top-level Goal can have a Companion.";
@@ -444,6 +447,74 @@ public class NoteCollectionService {
                 collection.getUpdatedAt(),
                 scheduledChildResponses
         );
+    }
+
+    /**
+     * The item detail of EVERY child Subject Plan of a Goal, in one read.
+     *
+     * <p>⚠️ IT EXISTS BECAUSE THE GOAL BUILDER WAS AN HTTP N+1: it loaded the Goal and then issued one
+     * {@code getCollection} per child, so a Review Set with 20 plans cost 22 requests to render one page
+     * against 3 now.
+     * {@code Promise.all} made those concurrent rather than cheap, and the connection pool is 20.
+     *
+     * <p>⚠️ THE CHILD IDS ARE DERIVED SERVER-SIDE, NEVER ACCEPTED FROM THE CALLER. Authorization is
+     * therefore exactly the fan-out's: {@code getOwnedCollectionOrThrow} on the parent (a non-owner gets
+     * the same 404 a single read gives), and the children query is itself filtered by owner, so a child
+     * this caller does not own cannot appear. An id-list request shape would need per-id authorization
+     * and is the IDOR version of this endpoint — do not introduce one.
+     *
+     * <p>⚠️ ITEMS FOR ALL CHILDREN ARE BUILT IN ONE {@code toItemResponses} PASS, so the batch costs the
+     * same five bulk queries at 2 children as at 20. {@code toItemResponses} is left untouched: the waste
+     * was the REQUEST COUNT, not the per-request work.
+     */
+    @Transactional(readOnly = true)
+    public List<GoalChildItemsResponse> getGoalChildItems(UUID collectionId, UUID userId) {
+        getOwnedCollectionOrThrow(collectionId, userId);
+        List<NoteCollectionEntity> children = collectionRepository
+                .findOrderedChildrenByParentCollectionIdAndOwnerUserId(collectionId, userId);
+        if (children.isEmpty()) {
+            return List.of();
+        }
+        List<UUID> childIds = children.stream().map(NoteCollectionEntity::getId).toList();
+        List<NoteCollectionItemEntity> items = itemRepository
+                .findByCollectionIdInOrderByCollectionIdAscPositionAsc(childIds);
+        Map<UUID, List<NoteCollectionItemResponse>> itemsByCollectionId =
+                groupItemResponsesByCollectionId(userId, items);
+        return children.stream()
+                .map(child -> new GoalChildItemsResponse(
+                        child.getId(),
+                        itemsByCollectionId.getOrDefault(child.getId(), List.of())
+                ))
+                .toList();
+    }
+
+    /**
+     * ⚠️ POSITIONAL PARTITION — THE ONE THING THAT CAN SILENTLY MISATTRIBUTE AN ITEM TO THE WRONG PLAN.
+     *
+     * <p>{@code toItemResponses} is a bare 1:1 {@code map} over its input, so response {@code i}
+     * describes item {@code i}. Its sibling {@code toPublicItemResponses} carries a {@code .filter()},
+     * so a future edit that adds one here would shift every response after the first drop into another
+     * child's list with no error. {@code v0.104.0} paid for exactly this class once — a positional helper
+     * reused over a filtered sublist read the wrong answers for every item after the first — so the size
+     * check below is load-bearing and must fail LOUDLY rather than degrade.
+     */
+    private Map<UUID, List<NoteCollectionItemResponse>> groupItemResponsesByCollectionId(
+            UUID userId,
+            List<NoteCollectionItemEntity> items
+    ) {
+        if (items.isEmpty()) {
+            return Map.of();
+        }
+        List<NoteCollectionItemResponse> responses = toItemResponses(userId, items);
+        if (responses.size() != items.size()) {
+            throw new IllegalStateException(ITEM_RESPONSE_ALIGNMENT_MESSAGE);
+        }
+        Map<UUID, List<NoteCollectionItemResponse>> grouped = new LinkedHashMap<>();
+        for (int index = 0; index < items.size(); index++) {
+            grouped.computeIfAbsent(items.get(index).getCollectionId(), key -> new ArrayList<>())
+                    .add(responses.get(index));
+        }
+        return grouped;
     }
 
     private ReadinessConceptTotals getDirectItemReadinessConceptTotals(UUID collectionId, UUID userId) {
