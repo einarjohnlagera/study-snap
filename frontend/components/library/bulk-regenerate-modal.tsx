@@ -9,6 +9,7 @@ import {
   bulkRegenerateNotes,
   getBulkRegenerationReceipt,
   preflightNoteRegeneration,
+  retryBulkRegeneration,
   type NoteBulkRegenerationReceiptResponse,
   type NoteRegenerationPreflightResponse,
   type NoteRegenerationScopeValue,
@@ -161,6 +162,26 @@ export function BulkRegenerateModal({
       setStarting(false);
     }
   }, [noteIds, onBatchStarted, preflight, scope]);
+
+  const handleRetry = useCallback(async () => {
+    if (!batchId || !receipt || receipt.retryableNoteIds.length === 0) {
+      return;
+    }
+    setStarting(true);
+    setError(null);
+    try {
+      // The server derives the failed set and mints a NEW batch id -- retrying into the original would
+      // put two writers on one (batch_id, note_id) row, which writeItem cannot survive.
+      const response = await retryBulkRegeneration(batchId);
+      writeStoredBatchId(response.batchId);
+      setReceipt(null);
+      setBatchId(response.batchId);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Could not retry the failed notes.");
+    } finally {
+      setStarting(false);
+    }
+  }, [batchId, receipt]);
 
   const handleGroupKeyDown = useCallback((event: ReactKeyboardEvent<HTMLDivElement>) => {
     const keys = ["ArrowRight", "ArrowDown", "ArrowLeft", "ArrowUp", "Home", "End"];
@@ -380,6 +401,16 @@ export function BulkRegenerateModal({
           </p>
         ) : null}
 
+        {receipt.finished && receipt.retryableNoteIds.length > 0 ? (
+          <p className="text-xs text-foreground/70">
+            {receipt.retryableNoteIds.length} {plural(receipt.retryableNoteIds.length, "note")} failed and
+            can be run again. Blocked notes are not retried — fix what blocked them and re-select those
+            deliberately.
+          </p>
+        ) : null}
+
+        {error ? <p className="text-sm font-medium text-destructive">{error}</p> : null}
+
         {unresolved.length > 0 ? (
           <ul className="space-y-1 text-xs text-foreground/70">
             {unresolved.map((item) => (
@@ -394,10 +425,23 @@ export function BulkRegenerateModal({
     );
   };
 
+  const canRetry = Boolean(receipt?.finished) && (receipt?.retryableNoteIds.length ?? 0) > 0;
+
   const actions = batchId ? (
-    <Button
-      type="button"
-      onClick={() => {
+    <>
+      {canRetry ? (
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => void handleRetry()}
+          disabled={starting}
+        >
+          {starting ? "Retrying…" : `Retry ${receipt?.retryableNoteIds.length ?? 0} failed`}
+        </Button>
+      ) : null}
+      <Button
+        type="button"
+        onClick={() => {
         // Only a settled batch is forgotten. Closing mid-run keeps the id so reopening resumes the
         // receipt rather than offering to run the same selection again.
         if (receipt?.finished || receipt?.stale) {
@@ -406,8 +450,9 @@ export function BulkRegenerateModal({
         onClose();
       }}
     >
-      {receipt?.finished || receipt?.stale ? "Done" : "Close"}
-    </Button>
+        {receipt?.finished || receipt?.stale ? "Done" : "Close"}
+      </Button>
+    </>
   ) : (
     <>
       <Button type="button" variant="outline" onClick={onClose} disabled={starting}>Cancel</Button>

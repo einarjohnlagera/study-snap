@@ -227,6 +227,25 @@ public class NoteController {
     }
 
     /**
+     * Re-runs the FAILED items of a previous batch, as a NEW batch.
+     *
+     * <p>⚠️ TAKES A BATCH ID, NEVER A NOTE LIST. The server derives which items failed, so "retry only
+     * the failed ones" is a guarantee rather than something the client is trusted to get right on a
+     * path that spends metered units.
+     */
+    @PostMapping("/bulk-regenerate/{batchId}/retry")
+    @PreAuthorize("hasAnyRole('USER','ADMIN')")
+    public BulkRegenerateNotesResponse retryBulkRegeneration(
+            @PathVariable UUID batchId,
+            @AuthenticationPrincipal AuthenticatedUser user
+    ) {
+        UUID userId = user.userId();
+        authService.requireEmailVerified(userId);
+        boolean enforceLimits = user.role() != UserRole.ADMIN;
+        return noteBulkRegenerationService.retryFailedItems(batchId, userId, enforceLimits);
+    }
+
+    /**
      * Queues a bulk regeneration batch.
      *
      * <p>⚠️ The over-quota rejection is a 422 raised inside {@code queueBatch} BEFORE anything is

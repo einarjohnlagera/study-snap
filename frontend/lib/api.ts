@@ -6196,3 +6196,24 @@ export async function getBulkRegenerationReceipt(
   );
   return parseApiResponse<NoteBulkRegenerationReceiptResponse>(response, "Could not load the regeneration receipt.");
 }
+
+/**
+ * Re-runs the FAILED items of a batch as a NEW batch.
+ *
+ * ⚠️ Takes a batch id, never a note list: the server derives which items failed, so "retry only the
+ * failed ones" is a server guarantee rather than something this client is trusted to get right on a
+ * path that spends metered units.
+ */
+export async function retryBulkRegeneration(
+  batchId: string,
+): Promise<BulkRegenerateNotesResponse> {
+  const response = await fetchWithAuth(
+    `/notes/bulk-regenerate/${batchId}/retry`,
+    {
+      method: "POST",
+      headers: buildAuthHeaders(),
+    },
+    true,
+  );
+  return parseApiResponse<BulkRegenerateNotesResponse>(response, "Could not retry the failed notes.");
+}

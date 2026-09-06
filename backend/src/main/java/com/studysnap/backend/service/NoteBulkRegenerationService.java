@@ -12,6 +12,7 @@ import com.studysnap.backend.exception.BulkNoteRegenerationQuotaExceededExceptio
 import com.studysnap.backend.exception.InvalidBulkRegenerationRequestException;
 import com.studysnap.backend.exception.MonthlyNoteGenerationLimitReachedException;
 import com.studysnap.backend.exception.AppException;
+import com.studysnap.backend.exception.NoteBulkRegenerationBatchNotFoundException;
 import com.studysnap.backend.exception.NoteNotFoundException;
 import com.studysnap.backend.repository.NoteBulkRegenerationItemRepository;
 import com.studysnap.backend.repository.NoteRepository;
@@ -87,6 +88,8 @@ public class NoteBulkRegenerationService {
     private static final long MIN_ITEM_TIMEOUT_MS = 1_000L;
     private static final String EMPTY_BATCH_MESSAGE = "Select at least one note to regenerate.";
     private static final String MAX_NOTES_MESSAGE_TEMPLATE = "You can regenerate up to %d notes at once.";
+    private static final String NOTHING_TO_RETRY_MESSAGE =
+            "Nothing in that batch failed, so there is nothing to retry.";
     private static final String QUOTA_BLOCKED_CODE = "NOTE_GENERATION_LIMIT_REACHED";
     /** Thrown as a BARE AppException by StudyPackService.assertMonthlyStudyPackQuotaAvailable. */
     private static final String MONTHLY_STUDY_PACK_LIMIT_CODE = "MONTHLY_STUDY_PACK_LIMIT_REACHED";
@@ -156,6 +159,55 @@ public class NoteBulkRegenerationService {
      * Letting the batch run until quota ran out would leave the curator a half-rebuilt Review Set with
      * no way to tell which half.
      */
+    /**
+     * Re-runs the items of a previous batch that FAILED, as a NEW batch.
+     *
+     * <p>⚠️ THE SERVER DERIVES THE SET; THE CLIENT NEVER SENDS IT. Retry spends real units on a paid
+     * account, so "only the failed ones" has to be a server guarantee rather than a client convention —
+     * a client sending the wrong ids would re-run REGENERATED notes, spending quota and replacing good
+     * content with a second generation nobody asked for.
+     *
+     * <p>⚠️ REGENERATED IS NEVER RETRIED, and neither is BLOCKED: a blocked item stays blocked until
+     * its condition changes (quota resets, a Domain Context is set), so re-running it blindly would
+     * fail again for the same reason. The curator fixes the cause and re-selects deliberately.
+     *
+     * <p>⚠️ A NEW BATCH ID IS MINTED, AND THAT IS LOAD-BEARING RATHER THAN COSMETIC.
+     * {@code writeItem} is find-then-save against the unique {@code (batch_id, note_id)}, which is safe
+     * only while ONE driver owns a batch. Retrying INTO the original batch would give one pair two
+     * writers whenever a timed-out RUNNING worker is still alive, and the loser's constraint violation
+     * is swallowed. A fresh batch id makes that collision impossible by construction.
+     *
+     * <p>⚠️ It routes through {@link #queueBatch}, so a retry re-runs the curator gate, the
+     * pre-dispatch 422 and every per-item readiness guard. A retry can no more overspend than the
+     * original could.
+     */
+    public BulkRegenerateNotesResponse retryFailedItems(
+            UUID batchId,
+            UUID ownerUserId,
+            boolean enforceLimits
+    ) {
+        List<NoteBulkRegenerationItemEntity> rows =
+                itemRepository.findByBatchIdAndOwnerUserIdOrderByBatchCreatedAtAsc(batchId, ownerUserId);
+        if (rows.isEmpty()) {
+            // Same 404 contract as the receipt: unknown, someone else's and expired are indistinguishable.
+            throw new NoteBulkRegenerationBatchNotFoundException();
+        }
+
+        List<UUID> failedNoteIds = rows.stream()
+                .filter(row -> row.getState() == NoteBulkRegenerationItemState.FAILED)
+                .map(NoteBulkRegenerationItemEntity::getNoteId)
+                .toList();
+        if (failedNoteIds.isEmpty()) {
+            throw new InvalidBulkRegenerationRequestException(NOTHING_TO_RETRY_MESSAGE);
+        }
+
+        // The original batch's scope, never a caller-supplied one: retrying a Study-Pack-only batch as
+        // combined would replace note content the curator never asked to replace.
+        NoteRegenerationScope scope = rows.getFirst().getScope();
+        return queueBatch(
+                new BulkRegenerateNotesRequest(failedNoteIds, scope.name()), ownerUserId, enforceLimits);
+    }
+
     public BulkRegenerateNotesResponse queueBatch(
             BulkRegenerateNotesRequest request,
             UUID ownerUserId,

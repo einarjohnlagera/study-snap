@@ -19,6 +19,7 @@ import com.studysnap.backend.exception.BulkNoteRegenerationQuotaExceededExceptio
 import com.studysnap.backend.service.BulkGenerationFailureReasonNormalizer;
 import com.studysnap.backend.service.MePlanService;
 import com.studysnap.backend.exception.BulkRegenerationNotPermittedException;
+import com.studysnap.backend.exception.InvalidBulkRegenerationRequestException;
 import com.studysnap.backend.exception.NoteBulkRegenerationBatchNotFoundException;
 import com.studysnap.backend.service.BulkRegenerationAccessGuard;
 import com.studysnap.backend.service.NoteBulkRegenerationService;
@@ -3017,6 +3018,88 @@ class NativeQueryPostgresIntegrationTest {
                 .isEqualTo(10);
     }
 
+    /**
+     * Retry re-runs the FAILED items and NOTHING ELSE.
+     *
+     * <p>⚠️ THE FIXTURE CARRIES ALL THREE OUTCOMES ON PURPOSE — one REGENERATED, one BLOCKED, one
+     * FAILED. A batch where everything failed passes under a retry that re-runs the whole batch, which
+     * is exactly the defect this guard exists to catch: re-running a REGENERATED item spends a unit and
+     * replaces good content with a second generation nobody asked for, and re-running a BLOCKED one
+     * fails again for the reason that blocked it.
+     *
+     * <p>⚠️ IT ALSO ASSERTS A NEW BATCH ID. Retrying INTO the original batch would put two writers on
+     * one {@code (batch_id, note_id)} pair whenever a timed-out RUNNING worker is still alive, and
+     * {@code writeItem} is find-then-save with no lock — the loser's constraint violation is swallowed.
+     */
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void retryReRunsOnlyTheFailedItemsAndMintsANewBatch() {
+        UUID owner = seedCuratorUser("bulk-regen-retry");
+        UUID succeeded = seedRegenerationNote(owner, "Site Grading", "Original A.");
+        UUID blocked = seedRegenerationNote(owner, "Site Drainage", "Original B.");
+        UUID failed = seedRegenerationNote(owner, "Site Utilities", "Original C.");
+        seedStudyPack(owner, succeeded, "Pack A");
+        seedStudyPack(owner, blocked, "Pack B");
+        seedStudyPack(owner, failed, "Pack C");
+        // Already GENERATING, which the per-item guard blocks.
+        jdbcTemplate.update("update notes set status = 'GENERATING' where id = ?", blocked);
+
+        BulkRegenerationHarness first = new BulkRegenerationHarness();
+        first.failStudyPackForTitle = "Site Utilities";
+        UUID firstBatch = first.run(owner, List.of(succeeded, blocked, failed),
+                NoteRegenerationScope.NOTE_AND_STUDY_PACK, true);
+
+        assertThat(itemState(firstBatch, succeeded)).isEqualTo("REGENERATED");
+        assertThat(itemState(firstBatch, blocked)).isEqualTo("BLOCKED");
+        assertThat(itemState(firstBatch, failed)).isEqualTo("FAILED");
+
+        BulkRegenerationHarness retry = new BulkRegenerationHarness();
+        UUID retryBatch = retry.retry(firstBatch, owner, true);
+
+        assertThat(retryBatch)
+                .as("a NEW batch id -- retrying into the original would give one row two writers")
+                .isNotEqualTo(firstBatch);
+        assertThat(jdbcTemplate.queryForObject(
+                "select count(*) from note_bulk_regeneration_item where batch_id = ?",
+                Integer.class, retryBatch))
+                .as("exactly one item: the failed one, never the regenerated or blocked ones")
+                .isEqualTo(1);
+        assertThat(itemState(retryBatch, failed))
+                .as("and it really ran")
+                .isEqualTo("REGENERATED");
+        assertThat(jdbcTemplate.queryForObject(
+                "select count(*) from note_bulk_regeneration_item where batch_id = ? and note_id in (?, ?)",
+                Integer.class, retryBatch, succeeded, blocked))
+                .as("the regenerated and blocked notes are not in the retry at all")
+                .isZero();
+
+        assertThat(itemState(firstBatch, succeeded))
+                .as("the original batch's receipt is left intact")
+                .isEqualTo("REGENERATED");
+    }
+
+    /**
+     * Retrying a batch with nothing failed is refused, rather than silently minting an empty batch that
+     * would read as a second run of work already done.
+     */
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void retryingABatchWithNoFailuresIsRefused() {
+        UUID owner = seedCuratorUser("bulk-regen-retry-clean");
+        UUID note = seedRegenerationNote(owner, "Site Access", "Body.");
+        seedStudyPack(owner, note, "Pack");
+
+        BulkRegenerationHarness harness = new BulkRegenerationHarness();
+        UUID batchId = harness.run(owner, List.of(note), NoteRegenerationScope.STUDY_PACK, true);
+        assertThat(itemState(batchId, note)).isEqualTo("REGENERATED");
+
+        assertThatThrownBy(() -> harness.retry(batchId, owner, true))
+                .isInstanceOf(InvalidBulkRegenerationRequestException.class);
+        assertThatThrownBy(() -> harness.retry(UUID.randomUUID(), owner, true))
+                .as("and an unknown batch keeps the receipt's 404 contract")
+                .isInstanceOf(NoteBulkRegenerationBatchNotFoundException.class);
+    }
+
     private UUID seedRegenerationNote(UUID ownerUserId, String title, String content) {
         UUID id = UUID.randomUUID();
         jdbcTemplate.update(
@@ -3892,6 +3975,18 @@ class NativeQueryPostgresIntegrationTest {
                 throw new IllegalStateException(interrupted);
             }
             return batchId;
+        }
+
+        /** Retries a batch through the real service and waits for the new batch's driver to finish. */
+        private UUID retry(UUID batchId, UUID ownerUserId, boolean enforceLimits) {
+            UUID newBatchId = service().retryFailedItems(batchId, ownerUserId, enforceLimits).batchId();
+            try {
+                driverThread.get().join(120_000);
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+                throw new IllegalStateException(interrupted);
+            }
+            return newBatchId;
         }
 
         private UUID start(UUID ownerUserId, List<UUID> noteIds, boolean enforceLimits) {

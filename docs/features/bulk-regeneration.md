@@ -33,6 +33,11 @@ carries the reasoning; this file carries the behaviour.
   `role() != ADMIN` expression bulk generation already uses and is **not** widened. An over-quota selection
   is rejected **422 before dispatch**, carrying how many notes to remove.
 - **No cancellation.** Already-dispatched LLM calls cannot be stopped, so no control implies they can be.
+- **Retry re-runs the FAILED items as a NEW batch** (`POST /notes/bulk-regenerate/{batchId}/retry`).
+  **⚠️ It takes a BATCH ID, never a note list** — the server derives which items failed, so "only the
+  failed ones" is a server guarantee rather than a client convention on a path that spends metered
+  units. It routes through `queueBatch`, so a retry re-runs the curator gate, the pre-dispatch 422 and
+  every per-item readiness guard, and inherits the original batch's scope.
 
 ## Anti-drift
 
@@ -71,8 +76,15 @@ carries the reasoning; this file carries the behaviour.
   `GenerationRecoveryService` heals the stranded *note* at 120 minutes, so the note self-heals while its
   batch row does not; the receipt reports `stale` rather than showing progress that will never advance.
 - **`writeItem` is find-then-save** with no lock against the unique `(batch_id, note_id)`. Safe while one
-  driver owns a batch. **A retry feature must mint a new batch id or make the write conditional.**
-- **Retry-failed is not built.** The receipt exposes `retryableNoteIds` (FAILED only — never `REGENERATED`,
-  which would spend quota and replace good content), and the curator re-selects those notes deliberately.
+  driver owns a batch, and retry preserves that by minting a new batch id rather than writing into the
+  old one. Any future path that writes into an existing batch from a second thread must revisit this.
+- **`REGENERATED` is never retried** — it would spend a unit and replace good content with a second
+  generation nobody asked for — and neither is `BLOCKED`, which stays blocked until its condition
+  changes. There is no auto-retry.
+- **⚠️ Retry MUST mint a new batch id, and does.** `writeItem` is find-then-save against the unique
+  `(batch_id, note_id)` with no lock, which is safe only while ONE driver owns a batch. Retrying *into*
+  the original batch would give one row two writers whenever a timed-out `RUNNING` worker is still
+  alive, and the loser's constraint violation is swallowed. A fresh batch id makes that impossible by
+  construction. **Do not "simplify" retry to reuse the original batch.**
 - **A note that is not the caller's** reads `NOT_ELIGIBLE` in preflight and `NOT_RUN` in the driver — the
   same miss under two names.
