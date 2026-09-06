@@ -73,6 +73,11 @@ class CombinedQuizShareLinkServiceTest {
                 "token", Arrays.asList(null, 1), Arrays.asList(List.of(2, 0), null));
 
         assertThat(publicQuiz.noteTitle()).isEqualTo("Whole unit");
+        // ⚠️ THE OWNER-RULED CONSTRAINT, PINNED. A CombinedQuizSection carries a COPIED TITLE STRING and no
+        // note id, so it has no durable source identity and contributes NO continue-learning source. Without
+        // this assertion, reverting the service to a title-matched lookup -- the exact thing "NEVER infer
+        // identity from a copied title" forbids -- would break no test.
+        assertThat(publicQuiz.sourceNotes()).isEmpty();
         assertThat(publicQuiz.questions()).hasSize(2).extracting(question -> question.question())
                 .containsExactly("Select both", "Second");
         assertThat(publicQuiz.questions().getFirst().questionFormat()).isEqualTo("MULTI_SELECT");
