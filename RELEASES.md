@@ -174,6 +174,78 @@ the `v0.95.1` stale-card-state guard passes unchanged against the faithful mock.
 
 `tsc --noEmit` exit 0 · `npm run lint` exit 0 · `npm test` exit 0, **2226 passed / 201 suites**.
 
+**Cold-agent findings — the declared verification, and it refuted two of six claims (inline).**
+
+**⚠️ THE WORST FINDING IS A DEFECT THIS RELEASE INTRODUCED, IN THE SAME CLASS IT EXISTS TO CLOSE.** Item 6's
+`refreshNotes` was `try/finally` with **no `catch`**, and `refreshingNotes` was a dependency of the
+picker-open effect: a REJECTED fetch cleared the flag in `finally`, the deps changed, the effect re-ran and
+refetched — **at event-loop speed, against the unbounded `listNotes()` endpoint, precisely when the backend
+is already failing.** The agent measured **3,743 calls in five seconds**. The pre-fix code could not do
+this: `listNotes()` lived inside `refreshBuilder`'s `Promise.all`, so a rejection propagated to the caller.
+**⚠️ It fires under exactly the conditions `[CHECKPOINT — due 2026-09-18]` exists to measure.** Fixed with a
+`catch` plus a one-attempt bound; the modal's Refresh control remains the deliberate retry.
+
+**⚠️ `C2` WAS WRONG, AND THE CORRECTION IS NARROWER THAN THE AGENT'S TOO — BOTH ARE RECORDED.** This release
+claimed the case-snap loop was unreachable. **The case axis is** (the combobox snaps typed input to a
+matching option), **but the WHITESPACE axis was not checked and does not snap:** `getSectionName` and
+`getSectionLabel` used bare `.trim()` and never collapsed internal runs, so a stored
+`"Cash  and Receivables"` was a section name the canonical form could never equal. **⚠️ BUT THE AGENT'S
+"the identical loop fires" IS ALSO OVERSTATED, AND THIS WAS ESTABLISHED BY MUTATION RATHER THAN ARGUMENT:
+the retry bound from items 1-3 ALREADY caps it at ONE write.** Its unbounded reproduction ran against
+`eb8d1940` — the kickoff commit, before the bound existed. **The true residual on merged code was one
+pointless no-op write per affected card per page load, plus a label that could not be repaired through the
+combobox** (every attempt was the suppressed transition). Both helpers now use `canonicalSectionLabel`,
+which completes scope item 1's *"one normalisation on both sides"*, **repairs such a label on its next
+write**, and folds lookalike sections.
+
+**⚠️ THE INGRESS IS CLOSED — the finding's §8 obligation, and it was the bulk path all along.**
+`bulk-generation-page-client.tsx:416` sent `sectionLabel.trim()` (no collapse) and **`:282` pre-fills that
+field from the free-text Subject**, so a doubled space in a pasted Subject minted the label with no action
+on the Section field at all. `buildAdoptedItems` copies labels verbatim, so a published source plan carrying
+one **propagated the wedge to every adopter** — the amplification this release's own scope names. Now
+canonicalised at the authoring surface. **⚠️ The BACKEND is deliberately unchanged and still stores what it
+is given**, per anti-drift: collapsing there would rewrite stored learner data on an unrelated write path.
+
+**Also fixed:** the picker rendered **`"No notes available."`** — a terminal claim about the library — during
+the async lazy load and permanently after a failed one; loading and failure now have their own copy. And a
+write the server REFUSED left that exact value **unsavable** (retyping the same name did nothing), so
+**focus now clears the retry bound** — the loop is render-driven and never touches focus, so it cannot
+reach that escape, while a curator refocusing the field unambiguously can.
+
+**⚠️ TWO PROCESS FAILURES, RECORDED BECAUSE THEY ARE THE REUSABLE PART. (1) THE PRE-DECLARED GUARD THAT WAS
+SKIPPED IS THE ONE THAT WOULD HAVE CAUGHT `C2`.** This release's own scope named two discriminating fixtures
+— *"(a) a stored label containing a DOUBLE SPACE … and (b) a label whose write is REJECTED"* — and **only
+(b) was written.** Fixture (a) is the whitespace case verbatim. **(2) THE REPLACEMENT GUARD THEN SURVIVED
+ITS OWN MUTATION TWICE BEFORE IT DISCRIMINATED.** The first draft advanced timers in **one large jump**,
+which fires only the first callback in a timer→write→re-render→timer chain; the second asserted a **call
+count**, which the retry bound already satisfies. Only asserting the **written payload** killed the mutant.
+**⚠️ Neither would have been caught by reading — both were found by running the mutant.**
+
+**Guards — four added, all mutation-verified with the killing test named.**
+
+| Mutant | Test that failed |
+|---|---|
+| revert `getSectionName`/`getSectionLabel` to bare `trim()` | *repairs a stored section label that differs only by internal whitespace, in one write* |
+| remove the lazy-load attempt bound / the `catch` | *stops re-fetching the note library after a failed lazy load* |
+| stop clearing the retry bound on focus | *lets a curator retry a section label the server refused* |
+
+**⚠️ ONE EXISTING ASSERTION IS VACUOUS AND IS ANNOTATED RATHER THAN DELETED:** in *consumes the write's own
+response*, the `listNotes` expectation cannot fail while item 6 ships (the list is lazy, so it is never
+fetched there either way). The `getCollection` assertion is what discriminates; the comment says so.
+
+**⚠️ CONFIRMED UNREFUTED: `C1`** (the retry bound works — `[1,1,1,…]` against `[2,3,4,…]` on pre-fix
+source), **`C3`** (the card key remounts on a value change), **`C4`** (`applyLeafDetail` matches the original
+leaf branch exactly; `childCount` 0→non-zero falls through to the Goal path), **`C6`** (item 7
+not-applicable, all six sites re-verified, no seventh site). **No anti-drift violations found.**
+
+**⚠️ ITEM 3 REMAINS UNGUARDED AND IS DISCLOSED RATHER THAN PINNED:** reverting `onLabelChangeRef` passes the
+whole suite. That is consistent with this release calling it *"a churn reduction, not the loop fix"*, but
+the repo has shipped two silent no-ops whose tell was exactly this, so it is stated plainly.
+
+`tsc --noEmit` exit 0 · `npm run lint` exit 0 · `npm test` exit 0, **2229 passed / 201 suites** (four
+consecutive clean full runs; one earlier run exited 139 on a worker crash with zero failing suites and did
+not reproduce).
+
 ## v0.122.0 - Shared Quiz Discoverability
 
 **Status: Released** (kicked off and signed off 2026-09-06, base branch `releases/v0.122.0`, cut from `main` after `v0.121.0` merged and tagged)

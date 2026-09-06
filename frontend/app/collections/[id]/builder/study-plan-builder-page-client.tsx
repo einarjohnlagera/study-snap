@@ -128,7 +128,15 @@ function leafOrdersMatch(left: NoteCollectionItem[], right: NoteCollectionItem[]
 }
 
 function getSectionName(label: string | null | undefined): string {
-  const trimmed = label?.trim();
+  // ⚠️ CANONICAL, NOT `trim()`, AND THIS IS THE OTHER HALF OF "ONE NORMALISATION ON BOTH SIDES".
+  // These two helpers are the SNAP-BACK path: the value a card requests goes through
+  // canonicalSectionLabel, but what actually gets STORED came back through here. While they only
+  // trimmed, a stored label carrying an internal double space named a section the canonical form
+  // could never equal -- so on PAGE LOAD, with no user interaction, a card computed a collapsed
+  // nextLabel, snapped back to the uncollapsed stored name, wrote the SAME value, never changed
+  // item.label, never remounted, and retried forever. Collapsing here also repairs such a label on
+  // its next write and folds lookalike sections that render identically.
+  const trimmed = canonicalSectionLabel(label ?? "");
   if (!trimmed) {
     return UNGROUPED_SECTION_NAME;
   }
@@ -143,7 +151,7 @@ function getSectionName(label: string | null | undefined): string {
 }
 
 function getSectionLabel(sectionName: string): string | null {
-  const trimmed = sectionName.trim();
+  const trimmed = canonicalSectionLabel(sectionName);
   return trimmed && normalizeSectionValue(trimmed) !== normalizeSectionValue(UNGROUPED_SECTION_NAME) ? trimmed : null;
 }
 
@@ -554,7 +562,15 @@ function LeafSortableNoteCard({
             combobox -- input or dropdown -- and releases it only when focus leaves the whole control. */}
         <div
           className="min-w-[220px] space-y-1.5"
-          onFocus={() => setEditing(true)}
+          onFocus={() => {
+            setEditing(true);
+            // ⚠️ A DELIBERATE RE-EDIT CLEARS THE RETRY BOUND, and the asymmetry is the whole design:
+            // the loop is driven by RE-RENDERS and never touches focus, so it can never reach this,
+            // while a curator who refocuses the field is unambiguously asking to try again. Without
+            // it, a write the server REFUSED left that exact value unsavable -- retyping the same
+            // name did nothing -- until they typed something else and came back.
+            lastRequestedLabelRef.current = null;
+          }}
           onBlur={() => setEditing(false)}
         >
           <span className="text-xs font-medium uppercase tracking-wide text-foreground/50">{sectionLabel}</span>
@@ -1052,6 +1068,7 @@ function AddNotesModal({
   onAdd,
   onRefresh,
   refreshing,
+  notesError,
 }: Readonly<{
   isOpen: boolean;
   subject: { collectionId: string; items: NoteCollectionItem[]; title?: string } | null;
@@ -1061,6 +1078,7 @@ function AddNotesModal({
   onAdd: (subjectId: string, noteIds: string[]) => Promise<void>;
   onRefresh: () => Promise<void>;
   refreshing: boolean;
+  notesError: string | null;
 }>) {
   const [query, setQuery] = useState("");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -1182,7 +1200,17 @@ function AddNotesModal({
               </div>
             ) : (
               <p className="rounded-lg bg-muted px-3 py-3 text-sm text-foreground/70">
-                {query ? "No matching notes." : (hasSelection ? "No more notes to add." : "No notes available.")}
+                {/* ⚠️ "No notes available." is a TERMINAL CLAIM ABOUT THE LIBRARY, and since the list
+                    became lazy it is briefly false on every first open and permanently false after a
+                    failed fetch. Loading and failure get their own copy; only an actually-empty,
+                    actually-loaded library gets the terminal sentence. */}
+                {refreshing
+                  ? "Loading your notes…"
+                  : notesError
+                    ? notesError
+                    : query
+                      ? "No matching notes."
+                      : (hasSelection ? "No more notes to add." : "No notes available.")}
               </p>
             )}
           </div>
@@ -1329,11 +1357,24 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
    * can read an empty map expecting a note that is not in the collection.
    */
   const notesLoadedRef = useRef(false);
+  // ⚠️ RECORDS THAT AN AUTOMATIC ATTEMPT WAS MADE, SUCCESS OR FAILURE, AND IT IS LOAD-BEARING.
+  // Without it this effect is itself an unbounded retry loop: `refreshingNotes` is a dependency, so a
+  // REJECTED fetch clears the flag in `finally`, the deps change, the effect re-runs, and it refetches
+  // -- at event-loop speed, against the unbounded note endpoint, precisely when the backend is already
+  // failing. Measured at 3,743 calls in five seconds before this existed. It is the same defect class
+  // as the section-label loop this release exists to close, and it was introduced by the fix for it.
+  const notesAutoLoadAttemptedRef = useRef(false);
+  const [notesError, setNotesError] = useState<string | null>(null);
   const refreshNotes = useCallback(async () => {
     setRefreshingNotes(true);
+    setNotesError(null);
     try {
       setNotes(await listNotes());
       notesLoadedRef.current = true;
+    } catch (error) {
+      // Surface it ONCE. The modal's Refresh control is the deliberate retry; an automatic one here
+      // is what produced the loop.
+      setNotesError(makeErrorMessage(error, "Could not load your notes."));
     } finally {
       setRefreshingNotes(false);
     }
@@ -1345,9 +1386,10 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
     if (!leafAddNotesOpen && addNotesSubjectId === null) {
       return;
     }
-    if (notesLoadedRef.current || refreshingNotes) {
+    if (notesLoadedRef.current || notesAutoLoadAttemptedRef.current || refreshingNotes) {
       return;
     }
+    notesAutoLoadAttemptedRef.current = true;
     void refreshNotes();
   }, [addNotesSubjectId, leafAddNotesOpen, refreshNotes, refreshingNotes]);
 
@@ -2461,6 +2503,7 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
           onAdd={handleAddLeafNotes}
           onRefresh={refreshNotes}
           refreshing={refreshingNotes}
+          notesError={notesError}
         />
         <AddSubjectModal
           isOpen={addSubjectOpen}
@@ -2643,6 +2686,7 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
         onAdd={handleAddNotes}
         onRefresh={refreshNotes}
         refreshing={refreshingNotes}
+        notesError={notesError}
       />
       <DeleteSubjectModal
         subject={deleteSubject}

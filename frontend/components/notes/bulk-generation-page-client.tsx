@@ -37,7 +37,7 @@ import {
 import { requireAuthenticatedOnboardedUser } from "@/lib/route-guards";
 import { DOMAIN_CONTEXT_OPTIONS, getDomainContextDescription } from "@/lib/domain-context";
 import { LEARNER_LEVEL_OPTIONS } from "@/lib/learning-profile";
-import { getCollectionLabels, isReservedSectionName, UNGROUPED_SECTION_NAME } from "@/lib/collection-labels";
+import { canonicalSectionLabel, getCollectionLabels, isReservedSectionName, UNGROUPED_SECTION_NAME } from "@/lib/collection-labels";
 
 export const MAX_BULK_GENERATION_TOPICS = 50;
 const SECTION_MAX_LENGTH = 120;
@@ -413,7 +413,15 @@ export function BulkGenerationPageClient() {
             domainContext: domainContext || null,
             learnerLevel: learnerLevel || null,
             ...(collectionId ? { collectionId } : {}),
-            ...(collectionId && sectionLabel.trim() ? { sectionLabel: sectionLabel.trim() } : {}),
+            // ⚠️ CANONICAL, NOT `trim()` — THIS IS THE INGRESS. It was `sectionLabel.trim()`, which
+            // preserves an internal double space, and the field is PRE-FILLED from the free-text
+            // Subject (`handleSubjectChange`), so a doubled space in a pasted Subject minted a section
+            // label no canonical form could equal. In the Study Plan Builder that label wedged the
+            // page in an unbounded write->refresh loop, and `buildAdoptedItems` copies labels verbatim,
+            // so a published source plan carrying one propagated the wedge to every adopter.
+            // ⚠️ The BACKEND deliberately still stores what it is given (trim-only); the fix belongs
+            // at the authoring surface, not in a write path that would rewrite stored learner data.
+            ...(collectionId && canonicalSectionLabel(sectionLabel) ? { sectionLabel: canonicalSectionLabel(sectionLabel) } : {}),
           }
         : { courseProgramText: courseProgram.trim() }),
     };
