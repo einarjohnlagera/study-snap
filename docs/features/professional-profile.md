@@ -72,10 +72,10 @@ Interview Practice is a **sub-mode of Adaptive Practice**, not a standalone quiz
 ### Identity
 
 - **Audience**: Professional profile, Pro plan only
-- **Vibe**: Coached interview prep — scenario-based questions with per-answer AI critique, framed like a senior interviewer following up
+- **Vibe**: Coached interview prep — scenario-based questions with per-answer critique, framed like a senior interviewer following up
 - **Surface**: Dedicated dashboard card on the Professional dashboard plus a Professional mode-selection tile. The mode-selection tile is the canonical per-note entry; the dashboard card auto-picks the most-recent ready note for quick re-entry.
 - **Discovery surfaces**: Landing page target users, Help Center Professional Guide, and Learn page Professional guides should all mention Interview Practice so Professional-profile users can find the workflow before they enter the app.
-- **Differentiator from Adaptive Practice**: scenario-style prompts, per-answer AI critique mid-session, Interview Readiness Report instead of standard score result
+- **Differentiator from Adaptive Practice**: scenario-style prompts, per-answer critique mid-session, Interview Readiness Report instead of standard score result
 
 ### Setup
 
@@ -90,7 +90,7 @@ Interview Practice is a **sub-mode of Adaptive Practice**, not a standalone quiz
   - Longer scenario prompt (3–5 sentences vs. 1 for standard MCQ)
   - 4 multiple-choice options reframed as approaches ("How would you handle this?") rather than recall ("What is the answer?")
   - Soft 2-min per-question timer (visible countdown, **non-enforcing** — at expiry shows a gentle "Try to wrap up" cue, never auto-submits)
-- **After each answer (per-answer AI critique, gpt-4.1-mini)**:
+- **After each answer (per-answer critique, gpt-4.1-mini)**:
   - Verdict line: ✅ Strong / ⚠️ Workable / ❌ Reconsider
   - Rationale (~2 sentences): why this approach works in practice; what a senior interviewer would probe next
   - Follow-up prompt: one sentence — "In a real interview, you might be asked: …"

@@ -53,7 +53,7 @@ Each category should contain guide cards with:
 ### For Professionals
 
 - `How to Prepare for Job Interviews With Your Notes`
-- `How to Use AI Critique in Interview Practice`
+- `How to Use Critique in Interview Practice` (slug remains `how-to-use-ai-critique-in-interview-practice` — a live indexed URL)
 - `How to Read Your Interview Readiness Report`
 
 ### Study Tips

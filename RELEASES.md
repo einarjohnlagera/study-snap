@@ -284,6 +284,31 @@ whose contract is already exercised.
 dismissed across a reload`; removing the title comparison fails `does not offer a suggestion when the
 generated title already matches the note's`.
 
+**7. The learner-facing "AI" language sweep, continued (owner request, 2026-09-06).** `v0.101.0` ran the
+Category A sweep and left *"AI critique"* explicitly out of scope as *"its own owner decision"*; the owner
+took that decision here. Thirteen occurrences across seven files lose the prefix — the `AI Critique` mode chip
+on the landing page becomes **Per-Answer Critique**, and the marketing, Interview Practice, Challenge Quiz,
+Help Center and Learn-guide copy now say *critique* or *per-answer critique*.
+
+**⚠️ THE LOCKED CONTRACT SURVIVES THIS, WHICH IS WHY IT WAS SAFE.** `EXAM_MODES.md` names Interview
+Practice's differentiator as *"scenario-based questions + per-answer critique + Interview Readiness Report
+result framing"*. The word carrying the contract is **critique**, not **AI**, so the sub-mode's stated
+differentiator is unchanged and the five-mode contract is untouched.
+
+**⚠️ THE SEO SLUG IS DELIBERATELY NOT RENAMED.** `learn-guides.ts` keys the guide on an explicit
+`slug: "how-to-use-ai-critique-in-interview-practice"` that does **not** derive from the title, so the copy
+change breaks no URL — **but renaming the slug itself would break a live indexed page**, so it stays and
+`learn-page.md` records why.
+
+**⚠️ SIX OCCURRENCES REMAIN ON PURPOSE, AND REMOVING THEM WOULD BE A DIFFERENT KIND OF CHANGE.** `v0.101.0`
+placed disclosures in Category B and ruled them out of scope; that still binds. Kept verbatim: the Privacy
+Policy's *"AI Processing"* section and its processing description, the Terms' *"Abuse AI generation"*, the
+shared-quiz notice *"Questions and answers are AI-generated from your note. Review them before you share"*,
+the working-solution caption *"AI-generated — verify calculations"*, and the Learning Companion guide's
+*"AI-assisted per-section drafts … a human must review and save before anything is published."* **Each tells
+a user that machine-generated output needs their judgement; stripping the word would remove the disclosure,
+not rebrand it.**
+
 ### Known limitations
 
 - **Dismissal is per-BROWSER, not per-account.** A curator who dismisses the suggestion on one machine sees

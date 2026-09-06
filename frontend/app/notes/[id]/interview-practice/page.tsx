@@ -345,7 +345,7 @@ export default function InterviewPracticePage() {
               Interview Practice
             </h1>
             <p className="max-w-2xl text-base leading-relaxed text-foreground/70 sm:text-lg">
-              Scenario-based practice with AI critique after every answer.
+              Scenario-based practice with a critique after every answer.
             </p>
             {note?.title ? (
               <p className="text-sm text-foreground/55">
@@ -392,9 +392,9 @@ export default function InterviewPracticePage() {
               <li className="flex gap-4">
                 <MessageSquare className="mt-0.5 h-5 w-5 shrink-0 text-foreground/70" aria-hidden="true" />
                 <div className="space-y-1">
-                  <p className="text-sm font-medium text-foreground">Scenario MCQ with AI critique</p>
+                  <p className="text-sm font-medium text-foreground">Scenario MCQ with per-answer critique</p>
                   <p className="text-sm leading-relaxed text-foreground/70">
-                    Scenario-based multiple-choice questions. After each answer, AI critiques your reasoning and gives a follow-up prompt.
+                    Scenario-based multiple-choice questions. Each answer gets a critique of your reasoning and a follow-up prompt.
                   </p>
                 </div>
               </li>

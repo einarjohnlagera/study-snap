@@ -386,10 +386,10 @@ const learnGuideSeeds: LearnGuideSeed[] = [
   {
     slug: "how-to-use-ai-critique-in-interview-practice",
     category: "professionals",
-    title: "Getting the Most Out of Interview Practice's AI Feedback",
-    description: "Read AI critique after each answer to improve how you explain and apply your knowledge.",
+    title: "Getting the Most Out of Interview Practice's Feedback",
+    description: "Read the critique after each answer to improve how you explain and apply your knowledge.",
     intro:
-      "AI critique after each question gives you more than a right or wrong signal. It shows you whether your reasoning was sound, where the explanation fell short, and what the stronger answer would have covered.",
+      "Critique after each question gives you more than a right or wrong signal. It shows you whether your reasoning was sound, where the explanation fell short, and what the stronger answer would have covered.",
     sections: [
       {
         heading: "Read the critique even on correct answers",
@@ -743,12 +743,12 @@ const learnGuideArticleContentBySlug: Record<string, LearnGuideArticleContent> =
   },
   "how-to-use-ai-critique-in-interview-practice": {
     summary: [
-      "AI critique gives more than a score — it shows where your reasoning fell short and what a stronger answer would have included.",
+      "Critique gives more than a score — it shows where your reasoning fell short and what a stronger answer would have included.",
       "Reading critique on correct answers helps improve the quality of your explanations, not just your accuracy.",
     ],
     practiceQuestions: [
       {
-        question: "Why should you read AI critique even on correct answers?",
+        question: "Why should you read the critique even on correct answers?",
         answer: "A correct answer can still be partially reasoned, and critique shows what additional context would make it stronger.",
       },
       {

@@ -155,7 +155,7 @@ const profileLearningLoops: ProfileLearningLoop[] = [
     ],
     modeChips: [
       { label: "Interview Practice", tier: "paid", tierLabel: "Pro" },
-      { label: "AI Critique", tier: "paid", tierLabel: "Pro" },
+      { label: "Per-Answer Critique", tier: "paid", tierLabel: "Pro" },
       { label: "Readiness Report", tier: "paid", tierLabel: "Pro" },
     ],
     screenshot: {

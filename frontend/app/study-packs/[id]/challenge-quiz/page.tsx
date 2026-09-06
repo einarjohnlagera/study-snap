@@ -1895,7 +1895,7 @@ export default function ChallengeQuizPage() {
                     ) : null}
                   </div>
                   <p className="mt-1 text-sm text-foreground/70">
-                    Coached scenario-based interview prep with per-answer AI critique.
+                    Coached scenario-based interview prep with per-answer critique.
                   </p>
                   <p className="mt-3 text-xs text-foreground/60">
                     {viewerPlanType === "PRO"
