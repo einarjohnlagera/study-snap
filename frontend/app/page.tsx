@@ -5,6 +5,7 @@ import {
   Briefcase,
   ClipboardList,
   Library,
+  Send,
   Sparkles,
   Target,
   Trophy,
@@ -409,6 +410,25 @@ function ModeShowcaseSection() {
             </p>
             <p className="text-sm text-foreground/75">
               Scenario-based MCQ plus per-answer critique. Built for professionals preparing for job interviews.
+            </p>
+          </div>
+        </div>
+      </div>
+      {/* ⚠️ A SIBLING LINE, NOT A SIXTH MODE. Sharing a quiz is a capability of the note, not a study
+          mode -- the grid above is the locked five-mode contract and its own heading counts them, so an
+          entry there would make this page state something untrue. It carries NO plan chip because it is
+          gated on nothing, and the wording matches the Help Center's (`export-sharing-guide.tsx`) so one
+          claim is not two. ⚠️ Do NOT add "see how they did" -- shared quiz results are graded in
+          memory and never recorded (`getSharedQuizResults`), so that sentence would be false. */}
+      <div className="rounded-2xl border border-sky-500/20 bg-sky-500/8 p-4 dark:bg-sky-500/12 sm:p-5">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:gap-4">
+          <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-sky-500/30 bg-background/80 text-sky-700 dark:text-sky-300">
+            <Send className="h-4 w-4" />
+          </span>
+          <div className="space-y-1">
+            <p className="text-sm font-semibold text-foreground">Also: Quiz for someone</p>
+            <p className="text-sm text-foreground/75">
+              Turn any note into a quiz for another person — a link anyone can open and answer without an account.
             </p>
           </div>
         </div>

@@ -55,6 +55,16 @@ describe("HowItWorksPage", () => {
     expect(structuredData?.textContent).toContain('"@type":"WebSite"');
   });
 
+  it("names the share-a-quiz capability without inflating the 3-step flow", async () => {
+    // The capability shipped in v0.110.0 and this page never mentioned it. It goes in the value list
+    // and NOT in `steps`, whose own heading counts its items -- so the second assertion is what stops a
+    // later session moving it there.
+    render(<HowItWorksPage />);
+
+    expect(screen.getByRole("heading", { name: "Share a quiz with someone" })).toBeInTheDocument();
+    expect(screen.getByText("Simple 3-Step Flow")).toBeInTheDocument();
+  });
+
   it("exports how it works metadata", () => {
     expect(metadata).toMatchObject({
       title: "How NoteLib Works — Notes to Study Packs and Quiz Practice",

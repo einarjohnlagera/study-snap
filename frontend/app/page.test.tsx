@@ -187,6 +187,20 @@ describe("LandingPage", () => {
     });
   });
 
+  it("names the share-a-quiz capability beside the study modes without claiming a sixth mode", async () => {
+    // ⚠️ A COPY RELEASE HAS NO FAILING TEST TO CATCH A FALSE CLAIM, which is why this pins the string
+    // rather than trusting prose. Two halves, and the second is the one that matters: the section
+    // heading COUNTS the modes, so promoting this capability into `studyModes` would make the page
+    // state something untrue. It is a sibling line, not a sixth card.
+    render(await Home());
+
+    expect(screen.getByText("Also: Quiz for someone")).toBeInTheDocument();
+    expect(
+      screen.getByText(/a link anyone can open and answer without an account/i),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Five study modes, one workspace" })).toBeInTheDocument();
+  });
+
   it("omits social proof when the live public-note total is unavailable", async () => {
     (getServerPublicNoteCount as jest.Mock).mockResolvedValue(null);
 

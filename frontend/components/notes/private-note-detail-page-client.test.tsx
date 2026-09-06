@@ -2571,6 +2571,147 @@ describe("PrivateNoteDetailPageClient", () => {
     expect(await screen.findByText("This Study Pack was copied. If the difficulty doesn't match your level, regenerate it to get a version tailored to you.")).toBeInTheDocument();
   });
 
+  // ⚠️ THESE FOUR ARE THE POINT OF v0.122.0, NOT PAPERWORK. A test asserting only that the rule is
+  // present in the array passes under a condition that can NEVER FIRE -- which is exactly how v0.116.0
+  // and v0.117.0 both shipped green no-ops. Each of these renders the real component and pins one half
+  // of the condition, so dropping either half fails a NAMED test.
+  const shareQuizAnnouncement = "You can turn this note into a quiz for someone else \u2014 a link anyone can open and answer without an account.";
+
+  it("announces the share-a-quiz capability on a quiz-ready note that has no quiz for anyone yet", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ planType: "FREE", emailVerifiedAt: "2026-03-21T09:00:00Z" });
+    (getNote as jest.Mock).mockResolvedValue({
+      ...baseNote,
+      studyPackStatus: "STUDY_PACK_READY",
+      studyPackId: "sp-1",
+      generatedQuiz: null,
+      quickReviewAvailable: true,
+    });
+
+    render(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    expect(await screen.findByText(shareQuizAnnouncement)).toBeInTheDocument();
+  });
+
+  it("stops announcing the share-a-quiz capability once a quiz for someone exists", async () => {
+    // Kills the mutant that drops `!note?.generatedQuiz`. The learner has already done the thing the
+    // tip exists to announce, so announcing it is noise.
+    (getAuthUser as jest.Mock).mockReturnValue({ planType: "FREE", emailVerifiedAt: "2026-03-21T09:00:00Z" });
+    (getNote as jest.Mock).mockResolvedValue({
+      ...baseNote,
+      studyPackStatus: "STUDY_PACK_READY",
+      studyPackId: "sp-1",
+      generatedQuiz: { noteId: "note-1", questions: [], generatedAt: "2026-09-01T00:00:00Z" },
+      quickReviewAvailable: true,
+    });
+
+    render(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    await screen.findByText("Test Note");
+    expect(screen.queryByText(shareQuizAnnouncement)).not.toBeInTheDocument();
+  });
+
+  it("does not announce the share-a-quiz capability on a note with no Study Pack", async () => {
+    // Kills the mutant that drops `isStudyPackReady`. The affordance itself is gated on the Study Pack
+    // being ready, so a draft note would be told about something it cannot reach.
+    (getAuthUser as jest.Mock).mockReturnValue({ planType: "FREE", emailVerifiedAt: "2026-03-21T09:00:00Z" });
+    (getNote as jest.Mock).mockResolvedValue({ ...baseNote, studyPackStatus: "DRAFT" });
+
+    render(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    await screen.findByText("Test Note");
+    expect(screen.queryByText(shareQuizAnnouncement)).not.toBeInTheDocument();
+  });
+
+  it("lets the copied-Study-Pack hint win over the share-a-quiz announcement", async () => {
+    // pickActiveGuidance returns exactly ONE rule, so priority is the only thing ordering these two --
+    // and this fixture satisfies BOTH conditions at once, which is a state that genuinely occurs. The
+    // absence assertion is what makes it a guard: without it, this passes under two tips rendering
+    // together and under the priorities being reversed.
+    (getAuthUser as jest.Mock).mockReturnValue({ planType: "FREE", emailVerifiedAt: "2026-03-21T09:00:00Z" });
+    (getNote as jest.Mock).mockResolvedValue({
+      ...baseNote,
+      copiedFromPublic: true,
+      studyPackStatus: "STUDY_PACK_READY",
+      studyPackId: "sp-1",
+      generatedQuiz: null,
+      quickReviewAvailable: true,
+    });
+
+    render(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    expect(await screen.findByText("This Study Pack was copied. If the difficulty doesn't match your level, regenerate it to get a version tailored to you.")).toBeInTheDocument();
+    expect(screen.queryByText(shareQuizAnnouncement)).not.toBeInTheDocument();
+  });
+
+  it("emits GUIDANCE_TIP_SHOWN for the announcement, so a low link count is readable", async () => {
+    // ⚠️ THIS IS THE CHECKPOINT'S DENOMINATOR, NOT ANALYTICS HYGIENE. [CHECKPOINT — due 2026-10-07]
+    // concludes "shared quizzes may not be wanted" if the capability is promoted and the link floor is
+    // still unmet — an inference that is INVALID unless we know the announcement reached anyone.
+    // QUIZ_SHARE_LINK_CREATED alone cannot separate "nobody was told" from "nobody wanted it"; that exact
+    // confound is why v0.109.0 LIFTED two dated reads rather than let them fire.
+    (getAuthUser as jest.Mock).mockReturnValue({ planType: "FREE", emailVerifiedAt: "2026-03-21T09:00:00Z" });
+    (getNote as jest.Mock).mockResolvedValue({
+      ...baseNote,
+      studyPackStatus: "STUDY_PACK_READY",
+      studyPackId: "sp-1",
+      generatedQuiz: null,
+      quickReviewAvailable: true,
+    });
+
+    render(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    await screen.findByText(shareQuizAnnouncement);
+    await waitFor(() => {
+      expect(trackAnalyticsEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          eventType: "GUIDANCE_TIP_SHOWN",
+          metadata: expect.objectContaining({ tipId: "note-detail-quiz-for-someone" }),
+        }),
+      );
+    });
+  });
+
+  it("does not emit a tip impression for the copied-pack hint, which has no dated read", async () => {
+    // Pins that the flag is scoped to the announcement rather than turned on for the shared slot wholesale
+    // — otherwise the copied-pack hint starts emitting too, adding noise to a stream a dated read filters.
+    (getAuthUser as jest.Mock).mockReturnValue({ planType: "FREE", emailVerifiedAt: "2026-03-21T09:00:00Z" });
+    (getNote as jest.Mock).mockResolvedValue({
+      ...baseNote,
+      copiedFromPublic: true,
+      studyPackStatus: "STUDY_PACK_READY",
+      studyPackId: "sp-1",
+      generatedQuiz: null,
+      quickReviewAvailable: true,
+    });
+
+    render(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    await screen.findByText("This Study Pack was copied. If the difficulty doesn't match your level, regenerate it to get a version tailored to you.");
+    expect(trackAnalyticsEvent).not.toHaveBeenCalledWith(
+      expect.objectContaining({ eventType: "GUIDANCE_TIP_SHOWN" }),
+    );
+  });
+
+  it("gives the share-a-quiz announcement no action button", async () => {
+    // ⚠️ The announcement shares a render slot with the copied-pack hint, which DOES carry a
+    // Regenerate action. Passing that action unconditionally would give this tip a second click target
+    // for a capability whose entry point already exists -- confounding the very read the release
+    // un-blocks -- and wire it to the wrong handler besides.
+    (getAuthUser as jest.Mock).mockReturnValue({ planType: "FREE", emailVerifiedAt: "2026-03-21T09:00:00Z" });
+    (getNote as jest.Mock).mockResolvedValue({
+      ...baseNote,
+      studyPackStatus: "STUDY_PACK_READY",
+      studyPackId: "sp-1",
+      generatedQuiz: null,
+      quickReviewAvailable: true,
+    });
+
+    render(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    await screen.findByText(shareQuizAnnouncement);
+    expect(screen.queryByRole("button", { name: /Regenerate/i })).not.toBeInTheDocument();
+  });
+
   it("confirms before regenerating an owned ready Study Pack", async () => {
     (getAuthUser as jest.Mock).mockReturnValue({ planType: "FREE", emailVerifiedAt: "2026-03-21T09:00:00Z" });
     (getNote as jest.Mock).mockResolvedValue({

@@ -1,5 +1,191 @@
 # RELEASES.md - NoteLib
 
+## v0.122.0 - Shared Quiz Discoverability
+
+**Status: Released** (kicked off and signed off 2026-09-06, base branch `releases/v0.122.0`, cut from `main` after `v0.121.0` merged and tagged)
+
+**⚠️ THIS RELEASE EXISTS TO MAKE `v0.121.0`'s OWN CHECKPOINT ANSWERABLE, AND THAT IS A DEPENDENCY RATHER THAN A THEME.** `[CHECKPOINT — due 2026-10-07]` asks *"has the shared-quiz capability been PROMOTED, so that any recipient metric has a denominator at all?"* and its kill criterion states outright: **"if the capability has NOT been promoted by this date, the distal checkpoint is RE-DATED, never answered."** The distal row (`[CHECKPOINT — due 2026-12-04]`) carries `v0.121.0`'s entire thesis — that the recipient experience was what suppressed use. **⚠️ So shipping anything else next spends the window and answers neither row.**
+
+**⚠️ THE ALTERNATIVE WAS SLICE 5 AND IT WAS DECLINED ON EVIDENCE, NOT PREFERENCE (owner, 2026-09-06).** A read-only production query the same day returned **1 `linked_learner_relationships` row, 1 `ACCEPTED`, 0 `PENDING`, 2 invitations, 3 live grants (1 `PROGRESS`, 2 `ACTIVITY`)**. Slice 5 enriches a **supporter** surface, so it would have built for a population of one — and worse, added a **second** unpromoted surface inside the checkpoint's own window, leaving two capabilities silent instead of one.
+
+**⚠️ AND THE SCOPE LINE IS SET BY A CHECKPOINT RATHER THAN BY TASTE — THIS IS THE FINDING THAT SHAPED THE RELEASE.** The instinct is to promote **both** silent capabilities at once. **That is wrong, and the reason is dated: `[CHECKPOINT — due 2026-09-19]` (`v0.89.0`, *"does anyone actually form a learning connection?"*) is THIRTEEN DAYS OUT, and its kill criterion keys on `ACCEPTED`** — *"if ZERO relationships have reached `ACCEPTED`, the demand hypothesis is unsupported — stop investing in this direction and do NOT build further phases on it."* **Promoting Learning Connections inside that window would contaminate the one number that decides whether the whole arc continues.** So this release promotes **shared quizzes ONLY**.
+
+**⚠️ THE `2026-09-19` READ ALSO INDEPENDENTLY CONFIRMS THE SLICE 5 DECISION, AND ITS ROW IS UPDATED IN THIS KICKOFF COMMIT RATHER THAN LEFT STALE.** That row carries a mid-window observation from **2026-08-26: the table was EMPTY, zero rows of any status**. Today's read supersedes it factually — **1 relationship, 1 `ACCEPTED`** — so the kill criterion does **not** fire, and the row's own instruction for a non-zero count applies verbatim: ***"A non-zero count, however small, means re-read at the next release rather than expand."*** **⚠️ Recorded as a mid-window observation and NOT as the verdict; the denominator clause (~381 accounts, needs TWO to act in concert) still governs and the verdict is due 2026-09-19.**
+
+**⚠️ THIS IS *NOT* `v0.109.0`'s STALE-GUIDE SHAPE, VERIFIED BY READING RATHER THAN ASSUMED FROM THE PRECEDENT.** That release's central finding was that `board-exam-guide.tsx` contained the string *"Review Set"* **zero times**. **Here the Help Center is already correct**: `export-sharing-guide.tsx:18` lists *"Quiz for someone — a link anyone can open and answer without an account"*, and `learning-connections-guide.tsx:35` explains the whole flow. **⚠️ Do NOT scope a guide rewrite — there is nothing stale to fix, and "sweep the guides" is the wrong lesson to carry over from `v0.109.0`.**
+
+**⚠️ THE MEASURED GAP IS IN-APP ANNOUNCEMENT AND MARKETING, AND BOTH NUMBERS WERE COUNTED AT KICKOFF:** the product ships **eleven** guidance tips (four on Library, three on Dashboard, two on note detail, two on collection detail) and **not one** mentions sharing a quiz with anyone; `app/page.tsx` names **Board Exam (4), Interview Practice (1), Adaptive Practice (2)** and shared quizzes **zero** times; `app/how-it-works/page.tsx` names **Board Exam (7)** and nothing else. The entry point itself is fine — it is a live menu item at `private-note-detail-page-client.tsx:2535` — **so nobody needs to WIRE anything.**
+
+### Planned Scope
+
+**(1) An in-app announcement where learners already are.** A one-time tip on the note detail page, routed through `pickActiveGuidance()` like every other tip. **⚠️ MODELLED VERBATIM ON `assessment-covers-whole-plan` (`collection-detail-page-client.tsx:3372`), INCLUDING ITS COMMENT — that tip is this repo's own solution to exactly this problem, and its comment is what stops a later session "improving" it into a second entry point.** **⚠️ IT HAS NO ACTION BUTTON, DELIBERATELY.** The *Quiz for someone* menu item already exists; adding a second click target for the same capability would confound the very read this release un-blocks.
+
+**⚠️ THE CONDITION IS DECIDED AT KICKOFF BECAUSE AN UNREACHABLE ONE IS THIS REPO'S MOST EXPENSIVE RECURRING DEFECT — `v0.116.0` widened a predicate that could never fire and `v0.117.0` added a callback to a branch nothing renders, both shipping green and both found only by a cold agent.** Fire on `isStudyPackReady && !note?.generatedQuiz` — **both inputs verified to exist at kickoff** (`isStudyPackReady` at `private-note-detail-page-client.tsx:984`; `generatedQuiz: GeneratedQuizResponse | null` on the note type, `lib/api.ts:1799`) — which is precisely the population that can act and has not: a learner holding a quiz-ready note who has never made a shared quiz. **⚠️ It must sort BELOW the two existing note-detail tips (both `priority: 10`), since `pickActiveGuidance` shows exactly one and ordering is how they coexist.**
+
+**(2) The marketing surfaces name the capability.** `app/page.tsx` and `app/how-it-works/page.tsx` describe a product in which sharing a quiz with someone does not exist. **⚠️ THE SHAPE IS DECIDED AT KICKOFF, NOT LEFT TO IMPLEMENTATION, BECAUSE *"name the capability"* COMES BACK AS A HERO SECTION:** the landing page already lists its assessment modes as sibling lines, so this is **ONE MORE LINE BESIDE THEM** — not a new section, not a hero, not a re-ordering of what is already there. **⚠️ COPY ONLY — no new route, no new component, no pricing or plan claim** (`v0.76.0`'s money-surface doctrine keeps pricing copy out and makes positioning an OWNER decision rather than an implementation one), **and do NOT claim it is new** — it has shipped since `v0.110.0`.
+
+### Anti-drift
+
+**⚠️ LEARNING CONNECTIONS PROMOTION IS OUT, AND THE PROHIBITION IS DATED RATHER THAN PERMANENT — IT UNBLOCKS AFTER `2026-09-19`.** Two specific temptations are named because **both look like copy and neither is**: **(a) do NOT move `Learning connections` from `secondaryNav` to `mainNav`** (`app-shell.tsx:421`, where it currently sits beside Profile / Settings / Help) — that is a **reachability change to the surface under measurement**, not a tidy-up; **(b) do NOT add any guidance tip naming supporters, connections or linked learners.** A later session reading only "the nav item is in the wrong menu" will find that an obvious fix, which is why the reason is written here.
+
+**⚠️ NO SECOND ENTRY POINT — `v0.109.0`'s explicit rule, and it binds here for the same reason it bound there:** *"do NOT add a second entry point because the capability feels hidden — that solves the wrong problem AND confounds the very reads item 3 re-arms."* The CTAs exist and work; **there is nothing to wire.**
+
+**⚠️ NO BEHAVIOUR CHANGE.** This release changes what the product **says**, not what it does. **⚠️ NO migration; no quota, entitlement, limit or meter change; no new mode or sub-mode; no `ProfileType` gate.**
+
+**⚠️ Do NOT change what `QUIZ_SHARE_LINK_OPENED` or `QUIZ_SHARE_LINK_COMPLETED` record, or their firing conditions.** `[CHECKPOINT — due 2026-12-04]` reads both, and its denominator correction depends on `OPENED` keeping **exactly** its two existing fire sites — page load with `metadata = {token}`, and the results-screen signup CTA with `metadata.source = "shared_quiz_results_signup_cta"` — so that the read can filter `metadata.source IS NULL`. **⚠️ Do NOT "tidy" the CTA onto its own event type; `v0.121.0` deliberately left it alone.**
+
+**⚠️ `frontend/app/onboarding` STAYS FROZEN — `[CHECKPOINT — due 2026-09-11]` is FIVE DAYS OUT, the closest this constraint has ever been to its date.** A promotion release is exactly the shape that violates it, because the instinct for *"nobody knows this exists"* is to say so during first run. **Do NOT add, remove or reorder an onboarding FLOW step.**
+
+**⚠️ Do NOT scope slice 5 (`Learning Connection integration`), and do NOT scope `quiz-assignments-learning-connections-stage1.md`**, which its own author marks NOT SCHEDULED. **⚠️ Do NOT record shared quiz results** (migration plus a privacy decision, `v0.121.0` §1B). **⚠️ Do NOT weaken `uq_generated_quizzes_note_id`.**
+
+**VERIFICATION: a single `advisor()` call on the diff** — copy plus one guidance tip; no permission substrate, no cross-user read, no money semantics, no migration, and by construction no behaviour change.
+
+**⚠️ THE VERIFICATION RISK IS UNUSUAL AND IS NAMED DELIBERATELY, CARRYING `v0.109.0`'s OWN LESSON: A COPY RELEASE HAS NO FAILING TEST TO CATCH A FALSE CLAIM.** Anchor every marketing claim to the code that implements it, and prefer a pinned string in a test over prose nothing checks.
+
+**⚠️ PRE-DECLARED GUARD, aimed at what this release could silently ship as a no-op: the tip's `condition()` must be asserted TRUE under a realistic fixture — a quiz-ready note with no generated quiz — and FALSE once one exists.** A test that merely asserts the rule is present in the array **passes under an unreachable condition and proves nothing**, which is the exact shape of `v0.116.0` and `v0.117.0`. **⚠️ A second guard is owed at the ordering seam: with an existing note-detail tip unseen, `pickActiveGuidance` must still return THAT tip, not this one.**
+
+**Routing: CLAUDE CODE inline.**
+
+### Shipped
+
+**(1) The note detail page announces that you can send someone a quiz.** A one-time tip through
+`pickActiveGuidance()`, firing on `isStudyPackReady && !note?.generatedQuiz` — the population that can act
+and has not.
+
+- **⚠️ IT SHARES ONE RULE ARRAY WITH `copied-study-pack-regenerate-hint`, AND THAT IS LOAD-BEARING RATHER
+  THAN TIDINESS.** The two note-detail tips were in **separate** `pickActiveGuidance` calls, and
+  `priority` cannot order across arrays — the function returns exactly one rule *per array*. Left split,
+  both tips render at once on a **copied, quiz-ready note**, which is a state that genuinely occurs, and
+  the pre-declared ordering guard would have had **no subject to assert against**. `quiz-tab-full-notes-nudge`
+  keeps its own array: it renders inside the quiz tab beside `PracticeQuizCard`, and co-rendering there is
+  today's behaviour, not something this release introduced.
+- **⚠️ THE ANNOUNCEMENT HAS NO ACTION BUTTON, AND THE SHARED RENDER SLOT NEARLY TOOK THAT AWAY.** That slot
+  passed `action={{ label: "Regenerate", … }}` **unconditionally**; merging the arrays without gating it
+  would have shipped the announcement with a Regenerate button — an action on a tip specified to have none,
+  wired to the wrong handler. The action is now gated on the rule id, and **a guard pins its absence**.
+- **⚠️ THE COPY DELIBERATELY DOES NOT NAME THE CONTROL, which is a correction to the obvious
+  implementation.** The two populations reach this through **different** affordances — the *Quiz for
+  someone* menu item is gated `!isTeacherMode && isStudyPackReady` (`:2518`), while a teacher gets the
+  *Generate Quiz* button (`:2887`) — so naming either one makes the tip false for the other half of its own
+  audience. The condition covers both, so neither is told about something it cannot reach.
+- **⚠️ `trackAnalytics` IS ON FOR THE ANNOUNCEMENT — REVERSED AT SIGNOFF, AND THE REVERSAL IS RECORDED
+  BECAUSE THE FIRST DECISION WAS WRONG.** It was delivered OFF on the reasoning that it is *"a new event
+  stream in a release that states no behaviour change"*. **Both halves of that are false.**
+  `GUIDANCE_TIP_SHOWN` **already fires from three sites**, so this adds a `tipId` value to an existing
+  stream rather than a new event; and the release's own anti-drift bars a *new event*, which this is not.
+- **⚠️ THE SIGNOFF CHECKPOINT GATE CAUGHT IT, AND THE PRECEDENT WAS IN THE SAME FILE ALL ALONG.**
+  `generate-quiz-combined-multi-note` (`:3546`) carries `trackAnalytics` with a comment stating it *"is
+  what makes the `v0.110.0` checkpoint readable — the outcome metric cannot separate 'nobody was told'
+  from 'nobody wanted it'."* **Same capability, same outcome metric, same confound.**
+  **⚠️ WITHOUT IT `[CHECKPOINT — due 2026-10-07]` WOULD HAVE BEEN DECORATIVE BY THE GATE'S OWN
+  DEFINITION:** that row concludes *"the question becomes whether shared quizzes are wanted at all"* when
+  promotion happened and the link floor is unmet — **an inference that is INVALID unless we know the
+  announcement reached anyone.** `GUIDANCE_TIP_SHOWN` supplies the denominator.
+- **⚠️ It is scoped to the announcement, not the shared slot** — the copied-pack hint has no dated read and
+  would only add noise. **Both directions are pinned**, and the mutant that turns it on wholesale fails a
+  named test.
+
+**(2) The marketing surfaces name the capability.**
+
+- `app/page.tsx` gains **one sibling line** in the mode showcase, beside the existing *Also: Interview
+  Practice* band. **⚠️ NOT a sixth `studyModes` card, and the reason is a false claim rather than the
+  locked contract alone:** that section's own heading reads **"Five study modes, one workspace"** and its
+  grid is `lg:grid-cols-5`, so an entry there would make the page **state something untrue** — in the one
+  release whose named risk is exactly that. **⚠️ It carries NO plan chip** (the capability is gated on
+  nothing) and uses the page's sky accent rather than the amber the Interview Practice band uses to mean
+  *Pro · Professional profile*.
+- `app/how-it-works/page.tsx` gains a fourth **value** entry. **⚠️ Deliberately in `valueSummaries` and not
+  in `steps`, whose heading counts its own items ("Simple 3-Step Flow") and whose cards render
+  `Step {n}`** — a fourth step would falsify the heading. The grid widens to `md:grid-cols-2 lg:grid-cols-4`
+  so the entry does not strand a card alone on a second row. **⚠️ DISCLOSED BECAUSE IT IS THE ONE EDIT IN
+  THE RELEASE THAT IS NOT STRICTLY COPY: that grid-arity change reflows the THREE PRE-EXISTING CARDS at the
+  `md` breakpoint (3-up becomes 2-up), not only the new one.** **Naming the capability was chosen over
+  extending a neighbouring description, because the point of the item is that it APPEARS AT ALL.**
+- **⚠️ NO CLAIM ABOUT SEEING THE RECIPIENT'S SCORE, ON ANY SURFACE, AND THIS IS THE COPY INSTINCT THAT WOULD
+  HAVE SHIPPED A LIE:** `getSharedQuizResults` grades **in memory with zero `.save(`** (`v0.121.0`'s
+  contradiction B), so *"see how they did"* is false. **⚠️ Nothing claims the capability is new** — it
+  shipped in `v0.110.0`. Both prohibitions are written into the code comments at each site.
+- **⚠️ ALL THREE STRINGS REUSE THE HELP CENTER'S CANONICAL WORDING VERBATIM** (`export-sharing-guide.tsx:18`)
+  — *"a link **anyone** can open and answer without an account"* — so one claim is not quietly two.
+  **`anyone` is the load-bearing word: it is the claim that a recipient needs NO ACCOUNT AND NO
+  RELATIONSHIP**, which is the property `v0.110.0` shipped and the note-detail menu item's own comment
+  protects. A first draft said *"they"*, which weakened it without looking like a change; **do not
+  re-soften it.**
+
+**(3) `docs/features/guidance.md`'s tip table is repaired to match code — added at owner request after the
+release's own doc re-read surfaced the drift.** **⚠️ THE FIRST COUNT WAS WRONG AND THE CORRECTION IS THE
+POINT: it was reported as FIVE missing tips and is EIGHT**, because the first sweep grepped literal
+`tipId="…"` strings and **rule-based tips pass `{rule.id}`**, so all three Dashboard tips were invisible to
+it. The table documented **11** of the **20** tips that ship.
+
+- Added: `dashboard-post-completion`, `teacher-dashboard-intro`, `dashboard-review-rhythm`,
+  `post-adopt-target-date`, `assessment-covers-whole-plan`, `quiz-tab-full-notes-nudge`,
+  `teacher-docx-export`, `teacher-note-content-quality`.
+- **⚠️ TWO EXISTING ROWS WERE WRONG, NOT MERELY ABSENT, AND BOTH OVERSTATED A TIP'S REACH.**
+  `note-detail-try-quiz` was documented as firing **always**; it actually requires the Performance Overview
+  to be **expanded** AND **zero attempts on both** Quick Review and Challenge Quiz — a first-run nudge, not
+  a permanent fixture, so anyone reasoning from the table had it backwards. `library-study-plan-grouping`
+  omitted its `!selectionMode` clause. Both corrections are recorded in the doc rather than quietly swapped.
+- The table is now **grouped by rule set with `priority` shown**, because within a set exactly one tip
+  renders and priority is the only thing ordering them — the fact this release had to discover by reading.
+- **Verified bidirectionally by script:** 20 ids in code, 20 rows in the doc, **nothing in code missing from
+  the table and nothing in the table absent from code.** Rule ids were extracted by bracket-matching each
+  `GuidanceRule[]` literal rather than by line-grep, which is what the first undercount got wrong.
+
+**(4) A FALSE INSTRUCTION IN THE HELP CENTER, FOUND BY SWEEPING BY SURFACE RATHER THAN BY DIFF.**
+`learning-connections-guide.tsx:35` read *"**From a note's actions menu**, choose Quiz for someone"* — but
+that menu item is gated `!isTeacherMode` (`private-note-detail-page-client.tsx:2548`), so **a teacher has no
+such item** and reaches the same capability through a button labelled **Generate Quiz**. The guide
+instructed teachers to do something they cannot.
+
+- **⚠️ THIS IS THE EXACT CLASS THE REPO ALREADY PAID FOR, MIRRORED.** `guidance.md` records
+  `teacher-generate-quiz-multi-note` being replaced in `v0.110.0` because it *"rendered unconditionally
+  while naming a `TEACHER`-gated CTA, so most of its readers were told to do something they could not."*
+  Here it was the **non-teacher** CTA, failing the other population.
+- **⚠️ THE RELEASE MADE IT WORSE BEFORE IT FOUND IT — which is why it is fixed here rather than deferred:**
+  this release exists to **promote** the capability, so it drives more readers into that instruction. It
+  was also **inconsistent with the release's own reasoning**, since the new tip deliberately does not name
+  the control for precisely this reason.
+- Fixed to name both: *"On a note with a ready Study Pack, choose Quiz for someone — teachers see the same
+  action as Generate Quiz."* **⚠️ An earlier draft of the fix said only *Quiz for someone* and was STILL
+  WRONG for teachers**, whose control carries a different label; the labels were read from code
+  (`:2565`, `:2931`) rather than assumed.
+- **⚠️ THE FILE WAS NOT IN THIS RELEASE'S DIFF and has never been in one when the behaviour it describes
+  changed** — the standing sweep-by-surface rule names exactly that pattern. A guard now pins it, and was
+  confirmed to **fail against the text that shipped**.
+- **⚠️ It does NOT contaminate `[CHECKPOINT — due 2026-09-19]`.** The sentence describes **shared quizzes**,
+  which require no connection; nothing about connection reachability changed, no nav item moved, and no tip
+  naming supporters or connections was added.
+
+**Guards — ten, all mutation-verified with the killing test named.** The pre-declared risk was a green
+no-op, so each mutant was run and the named failure recorded:
+
+| Mutant | Test that failed |
+|---|---|
+| drop `!note?.generatedQuiz` from the condition | *stops announcing … once a quiz for someone exists* |
+| drop `isStudyPackReady` from the condition | *does not announce … on a note with no Study Pack* |
+| `priority: 20` → `priority: 1` | *lets the copied-Study-Pack hint win over the share-a-quiz announcement* |
+| pass the Regenerate action unconditionally | *gives the share-a-quiz announcement no action button* |
+| remove the rule entirely | *announces the share-a-quiz capability on a quiz-ready note …* |
+| rename the landing sibling line | *names the share-a-quiz capability beside the study modes …* |
+| rename the how-it-works entry | *names the share-a-quiz capability without inflating the 3-step flow* |
+| restore the guide's *"From a note's actions menu"* instruction | *names the share-a-quiz control for BOTH populations, not just the learner one* |
+| revert `trackAnalytics` to OFF | *emits GUIDANCE_TIP_SHOWN for the announcement, so a low link count is readable* |
+| turn `trackAnalytics` on for the whole slot | *does not emit a tip impression for the copied-pack hint, which has no dated read* |
+
+Each marketing guard also pins the **counting heading** beside its claim, so a later session that promotes
+the line into `studyModes` or `steps` fails a test rather than shipping a false count. **⚠️ `npm test`
+2220 passed / 201 suites (exit 0), `tsc --noEmit` exit 0, `npm run lint` 0 errors and the same 18
+pre-existing warnings as `HEAD`** — all four exit statuses read directly, not through a pipe.
+
+### Known limitations
+
+- **For a teacher the tip is redundant**, since *Generate Quiz* is already their primary button in exactly
+  the state the tip fires in. Recorded as an observation rather than narrowed inline: the condition is the
+  kickoff's verified one, and adding `!isTeacherMode` would be the larger deviation.
+- **The announcement and `quiz-tab-full-notes-nudge` can both be on screen** when the learner is on the quiz
+  tab. That is pre-existing behaviour for the copied-pack hint too, and is **not** a regression.
+
 ## v0.121.0 - Shared Quiz Recipient Experience
 
 **Status: Released** (kicked off and signed off 2026-09-06, base branch `releases/v0.121.0`, cut from `main` after `v0.120.0` merged and tagged)

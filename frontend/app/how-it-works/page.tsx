@@ -79,6 +79,15 @@ const valueSummaries = [
     title: "Know exactly what to improve",
     description: "Results and weak-concept guidance make the next review session more intentional.",
   },
+  {
+    // ⚠️ Named here rather than folded into a neighbouring description, because the point of the entry
+    // is that the capability APPEARS AT ALL -- it has shipped since v0.110.0 and no marketing surface
+    // mentioned it. It goes in this list and NOT in `steps`, whose heading counts its own items
+    // ("Simple 3-Step Flow") and whose cards render "Step {n}". ⚠️ Do NOT add a claim about seeing the
+    // recipient's score: shared quiz results are graded in memory and never recorded.
+    title: "Share a quiz with someone",
+    description: "Turn a note into a quiz for another person — a link anyone can open and answer without an account.",
+  },
 ] as const;
 
 function WalkthroughSection({
@@ -180,7 +189,7 @@ export default function HowItWorksPage() {
           <p className="text-xs font-semibold uppercase tracking-wide text-sky-600 dark:text-sky-400">Why This Flow Works</p>
           <h2 className="text-2xl font-semibold sm:text-3xl">Study support that stays tied to your own material</h2>
         </div>
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           {valueSummaries.map((item) => (
             <Card key={item.title} className="space-y-3 p-5">
               <CardTitle>{item.title}</CardTitle>
