@@ -2884,6 +2884,19 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                     ? { label: "Regenerate", onClick: handleOpenRegenerateConfirm }
                     : undefined
                 }
+                // ⚠️ ON for the share announcement ONLY, and it is what makes
+                // [CHECKPOINT — due 2026-10-07] readable rather than decorative. That row's own kill
+                // criterion says a promoted capability with an unmet link floor means "shared quizzes may
+                // not be wanted" — an inference that is INVALID unless we know the announcement reached
+                // anyone. The outcome metric (`quiz_share_links` / QUIZ_SHARE_LINK_CREATED) cannot separate
+                // "nobody was told" from "nobody wanted it"; GUIDANCE_TIP_SHOWN supplies the denominator.
+                // This is the SAME reasoning already recorded on `generate-quiz-combined-multi-note` below,
+                // for the same capability and the same outcome metric.
+                //
+                // ⚠️ It is NOT a new event type — GUIDANCE_TIP_SHOWN already fires from three sites; this
+                // adds a `tipId` value to an existing stream. Left OFF for the copied-pack hint, which has
+                // no dated read and would only add noise.
+                trackAnalytics={noteDetailGuidance.id === SHARE_QUIZ_ANNOUNCEMENT_ID}
               />
             ) : null}
             {!isInlineMetadataEditMode ? (

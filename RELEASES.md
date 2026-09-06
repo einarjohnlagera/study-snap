@@ -68,9 +68,22 @@ and has not.
   someone* menu item is gated `!isTeacherMode && isStudyPackReady` (`:2518`), while a teacher gets the
   *Generate Quiz* button (`:2887`) — so naming either one makes the tip false for the other half of its own
   audience. The condition covers both, so neither is told about something it cannot reach.
-- **⚠️ `trackAnalytics` is left OFF.** `GuidanceTip` offers it and the instinct in a release *about*
-  measurement is to turn it on; it is a new event stream in a release that states no behaviour change, and
-  it was not scoped.
+- **⚠️ `trackAnalytics` IS ON FOR THE ANNOUNCEMENT — REVERSED AT SIGNOFF, AND THE REVERSAL IS RECORDED
+  BECAUSE THE FIRST DECISION WAS WRONG.** It was delivered OFF on the reasoning that it is *"a new event
+  stream in a release that states no behaviour change"*. **Both halves of that are false.**
+  `GUIDANCE_TIP_SHOWN` **already fires from three sites**, so this adds a `tipId` value to an existing
+  stream rather than a new event; and the release's own anti-drift bars a *new event*, which this is not.
+- **⚠️ THE SIGNOFF CHECKPOINT GATE CAUGHT IT, AND THE PRECEDENT WAS IN THE SAME FILE ALL ALONG.**
+  `generate-quiz-combined-multi-note` (`:3546`) carries `trackAnalytics` with a comment stating it *"is
+  what makes the `v0.110.0` checkpoint readable — the outcome metric cannot separate 'nobody was told'
+  from 'nobody wanted it'."* **Same capability, same outcome metric, same confound.**
+  **⚠️ WITHOUT IT `[CHECKPOINT — due 2026-10-07]` WOULD HAVE BEEN DECORATIVE BY THE GATE'S OWN
+  DEFINITION:** that row concludes *"the question becomes whether shared quizzes are wanted at all"* when
+  promotion happened and the link floor is unmet — **an inference that is INVALID unless we know the
+  announcement reached anyone.** `GUIDANCE_TIP_SHOWN` supplies the denominator.
+- **⚠️ It is scoped to the announcement, not the shared slot** — the copied-pack hint has no dated read and
+  would only add noise. **Both directions are pinned**, and the mutant that turns it on wholesale fails a
+  named test.
 
 **(2) The marketing surfaces name the capability.**
 
@@ -144,7 +157,7 @@ instructed teachers to do something they cannot.
   which require no connection; nothing about connection reachability changed, no nav item moved, and no tip
   naming supporters or connections was added.
 
-**Guards — eight, all mutation-verified with the killing test named.** The pre-declared risk was a green
+**Guards — ten, all mutation-verified with the killing test named.** The pre-declared risk was a green
 no-op, so each mutant was run and the named failure recorded:
 
 | Mutant | Test that failed |
@@ -157,10 +170,12 @@ no-op, so each mutant was run and the named failure recorded:
 | rename the landing sibling line | *names the share-a-quiz capability beside the study modes …* |
 | rename the how-it-works entry | *names the share-a-quiz capability without inflating the 3-step flow* |
 | restore the guide's *"From a note's actions menu"* instruction | *names the share-a-quiz control for BOTH populations, not just the learner one* |
+| revert `trackAnalytics` to OFF | *emits GUIDANCE_TIP_SHOWN for the announcement, so a low link count is readable* |
+| turn `trackAnalytics` on for the whole slot | *does not emit a tip impression for the copied-pack hint, which has no dated read* |
 
 Each marketing guard also pins the **counting heading** beside its claim, so a later session that promotes
 the line into `studyModes` or `steps` fails a test rather than shipping a false count. **⚠️ `npm test`
-2217 passed / 201 suites (exit 0), `tsc --noEmit` exit 0, `npm run lint` 0 errors and the same 18
+2220 passed / 201 suites (exit 0), `tsc --noEmit` exit 0, `npm run lint` 0 errors and the same 18
 pre-existing warnings as `HEAD`** — all four exit statuses read directly, not through a pipe.
 
 ### Known limitations

@@ -2643,6 +2643,55 @@ describe("PrivateNoteDetailPageClient", () => {
     expect(screen.queryByText(shareQuizAnnouncement)).not.toBeInTheDocument();
   });
 
+  it("emits GUIDANCE_TIP_SHOWN for the announcement, so a low link count is readable", async () => {
+    // ⚠️ THIS IS THE CHECKPOINT'S DENOMINATOR, NOT ANALYTICS HYGIENE. [CHECKPOINT — due 2026-10-07]
+    // concludes "shared quizzes may not be wanted" if the capability is promoted and the link floor is
+    // still unmet — an inference that is INVALID unless we know the announcement reached anyone.
+    // QUIZ_SHARE_LINK_CREATED alone cannot separate "nobody was told" from "nobody wanted it"; that exact
+    // confound is why v0.109.0 LIFTED two dated reads rather than let them fire.
+    (getAuthUser as jest.Mock).mockReturnValue({ planType: "FREE", emailVerifiedAt: "2026-03-21T09:00:00Z" });
+    (getNote as jest.Mock).mockResolvedValue({
+      ...baseNote,
+      studyPackStatus: "STUDY_PACK_READY",
+      studyPackId: "sp-1",
+      generatedQuiz: null,
+      quickReviewAvailable: true,
+    });
+
+    render(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    await screen.findByText(shareQuizAnnouncement);
+    await waitFor(() => {
+      expect(trackAnalyticsEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          eventType: "GUIDANCE_TIP_SHOWN",
+          metadata: expect.objectContaining({ tipId: "note-detail-quiz-for-someone" }),
+        }),
+      );
+    });
+  });
+
+  it("does not emit a tip impression for the copied-pack hint, which has no dated read", async () => {
+    // Pins that the flag is scoped to the announcement rather than turned on for the shared slot wholesale
+    // — otherwise the copied-pack hint starts emitting too, adding noise to a stream a dated read filters.
+    (getAuthUser as jest.Mock).mockReturnValue({ planType: "FREE", emailVerifiedAt: "2026-03-21T09:00:00Z" });
+    (getNote as jest.Mock).mockResolvedValue({
+      ...baseNote,
+      copiedFromPublic: true,
+      studyPackStatus: "STUDY_PACK_READY",
+      studyPackId: "sp-1",
+      generatedQuiz: null,
+      quickReviewAvailable: true,
+    });
+
+    render(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    await screen.findByText("This Study Pack was copied. If the difficulty doesn't match your level, regenerate it to get a version tailored to you.");
+    expect(trackAnalyticsEvent).not.toHaveBeenCalledWith(
+      expect.objectContaining({ eventType: "GUIDANCE_TIP_SHOWN" }),
+    );
+  });
+
   it("gives the share-a-quiz announcement no action button", async () => {
     // ⚠️ The announcement shares a render slot with the copied-pack hint, which DOES carry a
     // Regenerate action. Passing that action unconditionally would give this tip a second click target
