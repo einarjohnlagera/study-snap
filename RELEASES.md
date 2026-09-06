@@ -99,6 +99,26 @@ and has not.
   protects. A first draft said *"they"*, which weakened it without looking like a change; **do not
   re-soften it.**
 
+**(3) `docs/features/guidance.md`'s tip table is repaired to match code — added at owner request after the
+release's own doc re-read surfaced the drift.** **⚠️ THE FIRST COUNT WAS WRONG AND THE CORRECTION IS THE
+POINT: it was reported as FIVE missing tips and is EIGHT**, because the first sweep grepped literal
+`tipId="…"` strings and **rule-based tips pass `{rule.id}`**, so all three Dashboard tips were invisible to
+it. The table documented **11** of the **20** tips that ship.
+
+- Added: `dashboard-post-completion`, `teacher-dashboard-intro`, `dashboard-review-rhythm`,
+  `post-adopt-target-date`, `assessment-covers-whole-plan`, `quiz-tab-full-notes-nudge`,
+  `teacher-docx-export`, `teacher-note-content-quality`.
+- **⚠️ TWO EXISTING ROWS WERE WRONG, NOT MERELY ABSENT, AND BOTH OVERSTATED A TIP'S REACH.**
+  `note-detail-try-quiz` was documented as firing **always**; it actually requires the Performance Overview
+  to be **expanded** AND **zero attempts on both** Quick Review and Challenge Quiz — a first-run nudge, not
+  a permanent fixture, so anyone reasoning from the table had it backwards. `library-study-plan-grouping`
+  omitted its `!selectionMode` clause. Both corrections are recorded in the doc rather than quietly swapped.
+- The table is now **grouped by rule set with `priority` shown**, because within a set exactly one tip
+  renders and priority is the only thing ordering them — the fact this release had to discover by reading.
+- **Verified bidirectionally by script:** 20 ids in code, 20 rows in the doc, **nothing in code missing from
+  the table and nothing in the table absent from code.** Rule ids were extracted by bracket-matching each
+  `GuidanceRule[]` literal rather than by line-grep, which is what the first undercount got wrong.
+
 **Guards — seven, all mutation-verified with the killing test named.** The pre-declared risk was a green
 no-op, so each mutant was run and the named failure recorded:
 
@@ -119,12 +139,6 @@ pre-existing warnings as `HEAD`** — all four exit statuses read directly, not 
 
 ### Known limitations
 
-- **`docs/features/guidance.md`'s tip table is missing FIVE tips that ship today** — `assessment-covers-whole-plan`
-  and `post-adopt-target-date` (collection detail), `quiz-tab-full-notes-nudge` (note detail),
-  `teacher-docx-export` and `teacher-note-content-quality`. **Pre-existing drift, found by diffing rendered
-  `tipId`s against the table, and deliberately NOT fixed here** — this release is scoped to two items and
-  repairing the table is a separate docs correction. The new tip's own row and its anti-drift note **are**
-  in the doc.
 - **For a teacher the tip is redundant**, since *Generate Quiz* is already their primary button in exactly
   the state the tip fires in. Recorded as an observation rather than narrowed inline: the condition is the
   kickoff's verified one, and adding `!isTeacherMode` would be the larger deviation.

@@ -68,22 +68,61 @@ Analytics (opt-in):
 - pass `trackAnalytics` to `GuidanceTip` to fire `GUIDANCE_TIP_SHOWN` once on first impression and `GUIDANCE_TIP_CTA_CLICKED` when the tip's action is used (both carry `{ tipId }` metadata)
 - opt-in by design so existing tips emit no analytics noise; used for the v0.28.0 activation funnel (tip impression → CTA click → feature use, where feature use is an existing `*_STARTED` event or `QUIZ_REVIEW_EXPORTED`)
 
-Current active one-time tips:
+Current active one-time tips. **⚠️ THIS TABLE IS THE FULL SET — it is verified against code, and a tip
+added without a row here is drift.** Tips sharing a `pickActiveGuidance` rule set are grouped and carry
+their `priority`, because in a rule set **exactly one tip shows** and priority is the only thing ordering
+them.
+
+**Dashboard** — one rule set (`dashboardGuidanceRules`, `app/dashboard/page.tsx`):
+
+| tipId | Priority | Trigger | Message |
+|---|---|---|---|
+| `dashboard-post-completion` | 1 | non-teacher, and a recent ready note has `quizCount > 0` | `Nice work with {topic}. Come back to review it again later — spaced review helps it stick.` (topic is the note's subject, falling back to its title) |
+| `teacher-dashboard-intro` | 2 | teacher profile | `NoteLib turns your lesson notes into ready-to-use quiz drafts. Start by creating a note with your lesson content.` |
+| `dashboard-review-rhythm` | 3 | non-teacher, has completed a session | `A quick return visit matters: reviewing concepts over time makes recall stronger than one long study session.` |
+
+**Library** — one rule set (`libraryGuidanceRules`, `app/library/page.tsx`):
+
+| tipId | Priority | Trigger | Message |
+|---|---|---|---|
+| `teacher-library-multi-note-select` | 1 | teacher, not in selection mode, notes ≥ 1 | `Select multiple notes with the checkboxes, then add them to a lesson plan or build an exam from quiz-ready notes.` |
+| `library-study-plan-grouping` | 2 | non-teacher, **not in selection mode**, notes ≥ 3 | `Group related notes into a {Study Plan} you can study as one set.` (CTA: `Create {Study Plan}`, trackAnalytics) |
+| `library-organization-habits` | 3 | notes ≥ 5 | `You're building a solid library. Try filtering by subject to find related notes quickly.` |
+| `library-first-note-organization` | 4 | notes 1–3 | `Add a subject and tags when editing a note — it makes filtering your library much easier as it grows.` |
+
+**Collection detail** — one rule set (`postAdoptGuidanceRules`, `app/collections/[id]/collection-detail-page-client.tsx`):
+
+| tipId | Priority | Trigger | Message |
+|---|---|---|---|
+| `post-adopt-target-date` | 1 | just adopted, Goal view, no `targetCompletionDate` | `Set a target completion date to see your weekly countdown and daily study budget.` |
+| `assessment-covers-whole-plan` | 2 | **not** just adopted, and ≥ **2** quiz-ready notes | `Practice and exams now cover this whole plan, not one note at a time — weak areas are drawn from across it.` |
+
+**Note detail** — `copied-study-pack-regenerate-hint` and `note-detail-quiz-for-someone` share **one** rule set (`noteDetailGuidance`) and one render slot; the other two are independent:
+
+| tipId | Priority | Trigger | Message |
+|---|---|---|---|
+| `copied-study-pack-regenerate-hint` | 10 | `copiedFromPublic === true` and `studyPackStatus === STUDY_PACK_READY` | `This Study Pack was copied. If the difficulty doesn't match your level, regenerate it to get a version tailored to you.` (CTA: `Regenerate`) |
+| `note-detail-quiz-for-someone` | 20 | `studyPackStatus === STUDY_PACK_READY` and no `generatedQuiz` | `You can turn this note into a quiz for someone else — a link anyone can open and answer without an account.` (no action) |
+| `note-detail-generate-study-pack` | — | draft state, not generating, not failed, not editing metadata inline | `Generate a Study Pack to unlock summary, key concepts, and quiz questions from this note.` |
+| `quiz-tab-full-notes-nudge` | — | Quiz tab active, Study Pack ready, full notes not yet viewed | `Haven't reviewed the full notes yet? Skim the source material before testing yourself.` (CTA: `View Full Notes`) |
+| `note-detail-try-quiz` | — | Performance Overview **expanded**, and **zero** Quick Review *and* zero Challenge Quiz attempts | `Try Quick Review or Challenge Quiz to start tracking your performance on this note.` |
+
+**Everywhere else** — standalone tips, no rule set:
 
 | tipId | Surface | Trigger | Message |
 |---|---|---|---|
-| `note-detail-generate-study-pack` | Note Detail draft state | always | `Generate a Study Pack to unlock summary, key concepts, and quiz questions from this note.` |
-| `copied-study-pack-regenerate-hint` | Note Detail copied ready state | `copiedFromPublic === true` and `studyPackStatus === STUDY_PACK_READY` | `This Study Pack was copied. If the difficulty doesn't match your level, regenerate it to get a version tailored to you.` |
-| `note-detail-quiz-for-someone` | Note Detail ready state | `studyPackStatus === STUDY_PACK_READY` and no `generatedQuiz` | `You can turn this note into a quiz for someone else — a link anyone can open and answer without an account.` |
-| `note-detail-try-quiz` | Note Detail performance section | always | `Try Quick Review or Challenge Quiz to start tracking your performance on this note.` |
-| `sessions-export-hint` | Session History empty state | always | `Complete a quiz session to unlock session review and export — download your results as a PDF for study or sharing.` |
-| `quiz-review-export` | Session Review screen (review loaded) | always | `Export this review as a PDF to study offline or share it — use the Export button on this page.` (trackAnalytics) |
-| `public-library-intro` | Public Library | always | `Browse notes created by others. Copy any note into your library to study it in your own workspace — full Study Pack included.` |
-| `library-study-plan-grouping` | Library | non-teacher, notes ≥ 3 | `Group related notes into a {Study Plan} you can study as one set.` (CTA: `Create {Study Plan}`, trackAnalytics) |
-| `library-first-note-organization` | Library | notes 1–3 | `Add a subject and tags when editing a note — it makes filtering your library much easier as it grows.` |
-| `library-organization-habits` | Library | notes ≥ 5 | `You're building a solid library. Try filtering by subject to find related notes quickly.` |
-| `teacher-library-multi-note-select` | Library | teacher, not in selection mode, notes ≥ 1 | `Select multiple notes with the checkboxes, then add them to a lesson plan or build an exam from quiz-ready notes.` |
 | `generate-quiz-combined-multi-note` | Generate Quiz modal (Note Detail) | always | `Building a quiz for a whole unit? In your Library, choose Combined quiz to pick several notes and share one quiz.` (trackAnalytics) |
+| `teacher-docx-export` | Generated Quiz preview | `ADMIN` or `TEACHER` | `Download as DOCX and open in Word or Google Docs — format it your way before distributing to students.` |
+| `teacher-note-content-quality` | Note editor, Content field | teacher create mode | `The more detail in your notes, the better the quiz questions. Paste a full lesson outline, not just bullet headers.` |
+| `sessions-export-hint` | Session History empty state | always | `Complete a quiz session to unlock session review and export — download your results as a PDF for study or sharing.` |
+| `quiz-review-export` | Session Review screen | review loaded | `Export this review as a PDF to study offline or share it — use the Export button on this page.` (trackAnalytics) |
+| `public-library-intro` | Public Library | always | `Browse notes created by others. Copy any note into your library to study it in your own workspace — full Study Pack included.` |
+
+**⚠️ TWO ROWS WERE CORRECTED IN `v0.122.0` AND THE CORRECTIONS ARE RECORDED RATHER THAN QUIETLY SWAPPED,
+because both overstated a tip's reach.** `note-detail-try-quiz` was documented as firing **always**; it in
+fact requires the Performance Overview to be **expanded** *and* **zero attempts on both** Quick Review and
+Challenge Quiz — so it is a first-run nudge, not a permanent fixture, and anyone reasoning about it from
+this table would have had it backwards. `library-study-plan-grouping` omitted its `!selectionMode` clause.
 
 **⚠️ `generate-quiz-combined-multi-note` REPLACED `teacher-generate-quiz-multi-note` in `v0.110.0`, and the
 id change is deliberate.** The old tip rendered unconditionally while naming a `TEACHER`-gated CTA, so most
@@ -107,7 +146,7 @@ Quiz* button for teachers), so naming either makes the tip false for the other h
 **⚠️ Do NOT add a claim about seeing the recipient's score — shared quiz results are graded in memory and
 never recorded.**
 
-The Library tips (`teacher-library-multi-note-select`, `library-study-plan-grouping`, `library-organization-habits`, `library-first-note-organization`) are selected by a single `pickActiveGuidance` rule set so only one shows at a time; Study Plan grouping is prioritized for non-teachers as the v0.28.0 activation lever. The `{Study Plan}` label is profile-aware via `getCollectionLabels` (STUDENT → Study Plan, BOARD_EXAM → Review Set, PROFESSIONAL → Collection).
+Within the Library rule set, Study Plan grouping is prioritized for non-teachers as the v0.28.0 activation lever. Its `{Study Plan}` label is profile-aware via `getCollectionLabels` (STUDENT → Study Plan, BOARD_EXAM → Review Set, PROFESSIONAL → Collection).
 
 ## Layer 3 — Help Center
 
