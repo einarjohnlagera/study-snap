@@ -687,7 +687,7 @@ export function BulkGenerationPageClient() {
                 <h2 id="bulk-topics-heading" className="text-sm font-medium text-foreground">
                   Topics <span className="text-red-500" aria-hidden="true">*</span>
                 </h2>
-                <p className="mt-1 text-xs text-foreground/60">Each topic becomes a separate note. Each note&apos;s title and tags are generated automatically — the subject and other batch details apply to every note. Paste a list to add several at once — one topic per line.</p>
+                <p className="mt-1 text-xs text-foreground/60">Each topic becomes a separate note, and the topic you type stays as that note&apos;s title. Tags are generated automatically — the subject and other batch details apply to every note. Paste a list to add several at once — one topic per line.</p>
               </div>
               <span className={`text-sm font-medium ${
                 overCap ? "text-red-600 dark:text-red-400" : "text-foreground/65"

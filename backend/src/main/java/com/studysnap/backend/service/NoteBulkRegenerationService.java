@@ -43,9 +43,11 @@ import java.util.UUID;
  * that are all live in that code today:
  * <ol>
  *   <li>it always passes a non-null {@code preservedSubject}, which routes into
- *       {@code applyBulkGeneratedMetadataToNote} and UNCONDITIONALLY overwrites the note's title and
- *       tags — on a curator-authored canonical Note that is the single most destructive thing this
- *       feature could do, so this driver passes {@code null} and the destructive branch stays
+ *       {@code applyBulkGeneratedMetadataToNote} and rewrites the note's tags and subject.
+ *       ⚠️ UNTIL {@code v0.120.0} IT ALSO OVERWROTE THE TITLE, which on a curator-authored canonical
+ *       Note was the single most destructive thing this feature could do; that line is now gone, so
+ *       the title hazard is closed at its source. The tags rewrite remains a reason this driver
+ *       passes {@code null} — regeneration must not restamp metadata at all — and the branch stays
  *       unreachable;</li>
  *   <li>it resolves ONE generation context for the whole batch and passes it as an override, which
  *       makes the primitive skip per-note resolution — structurally wrong here, where each Note must
@@ -567,8 +569,10 @@ public class NoteBulkRegenerationService {
             return;
         }
         // ⚠️ BOTH TRAILING NULLS ARE LOAD-BEARING AND MUST STAY NULL.
-        // preservedSubject = null keeps applyBulkGeneratedMetadataToNote — which unconditionally
-        // overwrites title and tags — unreachable, protecting curator-authored canonical titles.
+        // preservedSubject = null keeps applyBulkGeneratedMetadataToNote — which rewrites tags and
+        // restamps subject — unreachable, so regeneration consumes metadata and never rewrites it.
+        // ⚠️ That method also overwrote TITLE until v0.120.0 deleted the line; the title hazard is
+        // now closed at its source, which is NOT a reason to relax this null.
         // generationContextOverride = null forces the primitive to resolve THIS note's own context
         // rather than one batch-wide context.
         studyPackService.startAsyncGenerationFromNote(

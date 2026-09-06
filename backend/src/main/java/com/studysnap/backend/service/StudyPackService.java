@@ -1293,13 +1293,39 @@ public class StudyPackService {
         }
     }
 
+    /**
+     * Stamps the curator's batch subject and the generated tags onto a bulk-generated Note.
+     *
+     * <p>⚠️ THIS DELIBERATELY DOES NOT SET THE TITLE, AND RE-ADDING THAT LINE IS THE DEFECT
+     * {@code v0.120.0} FIXED. {@code NoteBulkGenerationService.processItem} creates the Note with the
+     * curator's typed topic as its title -- which is correct -- and then always passes a non-blank
+     * {@code preservedSubject}, so this method always runs. It used to overwrite that title with the
+     * STUDY PACK's generated title, so a curator's {@code Site Grading Principles} persisted as
+     * {@code Site Grading Principles in Civil Engineering}, naming a discipline that was not among the
+     * four selected Applicable Programs. The model INFERRED it: no context field contained it, and
+     * {@code developer.txt}'s title doctrine was already correct and was violated anyway -- which is
+     * why the fix removes the model's authority over canonical titles rather than re-wording an
+     * instruction. The curator's topic IS the canonical title, exactly as the single-note path
+     * ({@link #applyGeneratedMetadataToNote}) has always behaved.
+     *
+     * <p>⚠️ It also matters downstream: {@code v0.118.0}'s regeneration contract is "the Note's current
+     * title is the topic", so a contaminated title would SEED every future regeneration of that Note.
+     *
+     * <p>⚠️ Tags fall back to the note's OWN title, never {@code generated.title()}. The generated title
+     * is no longer applied anywhere, so falling back to it would reintroduce the contaminated string
+     * through the tag field instead. {@code resolveTags} consults the fallback only when the LLM
+     * returned no tags at all.
+     *
+     * <p>⚠️ Do NOT merge this with {@link #applyGeneratedMetadataToNote} -- the two have genuinely
+     * different jobs. That one fills only BLANK subject and tags; this one stamps the curator's batch
+     * subject authoritatively.
+     */
     private void applyBulkGeneratedMetadataToNote(
             NoteEntity note,
             GeneratedStudyPackContent generated,
             String preservedSubject
     ) {
-        note.setTitle(normalizeEditableTitle(generated.title()));
-        note.setTags(resolveTags(generated.tags(), generated.title()));
+        note.setTags(resolveTags(generated.tags(), note.getTitle()));
         note.setSubject(normalizeUserSuppliedSubject(preservedSubject));
         note.setUpdatedAt(OffsetDateTime.now());
         noteRepository.save(note);

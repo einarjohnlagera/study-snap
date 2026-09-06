@@ -193,6 +193,80 @@ the tags change turns into an edit to `resolveTags` itself.
 existing modal, apply path and API call. **⚠️ Re-run the routing test if item 3 discovers a surface not in
 this plan**, which is how `v0.103.0` was mis-routed.
 
+### Shipped
+
+**1. The core fix — a curator's typed topic is the canonical Note title.**
+`StudyPackService.applyBulkGeneratedMetadataToNote` no longer calls
+`note.setTitle(normalizeEditableTitle(generated.title()))`. It still stamps the curator's batch subject and
+the generated tags. The method keeps its own identity — **not** merged with `applyGeneratedMetadataToNote`,
+which fills only blanks — and carries a javadoc naming the defect so the line is not re-added.
+
+**2. Tags fall back to the note's own title.** `resolveTags(generated.tags(), note.getTitle())` at the one
+bulk call site. `resolveTags` itself is untouched, so its other three callers are unaffected and the audit's
+escalation trigger did not fire. **⚠️ Behaviour changes only when the LLM returns NO tags** — otherwise its
+own tags win, as before.
+
+**3. The opt-in title suggestion (owner decision, against the audit's recommendation).** On the note detail
+page, a curator whose note title differs from its Study Pack's title gets a dismissible card offering the
+generated title. **Non-modal by necessity:** the existing modal is armed only when generation starts from
+that page, and a 50-item batch cannot show 50 modals. **Dismissal persists across reloads** (owner decision,
+2026-09-06) in `localStorage` under `notelib-title-suggestion-dismissed:{noteId}`. **The read is bounded** —
+curators only, pack READY only, once per Study Pack id, and never again once dismissed, so a learner's note
+page issues no extra request.
+
+**4. `createGeneratedNote` was checked and deliberately left alone.** It sets `note.setTitle(generated.title())`
+at `StudyPackService:958`, which is **correct**: that is the paste-text/image path, where no curator topic
+exists and the generated title is the only one available. **⚠️ Do not "fix" it for symmetry.**
+
+**5. A test that pinned the defect was REWRITTEN, not deleted.**
+`StudyPackServiceTest.startAsyncGenerationFromNote_bulkBypassPreservesSubjectAndAppliesAiTitleAndTagsWithoutUsage`
+asserted `getTitle()).isEqualTo("AI Refined Title")` — **a green suite was actively protecting the defect.**
+It is now `..._bulkBypassKeepsTheCuratorTitleAndPreservesSubjectWithoutUsage`; every other assertion it made
+(subject stamped, LLM tags applied, no usage spent) was correct and is kept.
+
+**6. The surface sweep, which found a user-facing false claim the diff would not have.**
+`bulk-generation-page-client.tsx:690` told curators *"Each note's title and tags are generated
+automatically"* — false for the title after this release. Corrected. `bulk-generation.md` (three separate
+claims, including a section that described the defect as the design), `study-pack-generation.md`,
+`bulk-regeneration.md`, and two stale `NoteBulkRegenerationService` comments citing the title overwrite as
+their justification were all corrected.
+
+### Verification performed
+
+**Guards, all mutation-verified with the killing test named.** Re-adding
+`note.setTitle(normalizeEditableTitle(generated.title()))` fails **all four** real-row guards in
+`NativeQueryPostgresIntegrationTest` — `bulkGenerationKeepsTheCuratorTopicAsTheNoteTitle`,
+`bulkGenerationWithNoGeneratedTagsFallsBackToTheCuratorTopic`, `bulkAndSingleNoteGenerationPersistTheSameTitle`
+and `bulkGenerationPreservesALegitimateDisciplinaryQualifier`. Making the frontend dismissal in-memory fails
+`keeps the suggestion dismissed across a reload`.
+
+**⚠️ GUARD 5 (profile isolation) WAS ALREADY COVERED, AND THIS IS RECORDED HONESTLY RATHER THAN CLAIMED AS
+NEW WORK.** The audit's §8.5 asked for it; `resolveForBulkGeneration_curatorDoesNotInheritProfileProgram`
+already existed and already kills the mutant, because its `List.of()` fixture also falls through to the
+curator check. The new
+`resolveForBulkGeneration_neverLetsACuratorProfileCourseProgramBecomeTitleContext` adds **no mutation
+coverage**; it pins the production-shaped four-program input and documents why the fixture must not be
+"simplified" to one id — `resolveBulkCourseProgram:155-160` RETURNS EARLY when `ids.size() == 1`, so a
+one-id fixture would never reach the guard and would silently become vacuous.
+
+**Suites:** backend **2187 executed, 0 failures** (counted from `target/surefire-reports/*.xml` after
+clearing the directory; `./mvnw clean install` exit status read directly, not through a pipe); frontend
+**2190 passed across 201 suites**; `tsc --noEmit` exit 0; ESLint 0 errors.
+
+**⚠️ NO endpoint was added, so `CLAUDE.md`'s real-request/MockMvc rule did not apply** — stated so a later
+session reads it as considered rather than skipped.
+
+### Known limitations
+
+- **Dismissal is per-BROWSER, not per-account.** A curator who dismisses the suggestion on one machine sees
+  it again on another. Account-level dismissal needs a `notes` column and a migration, which this release's
+  anti-drift forbids; it would be its own release.
+- **Existing contaminated titles are NOT repaired.** No migration, no backfill, no rename. Sizing the debt
+  needs a production read plus a hand-check (many `% in %` matches are legitimate), and **the production
+  database is read-only for Claude — that query is the owner's to run.** Tracked by a Backlog Index row.
+- **The narrowed title-input contract (§19) is deferred**, with the finding that there is no title-producing
+  call to narrow recorded in its own Backlog row.
+
 ## v0.119.1 - Public Catalog Bounds
 
 **Status: Released** (kicked off and signed off 2026-09-06, base branch `releases/v0.119.1`, cut from

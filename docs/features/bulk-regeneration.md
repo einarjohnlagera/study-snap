@@ -42,8 +42,11 @@ carries the reasoning; this file carries the behaviour.
 ## Anti-drift
 
 - **Never reuse `NoteBulkGenerationService.processItem`.** It applies one batch-wide context to every item,
-  reports success for items that failed, and overwrites `title` and `tags` through
-  `applyBulkGeneratedMetadataToNote` — which would destroy curator-authored canonical titles.
+  reports success for items that failed, and rewrites `tags` through
+  `applyBulkGeneratedMetadataToNote`. **⚠️ It also overwrote `title` until `v0.120.0` removed that line — so
+  the "would destroy curator-authored canonical titles" hazard is now closed AT ITS SOURCE rather than only
+  by this avoidance rule.** The rule stands anyway on its other two grounds (one batch-wide context, and
+  success reported for failed items); do not read the title fix as licence to reuse `processItem`.
 - **The item verdict comes from persisted `notes.status`, never from "the call did not throw."**
   `generateStudyPackFromExistingNoteAsync` catches `Exception`, marks the note `FAILED` and returns
   normally, so an outcome inferred from a clean return reports every async failure as a success.
