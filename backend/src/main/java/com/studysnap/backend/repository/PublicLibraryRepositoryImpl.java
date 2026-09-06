@@ -7,6 +7,7 @@ import com.studysnap.backend.entity.NoteVisibility;
 import com.studysnap.backend.model.NoteListItemProjection;
 import com.studysnap.backend.model.PublicLibrarySort;
 import com.studysnap.backend.model.PublicLibrarySource;
+import com.studysnap.backend.util.PublicNotesScoringUtils;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.Query;
 import jakarta.persistence.Tuple;
@@ -23,11 +24,14 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.EnumSet;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Optional;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 
 @Repository
@@ -50,13 +54,63 @@ public class PublicLibraryRepositoryImpl implements PublicLibraryRepository {
     private static final String UPDATED_AT_ALIAS = "updatedAt";
     private static final String COPIED_FROM_NOTE_ID_ALIAS = "copiedFromNoteId";
     private static final String COPIED_FROM_PUBLIC_ALIAS = "copiedFromPublic";
-    private static final String HAS_STUDY_PACK_ALIAS = "hasStudyPack";
-    private static final String HAS_CONTENT_ALIAS = "hasContent";
-    private static final String HAS_SUMMARY_ALIAS = "hasSummary";
-    private static final String QUIZ_COUNT_ALIAS = "quizCount";
     private static final String RANKED_SORT_PATH_REQUIRED_MESSAGE =
             "Ranked public-library sorts must use the materialized path.";
     private static final String NOTES_FROM = " from notes n ";
+    private static final String RANKED_FROM_BASE = " from notes n ";
+    /** Only Featured eligibility reads the pack's summary and quiz, so only Featured pays for it. */
+    private static final String RANK_STUDY_PACK_JOIN = " left join study_packs sp on sp.note_id = n.id ";
+    private static final String RANK_NOW_PARAMETER = "rankNow";
+    private static final String EXCLUDED_NOTE_ID_PARAMETER = "rankExcludedNoteId";
+    /**
+     * ⚠️ Each engagement metric joins a derived table that aggregates ONCE, rather than a correlated
+     * subquery evaluated per row. That is deliberate for {@code analytics_events}: it carries indexes
+     * on {@code event_type}, {@code user_id} and {@code created_at} but NOT on {@code entity_id}, so a
+     * correlated count would scan it once per public note. The grouped form does the same single pass
+     * the Java path's aggregate query did, and a metric is joined only when the chosen sort reads it.
+     */
+    private static final String RANK_COPIES_JOIN = " left join (select rank_copy_n.copied_from_note_id"
+            + " as note_id, count(*) as metric from notes rank_copy_n where rank_copy_n.copied_from_public = true"
+            + " and rank_copy_n.copied_from_note_id is not null group by rank_copy_n.copied_from_note_id)"
+            + " rank_copies on rank_copies.note_id = n.id ";
+    private static final String RANK_LIKES_JOIN = " left join (select rank_like.note_id as note_id,"
+            + " count(*) as metric from public_note_likes rank_like group by rank_like.note_id)"
+            + " rank_likes on rank_likes.note_id = n.id ";
+    private static final String RANK_VIEWS_JOIN = " left join (select rank_view.entity_id as note_id,"
+            + " count(*) as metric from analytics_events rank_view"
+            + " where rank_view.event_type = 'PUBLIC_NOTE_VIEWED' and rank_view.entity_id is not null"
+            + " group by rank_view.entity_id) rank_views on rank_views.note_id = n.id ";
+    /** Copies: the same predicate as {@code countCopiedPublicNotesBySourceNoteIds}. */
+    private static final String RANK_COPIES = "coalesce(rank_copies.metric, 0)";
+    /** Likes: the same predicate as {@code countLikesByNoteIds}. */
+    private static final String RANK_LIKES = "coalesce(rank_likes.metric, 0)";
+    /**
+     * Views: the same predicate as {@code countPublicNoteEventsByTypeAndNoteIds} for
+     * {@code PUBLIC_NOTE_VIEWED}. That query additionally joins {@code notes} to require
+     * {@code visibility = 'PUBLIC'}; the outer {@code n} here is already public, so joining on
+     * {@code n.id} carries that constraint.
+     */
+    private static final String RANK_VIEWS = "coalesce(rank_views.metric, 0)";
+    private static final String CREATED_AT_DESC = "n.created_at desc";
+    /**
+     * ⚠️ The final tiebreak is NOT cosmetic. The Java ranking this SQL replaces sorted a candidate
+     * list that the database had already returned {@code order by n.id}, and {@code List.sort} is
+     * stable — so ties resolved by ascending id. Dropping it re-orders equal-scoring notes.
+     */
+    private static final String ID_ASC = "n.id asc";
+    /**
+     * The SQL form of {@code NoteStudyPackStatusResolver.resolve(status, hasStudyPack) ==
+     * STUDY_PACK_READY}. Used by the {@code readyOnly} filter AND by Featured eligibility, which are
+     * the same rule — kept in one place so the two cannot drift apart.
+     */
+    private static final String STUDY_PACK_READY_SQL = """
+            (
+                n.status = 'GENERATED'
+                or (
+                    (n.status is null or n.status = 'DRAFT')
+                    and exists (select 1 from study_packs ready_sp where ready_sp.note_id = n.id)
+                )
+            )""";
     private static final String NOTE_LIST_ITEMS_FROM = """
              from notes n
              left join (
@@ -151,27 +205,102 @@ public class PublicLibraryRepositoryImpl implements PublicLibraryRepository {
     }
 
     @Override
-    public List<PublicLibraryCandidateProjection> findPublicLibraryCandidates(
-            PublicLibraryFilterCriteria criteria
+    public long countPublicLibraryRankedMatches(PublicLibraryFilterCriteria criteria, PublicLibrarySort sort) {
+        String eligibility = rankedEligibility(sort);
+        if (eligibility.isEmpty()) {
+            return countPublicLibraryMatches(criteria);
+        }
+        FilterSql filter = buildFilter(criteria);
+        Query query = entityManager.createNativeQuery(
+                "select count(*)" + rankedFrom(sort, eligibilityMetrics(sort)) + filter.whereClause() + eligibility
+        );
+        bind(query, filter.parameters());
+        return ((Number) query.getSingleResult()).longValue();
+    }
+
+    @Override
+    public Optional<UUID> findPublicNoteIdBySeoSlugs(
+            String subjectSlug,
+            String titleSlug,
+            boolean subjectIsNull
+    ) {
+        Map<String, Object> parameters = new LinkedHashMap<>();
+        StringBuilder sql = new StringBuilder("select n.id as " + ID_ALIAS
+                + " from notes n where n.visibility = 'PUBLIC'");
+
+        // ⚠️ TWO BRANCHES, REPRODUCING THE JAVA EXACTLY. The caller pre-queried `subject IS NULL` when
+        // the requested slug was the blank-subject default, so a WHITESPACE-only subject was never a
+        // candidate even though slugify() would have matched it. Preserved deliberately: "fixing" it
+        // changes which note a live public URL resolves to.
+        if (subjectIsNull) {
+            sql.append(" and n.subject is null");
+        } else {
+            sql.append(" and ").append(slugWithFallbackSql("n.subject", "subjectFallback"))
+                    .append(" = :subjectSlug");
+            parameters.put("subjectSlug", subjectSlug);
+            parameters.put("subjectFallback", DEFAULT_PUBLIC_SUBJECT_SLUG);
+        }
+
+        // ⚠️ THE FALLBACK IS LOAD-BEARING AND IS WHY normalizedSlugSql ALONE IS WRONG HERE. Java's
+        // slugify(value, fallback) returns the FALLBACK for a null or blank-after-normalisation value,
+        // whereas normalizedSlugSql returns ''. Without the coalesce/nullif a note titled "Untitled
+        // Note" would resolve while an untitled one would not, silently changing which page 404s.
+        sql.append(" and ").append(slugWithFallbackSql("n.title", "titleFallback"))
+                .append(" = :titleSlug");
+        parameters.put("titleSlug", titleSlug);
+        parameters.put("titleFallback", DEFAULT_PUBLIC_TITLE_SLUG);
+
+        // findFirst() over `order by updated_at desc` = most recently updated wins. The `n.id asc`
+        // tiebreak is ADDED: the previous ordering had none, so ties resolved by whatever the database
+        // returned. That was nondeterministic rather than defined, so pinning it cannot break a
+        // behaviour anyone could have relied on.
+        sql.append(" order by n.updated_at desc, n.id asc");
+
+        Query query = createNativeQuery(sql.toString());
+        parameters.forEach(query::setParameter);
+        query.setMaxResults(1);
+
+        // Same tuple/UUID idiom as findPublicLibraryRankedPageIds -- a raw getResultList() maps
+        // differently across the H2 and PostgreSQL harnesses.
+        return tuples(query).stream().map(tuple -> toUuid(tuple.get(ID_ALIAS))).findFirst();
+    }
+
+    /**
+     * {@code slugify(value, fallback)}'s SQL twin: blank and null both collapse to the fallback.
+     *
+     * <p>⚠️ The fallback is a BOUND PARAMETER per call site, not one shared name — subject and title
+     * use different fallbacks, and a single name would have silently applied one to both.
+     */
+    private String slugWithFallbackSql(String expression, String fallbackParameter) {
+        return "coalesce(nullif(" + normalizedSlugSql(expression) + ", ''), :" + fallbackParameter + ")";
+    }
+
+    public List<UUID> findPublicLibraryRankedPageIds(
+            PublicLibraryFilterCriteria criteria,
+            PublicLibrarySort sort,
+            OffsetDateTime rankedAt,
+            Collection<UUID> excludedNoteIds,
+            int offset,
+            int limit
     ) {
         FilterSql filter = buildFilter(criteria);
-        String quizCount = StudyPackQuizSqlExpressions.quizCount("sp", isPostgres());
-        String candidateSelect = """
-                select n.id as id,
-                       n.owner_user_id as "ownerUserId",
-                       n.created_at as "createdAt",
-                       n.updated_at as "updatedAt",
-                       n.status as status,
-                       case when sp.id is null then false else true end as "hasStudyPack",
-                       case when n.content is not null and trim(n.content) <> '' then true else false end as "hasContent",
-                       case when sp.summary is not null and trim(sp.summary) <> '' then true else false end as "hasSummary",
-                       %s as "quizCount"
-                from notes n
-                left join study_packs sp on sp.note_id = n.id
-                """.formatted(quizCount);
-        Query query = createNativeQuery(candidateSelect + filter.whereClause() + " order by n.id");
-        bind(query, filter.parameters());
-        return tuples(query).stream().map(this::toCandidate).toList();
+        Map<String, Object> parameters = new LinkedHashMap<>(filter.parameters());
+        StringBuilder where = new StringBuilder(filter.whereClause())
+                .append(rankedEligibility(sort));
+        if (excludedNoteIds != null && !excludedNoteIds.isEmpty()) {
+            String placeholders = bindValues(EXCLUDED_NOTE_ID_PARAMETER, excludedNoteIds, parameters);
+            where.append(" and n.id not in (").append(placeholders).append(")");
+        }
+        String orderBy = rankedOrderBy(sort);
+        if (orderBy.contains(":" + RANK_NOW_PARAMETER)) {
+            parameters.put(RANK_NOW_PARAMETER, rankedAt);
+        }
+        String from = rankedFrom(sort, rankedMetrics(sort));
+        Query query = createNativeQuery("select n.id as id" + from + where + orderBy);
+        bind(query, parameters);
+        query.setFirstResult(offset);
+        query.setMaxResults(limit);
+        return tuples(query).stream().map(tuple -> toUuid(tuple.get(ID_ALIAS))).toList();
     }
 
     @Override
@@ -231,15 +360,7 @@ public class PublicLibraryRepositoryImpl implements PublicLibraryRepository {
             appendTagFilter(where, criteria.tagSlugs(), parameters);
         }
         if (criteria.readyOnly()) {
-            where.append("""
-                     and (
-                         n.status = 'GENERATED'
-                         or (
-                             (n.status is null or n.status = 'DRAFT')
-                             and exists (select 1 from study_packs ready_sp where ready_sp.note_id = n.id)
-                         )
-                     )
-                    """);
+            where.append(" and ").append(STUDY_PACK_READY_SQL).append(" ");
         }
         appendSourceFilter(where, criteria, parameters);
         return new FilterSql(where.toString(), parameters);
@@ -371,6 +492,10 @@ public class PublicLibraryRepositoryImpl implements PublicLibraryRepository {
                 """;
     }
 
+    /** Mirrors {@code NoteService}'s constants; the SEO path resolves against the same two defaults. */
+    private static final String DEFAULT_PUBLIC_SUBJECT_SLUG = "general";
+    private static final String DEFAULT_PUBLIC_TITLE_SLUG = "untitled-note";
+
     private String normalizedSlugSql(String expression) {
         String base = "lower(trim(coalesce(" + expression + ", '')))";
         if (isPostgres()) {
@@ -387,6 +512,133 @@ public class PublicLibraryRepositoryImpl implements PublicLibraryRepository {
             case TITLE -> " order by lower(coalesce(n.title, 'Untitled note')) asc, n.created_at desc, n.id asc";
             default -> throw new IllegalArgumentException(RANKED_SORT_PATH_REQUIRED_MESSAGE);
         };
+    }
+
+    /** The engagement metrics a ranked sort READS, so only those derived tables are joined. */
+    private enum RankMetric {
+        COPIES,
+        LIKES,
+        VIEWS
+    }
+
+    private Set<RankMetric> rankedMetrics(PublicLibrarySort sort) {
+        if (sort == null) {
+            return EnumSet.noneOf(RankMetric.class);
+        }
+        return switch (sort) {
+            // Score reads all three; the tiebreak chain then reads copies and views.
+            case FEATURED, RECOMMENDED -> EnumSet.allOf(RankMetric.class);
+            // Eligibility reads copies and views; the order then adds likes.
+            case POPULAR, COPIED -> EnumSet.allOf(RankMetric.class);
+            case VIEWS -> EnumSet.of(RankMetric.VIEWS);
+            case MOST_COPIED -> EnumSet.of(RankMetric.COPIES);
+            // ⚠️ RECENT, TITLE and the legacy natural order read no metric at all, so they must not
+            // pay for these aggregates. The legacy branch is mostly these.
+            case RECENT, TITLE -> EnumSet.noneOf(RankMetric.class);
+        };
+    }
+
+    private Set<RankMetric> eligibilityMetrics(PublicLibrarySort sort) {
+        if (sort == PublicLibrarySort.POPULAR || sort == PublicLibrarySort.COPIED) {
+            return EnumSet.of(RankMetric.COPIES, RankMetric.VIEWS);
+        }
+        return EnumSet.noneOf(RankMetric.class);
+    }
+
+    private String rankedFrom(PublicLibrarySort sort, Set<RankMetric> metrics) {
+        StringBuilder from = new StringBuilder(RANKED_FROM_BASE);
+        if (sort == PublicLibrarySort.FEATURED) {
+            from.append(RANK_STUDY_PACK_JOIN);
+        }
+        if (metrics.contains(RankMetric.COPIES)) {
+            from.append(RANK_COPIES_JOIN);
+        }
+        if (metrics.contains(RankMetric.LIKES)) {
+            from.append(RANK_LIKES_JOIN);
+        }
+        if (metrics.contains(RankMetric.VIEWS)) {
+            from.append(RANK_VIEWS_JOIN);
+        }
+        return from.toString();
+    }
+
+    /**
+     * The eligibility predicate a ranked sort applies BEFORE ordering, as an appendable SQL fragment.
+     *
+     * <p>{@code sortByFeatured} and {@code sortByPopular} filter and then sort, and the old Java path
+     * took {@code totalMatching} from the filtered list — so this fragment belongs to the count as
+     * well as to the page, or {@code hasMore} changes meaning. Every other sort returns "".
+     */
+    private String rankedEligibility(PublicLibrarySort sort) {
+        if (sort == null) {
+            return "";
+        }
+        return switch (sort) {
+            case FEATURED -> " and " + STUDY_PACK_READY_SQL
+                    + " and (sp.summary is not null and trim(sp.summary) <> '')"
+                    + " and (n.content is not null and trim(n.content) <> '')"
+                    + " and " + StudyPackQuizSqlExpressions.quizCount("sp", isPostgres()) + " > 0 ";
+            case POPULAR, COPIED -> " and (" + RANK_COPIES + " >= " + PublicNotesScoringUtils.POPULAR_MIN_COPIES
+                    + " or " + RANK_VIEWS + " >= " + PublicNotesScoringUtils.POPULAR_MIN_VIEWS + ") ";
+            default -> "";
+        };
+    }
+
+    /**
+     * The ranked ORDER BY, byte-for-byte equivalent to the Java comparator chain it replaced.
+     *
+     * <p>A {@code null} sort is the legacy unpaginated ordering: {@code listPublicLegacy} loaded its
+     * rows through {@code findByVisibilityOrderByUpdatedAtDesc} and, when no {@code sort} was given,
+     * returned them untouched. ⚠️ That default is {@code updated_at desc}, NOT {@code RECOMMENDED} —
+     * a live dashboard caller sends no sort, so mapping it to the paginated default would silently
+     * re-rank that surface.
+     */
+    private String rankedOrderBy(PublicLibrarySort sort) {
+        if (sort == null) {
+            return " order by n.updated_at desc, " + ID_ASC;
+        }
+        return switch (sort) {
+            case FEATURED, RECOMMENDED -> " order by " + rankScoreSql() + " desc, " + RANK_COPIES + " desc, "
+                    + RANK_VIEWS + " desc, " + CREATED_AT_DESC + ", " + ID_ASC;
+            case POPULAR, COPIED -> " order by " + RANK_COPIES + " desc, " + RANK_VIEWS + " desc, "
+                    + RANK_LIKES + " desc, " + CREATED_AT_DESC + ", " + ID_ASC;
+            case VIEWS -> " order by " + RANK_VIEWS + " desc, " + CREATED_AT_DESC + ", " + ID_ASC;
+            case MOST_COPIED -> " order by " + RANK_COPIES + " desc, " + CREATED_AT_DESC + ", " + ID_ASC;
+            case RECENT, TITLE -> orderBy(sort);
+        };
+    }
+
+    /**
+     * {@code PublicNotesScoringUtils.computeScore} in SQL: {@code (views + copies*3 + likes*2)}
+     * multiplied by an age-decay factor with a 30-day half life and a 10% floor.
+     *
+     * <p>⚠️ Every literal is cast to {@code double precision}. In PostgreSQL an unadorned {@code 1.0}
+     * is {@code numeric} and {@code extract(epoch ...)} returns {@code numeric}, so without the casts
+     * the decay would evaluate in exact decimal and could order differently from the Java double
+     * arithmetic this reproduces. The weights come from {@link PublicNotesScoringUtils} rather than
+     * being repeated here.
+     */
+    private String rankScoreSql() {
+        String daysSince = isPostgres()
+                ? "floor(extract(epoch from (cast(:" + RANK_NOW_PARAMETER
+                        + " as timestamp with time zone) - n.created_at)) / 86400)"
+                : "floor(cast(datediff(second, n.created_at, cast(:" + RANK_NOW_PARAMETER
+                        + " as timestamp with time zone)) as double precision) / 86400)";
+        String decay = "greatest("
+                + doublePrecision("1") + " / (" + doublePrecision("1") + " + greatest("
+                + doublePrecision("0") + ", " + doublePrecision(daysSince) + ") / "
+                + doublePrecision(String.valueOf(PublicNotesScoringUtils.FEATURED_DECAY_HALF_LIFE_DAYS)) + "), "
+                + doublePrecision(String.valueOf(PublicNotesScoringUtils.FEATURED_DECAY_MIN_FACTOR)) + ")";
+        String base = doublePrecision(
+                RANK_COPIES + " * " + PublicNotesScoringUtils.FEATURED_COPY_WEIGHT
+                        + " + " + RANK_LIKES + " * " + PublicNotesScoringUtils.FEATURED_LIKE_WEIGHT
+                        + " + " + RANK_VIEWS + " * " + PublicNotesScoringUtils.FEATURED_VIEW_WEIGHT
+        );
+        return "(" + base + " * " + decay + ")";
+    }
+
+    private String doublePrecision(String expression) {
+        return "cast(" + expression + " as double precision)";
     }
 
     private NoteListItemProjection toListItemProjection(Tuple tuple) {
@@ -412,20 +664,6 @@ public class PublicLibraryRepositoryImpl implements PublicLibraryRepository {
         values.put(COPIED_FROM_NOTE_ID_ALIAS, nullableUuid(tuple.get(COPIED_FROM_NOTE_ID_ALIAS)));
         values.put(COPIED_FROM_PUBLIC_ALIAS, tuple.get(COPIED_FROM_PUBLIC_ALIAS));
         return projectionFactory.createProjection(NoteListItemProjection.class, values);
-    }
-
-    private PublicLibraryCandidateProjection toCandidate(Tuple tuple) {
-        return new PublicLibraryCandidateProjection(
-                toUuid(tuple.get(ID_ALIAS)),
-                toUuid(tuple.get(OWNER_USER_ID_ALIAS)),
-                offsetDateTime(tuple.get(CREATED_AT_ALIAS)),
-                offsetDateTime(tuple.get(UPDATED_AT_ALIAS)),
-                enumValue(NoteStatus.class, stringValue(tuple, STATUS_ALIAS)),
-                booleanValue(tuple.get(HAS_STUDY_PACK_ALIAS)),
-                booleanValue(tuple.get(HAS_CONTENT_ALIAS)),
-                booleanValue(tuple.get(HAS_SUMMARY_ALIAS)),
-                ((Number) tuple.get(QUIZ_COUNT_ALIAS)).intValue()
-        );
     }
 
     private Query createNativeQuery(String sql) {
@@ -474,16 +712,6 @@ public class PublicLibraryRepositoryImpl implements PublicLibraryRepository {
 
     private UUID nullableUuid(Object value) {
         return value == null ? null : toUuid(value);
-    }
-
-    private boolean booleanValue(Object value) {
-        if (value instanceof Boolean booleanValue) {
-            return booleanValue;
-        }
-        if (value instanceof Number number) {
-            return number.intValue() != 0;
-        }
-        return Boolean.parseBoolean(String.valueOf(value));
     }
 
     private String stringValue(Tuple tuple, String alias) {

@@ -1755,7 +1755,14 @@ class NativeQueryPostgresIntegrationTest {
         publicLibraryRepository.findPublicLibraryPage(publicCriteria, PublicLibrarySort.RECENT, 0, 10);
         publicLibraryRepository.findPublicLibraryPage(publicCriteria, PublicLibrarySort.TITLE, 0, 10);
         publicLibraryRepository.countPublicLibraryMatches(publicCriteria);
-        publicLibraryRepository.findPublicLibraryCandidates(publicCriteria);
+        for (PublicLibrarySort rankedSort : PublicLibrarySort.values()) {
+            publicLibraryRepository.countPublicLibraryRankedMatches(publicCriteria, rankedSort);
+            publicLibraryRepository.findPublicLibraryRankedPageIds(
+                    publicCriteria, rankedSort, OffsetDateTime.now(), List.of(UUID.randomUUID()), 0, 10);
+        }
+        publicLibraryRepository.countPublicLibraryRankedMatches(publicCriteria, null);
+        publicLibraryRepository.findPublicLibraryRankedPageIds(
+                publicCriteria, null, OffsetDateTime.now(), List.of(), 0, 10);
         publicLibraryRepository.findPublicLibraryListItemProjectionsByIdIn(List.of(ownerUserId));
     }
 
@@ -1785,6 +1792,270 @@ class NativeQueryPostgresIntegrationTest {
                 publicTagCriteria(List.of("nephrology")), PublicLibrarySort.RECENT, 0, 10))
                 .as("a tag no public note carries must match nothing")
                 .isEmpty();
+    }
+
+    /**
+     * ⚠️ THE BOUNDED-READ GUARD for v0.119.1, and it is written against the REPOSITORY rather than the
+     * response body on purpose.
+     *
+     * <p>Before v0.119.1 the ranked path fetched EVERY matching candidate and sliced a page out of it
+     * in Java, so a response of five items said nothing about how many rows crossed the wire. The
+     * fixture therefore holds twelve public notes against a page size of five: a query that stopped
+     * limiting would return twelve and this fails, while a fixture smaller than the page could not
+     * tell the two apart.
+     */
+    @Test
+    void rankedPublicLibraryPageIsLimitedByTheDatabaseNotByJava() {
+        RankingFixture fixture = seedRankingFixture("bounded");
+
+        List<UUID> firstPage = publicLibraryRepository.findPublicLibraryRankedPageIds(
+                publicRankingCriteria(), PublicLibrarySort.RECOMMENDED, fixture.rankedAt(), List.of(), 0, 5);
+        List<UUID> secondPage = publicLibraryRepository.findPublicLibraryRankedPageIds(
+                publicRankingCriteria(), PublicLibrarySort.RECOMMENDED, fixture.rankedAt(), List.of(), 5, 5);
+
+        assertThat(firstPage)
+                .as("twelve public notes are present; the database must return exactly one page of five")
+                .hasSize(5);
+        assertThat(secondPage).hasSize(5);
+        assertThat(firstPage).doesNotContainAnyElementsOf(secondPage);
+        assertThat(publicLibraryRepository.countPublicLibraryRankedMatches(
+                publicRankingCriteria(), PublicLibrarySort.RECOMMENDED)).isEqualTo(12);
+        assertThat(publicLibraryRepository.findPublicLibraryRankedPageIds(
+                publicRankingCriteria(), null, fixture.rankedAt(), List.of(), 0, 3))
+                .as("the legacy unpaginated ordering is bounded by the same mechanism")
+                .hasSize(3);
+    }
+
+    /**
+     * ⚠️ THE BEHAVIOUR-PRESERVATION GUARD: every one of the eight sorts must return the same items in
+     * the same order the Java ranking produced. The expected orders are written out LITERALLY rather
+     * than derived from any production class, so deleting or changing the ranking code cannot quietly
+     * take the expectation with it.
+     *
+     * <p>Ids are assigned {@code ...01}..{@code ...0c} in fixture order so that every tie resolves
+     * deterministically. The fixture is built so each level of the comparator chain actually fires —
+     * a fixture where the first key always decides proves nothing about the rest:
+     *
+     * <pre>
+     *  key      id  days  copies likes views  pack   base  decay    score
+     *  ALPHA    01     0       2     0     0  ready     6  1.0        6.0
+     *  BRAVO    02     0       0     3     0  ready     6  1.0        6.0
+     *  CHARLIE  03     0       0     0     6  -         6  1.0        6.0
+     *  DELTA    04     1       0     0     0  -         0  0.96774    0.0
+     *  ECHO     05     2       0     0     0  -         0  0.9375     0.0
+     *  FOXTROT  06     2       0     0     0  -         0  0.9375     0.0
+     *  GOLF     07   570       0     0   100  -       100  0.1 (floor) 10.0
+     *  HOTEL    08     0       0     0     7  -         7  1.0        7.0
+     *  INDIA    09     0       0     0    20  -        20  1.0       20.0
+     *  JULIET   0a    30       0     0    13  -        13  0.5        6.5
+     *  KILO     0b     0       3     1     0  -        11  1.0       11.0
+     *  LIMA     0c     1       3     5     0  -        19  0.96774   18.387
+     * </pre>
+     *
+     * <p>What each row is for: ALPHA/BRAVO/CHARLIE tie at 6.0 only if the weights really are
+     * copies×3, likes×2, views×1, and they then exercise the copies and views tiebreaks. DELTA versus
+     * ECHO exercises the createdAt tiebreak at score zero, and ECHO versus FOXTROT — identical in every
+     * key — exercises the ascending-id tiebreak the old Java path got from a stable sort over an
+     * id-ordered candidate list. GOLF outranks INDIA only WITHOUT decay and outranks HOTEL only WITH
+     * the 10% floor. JULIET sits between HOTEL and the 6.0 group only at a 30-day half life.
+     */
+    @Test
+    void rankedPublicLibrarySortsReproduceTheJavaRankingOrderExactly() {
+        RankingFixture f = seedRankingFixture("ranked");
+
+        assertThat(rank(f, PublicLibrarySort.RECOMMENDED))
+                .containsExactly(f.india(), f.lima(), f.kilo(), f.golf(), f.hotel(), f.juliet(),
+                        f.alpha(), f.charlie(), f.bravo(), f.delta(), f.echo(), f.foxtrot());
+        assertThat(rank(f, PublicLibrarySort.FEATURED))
+                .as("Featured admits only a ready pack with a summary, a quiz and content")
+                .containsExactly(f.alpha(), f.bravo());
+        assertThat(rank(f, PublicLibrarySort.POPULAR))
+                .as("Popular admits >=3 copies or >=20 views, then copies, views, likes")
+                .containsExactly(f.lima(), f.kilo(), f.golf(), f.india());
+        assertThat(rank(f, PublicLibrarySort.COPIED))
+                .as("COPIED is an alias of POPULAR")
+                .isEqualTo(rank(f, PublicLibrarySort.POPULAR));
+        assertThat(rank(f, PublicLibrarySort.VIEWS))
+                .containsExactly(f.golf(), f.india(), f.juliet(), f.hotel(), f.charlie(), f.alpha(),
+                        f.bravo(), f.kilo(), f.delta(), f.lima(), f.echo(), f.foxtrot());
+        assertThat(rank(f, PublicLibrarySort.MOST_COPIED))
+                .containsExactly(f.kilo(), f.lima(), f.alpha(), f.bravo(), f.charlie(), f.hotel(),
+                        f.india(), f.delta(), f.echo(), f.foxtrot(), f.juliet(), f.golf());
+        assertThat(rank(f, PublicLibrarySort.RECENT))
+                .containsExactly(f.alpha(), f.bravo(), f.charlie(), f.hotel(), f.india(), f.kilo(),
+                        f.delta(), f.lima(), f.echo(), f.foxtrot(), f.juliet(), f.golf());
+        assertThat(rank(f, PublicLibrarySort.TITLE))
+                .containsExactly(f.alpha(), f.bravo(), f.charlie(), f.delta(), f.echo(), f.foxtrot(),
+                        f.golf(), f.hotel(), f.india(), f.juliet(), f.kilo(), f.lima());
+        assertThat(rank(f, null))
+                .as("no sort on the unpaginated shape means updated_at desc, NOT recommended")
+                .containsExactly(f.alpha(), f.bravo(), f.charlie(), f.hotel(), f.india(), f.kilo(),
+                        f.delta(), f.lima(), f.echo(), f.foxtrot(), f.juliet(), f.golf());
+    }
+
+    /**
+     * {@code totalMatching} came from the size of the RANKED list, which Featured and Popular had
+     * already filtered. A count that ignored eligibility would report twelve for both and silently
+     * change {@code hasMore} on the anonymous Explore surface.
+     */
+    @Test
+    void rankedPublicLibraryCountsApplyTheSortsOwnEligibilityFilter() {
+        seedRankingFixture("counts");
+
+        assertThat(publicLibraryRepository.countPublicLibraryRankedMatches(
+                publicRankingCriteria(), PublicLibrarySort.FEATURED)).isEqualTo(2);
+        assertThat(publicLibraryRepository.countPublicLibraryRankedMatches(
+                publicRankingCriteria(), PublicLibrarySort.POPULAR)).isEqualTo(4);
+        assertThat(publicLibraryRepository.countPublicLibraryRankedMatches(
+                publicRankingCriteria(), PublicLibrarySort.COPIED)).isEqualTo(4);
+        assertThat(publicLibraryRepository.countPublicLibraryRankedMatches(
+                publicRankingCriteria(), PublicLibrarySort.RECOMMENDED)).isEqualTo(12);
+        assertThat(publicLibraryRepository.countPublicLibraryRankedMatches(
+                publicRankingCriteria(), PublicLibrarySort.VIEWS)).isEqualTo(12);
+        assertThat(publicLibraryRepository.countPublicLibraryRankedMatches(
+                publicRankingCriteria(), null)).isEqualTo(12);
+    }
+
+    /**
+     * The discovery sections keep their three lists mutually exclusive by excluding ids already used.
+     * The Java version filtered the ranked list and then took six; excluding inside the query that
+     * produces the limit is the same thing, and this pins that it still is.
+     */
+    @Test
+    void rankedPublicLibraryPageHonoursExcludedNoteIds() {
+        RankingFixture f = seedRankingFixture("excluded");
+
+        List<UUID> withoutTopTwo = publicLibraryRepository.findPublicLibraryRankedPageIds(
+                publicRankingCriteria(),
+                PublicLibrarySort.RECOMMENDED,
+                f.rankedAt(),
+                List.of(f.india(), f.lima()),
+                0,
+                3
+        );
+
+        assertThat(withoutTopTwo).containsExactly(f.kilo(), f.golf(), f.hotel());
+    }
+
+    private List<UUID> rank(RankingFixture fixture, PublicLibrarySort sort) {
+        return publicLibraryRepository.findPublicLibraryRankedPageIds(
+                publicRankingCriteria(), sort, fixture.rankedAt(), List.of(), 0, 50);
+    }
+
+    private PublicLibraryFilterCriteria publicRankingCriteria() {
+        return new PublicLibraryFilterCriteria(
+                null, null, null, null, List.of(), null, null, null, false, List.of());
+    }
+
+    private record RankingFixture(
+            OffsetDateTime rankedAt,
+            UUID alpha,
+            UUID bravo,
+            UUID charlie,
+            UUID delta,
+            UUID echo,
+            UUID foxtrot,
+            UUID golf,
+            UUID hotel,
+            UUID india,
+            UUID juliet,
+            UUID kilo,
+            UUID lima
+    ) {
+    }
+
+    private RankingFixture seedRankingFixture(String handle) {
+        UUID owner = seedUser(handle + "-rank-owner");
+        OffsetDateTime rankedAt = OffsetDateTime.parse("2026-09-06T12:00:00Z");
+        UUID alpha = seedRankedNote(owner, rankingId(1), "Alpha", rankedAt, 0);
+        UUID bravo = seedRankedNote(owner, rankingId(2), "Bravo", rankedAt, 0);
+        UUID charlie = seedRankedNote(owner, rankingId(3), "Charlie", rankedAt, 0);
+        UUID delta = seedRankedNote(owner, rankingId(4), "Delta", rankedAt, 1);
+        UUID echo = seedRankedNote(owner, rankingId(5), "Echo", rankedAt, 2);
+        UUID foxtrot = seedRankedNote(owner, rankingId(6), "Foxtrot", rankedAt, 2);
+        UUID golf = seedRankedNote(owner, rankingId(7), "Golf", rankedAt, 570);
+        UUID hotel = seedRankedNote(owner, rankingId(8), "Hotel", rankedAt, 0);
+        UUID india = seedRankedNote(owner, rankingId(9), "India", rankedAt, 0);
+        UUID juliet = seedRankedNote(owner, rankingId(10), "Juliet", rankedAt, 30);
+        UUID kilo = seedRankedNote(owner, rankingId(11), "Kilo", rankedAt, 0);
+        UUID lima = seedRankedNote(owner, rankingId(12), "Lima", rankedAt, 1);
+
+        markFeaturedEligible(owner, alpha, "Alpha pack");
+        markFeaturedEligible(owner, bravo, "Bravo pack");
+        seedNoteCopies(owner, alpha, 2);
+        seedNoteCopies(owner, kilo, 3);
+        seedNoteCopies(owner, lima, 3);
+        seedNoteLikes(handle + "a", bravo, 3);
+        seedNoteLikes(handle + "k", kilo, 1);
+        seedNoteLikes(handle + "l", lima, 5);
+        seedNoteViews(charlie, 6);
+        seedNoteViews(golf, 100);
+        seedNoteViews(hotel, 7);
+        seedNoteViews(india, 20);
+        seedNoteViews(juliet, 13);
+        return new RankingFixture(rankedAt, alpha, bravo, charlie, delta, echo, foxtrot,
+                golf, hotel, india, juliet, kilo, lima);
+    }
+
+    /** Fixed, ascending ids so the final id tiebreak is literal rather than accidental. */
+    private UUID rankingId(int index) {
+        return UUID.fromString("00000000-0000-4000-8000-%012d".formatted(index));
+    }
+
+    private UUID seedRankedNote(UUID owner, UUID id, String title, OffsetDateTime rankedAt, int daysOld) {
+        OffsetDateTime createdAt = rankedAt.minusDays(daysOld);
+        jdbcTemplate.update(
+                "insert into notes (id, owner_user_id, title, content, visibility, tags,"
+                        + " target_profile_type, status, created_at, updated_at)"
+                        + " values (?, ?, ?, 'body', 'PUBLIC', ?, 'STUDENT', 'DRAFT', ?, ?)",
+                id, owner, title, new String[] {}, createdAt, createdAt
+        );
+        return id;
+    }
+
+    /** Ready status plus a pack carrying a non-blank summary and exactly one quiz item. */
+    private void markFeaturedEligible(UUID owner, UUID noteId, String packTitle) {
+        jdbcTemplate.update("update notes set status = 'GENERATED' where id = ?", noteId);
+        jdbcTemplate.update(
+                "insert into study_packs"
+                        + " (id, owner_user_id, note_id, input_type, title, summary, key_concepts, quiz,"
+                        + " model_used, status, created_at, updated_at)"
+                        + " values (?, ?, ?, 'TEXT', ?, 'Meaningful summary', '[]'::jsonb,"
+                        + " '[{\"question\":\"Q?\",\"choices\":[\"A\",\"B\"],\"correctIndex\":0}]'::jsonb,"
+                        + " 'test-model', 'DONE', now(), now())",
+                UUID.randomUUID(), owner, noteId, packTitle
+        );
+    }
+
+    private void seedNoteCopies(UUID owner, UUID sourceNoteId, int count) {
+        for (int index = 0; index < count; index++) {
+            jdbcTemplate.update(
+                    "insert into notes (id, owner_user_id, title, content, visibility, tags,"
+                            + " target_profile_type, status, copied_from_note_id, copied_from_public,"
+                            + " created_at, updated_at)"
+                            + " values (?, ?, ?, 'body', 'PRIVATE', ?, 'STUDENT', 'DRAFT', ?, true, now(), now())",
+                    UUID.randomUUID(), owner, "Copy " + index, new String[] {}, sourceNoteId
+            );
+        }
+    }
+
+    private void seedNoteLikes(String handle, UUID noteId, int count) {
+        for (int index = 0; index < count; index++) {
+            jdbcTemplate.update(
+                    "insert into public_note_likes (id, note_id, user_id, created_at) values (?, ?, ?, now())",
+                    UUID.randomUUID(), noteId, seedUser(handle + "-like-" + index)
+            );
+        }
+    }
+
+    private void seedNoteViews(UUID noteId, int count) {
+        for (int index = 0; index < count; index++) {
+            jdbcTemplate.update(
+                    "insert into analytics_events (id, user_id, event_type, entity_id, metadata_json, created_at)"
+                            + " values (?, null, 'PUBLIC_NOTE_VIEWED', ?, '{}'::jsonb, now())",
+                    UUID.randomUUID(), noteId
+            );
+        }
     }
 
     /**
@@ -1964,6 +2235,64 @@ class NativeQueryPostgresIntegrationTest {
                 null, null, null, null, tagSlugs, null, null, null, false,
                 List.of(PublicLibrarySource.BY_YOU, PublicLibrarySource.OFFICIAL, PublicLibrarySource.COMMUNITY)
         );
+    }
+
+    /**
+     * The SEO path's slug resolution, against real PostgreSQL.
+     *
+     * <p>⚠️ IT CANNOT LIVE IN THE H2-BACKED SUITE, AND THAT IS ITSELF THE FINDING.
+     * {@code normalizedSlugSql} branches on the dialect, and the H2 arm calls {@code regexp_replace}
+     * WITHOUT the {@code 'g'} flag — so it replaces only the FIRST run of non-alphanumerics and
+     * "Shear Force Diagrams" slugifies to "shear-force diagrams". The expression is correct only on
+     * PostgreSQL, which is what production runs; a guard written against H2 would fail, or worse pass
+     * for the wrong reason.
+     *
+     * <p>⚠️ THE FIXTURE HOLDS MORE NOTES THAN THE ANSWER NEEDS. A single-note fixture resolves
+     * identically whether the query is bounded or loads the whole catalog, and would prove nothing
+     * about the defect this replaced — a full-catalog entity load, `content` included, on ~250 SEO
+     * pages.
+     *
+     * <p>⚠️ It pins the two fallback semantics that were easy to tidy away while moving the filter into
+     * SQL: Java's {@code slugify(value, fallback)} returns the FALLBACK for a null or blank value, while
+     * {@code normalizedSlugSql} returns {@code ''}. Without the coalesce/nullif an untitled note would
+     * 404 at {@code /untitled-note} while a note literally titled "Untitled Note" resolved.
+     */
+    @Test
+    void seoSlugResolutionIsBoundedAndKeepsItsFallbackSemantics() {
+        UUID owner = seedUser("seo-slug");
+        UUID shear = seedPublicSeoNote(owner, "Shear Force Diagrams", "Structural Analysis");
+        seedPublicSeoNote(owner, "Bending Moment", "Structural Analysis");
+        seedPublicSeoNote(owner, "Fluid Statics", "Hydraulics");
+        UUID untitled = seedPublicSeoNote(owner, null, "Structural Analysis");
+        UUID orphan = seedPublicSeoNote(owner, "Orphan Topic", null);
+
+        assertThat(publicLibraryRepository.findPublicNoteIdBySeoSlugs(
+                "structural-analysis", "shear-force-diagrams", false))
+                .as("an ordinary slug pair resolves, and the multi-word slug proves the 'g' flag is live")
+                .contains(shear);
+        assertThat(publicLibraryRepository.findPublicNoteIdBySeoSlugs(
+                "structural-analysis", "untitled-note", false))
+                .as("the TITLE fallback resolves -- normalizedSlugSql alone would 404 here")
+                .contains(untitled);
+        assertThat(publicLibraryRepository.findPublicNoteIdBySeoSlugs("general", "orphan-topic", true))
+                .as("a null subject resolves through the subject-is-null branch")
+                .contains(orphan);
+        assertThat(publicLibraryRepository.findPublicNoteIdBySeoSlugs(
+                "structural-analysis", "no-such-note", false))
+                .as("a miss is empty, not the first row of an unbounded scan")
+                .isEmpty();
+    }
+
+    private UUID seedPublicSeoNote(UUID ownerUserId, String title, String subject) {
+        UUID id = UUID.randomUUID();
+        jdbcTemplate.update(
+                "insert into notes (id, owner_user_id, title, subject, content, visibility, tags,"
+                        + " target_profile_type, status, created_at, updated_at)"
+                        + " values (?, ?, ?, ?, 'body', 'PUBLIC', '{}', 'STUDENT', 'GENERATED',"
+                        + " now(), now())",
+                id, ownerUserId, title, subject
+        );
+        return id;
     }
 
     private UUID seedPublicNote(UUID ownerUserId, String title, String[] tags) {

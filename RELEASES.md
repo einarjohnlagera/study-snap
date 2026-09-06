@@ -165,6 +165,68 @@ substrate, no cross-user read, no money or quota semantics, no migration.
   presented the bump as the answer to this class of failure. **It was raised 10 → 20 and the same
   failure recurred at 20** — said in the file so a later session does not raise it to 40.
 
+- **Leg A — the root cause: the server-side work is now bounded by the database (PR #1298).**
+  `findPublicLibraryCandidates` and its projection are **deleted** — the unbounded query no longer
+  exists to be called. The ranked branch, `listPublicLegacy` and `getPublicLibraryDiscoverySections`
+  all move to bounded SQL (`LIMIT`/`OFFSET` plus a matching `count(*)`), and ~200 lines of Java
+  filter/rank/limit helpers go with them.
+  - **⚠️ THE RANKING WAS MOVED INTO SQL FAITHFULLY, NOT REPLACED.** Score, 30-day-half-life decay with
+    its 10% floor, the copies×3 / likes×2 / views×1 weights, both eligibility filters and the whole
+    comparator chain — including the final `n.id asc` tiebreak the Java path got implicitly from a
+    stable sort. Weights and thresholds are now public constants the SQL is built from, so there is
+    **one** definition. **Evidence: `rankedSortsPreserveEligibilityAndUngatedSemantics` PREDATES this
+    change, was NOT edited, and passes unmodified** — verified against the base branch, not trusted.
+  - **⚠️ THE PLAN'S §1.5 IS CORRECTED: "the default is `RECOMMENDED`" is true of the PAGINATED branch
+    only.** `sortPublicLibraryItems` returned items untouched when `sort == null`, so the unpaginated
+    default was `updated_at desc` — and `dashboard-community-notes-section.tsx:76` is a live caller
+    sending no `sort`. Routing A1 through `parsePublicLibrarySort` would have **silently re-ranked that
+    dashboard section**. Preserved via a nullable sort meaning "natural order".
+  - **Three stated behaviour changes**, none moving a live caller: an unpaginated request with no
+    `size` is capped at **50** (was: the whole catalog) — every live caller already passes `size`, which
+    the controller clamps to ≤50; legacy `FEATURED` eligibility and `TITLE` blank-handling now use the
+    SQL definitions the paginated path already shipped; and legacy `contentPreview` derives from the
+    2000-char projection rather than the full body, **which is the point of the fix**.
+  - **⚠️ 18 `listPublic_*` tests were DELETED, with the reason recorded at the deletion site.** They
+    stubbed `findByVisibilityOrderByUpdatedAtDesc` and asserted Java filtering that no longer exists; a
+    mocked repository cannot assert an `ORDER BY` or a `LIMIT`, so a rewrite would have stubbed an id
+    order and asserted the same order came back. Coverage moved to real-row tests on PostgreSQL 18.
+
+- **A4 — the fourth instance, folded in on owner decision (PR #1298).** `getPublicBySeoPath` was
+  anonymous, transactional, and loaded **every public `NoteEntity` including `content`** before
+  filtering slugs in Java, on each of the ~250 SEO detail pages — **heavier per call than A1/A2/A3**,
+  all of which loaded slimmer projections. It is now one bounded `limit 1` query.
+  - **⚠️ THE SEMANTICS WERE REPRODUCED, NOT TIDIED, BECAUSE THEY ARE LIVE PUBLIC URL BEHAVIOUR.**
+    Java's `slugify(value, fallback)` returns the **fallback** for a null or blank value while
+    `normalizedSlugSql` returns `''` — so without a `coalesce`/`nullif` an untitled note would 404 at
+    `/untitled-note` while a note literally titled "Untitled Note" resolved. The fallback is a **bound
+    parameter per call site**: subject and title use different defaults, and one shared name would
+    silently have applied one to both.
+  - **⚠️ A PRESERVED QUIRK, STATED RATHER THAN FIXED:** the blank-subject branch still queries
+    `subject IS NULL`, not "slugifies to the default", so a whitespace-only subject stays unreachable
+    by its SEO URL exactly as before. Changing it changes which note a live public URL resolves to.
+  - The `updated_at desc` tiebreak gains `n.id asc`. The previous ordering had none, so ties resolved
+    by whatever the database returned — nondeterministic rather than defined, so pinning it cannot
+    break anything anyone could have relied on.
+  - **⚠️ THE GUARD CANNOT LIVE IN THE H2 SUITE, AND THAT IS ITSELF A FINDING.** `normalizedSlugSql`
+    branches on dialect and the **H2 arm omits the `g` flag**, replacing only the first run of
+    non-alphanumerics — so "Shear Force Diagrams" slugifies to `shear-force diagrams` there. The
+    expression is correct only on PostgreSQL, which is what production runs. The guard lives in
+    `NativeQueryPostgresIntegrationTest`; a version written against H2 would have failed, or passed for
+    the wrong reason.
+  - Three mocked `NoteServiceTest` cases were **rewired, not deleted** — matching is SQL now, but
+    author attribution, the study-pack join and the 404 contract are service glue worth keeping.
+
+### Known limitations
+- **`RECOMMENDED` is bounded per row, not per catalog.** The ranked default still aggregates the three
+  metric tables once per request, so it is O(catalog + events) **in the database**. What this removes is
+  the 1,442 entity + projection + DTO materialisations, three round trips, and the JVM-side hold that
+  exhausted the pool. `RECENT`/`TITLE`/legacy-null now do **zero** metric aggregates where the old
+  branch always did four. **`analytics_events` has no index on `entity_id`** — an `(event_type,
+  entity_id)` index would make this index-only, and is an owner follow-up because this release forbids
+  a migration.
+- **`OfficialChallengeQuizTemplateService:81`** does the same full-catalog entity load. Different risk
+  class — not anonymous — and out of scope here.
+
 ## v0.119.0 - Curator Bulk Regeneration
 
 **Status: Released** (kicked off 2026-09-05, signed off 2026-09-06, base branch `releases/v0.119.0`,
