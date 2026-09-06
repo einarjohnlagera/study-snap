@@ -1052,4 +1052,64 @@ describe("StudyPlanBuilderPageClient", () => {
       expect(getCollectionGoal).toHaveBeenCalledTimes(2);
     });
   });
+
+  // ⚠️ THE v0.123.0 LOOP GUARD. The discriminating fixture is a write the server REFUSES: the
+  // optimistic update rolls back, item.label is left exactly as it was, and the error state forces a
+  // re-render -- so the card's guard is unequal again on the very next render and, before the fix,
+  // re-armed the write every ~500ms with no cap, no backoff and no failure short-circuit. Each retry
+  // called refreshBuilder, refetching the curator's ENTIRE note list.
+  //
+  // ⚠️ A SUCCEEDING WRITE PROVES NOTHING HERE AND IS NOT THE GUARD: the card is keyed
+  // `${noteId}:${label}`, so a write that CHANGES the label remounts the card with a fresh
+  // labelValue and the guard clears on its own -- under the defect as well as the fix.
+  it("does not retry a section-label write the server rejected", async () => {
+    jest.useFakeTimers();
+    try {
+      (getCollection as jest.Mock).mockResolvedValue(collectionDetail("leaf-1", "Anatomy Plan", [
+        { ...collectionItem("note-1", "Skeletal System", 0), label: "Algebra" },
+      ], { parentCollectionId: null, childCount: 0 }));
+      (setCollectionItemOrder as jest.Mock).mockRejectedValue(new Error("Section name is too long."));
+      render(<StudyPlanBuilderPageClient collectionId="leaf-1" />);
+
+      const combobox = await screen.findByLabelText("Section for Skeletal System");
+      fireEvent.focus(combobox);
+      fireEvent.change(combobox, { target: { value: "Calculus" } });
+      fireEvent.blur(combobox);
+      await act(async () => { jest.advanceTimersByTime(600); });
+      await act(async () => { await Promise.resolve(); });
+
+      expect(setCollectionItemOrder).toHaveBeenCalledTimes(1);
+
+      // Six further retry windows. Under the defect this climbs without bound.
+      await act(async () => { jest.advanceTimersByTime(3000); });
+      await act(async () => { await Promise.resolve(); });
+      expect(setCollectionItemOrder).toHaveBeenCalledTimes(1);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it("still writes a new section name exactly once on the happy path", async () => {
+    // Regression companion, NOT a loop guard -- stated so it is not mistaken for one. It pins that
+    // bounding the retry did not also suppress the legitimate first write.
+    jest.useFakeTimers();
+    try {
+      (getCollection as jest.Mock).mockResolvedValue(collectionDetail("leaf-1", "Anatomy Plan", [
+        { ...collectionItem("note-1", "Skeletal System", 0), label: "Algebra" },
+      ], { parentCollectionId: null, childCount: 0 }));
+      render(<StudyPlanBuilderPageClient collectionId="leaf-1" />);
+
+      const combobox = await screen.findByLabelText("Section for Skeletal System");
+      fireEvent.focus(combobox);
+      fireEvent.change(combobox, { target: { value: "Calculus" } });
+      fireEvent.blur(combobox);
+      await act(async () => { jest.advanceTimersByTime(600); });
+      await act(async () => { await Promise.resolve(); });
+
+      expect(setCollectionItemOrder).toHaveBeenCalledTimes(1);
+      expect((setCollectionItemOrder as jest.Mock).mock.calls[0][1]).toContainEqual({ noteId: "note-1", label: "Calculus" });
+    } finally {
+      jest.useRealTimers();
+    }
+  });
 });

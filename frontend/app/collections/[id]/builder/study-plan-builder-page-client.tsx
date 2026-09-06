@@ -28,7 +28,9 @@ import { Card, CardDescription, CardTitle } from "@/components/ui/card";
 import { SuggestionCombobox } from "@/components/ui/suggestion-combobox";
 import { PageHeader } from "@/components/page-header";
 import { getAuthUser, type AuthUser } from "@/lib/auth";
-import { getCollectionLabels, normalizeSectionValue, UNGROUPED_SECTION_NAME } from "@/lib/collection-labels";
+import { getCollectionLabels, normalizeSectionValue, UNGROUPED_SECTION_NAME,
+  canonicalSectionLabel,
+} from "@/lib/collection-labels";
 import { requireAuthenticatedOnboardedUser } from "@/lib/route-guards";
 import { sortCollectionItemsByPosition } from "@/lib/collection-exam";
 import { cn } from "@/lib/utils";
@@ -442,17 +444,65 @@ function LeafSortableNoteCard({
   // changes item.label, which changes this card's key AND moves it into a different section block.
   // Typing "Week", pausing, then " 1" used to create a section called "Week" and drop the rest.
   // The save now lands 500ms after focus LEAVES the field, which is also when the value is final.
+  // ⚠️ THE HANDLER LIVES IN A REF SO ITS IDENTITY IS NOT AN EFFECT DEPENDENCY. `handleLeafLabelChange`
+  // is re-created every render (it closes over `moveLeafNote`, itself a plain function), so having it
+  // in the array below re-armed this write on EVERY render.
+  //
+  // ⚠️ A `useCallback` on the handler would be INERT here and is deliberately not what shipped:
+  // memoizing it requires memoizing `moveLeafNote` -> `persistLeafItems` -> `savePendingLeafOrder`,
+  // which lands on the deferred-save model v0.96.0 fixed at cost. The ref achieves the stated purpose
+  // -- a stable dependency -- without that cascade.
+  const onLabelChangeRef = useRef(onLabelChange);
+  useEffect(() => {
+    onLabelChangeRef.current = onLabelChange;
+  }, [onLabelChange]);
+
+  // ⚠️ THE RETRY BOUND, AND IT IS THE LOAD-BEARING HALF OF THE LOOP FIX. Records the one transition
+  // this card has already asked for, as (server label it saw) -> (label it requested).
+  const lastRequestedLabelRef = useRef<{ from: string; requested: string } | null>(null);
+
+  // Gated on `editing` deliberately. Saving mid-keystroke tears down the control the curator is
+  // typing into: persistLeafItems flips `disabled` (a disabled input loses focus) and the write
+  // changes item.label, which changes this card's key AND moves it into a different section block.
+  // Typing "Week", pausing, then " 1" used to create a section called "Week" and drop the rest.
+  // The save now lands 500ms after focus LEAVES the field, which is also when the value is final.
+  //
+  // ⚠️ THE GUARD BELOW CANNOT BE "item.label === nextLabel" ALONE, AND ASSUMING IT COULD IS THE
+  // DEFECT THIS FIX EXISTS TO CLOSE. What this card requests is NOT always what gets stored, so the
+  // comparison can be permanently unequal while nothing is wrong with the write:
+  //   - CASE-SNAP: typing "algebra" beside an existing "Algebra" stores "Algebra" (handleLeafLabelChange
+  //     snaps to the existing section name). The guard then compares "Algebra" against "algebra" forever.
+  //   - RESERVED NAME: typing the ungrouped sentinel returns early with an error and writes NOTHING,
+  //     so item.label never moves at all.
+  //   - REJECTED WRITE: the server refuses (e.g. over LABEL_MAX_LENGTH) and the optimistic update
+  //     rolls back, leaving item.label exactly as it was.
+  // In all three the old guard never cleared, and there was no cap, no backoff and no failure
+  // short-circuit -- so the card retried every ~500ms, and each retry refetched the curator's ENTIRE
+  // note list through refreshBuilder. A wedged page was a client-driven load amplifier.
   useEffect(() => {
     if (disabled || editing) {
       return;
     }
-    const nextLabel = labelValue.trim().replaceAll(/\s+/g, " ");
-    if ((item.label ?? "") === nextLabel) {
+    const nextLabel = canonicalSectionLabel(labelValue);
+    const currentLabel = item.label ?? "";
+    if (currentLabel === nextLabel) {
       return;
     }
-    const handle = globalThis.setTimeout(() => onLabelChange(item.noteId, nextLabel), 500);
+    // Ask for a given transition at most once. Keyed on the CURRENT server label as well as the
+    // requested one, so a genuine later edit -- or a re-request after the server value actually
+    // moves -- is still allowed; only the unproductive repeat is suppressed.
+    const lastRequested = lastRequestedLabelRef.current;
+    if (lastRequested?.from === currentLabel && lastRequested.requested === nextLabel) {
+      return;
+    }
+    const handle = globalThis.setTimeout(() => {
+      // Recorded at FIRE time, not at arm time: a cleared timeout never asked for anything, and
+      // recording it there would block a legitimate first attempt.
+      lastRequestedLabelRef.current = { from: currentLabel, requested: nextLabel };
+      onLabelChangeRef.current(item.noteId, nextLabel);
+    }, 500);
     return () => globalThis.clearTimeout(handle);
-  }, [disabled, editing, item.label, item.noteId, labelValue, onLabelChange]);
+  }, [disabled, editing, item.label, item.noteId, labelValue]);
 
   return (
     <div
@@ -532,7 +582,7 @@ function LeafSortableNoteCard({
               // protect — so it bypasses the debounce here. ⚠️ The effect above and its comment are
               // deliberately untouched: they guard TYPING, where mid-keystroke saves tear down the
               // control and previously created a section called "Week" from "Week 1".
-              const nextLabel = selected.trim().replaceAll(/\s+/g, " ");
+              const nextLabel = canonicalSectionLabel(selected);
               if ((item.label ?? "") === nextLabel) {
                 return;
               }
@@ -1628,7 +1678,7 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
   };
 
   const handleRenameLeafSection = (oldName: string, newName: string) => {
-    const trimmedName = newName.trim().replaceAll(/\s+/g, " ");
+    const trimmedName = canonicalSectionLabel(newName);
     if (normalizeSectionValue(trimmedName) === normalizeSectionValue(UNGROUPED_SECTION_NAME)) {
       setMutationError(`"${UNGROUPED_SECTION_NAME}" is reserved for notes without a ${labels.sectionSingular.toLowerCase()}.`);
       return;
@@ -1644,7 +1694,7 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
   };
 
   const handleLeafLabelChange = (noteId: string, requestedLabel: string) => {
-    const trimmedLabel = requestedLabel.trim().replaceAll(/\s+/g, " ");
+    const trimmedLabel = canonicalSectionLabel(requestedLabel);
     if (normalizeSectionValue(trimmedLabel) === normalizeSectionValue(UNGROUPED_SECTION_NAME)) {
       setMutationError(`"${UNGROUPED_SECTION_NAME}" is reserved for notes without a ${labels.sectionSingular.toLowerCase()}.`);
       return;
@@ -1669,7 +1719,7 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
       }
     }
     const nextItems = leafItems.map((item) => {
-      const trimmed = (item.subject ?? "").trim().replaceAll(/\s+/g, " ");
+      const trimmed = canonicalSectionLabel(item.subject ?? "");
       const normalized = normalizeSectionValue(trimmed);
       if (!trimmed || normalized === normalizeSectionValue(UNGROUPED_SECTION_NAME)) {
         return { ...item, label: null };

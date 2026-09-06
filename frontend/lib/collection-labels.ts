@@ -133,9 +133,25 @@ export function getCollectionTerminalAction(
  */
 export const UNGROUPED_SECTION_NAME = "Not in a section";
 
-/** Comparison form for section names: trimmed, whitespace-collapsed, lowercased. */
+/**
+ * DISPLAY form for a section name: trimmed and whitespace-collapsed, case preserved. This is the
+ * value a write path stores.
+ *
+ * ⚠️ IT EXISTS BECAUSE THIS EXPRESSION WAS DUPLICATED AT FIVE CALL SITES IN THE BUILDER, one of them
+ * a card's auto-save guard deciding whether its write had landed. A guard comparing against its own
+ * inline copy of a normalisation the write path might change is how an unbounded write->refresh loop
+ * becomes possible; keeping the expression here, once, is what stops the copies drifting again.
+ *
+ * ⚠️ `normalizeSectionValue` is DERIVED from this rather than repeating it, so the display form and
+ * the comparison form cannot diverge.
+ */
+export function canonicalSectionLabel(value: string): string {
+  return value.trim().replaceAll(/\s+/g, " ");
+}
+
+/** COMPARISON form for section names: the canonical display form, lowercased. */
 export function normalizeSectionValue(value: string): string {
-  return value.trim().replaceAll(/\s+/g, " ").toLowerCase();
+  return canonicalSectionLabel(value).toLowerCase();
 }
 
 /** True when a user-supplied section name collides with the reserved bucket, in any casing. */
