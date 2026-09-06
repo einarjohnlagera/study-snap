@@ -304,6 +304,21 @@ inline** for B3-B5.
     send `FormData`, where omitting it is correct because the browser must set the multipart boundary.
     These two were the only defects.
 
+- **Every new endpoint now has a real-request test, and the pressure test's limit is written down
+  (PR #1294).** Follow-up to the `Content-Type` defect, closing the class rather than the instance.
+  - **Three `MockMvc` tests** post real JSON at `/notes/regenerate/preflight` and `/notes/bulk-regenerate`,
+    exercise retry's bodiless POST, and pin that the receipt `GET` resolves to its own handler rather
+    than `/notes/{id}`. **⚠️ A direct method call is not a substitute** — it bypasses content negotiation
+    entirely, which is exactly why the earlier `enforceLimits` tests passed while the endpoint was
+    unreachable. Verified by mutation: making the endpoint consume `application/xml` fails
+    `bulkRegenerationEndpointsAcceptARealJsonRequest` with **415**, the production symptom.
+  - **`CLAUDE.md`'s verification tiers now state what none of them do.** Every tier reads code; none
+    exercises transport, and a higher tier does not close that gap — measured here, where the full
+    three-agent test found six defects and could not see this one. The rule added: a new endpoint owes
+    one real-request test **at every tier including the cheapest**, plus the pressure-test prompt
+    instruction that would have caught it — *enumerate every file the release ADDED and name those with
+    no test that executes them.*
+
 ### Known limitations (B1/B2)
 
 - **Nothing sweeps a lost batch.** A driver thread killed mid-loop leaves `RUNNING`/`PENDING` rows until

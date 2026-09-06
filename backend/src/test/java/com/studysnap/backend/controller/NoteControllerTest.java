@@ -10,6 +10,8 @@ import com.studysnap.backend.dto.BulkGenerateNotesResponse;
 import com.studysnap.backend.dto.BulkRegenerateNotesRequest;
 import com.studysnap.backend.dto.BulkRegenerateNotesResponse;
 import com.studysnap.backend.dto.NoteRegenerationPreflightRequest;
+import com.studysnap.backend.dto.NoteRegenerationPreflightResponse;
+import com.studysnap.backend.dto.NoteBulkRegenerationReceiptResponse;
 import com.studysnap.backend.dto.NoteListItemResponse;
 import com.studysnap.backend.dto.NoteResponse;
 import com.studysnap.backend.dto.NoteStatusResponse;
@@ -73,6 +75,7 @@ import org.mockito.ArgumentCaptor;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.hamcrest.Matchers.nullValue;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -129,6 +132,7 @@ class NoteControllerTest {
     private NoteController noteController;
     private com.studysnap.backend.service.NoteBulkRegenerationService noteBulkRegenerationService;
     private com.studysnap.backend.service.NoteRegenerationPreflightService noteRegenerationPreflightService;
+    private com.studysnap.backend.service.NoteBulkRegenerationReceiptService noteBulkRegenerationReceiptService;
 
     @BeforeEach
     void setUp() {
@@ -136,6 +140,8 @@ class NoteControllerTest {
                 org.mockito.Mockito.mock(com.studysnap.backend.service.NoteBulkRegenerationService.class);
         noteRegenerationPreflightService =
                 org.mockito.Mockito.mock(com.studysnap.backend.service.NoteRegenerationPreflightService.class);
+        noteBulkRegenerationReceiptService =
+                org.mockito.Mockito.mock(com.studysnap.backend.service.NoteBulkRegenerationReceiptService.class);
         noteController = new NoteController(
                 authService,
                 bulkGenerationResultService,
@@ -144,7 +150,7 @@ class NoteControllerTest {
                 noteBulkImportService,
                 noteBulkGenerationService,
                 noteBulkRegenerationService,
-                org.mockito.Mockito.mock(com.studysnap.backend.service.NoteBulkRegenerationReceiptService.class),
+                noteBulkRegenerationReceiptService,
                 noteRegenerationPreflightService,
                 noteGenerationService,
                 noteTextExtractionService,
@@ -1151,6 +1157,83 @@ class NoteControllerTest {
                 false,
                 false
         );
+    }
+
+    /**
+     * ⚠️ THESE EXIST BECAUSE A GREEN SUITE SAID NOTHING ABOUT THE ONE THING THAT WAS BROKEN.
+     *
+     * Bulk regeneration shipped with both JSON POSTs sending no {@code Content-Type}, so Spring rejected
+     * every request with {@code HttpMediaTypeNotSupportedException} BEFORE the controller was entered —
+     * and the feature could not make one successful request while the whole suite passed. Nothing
+     * executed the transport: the frontend tests mock the API layer wholesale, and the controller tests
+     * called these methods DIRECTLY, which bypasses content negotiation entirely.
+     *
+     * <p>⚠️ SO THESE GO THROUGH MockMvc WITH A REAL BODY, not a direct method call. A direct-call test
+     * passes under the defect and proves nothing about whether the endpoint is reachable. The three-agent
+     * pressure test could not catch it either — it reads code, it does not exercise transport.
+     */
+    @Test
+    void bulkRegenerationEndpointsAcceptARealJsonRequest() throws Exception {
+        AuthenticatedUser routeUser = new AuthenticatedUser(UUID.randomUUID(), UserRole.USER, true, 1);
+        MockMvc mockMvc = buildMockMvc(routeUser);
+        UUID noteId = UUID.randomUUID();
+        UUID batchId = UUID.randomUUID();
+
+        when(noteRegenerationPreflightService.preflight(any(), eq(routeUser.userId()), eq(true)))
+                .thenReturn(new NoteRegenerationPreflightResponse(
+                        "STUDY_PACK", 1, 1, 0, 0, 0, 0, 0, 10, 1, 10, false, 0, 50, List.of()));
+        when(noteBulkRegenerationService.queueBatch(any(), eq(routeUser.userId()), eq(true)))
+                .thenReturn(new BulkRegenerateNotesResponse(batchId, "STUDY_PACK", 1));
+
+        mockMvc.perform(post("/notes/regenerate/preflight")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"noteIds\":[\"" + noteId + "\"],\"scope\":\"STUDY_PACK\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.readyCount").value(1));
+
+        mockMvc.perform(post("/notes/bulk-regenerate")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"noteIds\":[\"" + noteId + "\"],\"scope\":\"STUDY_PACK\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.batchId").value(batchId.toString()));
+    }
+
+    /**
+     * Retry is addressed by BATCH ID and carries no body, so it must be reachable without a content
+     * type — the mirror of the guard above, and the reason retry cannot be "fixed" into taking a note
+     * list without someone noticing.
+     */
+    @Test
+    void retryEndpointIsReachableWithNoRequestBody() throws Exception {
+        AuthenticatedUser routeUser = new AuthenticatedUser(UUID.randomUUID(), UserRole.USER, true, 1);
+        UUID batchId = UUID.randomUUID();
+        UUID retryBatchId = UUID.randomUUID();
+        when(noteBulkRegenerationService.retryFailedItems(batchId, routeUser.userId(), true))
+                .thenReturn(new BulkRegenerateNotesResponse(retryBatchId, "STUDY_PACK", 1));
+
+        buildMockMvc(routeUser)
+                .perform(post("/notes/bulk-regenerate/" + batchId + "/retry"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.batchId").value(retryBatchId.toString()));
+    }
+
+    /**
+     * The receipt read is a GET and must resolve to its own handler rather than the {@code /notes/{id}}
+     * one — the same route-collision class {@code libraryRoutesResolveToDedicatedHandlers...} pins.
+     */
+    @Test
+    void bulkRegenerationReceiptResolvesToItsOwnHandler() throws Exception {
+        AuthenticatedUser routeUser = new AuthenticatedUser(UUID.randomUUID(), UserRole.USER, true, 1);
+        UUID batchId = UUID.randomUUID();
+        when(noteBulkRegenerationReceiptService.getReceipt(batchId, routeUser.userId()))
+                .thenReturn(new NoteBulkRegenerationReceiptResponse(
+                        batchId, "STUDY_PACK", 1, 1, 0, 0, 0, 0, true, false, List.of(), List.of()));
+
+        buildMockMvc(routeUser)
+                .perform(get("/notes/bulk-regenerate/" + batchId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.finished").value(true));
+        verify(noteService, never()).getById("bulk-regenerate", routeUser.userId());
     }
 
     private MockMvc buildMockMvc(AuthenticatedUser routeUser) {
