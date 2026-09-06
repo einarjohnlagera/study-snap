@@ -171,12 +171,19 @@ Feedback rules:
 
 ## Question formats
 
-Shared quiz items support these active formats:
+The `QuizItem` model **shared across modes** supports these active formats. **⚠️ "Shared" here means the
+common item model, NOT a shared quiz LINK — the two readings diverge on `MATCHING`, see the note below:**
 
 - `MCQ` — 4 choices, exactly 1 correct index
 - `TRUE_FALSE` — `["True", "False"]`, exactly 1 correct index
 - `MULTI_SELECT` — 4 choices, `correctIndices` contains 2–3 correct indexes
 - `MATCHING` — 2–4 consecutive single-correct items share the same 4-choice option set through `questionGroup`
+
+**⚠️ `MATCHING` NEVER REACHES A SHARED-LINK RECIPIENT (`v0.121.0`).** `PublicQuizItem` carries no
+`questionGroup` and the recipient page has no matching control, so a block arrived as independent MCQs and
+was **scored** as such. It is now filtered out server-side on the shared derivation, so the projection and
+the grader walk the same list. See `docs/features/shareable-quiz-links.md`. Every in-app mode still
+receives `MATCHING` normally.
 
 IDENTIFICATION rules — **the answer's form, not the subject, decides validity**:
 

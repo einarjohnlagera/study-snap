@@ -2,7 +2,7 @@
 
 ## v0.121.0 - Shared Quiz Recipient Experience
 
-**Status: In Progress** (kicked off 2026-09-06, base branch `releases/v0.121.0`, cut from `main` after `v0.120.0` merged and tagged)
+**Status: Released** (kicked off and signed off 2026-09-06, base branch `releases/v0.121.0`, cut from `main` after `v0.120.0` merged and tagged)
 
 **SLICES 1-4 of `docs/claude-plans/shared-quiz-recipient-experience-plan.md` — EXECUTE ITS DECISIONS, DO NOT RE-DERIVE THEM.** Its companion is `docs/claude-plans/supporter-progress-visibility-audit.md`, and **the recipient plan's §8 supersedes the audit where they differ.**
 
