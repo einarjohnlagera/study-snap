@@ -139,6 +139,38 @@ Since `v0.121.0` they are filtered out of the shared payload.
 - Supporting matching properly would change the **grading contract** on a `permitAll` route scored for an
   anonymous recipient. Recorded as a follow-up, not rejected on merit.
 
+### Continue learning — the provenance capability rule
+
+A shared-quiz result may offer the SOURCE material. The rule is a capability, not a single-note special case:
+
+> A source is surfaced only when NoteLib has **durable source-Note identity** for it AND the source is
+> **legitimately accessible to the recipient** at read/result time. **Never infer identity from a copied
+> title.**
+
+- `PublicSharedQuizResponse.sourceNotes` is a **list**, populated server-side in
+  `QuizShareLinkService.eligibleSources` from notes whose **`visibility == PUBLIC`** only. `/quiz/share/**`
+  is `permitAll`, so the recipient may be anonymous — which is what makes public visibility the
+  accessibility test.
+- **⚠️ PRIVATE SOURCES ARE OMITTED ENTIRELY** — not counted, not hinted, not placeheld. No *"1 source is
+  private"*, no *"2 of 3 available"*, no disabled card. **An empty list means the client renders nothing at
+  all**, never an empty state explaining the absence.
+- **⚠️ RELATIONSHIP STATE IS NEVER AN INPUT.** An accepted Learning Connection grants nothing here.
+- **⚠️ Combined quizzes contribute NOTHING, and there is deliberately no `isCombined` branch.**
+  `CombinedQuizSection` carries a copied title string and no note id, so the rule simply yields nothing for
+  them. When combined quizzes gain durable provenance they light up under the same rule, with no special
+  case to remove.
+- **Anonymous → View Note** (`/public/notes/{id}`). **Authenticated → Add to Library**, reusing
+  `PublicLibraryCopyAction`. **⚠️ Anonymous must NOT be given copy-first:**
+  `public-library-copy-action.tsx:161` sends them to `/signup?redirect=…`, but
+  `resolvePostLoginDestination` returns the gated home before reading the redirect param, so the intent is
+  lost and the path dead-ends.
+
+**Known limitation — the quiz TITLE is not gated, and this is pre-existing.**
+`PublicSharedQuizResponse.noteTitle` has always carried the source note's title regardless of visibility;
+it is how a recipient knows what the quiz is, and the sharer exposed it by choosing to share. What the rule
+above gates is the ability to **read** the note — the note **id**, which is what a link navigates by.
+Narrowing the title is a separate product decision, not part of this capability.
+
 ### Recipient answers are correctable
 
 Answers are **index-addressed**: both arrays are full-length and null-filled at load, and a **Back** control
@@ -160,10 +192,10 @@ returns the recipient to a previous question with their selection restored.
 
 | Format | Graded | Rendered |
 |---|---|---|
-| `MCQ` | single `correctIndex` | one-shot choice, committed on click |
+| `MCQ` | single `correctIndex` | single choice, **changeable until submit** (`v0.121.0`) |
 | `TRUE_FALSE` | single `correctIndex` | same as MCQ, two choices |
 | `MULTI_SELECT` | **exact set** against `correctIndices` | checkboxes with *Select all that apply*; editable until Continue |
-| `MATCHING` | single `correctIndex` per item | ⚠️ as N unrelated MCQs — see Known limitations |
+| `MATCHING` | — | **⚠️ never reaches a recipient — excluded server-side (`v0.121.0`)** |
 
 ### ⚠️ MULTI_SELECT grading must route through `QuizSessionReviewUtils.isAnswerCorrect`
 
@@ -266,12 +298,19 @@ changed count 400'd them on submit, and an **unchanged** count graded them again
 
 ## Known limitations
 
-- **A MATCHING block loses its grouping.** `teacher-quiz-developer.txt` may emit one block of 2–4
-  consecutive questions sharing a `questionGroup` and the same four choices. The shared quiz page renders
-  each as a standalone question with no *Match each item to one option* header, unlike the in-app
-  `QuizMatchingGroup`. **Grading is unaffected** — a MATCHING item carries a single `correctIndex` and is
-  graded like an MCQ. This is presentation only, and is the sharing gap `assessment-architecture-audit.md`
-  §15 records.
+- **~~A MATCHING block loses its grouping.~~ CLOSED in `v0.121.0`** — and the old text was wrong in a way
+  worth recording, since it called this *"presentation only"* with *"grading unaffected"*. It was neither:
+  a recipient was **scored** on items whose matching constraint they could not see. Matching questions are
+  now **excluded server-side** and never reach a recipient. Supporting them properly would change the
+  grading contract on a `permitAll` route, and is a follow-up rather than a rejection on merit.
+- **Combined quizzes offer no continue-learning source.** `CombinedQuizSection` carries a copied title
+  string and no note id, so there is no durable source identity to surface and none is inferred. Their
+  recipients get the ordinary result screen. **Follow-up:** give combined quiz sections a source-note
+  reference, after which they light up under the existing rule with no branch to remove.
+- **The quiz title is not visibility-gated, and this is pre-existing.**
+  `PublicSharedQuizResponse.noteTitle` has always carried the source note's title regardless of
+  visibility — it names the quiz, and the sharer exposed it by sharing. What `v0.121.0` gates is the
+  ability to **read** the note (its id). Narrowing the title is a separate product decision.
 - **IDENTIFICATION and ENUMERATION cannot be graded on the shared path.** Neither format is reachable
   today — `teacher-quiz-developer.txt` does not emit them — but if one ever appeared it would score zero,
   because the recipient has no text input to answer it with.

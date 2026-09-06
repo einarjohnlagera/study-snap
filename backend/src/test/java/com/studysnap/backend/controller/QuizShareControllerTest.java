@@ -51,7 +51,8 @@ class QuizShareControllerTest {
         when(quizShareLinkService.getActivePublicQuiz(TOKEN)).thenReturn(new PublicSharedQuizResponse(
                 UUID.randomUUID(),
                 "Cell Structure",
-                List.of(new PublicQuizItem("Answerable?", List.of("A", "B", "C", "D"), "Concept", "MCQ"))
+                List.of(new PublicQuizItem("Answerable?", List.of("A", "B", "C", "D"), "Concept", "MCQ")),
+                List.of()
         ));
 
         mockMvc().perform(get("/quiz/share/{token}", TOKEN))
@@ -61,7 +62,12 @@ class QuizShareControllerTest {
                 .andExpect(jsonPath("$.questions[0].questionFormat").value("MCQ"))
                 // The answer key must never reach the recipient over the wire either.
                 .andExpect(jsonPath("$.questions[0].correctIndex").doesNotExist())
-                .andExpect(jsonPath("$.questions[0].explanation").doesNotExist());
+                .andExpect(jsonPath("$.questions[0].explanation").doesNotExist())
+                // ⚠️ The one field slice 4 ADDS to this permitAll payload, asserted at the transport layer
+                // rather than only in the service. This class exists because direct handler calls pass
+                // under a serialization defect by construction.
+                .andExpect(jsonPath("$.sourceNotes").isArray())
+                .andExpect(jsonPath("$.sourceNotes").isEmpty());
     }
 
     /**
@@ -83,7 +89,10 @@ class QuizShareControllerTest {
                                 """))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.score").value(1))
-                .andExpect(jsonPath("$.total").value(2));
+                .andExpect(jsonPath("$.total").value(2))
+                // The results payload carries NO source identity at all -- the grading path computes
+                // eligibility and discards it, so there is nothing here to gate.
+                .andExpect(jsonPath("$.sourceNotes").doesNotExist());
 
         @SuppressWarnings("unchecked")
         ArgumentCaptor<List<Integer>> answers = ArgumentCaptor.forClass(List.class);

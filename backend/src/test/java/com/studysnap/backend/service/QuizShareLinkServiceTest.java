@@ -10,6 +10,7 @@ import com.studysnap.backend.dto.SharedQuizResultsRequest;
 import com.studysnap.backend.dto.SharedQuizResultsResponse;
 import com.studysnap.backend.entity.GeneratedQuizEntity;
 import com.studysnap.backend.entity.NoteEntity;
+import com.studysnap.backend.entity.NoteVisibility;
 import com.studysnap.backend.entity.PlanType;
 import com.studysnap.backend.entity.QuizShareLinkEntity;
 import com.studysnap.backend.exception.InvalidSharedQuizAnswersException;
@@ -536,6 +537,72 @@ class QuizShareLinkServiceTest {
 
     private QuizItem singleChoiceQuestion(String stem) {
         return new QuizItem(stem, CHOICES, 1, "Concept", "Because B", null, "MCQ", null, null);
+    }
+
+    /**
+     * ⚠️ THE PRIMARY GUARD FOR SLICE 4, AND THE ONE THE KICKOFF PRE-DECLARED. A PUBLIC-source fixture passes
+     * under a version that leaks EVERY source and proves nothing, so the private case is what pins the rule.
+     * {@code /quiz/share/**} is {@code permitAll}, so this recipient may be anonymous.
+     */
+    @Test
+    void aPrivateSourceNoteIsNeverOfferedToAShareRecipient() {
+        stubActiveQuizWithNoteVisibility(NoteVisibility.PRIVATE, "Curator Private Note");
+
+        PublicSharedQuizResponse response = quizShareLinkService.getActivePublicQuiz(TEST_TOKEN);
+
+        assertThat(response.sourceNotes()).isEmpty();
+    }
+
+    /**
+     * ⚠️ Asserts on the SERIALIZED payload, not the field. "The list is empty" would still pass if a later
+     * change surfaced the private note's ID anywhere else on the response -- a count, a hint, a disabled
+     * card -- and the ID is what makes a source ACTIONABLE, since it is what a link navigates by.
+     *
+     * <p>⚠️ IT DELIBERATELY DOES NOT ASSERT THE ABSENCE OF THE TITLE, AND THE REASON IS RECORDED SO NOBODY
+     * "TIGHTENS" IT LATER WITHOUT SEEING THE TRADE. {@code PublicSharedQuizResponse.noteTitle} has ALWAYS
+     * been the source note's title regardless of visibility -- it is how a recipient knows what the quiz
+     * is, and the sharer chose to expose it by sharing. That is PRE-EXISTING behaviour, not something the
+     * source-note capability introduced, and narrowing it is a separate product decision (see the Known
+     * limitation in {@code RELEASES.md}). What this release gates is the ability to READ the note.
+     */
+    @Test
+    void aPrivateSourceNoteIdNeverLeaksAnywhereInThePayload() throws Exception {
+        UUID privateNoteId = stubActiveQuizWithNoteVisibility(NoteVisibility.PRIVATE, "Confidential Draft");
+
+        PublicSharedQuizResponse response = quizShareLinkService.getActivePublicQuiz(TEST_TOKEN);
+        String payload = new ObjectMapper().writeValueAsString(response);
+
+        assertThat(payload)
+                .contains("\"sourceNotes\":[]")
+                .doesNotContain(privateNoteId.toString());
+    }
+
+    @Test
+    void aPublicSourceNoteIsOfferedWithItsRealIdentity() {
+        UUID publicNoteId = stubActiveQuizWithNoteVisibility(NoteVisibility.PUBLIC, "Cell Structure");
+
+        PublicSharedQuizResponse response = quizShareLinkService.getActivePublicQuiz(TEST_TOKEN);
+
+        assertThat(response.sourceNotes()).hasSize(1);
+        assertThat(response.sourceNotes().getFirst().id()).isEqualTo(publicNoteId);
+        assertThat(response.sourceNotes().getFirst().title()).isEqualTo("Cell Structure");
+    }
+
+    private UUID stubActiveQuizWithNoteVisibility(NoteVisibility visibility, String noteTitle) {
+        UUID noteId = UUID.randomUUID();
+        UUID generatedQuizId = UUID.randomUUID();
+        UUID ownerUserId = UUID.randomUUID();
+        QuizShareLinkEntity link = buildLink(generatedQuizId, ownerUserId, TEST_TOKEN, true);
+        GeneratedQuizEntity generatedQuiz = buildGeneratedQuiz(generatedQuizId, ownerUserId, noteId);
+        generatedQuiz.setQuestions(List.of(singleChoiceQuestion("Answerable?")));
+        NoteEntity note = new NoteEntity();
+        note.setId(noteId);
+        note.setTitle(noteTitle);
+        note.setVisibility(visibility);
+        when(quizShareLinkRepository.findByToken(TEST_TOKEN)).thenReturn(Optional.of(link));
+        when(generatedQuizRepository.findById(generatedQuizId)).thenReturn(Optional.of(generatedQuiz));
+        when(noteRepository.findById(noteId)).thenReturn(Optional.of(note));
+        return noteId;
     }
 
     private void stubActiveQuizWithNote(UUID noteId, String noteTitle, List<QuizItem> questions) {

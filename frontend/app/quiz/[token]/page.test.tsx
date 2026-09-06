@@ -6,6 +6,18 @@ jest.mock("next/navigation", () => ({
   useParams: () => ({ token: "tok123" }),
 }));
 
+let mockAuthUser: unknown = null;
+
+jest.mock("@/lib/auth", () => ({
+  getAuthUser: () => mockAuthUser,
+}));
+
+jest.mock("@/components/notes/public-library-copy-action", () => ({
+  PublicLibraryCopyAction: ({ noteId }: { noteId: string }) => (
+    <button type="button" data-testid={`copy-action-${noteId}`}>Add to Library</button>
+  ),
+}));
+
 jest.mock("@/lib/api", () => ({
   ApiRequestError: class ApiRequestError extends Error {
     status: number;
@@ -37,17 +49,74 @@ const SINGLE_CHOICE_QUESTION = {
   questionFormat: "MCQ",
 };
 
-function stubQuiz(questions: unknown[]) {
+function stubQuiz(questions: unknown[], sourceNotes: unknown[] = []) {
   getPublicSharedQuizMock.mockResolvedValue({
     quizId: "quiz-1",
     noteTitle: "Cell Structure",
     questions,
+    sourceNotes,
   } as never);
+}
+
+async function completeSingleQuestionQuiz() {
+  await screen.findByText("Which one?");
+  fireEvent.click(screen.getByRole("button", { name: /Bravo/ }));
+  fireEvent.click(screen.getByRole("button", { name: "Submit Answers" }));
+  await screen.findByText("Quiz Complete");
 }
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockAuthUser = null;
   getSharedQuizResultsMock.mockResolvedValue({ score: 1, total: 1, items: [] } as never);
+});
+
+describe("shared quiz results — continue learning", () => {
+  // ⚠️ THE PRE-DECLARED DISCRIMINATING GUARD. A PUBLIC-source fixture passes under a version that leaks
+  // every source, so the EMPTY case is what pins the rule. Private sources are omitted entirely by the
+  // server, and an empty list must render NOTHING -- no heading, no placeholder, no "1 source is private".
+  it("renders no continue-learning affordance when there is no eligible source", async () => {
+    stubQuiz([SINGLE_CHOICE_QUESTION], []);
+    render(<SharedQuizPage />);
+    await completeSingleQuestionQuiz();
+
+    expect(screen.queryByText("Keep learning")).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "View Note" })).not.toBeInTheDocument();
+  });
+
+  it("offers an anonymous recipient the public note, never a copy action", async () => {
+    stubQuiz([SINGLE_CHOICE_QUESTION], [{ id: "note-9", title: "Cell Structure" }]);
+    render(<SharedQuizPage />);
+    await completeSingleQuestionQuiz();
+
+    const viewNote = screen.getByRole("link", { name: "View Note" });
+    expect(viewNote).toHaveAttribute("href", "/public/notes/note-9");
+    expect(screen.queryByTestId("copy-action-note-9")).not.toBeInTheDocument();
+  });
+
+  it("offers an authenticated recipient the copy action instead", async () => {
+    mockAuthUser = { id: "user-1" };
+    stubQuiz([SINGLE_CHOICE_QUESTION], [{ id: "note-9", title: "Cell Structure" }]);
+    render(<SharedQuizPage />);
+    await completeSingleQuestionQuiz();
+
+    expect(await screen.findByTestId("copy-action-note-9")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "View Note" })).not.toBeInTheDocument();
+  });
+
+  // ⚠️ THIS GUARD EXISTS BECAUSE ITS ABSENCE ALREADY COST A DEFECT. The v0.121.0 slice-2 change intended to
+  // make this 54-character CTA wrap, but the edit landed on the SHORT "Learn about NoteLib" button on the
+  // inactive-link screen instead. The buttonVariants unit tests passed because they exercise the helper
+  // directly; nothing asserted the CTA itself, so the real overflow shipped unfixed.
+  it("lets the long results call-to-action wrap instead of overflowing", async () => {
+    stubQuiz([SINGLE_CHOICE_QUESTION], []);
+    render(<SharedQuizPage />);
+    await completeSingleQuestionQuiz();
+
+    const cta = screen.getByRole("link", { name: /Save your score/ });
+    expect(cta.className).toContain("whitespace-normal");
+    expect(cta.className).not.toContain("whitespace-nowrap");
+  });
 });
 
 describe("shared quiz page", () => {

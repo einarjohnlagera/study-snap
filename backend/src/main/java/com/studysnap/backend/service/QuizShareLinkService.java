@@ -3,6 +3,7 @@ package com.studysnap.backend.service;
 import com.studysnap.backend.config.StudySnapProperties;
 import com.studysnap.backend.dto.PublicQuizItem;
 import com.studysnap.backend.dto.PublicSharedQuizResponse;
+import com.studysnap.backend.dto.PublicSourceNote;
 import com.studysnap.backend.dto.QuizItem;
 import com.studysnap.backend.dto.QuizShareLinkResponse;
 import com.studysnap.backend.dto.SharedQuizResultItem;
@@ -10,6 +11,7 @@ import com.studysnap.backend.dto.SharedQuizResultsResponse;
 import com.studysnap.backend.entity.GeneratedQuizEntity;
 import com.studysnap.backend.entity.CombinedQuizEntity;
 import com.studysnap.backend.entity.NoteEntity;
+import com.studysnap.backend.entity.NoteVisibility;
 import com.studysnap.backend.entity.QuizShareLinkEntity;
 import com.studysnap.backend.exception.GeneratedQuizNotFoundException;
 import com.studysnap.backend.exception.CombinedQuizNotFoundException;
@@ -165,7 +167,8 @@ public class QuizShareLinkService {
         return new PublicSharedQuizResponse(
                 sharedQuiz.id(),
                 sharedQuiz.title(),
-                questions
+                questions,
+                sharedQuiz.sourceNotes()
         );
     }
 
@@ -275,7 +278,8 @@ public class QuizShareLinkService {
             return new SharedQuiz(
                     generatedQuiz.getId(),
                     resolveNoteTitle(note),
-                    excludeUnanswerableFormats(generatedQuiz.getQuestions())
+                    excludeUnanswerableFormats(generatedQuiz.getQuestions()),
+                    eligibleSources(note)
             );
         }
         if (link.getCombinedQuizId() != null) {
@@ -284,7 +288,12 @@ public class QuizShareLinkService {
             return new SharedQuiz(
                     combinedQuiz.getId(),
                     combinedQuiz.getTitle(),
-                    excludeUnanswerableFormats(flattenCombinedQuestions(combinedQuiz))
+                    excludeUnanswerableFormats(flattenCombinedQuestions(combinedQuiz)),
+                    // ⚠️ NOT an isCombined special case -- a CombinedQuizSection carries a COPIED TITLE
+                    // STRING and no note id, so there is nothing here with durable identity to offer. The
+                    // rule yields nothing; it is not switched off. When combined quizzes gain provenance
+                    // they light up under the same rule with no branch to remove.
+                    List.of()
             );
         }
         // V132's exclusive-arc check rejects this in PostgreSQL; keep public lookup fail-closed for corrupt rows.
@@ -334,6 +343,31 @@ public class QuizShareLinkService {
         return answerable;
     }
 
+    /**
+     * The provenance capability rule, in one place.
+     *
+     * <p>A source is offered to a shared-quiz recipient only when BOTH hold: NoteLib has a DURABLE
+     * source-Note identity for it, and the source is LEGITIMATELY ACCESSIBLE to that recipient at
+     * read/result time. {@code /quiz/share/**} is {@code permitAll}, so the recipient may be anonymous --
+     * which makes {@code visibility == PUBLIC} the accessibility test, resolved server-side.
+     *
+     * <p>⚠️ PRIVATE SOURCES ARE OMITTED ENTIRELY -- not counted, not hinted, not placeheld. No
+     * "1 source is private", no "2 of 3 available", no disabled card. The caller renders NOTHING for an
+     * empty list.
+     *
+     * <p>⚠️ RELATIONSHIP STATE IS NEVER AN INPUT. An accepted Learning Connection grants nothing here; the
+     * test is {@code visibility == PUBLIC}, full stop.
+     */
+    private List<PublicSourceNote> eligibleSources(NoteEntity note) {
+        if (note == null || note.getVisibility() != NoteVisibility.PUBLIC) {
+            return List.of();
+        }
+        // ⚠️ resolveNoteTitle, not getTitle(): notes.title has no NOT NULL constraint and this response's
+        // sibling noteTitle field already defaults a blank one. Raw getTitle() would render a "Keep
+        // learning" card with an empty label beside an unlabelled action.
+        return List.of(new PublicSourceNote(note.getId(), resolveNoteTitle(note)));
+    }
+
     private List<QuizItem> flattenCombinedQuestions(CombinedQuizEntity combinedQuiz) {
         return combinedQuiz.getSections() == null ? List.of() : combinedQuiz.getSections().stream()
                 .filter(Objects::nonNull)
@@ -341,7 +375,7 @@ public class QuizShareLinkService {
                 .toList();
     }
 
-    private record SharedQuiz(UUID id, String title, List<QuizItem> questions) {
+    private record SharedQuiz(UUID id, String title, List<QuizItem> questions, List<PublicSourceNote> sourceNotes) {
     }
 
     private String generateUniqueToken() {

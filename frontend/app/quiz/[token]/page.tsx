@@ -4,6 +4,8 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { TrackedLink } from "@/components/analytics/tracked-link";
+import { PublicLibraryCopyAction } from "@/components/notes/public-library-copy-action";
+import { getAuthUser } from "@/lib/auth";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { QuizQuestionText } from "@/components/study-pack/quiz-question-text";
@@ -37,6 +39,8 @@ export default function SharedQuizPage() {
   const [inactive, setInactive] = useState(false);
   const [fetchError, setFetchError] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [copiedNoteId, setCopiedNoteId] = useState<string | null>(null);
 
   const loadQuiz = useCallback(async () => {
     if (!token) {
@@ -78,6 +82,12 @@ export default function SharedQuizPage() {
   useEffect(() => {
     void loadQuiz();
   }, [loadQuiz]);
+
+  // Read after mount: the page is permitAll and renders for anonymous recipients, so auth state must not
+  // influence the first paint.
+  useEffect(() => {
+    setIsAuthenticated(getAuthUser() !== null);
+  }, []);
 
   const currentQuestion = quiz?.questions[currentIndex] ?? null;
   const questionCount = quiz?.questions.length ?? 0;
@@ -239,12 +249,45 @@ export default function SharedQuizPage() {
             <p className="text-lg font-semibold">
               Score: {results.score} / {results.total} correct
             </p>
+            {(quiz.sourceNotes ?? []).length > 0 ? (
+              <div className="space-y-3 rounded-xl border border-border bg-muted/40 p-4">
+                <p className="text-sm font-semibold">Keep learning</p>
+                {(quiz.sourceNotes ?? []).map((source) => (
+                  <div key={source.id} className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <p className="min-w-0 text-sm text-foreground/75">{source.title}</p>
+                    {isAuthenticated ? (
+                      <PublicLibraryCopyAction
+                        noteId={source.id}
+                        isOwner={false}
+                        onCopySuccess={({ copiedNoteId: newNoteId }) => setCopiedNoteId(newNoteId)}
+                      />
+                    ) : (
+                      // ⚠️ Anonymous recipients get VIEW, never copy. The copy path routes them to
+                      // /signup?redirect=..., but resolvePostLoginDestination returns the gated home
+                      // (verify-email -> onboarding) BEFORE reading the redirect param, so a new signup
+                      // loses it and the path dead-ends.
+                      <Link
+                        href={`/public/notes/${source.id}`}
+                        className={buttonVariants({ variant: "outline", className: "w-full sm:w-auto" })}
+                      >
+                        View Note
+                      </Link>
+                    )}
+                  </div>
+                ))}
+                {copiedNoteId ? (
+                  <Link href={`/notes/${copiedNoteId}`} className="text-sm font-medium text-blue-600 dark:text-blue-400">
+                    Saved to your Library — open it
+                  </Link>
+                ) : null}
+              </div>
+            ) : null}
             <TrackedLink
               href="/signup"
               eventType="QUIZ_SHARE_LINK_OPENED"
               entityId={quiz.quizId}
               eventMetadata={{ token, source: "shared_quiz_results_signup_cta" }}
-              className={buttonVariants({ className: "w-full sm:w-auto" })}
+              className={buttonVariants({ wrap: true, className: "w-full sm:w-auto" })}
             >
               Save your score and start studying with your own notes
             </TrackedLink>

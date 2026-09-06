@@ -61,6 +61,38 @@
 - The concept under the question stem is now a labelled *Topic* chip. It rendered as a bare grey string
   directly beneath the question, where it read as a second sentence of the question itself.
 
+**Slice 4 — continue learning.** **⚠️ Implemented inline (no Codex token), then put through the scoped
+cold-agent falsification pass the kickoff declared owed.**
+
+- `PublicSharedQuizResponse` gains **`sourceNotes: List<PublicSourceNote>`**, populated server-side from
+  sources whose **`visibility == PUBLIC`** only. A recipient who did poorly now has somewhere to go.
+- **⚠️ IT IS IMPLEMENTED AS THE OWNER'S CAPABILITY RULE, NOT AS A SINGLE-NOTE SPECIAL CASE — a source is
+  offered only where there is DURABLE source-Note identity AND legitimate recipient accessibility, and
+  identity is NEVER inferred from a copied title.** `generated_quizzes.note_id` qualifies (`V43:4`);
+  `CombinedQuizSection` carries a copied title string and no id, so a combined quiz contributes nothing
+  **through the ordinary path — there is no `isCombined` branch anywhere**, and combined quizzes light up
+  under the same rule once they gain provenance.
+- **⚠️ PRIVATE SOURCES ARE OMITTED ENTIRELY** — not counted, not hinted, not placeheld. An empty list
+  renders **nothing**, not an empty state explaining the absence. **Relationship state is never an input**;
+  the test is `visibility == PUBLIC`, full stop.
+- Anonymous recipients get **View Note** (`/public/notes/{id}`); authenticated recipients get **Add to
+  Library**, reusing the existing `PublicLibraryCopyAction` rather than a second copy implementation.
+  **⚠️ Anonymous deliberately does NOT get copy-first, and the reason is a repo fact:**
+  `public-library-copy-action.tsx:161` routes them to `/signup?redirect=…`, but
+  `resolvePostLoginDestination` returns the gated home **before** reading the redirect param, so a new
+  signup loses it and the path dead-ends.
+- **⚠️ Sender context (the plan's §7 — *"Quiz from Maria"*) is deliberately NOT built.** It is slice 5's
+  cross-user read and identity disclosure, and it stays out of this release.
+
+**⚠️ A DEFECT THIS RELEASE SHIPPED AND THEN CORRECTED, RECORDED RATHER THAN QUIETLY FIXED.** Slice 2's CTA
+overflow fix **landed on the wrong button**: `wrap: true` was applied to the short *"Learn about NoteLib"*
+button on the inactive-link screen (`page.tsx:222`) instead of the 54-character results call-to-action
+(`:247`) that actually overflows. It merged in PR #1302 and the real defect stayed live. **The
+`buttonVariants` unit tests passed throughout because they exercise the helper directly and nothing
+asserted the CTA itself** — verbatim the standing rule that *a diff which changes behaviour while no test
+beside it moves is unverified, not verified*. Both the fix and **the missing guard** are in this release,
+and the guard was confirmed to fail against the state that shipped.
+
 **Slice 1 — recipient assessment integrity.** **⚠️ Implemented inline rather than by Codex: no Codex token
 was available, following the `v0.119.1` precedent that routed its Codex leg the same way.**
 
@@ -120,12 +152,34 @@ page, not the authenticated shell*; making `wrap` emit the conflicting class any
 *shared quiz page › labels the concept so it does not read as part of the question*. **⚠️ The button guard
 asserts `whitespace-nowrap` is ABSENT rather than that `whitespace-normal` is present — the latter passes
 under the plain-join bug and proves nothing.** `npx tsc --noEmit` clean, `npm run lint` 0 errors (18
-pre-existing warnings, none in touched files), the frontend suite green at **201 suites / 2,201 tests**
-and the backend suite at **2,195 tests / 0 failures** (counted from `target/surefire-reports/*.xml` after
+pre-existing warnings, none in touched files), the frontend suite green at **201 suites / 2,205 tests**
+and the backend suite at **2,198 tests / 0 failures** (counted from `target/surefire-reports/*.xml` after
 cleaning the directory first), each command's exit status read directly rather than through a pipe.
 Removing the completion event failed *shared quiz page › records a completion once a recipient's answers
 are graded*; firing it before the await failed *shared quiz page › records no completion when grading
-fails*. **⚠️ Slice 1's second mutant is the one worth recording: re-splitting `resolveSharedQuestions` onto its own unfiltered derivation was killed by EXACTLY ONE test — *sharedQuizGradesASubmissionSizedToTheFilteredQuestionList* — the guard that exists to prove the delegation matters.** Admitting every question format was killed by three.
+fails*. **⚠️ Slice 1's second mutant is the one worth recording: re-splitting `resolveSharedQuestions` onto its own unfiltered derivation was killed by EXACTLY ONE test — *sharedQuizGradesASubmissionSizedToTheFilteredQuestionList* — the guard that exists to prove the delegation matters.** Admitting every question format was killed by three. **⚠️ Slice 4's own mutants are recorded too, because the first draft of this paragraph omitted them:** making `eligibleSources` ignore visibility was killed by *aPrivateSourceNoteIsNeverOfferedToAShareRecipient* and *aPrivateSourceNoteIdNeverLeaksAnywhereInThePayload*; giving a combined quiz a title-inferred source — **the exact shape the owner rule forbids** — was killed by *combinedQuizIsFlatPublicPayloadWithoutAnswerKeyAndMultiSelectGradesExactly*; and reverting the results CTA to what shipped in PR #1302 was killed by *lets the long results call-to-action wrap instead of overflowing*.
+
+### Known limitations
+
+- **Combined quizzes offer no continue-learning source.** `CombinedQuizSection` carries a copied title
+  string and no note id, so there is no durable source identity — and none is inferred, which is the rule
+  rather than an omission. **Follow-up:** give combined quiz sections a source-note reference, after which
+  they light up under the existing rule with no branch to remove.
+- **The shared quiz TITLE is not visibility-gated, and it is PRE-EXISTING rather than introduced here.**
+  `PublicSharedQuizResponse.noteTitle` has always carried the source note's title regardless of visibility;
+  it names the quiz, and the sharer exposed it by choosing to share. What this release gates is the ability
+  to **read** the note — its id, which is what a link navigates by. Narrowing the title is a separate
+  product decision and is not taken here.
+- **⚠️ ONE PRE-DECLARED GUARD COULD NOT BE WRITTEN, AND IS STATED RATHER THAN SILENTLY DROPPED.** The
+  kickoff declared *"mixed public/private must omit the private WITHOUT TRACE"*. That fixture has **no
+  reachable subject today**: `generated_quizzes.note_id` is `NOT NULL` with `uq_generated_quizzes_note_id`,
+  so a single-note quiz has exactly one candidate source, and a combined quiz always yields an empty list.
+  **No unreachable fixture was written to fake it** — this repo's own carried lesson is that a negative
+  assertion needs a reachable subject. It becomes writable when combined quizzes gain provenance.
+- **The authenticated *Add to Library* branch is pinned by a mocked component.** `PublicLibraryCopyAction`
+  is `jest.mock`'d in the recipient page tests, so what is proven is **which branch renders**, not that the
+  component works on this page. Its own behaviour is covered where it lives.
+
 
 ## v0.120.0 - Canonical Note Title Integrity
 
