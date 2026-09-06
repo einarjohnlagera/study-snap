@@ -72,12 +72,12 @@ describe("InterviewPracticePage", () => {
     render(<InterviewPracticePage />);
 
     expect(await screen.findByRole("heading", { name: "Interview Practice" })).toBeInTheDocument();
-    expect(screen.getByText("Scenario-based practice with AI critique after every answer.")).toBeInTheDocument();
+    expect(screen.getByText("Scenario-based practice with a critique after every answer.")).toBeInTheDocument();
     expect(screen.getByText("Session length")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /5 questions/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /10 questions/i })).toBeInTheDocument();
     expect(screen.getByText("Soft timer, non-enforcing")).toBeInTheDocument();
-    expect(screen.getByText("Scenario MCQ with AI critique")).toBeInTheDocument();
+    expect(screen.getByText("Scenario MCQ with per-answer critique")).toBeInTheDocument();
     expect(screen.getByText("Counts toward your monthly limit")).toBeInTheDocument();
     expect(screen.queryByText("This will use 1 of your 10 Interview Practice sessions this month.")).not.toBeInTheDocument();
   });

@@ -1,5 +1,347 @@
 # RELEASES.md - NoteLib
 
+## v0.120.0 - Canonical Note Title Integrity
+
+**Status: Released** (kicked off and signed off 2026-09-06, base branch `releases/v0.120.0`)
+
+**⚠️ CUT FROM `docs/next-sequencing`, NOT FROM `main` — stated as an exception, with the reason, rather
+than routed around.** PR #1300 (the sequencing section this release executes) is **blocked by a
+repository ruleset**, not by review: `require_extra_approval_for_unattributed_changes` is enabled on
+`main` (ruleset `17016892`, read via the API — **not** probed with a push). **⚠️ `required_approving_review_count` is 0, so this is NOT a review
+requirement** — the block comes specifically from the unattributed-changes parameter, and **the merge path is the
+owner's to choose** (attributing the commit is the likely fix; whether self-approval satisfies the rule was NOT
+tested). **⚠️ WHAT IS SETTLED IS ONLY THAT CLAUDE DOES NOT FORCE IT: `--admin` bypasses a branch protection and is
+not Claude's to run.** So the
+sequencing commit rides into `main` through this release's PR instead, exactly as `v0.111.0` did with
+`docs/correct-architecture-domain-context-verdict`. **⚠️ A later session should expect #1300 to be closed
+unmerged rather than look for it on `main`.**
+
+**⚠️ THIS ALSO CORRECTS A STALE `CLAUDE.md` CLAIM, which is why it is recorded here rather than in
+passing.** That file has said since `v0.103.0` that *"`main` is protected BY CONVENTION, and the
+enforcement claim was FALSE."* **A ruleset now exists and carries `update`, `creation`, `deletion`,
+`non_fast_forward` and `pull_request` rules.** `CLAUDE.md` itself instructs that if the ruleset is ever
+actually configured, the line is to be corrected back rather than deleted — done in this kickoff commit.
+
+Theme: a curator's typed topic is the canonical Note title, and the Study Pack's generated title stops
+overwriting it.
+
+**THE DEFECT, REPRODUCED AND OWNER-REPORTED.** A curator entered `Site Grading Principles` in Bulk
+Generate and the persisted Note title became `Site Grading Principles in Civil Engineering` — with Civil
+Engineering **not** among the four selected Applicable Programs. Governed by
+`docs/claude-plans/canonical-note-title-generation-integrity-stage1.md`; **EXECUTE ITS DECISIONS, DO NOT
+RE-DERIVE ITS SETTLED FACTS.**
+
+**⚠️ THE CAUSE IS NEITHER OF THE TWO SUSPECTED ONES AND RE-DERIVING THEM IS WASTED WORK — the audit
+closes both.** It is **not** context contamination (§3: `resolveBulkCourseProgram` sets
+`profileCourseProgram = null` for any curator, and the curator request branch omits `courseProgramText`
+entirely) and **not** a missing prompt rule (§4: `developer.txt:32-38` already carries the correct
+semantic-qualifier doctrine, added by `v0.96.0`, and it was violated anyway). **The model inferred
+`Civil Engineering` from `Domain: Engineering Sciences` + `Subject: Site Planning`; no context field
+contained it.**
+
+**IT IS ONE UNCONDITIONAL MUTATION — RE-VERIFIED AGAINST CODE AT KICKOFF, NOT TRUSTED FROM THE AUDIT.**
+`NoteBulkGenerationService:322` creates the Note with `item.topic()` as its title — **correct** — and
+then `:350-356` dispatches generation passing `preservedSubject = batch.subject()`, which is validated
+non-blank, so `StudyPackService:906` **always** takes the bulk branch. There,
+`applyBulkGeneratedMetadataToNote` does `note.setTitle(normalizeEditableTitle(generated.title()))`
+(`StudyPackService:1301`) — unconditionally. Its sibling `applyGeneratedMetadataToNote` (`:1279`)
+**never touches the title**. **So the two paths disagree and bulk is the anomaly; the fix DELETES a later
+mutation rather than adding logic.**
+
+**⚠️ WHY IT IS FIRST — AN ORDERING ARGUMENT, NOT A SEVERITY ONE.** `v0.118.0`'s locked contract is *"the
+Note's current title is the topic"*, so a contaminated title becomes the **seed for regenerated
+content**: `…in Civil Engineering` would shape the body of every future regeneration of that note. **Fix
+titles before the canonical library is regenerated, or the ALE pass has to be redone.**
+
+**⚠️ EXISTING NOTES ARE SAFE TODAY — verified in code, not assumed.**
+`applyBulkGeneratedMetadataToNote` is unreachable from regeneration: `NoteBulkRegenerationService:570`
+passes `preservedSubject = null` behind a load-bearing comment saying exactly why, and single-note
+regeneration passes `autoApplyGeneratedMetadata = false`. **The exposure is authoring NEW notes via Bulk
+Generate.**
+
+### Planned Scope
+
+**THREE OWNER DECISIONS TAKEN AT KICKOFF, 2026-09-06 — recorded as taken, with the two that went AGAINST
+the audit's recommendation marked as such.**
+
+**(1) THE CORE FIX — `applyBulkGeneratedMetadataToNote` stops setting `title`.** Owner decision (a):
+**the curator's topic always wins.** It keeps setting `subject` from `preservedSubject` (the curator's own
+batch value) and keeps setting tags. **⚠️ Do NOT delete the method or merge it with
+`applyGeneratedMetadataToNote`** — the two have genuinely different jobs, and bulk still stamps the
+curator's batch subject authoritatively.
+
+**(2) TAGS — owner decision (b), which takes the audit's recommendation.** Change the argument at
+`StudyPackService:1302` from `generated.title()` to the note's own title. **⚠️ THIS IS NARROWER THAN THE
+AUDIT FRAMES IT, established by reading `resolveTags:1075`: `fallbackTitle` is used ONLY when the LLM
+returned no tags at all** — otherwise the LLM's own tags win. So the behaviour change is confined to the
+rare empty-tags case, where the note would otherwise be tagged with a title that was discarded and
+appears nowhere on the note. **⚠️ `resolveTags` ITSELF IS NOT CHANGED — it has four callers (`:726`,
+`:961`, `:1287`, `:1302`), and changing one argument leaves the other three untouched.** That is why the
+audit's own escalation trigger (*"escalate if the tags decision turns into a change to `resolveTags`
+shared with other callers"*) **does not fire.**
+
+**(3) AN OPT-IN TITLE SUGGESTION FOR THE BULK PATH — owner decision (a)'s second half, taken AGAINST the
+audit's recommendation, which was to ship no suggestion action.** **⚠️ THE AUDIT SCOPED THIS AS NEW WORK
+AND IT IS MOSTLY BUILT ALREADY — found at kickoff by reading, and it is the reason the decision is
+affordable.** `private-note-detail-page-client.tsx:534-560` already implements
+`maybeShowGeneratedMetadataSuggestion`, which fetches the finished pack via
+`getMyStudyPack(studyPackId)` and offers its `title`/`subject`/`tags` as an **opt-in** suggestion through
+`AiSuggestionModal`, applied by `applySuggestion` (`:1452-1490`) and covered by existing tests
+(`private-note-detail-page-client.test.tsx:2529+`). **⚠️ AND NO MIGRATION IS NEEDED, WHICH IS WHAT KEEPS
+THIS INSIDE THE AUDIT'S ANTI-DRIFT: the generated title is ALREADY PERSISTED** on
+`StudyPackEntity:46` and already exposed by `StudyPackResponse.title`. The suggestion reads data that
+exists.
+
+**⚠️ WHAT IS ACTUALLY MISSING IS THE BULK CASE, AND IT CANNOT REUSE THE MODAL.** The mechanism is armed
+only from the note detail page itself (`:876`, `:1372` set
+`notelib-awaiting-suggestion:{noteId}`); **Bulk Generate never arms it** (zero references in
+`bulk-generation-page-client.tsx`), and **a 50-item batch cannot show 50 modals** — the curator is not
+sitting on any one note's page. **So the bulk affordance must be PERSISTENT AND NON-MODAL:** on a note
+whose Study Pack is `STUDY_PACK_READY` and whose pack title differs from the note title, offer the pack's
+title as a dismissible, opt-in suggestion, reusing `applySuggestion`'s existing update path. **⚠️ Derive
+it from `note.title !== studyPack.title`, NOT from bulk provenance** — no new column, no new field, and it
+serves any note whose titles have diverged.
+
+**(4) GUARDS — see the pre-declared list below.**
+
+### Anti-drift
+
+- **⚠️ DECISION (c) — the narrowed title-input contract (§19) — IS DEFERRED (owner, 2026-09-06), and the
+  reason is a finding rather than a preference, recorded so the next session does not re-derive it.**
+  The owner initially took it INTO scope; **reading `developer.txt:6` showed there is no title-producing
+  call to narrow** — `"title"` is field 1 of the **single** JSON schema the whole Study Pack generation
+  returns, so title and body come out of one call and §6's *"the same object is reused for body and
+  title"* is literal. **Narrowing therefore resolves into a fork with materially different costs:**
+  either **split title into its own LLM call** (an extra round-trip on EVERY generation — latency and
+  spend on every bulk item and every regeneration, plus a quota/cost decision no plan has taken), or
+  **narrow the one shared context**, which would also narrow **body** generation and strip
+  `domainContext` — *the sole LLM domain constraint* per `ADR-001`. **⚠️ The second option degrades every
+  generated note body and must not be taken.** Deferred to its own release with this finding attached.
+  **⚠️ Note also that once the overwrite is deleted the generated title no longer reaches the Note at
+  all, so (c)'s remaining value is about the Study Pack's own title quality — a smaller prize than it
+  looked.**
+- **⚠️ Do NOT add Course/Program suffixes by default**, and do NOT infer a title from Applicable
+  Programs, Review Set, Subject Plan or Domain Context.
+- **⚠️ Do NOT let profile Course/Program become canonical-title authority.** Closed today on both ends,
+  but `bulk-generation-page-client.tsx:182` pre-fills the visible Course/Program field from the curator's
+  own profile **ungated by curator status**, inert only because the curator request branch
+  (`isTeacherOrAdmin`, `:410-419`) sends `courseProgramIds` and never `courseProgramText`. **⚠️ If that
+  branch is ever unified the profile silently becomes title context — pin it with a test, not a comment.**
+- **⚠️ Do NOT remove legitimate disciplinary qualifiers.** The fix keeps the curator's words whatever they
+  are; **a banned-substring filter would break every right-hand case in the audit's §8 title-proof table**
+  (`Nursing Management of Acute Asthma`, `Civil Engineering Law and Ethics`, `Architectural Acoustics`).
+- **⚠️ Do NOT weaken `developer.txt:32-38`** — it is correct and still governs Study Pack titles.
+- **⚠️ Do NOT mass-rename existing Notes, and do NOT regenerate Study Packs to "repair" titles.** Doctrine
+  stays *normalize on meaningful touch*. The existing debt is unmeasured **by decision**: sizing it needs a
+  production read, **the production database is read-only for Claude**, and a `.sql` file is the owner's to
+  run. It gets a Backlog row, not a dated checkpoint.
+- **⚠️ Do NOT add a curator-vs-learner title branch** — there is nothing to differentiate once the
+  overwrite is gone, and learner-authored titles are untouched today.
+- **⚠️ NO MIGRATION.** This is one method's behaviour plus a frontend affordance over fields that already
+  exist. **If a migration appears necessary, the scope is wrong.**
+- **⚠️ NO endpoint is added, so `CLAUDE.md`'s real-request/MockMvc rule does not apply here** — stated
+  explicitly so a later session reads it as considered rather than skipped.
+- **⚠️ No quota, entitlement, limit or meter change; no new mode or sub-mode; no change to what
+  `BOARD_EXAM_STARTED`, `ADAPTIVE_PRACTICE_STARTED` or `QUIZ_SHARE_LINK_CREATED` record.**
+- **⚠️ `frontend/app/onboarding` STAYS FROZEN** — `[CHECKPOINT — due 2026-09-11]` is **5 days out**. This
+  release does not reach it; the rule is stated because the omission is the drift.
+- **⚠️ Do NOT change Applicable Programs architecture, the Domain Context taxonomy, or Review Set
+  structure.**
+
+### Verification
+
+**A single `advisor()` call on the diff**, which is the audit's own tier and survives the two decisions
+that widened scope: one deleted mutation, one changed argument, and a frontend affordance over existing
+data — **no permission substrate, no cross-user read, no money or quota semantics, no migration, no new
+endpoint.**
+
+**⚠️ ESCALATE TO ONE SCOPED COLD AGENT IF** item 3 grows a backend endpoint or a provenance field, or if
+the tags change turns into an edit to `resolveTags` itself.
+
+**⚠️ PRE-DECLARED GUARDS, each naming the fixture that would pass under the defect:**
+
+1. **The discriminating guard — assert the PERSISTED title, not the create call.**
+   `NoteBulkGenerationService:322` already creates the note correctly **today**, so a test asserting the
+   creation passes under the defect and proves nothing. The assertion belongs at the `StudyPackService`
+   layer where the mutation lives, on the save that `applyBulkGeneratedMetadataToNote` performs.
+   **⚠️ The fixture's `GeneratedStudyPackContent.title()` MUST DIFFER from the curator's topic** — equal
+   titles pass under both the defect and the fix. Use the observed case: topic `Site Grading Principles`,
+   generated title `Site Grading Principles in Civil Engineering`.
+2. **Mutate and confirm a NAMED test fails** — re-add `note.setTitle(normalizeEditableTitle(...))` and
+   record which test kills it.
+3. **Path parity** — the same topic through single-note generation and through bulk persists the **same**
+   title.
+4. **A legitimate qualifier survives** — topic `Nursing Management of Acute Asthma` is persisted
+   unchanged, proving the fix keeps curator words rather than stripping discipline terms.
+5. **Profile isolation** — a curator whose profile Course/Program is `Civil Engineering`, generating with
+   four unrelated `courseProgramIds` **and a null `courseProgramText`**, must produce a context whose
+   `courseProgram` is **null**. **⚠️ Write this at the BACKEND resolver, not against the frontend payload** —
+   it then holds regardless of what any client sends, which is the point of pinning a hazard that is one
+   refactor from failing. **⚠️ THE FIXTURE'S SHAPE IS LOAD-BEARING AND BOTH HALVES ARE, so it is spelled out
+   rather than left to implementation. FOUR ids, NOT ONE:** `resolveBulkCourseProgram:155-160` **returns early**
+   inside the `ids.size() == 1` branch, so a ONE-id fixture never reaches the curator guard at `:161` and the
+   mutant that deletes `!CuratorAuthoringPredicate.isCurator(user)` **survives it**. With four ids the `if` block
+   is skipped, execution reaches `:161`, and deleting the guard flips `profileCourseProgram` from `null` to
+   `Civil Engineering`. **AND `courseProgramText` MUST BE NULL**, because `:164` is
+   `firstNonBlank(courseProgramText, profileCourseProgram)` — a non-null text value would supply the answer from
+   the other argument and mask the guard entirely. Null is what the curator branch sends in production.
+6. **The tags fallback** — with the LLM returning **no** tags, the note is tagged from the curator's topic
+   and never from the discarded generated title. A fixture where the LLM returns tags passes under both
+   behaviours.
+
+**Routing: CLAUDE CODE inline** — two backend lines plus tests, and a frontend affordance reusing an
+existing modal, apply path and API call. **⚠️ Re-run the routing test if item 3 discovers a surface not in
+this plan**, which is how `v0.103.0` was mis-routed.
+
+**⚠️ ROUTING RE-RUN AT DELIVERY, AS THAT CLAUSE REQUIRED, AND THE OUTCOME IS RECORDED RATHER THAN ASSUMED.**
+Item 3 did discover a surface not in this plan — avoiding the `OPENED_STUDY_PACK` write meant adding
+`NoteResponse.studyPackTitle`, so the release is frontend **and** backend rather than frontend-only. It was
+still completed inline: the addition is one record component, two convenience-constructor delegations passing
+`null`, and one populated call site the compiler located, with no new endpoint, no migration and no
+anti-drift rule spanning files. **The verification tier is unchanged** — the declared escalation trigger was
+*"a backend endpoint or a provenance field"*, and a nullable display field on an existing response is
+neither.
+
+### Shipped
+
+**1. The core fix — a curator's typed topic is the canonical Note title.**
+`StudyPackService.applyBulkGeneratedMetadataToNote` no longer calls
+`note.setTitle(normalizeEditableTitle(generated.title()))`. It still stamps the curator's batch subject and
+the generated tags. The method keeps its own identity — **not** merged with `applyGeneratedMetadataToNote`,
+which fills only blanks — and carries a javadoc naming the defect so the line is not re-added.
+
+**2. Tags fall back to the note's own title.** `resolveTags(generated.tags(), note.getTitle())` at the one
+bulk call site. `resolveTags` itself is untouched, so its other three callers are unaffected and the audit's
+escalation trigger did not fire. **⚠️ Behaviour changes only when the LLM returns NO tags** — otherwise its
+own tags win, as before.
+
+**3. The opt-in title suggestion (owner decision, against the audit's recommendation).** On the note detail
+page, a curator whose note title differs from its Study Pack's title gets a dismissible card offering the
+generated title. **Non-modal by necessity:** the existing modal is armed only when generation starts from
+that page, and a 50-item batch cannot show 50 modals. **Dismissal persists across reloads** (owner decision,
+2026-09-06) in `localStorage` under `notelib-title-suggestion-dismissed:{noteId}`.
+
+**⚠️ THE OBVIOUS IMPLEMENTATION WAS WRONG AND WAS CAUGHT BEFORE SIGNOFF — RECORDED BECAUSE THE TRAP IS
+GENERAL.** The first version fetched the pack with `getMyStudyPack(studyPackId)` to compare titles. **That
+call is not free: `StudyPackService.getById` records an `OPENED_STUDY_PACK` activity event**, and
+`DashboardService.findLastOpenedStudyPack` reads exactly those rows to decide the Dashboard's last-opened
+pack. **So merely VIEWING a note would have rewritten what that curator's Dashboard recommends** — a write
+on a read path, the same class as `v0.91.0`'s rule that a recipient's Study Pack read must not
+`recordActivity`. **The suggestion now carries no request at all:** `NoteResponse` gained `studyPackTitle`
+(the detail response already carried the pack's `summary`, `keyConcepts` and `quiz` — the title was the
+conspicuous omission), and the card is a `useMemo` over `note`. **A test asserts `getMyStudyPack` is NOT
+called**, so the fetch cannot come back.
+
+**⚠️ Deriving at render also fixed a second defect the fetch version had:** it stamped a
+"already checked" ref before the async resolved, so renaming a note through the inline editor left a stale
+suggestion for the rest of the visit — and *Use this title* would then have overwritten a title the curator
+had just deliberately changed. The memo re-evaluates whenever `note` changes.
+
+**4. `createGeneratedNote` was checked and deliberately left alone.** It sets `note.setTitle(generated.title())`
+at `StudyPackService:958`, which is **correct**: that is the paste-text/image path, where no curator topic
+exists and the generated title is the only one available. **⚠️ Do not "fix" it for symmetry.**
+
+**5. A test that pinned the defect was REWRITTEN, not deleted.**
+`StudyPackServiceTest.startAsyncGenerationFromNote_bulkBypassPreservesSubjectAndAppliesAiTitleAndTagsWithoutUsage`
+asserted `getTitle()).isEqualTo("AI Refined Title")` — **a green suite was actively protecting the defect.**
+It is now `..._bulkBypassKeepsTheCuratorTitleAndPreservesSubjectWithoutUsage`; every other assertion it made
+(subject stamped, LLM tags applied, no usage spent) was correct and is kept.
+
+**6. The surface sweep, which found a user-facing false claim the diff would not have.**
+`bulk-generation-page-client.tsx:690` told curators *"Each note's title and tags are generated
+automatically"* — false for the title after this release. Corrected. `bulk-generation.md` (three separate
+claims, including a section that described the defect as the design), `study-pack-generation.md`,
+`bulk-regeneration.md`, and two stale `NoteBulkRegenerationService` comments citing the title overwrite as
+their justification were all corrected.
+
+**8. Instrumentation, added AT SIGNOFF because the checkpoint gate caught that none existed.** The
+suggestion card (item 3) shipped on an **owner override** against the audit's explicit recommendation to ship
+no suggestion action — which is the gate's named trigger — and **nothing measured whether curators ever take
+it.** `NOTE_TITLE_SUGGESTION_RESOLVED` now fires from both resolve paths with `action` = `applied` |
+`dismissed`. **⚠️ Verified EMITTING, not merely added to the enum:** frontend tests assert each emission, and
+removing a fire site fails a named test. It carries `[CHECKPOINT — due 2026-10-06]`, joined to the existing
+batch date per the consolidation rule. **⚠️ THE KILL CRITERION IS TO REMOVE THE CARD, NEVER TO RESTORE THE
+TITLE OVERWRITE** — the core fix rests on a reproduced defect and does not depend on this read. **⚠️ Its
+denominator clause is binding: the population is curators only and is plausibly one, so a null result is a
+RE-DATE, not a verdict.** This is the same shape as `v0.119.0`, whose gate also caught a missing signal at
+signoff.
+
+### Verification performed
+
+**Guards, all mutation-verified with the killing test named.** Re-adding
+`note.setTitle(normalizeEditableTitle(generated.title()))` fails **all four** real-row guards in
+`NativeQueryPostgresIntegrationTest` — `bulkGenerationKeepsTheCuratorTopicAsTheNoteTitle`,
+`bulkGenerationWithNoGeneratedTagsFallsBackToTheCuratorTopic`, `bulkAndSingleNoteGenerationPersistTheSameTitle`
+and `bulkGenerationPreservesALegitimateDisciplinaryQualifier`. Making the frontend dismissal in-memory fails
+`keeps the suggestion dismissed across a reload`.
+
+**⚠️ GUARD 5 (profile isolation) WAS ALREADY COVERED, AND THIS IS RECORDED HONESTLY RATHER THAN CLAIMED AS
+NEW WORK.** The audit's §8.5 asked for it; `resolveForBulkGeneration_curatorDoesNotInheritProfileProgram`
+already existed and already kills the mutant, because its `List.of()` fixture also falls through to the
+curator check. The new
+`resolveForBulkGeneration_neverLetsACuratorProfileCourseProgramBecomeTitleContext` adds **no mutation
+coverage**; it pins the production-shaped four-program input and documents why the fixture must not be
+"simplified" to one id — `resolveBulkCourseProgram:155-160` RETURNS EARLY when `ids.size() == 1`, so a
+one-id fixture would never reach the guard and would silently become vacuous.
+
+**Suites (final, at signoff):** backend **2189 executed, 0 failures** (counted from `target/surefire-reports/*.xml` after
+clearing the directory; `./mvnw clean install` exit status read directly, not through a pipe); frontend
+**2190 passed across 201 suites**; `tsc --noEmit` exit 0; ESLint 0 errors.
+
+**⚠️ THE REAL-REQUEST TEST WAS WRITTEN ANYWAY, AND THE FIRST ANSWER HERE WAS TOO COMFORTABLE.** No endpoint
+was added, so `CLAUDE.md`'s rule did not literally apply — but a check before signoff found
+`studyPackTitle` asserted in **zero** backend tests, while the frontend tests mock `lib/api` wholesale. **So
+nothing in either suite executed the field's serialization**, which is precisely the `v0.119.0` blind spot:
+a three-agent pressure test found six defects and still missed that the feature could not make one successful
+request. `NoteControllerTest.noteDetailResponseCarriesTheStudyPackTitleSeparatelyFromTheNoteTitle` now issues
+a real MockMvc request and asserts the field over the wire, with the pack title DISTINCT from the note's.
+
+**⚠️ AND A SECOND GUARD CLOSES THE SILENT NO-OP, WHICH WAS THE LIKELIEST WAY THIS RELEASE SHIPS GREEN AND
+DELIVERS NOTHING.** `NoteServiceTest.getById_carriesTheStudyPackTitleRatherThanTheNoteTitle` pins that the
+response carries the PACK's title: the plausible copy-paste `entity.getTitle()` compiles, keeps every other
+test green, and makes the two titles always equal — so the suggestion card would simply never appear, with
+no error anywhere. **Mutation-verified: that substitution fails this named test.**
+
+**Frontend mutants, both killed by named tests:** making the dismissal in-memory fails `keeps the suggestion
+dismissed across a reload`; removing the title comparison fails `does not offer a suggestion when the
+generated title already matches the note's`.
+
+**7. The learner-facing "AI" language sweep, continued (owner request, 2026-09-06).** `v0.101.0` ran the
+Category A sweep and left *"AI critique"* explicitly out of scope as *"its own owner decision"*; the owner
+took that decision here. Thirteen occurrences across seven files lose the prefix — the `AI Critique` mode chip
+on the landing page becomes **Per-Answer Critique**, and the marketing, Interview Practice, Challenge Quiz,
+Help Center and Learn-guide copy now say *critique* or *per-answer critique*.
+
+**⚠️ THE LOCKED CONTRACT SURVIVES THIS, WHICH IS WHY IT WAS SAFE.** `EXAM_MODES.md` names Interview
+Practice's differentiator as *"scenario-based questions + per-answer critique + Interview Readiness Report
+result framing"*. The word carrying the contract is **critique**, not **AI**, so the sub-mode's stated
+differentiator is unchanged and the five-mode contract is untouched.
+
+**⚠️ THE SEO SLUG IS DELIBERATELY NOT RENAMED.** `learn-guides.ts` keys the guide on an explicit
+`slug: "how-to-use-ai-critique-in-interview-practice"` that does **not** derive from the title, so the copy
+change breaks no URL — **but renaming the slug itself would break a live indexed page**, so it stays and
+`learn-page.md` records why.
+
+**⚠️ SIX OCCURRENCES REMAIN ON PURPOSE, AND REMOVING THEM WOULD BE A DIFFERENT KIND OF CHANGE.** `v0.101.0`
+placed disclosures in Category B and ruled them out of scope; that still binds. Kept verbatim: the Privacy
+Policy's *"AI Processing"* section and its processing description, the Terms' *"Abuse AI generation"*, the
+shared-quiz notice *"Questions and answers are AI-generated from your note. Review them before you share"*,
+the working-solution caption *"AI-generated — verify calculations"*, and the Learning Companion guide's
+*"AI-assisted per-section drafts … a human must review and save before anything is published."* **Each tells
+a user that machine-generated output needs their judgement; stripping the word would remove the disclosure,
+not rebrand it.**
+
+### Known limitations
+
+- **Dismissal is per-BROWSER, not per-account.** A curator who dismisses the suggestion on one machine sees
+  it again on another. Account-level dismissal needs a `notes` column and a migration, which this release's
+  anti-drift forbids; it would be its own release.
+- **Existing contaminated titles are NOT repaired.** No migration, no backfill, no rename. Sizing the debt
+  needs a production read plus a hand-check (many `% in %` matches are legitimate), and **the production
+  database is read-only for Claude — that query is the owner's to run.** Tracked by a Backlog Index row.
+- **The narrowed title-input contract (§19) is deferred**, with the finding that there is no title-producing
+  call to narrow recorded in its own Backlog row.
+
 ## v0.119.1 - Public Catalog Bounds
 
 **Status: Released** (kicked off and signed off 2026-09-06, base branch `releases/v0.119.1`, cut from

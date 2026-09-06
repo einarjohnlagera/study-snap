@@ -32,7 +32,20 @@ public record NoteResponse(
         Integer quizCount,
         boolean quickReviewAvailable,
         boolean challengeQuizAvailable,
-        boolean adaptivePracticeAvailable
+        boolean adaptivePracticeAvailable,
+        /**
+         * The Study Pack's own generated title, or null when the note has no pack.
+         *
+         * <p>⚠️ Added by v0.120.0 and it is NOT the note's title. Bulk Generate used to overwrite
+         * notes.title with this value; it no longer does, so the two can legitimately differ and the
+         * note detail page offers this one as a dismissible, opt-in suggestion.
+         *
+         * <p>⚠️ It is carried HERE rather than fetched, because GET /study-packs/{id} records an
+         * OPENED_STUDY_PACK activity event that drives the Dashboard's last-opened pack -- fetching it
+         * just to compare titles would make merely VIEWING a note rewrite that recommendation.
+         * Populated on the detail response only; list responses pass null.
+         */
+        String studyPackTitle
 ) {
     public NoteResponse(
             String id,
@@ -92,7 +105,8 @@ public record NoteResponse(
                 quizCount,
                 quickReviewAvailable,
                 challengeQuizAvailable,
-                adaptivePracticeAvailable
+                adaptivePracticeAvailable,
+                null
         );
     }
 
@@ -153,7 +167,8 @@ public record NoteResponse(
                 quizCount,
                 quickReviewAvailable,
                 challengeQuizAvailable,
-                adaptivePracticeAvailable
+                adaptivePracticeAvailable,
+                null
         );
     }
 }

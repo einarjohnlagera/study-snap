@@ -3568,6 +3568,14 @@ class NativeQueryPostgresIntegrationTest {
     private final class RegenerationHarness {
         private String noteContent = "Regenerated body.";
         private List<String> keyConcepts = List.of("Regenerated concept");
+        /**
+         * The STUDY PACK's generated title and tags. Defaults reproduce the values every pre-existing
+         * guard was written against; the v0.120.0 title guards override them so the generated title
+         * DIFFERS from the note's own -- a fixture where the two match passes under both the defect and
+         * the fix and proves nothing.
+         */
+        private String generatedPackTitle = "Regenerated pack";
+        private List<String> generatedTags = List.of("regenerated");
         private RuntimeException studyPackFailure;
         /** Runs after the second LLM call returns and before the commit transaction opens. */
         private Runnable beforeCommit;
@@ -3581,8 +3589,8 @@ class NativeQueryPostgresIntegrationTest {
                             beforeCommit.run();
                         }
                         return new GeneratedStudyPackContent(
-                                "Regenerated pack", "Regenerated summary", "Engineering",
-                                List.of("regenerated"), keyConcepts, List.of(),
+                                generatedPackTitle, "Regenerated summary", "Engineering",
+                                generatedTags, keyConcepts, List.of(),
                                 "test-model", 1, 1, 0, BigDecimal.ZERO);
                 });
             } else {
@@ -4529,5 +4537,154 @@ class NativeQueryPostgresIntegrationTest {
                     generatedQuizService
             );
         }
+    }
+
+    // ================================================================================================
+    // CANONICAL NOTE TITLE INTEGRITY (v0.120.0) -- REAL-ROW GUARDS.
+    //
+    // ⚠️ THE ASSERTION SITE IS THE WHOLE POINT AND IS THE ONE THING NOT TO "SIMPLIFY".
+    // NoteBulkGenerationService:322 already creates the Note with the curator's topic as its title, and
+    // it did so under the defect too -- so a test asserting the CREATE call passes while titles are
+    // being destroyed. The overwrite happened later, in the async transaction, inside
+    // applyBulkGeneratedMetadataToNote. These therefore assert the PERSISTED title after generation
+    // completes, read straight out of the notes table.
+    //
+    // ⚠️ AND THE FIXTURE MUST MAKE THE GENERATED TITLE DIFFER FROM THE TOPIC. If they are equal the
+    // assertion holds under both the defect and the fix. Every guard below overrides
+    // generatedPackTitle for that reason.
+    //
+    // ⚠️ NOT_SUPPORTED for the same reason as the regeneration guards above: under @DataJpaTest's
+    // rollback transaction dispatchAfterCommit registers a synchronization that never fires, so the
+    // worker would never run and every assertion would pass because nothing happened at all.
+    // ================================================================================================
+
+    /**
+     * THE OBSERVED DEFECT. A curator typed {@code Site Grading Principles} in Bulk Generate and the
+     * persisted title became {@code Site Grading Principles in Civil Engineering} -- a discipline that
+     * was not among the selected Applicable Programs, and that no context field contained.
+     *
+     * <p>The bulk branch is selected by a non-null {@code preservedSubject}, exactly as
+     * {@code NoteBulkGenerationService.processItem} always passes.
+     */
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void bulkGenerationKeepsTheCuratorTopicAsTheNoteTitle() {
+        UUID owner = seedCuratorUser("bulk-title-observed");
+        UUID noteId = seedBulkGenerationNote(owner, "Site Grading Principles");
+
+        RegenerationHarness harness = new RegenerationHarness();
+        harness.generatedPackTitle = "Site Grading Principles in Civil Engineering";
+        harness.service().startAsyncGenerationFromNote(
+                noteId.toString(), owner, false, false, null, "Site Planning");
+
+        assertThat(readNoteColumn(noteId, "status"))
+                .as("the Study Pack really was generated -- otherwise every assertion below is vacuous")
+                .isEqualTo("GENERATED");
+        assertThat(readNoteColumn(noteId, "title"))
+                .as("the curator's typed topic IS the canonical title; the Study Pack's generated title"
+                        + " stays on the Study Pack")
+                .isEqualTo("Site Grading Principles");
+        assertThat(readNoteColumn(noteId, "subject"))
+                .as("the curator's batch subject is still stamped -- the fix removes the title"
+                        + " overwrite only, and must not take the subject with it")
+                .isEqualTo("Site Planning");
+    }
+
+    /**
+     * The tags fallback. {@code resolveTags} consults its fallback title ONLY when the LLM returned no
+     * tags at all, so this is the only fixture that can discriminate -- with tags present the LLM's own
+     * values win under both behaviours and the assertion proves nothing.
+     *
+     * <p>⚠️ Under the old argument the note would be tagged with the DISCARDED generated title,
+     * reintroducing the contaminated string through the tag field after the title field was fixed.
+     */
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void bulkGenerationWithNoGeneratedTagsFallsBackToTheCuratorTopic() {
+        UUID owner = seedCuratorUser("bulk-title-tags");
+        UUID noteId = seedBulkGenerationNote(owner, "Site Grading Principles");
+
+        RegenerationHarness harness = new RegenerationHarness();
+        harness.generatedPackTitle = "Site Grading Principles in Civil Engineering";
+        harness.generatedTags = List.of();
+        harness.service().startAsyncGenerationFromNote(
+                noteId.toString(), owner, false, false, null, "Site Planning");
+
+        assertThat(readNoteColumn(noteId, "status")).isEqualTo("GENERATED");
+        assertThat(readNoteColumn(noteId, "tags"))
+                .as("the fallback tag is the note's OWN title, never the discarded generated one")
+                .isEqualTo("{\"Site Grading Principles\"}");
+    }
+
+    /**
+     * PATH PARITY. The single-note path has never overwritten a title; bulk was the anomaly. The same
+     * topic through both must persist the same title, which is what makes this a restoration of
+     * consistency rather than a new rule.
+     *
+     * <p>The two paths are distinguished exactly as production distinguishes them: a non-null
+     * {@code preservedSubject} routes into the bulk branch, a null one into
+     * {@code applyGeneratedMetadataToNote}.
+     */
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void bulkAndSingleNoteGenerationPersistTheSameTitle() {
+        UUID owner = seedCuratorUser("bulk-title-parity");
+        UUID viaBulk = seedBulkGenerationNote(owner, "Fluid Mechanics");
+        UUID viaSingleNote = seedBulkGenerationNote(owner, "Fluid Mechanics");
+
+        RegenerationHarness bulk = new RegenerationHarness();
+        bulk.generatedPackTitle = "Fluid Mechanics in Civil Engineering";
+        bulk.service().startAsyncGenerationFromNote(
+                viaBulk.toString(), owner, false, false, null, "Engineering");
+
+        RegenerationHarness single = new RegenerationHarness();
+        single.generatedPackTitle = "Fluid Mechanics in Civil Engineering";
+        single.service().startAsyncGenerationFromNote(
+                viaSingleNote.toString(), owner, true, false, null, null);
+
+        assertThat(readNoteColumn(viaBulk, "title"))
+                .isEqualTo(readNoteColumn(viaSingleNote, "title"))
+                .as("bulk stops diverging from the path that was always correct")
+                .isEqualTo("Fluid Mechanics");
+    }
+
+    /**
+     * ⚠️ THE FIX KEEPS THE CURATOR'S WORDS, WHATEVER THEY ARE -- it is not a suffix stripper.
+     * {@code Nursing Management of Acute Asthma} is a CORRECT title: the qualifier changes the
+     * knowledge promised, not the container it was authored in. A banned-substring implementation would
+     * pass the guard above and fail this one, which is why both are needed.
+     */
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void bulkGenerationPreservesALegitimateDisciplinaryQualifier() {
+        UUID owner = seedCuratorUser("bulk-title-qualifier");
+        UUID noteId = seedBulkGenerationNote(owner, "Nursing Management of Acute Asthma");
+
+        RegenerationHarness harness = new RegenerationHarness();
+        harness.generatedPackTitle = "Acute Asthma";
+        harness.service().startAsyncGenerationFromNote(
+                noteId.toString(), owner, false, false, null, "Nursing");
+
+        assertThat(readNoteColumn(noteId, "title"))
+                .as("the curator's qualifier survives -- the fix preserves their words rather than"
+                        + " stripping discipline terms, even when the LLM proposes a shorter title")
+                .isEqualTo("Nursing Management of Acute Asthma");
+    }
+
+    /**
+     * A bulk-generated Note starts life as the curator typed it: DRAFT, with the topic as its title.
+     * Deliberately NOT reusing {@code seedRegenerationNote}, which seeds GENERATED for the regeneration
+     * guards.
+     */
+    private UUID seedBulkGenerationNote(UUID ownerUserId, String curatorTopic) {
+        UUID id = UUID.randomUUID();
+        jdbcTemplate.update(
+                "insert into notes (id, owner_user_id, title, content, visibility, tags,"
+                        + " target_profile_type, status, subject, created_at, updated_at)"
+                        + " values (?, ?, ?, ?, 'PRIVATE', '{}', 'STUDENT', 'DRAFT', 'Site Planning',"
+                        + " now(), now())",
+                id, ownerUserId, curatorTopic, "Curator-authored body for " + curatorTopic + "."
+        );
+        return id;
     }
 }

@@ -418,6 +418,30 @@ function StudyPackFailureCard({
   );
 }
 
+
+/**
+ * Dismissal of the generated-title suggestion, keyed per note.
+ *
+ * ⚠️ localStorage, NOT sessionStorage, and the difference is deliberate: the sibling
+ * `notelib-awaiting-suggestion:` key arms a one-shot modal for the current visit, whereas this
+ * records a standing choice the curator expects to survive a reload (owner decision, v0.120.0).
+ *
+ * ⚠️ KNOWN LIMITATION, STATED RATHER THAN HIDDEN: this is per-BROWSER, not per-account. A curator who
+ * dismisses on one machine sees the suggestion again on another. Making it account-level means a
+ * `notes` column and a migration, which v0.120.0's anti-drift forbids -- that is its own release.
+ */
+const titleSuggestionDismissedKey = (noteId: string) => `notelib-title-suggestion-dismissed:${noteId}`;
+
+const isTitleSuggestionDismissed = (noteId: string) => {
+  try {
+    return globalThis.localStorage?.getItem(titleSuggestionDismissedKey(noteId)) === "1";
+  } catch {
+    // Private-mode browsers throw on storage access. Treat as "not dismissed": re-showing a
+    // dismissible suggestion is a far smaller failure than throwing on the note page.
+    return false;
+  }
+};
+
 export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDetailPageClientProps>) {
   const router = useRouter();
   const pathname = usePathname();
@@ -479,6 +503,11 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
   const [showGenerateStudyPackGuide, setShowGenerateStudyPackGuide] = useState(false);
   const [showQuickReviewGuide, setShowQuickReviewGuide] = useState(false);
   const [pendingSuggestion, setPendingSuggestion] = useState<PendingSuggestion | null>(null);
+  // v0.120.0: the persistent, opt-in title suggestion. See the memo below for why it is non-modal.
+  // The dismissal is persisted in localStorage; this state mirrors it only so that dismissing
+  // re-renders immediately instead of waiting for a remount.
+  const [dismissedTitleSuggestionNoteId, setDismissedTitleSuggestionNoteId] = useState<string | null>(null);
+  const [applyingPackTitle, setApplyingPackTitle] = useState(false);
   const [resolvingGeneratedMetadataSuggestion, setResolvingGeneratedMetadataSuggestion] = useState(false);
   const [applyingSuggestion, setApplyingSuggestion] = useState(false);
   const [generationMessageIndex, setGenerationMessageIndex] = useState(0);
@@ -1489,6 +1518,88 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
     }
   }, [applyingSuggestion, finalizeGeneratedRedirect, note, pendingSuggestion]);
 
+  /**
+   * THE PERSISTENT TITLE SUGGESTION (v0.120.0, owner decision (a)'s second half).
+   *
+   * v0.120.0 stopped Bulk Generate overwriting a curator's typed topic with the Study Pack's
+   * generated title. This is the opt-in half of that decision: the generated title stays AVAILABLE as
+   * a suggestion instead of being applied silently.
+   *
+   * ⚠️ NON-MODAL BY NECESSITY, NOT BY TASTE. The existing modal path
+   * (maybeShowGeneratedMetadataSuggestion) is armed from THIS page, by
+   * `notelib-awaiting-suggestion:{noteId}`, when the curator starts generation here. Bulk Generate
+   * never arms it, and a 50-item batch could not show 50 modals -- the curator is not sitting on any
+   * one note's page while the batch runs. So the bulk case needs a standing affordance.
+   *
+   * ⚠️ DERIVED AT RENDER TIME FROM `note.studyPackTitle`, WITH NO SECOND REQUEST, AND BOTH HALVES OF
+   * THAT MATTER. Fetching the pack via getMyStudyPack would have been the obvious implementation and
+   * is WRONG: `GET /study-packs/{id}` records an OPENED_STUDY_PACK activity event, which drives the
+   * Dashboard's last-opened pack (`DashboardService.findLastOpenedStudyPack`) -- so merely VIEWING a
+   * note would have rewritten what the curator's Dashboard recommends. Deriving from the note
+   * response also means the comparison re-evaluates whenever `note` changes, so renaming the note
+   * through the inline editor updates the card immediately instead of leaving a stale suggestion.
+   *
+   * ⚠️ Compared on `note.title`, NEVER on bulk provenance: no new column, and it serves any note
+   * whose titles have diverged.
+   */
+  const packTitleSuggestion = useMemo(() => {
+    if (!note || !canEditAuthoringMetadata) {
+      return null;
+    }
+    if (dismissedTitleSuggestionNoteId === note.id || isTitleSuggestionDismissed(note.id)) {
+      return null;
+    }
+    const packTitle = (note.studyPackTitle ?? "").trim();
+    return packTitle && packTitle !== (note.title ?? "").trim() ? packTitle : null;
+  }, [canEditAuthoringMetadata, dismissedTitleSuggestionNoteId, note]);
+
+  const applyPackTitleSuggestion = useCallback(async () => {
+    if (!note || !packTitleSuggestion || applyingPackTitle) {
+      return;
+    }
+    setApplyingPackTitle(true);
+    try {
+      const updated = await updateNote(note.id, {
+        title: packTitleSuggestion,
+        subject: note.subject,
+        courseProgramText: canEditAuthoringMetadata ? null : note.courseProgram ?? null,
+        courseProgramIds: canEditAuthoringMetadata ? savedApplicableProgramIds : [],
+        // PUT is a full replace: omitting these wipes them. Preserve what the note already carries.
+        domainContext: note.domainContext ?? null,
+        learnerLevel: note.learnerLevel ?? null,
+        tags: note.tags,
+        content: note.content,
+      });
+      // No explicit clear: the updated note carries the applied title, so the memo re-derives to null.
+      setNote(updated);
+      void trackAnalyticsEvent({
+        eventType: "NOTE_TITLE_SUGGESTION_RESOLVED",
+        metadata: { action: "applied", noteId: note.id },
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Could not apply the suggested title.";
+      setError(message);
+    } finally {
+      setApplyingPackTitle(false);
+    }
+  }, [applyingPackTitle, canEditAuthoringMetadata, note, packTitleSuggestion, savedApplicableProgramIds]);
+
+  const dismissPackTitleSuggestion = useCallback(() => {
+    if (!note) {
+      return;
+    }
+    try {
+      globalThis.localStorage?.setItem(titleSuggestionDismissedKey(note.id), "1");
+    } catch {
+      // The suggestion still clears for this visit even when the choice cannot be persisted.
+    }
+    setDismissedTitleSuggestionNoteId(note.id);
+    void trackAnalyticsEvent({
+      eventType: "NOTE_TITLE_SUGGESTION_RESOLVED",
+      metadata: { action: "dismissed", noteId: note.id },
+    });
+  }, [note]);
+
   const keepMineAndContinue = useCallback(() => {
     if (!pendingSuggestion) {
       return;
@@ -2157,6 +2268,40 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
               >
                 Try again
               </Button>
+            </Card>
+          ) : null}
+          {packTitleSuggestion ? (
+            <Card className="relative space-y-3 p-4 sm:p-6">
+              <button
+                type="button"
+                aria-label="Dismiss"
+                className="absolute right-3 top-3 rounded p-1 text-foreground/40 hover:text-foreground/70"
+                onClick={dismissPackTitleSuggestion}
+              >
+                <X className="h-4 w-4" />
+              </button>
+              <div className="space-y-1 pr-6">
+                <h2 className="text-base font-semibold">The Study Pack suggested a different title</h2>
+                <p className="text-sm text-foreground/80">
+                  Your title is kept. Generation proposed{" "}
+                  <span className="font-medium text-foreground">{packTitleSuggestion}</span>. Use it only
+                  if it describes the knowledge better — not because it names a course or programme.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={applyingPackTitle}
+                  onClick={() => void applyPackTitleSuggestion()}
+                >
+                  {applyingPackTitle ? "Applying…" : "Use this title"}
+                </Button>
+                <Button type="button" variant="ghost" size="sm" onClick={dismissPackTitleSuggestion}>
+                  Keep mine
+                </Button>
+              </div>
             </Card>
           ) : null}
           <Card className="space-y-4 p-4 sm:p-6">

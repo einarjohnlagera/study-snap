@@ -2,7 +2,7 @@
 
 ## Goal
 
-Bulk Generation lets an authenticated user enter one subject and a list of topics, then queue one generated note plus one Study Pack per topic. Each topic is a generation seed, matching the Note Create `Create from topic` flow. The AI generates the note content and later refines the note title and tags.
+Bulk Generation lets an authenticated user enter one subject and a list of topics, then queue one generated note plus one Study Pack per topic. Each topic is a generation seed, matching the Note Create `Create from topic` flow. The AI generates the note content and the tags; **the topic the curator typed remains the note title** (`v0.120.0` — see *Metadata Rule*).
 
 ## Access
 
@@ -26,7 +26,7 @@ Every batch contains:
 
 Subject is capped at 64 characters and learner-entered Course / Program at 120 characters, matching the columns they are persisted into. The API repeats those raw request bounds for fast failure and validates again after storage normalization, because dash normalization can lengthen an otherwise valid input. An over-long value returns a field-specific 400 before the batch is queued: no LLM call runs, no quota is consumed, and no note is created. This rejection rule applies to curator-supplied batch metadata; an over-long LLM-generated subject is instead clamped to 64 so generated Study Pack content is not lost over a secondary grouping field.
 
-Topics are discrete rows with `+ Add topic` and per-row removal. They are not note titles. A topic such as `Newton's Laws of Motion` seeds note-content generation; the Study Pack write-back supplies the AI-refined title and tags. The Topics helper states this expectation inline (title and tags are auto-generated; the subject and other batch details apply to every note) so users are not surprised by AI-named notes in their Library.
+Topics are discrete rows with `+ Add topic` and per-row removal. **A topic IS the note title** — a topic such as `Newton's Laws of Motion` both seeds note-content generation and becomes the note's title. The Study Pack write-back supplies tags. **⚠️ Before `v0.120.0` the write-back also replaced the title, and this line read "They are not note titles"; that described the defect.** The Topics helper copy must match: tags are auto-generated, and the subject and other batch details apply to every note.
 
 Pasting a multi-line block into a topic row splits it into one topic per line (`parsePastedTopics`). Splitting is on newlines only (CRLF-aware) — never on commas, because topics legitimately contain commas. Each line is trimmed, clamped to the topic max length, and has a single leading list marker stripped: bullets (`* - – — • · ‣ ◦`) and numbered prefixes (`1.` / `1)` / `(1)`), each requiring trailing whitespace so real topics like `.NET basics` and `1.5 inch standards` are left intact. The pasted-into row is filled when empty (otherwise the parsed rows are inserted after it), source order is preserved, and the import is capped at the topic max with a visible notice when lines are dropped — never silent truncation. Stripping is paste-time only; typed input is never altered.
 
@@ -98,7 +98,7 @@ The endpoint validates the request, queues one throttled background batch on the
 1. Validate the topic through content moderation.
 2. Resolve course/program, subject, Domain Context, and Note Learner Level through `StudyPackGenerationContextResolver`.
 3. Generate note content with the existing LLM note-from-topic operation.
-4. Create the note through `NoteService.create` with the topic as its initial title, all resolved batch metadata, and generated content.
+4. Create the note through `NoteService.create` with the topic as its title, all resolved batch metadata, and generated content. **That title is final — nothing downstream overwrites it (`v0.120.0`).**
 5. Apply PUBLIC visibility when requested.
 6. Start the existing async Study Pack generation pipeline.
 
@@ -118,16 +118,53 @@ This receipt is not a batch-job entity, not a progress table, not a per-item sta
 
 ## Metadata Rule
 
-The batch subject wins. Bulk Study Pack completion applies the AI-refined title and AI tags to the note, then re-applies the batch subject so the AI subject cannot replace it. This completion behavior is bulk-only and does not change normal single-note metadata suggestions.
+The batch subject wins, and **so does the curator's typed topic**. Bulk Study Pack completion stamps the
+batch subject onto the note (so the AI-suggested subject cannot replace it) and applies the AI tags. It does
+**not** touch the title. This completion behavior is bulk-only and does not change normal single-note
+metadata suggestions.
 
-**⚠️ That AI-refined title is the FINAL curated note title, and the chain is easy to misread.** The curator's typed topic is written to `notes.title` first and then **overwritten** — `StudyPackService.applyBulkGeneratedMetadataToNote` calls `note.setTitle(normalizeEditableTitle(generated.title()))`. So the Study Pack prompt's `Title` rule (`developer.txt`) is what actually decides curated titles, not the typed topic and not the note body's own heading. An earlier reading of this same code concluded the opposite; this doc is recorded as the more legible description of that four-hop path. **⚠️ `v0.97.0` UPDATE: the note
-body's own prompt (`note-generation-developer.txt`) now carries the SAME `Title` rule.** That does not change
-which prompt decides the final curated title — `developer.txt` still overwrites it — but it removes the
-divergence that made the four-hop path misreadable: previously the two prompts governed `title` by different
-rules (*"specific, academic, and anchored to the topic"* versus the semantic rule), so an intermediate title
-could be shaped by a rule the final one did not share. **⚠️ The unrun §5 read is what would have told us
-whether the body's first line feeds the final title; the owner lifted that gate on 2026-08-29 and both
-prompts were aligned rather than waiting to learn whether one would have sufficed. The query stays indexed.**
+**⚠️ CORRECTED BY `v0.120.0`, AND THE PREVIOUS TEXT HERE DESCRIBED A REAL DEFECT AS IF IT WERE THE DESIGN.**
+This section used to say the AI-refined title *"is the FINAL curated note title"*, because
+`StudyPackService.applyBulkGeneratedMetadataToNote` called `note.setTitle(normalizeEditableTitle(generated.title()))`
+unconditionally. **That line is gone.** It was reported from real use: a curator typed `Site Grading Principles`
+and the persisted title became `Site Grading Principles in Civil Engineering` — naming a discipline that was
+**not** among the four selected Applicable Programs, and that no context field contained. The model inferred it.
+
+**⚠️ THE CURATOR'S TYPED TOPIC IS NOW THE CANONICAL NOTE TITLE.** It is written at
+`NoteService.create` (which always did the right thing) and nothing overwrites it afterwards. The Study Pack's
+generated title stays on the Study Pack. **This restores consistency rather than inventing a rule** — the
+single-note path's `applyGeneratedMetadataToNote` has never set a title, and bulk was the anomaly.
+
+**⚠️ THE PROMPT RULE WAS NOT THE PROBLEM AND MUST NOT BE "STRENGTHENED" IN RESPONSE.** `developer.txt`'s
+`Title` rule already stated the correct semantic doctrine — added by `v0.96.0` — and was violated anyway.
+Removing the model's authority over canonical titles is structurally stronger than re-wording an instruction.
+`developer.txt` still governs the **Study Pack's** title, and `note-generation-developer.txt` still carries the
+same rule for the note body; keeping those two aligned remains correct (`v0.97.0`), it simply no longer decides
+what `notes.title` ends up being.
+
+**⚠️ WHY IT MATTERED BEYOND ONE WRONG TITLE:** `v0.118.0`'s regeneration contract is *"the Note's current title
+is the topic"*, so a contaminated title becomes the **seed for regenerated content** — `…in Civil Engineering`
+would have shaped the body of every future regeneration of that note.
+
+**The generated title is not discarded — it is offered.** On the note detail page, a curator whose note title
+differs from its Study Pack's title sees a **dismissible, opt-in** suggestion offering the generated one. It is
+non-modal by necessity: the existing suggestion modal is armed only when generation is started from that page,
+and a 50-item bulk batch cannot show 50 modals. **⚠️ Dismissal is stored per note in `localStorage`
+(`notelib-title-suggestion-dismissed:{noteId}`), so it survives a reload but is PER-BROWSER, not per-account** —
+account-level dismissal would need a `notes` column and a migration.
+
+**⚠️ THE SUGGESTION COSTS NO REQUEST, AND THAT IS A CORRECTNESS CONSTRAINT RATHER THAN AN OPTIMISATION.** The
+pack's title reaches the page on `NoteResponse.studyPackTitle` (populated on the detail response only), and the
+card is derived from `note.title !== note.studyPackTitle`. **Do NOT "simplify" this by fetching the pack with
+`getMyStudyPack`:** `StudyPackService.getById` records an `OPENED_STUDY_PACK` activity event, and
+`DashboardService.findLastOpenedStudyPack` reads exactly those rows — so fetching the pack merely to compare
+titles would make **viewing** a note rewrite what that curator's Dashboard recommends. A test asserts
+`getMyStudyPack` is not called. Deriving it also means the card re-evaluates whenever the note changes, so an
+inline rename updates it immediately instead of leaving a stale suggestion.
+
+**⚠️ Existing notes were NOT renamed.** `v0.120.0` stops new contamination; it ships no migration, no backfill
+and no mass rename. Titles already overwritten stay as they are, because many superficially similar titles are
+legitimate (*"Nursing Management of Acute Asthma"* is correct) and only a hand-check can tell them apart.
 
 ## Quota Model
 

@@ -38,7 +38,7 @@ Sub-modes are presentation/generation variants that share an existing engine dis
 
 | Sub-mode | Parent mode | Discriminator | Audience | Differentiator |
 |----------|-------------|---------------|----------|----------------|
-| Interview Practice | Adaptive Practice | `ADAPTIVE` + `subMode: "INTERVIEW"` | Professional profile, Pro plan at Start CTA | Scenario-based questions + per-answer AI critique + Interview Readiness Report result framing |
+| Interview Practice | Adaptive Practice | `ADAPTIVE` + `subMode: "INTERVIEW"` | Professional profile, Pro plan at Start CTA | Scenario-based questions + per-answer critique + Interview Readiness Report result framing |
 
 Adding a new sub-mode requires updating this table and the parent feature doc. A sub-mode that requires a new persistence aggregate, new session lifecycle state, or its own engine logic is **not a sub-mode** — it must be promoted to a full mode and go through the 5-mode contract review.
 
@@ -395,7 +395,7 @@ This doc proposes shape, not schedule. Concrete sequencing is owned by `ROADMAP.
 ### v0.14 (shipped)
 
 - ✅ **Multi-note Long Exam**: from a note, Pro users can add 1–3 additional notes from the same subject during the prestart step. **From a Study Plan (`v0.102.0`) the predicate is plan MEMBERSHIP instead of subject, and the cap is the learner-level-derived `maxSourceNotes` (6 / 8 / 10 including the primary) rather than 4.** This adds no mode — it is a capability on Long Exam, which this contract already anticipates. The primary Study Pack remains the session anchor, additional sources are stored as `sourceNoteRefs` in session JSONB, and questions are generated proportionally from each source without adding a new persistence aggregate.
-- ✅ **Interview Practice sub-mode**: Professional profile Pro users get an Adaptive Practice sub-mode with scenario MCQs, per-answer AI critique, dedicated monthly quota, and an Interview Readiness Report result screen. Runs on the `ADAPTIVE` discriminator with `subMode: "INTERVIEW"` in session JSONB. 5-mode contract preserved.
+- ✅ **Interview Practice sub-mode**: Professional profile Pro users get an Adaptive Practice sub-mode with scenario MCQs, per-answer critique, dedicated monthly quota, and an Interview Readiness Report result screen. Runs on the `ADAPTIVE` discriminator with `subMode: "INTERVIEW"` in session JSONB. 5-mode contract preserved.
 
 ### v0.15+ (later)
 

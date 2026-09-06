@@ -34,7 +34,7 @@ const STEPS: Step[] = [
     icon: MessageSquareText,
     title: "Answer and Review Critique",
     description:
-      "Answer scenario-based multiple choice questions, then see targeted AI critique on each answer.",
+      "Answer scenario-based multiple choice questions, then see targeted critique on each answer.",
     cta: { label: "Start Practice", href: "/library" },
   },
   {
@@ -49,7 +49,7 @@ const STEPS: Step[] = [
 
 const TIPS = [
   "Notes that cover one focused domain or role area produce the most useful practice questions.",
-  "Read the AI critique even on correct answers — it adds context that helps in real interviews.",
+  "Read the critique even on correct answers — it adds context that helps in real interviews.",
   "Use the Interview Readiness Report to decide which topics to study before the next session.",
   "Each session is 10 questions with a 2-minute soft pacing timer — treat it like a real interview round.",
 ];

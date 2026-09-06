@@ -444,9 +444,13 @@ failed-generation retry lands there), so a handler-scoped rule leaves a hole. Ga
 resolves the retry cases correctly: a failed **first** generation left no pack and still suggests; a
 failed **regeneration** left the original pack and does not.
 
-**⚠️ Bulk generation is a different mechanism and is unchanged.** It auto-applies the generated title and
-tags server-side via `applyBulkGeneratedMetadataToNote`, **preserving the curator's Subject**, and never
-used the suggestion modal at all.
+**⚠️ Bulk generation is a different mechanism.** It auto-applies the generated **tags** server-side via
+`applyBulkGeneratedMetadataToNote`, **preserving the curator's Subject**, and never used the suggestion modal
+at all. **⚠️ `v0.120.0` CORRECTION: it no longer applies the generated TITLE.** That overwrite discarded the
+curator's typed topic — persisting `Site Grading Principles in Civil Engineering` for a note typed as
+`Site Grading Principles` — and it is gone. The curator's topic is the canonical title; the generated title
+stays on the Study Pack and is offered on the note detail page as a dismissible, opt-in suggestion. See
+`bulk-generation.md` → *Metadata Rule*.
 
 ### What regeneration does not do
 

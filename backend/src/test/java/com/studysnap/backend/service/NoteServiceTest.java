@@ -805,6 +805,41 @@ class NoteServiceTest {
         verify(noteRepository).save(argThat(note -> note.getTargetProfileType() == NoteTargetProfileType.BOARD_TAKER));
     }
 
+    /**
+     * ⚠️ v0.120.0 — this is the guard that catches the SILENT NO-OP, which is this release's most
+     * likely way to ship green and deliver nothing.
+     *
+     * <p>The note detail response must carry the STUDY PACK's title, not the note's. A plausible
+     * copy-paste (`entity.getTitle()` instead of `studyPack.getTitle()`) compiles, keeps every other
+     * test green, and makes the two titles always equal — so the title-suggestion card would simply
+     * never appear, with no error anywhere.
+     *
+     * <p>⚠️ The fixture therefore gives the pack a DIFFERENT title from the note. Equal titles pass
+     * under both the correct mapping and the mutant.
+     */
+    @Test
+    void getById_carriesTheStudyPackTitleRatherThanTheNoteTitle() {
+        UUID ownerUserId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        NoteEntity note = buildNote(noteId, ownerUserId, NoteStatus.GENERATED, NoteVisibility.PRIVATE, "content");
+        note.setTitle("Site Grading Principles");
+        StudyPackEntity studyPack = buildStudyPack(noteId, "Summary");
+        studyPack.setTitle("Site Grading Principles in Civil Engineering");
+        when(noteRepository.findByIdAndOwnerUserId(noteId, ownerUserId)).thenReturn(Optional.of(note));
+        when(studyPackRepository.findByNoteId(noteId)).thenReturn(Optional.of(studyPack));
+
+        NoteResponse response = noteService.getById(noteId.toString(), ownerUserId);
+
+        assertThat(response.title())
+                .as("the note keeps the curator's own title")
+                .isEqualTo("Site Grading Principles");
+        assertThat(response.studyPackTitle())
+                .as("and the pack's generated title travels beside it -- this is the ONLY input the"
+                        + " title-suggestion card has, so mapping the note's title here would make the"
+                        + " card silently never appear")
+                .isEqualTo("Site Grading Principles in Civil Engineering");
+    }
+
     @Test
     void getById_mapsTransientGenerationStatuses() {
         UUID ownerUserId = UUID.randomUUID();

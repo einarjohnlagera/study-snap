@@ -3623,4 +3623,108 @@ describe("PrivateNoteDetailPageClient", () => {
     expect(pushMock).toHaveBeenCalledWith("/notes/note-1/challenge-quiz?entry=mode-selection");
     expect(screen.queryByText("Unlock Exam Mode")).not.toBeInTheDocument();
   });
+
+  // ==============================================================================================
+  // CANONICAL NOTE TITLE INTEGRITY (v0.120.0) -- the opt-in title suggestion.
+  //
+  // ⚠️ These exist because the release changes behaviour on this surface, and a diff that changes
+  // behaviour while touching no test that RUNS it is the shape this repo has shipped twice as a
+  // silent no-op. Each guard below names the fixture that would pass under a wrong implementation.
+  // ==============================================================================================
+
+  const curatorWithReadyPack = {
+    ...baseNote,
+    title: "Site Grading Principles",
+    studyPackStatus: "STUDY_PACK_READY" as const,
+    studyPackId: "sp-1",
+    studyPackTitle: "Site Grading Principles in Civil Engineering",
+  };
+
+  it("offers the generated title as an opt-in suggestion when it differs from the curator's", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({
+      planType: "PRO", emailVerifiedAt: "2026-03-21T09:00:00Z", profileType: "TEACHER",
+    });
+    (getNote as jest.Mock).mockResolvedValue(curatorWithReadyPack);
+
+    render(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    expect(await screen.findByText("Site Grading Principles in Civil Engineering")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Use this title" })).toBeInTheDocument();
+
+    (updateNote as jest.Mock).mockResolvedValue({
+      ...curatorWithReadyPack,
+      title: "Site Grading Principles in Civil Engineering",
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Use this title" }));
+    await waitFor(() =>
+      expect(trackAnalyticsEvent).toHaveBeenCalledWith({
+        eventType: "NOTE_TITLE_SUGGESTION_RESOLVED",
+        metadata: { action: "applied", noteId: "note-1" },
+      }));
+    // ⚠️ The suggestion must never cost a second request: GET /study-packs/{id} records
+    // OPENED_STUDY_PACK, which drives the Dashboard's last-opened pack, so fetching the pack here
+    // would let merely VIEWING a note rewrite that recommendation.
+    expect(getMyStudyPack).not.toHaveBeenCalled();
+  });
+
+  it("does not offer a suggestion when the generated title already matches the note's", async () => {
+    // ⚠️ THE DISCRIMINATING NEGATIVE. A fixture whose titles DIFFER passes under an implementation
+    // that renders the affordance unconditionally, which would nag on every note forever.
+    (getAuthUser as jest.Mock).mockReturnValue({
+      planType: "PRO", emailVerifiedAt: "2026-03-21T09:00:00Z", profileType: "TEACHER",
+    });
+    (getNote as jest.Mock).mockResolvedValue({
+      ...curatorWithReadyPack,
+      studyPackTitle: "Site Grading Principles",
+    });
+
+    render(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    await screen.findByText("Site Grading Principles");
+    expect(screen.queryByRole("button", { name: "Use this title" })).not.toBeInTheDocument();
+  });
+
+  it("never offers the suggestion to a non-curator", async () => {
+    // Bulk Generate is curator-gated, so a learner can never be in the state this repairs.
+    (getAuthUser as jest.Mock).mockReturnValue({
+      planType: "FREE", emailVerifiedAt: "2026-03-21T09:00:00Z", profileType: "STUDENT",
+    });
+    (getNote as jest.Mock).mockResolvedValue(curatorWithReadyPack);
+
+    render(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    await screen.findByText("Site Grading Principles");
+    expect(screen.queryByRole("button", { name: "Use this title" })).not.toBeInTheDocument();
+  });
+
+  it("keeps the suggestion dismissed across a reload", async () => {
+    // ⚠️ THE OWNER-REQUESTED BEHAVIOUR (2026-09-06), and the reason the dismissal is localStorage
+    // rather than the sessionStorage its sibling modal uses. Asserting only that the card disappears
+    // after a click passes under a purely in-memory dismissal, so this REMOUNTS -- which is what a
+    // reload does -- and asserts it stays gone.
+    (getAuthUser as jest.Mock).mockReturnValue({
+      planType: "PRO", emailVerifiedAt: "2026-03-21T09:00:00Z", profileType: "TEACHER",
+    });
+    (getNote as jest.Mock).mockResolvedValue(curatorWithReadyPack);
+
+    const first = render(<PrivateNoteDetailPageClient routeId="note-1" />);
+    fireEvent.click(await screen.findByRole("button", { name: "Keep mine" }));
+
+    // ⚠️ The checkpoint gate requires instrumentation verified EMITTING, not merely present: this
+    // event is the only way to learn whether curators ever take the suggestion or only dismiss it,
+    // and the card shipped on an owner override against the audit's recommendation.
+    expect(trackAnalyticsEvent).toHaveBeenCalledWith({
+      eventType: "NOTE_TITLE_SUGGESTION_RESOLVED",
+      metadata: { action: "dismissed", noteId: "note-1" },
+    });
+    await waitFor(() =>
+      expect(screen.queryByRole("button", { name: "Use this title" })).not.toBeInTheDocument());
+    first.unmount();
+
+    render(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    await screen.findByText("Site Grading Principles");
+    expect(screen.queryByRole("button", { name: "Use this title" })).not.toBeInTheDocument();
+    expect(window.localStorage.getItem("notelib-title-suggestion-dismissed:note-1")).toBe("1");
+  });
 });

@@ -1181,8 +1181,17 @@ class StudyPackServiceTest {
         assertThat(draftNote.getTags()).containsExactly("History", "Battle of Puebla", "Culture");
     }
 
+    /**
+     * ⚠️ REWRITTEN BY v0.120.0, NOT DELETED -- and the rename is the point. This test previously
+     * asserted {@code draftNote.getTitle()).isEqualTo("AI Refined Title")}, i.e. it PINNED THE DEFECT:
+     * bulk generation overwriting a curator's typed topic with the Study Pack's generated title. That
+     * is how the behaviour survived review -- a green suite was actively protecting it.
+     *
+     * <p>Everything else it checked was correct and is kept verbatim: the curator's batch subject is
+     * still stamped, the LLM's tags are still applied, and the bulk bypass still spends no usage.
+     */
     @Test
-    void startAsyncGenerationFromNote_bulkBypassPreservesSubjectAndAppliesAiTitleAndTagsWithoutUsage() {
+    void startAsyncGenerationFromNote_bulkBypassKeepsTheCuratorTitleAndPreservesSubjectWithoutUsage() {
         UUID userId = UUID.randomUUID();
         UUID noteId = UUID.randomUUID();
         NoteEntity draftNote = buildDraftNote(noteId, userId, "draft note content");
@@ -1224,9 +1233,15 @@ class StudyPackServiceTest {
         );
 
         assertThat(draftNote.getStatus()).isEqualTo(NoteStatus.GENERATED);
-        assertThat(draftNote.getTitle()).isEqualTo("AI Refined Title");
+        assertThat(draftNote.getTitle())
+                .as("the curator's typed topic IS the canonical title -- the generated"
+                        + " \"AI Refined Title\" stays on the Study Pack")
+                .isEqualTo("Pasted topic");
         assertThat(draftNote.getSubject()).isEqualTo("Admin Subject");
-        assertThat(draftNote.getTags()).containsExactly("ai-tag", "review");
+        assertThat(draftNote.getTags())
+                .as("the LLM's own tags still win whenever it returned any -- only the FALLBACK"
+                        + " changed, and it is consulted solely when the LLM returned none")
+                .containsExactly("ai-tag", "review");
         verify(studyPackUsageService, never()).resolveUsage(any(UUID.class), any(OffsetDateTime.class));
         verify(aiRateLimitService, never()).assertAllowed(any(UUID.class), any(PlanType.class), anyString());
         verify(userUsageService, never()).incrementStudyPackGeneration(any(UUID.class), any(OffsetDateTime.class));

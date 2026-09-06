@@ -664,6 +664,7 @@ export type AnalyticsEventType =
   | "GUIDANCE_TIP_CTA_CLICKED"
   | "QUIZ_REVIEW_EXPORTED"
   | "COPY_ON_SIGNUP_COMPLETED"
+  | "NOTE_TITLE_SUGGESTION_RESOLVED"
   | "QUIZ_SHARE_LINK_CREATED"
   | "QUIZ_SHARE_LINK_TOGGLED"
   | "QUIZ_SHARE_LINK_OPENED"
@@ -1770,6 +1771,12 @@ export type NoteResponse = {
   copiedAt: string | null;
   studyPackId?: string | null;
   studyPackStatus?: NoteStudyPackStatus;
+  /**
+   * The Study Pack's OWN generated title — not the note's. Since v0.120.0 the two can legitimately
+   * differ, and the note detail page offers this one as a dismissible, opt-in suggestion. Present on
+   * the detail response only; list responses omit it.
+   */
+  studyPackTitle?: string | null;
   summary: string | null;
   keyConcepts: string[];
   quiz: QuizItem[];

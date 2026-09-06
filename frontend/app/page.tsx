@@ -408,7 +408,7 @@ function ModeShowcaseSection() {
               </span>
             </p>
             <p className="text-sm text-foreground/75">
-              Scenario-based MCQ plus per-answer AI critique. Built for professionals preparing for job interviews.
+              Scenario-based MCQ plus per-answer critique. Built for professionals preparing for job interviews.
             </p>
           </div>
         </div>

@@ -441,4 +441,63 @@ class StudyPackGenerationContextResolverTest {
         curator.setCourseProgram(courseProgram);
         return curator;
     }
+
+    /**
+     * ⚠️ v0.120.0 GUARD 5 -- pins a hazard that is ONE REFACTOR from becoming live, so the fixture
+     * shape is load-bearing in both halves and must not be "simplified".
+     *
+     * <p>A curator's own profile Course/Program must never become authority over a canonical Note's
+     * generation context, and therefore over its title. Two independent guards hold that today: this
+     * one in {@code resolveBulkCourseProgram}, and the frontend curator branch omitting
+     * {@code courseProgramText} entirely. The frontend half is inert protection only --
+     * {@code bulk-generation-page-client.tsx} pre-fills the visible Course/Program field from the
+     * curator's profile UNGATED by curator status, so if that request branch is ever unified the
+     * profile silently becomes title context. This test is what fails when that happens.
+     *
+     * <p>⚠️ FOUR ids, NOT ONE. {@code resolveBulkCourseProgram} RETURNS EARLY inside its
+     * {@code ids.size() == 1} branch, so a one-id fixture never reaches the curator check at all and a
+     * mutant deleting {@code !CuratorAuthoringPredicate.isCurator(user)} SURVIVES it. With several ids
+     * the early return is skipped, the curator check is reached, and deleting it flips the result from
+     * null to the profile's value.
+     *
+     * <p>⚠️ AND {@code courseProgramText} MUST BE NULL, because the resolver ends in
+     * {@code firstNonBlank(courseProgramText, profileCourseProgram)} -- a non-null text value would
+     * supply the answer from the other argument and mask the guard entirely. Null is what the curator
+     * branch sends in production.
+     */
+    @Test
+    void resolveForBulkGeneration_neverLetsACuratorProfileCourseProgramBecomeTitleContext() {
+        UUID curatorId = UUID.randomUUID();
+        UserEntity curator = new UserEntity();
+        curator.setId(curatorId);
+        curator.setRole(UserRole.ADMIN);
+        curator.setOnboardingCompletedAt(OffsetDateTime.now());
+        curator.setLearnerLevel(LearnerLevel.COLLEGE);
+        curator.setCourseProgram("Civil Engineering");
+        when(userRepository.findById(curatorId)).thenReturn(Optional.of(curator));
+
+        List<UUID> fourUnrelatedPrograms = List.of(
+                UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID());
+
+        StudyPackGenerationContextResolver resolver = new StudyPackGenerationContextResolver(
+                userRepository, noteRepository, noteCourseProgramRepository, courseProgramCatalogRepository);
+
+        StudyPackGenerationContext context = resolver.resolveForBulkGeneration(
+                curatorId,
+                fourUnrelatedPrograms,
+                null,
+                "Site Planning",
+                DomainContext.ENGINEERING_SCIENCES,
+                LearnerLevel.COLLEGE
+        );
+
+        assertThat(context.courseProgram())
+                .as("a curator's own Course/Program is NOT authoring context -- this is the guard that"
+                        + " keeps 'Civil Engineering' out of a canonical note's generation input")
+                .isNull();
+        assertThat(context.subject())
+                .as("the curator's batch subject still reaches generation -- otherwise this test could"
+                        + " pass against a resolver that returns nothing at all")
+                .isEqualTo("Site Planning");
+    }
 }

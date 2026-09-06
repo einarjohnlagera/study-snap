@@ -1256,4 +1256,63 @@ class NoteControllerTest {
                 })
                 .build();
     }
+
+    /**
+     * ⚠️ v0.120.0 — the ONE real-request test the release owes.
+     *
+     * <p>The title-suggestion feature is driven entirely by {@code studyPackTitle} on the note detail
+     * response, and the frontend tests mock {@code lib/api} wholesale, so nothing else in either suite
+     * executes this field's SERIALIZATION. That is the exact blind spot {@code v0.119.0} shipped:
+     * a full three-agent pressure test found six defects and still missed that the feature could not
+     * make one successful request, because every tier read code and none exercised transport.
+     *
+     * <p>So this issues a real request through MockMvc and asserts the field over the wire, including
+     * that it is DISTINCT from the note's own title — the whole point of the release is that the two
+     * may legitimately differ, and a fixture where they match would pass even if the serializer
+     * emitted the wrong one.
+     */
+    @Test
+    void noteDetailResponseCarriesTheStudyPackTitleSeparatelyFromTheNoteTitle() throws Exception {
+        AuthenticatedUser routeUser = new AuthenticatedUser(UUID.randomUUID(), UserRole.USER, true, 1);
+        MockMvc mockMvc = buildMockMvc(routeUser);
+        UUID noteId = UUID.randomUUID();
+        when(noteService.getById(noteId.toString(), routeUser.userId())).thenReturn(new NoteResponse(
+                noteId.toString(),
+                "Site Grading Principles",
+                "Site Planning",
+                null,
+                null,
+                null,
+                List.of(),
+                "Body.",
+                "PRIVATE",
+                OffsetDateTime.now(),
+                OffsetDateTime.now(),
+                null,
+                null,
+                null,
+                false,
+                null,
+                UUID.randomUUID().toString(),
+                "STUDY_PACK_READY",
+                "Summary",
+                List.of(),
+                List.of(),
+                false,
+                null,
+                null,
+                null,
+                0,
+                false,
+                false,
+                false,
+                "Site Grading Principles in Civil Engineering"
+        ));
+
+        mockMvc.perform(get("/notes/" + noteId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.title").value("Site Grading Principles"))
+                .andExpect(jsonPath("$.studyPackTitle")
+                        .value("Site Grading Principles in Civil Engineering"));
+    }
 }
