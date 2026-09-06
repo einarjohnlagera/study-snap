@@ -13,8 +13,20 @@ jest.mock("@/lib/auth", () => ({
 }));
 
 jest.mock("@/components/notes/public-library-copy-action", () => ({
-  PublicLibraryCopyAction: ({ noteId }: { noteId: string }) => (
-    <button type="button" data-testid={`copy-action-${noteId}`}>Add to Library</button>
+  PublicLibraryCopyAction: ({
+    noteId,
+    onCopySuccess,
+  }: {
+    noteId: string;
+    onCopySuccess: (payload: { copiedNoteId: string; studyPackStatus: string }) => void;
+  }) => (
+    <button
+      type="button"
+      data-testid={`copy-action-${noteId}`}
+      onClick={() => onCopySuccess({ copiedNoteId: `copy-of-${noteId}`, studyPackStatus: "READY" })}
+    >
+      Add to Library
+    </button>
   ),
 }));
 
@@ -102,6 +114,18 @@ describe("shared quiz results — continue learning", () => {
 
     expect(await screen.findByTestId("copy-action-note-9")).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "View Note" })).not.toBeInTheDocument();
+  });
+
+  it("links to the copied note once an authenticated recipient saves it", async () => {
+    mockAuthUser = { id: "user-1" };
+    stubQuiz([SINGLE_CHOICE_QUESTION], [{ id: "note-9", title: "Cell Structure" }]);
+    render(<SharedQuizPage />);
+    await completeSingleQuestionQuiz();
+
+    fireEvent.click(await screen.findByTestId("copy-action-note-9"));
+
+    const saved = await screen.findByRole("link", { name: /Saved to your Library/ });
+    expect(saved).toHaveAttribute("href", "/notes/copy-of-note-9");
   });
 
   // ⚠️ THIS GUARD EXISTS BECAUSE ITS ABSENCE ALREADY COST A DEFECT. The v0.121.0 slice-2 change intended to
@@ -347,6 +371,51 @@ describe("shared quiz page", () => {
     await waitFor(() => {
       expect(getSharedQuizResultsMock).toHaveBeenCalledWith("tok123", [0, null, 3], [null, [2], null]);
     });
+  });
+
+  // ⚠️ Finding 7 from the slice 1-3 falsification pass: deleting this reduce's non-current-index branch
+  // left all 19 tests green, because the only counter assertion never left question 0. The value is the
+  // release's own rewrite and nothing exercised its actual job.
+  it("counts answers from questions the recipient has already left", async () => {
+    stubQuiz([SINGLE_CHOICE_QUESTION, MULTI_SELECT_QUESTION, SINGLE_CHOICE_QUESTION]);
+    render(<SharedQuizPage />);
+    await screen.findByText("Which one?");
+
+    expect(screen.getByText(/0 answered/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /Alpha/ }));
+    expect(screen.getByText(/1 answered/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Next Question" }));
+    await screen.findByText("Select all that apply");
+    // The first question is now behind us: its answer must still be counted.
+    expect(screen.getByText(/1 answered/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /Charlie/ }));
+    expect(screen.getByText(/2 answered/)).toBeInTheDocument();
+  });
+
+  // ⚠️ Finding 2: setSubmitError(null) sat after the isLastQuestion early return and handleBack never
+  // touched it, so a failed submit's message followed the recipient onto an unrelated question. Only
+  // reachable because Back now exists.
+  it("clears a failed submit's error when the recipient navigates away", async () => {
+    stubQuiz([SINGLE_CHOICE_QUESTION, MULTI_SELECT_QUESTION]);
+    getSharedQuizResultsMock.mockRejectedValue(new Error("boom") as never);
+    render(<SharedQuizPage />);
+    await screen.findByText("Which one?");
+
+    fireEvent.click(screen.getByRole("button", { name: /Alpha/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Next Question" }));
+    await screen.findByText("Select all that apply");
+    fireEvent.click(screen.getByRole("button", { name: /Bravo/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Submit Answers" }));
+
+    expect(await screen.findByText("Could not submit answers. Please try again.")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Back" }));
+    await screen.findByText("Which one?");
+
+    expect(screen.queryByText("Could not submit answers. Please try again.")).not.toBeInTheDocument();
   });
 
   it("offers no Back control on the first question", async () => {
