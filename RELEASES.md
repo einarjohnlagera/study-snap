@@ -110,6 +110,70 @@ rewritten.
 
 `tsc --noEmit` exit 0 · `npm run lint` exit 0 · `npm test` exit 0, **2224 passed / 201 suites**.
 
+**Items 4-7 — the request layer (inline).**
+
+- **The write consumes its own response (items 4 and 5, ONE mechanism, not two).** `PUT
+  /collections/{id}/items/order` already returns the same `NoteCollectionDetailResponse` that
+  `getCollection` returns; `persistLeafItems` **discarded it and then refetched that payload plus the
+  curator's entire note library.** It now applies the response directly through a new `applyLeafDetail`
+  helper, extracted from `refreshBuilder`'s own leaf branch so both paths set state identically.
+  **⚠️ ITEM 4 (`skipNotes: true`) IS THE AUDIT'S OWN "MINIMUM VIABLE VERSION" OF ITEM 5, so shipping
+  both on the same path would leave a redundant flag on a call that no longer happens.** The leaf path
+  takes item 5 and makes **no follow-up request at all**; the **Goal path keeps `refreshBuilder`** — the
+  response does not carry the child fan-out — **and takes `skipNotes: true` there**, which is where
+  item 4 actually lives.
+- **The note library is lazy (item 6).** `listNotes()` — unbounded, `contentPreview` and
+  `summaryPreview` per row — used to fire on collection load, on builder load, and again after every
+  non-drag mutation. It now loads **on picker open**. **⚠️ EVERY CONSUMER WAS VERIFIED DOWNSTREAM OF THE
+  PICKER rather than assumed**, which is the audit's own precondition: all three `noteById` maps sit on
+  add-note paths that cannot be reached without opening it, so nothing can read an empty map expecting a
+  note outside the collection. `refreshBuilder` still refreshes the list for paths that change the note
+  set — **but only once it exists**.
+- **⚠️ THE AUDIT'S "BOUND IT" SUB-ITEM IS DELIBERATELY NOT TAKEN, AND THE REASON IS A REGRESSION IT DOES
+  NOT RECKON WITH:** the picker filters **client-side over the whole library**, so passing a `limit`
+  would silently make notes beyond it **unaddable**. The audit names server-side picker search as the
+  longer-term fix; until that exists, bounding the fetch trades an invisible performance win for an
+  invisible correctness loss. Lazy loading already removes the fetch from both page loads.
+
+**⚠️ ITEM 7 IS CLOSED AS NOT-APPLICABLE, AND THIS IS AN EXECUTED RESULT RATHER THAN A SKIPPED ITEM.** The
+audit named six detail-page refetch sites and instructed that each be audited individually because "some
+may follow mutations that genuinely invalidate more than the collection." **All six turn out to be in that
+category, and the audit's premise — that they follow a mutation returning `NoteCollectionDetailResponse` —
+does not hold at any of them:**
+
+- **`:3000`, `:3002`** are inside `refetchAfterFailure`. There is **no successful mutation response to
+  consume** — resyncing after a failure is the whole point.
+- **`:3081`, `:3083`** follow `removeCollectionItem`, which is **`Promise<void>`** — the DELETE returns no
+  body, so there is nothing to consume. Making it return a detail is a **response-contract change**, which
+  is precisely the shape this release put out of scope for sequencing 4.
+- **`:3645`, `:4010`** are `getCollectionGoal` refetches that **already carry comments explaining why they
+  must stay**: `weeksRemaining`, `conceptsRemaining` and `todaysConceptBudget` exist **only** on
+  `GoalCollectionDetailResponse`, not on the `NoteCollectionDetail` the modal saves, so a client-side field
+  copy cannot refresh them.
+
+**⚠️ SO IMPLEMENTING ITEM 7 AS WRITTEN WOULD HAVE BEEN A NO-OP AT BEST AND A REGRESSION AT WORST** — the
+audit was written from a call-site list rather than from the mutations' return types. Recorded here so a
+later reader does not re-derive it, and its Backlog row is updated.
+
+**Guards — three, all mutation-verified with the killing test named.** **⚠️ The request-count assertion is
+the guard: a test asserting the label saved correctly passes under the defect by construction, because the
+defect was never about correctness.**
+
+| Mutant | Test that failed |
+|---|---|
+| restore the unconditional `refreshBuilder()` | *consumes the write's own response instead of refetching the collection and the note library* |
+| take item 4 alone (`skipNotes` but still refetch the collection) | *consumes the write's own response …* |
+| restore the eager note fetch on page load | *does not download the note library until a picker is opened* |
+| make the list lazy but never load it | *does not download the note library …* **and** *adds notes into one subject through the existing add-items endpoint* |
+
+**⚠️ ONE TEST-HARNESS CORRECTION WAS OWED AND IS RECORDED: the default `setCollectionItemOrder` mock
+returned a FIXED, UNRELATED collection's detail.** Harmless while the client discarded it; once the client
+consumes it, that mock fed the builder another collection's items. It now defers to whatever
+`getCollection` is configured to return for the same id, **which is what the server actually does** — and
+the `v0.95.1` stale-card-state guard passes unchanged against the faithful mock.
+
+`tsc --noEmit` exit 0 · `npm run lint` exit 0 · `npm test` exit 0, **2226 passed / 201 suites**.
+
 ## v0.122.0 - Shared Quiz Discoverability
 
 **Status: Released** (kicked off and signed off 2026-09-06, base branch `releases/v0.122.0`, cut from `main` after `v0.121.0` merged and tagged)
