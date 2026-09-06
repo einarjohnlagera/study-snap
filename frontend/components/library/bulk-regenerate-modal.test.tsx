@@ -7,12 +7,14 @@ jest.mock("@/lib/api", () => ({
   preflightNoteRegeneration: jest.fn(),
   bulkRegenerateNotes: jest.fn(),
   getBulkRegenerationReceipt: jest.fn(),
+  retryBulkRegeneration: jest.fn(),
 }));
 
 const api = jest.requireMock("@/lib/api") as {
   preflightNoteRegeneration: jest.Mock;
   bulkRegenerateNotes: jest.Mock;
   getBulkRegenerationReceipt: jest.Mock;
+  retryBulkRegeneration: jest.Mock;
 };
 
 function buildPreflight(
@@ -156,5 +158,69 @@ describe("BulkRegenerateModal", () => {
     expect(screen.getByText(/will stop rather than regenerate/i)).toBeInTheDocument();
     // A soft floor never blocks the button.
     expect(screen.getByRole("button", { name: /Regenerate 3 notes/i })).toBeEnabled();
+  });
+
+  it("offers retry for the failed items only, and never for a batch whose failures are all blocked", async () => {
+    api.bulkRegenerateNotes.mockResolvedValue({ batchId: "batch-1", scope: "STUDY_PACK", acceptedCount: 3 });
+    api.retryBulkRegeneration.mockResolvedValue({ batchId: "batch-2", scope: "STUDY_PACK", acceptedCount: 1 });
+    api.getBulkRegenerationReceipt.mockResolvedValue({
+      batchId: "batch-1",
+      scope: "STUDY_PACK",
+      totalCount: 3,
+      regeneratedCount: 1,
+      blockedCount: 1,
+      failedCount: 1,
+      notRunCount: 0,
+      pendingCount: 0,
+      finished: true,
+      stale: false,
+      // ⚠️ ONE entry against three items. The discriminating half: a fixture where everything failed
+      // would pass under a control that offers to re-run the whole batch, which would spend units on
+      // notes that already regenerated.
+      retryableNoteIds: ["note-3"],
+      items: [],
+    });
+
+    render(<BulkRegenerateModal isOpen noteIds={NOTE_IDS} onClose={jest.fn()} />);
+    const start = await screen.findByRole("button", { name: /Regenerate 3 notes/i });
+    await act(async () => {
+      fireEvent.click(start);
+    });
+
+    const retry = await screen.findByRole("button", { name: /Retry 1 failed/i });
+    expect(screen.getByText(/Blocked notes are not retried/i)).toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(retry);
+    });
+    // Addressed by BATCH id, never by a note list -- the server derives which items failed.
+    expect(api.retryBulkRegeneration).toHaveBeenCalledWith("batch-1");
+  });
+
+  it("offers no retry when nothing failed", async () => {
+    api.bulkRegenerateNotes.mockResolvedValue({ batchId: "batch-1", scope: "STUDY_PACK", acceptedCount: 3 });
+    api.getBulkRegenerationReceipt.mockResolvedValue({
+      batchId: "batch-1",
+      scope: "STUDY_PACK",
+      totalCount: 3,
+      regeneratedCount: 3,
+      blockedCount: 0,
+      failedCount: 0,
+      notRunCount: 0,
+      pendingCount: 0,
+      finished: true,
+      stale: false,
+      retryableNoteIds: [],
+      items: [],
+    });
+
+    render(<BulkRegenerateModal isOpen noteIds={NOTE_IDS} onClose={jest.fn()} />);
+    const start = await screen.findByRole("button", { name: /Regenerate 3 notes/i });
+    await act(async () => {
+      fireEvent.click(start);
+    });
+
+    expect(await screen.findByText(/Finished · 3 of 3 regenerated/i)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Retry/i })).not.toBeInTheDocument();
   });
 });

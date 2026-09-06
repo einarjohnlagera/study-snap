@@ -270,6 +270,26 @@ inline** for B3-B5.
     `CuratorAuthoringPredicate` from a bare role check. Both now pinned, the second by the cohort they
     actually disagree about: a **TEACHER-profile account mid-onboarding**.
 
+- **B5's retry-failed now exists (PR #1292).** The pressure test found it had never been built while
+  Planned Scope still claimed it and pre-declared guard 6 had no subject.
+  `POST /notes/bulk-regenerate/{batchId}/retry` re-runs the FAILED items **as a new batch**.
+  - **⚠️ IT TAKES A BATCH ID, NEVER A NOTE LIST.** The server derives the failed set, so "only the
+    failed ones" is a server guarantee rather than a client convention on a path that spends metered
+    units — a client sending the wrong ids would re-run `REGENERATED` notes, spending quota and
+    replacing good content with a second generation nobody asked for.
+  - **`REGENERATED` and `BLOCKED` are never retried.** A blocked item stays blocked until its condition
+    changes, so re-running it blindly fails again for the same reason; the curator fixes the cause and
+    re-selects deliberately. No auto-retry.
+  - **⚠️ A NEW BATCH ID IS MINTED, AND THAT IS LOAD-BEARING.** `writeItem` is find-then-save against the
+    unique `(batch_id, note_id)` with no lock, safe only while ONE driver owns a batch. Retrying into
+    the original would give one row two writers whenever a timed-out `RUNNING` worker is alive, and the
+    loser's violation is swallowed. This is the known limitation B1 recorded, closed rather than
+    inherited.
+  - It routes through `queueBatch`, so a retry re-runs the curator gate, the 422 and every per-item
+    guard — a retry can no more overspend than the original could — and inherits the original scope,
+    since retrying a Study-Pack-only batch as combined would replace note content nobody asked to
+    replace.
+
 ### Known limitations (B1/B2)
 
 - **Nothing sweeps a lost batch.** A driver thread killed mid-loop leaves `RUNNING`/`PENDING` rows until
