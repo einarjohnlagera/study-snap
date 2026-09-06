@@ -224,6 +224,76 @@ Previous: `v0.68.0 — Topic Note Rename` (on `releases/v0.68.0`, cut from `main
 
 Older released versions (`v0.41.0` and earlier, back to `v0.11.0`) are summarized in `docs/archive/ROADMAP_ARCHIVE.md`'s index and in full in `RELEASES.md` / `docs/archive/RELEASES_ARCHIVE.md` / `docs/releases/vX.Y.Z.md`.
 
+## What's next — sequenced 2026-09-06, after `v0.119.1` shipped
+
+**⚠️ READ THIS BEFORE SCANNING THE BACKLOG INDEX FOR CANDIDATES.** Seven plans were written 2026-09-05;
+four have shipped (`v0.117.0`, `v0.118.0`, `v0.119.0`, `v0.119.1`). This section records what remains and
+**in what order**, so a fresh session does not re-derive it from the plans themselves.
+
+### 1. NEXT — Canonical note title integrity (`docs/claude-plans/canonical-note-title-generation-integrity-stage1.md`)
+
+**The only remaining item that is a LIVE, REPRODUCED DEFECT ON CANONICAL CONTENT rather than a plan for
+a capability.** A curator entered `Site Grading Principles` in Bulk Generate and the persisted title
+became `Site Grading Principles in Civil Engineering` — with Civil Engineering **not** among the four
+selected Applicable Programs.
+
+**⚠️ THE CAUSE IS NEITHER OF THE TWO SUSPECTED ONES, AND RE-DERIVING THEM IS WASTED WORK.** It is not
+context contamination and not a missing prompt rule; the audit closes both (§3, §4). It is one
+unconditional mutation: **Bulk Generate creates the Note with the curator's topic as its title, then
+overwrites it with the STUDY PACK's generated title** — `applyBulkGeneratedMetadataToNote` does
+`note.setTitle(normalizeEditableTitle(generated.title()))`. Single-note generation never does this.
+**The fix deletes a later mutation rather than adding logic.**
+
+**⚠️ WHY IT IS ORDERED FIRST, AND IT IS AN ORDERING ARGUMENT RATHER THAN A SEVERITY ONE.** `v0.118.0`'s
+locked contract is *"the Note's current title is the topic"*, so a contaminated title becomes the **seed
+for regenerated content** — `…in Civil Engineering` would shape the body of every future regeneration of
+that note. **Fix titles before regenerating the canonical library**, or the ALE pass has to be redone.
+
+**⚠️ EXISTING NOTES ARE SAFE TODAY — verified in code during `v0.119.0`, not assumed.**
+`applyBulkGeneratedMetadataToNote` is **unreachable from regeneration**: the bulk driver passes
+`preservedSubject = null` deliberately, and single-note regeneration passes
+`autoApplyGeneratedMetadata = false`. The exposure is **authoring NEW notes via Bulk Generate**.
+
+**Three genuine owner decisions, each with the audit's recommendation** — take them at kickoff rather
+than mid-implementation: (a) should the curator topic always win, or should an explicit *"suggest a
+better title"* action exist? *(recommend: topic wins; no suggestion action — that is a feature, not part
+of stopping the regression)*; (b) what happens to LLM tags once the title is not applied? *(recommend:
+keep them, derived from the curator's topic rather than the discarded generated title)*; (c) is the
+narrowed title-input contract wanted? *(recommend: defer — the context was already clean, so it would
+not have prevented this)*.
+
+**⚠️ ANTI-DRIFT FROM THE AUDIT: do NOT add Course/Program suffixes by default, and do NOT infer a title
+from Applicable Programs, Review Set, Subject Plan or Domain Context.** No migration, no renames of
+existing notes, no regeneration pass — the audit is explicit that Stage 1 covers none of those.
+
+### 2. PAIRED, AND BLOCKED ON A CONVERSATION — shared quiz recipient experience + supporter progress
+
+`docs/claude-plans/shared-quiz-recipient-experience-plan.md` and
+`docs/claude-plans/supporter-progress-visibility-audit.md` are **companions and must be read together**;
+the recipient plan's §8 supersedes the supporter audit where they differ.
+
+**⚠️ DO NOT KICK EITHER OFF AS-IS.** The recipient plan opens by stating that **three owner decisions are
+contradicted by the repo** — not disagreements with the direction, but *missing substrate the direction
+assumes exists*. **Read its §1 before anything else.** That is an owner conversation first and a release
+second.
+
+### 3. EXPLICITLY NOT SCHEDULED — quiz assignments
+
+`docs/claude-plans/quiz-assignments-learning-connections-stage1.md` is marked **NOT IMPLEMENTED, NOT
+SCHEDULED** by its own author. It exists to stop the shared-quiz work drifting into the wrong
+abstraction (*"Sharing is lightweight. Assignment is relational."*). **It is not a candidate; do not
+scope it because it sits beside two plans that are.**
+
+### Not releases, but owed
+
+- **⚠️ THE ALE REVIEW SET CURATOR PASS IS UNBLOCKED.** It was the stated reason `v0.119.0` overrode its
+  own plan's §14 sequencing. It is curator time, not engineering. **See item 1 above for the ordering
+  constraint: do the title fix before authoring new ALE notes through Bulk Generate.**
+- **⚠️ OWNER ACTION: repoint Render's `healthCheckPath` to `/api/actuator/health/liveness`**, or
+  `v0.119.1`'s Leg C is inert. Its own Backlog row carries the detail.
+
+---
+
 ## Prioritization Lens & Strategic Frame (added 2026-07-28 — read before scoping or reprioritizing anything below)
 
 > ### Ratified product vision — 2026-08-05. Read this first; it governs everything below.
@@ -421,7 +491,7 @@ evidence.
 | **The regeneration quota race is narrowed, not closed** | same finding | **ACCEPTED RESIDUAL, recorded rather than fixed.** Quota is checked before dispatch and again inside the async worker with the LLM call in between, and the charge lands only at commit — so a burst passes the first check and some fail the second. `v0.119.0` discloses remaining allowance, which narrows the window; it does not remove it. **The async attribution branch is defensive and is NOT covered by a test** — reaching it needs quota to vanish inside a single item, a window the harness cannot open. | Closing it needs either a user-row lock across the LLM call (**forbidden by `v0.107.0`** — would serialize every quiz start and undo `v0.112.0`) or reserve-then-refund (**breaks `v0.118.0`'s one-commit money property** and re-opens a refund question declined three times). **Un-parks only if the race is observed biting a real curator again.** | 2026-09-06 |
 | **Public catalog unbounded read — production outage fix** | `docs/claude-findings/2026-09-05-prod-outage-public-catalog-unbounded-read.md`, plan at `docs/claude-plans/2026-09-05-public-catalog-unbounded-read-fix-plan.md` | **OPEN, plan written, deliberately deferred.** Owner ruled 2026-09-05 that it ships **after** `v0.119.0`, because ALE Review Set work was blocked on bulk regeneration. **Confirmed unrelated to the regeneration failures** — checked 2026-09-06: zero non-terminal `exam_question_pool` rows, nothing stuck `GENERATING`. | **Un-parks the moment `v0.119.0` is signed off.** | 2026-09-06 |
 | **Generation-failure triage query set** | `docs/claude-plans/2026-09-05-generation-failure-triage-read.sql` | **SUPERSEDED IN PART.** Written by the Prod Investigator session when the Render MCP was down. Q1/Q5/Q7/Q9 were run 2026-09-06 and answered: **not the outage, not the pipeline — quota exhaustion.** Q2/Q3/Q4/Q6/Q8 were never needed. Retained because the query set is reusable for the next generation incident. | Keep as a triage tool; no action owed. | 2026-09-06 |
-| **Canonical note title generation integrity (Stage 1 audit)** | `docs/claude-plans/canonical-note-title-generation-integrity-stage1.md` (2026-09-05) | **UNINDEXED UNTIL NOW — added by the `v0.119.0` audit, which is exactly what kickoff step 8 exists to catch.** Observed defect: curator entered `Site Grading Principles` in Bulk Generate and the persisted title became `Site Grading Principles in Civil Engineering`, with Civil Engineering **not** among the four selected Applicable Programs. Stage 1 audit only — no implementation, no migration, no renames. | Owner decision on whether to scope Stage 2. **⚠️ Related to `v0.096.0`'s curated-title rule; do NOT re-derive that rule, and do NOT add per-program title logic.** | 2026-09-06 |
+| **Canonical note title generation integrity (Stage 1 audit)** — ⚠️ **SEQUENCED FIRST, see "What's next" above** | `docs/claude-plans/canonical-note-title-generation-integrity-stage1.md` (2026-09-05) | **UNINDEXED UNTIL NOW — added by the `v0.119.0` audit, which is exactly what kickoff step 8 exists to catch.** Observed defect: curator entered `Site Grading Principles` in Bulk Generate and the persisted title became `Site Grading Principles in Civil Engineering`, with Civil Engineering **not** among the four selected Applicable Programs. Stage 1 audit only — no implementation, no migration, no renames. | Owner decision on whether to scope Stage 2. **⚠️ Related to `v0.096.0`'s curated-title rule; do NOT re-derive that rule, and do NOT add per-program title logic.** | 2026-09-06 |
 | **⚠️ OWNER ACTION OWED: repoint Render's `healthCheckPath` to `/api/actuator/health/liveness`** | `v0.119.1` Leg C | **LEG C IS INERT UNTIL THIS IS DONE, AND THE CONFIG ALONE LOOKS COMPLETE — which is exactly why it is a row rather than a comment.** `/actuator/health` aggregates every indicator regardless of groups; groups are exposed only at `/actuator/health/{group}`. The liveness group excluding `db` is shipped and tested, but the platform is still probing the db-dependent endpoint, so a pool saturated by our own query can still get a healthy instance restarted. Render settings are the owner's, not Claude's. | **Un-parks by doing it.** Verify afterwards that `/api/actuator/health/liveness` returns 200 and that `/api/actuator/health/readiness` still reports `db`. **⚠️ Until then, do NOT record Leg C as having addressed the restart behaviour.** | 2026-09-06 |
 | **An `(event_type, entity_id)` index on `analytics_events`** | `v0.119.1` Leg A residual | **OPEN.** `RECOMMENDED` is now bounded per row but still aggregates the three metric tables once per request, so it is O(catalog + events) **in the database**. `analytics_events` has no index on `entity_id`, so the ranked default uses pre-aggregated derived-table joins — matching the old aggregate's cost rather than beating it. An index would make it index-only. | Needs a migration, which `v0.119.1` forbids. **Un-parks at the next release that may add one.** ⚠️ Size it against real row counts first — this is a metrics table and the index is not free to maintain. | 2026-09-06 |
 | **`OfficialChallengeQuizTemplateService:81` loads the whole public catalog** | `v0.119.1` Leg A sweep | **OPEN, and deliberately out of `v0.119.1`'s scope.** It is the last `findByVisibilityOrderByUpdatedAtDesc(PUBLIC)` caller. **Different risk class — it is NOT anonymous and not on a hot read path** — but it is the same defect shape, and this shape has now crossed a growth threshold three times. | Assess when the catalog next grows materially, or immediately if the pool saturates again on a non-`/notes/public` path. | 2026-09-06 |
