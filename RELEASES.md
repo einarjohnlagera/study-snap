@@ -165,6 +165,52 @@ substrate, no cross-user read, no money or quota semantics, no migration.
   presented the bump as the answer to this class of failure. **It was raised 10 → 20 and the same
   failure recurred at 20** — said in the file so a later session does not raise it to 40.
 
+- **Leg A — the root cause: the server-side work is now bounded by the database (PR #1298).**
+  `findPublicLibraryCandidates` and its projection are **deleted** — the unbounded query no longer
+  exists to be called. The ranked branch, `listPublicLegacy` and `getPublicLibraryDiscoverySections`
+  all move to bounded SQL (`LIMIT`/`OFFSET` plus a matching `count(*)`), and ~200 lines of Java
+  filter/rank/limit helpers go with them.
+  - **⚠️ THE RANKING WAS MOVED INTO SQL FAITHFULLY, NOT REPLACED.** Score, 30-day-half-life decay with
+    its 10% floor, the copies×3 / likes×2 / views×1 weights, both eligibility filters and the whole
+    comparator chain — including the final `n.id asc` tiebreak the Java path got implicitly from a
+    stable sort. Weights and thresholds are now public constants the SQL is built from, so there is
+    **one** definition. **Evidence: `rankedSortsPreserveEligibilityAndUngatedSemantics` PREDATES this
+    change, was NOT edited, and passes unmodified** — verified against the base branch, not trusted.
+  - **⚠️ THE PLAN'S §1.5 IS CORRECTED: "the default is `RECOMMENDED`" is true of the PAGINATED branch
+    only.** `sortPublicLibraryItems` returned items untouched when `sort == null`, so the unpaginated
+    default was `updated_at desc` — and `dashboard-community-notes-section.tsx:76` is a live caller
+    sending no `sort`. Routing A1 through `parsePublicLibrarySort` would have **silently re-ranked that
+    dashboard section**. Preserved via a nullable sort meaning "natural order".
+  - **Three stated behaviour changes**, none moving a live caller: an unpaginated request with no
+    `size` is capped at **50** (was: the whole catalog) — every live caller already passes `size`, which
+    the controller clamps to ≤50; legacy `FEATURED` eligibility and `TITLE` blank-handling now use the
+    SQL definitions the paginated path already shipped; and legacy `contentPreview` derives from the
+    2000-char projection rather than the full body, **which is the point of the fix**.
+  - **⚠️ 18 `listPublic_*` tests were DELETED, with the reason recorded at the deletion site.** They
+    stubbed `findByVisibilityOrderByUpdatedAtDesc` and asserted Java filtering that no longer exists; a
+    mocked repository cannot assert an `ORDER BY` or a `LIMIT`, so a rewrite would have stubbed an id
+    order and asserted the same order came back. Coverage moved to real-row tests on PostgreSQL 18.
+
+### Known limitations
+
+- **⚠️ A FOURTH INSTANCE OF THE SAME DEFECT REMAINS, AND IT IS PLAUSIBLY THE ACTUAL OUTAGE TRIGGER.**
+  `NoteService.getPublicBySeoPath:1149` is anonymous, `@Transactional(readOnly = true)`, and loads
+  **every public `NoteEntity` including `content`** before filtering on slugs in Java — called on each
+  of the ~250 SEO note-detail pages, making it **heavier per call** than any of A1/A2/A3. Two facts,
+  deliberately not joined: the incident file lists an SEO-page burst as an unconfirmed candidate, **and**
+  the leak stack named `listPublic`, not this path. Left because the fix needs a decision rather than
+  code — `normalizedSlugSql` is already the SQL twin of the Java `slugify`, but the blank-value slug
+  defaults and "which of several matching notes wins" are **public SEO URL semantics**.
+- **`RECOMMENDED` is bounded per row, not per catalog.** The ranked default still aggregates the three
+  metric tables once per request, so it is O(catalog + events) **in the database**. What this removes is
+  the 1,442 entity + projection + DTO materialisations, three round trips, and the JVM-side hold that
+  exhausted the pool. `RECENT`/`TITLE`/legacy-null now do **zero** metric aggregates where the old
+  branch always did four. **`analytics_events` has no index on `entity_id`** — an `(event_type,
+  entity_id)` index would make this index-only, and is an owner follow-up because this release forbids
+  a migration.
+- **`OfficialChallengeQuizTemplateService:81`** does the same full-catalog entity load. Different risk
+  class — not anonymous — and out of scope here.
+
 ## v0.119.0 - Curator Bulk Regeneration
 
 **Status: Released** (kicked off 2026-09-05, signed off 2026-09-06, base branch `releases/v0.119.0`,

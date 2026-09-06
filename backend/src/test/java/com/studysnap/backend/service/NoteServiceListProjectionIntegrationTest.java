@@ -116,6 +116,26 @@ class NoteServiceListProjectionIntegrationTest {
                     foreign key (course_program_id) references course_programs(id)
                 )
                 """);
+        // The ranked public-library ordering aggregates engagement metrics in SQL as of v0.119.1,
+        // so these two tables have to exist even where a test seeds no rows in them.
+        jdbcTemplate.execute("""
+                create table if not exists analytics_events (
+                    id uuid primary key,
+                    user_id uuid,
+                    event_type varchar(64) not null,
+                    entity_id uuid,
+                    metadata_json varchar(2000) not null default '{}',
+                    created_at timestamp with time zone not null
+                )
+                """);
+        jdbcTemplate.execute("""
+                create table if not exists public_note_likes (
+                    id uuid primary key,
+                    note_id uuid not null,
+                    user_id uuid not null,
+                    created_at timestamp with time zone not null
+                )
+                """);
     }
 
     @Test
@@ -191,8 +211,23 @@ class NoteServiceListProjectionIntegrationTest {
         assertThat(refreshed.learnerLevel()).isEqualTo(LearnerLevel.COLLEGE.name());
     }
 
+    /**
+     * ⚠️ REWRITTEN in v0.119.1, and the property it pins is deliberately the OPPOSITE of the one it
+     * used to pin.
+     *
+     * <p>It previously asserted that the unpaginated {@code listPublic} read {@code content} WITHOUT a
+     * {@code substring} — i.e. that it built its preview from the full entity body. That was true, and
+     * it was the defect: serving the anonymous public list meant loading every public note's entire
+     * content into the heap inside a read-only transaction. The unpaginated shape now reads the same
+     * bounded projection the paginated shape always read, which truncates the body in SQL.
+     *
+     * <p>What must NOT change is the preview a reader sees, so this now pins two things: the preview
+     * still equals {@code buildContentPreview} over the real body, and the unpaginated and paginated
+     * shapes agree on it — which is the check that would fail if the truncation were ever tightened
+     * below the preview length.
+     */
     @Test
-    void listPublicStillBuildsItsPreviewFromTheFullEntityContent() {
+    void listPublicBuildsTheSamePreviewFromTheBoundedProjectionAsThePaginatedShape() {
         UUID ownerUserId = UUID.randomUUID();
         String longContent = realisticLongContent();
         saveNote(ownerUserId, LONG_NOTE_TITLE, longContent, BASE_TIME, NoteVisibility.PUBLIC);
@@ -201,13 +236,20 @@ class NoteServiceListProjectionIntegrationTest {
         SqlCaptureStatementInspector.clear();
 
         var response = noteService.listPublic(null, null, null, null, null, null, null, null);
+        var paginated = noteService.listPublic(
+                null, null, null, null, null, null, null, null, null, 0, 20, false, List.of());
 
         assertThat(response.items()).singleElement()
                 .extracting(NoteListItemResponse::contentPreview)
                 .isEqualTo(ContentPreviewUtils.buildContentPreview(longContent, CONTENT_PREVIEW_MAX_LENGTH));
-        assertThat(selectStatements()).anySatisfy(sql -> assertThat(sql.toLowerCase())
-                .contains("content")
-                .doesNotContain("substring"));
+        assertThat(paginated.items()).singleElement()
+                .extracting(NoteListItemResponse::contentPreview)
+                .isEqualTo(response.items().getFirst().contentPreview());
+        assertThat(selectStatements())
+                .as("the unpaginated shape must no longer select an untruncated content column")
+                .noneSatisfy(sql -> assertThat(sql.toLowerCase())
+                        .contains(" n.content ")
+                        .doesNotContain("substring"));
     }
 
     @Test
