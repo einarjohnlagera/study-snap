@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import SharedQuizPage from "./page";
-import { getPublicSharedQuiz, getSharedQuizResults } from "@/lib/api";
+import { getPublicSharedQuiz, getSharedQuizResults, trackAnalyticsEvent } from "@/lib/api";
 
 jest.mock("next/navigation", () => ({
   useParams: () => ({ token: "tok123" }),
@@ -21,6 +21,7 @@ jest.mock("@/lib/api", () => ({
 
 const getPublicSharedQuizMock = getPublicSharedQuiz as jest.MockedFunction<typeof getPublicSharedQuiz>;
 const getSharedQuizResultsMock = getSharedQuizResults as jest.MockedFunction<typeof getSharedQuizResults>;
+const trackAnalyticsEventMock = trackAnalyticsEvent as jest.MockedFunction<typeof trackAnalyticsEvent>;
 
 const MULTI_SELECT_QUESTION = {
   question: "Which apply?",
@@ -124,6 +125,42 @@ describe("shared quiz page", () => {
     fireEvent.click(screen.getByRole("button", { name: "Submit Answers" }));
 
     await waitFor(() => expect(getSharedQuizResultsMock).toHaveBeenCalledWith("tok123", [1], [null]));
+  });
+
+  it("records a completion once a recipient's answers are graded", async () => {
+    stubQuiz([SINGLE_CHOICE_QUESTION]);
+    getSharedQuizResultsMock.mockResolvedValue({ score: 1, total: 1, items: [] } as never);
+    render(<SharedQuizPage />);
+    await screen.findByText("Which one?");
+
+    fireEvent.click(screen.getByRole("button", { name: /Bravo/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Submit Answers" }));
+
+    await waitFor(() => {
+      expect(trackAnalyticsEventMock).toHaveBeenCalledWith({
+        eventType: "QUIZ_SHARE_LINK_COMPLETED",
+        entityId: "quiz-1",
+        metadata: { token: "tok123", score: 1, total: 1 },
+      });
+    });
+  });
+
+  // ⚠️ The discriminating half. An event fired before/regardless of grading would satisfy the test above
+  // while inflating the completion rate with submissions that never produced a score -- which is exactly
+  // the metric the release checkpoint reads.
+  it("records no completion when grading fails", async () => {
+    stubQuiz([SINGLE_CHOICE_QUESTION]);
+    getSharedQuizResultsMock.mockRejectedValue(new Error("boom") as never);
+    render(<SharedQuizPage />);
+    await screen.findByText("Which one?");
+
+    fireEvent.click(screen.getByRole("button", { name: /Bravo/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Submit Answers" }));
+
+    expect(await screen.findByText("Could not submit answers. Please try again.")).toBeInTheDocument();
+    expect(
+      trackAnalyticsEventMock.mock.calls.some(([call]) => call?.eventType === "QUIZ_SHARE_LINK_COMPLETED"),
+    ).toBe(false);
   });
 
   it("aligns answers and multiAnswers positionally across a mixed quiz", async () => {
