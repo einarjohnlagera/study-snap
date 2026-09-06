@@ -3650,6 +3650,17 @@ describe("PrivateNoteDetailPageClient", () => {
 
     expect(await screen.findByText("Site Grading Principles in Civil Engineering")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Use this title" })).toBeInTheDocument();
+
+    (updateNote as jest.Mock).mockResolvedValue({
+      ...curatorWithReadyPack,
+      title: "Site Grading Principles in Civil Engineering",
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Use this title" }));
+    await waitFor(() =>
+      expect(trackAnalyticsEvent).toHaveBeenCalledWith({
+        eventType: "NOTE_TITLE_SUGGESTION_RESOLVED",
+        metadata: { action: "applied", noteId: "note-1" },
+      }));
     // ⚠️ The suggestion must never cost a second request: GET /study-packs/{id} records
     // OPENED_STUDY_PACK, which drives the Dashboard's last-opened pack, so fetching the pack here
     // would let merely VIEWING a note rewrite that recommendation.
@@ -3698,6 +3709,14 @@ describe("PrivateNoteDetailPageClient", () => {
 
     const first = render(<PrivateNoteDetailPageClient routeId="note-1" />);
     fireEvent.click(await screen.findByRole("button", { name: "Keep mine" }));
+
+    // ⚠️ The checkpoint gate requires instrumentation verified EMITTING, not merely present: this
+    // event is the only way to learn whether curators ever take the suggestion or only dismiss it,
+    // and the card shipped on an owner override against the audit's recommendation.
+    expect(trackAnalyticsEvent).toHaveBeenCalledWith({
+      eventType: "NOTE_TITLE_SUGGESTION_RESOLVED",
+      metadata: { action: "dismissed", noteId: "note-1" },
+    });
     await waitFor(() =>
       expect(screen.queryByRole("button", { name: "Use this title" })).not.toBeInTheDocument());
     first.unmount();

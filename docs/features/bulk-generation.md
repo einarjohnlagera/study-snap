@@ -153,6 +153,15 @@ and a 50-item bulk batch cannot show 50 modals. **⚠️ Dismissal is stored per
 (`notelib-title-suggestion-dismissed:{noteId}`), so it survives a reload but is PER-BROWSER, not per-account** —
 account-level dismissal would need a `notes` column and a migration.
 
+**⚠️ THE SUGGESTION COSTS NO REQUEST, AND THAT IS A CORRECTNESS CONSTRAINT RATHER THAN AN OPTIMISATION.** The
+pack's title reaches the page on `NoteResponse.studyPackTitle` (populated on the detail response only), and the
+card is derived from `note.title !== note.studyPackTitle`. **Do NOT "simplify" this by fetching the pack with
+`getMyStudyPack`:** `StudyPackService.getById` records an `OPENED_STUDY_PACK` activity event, and
+`DashboardService.findLastOpenedStudyPack` reads exactly those rows — so fetching the pack merely to compare
+titles would make **viewing** a note rewrite what that curator's Dashboard recommends. A test asserts
+`getMyStudyPack` is not called. Deriving it also means the card re-evaluates whenever the note changes, so an
+inline rename updates it immediately instead of leaving a stale suggestion.
+
 **⚠️ Existing notes were NOT renamed.** `v0.120.0` stops new contamination; it ships no migration, no backfill
 and no mass rename. Titles already overwritten stay as they are, because many superficially similar titles are
 legitimate (*"Nursing Management of Acute Asthma"* is correct) and only a hand-check can tell them apart.

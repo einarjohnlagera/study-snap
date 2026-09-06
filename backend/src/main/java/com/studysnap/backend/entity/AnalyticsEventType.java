@@ -8,6 +8,20 @@ public enum AnalyticsEventType {
     COLLECTION_CREATED,
     NOTE_ADDED_TO_COLLECTION,
     BULK_REGENERATION_STARTED,
+    /**
+     * Fired when a curator resolves the generated-title suggestion on a note detail page, with
+     * {@code action} = {@code applied} | {@code dismissed}.
+     *
+     * <p>⚠️ ADDED AT THE {@code v0.120.0} SIGNOFF BECAUSE THE CHECKPOINT GATE CAUGHT THAT THE FEATURE
+     * HAD NO DURABLE SIGNAL AT ALL. The suggestion card shipped on an OWNER OVERRIDE against the
+     * governing audit's explicit recommendation to ship no suggestion action ("that is a feature, not
+     * part of stopping the regression"). This event is what makes that override falsifiable: it is the
+     * only way to learn whether curators ever take the suggestion, or only dismiss it.
+     *
+     * <p>⚠️ The core fix does NOT depend on this — titles are correct either way. This measures the
+     * OPT-IN HALF only, and its kill criterion is to remove the card, never to restore the overwrite.
+     */
+    NOTE_TITLE_SUGGESTION_RESOLVED,
     COLLECTION_SECTION_ASSIGNED,
     STUDY_PLAN_ADOPTED,
     STUDY_GOAL_ADOPTED,

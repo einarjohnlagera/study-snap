@@ -1572,6 +1572,10 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
       });
       // No explicit clear: the updated note carries the applied title, so the memo re-derives to null.
       setNote(updated);
+      void trackAnalyticsEvent({
+        eventType: "NOTE_TITLE_SUGGESTION_RESOLVED",
+        metadata: { action: "applied", noteId: note.id },
+      });
     } catch (err) {
       const message = err instanceof Error ? err.message : "Could not apply the suggested title.";
       setError(message);
@@ -1590,6 +1594,10 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
       // The suggestion still clears for this visit even when the choice cannot be persisted.
     }
     setDismissedTitleSuggestionNoteId(note.id);
+    void trackAnalyticsEvent({
+      eventType: "NOTE_TITLE_SUGGESTION_RESOLVED",
+      metadata: { action: "dismissed", noteId: note.id },
+    });
   }, [note]);
 
   const keepMineAndContinue = useCallback(() => {

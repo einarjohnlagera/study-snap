@@ -2,7 +2,7 @@
 
 ## v0.120.0 - Canonical Note Title Integrity
 
-**Status: In Progress** (kicked off 2026-09-06, base branch `releases/v0.120.0`)
+**Status: Released** (kicked off and signed off 2026-09-06, base branch `releases/v0.120.0`)
 
 **⚠️ CUT FROM `docs/next-sequencing`, NOT FROM `main` — stated as an exception, with the reason, rather
 than routed around.** PR #1300 (the sequencing section this release executes) is **blocked by a
@@ -254,6 +254,18 @@ claims, including a section that described the defect as the design), `study-pac
 `bulk-regeneration.md`, and two stale `NoteBulkRegenerationService` comments citing the title overwrite as
 their justification were all corrected.
 
+**8. Instrumentation, added AT SIGNOFF because the checkpoint gate caught that none existed.** The
+suggestion card (item 3) shipped on an **owner override** against the audit's explicit recommendation to ship
+no suggestion action — which is the gate's named trigger — and **nothing measured whether curators ever take
+it.** `NOTE_TITLE_SUGGESTION_RESOLVED` now fires from both resolve paths with `action` = `applied` |
+`dismissed`. **⚠️ Verified EMITTING, not merely added to the enum:** frontend tests assert each emission, and
+removing a fire site fails a named test. It carries `[CHECKPOINT — due 2026-10-06]`, joined to the existing
+batch date per the consolidation rule. **⚠️ THE KILL CRITERION IS TO REMOVE THE CARD, NEVER TO RESTORE THE
+TITLE OVERWRITE** — the core fix rests on a reproduced defect and does not depend on this read. **⚠️ Its
+denominator clause is binding: the population is curators only and is plausibly one, so a null result is a
+RE-DATE, not a verdict.** This is the same shape as `v0.119.0`, whose gate also caught a missing signal at
+signoff.
+
 ### Verification performed
 
 **Guards, all mutation-verified with the killing test named.** Re-adding
@@ -272,7 +284,7 @@ coverage**; it pins the production-shaped four-program input and documents why t
 "simplified" to one id — `resolveBulkCourseProgram:155-160` RETURNS EARLY when `ids.size() == 1`, so a
 one-id fixture would never reach the guard and would silently become vacuous.
 
-**Suites:** backend **2189 executed, 0 failures** (counted from `target/surefire-reports/*.xml` after
+**Suites (final, at signoff):** backend **2189 executed, 0 failures** (counted from `target/surefire-reports/*.xml` after
 clearing the directory; `./mvnw clean install` exit status read directly, not through a pipe); frontend
 **2190 passed across 201 suites**; `tsc --noEmit` exit 0; ESLint 0 errors.
 
