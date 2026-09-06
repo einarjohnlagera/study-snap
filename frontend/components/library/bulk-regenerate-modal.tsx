@@ -18,6 +18,35 @@ import { cn } from "@/lib/utils";
 const SCOPE_STUDY_PACK: NoteRegenerationScopeValue = "STUDY_PACK";
 const SCOPE_NOTE_AND_STUDY_PACK: NoteRegenerationScopeValue = "NOTE_AND_STUDY_PACK";
 const POLL_INTERVAL_MS = 3000;
+/**
+ * ⚠️ THE BATCH ID MUST OUTLIVE THIS COMPONENT. The modal is unmounted on close, so without this the id
+ * was unrecoverable the instant the curator closed it -- there is no "list my batches" endpoint -- and
+ * reopening returned to the START screen with the same selection. Pressing Regenerate then ran a
+ * SECOND batch over notes the first had already finished, charging both meters again and replacing
+ * content again. The copy promising "you can close this and come back" was false in the one direction
+ * that costs money.
+ */
+const ACTIVE_BATCH_STORAGE_KEY = "notelib-bulk-regeneration-batch";
+
+function readStoredBatchId(): string | null {
+  try {
+    return globalThis.sessionStorage?.getItem(ACTIVE_BATCH_STORAGE_KEY) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function writeStoredBatchId(batchId: string | null): void {
+  try {
+    if (batchId) {
+      globalThis.sessionStorage?.setItem(ACTIVE_BATCH_STORAGE_KEY, batchId);
+    } else {
+      globalThis.sessionStorage?.removeItem(ACTIVE_BATCH_STORAGE_KEY);
+    }
+  } catch {
+    // Storage can throw in private modes; a lost id degrades to today's behaviour, never a crash.
+  }
+}
 
 type BulkRegenerateModalProps = {
   isOpen: boolean;
@@ -45,7 +74,7 @@ export function BulkRegenerateModal({
   const [loading, setLoading] = useState(false);
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [batchId, setBatchId] = useState<string | null>(null);
+  const [batchId, setBatchId] = useState<string | null>(() => readStoredBatchId());
   const [receipt, setReceipt] = useState<NoteBulkRegenerationReceiptResponse | null>(null);
   const [showBlocked, setShowBlocked] = useState(false);
   const groupLabelId = useId();
@@ -91,7 +120,9 @@ export function BulkRegenerateModal({
   // still pending", never a stored end-of-batch flag, so a driver killed mid-batch does not leave this
   // polling forever -- it comes back `stale` instead.
   useEffect(() => {
-    if (!batchId || receipt?.finished) {
+    // ⚠️ `stale` stops the poll too: a batch a deploy killed will never advance, so polling it every
+    // 3s for as long as the modal stays open is pure waste.
+    if (!batchId || receipt?.finished || receipt?.stale) {
       return;
     }
     let cancelled = false;
@@ -111,7 +142,7 @@ export function BulkRegenerateModal({
       cancelled = true;
       globalThis.clearInterval(timer);
     };
-  }, [batchId, receipt?.finished]);
+  }, [batchId, receipt?.finished, receipt?.stale]);
 
   const handleStart = useCallback(async () => {
     if (!preflight || preflight.readyCount === 0 || preflight.quotaExceeded) {
@@ -121,6 +152,7 @@ export function BulkRegenerateModal({
     setError(null);
     try {
       const response = await bulkRegenerateNotes(noteIds, scope);
+      writeStoredBatchId(response.batchId);
       setBatchId(response.batchId);
       onBatchStarted?.();
     } catch (caught) {
@@ -238,6 +270,40 @@ export function BulkRegenerateModal({
             </p>
           ) : null}
 
+          {/* ⚠️ BOTH METERS, because a batch spends both and only one of them can refuse it. The Study
+              Pack figure was computed by the server, typed on the client and rendered NOWHERE — an
+              observable no-op — while §E deliberately makes it a SOFT floor: surfaced, never used to
+              reject. Surfacing it is the whole of that obligation. An ADMIN reads 0 for an unmetered
+              meter, so the copy is suppressed entirely when nothing is required of it. */}
+          {preflight.noteGenerationUnitsRequired > 0 || preflight.studyPackUnitsRequired > 0 ? (
+            <p className="text-xs text-foreground/60">
+              {[
+                combined
+                  ? `Costs ${preflight.noteGenerationUnitsRequired} topic note and ${preflight.studyPackUnitsRequired} Study Pack ${plural(preflight.studyPackUnitsRequired, "unit")}.`
+                  : `Costs ${preflight.studyPackUnitsRequired} Study Pack ${plural(preflight.studyPackUnitsRequired, "unit")}.`,
+                combined
+                  ? `You have ${preflight.noteGenerationUnitsRemaining} topic note ${plural(preflight.noteGenerationUnitsRemaining, "generation")} and ${preflight.studyPackUnitsRemaining} Study Pack ${plural(preflight.studyPackUnitsRemaining, "generation")} left this cycle.`
+                  : `You have ${preflight.studyPackUnitsRemaining} Study Pack ${plural(preflight.studyPackUnitsRemaining, "generation")} left this cycle.`,
+              ].join(" ")}
+            </p>
+          ) : null}
+
+          {/* The Study Pack meter cannot refuse a batch, so a shortfall is a WARNING, not a block.
+              Saying nothing was the defect: items past the meter fail mid-run for a reason the curator
+              was never given a chance to see. */}
+          {!preflight.quotaExceeded
+            && preflight.studyPackUnitsRequired > preflight.studyPackUnitsRemaining ? (
+              <p className="flex items-start gap-2 rounded-md bg-amber-50 p-2 text-xs font-medium text-amber-900 dark:bg-amber-950/40 dark:text-amber-100">
+                <AlertTriangle aria-hidden className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                <span>
+                  This batch needs {preflight.studyPackUnitsRequired} Study Pack{" "}
+                  {plural(preflight.studyPackUnitsRequired, "unit")} and you have{" "}
+                  {preflight.studyPackUnitsRemaining} left. The notes past that point will stop rather
+                  than regenerate, and you can finish them next cycle.
+                </span>
+              </p>
+            ) : null}
+
           {preflight.quotaExceeded ? (
             <p className="flex items-start gap-2 rounded-md bg-amber-50 p-2 text-xs font-medium text-amber-900 dark:bg-amber-950/40 dark:text-amber-100">
               <AlertTriangle aria-hidden className="mt-0.5 h-3.5 w-3.5 shrink-0" />
@@ -329,7 +395,19 @@ export function BulkRegenerateModal({
   };
 
   const actions = batchId ? (
-    <Button type="button" onClick={onClose}>Done</Button>
+    <Button
+      type="button"
+      onClick={() => {
+        // Only a settled batch is forgotten. Closing mid-run keeps the id so reopening resumes the
+        // receipt rather than offering to run the same selection again.
+        if (receipt?.finished || receipt?.stale) {
+          writeStoredBatchId(null);
+        }
+        onClose();
+      }}
+    >
+      {receipt?.finished || receipt?.stale ? "Done" : "Close"}
+    </Button>
   ) : (
     <>
       <Button type="button" variant="outline" onClick={onClose} disabled={starting}>Cancel</Button>

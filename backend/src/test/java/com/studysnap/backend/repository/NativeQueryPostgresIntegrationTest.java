@@ -19,6 +19,7 @@ import com.studysnap.backend.exception.BulkNoteRegenerationQuotaExceededExceptio
 import com.studysnap.backend.service.BulkGenerationFailureReasonNormalizer;
 import com.studysnap.backend.service.MePlanService;
 import com.studysnap.backend.exception.BulkRegenerationNotPermittedException;
+import com.studysnap.backend.exception.NoteBulkRegenerationBatchNotFoundException;
 import com.studysnap.backend.service.BulkRegenerationAccessGuard;
 import com.studysnap.backend.service.NoteBulkRegenerationService;
 import com.studysnap.backend.service.NoteBulkRegenerationTaskDispatcher;
@@ -2821,9 +2822,28 @@ class NativeQueryPostgresIntegrationTest {
                 .as("and no batch row was written")
                 .isZero();
 
-        // The SAME selection succeeds once the account is a curator -- so the refusal is the gate,
-        // not some unrelated defect in the fixture.
-        jdbcTemplate.update("update users set role = 'ADMIN', onboarding_completed_at = now() where id = ?", learner);
+        // ⚠️ THE DISCRIMINATING SUBJECT: a TEACHER-PROFILE ACCOUNT THAT HAS NOT FINISHED ONBOARDING.
+        // The v0.119.0 pressure test replaced CuratorAuthoringPredicate.isCurator with a bare
+        // `role == ADMIN || profileType == TEACHER` -- dropping the onboarding clause -- and the ENTIRE
+        // suite stayed green, because the only fixture was a plain USER whom both versions refuse and an
+        // onboarded ADMIN whom both admit. This cohort is the one they disagree about, and CLAUDE.md
+        // records it as live: nobody curates during onboarding.
+        jdbcTemplate.update(
+                "update users set profile_type = 'TEACHER', onboarding_completed_at = null where id = ?",
+                learner);
+        assertThatThrownBy(() -> harness.preflight(learner, List.of(note), NoteRegenerationScope.NOTE_AND_STUDY_PACK, true))
+                .as("a TEACHER mid-onboarding is NOT yet a curator")
+                .isInstanceOf(BulkRegenerationNotPermittedException.class);
+
+        // Finishing onboarding makes the same TEACHER a curator -- so the refusal above is the
+        // onboarding clause, not the profile check.
+        jdbcTemplate.update("update users set onboarding_completed_at = now() where id = ?", learner);
+        assertThat(harness.preflight(learner, List.of(note), NoteRegenerationScope.NOTE_AND_STUDY_PACK, true).readyCount())
+                .as("an onboarded TEACHER curator reads the selection fine")
+                .isEqualTo(1);
+
+        // And the same for ADMIN by role.
+        jdbcTemplate.update("update users set role = 'ADMIN', profile_type = null, onboarding_completed_at = now() where id = ?", learner);
         assertThat(harness.preflight(learner, List.of(note), NoteRegenerationScope.NOTE_AND_STUDY_PACK, true).readyCount())
                 .as("a curator reads the same selection fine")
                 .isEqualTo(1);
@@ -2883,6 +2903,118 @@ class NativeQueryPostgresIntegrationTest {
         assertThat(readNoteColumn(second, "content"))
                 .as("nothing was written for the blocked item")
                 .isEqualTo("Second body.");
+    }
+
+    /**
+     * The SIBLING meter. Found by the v0.119.0 pressure test: the earlier quota fix caught the
+     * note-generation meter and missed this one.
+     *
+     * <p>⚠️ THE TWO METERS THROW DIFFERENT SHAPES FOR THE SAME CONDITION.
+     * {@code assertQuotaAvailable} throws the typed {@code MonthlyNoteGenerationLimitReachedException};
+     * {@code assertMonthlyStudyPackQuotaAvailable} throws a BARE {@code AppException} carrying
+     * {@code MONTHLY_STUDY_PACK_LIMIT_REACHED}. A catch on the typed exception alone let this one fall
+     * through as {@code FAILED} — and the receipt offers FAILED items as RETRYABLE, so the curator was
+     * invited into a retry that cannot succeed until the billing cycle resets.
+     *
+     * <p>⚠️ SCOPE IS STUDY_PACK-ONLY ON PURPOSE. That scope spends NO note-generation unit, so this
+     * fixture cannot pass by accidentally tripping the sibling meter — which is exactly how a
+     * combined-scope fixture would have hidden the defect.
+     */
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void studyPackQuotaExhaustionIsReportedAsBlockedAndIsNotOfferedForRetry() {
+        UUID owner = seedCuratorUser("bulk-regen-sp-quota");
+        UUID note = seedRegenerationNote(owner, "Site Utilities", "Body.");
+        seedStudyPack(owner, note, "Pack");
+        // FREE allows 10 Study Pack generations a month; burn all of them.
+        seedStudyPackUsage(owner, 10);
+
+        BulkRegenerationHarness harness = new BulkRegenerationHarness();
+        UUID batchId = harness.run(owner, List.of(note), NoteRegenerationScope.STUDY_PACK, true);
+
+        assertThat(itemState(batchId, note))
+                .as("BLOCKED, not FAILED -- the curator resolves this by waiting or upgrading")
+                .isEqualTo("BLOCKED");
+        assertThat(jdbcTemplate.queryForObject(
+                "select reason_code from note_bulk_regeneration_item where batch_id = ? and note_id = ?",
+                String.class, batchId, note))
+                .isEqualTo("MONTHLY_STUDY_PACK_LIMIT_REACHED");
+        assertThat(readNoteColumn(note, "content"))
+                .as("nothing was regenerated")
+                .isEqualTo("Body.");
+    }
+
+    /**
+     * The receipt is invisible to anyone but its owner.
+     *
+     * <p>⚠️ THIS PATH SHIPPED WITH NO COVERAGE AT ALL — found by the v0.119.0 pressure test, which
+     * deleted the owner predicate from the repository and watched the ENTIRE existing suite stay green.
+     * It is a cross-tenant read on a real table, and this repo's standing rule is that a guard is worth
+     * only what a test actually executes.
+     *
+     * <p>⚠️ ONE CONTRACT FOR THREE CASES — unknown id, another user's batch, and an expired batch all
+     * 404, so a batch id cannot be used to probe whether someone else ran one.
+     */
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void aBulkRegenerationReceiptIsNotReadableByAnotherUser() {
+        UUID owner = seedCuratorUser("bulk-regen-receipt-owner");
+        UUID stranger = seedCuratorUser("bulk-regen-receipt-stranger");
+        UUID note = seedRegenerationNote(owner, "Site Access", "Body.");
+        seedStudyPack(owner, note, "Pack");
+
+        BulkRegenerationHarness harness = new BulkRegenerationHarness();
+        UUID batchId = harness.run(owner, List.of(note), NoteRegenerationScope.STUDY_PACK, true);
+
+        NoteBulkRegenerationReceiptService receiptService =
+                new NoteBulkRegenerationReceiptService(bulkRegenerationItemRepository, noteRepository);
+
+        assertThat(receiptService.getReceipt(batchId, owner).totalCount())
+                .as("the owner reads their own batch")
+                .isEqualTo(1);
+        assertThatThrownBy(() -> receiptService.getReceipt(batchId, stranger))
+                .as("and nobody else can, by the same 404 an unknown id gets")
+                .isInstanceOf(NoteBulkRegenerationBatchNotFoundException.class);
+        assertThatThrownBy(() -> receiptService.getReceipt(UUID.randomUUID(), owner))
+                .as("an unknown batch is indistinguishable from someone else's")
+                .isInstanceOf(NoteBulkRegenerationBatchNotFoundException.class);
+    }
+
+    /**
+     * The ADMIN bypass must actually bypass.
+     *
+     * <p>⚠️ IT DID NOT, AND THIS IS THE DEFECT THAT WOULD HAVE HIT THE OWNER FIRST. Skipping the
+     * request-side quota assert was not enough: {@code NoteGenerationService.generateFromTopic}
+     * asserted the note-generation quota AGAIN, unconditionally, on the generation thread — where
+     * {@code generateStudyPackFromExistingNoteAsync} swallows the exception and marks the note FAILED.
+     * So an ADMIN whose meter was full had EVERY combined item fail, with no reason recorded anywhere,
+     * on the exact account bulk regeneration was built for. Found by the v0.119.0 pressure test.
+     *
+     * <p>⚠️ THE FIXTURE MUST EXHAUST THE METER FIRST. An ADMIN with allowance to spare regenerates
+     * fine either way, so a fresh-meter fixture passes under the defect and proves nothing — which is
+     * exactly why {@code aTeacherBatchIsMeteredAndAnAdminBatchIsNot} could not see this.
+     */
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void anAdminBatchStillRegeneratesWhenTheNoteGenerationMeterIsAlreadyFull() {
+        UUID admin = seedCuratorUser("bulk-regen-admin-exhausted");
+        UUID note = seedRegenerationNote(admin, "Site Grading", "Body.");
+        seedStudyPack(admin, note, "Pack");
+        // FREE allows 10; burn every one. A metered curator would be refused outright here.
+        seedNoteGenerationUsage(admin, 10);
+
+        BulkRegenerationHarness harness = new BulkRegenerationHarness();
+        UUID batchId = harness.run(admin, List.of(note), NoteRegenerationScope.NOTE_AND_STUDY_PACK, false);
+
+        assertThat(itemState(batchId, note))
+                .as("the bypass holds all the way through generation, not merely at the request edge")
+                .isEqualTo("REGENERATED");
+        assertThat(readNoteColumn(note, "content"))
+                .as("and the content really was replaced")
+                .isEqualTo("Regenerated body.");
+        assertThat(persistedUsage(admin, "note_generations"))
+                .as("a bypassed batch charges nothing on top of what was already spent")
+                .isEqualTo(10);
     }
 
     private UUID seedRegenerationNote(UUID ownerUserId, String title, String content) {
@@ -3676,6 +3808,17 @@ class NativeQueryPostgresIntegrationTest {
      * the shape and billing period production writes. A hand-built row that drifts from the real period
      * resolution would leave the over-quota guard asserting against usage the service cannot see.
      */
+    /**
+     * Study Pack usage is {@code max(tracked, persisted rows this month)}, so the tracked counter is
+     * what a fixture can drive; the persisted count rises on its own as the batch creates packs.
+     */
+    private void seedStudyPackUsage(UUID userId, int studyPackGenerations) {
+        UserUsageService usageService = transactionalUserUsageService();
+        for (int index = 0; index < studyPackGenerations; index++) {
+            usageService.incrementStudyPackGeneration(userId, OffsetDateTime.now(ZoneOffset.UTC));
+        }
+    }
+
     private void seedNoteGenerationUsage(UUID userId, int noteGenerations) {
         UserUsageService usageService = transactionalUserUsageService();
         for (int index = 0; index < noteGenerations; index++) {

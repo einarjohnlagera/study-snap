@@ -11,6 +11,7 @@ import com.studysnap.backend.entity.NoteStatus;
 import com.studysnap.backend.exception.BulkNoteRegenerationQuotaExceededException;
 import com.studysnap.backend.exception.InvalidBulkRegenerationRequestException;
 import com.studysnap.backend.exception.MonthlyNoteGenerationLimitReachedException;
+import com.studysnap.backend.exception.AppException;
 import com.studysnap.backend.exception.NoteNotFoundException;
 import com.studysnap.backend.repository.NoteBulkRegenerationItemRepository;
 import com.studysnap.backend.repository.NoteRepository;
@@ -87,6 +88,8 @@ public class NoteBulkRegenerationService {
     private static final String EMPTY_BATCH_MESSAGE = "Select at least one note to regenerate.";
     private static final String MAX_NOTES_MESSAGE_TEMPLATE = "You can regenerate up to %d notes at once.";
     private static final String QUOTA_BLOCKED_CODE = "NOTE_GENERATION_LIMIT_REACHED";
+    /** Thrown as a BARE AppException by StudyPackService.assertMonthlyStudyPackQuotaAvailable. */
+    private static final String MONTHLY_STUDY_PACK_LIMIT_CODE = "MONTHLY_STUDY_PACK_LIMIT_REACHED";
     private static final String QUOTA_BLOCKED_MESSAGE =
             "You have reached your note generation limit for this billing cycle.";
     private static final String GENERATION_FAILED_CODE = "NOTE_REGENERATION_FAILED";
@@ -252,6 +255,34 @@ public class NoteBulkRegenerationService {
         return mePlanService.getNoteGenerationsRemaining(ownerUserId) <= 0;
     }
 
+    /**
+     * Both monthly meters a regeneration can exhaust, recognised by CODE because they do not share a
+     * type. The AI rate limit is deliberately NOT here: it resets within the minute, so retrying really
+     * is the remedy and FAILED/retryable is the honest classification for it.
+     */
+    private static boolean isQuotaExhaustion(AppException exception) {
+        String code = exception.getCode();
+        return QUOTA_BLOCKED_CODE.equals(code) || MONTHLY_STUDY_PACK_LIMIT_CODE.equals(code);
+    }
+
+    private NoteBulkRegenerationItemState recordFailure(
+            UUID batchId,
+            UUID ownerUserId,
+            UUID noteId,
+            NoteRegenerationScope scope,
+            OffsetDateTime batchCreatedAt,
+            RuntimeException exception
+    ) {
+        BulkGenerationFailureReason reason = normalizeFailureReason(noteId, exception);
+        log.warn(
+                "action=bulk_regenerate_note outcome=failed_before_dispatch batchId={} noteId={}"
+                        + " ownerUserId={}",
+                batchId, noteId, ownerUserId, exception
+        );
+        return record(batchId, ownerUserId, noteId, scope, batchCreatedAt,
+                NoteBulkRegenerationItemState.FAILED, reason.code(), reason.reason(), false);
+    }
+
     private List<UUID> normalizeNoteIds(List<UUID> requested) {
         if (requested == null || requested.isEmpty()) {
             throw new InvalidBulkRegenerationRequestException(EMPTY_BATCH_MESSAGE);
@@ -371,22 +402,26 @@ public class NoteBulkRegenerationService {
             return record(batchId, ownerUserId, noteId, scope, batchCreatedAt,
                     NoteBulkRegenerationItemState.NOT_RUN,
                     notFound.getCode(), notFound.getMessage(), false);
-        } catch (MonthlyNoteGenerationLimitReachedException quotaReached) {
-            // ⚠️ BLOCKED, not FAILED. Quota exhaustion mid-batch is not a failure of this item — it is
-            // a condition the curator resolves by waiting or upgrading, and retry must not re-run it
-            // blindly. Mirrors the existing receipt's quotaBlockedTopics bucket.
-            return record(batchId, ownerUserId, noteId, scope, batchCreatedAt,
-                    NoteBulkRegenerationItemState.BLOCKED,
-                    quotaReached.getCode(), quotaReached.getMessage(), false);
+        } catch (AppException appException) {
+            // ⚠️ CLASSIFIED BY CODE, NOT BY EXCEPTION TYPE, AND THAT IS THE WHOLE POINT. The two meters a
+            // combined regeneration spends throw DIFFERENT SHAPES for the same condition: the
+            // note-generation meter throws the typed MonthlyNoteGenerationLimitReachedException, while
+            // assertMonthlyStudyPackQuotaAvailable throws a BARE AppException carrying
+            // MONTHLY_STUDY_PACK_LIMIT_REACHED. A catch on the typed exception alone therefore caught one
+            // meter and let its sibling fall through to the generic branch below as FAILED — which the
+            // receipt then offers as RETRYABLE, inviting the curator into a retry that cannot succeed
+            // until the cycle resets. Found by the v0.119.0 pressure test; the earlier fix swept the diff
+            // rather than the surface.
+            if (isQuotaExhaustion(appException)) {
+                // BLOCKED, not FAILED: a condition the curator resolves by waiting or upgrading, and
+                // retry must not re-run it blindly. Mirrors the existing receipt's quotaBlockedTopics.
+                return record(batchId, ownerUserId, noteId, scope, batchCreatedAt,
+                        NoteBulkRegenerationItemState.BLOCKED,
+                        appException.getCode(), appException.getMessage(), false);
+            }
+            return recordFailure(batchId, ownerUserId, noteId, scope, batchCreatedAt, appException);
         } catch (RuntimeException exception) {
-            BulkGenerationFailureReason reason = normalizeFailureReason(noteId, exception);
-            log.warn(
-                    "action=bulk_regenerate_note outcome=failed_before_dispatch batchId={} noteId={}"
-                            + " ownerUserId={}",
-                    batchId, noteId, ownerUserId, exception
-            );
-            return record(batchId, ownerUserId, noteId, scope, batchCreatedAt,
-                    NoteBulkRegenerationItemState.FAILED, reason.code(), reason.reason(), false);
+            return recordFailure(batchId, ownerUserId, noteId, scope, batchCreatedAt, exception);
         }
 
         // ⚠️ THE VERDICT COMES FROM PERSISTED notes.status, NOT FROM "the call did not throw".

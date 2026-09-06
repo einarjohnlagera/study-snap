@@ -390,9 +390,18 @@ the destructive scope does not get it again from a control they only glanced at.
 has one client path rather than two behind one control. First generation on a `DRAFT` note still uses
 `POST /notes/{id}/generate` — that is a different control, not a scope choice.
 
-The combined card is **disabled with a stated reason** where the service would reject it (no title, no
-existing Study Pack), rather than accepting the choice and failing afterwards. Other rejections render
-inside the modal so the chosen scope survives a retry.
+The combined card is **disabled with a stated reason** where the service would reject it, rather than
+accepting the choice and failing afterwards. Four conditions disable it: no title, no existing Study
+Pack, and — added in `v0.119.0` — either meter being exhausted. Other rejections render inside the modal
+so the chosen scope survives a retry.
+
+**The modal also discloses remaining allowance**, not only what each scope costs, and the confirm button
+itself is disabled when the meter *that scope spends* is empty. **⚠️ The reason must name the meter that
+is actually exhausted** — an earlier version fell through to the topic-note wording whenever either meter
+was empty, so a learner with 25 topic notes left was told they had none while the banner beneath said the
+Study Pack meter was the empty one. **⚠️ An ABSENT limit means "not configured for this plan", not zero**:
+it resolves to null, renders no quota copy and gates nothing. Reading it as zero would disable
+regeneration for anyone whose plan does not carry the field.
 
 ### Warnings and disclosure
 

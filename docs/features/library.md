@@ -103,7 +103,13 @@ Private Library filters:
 - `Course / Program`
 - `Subject`
 - `Tags`
-- `Review Set` membership (`?collectionId=`, v0.119.0) — a note may belong to several Review Sets, so the
+- `Review Set` membership (`?collectionId=`, v0.119.0) — **⚠️ it counts as an ACTIVE filter**
+  (`hasActiveFilters`), or a Review Set with no matches renders the empty-library onboarding screen and
+  the *Open more filters* button that would clear it is itself inside the `hasItems` branch, so the
+  filter becomes unclearable. **⚠️ It is also passed to the subject-stats call**, or the subject chips
+  count across the whole library while the list shows one Review Set. **⚠️ Applying a saved filter
+  CLEARS it** — saved filters carry no collection axis, so inheriting it would restore a view that was
+  never saved — a note may belong to several Review Sets, so the
   server filters with an `EXISTS` over `note_collection_items` rather than a join, which would emit the
   note once per membership row and inflate both the page and the count. An absent value means **no
   collection filter**, never "notes in no collection"

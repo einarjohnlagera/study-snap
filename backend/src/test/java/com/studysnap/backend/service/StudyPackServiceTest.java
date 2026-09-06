@@ -1510,7 +1510,7 @@ class StudyPackServiceTest {
         when(studyPackUsageService.resolveUsage(eq(ownerUserId), any(OffsetDateTime.class)))
                 .thenReturn(new StudyPackUsageService.UsageSnapshot(
                         OffsetDateTime.now().minusDays(1), OffsetDateTime.now().plusDays(29), 0));
-        when(noteGenerationService.generateFromTopic(any(GenerateNoteFromTopicRequest.class), eq(ownerUserId), any(), eq(false)))
+        when(noteGenerationService.generateFromTopic(any(GenerateNoteFromTopicRequest.class), eq(ownerUserId), any(), eq(false), eq(true)))
                 .thenReturn(new GenerateNoteFromTopicResponse("Regenerated body."));
         when(llmStudyPackService.generateStudyPack(anyString(), any())).thenReturn(generatedContent("Regenerated pack"));
 

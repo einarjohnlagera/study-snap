@@ -212,17 +212,6 @@ public class NoteController {
     }
 
     /**
-     * Queues a bulk regeneration batch.
-     *
-     * <p>⚠️ NOT REACHABLE FROM THE UI YET, exactly as {@code NOTE_AND_STUDY_PACK} on the single-Note
-     * route was when it shipped: the Library selection intent, the confirmation modal and the receipt
-     * are later slices, and irreversible content replacement across dozens of canonical Notes must not
-     * be reachable without them.
-     *
-     * <p>⚠️ The over-quota rejection is a 422 raised inside {@code queueBatch} BEFORE anything is
-     * dispatched, carrying how many notes to remove.
-     */
-    /**
      * Progress and result for one batch, read by polling.
      *
      * <p>⚠️ NOT consume-once, unlike the bulk-generation receipt: a regeneration batch runs far past
@@ -237,6 +226,17 @@ public class NoteController {
         return noteBulkRegenerationReceiptService.getReceipt(batchId, user.userId());
     }
 
+    /**
+     * Queues a bulk regeneration batch.
+     *
+     * <p>⚠️ The over-quota rejection is a 422 raised inside {@code queueBatch} BEFORE anything is
+     * dispatched, carrying how many notes to remove. It reads only the note-generation meter; the
+     * Study Pack meter is a SOFT floor, disclosed by the preflight and never used to refuse a batch.
+     *
+     * <p>⚠️ Curator-only, enforced by {@code BulkRegenerationAccessGuard} inside the service — the
+     * {@code @PreAuthorize} below CANNOT express it, since {@code hasAnyRole('USER','ADMIN')} is
+     * satisfied by every authenticated account.
+     */
     @PostMapping("/bulk-regenerate")
     @PreAuthorize("hasAnyRole('USER','ADMIN')")
     public BulkRegenerateNotesResponse bulkRegenerate(
