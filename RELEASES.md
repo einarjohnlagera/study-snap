@@ -57,7 +57,58 @@
 
 ### Shipped
 
-_(nothing yet)_
+**Items 1-3 — the loop (inline).**
+
+- **One canonical normalisation.** `canonicalSectionLabel` is now the single definition of the display
+  form (trim + collapse internal runs, case preserved) and **`normalizeSectionValue` is DERIVED from it**,
+  so the display and comparison forms cannot drift. It replaced **five duplicated copies** of
+  `.trim().replaceAll(/\s+/g, " ")` in the builder. **⚠️ A unit test pins the derivation, and the mutant
+  that re-inlines a divergent normalisation fails it.**
+- **The retry is bounded, and this is the load-bearing half.** The card records the one transition it has
+  already asked for as `(server label it saw) -> (label it requested)` and will not ask again until one of
+  them actually moves. **⚠️ Recorded at FIRE time, not arm time — a cleared timeout never asked for
+  anything, and recording it there would block a legitimate first attempt.**
+- **The handler no longer re-arms the effect.** `onLabelChange` moved into a ref and out of the dependency
+  array. **⚠️ THE FINDING ASKED FOR A `useCallback` AND THAT IS DELIBERATELY NOT WHAT SHIPPED — recorded so
+  a later session does not read item 3 as skipped:** `handleLeafLabelChange` closes over `moveLeafNote`,
+  itself a plain function, so memoizing it requires memoizing `moveLeafNote` → `persistLeafItems` →
+  `savePendingLeafOrder` — a cascade landing on the deferred-save model `v0.96.0` fixed at cost and this
+  release's anti-drift locks. The ref achieves the stated purpose (a stable dependency) without it.
+  **⚠️ It is a churn reduction, not the loop fix.**
+
+**⚠️ THE FINDING'S DIAGNOSIS IS NARROWED BY IMPLEMENTATION, AND THE CORRECTION IS THE MOST USEFUL THING
+THIS PR PRODUCED — its §4 left "which loop fired" open, and one of the two candidates turns out to be
+UNREACHABLE.** Verified by reading, then empirically by a failing fixture:
+
+- **`v0.95.1`'s card key is `${noteId}:${item.label ?? ""}`, so ANY write that CHANGES the label REMOUNTS
+  the card** with a fresh `labelValue` read from the new label — the guard clears on its own. **So every
+  successful, value-changing write self-heals, under the defect as well as the fix.**
+- **Loop B (case-snap) CANNOT FIRE THROUGH THE COMBOBOX.** `SuggestionCombobox.handleInputChange` calls
+  `onChange(matchedOption?.value ?? nextValue)` — it **snaps a typed value to a matching option at the
+  INPUT layer** — so `labelValue` can never diverge in case from an existing section. A fixture built to
+  reproduce it issued **zero** writes, and instrumenting the source showed the guard returning early
+  because `labelValue` had already been snapped to `"Algebra"`.
+- **⚠️ SO THE REACHABLE LOOP IS LOOP A — A WRITE THE SERVER REFUSES — AND IT IS MORE GENERAL THAN THE LABEL
+  CASE:** the rollback leaves `item.label` untouched while the error state forces a re-render, so **any**
+  failed section-label write retried forever. Not just an over-long label: a 500, a network failure or any
+  validation refusal did it.
+- **⚠️ THE INGRESS REMAINS UNRESOLVED and is NOT closed by this PR.** Client and server both cap the label
+  at **120** (`LABEL_MAX_LENGTH`; `NoteCollectionService:2806`; `V72` `VARCHAR(120)`) and the input
+  truncates on the way in, so a length refusal is not obviously reachable — which sharpens the open
+  question rather than answering it. The finding's §7 detection query and its §8 bulk-path check are still
+  owed.
+
+**Guards — two, both mutation-verified with the killing test named.** **⚠️ AND THE FIXTURE CHOICE IS THE
+GUARD: a SUCCEEDING write proves nothing here, because the remount clears the condition under the defect
+too.** An earlier draft of these tests passed against the un-fixed code for exactly that reason and was
+rewritten.
+
+| Mutant | Test that failed |
+|---|---|
+| remove the retry bound (restore the loop) | *does not retry a section-label write the server rejected* |
+| stop deriving `normalizeSectionValue` from the canonical form | *is exactly normalizeSectionValue without the lowercasing* |
+
+`tsc --noEmit` exit 0 · `npm run lint` exit 0 · `npm test` exit 0, **2224 passed / 201 suites**.
 
 ## v0.122.0 - Shared Quiz Discoverability
 
