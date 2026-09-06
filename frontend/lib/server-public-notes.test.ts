@@ -2,6 +2,7 @@ import {
   getServerPublicNoteCount,
   getServerPublicNotes,
   getServerPublicNotesByCoursePrograms,
+  getServerPublicNotesBySubject,
   getServerPublicNotesBySubjectSlug,
 } from "./server-public-notes";
 
@@ -20,8 +21,11 @@ describe("getServerPublicNoteCount", () => {
     global.fetch = fetchMock;
 
     await expect(getServerPublicNoteCount()).resolves.toBe(128);
+    // ⚠️ CORRECTED, NOT EXTENDED. This previously pinned `?size=1` — the exact shape that caused the
+    // 2026-09-05 outage — so the suite was actively protecting the defect. `size` is not a pagination
+    // parameter, and without `sort` the paginated branch still ranks in Java over every candidate.
     expect(fetchMock).toHaveBeenCalledWith(
-      "http://localhost:8080/api/notes/public?size=1",
+      "http://localhost:8080/api/notes/public?page=0&pageSize=1&sort=recent",
       expect.objectContaining({
         method: "GET",
         next: { revalidate: 300 },
@@ -246,6 +250,30 @@ describe("public note fetches stay inside the 2MB data-cache limit", () => {
     const notes = await getServerPublicNotes();
 
     expect(notes).toHaveLength(250);
+  });
+
+  /**
+   * ⚠️ THE TIGHTENED INVARIANT. The version below it permitted the exact shape that caused the
+   * 2026-09-05 outage, in two ways: it accepted `subject=` as an ALTERNATIVE to `pageSize`, so
+   * `?subject=X&size=4` passed while loading the entire catalog; and it never called the two helpers
+   * that actually send the unbounded shape. `size` is NOT a pagination parameter — the server selects
+   * its branch on `page != null || pageSize != null`.
+   */
+  it("never requests /notes/public without pageSize, on any helper", async () => {
+    global.fetch = jest.fn().mockResolvedValue(page([], false));
+
+    await getServerPublicNotes();
+    await getServerPublicNotesBySubjectSlug("biology");
+    await getServerPublicNotesByCoursePrograms(["Nursing"]);
+    // The two the previous guard never exercised, and the only two that were unbounded.
+    await getServerPublicNoteCount();
+    await getServerPublicNotesBySubject("Biology");
+
+    const requestedUrls = (global.fetch as jest.Mock).mock.calls.map(([url]) => String(url));
+    expect(requestedUrls.length).toBeGreaterThan(0);
+    requestedUrls.forEach((url) => {
+      expect(url).toMatch(/[?&]pageSize=/);
+    });
   });
 
   // The invariant the whole change exists to establish.
