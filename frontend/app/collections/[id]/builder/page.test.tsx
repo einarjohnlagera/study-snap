@@ -1151,7 +1151,11 @@ describe("StudyPlanBuilderPageClient", () => {
       await act(async () => { await Promise.resolve(); });
 
       expect(setCollectionItemOrder).toHaveBeenCalledTimes(1);
-      // The whole point: no second read of the collection, and no read of the note library at all.
+      // ⚠️ THE getCollection ASSERTION IS THE ONE THAT DISCRIMINATES. The listNotes assertion below is
+      // VACUOUS as long as item 6 also ships -- the list is lazy, so it is never fetched here whether
+      // or not the refresh is restored. It is kept because it states the invariant this test is named
+      // for, but it must not be mistaken for the guard: reverting item 6 alone is caught by the
+      // dedicated lazy-load test, not by this line.
       expect((getCollection as jest.Mock).mock.calls.length).toBe(collectionCallsBefore);
       expect((listNotes as jest.Mock).mock.calls.length).toBe(notesCallsBefore);
       // ...and the edit still landed.
@@ -1179,5 +1183,97 @@ describe("StudyPlanBuilderPageClient", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /Add notes/i }));
     await waitFor(() => expect(listNotes).toHaveBeenCalledTimes(1));
+  });
+
+  it("repairs a stored section label that differs only by internal whitespace, in one write", async () => {
+    // ⚠️ THE PRE-DECLARED FIXTURE THAT WAS OWED AND NOT WRITTEN. RELEASES.md named "(a) a stored label
+    // containing a DOUBLE SPACE" alongside the rejected-write case; only the latter shipped, and (a)
+    // is what surfaces the snap-back path never being canonicalised.
+    //
+    // ⚠️ THE ASSERTION IS THE PAYLOAD, NOT THE CALL COUNT, and that correction matters: the retry
+    // bound from items 1-3 ALREADY caps this at one write, so a count-only assertion passes with the
+    // snap-back path left on bare trim() -- an earlier draft of this guard did exactly that and
+    // survived its own mutation. What the canonical snap-back changes is WHAT gets stored: the write
+    // now collapses the label (repairing it, and clearing the card's guard by changing the value)
+    // instead of rewriting the same uncollapsed string for nothing.
+    //
+    // ⚠️ It needs no user interaction -- the card seeds labelValue from item.label on mount, so this
+    // fires on PAGE LOAD.
+    jest.useFakeTimers();
+    try {
+      (getCollection as jest.Mock).mockResolvedValue(collectionDetail("leaf-1", "Anatomy Plan", [
+        { ...collectionItem("note-1", "Skeletal System", 0), label: "Cash  and Receivables" },
+      ], { parentCollectionId: null, childCount: 0 }));
+      render(<StudyPlanBuilderPageClient collectionId="leaf-1" />);
+
+      await screen.findByLabelText("Section for Skeletal System");
+      // Advance and flush in alternation: each cycle is timer -> write -> re-render -> new timer, so
+      // one large jump would fire only the first callback.
+      for (let cycle = 0; cycle < 8; cycle += 1) {
+        await act(async () => { jest.advanceTimersByTime(600); });
+        await act(async () => { await Promise.resolve(); });
+      }
+
+      expect((setCollectionItemOrder as jest.Mock).mock.calls.length).toBeLessThanOrEqual(1);
+      expect((setCollectionItemOrder as jest.Mock).mock.calls[0][1]).toEqual([
+        { noteId: "note-1", label: "Cash and Receivables" },
+      ]);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it("stops re-fetching the note library after a failed lazy load", async () => {
+    // ⚠️ A DEFECT v0.123.0's OWN item 6 INTRODUCED, and the same class the release exists to close.
+    // refreshNotes had no catch, and `refreshingNotes` is a dependency of the picker-open effect: a
+    // rejected fetch cleared the flag in `finally`, the deps changed, the effect re-ran and refetched
+    // -- at event-loop speed, against the unbounded note endpoint, exactly when the backend is already
+    // failing. A cold agent measured 3,743 calls in five seconds.
+    (getCollection as jest.Mock).mockResolvedValue(collectionDetail("leaf-1", "Anatomy Plan", [
+      { ...collectionItem("note-1", "Skeletal System", 0), label: "Algebra" },
+    ], { parentCollectionId: null, childCount: 0 }));
+    (listNotes as jest.Mock).mockRejectedValue(new Error("Notes are unavailable."));
+    render(<StudyPlanBuilderPageClient collectionId="leaf-1" />);
+
+    await screen.findByLabelText("Section for Skeletal System");
+    fireEvent.click(screen.getByRole("button", { name: /Add notes/i }));
+
+    await waitFor(() => expect(listNotes).toHaveBeenCalled());
+    await new Promise((resolve) => globalThis.setTimeout(resolve, 300));
+    // ONE automatic attempt. The modal's Refresh control is the deliberate retry.
+    expect((listNotes as jest.Mock).mock.calls.length).toBe(1);
+    // ...and the failure is surfaced rather than shown as "No notes available."
+    expect(await screen.findByText("Notes are unavailable.")).toBeInTheDocument();
+  });
+
+  it("lets a curator retry a section label the server refused", async () => {
+    // The retry bound must not strand a curator on a value they legitimately want. Refocusing the
+    // field is an unambiguous request to try again; the render-driven loop never touches focus, so
+    // clearing the bound there cannot reopen it.
+    jest.useFakeTimers();
+    try {
+      (getCollection as jest.Mock).mockResolvedValue(collectionDetail("leaf-1", "Anatomy Plan", [
+        { ...collectionItem("note-1", "Skeletal System", 0), label: "Algebra" },
+      ], { parentCollectionId: null, childCount: 0 }));
+      (setCollectionItemOrder as jest.Mock).mockRejectedValue(new Error("Section name is too long."));
+      render(<StudyPlanBuilderPageClient collectionId="leaf-1" />);
+
+      const combobox = await screen.findByLabelText("Section for Skeletal System");
+      fireEvent.focus(combobox);
+      fireEvent.change(combobox, { target: { value: "Calculus" } });
+      fireEvent.blur(combobox);
+      await act(async () => { jest.advanceTimersByTime(600); });
+      await act(async () => { await Promise.resolve(); });
+      expect(setCollectionItemOrder).toHaveBeenCalledTimes(1);
+
+      // The curator tries the SAME name again, deliberately.
+      fireEvent.focus(combobox);
+      fireEvent.blur(combobox);
+      await act(async () => { jest.advanceTimersByTime(600); });
+      await act(async () => { await Promise.resolve(); });
+      expect(setCollectionItemOrder).toHaveBeenCalledTimes(2);
+    } finally {
+      jest.useRealTimers();
+    }
   });
 });
