@@ -2,6 +2,7 @@ package com.studysnap.backend.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.studysnap.backend.config.StudySnapProperties;
+import com.studysnap.backend.dto.PublicQuizItem;
 import com.studysnap.backend.dto.PublicSharedQuizResponse;
 import com.studysnap.backend.dto.QuizItem;
 import com.studysnap.backend.dto.QuizShareLinkResponse;
@@ -27,6 +28,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.OffsetDateTime;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
@@ -440,6 +442,83 @@ class QuizShareLinkServiceTest {
         assertThat(response.questions().getFirst().questionFormat()).isEqualTo(MULTI_SELECT_FORMAT);
     }
 
+    /**
+     * A matching block is 2-4 consecutive items sharing one option set, keyed by {@code questionGroup} --
+     * which {@code PublicQuizItem} does not carry and the recipient page has no control for. They therefore
+     * reached recipients as independent MCQs and were scored as such.
+     */
+    @Test
+    void getActivePublicQuizWithholdsMatchingQuestionsFromTheRecipient() {
+        stubActiveQuizWithNote(UUID.randomUUID(), "Cell Structure", List.of(
+                singleChoiceQuestion("Answerable one?"),
+                matchingQuestion("Match A"),
+                matchingQuestion("Match B"),
+                singleChoiceQuestion("Answerable two?")
+        ));
+
+        PublicSharedQuizResponse response = quizShareLinkService.getActivePublicQuiz(TEST_TOKEN);
+
+        assertThat(response.questions()).hasSize(2);
+        assertThat(response.questions()).noneMatch(item -> "MATCHING".equals(item.questionFormat()));
+        assertThat(response.questions()).extracting(PublicQuizItem::question)
+                .containsExactly("Answerable one?", "Answerable two?");
+    }
+
+    /**
+     * ⚠️ THE DISCRIMINATING GUARD FOR THE PROJECTION/GRADER SPLIT, AND THE REASON THE FILTER LIVES ON THE
+     * SHARED DERIVATION. {@code getActivePublicQuiz} projects what the recipient SEES;
+     * {@code getSharedQuizResults} walks what the grader SCORES, and it used to re-derive its own unfiltered
+     * list. Filter only the projection and the recipient answers 2 questions while the grader expects 4, so
+     * {@code answers.size() != questions.size()} throws and EVERY submit 400s -- the {@code v0.110.2} shape.
+     * Against that implementation this test errors rather than fails, which is the point.
+     */
+    @Test
+    void sharedQuizGradesASubmissionSizedToTheFilteredQuestionList() {
+        stubActiveQuiz(UUID.randomUUID(), List.of(
+                singleChoiceQuestion("Answerable one?"),
+                matchingQuestion("Match A"),
+                matchingQuestion("Match B"),
+                singleChoiceQuestion("Answerable two?")
+        ));
+
+        SharedQuizResultsResponse results = quizShareLinkService.getSharedQuizResults(
+                TEST_TOKEN,
+                Arrays.asList(1, 1),
+                Arrays.asList(null, null)
+        );
+
+        assertThat(results.total()).isEqualTo(2);
+        assertThat(results.score()).isEqualTo(2);
+    }
+
+    /** Fail closed rather than serve a zero-question quiz that would score 0/0. */
+    @Test
+    void aQuizOfNothingButMatchingQuestionsIsTreatedAsUnavailable() {
+        stubActiveQuizWithNote(UUID.randomUUID(), "Cell Structure", List.of(
+                matchingQuestion("Match A"),
+                matchingQuestion("Match B")
+        ));
+
+        assertThatThrownBy(() -> quizShareLinkService.getActivePublicQuiz(TEST_TOKEN))
+                .isInstanceOf(QuizShareLinkNotFoundException.class);
+    }
+
+    /** Pins that the filter does not over-reach: a quiz with no matching items is untouched. */
+    @Test
+    void aQuizWithoutMatchingQuestionsIsServedUnchanged() {
+        stubActiveQuizWithNote(UUID.randomUUID(), "Cell Structure", List.of(
+                singleChoiceQuestion("First?"),
+                multiSelectQuestion(),
+                singleChoiceQuestion("Second?")
+        ));
+
+        PublicSharedQuizResponse response = quizShareLinkService.getActivePublicQuiz(TEST_TOKEN);
+
+        assertThat(response.questions()).hasSize(3);
+        assertThat(response.questions()).extracting(PublicQuizItem::questionFormat)
+                .containsExactly("MCQ", "MULTI_SELECT", "MCQ");
+    }
+
     private SharedQuizResultsResponse gradeMultiSelectQuiz(List<Integer> selectedIndices) {
         UUID generatedQuizId = UUID.randomUUID();
         stubActiveQuiz(generatedQuizId, List.of(multiSelectQuestion()));
@@ -448,6 +527,15 @@ class QuizShareLinkServiceTest {
                 Collections.singletonList(null),
                 List.of(selectedIndices)
         );
+    }
+
+    /** A MATCHING item as {@code teacher-quiz-developer.txt:23-26} instructs the model to emit. */
+    private QuizItem matchingQuestion(String stem) {
+        return new QuizItem(stem, CHOICES, 0, "Concept", "Because A", null, "MATCHING", null, null);
+    }
+
+    private QuizItem singleChoiceQuestion(String stem) {
+        return new QuizItem(stem, CHOICES, 1, "Concept", "Because B", null, "MCQ", null, null);
     }
 
     private void stubActiveQuizWithNote(UUID noteId, String noteTitle, List<QuizItem> questions) {
@@ -464,13 +552,27 @@ class QuizShareLinkServiceTest {
         when(noteRepository.findById(noteId)).thenReturn(Optional.of(note));
     }
 
+    /**
+     * ⚠️ Stubs the source note as well, which grading did NOT previously need. Since {@code v0.121.0} the
+     * grader and the recipient projection share ONE derivation ({@code resolveSharedQuestions} delegates to
+     * {@code resolveSharedQuiz}), so the note lookup that resolves the title is now on the grading path too.
+     * That mirrors production rather than papering over it: {@code generated_quizzes.note_id} is
+     * {@code NOT NULL REFERENCES notes(id) ON DELETE CASCADE} ({@code V43:4}), so a generated quiz cannot
+     * outlive its note and the lookup cannot fail for a quiz that exists. The old fixture simply stubbed the
+     * minimum the unfiltered path happened to touch.
+     */
     private void stubActiveQuiz(UUID generatedQuizId, List<QuizItem> questions) {
         UUID ownerUserId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
         QuizShareLinkEntity link = buildLink(generatedQuizId, ownerUserId, TEST_TOKEN, true);
-        GeneratedQuizEntity generatedQuiz = buildGeneratedQuiz(generatedQuizId, ownerUserId, UUID.randomUUID());
+        GeneratedQuizEntity generatedQuiz = buildGeneratedQuiz(generatedQuizId, ownerUserId, noteId);
         generatedQuiz.setQuestions(questions);
+        NoteEntity note = new NoteEntity();
+        note.setId(noteId);
+        note.setTitle("Shared Quiz");
         when(quizShareLinkRepository.findByToken(TEST_TOKEN)).thenReturn(Optional.of(link));
         when(generatedQuizRepository.findById(generatedQuizId)).thenReturn(Optional.of(generatedQuiz));
+        lenient().when(noteRepository.findById(noteId)).thenReturn(Optional.of(note));
     }
 
     /** Correct answers are {@code [0, 2]}; {@code correctIndex()} therefore resolves to 0. */

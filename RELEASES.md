@@ -61,6 +61,43 @@
 - The concept under the question stem is now a labelled *Topic* chip. It rendered as a bare grey string
   directly beneath the question, where it read as a second sentence of the question itself.
 
+**Slice 1 — recipient assessment integrity.** **⚠️ Implemented inline rather than by Codex: no Codex token
+was available, following the `v0.119.1` precedent that routed its Codex leg the same way.**
+
+- **Matching questions are no longer served to shared-quiz recipients.** `teacher-quiz-developer.txt:23-26`
+  instructs the model to emit a MATCHING block and `generated_quizzes` is populated through that very prompt
+  (`GeneratedQuizService:126`), but `PublicQuizItem` carries no `questionGroup` and the recipient page has no
+  control for one — so a block arrived as 2-4 consecutive MCQs with identical choices, scored independently.
+  Excluded on `questionFormat`, never on `questionGroup`, since a non-matching item may legitimately carry a
+  group. **⚠️ Carrying matching through instead would change the GRADING CONTRACT on a `permitAll` route
+  scored for an anonymous recipient; recorded as a follow-up, not rejected on merit.**
+- **⚠️ THE FILTER LIVES AT ONE POINT, AND THAT IS THE LOAD-BEARING PART.** `QuizShareLinkService` had **two
+  independent derivations of the same list** — `getActivePublicQuiz` projects what the recipient SEES,
+  `getSharedQuizResults` re-derived what the grader SCORES. Filtering only the projection would leave the
+  grader on a longer list, so `answers.size() != questions.size()` throws and **every submit 400s** — the
+  `v0.110.2` shape. `resolveSharedQuestions` now delegates to `resolveSharedQuiz(link).questions()`, making
+  divergence structurally impossible. **⚠️ The extra `noteRepository.findById` this puts on the grading path
+  is an ACCEPTED cost; do NOT re-split these methods to avoid one lookup.** It cannot fail in production:
+  `generated_quizzes.note_id` is `NOT NULL REFERENCES notes(id) ON DELETE CASCADE` (`V43:4`), so a quiz cannot
+  outlive its note.
+- A quiz consisting only of matching questions now fails closed to the existing *"no longer active"* screen
+  rather than serving a zero-question quiz that would score `0/0`.
+- **Answers are index-addressed instead of append-only**, and a **Back control** lets a recipient return and
+  correct one. The arrays are full-length and null-filled at load; the `answers[i]` / `multiAnswers[i]`
+  pairing (exactly one populated per question, decided by format) is preserved, so **no wire change was
+  needed** — the grader already tolerates a null slot.
+- **⚠️ A SECOND LOCK WAS FOUND THAT THE PLAN DOES NOT NAME, AND FIXING ONLY THE FIRST WOULD HAVE SHIPPED AN
+  OBSERVABLE NO-OP FOR SINGLE-CHOICE QUESTIONS.** `disabled={!isMultiSelect && selectedAnswer !== null}`
+  disabled **every** choice the moment a single-choice answer was picked, so Back would have landed on a
+  locked question. Removed. **⚠️ The test asserting that lock — commented *"Single-choice selection stays
+  one-shot, exactly as it shipped"* — was REWRITTEN, NOT DELETED**, since it pinned the defect; its
+  answers-slot half is genuine and was kept.
+- **⚠️ A REAL-REQUEST TEST NOW COVERS THE ROUTE, WHICH HAD NONE.** `QuizShareControllerTest` uses `MockMvc`
+  with `.contentType(MediaType.APPLICATION_JSON)` and a real body. Verified to catch the `v0.119.0` defect
+  class: removing the content type produces `HttpMediaTypeNotSupportedException` / 415 before the handler
+  runs. **⚠️ The pre-existing controller tests in this area call handlers as METHODS and pass under that
+  defect by construction.**
+
 **Recipient completion instrumentation (inline).**
 
 - `QUIZ_SHARE_LINK_COMPLETED` is added to `AnalyticsEventType` and fires from the recipient page **only
@@ -83,12 +120,12 @@ page, not the authenticated shell*; making `wrap` emit the conflicting class any
 *shared quiz page › labels the concept so it does not read as part of the question*. **⚠️ The button guard
 asserts `whitespace-nowrap` is ABSENT rather than that `whitespace-normal` is present — the latter passes
 under the plain-join bug and proves nothing.** `npx tsc --noEmit` clean, `npm run lint` 0 errors (18
-pre-existing warnings, none in touched files), the frontend suite green at **201 suites / 2,199 tests**
-and the backend suite at **2,189 tests / 0 failures** (counted from `target/surefire-reports/*.xml` after
+pre-existing warnings, none in touched files), the frontend suite green at **201 suites / 2,201 tests**
+and the backend suite at **2,195 tests / 0 failures** (counted from `target/surefire-reports/*.xml` after
 cleaning the directory first), each command's exit status read directly rather than through a pipe.
 Removing the completion event failed *shared quiz page › records a completion once a recipient's answers
 are graded*; firing it before the await failed *shared quiz page › records no completion when grading
-fails*.
+fails*. **⚠️ Slice 1's second mutant is the one worth recording: re-splitting `resolveSharedQuestions` onto its own unfiltered derivation was killed by EXACTLY ONE test — *sharedQuizGradesASubmissionSizedToTheFilteredQuestionList* — the guard that exists to prove the delegation matters.** Admitting every question format was killed by three.
 
 ## v0.120.0 - Canonical Note Title Integrity
 
