@@ -32,7 +32,7 @@ const SECTIONS: Section[] = [
     icon: Send,
     title: "Send someone a quiz — they need no account",
     description:
-      "From a note's actions menu, choose Quiz for someone. NoteLib builds a quiz from that note and gives you a link. Whoever opens it answers in their browser and sees their score, without signing up or being connected to you.",
+      "On a note with a ready Study Pack, choose Quiz for someone — teachers see the same action as Generate Quiz. NoteLib builds a quiz from that note and gives you a link. Whoever opens it answers in their browser and sees their score, without signing up or being connected to you.",
     bullets: [
       "Best for one-off help — a parent quizzing a child before a test, a friend checking a classmate",
       "Making the quiz spends a quiz generation from your monthly allowance",

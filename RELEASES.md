@@ -119,7 +119,32 @@ it. The table documented **11** of the **20** tips that ship.
   the table and nothing in the table absent from code.** Rule ids were extracted by bracket-matching each
   `GuidanceRule[]` literal rather than by line-grep, which is what the first undercount got wrong.
 
-**Guards — seven, all mutation-verified with the killing test named.** The pre-declared risk was a green
+**(4) A FALSE INSTRUCTION IN THE HELP CENTER, FOUND BY SWEEPING BY SURFACE RATHER THAN BY DIFF.**
+`learning-connections-guide.tsx:35` read *"**From a note's actions menu**, choose Quiz for someone"* — but
+that menu item is gated `!isTeacherMode` (`private-note-detail-page-client.tsx:2548`), so **a teacher has no
+such item** and reaches the same capability through a button labelled **Generate Quiz**. The guide
+instructed teachers to do something they cannot.
+
+- **⚠️ THIS IS THE EXACT CLASS THE REPO ALREADY PAID FOR, MIRRORED.** `guidance.md` records
+  `teacher-generate-quiz-multi-note` being replaced in `v0.110.0` because it *"rendered unconditionally
+  while naming a `TEACHER`-gated CTA, so most of its readers were told to do something they could not."*
+  Here it was the **non-teacher** CTA, failing the other population.
+- **⚠️ THE RELEASE MADE IT WORSE BEFORE IT FOUND IT — which is why it is fixed here rather than deferred:**
+  this release exists to **promote** the capability, so it drives more readers into that instruction. It
+  was also **inconsistent with the release's own reasoning**, since the new tip deliberately does not name
+  the control for precisely this reason.
+- Fixed to name both: *"On a note with a ready Study Pack, choose Quiz for someone — teachers see the same
+  action as Generate Quiz."* **⚠️ An earlier draft of the fix said only *Quiz for someone* and was STILL
+  WRONG for teachers**, whose control carries a different label; the labels were read from code
+  (`:2565`, `:2931`) rather than assumed.
+- **⚠️ THE FILE WAS NOT IN THIS RELEASE'S DIFF and has never been in one when the behaviour it describes
+  changed** — the standing sweep-by-surface rule names exactly that pattern. A guard now pins it, and was
+  confirmed to **fail against the text that shipped**.
+- **⚠️ It does NOT contaminate `[CHECKPOINT — due 2026-09-19]`.** The sentence describes **shared quizzes**,
+  which require no connection; nothing about connection reachability changed, no nav item moved, and no tip
+  naming supporters or connections was added.
+
+**Guards — eight, all mutation-verified with the killing test named.** The pre-declared risk was a green
 no-op, so each mutant was run and the named failure recorded:
 
 | Mutant | Test that failed |
@@ -131,6 +156,7 @@ no-op, so each mutant was run and the named failure recorded:
 | remove the rule entirely | *announces the share-a-quiz capability on a quiz-ready note …* |
 | rename the landing sibling line | *names the share-a-quiz capability beside the study modes …* |
 | rename the how-it-works entry | *names the share-a-quiz capability without inflating the 3-step flow* |
+| restore the guide's *"From a note's actions menu"* instruction | *names the share-a-quiz control for BOTH populations, not just the learner one* |
 
 Each marketing guard also pins the **counting heading** beside its claim, so a later session that promotes
 the line into `studyModes` or `steps` fails a test rather than shipping a false count. **⚠️ `npm test`
