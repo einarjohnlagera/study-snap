@@ -78,6 +78,8 @@ class NoteServicePublicLibraryPaginationIntegrationTest {
     @BeforeEach
     void initSchema() {
         createSchema();
+        jdbcTemplate.execute("delete from analytics_events");
+        jdbcTemplate.execute("delete from public_note_likes");
         jdbcTemplate.execute("delete from study_packs");
         jdbcTemplate.execute("delete from note_course_program");
         jdbcTemplate.execute("delete from course_programs");
@@ -448,8 +450,8 @@ class NoteServicePublicLibraryPaginationIntegrationTest {
         NoteEntity zero = saveNote(ownerId, "Zero", "Biology", null, new String[]{"rank"},
                 NoteStatus.DRAFT, NoteVisibility.PUBLIC, NoteTargetProfileType.STUDENT, 4);
         insertStudyPack(featured, true);
-        viewCounts.put(featured.getId(), 12L);
-        viewCounts.put(popular.getId(), 30L);
+        recordViews(featured.getId(), 12L);
+        recordViews(popular.getId(), 30L);
         insertCopies(copied.getId(), ownerId, 4);
         flushAndClear();
 
@@ -481,9 +483,122 @@ class NoteServicePublicLibraryPaginationIntegrationTest {
         assertThat(ids(viewsPage).getFirst()).isEqualTo(popular.getId().toString());
         assertThat(mostCopiedFirstPage.totalMatching()).isEqualTo(4);
         assertThat(recommendedPage.totalMatching()).isEqualTo(4);
-        assertThat(materializedQueries).hasSize(2);
-        assertThat(materializedQueries).anyMatch(sql -> sql.contains("left join study_packs sp"));
+        // ⚠️ totalMatching for the two eligibility-filtered sorts counts the ELIGIBLE rows, not every
+        // match — that is what the Java path's `rankedCandidates.size()` reported, and `hasMore` rides
+        // on it. Asserting only the ungated sorts above would miss a count that ignored eligibility.
+        assertThat(featuredPage.totalMatching())
+                .as("Featured drops ineligible notes before ordering, so its total is the eligible count")
+                .isEqualTo(1);
+        assertThat(popularPage.totalMatching()).isEqualTo(2);
+        assertThat(featuredPage.hasMore()).isFalse();
+        // v0.119.1: the ranked path issues a bounded count, a bounded id query and one projection
+        // fetch. Before it, the id query was an UNBOUNDED candidate load and there was no count.
+        assertThat(materializedQueries).hasSize(3);
+        assertThat(materializedQueries).anyMatch(sql -> sql.startsWith("select count(*)"));
+        assertThat(materializedQueries).anyMatch(sql -> sql.contains("rank_copies"));
         assertThat(materializedQueries).anyMatch(sql -> sql.contains("substring(n.content"));
+    }
+
+    /**
+     * ⚠️ THE DEFAULT-SORT GUARD. The whole finding behind v0.119.1 is that {@code sort} defaults to
+     * {@code recommended}, which is NOT SQL-orderable, so a request that simply omits {@code sort}
+     * took the unbounded ranking path even when it was paginated. A fixture that passes
+     * {@code sort=recent} exercises the one branch that was already fine and proves nothing.
+     *
+     * <p>Seven public notes against a page size of three: the request must come back with three, must
+     * report all seven as matching, and the query that chose the page must carry a database limit.
+     * Under the defect that query was an unlimited candidate load.
+     */
+    @Test
+    void requestWithNoSortTakesTheRankedPathAndIsBoundedByTheDatabase() {
+        UUID ownerId = insertUser("defaultsort", UserRole.USER);
+        for (int index = 0; index < 7; index++) {
+            saveNote(ownerId, "Default " + index, "Science", null, new String[]{"default"},
+                    NoteStatus.DRAFT, NoteVisibility.PUBLIC, NoteTargetProfileType.STUDENT, index + 1);
+        }
+        flushAndClear();
+
+        SqlCaptureStatementInspector.clear();
+        PublicNoteListResponse defaultSorted = page(
+                null, null, null, null, List.of(), null, null, false, List.of(), 0, 3);
+        List<String> queries = publicPaginationQueries();
+
+        assertThat(defaultSorted.items()).hasSize(3);
+        assertThat(defaultSorted.totalMatching()).isEqualTo(7);
+        assertThat(defaultSorted.hasMore()).isTrue();
+        assertThat(queries)
+                .as("no `sort` still means `recommended`, so this is the ranked path, not the fast path")
+                .anyMatch(sql -> sql.contains("rank_views") || sql.contains("rank_copies"));
+        assertThat(queries)
+                .filteredOn(sql -> sql.startsWith("select n.id as id from"))
+                .as("the query that chooses the ranked page must be limited by the database")
+                .isNotEmpty()
+                .allMatch(sql -> sql.contains("fetch first") || sql.contains("limit "));
+    }
+
+    /**
+     * ⚠️ THE A1 CONTRACT GUARD. {@code /notes/public} is a public HTTP contract and a caller that
+     * sends neither {@code page} nor {@code pageSize} still reaches the unpaginated shape. It must
+     * degrade to a sane BOUNDED response — never a 400, and never the whole catalog — and an
+     * unrecognised {@code sort} must still be ignored rather than rejected, which is what the Java
+     * sorter's {@code default} branch did.
+     */
+    @Test
+    void unpaginatedRequestIsBoundedKeepsUpdatedAtOrderAndNeverRejectsAnUnknownSort() {
+        UUID ownerId = insertUser("legacybound", UserRole.USER);
+        NoteEntity oldestButMostViewed = null;
+        for (int index = 0; index < 55; index++) {
+            NoteEntity note = saveNote(ownerId, "Bulk " + index, "Science", null, new String[]{"bulk"},
+                    NoteStatus.DRAFT, NoteVisibility.PUBLIC, NoteTargetProfileType.STUDENT, index + 1);
+            if (index == 0) {
+                oldestButMostViewed = note;
+            }
+        }
+        // ⚠️ Without this the fixture cannot tell `updated_at desc` from `recommended`: with every note
+        // scoring zero the two orders coincide. Giving the OLDEST note the engagement makes them
+        // disagree, so a change of the unpaginated default is caught here and not only in the
+        // repository harness.
+        recordViews(oldestButMostViewed.getId(), 50L);
+        flushAndClear();
+
+        PublicNoteListResponse unsized = noteService.listPublic(
+                null, null, null, null, List.of(), null, null, null);
+        PublicNoteListResponse unknownSort = noteService.listPublic(
+                null, null, "not-a-sort", null, List.of(), null, null, null);
+        PublicNoteListResponse sized = noteService.listPublic(
+                null, null, null, null, List.of(), null, null, 4);
+
+        assertThat(unsized.items())
+                .as("an unpaginated request with no size is capped instead of returning all 55")
+                .hasSize(50);
+        assertThat(unsized.total())
+                .as("total still reports every match, so nothing downstream loses a number")
+                .isEqualTo(55);
+        assertThat(unsized.page()).isNull();
+        assertThat(unsized.pageSize()).isNull();
+        assertThat(unknownSort.items()).extracting(NoteListItemResponse::id)
+                .as("an unrecognised sort is ignored, not rejected, and keeps updated_at desc order")
+                .isEqualTo(ids(unsized));
+        assertThat(ids(sized)).isEqualTo(ids(unsized).subList(0, 4));
+        assertThat(sized.items().getFirst().title())
+                .as("updated_at desc: the newest note is first, NOT the most-viewed one recommended would lead with")
+                .isEqualTo("Bulk 54");
+        assertThat(unsized.items().getFirst().title()).isEqualTo("Bulk 54");
+        assertThat(unknownSort.items().getFirst().title()).isEqualTo("Bulk 54");
+        assertThat(noteService.listPublic(null, null, null, null, List.of(), null, "nobody", null).items())
+                .as("an unknown creator still matches nothing rather than falling back to everything")
+                .isEmpty();
+    }
+
+    @Test
+    void unpaginatedRequestOnAnEmptyCatalogReturnsAnEmptyBoundedResponseForEverySort() {
+        for (String sort : List.of("featured", "popular", "copied", "recent", "views", "title",
+                "most_copied", "recommended")) {
+            PublicNoteListResponse response = noteService.listPublic(
+                    null, null, sort, null, List.of(), null, null, null);
+            assertThat(response.items()).as("sort=%s", sort).isEmpty();
+            assertThat(response.total()).isZero();
+        }
     }
 
     @Test
@@ -496,13 +611,13 @@ class NoteServicePublicLibraryPaginationIntegrationTest {
             NoteEntity note = saveNote(ownerId, "Featured " + index, "Science", null, new String[]{"discover"},
                     NoteStatus.GENERATED, NoteVisibility.PUBLIC, NoteTargetProfileType.STUDENT, index + 1);
             insertStudyPack(note, true);
-            viewCounts.put(note.getId(), 100L + index);
+            recordViews(note.getId(), 100L + index);
             featuredNotes.add(note);
         }
         for (int index = 0; index < 7; index++) {
             NoteEntity note = saveNote(ownerId, "Popular " + index, "Science", null, new String[]{"discover"},
                     NoteStatus.DRAFT, NoteVisibility.PUBLIC, NoteTargetProfileType.STUDENT, index + 20);
-            viewCounts.put(note.getId(), 30L + index);
+            recordViews(note.getId(), 30L + index);
             popularNotes.add(note);
         }
         for (int index = 0; index < 7; index++) {
@@ -659,6 +774,32 @@ class NoteServicePublicLibraryPaginationIntegrationTest {
             copy.setCopiedFromPublic(true);
             noteRepository.save(copy);
         }
+    }
+
+    /**
+     * Records real {@code PUBLIC_NOTE_VIEWED} rows AND the mocked DTO count together. The ranking now
+     * reads the rows; {@code toListItems} still reads the mock for the response body, so a fixture
+     * that set only one of the two would assert an ordering the product cannot produce.
+     */
+    private void recordViews(UUID noteId, long count) {
+        for (long index = 0; index < count; index++) {
+            jdbcTemplate.update(
+                    "insert into analytics_events (id, user_id, event_type, entity_id, metadata_json, created_at)"
+                            + " values (?, null, 'PUBLIC_NOTE_VIEWED', ?, '{}', ?)",
+                    UUID.randomUUID(), noteId, BASE_TIME
+            );
+        }
+        viewCounts.put(noteId, count);
+    }
+
+    private void recordLikes(UUID noteId, long count) {
+        for (long index = 0; index < count; index++) {
+            jdbcTemplate.update(
+                    "insert into public_note_likes (id, note_id, user_id, created_at) values (?, ?, ?, ?)",
+                    UUID.randomUUID(), noteId, UUID.randomUUID(), BASE_TIME
+            );
+        }
+        likeCounts.put(noteId, count);
     }
 
     private void insertStudyPack(NoteEntity note, boolean withQuiz) {
@@ -866,6 +1007,7 @@ class NoteServicePublicLibraryPaginationIntegrationTest {
                 )
                 """);
         createApplicableProgramsSchema();
+        createRankingMetricSchema();
         jdbcTemplate.execute("""
                 create table if not exists study_packs (
                     id uuid primary key,
@@ -951,6 +1093,32 @@ class NoteServicePublicLibraryPaginationIntegrationTest {
                     study_days_per_week integer,
                     created_at timestamp with time zone not null,
                     updated_at timestamp with time zone not null
+                )
+                """);
+    }
+
+    /**
+     * ⚠️ Added with v0.119.1. The engagement metrics behind Featured/Popular/Recommended used to be
+     * read through mocked repositories and merged in Java; the ranking now happens in SQL, so these
+     * tables have to exist and carry real rows or the ordering under test is not the shipped one.
+     */
+    private void createRankingMetricSchema() {
+        jdbcTemplate.execute("""
+                create table if not exists analytics_events (
+                    id uuid primary key,
+                    user_id uuid,
+                    event_type varchar(64) not null,
+                    entity_id uuid,
+                    metadata_json varchar(2000) not null default '{}',
+                    created_at timestamp with time zone not null
+                )
+                """);
+        jdbcTemplate.execute("""
+                create table if not exists public_note_likes (
+                    id uuid primary key,
+                    note_id uuid not null,
+                    user_id uuid not null,
+                    created_at timestamp with time zone not null
                 )
                 """);
     }

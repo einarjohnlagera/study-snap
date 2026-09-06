@@ -27,6 +27,12 @@ spring:
       # actual question. What leak detection is for is the SEPARATE question [CHECKPOINT — due 2026-10-04]
       # asks: whether the holds are across slow external calls, or an outright leak.
       leak-detection-threshold: ${DB_POOL_LEAK_DETECTION_MS:60000}
+      # ⚠️⚠️ RAISING THIS DOES NOT FIX POOL EXHAUSTION, AND v0.119.1 IS THE PROOF: it was raised 10 -> 20
+      # here, and on 2026-09-05 THE SAME FAILURE RECURRED AT 20. The holds are unbounded in DURATION
+      # (an anonymous /notes/public request loading the entire public catalog inside its transaction),
+      # so a larger pool buys time proportional to nothing. ⚠️ DO NOT RAISE THIS TO 40 AND BUY ANOTHER
+      # FEW WEEKS — bound the work instead.
+      # Diagnosis: docs/claude-findings/2026-09-05-prod-outage-public-catalog-unbounded-read.md
       # ⚠️ THE CEILING IS A DEPLOY-OVERLAP BOUND, NOT A PERFORMANCE KNOB. Render runs the NEW instance
       # alongside the OLD during a deploy, each with its own pool, so the safe bound is roughly
       # `N <= (max_connections - reserved) / 2`. Render Postgres allows >=100 connections on every
@@ -80,6 +86,34 @@ management:
       show-details: never
       probes:
         enabled: true
+      # ⚠️ THE LIVENESS GROUP DELIBERATELY EXCLUDES `db`, AND THIS IS WHAT TURNS AN INCIDENT INTO AN
+      # OUTAGE WHEN IT IS ABSENT (owner decision, 2026-09-06). DataSourceHealthIndicator needs a
+      # connection from the SAME pool the application is busy with, so a pool saturated by our own
+      # unbounded query made the instance unable to answer /actuator/health — and the platform
+      # restarted a process whose only problem was that it was busy. Twice: 2026-09-04 and 2026-09-05.
+      #
+      # ⚠️ connection-timeout: 5000 DID NOT PREVENT THIS AND MUST NOT BE RECORDED AS HAVING FIXED IT.
+      # Waiters failed at 5 s instead of 30 s and the instance was still killed, because failing fast
+      # does not make a connection available to the health check.
+      #
+      # ⚠️ THE TRADE IS STATED, NOT ASSUMED: this also keeps an instance ALIVE AND SERVING ERRORS when
+      # the database is genuinely gone. That is accepted because a dead database is visible in a dozen
+      # other ways, whereas a restart loop during a traffic spike is self-inflicted and silent.
+      # Database health remains observable at /actuator/health/readiness and in the `db` component of
+      # the full health endpoint — it is excluded from LIVENESS only.
+      #
+      # ⚠️⚠️ THIS CONFIG ALONE CHANGES NOTHING, AND SAYING SO IS THE POINT. /actuator/health aggregates
+      # EVERY indicator including `db` regardless of what groups exist; groups are only exposed at
+      # /actuator/health/{group}. Render's healthCheckPath is currently /api/actuator/health, so until
+      # the OWNER repoints it to /api/actuator/health/liveness in the Render dashboard, the platform is
+      # still probing the db-dependent endpoint and the restart behaviour is UNCHANGED.
+      # ⚠️ That repoint is an owner action (Render settings are not Claude's to change) and is recorded
+      # as an outstanding obligation in RELEASES.md. Do NOT record Leg C as done without it.
+      group:
+        liveness:
+          include: livenessState
+        readiness:
+          include: readinessState,db
   endpoints:
     web:
       exposure:

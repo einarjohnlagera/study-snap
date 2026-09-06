@@ -38,7 +38,36 @@ The More Filters sheet includes a `Study Pack Ready` boolean toggle. Applied sta
 
 **Backend**
 - `backend/src/main/java/com/studysnap/backend/controller/NoteController.java` — `GET /notes/public` (filter endpoint), `GET /notes/public/{id}`, `POST /notes/public/{id}/like`, `GET /notes/public/seo/{subject}/{slug}`
-- `backend/src/main/java/com/studysnap/backend/service/NoteService.java` — `listPublic(viewerUserId, search, sort, subject, tags, courseProgram, creator)`, `getPublicById`, `togglePublicNoteLike`
+- `backend/src/main/java/com/studysnap/backend/service/NoteService.java` — `listPublic(viewerUserId, search, sort, subject, tags, courseProgram, creator, size)`, `getPublicById`, `getPublicBySeoPath`, `togglePublicNoteLike`
+
+## ⚠️ Every public read is BOUNDED IN THE DATABASE, and it must stay that way (v0.119.1)
+
+`GET /notes/public` is **anonymous** and holds a pooled JDBC connection for the whole of its
+transaction, so any path that scales with the catalog scales the outage with it. This has already
+crossed a threshold **three times** as the catalog grew — the 2026-09-01 frontend build failure and the
+2026-09-04 and 2026-09-05 outages.
+
+- **There is no unbounded query left to call.** `findPublicLibraryCandidates` and its projection were
+  **deleted** rather than merely bypassed. Ranking, the legacy branch, the discovery sections and the
+  SEO path all resolve through bounded SQL with a matching `count(*)`.
+- **`RECOMMENDED` ranking lives in SQL now, reproduced faithfully** — decay with its floor, the
+  copies/likes/views weights, both eligibility filters and the full comparator chain including the id
+  tiebreak. Weights and thresholds are public constants the SQL is built from, so there is **one**
+  definition. **⚠️ Do not re-express the ranking anywhere else.**
+- **⚠️ `size` is NOT a pagination parameter.** Branch selection is `page != null || pageSize != null`.
+  A caller sending only `size` takes the legacy branch.
+- **⚠️ The unpaginated default sort is `updated_at desc`, NOT `RECOMMENDED`.** Only the *paginated*
+  branch defaults to `RECOMMENDED`. A live dashboard caller sends no `sort`, so routing the unpaginated
+  branch through `parsePublicLibrarySort` would silently re-rank it.
+- **⚠️ The slug SQL is correct only on PostgreSQL.** `normalizedSlugSql`'s H2 arm omits the `g` flag and
+  replaces only the first run of non-alphanumerics, so a multi-word title slugifies wrongly there. Guards
+  for it belong in `NativeQueryPostgresIntegrationTest`, never the H2-backed suite.
+- **⚠️ Do NOT fix a future recurrence by raising `maximum-pool-size`.** It was raised 10 → 20 and the
+  same failure recurred at 20; the holds are unbounded in **duration**.
+
+Related notes on a public note page are ordered **most-recent-first** as of `v0.119.1` (they were
+`RECOMMENDED`-ranked). That was an owner decision taken to make the call cheap — the ranked order needs
+a bounded ranked query per subject, which is not built.
 - `backend/src/main/java/com/studysnap/backend/repository/NoteRepository.java` — JPQL public note query with multi-param filtering
 - `backend/src/main/java/com/studysnap/backend/util/PublicNotesScoringUtils.java` — discovery score formula (`viewCount + copyCount×3 + likeCount×2`) with 30-day age decay; `computeScore(note, now)`
 

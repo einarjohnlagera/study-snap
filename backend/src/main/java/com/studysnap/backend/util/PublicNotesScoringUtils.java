@@ -12,14 +12,23 @@ import java.util.List;
  * All sorting is computed in-memory from existing engagement signals.
  */
 public final class PublicNotesScoringUtils {
-    private static final int FEATURED_COPY_WEIGHT = 3;
-    private static final int FEATURED_LIKE_WEIGHT = 2;
-    private static final int FEATURED_VIEW_WEIGHT = 1;
-    private static final long POPULAR_MIN_COPIES = 3L;
-    private static final long POPULAR_MIN_VIEWS = 20L;
+    /**
+     * ⚠️ These constants are the SINGLE definition of the public-library ranking rule, and
+     * {@code PublicLibraryRepositoryImpl} builds its ranking SQL from them rather than repeating the
+     * numbers. v0.119.1 moved the ordering itself into SQL so an anonymous {@code /notes/public}
+     * request stops loading the entire public catalog to rank it in Java; this class stays the
+     * readable statement of the rule the SQL encodes, and {@code PublicNotesScoringUtilsTest} stays
+     * its executable specification. Change a weight here and the SQL follows automatically — do NOT
+     * hardcode a second copy in the repository.
+     */
+    public static final int FEATURED_COPY_WEIGHT = 3;
+    public static final int FEATURED_LIKE_WEIGHT = 2;
+    public static final int FEATURED_VIEW_WEIGHT = 1;
+    public static final long POPULAR_MIN_COPIES = 3L;
+    public static final long POPULAR_MIN_VIEWS = 20L;
+    public static final double FEATURED_DECAY_HALF_LIFE_DAYS = 30.0;
+    public static final double FEATURED_DECAY_MIN_FACTOR = 0.1;
     private static final String FEATURED_READY_STATUS = "STUDY_PACK_READY";
-    private static final double FEATURED_DECAY_HALF_LIFE_DAYS = 30.0;
-    private static final double FEATURED_DECAY_MIN_FACTOR = 0.1;
 
     private PublicNotesScoringUtils() {}
 

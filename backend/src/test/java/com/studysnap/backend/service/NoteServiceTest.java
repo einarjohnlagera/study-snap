@@ -68,6 +68,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.doThrow;
@@ -76,6 +77,8 @@ import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -1888,8 +1891,13 @@ class NoteServiceTest {
         owner.setFirstName("History");
         owner.setEmail("history@example.com");
 
-        when(noteRepository.findByVisibilityOrderByUpdatedAtDesc(NoteVisibility.PUBLIC))
-                .thenReturn(List.of(publicNote));
+        // ⚠️ REWIRED, NOT DELETED. Slug MATCHING now lives in SQL and is covered by
+        // NativeQueryPostgresIntegrationTest.seoSlugResolutionIsBoundedAndKeepsItsFallbackSemantics --
+        // a mocked repository cannot test it. What THIS test still covers is service glue the SQL knows
+        // nothing about: author attribution and the study-pack join.
+        when(noteRepository.findPublicNoteIdBySeoSlugs(anyString(), anyString(), anyBoolean()))
+                .thenReturn(Optional.of(noteId));
+        when(noteRepository.findById(noteId)).thenReturn(Optional.of(publicNote));
         when(studyPackRepository.findByNoteId(noteId)).thenReturn(Optional.of(studyPack));
         when(userRepository.findById(ownerUserId)).thenReturn(Optional.of(owner));
 
@@ -1913,8 +1921,10 @@ class NoteServiceTest {
         publicNote.setTitle("Mitosis Overview");
         publicNote.setSubject("Biology – Cell Division");
 
-        when(noteRepository.findByVisibilityOrderByUpdatedAtDesc(NoteVisibility.PUBLIC))
-                .thenReturn(List.of(publicNote));
+        // Rewired for the same reason as above: matching is SQL now; this covers the subject passthrough.
+        when(noteRepository.findPublicNoteIdBySeoSlugs(anyString(), anyString(), anyBoolean()))
+                .thenReturn(Optional.of(noteId));
+        when(noteRepository.findById(noteId)).thenReturn(Optional.of(publicNote));
         when(studyPackRepository.findByNoteId(noteId)).thenReturn(Optional.empty());
         when(userRepository.findById(ownerUserId)).thenReturn(Optional.empty());
 
@@ -1926,7 +1936,11 @@ class NoteServiceTest {
 
     @Test
     void getPublicBySeoPath_rejectsMissingOrPrivateMatch() {
-        when(noteRepository.findByVisibilityOrderByUpdatedAtDesc(NoteVisibility.PUBLIC))
+        // The 404 contract is service-level and survives the move to SQL: an unresolved slug pair
+        // must throw rather than return anything.
+        when(noteRepository.findPublicNoteIdBySeoSlugs(anyString(), anyString(), anyBoolean()))
+                .thenReturn(Optional.empty());
+        lenient().when(noteRepository.findByVisibilityOrderByUpdatedAtDesc(NoteVisibility.PUBLIC))
                 .thenReturn(List.of());
 
         assertThatThrownBy(() -> noteService.getPublicBySeoPath("science", "cell-structure", null))
@@ -1967,8 +1981,9 @@ class NoteServiceTest {
         officialOwner.setRole(UserRole.ADMIN);
         officialOwner.setLearnerLevel(LearnerLevel.PROFESSIONAL);
 
-        when(noteRepository.findByVisibilityOrderByUpdatedAtDesc(NoteVisibility.PUBLIC))
-                .thenReturn(List.of(viewerNote, officialNote));
+        when(noteRepository.countPublicLibraryMatches(any())).thenReturn(2L);
+        when(noteRepository.findPublicLibraryRankedPageIds(any(), any(), any(), any(), anyInt(), anyInt()))
+                .thenReturn(List.of(viewerNoteId, officialNoteId));
         when(studyPackRepository.findByNoteIdIn(List.of(viewerNoteId, officialNoteId)))
                 .thenReturn(List.of(officialStudyPack));
         when(userRepository.findAllById(List.of(viewerUserId, officialOwnerUserId)))
@@ -2009,6 +2024,37 @@ class NoteServiceTest {
         assertThat(response.items().get(1).likedByCurrentUser()).isFalse();
     }
 
+    /**
+     * ⚠️ v0.119.1 REMOVED EIGHTEEN {@code listPublic_*} CASES FROM THIS CLASS, and where each one's
+     * coverage went is recorded here so the deletion can be checked rather than taken on trust.
+     *
+     * <p>They stubbed {@code findByVisibilityOrderByUpdatedAtDesc} and then asserted the filtering,
+     * sorting and size-limiting that {@code listPublicLegacy} performed IN JAVA. That code is gone:
+     * the unpaginated shape now filters, orders and limits in the database, because doing it in Java
+     * meant loading the entire public catalog on an anonymous endpoint. A mocked repository cannot
+     * assert an ORDER BY or a LIMIT, so rewriting them here would have produced tests that stub an id
+     * order and then assert the same id order came back — green under both the defect and the fix.
+     *
+     * <p>Replacement coverage, all against real rows:
+     * <ul>
+     *   <li>subject, search, tag, course-program, creator and combined filters, and legacy-versus-
+     *       paginated equivalence — {@code NoteServicePublicLibraryPaginationIntegrationTest}
+     *       ({@code legacyModeUsesJoinedProgramsBeforeThePersonalNoteStringAndMatchesPaginatedResults},
+     *       {@code legacyModePreservesCombinedFiltersTotalAndNullablePaginationFields},
+     *       {@code paginatedSearchMatchesEachLegacyPreviewAndTagField}).
+     *   <li>{@code size}, the new cap, the {@code updated_at desc} default and an unknown sort being
+     *       ignored rather than rejected — {@code
+     *       unpaginatedRequestIsBoundedKeepsUpdatedAtOrderAndNeverRejectsAnUnknownSort}.
+     *   <li>every one of the eight sort orders and both eligibility filters — {@code
+     *       NativeQueryPostgresIntegrationTest.rankedPublicLibrarySortsReproduceTheJavaRankingOrderExactly}
+     *       against real PostgreSQL rows, plus {@code rankedSortsPreserveEligibilityAndUngatedSemantics}.
+     *   <li>a note stored with any target profile type still being listed — {@code
+     *       discoverySectionsAreCappedUnfilteredAndMutuallyExclusive}, which seeds a BOARD_TAKER note.
+     * </ul>
+     *
+     * <p>The two cases kept below survived because their subject is {@code NoteService}'s own glue —
+     * DTO enrichment and the pre-filter {@code total} — not the SQL.
+     */
     @Test
     void listPublic_includesLikeCountsAndViewerLikeState() {
         UUID viewerUserId = UUID.randomUUID();
@@ -2023,8 +2069,11 @@ class NoteServiceTest {
         UserEntity owner = buildUser(ownerUserId, "owner@example.com");
         PublicNoteLikeCountProjection likedNoteLikes = mockLikeCount(likedNoteId, 12L);
 
-        when(noteRepository.findByVisibilityOrderByUpdatedAtDesc(NoteVisibility.PUBLIC))
-                .thenReturn(List.of(likedNote, plainNote));
+        when(noteRepository.countPublicLibraryMatches(any())).thenReturn(2L);
+        when(noteRepository.findPublicLibraryRankedPageIds(any(), any(), any(), any(), anyInt(), anyInt()))
+                .thenReturn(List.of(likedNoteId, plainNoteId));
+        org.mockito.Mockito.doReturn(List.of(buildListItemProjection(likedNote), buildListItemProjection(plainNote)))
+                .when(noteRepository).findPublicLibraryListItemProjectionsByIdIn(any());
         when(userRepository.findAllById(List.of(ownerUserId))).thenReturn(List.of(owner));
         when(publicNoteLikeRepository.countLikesByNoteIds(List.of(likedNoteId, plainNoteId)))
                 .thenReturn(List.of(likedNoteLikes));
@@ -2116,80 +2165,14 @@ class NoteServiceTest {
     // --- listPublic sort tests ---
 
     @Test
-    void listPublic_withNullSort_returnsNotesInDefaultDbOrder() {
-        UUID ownerId = UUID.randomUUID();
-        NoteEntity note1 = buildNote(UUID.randomUUID(), ownerId, NoteStatus.GENERATED, NoteVisibility.PUBLIC, "content1");
-        note1.setTitle("Note1");
-        NoteEntity note2 = buildNote(UUID.randomUUID(), ownerId, NoteStatus.GENERATED, NoteVisibility.PUBLIC, "content2");
-        note2.setTitle("Note2");
-        UserEntity owner = buildUser(ownerId, "user@example.com");
-        when(noteRepository.findByVisibilityOrderByUpdatedAtDesc(NoteVisibility.PUBLIC)).thenReturn(List.of(note1, note2));
-        when(userRepository.findAllById(any())).thenReturn(List.of(owner));
-
-        var result = noteService.listPublic(null, null, null, null, null, null, null, null);
-
-        assertThat(result.total()).isEqualTo(2);
-        assertThat(result.items()).extracting(NoteListItemResponse::title).containsExactly("Note1", "Note2");
-    }
-
-    @Test
-    void listPublic_withSizeLimitsAfterCourseProgramFilter() {
-        UUID ownerId = UUID.randomUUID();
-        UserEntity owner = buildUser(ownerId, "user@example.com");
-        List<NoteEntity> notes = java.util.stream.IntStream.rangeClosed(1, 6)
-                .mapToObj(index -> {
-                    NoteEntity note = buildNote(UUID.randomUUID(), ownerId, NoteStatus.GENERATED, NoteVisibility.PUBLIC, "content " + index);
-                    note.setTitle("PNLE Note " + index);
-                    note.setCourseProgram("PNLE");
-                    return note;
-                })
-                .toList();
-        NoteEntity otherProgram = buildNote(UUID.randomUUID(), ownerId, NoteStatus.GENERATED, NoteVisibility.PUBLIC, "other");
-        otherProgram.setTitle("NMAT Note");
-        otherProgram.setCourseProgram("NMAT");
-        when(noteRepository.findByVisibilityOrderByUpdatedAtDesc(NoteVisibility.PUBLIC))
-                .thenReturn(java.util.stream.Stream.concat(notes.stream(), java.util.stream.Stream.of(otherProgram)).toList());
-        when(userRepository.findAllById(any())).thenReturn(List.of(owner));
-
-        var result = noteService.listPublic(null, null, null, null, null, "PNLE", null, 4);
-
-        assertThat(result.total()).isEqualTo(7);
-        assertThat(result.items()).hasSize(4);
-        assertThat(result.items()).extracting(NoteListItemResponse::courseProgram).containsOnly("PNLE");
-        assertThat(result.items()).extracting(NoteListItemResponse::title)
-                .containsExactly("PNLE Note 1", "PNLE Note 2", "PNLE Note 3", "PNLE Note 4");
-    }
-
-    @Test
-    void listPublic_withoutSizeReturnsAllMatchingNotes() {
-        UUID ownerId = UUID.randomUUID();
-        UserEntity owner = buildUser(ownerId, "user@example.com");
-        List<NoteEntity> notes = java.util.stream.IntStream.rangeClosed(1, 6)
-                .mapToObj(index -> {
-                    NoteEntity note = buildNote(UUID.randomUUID(), ownerId, NoteStatus.GENERATED, NoteVisibility.PUBLIC, "content " + index);
-                    note.setTitle("Note " + index);
-                    return note;
-                })
-                .toList();
-        when(noteRepository.findByVisibilityOrderByUpdatedAtDesc(NoteVisibility.PUBLIC)).thenReturn(notes);
-        when(userRepository.findAllById(any())).thenReturn(List.of(owner));
-
-        var result = noteService.listPublic(null, null, null, null, null, null, null, null);
-
-        assertThat(result.total()).isEqualTo(6);
-        assertThat(result.items()).hasSize(6);
-    }
-
-    @Test
     void listPublic_legacyModeDropsMissingProjectionWithoutChangingPreFilterTotal() {
         NoteEntity retained = buildNote(
                 UUID.randomUUID(), UUID.randomUUID(), NoteStatus.DRAFT, NoteVisibility.PUBLIC, "retained"
         );
-        NoteEntity deletedBetweenQueries = buildNote(
-                UUID.randomUUID(), UUID.randomUUID(), NoteStatus.DRAFT, NoteVisibility.PUBLIC, "deleted"
-        );
-        when(noteRepository.findByVisibilityOrderByUpdatedAtDesc(NoteVisibility.PUBLIC))
-                .thenReturn(List.of(retained, deletedBetweenQueries));
+        UUID deletedBetweenQueries = UUID.randomUUID();
+        when(noteRepository.countPublicLibraryMatches(any())).thenReturn(2L);
+        when(noteRepository.findPublicLibraryRankedPageIds(any(), any(), any(), any(), anyInt(), anyInt()))
+                .thenReturn(List.of(retained.getId(), deletedBetweenQueries));
         org.mockito.Mockito.doReturn(List.of(buildListItemProjection(retained)))
                 .when(noteRepository).findPublicLibraryListItemProjectionsByIdIn(any());
 
@@ -2198,384 +2181,6 @@ class NoteServiceTest {
         assertThat(result.total()).isEqualTo(2);
         assertThat(result.items()).extracting(NoteListItemResponse::id)
                 .containsExactly(retained.getId().toString());
-    }
-
-    @Test
-    void listPublic_withSortFeatured_sortsByScoreDescThenNewestFirst() {
-        UUID ownerId = UUID.randomUUID();
-        UUID highScoreId = UUID.randomUUID();
-        UUID lowScoreId = UUID.randomUUID();
-        OffsetDateTime base = OffsetDateTime.now();
-
-        NoteEntity highScore = buildNote(highScoreId, ownerId, NoteStatus.GENERATED, NoteVisibility.PUBLIC, "high");
-        highScore.setTitle("HighScore");
-        highScore.setCreatedAt(base.minusDays(1));
-        NoteEntity lowScore = buildNote(lowScoreId, ownerId, NoteStatus.GENERATED, NoteVisibility.PUBLIC, "low");
-        lowScore.setTitle("LowScore");
-        lowScore.setCreatedAt(base.minusDays(2));
-
-        UserEntity owner = buildUser(ownerId, "user@example.com");
-        NoteCopyCountProjection highCopies = mockCopyCount(highScoreId, 10L);
-        NoteCopyCountProjection lowCopies = mockCopyCount(lowScoreId, 1L);
-        PublicNoteLikeCountProjection highLikes = mockLikeCount(highScoreId, 3L);
-        PublicNoteLikeCountProjection lowLikes = mockLikeCount(lowScoreId, 0L);
-        PublicNoteEventCountProjection highViews = mockEventCount(highScoreId, 5L);
-        PublicNoteEventCountProjection lowViews = mockEventCount(lowScoreId, 1L);
-        StudyPackEntity highScorePack = buildStudyPack(highScoreId, "High summary");
-        StudyPackEntity lowScorePack = buildStudyPack(lowScoreId, "Low summary");
-
-        when(noteRepository.findByVisibilityOrderByUpdatedAtDesc(NoteVisibility.PUBLIC))
-                .thenReturn(List.of(lowScore, highScore));
-        when(studyPackRepository.findByNoteIdIn(any())).thenReturn(List.of(highScorePack, lowScorePack));
-        when(noteRepository.countCopiedPublicNotesBySourceNoteIds(any()))
-                .thenReturn(List.of(highCopies, lowCopies));
-        when(publicNoteLikeRepository.countLikesByNoteIds(any()))
-                .thenReturn(List.of(highLikes, lowLikes));
-        when(analyticsEventRepository.countPublicNoteEventsByTypeAndNoteIds(
-                eq(AnalyticsEventType.PUBLIC_NOTE_VIEWED), any()))
-                .thenReturn(List.of(highViews, lowViews));
-        when(userRepository.findAllById(any())).thenReturn(List.of(owner));
-
-        var result = noteService.listPublic(null, null, "featured", null, null, null, null, null);
-
-        assertThat(result.items()).extracting(NoteListItemResponse::title).containsExactly("HighScore", "LowScore");
-    }
-
-    @Test
-    void listPublic_withSortFeatured_tiebreakByNewestCreatedAt() {
-        UUID ownerId = UUID.randomUUID();
-        UUID olderNoteId = UUID.randomUUID();
-        UUID newerNoteId = UUID.randomUUID();
-        OffsetDateTime base = OffsetDateTime.now();
-
-        NoteEntity olderNote = buildNote(olderNoteId, ownerId, NoteStatus.GENERATED, NoteVisibility.PUBLIC, "older");
-        olderNote.setTitle("OlderNote");
-        olderNote.setCreatedAt(base.minusDays(3));
-        NoteEntity newerNote = buildNote(newerNoteId, ownerId, NoteStatus.GENERATED, NoteVisibility.PUBLIC, "newer");
-        newerNote.setTitle("NewerNote");
-        newerNote.setCreatedAt(base.minusDays(1));
-
-        UserEntity owner = buildUser(ownerId, "user@example.com");
-        NoteCopyCountProjection olderCopies = mockCopyCount(olderNoteId, 5L);
-        NoteCopyCountProjection newerCopies = mockCopyCount(newerNoteId, 5L);
-        PublicNoteLikeCountProjection olderLikes = mockLikeCount(olderNoteId, 0L);
-        PublicNoteLikeCountProjection newerLikes = mockLikeCount(newerNoteId, 0L);
-        PublicNoteEventCountProjection olderViews = mockEventCount(olderNoteId, 5L);
-        PublicNoteEventCountProjection newerViews = mockEventCount(newerNoteId, 5L);
-        StudyPackEntity olderPack = buildStudyPack(olderNoteId, "Older summary");
-        StudyPackEntity newerPack = buildStudyPack(newerNoteId, "Newer summary");
-
-        when(noteRepository.findByVisibilityOrderByUpdatedAtDesc(NoteVisibility.PUBLIC))
-                .thenReturn(List.of(olderNote, newerNote));
-        when(studyPackRepository.findByNoteIdIn(any())).thenReturn(List.of(olderPack, newerPack));
-        when(noteRepository.countCopiedPublicNotesBySourceNoteIds(any()))
-                .thenReturn(List.of(olderCopies, newerCopies));
-        when(publicNoteLikeRepository.countLikesByNoteIds(any()))
-                .thenReturn(List.of(olderLikes, newerLikes));
-        when(analyticsEventRepository.countPublicNoteEventsByTypeAndNoteIds(
-                eq(AnalyticsEventType.PUBLIC_NOTE_VIEWED), any()))
-                .thenReturn(List.of(olderViews, newerViews));
-        when(userRepository.findAllById(any())).thenReturn(List.of(owner));
-
-        var result = noteService.listPublic(null, null, "featured", null, null, null, null, null);
-
-        assertThat(result.items()).extracting(NoteListItemResponse::title).containsExactly("NewerNote", "OlderNote");
-    }
-
-    @Test
-    void listPublic_withSortFeatured_excludesNotesWithoutMeaningfulSummary() {
-        UUID ownerId = UUID.randomUUID();
-        UUID eligibleId = UUID.randomUUID();
-        UUID noSummaryId = UUID.randomUUID();
-
-        NoteEntity eligible = buildNote(eligibleId, ownerId, NoteStatus.GENERATED, NoteVisibility.PUBLIC, "eligible");
-        eligible.setTitle("Eligible");
-        NoteEntity noSummary = buildNote(noSummaryId, ownerId, NoteStatus.GENERATED, NoteVisibility.PUBLIC, "no-summary");
-        noSummary.setTitle("NoSummary");
-
-        UserEntity owner = buildUser(ownerId, "user@example.com");
-        NoteCopyCountProjection eligibleCopies = mockCopyCount(eligibleId, 2L);
-        NoteCopyCountProjection noSummaryCopies = mockCopyCount(noSummaryId, 20L);
-        PublicNoteLikeCountProjection eligibleLikes = mockLikeCount(eligibleId, 0L);
-        PublicNoteLikeCountProjection noSummaryLikes = mockLikeCount(noSummaryId, 10L);
-        PublicNoteEventCountProjection eligibleViews = mockEventCount(eligibleId, 4L);
-        PublicNoteEventCountProjection noSummaryViews = mockEventCount(noSummaryId, 50L);
-        when(noteRepository.findByVisibilityOrderByUpdatedAtDesc(NoteVisibility.PUBLIC))
-                .thenReturn(List.of(eligible, noSummary));
-        when(studyPackRepository.findByNoteIdIn(any())).thenReturn(List.of(
-                buildStudyPack(eligibleId, "Eligible summary"),
-                buildStudyPack(noSummaryId, "   ")
-        ));
-        when(noteRepository.countCopiedPublicNotesBySourceNoteIds(any()))
-                .thenReturn(List.of(eligibleCopies, noSummaryCopies));
-        when(publicNoteLikeRepository.countLikesByNoteIds(any()))
-                .thenReturn(List.of(eligibleLikes, noSummaryLikes));
-        when(analyticsEventRepository.countPublicNoteEventsByTypeAndNoteIds(
-                eq(AnalyticsEventType.PUBLIC_NOTE_VIEWED), any()))
-                .thenReturn(List.of(eligibleViews, noSummaryViews));
-        when(userRepository.findAllById(any())).thenReturn(List.of(owner));
-
-        var result = noteService.listPublic(null, null, "featured", null, null, null, null, null);
-
-        assertThat(result.items()).extracting(NoteListItemResponse::title).containsExactly("Eligible");
-    }
-
-    @Test
-    void listPublic_withSortPopular_sortsByCopyCountDesc() {
-        UUID ownerId = UUID.randomUUID();
-        UUID manyId = UUID.randomUUID();
-        UUID fewId = UUID.randomUUID();
-
-        NoteEntity many = buildNote(manyId, ownerId, NoteStatus.GENERATED, NoteVisibility.PUBLIC, "many");
-        many.setTitle("ManyCopies");
-        NoteEntity few = buildNote(fewId, ownerId, NoteStatus.GENERATED, NoteVisibility.PUBLIC, "few");
-        few.setTitle("FewCopies");
-
-        UserEntity owner = buildUser(ownerId, "user@example.com");
-        NoteCopyCountProjection manyCopies = mockCopyCount(manyId, 50L);
-        NoteCopyCountProjection fewCopies = mockCopyCount(fewId, 3L);
-        PublicNoteLikeCountProjection manyLikes = mockLikeCount(manyId, 2L);
-        PublicNoteLikeCountProjection fewLikes = mockLikeCount(fewId, 8L);
-        when(noteRepository.findByVisibilityOrderByUpdatedAtDesc(NoteVisibility.PUBLIC))
-                .thenReturn(List.of(few, many));
-        when(noteRepository.countCopiedPublicNotesBySourceNoteIds(any()))
-                .thenReturn(List.of(manyCopies, fewCopies));
-        when(publicNoteLikeRepository.countLikesByNoteIds(any()))
-                .thenReturn(List.of(manyLikes, fewLikes));
-        when(userRepository.findAllById(any())).thenReturn(List.of(owner));
-
-        var result = noteService.listPublic(null, null, "popular", null, null, null, null, null);
-
-        assertThat(result.items()).extracting(NoteListItemResponse::title).containsExactly("ManyCopies", "FewCopies");
-    }
-
-    @Test
-    void listPublic_withSortPopular_filtersOutNotesBelowThreshold() {
-        UUID ownerId = UUID.randomUUID();
-        UUID popularId = UUID.randomUUID();
-        UUID belowThresholdId = UUID.randomUUID();
-
-        NoteEntity popular = buildNote(popularId, ownerId, NoteStatus.GENERATED, NoteVisibility.PUBLIC, "popular");
-        popular.setTitle("Popular");
-        NoteEntity belowThreshold = buildNote(belowThresholdId, ownerId, NoteStatus.GENERATED, NoteVisibility.PUBLIC, "below");
-        belowThreshold.setTitle("BelowThreshold");
-
-        UserEntity owner = buildUser(ownerId, "user@example.com");
-        NoteCopyCountProjection popularCopies = mockCopyCount(popularId, 3L);
-        NoteCopyCountProjection belowCopies = mockCopyCount(belowThresholdId, 2L);
-        PublicNoteLikeCountProjection popularLikes = mockLikeCount(popularId, 4L);
-        PublicNoteLikeCountProjection belowLikes = mockLikeCount(belowThresholdId, 12L);
-        PublicNoteEventCountProjection popularViews = mockEventCount(popularId, 5L);
-        PublicNoteEventCountProjection belowViews = mockEventCount(belowThresholdId, 19L);
-        when(noteRepository.findByVisibilityOrderByUpdatedAtDesc(NoteVisibility.PUBLIC))
-                .thenReturn(List.of(popular, belowThreshold));
-        when(noteRepository.countCopiedPublicNotesBySourceNoteIds(any()))
-                .thenReturn(List.of(popularCopies, belowCopies));
-        when(publicNoteLikeRepository.countLikesByNoteIds(any()))
-                .thenReturn(List.of(popularLikes, belowLikes));
-        when(analyticsEventRepository.countPublicNoteEventsByTypeAndNoteIds(
-                eq(AnalyticsEventType.PUBLIC_NOTE_VIEWED), any()))
-                .thenReturn(List.of(popularViews, belowViews));
-        when(userRepository.findAllById(any())).thenReturn(List.of(owner));
-
-        var result = noteService.listPublic(null, null, "popular", null, null, null, null, null);
-
-        assertThat(result.items()).extracting(NoteListItemResponse::title).containsExactly("Popular");
-    }
-
-    @Test
-    void listPublic_withSortRecent_sortsByCreatedAtDesc() {
-        UUID ownerId = UUID.randomUUID();
-        UUID oldId = UUID.randomUUID();
-        UUID newId = UUID.randomUUID();
-        OffsetDateTime base = OffsetDateTime.now();
-
-        NoteEntity old = buildNote(oldId, ownerId, NoteStatus.GENERATED, NoteVisibility.PUBLIC, "old");
-        old.setTitle("OldNote");
-        old.setCreatedAt(base.minusDays(5));
-        NoteEntity recent = buildNote(newId, ownerId, NoteStatus.GENERATED, NoteVisibility.PUBLIC, "new");
-        recent.setTitle("RecentNote");
-        recent.setCreatedAt(base.minusDays(1));
-
-        UserEntity owner = buildUser(ownerId, "user@example.com");
-        when(noteRepository.findByVisibilityOrderByUpdatedAtDesc(NoteVisibility.PUBLIC))
-                .thenReturn(List.of(old, recent));
-        when(userRepository.findAllById(any())).thenReturn(List.of(owner));
-
-        var result = noteService.listPublic(null, null, "recent", null, null, null, null, null);
-
-        assertThat(result.items()).extracting(NoteListItemResponse::title).containsExactly("RecentNote", "OldNote");
-    }
-
-    @Test
-    void listPublic_withUnknownSort_returnsDefaultOrder() {
-        UUID ownerId = UUID.randomUUID();
-        NoteEntity note1 = buildNote(UUID.randomUUID(), ownerId, NoteStatus.GENERATED, NoteVisibility.PUBLIC, "c1");
-        note1.setTitle("First");
-        NoteEntity note2 = buildNote(UUID.randomUUID(), ownerId, NoteStatus.GENERATED, NoteVisibility.PUBLIC, "c2");
-        note2.setTitle("Second");
-        UserEntity owner = buildUser(ownerId, "user@example.com");
-        when(noteRepository.findByVisibilityOrderByUpdatedAtDesc(NoteVisibility.PUBLIC)).thenReturn(List.of(note1, note2));
-        when(userRepository.findAllById(any())).thenReturn(List.of(owner));
-
-        var result = noteService.listPublic(null, null, "unknown_value", null, null, null, null, null);
-
-        assertThat(result.items()).extracting(NoteListItemResponse::title).containsExactly("First", "Second");
-    }
-
-    @Test
-    void listPublic_withEmptyPublicNotes_returnsEmptyRegardlessOfSort() {
-        when(noteRepository.findByVisibilityOrderByUpdatedAtDesc(NoteVisibility.PUBLIC)).thenReturn(List.of());
-
-        assertThat(noteService.listPublic(null, null, "featured", null, null, null, null, null).items()).isEmpty();
-        assertThat(noteService.listPublic(null, null, "popular", null, null, null, null, null).items()).isEmpty();
-        assertThat(noteService.listPublic(null, null, "recent", null, null, null, null, null).items()).isEmpty();
-    }
-
-    @Test
-    void listPublic_withSubjectFilter_returnsOnlyMatchingNotes() {
-        UUID ownerId = UUID.randomUUID();
-        NoteEntity match = buildNote(UUID.randomUUID(), ownerId, NoteStatus.GENERATED, NoteVisibility.PUBLIC, "c1");
-        match.setTitle("MatchNote");
-        match.setSubject("integral calculus");
-        NoteEntity noMatch = buildNote(UUID.randomUUID(), ownerId, NoteStatus.GENERATED, NoteVisibility.PUBLIC, "c2");
-        noMatch.setTitle("NoMatchNote");
-        noMatch.setSubject("Physics");
-        UserEntity owner = buildUser(ownerId, "user@example.com");
-        when(noteRepository.findByVisibilityOrderByUpdatedAtDesc(NoteVisibility.PUBLIC)).thenReturn(List.of(match, noMatch));
-        when(userRepository.findAllById(any())).thenReturn(List.of(owner));
-
-        // Case-insensitive match
-        var result = noteService.listPublic(null, null, null, "Integral Calculus", null, null, null, null);
-
-        assertThat(result.items()).extracting(NoteListItemResponse::title).containsExactly("MatchNote");
-    }
-
-    @Test
-    void listPublic_withSearchFilter_matchesTitleCaseInsensitively() {
-        UUID ownerId = UUID.randomUUID();
-        NoteEntity match = buildNote(UUID.randomUUID(), ownerId, NoteStatus.GENERATED, NoteVisibility.PUBLIC, "Cinco de Mayo overview");
-        match.setTitle("Cinco de Mayo");
-        match.setSubject("History");
-        NoteEntity noMatch = buildNote(UUID.randomUUID(), ownerId, NoteStatus.GENERATED, NoteVisibility.PUBLIC, "Ohm's law overview");
-        noMatch.setTitle("Ohm's Law");
-        noMatch.setSubject("Physics");
-        UserEntity owner = buildUser(ownerId, "user@example.com");
-        when(noteRepository.findByVisibilityOrderByUpdatedAtDesc(NoteVisibility.PUBLIC)).thenReturn(List.of(match, noMatch));
-        when(userRepository.findAllById(any())).thenReturn(List.of(owner));
-
-        var result = noteService.listPublic(null, "cinco", null, null, null, null, null, null);
-
-        assertThat(result.total()).isEqualTo(2);
-        assertThat(result.items()).extracting(NoteListItemResponse::title).containsExactly("Cinco de Mayo");
-    }
-
-    @Test
-    void listPublic_withTagFilter_matchesNormalizedTagSlug() {
-        UUID ownerId = UUID.randomUUID();
-        NoteEntity match = buildNote(UUID.randomUUID(), ownerId, NoteStatus.GENERATED, NoteVisibility.PUBLIC, "history content");
-        match.setTitle("Battle Notes");
-        match.setTags(new String[]{"Battle of Puebla", "History"});
-        NoteEntity noMatch = buildNote(UUID.randomUUID(), ownerId, NoteStatus.GENERATED, NoteVisibility.PUBLIC, "science content");
-        noMatch.setTitle("Physics Notes");
-        noMatch.setTags(new String[]{"Motion"});
-        UserEntity owner = buildUser(ownerId, "user@example.com");
-        when(noteRepository.findByVisibilityOrderByUpdatedAtDesc(NoteVisibility.PUBLIC)).thenReturn(List.of(match, noMatch));
-        when(userRepository.findAllById(any())).thenReturn(List.of(owner));
-
-        var result = noteService.listPublic(null, null, null, null, List.of("battle-of-puebla"), null, null, null);
-
-        assertThat(result.items()).extracting(NoteListItemResponse::title).containsExactly("Battle Notes");
-    }
-
-    @Test
-    void listPublic_withCourseProgramAndTagFilters_combinesFilters() {
-        UUID ownerId = UUID.randomUUID();
-        NoteEntity match = buildNote(UUID.randomUUID(), ownerId, NoteStatus.GENERATED, NoteVisibility.PUBLIC, "renal concepts");
-        match.setTitle("Renal Review");
-        match.setCourseProgram("Nursing");
-        match.setTags(new String[]{"Kidneys", "Anatomy"});
-        NoteEntity wrongCourseProgram = buildNote(UUID.randomUUID(), ownerId, NoteStatus.GENERATED, NoteVisibility.PUBLIC, "renal concepts");
-        wrongCourseProgram.setTitle("Biology Renal Review");
-        wrongCourseProgram.setCourseProgram("Biology");
-        wrongCourseProgram.setTags(new String[]{"Kidneys"});
-        NoteEntity wrongTag = buildNote(UUID.randomUUID(), ownerId, NoteStatus.GENERATED, NoteVisibility.PUBLIC, "renal concepts");
-        wrongTag.setTitle("General Nursing");
-        wrongTag.setCourseProgram("Nursing");
-        wrongTag.setTags(new String[]{"Circulation"});
-        UserEntity owner = buildUser(ownerId, "user@example.com");
-        when(noteRepository.findByVisibilityOrderByUpdatedAtDesc(NoteVisibility.PUBLIC))
-                .thenReturn(List.of(match, wrongCourseProgram, wrongTag));
-        when(userRepository.findAllById(any())).thenReturn(List.of(owner));
-
-        var result = noteService.listPublic(null, null, null, null, List.of("kidneys"), "nursing", null, null);
-
-        assertThat(result.total()).isEqualTo(3);
-        assertThat(result.items()).extracting(NoteListItemResponse::title).containsExactly("Renal Review");
-    }
-
-    @Test
-    void listPublic_returnsNotesRegardlessOfStoredTargetProfileType() {
-        UUID viewerUserId = UUID.randomUUID();
-        UUID studentOwnerId = UUID.randomUUID();
-        UUID teacherOwnerId = UUID.randomUUID();
-
-        NoteEntity studentTargetNote = buildNote(UUID.randomUUID(), teacherOwnerId, NoteStatus.GENERATED, NoteVisibility.PUBLIC, "student target");
-        studentTargetNote.setTitle("Student target");
-        studentTargetNote.setTargetProfileType(NoteTargetProfileType.STUDENT);
-        NoteEntity boardTargetNote = buildNote(UUID.randomUUID(), studentOwnerId, NoteStatus.GENERATED, NoteVisibility.PUBLIC, "board target");
-        boardTargetNote.setTitle("Board target");
-        boardTargetNote.setTargetProfileType(NoteTargetProfileType.BOARD_TAKER);
-
-        UserEntity studentOwner = buildUser(studentOwnerId, "student@example.com");
-        studentOwner.setProfileType(ProfileType.STUDENT);
-        UserEntity teacherOwner = buildUser(teacherOwnerId, "teacher@example.com");
-        teacherOwner.setProfileType(ProfileType.TEACHER);
-
-        when(noteRepository.findByVisibilityOrderByUpdatedAtDesc(NoteVisibility.PUBLIC))
-                .thenReturn(List.of(studentTargetNote, boardTargetNote));
-        when(userRepository.findAllById(List.of(teacherOwnerId, studentOwnerId)))
-                .thenReturn(List.of(teacherOwner, studentOwner));
-
-        var result = noteService.listPublic(viewerUserId, null, null, null, null, null, null, null);
-
-        assertThat(result.total()).isEqualTo(2);
-        assertThat(result.items()).extracting(NoteListItemResponse::title)
-                .containsExactly("Student target", "Board target");
-    }
-
-    @Test
-    void listPublic_withCreator_returnsMatchingCreatorPublicNotes() {
-        UUID ownerId = UUID.randomUUID();
-        NoteEntity creatorNote = buildNote(UUID.randomUUID(), ownerId, NoteStatus.GENERATED, NoteVisibility.PUBLIC, "creator note");
-        creatorNote.setTitle("Creator note");
-        creatorNote.setCourseProgram("Nursing");
-        NoteEntity otherCourseNote = buildNote(UUID.randomUUID(), ownerId, NoteStatus.GENERATED, NoteVisibility.PUBLIC, "other course note");
-        otherCourseNote.setTitle("Other course note");
-        otherCourseNote.setCourseProgram("Engineering");
-        UserEntity owner = buildUser(ownerId, "creator@example.com");
-        owner.setUsername(EXISTING_CREATOR_USERNAME);
-        when(noteRepository.findPublicNotes(NoteVisibility.PUBLIC, EXISTING_CREATOR_USERNAME))
-                .thenReturn(List.of(creatorNote, otherCourseNote));
-        when(userRepository.findAllById(List.of(ownerId))).thenReturn(List.of(owner));
-
-        var result = noteService.listPublic(null, null, null, null, null, "nursing", EXISTING_CREATOR_USERNAME, null);
-
-        assertThat(result.total()).isEqualTo(2);
-        assertThat(result.items()).extracting(NoteListItemResponse::title).containsExactly("Creator note");
-        verify(noteRepository).findPublicNotes(NoteVisibility.PUBLIC, EXISTING_CREATOR_USERNAME);
-    }
-
-    @Test
-    void listPublic_withUnknownCreator_returnsEmptyList() {
-        String unknownCreator = "doesnotexist";
-        when(noteRepository.findPublicNotes(NoteVisibility.PUBLIC, unknownCreator)).thenReturn(List.of());
-
-        var result = noteService.listPublic(null, null, null, null, null, null, unknownCreator, null);
-
-        assertThat(result.total()).isZero();
-        assertThat(result.items()).isEmpty();
-        verify(noteRepository).findPublicNotes(NoteVisibility.PUBLIC, unknownCreator);
     }
 
     // --- sort test helpers ---

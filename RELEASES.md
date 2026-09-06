@@ -1,5 +1,232 @@
 # RELEASES.md - NoteLib
 
+## v0.119.1 - Public Catalog Bounds
+
+**Status: Released** (kicked off and signed off 2026-09-06, base branch `releases/v0.119.1`, cut from
+`main` after `v0.119.0` merged and tagged)
+
+Theme: an anonymous public read stops doing work proportional to the entire catalog, and a busy pool
+stops being mistaken for a dead application.
+
+**⚠️ A PATCH, AND THE THIRD OCCURRENCE OF ONE SHAPE** — a latent unbounded fetch over the public
+catalog crossing a threshold as data grows: the 2026-09-01 frontend build failure, the 2026-09-04
+outage, and the 2026-09-05 outage. Governed by
+`docs/claude-plans/2026-09-05-public-catalog-unbounded-read-fix-plan.md`, with the incident at
+`docs/claude-findings/2026-09-05-prod-outage-public-catalog-unbounded-read.md`. **EXECUTE ITS
+DECISIONS; DO NOT RE-DERIVE ITS §1 SETTLED FACTS.**
+
+**⚠️ THE PLAN RECOMMENDED `v0.117.1` BECAUSE PRODUCTION RAN `v0.117.0` WHEN IT WAS WRITTEN. That is
+stale, not wrong — production now runs `v0.119.0`, and a patch is a `.1` of a version that EXISTS.**
+
+**THE DEFECT:** `GET /notes/public` is anonymous (`SecurityConfig:50` `permitAll`) and performs work
+proportional to the **whole public catalog** on every path a real client uses, holding a pooled JDBC
+connection for all of it. **The hold is INSIDE the transaction** — acquired at
+`JpaTransactionManager.doBegin`, i.e. at `@Transactional(readOnly = true)` entry — **so this is NOT an
+open-in-view problem and that question must not be re-opened here.** Twenty concurrent such requests
+exhaust the 20-connection pool; `DataSourceHealthIndicator` then cannot answer `/api/actuator/health`
+because it needs a connection from the same pool, and the platform restarts a process whose only
+problem is that it is busy. Public notes are **1,442**, up from ~950 in August.
+
+### Planned Scope
+
+**ALL THREE LEGS (owner, 2026-09-06).** They are independent and could have shipped separately; the
+owner took all three.
+
+- **Leg B — the two callers that never needed a catalog (frontend).** `getServerPublicNoteCount`
+  sends `/notes/public?size=1` and loads 1,442 notes **to return one integer**;
+  `getServerPublicNotesBySubject` sends `?subject=X&size=4` and loads 1,442 **to return four items, on
+  ~250 SEO pages**. Both move onto the SQL-orderable paginated path (`count(*)` + `LIMIT`) with
+  `page`/`pageSize`/`sort=recent`. **⚠️ `size` IS NOT A PAGINATION PARAMETER** — branch selection is
+  `page != null || pageSize != null`.
+  - **⚠️ OWNER DECISION, STATED NOT ABSORBED: `sort=recent` IS ACCEPTED FOR THE RELATED-NOTES CALL, AND
+    IT IS A VISIBLE PRODUCT CHANGE.** The four related notes on ~250 public SEO pages become the most
+    recent in that subject rather than the highest `RECOMMENDED`-ranked. Cheap now; the ranked order
+    would have required Leg A first.
+- **Leg A — bound the server-side work (backend, the root cause).** **A1** the legacy branch
+  (`NoteService.listPublicLegacy:831`) loads every public `NoteEntity` **including `content`**, then
+  filters in Java and applies `size` last. **A2** the ranking branch loads every matching candidate for
+  six of eight sorts — **including the DEFAULT `RECOMMENDED`**, so a request with no `sort` takes the
+  unbounded path even when paginated. **A3** `getPublicLibraryDiscoverySections` calls
+  `findPublicLibraryCandidates` with **empty criteria** on another anonymous endpoint.
+  - **⚠️ A1 IS BOUNDED, NOT RETIRED (routine call, recorded).** `listPublicNotes` is parameterised over
+    both shapes, so the legacy branch stays reachable, and `/notes/public` is a public HTTP contract:
+    an unpaginated request must degrade to a sane bounded response, **never a 400 and never an
+    unbounded load.**
+- **Leg C — decouple the health check from the pool (config).** **⚠️ OWNER DECISION (2026-09-06): the
+  health group EXCLUDES `db`.** The trade is stated rather than assumed: it stops the platform
+  restarting a healthy instance whose pool is saturated by its own query, **and** it keeps an instance
+  alive and serving errors when the database is genuinely gone. Database health must remain observable
+  somewhere. **⚠️ `connection-timeout: 5000` WORKED AS DESIGNED AND DID NOT PREVENT THE RESTART** —
+  waiters failed at 5 s instead of 30 s and the instance was still killed, because failing fast does
+  not make a connection available to the health check. **Do NOT record the `v0.112.0` config as having
+  addressed this leg.**
+
+### Anti-drift
+
+**⚠️ EVERY ITEM BELOW IS REJECTED WITH REASONS — DO NOT RE-PROPOSE.**
+
+- **⚠️ Do NOT raise `maximum-pool-size`, instance memory, or the database plan.** The database was not
+  the constraint (CPU 0.089/1, memory 191 MB of 256 MB, `max_connections=103`). The holds are unbounded
+  in **duration**, so a larger pool buys time proportional to nothing. **It has already been raised once
+  (10 → 20) and the same failure recurred at 20** — said plainly here so a later session does not raise
+  it to 40 and buy another few weeks.
+- **⚠️ Do NOT set `spring.jpa.open-in-view: false`.** The hold is inside the transaction; that change
+  has real blast radius and `v0.112.0` ruled it wants a staging run.
+- **⚠️ Do NOT propose PgBouncer** (standing rule from `v0.112.0`; it addresses *too many clients*, not
+  *connections held too long*).
+- **⚠️ Do NOT start `v0.112.0` Phase 3** — gated on `[CHECKPOINT — due 2026-10-04]`, restructures six
+  services and twelve quota sites, and is nearby precisely when it must not be taken opportunistically.
+- **⚠️ Do NOT trim `contentPreview`/`summaryPreview`** — `v0.100.0` rejected it; it moves the threshold,
+  which is what caused the recurrence.
+- **⚠️ Do NOT make identifying the traffic source a prerequisite.** Render request logging is not
+  enabled for this service, the endpoint is anonymous, and the unbounded read is a defect whoever
+  called it.
+- **⚠️ Do NOT silently replace `RECOMMENDED` with a SQL `ORDER BY` that scores differently.**
+  `PublicNotesScoringUtils` decides Featured/Popular/Recent and is real product behaviour — either move
+  the scoring into SQL faithfully or bound the candidate set by a stated, reviewed rule.
+- **⚠️ Do NOT "fix" Leg A by moving work off the transaction.** The work itself is the problem; a
+  shorter transaction around an unbounded load allocates the same heap and still scales with the
+  catalog.
+- **NO migration. No quota, entitlement, limit or meter change. No new mode or sub-mode.** Do not change
+  what `BOARD_EXAM_STARTED`, `ADAPTIVE_PRACTICE_STARTED`, `QUIZ_SHARE_LINK_CREATED` or the new
+  `BULK_REGENERATION_STARTED` record. `frontend/app/onboarding` stays frozen.
+
+### Verification
+
+**Leg A: ONE SCOPED COLD AGENT framed as FALSIFICATION** — it changes what an anonymous `permitAll`
+production read returns and touches native SQL plus product-visible ranking. **Legs B and C: a single
+`advisor()` call on the diff.** **⚠️ This does NOT reach the three-agent tier** — no permission
+substrate, no cross-user read, no money or quota semantics, no migration.
+
+**⚠️ PRE-DECLARED GUARDS, each written so a fixture cannot pass under both the defect and the fix:**
+
+- **Leg B:** assert the **request URL** each server helper builds and that it carries `pageSize`. **A
+  guard asserting only that the count is correct passes under both the defect and the fix — today's
+  code returns the right number, expensively.**
+- **Leg B, corrected guard:** `server-public-notes.test.ts:252` asserts the code *"never requests
+  `/notes/public` without either a filter or a pageSize"* while `:24` pins `?size=1` as expected — **the
+  existing guard permits the exact shape that causes the outage.** Tighten it, and **show the tightened
+  assertion FAILING against unmodified source** before changing the source.
+- **Leg A:** the fixture must contain **more public notes than the requested page size**, and must
+  assert the number of rows the REPOSITORY returns, not just the response body. **A fixture with fewer
+  notes than the page size cannot distinguish a bounded query from an unbounded one.**
+- **Leg A, default-sort guard:** exercise the **no-`sort`** request explicitly — the default is the
+  unbounded path, so a fixture passing `sort=recent` tests the one branch that was already fine.
+- **Leg A, behaviour-preservation guard:** for a given filter set the items returned must be
+  **unchanged**, including ordering, for each of the eight sorts. This is what stops a performance fix
+  silently re-ranking `/explore`.
+- **Leg C:** `/api/actuator/health` returns 200 while the pool is saturated, **and** database health
+  stays observable somewhere.
+
+### Obligations at signoff
+
+- **Correct two now-false comments**, or the tree misleads the next reader: `server-public-notes.ts`'s
+  block claiming pagination made this bounded (it bounded **response size**, fixing the 2 MB Next.js
+  cache defect, **not** server-side work), and `application.yaml`'s `maximum-pool-size: 20` block, which
+  presents the bump as the answer to this class of failure.
+- **Answer `[CHECKPOINT — due 2026-10-04]` early.** It asked whether the holds are across slow external
+  calls or an outright leak. **This outage answers it and the answer is NEITHER:** an unbounded
+  in-transaction result-set load on an anonymous read path.
+- **Record the win:** HikariCP leak detection, shipped in `v0.112.0` Phase 1 for exactly this purpose,
+  named the offending path on its first real firing.
+
+### Shipped
+
+- **Leg B — the two callers that never needed a catalog (PR #1297).** `getServerPublicNoteCount` now
+  sends `?page=0&pageSize=1&sort=recent` instead of `?size=1`, and `getServerPublicNotesBySubject`
+  sends `?subject=X&page=0&pageSize=4&sort=recent`. Both move onto the SQL-orderable paginated branch
+  (`count(*)` + `LIMIT`). **`total` keeps its exact meaning** — it is simply computed by a `count(*)`
+  rather than by materialising 1,442 notes.
+  - **⚠️ `sort=recent` IS REQUIRED, NOT DECORATIVE.** The default sort is `RECOMMENDED`, which is not
+    SQL-orderable, so a paginated request *without* a sort still loads every candidate to rank in Java.
+  - **⚠️ PRODUCT CHANGE, OWNER-DECIDED AND STATED:** the four related notes on ~250 public SEO pages
+    now arrive most-recent-first rather than in `RECOMMENDED` rank order.
+  - **⚠️ THE EXISTING GUARD WAS PROTECTING THE DEFECT.** `server-public-notes.test.ts:252` asserted the
+    code *"never requests `/notes/public` without either a filter or a pageSize"* — but it accepted
+    `subject=` as an ALTERNATIVE to `pageSize`, so `?subject=X&size=4` passed while loading the whole
+    catalog, **and it never called either of the two offending helpers.** Tightened to require
+    `pageSize` on all five helpers, and **shown FAILING against unmodified source first**
+    (`never requests /notes/public without pageSize, on any helper`). The `:24` assertion that pinned
+    `?size=1` was **corrected, not extended** — it had pinned the outage shape.
+- **Leg C — the health check stops depending on the pool (PR #1297).** A `liveness` group excluding
+  `db`, and a `readiness` group that keeps database health observable. Pinned by
+  `HealthGroupContractTest`, which reads the production YAML as text because the test profile shadows
+  it, and whose discriminating assertion is that liveness does **not** contain `db` — a group that
+  merely existed would reproduce the failure.
+  - **⚠️⚠️ THIS IS INERT UNTIL AN OWNER ACTION, AND IS RECORDED AS OUTSTANDING RATHER THAN DONE.**
+    `/actuator/health` aggregates every indicator regardless of groups; groups are only exposed at
+    `/actuator/health/{group}`. Render's `healthCheckPath` is `/api/actuator/health`, so **the platform
+    is still probing the db-dependent endpoint until the owner repoints it to
+    `/api/actuator/health/liveness`.** Render settings are not Claude's to change.
+- **Both now-false comments corrected**, per the plan's signoff obligation: `server-public-notes.ts`'s
+  claim that pagination made this bounded (it bounded **response size**, fixing the 2 MB Next.js cache
+  defect, not server-side work — and `fetchAllPublicNotePages("")` sends no `sort`, so one sitemap
+  generation issues ~29 full-catalog loads), and `application.yaml`'s `maximum-pool-size` block, which
+  presented the bump as the answer to this class of failure. **It was raised 10 → 20 and the same
+  failure recurred at 20** — said in the file so a later session does not raise it to 40.
+
+- **Leg A — the root cause: the server-side work is now bounded by the database (PR #1298).**
+  `findPublicLibraryCandidates` and its projection are **deleted** — the unbounded query no longer
+  exists to be called. The ranked branch, `listPublicLegacy` and `getPublicLibraryDiscoverySections`
+  all move to bounded SQL (`LIMIT`/`OFFSET` plus a matching `count(*)`), and ~200 lines of Java
+  filter/rank/limit helpers go with them.
+  - **⚠️ THE RANKING WAS MOVED INTO SQL FAITHFULLY, NOT REPLACED.** Score, 30-day-half-life decay with
+    its 10% floor, the copies×3 / likes×2 / views×1 weights, both eligibility filters and the whole
+    comparator chain — including the final `n.id asc` tiebreak the Java path got implicitly from a
+    stable sort. Weights and thresholds are now public constants the SQL is built from, so there is
+    **one** definition. **Evidence: `rankedSortsPreserveEligibilityAndUngatedSemantics` PREDATES this
+    change, was NOT edited, and passes unmodified** — verified against the base branch, not trusted.
+  - **⚠️ THE PLAN'S §1.5 IS CORRECTED: "the default is `RECOMMENDED`" is true of the PAGINATED branch
+    only.** `sortPublicLibraryItems` returned items untouched when `sort == null`, so the unpaginated
+    default was `updated_at desc` — and `dashboard-community-notes-section.tsx:76` is a live caller
+    sending no `sort`. Routing A1 through `parsePublicLibrarySort` would have **silently re-ranked that
+    dashboard section**. Preserved via a nullable sort meaning "natural order".
+  - **Three stated behaviour changes**, none moving a live caller: an unpaginated request with no
+    `size` is capped at **50** (was: the whole catalog) — every live caller already passes `size`, which
+    the controller clamps to ≤50; legacy `FEATURED` eligibility and `TITLE` blank-handling now use the
+    SQL definitions the paginated path already shipped; and legacy `contentPreview` derives from the
+    2000-char projection rather than the full body, **which is the point of the fix**.
+  - **⚠️ 18 `listPublic_*` tests were DELETED, with the reason recorded at the deletion site.** They
+    stubbed `findByVisibilityOrderByUpdatedAtDesc` and asserted Java filtering that no longer exists; a
+    mocked repository cannot assert an `ORDER BY` or a `LIMIT`, so a rewrite would have stubbed an id
+    order and asserted the same order came back. Coverage moved to real-row tests on PostgreSQL 18.
+
+- **A4 — the fourth instance, folded in on owner decision (PR #1298).** `getPublicBySeoPath` was
+  anonymous, transactional, and loaded **every public `NoteEntity` including `content`** before
+  filtering slugs in Java, on each of the ~250 SEO detail pages — **heavier per call than A1/A2/A3**,
+  all of which loaded slimmer projections. It is now one bounded `limit 1` query.
+  - **⚠️ THE SEMANTICS WERE REPRODUCED, NOT TIDIED, BECAUSE THEY ARE LIVE PUBLIC URL BEHAVIOUR.**
+    Java's `slugify(value, fallback)` returns the **fallback** for a null or blank value while
+    `normalizedSlugSql` returns `''` — so without a `coalesce`/`nullif` an untitled note would 404 at
+    `/untitled-note` while a note literally titled "Untitled Note" resolved. The fallback is a **bound
+    parameter per call site**: subject and title use different defaults, and one shared name would
+    silently have applied one to both.
+  - **⚠️ A PRESERVED QUIRK, STATED RATHER THAN FIXED:** the blank-subject branch still queries
+    `subject IS NULL`, not "slugifies to the default", so a whitespace-only subject stays unreachable
+    by its SEO URL exactly as before. Changing it changes which note a live public URL resolves to.
+  - The `updated_at desc` tiebreak gains `n.id asc`. The previous ordering had none, so ties resolved
+    by whatever the database returned — nondeterministic rather than defined, so pinning it cannot
+    break anything anyone could have relied on.
+  - **⚠️ THE GUARD CANNOT LIVE IN THE H2 SUITE, AND THAT IS ITSELF A FINDING.** `normalizedSlugSql`
+    branches on dialect and the **H2 arm omits the `g` flag**, replacing only the first run of
+    non-alphanumerics — so "Shear Force Diagrams" slugifies to `shear-force diagrams` there. The
+    expression is correct only on PostgreSQL, which is what production runs. The guard lives in
+    `NativeQueryPostgresIntegrationTest`; a version written against H2 would have failed, or passed for
+    the wrong reason.
+  - Three mocked `NoteServiceTest` cases were **rewired, not deleted** — matching is SQL now, but
+    author attribution, the study-pack join and the 404 contract are service glue worth keeping.
+
+### Known limitations
+- **`RECOMMENDED` is bounded per row, not per catalog.** The ranked default still aggregates the three
+  metric tables once per request, so it is O(catalog + events) **in the database**. What this removes is
+  the 1,442 entity + projection + DTO materialisations, three round trips, and the JVM-side hold that
+  exhausted the pool. `RECENT`/`TITLE`/legacy-null now do **zero** metric aggregates where the old
+  branch always did four. **`analytics_events` has no index on `entity_id`** — an `(event_type,
+  entity_id)` index would make this index-only, and is an owner follow-up because this release forbids
+  a migration.
+- **`OfficialChallengeQuizTemplateService:81`** does the same full-catalog entity load. Different risk
+  class — not anonymous — and out of scope here.
+
 ## v0.119.0 - Curator Bulk Regeneration
 
 **Status: Released** (kicked off 2026-09-05, signed off 2026-09-06, base branch `releases/v0.119.0`,
