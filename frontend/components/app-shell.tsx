@@ -60,8 +60,21 @@ function isAuthRoute(pathname: string): boolean {
   return pathname === "/auth" || pathname === "/login" || pathname === "/signup";
 }
 
+// A shared quiz is answered by its RECIPIENT, who may or may not have an account, and the page is a
+// focused assessment. Before this, a signed-in recipient got the full authenticated shell -- including the
+// mobile bottom tab bar -- while answering, so the same link produced two different experiences depending
+// on whether the viewer happened to be logged in, and offered escape hatches mid-assessment. Anonymous and
+// authenticated recipients now both get the focused page. `/quiz/` is the recipient route only; the
+// authenticated in-app quiz surfaces live under `/study-packs` and `/notes` and are unaffected.
+function isSharedQuizRoute(pathname: string): boolean {
+  return pathname.startsWith("/quiz/");
+}
+
 function shouldUseAuthenticatedShell(hasAuthUser: boolean, pathname: string): boolean {
-  return hasAuthUser && !isMarketingPublicRoute(pathname) && !isAuthRoute(pathname);
+  return hasAuthUser
+    && !isMarketingPublicRoute(pathname)
+    && !isAuthRoute(pathname)
+    && !isSharedQuizRoute(pathname);
 }
 
 function isProtectedAppRoute(pathname: string): boolean {

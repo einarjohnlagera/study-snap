@@ -50,6 +50,19 @@ beforeEach(() => {
 });
 
 describe("shared quiz page", () => {
+  // The concept used to render as a bare string directly under the stem, so it read as a second sentence
+  // OF the question. Asserting only that the concept text appears would pass under that defect -- the
+  // label is the whole fix, so the label is what is asserted.
+  it("labels the concept so it does not read as part of the question", async () => {
+    stubQuiz([SINGLE_CHOICE_QUESTION]);
+
+    render(<SharedQuizPage />);
+
+    expect(await screen.findByText("Which one?")).toBeInTheDocument();
+    expect(screen.getByText("Topic")).toBeInTheDocument();
+    expect(screen.getByText("Concept")).toBeInTheDocument();
+  });
+
   it("lets a recipient select several choices on a MULTI_SELECT question and submits the whole set", async () => {
     stubQuiz([MULTI_SELECT_QUESTION]);
     render(<SharedQuizPage />);
