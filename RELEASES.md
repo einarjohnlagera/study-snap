@@ -70,8 +70,38 @@
   `Promise.all` would add a wasted request to every leaf-plan refresh — a regression on the path this
   release's anti-drift says is untouched.
 
+**Cold-agent finding, folded in rather than deferred: the curator loaded the builder TWICE.**
+
+- **A `TEACHER` ran the whole builder load twice — 6 requests, not 3 — and the release's own headline
+  arithmetic was false for exactly the persona it is written about.** `labels` is memoized on
+  `authUser?.profileType`, and `authUser` resolves in a MOUNT EFFECT, so the first render sees
+  `undefined`. **⚠️ `STUDENT` and `BOARD_EXAM` both resolve `goalSingular` to the same `"Goal"` the
+  unresolved default gives, so the memo is referentially stable and they load once — `TEACHER` resolves
+  it to `"Course"`, which changed `loadBuilder`'s identity and re-armed the load effect.** The label was
+  read only for one error string, so it now goes through a ref (`v0.123.0`'s own `onLabelChangeRef`
+  shape, not a new one) and leaves the dependency array. **⚠️ PRE-EXISTING, NOT INTRODUCED HERE — it
+  doubled the fan-out too (44 requests, not 22).** It is fixed in this release rather than filed because
+  the release exists to cut Goal-path request cost and a curator is who owns 20-plan Review Sets.
+  **⚠️ THE GUARD'S FIXTURE IS A `TEACHER` FOR THAT REASON, AND A `STUDENT` FIXTURE PASSES UNDER THE
+  DEFECT** — which is why the shipped request-count guard could not see it.
+
 **Known limitations.**
 
+- **The endpoint's real-request test does NOT run the security filter chain, so `@PreAuthorize` is
+  pinned by reflection rather than enforced.** `buildMockMvc` uses `standaloneSetup`, which is the whole
+  controller test class's existing shape, so this is **pre-existing infrastructure and not specific to
+  this endpoint** — changing it would restructure a shared harness this release's anti-drift does not
+  open. **⚠️ What IS covered was verified by mutation: changing the `@GetMapping` path fails
+  `goalChildItemsResolveToTheirOwnHandlerAndSerializeOverTheWire`,** so routing and over-the-wire
+  serialization are genuinely exercised — and `v0.119.0`'s defect class (a JSON POST sent with no
+  `Content-Type`) cannot apply to a bodyless GET. The residual is that method security and the
+  application's own `ObjectMapper` bean are bypassed in that class.
+- **A child deleted mid-load now renders as an EMPTY plan instead of erroring.** The goal read and the
+  batch read are concurrent, so a child present in `goal.children` but absent from the batch response
+  falls through `?? []`. Under the fan-out, `getCollection(deletedChildId)` threw 404 and the page
+  surfaced `not-found`. The window is a delete from another tab or device between two in-flight
+  requests; it is arguably the better degradation, but it is a **behaviour change** and is recorded as
+  one rather than discovered later.
 - **The positional-partition guard is defensive and UNTESTED, and that is stated rather than papered
   over.** `groupItemResponsesByCollectionId` throws if `toItemResponses` ever returns a different number
   of responses than items — the shape that would silently misattribute an item to the wrong plan. It is

@@ -1503,6 +1503,13 @@ class NoteCollectionServiceTest {
      * {@code toItemResponses}' five bulk queries — is called EXACTLY ONCE for three children. A version
      * that looped {@code toItemResponses} per child would call it three times and still return the same
      * response, so asserting only the response shape would not catch it.
+     *
+     * <p>⚠️ OBSERVED KILL MECHANISM, RECORDED BECAUSE IT IS NOT THE ONE THIS COMMENT PREDICTS: when the
+     * per-child loop is actually introduced, the test dies EARLIER than the verify — with
+     * {@code NoteNotFoundException} out of {@code toItemResponse}, because the note-projection stub is
+     * keyed on the FULL note-id list and returns empty for a per-child sublist. The verify remains the
+     * assertion that would catch a loop which tolerated a missing note, so the guard is real either
+     * way; do not read the exception as a fixture defect and "fix" the stub to be lenient per child.
      */
     @Test
     void getGoalChildItems_returnsEveryChildsItemsInOneBulkPass() {
