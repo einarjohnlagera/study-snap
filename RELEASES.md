@@ -7,8 +7,11 @@
 **⚠️ CUT FROM `docs/next-sequencing`, NOT FROM `main` — stated as an exception, with the reason, rather
 than routed around.** PR #1300 (the sequencing section this release executes) is **blocked by a
 repository ruleset**, not by review: `require_extra_approval_for_unattributed_changes` is enabled on
-`main` (ruleset `17016892`, read via the API — **not** probed with a push). Merging it needs either an
-approval or `--admin`, and **bypassing a branch protection is the owner's action, not Claude's.** So the
+`main` (ruleset `17016892`, read via the API — **not** probed with a push). **⚠️ `required_approving_review_count` is 0, so this is NOT a review
+requirement** — the block comes specifically from the unattributed-changes parameter, and **the merge path is the
+owner's to choose** (attributing the commit is the likely fix; whether self-approval satisfies the rule was NOT
+tested). **⚠️ WHAT IS SETTLED IS ONLY THAT CLAUDE DOES NOT FORCE IT: `--admin` bypasses a branch protection and is
+not Claude's to run.** So the
 sequencing commit rides into `main` through this release's PR instead, exactly as `v0.111.0` did with
 `docs/correct-architecture-domain-context-verdict`. **⚠️ A later session should expect #1300 to be closed
 unmerged rather than look for it on `main`.**
@@ -171,9 +174,17 @@ the tags change turns into an edit to `resolveTags` itself.
 4. **A legitimate qualifier survives** — topic `Nursing Management of Acute Asthma` is persisted
    unchanged, proving the fix keeps curator words rather than stripping discipline terms.
 5. **Profile isolation** — a curator whose profile Course/Program is `Civil Engineering`, generating with
-   four unrelated `courseProgramIds`, must produce a context whose `courseProgram` is **null**. **⚠️ Write
-   this at the BACKEND resolver, not against the frontend payload** — it then holds regardless of what any
-   client sends, which is the point of pinning a hazard that is one refactor from failing.
+   four unrelated `courseProgramIds` **and a null `courseProgramText`**, must produce a context whose
+   `courseProgram` is **null**. **⚠️ Write this at the BACKEND resolver, not against the frontend payload** —
+   it then holds regardless of what any client sends, which is the point of pinning a hazard that is one
+   refactor from failing. **⚠️ THE FIXTURE'S SHAPE IS LOAD-BEARING AND BOTH HALVES ARE, so it is spelled out
+   rather than left to implementation. FOUR ids, NOT ONE:** `resolveBulkCourseProgram:155-160` **returns early**
+   inside the `ids.size() == 1` branch, so a ONE-id fixture never reaches the curator guard at `:161` and the
+   mutant that deletes `!CuratorAuthoringPredicate.isCurator(user)` **survives it**. With four ids the `if` block
+   is skipped, execution reaches `:161`, and deleting the guard flips `profileCourseProgram` from `null` to
+   `Civil Engineering`. **AND `courseProgramText` MUST BE NULL**, because `:164` is
+   `firstNonBlank(courseProgramText, profileCourseProgram)` — a non-null text value would supply the answer from
+   the other argument and mask the guard entirely. Null is what the curator branch sends in production.
 6. **The tags fallback** — with the LLM returning **no** tags, the note is tagged from the curator's topic
    and never from the discarded generated title. A fixture where the LLM returns tags passes under both
    behaviours.
