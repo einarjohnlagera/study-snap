@@ -130,6 +130,20 @@ was available, following the `v0.119.1` precedent that routed its Codex leg the 
   runs. **⚠️ The pre-existing controller tests in this area call handlers as METHODS and pass under that
   defect by construction.**
 
+**Post-implementation `advisor()` review of slices 1-3 (the declared tier), which added two guards.** The
+review pointed at slice 1's navigation state as the least-reviewed code in the release — the cold agent was
+scoped to slice 4's visibility predicate — and named two paths the existing tests did not walk. Both were
+checked in code and **neither was a defect**, but both are now pinned:
+
+- **Emptying an answer you returned to re-gates Continue.** Only MULTI_SELECT can be emptied (single-choice
+  can be re-set but never cleared), and `handleContinue` gates on `hasSelection`, so a recipient cannot
+  advance past a question they blanked. **⚠️ That upholds the kickoff's *correctable, not skippable* ruling
+  on a path that did not exist before this release** — you could never return to a question at all — so it
+  was unpinned rather than wrong.
+- **Repeated navigation keeps every answer in its own slot.** The prior guards walked forward, back once,
+  and forward again; a two-hop walk in each direction is what discriminates an off-by-one once the path is
+  longer than the special case. Mutating the slot index is killed by three named tests, including this one.
+
 **Recipient completion instrumentation (inline).**
 
 - `QUIZ_SHARE_LINK_COMPLETED` is added to `AnalyticsEventType` and fires from the recipient page **only

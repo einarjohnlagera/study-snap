@@ -291,6 +291,64 @@ describe("shared quiz page", () => {
     });
   });
 
+  // The kickoff ruled answers CORRECTABLE but not SKIPPABLE. Before this release you could never return to
+  // a question, so emptying one was unreachable; Back makes it reachable for MULTI_SELECT (single-choice
+  // can only be re-set, never cleared). This pins that the no-skip gate still holds on the way back out.
+  it("re-gates Continue when a recipient empties an answer they returned to", async () => {
+    stubQuiz([MULTI_SELECT_QUESTION, SINGLE_CHOICE_QUESTION]);
+    render(<SharedQuizPage />);
+    await screen.findByText("Select all that apply");
+
+    fireEvent.click(screen.getByRole("button", { name: /Alpha/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Next Question" }));
+
+    await screen.findByText("Which one?");
+    fireEvent.click(screen.getByRole("button", { name: "Back" }));
+
+    await screen.findByText("Select all that apply");
+    expect(screen.getByRole("button", { name: /Alpha/ })).toHaveAttribute("aria-pressed", "true");
+
+    // Untick the only selection: the recipient has emptied their own answer.
+    fireEvent.click(screen.getByRole("button", { name: /Alpha/ }));
+
+    expect(screen.getByRole("button", { name: "Next Question" })).toBeDisabled();
+  });
+
+  // Exercises more than one hop in each direction. A single back-then-forward walk cannot catch a slot
+  // being written to the wrong index once the path is longer than the special case.
+  it("keeps every answer in its own slot across repeated navigation", async () => {
+    stubQuiz([SINGLE_CHOICE_QUESTION, MULTI_SELECT_QUESTION, SINGLE_CHOICE_QUESTION]);
+    render(<SharedQuizPage />);
+    await screen.findByText("Which one?");
+
+    fireEvent.click(screen.getByRole("button", { name: /Alpha/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Next Question" }));
+    await screen.findByText("Select all that apply");
+    fireEvent.click(screen.getByRole("button", { name: /Charlie/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Next Question" }));
+
+    // Two hops back to the first question.
+    fireEvent.click(screen.getByRole("button", { name: "Back" }));
+    await screen.findByText("Select all that apply");
+    fireEvent.click(screen.getByRole("button", { name: "Back" }));
+    await screen.findByText("Which one?");
+    expect(screen.getByRole("button", { name: /Alpha/ })).toHaveAttribute("aria-pressed", "true");
+
+    // And two hops forward again, with the middle answer intact.
+    fireEvent.click(screen.getByRole("button", { name: "Next Question" }));
+    await screen.findByText("Select all that apply");
+    expect(screen.getByRole("button", { name: /Charlie/ })).toHaveAttribute("aria-pressed", "true");
+    fireEvent.click(screen.getByRole("button", { name: "Next Question" }));
+
+    await screen.findByText("Which one?");
+    fireEvent.click(screen.getByRole("button", { name: /Delta/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Submit Answers" }));
+
+    await waitFor(() => {
+      expect(getSharedQuizResultsMock).toHaveBeenCalledWith("tok123", [0, null, 3], [null, [2], null]);
+    });
+  });
+
   it("offers no Back control on the first question", async () => {
     stubQuiz([SINGLE_CHOICE_QUESTION, MULTI_SELECT_QUESTION]);
     render(<SharedQuizPage />);
