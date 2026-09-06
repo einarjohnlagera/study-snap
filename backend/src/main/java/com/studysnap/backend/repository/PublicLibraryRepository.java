@@ -6,6 +6,7 @@ import com.studysnap.backend.model.PublicLibrarySort;
 import java.time.OffsetDateTime;
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 public interface PublicLibraryRepository {
@@ -45,6 +46,22 @@ public interface PublicLibraryRepository {
      * @param excludedNoteIds ids to leave out, used by the discovery sections to keep the three
      *                        sections mutually exclusive
      */
+    /**
+     * The single public note a SEO path resolves to, or empty.
+     *
+     * <p>⚠️ REPLACES A FULL-CATALOG ENTITY LOAD. {@code getPublicBySeoPath} loaded every public
+     * {@code NoteEntity} — {@code content} included — and filtered on slugs in Java, on each of ~250 SEO
+     * detail pages. It was the heaviest instance of the unbounded-read defect in the codebase.
+     *
+     * @param subjectIsNull reproduces the caller's existing branch EXACTLY: when the requested subject
+     *                      slug is the blank-subject default, today's code queries
+     *                      {@code subject IS NULL} rather than "slugifies to the default", so a
+     *                      whitespace-only subject is unreachable by its SEO URL. That quirk is
+     *                      PRESERVED, not fixed — changing it changes which note a public URL resolves
+     *                      to, which is a product decision rather than an implementation detail.
+     */
+    Optional<UUID> findPublicNoteIdBySeoSlugs(String subjectSlug, String titleSlug, boolean subjectIsNull);
+
     List<UUID> findPublicLibraryRankedPageIds(
             PublicLibraryFilterCriteria criteria,
             PublicLibrarySort sort,

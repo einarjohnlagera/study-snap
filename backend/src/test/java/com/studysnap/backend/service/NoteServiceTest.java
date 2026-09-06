@@ -77,6 +77,8 @@ import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -1889,8 +1891,13 @@ class NoteServiceTest {
         owner.setFirstName("History");
         owner.setEmail("history@example.com");
 
-        when(noteRepository.findByVisibilityOrderByUpdatedAtDesc(NoteVisibility.PUBLIC))
-                .thenReturn(List.of(publicNote));
+        // ⚠️ REWIRED, NOT DELETED. Slug MATCHING now lives in SQL and is covered by
+        // NativeQueryPostgresIntegrationTest.seoSlugResolutionIsBoundedAndKeepsItsFallbackSemantics --
+        // a mocked repository cannot test it. What THIS test still covers is service glue the SQL knows
+        // nothing about: author attribution and the study-pack join.
+        when(noteRepository.findPublicNoteIdBySeoSlugs(anyString(), anyString(), anyBoolean()))
+                .thenReturn(Optional.of(noteId));
+        when(noteRepository.findById(noteId)).thenReturn(Optional.of(publicNote));
         when(studyPackRepository.findByNoteId(noteId)).thenReturn(Optional.of(studyPack));
         when(userRepository.findById(ownerUserId)).thenReturn(Optional.of(owner));
 
@@ -1914,8 +1921,10 @@ class NoteServiceTest {
         publicNote.setTitle("Mitosis Overview");
         publicNote.setSubject("Biology – Cell Division");
 
-        when(noteRepository.findByVisibilityOrderByUpdatedAtDesc(NoteVisibility.PUBLIC))
-                .thenReturn(List.of(publicNote));
+        // Rewired for the same reason as above: matching is SQL now; this covers the subject passthrough.
+        when(noteRepository.findPublicNoteIdBySeoSlugs(anyString(), anyString(), anyBoolean()))
+                .thenReturn(Optional.of(noteId));
+        when(noteRepository.findById(noteId)).thenReturn(Optional.of(publicNote));
         when(studyPackRepository.findByNoteId(noteId)).thenReturn(Optional.empty());
         when(userRepository.findById(ownerUserId)).thenReturn(Optional.empty());
 
@@ -1927,7 +1936,11 @@ class NoteServiceTest {
 
     @Test
     void getPublicBySeoPath_rejectsMissingOrPrivateMatch() {
-        when(noteRepository.findByVisibilityOrderByUpdatedAtDesc(NoteVisibility.PUBLIC))
+        // The 404 contract is service-level and survives the move to SQL: an unresolved slug pair
+        // must throw rather than return anything.
+        when(noteRepository.findPublicNoteIdBySeoSlugs(anyString(), anyString(), anyBoolean()))
+                .thenReturn(Optional.empty());
+        lenient().when(noteRepository.findByVisibilityOrderByUpdatedAtDesc(NoteVisibility.PUBLIC))
                 .thenReturn(List.of());
 
         assertThatThrownBy(() -> noteService.getPublicBySeoPath("science", "cell-structure", null))

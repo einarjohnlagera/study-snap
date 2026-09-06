@@ -1149,15 +1149,23 @@ public class NoteService {
     public PublicNoteDetailResponse getPublicBySeoPath(String subjectSlug, String titleSlug, UUID viewerUserId) {
         String normalizedSubjectSlug = normalizeSlug(subjectSlug);
         String normalizedTitleSlug = normalizeSlug(titleSlug);
-        List<NoteEntity> candidates = DEFAULT_PUBLIC_SUBJECT_SLUG.equals(normalizedSubjectSlug)
-                ? noteRepository.findByVisibilityAndSubjectIsNullOrderByUpdatedAtDesc(NoteVisibility.PUBLIC)
-                : noteRepository.findByVisibilityOrderByUpdatedAtDesc(NoteVisibility.PUBLIC);
-
-        NoteEntity matched = candidates.stream()
-                .filter(note -> slugify(note.getSubject(), DEFAULT_PUBLIC_SUBJECT_SLUG).equals(normalizedSubjectSlug))
-                .filter(note -> slugify(note.getTitle(), DEFAULT_PUBLIC_TITLE_SLUG).equals(normalizedTitleSlug))
-                .findFirst()
+        // ⚠️ THE FOURTH INSTANCE OF THE UNBOUNDED-READ DEFECT, AND THE HEAVIEST. This used to load EVERY
+        // public NoteEntity -- `content` included -- and filter on slugs in Java, on each of the ~250 SEO
+        // detail pages, inside a transaction holding a pooled connection. A1/A2/A3 all loaded slimmer
+        // projections. Resolution is now one bounded `limit 1` query.
+        // Diagnosis: docs/claude-findings/2026-09-05-prod-outage-public-catalog-unbounded-read.md
+        //
+        // ⚠️ THE SEMANTICS ARE REPRODUCED, NOT TIDIED. The blank-subject branch still queries
+        // `subject IS NULL` rather than "slugifies to the default", so a whitespace-only subject stays
+        // unreachable by its SEO URL exactly as before; and the fallback slugs are applied in SQL so an
+        // untitled note still resolves at /untitled-note. Both are live public URL semantics.
+        UUID matchedId = noteRepository
+                .findPublicNoteIdBySeoSlugs(
+                        normalizedSubjectSlug,
+                        normalizedTitleSlug,
+                        DEFAULT_PUBLIC_SUBJECT_SLUG.equals(normalizedSubjectSlug))
                 .orElseThrow(NoteNotFoundException::new);
+        NoteEntity matched = noteRepository.findById(matchedId).orElseThrow(NoteNotFoundException::new);
 
         StudyPackEntity linkedStudyPack = findLinkedStudyPack(matched.getId());
         LinkedHashMap<String, Object> analyticsMetadata = new LinkedHashMap<>();

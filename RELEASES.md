@@ -191,16 +191,32 @@ substrate, no cross-user read, no money or quota semantics, no migration.
     mocked repository cannot assert an `ORDER BY` or a `LIMIT`, so a rewrite would have stubbed an id
     order and asserted the same order came back. Coverage moved to real-row tests on PostgreSQL 18.
 
-### Known limitations
+- **A4 — the fourth instance, folded in on owner decision (PR #1298).** `getPublicBySeoPath` was
+  anonymous, transactional, and loaded **every public `NoteEntity` including `content`** before
+  filtering slugs in Java, on each of the ~250 SEO detail pages — **heavier per call than A1/A2/A3**,
+  all of which loaded slimmer projections. It is now one bounded `limit 1` query.
+  - **⚠️ THE SEMANTICS WERE REPRODUCED, NOT TIDIED, BECAUSE THEY ARE LIVE PUBLIC URL BEHAVIOUR.**
+    Java's `slugify(value, fallback)` returns the **fallback** for a null or blank value while
+    `normalizedSlugSql` returns `''` — so without a `coalesce`/`nullif` an untitled note would 404 at
+    `/untitled-note` while a note literally titled "Untitled Note" resolved. The fallback is a **bound
+    parameter per call site**: subject and title use different defaults, and one shared name would
+    silently have applied one to both.
+  - **⚠️ A PRESERVED QUIRK, STATED RATHER THAN FIXED:** the blank-subject branch still queries
+    `subject IS NULL`, not "slugifies to the default", so a whitespace-only subject stays unreachable
+    by its SEO URL exactly as before. Changing it changes which note a live public URL resolves to.
+  - The `updated_at desc` tiebreak gains `n.id asc`. The previous ordering had none, so ties resolved
+    by whatever the database returned — nondeterministic rather than defined, so pinning it cannot
+    break anything anyone could have relied on.
+  - **⚠️ THE GUARD CANNOT LIVE IN THE H2 SUITE, AND THAT IS ITSELF A FINDING.** `normalizedSlugSql`
+    branches on dialect and the **H2 arm omits the `g` flag**, replacing only the first run of
+    non-alphanumerics — so "Shear Force Diagrams" slugifies to `shear-force diagrams` there. The
+    expression is correct only on PostgreSQL, which is what production runs. The guard lives in
+    `NativeQueryPostgresIntegrationTest`; a version written against H2 would have failed, or passed for
+    the wrong reason.
+  - Three mocked `NoteServiceTest` cases were **rewired, not deleted** — matching is SQL now, but
+    author attribution, the study-pack join and the 404 contract are service glue worth keeping.
 
-- **⚠️ A FOURTH INSTANCE OF THE SAME DEFECT REMAINS, AND IT IS PLAUSIBLY THE ACTUAL OUTAGE TRIGGER.**
-  `NoteService.getPublicBySeoPath:1149` is anonymous, `@Transactional(readOnly = true)`, and loads
-  **every public `NoteEntity` including `content`** before filtering on slugs in Java — called on each
-  of the ~250 SEO note-detail pages, making it **heavier per call** than any of A1/A2/A3. Two facts,
-  deliberately not joined: the incident file lists an SEO-page burst as an unconfirmed candidate, **and**
-  the leak stack named `listPublic`, not this path. Left because the fix needs a decision rather than
-  code — `normalizedSlugSql` is already the SQL twin of the Java `slugify`, but the blank-value slug
-  defaults and "which of several matching notes wins" are **public SEO URL semantics**.
+### Known limitations
 - **`RECOMMENDED` is bounded per row, not per catalog.** The ranked default still aggregates the three
   metric tables once per request, so it is O(catalog + events) **in the database**. What this removes is
   the 1,442 entity + projection + DTO materialisations, three round trips, and the JVM-side hold that

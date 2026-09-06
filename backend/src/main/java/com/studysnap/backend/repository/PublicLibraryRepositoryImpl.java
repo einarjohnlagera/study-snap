@@ -27,6 +27,7 @@ import java.util.Collection;
 import java.util.EnumSet;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Optional;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
@@ -218,6 +219,62 @@ public class PublicLibraryRepositoryImpl implements PublicLibraryRepository {
     }
 
     @Override
+    public Optional<UUID> findPublicNoteIdBySeoSlugs(
+            String subjectSlug,
+            String titleSlug,
+            boolean subjectIsNull
+    ) {
+        Map<String, Object> parameters = new LinkedHashMap<>();
+        StringBuilder sql = new StringBuilder("select n.id as " + ID_ALIAS
+                + " from notes n where n.visibility = 'PUBLIC'");
+
+        // ⚠️ TWO BRANCHES, REPRODUCING THE JAVA EXACTLY. The caller pre-queried `subject IS NULL` when
+        // the requested slug was the blank-subject default, so a WHITESPACE-only subject was never a
+        // candidate even though slugify() would have matched it. Preserved deliberately: "fixing" it
+        // changes which note a live public URL resolves to.
+        if (subjectIsNull) {
+            sql.append(" and n.subject is null");
+        } else {
+            sql.append(" and ").append(slugWithFallbackSql("n.subject", "subjectFallback"))
+                    .append(" = :subjectSlug");
+            parameters.put("subjectSlug", subjectSlug);
+            parameters.put("subjectFallback", DEFAULT_PUBLIC_SUBJECT_SLUG);
+        }
+
+        // ⚠️ THE FALLBACK IS LOAD-BEARING AND IS WHY normalizedSlugSql ALONE IS WRONG HERE. Java's
+        // slugify(value, fallback) returns the FALLBACK for a null or blank-after-normalisation value,
+        // whereas normalizedSlugSql returns ''. Without the coalesce/nullif a note titled "Untitled
+        // Note" would resolve while an untitled one would not, silently changing which page 404s.
+        sql.append(" and ").append(slugWithFallbackSql("n.title", "titleFallback"))
+                .append(" = :titleSlug");
+        parameters.put("titleSlug", titleSlug);
+        parameters.put("titleFallback", DEFAULT_PUBLIC_TITLE_SLUG);
+
+        // findFirst() over `order by updated_at desc` = most recently updated wins. The `n.id asc`
+        // tiebreak is ADDED: the previous ordering had none, so ties resolved by whatever the database
+        // returned. That was nondeterministic rather than defined, so pinning it cannot break a
+        // behaviour anyone could have relied on.
+        sql.append(" order by n.updated_at desc, n.id asc");
+
+        Query query = createNativeQuery(sql.toString());
+        parameters.forEach(query::setParameter);
+        query.setMaxResults(1);
+
+        // Same tuple/UUID idiom as findPublicLibraryRankedPageIds -- a raw getResultList() maps
+        // differently across the H2 and PostgreSQL harnesses.
+        return tuples(query).stream().map(tuple -> toUuid(tuple.get(ID_ALIAS))).findFirst();
+    }
+
+    /**
+     * {@code slugify(value, fallback)}'s SQL twin: blank and null both collapse to the fallback.
+     *
+     * <p>⚠️ The fallback is a BOUND PARAMETER per call site, not one shared name — subject and title
+     * use different fallbacks, and a single name would have silently applied one to both.
+     */
+    private String slugWithFallbackSql(String expression, String fallbackParameter) {
+        return "coalesce(nullif(" + normalizedSlugSql(expression) + ", ''), :" + fallbackParameter + ")";
+    }
+
     public List<UUID> findPublicLibraryRankedPageIds(
             PublicLibraryFilterCriteria criteria,
             PublicLibrarySort sort,
@@ -434,6 +491,10 @@ public class PublicLibraryRepositoryImpl implements PublicLibraryRepository {
                 )
                 """;
     }
+
+    /** Mirrors {@code NoteService}'s constants; the SEO path resolves against the same two defaults. */
+    private static final String DEFAULT_PUBLIC_SUBJECT_SLUG = "general";
+    private static final String DEFAULT_PUBLIC_TITLE_SLUG = "untitled-note";
 
     private String normalizedSlugSql(String expression) {
         String base = "lower(trim(coalesce(" + expression + ", '')))";

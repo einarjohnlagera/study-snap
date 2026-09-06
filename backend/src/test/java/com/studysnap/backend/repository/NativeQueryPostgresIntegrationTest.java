@@ -2237,6 +2237,64 @@ class NativeQueryPostgresIntegrationTest {
         );
     }
 
+    /**
+     * The SEO path's slug resolution, against real PostgreSQL.
+     *
+     * <p>⚠️ IT CANNOT LIVE IN THE H2-BACKED SUITE, AND THAT IS ITSELF THE FINDING.
+     * {@code normalizedSlugSql} branches on the dialect, and the H2 arm calls {@code regexp_replace}
+     * WITHOUT the {@code 'g'} flag — so it replaces only the FIRST run of non-alphanumerics and
+     * "Shear Force Diagrams" slugifies to "shear-force diagrams". The expression is correct only on
+     * PostgreSQL, which is what production runs; a guard written against H2 would fail, or worse pass
+     * for the wrong reason.
+     *
+     * <p>⚠️ THE FIXTURE HOLDS MORE NOTES THAN THE ANSWER NEEDS. A single-note fixture resolves
+     * identically whether the query is bounded or loads the whole catalog, and would prove nothing
+     * about the defect this replaced — a full-catalog entity load, `content` included, on ~250 SEO
+     * pages.
+     *
+     * <p>⚠️ It pins the two fallback semantics that were easy to tidy away while moving the filter into
+     * SQL: Java's {@code slugify(value, fallback)} returns the FALLBACK for a null or blank value, while
+     * {@code normalizedSlugSql} returns {@code ''}. Without the coalesce/nullif an untitled note would
+     * 404 at {@code /untitled-note} while a note literally titled "Untitled Note" resolved.
+     */
+    @Test
+    void seoSlugResolutionIsBoundedAndKeepsItsFallbackSemantics() {
+        UUID owner = seedUser("seo-slug");
+        UUID shear = seedPublicSeoNote(owner, "Shear Force Diagrams", "Structural Analysis");
+        seedPublicSeoNote(owner, "Bending Moment", "Structural Analysis");
+        seedPublicSeoNote(owner, "Fluid Statics", "Hydraulics");
+        UUID untitled = seedPublicSeoNote(owner, null, "Structural Analysis");
+        UUID orphan = seedPublicSeoNote(owner, "Orphan Topic", null);
+
+        assertThat(publicLibraryRepository.findPublicNoteIdBySeoSlugs(
+                "structural-analysis", "shear-force-diagrams", false))
+                .as("an ordinary slug pair resolves, and the multi-word slug proves the 'g' flag is live")
+                .contains(shear);
+        assertThat(publicLibraryRepository.findPublicNoteIdBySeoSlugs(
+                "structural-analysis", "untitled-note", false))
+                .as("the TITLE fallback resolves -- normalizedSlugSql alone would 404 here")
+                .contains(untitled);
+        assertThat(publicLibraryRepository.findPublicNoteIdBySeoSlugs("general", "orphan-topic", true))
+                .as("a null subject resolves through the subject-is-null branch")
+                .contains(orphan);
+        assertThat(publicLibraryRepository.findPublicNoteIdBySeoSlugs(
+                "structural-analysis", "no-such-note", false))
+                .as("a miss is empty, not the first row of an unbounded scan")
+                .isEmpty();
+    }
+
+    private UUID seedPublicSeoNote(UUID ownerUserId, String title, String subject) {
+        UUID id = UUID.randomUUID();
+        jdbcTemplate.update(
+                "insert into notes (id, owner_user_id, title, subject, content, visibility, tags,"
+                        + " target_profile_type, status, created_at, updated_at)"
+                        + " values (?, ?, ?, ?, 'body', 'PUBLIC', '{}', 'STUDENT', 'GENERATED',"
+                        + " now(), now())",
+                id, ownerUserId, title, subject
+        );
+        return id;
+    }
+
     private UUID seedPublicNote(UUID ownerUserId, String title, String[] tags) {
         UUID id = UUID.randomUUID();
         jdbcTemplate.update(
