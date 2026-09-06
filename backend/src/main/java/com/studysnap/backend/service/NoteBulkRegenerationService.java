@@ -11,6 +11,7 @@ import com.studysnap.backend.entity.NoteStatus;
 import com.studysnap.backend.exception.BulkNoteRegenerationQuotaExceededException;
 import com.studysnap.backend.exception.InvalidBulkRegenerationRequestException;
 import com.studysnap.backend.exception.MonthlyNoteGenerationLimitReachedException;
+import com.studysnap.backend.entity.AnalyticsEventType;
 import com.studysnap.backend.exception.AppException;
 import com.studysnap.backend.exception.NoteBulkRegenerationBatchNotFoundException;
 import com.studysnap.backend.exception.NoteNotFoundException;
@@ -26,6 +27,7 @@ import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
@@ -88,6 +90,9 @@ public class NoteBulkRegenerationService {
     private static final long MIN_ITEM_TIMEOUT_MS = 1_000L;
     private static final String EMPTY_BATCH_MESSAGE = "Select at least one note to regenerate.";
     private static final String MAX_NOTES_MESSAGE_TEMPLATE = "You can regenerate up to %d notes at once.";
+    private static final String SCOPE_METADATA_KEY = "scope";
+    private static final String REQUESTED_COUNT_METADATA_KEY = "requestedCount";
+    private static final String METERED_METADATA_KEY = "metered";
     private static final String NOTHING_TO_RETRY_MESSAGE =
             "Nothing in that batch failed, so there is nothing to retry.";
     private static final String QUOTA_BLOCKED_CODE = "NOTE_GENERATION_LIMIT_REACHED";
@@ -108,6 +113,7 @@ public class NoteBulkRegenerationService {
     private final OnboardingGuardService onboardingGuardService;
     private final BulkGenerationFailureReasonNormalizer failureReasonNormalizer;
     private final NoteBulkRegenerationTaskDispatcher taskDispatcher;
+    private final AnalyticsService analyticsService;
     private final BulkRegenerationAccessGuard accessGuard;
     private final int maxNotes;
     private final int throttleDelayMs;
@@ -125,6 +131,7 @@ public class NoteBulkRegenerationService {
             BulkGenerationFailureReasonNormalizer failureReasonNormalizer,
             NoteBulkRegenerationTaskDispatcher taskDispatcher,
             BulkRegenerationAccessGuard accessGuard,
+            AnalyticsService analyticsService,
             // ⚠️ ITS OWN CONFIG KEY, deliberately not note.bulk-generation.max-topics, so tuning the
             // regeneration cap never moves the bulk GENERATION cap. Both default to 50.
             @Value("${note.bulk-regeneration.max-notes:50}") int maxNotes,
@@ -144,6 +151,7 @@ public class NoteBulkRegenerationService {
         this.failureReasonNormalizer = failureReasonNormalizer;
         this.taskDispatcher = taskDispatcher;
         this.accessGuard = accessGuard;
+        this.analyticsService = analyticsService;
         this.maxNotes = Math.clamp(maxNotes, MIN_MAX_NOTES, Integer.MAX_VALUE);
         this.throttleDelayMs = Math.clamp(throttleDelayMs, MIN_THROTTLE_DELAY_MS, MAX_THROTTLE_DELAY_MS);
         this.pollIntervalMs = Math.clamp(pollIntervalMs, MIN_POLL_INTERVAL_MS, MAX_POLL_INTERVAL_MS);
@@ -236,6 +244,33 @@ public class NoteBulkRegenerationService {
         // write above, say), and the driver would then stamp its rows with a different batch clock
         // than the PENDING ones -- splitting one batch across two TTLs and producing exactly the
         // half-swept receipt the batch clock exists to prevent.
+        // ⚠️ THE ONLY DURABLE RECORD THAT A BATCH EVER RAN. note_bulk_regeneration_item is a RECEIPT with
+        // a 24 h TTL, so it cannot answer a dated question, and nothing else distinguishes a
+        // bulk-regenerated note from a single-note one -- both mutate notes.updated_at in place. Without
+        // this event the checkpoints on curator adoption and on TEACHER allowance adequacy would be
+        // decorative, which the signoff gate forbids.
+        //
+        // ⚠️ `metered` IS THE FIELD THE MONEY DECISION IS READ THROUGH: owner decision 1 admitted TEACHER
+        // curators against the plan's recommendation, and this is what makes "is their allowance enough
+        // for a real batch?" answerable rather than a guess.
+        //
+        // ⚠️ Wrapped so analytics can NEVER fail the batch -- the v0.101.0 rule. A dropped event costs a
+        // measurement; a thrown one would cost the curator their regeneration.
+        try {
+            analyticsService.trackEvent(
+                    ownerUserId,
+                    AnalyticsEventType.BULK_REGENERATION_STARTED,
+                    batchId,
+                    Map.of(
+                            SCOPE_METADATA_KEY, scope.name(),
+                            REQUESTED_COUNT_METADATA_KEY, noteIds.size(),
+                            METERED_METADATA_KEY, enforceLimits
+                    )
+            );
+        } catch (RuntimeException analyticsFailure) {
+            log.warn("action=bulk_regenerate_batch outcome=analytics_failed batchId={}", batchId,
+                    analyticsFailure);
+        }
         taskDispatcher.execute(
                 () -> processBatch(batchId, noteIds, ownerUserId, scope, enforceLimits, batchCreatedAt));
         return new BulkRegenerateNotesResponse(batchId, scope.name(), noteIds.size());

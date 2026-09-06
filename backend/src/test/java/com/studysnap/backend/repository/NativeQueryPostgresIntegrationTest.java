@@ -32,6 +32,7 @@ import com.studysnap.backend.dto.AcceptLinkedLearnerRequest;
 import com.studysnap.backend.security.AiRateLimitService;
 import com.studysnap.backend.security.OcrRateLimitService;
 import com.studysnap.backend.service.ActivityTrackingService;
+import com.studysnap.backend.entity.AnalyticsEventType;
 import com.studysnap.backend.service.AnalyticsService;
 import com.studysnap.backend.service.AuthService;
 import com.studysnap.backend.service.BillingUsagePeriodService;
@@ -127,9 +128,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
 
 /**
  * Executes the repository's native SQL against the production database engine and the full Flyway schema.
@@ -3100,6 +3104,40 @@ class NativeQueryPostgresIntegrationTest {
                 .isInstanceOf(NoteBulkRegenerationBatchNotFoundException.class);
     }
 
+    /**
+     * The instrumentation the checkpoints read, verified EMITTING rather than merely present in the
+     * enum — which the signoff gate requires and which is the difference between a dated question and a
+     * decorative one.
+     *
+     * <p>⚠️ THERE IS NO OTHER DURABLE SIGNAL. {@code note_bulk_regeneration_item} is a receipt with a
+     * 24 h TTL, and nothing else distinguishes a bulk-regenerated note from a single-note one — both
+     * mutate {@code notes.updated_at} in place. Without this event, "did curators adopt bulk
+     * regeneration?" and "is a TEACHER's allowance enough for a real batch?" are unanswerable.
+     *
+     * <p>⚠️ {@code metered} IS ASSERTED, not just the event name. It is the field owner decision 1's
+     * money question is read through, and an event that fired without it would look like working
+     * instrumentation while answering nothing.
+     */
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void queueingABatchEmitsTheEventTheCheckpointsRead() {
+        UUID owner = seedCuratorUser("bulk-regen-analytics");
+        UUID note = seedRegenerationNote(owner, "Site Layout", "Body.");
+        seedStudyPack(owner, note, "Pack");
+
+        BulkRegenerationHarness harness = new BulkRegenerationHarness();
+        UUID batchId = harness.run(owner, List.of(note), NoteRegenerationScope.STUDY_PACK, true);
+
+        verify(harness.analyticsService).trackEvent(
+                eq(owner),
+                eq(AnalyticsEventType.BULK_REGENERATION_STARTED),
+                eq(batchId),
+                argThat(metadata -> "STUDY_PACK".equals(metadata.get("scope"))
+                        && Integer.valueOf(1).equals(metadata.get("requestedCount"))
+                        && Boolean.TRUE.equals(metadata.get("metered")))
+        );
+    }
+
     private UUID seedRegenerationNote(UUID ownerUserId, String title, String content) {
         UUID id = UUID.randomUUID();
         jdbcTemplate.update(
@@ -3952,6 +3990,8 @@ class NativeQueryPostgresIntegrationTest {
     private final class BulkRegenerationHarness {
         private final Map<String, StudyPackGenerationContext> contextsByTopic = new ConcurrentHashMap<>();
         private final AtomicReference<Thread> driverThread = new AtomicReference<>();
+        /** Exposed so the instrumentation guard can assert the event actually fires. */
+        private final AnalyticsService analyticsService = mock(AnalyticsService.class);
         private String failStudyPackForTitle;
         private String beforeStudyPackForTitle;
         private Runnable beforeStudyPack;
@@ -4068,6 +4108,7 @@ class NativeQueryPostgresIntegrationTest {
                         thread.start();
                     }),
                     new BulkRegenerationAccessGuard(userRepository),
+                    analyticsService,
                     50,
                     throttleDelayMs,
                     10,

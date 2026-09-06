@@ -2,8 +2,8 @@
 
 ## v0.119.0 - Curator Bulk Regeneration
 
-**Status: In Progress** (kicked off 2026-09-05, base branch `releases/v0.119.0`, cut from `main` after
-`v0.118.0` merged and tagged)
+**Status: Released** (kicked off 2026-09-05, signed off 2026-09-06, base branch `releases/v0.119.0`,
+cut from `main` after `v0.118.0` merged and tagged)
 
 Theme: a curator can regenerate a selected set of canonical Notes in one pass, with a truthful account
 of what happened to every one of them.
@@ -318,6 +318,15 @@ inline** for B3-B5.
     one real-request test **at every tier including the cheapest**, plus the pressure-test prompt
     instruction that would have caught it — *enumerate every file the release ADDED and name those with
     no test that executes them.*
+
+- **Instrumentation added at signoff, because the checkpoint gate caught its absence (signoff commit).**
+  `BULK_REGENERATION_STARTED` fires when a batch is queued, carrying `scope`, `requestedCount` and
+  **`metered`**. **⚠️ There was NO durable signal that a batch had ever run:**
+  `note_bulk_regeneration_item` is a receipt with a 24 h TTL, and nothing else distinguishes a
+  bulk-regenerated note from a single-note one — both mutate `notes.updated_at` in place. Both
+  `[CHECKPOINT — due 2026-10-06]` rows would have been decorative, which the gate forbids. Verified
+  EMITTING rather than enum-present, asserting the `metered` field the money decision is read through,
+  and wrapped so analytics can never fail a batch (the `v0.101.0` rule).
 
 ### Known limitations (B1/B2)
 
