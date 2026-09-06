@@ -117,13 +117,29 @@ export async function getServerPublicNoteBySeoPath(subject: string, slug: string
  * The whole public catalog. ⚠️ Only sitemap.ts legitimately needs this -- every other caller should filter
  * server-side. It is paginated so each response stays cacheable; an unbounded single fetch is the defect
  * that broke the production build.
+ *
+ * ⚠️ THAT PAGINATION BOUNDED THE RESPONSE, NOT THE SERVER'S WORK, AND READING IT OTHERWISE IS WHAT LET
+ * THE 2026-09-05 OUTAGE HAPPEN. It correctly fixed the 2 MB Next.js data-cache defect; it did nothing
+ * about the server materialising the whole catalog per request. Note that `fetchAllPublicNotePages("")`
+ * sends no `sort`, and the default RECOMMENDED sort is not SQL-orderable — so at 1,442 notes a single
+ * sitemap generation issues ~29 full-catalog loads.
  */
 export async function getServerPublicNotes() {
   return fetchAllPublicNotePages("");
 }
 
 export async function getServerPublicNoteCount(): Promise<number | null> {
-  const payload = await fetchPublicNoteList("/notes/public?size=1");
+  // ⚠️ `page`/`pageSize`, NOT `size`. The server picks its branch on `page != null || pageSize != null`
+  // — `size` is not a pagination parameter, so `?size=1` took the LEGACY branch, which loads every
+  // public NoteEntity (including `content`) and applies `size` LAST. That is 1,442 notes materialised
+  // to return one integer, inside a transaction holding a pooled connection: the 2026-09-05 outage.
+  //
+  // ⚠️ `sort=recent` is REQUIRED, not decorative. The default sort is RECOMMENDED, which is not
+  // SQL-orderable, so a paginated request WITHOUT a sort still loads every candidate to rank in Java.
+  //
+  // The paginated branch sets `totalMatching` from a real `count(*)`, and `total` is what this function
+  // already read — so the field keeps its exact meaning and is simply computed cheaply.
+  const payload = await fetchPublicNoteList("/notes/public?page=0&pageSize=1&sort=recent");
   const total = payload?.total;
   return typeof total === "number" && Number.isInteger(total) && total >= 0 ? total : null;
 }
@@ -247,7 +263,14 @@ export async function getServerPublicNotesBySubject(subject: string) {
     return [];
   }
 
-  return fetchPublicNotes(`/notes/public?subject=${encodeURIComponent(normalizedSubject)}&size=4`);
+  // ⚠️ SAME BRANCH FIX AS getServerPublicNoteCount, and one PRODUCT CHANGE that was decided, not
+  // absorbed (owner, 2026-09-06): these four related notes used to arrive in RECOMMENDED rank order and
+  // now arrive most-recent-first. RECOMMENDED is not SQL-orderable, so the ranked order cannot be had
+  // without bounding the ranking branch itself. This runs on ~250 public SEO pages, each of which was
+  // loading the entire 1,442-note catalog to show four items.
+  return fetchPublicNotes(
+    `/notes/public?subject=${encodeURIComponent(normalizedSubject)}&page=0&pageSize=4&sort=recent`,
+  );
 }
 
 export async function getServerPublicNotesByCourseProgram(courseProgram: string) {

@@ -132,7 +132,38 @@ substrate, no cross-user read, no money or quota semantics, no migration.
 
 ### Shipped
 
-_(nothing yet)_
+- **Leg B — the two callers that never needed a catalog (PR #1297).** `getServerPublicNoteCount` now
+  sends `?page=0&pageSize=1&sort=recent` instead of `?size=1`, and `getServerPublicNotesBySubject`
+  sends `?subject=X&page=0&pageSize=4&sort=recent`. Both move onto the SQL-orderable paginated branch
+  (`count(*)` + `LIMIT`). **`total` keeps its exact meaning** — it is simply computed by a `count(*)`
+  rather than by materialising 1,442 notes.
+  - **⚠️ `sort=recent` IS REQUIRED, NOT DECORATIVE.** The default sort is `RECOMMENDED`, which is not
+    SQL-orderable, so a paginated request *without* a sort still loads every candidate to rank in Java.
+  - **⚠️ PRODUCT CHANGE, OWNER-DECIDED AND STATED:** the four related notes on ~250 public SEO pages
+    now arrive most-recent-first rather than in `RECOMMENDED` rank order.
+  - **⚠️ THE EXISTING GUARD WAS PROTECTING THE DEFECT.** `server-public-notes.test.ts:252` asserted the
+    code *"never requests `/notes/public` without either a filter or a pageSize"* — but it accepted
+    `subject=` as an ALTERNATIVE to `pageSize`, so `?subject=X&size=4` passed while loading the whole
+    catalog, **and it never called either of the two offending helpers.** Tightened to require
+    `pageSize` on all five helpers, and **shown FAILING against unmodified source first**
+    (`never requests /notes/public without pageSize, on any helper`). The `:24` assertion that pinned
+    `?size=1` was **corrected, not extended** — it had pinned the outage shape.
+- **Leg C — the health check stops depending on the pool (PR #1297).** A `liveness` group excluding
+  `db`, and a `readiness` group that keeps database health observable. Pinned by
+  `HealthGroupContractTest`, which reads the production YAML as text because the test profile shadows
+  it, and whose discriminating assertion is that liveness does **not** contain `db` — a group that
+  merely existed would reproduce the failure.
+  - **⚠️⚠️ THIS IS INERT UNTIL AN OWNER ACTION, AND IS RECORDED AS OUTSTANDING RATHER THAN DONE.**
+    `/actuator/health` aggregates every indicator regardless of groups; groups are only exposed at
+    `/actuator/health/{group}`. Render's `healthCheckPath` is `/api/actuator/health`, so **the platform
+    is still probing the db-dependent endpoint until the owner repoints it to
+    `/api/actuator/health/liveness`.** Render settings are not Claude's to change.
+- **Both now-false comments corrected**, per the plan's signoff obligation: `server-public-notes.ts`'s
+  claim that pagination made this bounded (it bounded **response size**, fixing the 2 MB Next.js cache
+  defect, not server-side work — and `fetchAllPublicNotePages("")` sends no `sort`, so one sitemap
+  generation issues ~29 full-catalog loads), and `application.yaml`'s `maximum-pool-size` block, which
+  presented the bump as the answer to this class of failure. **It was raised 10 → 20 and the same
+  failure recurred at 20** — said in the file so a later session does not raise it to 40.
 
 ## v0.119.0 - Curator Bulk Regeneration
 
