@@ -282,8 +282,9 @@ export function AppShell({ children }: Readonly<AppShellProps>) {
   // tab does not bill a request a minute forever. (2) A failed poll KEEPS the last known count and
   // stays silent -- clearing the badge would tell a learner they have nothing when they may have a
   // pending request, and a toast per failed poll would be noise. (3) getNotificationUnreadCount is
-  // called with retry AND unauthorized-handling disabled, so a 401 here can never sign the user out
-  // of an otherwise valid session.
+  // called with unauthorized-handling disabled but retry ENABLED, so a 401 here refreshes the token
+  // rather than freezing the badge, and still can never sign the user out of an otherwise valid
+  // session. Both halves are pinned in lib/api-notifications.test.ts.
   useEffect(() => {
     if (!user.id) {
       setActionableUnreadCount(0);

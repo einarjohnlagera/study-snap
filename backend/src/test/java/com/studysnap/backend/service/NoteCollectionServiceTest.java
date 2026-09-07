@@ -3138,6 +3138,32 @@ class NoteCollectionServiceTest {
         assertThat(result.items().getFirst().studyPackId()).isNull();
     }
 
+    /**
+     * ⚠️ THE PUBLIC-DETAIL ADOPTION WIRING HAD NO GUARD AT ALL UNTIL A {@code v0.130.0} PRESSURE TEST
+     * MUTATION-PROVED IT: replacing the {@code adoptionCount} argument with a literal {@code 0} left the
+     * entire 219-test class green. The only test that touched the field stubbed an EMPTY projection list
+     * and asserted {@code isZero()}, which is the value the defect produces too.
+     *
+     * <p>So this test stubs a NON-ZERO count and asserts it arrives. A zero-valued fixture cannot
+     * distinguish "the count was read" from "the count was discarded".
+     */
+    @Test
+    void getPublic_carriesTheAdoptionCountThroughToTheAnonymousPayload() {
+        UUID collectionId = UUID.randomUUID();
+        NoteCollectionEntity collection = buildCollection(collectionId, UUID.randomUUID(), COLLECTION_TITLE, Instant.now());
+        collection.setVisibility(CollectionVisibility.PUBLIC);
+        when(collectionRepository.findByIdAndVisibility(collectionId, CollectionVisibility.PUBLIC)).thenReturn(Optional.of(collection));
+        when(collectionRepository.findByParentCollectionIdIn(List.of(collectionId))).thenReturn(List.of());
+        when(itemRepository.findByCollectionIdInOrderByCollectionIdAscPositionAsc(List.of(collectionId))).thenReturn(List.of());
+        when(collectionRepository.countByParentCollectionId(collectionId)).thenReturn(0L);
+        when(collectionRepository.countAdoptionsByCollectionIds(List.of(collectionId)))
+                .thenReturn(List.of(adoptionCountProjection(collectionId, 12)));
+
+        NoteCollectionDetailResponse result = service.getPublic(collectionId);
+
+        assertThat(result.adoptionCount()).isEqualTo(12);
+    }
+
     @Test
     void getPublic_exposesReadyCountForItsPublicItems() {
         UUID collectionId = UUID.randomUUID();

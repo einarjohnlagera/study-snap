@@ -16,6 +16,7 @@ import com.studysnap.backend.repository.ConceptHealthRepository;
 import com.studysnap.backend.repository.EmailLogRepository;
 import com.studysnap.backend.repository.EmailVerificationTokenRepository;
 import com.studysnap.backend.repository.FeedbackRepository;
+import com.studysnap.backend.repository.NotificationRepository;
 import com.studysnap.backend.repository.GeneratedQuizRepository;
 import com.studysnap.backend.repository.MemorizationCardRepository;
 import com.studysnap.backend.repository.NoteBulkRegenerationItemRepository;
@@ -82,6 +83,7 @@ public class AccountPurgeService {
     private final PasswordResetTokenRepository passwordResetTokenRepository;
     private final EmailLogRepository emailLogRepository;
     private final FeedbackRepository feedbackRepository;
+    private final NotificationRepository notificationRepository;
     private final PremiumWaitlistRepository premiumWaitlistRepository;
     private final PaymentTransactionRepository paymentTransactionRepository;
     private final SubscriptionRepository subscriptionRepository;
@@ -179,6 +181,9 @@ public class AccountPurgeService {
         userLibraryFilterRepository.deleteByUserId(userId);
         userUsageRepository.deleteByUserId(userId);
         studyPackDraftRepository.deleteByOwnerUserId(userId);
+        // ⚠️ Retention deliberately RETAINS unread actionable notifications forever, so this row set is
+        // not reachable by the cleanup job and a purge is the only thing that can take it.
+        notificationRepository.deleteByRecipientUserId(userId);
 
         List<UUID> collectionIds = noteCollectionRepository.findByOwnerUserId(userId)
                 .stream()

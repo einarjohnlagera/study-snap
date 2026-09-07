@@ -401,8 +401,20 @@ class NoteCollectionServiceProjectionIntegrationTest {
         assertThat(adoptionCounts(parentSource.getId())).containsEntry(parentSource.getId(), 2L);
     }
 
+    /**
+     * ⚠️ THIS TEST WAS RENAMED IN {@code v0.130.0} BECAUSE ITS OLD NAME —
+     * {@code applyingSourceUpdateDoesNotChangeTheAdoptionCount} — CLAIMED MORE THAN IT PROVES, and
+     * {@code RELEASES.md} and the {@code v0.129.0} release notes had generalised that name into
+     * "applySourceUpdate mutates rows and creates none." A pressure test disproved it: the fixture here
+     * is a LEAF source with no children, so {@code createSubjectAddition} never runs and the loop that
+     * creates rows is not entered. Short-circuiting the whole method also passed under the old name.
+     *
+     * <p>What it actually proves — and this is worth keeping — is that a re-sync of an ALREADY-ADOPTED
+     * plan does not double-count the adopter against the plan they already hold. The child case is
+     * covered by {@link #applyingSourceUpdateCreatesAnAdoptionOfANEWLYAddedChildSubjectPlan()}.
+     */
     @Test
-    void applyingSourceUpdateDoesNotChangeTheAdoptionCount() {
+    void applyingSourceUpdateToALeafPlanDoesNotReCountItsExistingAdopter() {
         UUID officialOwnerId = UUID.randomUUID();
         UUID adopterId = UUID.randomUUID();
         NoteCollectionEntity source = saveCollection(officialOwnerId, CollectionVisibility.PUBLIC);
@@ -413,6 +425,30 @@ class NoteCollectionServiceProjectionIntegrationTest {
         noteCollectionService.applySourceUpdate(adopted.getId(), adopterId);
 
         assertThat(adoptionCounts(source.getId())).containsEntry(source.getId(), 1L);
+    }
+
+    /**
+     * ⚠️ THE HALF THE OLD GUARD MISSED, AND THE COUNT GOING UP HERE IS CORRECT, NOT A BUG. When a curator
+     * adds a Subject Plan to a Goal, an adopter who applies the update genuinely gains a copy of that
+     * Subject Plan — {@code createSubjectAddition} saves a collection carrying its {@code sourcePlanId},
+     * so by the count's own definition the new child has one adopter it did not have before.
+     *
+     * <p>The defect was the CLAIM, not the number. This test exists so the claim can never be restated as
+     * "creates none" without something turning red.
+     */
+    @Test
+    void applyingSourceUpdateCreatesAnAdoptionOfANEWLYAddedChildSubjectPlan() {
+        UUID officialOwnerId = UUID.randomUUID();
+        UUID adopterId = UUID.randomUUID();
+        NoteCollectionEntity source = saveCollection(officialOwnerId, CollectionVisibility.PUBLIC);
+        NoteCollectionEntity adopted = saveAdoption(adopterId, source.getId());
+        NoteCollectionEntity newChild = saveChildCollection(officialOwnerId, source.getId(), "Newly added subject", 0);
+
+        assertThat(adoptionCounts(newChild.getId())).doesNotContainKey(newChild.getId());
+
+        noteCollectionService.applySourceUpdate(adopted.getId(), adopterId);
+
+        assertThat(adoptionCounts(newChild.getId())).containsEntry(newChild.getId(), 1L);
     }
 
     @Test

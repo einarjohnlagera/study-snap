@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { AppShell } from "./app-shell";
 import { ExamFocusProvider, useBottomViewportClaim, useExamFocusMode } from "./exam-mode/exam-focus-context";
-import { getMe, getMyPlan, logout } from "@/lib/api";
+import { getMe, getMyPlan, getNotificationUnreadCount, logout } from "@/lib/api";
 import { needsOnboarding } from "@/lib/auth";
 import {
   clearPendingLightweightProfileCompletion,
@@ -105,6 +105,12 @@ jest.mock("@/lib/api", () => ({
   },
   getMe: jest.fn(),
   getMyPlan: jest.fn(),
+  // ⚠️ OMITTING THIS WAS A DEFECT, not a tidy minimal mock. The header polls this on mount, so with the
+  // key absent the call was `undefined(...)`, every poll threw, the effect's own catch swallowed it as
+  // "a failed poll keeps the last count", and the badge path was executed by NO test in this file while
+  // all of them stayed green. A jest.mock factory is an allow-list: a module the component imports and
+  // the factory omits fails silently at the call site, not at import.
+  getNotificationUnreadCount: jest.fn(),
   logout: jest.fn(),
   requestEmailVerification: jest.fn(),
 }));
@@ -140,16 +146,60 @@ describe("AppShell", () => {
     sendFeedbackWidgetMock.mockClear();
     (getMe as jest.Mock).mockReset();
     (getMyPlan as jest.Mock).mockReset();
+    (getNotificationUnreadCount as jest.Mock).mockReset();
     (logout as jest.Mock).mockReset();
     (needsOnboarding as jest.Mock).mockReset();
     (needsOnboarding as jest.Mock).mockReturnValue(false);
     clearPendingLightweightProfileCompletion("user-1");
     (getMe as jest.Mock).mockResolvedValue(meResponse);
     (getMyPlan as jest.Mock).mockResolvedValue(null);
+    (getNotificationUnreadCount as jest.Mock).mockResolvedValue({ count: 0 });
     (logout as jest.Mock).mockImplementation(async () => {
       currentAuthUser = null;
       window.dispatchEvent(new Event("studysnap-auth-change"));
     });
+  });
+
+  it("polls the unread count and renders it on the bell", async () => {
+    // ⚠️ THE WIRING TEST, and until v0.130.0's pressure test nothing in this file executed it: the
+    // jest.mock factory omitted getNotificationUnreadCount, so every poll threw and was swallowed by the
+    // effect's own "a failed poll keeps the last count" catch. The suite was green BECAUSE the poll
+    // failed. This asserts poll -> state -> prop -> badge end to end.
+    (getNotificationUnreadCount as jest.Mock).mockResolvedValue({ count: 3 });
+
+    render(
+      <AppShell>
+        <div>Dashboard</div>
+      </AppShell>,
+    );
+
+    expect(await screen.findByLabelText("3 unread notifications")).toBeInTheDocument();
+  });
+
+  it("renders no badge for a signed-in learner with nothing actionable", async () => {
+    render(
+      <AppShell>
+        <div>Dashboard</div>
+      </AppShell>,
+    );
+
+    expect(await screen.findByLabelText("Open notifications")).toBeInTheDocument();
+    expect(screen.queryByLabelText(/unread notifications/)).not.toBeInTheDocument();
+  });
+
+  it("does not poll for notifications when nobody is signed in", async () => {
+    // The bell has no addressee on a public route, so the timer must not start at all.
+    currentPathname = "/collections/published";
+    currentAuthUser = null;
+
+    render(
+      <AppShell>
+        <div>Published plans</div>
+      </AppShell>,
+    );
+
+    await waitFor(() => expect(screen.getByText("Public Navbar")).toBeInTheDocument());
+    expect(getNotificationUnreadCount).not.toHaveBeenCalled();
   });
 
   it("does not render the authenticated shell on auth routes and redirects to dashboard", async () => {

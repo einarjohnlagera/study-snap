@@ -414,7 +414,7 @@ filter adoptions to justify the word.**
 - **⚠️ Parent and child counts stay independent (§3).** A child Subject Plan's `source_plan_id` points
   at the **child** source (`:2323`), so child adoptions do not roll up. **Never sum descendants into a
   parent's social-proof number.**
-- **Applying an update mutates rows and creates none — it cannot increment (§42).**
+- **⚠️ CORRECTED 2026-09-07 — THIS LINE IS THE ORIGIN OF A FALSE CLAIM THAT REACHED FOUR OTHER DOCUMENTS.** It read: *"Applying an update mutates rows and creates none — it cannot increment (§42)."* `applySourceUpdate` DOES create rows carrying a `sourcePlanId`, via `createSubjectAddition`. What is true is narrower: applying an update never re-counts an existing adopter against the set they already hold. A newly-added child Subject Plan legitimately gains an adopter. The `v0.129.0` guard written from this line used a leaf fixture and never entered the creating loop; a `v0.130.0` pressure test disproved the claim and both halves are now tested.
 - **Legacy null-provenance rows are excluded** and under-count. **⚠️ Never reconstruct provenance from
   titles, names or note overlap.**
 

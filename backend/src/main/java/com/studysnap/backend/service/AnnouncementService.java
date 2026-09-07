@@ -92,7 +92,17 @@ public class AnnouncementService {
     /**
      * Publishes a draft and fans it out, or RE-RUNS the fan-out for one that is already published.
      *
-     * <p>⚠️ RE-PUBLISH IS A RETRY, NOT A SECOND SEND, AND THAT IS DELIBERATE. Fan-out is one committed
+     * <p>⚠️ RE-PUBLISH IS A RETRY FOR EVERYONE WHO ALREADY HAS IT — AND A FIRST SEND FOR ANYONE WHO HAS
+     * JOINED THE AUDIENCE SINCE. This javadoc previously said "a retry, not a second send" flatly, and a
+     * {@code v0.130.0} pressure test showed that is only half true: {@link #fanOut(AnnouncementEntity)}
+     * re-resolves the audience AT CALL TIME, so a user who signed up, changed profile type or upgraded
+     * plan between the two publishes is in the second resolution and receives the announcement. Existing
+     * recipients are protected by the unique index and get nothing new; the effect is a TOP-UP.
+     *
+     * <p>That is a defensible behaviour — an admin pressing Publish again generally does want current
+     * readers reached — but it is a real difference and must not be restated as pure retry.
+     *
+     * <p>⚠️ THE RETRY HALF IS DELIBERATE. Fan-out is one committed
      * insert per recipient with no ambient transaction, so a few thousand recipients is a few thousand
      * round trips inside one admin HTTP request — long enough to outrun a gateway timeout. The status
      * transition commits BEFORE fan-out starts, and the unique index makes a re-run insert zero
