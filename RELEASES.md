@@ -16,6 +16,24 @@
 
 ### ⚠️ SCOPE SET AT KICKOFF BY A VERIFIED FINDING — ITEM 3 SHIPS EXITS FIRST
 
+**⚠️⚠️ CORRECTED 2026-09-07, HOURS AFTER THIS KICKOFF — THE FINDING BELOW WAS WRONG, AND IT IS KEPT RATHER THAN DELETED BECAUSE IT IS THE SAME DEFECT CLASS `v0.130.0` SHIPPED A WHOLE PRESSURE TEST TO CATCH.** The claim was that Quick Review's running branch has no in-page exit. **It has one.** A sticky top bar carrying a **"Leave Quiz"** button (`quick-review/page.tsx:1101`, gated on `quizSessionActive`) renders *above* the branch chain that was read. The audit that produced the claim grepped for `BackLink`, `<Link` and `router.push` and **never searched for the `onClick={() => requestLeave()}` button pattern that is the actual running-state exit in this repo** — a claim asserted from an incomplete search rather than anchored to the code that implements it.
+
+**THE CORRECTED AUDIT — every surface, checked for the right pattern:**
+
+| Surface | Bell during quiz | Running-state exit |
+|---|---|---|
+| Long Exam | already hidden | ✅ `ExamTopBar` |
+| Challenge Quiz — Board Exam | already hidden | ✅ `ExamTopBar` |
+| Challenge Quiz — ordinary | **visible** | ✅ inline top bar, *Leave Quiz* (`:1670`) |
+| Quick Review | **visible** | ✅ *Leave Quiz* (`:1101`) |
+| Adaptive Practice | **visible** | ✅ *Leave Quiz* (`:782`) |
+| Interview Practice | **visible** | ✅ *Leave Practice* (`:327`) |
+| Shared quiz `/quiz/[token]` | **already absent** | n/a — see below |
+
+**⚠️ CONSEQUENCE 1: NO EXIT WORK IS OWED. All four surfaces that need focus mode already have a running-state exit**, so item 3 is the hook call alone. Guard 7 still gets asserted per surface — it is now a regression guard rather than a prerequisite.
+
+**⚠️⚠️ CONSEQUENCE 2, AND IT IS A REAL FINDING THE PLAN GOT WRONG: DO NOT ADD `useExamFocusMode` TO THE SHARED QUIZ — IT WOULD BE A SILENT NO-OP.** `app-shell.tsx:593` returns early for `/quiz/` with a bare `<main>`, **so that route never renders the header and the bell is already absent there.** Focus mode's only consumer is the header gate, so the hook would change nothing while reading as shipped work — precisely the `v0.116.0`/`v0.117.0` shape (a behaviour changed with no test that runs it). **The plan's five-surface list is therefore FOUR surfaces.**
+
 **⚠️⚠️ QUICK REVIEW'S RUNNING STATE HAS NO IN-PAGE EXIT, AND ADDING FOCUS MODE TO IT AS WRITTEN WOULD TRAP THE LEARNER.** Checked at kickoff rather than taken on trust: `app/study-packs/[id]/quick-review/page.tsx` renders a branch chain — loading → error → `totalQuestions === 0` → `!currentSessionId` → `isComplete` → `retry-transition` → **else, the running quiz**. All four `BackLink`s sit in NON-running branches (`:1116`, `:1146`, `:1154`, `:1319`); the running branch has none. **Focus mode hides the ENTIRE header plus the mobile tab bar** (accepted deliberately by the owner), so on that surface it would remove the only way out.
 
 **⚠️ THEREFORE ITEM 3 IS "AUDIT AND ADD EXITS, THEN APPLY FOCUS MODE" — owner decision 2026-09-07, taken with the finding in hand.** Every one of the five surfaces has its RUNNING-state branch audited and an in-page exit added where missing, *before* the hook goes in. **⚠️ A `BackLink` elsewhere in the file does NOT satisfy this** — that is exactly what made Quick Review look safe. **⚠️ Guard 7 is asserted PER SURFACE, never once.**
