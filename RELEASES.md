@@ -59,7 +59,26 @@ Stage 3's own producers are Stage 5 (those rows) and Stage 6 (blocked). **Stage 
 
 ### Shipped
 
-_(nothing yet)_
+**Stage 3 — the notification substrate.** ⚠️ **The inbox is EMPTY by construction until Stage 4 lands; that is the design, not a gap.**
+
+- **`V139` adds `notifications` with a UNIQUE index on `(recipient_user_id, dedup_key)`, and THAT INDEX IS THE DELIVERY GUARANTEE.** `dedup_key` is deterministic — one helper builds `"<TYPE>:<entity-id>"` — and `deliver` **attempts the insert and catches `DataIntegrityViolationException`**, returning the existing row. **⚠️ There is NO `existsBy` pre-check anywhere, deliberately: two concurrent deliveries can both pass one and still duplicate.** Same shape as `NoteCollectionService:952`'s adoption race.
+- **The actionable/announcement split is a property of `NotificationType`, not a call-site `if`** — `actionableTypes()` derives from the enum flag, so announcements can never inflate the numeric badge by accident. **⚠️ No badge element renders at zero** — not a `0`, not an empty circle.
+- **Cross-user access returns NOT-FOUND, not forbidden**, so an endpoint never confirms someone else's notification exists.
+- **Retention deletes read-or-dismissed rows past a config-backed window; unread actionable rows are RETAINED regardless of age** — an unread row is the learner's only pointer to a pending request.
+- **⚠️ A polled 401 can no longer sign a learner out.** `fetchWithAuth` gained a `handleUnauthorized` parameter **defaulting to `true`, so every existing caller is byte-for-byte unchanged**; only `getNotificationUnreadCount` passes `false`, alongside `retry=false`. This is a change to shared auth plumbing and is called out rather than buried.
+- **Bell polls at 60s, stops while the tab is hidden, and a failed poll keeps the last known count silently** — clearing it would tell a learner they have nothing when a request is pending.
+
+**Verification.** **⚠️ BOTH `POST` ENDPOINTS HAVE REAL `MockMvc` REQUESTS WITH `.contentType(MediaType.APPLICATION_JSON)`** — the `v0.119.0` defect class, where two JSON POSTs sent no `Content-Type` and Spring rejected every request before the controller was entered. `lib/api-notifications.test.ts` pins the request shape independently, including that a 401 from the poll issues **exactly one** fetch.
+
+**⚠️ MUTATION VERIFICATION, AND ONE MUTATION FAILED TO REACH ITS SUBJECT — RECORDED BECAUSE THAT IS THE INSTRUCTIVE PART:**
+- Rendering the badge at zero (`> 0` → `>= 0`) fails the no-badge-at-zero test. ✅
+- **A first attempt at "mark everything read on panel open" PASSED ALL TESTS — and it was a false negative, not a missing guard.** The mutation iterated `notifications` from a **stale closure**, which is `[]` on first open, so it marked nothing. **⚠️ It compiled, it was present in the file, and it proved nothing.** Rewritten to mark read from the freshly-loaded list, it fails two tests. **This is the repo's own "the guard must reach its subject the way production does" lesson, hit from the mutation side rather than the fixture side.**
+
+**⚠️ TWO DEFECTS WERE FOUND IN THE HANDOVER, AND BOTH WERE FOUND BY GUARDS RATHER THAN BY READING:**
+- **`NotificationCleanupJob` was unregistered, and `ScheduledJobCronContractTest` failed the build for it** — the job declared a production cron but was absent from `EXPECTED_DEFAULTS`, `EXPECTED_ZONES` and the test profile's disable list. **⚠️ Its message names the real consequence: *"an unlisted cron job runs on the wall clock during the suite."*** Fixed by registering it in all three. **This is exactly what that guard exists for, and it worked with no human noticing the omission.**
+- **⚠️ THE INBOX CRASHED THE ENTIRE APP SHELL WHERE `matchMedia` IS UNAVAILABLE.** `globalThis.matchMedia(...)` was called unguarded, and **this component renders inside the header — so it takes down EVERY authenticated page, not just the bell.** It surfaced as 14 failures in `app-shell.test.tsx`. **⚠️ Fixed in the COMPONENT, not by mocking it in the test** — the fault was real, not a test gap — with optional chaining and a desktop-popover fallback, plus a guard asserting the component still renders.
+
+**Routing note.** Codex delivered the backend and part of the frontend, then stopped on a usage limit. **The backend was audited as third-party work and needed no correction.** The remainder — bell mount, count state and polling in `app-shell.tsx`, frontend tests, this documentation — was completed inline. **⚠️ The pre-declared scoped cold agent at release end is therefore doing double duty as the independent read on the inline half**, since the implementer also audited it.
 
 ## v0.129.0 - Adoption Signal
 

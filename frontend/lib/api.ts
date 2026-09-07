@@ -2254,6 +2254,22 @@ export type CreatorImpactResponse = {
   notes: CreatorImpactNoteResponse[];
 };
 
+export type NotificationResponse = {
+  id: string;
+  type: string;
+  title: string;
+  body: string | null;
+  ctaLabel: string | null;
+  ctaPath: string | null;
+  createdAt: string;
+  readAt: string | null;
+  dismissedAt: string | null;
+};
+
+export type NotificationUnreadCountResponse = {
+  count: number;
+};
+
 type ApiErrorPayload = {
   error?: {
     code?: string;
@@ -2446,18 +2462,25 @@ async function doRefreshAccessToken(): Promise<boolean> {
   return true;
 }
 
-async function fetchWithAuth(path: string, init: RequestInit, retry = true): Promise<Response> {
+async function fetchWithAuth(
+  path: string,
+  init: RequestInit,
+  retry = true,
+  handleUnauthorized = true,
+): Promise<Response> {
   const response = await fetch(buildUrl(path), init);
   if (response.status !== 401 || !retry) {
-    if (response.status === 401) {
+    if (response.status === 401 && handleUnauthorized) {
       handleUnauthorizedSession();
     }
     return response;
   }
   const refreshed = await tryRefreshAccessToken();
   if (!refreshed) {
-    clearAuthUser();
-    handleUnauthorizedSession();
+    if (handleUnauthorized) {
+      clearAuthUser();
+      handleUnauthorizedSession();
+    }
     return response;
   }
   const updatedHeaders = new Headers(init.headers ?? {});
@@ -2469,7 +2492,7 @@ async function fetchWithAuth(path: string, init: RequestInit, retry = true): Pro
     ...init,
     headers: updatedHeaders,
   });
-  if (retriedResponse.status === 401) {
+  if (retriedResponse.status === 401 && handleUnauthorized) {
     handleUnauthorizedSession();
   }
   return retriedResponse;
@@ -2645,6 +2668,57 @@ export async function getMe(): Promise<MeResponse> {
   const me = await parseApiResponse<MeResponse>(response, "Could not load profile. Please try again.");
   syncStoredAuthUserFromMe(me);
   return me;
+}
+
+export async function listNotifications(limit = 50): Promise<NotificationResponse[]> {
+  const response = await fetchWithAuth(
+    `/notifications?limit=${encodeURIComponent(String(limit))}`,
+    {
+      method: "GET",
+      headers: buildAuthHeaders(),
+    },
+    true,
+  );
+  return parseApiResponse<NotificationResponse[]>(response, "Could not load notifications.");
+}
+
+export async function getNotificationUnreadCount(): Promise<NotificationUnreadCountResponse> {
+  const response = await fetchWithAuth(
+    "/notifications/unread-count",
+    {
+      method: "GET",
+      headers: buildAuthHeaders(),
+    },
+    false,
+    false,
+  );
+  return parseApiResponse<NotificationUnreadCountResponse>(response, "Could not load notification count.");
+}
+
+export async function markNotificationRead(notificationId: string): Promise<NotificationResponse> {
+  const response = await fetchWithAuth(
+    `/notifications/${notificationId}/read`,
+    {
+      method: "POST",
+      headers: buildAuthHeaders("application/json"),
+      body: "{}",
+    },
+    true,
+  );
+  return parseApiResponse<NotificationResponse>(response, "Could not mark this notification as read.");
+}
+
+export async function dismissNotification(notificationId: string): Promise<NotificationResponse> {
+  const response = await fetchWithAuth(
+    `/notifications/${notificationId}/dismiss`,
+    {
+      method: "POST",
+      headers: buildAuthHeaders("application/json"),
+      body: "{}",
+    },
+    true,
+  );
+  return parseApiResponse<NotificationResponse>(response, "Could not dismiss this notification.");
 }
 
 export async function updateUserProfile(request: UpdateUserProfileRequest): Promise<MeResponse> {
