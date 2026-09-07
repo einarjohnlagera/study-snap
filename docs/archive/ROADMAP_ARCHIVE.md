@@ -4537,3 +4537,29 @@ Previous: `v0.68.0 — Topic Note Rename` (on `releases/v0.68.0`, cut from `main
 `v0.41.1 - Review Set Detail Page: This-Set Study Dashboard` is the previous released version (on `releases/v0.41.1`).
 
 Older released versions (`v0.41.0` and earlier, back to `v0.11.0`) are summarized in `docs/archive/ROADMAP_ARCHIVE.md`'s index and in full in `RELEASES.md` / `docs/archive/RELEASES_ARCHIVE.md` / `docs/releases/vX.Y.Z.md`.
+
+## Current Release Baseline entries moved from `ROADMAP.md`, 2026-09-07 (`v0.130.0` signoff)
+
+Moved verbatim at the `v0.130.0` signoff, when the live `## Current Release Baseline` named eight
+versions against a documented design of *current + the last five*. **A MOVE, NOT A DELETE** — live +
+archive together still hold every entry byte-for-byte.
+
+**Kicked off 2026-09-06.** `v0.124.0 — Collection Path Performance` is **Released** on `releases/v0.124.0`, cut from `main` after `v0.123.0` merged and tagged.
+
+**⚠️ IT OVERRIDES ITS OWN GATE BY EXPLICIT OWNER DECISION (2026-09-06), RECORDED RATHER THAN ROUTED AROUND.** The performance-audit Backlog row says *"re-read after `v0.123.0` deploys"* before taking sequencing 4, and **`v0.123.0` has not been observed in production.** A later session reading that row in isolation must come here first. **⚠️ Accepted residual: sized from the audit's STATIC read, so if `v0.123.0`'s lazy note list already removed most of the felt cost, the benefit is smaller than the arithmetic implies.**
+
+**THE DEFECT IS ARITHMETIC:** `refreshBuilder` issues **one `getCollection` per child Subject Plan**, so a 20-plan Review Set is **21 requests / ~147 queries for one page**. **⚠️ Concurrency is the sharp edge, not latency — the pool is 20 and `v0.112.0` documents exhaustion as a live failure mode.**
+
+**⚠️ SHAPE DECIDED AT KICKOFF, AND THE OBVIOUS OPTION IS WRONG: `getCollectionGoal` has SEVEN frontend consumers and six need no child items**, so widening `GoalCollectionDetailResponse` would inflate the Dashboard and three exam prestart paths to serve the builder alone. **A SEPARATE BATCH READ; the goal response is not widened.**
+
+**⚠️ The dated-read cluster is FOUR DAYS OUT (`2026-09-10` → `2026-09-19`, twelve reads) and the Goal builder path is measured by none of them** — which is what makes this release compatible with the window. **⚠️ `frontend/app/onboarding` stays frozen: the freeze lifts when the `2026-09-11` READ IS TAKEN, not when the date passes.** Full scope and anti-drift in `RELEASES.md`.
+
+**Previous: `v0.123.0 — Collection Builder Integrity` is RELEASED** on `releases/v0.123.0`, cut from `main` after `v0.122.0` merged and tagged.
+
+**⚠️ IT OPENS ON TWO UNTRACKED FILES KICKOFF STEP 8 SURFACED, NOT ON A ROADMAP QUEUE — and both point at the SAME surface, which is why they are one release rather than two.** An owner-reported incident (`docs/claude-findings/2026-09-06-study-plan-builder-section-label-refresh-loop.md`) and `docs/claude-plans/note-collection-page-performance-audit.md`. **Both were unindexed; both get Backlog Index rows in this kickoff commit.**
+
+**THE DEFECT:** `/collections/{id}/builder` wedges in an **unbounded write→refresh loop** after a section label is set to a long pasted value. `LeafSortableNoteCard`'s auto-save effect (`:445-455`) compares `item.label` against a **locally normalised** form of its own input, while the value reaching the server is chosen by a **different** normalisation in `handleLeafLabelChange` (`:1646`) — so when they disagree the guard never clears, with **no attempt cap, no backoff, no failure short-circuit**. **⚠️ Mechanics proven from code; INGRESS UNRESOLVED** — the row was deleted before it could be read and the Render MCP was unreachable, so nothing rests on production data.
+
+**⚠️ THE TWO DEFECTS COMPOUND: the loop's DAMAGE MULTIPLIER IS THE AUDIT'S LEVER 1.** Each iteration calls `refreshBuilder`, refetching the curator's **entire unbounded note list**, so a wedged page issues a heavy `listNotes()` every ~500 ms–1 s from every affected client — **a client-driven load amplifier against the backend the 2026-09-05 outage showed has no headroom** — and **adoption propagates it**, since an uncollapsed label on a published source plan wedges every learner who adopts it.
+
+**⚠️ VERIFICATION IS ONE SCOPED COLD AGENT, AND THE TIER IS A CONSEQUENCE OF AN OWNER DECISION RATHER THAN INHERITED: the recommendation was FOUR items (the loop fix plus audit sequencing 1 and 2) and the owner took SEVEN**, which fires the gate's named trigger that two or more changes touch the same shared method. Full scope and anti-drift in `RELEASES.md`.

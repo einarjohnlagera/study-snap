@@ -2254,6 +2254,60 @@ export type CreatorImpactResponse = {
   notes: CreatorImpactNoteResponse[];
 };
 
+export type NotificationResponse = {
+  id: string;
+  type: string;
+  title: string;
+  body: string | null;
+  ctaLabel: string | null;
+  ctaPath: string | null;
+  createdAt: string;
+  readAt: string | null;
+  dismissedAt: string | null;
+};
+
+export type NotificationUnreadCountResponse = {
+  count: number;
+};
+
+export type AnnouncementAudience = "EVERYONE" | "PROFILE_TYPE" | "PLAN_TYPE";
+
+export type AnnouncementStatus = "DRAFT" | "PUBLISHED" | "ENDED";
+
+export type AnnouncementResponse = {
+  id: string;
+  title: string;
+  body: string;
+  ctaLabel: string | null;
+  ctaPath: string | null;
+  audience: AnnouncementAudience;
+  audienceValue: string | null;
+  status: AnnouncementStatus;
+  publishedAt: string | null;
+  expiresAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  editable: boolean;
+  expired: boolean;
+};
+
+export type UpsertAnnouncementRequest = {
+  title: string;
+  body: string;
+  ctaLabel: string | null;
+  ctaPath: string | null;
+  audience: AnnouncementAudience;
+  audienceValue: string | null;
+  expiresAt: string | null;
+};
+
+export type AnnouncementPublishResponse = {
+  announcement: AnnouncementResponse;
+  recipientCount: number;
+  delivered: number;
+  skipped: number;
+};
+
 type ApiErrorPayload = {
   error?: {
     code?: string;
@@ -2446,18 +2500,25 @@ async function doRefreshAccessToken(): Promise<boolean> {
   return true;
 }
 
-async function fetchWithAuth(path: string, init: RequestInit, retry = true): Promise<Response> {
+async function fetchWithAuth(
+  path: string,
+  init: RequestInit,
+  retry = true,
+  handleUnauthorized = true,
+): Promise<Response> {
   const response = await fetch(buildUrl(path), init);
   if (response.status !== 401 || !retry) {
-    if (response.status === 401) {
+    if (response.status === 401 && handleUnauthorized) {
       handleUnauthorizedSession();
     }
     return response;
   }
   const refreshed = await tryRefreshAccessToken();
   if (!refreshed) {
-    clearAuthUser();
-    handleUnauthorizedSession();
+    if (handleUnauthorized) {
+      clearAuthUser();
+      handleUnauthorizedSession();
+    }
     return response;
   }
   const updatedHeaders = new Headers(init.headers ?? {});
@@ -2469,7 +2530,7 @@ async function fetchWithAuth(path: string, init: RequestInit, retry = true): Pro
     ...init,
     headers: updatedHeaders,
   });
-  if (retriedResponse.status === 401) {
+  if (retriedResponse.status === 401 && handleUnauthorized) {
     handleUnauthorizedSession();
   }
   return retriedResponse;
@@ -2645,6 +2706,67 @@ export async function getMe(): Promise<MeResponse> {
   const me = await parseApiResponse<MeResponse>(response, "Could not load profile. Please try again.");
   syncStoredAuthUserFromMe(me);
   return me;
+}
+
+export async function listNotifications(limit = 50): Promise<NotificationResponse[]> {
+  const response = await fetchWithAuth(
+    `/notifications?limit=${encodeURIComponent(String(limit))}`,
+    {
+      method: "GET",
+      headers: buildAuthHeaders(),
+    },
+    true,
+  );
+  return parseApiResponse<NotificationResponse[]>(response, "Could not load notifications.");
+}
+
+export async function getNotificationUnreadCount(): Promise<NotificationUnreadCountResponse> {
+  // ⚠️ retry=TRUE, handleUnauthorized=FALSE — and the two halves are separate decisions.
+  //
+  // Disabling the retry as well was a defect (found by a v0.130.0 pressure test): access tokens live 15
+  // minutes and this is a 60-second background poll, so every poll after the first idle quarter-hour
+  // 401'd without ever refreshing. The badge silently froze on its last value for the rest of the
+  // session, which is the one failure a pending-request signal cannot have. The "refresh storm"
+  // justification was never real: tryRefreshAccessToken already dedupes concurrent refreshes.
+  //
+  // handleUnauthorized STAYS false: a background poll must never sign a learner out of a session whose
+  // foreground still works.
+  const response = await fetchWithAuth(
+    "/notifications/unread-count",
+    {
+      method: "GET",
+      headers: buildAuthHeaders(),
+    },
+    true,
+    false,
+  );
+  return parseApiResponse<NotificationUnreadCountResponse>(response, "Could not load notification count.");
+}
+
+export async function markNotificationRead(notificationId: string): Promise<NotificationResponse> {
+  const response = await fetchWithAuth(
+    `/notifications/${notificationId}/read`,
+    {
+      method: "POST",
+      headers: buildAuthHeaders("application/json"),
+      body: "{}",
+    },
+    true,
+  );
+  return parseApiResponse<NotificationResponse>(response, "Could not mark this notification as read.");
+}
+
+export async function dismissNotification(notificationId: string): Promise<NotificationResponse> {
+  const response = await fetchWithAuth(
+    `/notifications/${notificationId}/dismiss`,
+    {
+      method: "POST",
+      headers: buildAuthHeaders("application/json"),
+      body: "{}",
+    },
+    true,
+  );
+  return parseApiResponse<NotificationResponse>(response, "Could not dismiss this notification.");
 }
 
 export async function updateUserProfile(request: UpdateUserProfileRequest): Promise<MeResponse> {
@@ -2973,6 +3095,70 @@ export async function sendReEngagementCampaign(): Promise<ReEngagementSendResult
     true,
   );
   return parseApiResponse<ReEngagementSendResult>(response, "Could not send campaign.");
+}
+
+export async function listAnnouncements(): Promise<AnnouncementResponse[]> {
+  const response = await fetchWithAuth(
+    "/admin/announcements",
+    { method: "GET", headers: buildAuthHeaders() },
+    true,
+  );
+  return parseApiResponse<AnnouncementResponse[]>(response, "Could not load announcements.");
+}
+
+export async function createAnnouncement(request: UpsertAnnouncementRequest): Promise<AnnouncementResponse> {
+  const response = await fetchWithAuth(
+    "/admin/announcements",
+    {
+      method: "POST",
+      headers: buildAuthHeaders("application/json"),
+      body: JSON.stringify(request),
+    },
+    true,
+  );
+  return parseApiResponse<AnnouncementResponse>(response, "Could not create the announcement.");
+}
+
+export async function updateAnnouncement(
+  announcementId: string,
+  request: UpsertAnnouncementRequest,
+): Promise<AnnouncementResponse> {
+  const response = await fetchWithAuth(
+    `/admin/announcements/${announcementId}`,
+    {
+      method: "PUT",
+      headers: buildAuthHeaders("application/json"),
+      body: JSON.stringify(request),
+    },
+    true,
+  );
+  return parseApiResponse<AnnouncementResponse>(response, "Could not update the announcement.");
+}
+
+export async function publishAnnouncement(announcementId: string): Promise<AnnouncementPublishResponse> {
+  const response = await fetchWithAuth(
+    `/admin/announcements/${announcementId}/publish`,
+    {
+      method: "POST",
+      headers: buildAuthHeaders("application/json"),
+      body: "{}",
+    },
+    true,
+  );
+  return parseApiResponse<AnnouncementPublishResponse>(response, "Could not publish the announcement.");
+}
+
+export async function endAnnouncement(announcementId: string): Promise<AnnouncementResponse> {
+  const response = await fetchWithAuth(
+    `/admin/announcements/${announcementId}/end`,
+    {
+      method: "POST",
+      headers: buildAuthHeaders("application/json"),
+      body: "{}",
+    },
+    true,
+  );
+  return parseApiResponse<AnnouncementResponse>(response, "Could not end the announcement.");
 }
 
 export async function issueAdminRefund(transactionId: string): Promise<AdminIssueRefundResponse> {

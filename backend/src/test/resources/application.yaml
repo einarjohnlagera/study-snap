@@ -29,6 +29,9 @@ studysnap:
     recovery-cron: "-"
     # ⚠️ Hourly at :45 in production, so this is the one that actually fired during a full suite.
     bulk-result-cleanup-cron: "-"
+  notifications:
+    # ⚠️ Hourly at :15 in production, so it WOULD fire on the wall clock during a full suite.
+    cleanup-cron: "-"
   billing:
     usage-reset-cron: "-"
     subscription-expiry-cron: "-"

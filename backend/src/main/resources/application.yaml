@@ -533,6 +533,9 @@ studysnap:
     pool-generating-bound-minutes: ${GENERATION_POOL_GENERATING_BOUND_MINUTES:60}
     long-exam-session-bound-minutes: ${GENERATION_LONG_EXAM_SESSION_BOUND_MINUTES:30}
     note-bound-minutes: ${GENERATION_NOTE_BOUND_MINUTES:120}
+  notifications:
+    cleanup-cron: ${NOTIFICATION_CLEANUP_CRON:0 15 * * * *}
+    retention-days: ${NOTIFICATION_RETENTION_DAYS:90}
   security:
     google:
       client-id: ${GOOGLE_CLIENT_ID:}

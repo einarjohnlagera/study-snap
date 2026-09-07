@@ -27,6 +27,7 @@ public class StudySnapProperties {
     private final Retention retention = new Retention();
     private final Account account = new Account();
     private final Generation generation = new Generation();
+    private final Notifications notifications = new Notifications();
 
     @Setter
     private String appName = "NoteLib";
@@ -508,5 +509,12 @@ public class StudySnapProperties {
         private int poolGeneratingBoundMinutes = 60;
         private int longExamSessionBoundMinutes = 30;
         private int noteBoundMinutes = 120;
+    }
+
+    @Getter
+    @Setter
+    public static class Notifications {
+        private String cleanupCron = "0 15 * * * *";
+        private int retentionDays = 90;
     }
 }

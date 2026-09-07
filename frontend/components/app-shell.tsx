@@ -19,6 +19,11 @@ import { SendFeedbackWidget } from "@/components/feedback/send-feedback-widget";
 import { ResponsiveActionButton, ResponsiveActionContent } from "@/components/ui/action-button";
 import { ToastMessage } from "@/components/ui/toast-message";
 import { Navbar } from "@/components/navbar";
+import { NotificationInbox } from "@/components/notifications/notification-inbox";
+import { getNotificationUnreadCount } from "@/lib/api";
+
+/** Matches the cadence of the existing generation poller; the inbox is far less urgent than a running generation. */
+const NOTIFICATION_UNREAD_POLL_INTERVAL_MS = 60_000;
 import { useAppShellTitleContext } from "@/components/app-shell-title-context";
 import { useExamFocusContext } from "@/components/exam-mode/exam-focus-context";
 import { MobileBottomTabBar } from "@/components/mobile-bottom-tab-bar";
@@ -246,6 +251,16 @@ export function AppShell({ children }: Readonly<AppShellProps>) {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [avatarMenuOpen, setAvatarMenuOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
+  const [actionableUnreadCount, setActionableUnreadCount] = useState(0);
+
+  // The inbox reports a local change (a row marked read) so the badge responds immediately rather
+  // than waiting for the next poll. Clamped at zero: a delta arriving after a poll already
+  // reconciled the count must never drive the badge negative.
+  const applyActionableUnreadDelta = useCallback((delta: number) => {
+    setActionableUnreadCount((current) => Math.max(0, current + delta));
+  }, []);
+
+
   const [hasAuthUser, setHasAuthUser] = useState(false);
   const [user, setUser] = useState<ShellUser>({
     id: null,
@@ -259,6 +274,52 @@ export function AppShell({ children }: Readonly<AppShellProps>) {
     role: null,
     profileType: null,
   });
+
+  // ⚠️ POLL, DO NOT STREAM -- there is no WebSocket/SSE infrastructure in this repo, and
+  // lib/study-pack-generation.ts is the proven polling pattern.
+  //
+  // ⚠️ Three things here are deliberate. (1) Polling STOPS while the tab is hidden, so a backgrounded
+  // tab does not bill a request a minute forever. (2) A failed poll KEEPS the last known count and
+  // stays silent -- clearing the badge would tell a learner they have nothing when they may have a
+  // pending request, and a toast per failed poll would be noise. (3) getNotificationUnreadCount is
+  // called with unauthorized-handling disabled but retry ENABLED, so a 401 here refreshes the token
+  // rather than freezing the badge, and still can never sign the user out of an otherwise valid
+  // session. Both halves are pinned in lib/api-notifications.test.ts.
+  useEffect(() => {
+    if (!user.id) {
+      setActionableUnreadCount(0);
+      return;
+    }
+    let cancelled = false;
+
+    const refreshUnreadCount = async () => {
+      if (globalThis.document?.visibilityState === "hidden") {
+        return;
+      }
+      try {
+        const summary = await getNotificationUnreadCount();
+        if (!cancelled) {
+          setActionableUnreadCount(summary.count);
+        }
+      } catch {
+        // Keep the last known count. See (2) above.
+      }
+    };
+
+    void refreshUnreadCount();
+    const intervalId = globalThis.setInterval(
+      () => void refreshUnreadCount(),
+      NOTIFICATION_UNREAD_POLL_INTERVAL_MS,
+    );
+    const onVisibilityChange = () => void refreshUnreadCount();
+    globalThis.document?.addEventListener("visibilitychange", onVisibilityChange);
+
+    return () => {
+      cancelled = true;
+      globalThis.clearInterval(intervalId);
+      globalThis.document?.removeEventListener("visibilitychange", onVisibilityChange);
+    };
+  }, [user.id]);
   const [resendingVerification, setResendingVerification] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [toastTone, setToastTone] = useState<"success" | "error" | "info">("info");
@@ -579,6 +640,10 @@ export function AppShell({ children }: Readonly<AppShellProps>) {
           </div>
 
           <div className="flex items-center gap-3">
+            <NotificationInbox
+              actionableUnreadCount={actionableUnreadCount}
+              onActionableUnreadDelta={applyActionableUnreadDelta}
+            />
             <ThemeToggle />
             <SendFeedbackWidget
               variant="icon"
