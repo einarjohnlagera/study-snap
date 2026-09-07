@@ -1,5 +1,45 @@
 # RELEASES.md - NoteLib
 
+## v0.128.0 - Onboarding Unfrozen
+
+**Status: In Progress** (kicked off 2026-09-07, base branch `releases/v0.128.0`, cut from `main` after `v0.127.0` merged and tagged)
+
+Theme: the work that was blocked only by the onboarding freeze, now that the read the freeze protected has been taken.
+
+**⚠️ THE FREEZE IS LIFTED BY OWNER DECISION (2026-09-07), AND THE READ IT PROTECTED WAS TAKEN FIRST RATHER THAN ABANDONED.** `[CHECKPOINT — due 2026-09-11]` froze `frontend/app/onboarding` to protect a signup-funnel read against a **62.4% completion baseline that cannot be re-run**. Taken read-only on 2026-09-07, four days early: **393 signups all-time, 249 completed, 63.4%** — essentially flat.
+
+**⚠️⚠️ THE FINDING THAT DISCHARGES THE CHECKPOINT IS THE DENOMINATOR, NOT THE RATE. The cohort since the `v0.73.0` redesign (2026-08-12) is EIGHTEEN SIGNUPS** — 15 completed, 83.3%. At ~0.7 signups/day, waiting to 2026-09-11 adds about three more. **83.3% on n=18 is noise, not a result.** The checkpoint was never going to be answerable on its own date; **the freeze was protecting a read that cannot be taken.** That is exactly the underpowered-denominator failure this repo's own checkpoint doctrine names, and it is why lifting is not a trade-off.
+
+**⚠️ Do NOT re-freeze onboarding for this checkpoint, and do NOT quote 62.4% or 83.3% as a current figure** — the first is a stale baseline, the second has n=18.
+
+### Planned Scope
+
+**(1) Summary maths renders.** `components/ui/summary-markdown.tsx` runs `react-markdown` + `remark-gfm` with **no math plugin**. The fix was blocked *solely* because `app/onboarding/page.tsx` renders `SummaryMarkdown`.
+
+**⚠️ THE NAIVE FIX IS WRONG AND `v0.95.1` RECORDED WHY: `_` IS MARKDOWN EMPHASIS**, so `$x_1 + x_2$` becomes `<em>` before any post-processing could see it. It needs `remark-math` for **tokenization only**, rendering through the **existing** KaTeX setup so there stays **one** math configuration. `katex` is already a dependency and `renderMathText` already handles `$…$`, `$$…$$` and `\[…\]`.
+
+**⚠️ `v0.95.1` fixed leg (a) — the plain-text note surfaces. This is leg (b), and neither is `v0.86.0`'s CORRUPTED-ESCAPE item**, which is a different defect on stored content. Do not close that one with this.
+
+**(2) Catalog-first suggestions in onboarding** — the deferred half of `v0.79.0`, **and by that release's own baseline the load-bearing one**. Onboarding was excluded from `v0.79.0` precisely to protect the read now discharged.
+
+### Anti-drift
+
+**⚠️ NO Learning Connections work.** `[CHECKPOINT — due 2026-09-19]` is **twelve days out**, its kill criterion keys on `ACCEPTED`, and it decides whether that arc continues at all — touching it would contaminate the one number that decides. **⚠️ Item 2 must NOT lock the course/program field or add a request queue**: `v0.79.0` shipped the **counter-proposal**, free text **stays allowed**, and the `ADR-001` amendment remains unratified — shipping this does not ratify it. **⚠️ Do NOT add, remove or reorder an onboarding FLOW step beyond what these two items require** — the freeze is lifted, not the judgment behind it. **⚠️ Do NOT change what `BOARD_EXAM_STARTED`, `ADAPTIVE_PRACTICE_STARTED`, `QUIZ_SHARE_LINK_*` or `GUIDANCE_TIP_SHOWN` record. NO migration, no quota/entitlement/meter change, no new mode or sub-mode, no `ProfileType` gate.**
+
+### Verification
+
+**ONE SCOPED COLD AGENT framed as falsification.** Item 1 changes a renderer with **nine consumers including SEO-indexed public pages**; item 2 touches the signup path.
+
+**⚠️ PRE-DECLARED GUARDS, each naming the fixture that proves nothing: (a)** a Summary containing `$x_1 + x_2$` must render maths and **not** `<em>` — **a fixture without an underscore passes under the defect**; **(b)** a Summary containing **no** maths must render **byte-identically** to today, since nine surfaces share this renderer; **(c)** onboarding must complete end to end with a catalog-sourced program **and** with free text, because free text staying allowed is the counter-proposal's whole point.
+
+**⚠️ CARRIED LESSON FROM `v0.127.0`: confirm a mutation is PRESENT before trusting a green suite** — one silently failed to apply and the run passed.
+
+**Routing: CLAUDE CODE inline.**
+
+### Shipped
+
+_(nothing yet)_
+
 ## v0.127.0 - Failure Attribution and Learner Dates
 
 **Status: Released** (kicked off and signed off 2026-09-07, base branch `releases/v0.127.0`, cut from `main` after `v0.126.0` merged and tagged)
