@@ -127,6 +127,7 @@ function collection(overrides: Record<string, unknown> = {}) {
         subject: "Biology",
         courseProgram: "Nursing",
         studyPackStatus: "DRAFT",
+        studyPackId: null,
         generatedQuizId: null,
         lastSessionCompletedAt: null,
         dueConceptCount: 0,
@@ -141,6 +142,7 @@ function collection(overrides: Record<string, unknown> = {}) {
         subject: "Pharmacy",
         courseProgram: "Nursing",
         studyPackStatus: "STUDY_PACK_READY",
+        studyPackId: null,
         generatedQuizId: "quiz-2",
         lastSessionCompletedAt: "2026-06-02T00:00:00Z",
         dueConceptCount: 0,
@@ -375,6 +377,32 @@ describe("CollectionDetailPageClient", () => {
     });
     globalThis.localStorage.clear();
     globalThis.sessionStorage.clear();
+  });
+
+  /**
+   * ⚠️ GUARD: OPENING A COLLECTION MUST NOT DOWNLOAD THE NOTE LIBRARY.
+   *
+   * <p>`listNotes()` is unbounded and every row carries `contentPreview` and `summaryPreview`. It used
+   * to run on EVERY collection open to derive two things: an ADMIN-only visibility map, and the primary
+   * exam's Study Pack id. For a learner the ENTIRE payload was discarded.
+   *
+   * <p>⚠️ THE FIXTURE IS A NON-ADMIN ON PURPOSE. An admin fixture still legitimately calls `listNotes`
+   * for the private badges, so it passes under the defect and proves nothing.
+   */
+  it("does not download the note library when a learner opens a collection", async () => {
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    expect(await screen.findByRole("heading", { name: "Midterm Study Plan" })).toBeInTheDocument();
+    expect(listNotes).not.toHaveBeenCalled();
+  });
+
+  it("still loads note visibility for an admin, whose role resolves after the first render", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ profileType: "STUDENT", planType: "FREE", role: "ADMIN" });
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    expect(await screen.findByRole("heading", { name: "Midterm Study Plan" })).toBeInTheDocument();
+    await waitFor(() => expect(listNotes).toHaveBeenCalledTimes(1));
   });
 
   it("renders collection items in persisted order", async () => {
@@ -2518,6 +2546,7 @@ describe("CollectionDetailPageClient", () => {
       items: collection().items.map((item) => ({
         ...item,
         studyPackStatus: "DRAFT",
+        studyPackId: null,
         generatedQuizId: null,
       })),
     }));
@@ -2561,6 +2590,7 @@ describe("CollectionDetailPageClient", () => {
       items: collection().items.map((item) => ({
         ...item,
         studyPackStatus: "STUDY_PACK_READY",
+        studyPackId: null,
         generatedQuizId: null,
         lastSessionCompletedAt: "2026-06-02T00:00:00Z",
       })),
@@ -2640,6 +2670,41 @@ describe("CollectionDetailPageClient", () => {
     );
   });
 
+  /**
+   * ⚠️ GUARD: THE BOARD EXAM CTA RESOLVES ITS STUDY PACK FROM THE COLLECTION ITEM.
+   *
+   * <p>This is the ONLY branch that needs a Study Pack id rather than a note id, and before `v0.124.0`
+   * it read that id out of the unbounded `listNotes()` payload. It now comes from
+   * `NoteCollectionItemResponse.studyPackId`.
+   *
+   * <p>⚠️ IT IS ALSO THE BRANCH NOTHING COVERED: hardcoding `primaryExamStudyPackId = null` passed all
+   * 142 tests in this file, so the id's provenance was unverified in BOTH directions. `BOARD_EXAM` +
+   * `PRO` is the only combination that reaches it, and `listNotes` is asserted unused so the id cannot
+   * be coming from the old lookup.
+   */
+  it("routes the PRO board-exam CTA through the item's own studyPackId, with no note-list lookup", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ profileType: "BOARD_EXAM", planType: "PRO" });
+    (getCollection as jest.Mock).mockResolvedValue(collection({
+      items: collection().items.map((item) => ({
+        ...item,
+        studyPackId: `sp-${item.noteId}`,
+        studyPackStatus: "STUDY_PACK_READY",
+        lastSessionCompletedAt: "2026-06-02T00:00:00Z",
+      })),
+    }));
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    const examButton = await screen.findByRole("button", { name: "Take the Board Exam" });
+    expect(examButton).toBeEnabled();
+    fireEvent.click(examButton);
+
+    expect(pushMock).toHaveBeenCalledWith(
+      expect.stringContaining("/study-packs/sp-note-1/challenge-quiz?"),
+    );
+    expect(listNotes).not.toHaveBeenCalled();
+  });
+
   it("keeps the Free board-profile Challenge Quiz CTA reachable without a studyPackId lookup", async () => {
     (getAuthUser as jest.Mock).mockReturnValue({ profileType: "BOARD_EXAM", planType: "FREE" });
 
@@ -2668,6 +2733,7 @@ describe("CollectionDetailPageClient", () => {
       items: collection().items.map((item) => ({
         ...item,
         studyPackStatus: "DRAFT",
+        studyPackId: null,
         generatedQuizId: null,
       })),
     }));

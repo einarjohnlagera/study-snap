@@ -1,10 +1,12 @@
 # RELEASES.md - NoteLib
 
-## v0.124.0 - Goal Path Request Cost
+## v0.124.0 - Collection Path Performance
 
 **Status: In Progress** (kicked off 2026-09-06, base branch `releases/v0.124.0`, cut from `main` after `v0.123.0` merged and tagged)
 
 **⚠️ IT OVERRIDES ITS OWN GATE BY EXPLICIT OWNER DECISION (2026-09-06), AND THE OVERRIDE IS WRITTEN DOWN RATHER THAN ROUTED AROUND.** `v0.123.0`'s Backlog row for the performance audit says: *"Re-read after `v0.123.0` deploys: if the Goal path is still the dominant cost on large Review Sets, sequencing 4 becomes its own Codex-routed release."* **`v0.123.0` HAS NOT BEEN OBSERVED IN PRODUCTION.** The owner took it anyway. **⚠️ A later session reading that row in isolation must come here first — recorded override, not drift.** **⚠️ THE ACCEPTED RESIDUAL, STATED AT KICKOFF: the release is sized from the audit's STATIC READ rather than from post-deploy evidence, so if `v0.123.0`'s lazy note list turns out to have already removed most of the felt cost, this release's benefit is smaller than its request-count arithmetic implies.** The arithmetic itself is not in doubt; what is unobserved is how much of it a curator actually feels.
+
+**⚠️ WIDENED MID-RELEASE BY OWNER DECISION (2026-09-06), FROM *Goal Path Request Cost* TO *Collection Path Performance*, AND THE TRIGGER WAS A FALSE CLAIM IN THE SHIPPED RECORD RATHER THAN A NEW IDEA.** Asked whether opening a collection was still slow, this session checked instead of answering from `RELEASES.md` — and found that **`v0.123.0` claimed the unbounded `listNotes()` had been made lazy on BOTH page loads when it had only been made lazy in the BUILDER.** `collection-detail-page-client.tsx` was never in that release's diff. **⚠️ SO THE AUDIT'S LEVER 1 — its own "biggest, and it repeats" — WAS STILL LIVE ON THE PAGE LEARNERS OPEN MOST**, and the record said otherwise. The release therefore covers **both** surfaces on the collection path, and `v0.123.0`'s bullet is corrected IN PLACE below rather than quietly rewritten.
 
 **THE DEFECT, AND IT IS ARITHMETIC RATHER THAN A BUG:** `refreshBuilder` loads the Goal, then issues **one `getCollection` per child Subject Plan** (`study-plan-builder-page-client.tsx:1447`). A Review Set with 20 plans is **21 requests and ~147 queries to render one page.** `Promise.all` makes them concurrent, **not cheap** — and **⚠️ CONCURRENCY IS THE SHARP EDGE HERE, NOT LATENCY: the connection pool is 20** (`application.yaml`), and `v0.112.0` documents pool exhaustion as a **live production failure mode**, so one curator opening one large Review Set can burst against the whole pool.
 
@@ -69,6 +71,39 @@
 - **Both calls sit BELOW `applyLeafDetail`'s early return.** Hoisting either into the opening
   `Promise.all` would add a wasted request to every leaf-plan refresh — a regression on the path this
   release's anti-drift says is untouched.
+
+**Item 3 — opening a collection stops downloading the note library.** (Folded in 2026-09-06 by owner
+decision; audit Lever 1 on the detail page.)
+
+- **`collection-detail-page-client.tsx` no longer calls `listNotes()` on load.** It ran on EVERY
+  collection open, unbounded — the backend caps nothing when `limit` is null — with each row carrying
+  `contentPreview` and `summaryPreview`, **the same two fields that pushed `/notes/public` past
+  Next.js's 2 MB data-cache limit in the 2026-08-31 build failure.** For a curator that is ~900 rows
+  before the page renders.
+- **⚠️ WHAT IT WAS FOR IS THE PART THAT JUSTIFIES THE FIX: exactly two derived values, and for a
+  learner BOTH were discarded.** `noteVisibility` feeds four render sites that are **every one**
+  `isAdmin &&`-gated — the code's own comment already called it *"admin-only progressive
+  enhancement"* — and `noteStudyPackIdByNoteId` resolved a **single** value, `primaryExamStudyPackId`.
+  So a non-admin downloaded their whole library to produce **one Study Pack id**.
+- **`NoteCollectionItemResponse` gains `studyPackId`, and it is FREE.** `StudyPackProgressView.getId()`
+  was **already loaded** in `toItemResponses` for the due-concept lookup, so this adds **no query** —
+  one more argument to a record already being built. `CollectionExamCandidate`'s `Pick` widens with it.
+- **Visibility now loads in its own ADMIN-gated effect, deliberately not inside the loader.** `authUser`
+  resolves in its own effect, so `isAdmin` is false on first render; gating the loader on it there would
+  either read stale state or re-arm the whole load — **the same defect the cold agent found in the
+  builder, which this release also fixes.** A learner now issues **zero** `listNotes()` calls on open.
+- **`noteListLoadFailed` is deleted rather than left inert.** It existed only to disable the exam CTA
+  when the note list failed and the pack id could not be resolved; the id now arrives on the item, and
+  the remaining `!primaryExamStudyPackId` clause still covers the Board Exam case.
+- **⚠️ THE BOARD EXAM BRANCH WAS COMPLETELY UNCOVERED AND IS NOW GUARDED.** Hardcoding
+  `primaryExamStudyPackId = null` passed **all 142** tests in the detail-page suite, so the id's
+  provenance was unverified in both directions — `BOARD_EXAM` + `PRO` is the only combination reaching
+  `/study-packs/{packId}/challenge-quiz`, and nothing exercised it. The new guard asserts that route
+  **and** that `listNotes` is unused, so the id cannot be coming from the old lookup.
+- **⚠️ GUARD FIXTURES ARE NON-ADMIN AND `PRO`-BOARD ON PURPOSE — an admin fixture still legitimately
+  calls `listNotes` for the badges and passes under the defect.** Mutation-verified: removing the admin
+  gate fails the learner guard (and the admin guard, which pins **exactly once**); nulling the pack id
+  fails the Board Exam guard and nothing else.
 
 **Cold-agent finding, folded in rather than deferred: the curator loaded the builder TWICE.**
 
@@ -238,7 +273,12 @@ rewritten.
   item 4 actually lives.
 - **The note library is lazy (item 6).** `listNotes()` — unbounded, `contentPreview` and
   `summaryPreview` per row — used to fire on collection load, on builder load, and again after every
-  non-drag mutation. It now loads **on picker open**. **⚠️ EVERY CONSUMER WAS VERIFIED DOWNSTREAM OF THE
+  non-drag mutation. It now loads **on picker open**. **⚠️ CORRECTED AT THE `v0.124.0` SIGNOFF, IN
+  PLACE RATHER THAN SILENTLY REWRITTEN: THIS ITEM WAS BUILDER-ONLY, AND THE TWO SENTENCES BELOW
+  OVERCLAIMED IT.** `collection-detail-page-client.tsx` was never in this release's diff — `git log
+  v0.122.0..v0.123.0 -- <that file>` is EMPTY — and its own `listNotes()` at `:2832` kept firing on
+  every collection open. Item 6's scope text and its `:1031`/`:1738`/`:1852` refs are all BUILDER line
+  numbers; the summary generalised past them. **`v0.124.0` closed the detail-page half.** **⚠️ EVERY CONSUMER WAS VERIFIED DOWNSTREAM OF THE
   PICKER rather than assumed**, which is the audit's own precondition: all three `noteById` maps sit on
   add-note paths that cannot be reached without opening it, so nothing can read an empty map expecting a
   note outside the collection. `refreshBuilder` still refreshes the list for paths that change the note
@@ -247,7 +287,8 @@ rewritten.
   NOT RECKON WITH:** the picker filters **client-side over the whole library**, so passing a `limit`
   would silently make notes beyond it **unaddable**. The audit names server-side picker search as the
   longer-term fix; until that exists, bounding the fetch trades an invisible performance win for an
-  invisible correctness loss. Lazy loading already removes the fetch from both page loads.
+  invisible correctness loss. Lazy loading removes the fetch from the BUILDER's page load (see the
+  correction above); the collection detail page's own call was closed separately in `v0.124.0`.
 
 **⚠️ ITEM 7 IS CLOSED AS NOT-APPLICABLE, AND THIS IS AN EXECUTED RESULT RATHER THAN A SKIPPED ITEM.** The
 audit named six detail-page refetch sites and instructed that each be audited individually because "some

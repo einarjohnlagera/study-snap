@@ -144,6 +144,7 @@ function collectionItem(noteId: string, title: string, position: number): NoteCo
     subject: "Education",
     courseProgram: "LET",
     studyPackStatus: "DRAFT",
+    studyPackId: null,
     generatedQuizId: null,
     lastSessionCompletedAt: null,
     dueConceptCount: 0,

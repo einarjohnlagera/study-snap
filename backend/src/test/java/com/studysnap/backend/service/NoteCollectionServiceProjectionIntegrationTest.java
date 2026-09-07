@@ -577,6 +577,7 @@ class NoteCollectionServiceProjectionIntegrationTest {
                 note.getDomainContext().name(),
                 note.getLearnerLevel().name(),
                 NoteStudyPackStatusResolver.resolve(note, studyPack),
+                studyPack == null ? null : studyPack.getId().toString(),
                 generatedQuizId == null ? null : generatedQuizId.toString(),
                 null,
                 dueConcepts.size(),

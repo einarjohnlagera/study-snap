@@ -250,6 +250,8 @@ The v0.33.1 Goal builder turns hierarchy curation into one canvas:
 - Subject plans = draggable, collapsible section blocks.
 - Notes = cards inside each Subject.
 
+**⚠️ Since `v0.124.0` the collection DETAIL page (`/collections/{id}`) does NOT fetch the note library on load.** `listNotes()` is unbounded (the backend caps nothing when `limit` is null) and every row carries `contentPreview` and `summaryPreview` — the two fields that pushed `/notes/public` past Next.js's 2 MB data-cache limit on 2026-08-31. It used to run on every collection open to derive exactly two things: an **ADMIN-only** visibility map, and the primary exam's Study Pack id. The pack id now arrives on the item itself as `NoteCollectionItemResponse.studyPackId` (free — the projection was already loaded for the due-concept lookup), and the visibility map loads in its own effect **only when the viewer is an ADMIN**. **⚠️ A learner opening a collection issues zero `listNotes()` calls; do not reintroduce one.** The admin visibility load is deliberately outside `loadCollection` because `authUser` resolves in its own effect — gating the loader on `isAdmin` would re-arm the whole load, which is the defect `v0.124.0` fixed in the builder.
+
 The Goal path loads the authoritative Goal shape from `GET /collections/{id}/goal` and every child Subject's notes from `GET /collections/{id}/goal/child-items` — **one batch read, not one request per child**. **⚠️ Since `v0.124.0` the builder must NOT call `getCollection` per child.** It used to, which made the page an HTTP N+1: a Review Set with 20 Subject plans cost 22 requests to render once (its own `getCollection` on the Goal, `getCollectionGoal`, and 20 child reads) against 3 now, and `Promise.all` made those concurrent rather than cheap against a connection pool of 20 (`v0.112.0` documents pool exhaustion as a live production failure mode). Both calls sit BELOW the leaf early-return, so a leaf plan still issues neither. Refreshing the page reconstructs the same structure from backend state; no client-only builder state is required for persistence.
 
 The builder page header (leaf and Goal) has a single primary action, `Add {subjectSingular}`; there is no standalone header `Refresh`. A `Refresh` control lives inside the `Add notes` modal instead (next to the search field), scoped to re-fetching just the note list so newly created notes appear as selectable — and **since `v0.123.0` that note list is fetched LAZILY, on first picker open, rather than on page load**, because `listNotes()` is unbounded and its only builder consumers are the picker and the add-note handlers that read its selection. **⚠️ One automatic attempt only: a failed load surfaces an error and does not retry, because the retry re-armed itself through the effect's own dependency and hammered the endpoint.** Refresh remains the deliberate retry — it does not refetch the collection/goal shape and does not affect the modal's current selection (v0.36.1). The Subject-block row itself still switches from stacked to horizontal layout at the `xl` breakpoint rather than `lg`, because the persistent app-shell sidebar (present from `md` up) consumes real width the viewport-relative breakpoint doesn't otherwise account for (v0.36.1).
@@ -602,6 +604,10 @@ Response: `GoalChildItemsResponse[]`, where each entry is
 
 - `collectionId`
 - `items: NoteCollectionItemResponse[]` — the identical item shape `GET /collections/{id}` returns
+
+`NoteCollectionItemResponse` carries `studyPackId` (nullable) as of `v0.124.0`. It costs no extra query
+— `toItemResponses` already loads the Study Pack projection for the due-concept lookup — and it exists so
+the detail page's Board Exam CTA can resolve its pack without the unbounded note-library fetch.
 
 **⚠️ It is deliberately minimal, and must stay that way.** The Goal builder reads only
 `(collectionId, items)` off a child, so returning N full `NoteCollectionDetailResponse` payloads would

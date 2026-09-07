@@ -3216,6 +3216,10 @@ public class NoteCollectionService {
                 note.domainContext() == null ? null : note.domainContext().name(),
                 note.learnerLevel() == null ? null : note.learnerLevel().name(),
                 NoteStudyPackStatusResolver.resolve(note.status(), studyPack != null),
+                // Already loaded for the due-concept lookup above, so carrying it costs no extra query.
+                // It exists so the collection detail page can resolve its primary exam's pack WITHOUT
+                // downloading the caller's entire note library -- see collections.md.
+                studyPack == null ? null : studyPack.getId().toString(),
                 generatedQuizId == null ? null : generatedQuizId.toString(),
                 lastSessionCompletedAt,
                 dueConcepts.size(),
