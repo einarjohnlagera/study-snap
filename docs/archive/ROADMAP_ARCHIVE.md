@@ -2349,3 +2349,1927 @@ Implementation stance:
 - use the existing `Note -> Study Pack -> Quiz -> Activity -> Weak Concepts` pipeline
 - emphasize exam-prep presentation, recommendations, and analytics without merging page responsibilities
 
+
+
+---
+
+## Second archive pass — 2026-09-07 (`v0.126.0`)
+
+The sections below moved out of `docs/product/ROADMAP.md` on 2026-09-07, resuming the convention
+the 2026-07-10 pass established and that had lapsed for 85 releases. **A MOVE, not a delete —
+content is preserved verbatim.** ⚠️ They are ordered NEWEST-FIRST, as they were in `ROADMAP.md`,
+whereas the sections above this divider are oldest-first; nothing was re-sorted, because
+re-ordering 60 sections would have obscured the verbatim guarantee this file exists to make.
+
+## v0.85.0 — Domain Signal Integrity (Released, base branch `releases/v0.85.0`)
+
+**⚠️ Status corrected at the `v0.97.0` kickoff, 2026-08-29** — this heading read *In Progress* for **eleven releases**, found by `docs/claude-plans/claude-docs-staleness-audit.md`. **⚠️ The per-version prose sections below stop here, at `v0.85.0`, while the project is on `v0.97.0`.** The **Current Release Baseline** and the **Backlog Index** above are current and are the authoritative surfaces; these per-version sections lapsed rather than being discontinued by decision. **Nothing below is maintained — read it as history, and do not treat a missing section as a missing release.** Whether to resume or formally retire the practice is an open one-line decision, indexed with the audit that found it.
+
+Kicked off 2026-08-17, cut from `main` after `v0.84.0` merged and deployed. Origin: the **Domain Context Catalog** proposal (2026-08-17), which a cold-context agent assessed and recommended declining — and which, while auditing the enum's real responsibilities, surfaced a defect much larger than itself. Assessment: `docs/claude-plans/domain-context-catalog-assessment.md`. Sizing: `docs/claude-plans/quantitative-context-coverage-read.sql`.
+
+### Planned scope
+
+1. **A declared per-value quantitative property**, replacing the substring guess. Not a longer keyword list — that keeps guessing. Must not remove guidance from any value that already matches.
+2. **Domain Context descriptions beside the authoring select** — copy only, zero schema. The subject lists already exist in `canonical-knowledge-architecture-out/08-…:56-67` and appear nowhere in the product.
+3. **Two `ADR-001` factual corrections** — the "single badge" and "vocabulary learners see" claims are both false.
+
+### Explicitly out of scope — anti-drift
+
+- **The Domain Context Catalog, admin CRUD, Domain Categories, prompt-hint fields, and any new enum value** including `General Engineering`. Declined on evidence 2026-08-17.
+- **Changing what an existing value resolves to.** `effectiveAuthoringDomain` still returns `getLabel()` — the label is the prompt payload, so changing it would rewrite what past generations were told.
+- **The enum stays an enum**, so `@Enumerated(EnumType.STRING)` and the three `Enum.valueOf` projection paths are untouched.
+- **Any migration.**
+
+## v0.84.0 — Public Explore (Released, base branch `releases/v0.84.0`)
+
+Kicked off 2026-08-17, cut from `main` after `v0.83.2` merged. **Slice C of Discovery System Stage 0** — see `docs/claude-plans/discovery-system-stage-0-scoping.md`. Slice A shipped in `v0.83.2`; Slice B was dissolved at that release's kickoff.
+
+### Planned scope
+
+1. **Render `/explore` for anonymous visitors** — remove the client-side gate; there is no `middleware.ts`, so this is a component change.
+2. **A generalized discovery-intent cookie** mirroring `lib/exam-intent.ts`. **Not the `redirect` param**, which signup drops.
+3. **Canonical, OG and structured data for `/explore`**, including the canonical direction against `/public/library`'s existing `CollectionPage` JSON-LD.
+4. **Anonymous Review Sets tab: full catalog, Adopt gated at click** (owner decision).
+5. **`robots.ts`** per the owner decision, with the atomicity condition recorded.
+
+### Explicitly out of scope — anti-drift
+
+- **Redirecting `/public/library`.** Stage 3, doctrine-blocked by `AGENTS.md`'s Explore Navigation Rule pending its amendment. Subject and note-detail pages are never-redirect regardless.
+- **Backend permit changes.** Slice A already granted what the facets need.
+- **Removing Exam Hubs from top nav** — Explore has no exam-aware browsing mode yet.
+- **A viewer-type analytics dimension** — already derivable via `user_id IS NULL`.
+- **Any change to `EXPLORE_VIEWED`'s firing condition or metadata**, and no new events.
+- **Any migration.**
+
+## v0.83.2 — Anonymous Discovery Access (Released, base branch `releases/v0.83.2`)
+
+Kicked off 2026-08-17, cut from `main` after `v0.83.1` merged. **Slice A of Discovery System Stage 0** — see `docs/claude-plans/discovery-system-stage-0-scoping.md`.
+
+### Planned scope
+
+1. **Permit anonymous `GET /subjects` and `GET /course-programs`** — two `permitAll()` additions mirroring the existing `/tags` rule. Both controllers already gate `scope=mine` themselves, so this grants only what they were written to serve. **Needs an anonymous `scope=mine` 401 test**, which is what proves the widening did not overreach.
+2. **Remove the `/exam` BackLink** — `/exam` is top-level in the marketing nav and footer, not a sub-page of Public Library.
+
+### Explicitly out of scope — anti-drift
+
+- **Making `/explore` anonymous.** It keeps its client-side gate. No canonical/OG/structured data, no discovery-intent cookie — those are Slice C.
+- **A viewer-type analytics dimension.** Rescoped at kickoff: already derivable via `user_id IS NULL`. Building one would duplicate existing data.
+- **Slice C**, blocked on the Review Sets tab and `robots.ts` owner decisions.
+- **Stages 1–3.** Stage 3 also stays doctrine-blocked by `AGENTS.md`'s Explore Navigation Rule pending its amendment.
+- **Any migration**, and any change to existing permit rules.
+
+## v0.83.1 — Note Creation Integrity (Released, base branch `releases/v0.83.1`)
+
+Kicked off 2026-08-17, cut from `main` after `v0.83.0` merged and deployed the same day.
+
+Fixes two `NoteEntity` insert paths that never set the `NOT NULL` `target_profile_type` column, 500ing `/study` paste-text, image upload, confirm-text and share-remix **after** the LLM call has billed quota. Pre-existing since 2026-03-21; surfaced by `v0.83.0`'s cold-context pressure test.
+
+### Planned scope
+
+1. **Set the value on both paths** — lift the owner-profile mapping to `NoteTargetProfileType.forOwnerProfile(ProfileType)`, with `NoteService` delegating so there is one definition.
+2. **Tests that would have caught it** — assert the **persisted** value through the real paths, including a `BOARD_EXAM` profile where a constant and a derivation diverge.
+
+### Explicitly out of scope — anti-drift
+
+- **Any migration**, and specifically **no `DEFAULT` on `notes.target_profile_type`** — it would mask the bug class rather than fix it, and the column is phase-4 material gated on `[CHECKPOINT — due 2026-09-16]`.
+- **A hardcoded constant** in place of the profile derivation. `SPEC.md:129` documents the contract; a constant falsifies a line corrected during `v0.83.0` signoff.
+- Any change to `NOT NULL`, the CHECK constraint, the index, or the enum's values.
+- Anything Discovery-System-related. That is scoped separately and needs its own kickoff.
+
+## v0.83.0 — Target Audience Removal (Phase 2) (Released, base branch `releases/v0.83.0`)
+
+Kicked off 2026-08-17, cut from `main` after `v0.82.0` merged and deployed the same day.
+
+**Step 2 of the revised Target Audience retirement.** `v0.81.0` was Step 0 (`V115` widened the Challenge bank key so an authoring correction at scale stops failing sessions); `v0.82.0` was Step 1 (`V117` backfilled Authored Depth onto 819 curator notes). This release executes **phases 2 and 3 of the already-ratified `ADR-001` amendment** — it is not a new decision, and the amendment reducing five axes to four was ratified 2026-08-16.
+
+### Planned scope
+
+1. **Remove the Public Library discovery surface** — the `target_profile_type` WHERE clause in `PublicLibraryRepositoryImpl`, the `PublicLibraryFilterCriteria` field, the filter chips, and `?audience=` parsing/building in `public-library-url.ts`.
+2. **Remove authoring and display** — bulk generation dropdown, note editor field, note detail display, the four DTO fields, onboarding's `mapProfileTypeToNoteTargetProfile` write, and the private Library's unused projection.
+3. **Documentation** — `ADR-001`, `docs/features/notes.md`, `docs/features/public-library.md`, `SPEC.md`, GPT context modules, re-read against the **final** code state rather than per-PR.
+4. **Replace the retired discovery facet with Authored Depth** — tolerant `?level=` filtering on `notes.learner_level`, with chips populated only from distinct non-null depths present on public notes.
+
+### Authored Depth replacement decision — resolved 2026-08-17
+
+The production read found 120 curator-owned public notes formerly classified as `STUDENT`: 26 `JUNIOR_HIGH`, 11 `SENIOR_HIGH`, 3 `GRADE_SCHOOL`, and 80 with NULL Authored Depth. Owner decision: ship the replacement filter before signoff. It restores the cross-program depth-filter mechanism but not full coverage; the 80 NULL-depth notes remain outside every depth-filtered result until curators classify them. This does not revive the killed `V118` backfill and writes no depth.
+
+### Explicitly out of scope — anti-drift
+
+- **Dropping `notes.target_profile_type`.** It is `V117`'s input and `[CHECKPOINT — due 2026-09-16]` cannot run without it. Phase 4 waits on that report. Same for `bulk_generation_result.target_profile_type` and the `NoteTargetProfileType` enum.
+- **Any migration.** None ships in this release.
+- **Re-gating Phase 2** on `[CHECKPOINT — due 2026-09-13]`. Ungated 2026-08-16 by owner call; the confound is recorded, not waited on.
+- **A `V118` `STUDENT` depth backfill.** Audited in `v0.82.0`, zero eligible notes. Do not re-propose.
+- **Any runtime use of Target Audience as a depth fallback.** Migration evidence only.
+- **`V117`'s written rows.** Untouched by this release.
+
+## v0.82.0 — Authored Depth Backfill (Released, base branch `releases/v0.82.0`)
+
+Kicked off 2026-08-16. Theme: give curator notes the depth they were always meant to carry, so the axis that will replace Target Audience actually holds information.
+
+### Why now — the prerequisite is genuinely cleared
+
+The revised sequence put a hard Step 0 in front of any depth backfill: a mass authoring correction would strand Challenge bank rows whose keys could be regenerated into a collision that failed the learner's session. **`v0.81.0` shipped `V115`, which widens the bank uniqueness key to include `learner_level`** — so a regenerated question at the new level coexists with the preserved old-level row instead of colliding. Stranded rows remain unreachable; that is degradation, not failure.
+
+### What is ratified, and what is deliberately not the reason
+
+The amendment reduces `ADR-001`'s five axes to four. **The justification is that Target Audience is absent from every prompt and its access-control purpose was never implemented — not that Course / Program predicts it.** That correlation (~99.3%) is an artifact of a board-heavy catalog and would break the moment general-student or professional content grew. A second opinion rejected it as grounds for an irreversible step, correctly.
+
+### Explicitly out of scope
+
+- **Removing Target Audience** — no column drop, no field removal, no authoring change. This ratifies direction; removal is later phases.
+- **The Public Library audience filter** — out of scope *for `v0.82.0`*. ⚠️ **The stated reason is SUPERSEDED and must not be re-derived as a live gate:** this read "Phase 2 changes discovery inside `[CHECKPOINT — due 2026-09-13]`'s window," but Phase 2 was **deliberately ungated from that checkpoint on 2026-08-16 (owner call)** — the audience chip has been a secondary filter since `v0.79.0` made course/program primary, so the Explore confound is recorded rather than waited on. Phase 2 ships in **`v0.83.0`**.
+- **Learner-owned notes** (4,645). Private, feed no filter, and a depth write there is an authoring decision their author never made.
+- **Mapping `STUDENT`** to any depth. It spans four.
+- **Any runtime use of Target Audience as a depth fallback.** Migration evidence only, one time.
+
+## v0.81.0 — Challenge Bank Integrity (Released, base branch `releases/v0.81.0`)
+
+Kicked off 2026-08-15. Theme: a learner's banked Challenge questions should survive an authoring correction, and a bank write should never break the session it belongs to.
+
+### Why these two defects, and why now
+
+Both were recorded as `v0.70.0` Known Limitations on 2026-08-04 by `#986`'s pre-commit audit, as an interaction between two items in the same release. Both are real and user-facing on their own: one can hand a learner a question they have already answered, the other makes a documented guarantee false. Neither has been fixed in eleven releases.
+
+**What surfaces them now is the Target Audience retirement direction.** Its revised sequence requires backfilling Authored Depth onto ~905 curator-owned notes — "an authoring correction, at scale," which is verbatim the condition defect (1)'s own record names as making it unbounded. **This release is Step 0 of that sequence and is a hard prerequisite for it.**
+
+### Explicitly out of scope
+
+- **All Target Audience code.** The `ADR-001` amendment is ratified as of 2026-08-16, but it records direction and gates only — it does **not** authorize field, filter, or schema removal. This release changes no Target Audience code.
+- **The depth backfill itself** — gated on ratification and on the Information Technology audit.
+- Wholesale deletion of existing bank rows; `ADR-001` rule 2 preserves them.
+- Challenge Quiz surfacing or CTA behaviour — `[CHECKPOINT — due 2026-10-15]` reads that.
+
+### Shipped
+
+- `V115` preserved all bank rows and widened question uniqueness to `(user, Study Pack, question, learner level)` with PostgreSQL nulls-not-distinct semantics. Authored-depth corrections no longer collide with stranded rows at the previous level; level-scoped reads deliberately remain unchanged.
+- Generated bank persistence now writes a single batch inside its warning catch, joining the caller's transaction. Flush-time collisions and other row failures are absorbed without skipping later rows or breaking the Challenge session, making the documented best-effort contract true.
+
+## v0.80.0 — Instrumentation Integrity (Released, base branch `releases/v0.80.0`)
+
+Kicked off 2026-08-15. Theme: the events four September decisions rest on should actually arrive.
+
+### Why this, and why it cannot wait
+
+**Verified in code at kickoff, not inferred:** `trackAnalyticsEvent` (`frontend/lib/api.ts:2844`) uses a raw `fetch` with `buildAuthHeaders()`; `fetchWithAuth` (`:2164`) refreshes and retries on 401; analytics does neither and swallows the failure at `:2854`. Access tokens live **15 minutes** (`application.yaml:428`).
+
+**The bias is the point.** A uniformly lossy pipeline adds noise. This one drops the *click* half of a ratio more often than the *impression* half, because impressions fire immediately after a data load while clicks can follow an idle page. Both `[CHECKPOINT — due 2026-09-14]` rows read an impression→click rate, so the defect does not blur those answers — it tilts them.
+
+**Timing inverts the usual caution.** The standing rule against touching instrumentation inside a live window assumes the change alters what gets counted. This alters only whether a counted thing arrives. `v0.78.0`'s window opened 2026-08-15; shipping now leaves ~29 of its 30 days clean, and deferring leaves none. **Waiting is the option that damages the read.**
+
+### Explicitly out of scope
+
+- Any change to what an event means, when it fires, or what metadata it carries. New events, removed events, changed firing conditions — all out.
+- Rewriting existing catalog rows. The normalization fix applies to creates going forward; rewriting live rows would change filter chips users already see.
+- Migrations.
+- The onboarding catalog-first follow-up, still gated on `[CHECKPOINT — due 2026-09-11]`.
+
+### Carried caveat, to be annotated before its read
+
+`v0.74.0`'s `[CHECKPOINT — due 2026-09-12]` secondary metric (`STUDY_PACK_QUIZ_TAB_OPENED_AFTER_UNLOCK`) is frontend-fired and its window opened 2026-08-13, so roughly 3 of 30 days will sit on the old delivery behaviour. Its **primary** metric is backend-fired and unaffected. Record this on that row before the read rather than discovering it in September.
+
+## v0.79.0 — Catalog-First Vocabulary (Released, base branch `releases/v0.79.0`)
+
+Kicked off 2026-08-15. Theme: the course/program a learner picks should be one the product can actually act on.
+
+### Why this, and why now
+
+`v0.78.0` built the machinery to recommend a program-matched Study Plan, then its own production reads showed **60 of the 189 planless learners cannot be matched at all — because of vocabulary, not content or features.** 15 sit on `Professional / Board Exam Review` (a study *context*, deliberately absent from the catalog), 3 on `Computer Science`, 2 on `Software Engineering`, plus free-typed values like `High School` (7). `v0.78.0`'s checkpoint kill criterion names this population by hand; this release is the first move against it.
+
+**Every other substantial candidate is checkpoint-gated until 2026-09-11 through 09-14.** This one is not, provided onboarding is left alone.
+
+### The defect, verified in code at kickoff — do not re-derive
+
+Two independent sources of truth that drifted: `COURSE_PROGRAM_SUGGESTIONS` (`frontend/lib/learning-profile.ts`) offers **31** hardcoded values; `V106__course_program_catalog.sql` seeds **21** canonical rows; **16 overlap.** The proposal's audit logged this as C8/C9 on 2026-08-11; it was re-verified against the code at this kickoff rather than taken on trust. `GET /course-program-catalog` is already `USER`-readable (`CourseProgramCatalogController:28`), so no new endpoint is required.
+
+### This is the counter-proposal, not the amendment
+
+`docs/claude-plans/course-program-canonical-catalog-proposal.md` records an owner proposal to lock the field to the catalog with a *"Request Program"* queue, **and** a counter-argument that free text is currently the demand mechanism which built the 21-row catalog in the first place. The doc's recommendation is to ship the softer fix first — catalog-first suggestions plus constraining public discovery — and lock down later only *"with evidence the softer fix failed, and with the 4,480-note migration designed rather than discovered."* **Shipping this release does not ratify the amendment.** It is the evidence-gathering step before that decision.
+
+### Explicitly out of scope
+
+- The `ADR-001` amendment: locking the field, the request queue, and whether blank is a valid learner program.
+- Any migration or rewrite of the 4,480 existing free-text learner notes, including the 15 on `Professional / Board Exam Review`.
+- Seeding, renaming, or retiring any catalog row — the catalog is read-only here.
+- **Onboarding's copy of the course/program field**, deferred on value asymmetry rather than blanket caution: reordering a dropdown's suggestions loses almost nothing by waiting 27 days, whereas `[CHECKPOINT — due 2026-09-11]`'s onboarding-completion read against a 62.4% baseline cannot be re-run. A follow-up applies the same change after that date.
+
+## v0.78.0 — Post-Mastery Next Step (Released, base branch `releases/v0.78.0`)
+
+Kicked off 2026-08-14. Theme: a learner who has just mastered a pack should be told **what to study next**, not left on a screen whose secondary slot is empty.
+
+### Why this, and why now
+
+Of the three candidates with live Backlog Index rows, this is the only one whose gate is clear today. **Adaptive Practice slice 2** is either cross-pack — which needs canonical concept identity and is ADR-sized — or means making the dashboard the *primary* route by demoting an entry point, which the standing **2026-09-12** constraint forbids. **Support Another Learner**'s own gate demands a pre-scoping audit ("does Phase 1 already exist?") plus an unresolved consent model and minors/DPA question. **Post-mastery (a)** is the row the index itself describes as unblocked and needing only a scoping pass.
+
+### Leg (a) only — and the a/b split is the scoping decision, not a detail
+
+The backlog row is explicit that **two features hide inside one sentence**. Leg (b), "a similar note," needs subject/tag/program overlap or embeddings — that is the **Discovery System**, already in the index and deliberately deferred until `[CHECKPOINT — due 2026-09-13]` (Explore engagement) reports. The row's instruction is to fold (b) into that initiative rather than build it standalone, for the same attributability reason that defers the Discovery System itself. **Leg (b) is out of scope and stays out.**
+
+### Three premises verified in code at kickoff — do not re-derive
+
+The row's claims were written 2026-08-13 and all three were checked before scoping, because every blocking finding in recent pressure tests came from an unverified "X already does Y":
+
+1. **The mastered branch carries no secondary action.** `PostSessionNextStepService.resolveQuickReviewNextStep` passes `null` as `secondaryAction` (`PostSessionNextStepService.java:215`). The slot is empty by construction — `v0.74.0` removed Adaptive Practice from that screen in the same release that added the mastered branch.
+2. **`TodayFocusType.STUDY_SUGGESTION` has exactly one call site** — `DashboardService.java:188`, the generic empty-state fallback. Reusing the type here **widens** it; the Dashboard behaviour must not change.
+3. **There is no next-note query anywhere.** `NoteCollectionItemRepository` has `findByCollectionIdOrderByPositionAsc` and nothing resembling "next".
+
+A fourth check, made while drafting the Codex prompt, **resized the release: it is backend-only.** `post-session-next-step.tsx:137` already renders `response.secondaryAction` generically, and its absence branch already renders nothing — so filling the slot needs no frontend change and "no next item" needs no empty state.
+
+### What "next" means — settled at kickoff, owner-decided
+
+**Lowest `NoteCollectionItemEntity.position` in the plan that the learner has not practiced.** Study Plans already carry explicit ordering (`position`), and `NoteCollectionService.toProgressResponse` already defines practiced as **`lastSessionCompletedAt != null`**. Reusing that definition is the substance of the decision, not a shortcut: a suggestion derived from a *different* notion of done could name a note the plan's own progress counter already counts as complete. **Strict-next-position** was rejected for exactly that (it suggests notes already finished); **readiness-weighted** was rejected because it overlaps the weak-concept recommendation `v0.77.0` just shipped and would create a competing resolver.
+
+When a note belongs to several plans, resolution is the user's **Primary Review Set** (`users.primary_collection_id`) if it contains the note, else the most recently updated containing collection. Deterministic, never arbitrary.
+
+### Explicitly out of scope
+
+- Leg (b), similarity, embeddings — gated behind `[CHECKPOINT — due 2026-09-13]`.
+- Any change to `STUDY_SUGGESTION`'s Dashboard empty-state behaviour.
+- A **9th** "what's next" resolver — the branch goes inside `PostSessionNextStepService`, one of the 8 the Companion Guidance Doctrine pressure test already counted.
+- Any Adaptive Practice entry-point change, in either direction, before **2026-09-12**.
+- The admin LaTeX backfill, dropped deliberately in `v0.74.0`.
+
+### Scope expanded 2026-08-15 — sized against production, and the code falsified the first two plans
+
+Owner direction: put everything mastery-related in this release rather than kicking off and signing off small ones. Full evidence chain is in `RELEASES.md` under *Scope expanded 2026-08-15*; the load-bearing numbers are **69% of packed-note learners (189 of 274) have nothing in a plan**, so the shipped suggestion can never fire for them, and of those **106 already have a published plan for their exact program**.
+
+**Two plans were proposed and discarded against the code before anything was built**, which is why this row exists:
+
+1. *"Add a `courseProgram` filter to Explore and deep-link the Dashboard pointer into it."* **Already shipped.** `resolveExploreTab` defaults to `review-sets`, and that tab's `PublishedPlansPageClient` auto-filters to the learner's own `courseProgram`.
+2. *"Add a program pointer to the post-mastery slot."* **Falsified by (1).** The 106 already have that exact route from the Dashboard, see it, and have not adopted — so the gap is **conversion, not discovery**, and a second generic pointer is the medicine already failing.
+
+What ships instead is **specificity plus measurement**: the Dashboard names one matched plan again, the post-mastery slot offers the same plan when the note is in no plan, and both are instrumented because `ExplorePointerCard` fires **no analytics today** — nobody can currently say whether the pointer is unseen, unclicked, or abandoned after the click.
+
+**This amends the `v0.67.0` "Explore Owns Discovery" convergence** (`docs/claude-plans/v0.67.0-explore-owns-discovery-ia.md`). That decision removed Dashboard discovery because the Dashboard duplicated Explore's *grid*. **One named plan with a reason is a recommendation, not a duplicated browse surface**, and the ratified *Adaptive Practice as the recommendation engine* direction puts recommendation on the Dashboard. Explore keeps browse. **This is not a licence to restore the grid.**
+
+### Folded in — the ~23 raw-LaTeX packs (owner-executed)
+
+Owner-selected into this release at kickoff. **`[EFFORT]`, curator time rather than engineering**, and not urgent because `lib/math-normalization.ts` repairs the text at display time — nothing is broken on screen; this is about the stored text. **Re-run `docs/claude-plans/v0.74.0-latex-affected-notes.sql` against production before regenerating anything**: the renderer fix may already make some `NEEDS_FIX` rows read correctly, which would shrink or empty the list. Hand-regenerate only the survivors.
+
+## v0.76.1 — Adaptive Practice Entry Attribution (Released, base branch `releases/v0.76.1`)
+
+Full Planned Scope and anti-drift rules are in `RELEASES.md`. This section records why a patch was the right shape.
+
+### Why a patch, and why now rather than in the next feature release
+
+The work is one metadata field. What makes it urgent is a **date**: the `[CHECKPOINT — due 2026-09-12]` reads on that day, and the field only has value if it has been collecting data for a meaningful window beforehand. Folding it into a larger release would couple a deadline to work that has none.
+
+**The gap it closes is one this project has already paid for.** The Challenge Quiz adoption read (c) sat **NOT MEASURABLE for months** — `CHALLENGE_QUIZ_STARTED` could not separate *seen-and-ignored* from *never-reached*, and the read only closed once `v0.74.0` shipped impression and click events. `ADAPTIVE_PRACTICE_STARTED` is in exactly that position today, and the due date is 29 days away.
+
+### Why it cannot contaminate the read it serves
+
+The checkpoint's **primary** metric is a total count of starts per active learner, compared post-deploy against the equivalent pre-deploy window. This release adds a metadata field to an existing event and changes no user-visible behaviour, so that count is untouched. It only makes the **secondary** question — where the surviving starts originate — answerable.
+
+### Why the direction docs ride along
+
+`main` **auto-deploys to production on merge.** The two ratified direction docs and the re-specified checkpoint remedy were originally opened as a separate PR to `main`; merging that separately would have meant a second production deploy purely for documentation, interrupting learners mid-session for no user-facing benefit. They are retargeted into this release so there is **one merge and one deploy**.
+
+### The constraint this release must not break
+
+**Do not remove the Challenge Quiz Adaptive Practice entry point in this release.** It is ratified direction, but `v0.74.0` already removed the Quick Review route and the checkpoint measuring it does not read until 2026-09-12. A second removal inside the same window confounds the two and destroys the read rather than answering it.
+
+## v0.76.0 — Messaging Architecture: The Money Surfaces (Released, base branch `releases/v0.76.0`)
+
+Second slice of the ratified Messaging Architecture initiative (Backlog Index row, ratified 2026-08-01). Full Planned Scope and anti-drift rules are in `RELEASES.md`; this section records the scoping decision.
+
+### Why the money surfaces, and why not everything at once
+
+The ratified row is explicit that this is **incremental**: *"Each remaining surface needs its own scoping pass and its own `/kickoff`."* The remaining surfaces are the pricing page, the in-app paywall/upgrade prompts, the landing page, and the Exam Hub upsell.
+
+**Pricing + in-app upgrade are one slice because they answer the same question — *should I pay?*** The landing page answers *what is this?* and the Exam Hub upsell answers *why this mode?*. Bundling them would produce a copy sweep with no single audience decision to test against.
+
+### `FREE.title` — the revert is the specification
+
+`v0.68.0` shipped the hero, supporting paragraph and the `PLUS`/`PRO` taglines, then **wrote an outcome-framed `FREE.title` and reverted it.** The recorded reason is the constraint on this release: the candidate had been derived from **consistency with its siblings**, which contradicts the ratified tier placement of **`FREE = adopt`** (adopt an Official Review Set and study it). Deriving it from `PLUS`/`PRO` symmetry a second time reproduces the same error.
+
+The test to apply: **if the new title only reads well beside `PLUS` and `PRO`, it is wrong.** It has to be true of what FREE actually offers under the ladder.
+
+### The sharpest contradiction on the page
+
+`PLAN_COMPARISON_ROWS`' "Best for" row currently reads *"Light review and trying the core study loop"* — feature vocabulary, sitting directly beneath a hero promising a learning system. It is the most visible remaining mismatch and is why the comparison table is in scope alongside the titles.
+
+### A constraint carried from `v0.68.0`, not rediscovered
+
+`FREE.description` was rebalanced at that signoff **for card-alignment reasons, not positioning**. Length parity across the three plan cards is a real layout constraint — a prior release had a regression whose true cause was `description` length drift across four card renderers, not title length. Revisiting the descriptions here is deliberate, but the parity constraint travels with it.
+
+## v0.75.0 — Authoring by Inference (Released, base branch `releases/v0.75.0`)
+
+Implements `ADR-001` → *"Authoring populates by inference, not manual classification"* (direction, added 2026-08-04). Full Planned Scope and anti-drift rules are in `RELEASES.md`; this section records the kickoff findings and the one open design call.
+
+### Both of the ADR's sequenced gates were already clear — verified at kickoff 2026-08-13
+
+`ADR-001`'s sequencing subsection blocked this work on two things, and neither still holds (the heading now reads *"Sequencing — BOTH GATES CLEARED"*, amended by this release):
+
+- **R4 resolved 2026-08-04**, passing on all three steps, recorded in `ADR-001` → *R4 verification* and in that item's own Backlog Index row.
+- **Editability shipped in `v0.70.0`.** The ADR states *"authoring metadata is not editable once a note reaches `STUDY_PACK_READY`, so making those fields editable is the true first step."* `AGENTS.md:1081` records the opposite: on a `STUDY_PACK_READY` note, Edit stays on Note Detail and Teacher/Admin authors may edit Target Audience, Domain Context, and Note Learner Level. `private-note-detail-page-client.tsx:1445-1452` opens that inline editor for any non-draft note.
+
+**The ADR text has been stale for four releases**, and an ADR outranks a feature doc — so a stale gate inside one blocks work that is in fact unblocked. Item 6 amends it; The Backlog Index's *Authoring by inference* row carries the identical staleness and is corrected in the same pass.
+
+### The two legs are not the same size
+
+**Leg 2 — author profile → depth — is implementable today and completes an existing convention.** `bulk-generation-page-client.tsx:132` already pre-fills `courseProgram` from the author's profile. `learnerLevel` (`:109`) is restored only from a saved stash, with no profile fallback; `/notes/new` initialises `learnerLevel: ""` (`note-editor-page-client.tsx:163`) with no pre-fill at all. Depth is the one axis left out of a pattern already shipped beside it. Every account has a non-null `learnerLevel` after onboarding, so the fallback always resolves.
+
+**Leg 1 — Review Set → depth — has no source, and needs a trigger as well as a column.**
+
+- `NoteCollectionEntity.java:45` carries `courseProgram` and no `learnerLevel`.
+- No plan-template entity carries one: `sourcePlanId`'s only level-adjacent sibling, `OfficialStudyPlanWishlistEntity:27`, has `courseProgram` and no depth.
+- **No authoring surface knows its target Review Set.** `/notes/new` accepts only `mode` and `source`, every entry point into it passes neither, and bulk-generate has no collection field.
+
+So *"a CE Board Review set is board-depth by construction"* — the ADR's own justification for admitting a curation container as a legitimate depth source — is a human reading of a title today, not a stored fact any code can read.
+
+### Item 3 — RESOLVED at scoping, 2026-08-13
+
+**The decision: add an optional Review Set selector to bulk-generate, so the Review Set is known *before* the notes exist and leg 1 fires as a genuine pre-fill.** The kickoff framed this as "pre-fill at creation vs. align-on-add," and that framing collapsed once the real workflow was traced.
+
+#### Why the original two options were not symmetric
+
+**Every authoring flow in this product is author-first, add-second. Verified at scoping:**
+
+- `/notes/new` accepts only `mode` and `source`, and no entry point passes a collection.
+- **Bulk-generate has no collection field and `router.push("/library")` on submit** (`bulk-generation-page-client.tsx:307`) — the notes land in the Library unattached, and the author then adds them to the Review Set by hand.
+- The collection detail page's *"Add notes"* picker (`collection-detail-page-client.tsx:2136`) selects from **existing** notes via `addCollectionItems`.
+- The Study Plan builder assembles existing notes; it authors nothing.
+
+So "pre-fill at creation" was never a wiring choice — **there is no context to read.** It is a missing input, and the fix is to ask for it in the one surface where bulk authoring actually happens.
+
+#### Why align-on-add is rejected, and the reason is not aesthetic
+
+Aligning depth when a note *joins* a Review Set mutates notes that may already be generated — which **makes authoring corrections routine, the exact condition the Backlog Index's *Challenge bank orphans* row names as making that bug unbounded.** That row is currently sized at 5 of 6,235 rows precisely because corrections are rare today. Confirmed in code at scoping: `uq_challenge_quiz_question_bank_user_pack_key` is `(user_id, study_pack_id, question_key)` and **excludes `learner_level`** (`V96__challenge_quiz_question_bank.sql:12`), while the claim index includes it (`:17`) — so a stranded row is unclaimable but still occupies the unique key, and the LLM can regenerate straight into a constraint violation. **This release must not be the thing that makes that unbounded.**
+
+Option C escapes it cleanly: bulk-generate queues async generation with `learnerLevel` in the request, so **no bank rows exist yet and the orphan risk is structurally zero, not merely small.**
+
+#### Binding consequence for item 1 — create surfaces ONLY
+
+**Item 1's profile pre-fill lands on `/notes/new` and bulk-generate only. It must NOT be added to the inline metadata editor** on `private-note-detail-page-client.tsx`, which edits already-generated notes. Doing so would re-introduce exactly the row-187 exposure align-on-add was rejected for, through a different door. Stated here because the two surfaces are adjacent and a reasonable implementer would otherwise treat them as one.
+
+#### Scoped to bulk-generate, not `/notes/new`
+
+The CE Review Set pain is **bulk** authoring. A single-note author can use `Add to Review Set` immediately after saving, so shipping the selector on both surfaces doubles the trigger surface for the same benefit. **One surface this release**; revisit only if single-note authoring shows the same friction.
+
+#### The inheritance rule
+
+**Depth resolves to the nearest ancestor with a non-null `learner_level`, walking up `parentCollectionId`.**
+
+- **Bound the walk** — `parentCollectionId` is a plain FK with no cycle constraint, so the walk needs a depth cap rather than trusting the data.
+- **No ancestor carrying a level means NO pre-fill — never `COLLEGE`.** Falling through to a hardcoded default is precisely the confidently-wrong-stored-value failure `ADR-001` constraint 2 names, and the profile fallback is leg 2's job, not leg 1's.
+- **This is not a read-time expansion.** `ADR-001:58` forbids resolving a *family into programs* in any filter, facet, badge, or search predicate. Computing a form default at pre-fill time is not that, and the resulting value is stored explicitly on the note because a human saved the form. Recorded so a reviewer does not flag it as a violation.
+
+#### Membership is written at completion, per successfully-generated note
+
+**Not at queue time.** `processBatch` wraps each topic in its own try/catch (`NoteBulkGenerationService.java:199-215`), so **partial failure is the normal case** — some topics succeed, some fail, some are quota-blocked. Writing membership at queue time would create collection rows pointing at notes that never generate.
+
+Two consequences for whoever implements this:
+
+- `processItem` currently returns `void` (`:265`) and must return the created note's id so the successful ones can be added.
+- The collection id must be carried through `BulkGenerateNotesRequest` into the async path, and **the add must be idempotent against the existing `resultId`** — a retry must not double-insert membership rows.
+
+**Authorization:** the selector must offer only Review Sets the author owns, and the membership write must re-check ownership server-side rather than trusting the submitted id.
+
+## v0.74.0 — Quiz Progression (Released, base branch `releases/v0.74.0`)
+
+Kicked off 2026-08-12, cut from `main` after `v0.73.0` merged and deployed. Brief of record: `docs/claude-plans/next-release-candidates-consultation-prompt.md`. **The product-UX second opinion is IN, not pending** — do not re-send the brief for consultation despite its filename.
+
+**Why this release exists.** `practice-quiz-card.tsx:25` renders the Study Pack's saved quiz with `revealAnswer` — questions *and* answers. Quick Review administers **those same questions** (`note.quiz`). A learner can read every answer, then sit the test on the same items. That makes the score meaningless *and* corrupts `ConceptHealth` (`QuickReviewSessionService.java:219-230`), the app's only mastery-integrity signal, locked since v0.37.0 to move only from genuine assessment. **Locking the easier artifact while leaving Challenge Quiz open is coherent, not arbitrary:** Challenge writes its own questions, so the answer key cannot spoil it.
+
+**Two rationales, different standing — keep them distinguishable at implementation time.** *Integrity* (don't hand someone the answer key to a test they haven't sat) is **code-verified** and satisfied by any completed Quick Review, since the first attempt at each question is the genuine assessment. The **perfect-score gate is the *progression* layer on top**, and is the falsifiable half.
+
+**Scope — all seven items ship.** Owner ruling 2026-08-12: nothing parked, no item waits on a date. (1) Lock — not hide — the Quiz tab until mastery, copy naming the real condition and pointing a 4/5 learner at Redo Mistakes. (2) Challenge Quiz open from the start. (3) 🔓 Quiz Unlocked celebration, **announcement only, no competing CTA**. (4) Promote Challenge to primary after mastery, moving `PostSessionNextStepService`'s threshold back from `>= 4/5`. (5) Replace *Finish Review* with *Review the Notes* — **completes the session, then navigates**. (6) Curator exemption. (7) Six analytics events **plus two folded in from the checkpoint below**, with first-pass vs. after-retry perfect carried in the payload.
+
+**Mastery = 5/5, and *Redo Mistakes* counts** — both owner rulings, 2026-08-12. The second half is what keeps a perfect-score gate from being a dead end.
+
+**Quick Review sessions are load-bearing — do not remove them.** Checked at kickoff after a reasonable contrary premise. `completeSession` writes `ConceptHealth` and records `COMPLETED_QUICK_REVIEW` (feeding Recent Sessions and `lastSessionCompletedAt`); the frontend fires `QUICK_REVIEW_COMPLETED` in the same block; progress persists mid-review for resume. **And this release's own gate is a completed-session fact** — 5/5 has no other record, so with no session nothing could ever unlock.
+
+**The 2026-09-30 checkpoint — cost paid, not absorbed.** Item 4 moves the threshold that checkpoint measures (5/5 → 4/5, shipped `becc70ba` 2026-06-16), closing its after-window. **Reads (a) and (b) must be run BEFORE deploy** — the Backlog Index already records both as MEASURABLE NOW, with read (a) explicitly not improving by waiting, and a ~2-month after-window already exists. **Read (c) — the only one that could falsify *"motivation, not placement"* — is now measurable:** item 7 shipped the missing post-session Challenge CTA impression and click events with the originating quiz mode. That also stops item 4 repeating the original failure of shipping a threshold blind.
+
+**`[CHECKPOINT — due 2026-09-12]`** — pre-declared at kickoff, **date set at signoff to deploy+30** (deploy 2026-08-13). **Metric:** among learners starting Quick Review post-deploy, the fraction reaching 5/5 (first pass or via Redo) — the unlock rate. **Secondary:** Quiz-tab-opened-after-unlock, testing whether the reward is wanted, not merely reachable. **Kill criterion:** a low unlock rate means the gate is a wall, not a progression — **relax it to "any completed Quick Review,"** which this release's own reasoning establishes is sufficient for integrity; do not iterate on lock copy instead. **Denominator clause:** too small to read at the due date is itself the finding, not grounds to extend.
+
+### Folded in 2026-08-12 — math notation renders as raw LaTeX (owner-reported)
+
+**The defect.** Quiz choices display literal `\frac{(y₂-y₁)}{(x₂-x₁)}` and `\sqrt{x}`, backslashes and all, instead of a fraction and a radical. Owner-reported from the **Practice Quiz surface — the same Quiz tab this release is locking**, which is what earns it a place here rather than in a later cleanup: gating a tab behind a perfect score while its formulas are unreadable makes the gate harder to pass for a reason that has nothing to do with knowing the material.
+
+**Root cause, verified in code and environment-independent.** The frontend has a full KaTeX pipeline, but it only activates **inside delimiters** — `$…$`, `\(…\)`, `$$…$$`, `\[…\]` (`quiz-working-solution.tsx:17-26`). Everything else renders as plain text. **No prompt in the repo tells the model to emit delimiters** — all 19 files in `prompts/study-pack-v1/` were checked and not one mentions math, LaTeX, KaTeX, or delimiters. So the model freelances *inconsistently within a single quiz*: Unicode subscripts (which display fine by accident), bare carets (`x^2`, literal), and bare LaTeX (`\frac`, literal). One local row proves it sometimes emits `\(\frac{…}\)` correctly on its own — the behaviour is unreliable, not absent.
+
+**Not the cause, ruled out:** `QuizValidationUtils.sanitizeChoiceText` only strips leading "A." labels and normalises whitespace; it never touches LaTeX.
+
+**Production sizing, run 2026-08-12 — this is what re-scoped the work.** Of **5,472 study packs**: **13** contain LaTeX command words, **2** are already `\(…\)`-delimited, **12** contain `$`, **12** contain bare carets. Assuming zero overlap, the worst case is **~23 affected packs — roughly 0.4%**. **The defect is real and worth fixing; the affected population is very small.**
+
+**Also checked, and it is fine:** the `$` currency false-positive risk is already guarded — `isInlineDollarOpen` requires a non-space after `$`, and the close-scan rejects a `$` preceded by whitespace or an operator, so `$100 and $200` falls through as plain text rather than being swallowed into KaTeX.
+
+**Scope — three parts, and they are independent.**
+- **A — Prompts (root cause, new content only).** Add one math-formatting rule to the ~9 generating developer prompts: wrap all math in `$…$`, never bare, never Unicode sub/superscripts. Cheap, and the highest-leverage part, since the model already does this correctly some of the time.
+- **B — Renderer (fixes everything already stored, at display time, with zero data risk).** A **conservative** normaliser that wraps only an allowlist of constructs (`\frac`, `\sqrt`, `\sum`, `x^2`, `_{…}`) and **never a bare backslash** — Windows paths, literal `\n`, and chemistry notation must pass through untouched. KaTeX already runs `throwOnError: false`, so a bad wrap degrades to a visible error string rather than crashing; that is a safety net, not a licence to be greedy. **Part B alone fixes every case the owner reported.**
+- **C — Admin backfill (deterministic, no LLM), fields limited to the quiz JSON: `question`, `choices`, `answer`, `explanation`, `workingSolution`** (owner-confirmed 2026-08-12). Modeled on the existing `POST /admin/study-packs/repair-malformed-quizzes`, but **it must NOT reuse that endpoint's regeneration approach** — that one calls the LLM per pack, which here would cost a call per pack, silently replace questions learners are actively studying, and violate `CLAUDE.md`'s "never auto-regenerate" rule.
+
+**Part C is DROPPED — owner decision 2026-08-12, on the sizing above.** Only **A and B ship**. The owner regenerates the affected notes by hand instead, using `docs/claude-plans/v0.74.0-latex-affected-notes.sql`, which lists them per note with a `verdict` column (`NEEDS_FIX` / `MIXED_CHECK_IT` / `LIKELY_OK`) plus a companion query showing the offending text.
+
+**Why dropping it is the right call, recorded so it is not re-proposed without new evidence.** Part C needed a new endpoint, a Java normaliser, in-progress-session guards, and idempotency, to repair **~23 packs that Part B already fixes on screen**. It also recreated the exact hazard PR 1's audit caught: a normaliser in Java plus a normaliser in TypeScript is **two implementations of one rule**, and PR 1's PL/pgSQL scorer diverging from `QuizItem` is what would have locked every learner out of the Quiz tab. Manual regeneration at this volume costs less than the machinery, and — unlike an admin sweep — it keeps regeneration an explicit per-note act, which is what `CLAUDE.md`'s never-auto-regenerate rule asks for anyway.
+
+**If it is ever revived** (a much larger affected population would be the trigger), these were the non-negotiables: a **shared input→expected fixture asserted by BOTH the Java and TypeScript suites**; normalise `answer` alongside `choices`, because `QuizItem.resolveCorrectIndex` falls back to matching the `answer` string against choice **text** and rewriting one without the other sends `correctIndex` to null — which now also breaks this release's mastery gate; skip packs with an in-progress Quick Review; and be idempotent, since running twice must not produce `$$x$$`.
+
+**Outstanding input, blocking item 1's copy only:** run `docs/claude-plans/v0.74.0-quiz-length-check.sql` **against production**. Quick Review takes `totalQuestions` straight from the stored row with no slicing (`QuickReviewSessionService.java:98`), and the exactly-5 validation only landed 2026-03-18 (`c78ee9f1`) — older packs and their remixes/copies were never subject to it. A single row of 5 makes "Score 5/5" exact; anything else forces length-agnostic wording.
+
+## v0.73.0 — Onboarding Redesign (Released, base branch `releases/v0.73.0`)
+
+Kicked off 2026-08-11, cut from `main` after `v0.72.1` merged and deployed.
+
+### Why this, and why now
+
+**132 learners — 35.2% of all signups — verify their email and never finish onboarding.** Largest single drop in the funnel (375 → 366 verified → 234 onboarded → 195 activated), and invisible until `v0.72.1`'s activation read surfaced it.
+
+**Justified on comprehension, NOT retention — and the distinction is binding.** `v0.72.1` measured activation at **52.2%**, which structurally caps activation-volume work below the retention lever regardless of the retention rate; the volume hypothesis was tested against a pre-committed rule and failed. This release stands on *132 people meet the product and leave before understanding it*. **Recorded plainly: this is the third justification offered for overlapping onboarding work** — retention, then activation volume, now comprehension — and the owner weighed that knowingly rather than letting it pass silently.
+
+### Planned Scope
+
+**Revised 2026-08-11 after an owner design pass**, which changed the governing principle from *restyle the wizard* to **"the learner is telling NoteLib their learning story, not configuring settings — every screen answers one question."** Ten items, full detail in `RELEASES.md`.
+
+**The structural change: one *required* question per screen, 5 screens → 8.** (Exam takers also see an optional exam-date field on Screen 3 — a secondary control, deliberately kept; see below.) Today step 2 asks three questions at once and step 3 asks two. Target flow: profile type → course/program → learner level → first intent → input method → the note itself → generating → done. **Auto-advance applies only to closed-set choices**; a typed combobox and free text keep an explicit Continue, because the system cannot know when a learner has finished typing. **Actual length rises; perceived effort should fall** — the tradeoff was stated and the owner chose it.
+
+**Two changes worth surfacing here rather than burying in `RELEASES.md`:**
+- ~~**The exam-date question is removed from onboarding**~~ — **decided against 2026-08-12 and closed.** The duplication is real, but the post-session prompt lives on session-completion screens and therefore reaches a strictly smaller population than onboarding does. Removing it would leave exam-bound learners who never complete a session with no exam date, killing the board-exam countdown and degrading the exam-date segmentation the *Target-habit definition* row depends on. The field is optional, so it was never a second required question.
+- **Scope item 1 (delete the three-CTA completion screen) is DROPPED** by owner ruling. Verified while scoping it: that screen is the note-creating flow's ending only, and **nothing in onboarding navigates to Quick Review today**, so the owner's actual requirement was already true and is now written as an anti-drift rule instead of built.
+
+Also: step 1 story cards with tap-to-advance and a selection beat; step 2 as question-plus-placeholders (**not** sentence-form, owner-rejected for mobile wrapping and validation); step 3 outcome copy with real note counts; the fallback as invitation; a typography and rhythm pass, mobile-first at 360px; **C8 and C9 folded in rather than scoped twice**; and step-level instrumentation, which stops being optional once the flow goes from 5 screens to 8.
+
+**Pre-declared at kickoff:** this ships on a falsifiable belief, so it **will owe a `[CHECKPOINT]`** at signoff — onboarding completion rate against the **62.4%** baseline, made readable per step by the instrumentation item. The signoff gate must not close without it.
+
+### Explicitly out of scope
+
+- **Universal onboarding.** Step 4's two generation endpoints both call `requireEmailVerified`, so running onboarding pre-verification would 403 exactly where it promises the first Study Pack. The counter-proposal — move the ask to step 4, from the door to the payoff — is a follow-on. Verification loses 9 learners; onboarding loses 132.
+- **Auto-starting Quick Review.** Owner decision, reaffirmed.
+- **Adding steps.** Shorter at the same step count.
+- **Any `ADR-001` / Applicable Programs change.**
+
+## v0.72.1 — Constraint Check (Released, base branch `releases/v0.72.1`)
+
+Kicked off 2026-08-11, cut from `main` after `v0.72.0` merged and deployed the same day. A patch on `v0.72.0`'s line, not a new minor: it continues the retention question rather than opening a new one.
+
+### Why this, and why now
+
+`v0.72.0` shipped H1+H5 under a pre-committed rule and, in the same document, recorded the question that outlives it: only **185** users have ever generated a first Study Pack and are old enough to measure, and **3** have ever returned in week 2. Moving retention from 2% to 4% against a ~31-user monthly activated cohort is roughly **+0.6 returning users per month**. That was deliberately not used to avoid the commitment then — the rule was written when the answer was unknown, and re-litigating it after the fact is what the rule existed to prevent. It is the right question to ask *now*, on evidence, which is what this release does.
+
+**Corroborated by an independent path:** 38.7% of accounts (141/364) never complete onboarding, tracking the ~40% recorded 2026-07-28 by a different query. A return-cadence habit cannot be built by users who never finish onboarding.
+
+### Planned Scope
+
+1. **Run the activation read** — owner action, production, read-only. Query written and syntax-validated against the real schema: **`docs/claude-plans/v0.72.1-activation-read.sql`** (five queries; the file's own header carries the caveats, and its closing block states the decision rule *before* the result is known). Where signups drop off between account creation and a first Study Pack, and whether the ~31/month activated cohort is capped by onboarding or downstream. **RUN 2026-08-11; results recorded in `RELEASES.md`** per this release's own rule. **All five queries are now discharged, Query 5 included**, so the file is a finished *release artifact* covered by this version's own section and needs no Backlog Index row of its own — the condition recorded here before signoff ("if Query 5 is still unrun at signoff, it needs its own row") was checked at signoff and did not fire.
+2. **Onboarding Intent Router residuals**, conditional on the read — C8, C9, M13, M15, M16, already clustered on one Backlog Index row and carried since `v0.71.0`. **NOT TAKEN** — see below.
+
+### The read ran 2026-08-11 and the volume hypothesis FAILED — this release rescoped
+
+Full numbers, corrections and caveats are in `RELEASES.md`. The short version: the largest drop **is** at onboarding (**132 users, 35.2%** of all signups verify their email and never complete it), and that still does not make volume the lever. Because `returning = activated × rate` makes both levers multiplicative, the comparison is **rate-independent** — the volume ceiling beats doubling retention only if activation is below **50%**, and activation is **52.2%**. Even the optimistic "every signup activates" ceiling (1.95 returning users/month) lands below simply doubling the rate (2.03), and the pre-committed condition required the *half-rate sensitivity* to clear that bar; it came in at 1.48.
+
+**Disclosed, not acted on:** the margin is 2.2 points, and monthly activation runs 65% → 39% → 33% across June/July/August. Re-cutting the verdict on recent months only would move it to "did not settle it." That is an owner call — making it silently in either direction is exactly what the pre-committed rule exists to prevent.
+
+**The residuals are not invalidated.** They stay carried on their own row with a live cost; what changed is only that they can no longer be justified *as a retention intervention*.
+
+### The rescope: is 2.4% a retention fact, or an artifact of its window?
+
+`v0.72.1` rescoped to **Query 5** of the same file — vary the retention window holding everything else fixed. **RUN 2026-08-11. Both halves are true: the window is a material artifact, and the constraint is still real.** Of the **11** users who ever returned after day 1, the shipped days 7–14 window sees **3 — 27%**; 4 return in days 2–7 before it opens, 4 only after day 14. So the number this roadmap has deferred to undercounts by roughly **3.7×** — and the loosest reading is still **7.24%**, meaning 141 of 152 activated users never came back at all. **Mis-sized, not imagined.** The small-n objection does not touch this: the exclusion of days 2–7 and day 15+ is definitional arithmetic, so what is uncertain is the *size* of the undercount, never its existence. **The rate-vs-volume verdict above is unaffected** — it was rate-independent.
+
+### The build half: a defect in shipped code
+
+**Not a documentation problem.** The window is baked into a live admin metric: `AnalyticsEventRepository.RETENTION_WINDOW_START_DAYS`/`_END_DAYS` → `AdminFunnelService.getRetentionCohortMetrics` → `frontend/app/admin/funnel/page.tsx:313`. That is where "2.4%" came from. The fix **reports multiple windows rather than swapping one number for another** — a lone replacement rate would be quoted in isolation exactly as the old one was — and must handle the coupling where widening the window also widens the `first_pack_at <= now - END_DAYS` eligibility filter and interacts with `RETENTION_COHORT_WEEK_LIMIT = 8`. **The exam-date segmentation from the Target-habit row is deliberately NOT folded in:** that row itself says the windowed read stays reasonable for open-ended learners, and flags the exam-bound metric's scored group as likely single-digit today. Backend + frontend, so it goes to Codex per task routing.
+
+### Explicitly out of scope
+
+- **A sixth quiz mode.** The five-mode contract is closed.
+- **Any change to the Applicable Programs model**, including the parked learner free-text amendment and the Overlapping-representations decision.
+- **Restoring the bare curator role check** on the three note-authoring paths — that is the B0 activation-blocking regression, and this release works directly on the onboarding flow.
+
+## v0.72.0 — Return Loop (Released, base branch `releases/v0.72.0`)
+
+Kicked off 2026-08-11, cut from `main` after `v0.71.2` merged and deployed. Targets W1→W2 retention (**2.4%**, unmoved across releases and named in `GPT_CONTEXT.md` as the single biggest constraint).
+
+### Why this, and why now
+
+Three consecutive releases went into the Applicable Programs arc, which was correct — it was a live authoring blocker, now cleared and validated in production. But that arc improved what can be *authored*, not what makes a learner *come back*. The constraint the whole roadmap defers to has not been touched.
+
+**The trigger is not a judgement call.** An earlier release pre-committed to a decision rule and the evidence window closed 2026-07-29; the kickoff gate scan found it unrun 13 days later. That is precisely the drift step 8 exists to catch, and it is why this release opens on a read.
+
+### Planned Scope
+
+1. **Run the `v0.48.0` cohort re-read** — owner action, production, read-only. The query exists: `docs/claude-prompt/next-priority-new-user-focus-out/02-h1-h5-cohort-recheck-and-cpale-depth.sql`, Query 1. **Record the result**, don't just cite the query.
+2. **H1 — commitment device**, conditional on the read.
+3. **H5 — pre-decided return action**, conditional on the read.
+
+**H1 and H5 ship together or not at all** — the pre-committed rule names them as a pair, and each is weaker alone.
+
+### If the read is clearly negative
+
+The rule says do not ship, and this release rescopes rather than proceeding on sunk reasoning. Recorded fallback: the **CPALE Exam Hub**, smaller and the fourth instance of a thrice-shipped shape, gated on its own depth-count check. `v0.71.0` set the precedent for opening a version whose scope is honestly blocked.
+
+### Explicitly out of scope
+
+- **A sixth quiz mode.** The five-mode contract is closed.
+- **Feeding self-review into readiness.** Mastery comes only from graded assessment; a return nudge is not a mastery signal.
+- **Any change to the Applicable Programs model**, including the parked learner free-text amendment.
+
+## v0.71.2 — Catalog Management (Released, base branch `releases/v0.71.2`)
+
+Owner-scoped 2026-08-11 from a production blocker, and deliberately kept on the Applicable Programs line rather than opened as a feature version: it completes the authoring loop Release B started. **Unlike `v0.71.1`, this is new capability, not deferred-findings cleanup** — write its anti-drift accordingly and do not copy the patch-release framing.
+
+### The blocker, stated concretely
+
+Civil Engineering notes are being authored in production now, with Algebra as the motivating case — the exact example `ADR-001` was written around. The next step is making that one note serve the other engineering programs, **and there is no way to do it.** The catalog holds **3** engineering programs (Civil, Electrical, Mechanical) against the ~11 Philippine engineering boards `ADR-001` cites as the motivating scale — it states that count but deliberately does not enumerate them, treating 8-vs-11 as an unsettled curriculum question rather than an architecture decision.
+
+### Audit findings, verified in code 2026-08-11 — do not re-derive
+
+1. **Learner free-text authoring works and is unaffected.** The learner control is `CourseProgramCombobox` with `allowCustom=true`; a typed value lands in `notes.course_program`. Nothing here changes it.
+2. **The curator control is catalog-only by design**, not by oversight: `applicable-programs-combobox.tsx` sets `allowCustom={false}`. That is the two-mode model working.
+3. **No catalog-creation capability exists anywhere.** `CourseProgramCatalogController` exposes only `list()`; `CourseProgramCatalogRepository` has no write method. **A migration is the only way to add a program today.** This is a missing capability, not a missing button.
+
+### Rejected: "let curators type a new program in Bulk Generate, like note creation does"
+
+The cheapest-looking option, and it buys the wrong thing. **A curator's free text is not merely unsupported — it is discarded**: `NoteService.create` does `entity.setCourseProgram(curator ? null : …)` and `NoteBulkGenerationService` sets `courseProgramText = isTeacherOrAdmin ? null : …`. Making it work means storing it, and then the note carries **one** free-text program and **no join rows**.
+
+That is fatal to the actual goal: Algebra needs to serve *many* programs, and a free-text string holds exactly one. The option hands back the one-note-per-program duplication Release B exists to remove, on the very note that motivated the architecture. The variant where typed text auto-creates a catalog row is worse — every typo becomes a permanent public shelf, and it quietly reverses the ratified rule that the catalog is curator-approved.
+
+### Shipped scope
+
+- **Admin catalog management, add-only (backend + frontend).** Shipped one Admin-only `POST`, near-match lookup, and a form on the existing Admin surface, plus explicit confirmed inline creation from the shared Applicable Programs picker. Existing-family assignment makes a new member participate in family expansion; normalized duplicates are a named 409 rather than a database 500.
+- ~~**A one-time seed of the PRC engineering boards.**~~ **REMOVED 2026-08-11 by the `v0.71.1` pressure test — it contradicted a ratified ruling and cited the ADR as if it supported it.** `ADR-001:74` reads: *"**Do not pre-seed a program vocabulary.** Seeding every PRC engineering program at once is premature expansion and is explicitly rejected. **Catalog growth is incremental and demand-driven by authoring:** a curator judging that a canonical note is applicable to a program is the trigger to add that program."* The removed bullet also claimed the seed was *"bounded to the boards `ADR-001` names"* — **the ADR names no such list.** It states a count twice and explicitly treats it as unsettled (*"whether `Engineering Sciences` spans 8 or 11 engineering programs is a curriculum fact, not an architecture decision"*), so there was nothing to bound a seed to.
+  - **What replaces it is already in the ADR's own sentence:** the curator adds each program at the moment a note needs it. That is what the admin CRUD above delivers, and it is what will actually happen — the Civil Engineering authoring in flight is precisely the trigger the rule describes.
+
+### Explicitly out of scope
+
+- **"Every course/program in the world" as a data patch.** `ADR-001` rejected pre-seeding as premature and that stands. A seeded-but-unused program is invisible to learners by construction (every learner-facing list derives from *notes*, not the catalog), so the cost is not user-facing — it is an unbounded, unowned vocabulary that accumulates near-duplicates. Adding the 11 that are needed beats adding 500 that are not.
+- **Letting a learner's free text reach the catalog.** `ADR-001` → *Representation authority* forbids it, and nothing here reopens that.
+
+### Kickoff decisions — settled
+
+- **Add-only shipped.** Rename and delete remain separate decisions with their URL and FK consequences unchanged.
+- **The Applicable Programs control includes inline creation for Admins.** It is a separate confirmed action with near-match visibility, never `allowCustom` or implicit creation.
+
+## v0.71.1 — Applicable Programs Follow-ups (Released, base branch `releases/v0.71.1`)
+
+Kicked off 2026-08-10, cut from `main` after `v0.71.0` merged and deployed. A patch release, not Release C: it clears the findings `v0.71.0` signed off with rather than extending `ADR-001`. Full scope and anti-drift in `RELEASES.md`.
+
+### Why a patch release rather than folding these into the next feature version
+
+`v0.71.0` signed off with four findings explicitly marked *needs a decision, not a patch*, and twenty Medium/Low findings carried as `v0.71.1` candidates. Both sets already have Backlog Index rows, so neither is at risk of being lost — the reason to spend a version on them now is different: **items (1), (2) and (4) are shapes where an ordinary user action re-creates a condition a migration just deleted, or where a surface half-knows about the join.** Those get harder to reason about once more surfaces read the join, not easier. Item (3) is a different case entirely and is here only because it is cheap and adjacent — it is not user-reachable. The `v0.67.1` precedent applies directly — that release opened scoped at three items and finished at seven, because a Known-Limitations list is not a scoping pass.
+
+### Planned Scope
+
+**Group 1 — the four deferred architectural findings.** Each carries an open question; the kickoff ruling (2026-08-10) is **scope now, decide per-PR** — the decision is made when the branch is cut and recorded in `ADR-001` or the feature doc in the same PR as the fix, never left implicit in a service.
+
+1. **`NoteApplicableProgramsService.replace` can recreate the `V108` class post-deploy. SHIPPED 2026-08-11 — ruling in `ADR-001` → *Curation authority*.** **An Applicable Program row may only be authored onto a note its author owns**; `ADMIN` grants catalog-curation authority, not authority over other users' notes. **Ownership, not visibility** — the visibility-scoped alternative fails on an ordinary sequence (learner's note is public → admin curates → learner flips it private), because gating the write moment does not constrain the resulting state, and closing that would need the `source` column this ADR rejected. **Production sizing ran before deciding and made it cheap:** 0 rows in the admin-authored shape (no cleanup migration needed) and *no* non-admin-owned note carries a join row at all, so the restriction costs nothing measurable. The Official Library is unaffected because official notes are `ADMIN`-owned. The admin curator page now pages only the requesting admin's own writable notes and no longer renders the redundant owner-email column.
+2. **A learner sees inherited programs on their own note that they cannot edit. SHIPPED 2026-08-10 — ruling in `ADR-001`.** *"No learner-facing Applicable Programs UI"* governs authoring **controls**, not provenance **display**: inherited programs render read-only with provenance, and the learner's own field is not required on a shadowed note. The backend exposes one authoritative `shadowed = (joinRowCount >= 1) && (joinRowCount == 1 || domainContext != null)` result (corrected at the pressure test); Note Detail and the Note Editor consume it without recomputing it. Provenance remains on note surfaces rather than cards, the sentence is conditioned on `copiedFromNoteId`, and F4 plus L12 shipped inside this item. **The M2 sequencing claim recorded here was corrected 2026-08-11 — see `ADR-001`.** It said the ordering was load-bearing because M2's fix would surface programs on learner cards automatically. It would not: library cards read `listLibraryPage`, whose native query has carried the join since slice 2, while M2 concerns `listMine`, which no card consumes. Cards already show the neutral summary this ruling requires. The ordering was a correct instinct on a wrong mechanism, and nothing depended on it.
+3. **`NoteBulkGenerationService` still uses the bare curator predicate. SHIPPED 2026-08-11.** Now guards on `onboardingCompletedAt` before the role check, matching the two paths corrected in `adfa797f`. Not UI-reachable, so no user-visible change — the value is that `CLAUDE.md` states this as a rule and a rule with a live in-repo exception decays. `CLAUDE.md` corrected: it still named this service as carrying the bare form. **Group 1 is complete.**
+4. **AI-suggestion apply dead-ends on a copy of a curated note. SHIPPED inside item 2** — `resolveRequestedCourseProgram` no longer throws when the target note is shadowed, closing the same defect for both `applySuggestions` paths. **The four findings are three branches.**
+
+**Group 2 — COMPLETE 2026-08-11.** Contracts that lie about themselves (M2 — `listMine` moved onto the same native select the Library page uses, dead JPQL projection deleted; M1 — `@JsonAlias` for the wire rename; M10 — the pre-checkout save stops swallowing its exception), consumers no longer blind to the join (M3, M4 — via one shared `NoteEffectivePrograms` helper, not three implementations), copy and control defects (M11, L1, L3 — **L12 moved into group 1 item 2**, whose read-only names block is its fix). **L4 and L5 are measured and dispositioned rather than patched:** L4's EXPLAIN finally ran and shows the slug fallback needs an *expression* index, not the plain one the finding proposed — a larger call, measured locally only, so no migration ships here; L5 diverges only on four catalog names no test uses. Per-item detail in `RELEASES.md`; `file:line` for all twenty in `docs/claude-findings/v0.71.0-pre-signoff-pressure-test.md`.
+
+### Completed in v0.71.1 so far
+
+- **Group 2 sweep (M1, M3, M4, M10, M11, L1, L3)** — contracts, join-blind consumers, copy and control defects; L4's EXPLAIN run and recorded, L5 and L9 dispositioned as not-taken. Shipped `29edf191`.
+- **Pre-signoff full pressure test (2026-08-11)** — four independent agents, then `advisor`. Every blocking finding traced to this session's own work, including a wrong shadowing predicate propagated into four documents and a test that asserted it. All fixed or recorded; see `RELEASES.md`.
+- **M2 (Group 2)** — `GET /notes` now returns the joined Applicable Programs it always advertised; `listMine` shares the Library page's native select instead of a JPQL projection that could not express the aggregate, and the dead projection is deleted. Scoping it surfaced a record correction: the item 2 sequencing claim rested on a mechanism that does not exist — cards read `listLibraryPage` and have shown joined programs since slice 2.
+- **Group 1 item 3** — the curator onboarding guard now covers all three authoring paths; `NoteBulkGenerationService` was the last holdout. The suite's own `mockUser` helper had never set `onboardingCompletedAt`, so every curator test was silently running against a mid-onboarding user — corrected, with two tests added.
+- **Group 1 item 1** — Applicable Program writes now require owner-and-curator authority, unauthorized notes remain concealed as not found, and the Admin Dashboard pages only the requesting admin's notes. The admin-or-owner read path remains unchanged; no migration or schema change was needed.
+- **Group 1 item 2 (including F4 and L12)** — shipped the backend-owned shadow predicate, optional personal Course / Program on shadowed notes, and read-only program-name provenance on Note Detail and the Note Editor. Curator authoring, M2's list projection, cards, generation inputs, and schema remain unchanged.
+
+### Explicitly out of scope
+
+- **C8, C9, M13, M15, M16** — the same onboarding-vocabulary and guard question in five forms. They belong to the Onboarding Intent Router row, and `v0.71.0` already ruled that constraining onboarding to the catalog is the wrong fix. If this release signs off without them they are **re-recorded, not closed**.
+- **M12** (does `effectiveAuthoringDomain` need a final fallback) and **M9** (stale cached `profileType`/`role`) — both may be *answered* here; neither may be patched around. M12 in particular is an ADR-level question, and a patch release is how that kind of decision gets made by accident.
+- **Retiring the `notes.course_program` legacy-string fallback** — `v0.71.0` recorded it as a separate, unscheduled decision. It stays unscheduled.
+- **L6** (not UI-reachable), **L7** (matches 0 notes in production), and **L8** — the two dead `V106` FK columns. L8 is not a free cleanup: the only obvious fix is a `DROP COLUMN`, which `v0.71.0` declined on irreversibility grounds and which this release's "migrations stay additive" rule forbids. Recorded, not scheduled.
+- **Any catalog seed migration, and any change to the four Program Family rulings.**
+
+## v0.71.0 — Applicable Programs (Released, base branch `releases/v0.71.0`)
+
+Kicked off 2026-08-04, cut from `main` after `v0.70.0` merged and deployed. Opens **Release B of `ADR-001`**: `note_course_program` turns applicability into a many-to-many fact, so one canonical Algebra note surfaces under every engineering program that needs it rather than being duplicated per program. Release A closed with `v0.70.0`.
+
+### Planned Scope — three slices, split along the irreversibility boundary
+
+Sequenced 2026-08-04 in `18-release-b-slice-sequence.md`. **Only slice 3 is gated** — the initial "blocked on applicability" framing read ADR-001's gate more broadly than the ADR does. It requires curator verification *"before **family-expansion defaults** are set"*, not before the join table, the backfill, or per-note curator additions.
+
+**Grew to five slices.** Slice 4 (Single Program Axis) was added 2026-08-05 and has shipped. **Slice 5 (Onboarding Intent Router) was added 2026-08-06** after the pre-signoff pressure test, by owner ruling — see the Backlog Index row and `docs/claude-plans/onboarding-activation-and-intent-router.md`. Slice 5 is a *consequence* of this release rather than new ambition: ADR-001 Release B invalidated onboarding's core assumptions, and the pressure test found **B0**, an activation-blocking regression this release introduced. Its B0 repair lands first and independently so signoff is never blocked behind the redesign; the Intent Router itself is gated on an owner-run production audit of Official Review Set program vocabulary.
+
+**The pre-signoff pressure test ran 2026-08-06 and its findings are OPEN** — five blockers, 9 High, 16 Medium, 12 Low, in `docs/claude-findings/v0.71.0-pre-signoff-pressure-test.md`. Per `CLAUDE.md` each must be fixed or recorded in `RELEASES.md` as a Known Limitation before this version can close. Two of the blockers (B1 `copyNote` FK violation, B2 frozen learner programs) have a **fix-order dependency on each other**, and B2 additionally has an open owner decision attached; do not fix either in isolation.
+
+1. **`note_course_program` + 1:1 backfill + admin write surface — shipped.** Additive, reversible, gated on nothing, and it delivers the ADR's actual purpose: one canonical note applicable to many programs.
+2. **Read paths move to join/`EXISTS` — shipped.** Filters, facets, badges, and Public Library search are join-first with a legacy-string fallback for notes with no join rows. This corrected shape preserves excluded-value results and shareable slugs while allowing multi-program discovery; retiring the fallback is unscheduled.
+3. **Program Family expansion — shipped.** The shared authoring control derives families from the existing catalog and unconditionally unions every member into the explicit selection for trimming before save. No backend, migration, endpoint, catalog seed, curriculum conditioning, or read-time family expansion was added. Four owner rulings below.
+
+**The gate on slice 3 is CLEARED — owner rulings, 2026-08-05.** It previously read: *applicability groupings unverified against current PRC board syllabi — `[EFFORT]`, not `[EVIDENCE]`.* It was cleared by **narrowing the question rather than answering it as posed**. The recorded gate asked whether `Engineering Sciences` spans 8 or 11 engineering programs, but the catalog holds **3** engineering programs and one family; the "11" was an early doc reasoning about Philippine engineering education generally. More decisively, the rulings make expansion **unconditional**, so no subject→program mapping is needed and the syllabus question stops gating anything.
+
+Four rulings, none of which Slice 3 may re-litigate:
+
+1. **The catalog represents *valid applicability*, not curriculum coverage.** It answers "who can legitimately study this note?" — Review Sets communicate completeness. **The catalog still follows curriculum; what changed is what "follows" means.** A program does not need a complete Official Review Set to earn an entry — it earns one once **legitimate canonical notes are applicable to it**. **Do not pre-seed every PRC engineering program**; that is premature expansion and is rejected. Catalog growth is **incremental and demand-driven by authoring**, which refines rather than reverses the `v0.70.0` *follow-not-lead* posture and leaves the `Computer Science` / `Software Engineering` rulings standing. **Practical effect on slice 3: no catalog seed migration ships with it** — the current 21 programs stay until authoring demands more.
+2. **Program Families stay intentionally dumb** — an authoring shortcut, never a curriculum engine. No hidden inference, no read-time applicability, no curriculum intelligence.
+3. **Expansion fills in all family members.** No curated subsets. An author trims what does not apply.
+4. **Expansion is never subject-conditioned** — explicitly rejected. That would quietly make Program Families a second curriculum taxonomy and permanently couple Subject knowledge to applicability rules, re-coupling the axes ADR-001 separated.
+
+**Governing principle, now binding in ADR-001:** Program Families are a **productivity feature, not a curriculum feature.** They are deliberately allowed to over-select, because the Note's explicit Applicable Programs are always the source of truth. Maintaining curriculum rules inside Program Families is the tripwire that says the feature has exceeded its responsibility.
+
+#### Design direction — Programs and Review Sets answer different questions (ratified 2026-08-05, NOT in slice 3)
+
+| Surface | Answers | Role |
+|---|---|---|
+| **Program** (Applicable Programs) | *"What notes are applicable to me?"* | discovery |
+| **Review Set** | *"What is my complete learning journey?"* | curriculum completeness |
+
+Keeping these distinct is what lets the catalog grow on applicability without implying coverage. **Coverage is emergent, not declared:** every learner-facing program list (facets, filter dropdowns, search) derives from *notes* rather than the catalog, so a program with no applicable notes is invisible to learners and the catalog is effectively author-facing. The residual risk is a **thin** shelf, not an empty one — a program carrying a handful of shared foundational notes reads as a curriculum without being one.
+
+**The direction:** communicate coverage **at the Program level**, when a learner browses a Program with no dedicated Official Review Set yet. Conceptually — *"This Program currently contains shared foundational notes. A dedicated Official Review Set is still being developed."*
+
+**Explicitly rejected:** per-note coverage indicators, and any new coverage metadata system. The completeness signal already exists — it is the Review Set — so this is a messaging affordance, not a new axis.
+
+**Production sizing, 2026-08-06 (`25-query-a-production-results.md`) — the trigger already exists.** Six catalog programs hold **≤2 notes** (Business Administration 1, Aviation 1, Psychology 1, Medicine 2, Criminology 2, Law 2) and two more hold zero, while the top four (Education 1845, Architecture 990, Nursing 929, Accountancy 606) are **92%** of all catalogued notes. So thin shelves are a present condition, not a future risk. Sharper still: the `Engineering` family holds Civil Engineering 214, Electrical Engineering 8, Mechanical Engineering 7 — meaning the **first real curator use of the slice 3 family shortcut is also the moment two thin shelves become visible to learners**. That is correct ADR behaviour (author once, serve many), and it argues for shipping this message before heavy family use rather than after.
+
+**Status: design direction for the learner experience, deliberately not scoped into slice 3.** It needs its own scoping pass; it becomes live the moment the catalog grows past the programs that have real Review Sets behind them, which under ruling 1 is authoring-driven rather than scheduled.
+
+**R4 still did not settle applicability** — it validated the Domain Context *value set*. That caveat stands; it is simply no longer load-bearing, because unconditional expansion needs no per-subject applicability answer.
+
+### What ADR-001 warns about, and this release must respect
+
+- **Not reversible** once filters and badges read the join — rollback needs a migration. A knowing failure of the bootstrap test's clause 2, accepted as a multi-release commitment.
+- Filter and search move to join/`EXISTS` semantics on a **hot paginated path** that already needed a dedicated performance release (`v0.51.0`).
+- **Facet counts will sum above the note total** — correct behavior, needs a UI affordance, not a fix.
+- **Program Families expand at save time**, never inferred at read time.
+- Review Sets keep composing notes freely; a Review Set's course/program stays a curation label.
+
+### Carried forward
+
+Both `v0.70.0` Known Limitations, plus the regeneration-variance finding from R4 — each now has its own Backlog Index row rather than living only in a released version's prose.
+
+## v0.70.0 — Canonical Knowledge Completion (Released, base branch `releases/v0.70.0`)
+
+**Kicked off 2026-08-04.** Completes ADR-001 Release A. See `RELEASES.md` v0.70.0 for full Planned Scope and anti-drift rules, and `15-vocabulary-and-impact-results.md` for the production reads that unblocked the two deferred items.
+
+### Planned Scope
+
+_All planned scope has shipped. Remaining before signoff: R4, the two `#986` Known Limitations dispositioned, and the full pre-signoff pressure test._
+
+### Completed in v0.70.0 so far
+
+1. **Authoring metadata editable on `STUDY_PACK_READY` notes, including the detail-page inline panel** — Domain Context and Note Learner Level are correctable after generation while content stays locked.
+2. **Pool/bank learner-level re-keying** — persisted quiz reuse now keys on the note's effective curriculum level, with no pre-stamping migration.
+3. **`course_programs` catalog + `program_families`** — V106 seeds the audited 21-program catalog and one Engineering family, adds nullable note/user FKs without rewriting legacy strings, and makes catalog names authoritative for Exam Hub lookups with fail-open literals.
+4. **`10-…sql` cleanup plus two `AGENTS.md` blocks that were actively misdirecting Codex prompts** — `31f602f4`.
+
+### Carried over unchanged
+
+**R4 — ~~`[CHECKPOINT — due 2026-08-18]`~~ RESOLVED 2026-08-04, before the due date** (`ADR-001` → *R4 verification — RESOLVED 2026-08-04. The 8-value set is not amended*). It passed on all three steps against production once `v0.70.0` deployed, and **the bulk-authoring block that stood across three releases was lifted at the `v0.71.0` kickoff.** The sentence here previously read *"bulk authoring does not begin until step 2 passes"* and was never updated — corrected 2026-08-11, when real bulk authoring in production made the stale gate visible. The live-looking checkpoint marker is struck through deliberately: kickoff step 9 scans for `[CHECKPOINT — due …]` rows, and a resolved obligation wearing a live marker is a false positive waiting for someone to act on it. PR 6b and the authoring-by-inference direction are no longer gated behind R4.
+
+### Resolved catalog decisions
+
+The owner ruled 2026-08-04 to seed `Information Technology` and leave `Computer Science` / `Software Engineering` outside the catalog with null FKs. On 2026-08-05 the owner also ruled to seed all three Senior High strands and remove the zero-match `Medical – Surgical Nursing` subject-area alias from PNLE. `Bsed` -> `Education` is the only literal non-exact FK mapping; every legacy string remains unchanged.
+
+## v0.69.0 — Canonical Knowledge Foundation (Released, base branch `releases/v0.69.0`)
+
+**Kicked off 2026-08-03.** Release A of ADR-001 — see the "Canonical Knowledge Architecture" section directly below for the full sequencing, success metric, and deferral list, and `RELEASES.md` v0.69.0 for Planned Scope and anti-drift rules.
+
+### Planned Scope
+
+1. **`notes.domain_context`** — curated closed 8-value set; replaces `course_program` as the LLM's authoritative domain constraint. Resolver, `StudyPackGenerationContext`, `buildGenerationContextBlock`, `buildSubjectSuggestionGuidanceBlock`, `isQuantitativeContext`, the `{COURSE_PROGRAM}` → `{DOMAIN_CONTEXT}` placeholder rename, admin authoring, Bulk Generate.
+2. **`course_programs` catalog + `program_families`** — nullable FK alongside the existing strings, nothing reads the FK yet; retires `ExamGoalConfig`/`exam-hub-config.ts`'s hand-synced name lists.
+3. **`notes.learner_level`** — plus the mechanical backfill of the 49 K-12-level-in-program notes, which today feed a grade level into the authoritative-academic-domain prompt line.
+4. **Question pool / bank re-keying** — own PR: `exam_question_pool.learner_level` and `challenge_quiz_question_bank.learner_level` move off *user* level, with an explicit existing-rows policy.
+5. **Subject-equals-context admin nudge**, and the **`AGENTS.md`/`CLAUDE.md` doc corrections** folded in (see below).
+
+### Documentation corrections folded into kickoff
+
+Both were found by asking whether a fresh session could safely continue this work, and both would have actively misled one:
+
+- **`AGENTS.md` Course/Program UI rules contradicted the ratified ADR.** The rules stated `courseProgram` is "the top-level note-classification shelf above `subject` and `tags`" and that `notes.courseProgram`/`users.courseProgram` "remain persisted string fields; do not add a `course_programs` table unless explicitly requested." `CLAUDE.md` designates `AGENTS.md` as the anti-drift source to "always check first," so a session or Codex prompt reading it would have found an explicit prohibition on exactly what this release ships — with the live risk that a later session "fixes" the schema back to match the rule.
+- **`CLAUDE.md`'s source-of-truth list omitted `docs/architecture/` entirely** — `ARCHITECTURE.md`, `DATA_MODEL.md`, and now `ADR-001` were all absent from the list a session is told to read "before implementing anything." The Backlog Index row was the only thing pointing at the binding architecture record, which is a backstop, not a design.
+
+### Locked legacy-data decisions (ratified 2026-08-03 — do not reopen in a later PR)
+
+Both are recorded in `docs/architecture/ADR-001-canonical-knowledge-architecture.md` under "Legacy-data policy," and the PR-level consequences are in `09-release-a-pr-sequence.md` (PR 4 and PR 6). Summarised here so PR scoping does not have to find them:
+
+1. **Ambiguous legacy values are resolved per-record by content, never by blanket mapping.** The case is `course_program = 'High School'` (11 notes, all official public, none in a collection). `LearnerLevel` already separates `JUNIOR_HIGH` from `SENIOR_HIGH`, so the legacy label is less precise than the taxonomy replacing it. Each note is classified from its **actual curriculum and content**, not from the old label; notes that cannot be classified confidently stay **unclassified** (NULL `learner_level`, **NULL `domain_context`**, `course_program` retained so they are never left with no classification) and flagged for admin review; and **no `HIGH_SCHOOL` enum value may be added** to preserve the ambiguity — that would migrate the imprecision permanently into the new taxonomy. This makes PR 4 a human-review pass plus an explicit note-ID → level mapping, not a single SQL `UPDATE` — the review query is `10-high-school-classification.sql`, and it runs against **production** (the local dev DB is a different, much smaller dataset). **PR 4 is split into 4a (the 27 pure-level notes, unblocked) and 4b (the remaining 22), and neither clears `course_program`** — see ADR-001's second corollary: clearing is cosmetic once a Domain Context is set, irreversible, and would activate a live editor defect that silently submits the editing admin's own profile program onto a null-program note. The what-counts-as-a-program call moves to PR 5. `visibility` is **not** flipped: withdrawing live official public content is not authorized. **The NULL `domain_context` above is a corollary added 2026-08-03 while scoping PR 4**, not a new decision: `StudyPackGenerationContextResolver:122-140` resolves the domain as `domainContext` → `courseProgram` but the level as `noteLearnerLevel` → user level → `COLLEGE`, never reading `courseProgram`. Backfilling `GENERAL_EDUCATION` onto an unclassified note would therefore evict `'High School'` from the prompt while supplying no level — leaving static content with no curriculum-level line at all (it reads the note level directly, with no reader fallback) and quizzes resolving to the reader's level, `COLLEGE` by default. Retaining `course_program` only preserves a classification if nothing overrides it.
+
+2. **Existing generated assets are preserved, but their semantic reach does not widen automatically.** Principle: *preserve existing assets, but do not expand their semantic reach until their compatibility has been deliberately reclassified.* Existing `exam_question_pool` / `challenge_quiz_question_bank` rows stay reusable for their **original source Note**; Domain Context is backfilled from the source Note only where deterministic; legacy `course_program` is **not** evidence of cross-program reusability; rows stay **source-note-scoped** until a PR explicitly re-keys and audits compatibility; rows with no confidently resolved Domain Context remain usable only via their existing narrow path or are excluded from shared retrieval; and there is **no deletion, no destructive regeneration, and no bulk retirement**. This deliberately rejects both options originally offered (null the rows, or force one invalidation pass). **It does not restrict `v0.60.0`'s Official template sharing**, which is cross-user but already same-source-note via `copiedFromNoteId`.
+
+### Descoped 2026-08-04 — PR 5 and PR 6 move to v0.70.0
+
+Items 2 and 4 of the Planned Scope above did not ship. Both are blocked on production reads this branch cannot perform, not on engineering time:
+
+- **PR 5 (`course_programs` catalog + `program_families`)** needs the exact 32 program strings. `05-vocabulary-results.md` never enumerates them — the 5 user-side-only values are counted but unnamed, and prose loses exact bytes such as the U+2013 in the Senior High labels. Query written: `11-program-vocabulary-seed.sql`. Fully independent of everything else; it can land first in v0.70.0.
+- **PR 6 (pool/bank re-keying)** needs `12-pool-bank-relevel-impact.sql` to size the refresh wave, and needs R4, because its Domain Context backfill onto pool rows is invalidated by a changed value set. Scoping also found a read/write divergence `09` does not mention (`PostSessionNextStepService:80` passes the reader's level while the five `ChallengeQuizService` write sites would move to the note's), which must be fixed in the same PR or Redo Missed Questions disagrees with itself.
+
+Recorded as an explicit deferral rather than dropped: both remain in `RELEASES.md` Planned Scope tagged `[DEFERRED to v0.70.0]`.
+
+### Verification
+
+**⚠️ ~~Restructured 2026-08-04 into a post-deploy `[CHECKPOINT — due 2026-08-18]`~~ — RESOLVED 2026-08-04; see the corrected note under *Carried over unchanged* above and `ADR-001:266`. Retained below as the record of why it could not run before signoff.** The R4 generate-and-diff check could not run before signoff: it needs the columns and authoring fields live in production, production runs `main`, and `main` is at V101 with all 28 release commits on the release branch — so signoff is what deploys it. **Bulk authoring still must not begin until R4 step 2 passes.** Original note follows.
+
+**⚠️ Owed, not done as of 2026-08-03: the R4 generate-and-diff check for PRs 2–3.** Automated checks all pass, but the one risk tests cannot cover — a broader Domain Context (`Engineering Mathematics`) producing vaguer content than the `course_program` it replaced (`Civil Engineering`) — has not been verified against real generated output. It is an owner action through the UI, now possible since PR 3 shipped the authoring fields. **Do it before bulk authoring and before PRs 4–7:** if content drifts generic, the fix amends ADR-001's ratified 8-value set, which is cheap now and expensive once later PRs and a body of authored notes depend on those values. Full steps in `RELEASES.md` v0.69.0 under "Verification owed."
+
+Migration numbers start at **V102** (V102 and V103 are now taken; PR 4 continues from **V104**) — the numeric max is `V101__concept_health_incorrect_streak.sql`, *not* V99; a lexical `ls` sorts `V9__`/`V90__`–`V99__` after `V100__`, so always derive it numerically. `v0.47.1` was a migration-collision hotfix; check concurrent branches before claiming a number.
+
+Baselines for the success metric were taken **before** this release (they are unrecoverable afterward) and live in `docs/claude-prompt/canonical-knowledge-architecture-out/05-vocabulary-results.md`.
+
+## Canonical Knowledge Architecture (ratified 2026-08-03 — Release A kicked off as `v0.69.0`, Release B follows)
+
+**Why now, in the owner's own terms.** Under the Civil Engineering Review Set's **Engineering Mathematics** subject plan, the next authoring step was creating topic notes for the **Algebra** subject. That work was stopped deliberately: those same Algebra notes will be needed by Mechanical, Electrical, Electronics, Computer, Industrial, Chemical, Mining, Agricultural, Geodetic, and Sanitary Engineering, and authoring them under a single-program model commits to duplicating them ten more times. The initiative exists to **avoid creating the duplication in the first place**, decided at the moment of authoring — not to clean it up afterward. Every finding below is supporting evidence for that decision, not the decision's origin.
+
+
+Full deliverable: `docs/claude-prompt/canonical-knowledge-architecture-out/01-architecture-critique-and-migration-plan.md` (critique, gaps, risks, alternatives, recommended architecture, 14-item migration inventory) and `docs/architecture/ADR-001-canonical-knowledge-architecture.md` (draft ADR, moves to `docs/architecture/ADR-001-canonical-knowledge-architecture.md` on ratification only). Backlog Index row above carries the audit findings. This section is the sequencing reference.
+
+**The problem.** `notes.course_program` is one free-text `VARCHAR(120)` carrying five responsibilities with incompatible cardinality: the LLM's authoritative domain constraint (needs exactly one value), plus the private Library facet, the Public Library filter and search predicate, the Exam Hub mapping key, and the note card badge (all want many). Invisible across four Official programs with little shared content; a hard blocker at Civil Engineering, where one Algebra subject applies to eleven engineering programs.
+
+**The decision.** Notes model canonical knowledge; programs describe applicability. Four axes, one owner each — Subject (*what*), Domain Context (*how it's authored* — the domain constraint), Note Learner Level (*how deep*), Applicable Programs (*where it appears*, discovery only, never reaches a prompt) — plus a ruling on the existing `notes.target_profile_type` (*who it's for*, never depth).
+
+**Sequencing — REVISED 2026-08-03 after the production vocabulary audit. Two releases, not four steps in four slots.** (`01` §5.4 still carries the original four-step framing and its per-step detail; this is the operative sequence.)
+
+**Release A — Steps 1 + 2 + 4 together.** All additive nullable columns/tables, all reversible, and Steps 1 and 4 edit the *same method* (`OpenAiLlmStudyPackService.buildGenerationContextBlock`, `:1529-1549`), so splitting them means knowingly shipping one fix while leaving its twin bug in place.
+
+1. **`notes.domain_context`** — resolver + three prompt-builder changes (`buildGenerationContextBlock`, `buildSubjectSuggestionGuidanceBlock`, `isQuantitativeContext`), admin authoring + Bulk Generate expose it, normal users unaffected via the fallback chain. No read-path, filter, badge, or URL change. **This alone is the curriculum-authoring unblock**: Review Sets already compose notes by explicit reference, so a curator can author one canonical "Engineering Foundation / Algebra" note and add it to eleven engineering Review Sets before any join table exists.
+2. **`course_programs` catalog + `program_families`** — folded in; the audit found only 32 union values with zero character-level collisions, so this is a curated seed plus ~6 semantic judgment calls, not its own release. Nullable FK alongside the existing strings, nothing reads it yet. Retires `ExamGoalConfig`/`exam-hub-config.ts`'s hand-synced program-name lists and their documented en-dash fragility.
+4. **`notes.learner_level`** — folded in, and it fixes a live bug rather than adding a nicety: **49 notes currently hold a K-12 grade level in `course_program`, which feeds a grade level into the prompt line that says "treat the course/program above as the authoritative academic domain."** Backfill is mechanical for exactly six values, and all 49 are in zero collections. The pool/bank re-keying (`exam_question_pool.learner_level`, `challenge_quiz_question_bank.learner_level` moving off user level, plus the existing-rows policy) is the one genuinely separable piece — its own PR inside this release, not its own release.
+
+**Release B (multi-release) — Step 3, `note_course_program` + read paths.** The expensive, **irreversible** step, now justified on evidence rather than held as a bet. Four filter/facet/search sites, badge change, Exam Hub tie-break, admin multi-select + family expansion, copy rule, analytics. Decide the perf approach (denormalized `program_slugs text[]` + GIN vs. covering index on the join) *before* writing queries — this is the path `v0.51.0` already needed a dedicated performance release for. Keep `notes.course_program` written in parallel for one full release as the rollback path.
+
+**Success metric — ratified wording, 2026-08-03:**
+
+> **"Eliminates duplication of shared knowledge as NoteLib expands to more programs."**
+
+Comprehensive Review Sets, faster curriculum expansion, and lower maintenance cost are **downstream benefits, not the architectural guarantee.** The earlier phrasing ("significantly reduces the effort required to build comprehensive Official Review Sets") was retired at ratification because it over-promised: this architecture removes the *multiplier* on every program after the first, but it does not reduce the ~60% of any program's content that is program-specific, and it does not help assembly — Review Sets compose by explicit reference, deliberately. Reaching several hundred notes per Review Set is an authoring-volume and assembly problem this architecture does not address, and the old wording would have read as a failure when Civil Engineering still took real work to finish.
+
+**Baselines taken 2026-08-03, before Release A.** (A) **Duplicate-content ratio: 0.00% by exact title+subject across 886 official public notes — and this metric is now known to be too weak to trust.** Query J found a semantic duplicate it cannot see (`Stress and Strain in Strength of Materials` / `Stress, Strain, and Material Strength`, Civil vs. Mechanical Engineering). Never cite the 0.00% as evidence of no duplication. (B) **4 comprehensive Official Review Sets averaging ~58 notes** — CPALE 74, PNLE 63, ALE 52, LET 43, by hierarchy rollup — against a target of several hundred. The "avg 8.6" figure from the first pass was per-subject-child and must not be quoted. (C) Curator-hours per published Review Set: still manually logged, still owed. Leading indicator after Release A: notes whose Domain Context is shared by Review Sets of ≥2 distinct programs. **The originally-proposed **RETIRED CHECKPOINT** (was due 2027-02-01; token deliberately de-fanged so the kickoff step-9 scan does not flag it) is retired** — it asked whether cross-program reuse would ever materialize, and Query J answered yes before it was needed.
+
+**Deferred to make room, and what was deliberately *not* deferred.** Deferrable (building, no dated obligation): Retention H1+H5, the remaining Messaging Architecture surfaces, Company Redefinition Phase 4 items 5 and 7. **Not deferrable** — dated *measurement* obligations, cheap to run, and exactly what kickoff checklist steps 8–9 exist to catch: the Diagnostic Read Round 2 (due ~2026-08-06, re-cut by the 2026-07-28 target-habit segmentation — deferring loses the cohort window and it cannot be run late with the same meaning) and the Knowledge Impact `[CHECKPOINT — due 2026-09-11]`. **Reprioritizing defers building, never measuring.**
+
+**Nothing here is authorized for implementation until ratified**, and each step needs its own `/kickoff` regardless.
+
+## Company Redefinition Roadmap — Phase Detail
+
+Full detail from Fable's capstone synthesis, `docs/claude-prompt/company-redefinition-out/06-unified-roadmap.md` (read in full, not just its "Decisions carried forward" block). This section exists so reprioritization discussions (e.g. with product/UX) have one canonical reference instead of six separate planning docs to reconcile against — **treat this section, not conversational recall, as the source of truth for what Fable actually designed.** Update it in the same commit as any reprioritization decision so it never drifts from what's actually agreed.
+
+**Resequenced 2026-07-24 — see `company-redefinition-out/07-reprioritization.md` for the full reasoning.** A real-time signup surge (~15 signups in one evening; hundreds of verified users now; LET the strongest acquisition channel) landed alongside a product/UX realization that Challenge Quiz's always-fresh AI questions might be better treated as a reusable, improving asset than disposable output. That combination is significant enough to reorder what comes right after Phase 1, **reversing the 2026-07-23 decision to proceed straight to Phase 2 (v0.58.0)** made earlier that same day. The reasoning (verified against the actual quiz-generation code, cross-checked by an independent advisor pass and an independent Fable session): the realization is correct but was framed as a cost problem when its real value is a **retention primitive** — and it is not the same thing as Phase 3 below (see that section's callout). The new sequence:
+
+1. **Phase 1** — shipped, as before.
+2. **Diagnostic Read** (new, inserted here) — read the surge cohort before committing another build cycle.
+3. **Reusable Practice Assets & the Return Loop** (new initiative, inserted here, ahead of Phase 2) — the reframed realization, done as a retention play, not a cost play.
+4. **Phase 2** — re-gated: Progress now explicitly depends on Reusable Practice Assets existing; Explore is now contingent on the diagnostic read showing a discovery problem specifically (see Phase 2 below).
+5. **Phase 3, Phase 4** — unchanged, still parked at their original gates. Phase 3 in particular should **not** be accelerated just because the realization put "question pooling" top of mind — see its callout below for why it's a different thing.
+
+**Phase order as originally designed (cost/risk-based, not arbitrary; superseded above only where noted):** Phase 1 was cheapest/most reversible and instruments its own validation read. Phase 2 was meant to be the v2 layer, building the convergence surface Phase 3 needs something to pool from. Phase 3 is highest one-time engineering cost, sequenced late so adoption volume justifies it before building. Phase 4 is a business decision with **no engineering dependency on 1–3 at all** — it is explicitly free to move earlier the moment the owner ratifies its terms; it's sequenced last purely by convention, not by cost or risk.
+
+### Phase 1 — Practice-first activation onboarding branch
+**Status: Shipped, v0.57.0 (2026-07-23).** Source: `company-redefinition-out/02-activation-onboarding.md`.
+- What shipped: `BOARD_EXAM` learners with a depth-qualifying Official Review Set skip note-authoring/generation, adopt the set in one tap, land on its detail page. No qualifying set → unchanged 5-step flow.
+- Gate to enter: none (first phase, produces the evidence later phases were meant to consume).
+- Validation: pre/post W1→W2 retention on the *same covered course/program tracks* (not naive cross-track A/B, since create-first vs. practice-first cohorts are otherwise confounded with covered-vs-uncovered tracks). Floor ~30 completed onboardings/arm for a directional read, ~75+/arm for decision-grade. **Not pulled yet** — needs a 14-day window after the last onboarding in the intake window; see `docs/releases/v0.57.0.md` Known Limitations. The 2026-07-24 signup surge is a candidate cohort for this read — see Diagnostic Read below.
+- **SUPERSEDED IN PART, 2026-08-06 — Phase 1 is being generalized by `v0.71.0` slice 5 (Onboarding Intent Router).** Recorded here rather than only in the Backlog Index, per this section's own rule that it must be updated in the same commit as any reprioritization. What changes: the `BOARD_EXAM`-only gate (`onboarding/page.tsx:723-726`) opens to every profile type, so a `STUDENT` with a qualifying Study Plan can also adopt instead of authoring — roughly doubling Branch A's addressable population given `BOARD_EXAM` is 70.94% and `STUDENT` 27.09% of profile-typed accounts, though only where content actually exists. The silent create-first fallback is replaced by an explicit first-intent step whose copy resolves against the learner's program before selection, plus an honest "Coming soon for {Program}" state. What does **not** change: the depth-qualifying predicate (`itemCount > 0 && readyCount > 0`), one-tap adoption, and landing on the set's detail page rather than cold-dropping a new learner into a quiz — a live-testing finding recorded in a 5-line comment at `onboarding/page.tsx:816-821` and explicitly preserved. **Consequence for this section's own validation read — RESOLVED 2026-08-07.** Round 2 was pulled against the pre-slice-5 cohort before deploy, exactly as this note required. The create-first vs practice-first comparison came back **inconclusive** (0 of 33 vs 1 of 18), so the window closed without a verdict rather than being lost unmeasured — the question was asked and answered "insufficient data". **Slice 5 is therefore no longer gated on it.** Do not re-run that comparison: the group ceases to exist at deploy, and `18-diagnostic-read-round2-results.md` is its final record. Open question §12.5 in the onboarding plan is closed by this.
+
+### Diagnostic Read — read the surge cohort before building again (new, 2026-07-24)
+**Status: ROUND 2 RUN 2026-08-07 — the read is no longer owed, and it found something larger than it went looking for.** Full results: `company-redefinition-out/18-diagnostic-read-round2-results.md`; queries: `17-diagnostic-read-round2.sql`. **W1→W2 retention is 0.91% (1 of 110), and 0 of 74 open-ended learners returned at all** — a real denominator, not a small-n artefact, and below the 2.4%/127 this whole redefinition was launched to address. Instrumentation was verified healthy *before* concluding (16,903 analytics events across 172 users, most recent same-day), because 1-of-110 is extreme enough to suspect a broken pipe rather than broken retention; it is not broken. The exam-bound segment is **1 of 6 and not measurable** — 51 of 57 exam-bound users are `in_flight` with exam dates still ahead, so that segment carries real signal only later. **The create-first vs practice-first comparison came back inconclusive** (0 of 33 vs 1 of 18 — one user separates the arms) and its window is now permanently closed, which **discharges the gate on `v0.71.0` slice 5**. **What this does not say:** nothing here validates the Intent Router, and reading it as support would be reading a hypothesis into a null result. **What it does say:** the problem is not which door a learner picks at signup — it is that nothing brings them back afterwards. **A return trigger (exam-date-anchored reminders, a queued next session) is now the highest-evidence gap on this roadmap and outranks further entry-point work.** Do not fold it into `v0.71.0`.
+
+**Round 1 history — retained.** Ratified (2026-07-24). Round 1 run 2026-07-24/25 — inconclusive by construction. The surge cohort's own 14-day eligibility window hasn't closed yet, so no retention verdict exists. One real, unrelated finding survived: a chronic ~50% onboarding non-completion rate across recent signups generally (not surge-specific — the surge day completed onboarding better than baseline, not worse). **Corroborated 2026-07-28** via an independent measurement path: `15-profile-type-population-mix.sql` found 40.1% of all accounts and 27.4% of the surge-and-after window still have `profile_type` NULL, consistent with a large share of signups never completing onboarding — see the "Profile-type population mix" Backlog Index row above for the full numbers. **Funnel re-check, same day:** re-running Round 1's own Query 7/Query 8 shows non-surge completion up from 50.4% to 58.46% (Query 7, field-based — stands on its own) and the event-based completion ratio up from 66.7% to 76.5% (Query 8). **Correction, same day, after code investigation:** Query 8's ratio is not a trustworthy second signal — `ONBOARDING_V2_STARTED` is gated behind an async `getMe()` round trip while `ONBOARDING_V2_COMPLETED` isn't, so the ratio can move independent of any real funnel change. Also found the real cause of the `ONBOARDING_V2_ABANDONED` > `ONBOARDING_V2_STARTED` anomaly — not a window-boundary artifact as first suspected, but two compounding frontend bugs (an over-fire on every step transition, plus several early-return redirects that leak `ABANDONED` with no matching `STARTED`) — see the "ONBOARDING_V2_ABANDONED instrumentation bug" Backlog Index row below and `08-diagnostic-read-methodology.md`'s "Results — Onboarding funnel re-check" section for full detail. Full results and what was retracted as over-read: `company-redefinition-out/08-diagnostic-read-methodology.md` "Results — Round 1." Concrete methodology and runnable queries: `08-diagnostic-read-queries.sql`. Source: `company-redefinition-out/07-reprioritization.md`.
+- **Scoping found the existing W1→W2 definition needs a fix, not just a re-run:** it anchors "activated" on `STUDY_PACK_GENERATED`, which never fires for a practice-first adopter (copies an already-generated Study Pack, no LLM call) — every practice-first-onboarded learner was invisible to the old read. `08`'s queries report a signup-anchored read (primary, path-agnostic) alongside a widened activation-anchored read (historical comparability) side by side. See `08-diagnostic-read-methodology.md` for the full reasoning.
+- Three prior retention fixes (v0.44.0, v0.46.0, v0.48.0) each shipped on a different hypothesis without moving W1→W2 — that pattern is a diagnosis gap, not evidence that the next feature will be the one that works.
+- The 2026-07-24 surge (LET/Facebook-driven) is the best real research asset available: read where the funnel actually breaks (do signups complete a first session? return at all? segment by exam-date proximity/prep-cycle rather than a flat weekly boolean), using instrumentation Phase 1 already emits. A handful of direct interviews with reachable new signups is in scope here too.
+- Add a crude cost-per-active-user (no token accounting needed — see the Reusable Practice initiative below for why none exists today).
+- **Three hypotheses to actually test here, not assume:** (a) discovery problem — the value exists but exam-dated users don't reach it before bouncing; (b) value problem — they reach it and it isn't worth a second visit; (c) lifecycle-metric mismatch — board-exam prep is episodic (cram → sit the exam → legitimately done), so weekly retention may be structurally low regardless of feature quality. Note **(c) is in tension with the existing 0% exam-dated-retention finding** (0/41, retaining *below* their own exam date) — that fact leans toward (a) or (b), so (c) should be tested, not adopted by default.
+- **Segmentation refinement (2026-07-28):** the surge is Facebook/LET-driven and adoption is concentrated on 2 specific Official Review Sets people land on directly — that's evidence about *pre-signup acquisition-channel* discovery, a different thing from the *post-signup in-app* discovery Explore Convergence's own gate actually tests (can a signed-up user find/reach value once inside the app, including on a cold return visit with no direct link). Make sure this read's segmentation explicitly compares retention for Facebook-direct-landing users against organic in-app-browsing users — if both retain equally poorly, that's evidence Explore's fix doesn't touch the real mechanism regardless of what the top-line discovery verdict says. Add this split now if the read as scoped doesn't already capture it — cheap, and the window is closing.
+- **Read this against the target-habit definition, not the raw W1→W2 boolean alone — defined 2026-07-28, see the "Target-habit definition" Backlog Index row above.** Concretely: re-cut Round 2 by whether `UserEntity.examDate` is set. For exam-dated users, score only those whose exam date has already passed (activity in their final 7 pre-exam days), excluding still-in-flight users from the denominator entirely rather than reading one blended percentage. Expect a small scored group at first — treat a near-single-digit denominator as "not yet measurable," not a verdict.
+- **Why this sits ahead of Phase 2:** reorganizing navigation mid-surge would pollute the exact funnel data this read needs to stay clean.
+- Gate to enter: none — cheap, reversible, unblocks the sequencing decision below it.
+
+### Reusable Practice Assets & the Return Loop — new initiative (2026-07-24)
+**Status: Ratified (2026-07-24), shipped as `v0.58.0 - Reusable Practice Assets & the Return Loop` (Released).** Source: `company-redefinition-out/07-reprioritization.md`. **This is not Phase 3** — see the callout in that section for the precise distinction.
+- **What it is:** of the 5 quiz modes, Quick Review already replays a stored quiz (zero LLM per session — already the target state). Board Exam Mode and Long Exam have **per-user** question pooling already built in `ExamQuestionPoolService`, but it ships **dormant** — `examPoolPrewarmEnabled=false` by default, so no pool row is ever created and both regenerate fresh every session today. Challenge Quiz regenerates fresh on start *and on every "give me more" click*, with no reuse of any kind. Adaptive Practice regenerates fresh by design (personalized to one learner's own misses) and should stay that way — it is not in scope here.
+- **A previously untracked finding:** Challenge Quiz's "give me more" path calls the LLM every click and is **completely unmetered** — no quota decrement at all, unlike every other generation path in the product. Reframe this as an **engagement signal to harvest** (persist those questions as a durable, revisitable set) rather than a leak to simply cap.
+- **What ships:** turn on the existing per-user pool for Board/Long Exam; extend the same per-user pattern to Challenge Quiz (a mode it currently isn't wired to at all); persist generated questions as an owned, revisitable set instead of discarding them each session; add a "redo what you missed" surface reusing the existing weak-concept/`ConceptHealth` machinery (v0.56.0's explanation links, readiness scoring) rather than inventing new mastery signals.
+- **Why it's a retention play, not a cost play:** at current scale, aggregate LLM cost is small (quota is essentially never hit) and there is no token/dollar metering anywhere to optimize against — so "AI cost" is the weakest argument for this. The strong argument is pedagogical: a learner who never gets a second crack at the specific question they missed has no spaced-repetition mechanic to retain against, and the product has already locked "curation, never generation" as an identity while 4 of 5 quiz modes currently regenerate-every-session — this closes that gap.
+- **Why it's sequenced here:** most of the machinery already exists (stored Quick Review quiz, dormant per-user pool, `ConceptHealth`, weak-concept links) — it is cheap relative to Phase 3. It also **unblocks Phase 2's Progress promotion** below, which has nothing stable to show progress against if quizzes regenerate every time.
+- Gate to enter: Phase 1 shipped (done). Does not depend on the Diagnostic Read's outcome — it helps under all three hypotheses above. Ratified and kicked off 2026-07-24 as `v0.58.0`.
+
+### Phase 2 — IA / Explore convergence
+**Status: both chunks Released.** `v0.59.0` chunk Released; `v0.67.0 — Explore Convergence` chunk kicked off 2026-07-30 via explicit owner gate override, shipped the same day, and signed off 2026-07-31 — see below. Source: `company-redefinition-out/03-information-architecture.md`.
+
+**Gate override, ratified by the owner 2026-07-30.** The Explore chunk's stated gate — proceed only if the Diagnostic Read indicates a discovery problem — was, and remains, unmet at kickoff time (Round 2 not due until after 2026-08-06). The owner explicitly chose to override rather than wait, the same shape of decision as Knowledge Impact's and Challenge Quiz Quota Increase's ratified overrides above — recorded as an explicit ratification, not a silent gate-clear. A `[CHECKPOINT — due 2026-09-13]` was committed at the same time: a new `AnalyticsEventType` on Explore nav engagement ships inside `v0.67.0` itself, then gets checked against pre-launch baseline ~30-45 days later. Kill criterion: flat-to-negligible Explore-attributed engagement against baseline settles that the discovery gap wasn't the retention lever worth iterating on further without new evidence. Worth keeping on record, not treated as a blocker: the 2026-07-24 surge motivating renewed interest in this gate is Facebook/LET-direct-landing traffic (pre-signup acquisition-channel discovery), a different mechanism from the post-signup in-app discovery this release actually addresses (see the segmentation-refinement bullet under "Diagnostic Read" above) — if that segment's own retention doesn't move regardless of this release shipping, Explore didn't touch the real mechanism, and the eventual Diagnostic Read re-read is what will surface that, not this checkpoint alone. **Mid-release scope addition (2026-07-30):** `/explore` now owns authenticated content discovery; Collections becomes a pure workspace first, followed by a separately sequenced Dashboard-pointer PR. The checkpoint analysis must segment pointer-originated `EXPLORE_VIEWED` events using `source` metadata from direct/nav views rather than treating all Explore page views as one comparable cohort.
+- What ships: authenticated nav becomes `Dashboard / {profile-aware Collections label} / Library / Explore / Progress` (not the literal string "My Reviews" — that text never existed in code; see the Current Release Baseline note). Explore is a new nav item (not a replacement canonical content URL) compositing the existing Official Review Set catalog (`/collections/published`) and `/public/library` behind a segmented control, plus a pointer to the Exam Hub index. Progress was already promoted from sub-page to first-class nav item in `v0.59.0` and is unchanged here. `/exam/[slug]` gains one additive check: resolve the hub's `courseProgram`(s) against published Official Review Sets — a match adds a preview+adopt path. Library stays untouched and structurally separate from Collections.
+- Reuses almost nothing from fable-out (built on already-shipped mainline machinery instead: v0.41.1 Primary-card hierarchy, `PlanPicker` + `?collectionId=`, `getCollectionLabels`, the copy funnel's `redirectTo` param).
+- One flagged-not-resolved recommendation: adopting an Official Review Set with no existing Primary sets it as Primary — does not resolve the still-open Primary-Review-Set-vs-Study/Exam-Focus question.
+- **Two release-sized chunks, by design (different risk profiles), now separately gated:**
+  - `v0.59.0 — Dashboard & Progress Reorg` (originally `v0.59.0`, shifted to `v0.60.0` when Reusable Practice Assets claimed `v0.58.0`, then reclaimed `v0.59.0` on 2026-07-24 once its own gate cleared before Explore's — see Current Release Baseline note): Dashboard hero → Primary Review Set condensed card, Progress promotion, the adopt-sets-Primary default. **Gate (new): proceed only once Reusable Practice Assets & the Return Loop has shipped** — there is no stable progress to promote to a top-level nav item until quiz content stops regenerating every session. Also still touches default states on pages users already rely on daily — do not fold into the same release as the chunk above. **Gate satisfied 2026-07-24 (v0.58.0 shipped); shipped and signed off as `v0.59.0` (Released).**
+  - `v0.67.0 — Explore Convergence` (originally `v0.58.0`, shifted to `v0.59.0` when Reusable Practice Assets claimed `v0.58.0`, then to `v0.60.0` when Dashboard & Progress Reorg reclaimed `v0.59.0`, then to `v0.61.0` when Shared Official Pool Foundation reclaimed `v0.60.0`, then to `v0.62.0` when Challenge Quiz Quota Increase reclaimed `v0.61.0` on 2026-07-28, then to `v0.63.0` when Knowledge Impact reclaimed `v0.62.0` the same day, then to `v0.64.0` when Ask Companion reclaimed `v0.63.0` on 2026-07-29, then to `v0.65.0` when Add to Review Set reclaimed `v0.64.0` the same day, then to `v0.66.0` when Study Effectiveness Polish reclaimed `v0.65.0` the same day, then to `v0.67.0` when Challenge Quiz Result Clarity reclaimed `v0.66.0` on 2026-07-30 (all unrelated ratified work, not Diagnostic-Read-gated items — see Current Release Baseline note) — see Current Release Baseline note): new Explore nav item, segmented Review-Sets/Notes control, Exam Hub additive official-set check. **Gate (new): proceed only if the Diagnostic Read above indicates a discovery problem** (exam-dated users bouncing before reaching value) — otherwise this is a discovery bet the read didn't support. **Gate explicitly overridden by owner ratification 2026-07-30 — kicked off as `v0.67.0` the same day, gate remains formally unmet (see the override note above and Current Release Baseline). No runtime gate-check logic is added to the codebase — the override is a documentation-level decision only.** Shipped 2026-07-30, signed off 2026-07-31 after a full pre-signoff pressure test (release-wide surface area, 3 PRs) found and fixed one checkpoint-measurability gap and logged nine further findings as Known Limitations — see `RELEASES.md` v0.67.0.
+- Producing more Official Review Sets remains bottlenecked on the separate, still-unscoped Curator pipeline (Smart Review Planning) — Phase 2 does not solve this; Phase 3's authoring slice hits the same gap.
+
+### Phase 3 — Cross-user question pool + bounded reusable-object model
+**Status: 3a ratified, kicked off, and shipped 2026-07-24 as `v0.60.0` (Released; reclaimed from Explore Convergence, which renumbers to `v0.61.0`) — its proposed gate cleared on real adoption data, not on "we already do per-user pooling."** Retargeted the same day from the original exam-pool design to Challenge Quiz Official template sharing — see `RELEASES.md` v0.60.0. 3b stays drafted, not ratified, parked on its own unrelated review-queue dependency (see below). Source: `company-redefinition-out/04-reusable-assets-and-reviewer.md`.
+- **3a gate evidence (2026-07-24):** `company-redefinition-out/10-phase3-adoption-concurrency-check.sql`, run against production. Two shared Official Review Sets show real, concentrated, currently-active adoption: `LET Comprehensive Review` (Education Goal, 4 children) at 23 distinct adopters, 22 of which landed in the last ~24-48h (an active surge, not historical build-up); `PNLE Core Nursing Review` (Nursing Goal, 7 children) at 9 distinct adopters, 7 in the last 14 days. Denominator context: only 4 distinct Goals have ever been adopted at all, and these two account for ~84% of all goal-adopters (32 of ~38) — this is genuine concentration, not a flat spread. Absolute scale is still modest (23 and 9 people) and the LET surge's track record is only ~1-2 days old at ratification time — the owner weighed this explicitly and chose to proceed rather than wait for a longer trend confirmation.
+- **Callout: this is not the same thing as "Reusable Practice Assets & the Return Loop" above, even though both involve `ExamQuestionPool`.** Phase 3 is **cross-user** sharing — many different learners who adopt the same Official content drawing from *one* pool. The new initiative above is **per-user, cross-session** reuse — one learner's own repeat practice reusing their own previously-generated questions instead of regenerating. Phase 3 needs the resolver + child table below; the new initiative needs neither. Don't let "we're already doing pooling" become an argument to pull Phase 3 forward — its own gate (adoption volume) is unrelated to and unmet regardless of the new initiative shipping.
+- Foundation slice (3a), **retargeted 2026-07-24**: originally scoped as a `resolvePoolKey(studyPackId)` step inside `ExamQuestionPoolService` (Long/Board Exam pools). Retargeted after confirming Long/Board Exam is PRO-gated with ~zero production load (`StudySnapProperties.isLongExamAvailable`/`resolveMonthlyBoardExamLimit` both return 0/false off PRO) — the gate evidence's adopters are FREE-tier and almost certainly hitting Challenge Quiz instead. Diagnostics (one-off production scripts, run then not retained in the repo) confirmed the Official source study packs exist and are generated, but have zero existing Challenge Quiz bank rows — so an eager seed is additive, not redundant. New design: eager-seed a Challenge Quiz question template once per Official study pack (triggered on note-becomes-Official and on Study-Pack-generation-if-already-Official, plus a one-time backfill for already-published content), and have the claim path copy fresh per-user rows from that template instead of calling the LLM, falling through to live generation only for any remaining shortfall. No schema change to `challenge_quiz_question_bank` — copies are ordinary per-user rows, so `claimIncorrectQuestions`/"redo what you missed" is unaffected. See `RELEASES.md` v0.60.0 for full scope and the reconciliation with the existing "do not pre-generate Challenge Quiz" ruling below.
+- Authoring slice (3b): curator-side pool expansion, batches land pending-review before READY, reusing the review-queue shape from the parked Smart Review Planning docs.
+- Bounded object model: of 8 proposed fields, 5 need zero new work; Flashcards stays derived; Difficulty is cut (already covered by `DIFFICULTY_SELECTION`). **The 3a resolver + child table is the only genuinely new build in the whole model.**
+- Reviewer decision: label-only, no new entity — `getCollectionLabels("BOARD_EXAM")` already returns "Review Set"; "Reviewer" ships as a relabel.
+- **Real dependency, not smoothed over:** 3b's review-queue mechanism does not exist in the codebase today. It either waits for the Smart Review Planning Curator pipeline to ship, or needs its own small standalone queue as net-new Phase-3 scope. 3a has no such dependency.
+- Proposed gate (not stated by the owner, proposed by Fable): don't kick off 3a until adoption telemetry (already emitted by Phase 1/2's adopt/copy paths) shows a shared Official Review Set with enough concurrent adopters that duplicated per-owner pool generation is a measurable cost, not hypothetical. **Gate satisfied 2026-07-24** — see the gate evidence bullet above. 3b's own gate (the review-queue dependency) is untouched by this and remains unmet.
+- **Release chunks:** `v0.60.0 — Shared Official Pool Foundation` (3a only, retargeted to Challenge Quiz Official template sharing, no review-queue dependency, shipped standalone) is **Released** — see its section below; a later TBD release for 3b once the review-queue question is resolved; the Reviewer relabel can ship independently in either chunk and has not been assigned to either yet.
+
+### Phase 4 — Packaging / terminology delta
+**Status: Ratified 2026-07-31 (§4 items 1, 2, 3, 6); partially shipped in `v0.68.0`. Unaffected by the 2026-07-24 resequencing.** Source: `company-redefinition-out/05-packaging-and-terminology.md`. **Corrected 2026-08-01 at `v0.68.0` signoff:** this section still read "Drafted, not ratified — needs an explicit owner decision before scoping" and still described the rename as future work, contradicting both the Current Release Baseline and the Backlog Index row. Commit `6201eaee`, titled "correct Phase 4 status," corrected only line 9 and the Backlog Index row and left this section stale — the same partial-sweep failure the release documented elsewhere. **Shipped in `v0.68.0`:** item 6 (the rename, plus two consistency batches), item 8 (the retry-grammar fix), and item 4's first slice as the widened Messaging Architecture initiative. **Still open:** items 5 and 7's implementation substance, and item 9 (out of scope by `05`'s own constraint).
+- What ships (ratified 2026-07-31; the rename shipped in `v0.68.0`): Creator (bring-your-own-notes) and Curated Learning (adopt Official Review Sets) stay **one product** on the existing FREE/PLUS/PRO ladder — a messaging distinction, not a pricing fork. No new SKU. Terminology delta, top item: rename "Generate Note"/"Generate a note" → "Create a Note"/"Draft a Note" (freeform AI-authored prose with no source note shouldn't borrow "Generate"'s differentiator language); "Generate Study Pack"/"Generate Quiz"/"Regenerate Quiz" keep the generation-flavored verb since that names the real differentiator.
+- Directly reuses `fable-out/05`'s already-recommended tier placement (FREE=adopt, PLUS=conversational assembly, PRO=adaptive planning) and its recommendation that adopting Official Review Sets stays free and unmetered at every tier.
+- **Owner-must-decide gate:** source doc `05` carries a formally-headed "§4. Owner must decide" section — the only one of the six Fable docs with one. Phase 4 could not be scoped for `/kickoff` until those items were actually decided, not just acknowledged. **Satisfied 2026-07-31 for items 1, 2, 3, 6** — those were explicitly decided by the owner, and item 6 was kicked off as `v0.68.0` the same day. Items 5, 7, and 9 remain undecided, so any further Phase 4 scoping is still gated on them.
+- **No engineering dependency on Phases 1–3 — the one phase free to move earlier if ratified sooner.** The terminology-rename slice specifically is small enough (copy/label change, no new infra) to be a direct Claude-Code frontend change per this repo's task-routing table, and could ride along inside any other release's polish bucket once ratified, rather than needing its own release.
+- **Illustrative release chunk (only if tracked standalone):** `vX.Y.Z — Terminology & Packaging Cleanup`.
+
+### Dependency spine (resequenced 2026-07-24)
+Phase 1 (shipped) → Diagnostic Read (ratified; Round 1 already run) → Reusable Practice Assets & the Return Loop (ratified, **shipped as `v0.58.0`**, gated only on Phase 1 having shipped) → Phase 2, split: `v0.59.0` Progress **shipped (Released)**, gate satisfied by Reusable Practice having shipped; `v0.67.0` Explore (renumbered 8 times as unrelated ratified work reclaimed each intervening slot — see Current Release Baseline for the full chain) gated on the Diagnostic Read showing a discovery problem specifically, **gate explicitly overridden by owner ratification 2026-07-30, kicked off as `v0.67.0` the same day (In Progress)** → Phase 3a **gate satisfied 2026-07-24 on real adoption-concurrency data, retargeted to Challenge Quiz Official template sharing, shipped and signed off as `v0.60.0` (Released)**; Phase 3b remains separately gated on its own unresolved review-queue dependency, unaffected by 3a's ratification. **Phase 4 has no dependency on any of the above and floats freely on owner ratification timing** — this is the lever to pull if reprioritizing without new engineering risk.
+
+### Backlog Index rows this roadmap supersedes or folds into
+- **Smart Review Planning (Internal Curator, 7 docs)** — partially folded, not closed. Phase 3 carves out and re-gates only the bounded-object-model/cross-user-pool/Reviewer-relabel slice; the curriculum-authoring pipeline (templates, matcher, gap-fill queue, Plan-My-Review wizard) stays exactly as Parked, same original gate.
+- **AI-generated Review Sets / Runtime Companion** — splits. "AI-generated Review Sets" is effectively closed/ruled out by the locked curation-never-generation architecture this whole effort re-affirms. "Runtime Companion / Ask Companion / Personalization" is untouched and stays Parked separately.
+- **Review-Set-Centric Navigation** — its drafted navigation shape was reached on 2026-07-30 through Progress promotion, the profile-aware Collections label, and Explore convergence. Library remains a separate, non-Review-Set-organized concern by design; the still-open Primary-vs-Study/Exam-Focus philosophy question is not implied resolved.
+- **Product-language row** — no standalone row exists; Phase 4 is where the terminology-delta content now lives (extends `fable-out/06`'s rename map, and reverses its blanket "keep Generate Note, not touched" stance — **for the onboarding/editor/demo action *and* for the `PLAN_COMPARISON_ROWS` label "Topic note generation"**, both renamed in `v0.68.0`, with a new argument for why). **Corrected 2026-08-01:** this line previously scoped the reversal to "onboarding specifically," which understated it — `06` marked the plans row **keep** too, and cited it as an example of already-correct outcome naming in its own policy section. A future session executing `06` as source-of-truth would therefore have restored `Topic note generation` and silently reverted `v0.68.0`. `06` now carries an inline status note plus annotations on all four affected spots (two "keep" verdicts, a policy-section example, and the forward-looking "Consistency guard for future copy" that had blessed "Generate a note" — corrected at signoff from "both affected entries", which undercounted it in the same way `06` itself had undercounted); the rest of its map (the unexecuted "AI" de-emphasis rename — `ai-suggestion-modal.tsx`, "AI Critique" → "Answer Critique", Help/Learn mechanism copy) is unaffected and still needs its own scoping pass and `/kickoff`. That remaining work is the actual substance of §4 item 7 and is **not** folded into `v0.68.0`.
+
+### Nothing here is authorized for implementation until ratified
+Each phase and each new item above needs the owner's explicit ratification before its own `/kickoff` — this applies equally to all of them, not just the ones with a stated behavioral/adoption gate. Phase 2's original behavioral-read gate was explicitly overridden by the owner on 2026-07-23, and that same "proceed to Phase 2 next" decision was itself reversed on 2026-07-24 in light of the signup surge and the reusable-assets realization — both are ratification decisions in their own right, not bypasses of the ratification requirement itself. Phase 3a's proposed adoption-volume gate was evaluated against real production data (not waved through on signup enthusiasm alone) and ratified by the owner 2026-07-24 — see the gate evidence bullet in the Phase 3 section above.
+
+## v0.66.2 — Card Surface Token Fix (Released)
+
+**Kicked off 2026-07-30.** Patch release off `v0.66.1`'s line — see Current Release Baseline above.
+
+**Signed off 2026-07-30.** Shipped on a single PR (`fix/bg-card-token`, PR #947) — one two-line CSS change, but with a 23-site blast radius, so the owner requested an independent Codex audit rather than the default single-`advisor()` pass. That audit is the reason this section's "false override claim" correction exists (see the paragraphs above) — caught and fixed before signoff, not left as a known limitation. `tsc`, lint, and the full Jest suite (157/157) were clean throughout; the `getComputedStyle` verification (not just screenshots) is what actually resolved the conflict between the original visual read and the audit's static-analysis claim. Known Limitations: none.
+
+**Origin.** The `bg-card` no-op finding logged in the Backlog Index during `v0.66.0`'s pressure test (no `--color-card` token registered in `globals.css`, so the utility silently drops everywhere it's used). Picked as the next small, ungated candidate after a fresh scan of the Backlog Index found nothing else ready outside Diagnostic-Read-gated items and large multi-doc initiatives.
+
+**Re-verification found the original finding undercounted, 2026-07-30.** A fresh grep found 21 usages across 10 files, not the 9 originally logged — `long-exam/page.tsx` (8 call sites) and `challenge-quiz/page.tsx` (5) were missed the first time. This meaningfully changed the risk profile: the real blast radius is core exam-mode UI (Long Exam and Challenge Quiz's active-question cards, Board Exam's question card), not a handful of peripheral cards. Corrected in the Backlog Index row before scoping further.
+
+**Token value chosen from real-browser evidence, not picked blind — but the first pass of that evidence was itself wrong.** Two candidates existed: alias `--card` to `--surface-alt` (an explicitly elevated tone) or to `--background` (making the current accidental appearance the intentional one). Both were wired into `globals.css` temporarily and rendered via a throwaway preview route reproducing three real patterns verbatim from source, in both themes. Visual inspection of the screenshots was read as: `--surface-alt` made the `Card` + `bg-card` override pattern (`challenge-quiz/page.tsx:2090`, `long-exam/page.tsx:1090`) render identically to a default `Card`, while `--background` preserved a visible distinction. **This visual read was wrong** — a subsequent Codex audit (requested by the owner as an independent pressure test) found that `cn()` has no `tailwind-merge` and the compiled stylesheet's cascade order, not JSX class order, decides equal-specificity ties; `.bg-card` compiles before `.bg-surface-alt`, so `bg-surface-alt` wins on both patterns regardless of what `--card` aliases to. A direct `getComputedStyle` check (not another screenshot) confirmed it: both the "override" `Card` and a plain `Card` compute to the identical `rgb(249, 250, 251)` — the visible difference in the earlier screenshot came from the override's different border color (`border-foreground/15` vs. the default `border-border`), not a different fill, and was misread as a fill difference.
+
+**The token choice survived the correction; the stated reason for it didn't.** The `getComputedStyle` check also confirmed the *other* piece of evidence still holds: `ScoreReveal`'s nested standalone panel (a plain `bg-card` div with no competing `bg-surface-alt` class on the same element, sitting inside a parent `Card`) computes to `rgb(255, 255, 255)` — visibly distinct from its container's `rgb(249, 250, 251)`. That's real, unambiguous separation, unaffected by the cascade-order issue since there's no second background class on that element to compete with. `--card: var(--background)` remained the right choice on that narrower, now-verified basis; the "preserves the Board Exam override" rationale was removed from `RELEASES.md` rather than left standing. **Lesson applied:** a visual screenshot comparison can be fooled by an adjacent, unrelated style difference (here, the border color) when the actual claim is about a specific CSS property; a `getComputedStyle` check on the specific property is the deciding test, not the screenshot.
+
+**One incidental, genuine visual change surfaced by the same audit:** `quiz-generation-overlay.tsx`'s modal panel (previously transparent against a blurred `bg-background/85` scrim) is now a solid, legible panel — checked in both themes via a real render; a positive change, not a regression, but the original scoping had incorrectly implied every usage was visually inert.
+
+**Anti-drift:** CSS token registration only — no component logic, className, or markup changes at any of the 21 call sites; nothing about how `Card`'s own default `bg-surface-alt` works changes.
+
+## v0.66.1 — Goal Detail Due-Concept Signal (Released)
+
+**Kicked off 2026-07-30.** Patch release off `v0.66.0`'s line — see Current Release Baseline above.
+
+**Signed off 2026-07-30.** Shipped on a single PR (`fix/goal-detail-due-concept-signal`, PR #945) — two small files, one concept, well under the full-pressure-test threshold. `tsc --noEmit` and lint clean, full Jest suite 157/157 unaffected (no existing test coverage for this page-client file to update), and the due-color change was verified in a real browser render in both light and dark mode via a throwaway preview route (deleted before commit, never merged). A single `advisor()` check at signoff found and fixed one doc-consistency gap in this section's own draft — see Current Release Baseline above — not a code finding. Known Limitations: none.
+
+**Origin.** Surfaced while discussing what's next after `v0.66.0`'s signoff. The Post-v0.40.0 Polish Backlog already named a candidate — "Overdue color-warning on child Subject-plan cards" — flagged there as cheap and using existing data, but explicitly requiring "a conscious sign-off, not an automatic yes" since a warning color leans toward the "monitoring" framing the locked collection-detail anti-drift rule pushes back on.
+
+**Research before scoping, 2026-07-30.** Read `frontend/app/collections/[id]/collection-detail-page-client.tsx`'s `GoalDetailView` directly rather than trust the backlog note's framing alone. Two findings: (1) `AGENTS.md:142`'s "execution rows" phrase specifically means per-note practice-status rows (`getNoteExecutionStatus`, same file) — a different UI element than the Goal → child Subject-plan summary cards this candidate targets, so the rule's literal terms don't crisply cover this surface. (2) More materially: this exact card already shows `child.overallReadinessPercentage` plus a progress bar (lines 1201-1217), shipped 2026-06-30 with the original Goal → Subject hierarchy feature — a real mastery-percentage display on a collection-detail surface, which `docs/features/collections.md:481` documents as excepted only for the dedicated `/progress?collectionId={id}` route. No RELEASES.md/ROADMAP.md/archive trail ratifies this as a deliberate second exception; it appears to be an undocumented gap between the shipped surface and the written rule, not a fabricated one.
+
+**Scope, agreed with the owner 2026-07-30:** fold both into this one patch release rather than treat them separately — see `RELEASES.md` v0.66.1 for the two Planned Scope items (doc fix + due-color addition). The due-color addition is scoped as a small, consistent extension of a card that already carries a mastery signal, not a fresh departure into "monitoring dashboard" territory; presence-based (`dueConcepts > 0`) rather than a magnitude threshold, to avoid inventing a new threshold system.
+
+**Anti-drift:** no change to how `dueConcepts` or `overallReadinessPercentage` are computed, no new backend field, no new threshold constant; the doc fix corrects `AGENTS.md`/`collections.md` to match already-shipped behavior, it does not relax the underlying no-mastery rule for any other surface (collection list cards, published-plan cards, public source plans, and per-note execution rows are unaffected).
+
+## v0.66.0 — Challenge Quiz Result Clarity (Released)
+
+**Kicked off 2026-07-30.** Reclaims the `v0.66.0` slot from `Explore Convergence` (renumbered to `v0.67.0`) — see Current Release Baseline above.
+
+**Signed off 2026-07-30.** Shipped on a single PR (`feat/challenge-quiz-result-consolidation`, PR #943) — frontend-only, single concept, well under this doc's own full-pressure-test threshold. The owner requested an independent Opus review anyway (fresh agent, no inherited context, instructed to read the real diff rather than trust a summary) plus a real-browser check rather than the default single-`advisor()` pass. That review confirmed the additive `ScoreReveal` API change left Board Exam Mode and Long Exam Mode byte-identical, found no data loss or NaN/divide-by-zero risk, and surfaced two real gaps fixed before signoff: the "Answered Accuracy vs. Overall Completion Score" explainer sat two paragraphs below the metrics it explains (moved adjacent to the reveal), and the secondary metric's `aria-label` was on a `<p>`, a role ARIA doesn't guarantee gets announced (removed rather than left as misleading dead code). A third flagged concern — `ScoreReveal` nesting inside the standard result screen's existing outer `Card`, read from the diff alone as a possible "card-in-a-card" — was checked with an actual rendered screenshot (light and dark) and did not hold up; no structural change was made. Known Limitations: none.
+
+**Origin.** Logged as a Known Limitation while signing off `v0.65.0`'s card-accretion layout pass: that pass's Codex prompt explicitly scoped only the post-session guidance cards (`PostSessionNextStep`/`GoalNudgeCard`/`WeeklyPacingEchoCard`/`CompanionResultBridgeCard`/`TwiceMissedAskCompanionCard`), not the score/outcome area above them, and a real-browser visual audit flagged that outcome area as the reason Challenge Quiz's result screen was the weakest of the three modes (Adaptive Practice's was rated strongest). Chosen over the other identified next-release candidate — resolving the Primary Review Set vs. Study/Exam Focus philosophy question — which stays open in the Post-v0.40.0 Polish Backlog for a future release.
+
+**Scope, verified against current code 2026-07-30:** Standard Challenge Quiz mode's result branch (`frontend/app/study-packs/[id]/challenge-quiz/page.tsx`, ~line 2548-2639) stacks three separate, partially-duplicated visual blocks — a raw score `<div>` (percentage, correct count, duration, message, performance badge), a "Score Summary" `Card` re-displaying the same Correct/Answered/Percentage numbers in a grid, and a "Concept Breakdown" `Card`. Board Exam Mode's own result branch in the same file (~line 2331-2379) already converged on a cleaner pattern: the shared `ScoreReveal` component (`frontend/components/exam-mode/score-reveal.tsx`) plus one Concept Breakdown card. `ScoreReveal` needs a third `challenge-quiz` tone for standard mode. **Dual-metric decision resolved before implementation:** keep Answered Accuracy primary and extend `ScoreReveal` with an optional subordinate `secondaryMetric` for Overall Completion Score when questions remain unanswered; Board Exam and Long Exam omit the additive prop and remain unchanged.
+
+**Anti-drift:** presentation-only, no score calculation or concept-breakdown data changes; Quick Review and Adaptive Practice result screens are explicitly not in scope (the Known Limitation named Challenge Quiz specifically); Board Exam Mode's branch is the reference pattern to converge toward, not to modify.
+
+## v0.65.0 — Study Effectiveness Polish (Released)
+
+**Kicked off 2026-07-30.** Reclaims the `v0.65.0` slot from `Explore Convergence` (renumbered to `v0.66.0`) — see Current Release Baseline above.
+
+**Signed off 2026-07-30.** Shipped on four PRs (#938 collapsed-Companion teaser, #939 Study Pack scope surfacing, #940 card-accretion layout pass, #941 Adaptive Practice rationale tag), each individually audited (checklist + build/test) before merge, plus a real-browser visual review (#940) that found and fixed two presentation bugs no automated check could catch. Per this doc's own pre-signoff gating rule, checked whether the release crossed the full-pressure-test threshold: 4 PRs (below the 6+ bar), no single concept spanning 3+ surfaces, and two same-file overlaps (`collection-detail-page-client.tsx` between #938/#940, `adaptive-practice/page.tsx` between #940/#941) confirmed to land in disjoint rendering regions, not a shared method — so a single `advisor()` summary was the right depth, not the full multi-agent pressure test. That check flagged one real thing to verify (whether the new rationale pill row could render on the completed/result branch, given how close its hunk sat to #940's result-screen changes in the same file) and one process gap (the merged-`releases/v0.65.0`-branch build/test hadn't actually run yet — each PR was only verified pre-merge, on its own branch). Both resolved before signoff: confirmed by direct code inspection that the rationale row renders only in the active-question branch, never the result branch; then ran `./mvnw clean install`, `tsc --noEmit`, and the full Jest suite on the merged branch — all green (157/157 suites, 1586/1586 tests). Known Limitations: two, both logged below, neither fixed this release (Challenge Quiz's outcome-area accretion — out of this release's scope; the rationale pill row's own layout on narrow viewports/matching groups — owner opted to verify in-browser directly rather than route through a separate visual-review pass).
+
+**Origin.** The 2026-07-22 Fable consultation (`docs/claude-prompt/study-effectiveness-out/01-study-effectiveness-ui-pricing.md`) named six Flow/UI Polish candidates plus four Pricing Fit findings, explicitly scoped to exclude retention-trigger mechanics. Two items shipped already, in earlier releases: Flow #1 (link missed/weak concepts to their explanation) as `v0.56.0`; Flow #6 (on-demand re-explanation) as the twice-missed-concept → Ask Companion feature in `v0.63.0`. Pricing #1 (Difficulty Selection to Plus) is dead — that selector was removed entirely in `v0.60.1`. That left six remaining candidates in the Backlog Index row, marked `[EFFORT — authorizable today, no data dependency]` — this release scopes and ships the ones still real.
+
+**Scoping-pass verification against current code, 2026-07-30 (not the 2026-07-22 snapshot — v0.56.0 through v0.64.0 shipped in the interim):**
+- **Note Detail tab-order mismatch — already resolved, struck from scope.** `docs/features/note-detail.md:125` locks the current tab order as a deliberate decision "not to be reopened without a fresh product decision," and documents the shipped remedy: a `GuidanceTip` nudge on the Quiz tab pointing back to Full Notes (`quizFullNotesNudgeGuidance`, `frontend/components/notes/private-note-detail-page-client.tsx:2352`). Nothing to build.
+- **Key Concepts readiness sort — already shipped, struck from scope.** `sortedKeyConceptEntries` (`private-note-detail-page-client.tsx:907-919`) already sorts by `getConceptSortRank(readinessStatus, isStruggling)`, due/struggling first, generation-order as tiebreak.
+- The remaining four are real and make up this release's scope (below).
+
+**Planned Scope, verified against current code:**
+- **Study Pack scope surfacing (backend + frontend).** No note-list card or the Summary tab currently shows concept count, quiz length, or review time. `StudyPackEntity.keyConcepts`/`.quiz` (`backend/.../entity/StudyPackEntity.java:58-63`) already carry this data for the Summary tab — free `.size()` there. The note-list response DTO does not currently carry these counts for the card view; needs a small backend addition. Owner explicitly chose both surfaces over Summary-tab-only, accepting the backend DTO touch.
+- **Card-accretion layout pass (frontend only, Codex).** Confirmed worse than the 2026-07-22 audit described — the stack has grown since, not shrunk. Current Review Set Detail Goal-view stack: Hero → `TodaysFocusCard` (mentor tip now merged inside) → `ReadinessSummary` (with countdown) → post-adopt `GuidanceTip` (conditional) → `CompanionDisplayCard` → `AskCompanionPanel` (conditional, new in `v0.63.0`). Adaptive Practice result screen: score → weak-areas → `PostSessionNextStep` → `GoalNudgeCard` (conditional, new) → `WeeklyPacingEchoCard` → `CompanionResultBridgeCard` → `TwiceMissedAskCompanionCard` (conditional, new in `v0.63.0`) → action buttons → `BackLink` → conditional answer review/feedback panels. Quick Review and Challenge Quiz result screens follow the same component set and structure. Presentation-only reorder/consolidation, no logic change, but touches the detail page plus 3 result-screen variants — routed to Codex per this project's task-routing table (>5 files in practice once all three result-screen variants are touched).
+- **Collapsed-Companion teaser (frontend only, Claude Code direct).** `CompanionDisplayCard` (`frontend/app/collections/[id]/collection-detail-page-client.tsx:1064-1149`) renders literally nothing — not even a preview line — when collapsed. One component, one-line overview excerpt added to the collapsed branch. The collapse-by-default decision itself (documented Coach vs. Companion doctrine) is unchanged.
+- **Adaptive Practice per-question rationale tag (backend + frontend, Codex).** `QuizItem` (`backend/.../dto/QuizItem.java`) deliberately remains free of selection provenance because that fact is relative to one session, not intrinsic generated content. Selection happens in `QuickReviewAdaptivePracticeService`'s weak/due-concept merge logic; capture due-only / weak-only / both before the merge loses that distinction, then persist and return a parallel index-aligned reason array beside the quiz in session state. Render it per question during the active session (e.g. "Reviewing: Ohm's Law — missed last time"). The largest item this release; genuine backend + frontend, not polish-only.
+
+**Anti-drift verified, not assumed:** none of the four touch `EXAM_MODES.md`'s locked no-mid-exam-coaching rule (`EXAM_MODES.md:323`, which names Board Exam and Long Exam specifically) — the rationale tag is static deterministic metadata computed at selection time, not an LLM call, so it doesn't cross into "interactive AI"; the layout pass removes no card and changes no logic, presentation only; Companion's collapse-by-default choice stays, only the collapsed-state emptiness is fixed.
+
+## v0.64.0 — Add to Review Set (Released)
+
+**Kicked off 2026-07-29,** surfaced while discussing v0.63.0 Ask Companion's own signoff. Reclaims the `v0.64.0` slot from `Explore Convergence` (renumbered to `v0.65.0`) — see Current Release Baseline above.
+
+**Signed off 2026-07-29.** Shipped on a single PR (`feat/add-to-review-set`, PR #935) — frontend-only feature plus docs, no shared-method collisions across PRs, so per this doc's own pre-signoff gating rule this needed a single `advisor()` check rather than the full multi-agent pressure test. That check flagged one real gap: `AddToCollectionModal`'s `itemNoun` prop defaulted to `"imported draft"` (preserving Bulk Import's exact prior copy), meaning a future third caller that forgot to pass it would silently inherit import-specific wording. Fixed before signoff — `itemNoun` is now a required prop with no default, and Bulk Import's call site passes `"imported draft"` explicitly. No other findings; Known Limitations: none.
+
+**A second architectural question arrived mid-release** (before this item's own implementation began): whether "Ask Companion" should evolve into a cross-cutting "Companion" guidance system spanning Dashboard/Review Set/Progress/Readiness. Pressure-tested with Opus, resolved as *considered and narrowed* (doctrine adopted, literal merge rejected) — full writeup in the Backlog Index row "Companion Guidance Doctrine" above. Confirmed orthogonal to this release; "Add to Review Set" and the doc corrections below shipped exactly as originally kicked off.
+
+**Origin.** Before signing off v0.63.0, the owner asked whether Companion should really stay Review-Set-only, given users who never adopt a Study Plan/Review Set get no guidance layer at all. Claude's first pass: ship v0.63.0 as scoped, treat this as a separate question. The owner took it to GPT for a second opinion; GPT reframed it as "what role do Notes play in the Learning OS" and proposed keeping Companion permanently Review-Set-only while giving Note Detail "transition features" (add-to-Review-Set, browse Official sets covering this topic, create-a-Review-Set-from-this-subject) so note-only users aren't left out of the guidance layer. The owner asked for an Opus pressure test of that proposal before acting on it.
+
+**What the pressure test changed.** GPT's conclusion (no Companion on Notes) held up; its reasoning and proposed shape didn't, fully:
+- **Corrected the framing.** Companion isn't "Review-Set-scoped" — it's admin-authored-Official-collection-scoped. `NoteCollectionService.setCompanion`/`clearCompanion`/`generateCompanion` all call `assertAdmin(user)` before touching `collection.companion` — a learner-created Review Set can never have one, because nobody curated it. That's a structural fact, not a permanent philosophical stance about curriculum-vs-note altitude — so "permanently Review-Set-only" is dropped in favor of "the **authored** Companion stays scoped to curated Official collections"; Personalization (PRO, still Parked not ruled out) is the mechanism that could eventually reach a no-Review-Set learner some other way.
+- **Rejected the "create a Review Set from this note" bridge as a guidance entry point.** Same `assertAdmin` fact means a user-created collection gets no Companion and doesn't clear Ask Companion's renderable-content eligibility either — that bridge routes a learner to the guidance layer's front door and hands them nothing.
+- **Rejected a Note Detail recommendation/nudge entirely.** At the time, `DashboardStudyPlanSection` supplied the "adopt/continue an Official set" recommendation on Onboarding, Dashboard, and Collections. Corrected 2026-07-30: the "Explore Owns Discovery" addition removes that component from Collections, and Library's `GuidanceTip` is note-creation guidance, not set-adoption guidance. A Note Detail version still does not belong on the one surface (`docs/features/guidance.md`'s own rule) meant to stay focused; authenticated discovery now points to Explore instead of being duplicated there.
+- **Rejected "browse Official Review Sets covering this topic" on Note Detail.** Needs subject-level matching that doesn't exist (`NoteCollectionController.listPublic` matches `courseProgram` only) — placed next to one specific note, a courseProgram-only match implicitly claims relevance it can't back, the same false-precision shape already logged as a Known Limitation on v0.63.0's twice-missed CTA. This idea is also already scoped inside `v0.66.0` Explore Convergence's own additive official-set check — building a second, uncoordinated version now duplicates work whose gate clears in about a week.
+- **Folded the "no-Review-Set learner's guidance surface" question into the existing, still-open Primary-Review-Set-vs-Study/Exam-Focus philosophy question** (Post-v0.40.0 Polish Backlog) rather than opening a new roadmap item — that question already commits to Study/Exam Focus as the load-bearing no-Goal fallback, so answering it a second time here would just recreate an uncoordinated second answer. See that Backlog row for the amendment.
+
+**What actually ships: "Add to {Review Set}" on Note Detail (frontend only).** The one piece of GPT's proposal that survives — a genuine capability gap (today, adding an already-existing note to a collection requires leaving Note Detail, going to Library, entering selection mode, and re-finding the note), user-*initiated* so it can never nag, and claims nothing about coverage/relevance so it carries none of the false-precision risk above. Justified as a friction fix on its own — no adoption-rate gate needed. Cheap because the component already exists: `AddImportedDraftsModal` in `frontend/components/notes/bulk-import-page-client.tsx` (private, file-local, `noteIds`-driven) already lists collections, adds via `addCollectionItems`, and creates-new via `createCollection` — extract it into a shared component and mount it from Note Detail with the single viewed note. No backend changes.
+
+Anti-drift: no Companion content on standalone Notes, ever; no Note Detail nudge/recommendation surface; no subject-level Official-Review-Set matching (belongs inside `v0.66.0` Explore Convergence if ever built, gated the same way); no new Backlog Index row for the guidance-surface question — folded into the existing Primary-vs-Focus row.
+
+## v0.63.0 — Ask Companion (Released)
+
+**Kicked off 2026-07-29.** Ratified by the owner the same day v0.62.0 merged to `main` — see the "AI-generated Review Sets / Runtime Companion" Backlog Index row above for the ratification history. **Reclaims the `v0.63.0` slot from `Explore Convergence`** (renumbered to `v0.64.0`) — this item's gate (owner ratification) cleared 2026-07-29 while Explore's Diagnostic Read gate is still unmet, matching this doc's established precedent (`v0.58.0`, `v0.59.0`, `v0.60.0`, `v0.61.0`, `v0.62.0` each changed hands the same way — this is the sixth).
+
+Design brief and original tiering rationale: "Future, gated — Runtime Companion (Ask Companion, Personalization)" section below. That section covered two features; **this ratification is Ask Companion (PLUS) only.** Personalization (PRO) is explicitly not in scope — it carries a second, separate gate (the open Primary-Review-Set-vs-Study/Exam-Focus philosophy question, Post-v0.40.0 Polish Backlog above) that Ask Companion does not share, since Ask Companion's only dependency was the persisted Companion existing (shipped v0.41.0/v0.42.0, confirmed live in the codebase).
+
+**v1 scope, signed off by the owner at kickoff:**
+- Grounded Q&A over a top-level Review Set's authored Companion content (`note_collections.companion`) — retrieval over static curator-authored text, not generation.
+- Access: PLUS and PRO (not FREE). PRO does not lose anything PLUS gains.
+- Scope boundary: only available on a collection whose `companion` has renderable authored content — exactly mirrors `CompanionDisplayCard`'s existing gate (hidden when Companion is null or only empty draft fields). No content to ground answers in otherwise.
+- Monthly quota: 20 sessions/user. Higher than Interview Practice's PRO-tier 10/month since grounded retrieval is cheaper than generative simulation.
+- Per-session cap: 6 turns. New mechanism — Interview Practice is a fixed-question-set flow with no existing open-ended turn-cap code to reuse; only the feature-gate/quota/rate-limit/cheap-model *pattern* carries over, not literal code.
+- Model: CRITIQUE tier (`gpt-4.1-mini` default), same cost class as Interview Practice's feedback generation.
+- Reuses the existing `AiRateLimitService` per-minute rate-limit pattern.
+
+**Implemented in the v0.63.0 release worktree.** The shipped shape uses a dedicated `ask_companion_sessions` aggregate with JSONB question/answer turn history (not quiz-session persistence), one partial-unique ACTIVE session per user/collection, rolling-period usage in `user_usage`, three authenticated endpoints, and a collection-detail-only chat panel. See `docs/features/ask-companion.md` and `RELEASES.md` for the runtime contract and shipped summary.
+
+Anti-drift: no mid-exam coaching (`EXAM_MODES.md`'s locked interactive-AI constraint is unaffected — this is a Companion-detail-page feature, not a quiz-session feature); grounded retrieval only, no free-form generation; does not touch Personalization, which stays gated separately.
+
+### Item 2 — Twice-missed concept → Ask Companion, added 2026-07-29
+
+**Scoped same day, after Ask Companion shipped.** Source: the Study Effectiveness backlog's "on-demand re-explanation" candidate (`study-effectiveness-out/01-study-effectiveness-ui-pricing.md` Flow #6), which explicitly deferred itself pending Ask Companion existing — "decide which surface owns 'I still don't get it' before scoping either." That decision is now made: Ask Companion owns it, no separate re-explanation mechanism gets built.
+
+**Implemented in the v0.63.0 release worktree.** The three scoped completion responses now carry only the concepts whose persisted consecutive incorrect streak reached the threshold. Their existing result-page Primary Review Set resolver feeds one shared CTA component; the paid deep link initializes a collection-detail draft without starting a conversation or consuming quota.
+
+**Verified before scoping, not assumed:**
+- The collection-resolution problem is already solved. `CompanionResultBridgeCard` (rendered today on Adaptive Practice, Challenge Quiz, and Quick Review result screens) already resolves `getMe()` → `primaryCollectionId` → `getCollectionGoal()`, and the product already accepts that this doesn't guarantee the just-completed note belongs to the Primary collection (`docs/features/collections.md`'s Countdown & Pacing section). This item reuses that exact resolver and tradeoff — no new note→collection resolution path needed.
+- "Missed twice" is not a signal that exists anywhere today. `ConceptHealthEntity` stores only `lastCorrectAt`/`lastIncorrectAt` timestamps, no incorrect count. This needs new backend tracking, which is why this item is backend + frontend, not a frontend-only deep-link.
+
+**v1 scope, signed off by the owner:**
+- Trigger: a new `incorrectStreak` counter on `ConceptHealthEntity`, incremented on a wrong answer and reset to 0 on a right answer — a *consecutive* miss streak, not a cumulative all-time count, so a concept the learner later masters stops qualifying. Fires the CTA at a streak of 2.
+- Scope: the same three result screens `CompanionResultBridgeCard` already appears on. Does not extend to Long Exam, Board Exam, or Interview Practice — avoids reopening `EXAM_MODES.md`'s feedback-free/no-mid-exam-coaching question for those modes.
+- Eligibility and CTA behavior:
+  - FREE: shows the same upgrade nudge `AskCompanionPanel` already uses (`getUpgradeCtas(currentPlan, "ask-companion")`), regardless of whether an eligible collection exists — a deliberate choice, since this is a high-intent moment worth pitching even without a confirmed destination.
+  - PLUS/PRO with an eligible `primaryCollectionId` (set, and its Companion has renderable content): CTA navigates to Review Set Detail with the Ask Companion panel's draft pre-filled (e.g. "Can you explain {concept} a different way?") — the learner still has to send it; it does not auto-fire and does not silently consume quota.
+  - PLUS/PRO without an eligible collection: nothing renders. Not a plan gate, so an upgrade pitch would be wrong here.
+
+**Release-shape note:** this is the second PR in `v0.63.0` to touch `AskCompanionService`'s session-start flow (Item 1 built it, this item calls into it) — crosses this doc's own "2+ PRs touching the same shared method" pressure-test trigger, so this release needs the full multi-agent pressure test at signoff, not a single `advisor()` summary.
+
+Anti-drift: same as Item 1 — no mid-exam coaching, grounded retrieval only, does not touch Personalization.
+
+**Pre-signoff pressure test, 2026-07-29 — Opus, three parallel agents, five findings fixed, seven logged as Known Limitations.** Requested explicitly by the owner given the release's size and the two-PRs-touching-one-shared-method trigger (see the "Release-shape note" above). Findings fixed, all on PR #933:
+- **Critical, fixed:** `OpenAiAskCompanionLlmService` sent prior assistant-turn history to OpenAI's Responses API with content type `input_text`, which the API only accepts on `system`/`developer`/`user` roles — assistant-role content requires `output_text`/`refusal`. Independently confirmed against OpenAI's own documented error message. Every Ask Companion conversation would have failed starting on its second question, breaking the feature's entire multi-turn premise. Fixed by making the content type role-conditional; a new test asserts the serialized payload shape for both roles.
+- **Fixed:** `AskCompanionService`'s session-start response re-read monthly usage after the native `@Modifying` quota increment in the same transaction; Hibernate's first-level cache returned the pre-increment entity, so the displayed `usedThisMonth` was always one behind actual. Fixed by passing the known post-increment count explicitly instead of re-querying — verified by direct code reading (the mocked unit test proves the arithmetic, not the Hibernate cache behavior itself, which isn't reproducible against a mocked repository).
+- **Fixed:** the collection-detail page resolved `currentPlan` from a cookie-cached `authUser.planType`, while the three result pages already resolve it from a freshly-fetched usage summary — a learner who just upgraded or downgraded could see a deep link built for the wrong plan. Now resolves the same fresh way as the result pages.
+- **Fixed:** a quiz item with no concept tag normalizes to a placeholder label (`"Unknown"` in the shared review-utils normalizer, `"Uncategorized"` in Challenge Quiz's own — two independent normalizers, not unified) that could reach `twiceMissedConcepts` and render as "Can you explain Unknown a different way?" Card now skips placeholder labels and falls through to the next real concept.
+- **Fixed, pre-existing drift, not this release's regression:** `EXAM_MODES.md` stated "Quick Review does not write `ConceptHealth`," but `git log -S` confirmed Quick Review has written it (`lastCorrectAt`/`lastIncorrectAt`, feeding due-state/mastery/Overall Readiness) since a deliberate 2026-07-11 change — the doc was simply never updated. This pressure test is what surfaced the drift, so it's corrected here even though the underlying behavior predates v0.63.0 by weeks.
+
+Known Limitations logged, not fixed this release (full reasoning in `RELEASES.md` v0.63.0): the twice-missed CTA can target the wrong Review Set and burn quota on a guaranteed refusal (materially worse than `CompanionResultBridgeCard`'s zero-cost version of the same tradeoff); `incorrect_streak` has no mode discriminator, so Board Exam/Long Exam/Interview Practice still write the counter the exposing modes read; the `V101` migration has no backfill for learners already mid-streak; the two placeholder-concept normalizers remain un-unified (only guarded at the CTA's last mile); the `?askCompanionDraft=` query param is never cleared from the URL; no scroll-to/highlight on deep-link arrival; and the session-row pessimistic lock in `askQuestion` is held for the full LLM call duration.
+
+## v0.62.0 — Knowledge Impact (Released)
+
+**Kicked off 2026-07-28.** Ratified by the owner despite its own data gate failing (3 non-official public-note creators against a 20-30+ un-park threshold) — see the "Knowledge Impact" Backlog Index row above for the full ratification reasoning and the 2026-07-28 bootstrap-test check that validated proceeding anyway (this is the worked example the gate-types taxonomy above was built around). **Reclaims the `v0.62.0` slot from `Explore Convergence`** (renumbered to `v0.63.0`) — this item's gate cleared 2026-07-28 while Explore's Diagnostic Read gate is still unmet, matching this doc's established precedent (`v0.58.0`, `v0.59.0`, `v0.60.0`, `v0.61.0` each changed hands the same way).
+
+**Scoped 2026-07-28.** Four items, all verified against the actual codebase (not assumed from the design brief): (1) the official-author predicate fix, now confirmed as a **three-way** inconsistency, not two; (2) the Knowledge Impact dashboard itself — a new authenticated, self-only endpoint plus a frontend entry point, since none exists today; (3) the conditional-rate `AnalyticsEventType` pair the 2026-09-11 checkpoint depends on; (4) the optional opt-in digest — scoping recommended deferring this given the 3-creator audience and added migration/scheduling surface, but the **owner chose to include it in this release** during the scoping review, so it ships alongside the other three. `docs/claude-prompt/company-redefinition-out/09-knowledge-impact.md`'s "Answers to the memo's 12 questions" and "Risks to avoid, if/when this is un-parked" sections remain the design brief this scoping implements: passive/pull, retrospective + aggregate framing ("helped," never "ranked"), weight downstream signal over raw view/copy counts, nothing comparative/ranked/real-time/identifying across creators, private-to-the-creator-themselves, no streaks/badges/leaderboards.
+
+**Item 1 implemented 2026-07-28.** The owner confirmed the production official account already holds `role = ADMIN`, so the predicate fix landed as a confirmed no-op today (see the "Shipped" bullet in `RELEASES.md`) — pure future-proofing, no reclassification, no backfill decision needed. `docs/features/public-library.md` and `docs/features/challenge-quiz.md` updated to describe the corrected classification rule.
+
+**Items 2+3 implemented 2026-07-28.** The release worktree now has the authenticated self-only `GET /creator-impact/me` boundary, creator-level and per-note distinct-learner aggregates that require a completed downstream session, and the owner-only `Your Impact` section on the public profile page, plus the `KNOWLEDGE_IMPACT_DASHBOARD_VIEWED` / idempotent `PUBLIC_NOTE_PUBLISHED` event pair. Audit finding corrected before commit: Codex's first pass gated the pre-existing "View Public Page" link on `/profile` behind `hasPublicNotes`, which regressed that link from unconditional to hidden for any account without a public note (losing the only path to the owner-only visibility toggle on that page) — reverted to unconditional, since that pre-existing link already satisfied the "discoverable entry point" requirement and never needed gating. Public profile response shapes and the existing visitor-visible views/copies/shares block remain unchanged. Item 4's optional digest remained separate from that work.
+
+**Item 4 implemented 2026-07-29.** Creators with public notes now have an off-by-default `Knowledge Impact digest` toggle in the existing Email Preferences panel. A new monthly retention dispatch counts distinct learners with completed downstream quiz sessions in the trailing 30 days through a separate windowed query, skips zero-count creators, and reuses the existing 30-day cooldown, per-recipient failure isolation, templates, send log, and unsubscribe category flow. The cumulative dashboard query and response, the Item 3 analytics events, and the official-author predicate are unchanged.
+
+**Pre-signoff pressure test, 2026-07-29 — one critical finding, fixed.** Three Opus agents independently audited the backend, frontend, and git/branch state after all four items merged. Two real findings:
+- **Critical, fixed:** all three "learners helped" queries (`NoteRepository.countDistinctLearnersHelpedBySourceNoteIds`/`countDistinctLearnersHelpedByCreatorUserId`/`countDistinctLearnersHelpedByCreatorUserIdSince`) gated only on `session.completedAt is not null`, with no `session.status` check. `LongExamService.forfeitSession` (line ~525) and `InterviewPracticeService.forfeitSession` (line ~399) both set `completedAt` on forfeit, not just on genuine completion — so a learner who copied a public note, started a Long Exam or Interview Practice session on the copy, and forfeited it was counted as "helped" on the dashboard, in the headline, and could trigger a real Item 4 digest email. This directly undermined the release's own core design principle (weight genuine downstream signal, not raw activity). Fixed by adding `and session.status = QuickReviewSessionStatus.COMPLETED` to all three queries — verified as a genuine regression by confirming the two new forfeit-specific tests fail without the fix and pass with it. Minimal, contained fix: only the three new queries changed, no pre-existing forfeit behavior touched.
+- **Minor, fixed:** the Settings page's new digest toggle and the public profile page's dashboard both call the same `GET /creator-impact/me`, but had divergent failure UX — the profile page shows "Could not load your impact" with Retry, while Settings silently hid the toggle on any transient failure with no error or retry affordance. Brought in line: Settings now shows an explicit "Couldn't check your public notes" notice with a Retry button in the same failure case.
+- **Also verified clean:** account-deletion/purge interaction with the digest recipient query, Item 1 × Items 2+3 interaction (zero shared surface), scheduler collision risk (daily/weekly/monthly crons don't overlap, distinct cooldown types), and the entire git/branch state from the earlier tracking-misconfiguration incident (all 6 checks passed — `main` still exactly where the "leave it" decision left it, release branch is a clean linear history, sign-off merge will be conflict-free).
+
+### Context
+
+Verified while scoping: this feature has almost no infrastructure gap. `NoteEntity` already carries `copiedFromNoteId`/`copiedFromUserId`/`copiedFromPublic` (currently lines 64/67/73) recording exactly which public note a copy came from, and `QuickReviewSessionEntity` already carries `noteId` directly (currently line 36) — so "did a copy of this note lead to a real study session" is a plain join across two already-managed entities, the same unmapped-join pattern `AnalyticsEventRepository.countPublicNoteEventsByTypeAndNoteIds` (currently lines 280-292) already uses between `AnalyticsEventEntity` and `NoteEntity`. No new tables. Confirmed only one attribution path exists to reason about: every "quiz yourself on this note" CTA on a public note (`PublicSeoCopyCta`, `frontend/components/notes/public-seo-copy-cta.tsx`, `action="quickReview"`) calls `copyNote(...)` first and redirects to the copy — there is no code path that starts a `quick_review_sessions` row against someone else's original note directly. Also confirmed: v0.60.0's Official Challenge Quiz template pooling only ever seeds from **official**-authored notes (`OfficialChallengeQuizTemplateService.isEligibleOfficialTemplate`, currently line 256) — community-authored notes are never eligible source material for pooling, so a community creator's downstream sessions are never laundered through the shared template bank and stay fully traceable back through the copy chain.
+
+### Item 1 — Official-author predicate fix
+
+**Classification: small, direct implementation (Claude Code), no Codex prompt.**
+
+Confirmed **three**, not two, independent copies of "is this user an official author," and they disagree:
+- `PublicProfileService.isOfficialAuthor(UserEntity)` (currently lines 196-198) — the reference form: `role == ADMIN OR email == OFFICIAL_AUTHOR_EMAIL` (constant at line 40, `einar.lagera@gmail.com`).
+- `PublicLibraryRepositoryImpl.officialAuthorPredicate()` (currently lines 320-329) — SQL, checks `role = 'ADMIN'` only. Feeds the Public Library's OFFICIAL/COMMUNITY source filter (`appendSourceFilter`, currently lines 284-318) — **user-visible**, not internal-only.
+- `OfficialChallengeQuizTemplateService.isOfficialAuthor(UUID)` (currently lines 267-271) — Java, but also checks `role == ADMIN` only, matching the SQL form rather than the reference form. Gates `isEligibleOfficialTemplate` (line 256) and `resolveTemplate` (line 108) — i.e. **whether a note is eligible to seed the shared Official Challenge Quiz template pool at all.**
+
+Fix: bring both the SQL and the template-service checks in line with `PublicProfileService`'s reference form (role OR official email), not just the SQL one the original gate-query note called out.
+- `PublicLibraryRepositoryImpl.officialAuthorPredicate()`: add the email check to the SQL, bound as a parameter (`:officialAuthorEmail`) rather than a literal, consistent with how `:deletedUserId` is already conditionally bound in `appendSourceFilter` (currently lines 296-298).
+- `OfficialChallengeQuizTemplateService.isOfficialAuthor(UUID)`: add `|| OFFICIAL_AUTHOR_EMAIL.equalsIgnoreCase(user.getEmail())` to the existing role check.
+- Do not fully consolidate the three copies into one shared source of truth in this pass — flag it as a follow-up hardening item (a fourth copy is exactly how this drifted in the first place), but keep this fix minimal and reviewable.
+
+**Blast radius — verify before shipping, not just fixing the code:** if the owner's own account (`einar.lagera@gmail.com`) does not currently have `role = ADMIN` in production, this fix is a live behavior change, not just future-proofing: (a) the owner's personally-authored public notes reclassify from COMMUNITY to OFFICIAL in the Public Library filter — changes what a COMMUNITY-source-filtered visitor sees today; (b) those same notes become newly eligible for Official Challenge Quiz template seeding, which may need the same kind of manual backfill trigger v0.60.0 needed for already-published Official content. **Specifically worth checking, not just asserting:** the 2026-07-28 gate query (`14-knowledge-impact-gate-check.sql`, which already used the wider Java-form definition) found only 4 community notes total — if today's narrower SQL predicate is why some of those 4 are misclassified as community, the Public Library's COMMUNITY filter could return a visibly smaller result set (in the limit, empty) once fixed. That's a user-visible before/after the owner should see and decide on, not something to silently let Codex change. Check the account's actual `role` in production before implementation — this determines whether the fix is a no-op today (already `ADMIN`) or an active reclassification (needs the RELEASES.md bullet and a note in `docs/features/public-library.md`, plus a decision on backfill).
+
+Files: `backend/src/main/java/com/studysnap/backend/repository/PublicLibraryRepositoryImpl.java`, `backend/src/main/java/com/studysnap/backend/service/OfficialChallengeQuizTemplateService.java`.
+
+Sequencing: land first — Item 2's "who counts as a creator" framing and Item 1's fix should agree from the start, rather than shipping the dashboard against the still-inconsistent predicate and re-deriving numbers later.
+
+### Item 2 — Knowledge Impact dashboard (backend + frontend)
+
+**Classification: medium — write a Codex prompt.** New endpoint, new service, new frontend surface plus an entry point that doesn't exist today.
+
+**Surface decision, made during scoping:** do **not** extend `PublicProfileResponse`/`PublicProfileController` (currently `@RequestMapping("/public")`, `permitAll()` at `SecurityConfig.java` line 49, servable to anonymous visitors). Owner-private aggregates have no business living in a response shape that's cacheable/servable without auth — one caching mistake away from leaking. Instead: a new controller outside `/public/**`, which `SecurityConfig`'s existing `anyRequest().authenticated()` (line 57) protects by default with zero new security config.
+- New `CreatorImpactController` (`@RequestMapping("/creator-impact")`), single endpoint `GET /creator-impact/me`, resolves the creator from `@AuthenticationPrincipal` only — no path parameter, cannot be pointed at another user's id.
+- New `CreatorImpactService`, separate from `PublicProfileService` to keep the privacy boundary structural, not just conventional.
+- New repository query (`NoteRepository`, alongside the existing `countCopiedPublicNotesBySourceNoteIds` at line 211): per source note, `count(distinct copy.ownerUserId)` where a copy (`copiedFromNoteId = sourceNote.id and copiedFromPublic = true`) has at least one `QuickReviewSessionEntity` row with `noteId = copy.id and completedAt is not null` — an unmapped join across `NoteEntity` and `QuickReviewSessionEntity`, same pattern already in use elsewhere in this codebase. A second, creator-scoped query (not summed from the per-note one) gives the true headline "N distinct learners helped" across all of a creator's notes — state explicitly in the UI copy that the per-note breakdown can sum higher than the headline (a learner who copied two of the same creator's notes), so it doesn't read as a bug the first time someone notices.
+- Response: headline distinct-learners-helped count, plus a per-note breakdown (title, distinct learners, with raw views/copies shown but visually de-emphasized per the design brief's "weight downstream signal over raw counts").
+- **Decision, stated explicitly for Codex, corrected during scoping review:** "helped" requires `completedAt is not null` on the downstream session, not merely a row existing. Verified why the weaker bar fails: `QuickReviewSessionService.startSession` (currently lines 72-113) writes the `quick_review_sessions` row immediately at session start, before any question is answered, and the "quiz yourself" CTA (`PublicSeoCopyCta`) copies the note and redirects straight into that same start flow — so "a session row exists" is nearly equivalent to "clicked the CTA," which collapses the metric back into a copy count with extra steps and defeats the brief's "weight downstream signal over raw counts" requirement. Requiring completion is the honest bar for "helped."
+
+**Entry point — verified there isn't one today, this is in scope, not optional:** `buildPublicProfilePath` (`frontend/lib/public-note-path.ts` line 49) and the `/public/profile/[userId]` page exist, and the page already gates owner-only affordances behind `isOwner` (`public-profile-page-client.tsx` line 108, e.g. the public-profile-visibility toggle at line 476). But grepping the whole frontend for a link to a user's *own* profile from any authenticated surface (`/profile`, `/settings`, dashboard) turns up nothing — today a creator can only reach this page by already knowing their own `userId`/username. Add a discoverable "View your public profile" (or equivalent) link from the existing `/profile` account page (`frontend/app/profile/page.tsx`) gated on `publicNotesCount > 0` or `publicProfileVisible`; exact placement/copy is an implementation decision, not a scoping one. The "Your Impact" section itself renders on the existing `/public/profile/[userId]` page, gated by the existing `isOwner` boolean, below the current public stats block (which stays as-is, unchanged, still visible to all visitors).
+- Fire a new `KNOWLEDGE_IMPACT_DASHBOARD_VIEWED` event via the existing `AnalyticsPageViewTracker` (`frontend/components/analytics/page-view-tracker.tsx`) when the owner-only Impact section mounts — same pattern as `PUBLISHED_PLANS_VIEWED`. Not fired for non-owner visitors to the same page.
+
+Files: new `CreatorImpactController.java`, `CreatorImpactService.java`, `CreatorImpactResponse.java` DTO, a new `NoteLearnersHelpedProjection` (mirroring `NoteCopyCountProjection`); `NoteRepository.java` (new query); `AnalyticsEventType.java` (new value); `frontend/lib/api.ts` (new `getCreatorImpact()` call + type), `frontend/components/public/public-profile-page-client.tsx` (new owner-gated section), `frontend/app/profile/page.tsx` (new entry-point link).
+
+### Item 3 — Conditional-rate analytics event
+
+**Classification: small, direct implementation (Claude Code) — but land in the same PR as Item 2, not separately, since the dashboard-view event is what this item measures.**
+
+Two new `AnalyticsEventType` values needed — neither exists today:
+- `KNOWLEDGE_IMPACT_DASHBOARD_VIEWED` — added as part of Item 2 above.
+- `PUBLIC_NOTE_PUBLISHED` — does not exist in any form today. `NoteService.updateVisibility` (currently lines 376-388) sets `NoteVisibility` on a note and saves it, but tracks no analytics event at all. Fix: capture the note's visibility before the mutation, and after saving, call `analyticsService.trackEvent(ownerUserId, AnalyticsEventType.PUBLIC_NOTE_PUBLISHED, noteId, metadata)` (same `AnalyticsService.trackEvent` signature already used at `NoteService.java` line 296 for `PUBLIC_NOTE_COPIED`) **only when** the prior visibility was not `PUBLIC` and the new one is — a re-save of an already-public note must not look like a fresh "publish" for rate purposes. This is a generically useful hygiene event beyond Knowledge Impact (the product currently has no record of when a note became public, only `updatedAt`, which any unrelated edit also touches) — not namespaced to this feature.
+
+Both additive `enum` values, no migration — `analytics_events.event_type` is a plain `VARCHAR(64)` with no check constraint (`V25__analytics_events.sql`), confirmed by reading the migration directly.
+
+**The actual checkpoint query, written now** (per this doc's own gate-types rule that a checkpoint must be operable at its stated date, not designed later):
+
+```sql
+-- Conditional publish-after-view rate. Only counts a view whose 30-day window has
+-- already closed (created_at <= now() - 30 days) so an in-flight view isn't scored
+-- as a non-republish. Safe to run any time on/after 2026-08-31 for full coverage,
+-- and again at the 2026-09-11 checkpoint itself.
+select
+  count(distinct viewed.user_id)                                            as creators_who_viewed,
+  count(distinct case when republished.user_id is not null
+                       then viewed.user_id end)                             as creators_who_republished
+from (
+  select user_id, min(created_at) as first_viewed_at
+  from analytics_events
+  where event_type = 'KNOWLEDGE_IMPACT_DASHBOARD_VIEWED'
+    and created_at <= now() - interval '30 days'
+  group by user_id
+) viewed
+left join analytics_events republished
+  on republished.user_id = viewed.user_id
+ and republished.event_type = 'PUBLIC_NOTE_PUBLISHED'
+ and republished.created_at > viewed.first_viewed_at
+ and republished.created_at <= viewed.first_viewed_at + interval '30 days';
+```
+
+N = 30 days, chosen so the window reliably closes before the 2026-09-11 checkpoint even for a view that happens shortly after this release ships (late July/early August + 30 days closes by early September). **Honest limit, stated up front so it doesn't get argued in September:** on a 3-creator base, this rate's denominator (`creators_who_viewed`) is likely to be single-digit or zero for a long time — this event pair explains *mechanism* (did anyone even look), it does not replace the checkpoint's actual kill criterion, which stays the raw community-publish-rate trend already on record in the Backlog Index (1 → 3 → 0, May/June/July). Both numbers should be reported together at the checkpoint, not this rate alone.
+
+Files: `AnalyticsEventType.java`, `NoteService.java` (`updateVisibility`), `frontend/lib/api.ts` (the `AnalyticsEventType` union, currently starting line 478, must gain both new values or `trackAnalyticsEvent` calls referencing them won't type-check).
+
+### Item 4 — Optional impact digest (backend + frontend)
+
+**Scoping recommended deferring this item — real surface area (a migration, a new preference field, a new scheduled job) to reach an audience of 3 people with no read on it yet, while the ratification's non-negotiable items are only the dashboard and the conditional-rate event.** The owner reviewed that tradeoff during scoping and chose to include it in this release anyway — scoped in full below, not treated as a lesser afterthought because of the recommendation.
+
+**Classification: small-to-medium — write a Codex prompt.** Touches a migration, an entity, two DTOs, a service, a new scheduled job, and a frontend preferences toggle — past the isolated 1-3-file bar.
+
+Design, reusing the existing Email Preferences category system exactly as it works today, never a new notification channel:
+- New nullable-at-the-column-level, opt-in (`DEFAULT false`) `knowledge_impact_digest_reminders_enabled` boolean column via a new migration `V99__add_knowledge_impact_digest_preference.sql` (next available after `V98__add_llm_usage_to_quiz_sessions.sql`). Default **false**, never default-on — this doc's own standing lesson from the due-concepts digest.
+- `UserEntity`: new `Boolean knowledgeImpactDigestRemindersEnabled` field, alongside the existing four reminder booleans (currently lines 106-115).
+- `UpdateEmailPreferencesRequest` and `MeResponse` (which already carry the sibling `weeklySummaryRemindersEnabled`/`dueConceptsDigestRemindersEnabled` fields) both gain the new field; `AuthService.updateEmailPreferences` (currently lines 435-441) sets it alongside the existing four.
+- Frontend: the existing email-preferences panel (wherever the four current reminder toggles render) gains a fifth toggle, shown only for an account with ≥1 public note — surfacing an opt-in toggle for a digest that account can never receive anything meaningful from is confusing, not opt-in-friendly.
+- New scheduled dispatch, modeled directly on `RetentionEmailScheduler`/`RetentionService`'s existing weekly path (`RetentionEmailScheduler.runWeekly`, currently lines 29-34; `RetentionService.sendWeeklySummaryEmails`/`dispatchWeeklySummaryEmails`, currently lines 178/410): **monthly**, not weekly — the design brief allows either, and monthly gives more signal per email at a 3-creator scale, matching its own "low-frequency" instruction. New `@Scheduled` cron property (e.g. `studysnap.retention.knowledge-impact-digest-monthly-cron`), reusing `CreatorImpactService`'s aggregate query from Item 2.
+- **Send-skip rule, a deliberate design decision, not an afterthought:** only send to a creator whose distinct-learners-helped count, counted over a trailing-30-day window (not cumulative-to-date), is greater than zero. Sending "0 new learners this month" repeatedly to a near-single-digit creator base is exactly the pity-metric risk the design brief names, and repeats this doc's own `v0.48.0` digest-lift mistake in spirit (a dispatch nobody wanted or read). No new state/event needed for this — a windowed variant of Item 2's own query, not a persisted "last sent" timestamp.
+
+Files: new migration, `UserEntity.java`, `UpdateEmailPreferencesRequest.java`, `MeResponse.java`, `AuthService.java` (`updateEmailPreferences`), a new scheduled job class (or an addition to `RetentionEmailScheduler`/`RetentionService`), the frontend email-preferences component, `application.yaml` (new cron property).
+
+Sequencing: depends on Item 2's `CreatorImpactService` query existing first; land after Items 1-3.
+
+### Overall Sequencing
+
+Item 1 first (predicate fix). Item 2 and Item 3 together in one Codex prompt/PR (the dashboard's view event and the publish event are one measurable unit — shipping one without the other repeats the exact unmeasurable-checkpoint mistake this doc's gate-types section already named). Item 4 last, as its own Codex prompt/PR, since its extra migration/scheduling surface is unrelated to the checkpoint mechanics of Items 2-3 and shouldn't complicate that audit.
+
+### Verification
+
+- **Item 1:** confirm the production `einar.lagera@gmail.com` account's actual `role` before/after; confirm Public Library COMMUNITY-filtered results and Official Challenge Quiz template eligibility change only for that account's notes, nothing else.
+- **Item 2:** as a creator with ≥1 public note and ≥1 downstream copy with a *completed* session, confirm the dashboard shows a distinct-learner count that matches a manual query; separately confirm a copy whose session was only started (never completed) does **not** count, to guard against the metric silently regressing to a copy count; confirm a visitor other than the owner never sees the section and `GET /creator-impact/me` 401s when unauthenticated; confirm the new entry-point link only appears when the account has public notes.
+- **Item 3:** confirm `PUBLIC_NOTE_PUBLISHED` fires once on a private→public transition and not on a public→public re-save; confirm `KNOWLEDGE_IMPACT_DASHBOARD_VIEWED` fires once per owner page load of the Impact section; run the checkpoint query above against a hand-seeded local case to confirm it returns the expected 0/1 shape before relying on it in September.
+- **Item 4:** confirm the toggle defaults to off for existing and new accounts; confirm a creator with zero new completed downstream sessions in the trailing 30 days receives no email that cycle; confirm a creator with ≥1 new one does, with a count matching a manual query; confirm the toggle is hidden/inert for an account with zero public notes.
+- Full regression before PR handoff for commit: `./mvnw clean install` (backend) and `npm test` + `tsc --noEmit` (frontend), per this project's standing build-before-commit rule.
+
+## v0.61.0 — Challenge Quiz Quota Increase (Released)
+
+**Scoped 2026-07-28.** Two items ratified by the owner the same day, overriding this doc's own prior data/instrumentation gates for the same underlying proposal — see the "Challenge Quiz daily quota... price decrease" Backlog Index row for the full ratification reasoning and history, including why a genuinely-daily model was rejected in favor of a bigger monthly ceiling. **Reclaims the `v0.61.0` slot from `Explore Convergence`** — this item's gate (owner ratification) cleared 2026-07-28, while Explore's gate (the Diagnostic Read showing a discovery problem) is still unmet, following this doc's own established precedent for reclaiming a minor-version slot when a different item's gate clears first (`v0.58.0`, `v0.59.0`, and `v0.60.0` each changed hands the same way). Explore Convergence renumbered to `v0.62.0` at the time, now `v0.63.0` — see the Current Release Baseline note and Phase 2 section below.
+
+**Implemented 2026-07-28.** Both items are complete in the release worktree: backend/frontend quota truth is aligned at FREE 20 / PLUS 100 / PRO 200, and Challenge Quiz real-LLM shortfalls now persist cumulative model/token usage on `quick_review_sessions` while pooled-only sessions remain null. Release signoff remains pending.
+
+### Context
+
+Two items:
+1. **Monthly quota increase.** Challenge Quiz's monthly limits (FREE 5, PLUS 25, PRO 50) go to FREE 20, PLUS 100, PRO 200 — a uniform 4x across all three tiers, keeping today's 1:5:10 tier ratio intact. Owner's philosophy, stated explicitly: a paying learner should feel "I can just study" instead of tracking a quota, and real study behavior is bursty (exam-week crunch), not evenly spread across a month — a monthly ceiling respects that shape better than a daily one would. Reuses the existing rolling-billing-period `UserUsageEntity` tracking exactly as it works today; no new infrastructure, no migration for this item.
+2. **Challenge Quiz LLM token/cost telemetry.** Folded into this release's scope, not treated as a precondition or a separate gate — raising the ceiling this much with zero cost visibility today would mean a real cost blowup is only visible after the invoice. This makes this release's own effect on spend observable rather than blind, without blocking the quota change on building it first.
+
+Pricing (the other half of the original held Backlog Index item) is explicitly deferred, not part of this release — the owner wants to observe paywall conversion, onboarding retention, and usage after the quota increase lands before revisiting price, rather than move both levers at once and lose the ability to attribute effect to either one.
+
+### Item 1 — Monthly quota increase (FREE 20 / PLUS 100 / PRO 200)
+
+**Classification: small, direct implementation (Claude Code, no Codex prompt needed) in isolation** — but see Overall Sequencing below for why it's proposed to ride along in the same Codex prompt as Item 2 instead.
+
+Two sources of truth carry these numbers today, confirmed by direct file read, and both must move together or the marketing copy and the actually-enforced limit will disagree:
+- **Backend enforcement:** `backend/src/main/resources/application.yaml` (currently lines 103-105) — `free-monthly-challenge-quiz-limit: ${FREE_MONTHLY_CHALLENGE_QUIZ_LIMIT:5}`, `plus-monthly-challenge-quiz-limit: ${PLUS_MONTHLY_CHALLENGE_QUIZ_LIMIT:25}`, `pro-monthly-challenge-quiz-limit: ${PRO_MONTHLY_CHALLENGE_QUIZ_LIMIT:${PREMIUM_MONTHLY_CHALLENGE_QUIZ_LIMIT:50}}`, read via `StudySnapProperties.resolveMonthlyChallengeQuizLimit` (currently line 150). This is what `ChallengeQuizService.assertChallengeQuizQuotaAvailable` actually enforces.
+- **Frontend marketing/display copy:** `frontend/lib/pricing-config.ts`'s `pricingConfig` object (currently lines 9, 19, 29 — `challengeQuizzesPerMonth: 5/25/50` for free/plus/pro) — a **separate, independently-maintained static constant, not derived from the backend config at all.** Confirmed consumers of this same shared object: `frontend/src/config/plans.ts` (pricing-card copy, e.g. "Practice more often with 25 quizzes each month"), `frontend/app/settings/page.tsx`, `frontend/app/dashboard/dashboard-monthly-usage-card.tsx`, `frontend/components/notes/private-note-detail-page-client.tsx`, `frontend/components/notes/generated-quiz-preview-page-client.tsx` — one edit to `pricing-config.ts` propagates to all of them since they all read the same object.
+
+Fix:
+- Update the three env-var default values in `application.yaml` (lines 103-105) from 5/25/50 to 20/100/200. These stay env-var overridable in prod without a redeploy if the numbers ever need a fast adjustment.
+- Update `frontend/lib/pricing-config.ts`'s `challengeQuizzesPerMonth` values (lines 9, 19, 29) to match exactly.
+- Do not touch any other quota field in either file (study packs, adaptive practice, exports, etc.) — this item is Challenge Quiz only.
+
+Files: `backend/src/main/resources/application.yaml`, `frontend/lib/pricing-config.ts`; update `frontend/app/pricing/page.test.tsx` (currently asserts "5 Quizzes / month", "25 quizzes each month", "50 quizzes each month" — lines 85-87) and any other test asserting the old numbers.
+
+Sequencing: independent of Item 2, land in either order.
+
+### Item 2 — Challenge Quiz LLM token/cost telemetry
+
+**Classification: small-to-medium — write a Codex prompt.** Touches an interface, two implementations, a migration, and service-layer wiring — past the isolated 1-3-file bar even though the change itself is narrow and low-risk.
+
+Confirmed mechanism: `OpenAiLlmStudyPackService` already extracts real per-call token usage for Study Pack generation via `extractUsageMetadata(responseJson, fallbackModel)` (currently line 562), returning a `UsageMetadata(modelUsed, inputTokens, outputTokens, ...)` record (currently line 2602), persisted onto `StudyPackEntity`'s existing `modelUsed`/`inputTokens`/`outputTokens`/`cachedInputTokens` columns (currently lines 72-81). Challenge Quiz's generation path never calls this helper: `generateChallengeQuiz`/`generateMoreChallengeQuiz` (currently lines 1692, 1721) funnel through the shared private `generateQuizWithSchemaOnce` (currently line 2063), which reads `response.payload()` off the returned `JsonSchemaResponse<PromptGeneratedQuiz>` (currently line 2596 — `record JsonSchemaResponse<T>(T payload, JsonNode responseJson)`) but never touches `response.responseJson()` — the raw data `extractUsageMetadata` needs is already sitting right there, just discarded. `ChallengeQuizService` calls this LLM path from two sites: `startSession`'s bank/template shortfall generation (currently line 302) and `generateMoreQuestions`'s "+5" shortfall generation (currently line 679) — both are real LLM calls only when the bank/template claim doesn't fully cover the requested count; a fully bank-sourced session or batch makes no LLM call at all and should record no usage for that call.
+
+Fix:
+- Extend `generateQuizWithSchemaOnce` (or a thin wrapper around it) to also call the existing `extractUsageMetadata(response.responseJson(), model)` and return it alongside the quiz items — a return-shape change on `LlmStudyPackService.generateChallengeQuiz`/`generateMoreChallengeQuiz` (interface), both implementations (`OpenAiLlmStudyPackService`, `StubLlmStudyPackService`), and `QuizGenerationService`'s wrapping methods. The stub/mock path (`MockQuizGenerationUtils`, used by `StubLlmStudyPackService`) never calls the LLM, so it returns null/zero usage — nothing to report.
+- Add nullable `model_used` (varchar), `input_tokens`, `output_tokens`, `cached_input_tokens` (integer) columns to `quick_review_sessions` via a new Flyway migration (`V98__`, next available after `V97__add_quota_exempt_to_quiz_sessions.sql`) — mirroring `StudyPackEntity`'s existing column shape exactly, not inventing a new one.
+- In `ChallengeQuizService`, accumulate these onto the session at both call sites: `startSession`'s initial shortfall (currently ~line 302, before `markSessionReady`) sets the session's usage columns for the first time; `generateMoreQuestions`'s "+5" shortfall (currently ~line 679) **adds to the existing values rather than overwriting them**, so the columns represent the session's cumulative real-LLM cost across its whole lifetime, not just the initial call. A session that never needs the LLM (fully bank/template-sourced, at start and on every "+5") keeps these columns null — that itself is a meaningful signal (pooling is working), not a gap to backfill.
+- Board Exam Mode, Long Exam, and Adaptive Practice are explicitly out of scope — this is Challenge Quiz only, matching the original held-item row's "at minimum for Challenge Quiz" framing. Do not extend to other modes in this pass.
+- This is read-only telemetry, not a gate or a limiter — nothing about session start/completion/quota enforcement changes. A failure to extract usage (e.g. an unexpected response shape) must not block or fail the generation itself — only skip recording usage for that call.
+
+Files: `backend/src/main/java/com/studysnap/backend/service/LlmStudyPackService.java`, `backend/src/main/java/com/studysnap/backend/service/impl/OpenAiLlmStudyPackService.java`, `backend/src/main/java/com/studysnap/backend/service/impl/StubLlmStudyPackService.java`, `backend/src/main/java/com/studysnap/backend/service/QuizGenerationService.java`, `backend/src/main/java/com/studysnap/backend/service/ChallengeQuizService.java`, `backend/src/main/java/com/studysnap/backend/entity/QuickReviewSessionEntity.java`, new migration file, `ChallengeQuizServiceTest.java`.
+
+Sequencing: independent of Item 1, land in either order.
+
+### Overall Sequencing
+
+Both items are independent — no required order. Item 1 is small enough to implement directly (Claude Code), but proposed here to ride along inside the same Codex prompt as Item 2 instead of shipping as a separate PR — matches this session's own established pattern for v0.60.3 (bundling several small items into one prompt/PR to run the mandatory post-delivery audit once instead of twice) and keeps the quota-number change and its own observability landing atomically, rather than a window where the ceiling is already raised but usage still isn't being captured.
+
+### Verification
+
+- **Item 1:** confirm a new FREE/PLUS/PRO account's `monthlyLimit` in `ChallengeQuizStartResponse` reads 20/100/200; confirm the pricing page displays the updated numbers.
+- **Item 2:** start a Challenge Quiz session that requires real LLM generation (a private note with no bank/template coverage) and confirm the session's `input_tokens`/`output_tokens`/`model_used` are populated; start a session fully served from the bank/template (an Official-content study pack) and confirm these columns stay null; trigger a "+5 More" that hits the LLM and confirm the values accumulate rather than reset.
+- Full regression before PR handoff for commit: `./mvnw clean install` (backend) and `npm test` + `tsc --noEmit` (frontend), per this project's standing build-before-commit rule.
+
+## v0.60.3 — Challenge Quiz Shaping (Released, base branch `releases/v0.60.3`)
+
+**Scoped 2026-07-27, kicked off 2026-07-28.** All four root causes below were confirmed by direct file read in the same session this was scoped — re-verify file:line anchors first if code has shifted since. Patch release off `v0.60.2`, following this project's existing patch-release convention — does not consume the `v0.61.0` minor-version slot (still reserved for Explore Convergence, still gated on the Diagnostic Read re-read). Theme broadened from pure Challenge Quiz shaping to also include Item 4 (onboarding), added the same day after a wider pricing/quota/growth discussion narrowed to two low-risk, additive pieces worth shipping now while the rest (a daily Challenge Quiz quota model, a price decrease) was explicitly held pending LLM cost instrumentation that does not exist yet — see this doc's Backlog Index row for the full held-items reasoning. **Items 1-3 are clear to branch and implement now. Item 4 stays gated at its own kickoff** (see Item 4's sequencing-risk paragraph below) — do not start Item 4's branch until the prod cohort query comes back clean.
+
+### Context
+
+Four items:
+
+1. **Adaptive initial question count.** Reopens the `v0.60.0`-era "start with more than 5 questions" idea, previously rejected as a cost argument (see the Backlog Index row's superseded verdict). Reopened on a different, accepted basis: reducing "+5 Questions" mid-session click friction and improving pacing/commitment — mode-wide, not Official-content-only, which resolves the original provenance-inconsistency objection.
+2. **Redo Missed Questions silently returns the wrong session.** Surfaced by direct user testing: clicking "Redo Missed Questions" returned the full original question set, not just the missed ones. Traced to the already-documented v0.58.0 known limitation ("a redo-missed request can silently resume an unrelated in-progress session… matches only on session type, not sub-mode"), deferred twice already (logged in v0.58.0, explicitly declined in v0.60.1 as "widening blast radius for uncertain benefit"). Verified via direct read that this — not a claim-query bug — is the actual mechanism (see Item 2 below).
+3. **No guard against submitting with unanswered questions.** A distinct, unrelated gap raised in the same conversation: `handleSubmit` finalizes immediately on a manual Submit click with zero awareness of how many questions are still unanswered. Not a substitute for Item 2 — Redo Missed is a post-session drill loop over questions answered *wrong*; this is an in-session guard over questions left *blank*. Both are worth doing; neither replaces the other.
+4. **Onboarding coverage-gap capture.** Unrelated to Challenge Quiz — raised in the same conversation as part of a broader growth discussion. When a Student's course/program has no matching Official Review Set at onboarding, that moment currently produces no signal at all; capturing it cheaply tells the product what to curate next, and doubles as a lower-risk substitute for the discussion's community-authorship growth bet (see Item 4 below for why that distinction matters).
+
+### Item 1 — Adaptive initial question count (10/12/15) — Shipped, see `RELEASES.md`
+
+**Classification: small, direct implementation (Claude Code, no Codex prompt needed).** Single file, ~3 line change.
+
+`ChallengeQuizService.resolveGenerationProfile` (currently ~line 846) already computes a score-adaptive `ChallengeGenerationProfile(questionCount, difficulty)` — `LOW_SCORE_QUESTION_COUNT=10` / `MID_SCORE_QUESTION_COUNT=12` / `HIGH_SCORE_QUESTION_COUNT=15` (currently lines 137-139), based on the learner's last Quick Review score, same profile already used for Challenge's post-v0.60.1 score-based difficulty fallback. Confirmed via grep: `.questionCount()` is called **nowhere** in this file — only `.difficulty()` is ever read from the returned profile. Every Challenge session start hardcodes `INITIAL_CHALLENGE_QUIZ_COUNT=5` instead (currently line 204, the non-Board-Exam branch of `startSession`'s `quizCount` ternary).
+
+Fix:
+- In `startSession`'s `quizCount` ternary (currently lines 202-204), replace the flat `INITIAL_CHALLENGE_QUIZ_COUNT` fallback with `profile.questionCount()` for the Challenge (non-Board-Exam) branch only.
+- **Do not touch the Board Exam branch** (`resolveBoardExamQuestionCount(boardExamSourceCount)`, same ternary) — Board Exam Mode stays exactly as it is today, fixed count, no adaptive behavior. This is an explicit exclusion, not an oversight — say so in the PR description.
+- **`startRedoMissedSession`'s own count stays fixed, not adaptive.** It independently references `INITIAL_CHALLENGE_QUIZ_COUNT` (currently line 406) as the `count` argument to `claimIncorrectQuestions` — this is a separate call site, unaffected by the `quizCount` change above unless explicitly touched. Recommend leaving it fixed: Redo Missed is a smaller, targeted catch-up loop, not a full new session, and scaling it up would work against its own purpose. Confirm this reasoning still holds at implementation time rather than assuming symmetry with Item 1.
+- `MAX_CHALLENGE_QUIZ_QUESTIONS=20` and `GENERATE_MORE_BATCH_SIZE=5` are unchanged — `generateMoreQuestions`'s existing `Math.min(GENERATE_MORE_BATCH_SIZE, MAX_CHALLENGE_QUIZ_QUESTIONS - existingQuiz.size())` clamp already handles a shorter final "+5" batch regardless of starting count, so a session starting at 15 still gets exactly one clamped batch to reach 20, no extra logic needed.
+
+Files: `backend/src/main/java/com/studysnap/backend/service/ChallengeQuizService.java`, `ChallengeQuizServiceTest.java` (test: a session starts with 10/12/15 questions matching the resolved profile instead of a flat 5, for each score band; a regression test that Board Exam's question count is unaffected; a regression test that `startRedoMissedSession` still requests a fixed count).
+
+Sequencing: fully independent, land anytime.
+
+### Item 2 — Redo Missed Questions returns the wrong session — Shipped, see `RELEASES.md`
+
+**Classification: small-to-medium, direct implementation (Claude Code, no Codex prompt needed) — same flavor as v0.60.2 Item 2's lock-recheck fix.** Confined to `ChallengeQuizService.java` + its test.
+
+Confirmed mechanism: `startRedoMissedSession` (currently lines 377-414) calls the exact same `resolveExistingChallengeSession(userId, studyPackId, studyPack, planType)` (currently line 382) that `startSession` uses — this resolver matches on `userId + studyPackId + sessionMode=CHALLENGE` only, with no notion of *which* sub-flow the caller wants. Any lingering `GENERATING`/`IN_PROGRESS` Challenge session on that study pack — an ordinary session, not a redo — gets returned verbatim, full original question set included, before the method ever reaches `claimIncorrectQuestions` (currently line 401). This reproduces the reported bug exactly whenever a stale ordinary session exists on the same study pack. Independently verified this is the actual and only mechanism: `ChallengeQuizQuestionBankRepository.findIncorrectClaimableForUpdate` (currently lines 30-46) correctly filters `question.lastKnownOutcome = :outcome and question.claimedSessionId is null` — the claim query itself is clean, so a wrong-question-set result can only come from the session-resolution layer returning the wrong session, not from the claim logic returning the wrong questions.
+
+**Design (revised after second-opinion review):** the original draft proposed reusing `session.setQuotaExempt(true)` (currently line 411, set in exactly one place in this file — `startRedoMissedSession` itself) as the disambiguating signal. A second-opinion review flagged this as conflating two unrelated concerns — billing exemption and session provenance — under a field name that already reads as "billing consequence," not "which sub-flow created this session." Confirmed on inspection: the field genuinely is named for its billing effect, not its origin, so the concern holds; the original draft optimized for "no schema change" without stress-testing the semantics hard enough.
+
+Fix instead: add a dedicated `sessionState` JSONB marker mirroring the existing `QuizSessionStateUtils.withPoolSourced` pattern (already used for Board Exam's pool-sourcing flag in this file and in `LongExamService.java`) — e.g. `QuizSessionStateUtils.withRedoMissedSource(sessionState, true)`, read via a paired `isRedoMissedSource(sessionState)` accessor. This keeps the "no new column" property the original draft was after, without the semantic conflation.
+
+**`quotaExempt` is not replaced — it stays, and `startRedoMissedSession` sets both fields.** They serve two different consumers reading two different facts, and conflating them back together would reintroduce the same bug in a new shape:
+- `quotaExempt` (currently line 411) → read by `countChallengeQuizUsedThisMonth` to exclude the session from the monthly quota count. A billing decision, untouched by this fix.
+- The new `isRedoMissedSource` sessionState marker → read only by `resolveExistingChallengeSession`'s new provenance check below, to decide whether a found in-progress session is itself a prior redo-missed session. A session-identity decision, unrelated to billing.
+
+**An implementer must set both fields, not swap one for the other.** If the marker replaces `quotaExempt` instead of joining it, redo sessions silently start counting against the monthly quota — a regression, not a refactor. Say this explicitly in the PR description, not just in code comments.
+
+Fix:
+- Give `resolveExistingChallengeSession` a way to require the candidate carry the `isRedoMissedSource` marker (e.g. an added boolean parameter, or a second private variant) — `startSession` passes/behaves as today (no requirement), `startRedoMissedSession` passes the new requirement.
+- If `startRedoMissedSession` finds a candidate that is `IN_PROGRESS`/`GENERATING` but does **not** carry the marker (i.e. a stale ordinary session, not a stale redo session): do not return it. Since clicking "Redo Missed Questions" is itself a deliberate, explicit user action — unlike the generic entry-point ambiguity v0.60.1's Resume/Start Fresh prompt exists for — there's no ambiguity to resolve with a prompt here. Forfeit the stale ordinary session (mirror the existing `markSessionForfeited` + save + claims-release pattern already used elsewhere in this class) and proceed to start the fresh redo-missed session, rather than silently resuming it or running two `IN_PROGRESS` rows for the same user+study pack+mode side by side (which would corrupt `findTopByUserIdAndStudyPackIdAndSessionModeAndStatusInOrderByCreatedAtDesc`'s "top" semantics for later lookups).
+- If the candidate **does** carry the marker (a genuinely stale prior redo-missed session), keep today's behavior — resume it, matching how any other in-progress session is treated.
+- Do not touch `startSession`'s behavior or its call to `resolveExistingChallengeSession` — this fix is scoped to the redo-missed entry point only.
+
+**Backfill note — state this consequence up front, don't let it surface as a surprise during audit:** sessions created before this ships have no `isRedoMissedSource` marker in their `sessionState`. If a pre-existing, still-in-progress redo-missed session is encountered after this ships, it reads as an ordinary session and gets forfeited rather than resumed on the next Redo Missed click. Accepted: one-time, low-volume (only affects sessions mid-flight at deploy time), and self-healing — the forfeited session is immediately replaced by a fresh, correctly-scoped one, no data loss.
+
+Files: `backend/src/main/java/com/studysnap/backend/service/ChallengeQuizService.java`, `ChallengeQuizServiceTest.java` (test: a stale ordinary session is forfeited, not resumed, when `startRedoMissedSession` is called, and the fresh redo session starts correctly with only missed questions; a stale prior redo session — carrying the marker — is still resumed as today; `startSession`'s own resumption behavior is unchanged — regression guard; a new redo-missed session has both `quotaExempt=true` and the `isRedoMissedSource` marker set, and still excludes from `countChallengeQuizUsedThisMonth` — regression guard against the swap-not-add failure mode above; abandon a normal session → click Redo Missed → verify a *new* redo session starts, not the stale one, per the second-opinion review's suggested regression scenario).
+
+Sequencing: independent of Item 1. Touches the same file as Item 1 but a different method — land in either order.
+
+### Item 3 — Incomplete-submission guard on manual Submit — Shipped, see `RELEASES.md`
+
+**Classification: small, direct implementation (Claude Code, no Codex prompt needed).** Frontend-only, one file.
+
+Confirmed: `handleSubmit` (currently `frontend/app/study-packs/[id]/challenge-quiz/page.tsx` line 1063) calls `finalizeChallengeSession` immediately with no unanswered-question check, for both the manual Submit buttons (currently lines 2232, 2253) and the timeout-triggered auto-submit path. The result screen already computes and displays an "unanswered questions counted as incomplete" distinction (currently ~line 2498, `Overall Completion Score`), so the underlying answered-vs-unanswered signal already exists in the data model — this is a presentation/flow gap, not a missing data source.
+
+Fix:
+- On a **manual** Submit click only (not on `timeoutTriggered=true` — a timeout should still auto-submit exactly as today; that behavior is intentional and out of scope), check whether any question is currently unanswered.
+- If none are unanswered: submit immediately, unchanged from today.
+- If some are unanswered: show a confirmation before finalizing — "You have N unanswered question(s)" with a choice to go back (dismiss the prompt and return to the first unanswered question) or submit anyway. Reuse this page's existing modal patterns rather than a native `confirm()` — `AppModal` is already imported and used here, and `useQuizSessionGuard`'s existing `requestLeave`/`LeaveQuizModal` pair is a directly analogous "guard before a risky action" pattern already proven on this same page; prefer extending that shape over inventing a new one.
+
+Files: `frontend/app/study-packs/[id]/challenge-quiz/page.tsx`, its test file (test: manual submit with all questions answered proceeds unchanged; manual submit with unanswered questions shows the guard and blocks immediate finalization; "submit anyway" finalizes with the unanswered questions counted as incomplete, matching existing scoring behavior; timeout-triggered auto-submit is completely unaffected by this change).
+
+Sequencing: fully independent of Items 1 and 2, different file entirely.
+
+### Item 4 — Onboarding coverage-gap capture
+
+**Deferred out of v0.60.3 (2026-07-28) — design below is unchanged and still valid, it just didn't ship in this release.** The gate query (see "Gate query run 2026-07-28" note further down this section) found real `STUDENT`-profile presence in the signup-surge cohort, failing the effectively-zero bar required to proceed while the Diagnostic Read is mid-measurement. v0.60.3 shipped its other three items and was signed off without this one; this item now tracks as its own Backlog Index row, gated on the Diagnostic Read closing (~2026-08-06) and a clean re-run of the gate query — see that row for the current status, don't treat this section as describing shipped behavior.
+
+**Classification: small-to-medium, direct implementation (Claude Code, no Codex prompt needed).** Frontend-only for the check/capture UI, reuses the existing feedback backend pipeline as-is (no new endpoint, table, or migration).
+
+Confirmed mechanism: `frontend/app/onboarding/page.tsx`'s `handleContinueFromStepTwo` (currently lines 713-739) is the only place the practice-first coverage check runs. Its very first branch — `if (profileType !== "BOARD_EXAM") { goToStep(3); return; }` (currently line 718) — means `STUDENT`, `TEACHER`, and `PROFESSIONAL` never call `listCourseProgramStudyPlans` at all; they always land on the unchanged Step 3 Input Method choice with zero awareness of whether matching content exists. For `BOARD_EXAM`, the check runs, and on a **miss** (`matchingPlan` null, or `itemCount`/`readyCount` not both positive, currently lines 726-732) it silently falls through to normal Step 3 too — a real gap is discovered and then thrown away, for every profile type, today.
+
+**Explicit scope decision — read this before implementing:** this item adds coverage-gap *capture* for `STUDENT` specifically. It does **not** extend `BOARD_EXAM`'s practice-first *adoption* behavior (skip note-authoring, land directly on an adopted Review Set) to `STUDENT` — that would be a materially bigger change to the dominant profile type's onboarding funnel, decided separately if ever, not bundled in here. `TEACHER` and `PROFESSIONAL` are out of scope too; only what was actually asked for.
+
+Fix:
+- Add a `STUDENT`-scoped variant of the existing coverage check (reuse `listCourseProgramStudyPlans`, the same call `BOARD_EXAM` already makes) inside `handleContinueFromStepTwo`, run alongside (not instead of) the existing `BOARD_EXAM` branch. On a miss — no qualifying plan for the learner's `courseProgram` — show a small, dismissible, non-blocking capture prompt before continuing to Step 3: "We don't have content for {courseProgram} yet — tell us what you need" with a free-text field and a Skip option. On a match, or after skip/submit, continue to the unchanged Step 3 exactly as today — this item never blocks reaching a first Study Pack, matching this doc's own stated onboarding philosophy ("get the user to a real first Study Pack... not collect every preference up front").
+- Submit through the existing `POST /feedback` pipeline (`FeedbackEntity` — `userId`, `email`, `message`, `pageUrl`, `status`), tagged with a clear `source`/context value (e.g. `onboarding_coverage_gap`) for funnel attribution, matching the existing source-tagging convention documented in `docs/features/pricing.md`'s Upgrade-surface analytics section. No new table, no structured curriculum/grade-level fields — this project's own precedent (`Structured quiz feedback questions` in the Backlog Index, superseded in favor of the simpler free-text app-wide approach) argues against inventing a multi-field form here.
+- Fail open on error exactly like the existing `BOARD_EXAM` check (currently lines 733-735) — a lookup failure must never block onboarding.
+
+**Sequencing risk, not a blocker — resolve with a data check before kickoff, not a judgment call.** This touches the onboarding funnel while the Diagnostic Read re-read (due after 2026-08-06) is mid-measurement. The Diagnostic Read's own text warns against exactly this ("reorganizing navigation mid-surge would pollute the exact funnel data this read needs to stay clean"). This item is scoped to `STUDENT`, and the surge cohort the read is measuring skews Board-Exam/exam-dated — but "skews toward" is not the same as "excludes," and that gap is exactly where the risk lives.
+
+Resolution path: run a prod query on the signup-surge cohort's `profileType` composition within the measurement window, rather than proceeding on the skew assumption. **Pass bar is strict, not a judgment call:** the cohort must show effectively zero `STUDENT`-profile accounts in the window for this item to proceed now. "Mostly Board Exam" or "skews Board Exam" is not a pass — any meaningful `STUDENT` presence means the funnel overlap the Diagnostic Read warns about is real, not hypothetical, and this item waits unconditionally until the read closes (~2026-08-06), regardless of how small that presence looks. Requires prod `DB_USER` access this assistant does not have — the query must be run and its result reported before kickoff, not inferred from prior segment-mix assumptions.
+
+**Gate query run 2026-07-28 (owner-run, `docs/claude-prompt/company-redefinition-out/13-item4-profiletype-surge-check.sql`) — FAILS the bar.** Surge day itself (2026-07-23, n=29): `BOARD_EXAM` 17 (58.6%), no `profile_type` yet 10 (34.5%), **`STUDENT` 2 (6.9%)**. Wider open-measurement window (all signups since 2026-07-23, n=73): 53 have a `profile_type` set, 20 (27.4%) still don't. 6.9% STUDENT presence on the surge day is real, not noise, and the 27.4%-still-NULL share in the wider window means the true STUDENT share could be higher once those finish onboarding, not lower — so this doesn't round down to "effectively zero" under any reading of the stated bar. **Item 4 stays parked; do not kick off until the Diagnostic Read closes (~2026-08-06) and the re-read queries (`08-diagnostic-read-queries.sql`, Queries 2-5) actually run.** Re-run this same gate query at that point before kickoff — don't reuse this 2026-07-28 result, since the window composition will have shifted.
+
+Files: `frontend/app/onboarding/page.tsx`, its test file (test: a `STUDENT` with no matching plan sees the capture prompt and can skip or submit, either way reaching Step 3 unchanged; a `STUDENT` with a matching plan never sees the prompt; `BOARD_EXAM`'s existing practice-first behavior is completely unaffected — regression guard; a lookup failure fails open exactly like the existing `BOARD_EXAM` catch block).
+
+Sequencing: fully independent of Items 1-3, different part of the app entirely. Gate kickoff on the sequencing-risk confirmation above.
+
+### Overall Sequencing
+
+All four items are independent — no required order, can land as separate PRs. Item 4 additionally needs an explicit go/no-go on onboarding-funnel timing before kickoff (see Item 4's sequencing risk).
+
+### Verification
+
+- **Item 1:** start Challenge Quiz sessions across all three score bands and confirm initial question count matches 10/12/15; confirm Board Exam's count is unaffected; confirm Redo Missed still requests a fixed count.
+- **Item 2:** manually reproduce the original bug — leave an ordinary Challenge session abandoned mid-session, then click Redo Missed Questions from a completed session on the same study pack, and confirm a fresh redo session starts (missed questions only), not the stale ordinary one.
+- **Item 3:** manually leave questions unanswered and click Submit; confirm the guard appears, "go back" returns to an unanswered question, and "submit anyway" finalizes with the same scoring behavior as today.
+- **Item 4:** onboard as a Student with a course/program that has no published Official Review Set and confirm the capture prompt appears and is skippable; onboard as a Student with a covered course/program and confirm no prompt appears; confirm a submitted note is visible via the existing `/admin` feedback view tagged with the `onboarding_coverage_gap` source.
+- Full regression before PR handoff for commit: `./mvnw clean install` (backend) and `npm test` + `tsc --noEmit` (frontend), per this project's standing build-before-commit rule.
+
+## v0.60.2 — Challenge Quiz Known-Limitations Cleanup (Released, base branch `releases/v0.60.2`)
+
+**Kicked off 2026-07-26.** All three root causes below were confirmed by direct file read in the same session that kicked this off — re-verify file:line anchors first if code has shifted since.
+
+### Context
+
+v0.60.1's own signoff logged three narrow Known Limitations, deliberately deferred at the time as out of scope for that patch release: a claim-release rollback that can leave Challenge Quiz bank rows stuck claimed after a mid-batch generation failure (Item 1), an expiry-vs-completion race that can silently overwrite a genuinely completed session back to forfeited (Item 2), and a Resume/Start Fresh prompt that never appears when a live session is found via the collection/Review Set premium-exam launch, unlike the note detail page's Challenge Quiz card (Item 3). None of the three depends on a product decision, a data pull, or a time-gated cohort read — unlike every other Backlog Index candidate reviewed the same day this was kicked off, which is why this was picked as the one thing genuinely ready to build right now.
+
+Routing note: per `CLAUDE.md`'s task-routing table, all three items are isolated 1–2 file bug fixes with a clear root cause — the table's own "Claude Code, implement directly" lane. This release routes them to Codex anyway, as a deliberate one-off choice to conserve Claude usage while Codex capacity was available; the audit-before-commit step below is not optional given that tradeoff.
+
+### Item 1 — Claim-release rollback under `@Transactional` — Shipped, see `RELEASES.md`
+
+**Classification: small, direct implementation (no Codex prompt needed in ordinary circumstances) — routed to Codex per the Context note above.**
+
+Confirmed: `ChallengeQuizQuestionBankService.releaseClaims` (line 221) has no `@Transactional` annotation of its own today. `ChallengeQuizService.generateMoreQuestions`'s catch block (lines 702–705) calls it on a generation failure, then re-throws. Because `generateMoreQuestions` runs under the class-level `@Transactional` on `ChallengeQuizService` (line 70), that re-throw rolls back the entire transaction — including `releaseClaims`'s own writes, which exist specifically to undo the claim on failure. Affected bank rows stay claimed until they naturally expire instead of being freed immediately.
+
+Fix: add `@Transactional(propagation = Propagation.REQUIRES_NEW)` directly on `ChallengeQuizQuestionBankService.releaseClaims`. Since `ChallengeQuizQuestionBankService` is a distinct Spring bean from `ChallengeQuizService` (not a self-invocation), Spring's proxy-based AOP intercepts the call correctly — the new transaction commits independently of the caller's eventual rollback. `releaseClaims` already wraps its body in its own try/catch that swallows `RuntimeException` (never re-throws), so this is a pure addition with no new failure surface. This also affects `releaseClaims`'s other two call sites (`forfeitSession` line 614, `forfeitExpiredSession` line 931) — both already treat the release as best-effort/non-atomic with the session save (each already in its own try/catch), so running it in its own transaction doesn't change or regress their existing behavior.
+
+Files: `backend/src/main/java/com/studysnap/backend/service/ChallengeQuizQuestionBankService.java`, `ChallengeQuizQuestionBankServiceTest.java` or `ChallengeQuizServiceTest.java` (test that a mid-batch generation failure still results in released claims even though the outer transaction rolled back).
+
+Sequencing: fully independent, land anytime.
+
+### Item 2 — Expiry-vs-completion lock race — Shipped, see `RELEASES.md`
+
+**Classification: small, direct implementation (no Codex prompt needed in ordinary circumstances) — routed to Codex per the Context note above, with a mandatory recheck-after-lock step (see below).**
+
+Confirmed: `resolveExistingChallengeSession` (line 879) reads the candidate session via `findTopByUserIdAndStudyPackIdAndSessionModeAndStatusInOrderByCreatedAtDesc` — no lock. `completeSession` (line 513) and `generateMoreQuestions` (line 619) both instead call `findChallengeSessionForUpdateOrThrow`, which uses `findByIdAndUserIdAndSessionModeForUpdate` (`QuickReviewSessionRepository.java` line 78-86, `@Lock(LockModeType.PESSIMISTIC_WRITE)`). If a `completeSession` request and a `resolveExistingChallengeSession`-triggered expiry forfeit land close enough together, the forfeit's unlocked read-then-write can commit after the completion's, overwriting `COMPLETED` back to `FORFEITED` and hiding a genuine finished attempt from Recent Sessions.
+
+Fix: in `resolveExistingChallengeSession`, after the existing unlocked "top" lookup identifies a candidate session id, re-fetch that exact same id through the existing `findByIdAndUserIdAndSessionModeForUpdate` (the same locked query `completeSession`/`generateMoreQuestions` already use) before making any forfeit decision. **Mandatory: re-check the locked session's status is still `IN_PROGRESS` after the lock is acquired** — if a concurrent `completeSession` already committed and changed it to `COMPLETED` while this method was waiting for the lock, do not forfeit it; treat it the same as any other non-resumable session (return `Optional.empty()`, matching the existing behavior for an already-forfeited session). Only proceed to the existing expiry check + `forfeitExpiredSession` call if the locked re-read still shows `IN_PROGRESS`.
+
+**Why this doesn't introduce new deadlock risk (verified, not assumed):** every code path that locks this session row — `completeSession`, `generateMoreQuestions`, and now `resolveExistingChallengeSession` — acquires exactly one lock, on the same single row, via the same query shape (`id` + `userId` + `sessionMode`). A deadlock requires two transactions each holding a resource the other is waiting for, in conflicting orders across two or more resources; single-resource, single-order contention only ever produces a lock *wait*, not a cycle. Do not add any additional lock acquisition (e.g. on bank rows) while holding this session lock without re-verifying this reasoning still holds.
+
+Files: `backend/src/main/java/com/studysnap/backend/service/ChallengeQuizService.java` (`resolveExistingChallengeSession`), `ChallengeQuizServiceTest.java` (test: a session forfeited via this path after a concurrent completion already landed must not overwrite `COMPLETED`; a genuinely expired, still-`IN_PROGRESS` session is still forfeited as before).
+
+Sequencing: independent of Items 1 and 3. Same file as Item 1's test suite target but a different method — no merge conflict expected.
+
+### Item 3 — Resume/Start Fresh missing at the collection premium-exam entry point — Shipped, see `RELEASES.md`
+
+**Classification: small, direct implementation (no Codex prompt needed in ordinary circumstances) — routed to Codex per the Context note above.**
+
+Confirmed: `collection-detail-page-client.tsx`'s `openCollectionPremiumExam` (lines 3103–3120) builds `const params = new URLSearchParams({ collectionId })` and, for the Challenge Quiz branch (line 3119), pushes to `/study-packs/${primaryExamStudyPackId}/challenge-quiz?${params.toString()}` with no `entry` param. The target page (`frontend/app/study-packs/[id]/challenge-quiz/page.tsx`) already reads `CHALLENGE_QUIZ_ENTRY_QUERY_PARAM` via `searchParams.get(...)` (confirmed present, route-agnostic) and only shows the Resume/Start Fresh prompt when that param equals `CHALLENGE_QUIZ_MODE_SELECTION_ENTRY` (`isModeSelectionChallengeQuizEntry`, from `frontend/lib/challenge-quiz-entry.ts`) — the same constants `buildChallengeQuizHref` already uses for the note detail page's Challenge Quiz card. Without it, a live session found through this entry point is silently auto-resumed with no choice offered, same underlying gap v0.60.1's TEACHER-profile fix closed for a different entry point.
+
+Fix: in the Challenge Quiz branch of `openCollectionPremiumExam` only (not the `long_exam`/`interview` branches above it — they don't read this param and are out of scope), append `entry=mode-selection` using the existing exported constants (`CHALLENGE_QUIZ_ENTRY_QUERY_PARAM`, `CHALLENGE_QUIZ_MODE_SELECTION_ENTRY` from `frontend/lib/challenge-quiz-entry.ts`) to the `URLSearchParams` before the `router.push` at line 3119.
+
+Files: `frontend/app/collections/[id]/collection-detail-page-client.tsx`, its test file (test: clicking the premium-exam CTA when `terminalAction.mode` resolves to Challenge Quiz navigates with `entry=mode-selection` in the query string).
+
+Sequencing: fully independent, frontend-only, land anytime.
+
+### Overall Sequencing
+
+All three items are independent — no required order, can land as one PR or three. Given the size (3 small, unrelated fixes), one combined Codex prompt covering all three is appropriate rather than three separate prompts.
+
+### Verification
+
+- **Item 1:** trigger a mid-batch `generateMoreQuestions` failure (e.g. force `NotEnoughNewQuestionsException`) and confirm the claimed bank rows are released (`claimedSessionId` cleared) even though the request itself errors.
+- **Item 2:** a concurrency test (or a manually sequenced test using the two locked queries) proving a session already moved to `COMPLETED` by `completeSession` is never overwritten to `FORFEITED` by a subsequent `resolveExistingChallengeSession` call; a separate test proving a genuinely expired, still-`IN_PROGRESS` session is still forfeited exactly as before this change.
+- **Item 3:** manually reproduce — have a live, non-expired Challenge Quiz session, trigger the collection/Review Set premium-exam CTA, and confirm the Resume/Start Fresh prompt appears instead of silent auto-resume.
+- Full regression before PR handoff for commit: `./mvnw clean install` (backend) and `npm test` + `tsc --noEmit` (frontend), per this project's standing build-before-commit rule.
+
+## v0.60.1 — Challenge Quiz Fix Pass (Released, base branch `releases/v0.60.1`)
+
+**Kicked off 2026-07-25.** The plan below was fully designed and verified before kickoff — treat it as ground truth for implementation, re-verifying file:line anchors first since code may have shifted since 2026-07-25.
+
+### Context
+
+v0.60.0 shipped Official Challenge Quiz Template Sharing (a pre-generated, shared question pool for admin-authored "Official" content). Attempting to run the one-time production backfill immediately surfaced a real infra bug (Item 1), and using the resulting feature surfaced four more pre-existing (or newly-exposed) Challenge Quiz issues that predate v0.60.0 but were only now noticed in live testing: no whole-array shuffle ever existed (Item 2), difficulty selection has been silently inert since v0.58.0's per-user question bank shipped (Item 3 — resolved via product decision to remove the feature rather than fix the underlying architecture mismatch), abandoned sessions get silently resumed and immediately auto-submitted as "time's up" (Item 4), and "Redo Missed Questions" has never actually worked because of a same-route navigation bug (Item 5).
+
+All five root causes below are confirmed via direct code reading (not inferred) across three rounds of research: three parallel Explore agents, a scope-verification pass, and a Plan agent whose two safety-critical claims (index-keyed answer maps; existing timer/forfeit helpers) were independently re-verified by direct file reads in this same session. This is a patch release off `v0.60.0` (following this project's existing patch-release convention, e.g. v0.51.1, v0.52.1, v0.54.1).
+
+Two decisions were made by the product owner before this plan was finalized — do not re-litigate them without a new reason:
+- **Difficulty (Item 3): remove the manual Easy/Medium/Hard selector from Challenge Quiz entirely**, rather than re-engineer the bank/template claim path to respect it. Reasoning: doesn't fit the reusable-pool architecture, Adaptive Practice already covers personalized difficulty better, and its pedagogical value as a manual picker (vs. a historical Plus/Pro differentiator) is doubtful. Board Exam Mode is unaffected — it already uses a fixed `DIFFICULTY_MIXED` value and never touches this gate.
+- **Abandoned sessions (Item 4): reuse the existing Long Exam pattern** (expiry detection + "Resume / Start Fresh" prompt, on the setup page's existing load-time fetch) rather than build new card-level pre-check logic that no quiz mode in this app has today.
+
+### Item 1 — Executor saturation (`TaskRejectedException` on backfill) — Shipped, see `RELEASES.md`
+
+**Classification: small, direct implementation (no Codex prompt needed).**
+
+`OfficialChallengeQuizTemplateService.queueBackfill()` fires ~50 seed tasks in a tight loop via `dispatchSeedAfterCommit` → `studyPackGenerationTaskExecutor` (`AppConfig.java`, pool 3/6, queue 100, default `AbortPolicy`) — the same executor live, user-facing Study Pack generation uses (`StudyPackService.java:650-652`). This is a real production-risk bug: it can delay/reject actual user requests, and did reject its own tasks (confirmed stack trace: 106 tasks in flight against 6+100 capacity).
+
+Fix:
+- Switch `dispatchSeedAfterCommit` (used by both `queueBackfill` and the per-note `queueSeedIfEligible` eager hooks) to the existing `llmParallelTaskExecutor` bean (`AppConfig.java`, pool 4/8, queue 50) — the pool this codebase already uses for bulk LLM fan-out, via `@Qualifier("llmParallelTaskExecutor")`, exactly matching `AdminStudyPackService`'s existing pattern for its own bulk admin actions (regenerate-summaries, repair-malformed-quizzes). Move both call sites, not just the backfill — template seeding is background LLM work by nature and should never contend with live generation.
+- Wrap the dispatch in `try/catch (RejectedExecutionException)`, matching `AdminStudyPackService`'s existing guard style.
+- Extend `AdminSeedOfficialChallengeQuizTemplatesResponse` from `(queued, skipped)` to `(queued, skipped, rejected)` so a rejected dispatch is reported distinctly rather than silently inflating `queued`.
+- No additional throttling/batching needed — the 4/8/50 pool's bounded max size is itself the concurrency limiter, consistent with how `AdminStudyPackService` already relies on it.
+
+Files: `backend/src/main/java/com/studysnap/backend/service/OfficialChallengeQuizTemplateService.java`, `backend/src/main/java/com/studysnap/backend/dto/AdminSeedOfficialChallengeQuizTemplatesResponse.java`, `OfficialChallengeQuizTemplateServiceTest.java`.
+
+Sequencing: fully independent — land first, in parallel with everything else. **The v0.60.0 production backfill still has not successfully completed — re-running it is blocked on this fix landing.**
+
+### Item 2 — Whole-array shuffle — Shipped, see `RELEASES.md`
+
+**Classification: small, direct implementation — but with a data-safety constraint that must be respected.**
+
+**Shipped with one refinement beyond this plan:** Challenge Quiz can include a MATCHING block (2–4 consecutive questions sharing a `questionGroup`, confirmed in `challenge-quiz-developer.txt`), which the frontend (`lib/quiz.ts`) groups by scanning the array for adjacency. A flat `Collections.shuffle` on the whole list — as originally planned below — would silently scatter a MATCHING block apart and break that grouping. The shipped fix shuffles at the block level instead: MATCHING runs are treated as one atomic unit that moves together, everything else shuffles freely. This was caught by re-verifying the plan against current code before implementing, not by re-deriving the plan itself — the injection points and data-safety constraint below are otherwise exactly as planned.
+
+Confirmed: no shuffle exists anywhere in the Challenge Quiz path (grepped for `shuffle`/`Random`/`nextInt` across `ChallengeQuizService.java`, `ChallengeQuizQuestionBankService.java`, `OfficialChallengeQuizTemplateService.java`, `QuizSessionStateUtils.java`, `ChallengeQuizQuestionBankRepository.java` — zero hits). `persistGeneratedQuestions` stamps one shared `generatedAt` per batch (`ChallengeQuizQuestionBankService.java:94,112`), and `findClaimableForUpdate` orders strictly `generatedAt asc` with no tiebreaker (`ChallengeQuizQuestionBankRepository.java:14-22`) — so batches (original 5, each "+5") always sort as fixed blocks, forever, across every future session.
+
+**Critical safety finding (independently verified by direct file read against `QuizSessionStateUtils.java`, lines 84/108/137/161):** selected-answer maps (`selectedChoices`, `selectedMultiChoices`, `selectedIdentificationAnswers`, `selectedEnumerationAnswers`) are keyed by **array index** (`String.valueOf(questionIndex)`), not question identity. Reshuffling an in-progress session's array would silently remap recorded answers to the wrong questions — this constrains the fix to one safe injection point. Do not skip re-verifying this before implementing if any of the surrounding code has changed since 2026-07-25.
+
+Fix — matches the product owner's actual ask precisely (their examples were about a "second try" / "succeeding challenge quiz," i.e. a new session, not the "+5" growth within one active session):
+- Shuffle the fully assembled `challengeQuiz` list (banked + template + freshly generated) once, at **initial session start** (`ChallengeQuizService.java`, Challenge branch of `startSession`, assembled ~lines 277-313), before `markSessionReady` — the one point where no answers exist yet, so a whole-array shuffle is safe. Every new session presents its accumulated pool in a fresh order.
+- Do **not** reshuffle the whole array in `generateMoreQuestions`/"+5" (~lines 614-706) — that would corrupt already-recorded index-keyed answers. Instead, shuffle only the newly-added batch before appending it via `QuizSessionStateUtils.appendQuizItems`, so growth still avoids fixed-order artifacts without touching existing indices.
+- Skip the shuffle for Board Exam (leave its existing ordering/behavior untouched — out of scope, avoid an unintended regression).
+- Apply the same initial-shuffle treatment to `startRedoMissedSession`'s assembly (same `markSessionReady` call, ~line 405), since it's the same safe assembly point.
+
+Files: `backend/src/main/java/com/studysnap/backend/service/ChallengeQuizService.java`, `ChallengeQuizServiceTest.java` (use a seeded/injectable RNG or a copied-list assertion so order can be tested deterministically).
+
+Sequencing: same file as Item 3 (adjacent methods) — land **after** Item 3 to avoid merge churn. Logically independent of it.
+
+### Item 3 — Remove manual difficulty selection from Challenge Quiz — Shipped, see `RELEASES.md`
+
+**Classification: large — write a Codex prompt, don't implement directly.** Multi-system (backend enum/config/DTOs/service + frontend page + pricing/paywall/marketing copy + two test suites), well past the 5-file/100-LOC threshold for direct work, and pricing-adjacent copy in this project gets deliberate handling. Use `docs/skills/codex-prompt-generator.md`'s Long template.
+
+Full REMOVE / KEEP scope was verified via a dedicated research pass and is ground truth for the Codex prompt's REQUIRED CHANGES section — do not re-derive it, just transcribe it into the prompt (re-verify line numbers first, since code may have shifted since 2026-07-25):
+
+**Remove:** `resolveSelectedDifficulty`'s Challenge branch (`ChallengeQuizService.java:1108-1116`, keep the Board Exam branch at 1105-1106 which returns `DIFFICULTY_MIXED`), `resolveGenerationProfile`'s manual-selection path (844-845), `isDifficultySelectionAvailable` helper (1649-1650) and its two response-flag uses (1094, 1669), `selectedDifficulty` plumbing in `startSession` (177, 200); backend `Feature.DIFFICULTY_SELECTION` enum value (delete outright — it has exactly one exhaustive switch, `FeatureGateService.hasFeatureAccess` lines 46-52, so deletion is compile-clean once that `case` at line 48 is removed) and every reference (`FeatureGateService.java:48`, `StudySnapProperties.java:241-246` and its `difficultySelectionProOnly` config, `application.yaml:130`'s `difficulty-selection-pro-only` key, `MePlanService.java:104`, `BillingUsageService.java:35`, `NoteService.java:1399`'s `NoteResponse.difficultySelectionAvailable` field, `entity/Feature.java:10-12`'s access-denied copy, `dto/ChallengeQuizStartResponse.java:19`'s matching field); frontend selector block only (`frontend/app/study-packs/[id]/challenge-quiz/page.tsx:1689-1712` — the file is shared with Board Exam setup, do not remove the whole file) plus `canChooseChallengeDifficulty` (line 1285) and its consumption sites (158, 160, 1125, 1284); all pricing/marketing/paywall copy referencing difficulty selection as a Plus/Pro benefit: `frontend/src/config/plans.ts` (lines 56, 92, 171-177, 219, 304-309, 352-357), `frontend/app/page.tsx:143`, `frontend/app/dashboard/free-plan-upgrade-card.tsx:19`, `frontend/app/billing/success/page.tsx:60`, `frontend/components/billing/pricing-plans-section.tsx:363`, `frontend/components/help/quiz-modes-guide.tsx:29`, `frontend/lib/paywall-content.ts` (`DIFFICULTY_SELECTION_LOCKED`, lines 12,41,94-95,219-223), `frontend/components/billing/paywall-modal.tsx:53,122-123`.
+
+**Keep — do not touch:** Board Exam's fixed `DIFFICULTY_MIXED` path (`resolveGenerationProfile` lines 841-842), the score-based automatic Challenge difficulty fallback (lines 847-868, last Quick Review score → EASY/DEFAULT/HARD) which becomes the sole Challenge difficulty path after removal, `resolveQuestionCountForDifficulty` (897-904), `extractDifficulty` (1188-1197), `buildInitialSessionState` (1145-1159). `startRedoMissedSession` (line 388) already passes `null` difficulty and is unaffected.
+
+Remove (don't just skip) the two difficulty-specific tests that assert on the removed behavior (`frontend/app/study-packs/[id]/challenge-quiz/page.test.tsx` lines 435 and 1118; `ChallengeQuizServiceTest.java`'s `startSession_throwsTypedExceptionForInvalidDifficulty` line 1956); trim/update the remaining ~58 difficulty references across both test suites, including fixture-only touches in `pricing/page.test.tsx:95`, `settings/page.test.tsx:170,208`, `paywall-modal.test.tsx:87`, `NoteServiceTest.java:132`; add a regression test proving Board Exam's fixed-MIXED path is untouched, and one proving the score-based fallback is now the only Challenge difficulty source.
+
+Land as one atomic backend+frontend PR (single monorepo release, no cross-service contract window to protect). Run `/audit-diff` after delivery, then update `docs/features/challenge-quiz.md` and check `docs/product/ROADMAP.md`'s own Backlog Index row for "Difficulty Selection moved Pro→Plus" (a related, now-superseded pending pricing item — this removal resolves it, update or close that row too).
+
+Sequencing: land **first** among the three items touching `challenge-quiz/page.tsx` (Items 3, 4, 5) — it simplifies the file for the other two and reduces merge churn.
+
+### Item 4 — Abandoned sessions silently resumed and auto-submitted — Shipped, see `RELEASES.md`
+
+**Shipped refinement:** expiry handling now runs in both layers documented below: the frontend read-path check prevents a stale fetched session from entering the running timer, while `resolveExistingChallengeSession` auto-forfeits expired explicit-start sessions. Server-side Challenge-mode cleanup also releases live bank claims; Board Exam follows the same expiry and prompt behavior without claim release.
+
+**Classification: large — write a Codex prompt, don't implement directly.** Multi-system (backend service-logic change + new frontend UI states ported from an existing pattern).
+
+Confirmed mechanism: `resolveExistingChallengeSession` (`ChallengeQuizService.java:871-895`) resumes any `IN_PROGRESS`+non-empty-quiz session unconditionally — no timer/expiration check exists anywhere server-side (confirmed: no entity column, no expiration comparison logic anywhere in the backend; the timer is only ever read back to echo to the client). The frontend's setup page (`frontend/app/study-packs/[id]/challenge-quiz/page.tsx`) already fetches this stale session on load (`getInProgressChallengeQuizSession`, line 779) but discards it on the `entry=mode-selection` path (lines 782-802 — the exact flow from the note detail page's Challenge Quiz card); on Start Quiz, the resumed session's deadline (`timerStartedAtEpochSeconds + timeLimitSeconds`, both stamped at the ORIGINAL session's start) is already in the past, so `applyStartedSession` (lines 597-690) computes 0 seconds remaining and the running-timer effect (lines 1016-1038) immediately auto-submits as a timeout — the reported "suddenly ends."
+
+Fix has two layers:
+- **Server-side (the actual root fix):** `resolveExistingChallengeSession` is the single choke point every start path flows through — client-side detection alone can't fully close this, since the non-mode-selection entry path (page.tsx lines 804-808) resumes stale sessions directly with no discard step at all. Add expiration awareness there: compute the deadline from the session's already-stored `timerStartedAtEpochSeconds`/`timeLimitSeconds` (via the existing `extractTimeLimitSeconds` line 1199 / `extractTimerStartedAtEpochSeconds` line 1210 helpers — confirmed present, no schema change needed); if expired, auto-forfeit via the existing `markSessionForfeited` (line 1636, already used elsewhere in this same method) and return empty instead of resumable.
+- **Client-side (UX, ported from Long Exam):** add `isChallengeQuizSessionExpired`, mirroring Long Exam's `isLongExamSessionExpired` (`frontend/app/notes/[id]/long-exam/page.tsx:112-122`) using the same already-shared `frontend/lib/challenge-quiz-timer.ts` helpers (`resolveDeadlineEpochSeconds`, `resolveRemainingSecondsFromDeadline`). In the setup page's `entry=mode-selection` branch, replace the current outright-discard with: expired → forfeit (mirroring Long Exam's on-load forfeit at lines 359-368) and show a clean prestart; not expired → show a "Resume / Start Fresh" prompt (port Long Exam's UI at lines 856-877) instead of silently resuming or silently discarding.
+
+**Deferred, not bundled:** the separate, already-documented v0.58.0 limitation ("A redo-missed request can silently resume an unrelated in-progress session… matches only on session type, not on the specific sub-mode requested" — `docs/releases/v0.58.0.md:34`, still live in the code) is a related but separable concern. Fixing it here would widen blast radius for uncertain benefit — leave it as a tracked, still-open known limitation.
+
+Files: `backend/src/main/java/com/studysnap/backend/service/ChallengeQuizService.java` (`resolveExistingChallengeSession`), `frontend/app/study-packs/[id]/challenge-quiz/page.tsx` (the `entry=mode-selection` load branch, new Resume/Start Fresh UI), reference-only `frontend/app/notes/[id]/long-exam/page.tsx` and `frontend/lib/challenge-quiz-timer.ts`.
+
+Sequencing: land after Item 3 (shared file). Land before/combined with Item 5 (shares the same method and page region).
+
+### Item 5 — "Redo Missed Questions" does nothing — Shipped, see `RELEASES.md`
+
+**Shipped:** the query entry is preserved in state while its URL parameter is stripped, resets a stale result/session to prestart, then starts the dedicated redo endpoint. The fewer-than-three-missed conflict now renders the backend message on a clean, retryable prestart.
+
+**Classification: small, direct implementation (no Codex prompt needed).** Frontend-only, one file, mirrors an existing in-file pattern.
+
+Confirmed mechanism: the button (`frontend/components/study-pack/post-session-next-step.tsx:71,83`) is a same-route, query-only `<Link>` to `?entry=redo-missed` that doesn't remount the page — so the redo-missed effect's guards (`page.tsx:1169-1182`, `phase !== "prestart"` and `challengeSession?.sessionId` already set) short-circuit and `startRedoMissedChallengeQuizSession` is never called. The user just sees the previous session's own already-rendered result (confirmed: the displayed percentages are `computeStatistics`'s real numbers for the prior partially-answered session, not a stale unrelated session or an auto-submit artifact). No quota is charged (the request never fires, and the backend path is quota-exempt by design regardless — `session.setQuotaExempt(true)`, `ChallengeQuizService.java:406`, no usage-increment call in `startRedoMissedSession` at all).
+
+Fix — mirror the sibling `entry=mode-selection` pattern already in the same file (`sharedModeSelectionEntryRequested` state flag at lines 456-461 + `router.replace` to strip the query param at lines 463-470):
+- Add a surviving state flag (`redoMissedEntryRequested`) set from the query param, then strip the param via `router.replace`. The start effect must key off this surviving flag, not the live query param, or stripping the query kills the trigger.
+- Add a one-shot reset: when the flag is set and the page is on a stale screen (`complete`/existing session/result), reset to a clean prestart (reuse the existing `handleRetry` reset block at lines 1184-1199), then let the now-correctly-keyed effect fire the redo-missed start.
+- Add the missing error state: confirmed **zero** existing frontend handling of `NOT_ENOUGH_MISSED_CHALLENGE_QUESTIONS` (thrown by `claimIncorrectQuestions` when fewer than `MINIMUM_REDO_MISSED_QUESTIONS`=3 are eligible) — this path has apparently never successfully run in production, since the button itself never worked. Add an explicit branch in `handleStartChallenge`'s catch (lines 1139-1150) that keeps the user on a clean prestart screen with the backend's ready user-facing message ("Answer at least 3 Challenge Quiz questions incorrectly before redoing missed questions."), rather than an unhandled raw error, and ensure the retrigger flag/ref are cleared so the user can retry a normal start.
+
+Files: `frontend/app/study-packs/[id]/challenge-quiz/page.tsx`, its test file.
+
+Sequencing: land after Item 4 (shared file region) — consider combining into one PR with Item 4 ("Challenge Quiz session entry hardening") since both touch entry-handling and can share review context.
+
+### Overall Sequencing
+
+1. **PR A — Item 1** (executor fix). Independent, land anytime, can go first. Unblocks re-running the still-incomplete v0.60.0 production backfill. **Shipped.**
+2. **PR B — Item 3** (difficulty removal, Codex prompt). Land early to reduce conflict churn for C/D.
+3. **PR C — Item 2** (shuffle). Rebase on B. **Shipped**, block-aware (see Item 2's note above).
+4. **PR D — Items 4 + 5 combined** (session entry hardening: expiration/forfeit + redo-missed retrigger; Item 4's portion is the Codex prompt, Item 5 folds in as a small direct addition). **Shipped.**
+
+After each Codex-scoped PR (B, D): run `/audit-diff` before committing, per this project's standard Codex-delivery process. Update `RELEASES.md` v0.60.1 and `docs/features/challenge-quiz.md` as each item ships (Item 3 in particular changes documented, user-visible behavior — Plus/Pro plan comparison copy needs updating too, see Item 3's Files list).
+
+### Verification
+
+- **Item 1:** trigger the backfill again (small eligible-note set first) and confirm seed tasks run on `llm-parallel-*` threads (not `study-pack-generation-*`), and that a forced-saturation scenario produces a `rejected` count in the response rather than a thrown exception.
+- **Item 2:** unit test with a seeded/deterministic shuffle asserting (a) a fresh session's presented order differs from strict `generatedAt` order across a 10-question accumulated pool, (b) a "+5" mid-session growth preserves existing question-index-to-answer mappings (the corruption-prevention regression test — this is the one that must not be skipped), (c) Board Exam ordering is unchanged.
+- **Item 3:** run both test suites after removal; manually confirm Board Exam's difficulty is still fixed-MIXED and unaffected; confirm the Challenge Quiz Setup screen no longer shows a difficulty selector for any plan; confirm pricing/paywall pages no longer reference difficulty selection.
+- **Item 4:** manually reproduce the original bug (start a session, abandon it past its timer window, start a new one) and confirm either a clean prestart or a "Resume / Start Fresh" prompt appears — never an instant auto-submit. Add a backend test for stale-session auto-forfeit and a frontend test for the prompt/forfeit-on-load paths.
+- **Item 5:** manually complete a Challenge Quiz session with ≥3 incorrect answers, click "Redo Missed Questions," and confirm a real new quiz starts (not the stale result screen); separately test the `<3` missed case shows the new error message on a clean prestart.
+- Full regression before every PR handoff for commit: `./mvnw clean install` (backend) and `npm test` + `tsc --noEmit` (frontend), per this project's standing build-before-commit rule.
+
+## v0.60.0 - Shared Official Pool Foundation (Released, base branch `releases/v0.60.0`)
+
+Origin: Phase 3a (`docs/claude-prompt/company-redefinition-out/04-reusable-assets-and-reviewer.md`), the foundation slice of Phase 3's cross-user question pool. Ratified and kicked off 2026-07-24 after its proposed adoption-concurrency gate cleared on real production data — see "Company Redefinition Roadmap — Phase Detail" above, Phase 3 section, for the evidence. Reclaimed the `v0.60.0` slot from Explore Convergence the same day, since this chunk was ratified on real data while Explore's gate remains unmet — Explore Convergence renumbers to `v0.61.0`. Explicitly not the same thing as v0.58.0's Reusable Practice Assets & the Return Loop (per-user, cross-session reuse) — this is cross-user sharing across different learners who adopted the same Official content. 3b (curator-side pool expansion) is not part of this release and remains gated on its own unresolved review-queue dependency.
+
+**Retargeted 2026-07-24, same day as kickoff.** The original scope (`04`'s design) targeted `ExamQuestionPoolService` — Long/Board Exam pools. Checking the actual plan gate found Long/Board Exam is PRO-only (`isLongExamAvailable`/`resolveMonthlyBoardExamLimit` both gate on `PlanType.PRO`), and production has ~zero PRO users (per v0.58.0's own framing) — so the gate evidence's 23-25 LET / 9 PNLE adopters, all FREE-tier, cannot be exercising that subsystem. They're almost certainly hitting Challenge Quiz instead (FREE-tier, no LLM-cost metering on "give me more"). Two diagnostic scripts (run once against production, not retained in the repo) confirmed the retarget is buildable: the first attempt was inconclusive — a join-direction false alarm, resolved by checking `V17__study_pack_note_link.sql` — and the corrected version was conclusive: every child note under both Official plans has a `GENERATED` Study Pack and `PUBLIC` visibility, and zero existing `challenge_quiz_question_bank` rows. That second fact matters: `ChallengeQuizQuestionBankEntity` fuses question content with per-user state (`last_known_outcome`, `claimed_session_id`) on one row, unlike the exam pool's separated content/tracking — so a direct port of `resolvePoolKey` would have required migrating live "redo what you missed" state off shared rows. Copy-on-claim from an eagerly-seeded template avoids that entirely: every user still gets ordinary per-user rows, just sourced by copy instead of a fresh LLM call when a template exists.
+
+### Planned Scope
+
+**Official template seeding.** Eager seed at two hook points: `NoteService.updateVisibility()` (note transitions to `PUBLIC`, owner is Official (`isOfficialAuthor`), Study Pack already exists) and the existing `StudyPackService` call sites where `examQuestionPoolService.initiatePool(...)` fires (Study Pack generated for a note that's already `PUBLIC` and Official-owned) — covers both orderings. Seeding calls the existing `quizGenerationService.generateChallengeQuiz(...)` + `persistGeneratedQuestions(...)`, storing the result under the Official author's own `userId`/`studyPackId` — no schema change. A one-time backfill job seeds already-published Official content predating this release (confirmed scope: LET's 4 child plans / 43 notes, PNLE's children).
+
+**Copy-on-claim.** When a Challenge Quiz claim against the calling user's own bank falls short, resolve the caller's `studyPackId` to an Official source via the existing note-lineage hop (`StudyPackEntity.noteId` → `NoteEntity.copiedFromNoteId`/`sourceNoteId` → source note → its Study Pack) and the role-based `isOfficialAuthor` check. If the resolved template has content the caller hasn't already received, copy it into fresh rows under the caller's own identity instead of calling the LLM; fall through to live generation for any remaining shortfall. Private, non-Official bank rows are fully unchanged.
+
+Reconciles with, not a reversal of, the existing "do not pre-generate Challenge Quiz" ruling below (line ~747) — see `RELEASES.md` v0.60.0 for the distinction (one user's own progressive-batch pre-warm vs. a shared Official template seeded once). See `docs/claude-prompt/company-redefinition-out/04-reusable-assets-and-reviewer.md` for the original bounded-object-model design context; the Reviewer label-only relabel is not assigned to this release and remains a separate, independently-shippable decision.
+
+## v0.59.0 - Dashboard & Progress Reorg (Released, base branch `releases/v0.59.0`)
+
+Origin: second of Phase 2's two separately-gated chunks (`docs/claude-prompt/company-redefinition-out/03-information-architecture.md` §3), kicked off 2026-07-24 now that its gate — Reusable Practice Assets & the Return Loop shipped — is satisfied. Reclaimed the `v0.59.0` slot from Explore Convergence the same day, since this chunk's gate cleared first. See "Company Redefinition Roadmap — Phase Detail" above, Phase 2 section, for full design and the chunk split. Explicitly not the Explore Convergence chunk (now `v0.67.0`, renumbered 8 times total — see the Current Release Baseline note above), which was kicked off 2026-07-30 via an explicit owner gate override, not a cleared gate.
+
+### Planned Scope
+
+See `RELEASES.md` v0.59.0 for scope and anti-drift rules.
+
+## v0.58.0 - Reusable Practice Assets & the Return Loop (Released, base branch `releases/v0.58.0`)
+
+Origin: ratified by the owner 2026-07-24, inserted ahead of Phase 2 in the Company Redefinition resequencing (`docs/claude-prompt/company-redefinition-out/07-reprioritization.md`) — not Phase 3 (cross-user pooling of Official content stays parked at its own adoption-volume gate, unaffected). See "Company Redefinition Roadmap — Phase Detail" above, "Reusable Practice Assets & the Return Loop" subsection, for full design. Claims the `v0.58.0` slot previously earmarked for Phase 2's Explore Convergence chunk; see the Current Release Baseline note above for the resulting renumber.
+
+### Planned Scope
+
+See `RELEASES.md` v0.58.0 for scope and anti-drift rules.
+
+## v0.57.0 - Practice-First Activation Onboarding (Released, base branch `releases/v0.57.0`)
+
+Origin: Phase 1 of the Company Redefinition roadmap (`docs/claude-prompt/company-redefinition-out/06-unified-roadmap.md`) — the cheapest, most reversible, dependency-free phase of the boardready-model re-architecture, ratified by the owner 2026-07-23. Fully designed in `docs/claude-prompt/company-redefinition-out/02-activation-onboarding.md`. Explicitly picked to enter first because it produces the behavioral read (pre/post W1→W2 retention on the same covered course/program tracks) that was intended to gate Phase 2 — **the owner chose to kick off Phase 2 (v0.58.0, Explore Convergence) before that read comes back (decision: 2026-07-23); see the Backlog Index row above.** The read itself has not been pulled yet (needs a ~14-day window on both sides of the ship date) and remains an open follow-up regardless of Phase 2 proceeding.
+
+### Planned Scope
+
+See `RELEASES.md` v0.57.0 for scope and anti-drift rules.
+
+## v0.56.0 - Weak-Concept Explanation Links (Released, base branch `releases/v0.56.0`)
+
+Origin: Fable's top pick from the 2026-07-22 study-effectiveness session (`docs/claude-prompt/study-effectiveness-out/01-study-effectiveness-ui-pricing.md` §1 item 1) — explicitly scoped to exclude retention-trigger mechanics and Smart Review Planning. Picked as the cheapest, most direct answer to "does the product help you learn right now, in this session" — no dependency on the in-flight retention/acquisition experiments.
+
+### Planned Scope
+
+See `RELEASES.md` v0.56.0 for scope and anti-drift rules.
+
+## v0.55.0 - Result-Screen Companion Bridge (Released, base branch `releases/v0.55.0`)
+
+Origin: the only genuinely unblocked candidate from the App Shape planning session (`docs/claude-prompt/app-shape-out/01-app-shape-features.md` item 4) — its premise problem was resolved 2026-07-22 by reusing the v0.46.0 Weekly Pacing Echo's `primaryCollectionId` pattern instead of building a note→collection reverse lookup. Every other App Shape Core/Polish candidate remains gated on the retention constraint clearing or its own unresolved scoping question — this release does not touch those.
+
+### Planned Scope
+
+See `RELEASES.md` v0.55.0 for the Companion Bridge scope and anti-drift rules.
+
+## v0.54.1 - Public Note Copy Correctness Fixes (Released, base branch `releases/v0.54.1`)
+
+Origin: a self-inflicted-by-timing edge case surfaced during v0.50.3 signoff follow-up (no session doc) — `NoteService.copyNote()`'s existing-copy branch returns a prior copy as-is even if it predates the source's Study Pack becoming ready, so a user who copies before the source pack exists and retries later keeps getting the stale pack-less draft forever. Isolated, root-caused, Claude-Code-direct-sized fix — no Codex prompt needed.
+
+### Planned Scope
+
+See `RELEASES.md` v0.54.1 for the fix scope and anti-drift rules.
+
+## v0.54.0 - CPALE Exam Hub (Wave 2) (Released, base branch `releases/v0.54.0`)
+
+Origin: `next-priority-new-user-focus-out/01-next-priority-new-user-focus.md` (run 2026-07-21) confirmed the CPALE hub fits the "new users to retain" acquisition posture and recommended it as the smaller, lower-stakes build once its depth gate cleared (reuses an already-shipped 3x pattern, unlike H1+H5 which remains gated on the overdue v0.48.0 cohort re-read — see the Backlog Index row below). The depth-count gate (Query 2 in `next-priority-new-user-focus-out/02-h1-h5-cohort-recheck-and-cpale-depth.sql`) has since been confirmed against production, clearing the ~25-30-note Wave 2 bar.
+
+### Planned Scope
+
+See `RELEASES.md` v0.54.0 for the CPALE hub scope and anti-drift rules.
+
+## v0.53.0 - SEO Discoverability: Exam Hub Depth & Organic Attribution (Released, base branch `releases/v0.53.0`)
+
+Origin: the organic-search strategy session (`docs/claude-prompt/seo-strategy-out/01-seo-strategy.md`, run 2026-07-17 via Fable) diagnosed why "free PNLE notes"-style searches don't find NoteLib and ranked fixable gaps. After the product priority explicitly shifted to acquiring and retaining *new* users rather than re-engaging past churned ones, this picks up the code-shippable, gate-free remainder of that plan (P4/P5/P6) — pure acquisition work, no experiment-cohort or interview dependency.
+
+### Planned Scope
+
+All three scoped P4/P5/P6 items are shipped; see `RELEASES.md` v0.53.0 for the exam-hub depth, `ItemList`, and organic-landing attribution decisions and anti-drift rules.
+
+## v0.52.1 - Early-Lifecycle Feedback Signals (Released, base branch `releases/v0.52.1`)
+
+Origin: a follow-on to v0.52.0's proactive feedback prompts. The product owner initially floated this as quiz-result-specific copy, then corrected scope twice mid-session: first to app-wide, then explicitly to target *new* users specifically ("we're not chasing our previous users anymore, we're now chasing new users to retain") rather than winning back already-churned users — a question the existing `retention-diagnosis-session-plan.md` interview track owns instead, and which in-app prompts structurally cannot answer regardless. A Fable design session (`docs/claude-prompt/app-wide-feedback-signals-out/01-app-wide-feedback-signals.md`) scoped the three placements shipped here, explicitly rejecting a fuller build as the same "more listening infrastructure on an already-tiny population" anti-pattern the retention diagnosis flagged, in favor of a small, mostly-zero-backend slice.
+
+### Planned Scope
+
+See `RELEASES.md` v0.52.1 for the three placements (Public Library browse-without-adopt, first non-onboarding Study Pack generation, second-ever completed quiz) and their anti-drift rules.
+
+## v0.52.0 - Proactive In-App Feedback Prompts (Released, base branch `releases/v0.52.0`)
+
+Origin: a direct pivot away from the retention-diagnosis interview plan (`docs/claude-prompt/retention-diagnosis-session-plan.md`), after the v0.48.0 cohort-read gate came back with too weak a signal to act on and cold email outreach to churned users was judged unlikely to work (precedent: failed-payment recovery emails got zero response). Rather than chasing a hard-to-reach churned cohort, this surfaces the app's existing, under-used `SendFeedbackWidget`/`QuizFeedbackPanel` pipeline proactively to *current* users at two moments, so future cohorts' friction is caught in real time instead of inferred later. Retention H1 + H5 (`docs/product/ROADMAP.md` Backlog Index) stays exactly where it was — this doesn't resolve or replace that gate, it's a separate, forward-looking track.
+
+**Scope:**
+- First-quiz-ever feedback prompt (backend + frontend).
+- Return-after-inactivity feedback prompt (backend + frontend).
+- Mid-release addition (2026-07-20): feedback modal restyle + Admin detail view (frontend only), plus an optional screenshot attachment on feedback (backend + frontend) — see `docs/claude-prompt/feedback-system-polish-session-plan.md`.
+
+Anti-drift: reuses the existing `POST /feedback` pipeline as-is. The one exception is the mid-release addition's new `feedback_image` table, explicitly justified by a read-path constraint (see `RELEASES.md`) — no other new storage, no rating/NPS data model. No changes to the existing 3-day inactivity email or its cooldown logic. No outreach to already-churned users. Full scope in `RELEASES.md`.
+
+## v0.51.1 - Dashboard Stage-1 Limit Wiring (Released, base branch `releases/v0.51.1`)
+
+Origin: F2's follow-up item from `v0.51.0 - Read-Path Performance Pass II`, deliberately deferred during F2's own implementation because Dashboard Stage-1's `totalNotes`, `hasCompletedSession`, and Challenge-CTA resolution all depended on the full unbounded note array at the time. Now that F2's bounded `limit` param exists and is unused, this closes the gap.
+
+**Scope (shipped):**
+- Dashboard Stage-1 bounded fetch (backend + frontend).
+
+Anti-drift: read-path performance only, following F1/F2/F6's precedent from v0.51.0 — no change to what Dashboard displays or which note Continue Studying / Challenge Quiz routes to. No new caching infrastructure. No changes to quiz-session data model, mastery/readiness computation, or profile-type branching logic. Full scope in `RELEASES.md`.
+
+## v0.51.0 - Read-Path Performance Pass II (Released, base branch `releases/v0.51.0`)
+
+Origin: user-reported production slowness on Private Library, Public Library, Note Collection detail, and the Dashboard. Diagnosed via 4 parallel direct-codebase investigations (one per page) plus a Fable planning session (`docs/claude-prompt/production-performance-audit-out/01-production-performance-audit.md`), grounded against the prior `v0.38.0 - Read-Path Optimization Pass` precedent. Scoped in full via explicit user decision: F9/F10 left parked rather than included; F8 (real server-side Public Library pagination) built directly rather than F3's cap-and-load-more stopgap.
+
+**Scope (shipped):**
+- F1 — Dashboard-overview lean projections + bounding (Codex).
+- F2 — `NoteService.listMine` lean projection + optional `limit` param (Codex).
+- F4 — Private Library poller narrowing (Claude Code direct).
+- F5 — Collection detail waterfall flattening + 2 verification tasks (Codex, likely crosses the ~50 LOC threshold).
+- F6 — Dashboard Stage 2 batched fan-out endpoint (Codex).
+- F7 — Real backend pagination for Private Library (Codex).
+- F8 — Server-side filtering + full pagination UX for Public Library (Codex).
+
+Anti-drift: read-path performance only; byte-identical responses for F1/F2/F4/F5/F6; F7/F8 are explicit UX/architecture changes, not disguised backend swaps; no new caching infrastructure; no quiz-session/mastery/readiness/profile-branching changes. Full scope in `RELEASES.md`.
+
+## v0.50.4 - Exam Hub Discovery Polish (Released, base branch `releases/v0.50.4`)
+
+Origin: direct user production testing of the "Quiz yourself"/"Add to Library" copy-as-is fix (confirmed working correctly on a fresh account — the apparent regression was stale test-account data hitting the copy idempotency guard, not a code bug) surfaced the duplicate Exam Hub link as a separate, real finding; bundled with P2 (vocabulary pass) from the SEO strategy Fable session (`docs/claude-prompt/seo-strategy-out/01-seo-strategy.md`) run the same day. Mid-release scope addition: after direct production testing showed NoteLib not surfacing for exam-adjacent searches, the vocabulary pass was extended to every Public Library subject page (not just Exam Hub), paired with a defensive subject-page indexation gate (`SUBJECT_PAGE_INDEX_THRESHOLD = 6`) informed by a production content-depth inventory.
+
+**Scope (shipped):**
+- Collapsed the duplicate "Browse {Hub} hub →" link on public note detail (Claude Code direct).
+- "Free reviewer" vocabulary pass on Exam Hub pages — SEO candidate P2 (Claude Code direct).
+- Extended the same vocabulary pass to all Public Library subject pages (Claude Code direct).
+- Subject-page indexation gate — sitemap + `robots: noindex` below the depth threshold, so thin subject pages stop being served to search engines while staying fully reachable in-app (Claude Code direct).
+
+Anti-drift: no mass-generated AI content; no pricing/paywall/quota changes; no Wave 2 Exam Hub expansion; the indexation gate changes search-engine visibility only, never page reachability or access. Full scope in `RELEASES.md`.
+
+## v0.50.3 - Public Note Copy Flow & Related-Notes Consistency (Released, base branch `releases/v0.50.3`)
+
+Origin: direct user testing of the public note detail page surfaced two findings, bundled into one Fable session (`docs/claude-prompt/public-note-copy-and-related-links-out/01-copy-flow-and-link-consistency.md`) since both live on the same page. (1) "Quiz yourself on this note" sometimes forces a full Study Pack regeneration whose AI-suggestion modal gets cut off by a real race condition — investigation confirmed the bug and found the backend already supports a free, synchronous copy-as-is path that should be the only behavior for this CTA; Fable confirmed copy-as-is over regeneration as the right default and recommended skipping the modal on this flow entirely rather than just fixing its timing. (2) The two related-notes sections' "see all" links wrap on mobile for longer subject/course names and use inconsistent grid column counts on desktop, both flagged directly from user screenshots.
+
+**Scope:**
+- Part A (Codex): copy-as-is only for the "Quiz yourself" CTA, skip the AI-suggestion modal on this flow, gate the CTA server-side on the source having a ready Study Pack, fix the navigation-vs-modal race as an ordering guarantee.
+- Part B (Claude Code direct): shorten both related-notes "see all" links to `See all →` (with `aria-label`s), collapse the subject section's grid to match the course/program section's 2 columns.
+
+Anti-drift: no new personalization/regeneration capability (the existing copied-pack regenerate hint already covers it); `Browse {Hub} hub →` stays untouched. Full scope in `RELEASES.md`.
+
+## v0.50.2 - Note Card Content Consistency (Released, base branch `releases/v0.50.2`)
+
+Origin: direct user report that the public note detail page's two related-notes sections ("More {Course/Program} notes" vs. "More in {Subject}") render inconsistently — traced to shipping drift (built six weeks apart, never reconciled) rather than a deliberate design choice. Broadened into a Fable card-content-strategy session (`docs/claude-prompt/note-preview-vs-summary-out/01-card-content-strategy.md`) after the user questioned whether the standing "prioritize note preview over summary" rule still holds now that a growing share of notes are AI-authored via `Generate Note` rather than user-written.
+
+**Scope (Phase 1 only — Phase 2 origin-tracking stays parked, see Backlog Index):**
+- Single-excerpt cascade on all four note-card surfaces (public note detail's two related-notes sections, Public Library grid, private Library grid): note preview if non-empty and long enough, else a labeled "Summary" fallback, else no excerpt block — never both stacked.
+- Migrate the bespoke "More {Course/Program} notes" card to the shared `SharedNoteCard` component, matching "More in {Subject}" exactly (sections may still differ in query/count, never in card template).
+- Rewrite the documented card-content rule in `docs/features/public-library.md` (and any other feature doc citing it) from a human-authorship rationale to a source-object rationale ("the note is the source, the summary is a fallback preview of a derivative") — the old rationale is factually broken now that note origin can't be verified, but the underlying priority (note preview first) still holds for an unrelated reason.
+- Frontend-only, no schema/backend change. Fits the Claude-Code-direct lane (isolated, well-scoped, ≤ a few files) rather than needing a Codex prompt — confirm at kickoff.
+
+Anti-drift: no origin-aware rendering (Phase 2 is explicitly rejected for card display even once instrumentation exists — see the Fable output's "Explicit rejections" §3–4); no change to Featured-ranking eligibility criteria; no change to note visibility/ownership/copy-adopt rules; no change to `Generate Note` itself.
+
+Patch version, not minor — this is a consistency/polish fix to something that already exists, not new planned feature work, matching the v0.45.1/v0.45.2/v0.50.1 patch precedent.
+
+## v0.50.1 - Mobile UI Polish (Released, base branch `releases/v0.50.1`)
+
+Origin: direct user report of five UI polish items after using v0.50.0 in practice — three are fast-follow refinements to the tab bar itself (icon-only on focus pages, filter-retaining links, a show/hide preference), two are small, unrelated pre-existing issues (Review Set description truncation, Progress page milestone empty state). Routed entirely through Codex prompts this release (user's token-budget choice, mirroring v0.47.0's per-item Codex-prompt pattern) rather than the direct-Claude-Code lane the routing table would otherwise put most of these in. Full scope in `RELEASES.md`.
+
+## v0.50.0 - Mobile Bottom Tab Bar (Released, base branch `releases/v0.50.0`)
+
+Origin: Fable App Shape proposal (`docs/claude-prompt/app-shape-out/02-app-like-ui.md`), gated on device-mix evidence. Un-parked 2026-07-15 by a production pull showing ~75% mobile vs. 25% desktop by distinct users. Scoping confirmed the original proposal's coordination concern (a "sticky Continue bar") never shipped; two other real, currently-shipped bottom-of-viewport elements (`AddToHomeScreenNudge`, the floating "Send Feedback" launcher) need coordination instead. Full scope in `RELEASES.md`.
+
+Mid-release addition (2026-07-15): the 3 held instrumentation pulls from `retention-diagnosis-session-plan.md`'s Strategy checkpoint (UTM/referral tracking, offline-fallback hit rate, browse-without-adopt tracking), folded in after an explicit decision to instrument rather than opened as their own version. See `RELEASES.md`.
+
+## v0.49.0 - Progress Page: Private Library Links (Released, base branch `releases/v0.49.0`)
+
+Origin: surfaced during the v0.49.0 scoping pass as one of two candidates from the "Post-v0.40.0 Polish Backlog" for a small orthogonal release to fill the interim window while v0.48.0's retention experiments accrue cohort data. The other candidate (Adopted badge on Review Sets) turned out to already be shipped in v0.40.1 — that roadmap entry was stale and has been corrected above. Full scope in `RELEASES.md`.
+
+## v0.48.0 - Retention Experiment: Open Loop & Digest Trigger (Released, base branch `releases/v0.48.0`)
+
+Origin: `docs/claude-prompt/retention-diagnosis-session-plan.md`'s "Recommended v0.48.0 scope" — two Fable sessions (growth/retention diagnosis + consumer psychology) converged on dead trigger infrastructure and no open loop at first-session end as co-dominant retention causes, sharpened by real production data pulls (week-1 depth ≈ W2 retention magnitude; exam-dated users retained *worse* under status quo, since nothing currently acts on the field). A pre-kickoff Resend open/click check (domain-wide, not `INACTIVITY`-specific — no per-type tagging exists to decompose it) found sub-1% click-through, which didn't kill either experiment but reweighted the digest trigger fix to include CTA/content work rather than a bare default flip. Full scope in `RELEASES.md`.
+
+## v0.47.1 - V82 Migration Collision Hotfix (Released, base branch `releases/v0.47.1`)
+
+Origin: production deploy has failed since `v0.46.0` merged with `Found more than one migration with version 82`. Root cause: a rebase artifact — `releases/v0.46.0` was cut from `main` before `v0.45.2` existed and later rebased onto latest `main`, but the due-concepts-digest migration kept its version number from the older base instead of picking up the number the newer `main` had already taken. Full scope in `RELEASES.md`.
+
+## v0.47.0 - Conversion Audit Tier 4: Cleanup Batch (Released, base branch `releases/v0.47.0`)
+
+Origin: Tier 4 of `docs/claude-prompt/conversion-audit-prioritized-backlog.md` (items 37–55, "low impact, cheap cleanups," explicitly meant to be batched together). Item 52 already shipped in v0.46.0; items 47 and 50 (already fixed in prior releases) were dropped during pre-scoping verification. Item 37 was also initially dropped (its assumed cookie-consumption mechanism didn't fit Learn's category-keyed guides), then folded back in at a smaller scope once the rest of the release shipped, reusing item 43's query-param intent pattern instead. Routed through Codex prompts per-item this release (token-budget choice), not the direct-Claude-Code lane the routing table would otherwise put every item in. Full scope in `RELEASES.md`.
+
+## v0.46.0 - Retention Depth: Due-Concepts Digest & Exam Pacing (Released, base branch `releases/v0.46.0`)
+
+Origin: Ideas 1 and 5 from the "New Capability Ideation" Fable session (`docs/claude-prompt/new-capability-out/01-new-capability-ideation.md`), the two ranked highest of three recommended for a real scoping pass. Both are retention-themed, continuing v0.44.0's data-driven thesis that retention (not top-of-funnel) is the proven constraint. Full scope in `RELEASES.md`.
+
+## v0.45.2 - Public Plan Preview Rollup Fix (Released, base branch `releases/v0.45.2`)
+
+Origin: the "Preview this plan" panel on public plan cards was found still showing "0 of 0 notes practice-ready" for Goal collections during v0.46.0 kickoff research — v0.45.1's rollup fix touched `list()`/`listPublic()` but never `getPublic()`, the third code path backing this panel. Cut from `main` as its own patch, independent of the concurrent `v0.46.0` branch. Full scope in `RELEASES.md`.
+
+## v0.45.1 - Study Plan Collection Fixes (Released, base branch `releases/v0.45.1`)
+
+Origin: three pre-existing bugs surfaced by direct user report and confirmed via Explore-agent investigation plus independent Opus and Fable consultations during v0.45.0's pre-signoff review — deliberately deferred to their own release rather than folded into v0.45.0 late. Full scope in `RELEASES.md`.
+
+## v0.45.0 - Conversion Audit Tier 3 — Landing, Pricing & Discovery Polish (Released, base branch `releases/v0.45.0`)
+
+Origin: the same 7-session conversion/retention UX audit that drove v0.44.0, Tier 3 of `docs/claude-prompt/conversion-audit-prioritized-backlog.md` (items #19–36, "medium impact, lower urgency"). Unlike v0.44.0's Tier 1/2, every item here routes to direct Claude Code implementation per `CLAUDE.md`'s task-routing table (copy/composition/UI polish, no new backend/infra) except the note-detail related-notes module, whose routing depends on whether a new query is needed. Full scope in `RELEASES.md`.
+
+## v0.44.0 - Conversion & Retention Polish (Released, base branch `releases/v0.44.0`)
+
+Origin: a 7-session conversion/retention UX audit (`docs/claude-prompt/conversion-audit-out/`, consolidated and tiered in `docs/claude-prompt/conversion-audit-prioritized-backlog.md`), run against a real prior data-driven finding (`docs/archive/conversion-funnel-finding.md`, v0.32.2) that identified retention — not top-of-funnel or onboarding — as the proven constraint. This release shipped the audit's Tier 1 (high-impact, low-effort) items plus one verified backend gap, then folded in Tier 2 (items 12–18) as a second slice rather than closing and reopening a new version. Full scope in `RELEASES.md`.
+
+Two things surfaced by the same audit are explicitly **not** in this release's scope:
+- **The `adaptivePracticeProOnly` pricing-copy-vs-runtime-gate divergence — resolved, no code change needed.** `StudySnapProperties.resolveMonthlyAdaptivePracticeLimit` has an `adaptivePracticeProOnly` kill-switch that, if `true`, would zero Free/Plus regardless of their configured 3/10 limits; it defaults `false` in both `application.yaml` and `application-prod.yaml`, and the owner confirmed production also runs with it unset/`false`. Marketing copy (3/10/30 across Free/Plus/Pro) was correct all along — `subscriptions-and-usage-limits.md`'s stale "Adaptive Practice unavailable"/"currently unavailable in runtime" lines and its "Pricing-surface note" mismatch disclaimer were corrected to match. No release scope required.
+- **"Smart Review Planning."** A much larger, separate initiative (curriculum-driven Review Set auto-assembly) exists as paused planning material in `docs/claude-prompt/fable-out/` — architecture, matching/coverage, admin workflow, student UX, monetization recommendation, terminology audit, and a phased technical roadmap are all drafted but nothing is scoped or kicked off. Unrelated to this release; mentioned here only so it isn't confused with the conversion-audit work. **Current status and gate condition: see the Backlog Index above** — this sat unindexed for ~5 release cycles until a 2026-07-15 checkpoint surfaced it; don't let this historical mention be the only place it's tracked again.
+
+## Retention Root-Cause Diagnosis (candidate, not yet scoped — diagnosis only, no implementation)
+
+Not a version — no release branch, no implementation scope, and explicitly not intended to become one without a further, deliberate scoping pass. Origin: production W1→W2 retention read at **2.4%** (3 of 127 eligible activated users, 2026-07-15), against an earlier 5.6% read (v0.32.2) that first flagged retention as "the real constraint" — the level has not meaningfully improved despite two intervening releases touching retention surfaces (v0.44.0, v0.46.0). Two independent Fable consultations (growth/retention lens and consumer-psychology/behavioral-economics lens, run with no shared context) converged on the same core diagnosis: the retention infrastructure that exists (due-concepts digest, weak-concept nudge, weekly summary) ships default-OFF and is gated behind the exact engagement it's meant to create; the first session ends in psychological completion rather than an open loop; exam date is the strongest retention primitive in the product but is optional and Board-exam-only; and single-serving-utility risk is real for anchor-less casual users but not for exam-dated reviewees, whose job is inherently longitudinal. Pricing was independently ruled out by both sessions as a current bottleneck (Free quota is essentially never hit). Full diagnosis, ranked root causes, ruled-out causes, recommended data pulls (week-1 depth, an exam-date natural experiment, acquisition-source segmentation — all queries against existing data, no code), and candidate directions (all explicitly contingent on those data pulls, none release-ready) are in `docs/claude-prompt/retention-diagnosis-session-plan.md`, with the two full raw sessions in `docs/claude-prompt/retention-diagnosis-out/`. **Data pulls run 2026-07-15**: week-1 depth came back at 3.88% (near the same magnitude as W1→W2 itself, ruling out the "session 1 is fine, only week 2's trigger is broken" reading — the two root causes are co-dominant, not one ahead of the other); the exam-date natural experiment found exam-dated users retained no better under the status quo (0/35 vs 3/94 for non-exam-dated, small-sample), which strengthens the *active* commitment-device candidate direction over the passive one; acquisition-source segmentation remains genuinely unanswerable (no UTM/referral tracking exists in the schema). The recommended v0.48.0 scope (trigger fix + open-loop session ending, both cheap and independently testable) was confirmed and shipped — see `v0.48.0` above. **Post-shipment strategy checkpoint (2026-07-15):** two Fable consultations, run after v0.48.0 merged, prioritized what comes next — full detail in the session-plan file's "Strategy checkpoint" section. Headline: talk to actual retained/churned users now (cheap, non-confounding, more informative at this scale than further cohort analysis); pull UTM/referral tracking and device mix in the same pass; pre-committed decision rule for the v0.48.0 read (any positive-or-ambiguous signal → ship H1 + H5 together as one release, not sequentially, since a 2-week cohort is too small to cleanly resolve); Unified Next-Step Resolver reframed as H5's infrastructure, not standalone app-shape work; the exam-date-users-retained-worse finding may indicate a value problem, not just a trigger problem — unresolved until the interviews happen. **Interim-window analytics pulls run 2026-07-22** (`retention-diagnosis-out/04-interim-window-queries.sql`, run manually against production by the product owner — not by Claude, which lacks the prod `DB_USER`): device mix by distinct user is ~75% mobile / 25% desktop (209 mobile vs. 69 desktop, 1545 vs. 1700 tokens) — reconfirms, doesn't change, the device-mix read already used to un-park the v0.50.0 mobile tab bar. PDF export volume is unchanged at exactly 1 export, ever, by 1 user (2026-07-11) — further reinforces the existing "Parked — do not build" call on PDF export surfacing (see below), no new signal. Official Review Set coverage: exactly 4 course programs have a published (visibility=PUBLIC, top-level) Review Set at all — Accountancy (74 notes), Architecture (52 notes), Education (43 notes), Nursing (63 notes) — a 1:1 match with the four shipped Exam Hub programs (CPALE/ALE/LET/PNLE respectively). Each has real, non-trivial depth (43–74 notes), which is a mild prior *against* the strongest form of the content-gap-churn hypothesis for those four exams specifically — but zero official coverage exists for any board exam outside those four, which the interviews should probe if churned exam-dated users skew toward other boards. The same pass also re-ran the original exam-date natural experiment (`retention-diagnosis-out/03-data-pull-queries.sql` Query 2) at a larger, later sample: 0/41 (0%) exam-dated vs. 3/106 (2.83%) non-exam-dated — consistent with the original 2026-07-15 read (0/35 vs. 3/94), same direction, larger n. This is a general-population reconfirmation of the underlying hypothesis, not the H1+H5 kickoff gate itself — that gate is still the post-v0.48.0 cohort read, unreachable until 2026-07-29 (see Backlog Index above). None of these four results change any status or gate on their own; they narrow what the interviews still need to answer (mainly: value vs. discovery for exam-dated users, and coverage outside the four existing hubs) rather than resolving anything standalone.
+
+## Post-v0.44.0 Conversion Audit Backlog (candidate, not yet scoped)
+
+Not a version — no release branch, no implementation scope yet. Tier 2 (7 items) folded into `v0.44.0`; Tier 3 (18 items) is now scoped as `v0.45.0` (see above). Tier 4 (19 items, "low impact, cheap cleanups") remains here from the same 7-session conversion/retention UX audit — full detail, impact/effort ratings, and Claude Code/Codex routing per item in `docs/claude-prompt/conversion-audit-prioritized-backlog.md`. **Item 52 (echo Weekly Countdown pacing at quiz-session completion) is now scoped into `v0.46.0`** (2026-07-14, pulled in as a Concept Flashcards replacement — see `RELEASES.md`). **16 of the remaining 18 items are now scoped into `v0.47.0`** (2026-07-14 — see `RELEASES.md`); items 47 and 50 (both already fixed in prior releases) were dropped during v0.47.0's pre-scoping verification and remain closed candidates here. Item 37 was also initially dropped (its assumed cookie/goal-banner mechanism doesn't fit Learn's category-keyed guides) but was folded back into `v0.47.0` at a smaller scope once the rest of the release shipped, reusing the query-param intent pattern from item 43 instead. Also includes two explicitly deferred items (adoption-count social proof on Public Library plan cards; "Trending this week," blocked on windowed backend counts that don't exist yet). Pull from here when scoping what comes after v0.45.0 — do not re-run the audit or re-derive this list from scratch.
+
+## App Shape, App-Like UI & Companion Authenticity (candidate, not yet scoped)
+
+Not a version — no release branch, no implementation scope yet. Deliberately **not** conversion-related (unlike the two backlogs above) — three independent questions run through Fable about product shape and experience quality: (1) what features could deepen how Notes/Study Packs/Review Sets/Companion/Progress compose as one system, (2) how the five highest-traffic pages (Note Detail, Review Sets list, Review Set detail, Private Library, Public Library) could read as an app rather than a website, and (3) how Learning Companion content (both curator-written and the v0.42.0 AI-assist draft) could be grounded in real aggregate learner-experience data instead of reading as generic AI output. Full prompts, Fable's raw output, and a classified synthesis (Core Feature / Polish / Future Enhancement, plus explicit out-of-scope guardrails) are in `docs/claude-prompt/app-shape-session-plan.md`. **4 of the 7 Polish items are now scoped into `v0.46.0`** (2026-07-14 scope broadening, see `RELEASES.md`): shared note-card press feedback, skeleton-first initial load (Note Detail only — Review Sets list already had it), sticky search/filter toolbar, and collapse-by-default Note Detail sections. **3 items were pulled in and then dropped the same day** after direct investigation found they were misclassified as Polish — the Review Set filter facet needs a note→collection association that doesn't exist anywhere in the note-list API; the Result-Screen Companion Bridge has a premise problem (Companion content belongs to Collections, not Study Packs — resolve that scoping question before any future attempt); the Review Set feedback digest needs new schema (`FeedbackEntity` is a flat, unscoped global table today) and its paired staleness flag has no target (no "Struggle Map" evidence panel exists anywhere yet to attach it to — that panel is itself one of the still-unscoped Core Feature candidates below). All three remain here as candidates, correctly re-classified as needing real scoping passes, not quick fold-ins. The Core Feature candidates (Companion Live Milestones, Unified Next-Step Resolver, Concept-to-Note Back-Annotation, mobile bottom tab bar, Companion "Struggle Map" evidence panel) remain unscoped — nothing there is kicked off yet, and the Companion-authenticity work still has its named prerequisite (an adoption-provenance link, confirmed cheap on inspection) needing an explicit go/no-go before it's picked up. **Re-prioritized 2026-07-15** against the retention-root-cause diagnosis (see above): Live Milestones, Back-Annotation, and Struggle Map held indefinitely — none touch the proven retention constraint. Unified Next-Step Resolver reframed as infrastructure for the deferred H5 retention direction, not standalone scope — pick up only alongside H5. Mobile tab bar conditional on the device-mix data pull queued as part of the same checkpoint. Full reasoning in `docs/claude-prompt/app-shape-session-plan.md`'s correction note.
+
+## New Capability Ideation (candidate, not yet scoped)
+
+Not a version — no release branch, no implementation scope yet. Distinct from the three backlogs above: not conversion polish, not the composition/app-shape work, not the curriculum-auto-assembly bet — a single open-ended Fable pass asking what capability areas NoteLib has **no version of at all today**. 11 ideas classified via `docs/skills/roadmap-feature-audit.md`'s tiers (5 Core Feature, 4 Future Enhancement, 2 Low-Priority), plus 9 explicit rejections (no 6th quiz mode, no learner-to-learner content exchange bypassing curation, no auto-regeneration, no leaderboards, no freetext taxonomy). Top-ranked candidates: a due-concepts email digest and an Exam Date Countdown/paced-review feature over owned content only (explicitly not Smart Review Planning) — **both scoped into `v0.46.0`, see above**. **Second correction (2026-07-14, load-bearing):** Concept Flashcards (Idea 8) was briefly considered as a third v0.46.0 fold-in but turned out to already be a fully shipped feature (`docs/features/flashcards.md`, including a public preview) — Fable's write-up wrongly listed it as an area with no existing version. Dropped from consideration; do not re-propose it without checking `docs/features/flashcards.md` first. Photo capture of handwritten notes (Idea 6) remains the next recommended-but-unscoped idea — Core Feature-sized (new image upload + vision-extraction infrastructure), not a quick addition; **independently re-endorsed 2026-07-15** as the next Core-Feature bet, explicitly gated on the retention loop existing first (see below), not before. Full detail, corrections, and reasoning in `docs/claude-prompt/new-capability-session-plan.md` and `docs/claude-prompt/new-capability-out/01-new-capability-ideation.md`. **First correction, already applied and load-bearing:** the original top idea assumed NoteLib has no out-of-app re-engagement channel — false, a real retention-email system already ships (`docs/features/retention-emails.md`); the idea survives as a much cheaper addition to that system, not new infrastructure. Read the correction notes in the output file before scoping, not just the original Fable text. **Third correction (2026-07-15), the remaining 8 ideas re-evaluated against the retention diagnosis:** Idea 4 (Parent Readiness Digest) promoted to a conditional retention candidate, gated on the v0.48.0/H1 read — reframed as an external accountability trigger, not persona-completeness work; Idea 9 (Offline Study Pack Access)'s cost was overstated — a service worker and offline fallback already exist in the codebase (`frontend/public/sw.js`, `offline.html`), so remaining work is content-layer, not platform-layer, though it needs its own evidence leg beyond device mix (PDF export volume, offline-fallback hit rate) before it's a real trigger condition; Ideas 2 and 3 (teacher shared-results probe, class groups) folded into the Bulk Quiz Generation trigger condition below rather than tracked separately; Ideas 7 (Listen Mode) and 10 (Bilingual UI) unchanged, stay low; Idea 11 (Study Buddy) confirmed lowest — at 2.4% W1→W2, a pairing mechanic multiplies churn risk rather than countering it. Three items (Ideas 2, 4, 9) flagged as needing a real product decision before they're scopeable, not just a priority slot — full detail in `docs/claude-prompt/retention-diagnosis-session-plan.md`'s "Strategy checkpoint" Session B.
+
+## Archived releases
+
+Full scope for the following shipped versions moved to `docs/archive/ROADMAP_ARCHIVE.md` (see `RELEASES.md` for each changelog entry):
+
+- `v0.35.0` - Mobile-First Builder
+- `v0.36.0` - Readiness/Progress Merge
+- `v0.36.3` - OCR Fast-Follow: Messaging & Feedback
+- `v0.36.2` - OCR Disable Hotfix
+- `v0.36.1` - Post-Release Fixes
+- `v0.38.0` - Read-Path Optimization Pass
+- `v0.37.4` - Idle GC & Metaspace Ceiling Hotfix
+- `v0.37.3` - Study Plan Read-Path Memory Optimization
+- `v0.37.2` - Plan Data Integrity Hotfix
+- `v0.37.1` - Native Memory Hotfix
+- `v0.37.0` - Readiness-First Plans & Mastery Integrity
+- `v0.39.0` - Flexible Review Methods
+- `v0.39.1` - Study Plan Builder Polish
+- `v0.39.2` - Public Library Learning Experience
+- `v0.40.0` - Weekly Study Plan (Exam Countdown) + Primary Review Set
+- `v0.40.1` - Public Review Set Reachability
+
+## Post-v0.40.0 Polish Backlog (7 items from live usage — candidates, not yet scoped)
+
+Not a version — no release branch, no implementation scope yet. Surfaced by the user while using their own v0.40.0 release; captured here so the ideas don't drift/disappear before they're deliberately scoped. Research below was done via direct code trace (some Explore-agent verification hit a session limit and returned nothing — items are marked CONFIRMED where traced directly vs. PARTIAL where grounded but incomplete).
+
+**Fold into v0.40.1 (no new item needed):**
+- **Misleading "No curated Review Sets for X yet" empty state.** `dashboard-study-plan-section.tsx:150` shows this regardless of how many Review Sets the user already owns — it means "no *official curated* set for your track," not "you have none," but reads like the latter. Single-string copy fix on the exact same empty-state card v0.40.1 already rewires (see v0.40.1's "Rewire the existing empty state" bullet above) — fold in, don't ship standalone.
+
+**Open philosophy question — blocks any related scoping until decided:**
+- **Primary Review Set vs. the older Study/Exam Focus mechanism (`studyGoal`/`focusSubjects`, `docs/features/profile.md:85-108`) are unreconciled.** CONFIRMED via `progress-report-client.tsx`: on Progress they're already mutually exclusive at the view level (Primary, once set, fully supersedes the old goalSummary/milestones UI) — but the Profile page has **zero awareness of Primary Review Set** (no `primaryCollectionId` reference anywhere in `frontend/app/profile/`), so it still shows only the old per-subject Exam Focus picker, independently editable, with no cross-reference to the Primary the user separately set. Two "what am I working toward" fields, coincidentally similar-looking values, no link between them.
+  - PARTIAL: whether `studyGoal`/`focusSubjects` also drive Dashboard, onboarding, or the exam-hub intent flow beyond Progress was not verified — don't assume "Primary wins" holds everywhere.
+  - Recommended direction (lowest-drift, matches what Progress's code already does): Primary Review Set becomes the canonical surface; Study/Exam Focus is kept but reframed as the explicit fallback for users with no Goal, and Profile actually shows the Primary. Not purely additive — Study Focus is load-bearing as the no-Goal fallback, so this redefines what it means. Needs a deliberate product decision (user is taking this to GPT) before it becomes a roadmap item.
+  - **Widened 2026-07-29, folded in rather than opened as a new item:** while discussing v0.63.0 Ask Companion's signoff, the owner asked whether the guidance layer (Companion) should ever reach users who never adopt a Review Set. A GPT second opinion, pressure-tested with Opus (see `v0.64.0 — Add to Review Set` section below), concluded Companion should not — but that the no-Review-Set learner's guidance surface is exactly what this open question's own "Study/Exam Focus as the load-bearing no-Goal fallback" direction already claims to own. Answering it a second time from the Note Detail side would recreate the same two-uncoordinated-answers problem this question exists to fix.
+  - **Widened again 2026-07-29, same conversation:** a further GPT exchange proposed evolving "Ask Companion" into a cross-cutting "Companion" guidance *system* powering Dashboard/Review Set/Progress/Readiness with one voice. Pressure-tested with Opus (see the "Companion Guidance Doctrine" Backlog Index row below for the full resolution) — the taxonomy was adopted, the literal system-merge was rejected, and a unified "what should I do next" answer was found to require one canonical answer to "what am I working toward," which this question already owns. **This question now has three things waiting on its resolution** (Personalization's gate, the no-Review-Set guidance surface, and the Companion Guidance Doctrine's Phase 1) — a stronger argument for prioritizing the decision sooner rather than later.
+
+**Cheap, independent candidates (sequence after the philosophy question above, since it touches the same Profile/Progress neighborhood):**
+- ~~Show "Adopted" vs. "Created by you" on a Review Set~~ — **already shipped, v0.40.1** (`AdoptedBadge` in `collections-page-client.tsx`, equivalent treatment in `collection-detail-page-client.tsx`, both test-covered). This roadmap entry was stale — corrected 2026-07-15 while scoping v0.49.0, which briefly re-surfaced it as a candidate before direct code inspection found it already live. Showing the *original author's name* (like Public Notes' `authorDisplayName`) remains a real, separate, larger item — needs new backend exposure (no owner/author/official field on collection responses today) and a real edge case (source since deleted/private, no author left to show).
+- **Overdue color-warning on child Subject-plan cards.** `child.dueConcepts` is already rendered as plain text on the Goal detail page (`collection-detail-page-client.tsx:660`) — no color coding today. Cheap, uses existing data. Flag: a warning *color* leans toward the "monitoring" framing the locked list/execution-row anti-drift rule pushes back on; defensible only because this is the Goal's own detail surface, not a list/browse card — needs a conscious sign-off, not an automatic yes. (Distinct from Phase 2 weighted-allocation scheduling above, which remains separately deferred and ungated.)
+- ~~Make Progress's per-subject "Concept Mastery" cards link to Private Library filtered by subject~~ — **scoped into `v0.49.0`**, see below.
+
+---
+
+## Guided Learning Initiative (Companion) — v0.41.0 and beyond
+
+Not a version — no release branch yet, planned to kick off after v0.40.1. Origin: a product realization surfaced across several planning discussions — Review Centers are not valuable because they provide PDFs or quizzes, they are valuable because they provide **guidance** (structure, direction, pacing, coaching, confidence). NoteLib has the knowledge layer (Notes), the learning engine (Study Packs), and the journey (Review Sets) — but no **guidance layer** riding on top of the journey. This does not turn NoteLib into an online Review Center; it adds one new layer while keeping Notes as the source of truth and Subject Plans strictly academic (no "Exam Strategies"/"FAQs" masquerading as Subject Plans).
+
+**Success criterion (the north star every phase below is judged against):** *"Every Official Review Set should feel like a premium guided learning experience rather than a collection of notes."* Not feature count, not revenue.
+
+**The organizing insight:** of the topics discussed (Companion, AI-assisted authoring, Companion regeneration, AI-generated Review Sets, creation/adoption/discovery UX, Public Library integration, runtime AI, monetization, profile-aware terminology), only **one is a genuinely new concept** — the **Learning Companion**, a persisted, curator-authored, profile-aware, statically-served guidance layer on a top-level Review Set. Confirmed by codebase audit: no entity carries authored narrative content on a collection today (guidance today is client-side ephemeral tips only, `frontend/lib/guidance-engine.ts` — no stored content). Everything else in the discussion is either an authoring enabler for the Companion, already on the roadmap under a different name, a deferred premium tier, or a cross-cutting naming constraint:
+
+- **Review Set creation/adoption UX** — already shipped (Builder Canvas, adopt/adopt-goal) plus already-planned refinements (Post-v0.40.0 Polish Backlog's "Adopted" badge). Not new scope here.
+- **Review Set discovery** — already scoped narrowly in `v0.40.1` (Browse All) and further gated in the deferred "Review-Set-Centric Navigation" section below. This initiative did not reopen that. **Superseded 2026-07-30:** the `v0.67.0` "Explore Owns Discovery" scope addition reopens navigation-level ownership now that Explore and Primary Review Set infrastructure are live; it does not add Note Detail recommendations, fuzzy matching, or new catalog data.
+- **Public Library integration** — already shipped (v0.39.2 Flashcards/Memorization preview) plus the same deferred Explore-convergence direction below.
+- **Runtime AI / personalization** — deferred premium tiers, gated on the Companion existing first (see Monetization below); does **not** violate the locked "no interactive AI / no mid-exam coaching" constraint in `EXAM_MODES.md` because the Companion MVP is authored static content, not a chatbot.
+- **Profile-aware terminology** — a constraint, not a feature: any "Companion" label resolves through `getCollectionLabels` (candidate new field, e.g. `companionSingular`), same as `primarySingular`.
+
+### v0.41.0 — Learning Companion (MVP), released (base branch `releases/v0.41.0`)
+
+- **Persisted Companion content model.** A JSONB column on the top-level `note_collections` row (not a new table) — lowest-drift, mirrors the existing `sessionState` JSONB precedent, and copies naturally with the row on adopt. Promotable to its own table later if it grows. Companion is 1:1 with a top-level collection only (mirrors the `targetCompletionDate`/primary constraint — rejected on child Subject Plans, same `400` pattern as existing hierarchy validation).
+- **Four sections only, deliberately small:** Overview, Study Strategy, Common Mistakes, FAQ. **Study Timeline and Final Checklist are explicitly deferred and must NOT be static prose** — when built (v0.42.0+) they link the already-shipped, already-free **live** features (the v0.40.0 weekly countdown and readiness), never re-author them. Resources/Updates sections deferred to v0.42.0.
+- **Manual authoring only in v0.41.0** — no AI generation yet; there are few Official sets today so the authoring burden is trivial, and this de-risks the content model before layering LLM on top.
+- **Official Companion authoring only (MVP scope decision, not a permanent limitation).** Only the NoteLib official author can author a Companion in v1; architecture stays open to any top-level-Goal owner later.
+- **Publishes with the Review Set** — hooks into the existing `updateVisibility`/`publishChildCollections` publish cascade.
+- **Travels on adopt, per the locked snapshot-copy rule (v0.31.0, below).** Companion is added to `persistAdoptedGoal`'s copied set (the way `targetCompletionDate` is explicitly *excluded* — Companion is the opposite, it should travel, like a linked Study Pack does on note copy). Source edits do **not** propagate to existing adopters (same as notes today). Owner self-copy **excludes** the Companion (same category as the existing generated-content self-copy exclusion).
+- **FREE for all learners.** Zero paid uplift by design in v0.41.0 — this is an activation/retention bet, consistent with the success criterion being about experience quality, not revenue.
+
+Anti-drift: no runtime LLM call to serve a Companion (authored once, served static — zero per-view cost); no new top-level entity; no change to the 5-mode quiz contract; no change to `UserEntity`; Companion label resolves through `getCollectionLabels`.
+
+## Archived releases
+
+`v0.41.1 - Review Set Detail Page: This-Set Study Dashboard` shipped; full scope moved to `docs/archive/ROADMAP_ARCHIVE.md` (see `RELEASES.md` for the changelog entry).
+
+## Post-v0.41.0 Polish Backlog (candidate, not yet scoped)
+
+Not a version — no release branch, no implementation scope yet. Surfaced by the user while using their own v0.41.0 release.
+
+- **App-wide CRUD success-toast feedback.** Currently a Review Set-scoped pass (edit details, set/clear primary, Companion save/clear, create, delete) reuses the existing `ToastMessage` component (`frontend/components/ui/toast-message.tsx`) with local-state + `setTimeout` auto-dismiss, matching the pattern already used in 10 other files (profile, study, admin, etc.). Extending this to every mutating action across the whole app is a separate, larger initiative — the current pattern is per-page local state with no shared queue, so app-wide rollout needs a `useToast()` provider/hook first (concurrent toasts aren't handled today). Gate: scope and design the shared provider before starting; don't replicate local-state toasts file-by-file at app-wide scale.
+
+### v0.42.0 — AI-assisted Companion authoring + regeneration, released (base branch `releases/v0.42.0`)
+
+- **Curator workflow:** `Generate Companion` (per section or all) → LLM draft → **mandatory human review and edit** → `Publish`. Publishing is never autonomous. Reuses the existing OpenAI service + PREMIUM/CRITIQUE model tiers — no new LLM infra.
+- **Granular per-section regeneration** (Overview / Strategy / FAQ / Checklist independently, not an all-or-nothing regenerate) plus a **"Companion may be outdated"** staleness signal when the set's structure changes — a lightweight stored structure snapshot (child count / note ids / concept count) compared on read, no new job infra.
+- Adds the Resources section and the Timeline/Checklist live-feature embeds deferred from v0.41.0.
+
+### v0.42.1 — Companion & Progress Polish, released (base branch `releases/v0.42.1`)
+
+Small UX fixes surfaced from using v0.42.0 in practice, frontend-only, no new features:
+
+- Merge the Review Set detail page's readiness card and its "View full progress"/"Review due concepts" row into one card — they're already documented as the same Readiness tier (see `docs/features/collections.md`), this just makes the layout match.
+- Fix `/progress?collectionId={id}`'s backlink: it always showed "Dashboard" regardless of entry point; now returns to the originating collection when reached via that collection's "View full progress" link.
+- Considered and declined: turning collection cards' course/program metadata into a badge — stays plain text per the existing badge-classification rule (identity/state get badges, metadata does not).
+
+### v0.43.0 — Companion "Coach Experience", Released (base branch `releases/v0.43.0`)
+
+Origin: a product proposal to make the Review Set detail page *feel* like a coach talking to the learner rather than a set of labeled CMS fields ("Overview", "Study Strategy", "Common Mistakes", "FAQ"). Pressure-tested via architecture review before scoping.
+
+**Finding: the proposal's own mockup conflates three different operations — only one is genuinely "same content, new presentation":**
+- **(a) Relabel/re-voice authored sections** (e.g. "Overview" → "🗺️ What this covers") — same curator text, friendlier frame, order preserved. Not generation (no per-learner synthesis, same author, same review-before-publish gate); "Curation, never generation" is not implicated. (Shipped headings stay descriptive of the section's content rather than becoming a generic greeting — an earlier "👋 Welcome back" draft for Overview was rejected mid-build for exactly that reason; see the "Coach vs. Companion" refinement below.)
+- **(b) Reorder/prioritize authored sections by learner context** (e.g. surface Common Mistakes first when readiness is low) — **explicitly deferred**, not part of the near-term slice. Two problems: it collides with the monetization line below (adaptive prioritization is named PRO value), and it breaks curator-authored narrative flow — Overview → Strategy → Mistakes → FAQ assumes that reading order, and later sections can reference earlier ones.
+- **(c) Coach-voice composition of already-shipped live signals** — target-date pacing, the resolved next action (`getNextPlanAction`), readiness/due-concepts (`ReadinessSummary`/ConceptHealth), and terminal exam/builder actions. None of this is Companion content; it's v0.41.1's dashboard signals, already FREE, just not yet wearing a coach voice.
+
+**Near-term buildable slice = (a) + (c).** A static coach-label mapping (same shape as `getCollectionLabels`) over `CompanionDisplayCard`, order-preserving, plus a conversational frame composed from already-loaded live signals, positioned above Progress and the authored Companion (which stays a stable, unreordered narrative). Frontend-only, no new backend call, no new persisted state — same architectural class as `pickActiveGuidance` (`frontend/lib/guidance-engine.ts`) and `getNextPlanAction`, both deterministic and frontend-only already. Shipped as `TodaysFocusCard`, which merges the former countdown/primary-action/coach-intro surfaces into one Coach card, while Progress owns the countdown summary and Companion remains reference material.
+
+**(b) stays deferred, reserved for future PRO personalization** (see "Future, gated — Runtime Companion" below). If ever picked up, the FREE-deterministic/PRO-adaptive line already drawn there applies: rule-based deterministic reordering could ship FREE like the weekly countdown did, but genuinely adaptive/learning-pattern/LLM-driven selection is the PRO differentiator — not a re-paywalled version of deterministic logic.
+
+**Planned Scope:**
+- Coach-voice terminology mapping over `CompanionDisplayCard` (order-preserving, no reordering).
+- `TodaysFocusCard` in the Coach tier, above Progress and the authored Companion, driven by the already-resolved primary action (`getNextPlanAction`) plus target-date pacing and existing quick/terminal actions.
+- Short curator-authoring guidance note in `docs/features/companion.md`.
+- **"View Full Guide" collapse (added mid-release, see philosophy refinement below).** `CompanionDisplayCard`'s five sections stop rendering inline; they move behind a "View Full Guide" disclosure, below Today's Focus and Progress. Frontend-only, no new data, no new persisted state — same guardrails as the rest of this release.
+
+Anti-drift: no reordering of authored Companion sections (the narrative-flow reason for this holds for today's long-form-paragraph content model — see the "Coach vs. Companion" refinement below for why that reasoning changes if content ever becomes atomic tips); no generation; no new backend, endpoint, or persisted state; does not reopen Timeline/Checklist as authored prose (stays live-feature embeds per v0.42.0); labels continue through `getCollectionLabels`.
+
+### Coach vs. Companion, formalized (mid-release philosophy refinement)
+
+Surfaced from using the shipped relabel + intro in practice: swapping section headings for coach-voice copy didn't fix the actual complaint. Five long-form paragraphs stacked under friendlier labels still reads as an article, not an app. The heading-copy lever is exhausted; the real lever is disclosure and interaction, not vocabulary.
+
+**The organizing split, going forward:**
+- **Coach (dynamic).** Reacts to the learner: continue-where-you-left-off, target-date pacing, readiness, due concepts, resolved next action, and existing terminal actions. This is not a new concept — it's naming what already exists (`TodaysFocusCard` plus `ReadinessSummary`). Zero new cost.
+- **Companion (timeless).** Authored, does not react to daily progress. Teaches how to approach the curriculum — mindset, expectations, common mistakes, practical advice. Should read like mentor advice, not reference material.
+- **Curriculum.** Subject Plans → Notes → Practice. Unchanged, not part of this discussion.
+
+**A correction to this release's own anti-drift reasoning, recorded so it isn't re-derived wrong later:** the (b) reordering objection above cites two reasons — a PRO-monetization collision and a narrative-flow break. The monetization citation is imprecise in isolation: only *learning-pattern/LLM-informed* selection is the PRO differentiator (see Monetization philosophy, below); deterministic, rule-based selection (a date threshold, a progress count) is FREE-safe by the same precedent as the weekly countdown. The narrative-flow reason is the one that actually holds — and only because today's Companion is five long-form paragraphs where later sections can presume earlier ones were read. That reasoning is specific to *this* content shape, not a permanent rule; see v0.43.1 below for why it changes if sections become atomic tips.
+
+**The verdict, split by cost:**
+- **Cheap (this release, frontend-only):** the Coach/Companion naming above (free, just clarity), the `TodaysFocusCard` → Progress → Companion hierarchy, and the "View Full Guide" collapse (Planned Scope, above). Together these are the actual fix for "feels like documentation" — leading with what already exists and demoting the long-form article to reference material, reachable but not the first thing shown.
+- **Expensive (a distinct initiative, not polish):** atomic, individually-surfaceable "Mentor Tips" with rotation and action-linking. This needs a new content shape — `CompanionContent`'s five long-form fields can't be "surfaced as a moment" without truncating curator intent. Scoped separately below as v0.43.1, since it is not frontend-only and does not fit this release's guardrails.
+
+### v0.43.1 — Companion Mentor Tips, Released (base branch `releases/v0.43.1`)
+
+Origin: continuation of the philosophy refinement above. Once the Companion is reachable via "View Full Guide" rather than rendered inline, the next question is whether the *authored* content itself can participate in the experience the way the Coach cluster already does — small, individually-surfaced, action-linked moments instead of an article to read start to finish.
+
+**Why this is a distinct version, not a v0.43.0 fast-follow in the polish sense** (unlike v0.40.1, v0.41.1, v0.42.1, which were frontend-only fast-follows on their preceding `.0`): this needs a real content-model change, not a presentation change.
+
+- **Content model.** `CompanionContent`'s five long-form markdown fields (`overview`, `studyStrategy`, `commonMistakes`, `resources`, `faq[]`) do not support an individually-rotatable, individually-linkable tip. A tip needs its own identity, optional linked action, and optional surfacing condition — a new entity/DTO shape, not a frontend read of existing fields. This is the fulcrum: everything past this point is backend + authoring-UI scope, which is why it cannot fold into v0.43.0.
+- **Authoring.** The authoring modal, v0.42.0's per-section AI-assist, and the structure-staleness snapshot all need to extend to the new shape. Mandatory human review before publish still applies — no change to "Curation, never generation" or "publishing is never autonomous."
+- **Action-linking is curator-tagged, not inferred.** `TodaysFocusCard` already links *Coach* signals to actions — that part exists. Linking a curator's *authored* tip to an action (e.g. "you still have due concepts" → Review due concepts) must be a field the curator sets when authoring the tip, not something inferred at render time — inferring it would require a per-view LLM call, which v0.41.0 explicitly ruled out ("authored once, served static — zero per-view cost"). This constraint and the cheap/compliant path are the same path: deterministic, curator-tagged linking.
+- **Surfacing stays deterministic.** "Show this tip within 2 weeks of the exam date" or "after N subjects completed" are date/progress rules, not learning-pattern inference — FREE-safe by the weekly-countdown precedent, not a PRO feature. Nothing here requires the adaptive/LLM-driven selection that Monetization philosophy (below) reserves for PRO.
+- **"View Full Guide" stays a permanent escape hatch.** Whatever rotation/surfacing logic ships, the full authored Companion must remain reachable regardless of which triggers have fired — a learner should never permanently miss a curator's warning because its surfacing condition never happened to trigger for them.
+- **Volume caveat.** Per the original Companion MVP scoping, there are still few Official Review Sets today. A "show another tip" affordance over a two-tip guide will feel hollow — this feature's perceived value scales with authored tip volume, which curators have not yet been asked to produce at this grain. Worth an explicit go/no-go check against actual authored-content volume before or during kickoff, not an assumption.
+
+**Go/no-go check, done at kickoff (2026-07-10):** dev DB query found only 1 PUBLIC/Official top-level Review Set carrying an authored Companion (2 companions total across 7 top-level collections; the other sits on a PRIVATE collection). Decision: proceed anyway — dev/local volume is not necessarily representative of prod, and the content-model/authoring-UI work has standalone value independent of how many tips exist on day one. Recorded here so this isn't re-litigated as a fresh concern mid-release. Full scope in `RELEASES.md`.
+
+**Scope broadened mid-release (2026-07-10):** a pre-signoff "tighten these new features" audit surfaced a real trust bug — Pro-only paywalls (Board Exam Mode, Long Exam, Difficulty Selection, Interview Practice) let a Free/Plus user select and pay for Plus without unlocking the feature — plus two lower-stakes gaps: no paywall upsell existed for the Plus/Pro-gated per-concept review-timing detail, and the Help Center had no coverage for this cycle's Companion/Coach/Mentor Tips or Primary Review Set/target-date pacing features. All three landed as additional `v0.43.1` Shipped bullets rather than a separate version, per the same mid-release-fix precedent as v0.42.0's `setCompanion` null-content guard. Full detail in `RELEASES.md`.
+
+### Documented rule clarification (not a reversal) — enables AI-assisted authoring
+
+The standing "Curation, never generation" rule (see v0.31.0 below, "the forbidden version is *auto-generate a personalized plan* — do not build that here") is **clarified, not reversed**, to make v0.42.0 possible:
+
+- **Learner-facing: unchanged.** Curation over generation — a learner never gets an auto-generated plan.
+- **Curator-facing (new, scoped to Official Review Sets/Companions): AI-assisted authoring, with mandatory human review before publish.**
+- **Publishing: never autonomous**, in either case.
+
+This is the same category of deliberate, written rule refinement as v0.33.0's Progress-separation reversal — recorded here so it is never mistaken for scope creep or relitigated later.
+
+### Future, gated — AI-generated Review Sets
+
+Curator pipeline: public notes → suggest Subject Plans → map notes → generate Companion → human review → publish. A separate, larger initiative — gated on v0.42.0's authoring-assist pipeline proving out (this reuses that pipeline rather than building a second one) and on the rule clarification above. Not scoped to a version yet.
+
+### Future, gated — Runtime Companion (Ask Companion, Personalization)
+
+- **Ask Companion (PLUS). Ratified 2026-07-29, kicked off as `v0.63.0` — see this doc's own "v0.63.0 — Ask Companion" section above for the signed-off v1 scope (quota, turn cap, model, access tier).** Grounded Q&A over the authored Companion content — cheap, bounded, reuses the existing Interview Practice cost-control template (feature gate + monthly quota + per-minute `AiRateLimitService` + the cheaper CRITIQUE model + capped turns), the only existing runtime/interactive LLM feature in the product today. Deliberately placed at PLUS (not PRO, where Interview Practice's PREMIUM-model generative simulation lives) because it is grounded retrieval over static content, not generation — a documented, deliberate ladder repositioning.
+- **Personalized/Adaptive guidance (PRO). Not ratified — explicitly excluded from the 2026-07-29 Ask Companion decision, stays Parked.** Must be genuinely adaptive (learning-pattern/LLM-driven) — **not** the existing deterministic v0.40.0 weekly countdown re-labeled with a price tag, which already shipped FREE.
+- Both gated on the persisted Companion existing — **satisfied** (shipped v0.41.0/v0.42.0, confirmed live in the codebase), which is what made Ask Companion decision-ready. Personalization is additionally blocked by the open Primary-Review-Set-vs-Study/Exam-Focus philosophy question (Post-v0.40.0 Polish Backlog, above) — that question is about Profile/Progress, not the Companion, so it did not gate v0.41.0/v0.42.0 and does not gate Ask Companion, but it does still gate Personalization specifically.
+
+### Monetization philosophy (long-term principle, established here for future features to follow)
+
+Codifies what is already the de facto model in this codebase (readiness was ungated to FREE in v0.33.0 as "access not billing"; interaction-heavy features already sit at PRO) rather than redesigning pricing:
+
+- **FREE — static guidance.** The Companion itself. Near-zero marginal cost (authored once, served static), high perceived value — the activation/retention driver and the conversion hook for paid interaction/personalization. Not a giveaway; a funnel.
+- **PLUS — interaction.** Ask Companion. Gives PLUS its first genuinely distinct capability (today PLUS is quota-only) — strengthens PLUS's reason to exist.
+- **PRO — personalization.** Genuinely adaptive guidance, not a re-paywalled version of something already free. **Not any prioritization** — deterministic, rule-based reordering (e.g. "surface Common Mistakes first when readiness is low," see Companion "Coach Experience" candidate above) follows the same FREE precedent as the v0.40.0 weekly countdown. PRO's prioritization must specifically be adaptive/learning-pattern/LLM-informed selection. Much of that adaptive value is derivable from existing ConceptHealth with no per-query LLM for the underlying signal — high margin; only the conversational/adaptive selection logic itself carries recurring cost, controlled via the Interview Practice template.
+- Applies consistently across profiles (Student/Exam-taker/Teacher/Professional) because it gates capabilities, not content, and all labels route through `getCollectionLabels`.
+- No price/quota/checkout change from this principle alone — it governs how *future* features (Ask Companion, Personalization) get tiered when they're built, not a repricing of today's plans.
+
+---
+
+## Review-Set-Centric Navigation (navigation shape reached 2026-07-30)
+
+Originally captured as a future direction rather than a release. **Gate satisfied 2026-07-30:** the Primary Review Set concept proved useful through the shipped Dashboard, Progress, and Collections flows. Progress promotion shipped in `v0.59.0`; `v0.67.0` then reached the drafted navigation shape with a profile-aware Collections label and Explore as the shared discovery front door. The same-day "Explore Owns Discovery" addition makes that ownership explicit without absorbing Library or deleting the standalone public catalog routes.
+
+**Earlier partial exception (v0.41.1, released):** the Review Set detail-page hierarchy (Identity → Current Journey → Primary Action → Readiness → Guidance → Subject Plans/Notes) and the matching `/collections` list-card Primary treatment shipped as a narrow, frontend-only re-composition — see the "v0.41.1" section above. The later `v0.59.0` and `v0.67.0` releases advanced the Dashboard/Progress/Explore navigation parts that were still gated then.
+
+Origin: structural realization that Review Sets have become NoteLib's primary study experience, not a secondary feature alongside Public Library/subjects. When the product was designed, users mostly discovered notes through the Public Library, so Dashboard, Progress, and Exam Hub were all built subject-first. That assumption no longer holds now that Official Review Sets, Subject Plans, smart progression, readiness, and (v0.40.0) weekly plans exist.
+
+Direction, as stated by the user:
+
+- **Official Review Set catalog as the scalable replacement for hand-built per-profession pages.** Publishing another Official Review Set should require no new frontend, versus adding an Exam Hub page per profession (Civil/Electrical/Mechanical Engineering, Nutrition, Midwifery, …).
+- **Public Library preserved as a distinct discovery path.** "I want to browse notes" (Public Library) and "I want to study for an exam" (Review Sets) are two valid entry points to the same notes; the Public Library is not absorbed or removed.
+- **Dashboard and Progress reorganized around the Primary Review Set** instead of subject/course-program. Dashboard asks "what review are you preparing for?"; Progress answers "what's happening with my primary study journey?" Subject mastery still exists — it becomes a facet of the Review Set rather than the primary navigation.
+- **Reached nav shape:** Dashboard / profile-aware `getCollectionLabels().navLabel` / Library / Explore / Progress, where Explore houses the Official Review Set catalog and Public Library. No literal "My Reviews" label was introduced.
+
+Corrections recorded from the codebase research behind this (so they aren't relitigated later):
+
+- **Exam Hub is not the maintenance burden the original framing assumed.** It is a single dynamic `/exam/[slug]` route over a small hardcoded config (`frontend/lib/exam-hub-config.ts`), and it does a distinct job an authenticated catalog does *not* replace: **anonymous / SEO acquisition** (organic search → signup; authenticated visitors route into a filtered Public Library). The recommended resolution is **convergence, not deletion** — an Explore surface that houses the Official Review Set catalog + Public Library, and lets the existing `/exam/[slug]` SEO pages deep-link into a matching Official Review Set once one exists. Retiring the SEO surface would cost organic acquisition.
+- **Naming stays profile-aware.** Any "Primary Review" / "My Reviews" language must resolve through the existing `getCollectionLabels` pattern, not ship as hardcoded universal copy — the concept is profile-agnostic; the label is not (Study Plan / Review Set / Lesson Plan / Collection).
+- **Progress reorg is a default-view change, not a re-scoping.** The `PlanPicker` + `?collectionId=` machinery already exists; a future reorg defaults it to the primary and must keep the all-subjects rollup reachable so notes outside any Review Set aren't orphaned, and must not undo the v0.36.0 Progress/Readiness unification.
+
+---
+
+## Note Detail readiness as its own tab (candidate)
+
+Idea surfaced while fixing v0.36.1's Note Detail readiness placement: instead of showing the readiness summary inline (currently just before Performance Overview on every tab), give it its own tab alongside Summary / Key Concepts / Quiz / Full Notes.
+
+Blocker: the current 4-tab bar already fills the width of a standard iPhone viewport exactly. Adding a 5th tab would overflow and needs a scroll/overflow affordance (e.g. an arrow or horizontal scroll) so the added tab isn't silently hidden on mobile — that affordance needs its own design pass, not a fast-follow. Not scoped into any release yet.
+
+---
+
+## Archived releases
+
+Full scope for the following shipped versions moved to `docs/archive/ROADMAP_ARCHIVE.md` (see `RELEASES.md` for each changelog entry):
+
+- `v0.33.0` - Study Plans as a Retention Engine
+- `v0.33.1` - Study Plan polish & Curated Plan Coverage
+- `v0.33.2` - Plan Detail Redesign (view/edit split)
+- `v0.33.4` - Builder Surface Clarity
+- `v0.33.3` - Recursive Goal Adopt
+
+## Deeper plan nesting — study-plan-within-a-study-plan (candidate, nice-to-have)
+
+The 2-level Goal → Subject model is intentionally constrained. Going to 3+ levels is **feasible but a real project, not a constraint flip** (`parent_collection_id` is self-referential so the *column* supports depth, but every shipped invariant assumes 2): N-level needs real ancestor-walk **cycle detection** (today 2-level makes cycles impossible by construction); **recursive readiness rollup** (today sums *direct* children; the no-cross-subject-dedup rule gets thornier each level); **adopt-recursion**; per-level `sibling_position`; and a tree/breadcrumb builder UX. Genuinely nice-to-have, later — see `docs/archive/STUDY_PLAN_HIERARCHY_PLAN.md`.
+
+---
+
+## Archived releases
+
+Full scope for the following shipped versions moved to `docs/archive/ROADMAP_ARCHIVE.md` (see `RELEASES.md` for each changelog entry):
+
+- `v0.34.0` - Journey: Goal-First Study Experience
+- `v0.29.0` - Bulk Generation & Generation-Context Correctness
+- `v0.29.1` - Bulk Generation Polish
+- `v0.30.1` - Copy Flow Polish
+- `v0.30.0` - Readiness Signals
+- `v0.31.0` - Adoptable Study Plans (v1)
+- `v0.31.1` - Adoptable Study Plans Discovery & Status
+- `v0.31.2` - Analytics Integrity & Funnel Visibility
+- `v0.32.2` - Conversion Diagnosis & Quota Honesty
+- `v0.32.1` - Monetization Surfacing & Pricing Clarity
+- `v0.32.0` - Account & Communication Controls
+
+## Bulk Quiz Generation & Teacher-Flow Polish (candidate, gated on teacher users; version number TBD — do not confuse with the shipped v0.35.0 - Mobile-First Builder)
+
+Theme: reduce the friction of turning material into quizzes. Builds on the v0.27.0 collections spine and the v0.29.0 bulk-generation foundation. **Deferred (was v0.33.0, before that v0.32.0, earlier v0.31.0, before that v0.30.0, originally v0.29.0)** — we have no teacher users yet, so this only schedules once a teacher cohort exists; it may slip further. (v0.33.0 was repurposed for the Study Plans retention work above.) **Honest remainder after v0.29.0:** v0.29.0 builds the shared batch-orchestration + quota foundation for bulk *content* (note + Study Pack) generation from topics; this release extends that to **collection-level bulk *quiz* generation over existing notes** plus async quiz generation, and bundles three teacher-flow quiz-preview polish fixes. Make quiz generation async (like the Study Pack pipeline), then add a collection-level bulk action that batches the universal per-note pipeline.
+
+**Formalized as an explicit trigger condition, 2026-07-15** (post-v0.48.0 Fable strategy checkpoint, `docs/claude-prompt/retention-diagnosis-session-plan.md`): the 5-consecutive-deferral pattern was confirmed as correct — teachers can already generate quizzes per-note, so missing bulk-batching isn't what's blocking teacher adoption; zero teacher users is a positioning/distribution problem, not a feature gap — but re-litigating the same decision every release cycle is real waste. This now **auto-schedules once ≥5 active teacher accounts exist**, and is out of per-release scoping consideration until that threshold is hit. **New Capability Ideation's Idea 2 (teacher shared-quiz-results probe) and Idea 3 (class groups) fold into this same trigger, not tracked as separate candidates** — when the threshold fires, Idea 2 (cheapest demand test) ships first, and its result decides between this item and Idea 3.
+
+Locked direction:
+
+- **The universal spine is preserved.** Every profile still generates a Study Pack before a quiz — this is intentional, not a funnel to remove (consistency across easy profile switching + uniform quota). Bulk solves the friction by *batching* the same pipeline, never by forking a profile-specific shortcut.
+- **Profile-aware framing, not a fork.** Teacher emphasizes quizzes, Student study packs, via the existing Study/Exam Focus copy mechanism — never per-profile pipeline branches or hardcoded `if (TEACHER)` checks.
+- **No new quota category, no collection-level AI synthesis.** Each note spends one existing per-note credit per artifact; bulk is a fan-out of per-note generation, not a synthesized collection document (Option B stays deferred).
+- **Bulk is explicit, not an import side-effect.** One deliberate user click for the batch; preserves the explicit-generation rule. DOCX export and the multi-note Exam Builder stay Teacher/Admin-only; the old share-link profile restriction was superseded by `v0.89.0`, which makes individual generated quiz links available to any onboarded owner.
+
+Scope:
+
+- **Teacher quiz-preview polish** — move the ⋯ context menu to the top-right of the note title; remove the redundant "Correct Answer" panel (the choice already shows a ✓ Correct badge + highlight, no a11y loss); render the question stem through `QuizQuestionText` so `Statement N:` lines break onto separate lines (the teacher preview is the only quiz view rendering raw stem text).
+- **Async quiz generation** — mirror the Note → Study Pack pipeline: status field (`GENERATING` / `READY` / `FAILED`), task-executor enqueue, frontend polling. `GeneratedQuizService.generate()` is currently synchronous. Prerequisite for bulk.
+- **Collection-level bulk generation** — batch the universal per-note pipeline across a collection. The hard part is **quota-aware partial execution**: generate as many as quota allows, report completed vs. blocked, upsell — never fail the whole batch.
+
+---

@@ -9,7 +9,7 @@ needed.
 
 ## Contents
 
-- **`RELEASES_ARCHIVE.md`** — full `RELEASES.md` sections for v0.40.1 and earlier. `RELEASES.md`
+- **`RELEASES_ARCHIVE.md`** — full `RELEASES.md` sections for v0.120.0 and earlier (v0.40.1 and earlier moved 2026-07-10; v0.41.0-v0.120.0 moved 2026-09-07). `RELEASES.md`
   itself keeps the current + last few versions live, plus a one-line index of every archived
   version pointing here. Condensed (summary-only) per-version notes for the same versions also
   live in `docs/releases/vX.Y.Z.md` — those drop implementation detail (endpoint/column names,
