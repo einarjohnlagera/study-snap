@@ -49,6 +49,7 @@ import com.studysnap.backend.model.StudyPackProgressView;
 import com.studysnap.backend.repository.GeneratedQuizRepository;
 import com.studysnap.backend.repository.GeneratedQuizNoteProjection;
 import com.studysnap.backend.repository.NoteCollectionChildCountProjection;
+import com.studysnap.backend.repository.NoteCollectionAdoptionCountProjection;
 import com.studysnap.backend.repository.NoteCollectionItemCountProjection;
 import com.studysnap.backend.repository.NoteCollectionItemNoteProjection;
 import com.studysnap.backend.repository.NoteCollectionItemRepository;
@@ -197,6 +198,7 @@ public class NoteCollectionService {
                         rolledUpItemCountsByCollectionId.getOrDefault(collection.getId(), 0),
                         rolledUpReadyCountsByCollectionId.getOrDefault(collection.getId(), 0),
                         childCountsByCollectionId.getOrDefault(collection.getId(), 0),
+                        0,
                         practicedCountsByCollectionId.getOrDefault(collection.getId(), 0)
                 ))
                 .toList();
@@ -221,6 +223,7 @@ public class NoteCollectionService {
                         collection,
                         itemCountsByCollectionId.getOrDefault(collection.getId(), 0),
                         readyCountsByCollectionId.getOrDefault(collection.getId(), 0),
+                        0,
                         0,
                         0
                 ))
@@ -247,12 +250,14 @@ public class NoteCollectionService {
         Map<UUID, Integer> rolledUpItemCountsByCollectionId = rollUpCounts(collections, children, itemCountsByCollectionId);
         Map<UUID, Integer> rolledUpReadyCountsByCollectionId = rollUpCounts(collections, children, readyCountsByCollectionId);
         Map<UUID, Integer> childCountsByCollectionId = loadChildCounts(collections);
+        Map<UUID, Integer> adoptionCountsByCollectionId = loadAdoptionCounts(collections);
         return collections.stream()
                 .map(collection -> toSummaryResponse(
                         collection,
                         rolledUpItemCountsByCollectionId.getOrDefault(collection.getId(), 0),
                         rolledUpReadyCountsByCollectionId.getOrDefault(collection.getId(), 0),
                         childCountsByCollectionId.getOrDefault(collection.getId(), 0),
+                        adoptionCountsByCollectionId.getOrDefault(collection.getId(), 0),
                         0
                 ))
                 .toList();
@@ -686,7 +691,8 @@ public class NoteCollectionService {
         collectionsWithChildren.addAll(children);
         List<NoteCollectionItemEntity> items = itemRepository
                 .findByCollectionIdInOrderByCollectionIdAscPositionAsc(collectionIds(collectionsWithChildren));
-        return toPublicDetailResponse(collection, items);
+        int adoptionCount = loadAdoptionCounts(List.of(collection)).getOrDefault(collectionId, 0);
+        return toPublicDetailResponse(collection, items, adoptionCount);
     }
 
     @Transactional
@@ -2660,6 +2666,18 @@ public class NoteCollectionService {
         return countsByCollectionId;
     }
 
+    private Map<UUID, Integer> loadAdoptionCounts(List<NoteCollectionEntity> collections) {
+        if (collections.isEmpty()) {
+            return Map.of();
+        }
+        List<UUID> collectionIds = collections.stream().map(NoteCollectionEntity::getId).toList();
+        Map<UUID, Integer> countsByCollectionId = new HashMap<>();
+        for (NoteCollectionAdoptionCountProjection projection : collectionRepository.countAdoptionsByCollectionIds(collectionIds)) {
+            countsByCollectionId.put(projection.getCollectionId(), Math.toIntExact(projection.getAdoptionCount()));
+        }
+        return countsByCollectionId;
+    }
+
     private Map<UUID, Integer> loadPracticedCounts(UUID userId, List<NoteCollectionEntity> collections) {
         Map<UUID, List<UUID>> noteIdsByCollectionId = loadNoteIdsByCollectionId(collections);
         LinkedHashSet<UUID> allNoteIds = noteIdsByCollectionId.values().stream()
@@ -2921,6 +2939,7 @@ public class NoteCollectionService {
             int itemCount,
             int readyCount,
             int childCount,
+            int adoptionCount,
             int notesPracticed
     ) {
         return new NoteCollectionSummaryResponse(
@@ -2936,6 +2955,7 @@ public class NoteCollectionService {
                 itemCount,
                 readyCount,
                 childCount,
+                adoptionCount,
                 notesPracticed,
                 collection.getCreatedAt(),
                 collection.getUpdatedAt()
@@ -2962,6 +2982,7 @@ public class NoteCollectionService {
                 collection.getSourcePlanId(),
                 collection.getParentCollectionId(),
                 Math.toIntExact(collectionRepository.countByParentCollectionId(collection.getId())),
+                0,
                 progress.notesWithStudyPack(),
                 collection.getCreatedAt(),
                 collection.getUpdatedAt(),
@@ -2972,7 +2993,8 @@ public class NoteCollectionService {
 
     private NoteCollectionDetailResponse toPublicDetailResponse(
             NoteCollectionEntity collection,
-            List<NoteCollectionItemEntity> items
+            List<NoteCollectionItemEntity> items,
+            int adoptionCount
     ) {
         List<NoteCollectionItemResponse> itemResponses = toPublicItemResponses(items);
         NoteCollectionProgressResponse progress = toProgressResponse(itemResponses);
@@ -2996,6 +3018,7 @@ public class NoteCollectionService {
                 collection.getSourcePlanId(),
                 collection.getParentCollectionId(),
                 Math.toIntExact(collectionRepository.countByParentCollectionId(collection.getId())),
+                adoptionCount,
                 progress.notesWithStudyPack(),
                 collection.getCreatedAt(),
                 collection.getUpdatedAt(),

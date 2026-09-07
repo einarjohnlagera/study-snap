@@ -55,6 +55,7 @@ import com.studysnap.backend.exception.NoteNotFoundException;
 import com.studysnap.backend.repository.GeneratedQuizRepository;
 import com.studysnap.backend.repository.GeneratedQuizNoteProjection;
 import com.studysnap.backend.repository.NoteCollectionChildCountProjection;
+import com.studysnap.backend.repository.NoteCollectionAdoptionCountProjection;
 import com.studysnap.backend.repository.NoteCollectionItemCountProjection;
 import com.studysnap.backend.repository.NoteCollectionItemNoteProjection;
 import com.studysnap.backend.repository.NoteCollectionItemRepository;
@@ -2992,6 +2993,26 @@ class NoteCollectionServiceTest {
     }
 
     @Test
+    void listPublic_loadsAdoptionCountsOnceForTheFullVisibleCollectionList() {
+        UUID firstCollectionId = UUID.randomUUID();
+        UUID secondCollectionId = UUID.randomUUID();
+        NoteCollectionEntity first = buildCollection(firstCollectionId, UUID.randomUUID(), "First public set", Instant.now());
+        NoteCollectionEntity second = buildCollection(secondCollectionId, UUID.randomUUID(), "Second public set", Instant.now());
+        first.setVisibility(CollectionVisibility.PUBLIC);
+        second.setVisibility(CollectionVisibility.PUBLIC);
+        List<UUID> visibleCollectionIds = List.of(firstCollectionId, secondCollectionId);
+        when(collectionRepository.findByVisibilityAndParentCollectionIdIsNullOrderByUpdatedAtDesc(CollectionVisibility.PUBLIC))
+                .thenReturn(List.of(first, second));
+        when(collectionRepository.countAdoptionsByCollectionIds(visibleCollectionIds))
+                .thenReturn(List.of(adoptionCountProjection(firstCollectionId, 7)));
+
+        List<NoteCollectionSummaryResponse> result = service.listPublic(null);
+
+        assertThat(result).extracting(NoteCollectionSummaryResponse::adoptionCount).containsExactly(7, 0);
+        verify(collectionRepository, times(1)).countAdoptionsByCollectionIds(visibleCollectionIds);
+    }
+
+    @Test
     void listPublic_countsOnlyStudyPackReadyNotes() {
         UUID collectionId = UUID.randomUUID();
         UUID readyNoteId = UUID.randomUUID();
@@ -3107,10 +3128,12 @@ class NoteCollectionServiceTest {
         when(noteRepository.findCollectionNoteProjectionsByIdIn(noteIds)).thenReturn(asNoteProjections(readyNote));
         when(studyPackRepository.findProgressViewsByNoteIdIn(noteIds)).thenReturn(asProjections(buildStudyPack(readyNoteId)));
         when(collectionRepository.countByParentCollectionId(collectionId)).thenReturn(0L);
+        when(collectionRepository.countAdoptionsByCollectionIds(List.of(collectionId))).thenReturn(List.of());
 
         NoteCollectionDetailResponse result = service.getPublic(collectionId);
 
         assertThat(result.readyCount()).isEqualTo(1);
+        assertThat(result.adoptionCount()).isZero();
         assertThat(result.items()).hasSize(1);
         assertThat(result.items().getFirst().studyPackId()).isNull();
     }
@@ -5520,6 +5543,20 @@ class NoteCollectionServiceTest {
             @Override
             public long getChildCount() {
                 return childCount;
+            }
+        };
+    }
+
+    private NoteCollectionAdoptionCountProjection adoptionCountProjection(UUID collectionId, long adoptionCount) {
+        return new NoteCollectionAdoptionCountProjection() {
+            @Override
+            public UUID getCollectionId() {
+                return collectionId;
+            }
+
+            @Override
+            public long getAdoptionCount() {
+                return adoptionCount;
             }
         };
     }
