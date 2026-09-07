@@ -483,6 +483,18 @@ currently answers nowhere:
 **after** onboarding completes. So `/onboarding` is a **waypoint the token passes through, not a surface
 this work edits.**
 
+> **⚠️ CORRECTED 2026-09-07 (`v0.128.0`) — THE PARAGRAPH BELOW IS NO LONGER TRUE AND MUST NOT BE
+> READ AS A LIVE CONSTRAINT.** `[CHECKPOINT — due 2026-09-11]` is **DISCHARGED** and the onboarding
+> freeze is **LIFTED** (owner, 2026-09-07). The read was taken first rather than abandoned, four days
+> early: 393 signups all-time, 249 completed, 63.4% against a 62.4% baseline. **The deciding fact was
+> the denominator, not the rate — the post-`v0.73.0` cohort is n=18**, so the read was never going to
+> be answerable on its own date. `app/onboarding` WAS edited in `v0.128.0` (catalog-first Course /
+> Program suggestions), with owner approval, and no read was spent.
+>
+> **⚠️ THIS CORRECTION IS STRICTLY ABOUT THE 2026-09-11 ONBOARDING READ. It says NOTHING about
+> `[CHECKPOINT — due 2026-09-19]`, which is this arc's own kill criterion, keys on `ACCEPTED`, and
+> remains fully live and untouched.** `v0.128.0` did no Learning Connections work of any kind.
+
 **⚠️ THIS IS WHAT KEEPS `[CHECKPOINT — due 2026-09-11]` ALIVE.** That read is a **live measurement window**
 — 375 signups against a 62.4% completion baseline — so editing the flow would **destroy** it, not confound
 it. The owner lifted every gate on 2026-08-29; the read survives anyway because the definition does not

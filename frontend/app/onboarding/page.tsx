@@ -1,6 +1,6 @@
 "use client";
 
-import { type ReactNode, useEffect, useRef, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { PaywallModal } from "@/components/billing/paywall-modal";
 import { CourseProgramCombobox } from "@/components/metadata/course-program-combobox";
@@ -49,10 +49,14 @@ import {
   type OnboardingProfileType,
 } from "@/lib/onboarding-v2";
 import {
-  COURSE_PROGRAM_SUGGESTIONS,
+  buildCatalogFirstCourseProgramSuggestions,
   getDefaultLearnerLevel,
   getGroupedLearnerLevels,
 } from "@/lib/learning-profile";
+import {
+  trackCourseProgramValueSelected,
+  useCourseProgramCatalogNames,
+} from "@/hooks/use-course-program-catalog";
 import {
   formatStudyPackResetDate,
   isStudyPackLimitReachedMessage,
@@ -311,11 +315,32 @@ export default function OnboardingPage() {
     quiz: true,
   });
   const { usageSummary, refreshUsageSummary } = useBillingUsageSummary();
+
+  // Catalog-first Course / Program suggestions -- the deferred half of v0.79.0, which excluded
+  // onboarding ONLY to protect a signup-funnel read that has since been taken and discharged.
+  //
+  // ⚠️ The hook swallows every failure to `null`, and the helper falls back to the hardcoded
+  // COURSE_PROGRAM_SUGGESTIONS on `null`. That is deliberate: a catalog that does not load must not
+  // block signup. It also means the catalog genuinely has to ARRIVE for this to be more than a
+  // no-op, which is why the guard in the test file asserts a list that differs from the constant
+  // rather than merely asserting the screen renders.
+  const catalogCourseProgramNames = useCourseProgramCatalogNames();
+  const courseProgramSuggestions = useMemo(
+    () => buildCatalogFirstCourseProgramSuggestions(catalogCourseProgramNames, [draft.courseProgram]),
+    [catalogCourseProgramNames, draft.courseProgram],
+  );
+
   const generatedNoteSectionRef = useRef<HTMLDivElement | null>(null);
   const [generatedNoteRefreshToken, setGeneratedNoteRefreshToken] = useState(0);
 
   const startedTrackedRef = useRef(false);
   const completionTrackedRef = useRef(false);
+  // ⚠️ Holds the last Course / Program value actually COMMITTED, and is passed as the event's
+  // `previousValue` so the helper's own change-suppression does the de-duplication.
+  // `selectLearnerLevel` re-runs `updateLearningProfileContext` every time a level is picked, so a
+  // learner who goes back and changes only their level would otherwise fire a duplicate selection
+  // for a program they never re-picked.
+  const trackedCourseProgramRef = useRef<string | null>(null);
   const generationTrackedRef = useRef<string | null>(null);
   const completionAttemptedRef = useRef(false);
   const practiceFirstEligibleTrackedRef = useRef(new Set<string>());
@@ -520,6 +545,13 @@ export default function OnboardingPage() {
           nextDraft.generatedNoteReady = true;
         }
         setDraft(nextDraft);
+        // ⚠️ Seed the selection-tracking baseline from what is ALREADY stored, so a resumed
+        // onboarding does not re-report a program the learner picked in an earlier session. The ref
+        // is per-page-load, so without this a learner who returns and steps Back to the learner-level
+        // screen would fire a second COURSE_PROGRAM_VALUE_SELECTED for an unchanged value. Only
+        // `me.courseProgram` counts here -- a draft value that was never committed has never been
+        // reported, so it must still be able to fire.
+        trackedCourseProgramRef.current = me.courseProgram ?? null;
 
         if (!startedTrackedRef.current) {
           startedTrackedRef.current = true;
@@ -1117,6 +1149,16 @@ export default function OnboardingPage() {
     // availability, the intent router) reads values that are now actually stored.
     try {
       await updateLearningProfileContext(learnerLevel, draft.courseProgram.trim() || null);
+      // Fired from the EXISTING commit point, mirroring the dashboard prompt: this is the awaited
+      // write that persists the value, so the event records a program the learner actually kept.
+      // Placed after the await deliberately -- a failed save must not report a selection.
+      trackCourseProgramValueSelected(
+        "onboarding",
+        draft.courseProgram,
+        trackedCourseProgramRef.current,
+        catalogCourseProgramNames,
+      );
+      trackedCourseProgramRef.current = draft.courseProgram;
       if (profileType === "BOARD_EXAM" && draft.examDate) {
         await updateExamDate(draft.examDate);
       }
@@ -1521,7 +1563,7 @@ export default function OnboardingPage() {
             <CourseProgramCombobox
               id="onboarding-course-program"
               value={draft.courseProgram}
-              suggestions={COURSE_PROGRAM_SUGGESTIONS}
+              suggestions={courseProgramSuggestions}
               onChange={updateCourseProgram}
               learnerLevel={draft.learnerLevel}
               ariaLabel="Course / Program"
