@@ -405,7 +405,7 @@ public class NoteLibraryRepositoryImpl implements NoteLibraryRepository {
     }
 
     /**
-     * The owner-scoped note search behind {@code GET /notes?q=}.
+     * The owner-scoped note search behind {@code GET /notes?search=}.
      *
      * <p>⚠️ FOUR FIELDS, NOT TWO, AND THAT IS THE WHOLE POINT. It replaces the Study Plan builder's
      * client-side picker filter, which matched title, subject, course program AND tags; a server

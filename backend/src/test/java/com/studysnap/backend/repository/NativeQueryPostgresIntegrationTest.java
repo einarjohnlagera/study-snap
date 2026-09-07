@@ -211,6 +211,8 @@ class NativeQueryPostgresIntegrationTest {
 
     @Autowired
     private StudyPackRepository studyPackRepository;
+    @Autowired
+    private ChallengeQuizQuestionBankRepository questionBankRepository;
 
     @Autowired
     private GeneratedQuizRepository generatedQuizRepository;
@@ -1733,7 +1735,7 @@ class NativeQueryPostgresIntegrationTest {
             }
         }
         noteLibraryRepository.findListItemProjectionsByOwnerUserId(ownerUserId, null, 10);
-        // ⚠️ The q= branch is a DIFFERENT statement (four LIKE legs plus a Postgres `unnest`),
+        // ⚠️ The search= branch is a DIFFERENT statement (four LIKE legs plus a Postgres `unnest`),
         // so PREPAREing the unsearched one proves nothing about it.
         noteLibraryRepository.findListItemProjectionsByOwnerUserId(ownerUserId, SEARCH_PATTERN, 10);
         noteLibraryRepository.findLibraryListItemProjectionsByOwnerUserIdAndIdIn(ownerUserId, List.of(otherUserId));
@@ -2297,6 +2299,93 @@ class NativeQueryPostgresIntegrationTest {
                 id, ownerUserId, title, subject
         );
         return id;
+    }
+
+    /**
+     * ⚠️ THE BACKFILL'S THREE JPQL PROJECTIONS, WHICH NOTHING ELSE EXECUTES.
+     *
+     * <p>{@code v0.125.0} rewrote {@code OfficialChallengeQuizTemplateService.queueBackfill} onto
+     * constructor projections. Every test reaching that service MOCKS these repositories and hands back
+     * correctly-ordered records; this class's {@code PREPARE} sweep covers NATIVE queries only; and
+     * Spring's bootstrap proves the JPQL parses but not that the arguments are in the right order —
+     * <strong>every component is a {@code UUID}</strong> bar one enum.
+     *
+     * <p>MEASURED, NOT ASSUMED: swapping {@code s.id} and {@code s.noteId} in
+     * {@code findOwnerProjectionsByNoteIdIn} passed the ENTIRE backend suite — 2,213 tests, zero
+     * failures — while making the admin backfill report {@code queued=0, skipped=1442} over the whole
+     * catalog. A successful-looking response that seeds nothing.
+     *
+     * <p>⚠️ EVERY ID IS DISTINCT AND ASSERTED BY IDENTITY, NEVER MERELY NON-NULL: a fixture whose note,
+     * owner and pack ids could coincide passes under a transposition, which is exactly why this was
+     * invisible.
+     */
+    @Test
+    void backfillProjectionsPlaceEveryUuidComponentInItsOwnField() {
+        UUID ownerUserId = seedUser("backfill-projection-owner");
+        UUID noteId = seedPublicNote(ownerUserId, "Backfill projection note", new String[]{"tag"});
+        UUID studyPackId = seedStudyPack(ownerUserId, noteId, "Backfill projection pack");
+        assertThat(List.of(ownerUserId, noteId, studyPackId)).doesNotHaveDuplicates();
+
+        List<NoteOwnerVisibilityProjection> notes = noteRepository
+                .findOwnerVisibilityProjectionsByVisibilityOrderByUpdatedAtDesc(NoteVisibility.PUBLIC);
+        NoteOwnerVisibilityProjection note = notes.stream()
+                .filter(candidate -> noteId.equals(candidate.id()))
+                .findFirst()
+                .orElseThrow();
+        assertThat(note.ownerUserId()).isEqualTo(ownerUserId);
+        assertThat(note.visibility()).isEqualTo(NoteVisibility.PUBLIC);
+
+        List<StudyPackOwnerProjection> packs = studyPackRepository.findOwnerProjectionsByNoteIdIn(List.of(noteId));
+        assertThat(packs).hasSize(1);
+        assertThat(packs.getFirst().id()).isEqualTo(studyPackId);
+        assertThat(packs.getFirst().noteId()).isEqualTo(noteId);
+        assertThat(packs.getFirst().ownerUserId()).isEqualTo(ownerUserId);
+
+        seedQuestionBankEntry(ownerUserId, studyPackId, "Seeded question one");
+        seedQuestionBankEntry(ownerUserId, studyPackId, "Seeded question two");
+        List<ChallengeQuizQuestionBankOwnerProjection> pairs = questionBankRepository
+                .findOwnerStudyPackPairsByStudyPackIdIn(List.of(studyPackId));
+        // `distinct` collapses both rows to the one (user, pack) pair the backfill checks.
+        assertThat(pairs).hasSize(1);
+        assertThat(pairs.getFirst().userId()).isEqualTo(ownerUserId);
+        assertThat(pairs.getFirst().studyPackId()).isEqualTo(studyPackId);
+        assertThat(questionBankRepository.findOwnerStudyPackPairsByStudyPackIdIn(List.of(UUID.randomUUID())))
+                .isEmpty();
+    }
+
+    /**
+     * The backfill dispatches in this query's order, so the ordering is behaviour rather than
+     * presentation: it decides which Official templates seed first.
+     */
+    @Test
+    void theBackfillCatalogProjectionReturnsMostRecentlyUpdatedFirst() {
+        UUID ownerUserId = seedUser("backfill-order-owner");
+        UUID older = seedPublicNote(ownerUserId, "Older backfill note", new String[]{"tag"});
+        UUID newer = seedPublicNote(ownerUserId, "Newer backfill note", new String[]{"tag"});
+        jdbcTemplate.update("update notes set updated_at = ? where id = ?",
+                OffsetDateTime.parse("2026-01-01T00:00:00Z"), older);
+        jdbcTemplate.update("update notes set updated_at = ? where id = ?",
+                OffsetDateTime.parse("2026-02-01T00:00:00Z"), newer);
+
+        List<UUID> ordered = noteRepository
+                .findOwnerVisibilityProjectionsByVisibilityOrderByUpdatedAtDesc(NoteVisibility.PUBLIC)
+                .stream()
+                .map(NoteOwnerVisibilityProjection::id)
+                .filter(id -> id.equals(older) || id.equals(newer))
+                .toList();
+
+        assertThat(ordered).containsExactly(newer, older);
+    }
+
+    private void seedQuestionBankEntry(UUID userId, UUID studyPackId, String text) {
+        jdbcTemplate.update(
+                "insert into challenge_quiz_question_bank"
+                        + " (id, user_id, study_pack_id, question_key, question, last_known_outcome, generated_at)"
+                        + " values (?, ?, ?, ?, ?::jsonb, 'UNANSWERED', now())",
+                UUID.randomUUID(), userId, studyPackId, text.toLowerCase(),
+                "{\"question\":\"" + text + "\",\"choices\":[\"A\",\"B\",\"C\",\"D\"],"
+                        + "\"correctIndex\":0,\"keyConcept\":\"Concept\",\"explanation\":\"Explanation\"}"
+        );
     }
 
     private UUID seedPublicNote(UUID ownerUserId, String title, String[] tags) {
@@ -3063,7 +3152,7 @@ class NativeQueryPostgresIntegrationTest {
     }
 
     /**
-     * {@code GET /notes?q=}, against real rows. The PREPARE sweep proves the SQL parses; only this
+     * {@code GET /notes?search=}, against real rows. The PREPARE sweep proves the SQL parses; only this
      * proves it MATCHES the right four fields.
      *
      * <p>⚠️ EVERY FIXTURE NOTE MATCHES BY EXACTLY ONE FIELD, AND THE MATCHED FIELD IS NEVER THE
