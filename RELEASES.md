@@ -96,7 +96,7 @@ decision; audit Lever 1 on the detail page.)
   when the note list failed and the pack id could not be resolved; the id now arrives on the item, and
   the remaining `!primaryExamStudyPackId` clause still covers the Board Exam case.
 - **⚠️ THE BOARD EXAM BRANCH WAS COMPLETELY UNCOVERED AND IS NOW GUARDED.** Hardcoding
-  `primaryExamStudyPackId = null` passed **all 142** tests in the detail-page suite, so the id's
+  `primaryExamStudyPackId = null` passed the **entire** detail-page suite, so the id's
   provenance was unverified in both directions — `BOARD_EXAM` + `PRO` is the only combination reaching
   `/study-packs/{packId}/challenge-quiz`, and nothing exercised it. The new guard asserts that route
   **and** that `listNotes` is unused, so the id cannot be coming from the old lookup.
@@ -132,6 +132,40 @@ decision; audit Lever 1 on the detail page.)
   the release exists to cut Goal-path request cost and a curator is who owns 20-plan Review Sets.
   **⚠️ THE GUARD'S FIXTURE IS A `TEACHER` FOR THAT REASON, AND A `STUDENT` FIXTURE PASSES UNDER THE
   DEFECT** — which is why the shipped request-count guard could not see it.
+
+**Round-2 cold agent, run because the release doubled after round 1 covered only the first commit.**
+
+- **⚠️ IT FOUND A REGRESSION THIS RELEASE INTRODUCED, AND THE MECHANISM IS THE PRICE OF ITEM 3'S OWN
+  FIX: an ADMIN could reach an ENABLED Publish button while note visibility was still unknown.** Moving
+  the visibility fetch out of `loadCollection` means the page now reaches READY while that request is in
+  flight — and **an empty `noteVisibility` map is indistinguishable from "nothing is private"**, so
+  `privateCount` read 0, the *"N notes are private"* affordance did not render, and the admin met the
+  server's raw rejection instead. **⚠️ FIXED BY FAILING CLOSED: unknown blocks, only a COMPLETED read
+  unblocks**, so a failed visibility fetch also keeps Publish disabled. Server-side validation always
+  held, so no bad data was reachable. **⚠️ THE GUARD HOLDS `listNotes` UNRESOLVED — letting it resolve
+  reproduces the settled state, which is correct under both the defect and the fix.**
+- **⚠️ A LINE THIS RELEASE CHANGED WAS EXECUTED BY NO TEST, PROVEN BY MUTATION RATHER THAN SUSPECTED:**
+  replacing the builder's load-error copy outright left **all 54 tests green**. It is the ONE surviving
+  read of `labels.goalSingular` behind the new ref, so the ref's correctness rested entirely on reading.
+  **⚠️ IT IS UNCOVERED FOR A NARROW REASON WORTH RECORDING: `makeErrorMessage` returns `error.message`
+  for anything `instanceof Error`, so the fallback string is reachable ONLY when a NON-`Error` is
+  thrown** — an `Error` fixture renders the thrown message and never exercises the label. Now guarded,
+  and the mutant dies.
+- **Two comments still justified themselves by a dependency this release DELETED**, one of them stating
+  that `loadBuilder` re-fires for TEACHER profiles and that a ref absorbs it. **⚠️ That is precisely the
+  premise on which a later session restores `labels.goalSingular` to the deps array believing it is
+  covered**, so both are corrected in place rather than removed.
+- **`toOptimisticItem` hardcoded `studyPackId: null`** while holding the real value. Inert today, but
+  `CollectionExamCandidate` now carries the field, so an optimistically-added note would have read as
+  packless to any future exam-eligibility check over builder state.
+- **⚠️ THE ZERO-`listNotes` CLAIM IS TRUE FOR A REASON THAT IS NOT THE FIX, AND THE FEATURE DOC NOW SAYS
+  SO:** the detail page's own `AddNotesModal` still fetches unbounded on open and is simply
+  **UNREACHABLE** — `setAddOpen(true)` appears nowhere on that page. Re-wiring an *Add notes* button
+  there would silently restore the fetch this release removed.
+- **Not refuted, checked rather than assumed:** `toItemResponse` has exactly two callers and no third
+  path reaches the DTO; every study-pack-id endpoint is role-gated and the share routes are
+  token-addressed, so the brief anonymous exposure was harmless as stated; `uq_study_packs_note_id`
+  means the owner-unfiltered projection cannot disagree with the old client-side source.
 
 **Known limitations.**
 

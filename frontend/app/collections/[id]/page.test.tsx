@@ -396,6 +396,43 @@ describe("CollectionDetailPageClient", () => {
     expect(listNotes).not.toHaveBeenCalled();
   });
 
+  /**
+   * ⚠️ GUARD: PUBLISH FAILS CLOSED WHILE NOTE VISIBILITY IS STILL UNKNOWN.
+   *
+   * <p>`v0.124.0` moved the admin visibility fetch OUT of `loadCollection`, so the page now reaches
+   * READY while that request is in flight. An empty `noteVisibility` map is indistinguishable from
+   * "nothing is private", so `privateCount` was 0, `blockedByPrivateNotes` false, and Publish rendered
+   * ENABLED with no "N notes are private" affordance — the admin clicked it and got the server's raw
+   * rejection instead.
+   *
+   * <p>⚠️ THE FIXTURE HOLDS `listNotes` UNRESOLVED ON PURPOSE. Letting it resolve reproduces the
+   * settled state, which is correct under both the defect and the fix and proves nothing; the whole
+   * defect lives in the window before it lands.
+   */
+  it("blocks publishing while an admin's note visibility is still unknown", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ profileType: "STUDENT", planType: "FREE", role: "ADMIN" });
+    (listNotes as jest.Mock).mockReturnValue(new Promise(() => {}));
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    await screen.findByRole("heading", { name: "Midterm Study Plan" });
+    fireEvent.click(screen.getByRole("button", { name: "Publish settings" }));
+
+    expect(await screen.findByRole("button", { name: "Publish" })).toBeDisabled();
+  });
+
+  it("blocks publishing when the admin visibility read fails outright", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ profileType: "STUDENT", planType: "FREE", role: "ADMIN" });
+    (listNotes as jest.Mock).mockRejectedValue(new Error("note list unavailable"));
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    await screen.findByRole("heading", { name: "Midterm Study Plan" });
+    fireEvent.click(screen.getByRole("button", { name: "Publish settings" }));
+
+    expect(await screen.findByRole("button", { name: "Publish" })).toBeDisabled();
+  });
+
   it("still loads note visibility for an admin, whose role resolves after the first render", async () => {
     (getAuthUser as jest.Mock).mockReturnValue({ profileType: "STUDENT", planType: "FREE", role: "ADMIN" });
 
