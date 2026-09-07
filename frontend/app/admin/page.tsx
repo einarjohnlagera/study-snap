@@ -483,6 +483,9 @@ export default function AdminPage() {
             <Link href="/admin/campaigns" className="text-sm text-foreground/55 hover:text-foreground/80">
               Campaigns →
             </Link>
+            <Link href="/admin/announcements" className="text-sm text-foreground/55 hover:text-foreground/80">
+              What&apos;s New →
+            </Link>
             <Link href="/admin/funnel" className="text-sm text-foreground/55 hover:text-foreground/80">
               Funnel →
             </Link>

@@ -19,8 +19,41 @@ public interface NotificationRepository extends JpaRepository<NotificationEntity
 
     Optional<NotificationEntity> findByIdAndRecipientUserId(UUID id, UUID recipientUserId);
 
-    List<NotificationEntity> findByRecipientUserIdAndDismissedAtIsNullOrderByCreatedAtDesc(
-            UUID recipientUserId,
+    /**
+     * The inbox read, with announcement lifecycle applied ON READ.
+     *
+     * <p>⚠️ AN ENDED OR EXPIRED ANNOUNCEMENT MUST STOP READING AS NEW IMMEDIATELY, not at the next
+     * cleanup sweep — so the decision is made here, against {@code status}/{@code expires_at}, and
+     * there is no scheduled job involved. The delivered row may linger until retention deletes it;
+     * it just stops presenting.
+     *
+     * <p>⚠️ The predicate is NOT-EXISTS-ended rather than EXISTS-live on purpose. A notification
+     * outlives the thing it points at by design and its copy is self-contained, so a missing
+     * announcement row leaves the delivered row VISIBLE. An EXISTS-live form would make a vanished
+     * announcement silently eat inboxes.
+     *
+     * <p>⚠️ ONE QUERY, INDEPENDENT OF ROW COUNT. The lifecycle check is a correlated subquery, not a
+     * per-row lookup in service code.
+     */
+    @Query("""
+            select notification
+            from NotificationEntity notification
+            where notification.recipientUserId = :recipientUserId
+              and notification.dismissedAt is null
+              and not exists (
+                  select 1
+                  from AnnouncementEntity announcement
+                  where announcement.id = notification.announcementId
+                    and (
+                        announcement.status = com.studysnap.backend.entity.AnnouncementStatus.ENDED
+                        or (announcement.expiresAt is not null and announcement.expiresAt <= :now)
+                    )
+              )
+            order by notification.createdAt desc
+            """)
+    List<NotificationEntity> findVisibleInbox(
+            @Param("recipientUserId") UUID recipientUserId,
+            @Param("now") OffsetDateTime now,
             Pageable pageable
     );
 

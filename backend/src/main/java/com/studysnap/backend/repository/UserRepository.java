@@ -1,5 +1,6 @@
 package com.studysnap.backend.repository;
 
+import com.studysnap.backend.entity.ProfileType;
 import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.entity.UserRole;
 import com.studysnap.backend.entity.UserStatus;
@@ -35,6 +36,22 @@ public interface UserRepository extends JpaRepository<UserEntity, UUID> {
 
     @Query("select u.id from UserEntity u where u.status = com.studysnap.backend.entity.UserStatus.ACTIVE")
     List<UUID> findAllUserIds();
+
+    /**
+     * Announcement audience resolution for {@code PROFILE_TYPE}.
+     *
+     * <p>⚠️ ACTIVE accounts only, and deliberately NOT filtered on {@code emailVerifiedAt}. Delivery
+     * here is in-app, so an unverified account can still read its own inbox — the verification filter
+     * on {@code ReEngagementCampaignService}'s audience exists because that path sends EMAIL. Do not
+     * "align" the two.
+     */
+    @Query("""
+            select u.id
+            from UserEntity u
+            where u.status = com.studysnap.backend.entity.UserStatus.ACTIVE
+              and u.profileType = :profileType
+            """)
+    List<UUID> findActiveUserIdsByProfileType(@Param("profileType") ProfileType profileType);
 
     @Query("select u.createdAt from UserEntity u where u.id = :userId")
     Optional<OffsetDateTime> findCreatedAtById(@Param("userId") UUID userId);

@@ -63,6 +63,29 @@ public interface SubscriptionRepository extends JpaRepository<SubscriptionEntity
             @Param("now") OffsetDateTime now
     );
 
+    /**
+     * Users holding a subscription that is inside its active window right now.
+     *
+     * <p>⚠️ THIS MIRRORS {@code SubscriptionService.isWithinActiveWindow} DELIBERATELY, INCLUDING THE
+     * {@code startAt} LEG. The neighbouring {@link #findActiveUserIdsByPlanTypeInAndStatus} omits
+     * {@code startAt}, so a future-dated subscription counts as active there — harmless for the
+     * expiry sweeps that use it, wrong for an audience that must agree with the plan the user is
+     * actually being served. Announcement targeting is editorial, so a divergence here would not
+     * grant or remove anything; it would simply mail the wrong people.
+     */
+    @Query("""
+            select distinct s.user.id
+            from SubscriptionEntity s
+            where s.status = com.studysnap.backend.entity.SubscriptionStatus.ACTIVE
+              and s.planType in :planTypes
+              and (s.startAt is null or s.startAt <= :now)
+              and (s.endAt is null or s.endAt > :now)
+            """)
+    List<UUID> findUserIdsWithSubscriptionInActiveWindow(
+            @Param("planTypes") Collection<PlanType> planTypes,
+            @Param("now") OffsetDateTime now
+    );
+
     List<SubscriptionEntity> findByPlanTypeInAndStatusAndEndAtBefore(
             Collection<PlanType> planTypes,
             SubscriptionStatus status,

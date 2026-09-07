@@ -50,10 +50,15 @@ public class NotificationService {
         }
     }
 
+    /**
+     * ⚠️ ANNOUNCEMENT LIFECYCLE IS APPLIED HERE, ON READ, so an ended or expired announcement stops
+     * presenting the instant the admin ends it — no cleanup job stands between the two.
+     */
     @Transactional(readOnly = true)
     public List<NotificationResponse> listInbox(UUID userId, int limit) {
-        return notificationRepository.findByRecipientUserIdAndDismissedAtIsNullOrderByCreatedAtDesc(
+        return notificationRepository.findVisibleInbox(
                         userId,
+                        OffsetDateTime.now(ZoneOffset.UTC),
                         PageRequest.of(0, Math.min(Math.max(limit, 1), MAX_INBOX_LIMIT))
                 ).stream()
                 .map(this::toResponse)

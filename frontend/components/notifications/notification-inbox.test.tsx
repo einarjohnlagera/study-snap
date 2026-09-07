@@ -78,6 +78,44 @@ describe("NotificationInbox", () => {
     expect(markNotificationRead).not.toHaveBeenCalled();
   });
 
+  it("renders an announcement row but never lets it reach the badge", async () => {
+    (listNotifications as jest.Mock).mockResolvedValue([{
+      ...actionable,
+      id: "n-announcement",
+      type: "ANNOUNCEMENT",
+      title: "Board Exam Mode is here",
+      ctaLabel: "Try it",
+      ctaPath: "/dashboard?tab=exams",
+    }]);
+    renderInbox(0);
+    fireEvent.click(screen.getByLabelText("Open notifications"));
+
+    expect(await screen.findByText("Board Exam Mode is here")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Try it" })).toHaveAttribute("href", "/dashboard?tab=exams");
+    // ⚠️ Guard 8, from the render side: an unread announcement with zero actionable leaves NO badge
+    // element — not a "0".
+    expect(screen.queryByLabelText(/unread notifications/)).not.toBeInTheDocument();
+  });
+
+  it("refuses to render a CTA that is not a same-origin relative path", async () => {
+    // ⚠️ THE STORED VALUE IS UNTRUSTED AT RENDER TIME. next/link renders an absolute URL as a live
+    // external anchor, so an off-site cta_path — written before the write-side rule existed, or by any
+    // future path that forgets it — must produce NO link rather than a link off-site.
+    (listNotifications as jest.Mock).mockResolvedValue([{
+      ...actionable,
+      id: "n-phishy",
+      type: "ANNOUNCEMENT",
+      title: "Suspicious",
+      ctaLabel: "Click here",
+      ctaPath: "https://evil.example",
+    }]);
+    renderInbox(0);
+    fireEvent.click(screen.getByLabelText("Open notifications"));
+
+    expect(await screen.findByText("Suspicious")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Click here" })).not.toBeInTheDocument();
+  });
+
   it("distinguishes a failed load from an empty inbox", async () => {
     // ⚠️ Conflating them tells a learner they have nothing when they may have a pending request.
     (listNotifications as jest.Mock).mockRejectedValue(new Error("offline"));

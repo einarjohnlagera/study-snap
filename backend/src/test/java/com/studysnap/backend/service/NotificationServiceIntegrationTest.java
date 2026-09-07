@@ -45,7 +45,27 @@ class NotificationServiceIntegrationTest {
                 )
                 """);
         jdbcTemplate.execute("create unique index if not exists idx_notifications_recipient_dedup on notifications(recipient_user_id, dedup_key)");
+        // ⚠️ The inbox read applies ANNOUNCEMENT LIFECYCLE ON READ as of v0.130.0 Stage 4, so its query
+        // references this table even when no notification in the fixture came from an announcement.
+        jdbcTemplate.execute("""
+                create table if not exists announcements (
+                    id uuid primary key,
+                    title varchar(255) not null,
+                    body varchar(1000) not null,
+                    cta_label varchar(64),
+                    cta_path varchar(512),
+                    audience varchar(32) not null,
+                    audience_value varchar(64),
+                    status varchar(16) not null,
+                    published_at timestamp with time zone,
+                    expires_at timestamp with time zone,
+                    created_by_user_id uuid not null,
+                    created_at timestamp with time zone not null,
+                    updated_at timestamp with time zone not null
+                )
+                """);
         jdbcTemplate.execute("delete from notifications");
+        jdbcTemplate.execute("delete from announcements");
     }
 
     @Test

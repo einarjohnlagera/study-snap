@@ -10,6 +10,7 @@ import {
   markNotificationRead,
   type NotificationResponse,
 } from "@/lib/api";
+import { toSafeRelativePath } from "@/lib/safe-relative-path";
 
 type NotificationInboxProps = {
   actionableUnreadCount: number;
@@ -104,16 +105,22 @@ export function NotificationInbox({
       {!isLoading && !hasLoadError && notifications.length === 0 ? (
         <p className="px-4 py-6 text-sm text-muted-foreground">Your inbox is empty.</p>
       ) : null}
-      {!isLoading && !hasLoadError ? notifications.map((notification) => (
+      {!isLoading && !hasLoadError ? notifications.map((notification) => {
+        // ⚠️ THE STORED PATH IS UNTRUSTED AT RENDER TIME, not just at write time. An announcement CTA is
+        // admin-authored and appears inside every recipient's inbox under NoteLib's own chrome, and
+        // next/link renders an absolute URL as a live external anchor. Anything that is not a
+        // same-origin relative path renders as NO link rather than as a link somewhere else.
+        const ctaPath = toSafeRelativePath(notification.ctaPath);
+        return (
         <article key={notification.id} className="border-b border-border px-4 py-3 last:border-b-0">
           <div className="flex items-start gap-3">
             <div className="min-w-0 flex-1">
               <p className={notification.readAt ? "text-sm font-medium" : "text-sm font-semibold"}>{notification.title}</p>
               {notification.body ? <p className="mt-1 text-sm text-muted-foreground">{notification.body}</p> : null}
               <div className="mt-3 flex items-center gap-3">
-                {notification.ctaPath ? (
+                {ctaPath ? (
                   <Link
-                    href={notification.ctaPath}
+                    href={ctaPath}
                     className="text-sm font-medium text-primary underline-offset-4 hover:underline"
                     onClick={() => void markRead(notification)}
                   >
@@ -137,7 +144,8 @@ export function NotificationInbox({
             </button>
           </div>
         </article>
-      )) : null}
+        );
+      }) : null}
     </div>
   );
 
