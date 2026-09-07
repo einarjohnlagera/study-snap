@@ -292,7 +292,34 @@ User-facing generation statuses:
 - `DRAFT`: no Study Pack has been generated yet.
 - `GENERATING`: generation is running in the background.
 - `STUDY_PACK_READY`: generated summary, key concepts, and quiz are available.
-- `FAILED`: generation did not complete and can be retried from Note Detail.
+- `FAILED`: generation did not complete and can be retried from Note Detail. Since `v0.127.0` the
+  row also records WHY — see *Why a generation failed is recorded on the note* below.
+
+## Why a generation failed is recorded on the note (v0.127.0)
+
+A `FAILED` note carries three nullable columns saying **why**: `notes.generation_failure_code`,
+`notes.generation_failure_reason` and `notes.generation_failed_at`. They are written by the async
+worker's `catch` in `StudyPackService.generateStudyPackFromExistingNoteAsync`, so both first
+generation and regeneration are covered, and by the recovery sweep's own entry point.
+
+- The reason is normalized by `BulkGenerationFailureReasonNormalizer` — `v0.87.0`'s shape, reused
+  rather than reimplemented. An `AppException` contributes its own code and safe message (a quota
+  rejection persists `NOTE_GENERATION_LIMIT_REACHED`); anything else persists `UNEXPECTED_ERROR` and a
+  template naming only the exception CLASS. **Raw exception text is never persisted.**
+- A note resolved by the recovery sweep records `GENERATION_INTERRUPTED`.
+- **⚠️ The columns are a LAST-FAILURE record and are never cleared when a later attempt succeeds.**
+  Regeneration mutates the note in place, so a manual retry overwrites `status`; that is exactly what
+  destroyed the evidence of the 2026-09-05 incident, where the database held zero `FAILED` notes by the
+  time it was investigated. `generation_failed_at` is what tells a reader whether the reason describes
+  the row's current `FAILED` state or an earlier, since-recovered one — `updated_at` cannot, because
+  the retry bumps it.
+- **They are persisted only; no response DTO exposes them and no surface renders them.** This is an
+  operational trace for investigating a failure, not learner-facing copy.
+- Nothing about quota, entitlements, limits or meters changed. In particular the SECOND, in-worker
+  quota assert in `NoteGenerationService.generateFromTopic` **stays**: the pre-dispatch check at
+  `StudyPackService` can be 10–27 s stale, the note meter is charged at commit regardless, and
+  `generateFromTopic`'s own contract is that asserting and charging move together. The defect was that
+  its rejection was opaque, not that it fired.
 
 ## Combined Note + Study Pack regeneration (v0.118.0)
 
@@ -468,7 +495,7 @@ The scheduled generation-recovery job covers three independently processed surfa
 
 - exam pools stamp nullable `generation_status_at` on every `PENDING` and `GENERATING` write. Separate default bounds are `60` minutes for queued `PENDING` work and `60` minutes for `GENERATING` fan-out work. A stale pool becomes `FAILED`; `sampleQuestions` owns the existing next-use refresh.
 - Long Exam sessions use immutable `created_at`, with a default `30`-minute bound. Only `session_mode = LONG_EXAM` is eligible; a stale session becomes `FAILED`, allowing a later start to create a fresh session.
-- notes stamp nullable `generation_enqueued_at` in the same transaction that sets `GENERATING`, refreshing it on every retry. The default `120`-minute bound covers both queue wait and the single LLM call. A stale note becomes `FAILED` through the same entity transition used by generation errors and exposes the existing Retry Generation action. This protection is prospective: production sizing found zero stuck notes.
+- notes stamp nullable `generation_enqueued_at` in the same transaction that sets `GENERATING`, refreshing it on every retry. The default `120`-minute bound covers both queue wait and the single LLM call. A stale note becomes `FAILED` through the same entity transition used by generation errors and exposes the existing Retry Generation action. Since `v0.127.0` that transition also stamps `generation_failure_code = 'GENERATION_INTERRUPTED'`, so a swept note is not left carrying failure columns that describe a different, earlier failure. This protection is prospective: production sizing found zero stuck notes.
 
 The job runs every ten minutes by default, processes at most `200` candidates per surface per run, reports recovered count and oldest age, and has a deploy kill switch. Every bound, the cron and batch size are configuration-owned placeholders; they can be tightened after production observation without a code change. `V118` seeds existing non-terminal pool attempts with deploy time rather than reused-row `created_at`, so no live attempt is swept early and genuinely stuck rows become eligible one full bound after deploy. Notes with a null enqueue clock are left untouched and warned. `V118` seeds the clock for any note already `GENERATING` at deploy time — on the same argument as pools, because the deploy that installs the sweeper is itself the event that strands in-flight generation — and `StudyPackService` is the single writer of `GENERATING` and stamps in the same transaction. So a null clock after that means a **new writer** appeared without a stamp, and silently recovering it would hide that bug rather than surface it.
 
