@@ -2,7 +2,7 @@
 
 ## v0.129.0 - Adoption Signal
 
-**Status: In Progress** (kicked off 2026-09-07, base branch `releases/v0.129.0`, cut from `main` after `v0.128.0` merged)
+**Status: Released** (kicked off and signed off 2026-09-07, base branch `releases/v0.129.0`, cut from `main` after `v0.128.0` merged)
 
 Theme: show how many learners have adopted an Official Review Set — **Stage 2 of the in-app notifications plan, which is the one stage that does not depend on notifications existing.**
 
@@ -80,6 +80,25 @@ The plan's §10 listed two reads as prerequisites and assumed both were the owne
 
 **Backend build: `./mvnw clean install` green — 2227 tests, 0 failures**, re-run clean after every
 mutation was reverted.
+
+### Known limitations, and why NO checkpoint is owed
+
+- **⚠️ THE THRESHOLD IS SHIPPED BUT UNEXERCISED IN PRODUCTION, AND THAT IS A KNOWN LIMITATION RATHER
+  THAN A DEFECT.** Every top-level PUBLIC set is already ≥8 (LET 40, ALE 30, PNLE 15, CPALE 8), and
+  only top-level sets render on Explore, so the hide branch **has never fired against real data**. It
+  is covered by unit tests and will fire the first time a small set is published top-level. **⚠️ Do
+  not "verify" it by lowering the threshold — that is an owner decision, not a test fixture.**
+- **Legacy rows without provenance (8.8% of collections) are excluded and under-count**, by decision.
+  **⚠️ Never reconstruct provenance from titles, names or note overlap.**
+- **NO `[CHECKPOINT]` ROW IS OWED, and the reason is the denominator rather than the absence of a
+  question.** The obvious one — *does showing adoption counts increase adoption?* — is measurable
+  from `note_collections` without new instrumentation, so it clears the "decorative checkpoint" bar
+  on that axis. **⚠️ But it fails clause 3 of the bootstrap test: it would be read across FOUR
+  top-level sets at ~0.7 signups/day, which cannot separate a social-proof effect from noise.**
+  Writing it would reproduce the underpowered read this release cycle has now diagnosed twice — the
+  onboarding `n=18` and the Learning Connections `n=1`. **⚠️ Stage 2's own EVIDENCE gate was CLEARED
+  before building** (provenance 91.2%, distribution read), so nothing here shipped ahead of its
+  evidence; the display threshold was an owner decision, not an evidence gate.
 
 - **The adoption-count display rule lives in one module, so the two surfaces cannot drift.**
   `frontend/lib/adoption-count.ts` owns the threshold, the compact/detailed wording and the
