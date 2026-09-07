@@ -4884,7 +4884,10 @@ export async function listNotes(limit?: number, search?: string): Promise<NoteLi
   }
   const trimmedSearch = search?.trim();
   if (trimmedSearch) {
-    // ⚠️ MUST STAY `q` — it is the backend's own @RequestParam name on GET /notes.
+    // ⚠️ MUST STAY `search` — it is the backend's own @RequestParam name on GET /notes
+    // (`NoteController.SEARCH_REQUEST_PARAM`), shared with the library endpoints. Renaming either
+    // side alone binds null server-side: the picker keeps its 50-row bound while search reaches
+    // nothing, which is the every-note-past-the-bound-is-unaddable loss v0.123.0 refused to ship.
     parameters.set("search", trimmedSearch);
   }
   const serialized = parameters.toString();

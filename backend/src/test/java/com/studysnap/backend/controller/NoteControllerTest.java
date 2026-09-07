@@ -303,7 +303,7 @@ class NoteControllerTest {
     }
 
     /**
-     * ⚠️ A REAL REQUEST, NOT A HANDLER CALL, AND THE DISTINCTION IS THE WHOLE POINT. `q` is new on
+     * ⚠️ A REAL REQUEST, NOT A HANDLER CALL, AND THE DISTINCTION IS THE WHOLE POINT. `search` is new on
      * `GET /notes`, and the direct-invocation test above passes under ANY binding defect by
      * construction — it hands the controller a Java argument and never exercises `@RequestParam`.
      * `v0.119.0` shipped exactly that class of defect with every test green.
@@ -327,7 +327,7 @@ class NoteControllerTest {
     }
 
     /**
-     * ⚠️ THE ADDITIVE HALF. Every existing caller sends no `q`, so the parameter must arrive null
+     * ⚠️ THE ADDITIVE HALF. Every existing caller sends no `search`, so the parameter must arrive null
      * rather than as an empty string — an empty pattern would match nothing at all and would empty
      * the note list for every consumer of this endpoint.
      */

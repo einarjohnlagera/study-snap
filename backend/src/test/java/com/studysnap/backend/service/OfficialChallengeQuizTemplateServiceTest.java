@@ -361,17 +361,28 @@ class OfficialChallengeQuizTemplateServiceTest {
      */
     @Test
     void queueBackfill_dispatchesInTheOrderTheCatalogQueryReturned() {
+        // ⚠️ DETERMINISTIC, DESCENDING IDS AND N=3 — NOT DECORATION. With N=2 and random UUIDs this
+        // fixture survived the very reorder its name forbids: a sort by pack id preserved the fixture
+        // order roughly half the time, so the guard was sound in principle and a coin flip in practice.
+        // The catalog is returned in DESCENDING id order (the query's own `updated_at desc`), so any
+        // ascending sort — by note id or pack id — produces a different order every run.
         UUID officialId = UUID.randomUUID();
-        UUID newerNoteId = UUID.randomUUID();
-        UUID olderNoteId = UUID.randomUUID();
+        UUID newestNoteId = UUID.fromString("cccccccc-0000-4000-8000-000000000003");
+        UUID middleNoteId = UUID.fromString("bbbbbbbb-0000-4000-8000-000000000002");
+        UUID oldestNoteId = UUID.fromString("aaaaaaaa-0000-4000-8000-000000000001");
         stubBackfillCatalog(
                 List.of(
-                        new NoteOwnerVisibilityProjection(newerNoteId, officialId, NoteVisibility.PUBLIC),
-                        new NoteOwnerVisibilityProjection(olderNoteId, officialId, NoteVisibility.PUBLIC)
+                        new NoteOwnerVisibilityProjection(newestNoteId, officialId, NoteVisibility.PUBLIC),
+                        new NoteOwnerVisibilityProjection(middleNoteId, officialId, NoteVisibility.PUBLIC),
+                        new NoteOwnerVisibilityProjection(oldestNoteId, officialId, NoteVisibility.PUBLIC)
                 ),
                 List.of(
-                        new StudyPackOwnerProjection(UUID.randomUUID(), newerNoteId, officialId),
-                        new StudyPackOwnerProjection(UUID.randomUUID(), olderNoteId, officialId)
+                        new StudyPackOwnerProjection(
+                                UUID.fromString("cccccccc-1111-4000-8000-000000000003"), newestNoteId, officialId),
+                        new StudyPackOwnerProjection(
+                                UUID.fromString("bbbbbbbb-1111-4000-8000-000000000002"), middleNoteId, officialId),
+                        new StudyPackOwnerProjection(
+                                UUID.fromString("aaaaaaaa-1111-4000-8000-000000000001"), oldestNoteId, officialId)
                 ),
                 List.of(officialAuthor(officialId)),
                 List.of()
@@ -388,8 +399,8 @@ class OfficialChallengeQuizTemplateServiceTest {
         // Each seed task re-reads its own note; the unstubbed lookup returns empty and the task bails,
         // which is all this needs -- the ORDER of those reads is the queue order.
         ArgumentCaptor<UUID> seededNoteIds = ArgumentCaptor.forClass(UUID.class);
-        verify(noteRepository, times(2)).findById(seededNoteIds.capture());
-        assertThat(seededNoteIds.getAllValues()).containsExactly(newerNoteId, olderNoteId);
+        verify(noteRepository, times(3)).findById(seededNoteIds.capture());
+        assertThat(seededNoteIds.getAllValues()).containsExactly(newestNoteId, middleNoteId, oldestNoteId);
     }
 
     @Test

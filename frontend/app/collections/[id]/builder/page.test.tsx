@@ -1105,6 +1105,58 @@ describe("StudyPlanBuilderPageClient", () => {
    * ⚠️ THE WRITE IS HELD IN FLIGHT ON PURPOSE. Let it resolve and `refreshBuilder` repaints the row
    * from the server, so the assertion would pass under the defect and prove nothing.
    */
+  /**
+   * ⚠️ THE LEAF PICKER, WHICH THE GOAL-PATH GUARD BELOW CANNOT REACH.
+   *
+   * <p>`handleAddLeafNotes` and `handleAddNotes` are SEPARATE functions with the same defect and the
+   * same fix. A cold review found the leaf one entirely unexercised: reverting its `noteById` to
+   * `new Map(notes.map(...))` — the exact defect `v0.125.0` fixed — passed all 59 builder tests, and so
+   * did `throw` as its first statement. `/collections/{leafId}/builder` is the common curator surface.
+   *
+   * <p>⚠️ The add is held IN FLIGHT deliberately: letting it resolve repaints from the server, which is
+   * correct under both the defect and the fix. And the assertion is scoped to the canvas, because the
+   * modal's own "Selected" list still shows the title.
+   */
+  it("renders the optimistic row on a LEAF plan for a note selected under an earlier search query", async () => {
+    const library = [note("note-alpha", "Alpha Kinematics"), note("note-beta", "Beta Optics")];
+    (listNotes as jest.Mock).mockImplementation(async (_limit?: number, search?: string) => (
+      search
+        ? library.filter((candidate) => candidate.title.toLowerCase().includes(search.toLowerCase()))
+        : library
+    ));
+    (getCollection as jest.Mock).mockImplementation((id: string) => Promise.resolve(
+      id === "leaf-1"
+        ? collectionDetail("leaf-1", "Anatomy Plan", [], { parentCollectionId: null, childCount: 0 })
+        : collectionDetail(id, "Child", []),
+    ));
+    const pendingAdd = deferred<unknown>();
+    (addCollectionItems as jest.Mock).mockReturnValue(pendingAdd.promise);
+
+    render(<StudyPlanBuilderPageClient collectionId="leaf-1" />);
+
+    await screen.findByRole("heading", { name: "Anatomy Plan" });
+    fireEvent.click((await screen.findAllByRole("button", { name: "Add notes" }))[0]);
+    const dialog = await screen.findByRole("dialog");
+
+    fireEvent.click(await within(dialog).findByText("Alpha Kinematics"));
+    fireEvent.change(within(dialog).getByPlaceholderText(/Search notes/i), { target: { value: "optics" } });
+    await waitFor(() => expect(listNotes).toHaveBeenCalledWith(50, "optics"));
+    await within(dialog).findByText("Beta Optics");
+
+    fireEvent.click(within(dialog).getByRole("button", { name: /Add selected/ }));
+    await waitFor(() => expect(addCollectionItems).toHaveBeenCalledWith("leaf-1", ["note-alpha"]));
+
+    // ⚠️ Asserted OUTSIDE the dialog: the modal's own "Selected" list still shows the title, so an
+    // unscoped query passes under the defect.
+    await waitFor(() => {
+      const outsideDialog = screen.getAllByText("Alpha Kinematics")
+        .filter((element) => !dialog.contains(element));
+      expect(outsideDialog.length).toBeGreaterThan(0);
+    });
+
+    pendingAdd.resolve(collectionDetail("leaf-1", "Anatomy Plan"));
+  });
+
   it("renders the optimistic row for a note selected under an earlier search query", async () => {
     const library = [note("note-alpha", "Alpha Kinematics"), note("note-beta", "Beta Optics")];
     (listNotes as jest.Mock).mockImplementation(async (_limit?: number, search?: string) => (

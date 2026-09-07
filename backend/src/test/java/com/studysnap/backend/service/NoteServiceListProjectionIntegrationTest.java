@@ -186,7 +186,7 @@ class NoteServiceListProjectionIntegrationTest {
     }
 
     /**
-     * The H2 leg of {@code GET /notes?q=}.
+     * The H2 leg of {@code GET /notes?search=}.
      *
      * <p>⚠️ THE TAG PREDICATE IS DIALECT-SPLIT — {@code unnest(...)} on PostgreSQL,
      * {@code array_to_string(...)} on H2 — so the PostgreSQL harness proves nothing about the branch
