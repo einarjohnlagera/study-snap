@@ -19,6 +19,7 @@ public record NoteCollectionDetailResponse(
         UUID sourcePlanId,
         UUID parentCollectionId,
         int childCount,
+        int adoptionCount,
         int readyCount,
         Instant createdAt,
         Instant updatedAt,
@@ -37,6 +38,7 @@ public record NoteCollectionDetailResponse(
             UUID sourcePlanId,
             UUID parentCollectionId,
             int childCount,
+            int adoptionCount,
             int readyCount,
             Instant createdAt,
             Instant updatedAt,
@@ -44,7 +46,7 @@ public record NoteCollectionDetailResponse(
             List<NoteCollectionItemResponse> items
     ) {
         this(id, title, description, visibility, courseProgram, null, null, estimatedStudyHours,
-                targetCompletionDate, companion, sourcePlanId, parentCollectionId, childCount, readyCount,
+                targetCompletionDate, companion, sourcePlanId, parentCollectionId, childCount, adoptionCount, readyCount,
                 createdAt, updatedAt, progress, items);
     }
 }

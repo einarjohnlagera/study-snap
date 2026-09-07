@@ -95,6 +95,16 @@ public interface NoteCollectionRepository extends JpaRepository<NoteCollectionEn
             """)
     List<NoteCollectionChildCountProjection> countChildrenByCollectionIds(@Param("collectionIds") List<UUID> collectionIds);
 
+    @Query("""
+            select adoption.sourcePlanId as collectionId, count(adoption.id) as adoptionCount
+            from NoteCollectionEntity adoption
+            join NoteCollectionEntity source on source.id = adoption.sourcePlanId
+            where adoption.sourcePlanId in :collectionIds
+              and adoption.ownerUserId <> source.ownerUserId
+            group by adoption.sourcePlanId
+            """)
+    List<NoteCollectionAdoptionCountProjection> countAdoptionsByCollectionIds(@Param("collectionIds") List<UUID> collectionIds);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("""
             select collection

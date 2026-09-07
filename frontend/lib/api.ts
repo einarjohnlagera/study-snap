@@ -2046,6 +2046,12 @@ export type NoteCollectionSummary = {
   readyCount?: number | null;
   childCount: number;
   notesPracticed: number;
+  /**
+   * Learners who have adopted this Review Set, EXACT and excluding the source's own owner.
+   * ⚠️ The display threshold lives in `lib/adoption-count.ts`, never here — this value is not
+   * filtered, clamped or bucketed by the API.
+   */
+  adoptionCount?: number | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -2092,6 +2098,8 @@ export type NoteCollectionDetail = {
   parentCollectionId: string | null;
   childCount: number;
   readyCount?: number | null;
+  /** See `NoteCollectionSummary.adoptionCount` — exact, unfiltered; threshold is display-only. */
+  adoptionCount?: number | null;
   createdAt: string;
   updatedAt: string;
   progress: NoteCollectionProgress;

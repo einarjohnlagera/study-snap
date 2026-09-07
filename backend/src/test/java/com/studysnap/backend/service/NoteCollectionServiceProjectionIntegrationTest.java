@@ -48,6 +48,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -175,6 +176,15 @@ class NoteCollectionServiceProjectionIntegrationTest {
                 """);
         jdbcTemplate.execute("alter table note_collections add column if not exists learner_level varchar(50)");
         jdbcTemplate.execute("""
+                create table if not exists note_collection_item_removals (
+                    adopted_collection_id uuid not null,
+                    source_plan_id uuid not null,
+                    source_note_id uuid not null,
+                    removed_at timestamp with time zone not null,
+                    primary key (adopted_collection_id, source_plan_id, source_note_id)
+                )
+                """);
+        jdbcTemplate.execute("""
                 create table if not exists note_collection_items (
                     id uuid primary key,
                     collection_id uuid not null,
@@ -236,6 +246,7 @@ class NoteCollectionServiceProjectionIntegrationTest {
         jdbcTemplate.execute("delete from generated_quizzes");
         jdbcTemplate.execute("delete from concept_health");
         jdbcTemplate.execute("delete from study_packs");
+        jdbcTemplate.execute("delete from note_collection_item_removals");
         jdbcTemplate.execute("delete from note_collection_items");
         jdbcTemplate.execute("delete from note_collections");
         jdbcTemplate.execute("delete from quick_review_sessions");
@@ -360,6 +371,48 @@ class NoteCollectionServiceProjectionIntegrationTest {
         assertThat(detail.progress().totalNotes()).isEqualTo(1);
         assertThat(detail.progress().notesWithStudyPack()).isEqualTo(1);
         assertProjectionQueriesAvoidLargeColumns();
+    }
+
+    @Test
+    void countAdoptionsExcludesTheOfficialOwnerAndKeepsParentAndChildSourcesIndependent() {
+        UUID officialOwnerId = UUID.randomUUID();
+        NoteCollectionEntity parentSource = saveCollection(officialOwnerId, CollectionVisibility.PUBLIC);
+        NoteCollectionEntity childSource = saveChildCollection(officialOwnerId, parentSource.getId(), "Official child", 0);
+        childSource.setVisibility(CollectionVisibility.PUBLIC);
+        collectionRepository.save(childSource);
+        NoteCollectionEntity unadoptedSource = saveCollection(UUID.randomUUID(), CollectionVisibility.PUBLIC);
+
+        saveAdoption(UUID.randomUUID(), parentSource.getId());
+        NoteCollectionEntity deletedAdoption = saveAdoption(UUID.randomUUID(), parentSource.getId());
+        saveAdoption(officialOwnerId, parentSource.getId());
+        saveAdoption(UUID.randomUUID(), childSource.getId());
+        saveCollection(UUID.randomUUID(), CollectionVisibility.PRIVATE);
+
+        assertThat(adoptionCounts(parentSource.getId(), childSource.getId(), unadoptedSource.getId()))
+                .containsEntry(parentSource.getId(), 2L)
+                .containsEntry(childSource.getId(), 1L)
+                .doesNotContainKey(unadoptedSource.getId());
+
+        collectionRepository.delete(deletedAdoption);
+        collectionRepository.flush();
+        assertThat(adoptionCounts(parentSource.getId())).containsEntry(parentSource.getId(), 1L);
+
+        saveAdoption(UUID.randomUUID(), parentSource.getId());
+        assertThat(adoptionCounts(parentSource.getId())).containsEntry(parentSource.getId(), 2L);
+    }
+
+    @Test
+    void applyingSourceUpdateDoesNotChangeTheAdoptionCount() {
+        UUID officialOwnerId = UUID.randomUUID();
+        UUID adopterId = UUID.randomUUID();
+        NoteCollectionEntity source = saveCollection(officialOwnerId, CollectionVisibility.PUBLIC);
+        NoteCollectionEntity adopted = saveAdoption(adopterId, source.getId());
+
+        assertThat(adoptionCounts(source.getId())).containsEntry(source.getId(), 1L);
+
+        noteCollectionService.applySourceUpdate(adopted.getId(), adopterId);
+
+        assertThat(adoptionCounts(source.getId())).containsEntry(source.getId(), 1L);
     }
 
     @Test
@@ -622,6 +675,20 @@ class NoteCollectionServiceProjectionIntegrationTest {
         collection.setParentCollectionId(parentCollectionId);
         collection.setSiblingPosition(siblingPosition);
         return collectionRepository.save(collection);
+    }
+
+    private NoteCollectionEntity saveAdoption(UUID userId, UUID sourcePlanId) {
+        NoteCollectionEntity adoption = saveCollection(userId, CollectionVisibility.PRIVATE);
+        adoption.setSourcePlanId(sourcePlanId);
+        return collectionRepository.save(adoption);
+    }
+
+    private Map<UUID, Long> adoptionCounts(UUID... collectionIds) {
+        return collectionRepository.countAdoptionsByCollectionIds(List.of(collectionIds)).stream()
+                .collect(Collectors.toMap(
+                        projection -> projection.getCollectionId(),
+                        projection -> projection.getAdoptionCount()
+                ));
     }
 
     private NoteEntity saveNote(UUID userId, String title, NoteStatus status, NoteVisibility visibility, int offsetHours) {
