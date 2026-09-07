@@ -2,7 +2,7 @@
 
 ## v0.130.0 - Notification Inbox
 
-**Status: In Progress** (kicked off 2026-09-07, base branch `releases/v0.130.0`, **cut from `releases/v0.129.0` rather than `main`** because `v0.129.0`'s release PR #1340 is BLOCKED by the `main` ruleset's `require_extra_approval_for_unattributed_changes` parameter — the `v0.120.0`/`v0.111.0` precedent, where the signoff commit rides into `main` via the release PR)
+**Status: Released** (kicked off 2026-09-07, signed off 2026-09-07, base branch `releases/v0.130.0`, **cut from `releases/v0.129.0` rather than `main`** because `v0.129.0`'s release PR #1340 is BLOCKED by the `main` ruleset's `require_extra_approval_for_unattributed_changes` parameter — the `v0.120.0`/`v0.111.0` precedent, where the signoff commit rides into `main` via the release PR)
 
 Theme: build the notification substrate, and give it the one producer that can actually fill it.
 
