@@ -25,7 +25,7 @@ Make ALL changes before committing — this is one atomic commit.
 
 - [ ] **`RELEASES.md`** — Add new `## vX.Y.Z - Theme` section at top (Status: In Progress). Mark the *prior* version Released.
 - [ ] **`ROADMAP.md`** — Add new version section. Update "Current Release Baseline" line.
-- [ ] **`CLAUDE.md`** — Bump `Current version: vX.Y.Z`.
+- [ ] **`CLAUDE.md`** — **REPLACE** the `Current version:` block with the new release's. **⚠️ REPLACE, NOT PREPEND — this is the step whose absence cost ~80,000 tokens per session.** That line grew to **322,329 characters** (63 chained `Previous:` blocks, `v0.37.0` → `v0.125.0`, ~90% of the file) because every kickoff prepended and none ever removed. `RELEASES.md` is the canonical record and always was; this line is a pointer to the OPEN release, never a history. Keep the product description above it and the anti-drift of the release you are opening — nothing else.
 - [ ] **`frontend/package.json`** — Bump `"version": "X.Y.Z"`.
 - [ ] **`backend/pom.xml`** — Bump `<version>X.Y.Z</version>` (project version, not a dependency).
 - [ ] **`AGENTS.md`** — Update documentation baseline and version reference line.
