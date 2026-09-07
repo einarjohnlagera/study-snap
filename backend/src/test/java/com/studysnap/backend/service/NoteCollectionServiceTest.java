@@ -2985,6 +2985,44 @@ class NoteCollectionServiceTest {
         verify(collectionRepository).findByParentCollectionIdIn(List.of(goalId));
     }
 
+    /**
+     * ⚠️ GUARD: THE ANONYMOUS PUBLIC PAYLOAD MUST NOT CARRY {@code studyPackId}.
+     *
+     * <p>{@code GET /collections/public/{id}} is {@code permitAll}, so this response reaches callers
+     * with no account. {@code studyPackId} was added in {@code v0.124.0} for the OWNER's detail page,
+     * and {@code toItemResponse} is SHARED between the owner and public mappers — so the field arrived
+     * on the anonymous payload as a side effect of a change made for a different caller. Nothing public
+     * consumes it, so the public mapper withholds it.
+     *
+     * <p>⚠️ THE FIXTURE MUST STUB A STUDY PACK THAT EXISTS. With no pack the field is null under both
+     * the defect and the fix, so a pack-less fixture passes either way and proves nothing --
+     * {@code readyCount} being 1 below is what proves the pack was found and deliberately withheld.
+     */
+    @Test
+    void getPublic_withholdsStudyPackIdFromTheAnonymousPayload() {
+        UUID collectionId = UUID.randomUUID();
+        UUID readyNoteId = UUID.randomUUID();
+        NoteCollectionEntity collection = buildCollection(collectionId, UUID.randomUUID(), COLLECTION_TITLE, Instant.now());
+        collection.setVisibility(CollectionVisibility.PUBLIC);
+        NoteEntity readyNote = buildNote(readyNoteId, collection.getOwnerUserId(), NOTE_TITLE_ONE);
+        readyNote.setVisibility(NoteVisibility.PUBLIC);
+        List<UUID> noteIds = List.of(readyNoteId);
+        when(collectionRepository.findByIdAndVisibility(collectionId, CollectionVisibility.PUBLIC)).thenReturn(Optional.of(collection));
+        when(collectionRepository.findByParentCollectionIdIn(List.of(collectionId))).thenReturn(List.of());
+        when(itemRepository.findByCollectionIdInOrderByCollectionIdAscPositionAsc(List.of(collectionId))).thenReturn(List.of(
+                buildItem(collectionId, readyNoteId, 0, null)
+        ));
+        when(noteRepository.findCollectionNoteProjectionsByIdIn(noteIds)).thenReturn(asNoteProjections(readyNote));
+        when(studyPackRepository.findProgressViewsByNoteIdIn(noteIds)).thenReturn(asProjections(buildStudyPack(readyNoteId)));
+        when(collectionRepository.countByParentCollectionId(collectionId)).thenReturn(0L);
+
+        NoteCollectionDetailResponse result = service.getPublic(collectionId);
+
+        assertThat(result.readyCount()).isEqualTo(1);
+        assertThat(result.items()).hasSize(1);
+        assertThat(result.items().getFirst().studyPackId()).isNull();
+    }
+
     @Test
     void getPublic_exposesReadyCountForItsPublicItems() {
         UUID collectionId = UUID.randomUUID();

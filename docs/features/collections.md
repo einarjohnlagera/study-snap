@@ -607,7 +607,7 @@ Response: `GoalChildItemsResponse[]`, where each entry is
 
 `NoteCollectionItemResponse` carries `studyPackId` (nullable) as of `v0.124.0`. It costs no extra query
 — `toItemResponses` already loads the Study Pack projection for the due-concept lookup — and it exists so
-the detail page's Board Exam CTA can resolve its pack without the unbounded note-library fetch.
+the detail page's Board Exam CTA can resolve its pack without the unbounded note-library fetch. **⚠️ `GET /collections/public/{id}` WITHHOLDS IT.** That route is `permitAll`, and the owner and public mappers share `toItemResponse`, so the field is passed IN by each caller rather than derived inside — nothing public consumes it, and a field added for one caller otherwise reaches both.
 
 **⚠️ It is deliberately minimal, and must stay that way.** The Goal builder reads only
 `(collectionId, items)` off a child, so returning N full `NoteCollectionDetailResponse` payloads would
