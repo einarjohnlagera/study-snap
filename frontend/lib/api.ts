@@ -2270,6 +2270,44 @@ export type NotificationUnreadCountResponse = {
   count: number;
 };
 
+export type AnnouncementAudience = "EVERYONE" | "PROFILE_TYPE" | "PLAN_TYPE";
+
+export type AnnouncementStatus = "DRAFT" | "PUBLISHED" | "ENDED";
+
+export type AnnouncementResponse = {
+  id: string;
+  title: string;
+  body: string;
+  ctaLabel: string | null;
+  ctaPath: string | null;
+  audience: AnnouncementAudience;
+  audienceValue: string | null;
+  status: AnnouncementStatus;
+  publishedAt: string | null;
+  expiresAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  editable: boolean;
+  expired: boolean;
+};
+
+export type UpsertAnnouncementRequest = {
+  title: string;
+  body: string;
+  ctaLabel: string | null;
+  ctaPath: string | null;
+  audience: AnnouncementAudience;
+  audienceValue: string | null;
+  expiresAt: string | null;
+};
+
+export type AnnouncementPublishResponse = {
+  announcement: AnnouncementResponse;
+  recipientCount: number;
+  delivered: number;
+  skipped: number;
+};
+
 type ApiErrorPayload = {
   error?: {
     code?: string;
@@ -3047,6 +3085,70 @@ export async function sendReEngagementCampaign(): Promise<ReEngagementSendResult
     true,
   );
   return parseApiResponse<ReEngagementSendResult>(response, "Could not send campaign.");
+}
+
+export async function listAnnouncements(): Promise<AnnouncementResponse[]> {
+  const response = await fetchWithAuth(
+    "/admin/announcements",
+    { method: "GET", headers: buildAuthHeaders() },
+    true,
+  );
+  return parseApiResponse<AnnouncementResponse[]>(response, "Could not load announcements.");
+}
+
+export async function createAnnouncement(request: UpsertAnnouncementRequest): Promise<AnnouncementResponse> {
+  const response = await fetchWithAuth(
+    "/admin/announcements",
+    {
+      method: "POST",
+      headers: buildAuthHeaders("application/json"),
+      body: JSON.stringify(request),
+    },
+    true,
+  );
+  return parseApiResponse<AnnouncementResponse>(response, "Could not create the announcement.");
+}
+
+export async function updateAnnouncement(
+  announcementId: string,
+  request: UpsertAnnouncementRequest,
+): Promise<AnnouncementResponse> {
+  const response = await fetchWithAuth(
+    `/admin/announcements/${announcementId}`,
+    {
+      method: "PUT",
+      headers: buildAuthHeaders("application/json"),
+      body: JSON.stringify(request),
+    },
+    true,
+  );
+  return parseApiResponse<AnnouncementResponse>(response, "Could not update the announcement.");
+}
+
+export async function publishAnnouncement(announcementId: string): Promise<AnnouncementPublishResponse> {
+  const response = await fetchWithAuth(
+    `/admin/announcements/${announcementId}/publish`,
+    {
+      method: "POST",
+      headers: buildAuthHeaders("application/json"),
+      body: "{}",
+    },
+    true,
+  );
+  return parseApiResponse<AnnouncementPublishResponse>(response, "Could not publish the announcement.");
+}
+
+export async function endAnnouncement(announcementId: string): Promise<AnnouncementResponse> {
+  const response = await fetchWithAuth(
+    `/admin/announcements/${announcementId}/end`,
+    {
+      method: "POST",
+      headers: buildAuthHeaders("application/json"),
+      body: "{}",
+    },
+    true,
+  );
+  return parseApiResponse<AnnouncementResponse>(response, "Could not end the announcement.");
 }
 
 export async function issueAdminRefund(transactionId: string): Promise<AdminIssueRefundResponse> {
