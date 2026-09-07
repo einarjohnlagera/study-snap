@@ -180,7 +180,10 @@ export default function AdminAnnouncementsPage() {
       setPublishTarget(null);
       setSuccessMessage(
         `Published to ${result.delivered} of ${result.recipientCount} ${result.recipientCount === 1 ? "person" : "people"}` +
-          (result.skipped > 0 ? ` — ${result.skipped} failed, press Publish again to retry those.` : "."),
+          (result.skipped > 0 ? ` — ${result.skipped} failed, press Publish again to retry those.` : ".") +
+          (result.delivered === 0 && result.recipientCount > 0
+            ? " Nobody actually received it — check the logs before assuming it went out."
+            : ""),
       );
       void loadAnnouncements();
     } catch (err) {
@@ -418,7 +421,12 @@ export default function AdminAnnouncementsPage() {
         description={
           publishTarget?.status === "DRAFT"
             ? "This delivers the announcement to every targeted learner's inbox right now, and the title, body and link can no longer be changed afterwards. This cannot be undone — to correct it later you would end it and publish a replacement."
-            : "This re-runs delivery for anyone the first attempt missed. Nobody receives it twice."
+            // ⚠️ This used to read "This re-runs delivery for anyone the first attempt missed. Nobody
+            // receives it twice." The second sentence is true — the unique index dedupes — but the first
+            // was incomplete, and this is the copy an admin reads immediately before firing an
+            // irreversible action. fanOut re-resolves the audience at call time, so anyone who joined the
+            // audience since the first publish receives it now. It is a top-up, not only a retry.
+            : "This re-runs delivery for anyone the first attempt missed, and also delivers to anyone who has joined this audience since — new signups, or people whose profile or plan now matches. Nobody receives it twice."
         }
         onClose={() => { if (!acting) { setPublishTarget(null); } }}
         panelClassName="max-w-[520px]"

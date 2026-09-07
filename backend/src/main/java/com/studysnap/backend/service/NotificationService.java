@@ -37,7 +37,11 @@ public class NotificationService {
         notification.setTitle(delivery.title());
         notification.setBody(delivery.body());
         notification.setCtaLabel(delivery.ctaLabel());
-        notification.setCtaPath(delivery.ctaPath());
+        // ⚠️ THE LAST CHOKEPOINT BEFORE AN ADMIN-AUTHORED LINK IS PERSISTED INTO SOMEONE'S INBOX.
+        // Announcement create/update already validate, so this re-check is normally a no-op — it is here
+        // so that the validator's "one rule, one location" guarantee survives the NEXT producer, which
+        // will not be an announcement and may not think about it.
+        notification.setCtaPath(AnnouncementCtaPathValidator.validate(delivery.ctaPath()));
         notification.setAnnouncementId(delivery.announcementId());
         notification.setCreatedAt(OffsetDateTime.now(ZoneOffset.UTC));
 
@@ -85,7 +89,11 @@ public class NotificationService {
 
     @Transactional(readOnly = true)
     public int countActionableUnread(UUID userId) {
-        return Math.toIntExact(notificationRepository.countActionableUnread(userId, NotificationType.actionableTypes()));
+        return Math.toIntExact(notificationRepository.countActionableUnread(
+                userId,
+                NotificationType.actionableTypes(),
+                OffsetDateTime.now(ZoneOffset.UTC)
+        ));
     }
 
     @Transactional

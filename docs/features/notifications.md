@@ -43,6 +43,14 @@ the actionable half the badge exists for.
 
 **⚠️ Never render a literal `0`** — at zero there is no badge element at all, not an empty circle.
 
+**⚠️ THE BADGE QUERY AND THE INBOX QUERY MUST CARRY THE SAME VISIBILITY PREDICATE.** `countActionableUnread`
+shipped in `v0.130.0` filtering on `read_at` alone while `findVisibleInbox` also filters `dismissed_at`,
+so an actionable row dismissed without being read left the inbox and kept incrementing the bell — a
+number the learner could neither open nor clear. Fixed in the same release; both queries now filter
+`dismissed_at` and both apply the announcement-lifecycle subquery. **A change to either is a change to
+both**, and the lifecycle leg on the badge is mirroring rather than live (announcements are
+non-actionable, so no row has both today) — it is there so the two cannot drift.
+
 ## Read, dismiss, and what the panel must not do
 
 `read_at` is awareness; `dismissed_at` is inbox visibility. Both are idempotent — setting an already
@@ -74,10 +82,15 @@ Three properties are deliberate:
 - **Polling stops while the tab is hidden**, and refreshes on `visibilitychange`.
 - **A failed poll keeps the last known count and stays silent.** Clearing the badge would tell a
   learner they have nothing when they may have a pending request; a toast per failed poll is noise.
-- **⚠️ `getNotificationUnreadCount` is called with retry AND unauthorized-handling disabled**, so a
-  401 from a background poll can never sign a learner out of an otherwise valid session. This is why
-  `fetchWithAuth` gained a `handleUnauthorized` parameter — it defaults to `true`, so every other
-  caller is unchanged.
+- **⚠️ `getNotificationUnreadCount` is called with `retry=true` and `handleUnauthorized=false`, and the
+  two halves are separate decisions.** `handleUnauthorized=false` is why `fetchWithAuth` gained the
+  parameter — it defaults to `true`, so every other caller is unchanged — and it means a 401 from a
+  background poll can never sign a learner out of an otherwise valid session.
+  **⚠️ Disabling the RETRY as well was a defect, shipped and then fixed inside `v0.130.0`.** Access
+  tokens live 15 minutes and this polls every 60 seconds, so with no refresh every poll after the first
+  idle quarter-hour 401'd and the badge froze on its last value for the rest of the session. The
+  "refresh storm" rationale was never real: `tryRefreshAccessToken` already dedupes concurrent
+  refreshes. `trackAnalyticsEvent` is the precedent — same pairing, same reason.
 
 ## Announcements — the Admin "What's New" producer
 
@@ -106,7 +119,12 @@ delivery's `entityId` and its `announcementId`. **⚠️ There is NO service-sid
 the unique index is the guarantee.
 
 **Publish on an already-`PUBLISHED` announcement RE-RUNS the fan-out rather than being refused**, and
-that is deliberate. Fan-out is one committed insert per recipient with no ambient transaction, so a
+that is deliberate. **⚠️ But it is a RETRY ONLY FOR PEOPLE WHO ALREADY HAVE IT — for anyone who has
+joined the audience since the first publish it is a FIRST SEND.** `fanOut` re-resolves the audience at
+call time, so a user who signed up, changed profile type or upgraded plan in between is included in the
+second resolution and receives the announcement; existing recipients are deduped by the unique index and
+get nothing new. The net effect is a **top-up**. This doc and the service javadoc both used to say
+"a retry, not a second send" flatly, which a `v0.130.0` pressure test disproved. Fan-out is one committed insert per recipient with no ambient transaction, so a
 few thousand recipients is a few thousand round trips inside one admin HTTP request — long enough to
 outrun a gateway timeout. The status transition commits *before* fan-out starts and the index makes a
 re-run insert zero duplicates, so a timed-out publish is recoverable by pressing Publish again.
@@ -163,7 +181,10 @@ optional query string, rejecting anything with a scheme, a host, or a protocol-r
 **⚠️ A RULE, NOT AN ALLOW-LIST OF ROUTES** — an allow-list needs an application release for every new
 legitimate destination, which is the pressure that gets a security check deleted.
 
-**⚠️ Validated on WRITE and re-checked on RENDER.** `AnnouncementCtaPathValidator` (backend) and
+**⚠️ Validated on WRITE, again on DELIVER, and re-checked on RENDER.** The deliver-side check is normally
+a no-op — announcement create/update already validated — and exists because `NotificationService.deliver`
+originally took whatever `ctaPath` it was handed, which made the "one rule, one location" guarantee hold
+only for as long as announcements stayed the sole producer. `AnnouncementCtaPathValidator` (backend) and
 `lib/safe-relative-path.ts` (frontend) implement the same rule; a stored value is still untrusted by
 the time it reaches an `href`, because `next/link` renders an absolute URL as a live external anchor.
 If one side changes, change the other.
@@ -180,8 +201,17 @@ delivery, with no campaign entity to build on. Do not refactor, merge or delete 
 A `@Scheduled` job modelled on `BulkGenerationResultCleanupJob` deletes **read or dismissed**
 notifications older than a config-backed window (default 90 days).
 
-**⚠️ Unread actionable notifications are RETAINED regardless of age** — an unread row is the learner's
-only pointer to a pending request.
+**⚠️ Unread AND UNDISMISSED actionable notifications are RETAINED regardless of age** — such a row is the
+learner's only pointer to a pending request. **⚠️ The qualifier matters and `RELEASES.md` originally
+omitted it:** the cleanup predicate is `read_at IS NOT NULL OR dismissed_at IS NOT NULL`, so a row the
+learner dismissed without reading IS eligible for deletion. That is correct — dismissing is the learner
+saying they are done with it — but "unread rows are retained regardless of age" is not what the query
+says.
+
+**⚠️ Retention is NOT erasure, and cannot stand in for it.** Because unread rows are kept indefinitely,
+nothing on the retention path can ever clear a deleted account's inbox. `AccountPurgeService.deletePersonalRows`
+calls `deleteByRecipientUserId` for exactly that reason — it shipped missing in `v0.130.0` and was fixed in
+the same release, having left every purged account's notification history behind permanently.
 
 **⚠️ Notification is not workflow history.** Deleting a row must never touch the invitation, share,
 grant or collection it referred to. There is no archival infrastructure — one delete query on a

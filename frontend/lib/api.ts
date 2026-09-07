@@ -2721,13 +2721,23 @@ export async function listNotifications(limit = 50): Promise<NotificationRespons
 }
 
 export async function getNotificationUnreadCount(): Promise<NotificationUnreadCountResponse> {
+  // ⚠️ retry=TRUE, handleUnauthorized=FALSE — and the two halves are separate decisions.
+  //
+  // Disabling the retry as well was a defect (found by a v0.130.0 pressure test): access tokens live 15
+  // minutes and this is a 60-second background poll, so every poll after the first idle quarter-hour
+  // 401'd without ever refreshing. The badge silently froze on its last value for the rest of the
+  // session, which is the one failure a pending-request signal cannot have. The "refresh storm"
+  // justification was never real: tryRefreshAccessToken already dedupes concurrent refreshes.
+  //
+  // handleUnauthorized STAYS false: a background poll must never sign a learner out of a session whose
+  // foreground still works.
   const response = await fetchWithAuth(
     "/notifications/unread-count",
     {
       method: "GET",
       headers: buildAuthHeaders(),
     },
-    false,
+    true,
     false,
   );
   return parseApiResponse<NotificationUnreadCountResponse>(response, "Could not load notification count.");

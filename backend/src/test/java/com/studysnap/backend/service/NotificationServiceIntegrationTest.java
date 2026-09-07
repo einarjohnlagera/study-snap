@@ -2,6 +2,7 @@ package com.studysnap.backend.service;
 
 import com.studysnap.backend.entity.NotificationEntity;
 import com.studysnap.backend.entity.NotificationType;
+import com.studysnap.backend.exception.InvalidAnnouncementRequestException;
 import com.studysnap.backend.exception.NotificationNotFoundException;
 import com.studysnap.backend.repository.NotificationRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -140,6 +141,47 @@ class NotificationServiceIntegrationTest {
         notificationService.deliver(delivery(recipientId, UUID.randomUUID(), NotificationType.ACTION_REQUIRED));
 
         assertThat(notificationService.countActionableUnread(recipientId)).isEqualTo(1);
+    }
+
+    @Test
+    void aDismissedActionableRowStopsCountingTowardTheBadge() {
+        // ⚠️ THE BADGE AND THE INBOX MUST AGREE. Two independent v0.130.0 pressure-test agents found that
+        // countActionableUnread filtered on read_at alone while findVisibleInbox filters on dismissed_at,
+        // so dismissing an actionable row without reading it removed it from the inbox and left it
+        // incrementing the bell — a number the learner could not open and could not clear.
+        UUID recipientId = UUID.randomUUID();
+        UUID entityId = UUID.randomUUID();
+        var delivered = notificationService.deliver(delivery(recipientId, entityId, NotificationType.ACTION_REQUIRED));
+        assertThat(notificationService.countActionableUnread(recipientId)).isEqualTo(1);
+
+        notificationService.dismiss(recipientId, delivered.id());
+
+        assertThat(notificationService.listInbox(recipientId, 25)).isEmpty();
+        assertThat(notificationService.countActionableUnread(recipientId)).isZero();
+    }
+
+    @Test
+    void deliverRefusesACtaPathThatLeavesThisOrigin() {
+        // ⚠️ deliver is the last chokepoint before an admin-authored link is persisted into an inbox. It
+        // previously took whatever ctaPath it was handed, so the validator's "one rule, one location"
+        // guarantee held only while announcements were the sole producer.
+        UUID recipientId = UUID.randomUUID();
+        var offSite = new NotificationService.NotificationDelivery(
+                recipientId,
+                NotificationType.ACTION_REQUIRED,
+                UUID.randomUUID(),
+                "Action needed",
+                "Review this item.",
+                "Open",
+                "https://evil.example",
+                null
+        );
+
+        assertThatThrownBy(() -> notificationService.deliver(offSite))
+                .isInstanceOf(InvalidAnnouncementRequestException.class);
+
+        // Recipient-scoped on purpose: this class shares one schema across tests and never truncates.
+        assertThat(notificationService.listInbox(recipientId, 25)).isEmpty();
     }
 
     private NotificationService.NotificationDelivery delivery(UUID recipientId, UUID entityId, NotificationType type) {

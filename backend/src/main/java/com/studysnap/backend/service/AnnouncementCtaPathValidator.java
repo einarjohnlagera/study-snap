@@ -15,9 +15,14 @@ import java.util.regex.Pattern;
  * <p>The rule: a same-origin relative path. Accept {@code ^/[A-Za-z0-9\-._~/]*$} plus an optional
  * query string. Reject anything carrying a scheme, a host, or a protocol-relative {@code //} prefix.
  *
- * <p>⚠️ ONE VALIDATOR, ONE LOCATION — create and update both call {@link #validate(String)}, and the
- * frontend mirrors the same rule on render in {@code lib/safe-relative-path.ts}, because a value
- * already in the database is still untrusted input by the time it reaches an {@code href}.
+ * <p>⚠️ ONE VALIDATOR, THREE CHOKEPOINTS — announcement create and update both call
+ * {@link #validate(String)} on the way in, {@code NotificationService.deliver} calls it again on the way
+ * into an inbox row, and the frontend mirrors the same rule on render in
+ * {@code lib/safe-relative-path.ts}. The middle one is normally a no-op and is there anyway: a
+ * {@code v0.130.0} pressure test found that {@code deliver} took whatever {@code ctaPath} it was handed,
+ * so this javadoc's guarantee held only for as long as announcements stayed the sole producer. The
+ * render-side check is not redundant with either, because a value already in the database is still
+ * untrusted input by the time it reaches an {@code href}.
  */
 public final class AnnouncementCtaPathValidator {
     static final String FIELD = "ctaPath";
