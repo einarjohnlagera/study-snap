@@ -1352,6 +1352,31 @@ describe("StudyPlanBuilderPageClient", () => {
    * load effect, running the ENTIRE builder load a SECOND time -- 3 requests becoming 6, for exactly
    * the curator persona that owns the large Review Sets this release exists to make cheaper.
    */
+  /**
+   * ⚠️ GUARD: THE LOAD-ERROR COPY NAMES THE VIEWER'S OWN LABEL.
+   *
+   * <p>`v0.124.0` moved `labels.goalSingular` out of `loadBuilder`'s dependency array and behind a ref,
+   * to stop a TEACHER re-running the whole load. That label survives in exactly ONE place — this error
+   * string — and a cold review proved the line was executed by NO test: replacing it wholesale left all
+   * 54 tests green. So the ref read is pinned here, at the only layer it is observable.
+   *
+   * <p>⚠️ THE FIXTURE IS A TEACHER, whose label is "Course" rather than the unresolved default "Goal",
+   * so a stale read through the ref would render the WRONG word rather than merely a different one.
+   *
+   * <p>⚠️ IT REJECTS WITH A NON-`Error`, WHICH IS THE ONLY WAY TO REACH THIS STRING AT ALL:
+   * `makeErrorMessage` returns `error.message` for anything `instanceof Error` and the fallback only
+   * otherwise. That narrowness is exactly why the line went uncovered — an `Error` fixture renders the
+   * thrown message and never exercises the label.
+   */
+  it("names the curator's own label in the load error, reading it through the ref", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ profileType: "TEACHER", planType: "PRO" });
+    (getCollection as jest.Mock).mockRejectedValue("collection unavailable");
+
+    render(<StudyPlanBuilderPageClient collectionId="goal-1" />);
+
+    expect(await screen.findByText("Could not load this course.")).toBeInTheDocument();
+  });
+
   it("loads once for a curator, whose profile label resolves after the first render", async () => {
     (getAuthUser as jest.Mock).mockReturnValue({ profileType: "TEACHER", planType: "PRO" });
     const children = [

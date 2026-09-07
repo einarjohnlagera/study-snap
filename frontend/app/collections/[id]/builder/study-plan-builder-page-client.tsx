@@ -214,7 +214,10 @@ function toOptimisticItem(note: NoteListItemResponse, position: number): NoteCol
     subject: note.subject,
     courseProgram: note.courseProgram,
     studyPackStatus: note.studyPackStatus,
-    studyPackId: null,
+    // ⚠️ Carried, not nulled: `CollectionExamCandidate` includes `studyPackId` since `v0.124.0`, so a
+    // hardcoded null would make an optimistically-added note read as having no pack to any future
+    // exam-eligibility check over builder state.
+    studyPackId: note.studyPackId ?? null,
     generatedQuizId: note.generatedQuizId ?? null,
     lastSessionCompletedAt: note.lastSessionCompletedAt ?? null,
     dueConceptCount: 0,
@@ -1322,12 +1325,14 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
   const [notes, setNotes] = useState<NoteListItemResponse[]>([]);
   const [refreshingNotes, setRefreshingNotes] = useState(false);
   const [collapsedSubjectIds, setCollapsedSubjectIds] = useState<Set<string>>(new Set());
-  // Tracks which collectionId the initial collapse-seed has already run for. A plain
-  // "has seeded" boolean isn't enough: loadBuilder depends on labels.goalSingular,
-  // which changes once for TEACHER profiles when auth resolves ("Goal" -> "Course"),
-  // re-firing loadBuilder a second time for the *same* plan. Keying the guard by
-  // collectionId makes that second fire a no-op while still correctly reseeding if
-  // the user navigates to a different Goal plan without a full remount.
+  // Tracks which collectionId the initial collapse-seed has already run for, so it reseeds correctly
+  // when the user navigates to a different Goal plan without a full remount.
+  // ⚠️ ITS ORIGINAL JUSTIFICATION IS DEAD AND IS CORRECTED HERE RATHER THAN LEFT TO MISLEAD: it used
+  // to read "loadBuilder depends on labels.goalSingular, which changes once for TEACHER profiles when
+  // auth resolves, re-firing loadBuilder a second time for the same plan." `v0.124.0` moved that read
+  // behind `labelsRef` and removed the dependency, so the second fire no longer happens.
+  // ⚠️ Do NOT restore `labels.goalSingular` to `loadBuilder`'s deps believing this ref absorbs it --
+  // it would run the ENTIRE builder load twice for every curator, which is what that release fixed.
   const seededCollapseForCollectionIdRef = useRef<string | null>(null);
   const [mutationKind, setMutationKind] = useState<MutationKind>(null);
   const [mutationError, setMutationError] = useState<string | null>(null);
@@ -1421,7 +1426,7 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
     const serverItems = sortCollectionItemsByPosition(detail.items);
     // A background/auth-triggered refresh must never overwrite a visible pending order. Every
     // deliberate non-drag mutation flushes first; this guard covers refreshes not initiated by
-    // a mutation (including the second auth/profile load on this client page).
+    // a mutation (and formerly the second auth/profile load on this client page, which v0.124.0 removed).
     if (!leafOrderDirtyRef.current) {
       leafItemsRef.current = serverItems;
       lastSavedLeafItemsRef.current = serverItems;

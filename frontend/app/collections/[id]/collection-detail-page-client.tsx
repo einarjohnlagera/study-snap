@@ -2379,6 +2379,7 @@ function PublishStudyPlanModal({
   collection,
   isOpen,
   privateNoteIds,
+  privateNotesUnknown,
   onClose,
   onSaved,
   onNotesPublished,
@@ -2386,6 +2387,7 @@ function PublishStudyPlanModal({
   collection: NoteCollectionDetail;
   isOpen: boolean;
   privateNoteIds: string[];
+  privateNotesUnknown: boolean;
   onClose: () => void;
   onSaved: (collection: NoteCollectionDetail) => void;
   onNotesPublished: () => Promise<void> | void;
@@ -2403,7 +2405,12 @@ function PublishStudyPlanModal({
   const courseProgramDirty = trimmedCourseProgram !== (collection.courseProgram ?? "").trim();
   const busy = savingCourseProgram || togglingVisibility || makingPublic;
   const privateCount = privateNoteIds.length;
-  const blockedByPrivateNotes = privateCount > 0;
+  // ⚠️ FAIL CLOSED WHILE VISIBILITY IS UNKNOWN. `v0.124.0` moved the admin visibility fetch OUT of
+  // `loadCollection`, so the page now renders READY while that request is still in flight -- and an
+  // empty `noteVisibility` map is indistinguishable from "no private notes". Treating unknown as
+  // unblocked let an admin press Publish, see no "N notes are private" affordance, and get the
+  // server's raw rejection instead. Unknown blocks; only a completed read can unblock.
+  const blockedByPrivateNotes = privateCount > 0 || privateNotesUnknown;
 
   // Publishing is a constrained surface: lock the field to known buckets, but keep
   // the plan's existing value selectable even if the suggestion fetch omits it.
@@ -2805,6 +2812,9 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
   const [editingSectionName, setEditingSectionName] = useState("");
   const [pendingSectionRename, setPendingSectionRename] = useState<{ oldName: string; newName: string } | null>(null);
   const [noteVisibility, setNoteVisibility] = useState<Map<string, NoteVisibility>>(new Map());
+  // Distinguishes "read completed, nothing private" from "read has not completed" -- see
+  // `blockedByPrivateNotes`. A failed read leaves this false, which keeps Publish blocked.
+  const [noteVisibilityLoaded, setNoteVisibilityLoaded] = useState(false);
   const [showReviewFirstModal, setShowReviewFirstModal] = useState(false);
   const [skippedNoticeCount, setSkippedNoticeCount] = useState<number | null>(null);
   const [justAdopted, setJustAdopted] = useState(false);
@@ -2979,6 +2989,7 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
     try {
       const notes = await listNotes();
       setNoteVisibility(new Map(notes.map((note) => [note.id, note.visibility])));
+      setNoteVisibilityLoaded(true);
     } catch {
       // Visibility badges are admin-only progressive enhancement; ignore failures.
     }
@@ -3696,6 +3707,7 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
             collection={collection}
             isOpen={publishOpen}
             privateNoteIds={privateNoteIds}
+            privateNotesUnknown={isAdmin && !noteVisibilityLoaded}
             onClose={() => setPublishOpen(false)}
             onSaved={(saved) => {
               setCollection(saved);
@@ -4066,6 +4078,7 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
           collection={collection}
           isOpen={publishOpen}
           privateNoteIds={privateNoteIds}
+          privateNotesUnknown={isAdmin && !noteVisibilityLoaded}
           onClose={() => setPublishOpen(false)}
           onSaved={(saved) => {
             setCollection(saved);
