@@ -2,7 +2,7 @@
 
 ## v0.126.0 - Context Budget
 
-**Status: In Progress** (kicked off 2026-09-07, base branch `releases/v0.126.0`, cut from `main` after `v0.125.0` merged and tagged)
+**Status: Released** (kicked off and signed off 2026-09-07, base branch `releases/v0.126.0`, cut from `main` after `v0.125.0` merged and tagged)
 
 Theme: the governing documents stop charging every session for history that is already recorded somewhere else.
 
