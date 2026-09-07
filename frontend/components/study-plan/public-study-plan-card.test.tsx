@@ -53,6 +53,27 @@ describe("PublicStudyPlanCard", () => {
     (trackAnalyticsEvent as jest.Mock).mockReset();
   });
 
+  it("renders the adoption count on the card once it reaches the threshold", () => {
+    render(<PublicStudyPlanCard plan={{ ...leafPlan, adoptionCount: 40 }} adoptedCollection={null} />);
+
+    expect(screen.getByText("40 adopted")).toBeInTheDocument();
+  });
+
+  it("renders NOTHING about adoption below the threshold, not a floor or a range", () => {
+    // ⚠️ The threshold exists to hide smallness, so a "fewer than 5" label would defeat it. This
+    // asserts the ABSENCE of any adoption text -- not the presence of a softer one.
+    render(<PublicStudyPlanCard plan={{ ...leafPlan, adoptionCount: 4 }} adoptedCollection={null} />);
+
+    expect(screen.queryByText(/adopted/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/fewer than/i)).not.toBeInTheDocument();
+  });
+
+  it("stays silent when the API omits the count entirely", () => {
+    render(<PublicStudyPlanCard plan={leafPlan} adoptedCollection={null} />);
+
+    expect(screen.queryByText(/\d+ adopted/)).not.toBeInTheDocument();
+  });
+
   it("identifies published plans and explains the adopt outcome", () => {
     render(<PublicStudyPlanCard plan={leafPlan} adoptedCollection={null} />);
 

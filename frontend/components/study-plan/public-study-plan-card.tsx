@@ -14,6 +14,7 @@ import {
   type ProfileType,
 } from "@/lib/api";
 import { getCollectionLabels } from "@/lib/collection-labels";
+import { getCompactAdoptionLabel, getDetailedAdoptionLabel } from "@/lib/adoption-count";
 import { setJustAdoptedNotice } from "@/lib/just-adopted-notice";
 import { setStudyPlanSkippedNotice } from "@/lib/study-plan-skipped-notice";
 
@@ -57,6 +58,10 @@ export function PublicStudyPlanCard({
   const practiceReadyLine = plan.readyCount == null
     ? null
     : `${plan.readyCount} of ${plan.itemCount} notes practice-ready`;
+  // ⚠️ Null below the owner's threshold, and then NOTHING is rendered -- not "fewer than 5" and not a
+  // range, either of which still discloses the smallness the threshold exists to hide. The API's count
+  // is exact; only the display is gated. See lib/adoption-count.ts.
+  const adoptionLabel = getCompactAdoptionLabel(plan.adoptionCount);
   const descriptionFallback = isGoal
     ? `${subjectPlanLabel} · ${noteLabel}`
     : `${noteLabel} in saved order.`;
@@ -166,6 +171,7 @@ export function PublicStudyPlanCard({
       <div className="space-y-3">
         <p className="text-sm text-foreground/70">{detailLine}</p>
         {practiceReadyLine ? <p className="text-sm text-foreground/70">{practiceReadyLine}</p> : null}
+        {adoptionLabel ? <p className="text-sm font-medium text-foreground/70">{adoptionLabel}</p> : null}
         <Button type="button" variant="outline" className="w-full" onClick={handlePreview} aria-expanded={previewOpen}>
           {previewOpen ? "Hide plan preview" : `Preview this plan · ${noteLabel}`}
         </Button>
@@ -190,6 +196,9 @@ export function PublicStudyPlanCard({
                       : `Estimated study time: ${preview.estimatedStudyHours} ${preview.estimatedStudyHours === 1 ? "hour" : "hours"}`}
                   </p>
                   {previewReadyLine ? <p>{previewReadyLine}</p> : null}
+                  {getDetailedAdoptionLabel(preview.adoptionCount)
+                    ? <p>{getDetailedAdoptionLabel(preview.adoptionCount)}</p>
+                    : null}
                 </div>
                 {preview.items.length === 0 ? (
                   <p className="text-sm text-foreground/70">This plan does not have any available notes yet.</p>
