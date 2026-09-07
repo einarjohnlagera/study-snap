@@ -6,6 +6,8 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
+**Kicked off 2026-09-07.** `v0.125.0 — Bounded Reads` is **IN PROGRESS** on `releases/v0.125.0`, cut from `main` after `v0.124.0` merged and tagged. **Two items, both the last named instances of a shape that has caused THREE production events:** `OfficialChallengeQuizTemplateService.queueBackfill:81` (the last full-catalog entity load — plus TWO per-note queries the Backlog row does not mention, ~2,884 for one admin action) and server-side note search, which is the stated prerequisite for bounding the note picker. **⚠️ SCOPE IS SET BY A DATED CLUSTER: `[CHECKPOINT — due 2026-09-10]` is THREE days out and `[CHECKPOINT — due 2026-09-11]` FOUR, so the substantial onboarding work is BLOCKED FOR FOUR MORE DAYS and is next, not now.** **⚠️ Search ships with or before the bound, never a bound alone — `v0.123.0` declined the bound precisely because client-side filtering makes notes beyond a limit UNADDABLE.**
+
 **Kicked off 2026-09-06.** `v0.124.0 — Collection Path Performance` is **Released** on `releases/v0.124.0`, cut from `main` after `v0.123.0` merged and tagged.
 
 **⚠️ IT OVERRIDES ITS OWN GATE BY EXPLICIT OWNER DECISION (2026-09-06), RECORDED RATHER THAN ROUTED AROUND.** The performance-audit Backlog row says *"re-read after `v0.123.0` deploys"* before taking sequencing 4, and **`v0.123.0` has not been observed in production.** A later session reading that row in isolation must come here first. **⚠️ Accepted residual: sized from the audit's STATIC read, so if `v0.123.0`'s lazy note list already removed most of the felt cost, the benefit is smaller than the arithmetic implies.**
