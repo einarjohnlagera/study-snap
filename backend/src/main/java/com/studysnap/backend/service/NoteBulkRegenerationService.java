@@ -536,8 +536,13 @@ public class NoteBulkRegenerationService {
             // failed" with no reason recorded anywhere. If the meter is exhausted now, that is
             // overwhelmingly what happened, and saying so is strictly better than a generic failure
             // whose only remedy looks like "try again" -- which would spend a unit the curator has not
-            // got. Still a narrowing, not a proof: see the finding doc for why the exact reason cannot
-            // be persisted without a column this release may not add.
+            // got. Still a narrowing, not a proof -- this infers the cause from the meter's state now
+            // rather than reading it.
+            // ⚠️ v0.127.0 ADDED THE COLUMN THAT WOULD MAKE IT A PROOF: the worker now persists the
+            // normalized failure code on notes.generation_failure_code, so a quota rejection is
+            // readable rather than inferable. Repointing this branch at that column is a deliberate
+            // FOLLOW-UP, not an omission -- it changes a BLOCKED/FAILED classification the curator's
+            // retry behaviour keys on, which is a wider change than that release scoped.
             if (isNoteGenerationQuotaExhausted(ownerUserId, scope, enforceLimits)) {
                 return record(batchId, ownerUserId, noteId, scope, batchCreatedAt,
                         NoteBulkRegenerationItemState.BLOCKED,

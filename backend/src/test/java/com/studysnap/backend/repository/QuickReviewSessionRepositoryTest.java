@@ -41,7 +41,10 @@ class QuickReviewSessionRepositoryTest {
         jdbcTemplate.execute("""
                 create table if not exists notes (
                     id uuid primary key,
-                    generation_enqueued_at timestamp with time zone
+                    generation_enqueued_at timestamp with time zone,
+                    generation_failure_code text,
+                    generation_failure_reason text,
+                    generation_failed_at timestamp with time zone
                 )
                 """);
         jdbcTemplate.execute("""

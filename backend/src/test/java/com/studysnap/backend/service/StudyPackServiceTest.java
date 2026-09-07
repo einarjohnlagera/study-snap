@@ -1540,6 +1540,153 @@ class StudyPackServiceTest {
         assertThat(note.getStatus()).isEqualTo(NoteStatus.GENERATED);
     }
 
+    /**
+     * The QUOTA half of {@code v0.127.0}'s failure attribution, at the layer the defect lived at: the
+     * async worker's {@code catch}. On 2026-09-05 a burst of regenerations exhausted the monthly
+     * note-generation meter, the later ones hit {@code NoteGenerationService}'s own second assert on the
+     * generation thread, and the blanket {@code catch} marked the note {@code FAILED} while telling the
+     * owner nothing.
+     *
+     * <p>⚠️ A generic-failure fixture proves nothing here: the point is that a quota rejection is
+     * DISTINGUISHABLE from a generic failure, so the code is asserted, not merely its presence.
+     *
+     * <p>The real-row twin, which reaches this leg through actual {@code user_usage} rows rather than a
+     * stubbed exception, is {@code NativeQueryPostgresIntegrationTest
+     * #asyncQuotaExhaustionIsRecordedOnTheNoteAndSurvivesTheRetryThatOverwritesStatus}.
+     */
+    @Test
+    void noteAndStudyPackRegeneration_recordsTheQuotaCodeWhenTheWorkerHitsTheLimit() {
+        UUID ownerUserId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        NoteEntity note = regenerationNote(noteId, ownerUserId, "Site Planning");
+        stubRegenerationLookups(noteId, ownerUserId, note);
+        when(noteGenerationService.generateFromTopic(
+                any(GenerateNoteFromTopicRequest.class), eq(ownerUserId), any(), eq(false), eq(true)))
+                .thenThrow(new MonthlyNoteGenerationLimitReachedException());
+
+        studyPackService.startAsyncNoteAndStudyPackRegeneration(noteId.toString(), ownerUserId);
+
+        assertThat(note.getStatus()).isEqualTo(NoteStatus.FAILED);
+        assertThat(note.getGenerationFailureCode()).isEqualTo("NOTE_GENERATION_LIMIT_REACHED");
+        assertThat(note.getGenerationFailureReason())
+                .isEqualTo("You have reached your note generation limit for this billing cycle.");
+        assertThat(note.getGenerationFailedAt()).isNotNull();
+        assertThat(note.getContent())
+                .as("nothing was regenerated, so this is a real failure rather than a half-written note")
+                .isEqualTo("Existing body.");
+    }
+
+    /**
+     * GUARD (c) at the unit layer, so it runs even when the PostgreSQL harness is skipped: the recorded
+     * reason SURVIVES a successful retry that overwrites {@code status}.
+     *
+     * <p>⚠️ ASSERTING ONLY AFTER THE RETRY WOULD PASS UNDER A VERSION THAT NEVER WROTE THE REASON AT
+     * ALL — both reads are NULL. Both points are asserted.
+     */
+    @Test
+    void noteAndStudyPackRegeneration_failureReasonSurvivesASuccessfulRetryThatOverwritesStatus() {
+        UUID ownerUserId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        NoteEntity note = regenerationNote(noteId, ownerUserId, "Site Planning");
+        stubRegenerationLookups(noteId, ownerUserId, note);
+        when(noteGenerationService.generateFromTopic(
+                any(GenerateNoteFromTopicRequest.class), eq(ownerUserId), any(), eq(false), eq(true)))
+                .thenThrow(new MonthlyNoteGenerationLimitReachedException())
+                .thenReturn(new GenerateNoteFromTopicResponse("Regenerated body."));
+        when(llmStudyPackService.generateStudyPack(anyString(), any()))
+                .thenReturn(generatedContent("Regenerated pack"));
+
+        studyPackService.startAsyncNoteAndStudyPackRegeneration(noteId.toString(), ownerUserId);
+
+        assertThat(note.getStatus()).isEqualTo(NoteStatus.FAILED);
+        assertThat(note.getGenerationFailureCode()).isEqualTo("NOTE_GENERATION_LIMIT_REACHED");
+        OffsetDateTime failedAt = note.getGenerationFailedAt();
+        assertThat(failedAt).isNotNull();
+
+        studyPackService.startAsyncNoteAndStudyPackRegeneration(noteId.toString(), ownerUserId);
+
+        assertThat(note.getStatus())
+                .as("the retry really did overwrite status — otherwise the survival assertion is vacuous")
+                .isEqualTo(NoteStatus.GENERATED);
+        assertThat(note.getGenerationFailureCode())
+                .as("GUARD (c): a successful retry must never erase why the earlier attempt failed")
+                .isEqualTo("NOTE_GENERATION_LIMIT_REACHED");
+        assertThat(note.getGenerationFailedAt())
+                .as("the stamp still belongs to the FAILURE, which is what dates the reason")
+                .isEqualTo(failedAt);
+    }
+
+    /**
+     * GUARD (d) at the unit layer, and it covers the FIRST-GENERATION entry point deliberately: the
+     * {@code catch} that records the reason is shared by {@code startAsyncGenerationFromNote} and
+     * {@code startAsyncNoteAndStudyPackRegeneration}, so both surfaces gain attribution.
+     *
+     * <p>⚠️ THE EXCEPTION MESSAGE IS SECRET-SHAPED ON PURPOSE. An innocuous message passes under a
+     * version that persists {@code ex.getMessage()} verbatim and proves nothing.
+     */
+    @Test
+    void startAsyncGenerationFromNote_persistsASafeReasonAndNeverRawExceptionTextWhenTheWorkerFails() {
+        UUID userId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        NoteEntity draftNote = buildDraftNote(noteId, userId, "draft note content");
+        when(noteRepository.findByIdAndOwnerUserId(noteId, userId)).thenReturn(Optional.of(draftNote));
+        when(studyPackRepository.findByOwnerUserIdAndNoteId(userId, noteId)).thenReturn(Optional.empty());
+        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.FREE);
+        when(studyPackUsageService.resolveUsage(eq(userId), any(OffsetDateTime.class)))
+                .thenReturn(new StudyPackUsageService.UsageSnapshot(
+                        OffsetDateTime.now().minusDays(10), OffsetDateTime.now().plusDays(20), 0));
+        when(llmStudyPackService.generateStudyPack(eq("draft note content"), any(StudyPackGenerationContext.class)))
+                .thenThrow(new IllegalStateException("upstream said sk-live-leaked-secret"));
+
+        studyPackService.startAsyncGenerationFromNote(noteId.toString(), userId);
+
+        assertThat(draftNote.getStatus()).isEqualTo(NoteStatus.FAILED);
+        assertThat(draftNote.getGenerationFailureCode())
+                .as("a non-AppException can never be mistaken for a quota block")
+                .isEqualTo("UNEXPECTED_ERROR");
+        assertThat(draftNote.getGenerationFailureReason())
+                .as("GUARD (d): raw exception text is NEVER persisted")
+                .doesNotContain("sk-live-leaked-secret")
+                .doesNotContain("upstream said")
+                .as("only the exception CLASS, which is v0.87.0's template")
+                .contains("IllegalStateException");
+        assertThat(draftNote.getGenerationFailedAt()).isNotNull();
+    }
+
+    /**
+     * The recovery sweeper's own entry point. A note the sweeper resolves is FAILED with no exception in
+     * hand at all, and leaving the columns NULL would leave {@code status = FAILED} beside failure
+     * columns describing a DIFFERENT, EARLIER failure.
+     */
+    @Test
+    void markNoteGenerationFailed_recordsAnInterruptedReasonForTheRecoverySweep() {
+        NoteEntity note = regenerationNote(UUID.randomUUID(), UUID.randomUUID(), "Stranded note");
+        note.setStatus(NoteStatus.GENERATING);
+
+        studyPackService.markNoteGenerationFailed(note);
+
+        assertThat(note.getStatus()).isEqualTo(NoteStatus.FAILED);
+        assertThat(note.getGenerationFailureCode()).isEqualTo("GENERATION_INTERRUPTED");
+        assertThat(note.getGenerationFailureReason()).isNotBlank();
+        assertThat(note.getGenerationFailedAt()).isNotNull();
+    }
+
+    private void stubRegenerationLookups(UUID noteId, UUID ownerUserId, NoteEntity note) {
+        when(noteRepository.findByIdAndOwnerUserId(noteId, ownerUserId)).thenReturn(Optional.of(note));
+        StudyPackEntity existingPack = new StudyPackEntity();
+        existingPack.setId(UUID.randomUUID());
+        existingPack.setNoteId(noteId);
+        existingPack.setCreatedAt(OffsetDateTime.now().minusDays(2));
+        when(studyPackRepository.findByOwnerUserIdAndNoteId(ownerUserId, noteId))
+                .thenReturn(Optional.of(existingPack));
+        lenient().when(studyPackRepository.findByNoteId(noteId)).thenReturn(Optional.of(existingPack));
+        lenient().when(noteRepository.findById(noteId)).thenReturn(Optional.of(note));
+        when(subscriptionService.resolvePlan(ownerUserId)).thenReturn(PlanType.FREE);
+        when(studyPackUsageService.resolveUsage(eq(ownerUserId), any(OffsetDateTime.class)))
+                .thenReturn(new StudyPackUsageService.UsageSnapshot(
+                        OffsetDateTime.now().minusDays(1), OffsetDateTime.now().plusDays(29), 0));
+    }
+
     private NoteEntity regenerationNote(UUID noteId, UUID ownerUserId, String title) {
         NoteEntity note = new NoteEntity();
         note.setId(noteId);
