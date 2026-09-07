@@ -100,6 +100,19 @@ decision; audit Lever 1 on the detail page.)
   provenance was unverified in both directions — `BOARD_EXAM` + `PRO` is the only combination reaching
   `/study-packs/{packId}/challenge-quiz`, and nothing exercised it. The new guard asserts that route
   **and** that `listNotes` is unused, so the id cannot be coming from the old lookup.
+- **⚠️⚠️ THE SHARED MAPPER PUT THE NEW FIELD ON AN ANONYMOUS PAYLOAD, AND NOTHING CAUGHT IT — FOUND
+  ONLY BY ASKING WHO ELSE CALLS `toItemResponse`.** `toPublicItemResponses` delegates to the SAME
+  mapper, and it backs `GET /collections/public/{id}`, which `SecurityConfig` declares `permitAll`.
+  **So a field added for the owner's detail page began riding on a payload served to callers with no
+  account** — `tsc`, 2204 backend tests and 2237 frontend tests all stayed green. **⚠️ THE PUBLIC
+  MAPPER NOW WITHHOLDS IT**, and `studyPackId` became a CALLER-SUPPLIED parameter rather than one
+  derived inside the mapper, following the precedent already set by `generatedQuizId` — the two callers
+  legitimately disagree, so the shared mapper must not decide. **⚠️ EXPOSURE WAS LOW, STATED HONESTLY
+  RATHER THAN INFLATED:** the notes are already `PUBLIC` and `/study-packs/{id}` is
+  `findByIdAndOwnerUserId`, so the id 404s for anyone else. **It was an unintended widening of an
+  anonymous contract, not a credential leak — and the lesson is the mechanism, not the blast radius.**
+  Guarded, and the fixture MUST stub an existing pack: with no pack the field is null under both the
+  defect and the fix.
 - **⚠️ GUARD FIXTURES ARE NON-ADMIN AND `PRO`-BOARD ON PURPOSE — an admin fixture still legitimately
   calls `listNotes` for the badges and passes under the defect.** Mutation-verified: removing the admin
   gate fails the learner guard (and the admin guard, which pins **exactly once**); nulling the pack id

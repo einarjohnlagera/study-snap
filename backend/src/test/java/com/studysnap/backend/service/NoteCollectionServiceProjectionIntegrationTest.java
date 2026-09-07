@@ -271,10 +271,10 @@ class NoteCollectionServiceProjectionIntegrationTest {
         ));
 
         List<NoteCollectionItemResponse> expectedItems = List.of(
-                legacyItem(draft, null, null, 0, List.of()),
-                legacyItem(generating, null, null, 1, List.of()),
-                legacyItem(failed, null, null, 2, List.of()),
-                legacyItem(ready, readyPack, generatedQuizId, 3, List.of("Cells", "DNA", "Mitosis", "Genetics"))
+                legacyItem(draft, null, null, null, 0, List.of()),
+                legacyItem(generating, null, null, null, 1, List.of()),
+                legacyItem(failed, null, null, null, 2, List.of()),
+                legacyItem(ready, readyPack, packIdOf(readyPack), generatedQuizId, 3, List.of("Cells", "DNA", "Mitosis", "Genetics"))
         );
 
         SqlCaptureStatementInspector.clear();
@@ -351,7 +351,9 @@ class NoteCollectionServiceProjectionIntegrationTest {
 
         NoteCollectionDetailResponse detail = noteCollectionService.getPublic(collection.getId());
 
-        assertThat(detail.items()).containsExactly(legacyItem(publicNote, publicPack, null, 0, List.of()));
+        // ⚠️ `studyPackId` is null here even though `publicPack` EXISTS: `getPublic` is anonymous and
+        // withholds it. Passing `packIdOf(publicPack)` would assert the leak this release closed.
+        assertThat(detail.items()).containsExactly(legacyItem(publicNote, publicPack, null, null, 0, List.of()));
         assertThat(detail.progress().totalNotes()).isEqualTo(1);
         assertThat(detail.progress().notesWithStudyPack()).isEqualTo(1);
         assertProjectionQueriesAvoidLargeColumns();
@@ -560,9 +562,20 @@ class NoteCollectionServiceProjectionIntegrationTest {
         return (int) Math.round(masteredConcepts * 100.0 / totalConcepts);
     }
 
+    private static String packIdOf(StudyPackEntity studyPack) {
+        return studyPack == null ? null : studyPack.getId().toString();
+    }
+
+    /**
+     * ⚠️ {@code studyPackId} IS SUPPLIED BY THE CALLER, NOT DERIVED FROM {@code studyPack}, because the
+     * owner and public mappers legitimately DISAGREE about it: {@code GET /collections/public/{id}} is
+     * {@code permitAll} and withholds the field, while the owner's detail path carries it. Deriving it
+     * here would make the public assertion below silently expect the owner shape.
+     */
     private NoteCollectionItemResponse legacyItem(
             NoteEntity note,
             StudyPackEntity studyPack,
+            String studyPackId,
             UUID generatedQuizId,
             int position,
             List<String> dueConcepts
@@ -577,7 +590,7 @@ class NoteCollectionServiceProjectionIntegrationTest {
                 note.getDomainContext().name(),
                 note.getLearnerLevel().name(),
                 NoteStudyPackStatusResolver.resolve(note, studyPack),
-                studyPack == null ? null : studyPack.getId().toString(),
+                studyPackId,
                 generatedQuizId == null ? null : generatedQuizId.toString(),
                 null,
                 dueConcepts.size(),

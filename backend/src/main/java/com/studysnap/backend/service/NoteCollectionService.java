@@ -3118,11 +3118,19 @@ public class NoteCollectionService {
                         item,
                         notesById.get(item.getNoteId()),
                         studyPacksByNoteId.get(item.getNoteId()),
+                        // Already loaded for the due-concept lookup above, so this costs no extra query.
+                        // It exists so the collection detail page can resolve its primary exam's pack
+                        // WITHOUT downloading the caller's entire note library -- see collections.md.
+                        studyPackIdOf(studyPacksByNoteId.get(item.getNoteId())),
                         generatedQuizIdByNoteId.get(item.getNoteId()),
                         lastSessionCompletedAtByNoteId.get(item.getNoteId()),
                         dueConceptsByStudyPackId
                 ))
                 .toList();
+    }
+
+    private static String studyPackIdOf(StudyPackProgressView studyPack) {
+        return studyPack == null ? null : studyPack.getId().toString();
     }
 
     private List<NoteCollectionItemResponse> toPublicItemResponses(List<NoteCollectionItemEntity> items) {
@@ -3143,6 +3151,11 @@ public class NoteCollectionService {
                         item,
                         notesById.get(item.getNoteId()),
                         studyPacksByNoteId.get(item.getNoteId()),
+                        // ⚠️ WITHHELD DELIBERATELY. `GET /collections/public/{id}` is `permitAll`, so this
+                        // payload reaches ANONYMOUS callers. `studyPackId` was added for the OWNER's
+                        // detail page and nothing public consumes it, so it does not travel here --
+                        // this mapper is shared, and a field added for one caller reaches both.
+                        null,
                         null,
                         null,
                         Map.of()
@@ -3196,6 +3209,7 @@ public class NoteCollectionService {
             NoteCollectionItemEntity item,
             NoteCollectionNoteProjection note,
             StudyPackProgressView studyPack,
+            String studyPackId,
             UUID generatedQuizId,
             OffsetDateTime lastSessionCompletedAt,
             Map<UUID, List<String>> dueConceptsByStudyPackId
@@ -3216,10 +3230,7 @@ public class NoteCollectionService {
                 note.domainContext() == null ? null : note.domainContext().name(),
                 note.learnerLevel() == null ? null : note.learnerLevel().name(),
                 NoteStudyPackStatusResolver.resolve(note.status(), studyPack != null),
-                // Already loaded for the due-concept lookup above, so carrying it costs no extra query.
-                // It exists so the collection detail page can resolve its primary exam's pack WITHOUT
-                // downloading the caller's entire note library -- see collections.md.
-                studyPack == null ? null : studyPack.getId().toString(),
+                studyPackId,
                 generatedQuizId == null ? null : generatedQuizId.toString(),
                 lastSessionCompletedAt,
                 dueConcepts.size(),
