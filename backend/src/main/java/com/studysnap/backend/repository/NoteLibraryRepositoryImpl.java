@@ -50,6 +50,7 @@ public class NoteLibraryRepositoryImpl implements NoteLibraryRepository {
     private static final String UPDATED_AT_ALIAS = "updatedAt";
     private static final String COPIED_FROM_NOTE_ID_ALIAS = "copiedFromNoteId";
     private static final String COPIED_FROM_PUBLIC_ALIAS = "copiedFromPublic";
+    private static final String SEARCH_PATTERN_ALIAS = "searchPattern";
     private static final String LIBRARY_VALUE_ALIAS = "libraryValue";
     private static final String LIBRARY_COUNT_ALIAS = "libraryCount";
     private static final String NOTE_LIST_ITEM_SELECT = """
@@ -180,12 +181,22 @@ public class NoteLibraryRepositoryImpl implements NoteLibraryRepository {
     }
 
     @Override
-    public List<NoteListItemProjection> findListItemProjectionsByOwnerUserId(UUID ownerUserId, Integer limit) {
-        Query query = createNativeQuery(NOTE_LIST_ITEM_SELECT + NOTE_LIST_ITEMS_FROM + """
-                 where n.owner_user_id = :ownerUserId
-                 order by n.updated_at desc
-                """);
-        query.setParameter(OWNER_USER_ID_ALIAS, ownerUserId);
+    public List<NoteListItemProjection> findListItemProjectionsByOwnerUserId(
+            UUID ownerUserId,
+            String searchPattern,
+            Integer limit
+    ) {
+        StringBuilder where = new StringBuilder(" where n.owner_user_id = :ownerUserId");
+        Map<String, Object> parameters = new LinkedHashMap<>();
+        parameters.put(OWNER_USER_ID_ALIAS, ownerUserId);
+        if (searchPattern != null) {
+            appendOwnedNoteSearchFilter(where);
+            parameters.put(SEARCH_PATTERN_ALIAS, searchPattern);
+        }
+        Query query = createNativeQuery(
+                NOTE_LIST_ITEM_SELECT + NOTE_LIST_ITEMS_FROM + where + " order by n.updated_at desc"
+        );
+        bind(query, parameters);
         if (limit != null) {
             query.setMaxResults(limit);
         }
@@ -324,7 +335,7 @@ public class NoteLibraryRepositoryImpl implements NoteLibraryRepository {
 
         if (criteria.searchPattern() != null) {
             appendSearchFilter(where);
-            parameters.put("searchPattern", criteria.searchPattern());
+            parameters.put(SEARCH_PATTERN_ALIAS, criteria.searchPattern());
         }
         if (criteria.courseProgram() != null) {
             where.append("""
@@ -387,6 +398,46 @@ public class NoteLibraryRepositoryImpl implements NoteLibraryRepository {
         where.append("""
                  and (
                      lower(coalesce(n.title, '')) like :searchPattern escape '\\'
+                     or lower(array_to_string(n.tags, '|||LIBRARY_TAG_BOUNDARY|||'))
+                         like :searchPattern escape '\\'
+                 )
+                """);
+    }
+
+    /**
+     * The owner-scoped note search behind {@code GET /notes?search=}.
+     *
+     * <p>⚠️ FOUR FIELDS, NOT TWO, AND THAT IS THE WHOLE POINT. It replaces the Study Plan builder's
+     * client-side picker filter, which matched title, subject, course program AND tags; a server
+     * search over fewer fields would silently make tag-findable notes unreachable the moment the
+     * picker is bounded — the same invisible narrowing the bound itself was declined for.
+     *
+     * <p>⚠️ AND IT IS A SEPARATE METHOD FROM {@link #appendSearchFilter} ON PURPOSE. That one serves
+     * the PUBLIC LIBRARY, a different surface with SEO-indexed pages; widening it there would be an
+     * unrequested behaviour change. Only the tags leg needs the dialect split — {@code subject} and
+     * {@code course_program} are plain columns.
+     */
+    private void appendOwnedNoteSearchFilter(StringBuilder where) {
+        if (isPostgres()) {
+            where.append("""
+                     and (
+                         lower(coalesce(n.title, '')) like :searchPattern escape '\\'
+                         or lower(coalesce(n.subject, '')) like :searchPattern escape '\\'
+                         or lower(coalesce(n.course_program, '')) like :searchPattern escape '\\'
+                         or exists (
+                             select 1
+                             from unnest(n.tags) as owned_search_tag(value)
+                             where lower(owned_search_tag.value) like :searchPattern escape '\\'
+                         )
+                     )
+                    """);
+            return;
+        }
+        where.append("""
+                 and (
+                     lower(coalesce(n.title, '')) like :searchPattern escape '\\'
+                     or lower(coalesce(n.subject, '')) like :searchPattern escape '\\'
+                     or lower(coalesce(n.course_program, '')) like :searchPattern escape '\\'
                      or lower(array_to_string(n.tags, '|||LIBRARY_TAG_BOUNDARY|||'))
                          like :searchPattern escape '\\'
                  )

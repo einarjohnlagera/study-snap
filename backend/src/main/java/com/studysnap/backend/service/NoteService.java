@@ -541,13 +541,27 @@ public class NoteService {
 
     @Transactional(readOnly = true)
     public List<NoteListItemResponse> listMine(UUID ownerUserId, Integer limit) {
+        return listMine(ownerUserId, null, limit);
+    }
+
+    /**
+     * ⚠️ {@code search} IS ADDITIVE AND THE SAME ESCAPING THE LIBRARY USES. It exists so a caller can
+     * bound {@code limit} without making anything unreachable: the Study Plan builder's note picker
+     * filtered the WHOLE library in the browser, so bounding it alone would have hidden every note
+     * past the limit with no way to reach it.
+     *
+     * <p>⚠️ It reuses {@link #toLibrarySearchPattern}; a second escaping helper is how the two
+     * surfaces would disagree about what {@code %} means.
+     */
+    @Transactional(readOnly = true)
+    public List<NoteListItemResponse> listMine(UUID ownerUserId, String search, Integer limit) {
         // Native rather than the old JPQL projection: JPQL cannot express the array_agg the join needs,
         // so that projection never selected applicablePrograms and GET /notes advertised a field it
         // always returned empty (M2). This shares the select and join with the Library page, so the two
         // endpoints cannot drift on the same DTO. The aggregate is owner-scoped, so it is empty for
         // every learner -- no non-admin note carries a join row -- and bounded for a curator.
         List<? extends NoteListItemView> notes = noteRepository
-                .findListItemProjectionsByOwnerUserId(ownerUserId, limit);
+                .findListItemProjectionsByOwnerUserId(ownerUserId, toLibrarySearchPattern(search), limit);
         return toListItems(notes, ownerUserId, true);
     }
 

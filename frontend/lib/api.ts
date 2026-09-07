@@ -4871,8 +4871,27 @@ export async function exportCombinedGeneratedQuizDocx(
   return { filename };
 }
 
-export async function listNotes(limit?: number): Promise<NoteListItemResponse[]> {
-  const query = typeof limit === "number" ? `?limit=${encodeURIComponent(String(limit))}` : "";
+/**
+ * ⚠️ `search` AND `limit` ARE A PAIR, NOT TWO INDEPENDENT OPTIONS. A caller that bounds this list
+ * without offering a search hides every note past the bound with no way to reach it — which is why
+ * `v0.123.0` declined to bound the Study Plan builder's picker at all. Callers that need the whole
+ * library (visibility badges, exam builders) still pass neither.
+ */
+export async function listNotes(limit?: number, search?: string): Promise<NoteListItemResponse[]> {
+  const parameters = new URLSearchParams();
+  if (typeof limit === "number") {
+    parameters.set("limit", String(limit));
+  }
+  const trimmedSearch = search?.trim();
+  if (trimmedSearch) {
+    // ⚠️ MUST STAY `search` — it is the backend's own @RequestParam name on GET /notes
+    // (`NoteController.SEARCH_REQUEST_PARAM`), shared with the library endpoints. Renaming either
+    // side alone binds null server-side: the picker keeps its 50-row bound while search reaches
+    // nothing, which is the every-note-past-the-bound-is-unaddable loss v0.123.0 refused to ship.
+    parameters.set("search", trimmedSearch);
+  }
+  const serialized = parameters.toString();
+  const query = serialized ? `?${serialized}` : "";
   const response = await fetchWithAuth(
     `/notes${query}`,
     {

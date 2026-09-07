@@ -1014,6 +1014,201 @@ describe("StudyPlanBuilderPageClient", () => {
     });
   });
 
+  /**
+   * ⚠️ THE PRE-DECLARED GUARD FOR THE BOUND, AND THE FIXTURE IS THE POINT. A library SMALLER than the
+   * limit passes whether or not the search works at all — it is the whole reason `v0.123.0` refused
+   * to bound this picker: a limit with client-side filtering makes every note past it permanently
+   * unaddable, and nothing on screen says so.
+   *
+   * ⚠️ The `listNotes` mock behaves like the SERVER (filter, then slice), not like a stub, so the
+   * buried note is genuinely absent from the first page rather than merely unasserted.
+   */
+  it("keeps a note beyond the picker's bound reachable, and addable, through search", async () => {
+    const recent = Array.from({ length: 60 }, (_, index) => note(`note-recent-${index}`, `Recent Note ${index}`));
+    const buried = note("note-buried", "Buried Thermodynamics");
+    const library = [...recent, buried];
+    (listNotes as jest.Mock).mockImplementation(async (limit?: number, search?: string) => {
+      const matched = search
+        ? library.filter((candidate) => candidate.title.toLowerCase().includes(search.toLowerCase()))
+        : library;
+      return typeof limit === "number" ? matched.slice(0, limit) : matched;
+    });
+    render(<StudyPlanBuilderPageClient collectionId="goal-1" />);
+
+    const block = await waitFor(() => subjectBlock("Professional Education Mastery"));
+    fireEvent.click(within(block).getByRole("button", { name: "Add notes" }));
+    const dialog = await screen.findByRole("dialog");
+
+    // The fetch is BOUNDED — without this the search assertion below would pass on an unbounded list.
+    await waitFor(() => expect(listNotes).toHaveBeenCalledWith(50, undefined));
+    await waitFor(() => expect(within(dialog).getByText("Recent Note 0")).toBeInTheDocument());
+    expect(within(dialog).queryByText("Buried Thermodynamics")).not.toBeInTheDocument();
+
+    fireEvent.change(within(dialog).getByPlaceholderText(/Search notes/i), { target: { value: "thermo" } });
+
+    await waitFor(() => expect(listNotes).toHaveBeenCalledWith(50, "thermo"));
+    expect(await within(dialog).findByText("Buried Thermodynamics")).toBeInTheDocument();
+
+    fireEvent.click(within(dialog).getByText("Buried Thermodynamics"));
+    fireEvent.click(within(dialog).getByRole("button", { name: /Add selected/ }));
+
+    await waitFor(() => {
+      expect(addCollectionItems).toHaveBeenCalledWith("child-1", ["note-buried"]);
+    });
+  });
+
+  /**
+   * ⚠️ THE SELECTION MUST SURVIVE A QUERY CHANGE. Once search moved to the server, `notes` stopped
+   * being the whole library and became the current result page — so a selection derived from `notes`
+   * silently loses every note that is no longer on screen. The modal would then show "Selected (0)"
+   * while still sending the id, and the optimistic row for the added note would never appear.
+   *
+   * ⚠️ A fixture that selects and adds under ONE query passes under that defect and proves nothing.
+   */
+  it("keeps a note selected after the search query changes it off the visible page", async () => {
+    const library = [note("note-alpha", "Alpha Kinematics"), note("note-beta", "Beta Optics")];
+    (listNotes as jest.Mock).mockImplementation(async (_limit?: number, search?: string) => (
+      search
+        ? library.filter((candidate) => candidate.title.toLowerCase().includes(search.toLowerCase()))
+        : library
+    ));
+    render(<StudyPlanBuilderPageClient collectionId="goal-1" />);
+
+    const block = await waitFor(() => subjectBlock("Professional Education Mastery"));
+    fireEvent.click(within(block).getByRole("button", { name: "Add notes" }));
+    const dialog = await screen.findByRole("dialog");
+
+    fireEvent.click(await within(dialog).findByText("Alpha Kinematics"));
+    expect(within(dialog).getByText("Selected (1)")).toBeInTheDocument();
+
+    fireEvent.change(within(dialog).getByPlaceholderText(/Search notes/i), { target: { value: "optics" } });
+    await waitFor(() => expect(listNotes).toHaveBeenCalledWith(50, "optics"));
+    await within(dialog).findByText("Beta Optics");
+
+    expect(within(dialog).getByText("Selected (1)"))
+      .toBeInTheDocument();
+    expect(within(dialog).getAllByText("Alpha Kinematics").length)
+      .toBeGreaterThan(0);
+
+    fireEvent.click(within(dialog).getByRole("button", { name: /Add selected/ }));
+    await waitFor(() => {
+      expect(addCollectionItems).toHaveBeenCalledWith("child-1", ["note-alpha"]);
+    });
+  });
+
+  /**
+   * ⚠️ THE OPTIMISTIC ROW MUST COME FROM THE SELECTION, NOT FROM THE VISIBLE RESULTS. `handleAddNotes`
+   * builds its optimistic items from a note map and SILENTLY DROPS any id it cannot resolve — so once
+   * `notes` became a searched slice, adding a note selected under an earlier query rendered nothing
+   * at all until the server round-trip landed.
+   *
+   * ⚠️ THE WRITE IS HELD IN FLIGHT ON PURPOSE. Let it resolve and `refreshBuilder` repaints the row
+   * from the server, so the assertion would pass under the defect and prove nothing.
+   */
+  /**
+   * ⚠️ THE LEAF PICKER, WHICH THE GOAL-PATH GUARD BELOW CANNOT REACH.
+   *
+   * <p>`handleAddLeafNotes` and `handleAddNotes` are SEPARATE functions with the same defect and the
+   * same fix. A cold review found the leaf one entirely unexercised: reverting its `noteById` to
+   * `new Map(notes.map(...))` — the exact defect `v0.125.0` fixed — passed all 59 builder tests, and so
+   * did `throw` as its first statement. `/collections/{leafId}/builder` is the common curator surface.
+   *
+   * <p>⚠️ The add is held IN FLIGHT deliberately: letting it resolve repaints from the server, which is
+   * correct under both the defect and the fix. And the assertion is scoped to the canvas, because the
+   * modal's own "Selected" list still shows the title.
+   */
+  it("renders the optimistic row on a LEAF plan for a note selected under an earlier search query", async () => {
+    const library = [note("note-alpha", "Alpha Kinematics"), note("note-beta", "Beta Optics")];
+    (listNotes as jest.Mock).mockImplementation(async (_limit?: number, search?: string) => (
+      search
+        ? library.filter((candidate) => candidate.title.toLowerCase().includes(search.toLowerCase()))
+        : library
+    ));
+    (getCollection as jest.Mock).mockImplementation((id: string) => Promise.resolve(
+      id === "leaf-1"
+        ? collectionDetail("leaf-1", "Anatomy Plan", [], { parentCollectionId: null, childCount: 0 })
+        : collectionDetail(id, "Child", []),
+    ));
+    const pendingAdd = deferred<unknown>();
+    (addCollectionItems as jest.Mock).mockReturnValue(pendingAdd.promise);
+
+    render(<StudyPlanBuilderPageClient collectionId="leaf-1" />);
+
+    await screen.findByRole("heading", { name: "Anatomy Plan" });
+    fireEvent.click((await screen.findAllByRole("button", { name: "Add notes" }))[0]);
+    const dialog = await screen.findByRole("dialog");
+
+    fireEvent.click(await within(dialog).findByText("Alpha Kinematics"));
+    fireEvent.change(within(dialog).getByPlaceholderText(/Search notes/i), { target: { value: "optics" } });
+    await waitFor(() => expect(listNotes).toHaveBeenCalledWith(50, "optics"));
+    await within(dialog).findByText("Beta Optics");
+
+    fireEvent.click(within(dialog).getByRole("button", { name: /Add selected/ }));
+    await waitFor(() => expect(addCollectionItems).toHaveBeenCalledWith("leaf-1", ["note-alpha"]));
+
+    // ⚠️ Asserted OUTSIDE the dialog: the modal's own "Selected" list still shows the title, so an
+    // unscoped query passes under the defect.
+    await waitFor(() => {
+      const outsideDialog = screen.getAllByText("Alpha Kinematics")
+        .filter((element) => !dialog.contains(element));
+      expect(outsideDialog.length).toBeGreaterThan(0);
+    });
+
+    pendingAdd.resolve(collectionDetail("leaf-1", "Anatomy Plan"));
+  });
+
+  it("renders the optimistic row for a note selected under an earlier search query", async () => {
+    const library = [note("note-alpha", "Alpha Kinematics"), note("note-beta", "Beta Optics")];
+    (listNotes as jest.Mock).mockImplementation(async (_limit?: number, search?: string) => (
+      search
+        ? library.filter((candidate) => candidate.title.toLowerCase().includes(search.toLowerCase()))
+        : library
+    ));
+    const pendingAdd = deferred<unknown>();
+    (addCollectionItems as jest.Mock).mockReturnValue(pendingAdd.promise);
+    render(<StudyPlanBuilderPageClient collectionId="goal-1" />);
+
+    await screen.findByRole("heading", { name: "LET Mastery" });
+    fireEvent.click(screen.getByRole("button", { name: "Expand all" }));
+    const block = await waitFor(() => subjectBlock("Professional Education Mastery"));
+    fireEvent.click(within(block).getByRole("button", { name: "Add notes" }));
+    const dialog = await screen.findByRole("dialog");
+
+    fireEvent.click(await within(dialog).findByText("Alpha Kinematics"));
+    fireEvent.change(within(dialog).getByPlaceholderText(/Search notes/i), { target: { value: "optics" } });
+    await waitFor(() => expect(listNotes).toHaveBeenCalledWith(50, "optics"));
+    await within(dialog).findByText("Beta Optics");
+
+    fireEvent.click(within(dialog).getByRole("button", { name: /Add selected/ }));
+    await waitFor(() => expect(addCollectionItems).toHaveBeenCalledWith("child-1", ["note-alpha"]));
+
+    // Scoped to the SUBJECT, not the document: the modal's own "Selected" list still shows the title,
+    // so an unscoped query would pass under the defect.
+    const subjectAfterAdd = subjectBlock("Professional Education Mastery");
+    expect(await within(subjectAfterAdd).findByText("Alpha Kinematics")).toBeInTheDocument();
+
+    pendingAdd.resolve(collectionDetail("child-1", "Professional Education Mastery"));
+  });
+
+  /**
+   * ⚠️ A TRUNCATED LIST MUST SAY IT IS TRUNCATED. The picker's empty state already treats
+   * "No notes available." as a terminal claim about the library; showing 50 of 61 with no sentence
+   * attached is the same false claim, and it is what makes the bound honest rather than merely quiet.
+   */
+  it("tells the curator the picker list is bounded when it fills the limit", async () => {
+    const library = Array.from({ length: 60 }, (_, index) => note(`note-recent-${index}`, `Recent Note ${index}`));
+    (listNotes as jest.Mock).mockImplementation(async (limit?: number) => (
+      typeof limit === "number" ? library.slice(0, limit) : library
+    ));
+    render(<StudyPlanBuilderPageClient collectionId="goal-1" />);
+
+    const block = await waitFor(() => subjectBlock("Professional Education Mastery"));
+    fireEvent.click(within(block).getByRole("button", { name: "Add notes" }));
+    const dialog = await screen.findByRole("dialog");
+
+    expect(await within(dialog).findByText(/Showing your 50 most recently updated notes/i)).toBeInTheDocument();
+  });
+
   it("refreshes the note list from within the Add-notes modal without a standalone header Refresh button", async () => {
     render(<StudyPlanBuilderPageClient collectionId="goal-1" />);
 

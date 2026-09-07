@@ -681,15 +681,23 @@ public class NoteController {
         return noteService.updateVisibility(id, request.visibility(), userId);
     }
 
+    /**
+     * ⚠️ {@code q} IS ADDITIVE: omitting it is byte-for-byte the previous behaviour, so every
+     * existing caller is unaffected by construction. It exists so the Study Plan builder's note
+     * picker can pass a {@code limit} without hiding the notes past it — search and bound ship
+     * together, never a bound alone.
+     */
     @GetMapping
     @PreAuthorize("hasAnyRole('USER','ADMIN')")
     public List<NoteListItemResponse> listMine(
+            @RequestParam(value = SEARCH_REQUEST_PARAM, required = false) String search,
             @RequestParam(value = "limit", required = false) Integer limit,
             @AuthenticationPrincipal AuthenticatedUser user
     ) {
         UUID userId = user.userId();
         return noteService.listMine(
                 userId,
+                search,
                 limit == null ? null : Math.clamp(limit, PRIVATE_NOTES_MIN_LIMIT, PRIVATE_NOTES_MAX_LIMIT)
         );
     }

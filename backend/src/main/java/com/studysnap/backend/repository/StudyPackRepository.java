@@ -142,6 +142,22 @@ public interface StudyPackRepository extends JpaRepository<StudyPackEntity, UUID
 
     List<StudyPackEntity> findByNoteIdIn(Collection<UUID> noteIds);
 
+    /**
+     * The projection form of {@link #findByNoteIdIn}, for callers that only need to decide which
+     * note a pack belongs to and who owns it. Keeps a catalog-wide scan from materializing
+     * {@code summary}, {@code key_concepts} and the {@code quiz} JSONB it never reads.
+     */
+    @Query("""
+            select new com.studysnap.backend.repository.StudyPackOwnerProjection(
+                s.id,
+                s.noteId,
+                s.ownerUserId
+            )
+            from StudyPackEntity s
+            where s.noteId in :noteIds
+            """)
+    List<StudyPackOwnerProjection> findOwnerProjectionsByNoteIdIn(@Param("noteIds") Collection<UUID> noteIds);
+
     List<StudyPackEntity> findByOwnerUserIdAndNoteIdInAndStatus(
             UUID ownerUserId,
             Collection<UUID> noteIds,

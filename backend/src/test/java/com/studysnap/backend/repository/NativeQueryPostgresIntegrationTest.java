@@ -73,6 +73,7 @@ import com.studysnap.backend.config.StudySnapProperties;
 import com.studysnap.backend.security.InvitationRateLimitService;
 import com.studysnap.backend.model.NoteLibraryReadiness;
 import com.studysnap.backend.model.NoteListItemProjection;
+import com.studysnap.backend.model.NoteListItemView;
 import com.studysnap.backend.model.NoteLibrarySort;
 import com.studysnap.backend.model.PublicLibrarySort;
 import com.studysnap.backend.model.PublicLibrarySource;
@@ -210,6 +211,8 @@ class NativeQueryPostgresIntegrationTest {
 
     @Autowired
     private StudyPackRepository studyPackRepository;
+    @Autowired
+    private ChallengeQuizQuestionBankRepository questionBankRepository;
 
     @Autowired
     private GeneratedQuizRepository generatedQuizRepository;
@@ -1731,7 +1734,10 @@ class NativeQueryPostgresIntegrationTest {
                 noteLibraryRepository.findLibraryPage(allOwned, sort, 0, 10);
             }
         }
-        noteLibraryRepository.findListItemProjectionsByOwnerUserId(ownerUserId, 10);
+        noteLibraryRepository.findListItemProjectionsByOwnerUserId(ownerUserId, null, 10);
+        // ⚠️ The search= branch is a DIFFERENT statement (four LIKE legs plus a Postgres `unnest`),
+        // so PREPAREing the unsearched one proves nothing about it.
+        noteLibraryRepository.findListItemProjectionsByOwnerUserId(ownerUserId, SEARCH_PATTERN, 10);
         noteLibraryRepository.findLibraryListItemProjectionsByOwnerUserIdAndIdIn(ownerUserId, List.of(otherUserId));
         noteLibraryRepository.findAllLibrarySubjectCandidates(ownerUserId);
         noteLibraryRepository.countLibraryCoursePrograms(ownerUserId);
@@ -2293,6 +2299,93 @@ class NativeQueryPostgresIntegrationTest {
                 id, ownerUserId, title, subject
         );
         return id;
+    }
+
+    /**
+     * ⚠️ THE BACKFILL'S THREE JPQL PROJECTIONS, WHICH NOTHING ELSE EXECUTES.
+     *
+     * <p>{@code v0.125.0} rewrote {@code OfficialChallengeQuizTemplateService.queueBackfill} onto
+     * constructor projections. Every test reaching that service MOCKS these repositories and hands back
+     * correctly-ordered records; this class's {@code PREPARE} sweep covers NATIVE queries only; and
+     * Spring's bootstrap proves the JPQL parses but not that the arguments are in the right order —
+     * <strong>every component is a {@code UUID}</strong> bar one enum.
+     *
+     * <p>MEASURED, NOT ASSUMED: swapping {@code s.id} and {@code s.noteId} in
+     * {@code findOwnerProjectionsByNoteIdIn} passed the ENTIRE backend suite — 2,213 tests, zero
+     * failures — while making the admin backfill report {@code queued=0, skipped=1442} over the whole
+     * catalog. A successful-looking response that seeds nothing.
+     *
+     * <p>⚠️ EVERY ID IS DISTINCT AND ASSERTED BY IDENTITY, NEVER MERELY NON-NULL: a fixture whose note,
+     * owner and pack ids could coincide passes under a transposition, which is exactly why this was
+     * invisible.
+     */
+    @Test
+    void backfillProjectionsPlaceEveryUuidComponentInItsOwnField() {
+        UUID ownerUserId = seedUser("backfill-projection-owner");
+        UUID noteId = seedPublicNote(ownerUserId, "Backfill projection note", new String[]{"tag"});
+        UUID studyPackId = seedStudyPack(ownerUserId, noteId, "Backfill projection pack");
+        assertThat(List.of(ownerUserId, noteId, studyPackId)).doesNotHaveDuplicates();
+
+        List<NoteOwnerVisibilityProjection> notes = noteRepository
+                .findOwnerVisibilityProjectionsByVisibilityOrderByUpdatedAtDesc(NoteVisibility.PUBLIC);
+        NoteOwnerVisibilityProjection note = notes.stream()
+                .filter(candidate -> noteId.equals(candidate.id()))
+                .findFirst()
+                .orElseThrow();
+        assertThat(note.ownerUserId()).isEqualTo(ownerUserId);
+        assertThat(note.visibility()).isEqualTo(NoteVisibility.PUBLIC);
+
+        List<StudyPackOwnerProjection> packs = studyPackRepository.findOwnerProjectionsByNoteIdIn(List.of(noteId));
+        assertThat(packs).hasSize(1);
+        assertThat(packs.getFirst().id()).isEqualTo(studyPackId);
+        assertThat(packs.getFirst().noteId()).isEqualTo(noteId);
+        assertThat(packs.getFirst().ownerUserId()).isEqualTo(ownerUserId);
+
+        seedQuestionBankEntry(ownerUserId, studyPackId, "Seeded question one");
+        seedQuestionBankEntry(ownerUserId, studyPackId, "Seeded question two");
+        List<ChallengeQuizQuestionBankOwnerProjection> pairs = questionBankRepository
+                .findOwnerStudyPackPairsByStudyPackIdIn(List.of(studyPackId));
+        // `distinct` collapses both rows to the one (user, pack) pair the backfill checks.
+        assertThat(pairs).hasSize(1);
+        assertThat(pairs.getFirst().userId()).isEqualTo(ownerUserId);
+        assertThat(pairs.getFirst().studyPackId()).isEqualTo(studyPackId);
+        assertThat(questionBankRepository.findOwnerStudyPackPairsByStudyPackIdIn(List.of(UUID.randomUUID())))
+                .isEmpty();
+    }
+
+    /**
+     * The backfill dispatches in this query's order, so the ordering is behaviour rather than
+     * presentation: it decides which Official templates seed first.
+     */
+    @Test
+    void theBackfillCatalogProjectionReturnsMostRecentlyUpdatedFirst() {
+        UUID ownerUserId = seedUser("backfill-order-owner");
+        UUID older = seedPublicNote(ownerUserId, "Older backfill note", new String[]{"tag"});
+        UUID newer = seedPublicNote(ownerUserId, "Newer backfill note", new String[]{"tag"});
+        jdbcTemplate.update("update notes set updated_at = ? where id = ?",
+                OffsetDateTime.parse("2026-01-01T00:00:00Z"), older);
+        jdbcTemplate.update("update notes set updated_at = ? where id = ?",
+                OffsetDateTime.parse("2026-02-01T00:00:00Z"), newer);
+
+        List<UUID> ordered = noteRepository
+                .findOwnerVisibilityProjectionsByVisibilityOrderByUpdatedAtDesc(NoteVisibility.PUBLIC)
+                .stream()
+                .map(NoteOwnerVisibilityProjection::id)
+                .filter(id -> id.equals(older) || id.equals(newer))
+                .toList();
+
+        assertThat(ordered).containsExactly(newer, older);
+    }
+
+    private void seedQuestionBankEntry(UUID userId, UUID studyPackId, String text) {
+        jdbcTemplate.update(
+                "insert into challenge_quiz_question_bank"
+                        + " (id, user_id, study_pack_id, question_key, question, last_known_outcome, generated_at)"
+                        + " values (?, ?, ?, ?, ?::jsonb, 'UNANSWERED', now())",
+                UUID.randomUUID(), userId, studyPackId, text.toLowerCase(),
+                "{\"question\":\"" + text + "\",\"choices\":[\"A\",\"B\",\"C\",\"D\"],"
+                        + "\"correctIndex\":0,\"keyConcept\":\"Concept\",\"explanation\":\"Explanation\"}"
+        );
     }
 
     private UUID seedPublicNote(UUID ownerUserId, String title, String[] tags) {
@@ -3056,6 +3149,93 @@ class NativeQueryPostgresIntegrationTest {
         assertThat(quickReviewSessionRepository.findQuizMasteredAt(owner, packId, 5, noteId))
                 .as("a legacy note keeps the mastery the learner already earned")
                 .isNotNull();
+    }
+
+    /**
+     * {@code GET /notes?search=}, against real rows. The PREPARE sweep proves the SQL parses; only this
+     * proves it MATCHES the right four fields.
+     *
+     * <p>⚠️ EVERY FIXTURE NOTE MATCHES BY EXACTLY ONE FIELD, AND THE MATCHED FIELD IS NEVER THE
+     * TITLE. A title-matching fixture passes under a title-only implementation and proves nothing —
+     * and a title-only server search is the single most likely way bounding the picker silently
+     * makes notes unreachable, because the client filter it replaces matched all four.
+     */
+    @Test
+    void theOwnedNoteSearchMatchesTitleSubjectCourseProgramAndTags() {
+        UUID owner = seedUser("owned-note-search");
+        UUID other = seedUser("owned-note-search-other");
+        UUID byTitle = seedOwnedSearchNote(owner, "Photosynthesis", "Botany", "Education", new String[]{"plants"});
+        UUID byTag = seedOwnedSearchNote(owner, "Cell Respiration", "Botany", "Education", new String[]{"photosynthesis"});
+        UUID bySubject = seedOwnedSearchNote(owner, "Light Reactions", "Photosynthesis", "Education", new String[]{"plants"});
+        UUID byCourseProgram = seedOwnedSearchNote(owner, "Leaf Anatomy", "Botany", "Photosynthesis Review", new String[]{"plants"});
+        UUID unrelated = seedOwnedSearchNote(owner, "Fluid Mechanics", "Hydraulics", "Civil Engineering", new String[]{"flow"});
+        UUID otherOwner = seedOwnedSearchNote(other, "Photosynthesis", "Botany", "Education", new String[]{"plants"});
+
+        assertThat(searchOwnedNoteIds(owner, "%photosynthesis%"))
+                .as("all four fields match, and the owner scope still holds")
+                .containsExactlyInAnyOrder(byTitle, byTag, bySubject, byCourseProgram)
+                .doesNotContain(unrelated, otherOwner);
+
+        assertThat(searchOwnedNoteIds(owner, "%PHOTOSYNTHESIS%".toLowerCase(java.util.Locale.ROOT)))
+                .as("matching is case-insensitive, as the client filter it replaces was")
+                .hasSize(4);
+
+        assertThat(searchOwnedNoteIds(owner, null))
+                .as("a null pattern means NO search -- never 'match nothing'")
+                .containsExactlyInAnyOrder(byTitle, byTag, bySubject, byCourseProgram, unrelated);
+    }
+
+    /**
+     * ⚠️ THE BOUND AND THE SEARCH ARE ONE FEATURE. A limited page hides the older notes by design;
+     * what makes that acceptable is that a search still reaches them. A fixture with fewer notes than
+     * the limit passes whether or not the search works at all.
+     */
+    @Test
+    void aNoteBeyondTheLimitIsStillReachableBySearch() {
+        UUID owner = seedUser("owned-note-search-bound");
+        UUID buried = seedOwnedSearchNote(owner, "Buried Thermodynamics", "Physics", "Engineering", new String[]{"heat"});
+        jdbcTemplate.update("update notes set updated_at = now() - interval '10 days' where id = ?", buried);
+        for (int index = 0; index < 3; index++) {
+            seedOwnedSearchNote(owner, "Recent " + index, "Physics", "Engineering", new String[]{"recent"});
+        }
+
+        assertThat(noteLibraryRepository.findListItemProjectionsByOwnerUserId(owner, null, 3)
+                .stream().map(NoteListItemView::getId).toList())
+                .as("the bound genuinely hides it -- otherwise the search assertion below is vacuous")
+                .doesNotContain(buried);
+
+        assertThat(searchOwnedNoteIds(owner, "%thermodynamics%", 3))
+                .as("and the search reaches it anyway, which is what makes the bound safe")
+                .containsExactly(buried);
+    }
+
+    private List<UUID> searchOwnedNoteIds(UUID ownerUserId, String searchPattern) {
+        return searchOwnedNoteIds(ownerUserId, searchPattern, 100);
+    }
+
+    private List<UUID> searchOwnedNoteIds(UUID ownerUserId, String searchPattern, int limit) {
+        return noteLibraryRepository.findListItemProjectionsByOwnerUserId(ownerUserId, searchPattern, limit)
+                .stream()
+                .map(NoteListItemView::getId)
+                .toList();
+    }
+
+    private UUID seedOwnedSearchNote(
+            UUID ownerUserId,
+            String title,
+            String subject,
+            String courseProgram,
+            String[] tags
+    ) {
+        UUID id = UUID.randomUUID();
+        jdbcTemplate.update(
+                "insert into notes (id, owner_user_id, title, subject, course_program, content,"
+                        + " visibility, tags, target_profile_type, status, created_at, updated_at)"
+                        + " values (?, ?, ?, ?, ?, 'body', 'PRIVATE', ?, 'STUDENT', 'GENERATED',"
+                        + " now(), now())",
+                id, ownerUserId, title, subject, courseProgram, tags
+        );
+        return id;
     }
 
     private void seedCompletedQuickReview(

@@ -294,12 +294,90 @@ class NoteControllerTest {
     void listMine_clampsProvidedLimitBeforeDelegating() {
         UUID userId = UUID.randomUUID();
         AuthenticatedUser user = new AuthenticatedUser(userId, UserRole.USER, true, 1);
-        when(noteService.listMine(userId, 1)).thenReturn(List.of());
+        when(noteService.listMine(userId, null, 1)).thenReturn(List.of());
 
-        List<NoteListItemResponse> response = noteController.listMine(0, user);
+        List<NoteListItemResponse> response = noteController.listMine(null, 0, user);
 
         assertThat(response).isEmpty();
-        verify(noteService).listMine(userId, 1);
+        verify(noteService).listMine(userId, null, 1);
+    }
+
+    /**
+     * ⚠️ A REAL REQUEST, NOT A HANDLER CALL, AND THE DISTINCTION IS THE WHOLE POINT. `search` is new on
+     * `GET /notes`, and the direct-invocation test above passes under ANY binding defect by
+     * construction — it hands the controller a Java argument and never exercises `@RequestParam`.
+     * `v0.119.0` shipped exactly that class of defect with every test green.
+     *
+     * <p>⚠️ The query string is asserted LITERALLY as `search`: the client builds `?limit=&search=` and a
+     * rename on either side leaves both halves green while the picker silently searches nothing.
+     */
+    @Test
+    void listMine_bindsTheSearchParameterFromTheQueryStringOfARealRequest() throws Exception {
+        AuthenticatedUser routeUser = new AuthenticatedUser(UUID.randomUUID(), UserRole.USER, true, 1);
+        MockMvc mockMvc = buildMockMvc(routeUser);
+        String matchedNoteId = UUID.randomUUID().toString();
+        when(noteService.listMine(routeUser.userId(), "thermo", 25))
+                .thenReturn(List.of(listItemResponse(matchedNoteId, routeUser.userId(), "Thermodynamics")));
+
+        mockMvc.perform(get("/notes?limit=25&search=thermo"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].id").value(matchedNoteId));
+
+        verify(noteService).listMine(routeUser.userId(), "thermo", 25);
+    }
+
+    /**
+     * ⚠️ THE ADDITIVE HALF. Every existing caller sends no `search`, so the parameter must arrive null
+     * rather than as an empty string — an empty pattern would match nothing at all and would empty
+     * the note list for every consumer of this endpoint.
+     */
+    @Test
+    void listMine_leavesTheSearchParameterNullWhenARealRequestOmitsIt() throws Exception {
+        AuthenticatedUser routeUser = new AuthenticatedUser(UUID.randomUUID(), UserRole.USER, true, 1);
+        MockMvc mockMvc = buildMockMvc(routeUser);
+        when(noteService.listMine(routeUser.userId(), null, null)).thenReturn(List.of());
+
+        mockMvc.perform(get("/notes")).andExpect(status().isOk());
+
+        verify(noteService).listMine(routeUser.userId(), null, null);
+    }
+
+    private NoteListItemResponse listItemResponse(String noteId, UUID ownerUserId, String title) {
+        return new NoteListItemResponse(
+                noteId,
+                ownerUserId.toString(),
+                title,
+                null,
+                null,
+                null,
+                null,
+                List.of(),
+                null,
+                null,
+                "PRIVATE",
+                null,
+                "DRAFT",
+                0,
+                0,
+                0L,
+                0L,
+                0L,
+                0L,
+                null,
+                null,
+                false,
+                true,
+                OffsetDateTime.now(),
+                OffsetDateTime.now(),
+                null,
+                null,
+                null,
+                null,
+                null,
+                false,
+                false,
+                List.of()
+        );
     }
 
     @Test
