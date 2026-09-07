@@ -1383,24 +1383,6 @@ function GoalDetailView({
   );
 }
 
-function normalizeNoteSearch(value: string): string {
-  return value.trim().toLowerCase();
-}
-
-function filterPickerNotes(notes: NoteListItemResponse[], presentNoteIds: Set<string>, query: string): NoteListItemResponse[] {
-  const normalizedQuery = normalizeNoteSearch(query);
-  return notes
-    .filter((note) => !presentNoteIds.has(note.id))
-    .filter((note) => {
-      if (!normalizedQuery) {
-        return true;
-      }
-      return [note.title, note.subject, note.courseProgram, ...(note.tags ?? [])]
-        .filter(Boolean)
-        .some((value) => String(value).toLowerCase().includes(normalizedQuery));
-    });
-}
-
 type CompanionFaqDraft = {
   question: string;
   answer: string;
@@ -2207,174 +2189,6 @@ function DeleteCollectionModal({
   );
 }
 
-function AddNotesModal({
-  isOpen,
-  presentNoteIds,
-  onClose,
-  onAdd,
-}: Readonly<{
-  isOpen: boolean;
-  presentNoteIds: Set<string>;
-  onClose: () => void;
-  onAdd: (noteIds: string[]) => Promise<void>;
-}>) {
-  const [notes, setNotes] = useState<NoteListItemResponse[]>([]);
-  const [query, setQuery] = useState("");
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [loading, setLoading] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!isOpen) {
-      setQuery("");
-      setSelectedIds(new Set());
-      setError(null);
-      return;
-    }
-    let mounted = true;
-    setLoading(true);
-    setError(null);
-    void listNotes()
-      .then((result) => {
-        if (mounted) {
-          setNotes(result);
-        }
-      })
-      .catch((loadError) => {
-        if (mounted) {
-          setError(loadError instanceof Error ? loadError.message : "Could not load your notes.");
-        }
-      })
-      .finally(() => {
-        if (mounted) {
-          setLoading(false);
-        }
-      });
-    return () => {
-      mounted = false;
-    };
-  }, [isOpen]);
-
-  const availableNotes = useMemo(() => filterPickerNotes(notes, presentNoteIds, query), [notes, presentNoteIds, query]);
-  const hasAnyAvailableNotes = notes.some((note) => !presentNoteIds.has(note.id));
-
-  const toggleSelected = (noteId: string) => {
-    setSelectedIds((previous) => {
-      const next = new Set(previous);
-      if (next.has(noteId)) {
-        next.delete(noteId);
-      } else {
-        next.add(noteId);
-      }
-      return next;
-    });
-  };
-
-  const allVisibleSelected = availableNotes.length > 0 && availableNotes.every((note) => selectedIds.has(note.id));
-
-  const toggleSelectAllVisible = () => {
-    setSelectedIds((previous) => {
-      const next = new Set(previous);
-      if (allVisibleSelected) {
-        availableNotes.forEach((note) => next.delete(note.id));
-      } else {
-        availableNotes.forEach((note) => next.add(note.id));
-      }
-      return next;
-    });
-  };
-
-  const handleAdd = async () => {
-    const noteIds = Array.from(selectedIds);
-    if (noteIds.length === 0) {
-      return;
-    }
-    setSubmitting(true);
-    setError(null);
-    try {
-      await onAdd(noteIds);
-      onClose();
-    } catch (addError) {
-      setError(addError instanceof Error ? addError.message : "Could not add notes.");
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  return (
-    <AppModal
-      isOpen={isOpen}
-      title="Add notes"
-      description="Choose from your existing notes. Notes already in this collection are hidden."
-      onClose={onClose}
-      panelClassName="sm:max-w-2xl"
-      actions={(
-        <>
-          <Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>
-          <Button type="button" loading={submitting} loadingText="Adding..." disabled={selectedIds.size === 0} onClick={handleAdd}>
-            Add selected
-          </Button>
-        </>
-      )}
-    >
-      <div className="space-y-4">
-        <label className="flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-2">
-          <Search className="h-4 w-4 text-foreground/50" aria-hidden="true" />
-          <span className="sr-only">Search notes</span>
-          <input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search notes"
-            className="w-full bg-transparent text-sm outline-none"
-          />
-        </label>
-
-        {loading ? <p className="text-sm text-foreground/60">Loading notes...</p> : null}
-        {error ? <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-200">{error}</p> : null}
-        {!loading && !error && !hasAnyAvailableNotes ? (
-          <p className="rounded-lg bg-muted px-3 py-3 text-sm text-foreground/70">
-            You do not have any other notes to add yet.
-          </p>
-        ) : null}
-        {!loading && !error && hasAnyAvailableNotes && availableNotes.length === 0 ? (
-          <p className="rounded-lg bg-muted px-3 py-3 text-sm text-foreground/70">No matching notes found.</p>
-        ) : null}
-        {!loading && !error && availableNotes.length > 0 ? (
-          <div className="flex items-center justify-between px-1">
-            <button
-              type="button"
-              onClick={toggleSelectAllVisible}
-              className="text-sm font-medium text-blue-600 hover:underline dark:text-blue-400"
-            >
-              {allVisibleSelected ? "Deselect all" : `Select all${query.trim() ? " matching" : ""} (${availableNotes.length})`}
-            </button>
-            <span className="text-xs text-foreground/50">{selectedIds.size} selected</span>
-          </div>
-        ) : null}
-        <div className="max-h-80 space-y-2 overflow-y-auto pr-1">
-          {availableNotes.map((note) => (
-            <label key={note.id} className="flex cursor-pointer items-start gap-3 rounded-lg border border-border p-3 hover:bg-highlight">
-              <input
-                type="checkbox"
-                checked={selectedIds.has(note.id)}
-                onChange={() => toggleSelected(note.id)}
-                className="mt-1"
-              />
-              <span className="space-y-1">
-                <span className="block text-sm font-medium text-foreground">{note.title || "Untitled note"}</span>
-                <span className="block text-xs text-foreground/60">
-                  {[note.subject, note.courseProgram].filter(Boolean).join(" · ") || "No subject yet"}
-                </span>
-              </span>
-            </label>
-          ))}
-        </div>
-      </div>
-    </AppModal>
-  );
-}
-
 function PublishStudyPlanModal({
   collection,
   isOpen,
@@ -2802,7 +2616,6 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
 
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
-  const [addOpen, setAddOpen] = useState(false);
   const [publishOpen, setPublishOpen] = useState(false);
   const [companionOpen, setCompanionOpen] = useState(false);
   const [organizeMode] = useState(false);
@@ -3103,21 +2916,6 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
     }
   };
 
-  const handleAdd = async (noteIds: string[]) => {
-    setMutationKind("add");
-    setMutationError(null);
-    try {
-      const result = await addCollectionItems(collectionId, noteIds);
-      setCollection(result);
-      setItems(sortCollectionItemsByPosition(result.items));
-    } catch (error) {
-      await refetchAfterFailure(error instanceof Error ? error.message : "Could not add notes.");
-      throw error;
-    } finally {
-      setMutationKind(null);
-    }
-  };
-
   const handleSourceUpdate = async () => {
     setMutationKind("source-update");
     setMutationError(null);
@@ -3173,7 +2971,6 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
     }
   };
 
-  const presentNoteIds = useMemo(() => new Set(items.map((item) => item.noteId)), [items]);
   const privateNoteIds = useMemo(
     () => (isAdmin ? items.filter((item) => noteVisibility.get(item.noteId) === "PRIVATE").map((item) => item.noteId) : []),
     [isAdmin, items, noteVisibility],
@@ -4066,12 +3863,6 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
         deleting={mutationKind === "delete"}
         onClose={() => setDeleteOpen(false)}
         onConfirm={() => void handleDelete()}
-      />
-      <AddNotesModal
-        isOpen={addOpen}
-        presentNoteIds={presentNoteIds}
-        onClose={() => setAddOpen(false)}
-        onAdd={handleAdd}
       />
       {isAdmin ? (
         <PublishStudyPlanModal

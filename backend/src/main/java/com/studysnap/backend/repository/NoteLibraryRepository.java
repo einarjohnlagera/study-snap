@@ -36,9 +36,21 @@ public interface NoteLibraryRepository {
      * {@link #findLibraryPage}, which is the point: the JPQL projection this replaced never selected
      * {@code applicablePrograms}, so the endpoint advertised a field it always returned empty (M2).
      *
+     * <p>⚠️ {@code searchPattern} EXISTS SO A CALLER CAN BOUND {@code limit} WITHOUT NARROWING WHAT
+     * IT CAN REACH. The Study Plan builder's note picker used to fetch the whole library and filter
+     * it in the browser; a bound alone would have made every note past the limit unaddable, which is
+     * why {@code v0.123.0} declined the bound outright. The two ship together.
+     *
+     * @param searchPattern an already-escaped, already-lowercased {@code %…%} LIKE pattern, or
+     *                      {@code null} for no search. Matches title, subject, course program AND
+     *                      tags — the same four fields the client filter it replaces matched.
      * @param limit {@code null} for unbounded — several callers list the whole library.
      */
-    List<NoteListItemProjection> findListItemProjectionsByOwnerUserId(UUID ownerUserId, Integer limit);
+    List<NoteListItemProjection> findListItemProjectionsByOwnerUserId(
+            UUID ownerUserId,
+            String searchPattern,
+            Integer limit
+    );
 
     List<NoteLibrarySubjectProjection> findAllLibrarySubjectCandidates(UUID ownerUserId);
 

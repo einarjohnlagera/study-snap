@@ -191,6 +191,18 @@ function pluralizeLabel(label: string): string {
   return label.endsWith("s") ? label : `${label}s`;
 }
 
+/**
+ * ⚠️ THE PICKER'S NOTE FETCH IS BOUNDED, AND THE BOUND IS ONLY SAFE BECAUSE THE SEARCH IS NOW
+ * SERVER-SIDE. `v0.123.0` declined to bound this list precisely because it filtered client-side over
+ * the whole library, so a limit alone would have made every note past it unaddable — an invisible
+ * correctness loss traded for an invisible performance win. Search and bound ship together.
+ *
+ * ⚠️ 50 is `NoteController.PRIVATE_NOTES_MAX_LIMIT`; the server clamps to it, so a larger number
+ * here would quietly become 50 anyway and make the "showing N" copy a lie.
+ */
+const PICKER_NOTE_LIMIT = 50;
+const PICKER_SEARCH_DEBOUNCE_MS = 300;
+
 function filterPickerNotes(notes: NoteListItemResponse[], presentNoteIds: Set<string>, query: string): NoteListItemResponse[] {
   const normalizedQuery = query.trim().toLowerCase();
   return notes
@@ -1069,6 +1081,9 @@ function AddNotesModal({
   isOpen,
   subject,
   notes,
+  noteLimit,
+  query,
+  onQueryChange,
   submitting,
   onClose,
   onAdd,
@@ -1079,20 +1094,30 @@ function AddNotesModal({
   isOpen: boolean;
   subject: { collectionId: string; items: NoteCollectionItem[]; title?: string } | null;
   notes: NoteListItemResponse[];
+  noteLimit: number;
+  query: string;
+  onQueryChange: (value: string) => void;
   submitting: boolean;
   onClose: () => void;
-  onAdd: (subjectId: string, noteIds: string[]) => Promise<void>;
+  onAdd: (subjectId: string, noteIds: string[], selectedNotes: NoteListItemResponse[]) => Promise<void>;
   onRefresh: () => Promise<void>;
   refreshing: boolean;
   notesError: string | null;
 }>) {
-  const [query, setQuery] = useState("");
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  /**
+   * ⚠️ SELECTION HOLDS THE NOTES THEMSELVES, NOT JUST THEIR IDS, AND SINCE SEARCH MOVED TO THE SERVER
+   * THAT IS LOAD-BEARING RATHER THAN TIDY. `notes` is now the CURRENT RESULT PAGE, not the whole
+   * library, so a note selected under one query is simply absent from the array once the query
+   * changes. Deriving "Selected (N)" from `notes` therefore made an already-selected note disappear
+   * from that list while its id stayed in the set — the modal under-reported what Add would send.
+   * Holding the note object makes the selection independent of what is currently on screen.
+   */
+  const [selectedNotesById, setSelectedNotesById] = useState<Map<string, NoteListItemResponse>>(new Map());
   const [error, setError] = useState<string | null>(null);
 
   const handleClose = () => {
-    setQuery("");
-    setSelectedIds(new Set());
+    onQueryChange("");
+    setSelectedNotesById(new Map());
     setError(null);
     onClose();
   };
@@ -1102,37 +1127,39 @@ function AddNotesModal({
     [subject?.items],
   );
 
-  const noteById = useMemo(() => new Map(notes.map((n) => [n.id, n])), [notes]);
+  const selectedIds = useMemo(() => new Set(selectedNotesById.keys()), [selectedNotesById]);
+  const selectedNotes = useMemo(() => Array.from(selectedNotesById.values()), [selectedNotesById]);
 
-  const selectedNotes = useMemo(
-    () => Array.from(selectedIds).map((id) => noteById.get(id)).filter((n): n is NoteListItemResponse => n !== undefined),
-    [selectedIds, noteById],
-  );
-
+  // The server already applied `query`; this pass is what hides notes already in the subject and
+  // notes already selected, and it keeps the visible list honest during the search debounce.
   const resultNotes = useMemo(
     () => filterPickerNotes(notes, new Set([...presentNoteIds, ...selectedIds]), query),
     [notes, presentNoteIds, selectedIds, query],
   );
 
-  const toggleSelected = (noteId: string) => {
-    setSelectedIds((previous) => {
-      const next = new Set(previous);
-      if (next.has(noteId)) {
-        next.delete(noteId);
+  const toggleSelected = (note: NoteListItemResponse) => {
+    setSelectedNotesById((previous) => {
+      const next = new Map(previous);
+      if (next.has(note.id)) {
+        next.delete(note.id);
       } else {
-        next.add(noteId);
+        next.set(note.id, note);
       }
       return next;
     });
   };
 
   const handleAdd = async () => {
-    if (!subject || selectedIds.size === 0) {
+    if (!subject || selectedNotesById.size === 0) {
       return;
     }
     setError(null);
     try {
-      await onAdd(subject.collectionId, Array.from(selectedIds));
+      await onAdd(
+        subject.collectionId,
+        Array.from(selectedNotesById.keys()),
+        Array.from(selectedNotesById.values()),
+      );
       handleClose();
     } catch (addError) {
       setError(makeErrorMessage(addError, "Could not add notes."));
@@ -1141,6 +1168,10 @@ function AddNotesModal({
 
   const hasResults = resultNotes.length > 0;
   const hasSelection = selectedNotes.length > 0;
+  // ⚠️ A BOUNDED LIST MUST SAY SO. The empty state below already treats "No notes available." as a
+  // TERMINAL CLAIM ABOUT THE LIBRARY; a silently truncated list is that same false claim with no
+  // sentence attached, and it is precisely why a bound could not ship without search beside it.
+  const truncated = !refreshing && !notesError && notes.length >= noteLimit;
 
   return (
     <AppModal
@@ -1152,8 +1183,8 @@ function AddNotesModal({
       actions={(
         <>
           <Button type="button" variant="secondary" onClick={handleClose}>Cancel</Button>
-          <Button type="button" loading={submitting} loadingText="Adding..." disabled={selectedIds.size === 0 || !subject} onClick={() => void handleAdd()}>
-            {selectedIds.size > 0 ? `Add selected (${selectedIds.size})` : "Add selected"}
+          <Button type="button" loading={submitting} loadingText="Adding..." disabled={selectedNotesById.size === 0 || !subject} onClick={() => void handleAdd()}>
+            {selectedNotesById.size > 0 ? `Add selected (${selectedNotesById.size})` : "Add selected"}
           </Button>
         </>
       )}
@@ -1165,8 +1196,8 @@ function AddNotesModal({
             <span className="sr-only">Search notes</span>
             <input
               value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search notes"
+              onChange={(event) => onQueryChange(event.target.value)}
+              placeholder="Search notes by title, subject, program or tag"
               className="w-full bg-transparent text-sm outline-none"
             />
           </label>
@@ -1174,7 +1205,7 @@ function AddNotesModal({
             type="button"
             variant="ghost"
             size="sm"
-            title="Pull in notes created since this list loaded"
+            title="Pull in notes created since these results loaded"
             disabled={refreshing}
             onClick={() => void onRefresh()}
           >
@@ -1183,6 +1214,13 @@ function AddNotesModal({
           </Button>
         </div>
         {error ? <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-200">{error}</p> : null}
+        {truncated ? (
+          <p className="rounded-lg bg-muted px-3 py-2 text-xs text-foreground/70">
+            {query.trim()
+              ? `Showing the first ${noteLimit} matches. Keep typing to narrow them.`
+              : `Showing your ${noteLimit} most recently updated notes. Search to reach any of the others.`}
+          </p>
+        ) : null}
         <div className="space-y-3">
           <div className="space-y-1.5">
             {hasResults ? (
@@ -1192,7 +1230,7 @@ function AddNotesModal({
                     <input
                       type="checkbox"
                       checked={false}
-                      onChange={() => toggleSelected(note.id)}
+                      onChange={() => toggleSelected(note)}
                       className="mt-1"
                     />
                     <span className="space-y-1">
@@ -1229,7 +1267,7 @@ function AddNotesModal({
                 <button
                   type="button"
                   className="text-xs text-foreground/50 hover:text-foreground/80"
-                  onClick={() => setSelectedIds(new Set())}
+                  onClick={() => setSelectedNotesById(new Map())}
                 >
                   Clear all
                 </button>
@@ -1240,7 +1278,7 @@ function AddNotesModal({
                     <input
                       type="checkbox"
                       checked
-                      onChange={() => toggleSelected(note.id)}
+                      onChange={() => toggleSelected(note)}
                       className="mt-1 accent-blue-600"
                     />
                     <span className="space-y-1">
@@ -1324,6 +1362,10 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
   const leafOrderSavePromiseRef = useRef<Promise<boolean> | null>(null);
   const [notes, setNotes] = useState<NoteListItemResponse[]>([]);
   const [refreshingNotes, setRefreshingNotes] = useState(false);
+  // The picker's query lives HERE, not in the modal, because the fetch it drives lives here too:
+  // `refreshBuilder` has to re-read the same slice after an add, and it cannot see modal state.
+  const [pickerQuery, setPickerQuery] = useState("");
+  const [debouncedPickerQuery, setDebouncedPickerQuery] = useState("");
   const [collapsedSubjectIds, setCollapsedSubjectIds] = useState<Set<string>>(new Set());
   // Tracks which collectionId the initial collapse-seed has already run for, so it reseeds correctly
   // when the user navigates to a different Goal plan without a full remount.
@@ -1377,35 +1419,74 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
   // -- at event-loop speed, against the unbounded note endpoint, precisely when the backend is already
   // failing. Measured at 3,743 calls in five seconds before this existed. It is the same defect class
   // as the section-label loop this release exists to close, and it was introduced by the fix for it.
-  const notesAutoLoadAttemptedRef = useRef(false);
+  // ⚠️ REPLACES `notesAutoLoadAttemptedRef` AND KEEPS ITS ENTIRE JOB. It records the query string
+  // whose fetch has already been STARTED (set synchronously, before the first await, and NOT cleared
+  // on failure), so a rejected fetch cannot re-arm the effect below. It additionally answers "has the
+  // query changed?", which is what turns one auto-load into a search.
+  const lastPickerRequestRef = useRef<string | null>(null);
+  // ⚠️ Out-of-order responses are real once a bounded list is refetched per keystroke: type "a" then
+  // "ab" and the slower "a" response would otherwise overwrite the newer results.
+  const pickerRequestSequenceRef = useRef(0);
   const [notesError, setNotesError] = useState<string | null>(null);
-  const refreshNotes = useCallback(async () => {
+  const refreshNotes = useCallback(async (search: string) => {
+    const requested = search.trim();
+    lastPickerRequestRef.current = requested;
+    const sequence = pickerRequestSequenceRef.current + 1;
+    pickerRequestSequenceRef.current = sequence;
     setRefreshingNotes(true);
     setNotesError(null);
     try {
-      setNotes(await listNotes());
+      const result = await listNotes(PICKER_NOTE_LIMIT, requested || undefined);
+      if (pickerRequestSequenceRef.current !== sequence) {
+        return;
+      }
+      setNotes(result);
       notesLoadedRef.current = true;
     } catch (error) {
+      if (pickerRequestSequenceRef.current !== sequence) {
+        return;
+      }
       // Surface it ONCE. The modal's Refresh control is the deliberate retry; an automatic one here
       // is what produced the loop.
       setNotesError(makeErrorMessage(error, "Could not load your notes."));
     } finally {
-      setRefreshingNotes(false);
+      if (pickerRequestSequenceRef.current === sequence) {
+        setRefreshingNotes(false);
+      }
     }
   }, []);
 
-  // Fetch the picker's note list the first time a picker is actually opened. Re-opening reuses what
-  // is already in state; the modal's own Refresh control is how a curator pulls a newer list.
   useEffect(() => {
-    if (!leafAddNotesOpen && addNotesSubjectId === null) {
+    const handle = globalThis.setTimeout(
+      () => setDebouncedPickerQuery(pickerQuery),
+      PICKER_SEARCH_DEBOUNCE_MS,
+    );
+    return () => globalThis.clearTimeout(handle);
+  }, [pickerQuery]);
+
+  const pickerOpen = leafAddNotesOpen || addNotesSubjectId !== null;
+
+  /**
+   * Fetches the picker's slice the first time a picker is opened, and again whenever the debounced
+   * query changes.
+   *
+   * ⚠️ `refreshingNotes` IS DELIBERATELY NOT A DEPENDENCY, AND THAT IS THE WHOLE LOOP GUARD. It used
+   * to be one, and with `finally` clearing it a REJECTED fetch changed the deps, re-ran the effect
+   * and refetched — 3,743 calls in five seconds, measured, against the unbounded note endpoint and
+   * precisely when the backend was already failing. `lastPickerRequestRef` now carries that duty:
+   * it is set before the request and survives its failure, so a failed search never retries itself.
+   * The modal's Refresh control stays the deliberate retry.
+   */
+  useEffect(() => {
+    if (!pickerOpen) {
       return;
     }
-    if (notesLoadedRef.current || notesAutoLoadAttemptedRef.current || refreshingNotes) {
+    const requested = debouncedPickerQuery.trim();
+    if (lastPickerRequestRef.current === requested) {
       return;
     }
-    notesAutoLoadAttemptedRef.current = true;
-    void refreshNotes();
-  }, [addNotesSubjectId, leafAddNotesOpen, refreshNotes, refreshingNotes]);
+    void refreshNotes(requested);
+  }, [pickerOpen, debouncedPickerQuery, refreshNotes]);
 
   /**
    * Apply a collection detail payload to the LEAF view, returning false when the payload describes a
@@ -1439,16 +1520,20 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
   const refreshBuilder = useCallback(async (options?: { seedCollapsed?: boolean; skipNotes?: boolean }) => {
     setRefreshingBuilder(true);
     try {
-      // ⚠️ `listNotes()` fetches the user's ENTIRE note list. A reorder changes only item positions
-      // inside this collection — it adds, removes and edits no note — so refetching every note the
-      // user owns after each drop was the bulk of the unresponsiveness on a large plan. Paths that
-      // can change the note set (add, remove, import) must NOT pass skipNotes.
+      // ⚠️ The picker's note read is now BOUNDED and SEARCHED, but it is still a second request. A
+      // reorder changes only item positions inside this collection — it adds, removes and edits no
+      // note — so refetching notes after each drop was the bulk of the unresponsiveness on a large
+      // plan. Paths that can change the note set (add, remove, import) must NOT pass skipNotes.
       const [collectionResult, notesResult] = await Promise.all([
         getCollection(collectionId),
         // ⚠️ `notesLoadedRef` is the LAZY half: before the picker has ever been opened there is no
         // list to keep fresh, so a refresh must not fetch one. Paths that change the note SET still
         // pass skipNotes: false and still refresh it -- but only once it actually exists.
-        options?.skipNotes || !notesLoadedRef.current ? Promise.resolve(null) : listNotes(),
+        // ⚠️ It must re-read THE SAME SLICE the picker is showing, or an add would silently replace
+        // the curator's search results with the unsearched first page.
+        options?.skipNotes || !notesLoadedRef.current
+          ? Promise.resolve(null)
+          : listNotes(PICKER_NOTE_LIMIT, lastPickerRequestRef.current || undefined),
       ]);
       if (notesResult) {
         setNotes(notesResult);
@@ -1910,7 +1995,17 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
     }
   };
 
-  const handleAddLeafNotes = async (targetId: string, noteIds: string[]) => {
+  /**
+   * ⚠️ `selectedNotes` COMES FROM THE PICKER'S SELECTION, NOT FROM `notes`. Since `notes` became a
+   * bounded, searched slice, a note selected under an earlier query is no longer guaranteed to be in
+   * it — and the optimistic map below silently DROPS anything it cannot resolve, so the row a
+   * curator just added would flicker missing until the refresh landed.
+   */
+  const handleAddLeafNotes = async (
+    targetId: string,
+    noteIds: string[],
+    selectedNotes: NoteListItemResponse[],
+  ) => {
     const flushed = await savePendingLeafOrder({
       refreshAfter: false,
       failureMessage: "Could not save the pending order, so notes were not added.",
@@ -1919,7 +2014,7 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
       throw new Error("Could not save the pending order.");
     }
     const previousItems = leafItemsRef.current;
-    const noteById = new Map(notes.map((n) => [n.id, n]));
+    const noteById = new Map(selectedNotes.map((n) => [n.id, n]));
     setMutationKind("add-notes");
     setMutationError(null);
     const optimisticItems = noteIds
@@ -2031,9 +2126,15 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
     }
   };
 
-  const handleAddNotes = async (subjectId: string, noteIds: string[]) => {
+  // ⚠️ Same reason as `handleAddLeafNotes`: the optimistic rows are built from the SELECTION, never
+  // from the current (bounded, searched) `notes` slice.
+  const handleAddNotes = async (
+    subjectId: string,
+    noteIds: string[],
+    selectedNotes: NoteListItemResponse[],
+  ) => {
     const previousSubjects = subjects;
-    const noteById = new Map(notes.map((note) => [note.id, note]));
+    const noteById = new Map(selectedNotes.map((note) => [note.id, note]));
     setMutationKind("add-notes");
     setMutationError(null);
     setSubjects((current) => current.map((subject) => {
@@ -2535,10 +2636,13 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
           isOpen={leafAddNotesOpen}
           subject={leafAddNotesOpen ? { collectionId, items: leafItems } : null}
           notes={notes}
+          noteLimit={PICKER_NOTE_LIMIT}
+          query={pickerQuery}
+          onQueryChange={setPickerQuery}
           submitting={mutationKind === "add-notes"}
           onClose={() => setLeafAddNotesOpen(false)}
           onAdd={handleAddLeafNotes}
-          onRefresh={refreshNotes}
+          onRefresh={() => refreshNotes(pickerQuery)}
           refreshing={refreshingNotes}
           notesError={notesError}
         />
@@ -2718,10 +2822,13 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
         isOpen={addNotesSubjectId !== null}
         subject={selectedAddNotesSubject}
         notes={notes}
+        noteLimit={PICKER_NOTE_LIMIT}
+        query={pickerQuery}
+        onQueryChange={setPickerQuery}
         submitting={mutationKind === "add-notes"}
         onClose={() => setAddNotesSubjectId(null)}
         onAdd={handleAddNotes}
-        onRefresh={refreshNotes}
+        onRefresh={() => refreshNotes(pickerQuery)}
         refreshing={refreshingNotes}
         notesError={notesError}
       />

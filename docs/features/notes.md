@@ -7,7 +7,7 @@ Notes are the primary user-authored workspace in NoteLib. Users organize note me
 ## Key Files
 
 **Backend**
-- `backend/src/main/java/com/studysnap/backend/controller/NoteController.java` — `GET /notes` (private list), `POST /notes`, `PUT /notes/{id}`, `DELETE /notes/{id}`, `GET /notes/public` (public filter endpoint); subject/courseProgram suggestion endpoints
+- `backend/src/main/java/com/studysnap/backend/controller/NoteController.java` — `GET /notes` (private list; optional `limit` plus, since `v0.125.0`, an optional additive `search` parameter matching title, subject, course program and tags), `POST /notes`, `PUT /notes/{id}`, `DELETE /notes/{id}`, `GET /notes/public` (public filter endpoint); subject/courseProgram suggestion endpoints
 - `backend/src/main/java/com/studysnap/backend/service/NoteService.java` — note CRUD, `listMine(userId)`, `listPublic(...)`, visibility change, note copy, subject/courseProgram autocomplete
 - `backend/src/main/java/com/studysnap/backend/service/NoteBulkImportService.java` — bulk material import orchestration; one extracted file becomes one `DRAFT` note without Study Pack generation
 - `backend/src/main/java/com/studysnap/backend/entity/NoteEntity.java` — note schema: `title`, `content`, `subject`, `courseProgram`, `domainContext`, note-level `learnerLevel`, `tags`, `visibility`, `studyPackStatus`, retained historical `targetProfileType`, `ownerUserId`
@@ -21,7 +21,7 @@ Notes are the primary user-authored workspace in NoteLib. Users organize note me
 - `frontend/components/notes/note-editor-page-client.tsx` — shared editor client for create and edit modes
 - `frontend/components/notes/private-note-detail-page-client.tsx` — Note Detail client; Study Pack status polling; AI suggestion modal trigger; quiz mode entry points
 - `frontend/components/notes/ai-suggestion-modal.tsx` — post-generation AI metadata suggestions (title / subject / tags)
-- `frontend/lib/api.ts` — `listNotes()`, `createNote()`, `updateNote()`, `deleteNote()`, `updateNoteVisibility()`, `copyNote()`
+- `frontend/lib/api.ts` — `listNotes(limit?, search?)`, `createNote()`, `updateNote()`, `deleteNote()`, `updateNoteVisibility()`, `copyNote()`
 
 ## Anti-drift Notes
 

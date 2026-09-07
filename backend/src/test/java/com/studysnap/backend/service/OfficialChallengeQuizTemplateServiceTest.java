@@ -4,7 +4,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -17,11 +20,15 @@ import com.studysnap.backend.entity.NoteVisibility;
 import com.studysnap.backend.entity.StudyPackEntity;
 import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.entity.UserRole;
+import com.studysnap.backend.repository.ChallengeQuizQuestionBankOwnerProjection;
 import com.studysnap.backend.repository.ChallengeQuizQuestionBankRepository;
+import com.studysnap.backend.repository.NoteOwnerVisibilityProjection;
 import com.studysnap.backend.repository.NoteRepository;
+import com.studysnap.backend.repository.StudyPackOwnerProjection;
 import com.studysnap.backend.repository.StudyPackRepository;
 import com.studysnap.backend.repository.UserRepository;
 import com.studysnap.backend.service.model.GeneratedChallengeQuizContent;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -224,12 +231,13 @@ class OfficialChallengeQuizTemplateServiceTest {
     void queueBackfill_isIdempotentForAnAlreadySeededOfficialStudyPack() {
         UUID officialId = UUID.randomUUID();
         UUID noteId = UUID.randomUUID();
-        NoteEntity officialNote = note(noteId, officialId, NoteVisibility.PUBLIC);
-        StudyPackEntity officialStudyPack = studyPack(UUID.randomUUID(), noteId, officialId);
-        when(noteRepository.findByVisibilityOrderByUpdatedAtDesc(NoteVisibility.PUBLIC)).thenReturn(List.of(officialNote));
-        when(studyPackRepository.findByNoteIdIn(List.of(noteId))).thenReturn(List.of(officialStudyPack));
-        when(userRepository.findById(officialId)).thenReturn(Optional.of(officialAuthor(officialId)));
-        when(questionBankRepository.existsByUserIdAndStudyPackId(officialId, officialStudyPack.getId())).thenReturn(true);
+        UUID studyPackId = UUID.randomUUID();
+        stubBackfillCatalog(
+                List.of(new NoteOwnerVisibilityProjection(noteId, officialId, NoteVisibility.PUBLIC)),
+                List.of(new StudyPackOwnerProjection(studyPackId, noteId, officialId)),
+                List.of(officialAuthor(officialId)),
+                List.of(new ChallengeQuizQuestionBankOwnerProjection(officialId, studyPackId))
+        );
 
         var first = service().queueBackfill();
         var second = service().queueBackfill();
@@ -245,12 +253,13 @@ class OfficialChallengeQuizTemplateServiceTest {
     void queueBackfill_reportsRejectedInsteadOfFailingWhenTheSeedExecutorQueueIsFull() {
         UUID officialId = UUID.randomUUID();
         UUID noteId = UUID.randomUUID();
-        NoteEntity officialNote = note(noteId, officialId, NoteVisibility.PUBLIC);
-        StudyPackEntity officialStudyPack = studyPack(UUID.randomUUID(), noteId, officialId);
-        when(noteRepository.findByVisibilityOrderByUpdatedAtDesc(NoteVisibility.PUBLIC)).thenReturn(List.of(officialNote));
-        when(studyPackRepository.findByNoteIdIn(List.of(noteId))).thenReturn(List.of(officialStudyPack));
-        when(userRepository.findById(officialId)).thenReturn(Optional.of(officialAuthor(officialId)));
-        when(questionBankRepository.existsByUserIdAndStudyPackId(officialId, officialStudyPack.getId())).thenReturn(false);
+        UUID studyPackId = UUID.randomUUID();
+        stubBackfillCatalog(
+                List.of(new NoteOwnerVisibilityProjection(noteId, officialId, NoteVisibility.PUBLIC)),
+                List.of(new StudyPackOwnerProjection(studyPackId, noteId, officialId)),
+                List.of(officialAuthor(officialId)),
+                List.of()
+        );
         doThrow(new RejectedExecutionException("queue full")).when(llmParallelTaskExecutor).execute(any());
 
         var response = service().queueBackfill();
@@ -259,6 +268,128 @@ class OfficialChallengeQuizTemplateServiceTest {
         assertThat(response.skipped()).isZero();
         assertThat(response.rejected()).isEqualTo(1);
         verifyNoInteractions(quizGenerationService);
+    }
+
+    /**
+     * ⚠️ THE QUERY-COUNT GUARD, AND IT NEEDS {@code never()} RATHER THAN {@code times(1)}. Asserting
+     * only that the batch lookups fired once passes under a "both run" implementation — the shape
+     * this repo has already paid for twice — and asserting only that the counts come out right
+     * passes under the N+1 by construction, because the N+1 returns the SAME counts.
+     *
+     * <p>⚠️ AND N MUST BE > 1. With a single note, one-per-note and one-for-all are the same number.
+     */
+    @Test
+    void queueBackfill_resolvesAuthorsAndSeededPacksInBatchesRatherThanOncePerNote() {
+        UUID officialId = UUID.randomUUID();
+        UUID firstNoteId = UUID.randomUUID();
+        UUID secondNoteId = UUID.randomUUID();
+        UUID firstStudyPackId = UUID.randomUUID();
+        UUID secondStudyPackId = UUID.randomUUID();
+        stubBackfillCatalog(
+                List.of(
+                        new NoteOwnerVisibilityProjection(firstNoteId, officialId, NoteVisibility.PUBLIC),
+                        new NoteOwnerVisibilityProjection(secondNoteId, officialId, NoteVisibility.PUBLIC)
+                ),
+                List.of(
+                        new StudyPackOwnerProjection(firstStudyPackId, firstNoteId, officialId),
+                        new StudyPackOwnerProjection(secondStudyPackId, secondNoteId, officialId)
+                ),
+                List.of(officialAuthor(officialId)),
+                List.of()
+        );
+
+        var response = service().queueBackfill();
+
+        assertThat(response.queued()).isEqualTo(2);
+        verify(userRepository, never()).findById(any());
+        verify(questionBankRepository, never()).existsByUserIdAndStudyPackId(any(), any());
+        verify(userRepository, times(1)).findAllById(any());
+        verify(questionBankRepository, times(1)).findOwnerStudyPackPairsByStudyPackIdIn(any());
+        verify(noteRepository, times(1))
+                .findOwnerVisibilityProjectionsByVisibilityOrderByUpdatedAtDesc(NoteVisibility.PUBLIC);
+        verify(studyPackRepository, times(1)).findOwnerProjectionsByNoteIdIn(any());
+        verify(noteRepository, never()).findByVisibilityOrderByUpdatedAtDesc(any());
+        verify(studyPackRepository, never()).findByNoteIdIn(any());
+    }
+
+    /**
+     * ⚠️ THE COUNTS MUST MEAN WHAT THEY MEANT BEFORE. The catalog holds one of each shape the old
+     * loop distinguished — eligible, already-seeded, a non-Official author, and a note with no pack
+     * — so a batch implementation that quietly drops a category (an inner join instead of a lookup,
+     * say) changes {@code skipped} and this fails.
+     */
+    @Test
+    void queueBackfill_countsEveryIneligibleShapeAsSkippedExactlyAsTheOldLoopDid() {
+        UUID officialId = UUID.randomUUID();
+        UUID learnerId = UUID.randomUUID();
+        UUID eligibleNoteId = UUID.randomUUID();
+        UUID seededNoteId = UUID.randomUUID();
+        UUID learnerNoteId = UUID.randomUUID();
+        UUID packlessNoteId = UUID.randomUUID();
+        UUID eligibleStudyPackId = UUID.randomUUID();
+        UUID seededStudyPackId = UUID.randomUUID();
+        UUID learnerStudyPackId = UUID.randomUUID();
+        stubBackfillCatalog(
+                List.of(
+                        new NoteOwnerVisibilityProjection(eligibleNoteId, officialId, NoteVisibility.PUBLIC),
+                        new NoteOwnerVisibilityProjection(seededNoteId, officialId, NoteVisibility.PUBLIC),
+                        new NoteOwnerVisibilityProjection(learnerNoteId, learnerId, NoteVisibility.PUBLIC),
+                        new NoteOwnerVisibilityProjection(packlessNoteId, officialId, NoteVisibility.PUBLIC)
+                ),
+                List.of(
+                        new StudyPackOwnerProjection(eligibleStudyPackId, eligibleNoteId, officialId),
+                        new StudyPackOwnerProjection(seededStudyPackId, seededNoteId, officialId),
+                        new StudyPackOwnerProjection(learnerStudyPackId, learnerNoteId, learnerId)
+                ),
+                List.of(officialAuthor(officialId), learnerAuthor(learnerId)),
+                List.of(new ChallengeQuizQuestionBankOwnerProjection(officialId, seededStudyPackId))
+        );
+
+        var response = service().queueBackfill();
+
+        assertThat(response.queued()).isEqualTo(1);
+        assertThat(response.skipped()).isEqualTo(3);
+        assertThat(response.rejected()).isZero();
+        verify(llmParallelTaskExecutor, times(1)).execute(any());
+    }
+
+    /**
+     * ⚠️ THE QUEUE ORDER IS PART OF THE CONTRACT. The backfill dispatches in {@code updated_at desc}
+     * order, so it decides which packs seed first when the executor queue fills — and a batched
+     * rewrite that grouped by owner or by pack id would reorder it invisibly. The counts would be
+     * identical, which is why this is a separate assertion rather than a stronger one above.
+     */
+    @Test
+    void queueBackfill_dispatchesInTheOrderTheCatalogQueryReturned() {
+        UUID officialId = UUID.randomUUID();
+        UUID newerNoteId = UUID.randomUUID();
+        UUID olderNoteId = UUID.randomUUID();
+        stubBackfillCatalog(
+                List.of(
+                        new NoteOwnerVisibilityProjection(newerNoteId, officialId, NoteVisibility.PUBLIC),
+                        new NoteOwnerVisibilityProjection(olderNoteId, officialId, NoteVisibility.PUBLIC)
+                ),
+                List.of(
+                        new StudyPackOwnerProjection(UUID.randomUUID(), newerNoteId, officialId),
+                        new StudyPackOwnerProjection(UUID.randomUUID(), olderNoteId, officialId)
+                ),
+                List.of(officialAuthor(officialId)),
+                List.of()
+        );
+        List<Runnable> dispatched = new ArrayList<>();
+        doAnswer(invocation -> {
+            dispatched.add(invocation.getArgument(0));
+            return null;
+        }).when(llmParallelTaskExecutor).execute(any());
+
+        service(immediateTransactions(), llmParallelTaskExecutor).queueBackfill();
+        dispatched.forEach(Runnable::run);
+
+        // Each seed task re-reads its own note; the unstubbed lookup returns empty and the task bails,
+        // which is all this needs -- the ORDER of those reads is the queue order.
+        ArgumentCaptor<UUID> seededNoteIds = ArgumentCaptor.forClass(UUID.class);
+        verify(noteRepository, times(2)).findById(seededNoteIds.capture());
+        assertThat(seededNoteIds.getAllValues()).containsExactly(newerNoteId, olderNoteId);
     }
 
     @Test
@@ -276,6 +407,19 @@ class OfficialChallengeQuizTemplateServiceTest {
 
         assertThatCode(() -> service.queueSeedIfEligible(officialNote, officialStudyPack)).doesNotThrowAnyException();
         verifyNoInteractions(quizGenerationService);
+    }
+
+    private void stubBackfillCatalog(
+            List<NoteOwnerVisibilityProjection> publicNotes,
+            List<StudyPackOwnerProjection> studyPacks,
+            List<UserEntity> owners,
+            List<ChallengeQuizQuestionBankOwnerProjection> alreadySeeded
+    ) {
+        when(noteRepository.findOwnerVisibilityProjectionsByVisibilityOrderByUpdatedAtDesc(NoteVisibility.PUBLIC))
+                .thenReturn(publicNotes);
+        when(studyPackRepository.findOwnerProjectionsByNoteIdIn(any())).thenReturn(studyPacks);
+        when(userRepository.findAllById(any())).thenReturn(owners);
+        when(questionBankRepository.findOwnerStudyPackPairsByStudyPackIdIn(any())).thenReturn(alreadySeeded);
     }
 
     private OfficialChallengeQuizTemplateService service() {
@@ -322,6 +466,14 @@ class OfficialChallengeQuizTemplateServiceTest {
         studyPack.setNoteId(noteId);
         studyPack.setOwnerUserId(ownerId);
         return studyPack;
+    }
+
+    private UserEntity learnerAuthor(UUID id) {
+        UserEntity user = new UserEntity();
+        user.setId(id);
+        user.setRole(UserRole.USER);
+        user.setEmail("learner-" + id + "@example.test");
+        return user;
     }
 
     private UserEntity officialAuthor(UUID id) {

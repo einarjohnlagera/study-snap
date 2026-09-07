@@ -185,6 +185,57 @@ class NoteServiceListProjectionIntegrationTest {
         assertThat(noteService.listMine(ownerUserId, null)).containsExactlyElementsOf(unbounded);
     }
 
+    /**
+     * The H2 leg of {@code GET /notes?q=}.
+     *
+     * <p>⚠️ THE TAG PREDICATE IS DIALECT-SPLIT — {@code unnest(...)} on PostgreSQL,
+     * {@code array_to_string(...)} on H2 — so the PostgreSQL harness proves nothing about the branch
+     * that most of this suite actually executes. A syntax error here would surface as a runtime
+     * failure only for whoever ran a mocked test that happened to hit the real repository.
+     *
+     * <p>⚠️ AND THE FIXTURE MATCHES BY TAG ALONE, NEVER BY TITLE. A title-matching fixture passes
+     * under a title-only implementation, which is the exact way this release could silently narrow
+     * what the note picker can reach.
+     */
+    @Test
+    void listMineSearchMatchesATagOnlyNoteOnTheH2Dialect() {
+        UUID ownerUserId = UUID.randomUUID();
+        UserEntity owner = new UserEntity();
+        owner.setId(ownerUserId);
+        when(userRepository.findById(ownerUserId)).thenReturn(Optional.of(owner));
+        NoteEntity tagged = saveNote(
+                ownerUserId, "Patient handoff", "Body.", BASE_TIME.plusHours(4), NoteVisibility.PRIVATE
+        );
+        tagged.setTags(new String[]{"pharmacology"});
+        noteRepository.save(tagged);
+        NoteEntity bySubject = saveNote(
+                ownerUserId, "Wound care", "Body.", BASE_TIME.plusHours(3), NoteVisibility.PRIVATE
+        );
+        bySubject.setSubject("Pharmacology");
+        noteRepository.save(bySubject);
+        NoteEntity byCourseProgram = saveNote(
+                ownerUserId, "Vital signs", "Body.", BASE_TIME.plusHours(2), NoteVisibility.PRIVATE
+        );
+        byCourseProgram.setCourseProgram("BS Pharmacology");
+        noteRepository.save(byCourseProgram);
+        saveNote(ownerUserId, "Patient transport", "Body.", BASE_TIME.plusHours(1), NoteVisibility.PRIVATE);
+        entityManager.flush();
+        entityManager.clear();
+
+        List<NoteListItemResponse> matches = noteService.listMine(ownerUserId, "PHARMacology", 50);
+
+        assertThat(matches).extracting(NoteListItemResponse::id)
+                .as("found by tag, subject and course program, case-insensitively, with no title match to lean on")
+                .containsExactlyInAnyOrder(
+                        tagged.getId().toString(),
+                        bySubject.getId().toString(),
+                        byCourseProgram.getId().toString()
+                );
+        assertThat(noteService.listMine(ownerUserId, "  ", 50))
+                .as("a blank search is NO search -- an empty pattern would match nothing at all")
+                .hasSize(4);
+    }
+
     @Test
     void createPersistsAuthoringAxesAndLoadsThemOnFreshFetch() {
         UUID ownerUserId = UUID.randomUUID();

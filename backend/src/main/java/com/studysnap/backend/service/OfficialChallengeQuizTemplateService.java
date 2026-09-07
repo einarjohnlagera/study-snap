@@ -9,8 +9,11 @@ import com.studysnap.backend.entity.NoteVisibility;
 import com.studysnap.backend.entity.StudyPackEntity;
 import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.entity.UserRole;
+import com.studysnap.backend.repository.ChallengeQuizQuestionBankOwnerProjection;
 import com.studysnap.backend.repository.ChallengeQuizQuestionBankRepository;
+import com.studysnap.backend.repository.NoteOwnerVisibilityProjection;
 import com.studysnap.backend.repository.NoteRepository;
+import com.studysnap.backend.repository.StudyPackOwnerProjection;
 import com.studysnap.backend.repository.StudyPackRepository;
 import com.studysnap.backend.repository.UserRepository;
 import com.studysnap.backend.service.model.StudyPackGenerationContext;
@@ -18,12 +21,16 @@ import com.studysnap.backend.util.QuizDeduplicationUtils;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.RejectedExecutionException;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -74,26 +81,74 @@ public class OfficialChallengeQuizTemplateService {
         }
     }
 
+    /**
+     * ⚠️ THREE QUERIES OVER THE WHOLE CATALOG, NEVER TWO PER NOTE. This used to load every public
+     * {@code NoteEntity} (~1,442 rows, each carrying {@code content}) and every matching
+     * {@code StudyPackEntity}, then run {@code userRepository.findById} AND
+     * {@code existsByUserIdAndStudyPackId} INSIDE the loop — ~2,884 queries for one admin action.
+     *
+     * <p>⚠️ WHICH NOTES ARE ELIGIBLE IS UNCHANGED — only how they are found. The shape legs and the
+     * Official-author legs are the same predicate the entity path uses
+     * ({@link #matchesOfficialTemplateShape}, {@link #isOfficialAuthorAccount}), and the bank check
+     * is still asked only about notes that already passed both, exactly as the old {@code ||}
+     * short-circuit did. {@code queued}/{@code skipped}/{@code rejected} therefore mean what they
+     * meant before.
+     *
+     * <p>⚠️ AND IT IS NOT PAGED. The response is three counts over the whole catalog; a page would
+     * change what those numbers mean. The queue order stays {@code updated_at desc}, because it
+     * decides which packs seed first.
+     */
     public AdminSeedOfficialChallengeQuizTemplatesResponse queueBackfill() {
         int queued = 0;
         int skipped = 0;
         int rejected = 0;
-        List<NoteEntity> publicNotes = noteRepository.findByVisibilityOrderByUpdatedAtDesc(NoteVisibility.PUBLIC);
+        List<NoteOwnerVisibilityProjection> publicNotes = noteRepository
+                .findOwnerVisibilityProjectionsByVisibilityOrderByUpdatedAtDesc(NoteVisibility.PUBLIC);
         if (publicNotes.isEmpty()) {
             return new AdminSeedOfficialChallengeQuizTemplatesResponse(queued, skipped, rejected);
         }
 
-        java.util.Map<UUID, StudyPackEntity> packsByNoteId = studyPackRepository.findByNoteIdIn(
-                publicNotes.stream().map(NoteEntity::getId).toList()
-        ).stream().collect(java.util.stream.Collectors.toMap(StudyPackEntity::getNoteId, studyPack -> studyPack));
-        for (NoteEntity note : publicNotes) {
-            StudyPackEntity studyPack = packsByNoteId.get(note.getId());
-            if (!isEligibleOfficialTemplate(note, studyPack)
-                    || questionBankRepository.existsByUserIdAndStudyPackId(note.getOwnerUserId(), studyPack.getId())) {
+        Map<UUID, StudyPackOwnerProjection> packsByNoteId = studyPackRepository.findOwnerProjectionsByNoteIdIn(
+                publicNotes.stream().map(NoteOwnerVisibilityProjection::id).toList()
+        ).stream().collect(Collectors.toMap(StudyPackOwnerProjection::noteId, studyPack -> studyPack));
+        Set<UUID> officialAuthorIds = resolveOfficialAuthorIds(
+                publicNotes.stream().map(NoteOwnerVisibilityProjection::ownerUserId).toList()
+        );
+
+        List<OfficialTemplateCandidate> candidates = new ArrayList<>();
+        for (NoteOwnerVisibilityProjection note : publicNotes) {
+            StudyPackOwnerProjection studyPack = packsByNoteId.get(note.id());
+            if (studyPack == null
+                    || !matchesOfficialTemplateShape(
+                            note.id(), note.ownerUserId(), note.visibility(),
+                            studyPack.noteId(), studyPack.ownerUserId())
+                    || !officialAuthorIds.contains(note.ownerUserId())) {
+                // ⚠️ AN EXPLICIT COUNTER, NOT `publicNotes.size() - candidates.size()`. The
+                // subtraction is only equal to the old loop's semantics if the projection returns
+                // exactly one row per note; it does today (no join, and `uq_study_packs_note_id`
+                // keeps the pack map one-to-one), but counting here is equal BY CONSTRUCTION and
+                // does not quietly depend on that.
                 skipped++;
                 continue;
             }
-            if (dispatchSeedAfterCommit(note.getId(), studyPack.getId())) {
+            candidates.add(new OfficialTemplateCandidate(note.id(), note.ownerUserId(), studyPack.id()));
+        }
+        if (candidates.isEmpty()) {
+            return new AdminSeedOfficialChallengeQuizTemplatesResponse(queued, skipped, rejected);
+        }
+
+        Set<ChallengeQuizQuestionBankOwnerProjection> alreadySeeded = new HashSet<>(
+                questionBankRepository.findOwnerStudyPackPairsByStudyPackIdIn(
+                        candidates.stream().map(OfficialTemplateCandidate::studyPackId).toList()
+                )
+        );
+        for (OfficialTemplateCandidate candidate : candidates) {
+            if (alreadySeeded.contains(new ChallengeQuizQuestionBankOwnerProjection(
+                    candidate.ownerUserId(), candidate.studyPackId()))) {
+                skipped++;
+                continue;
+            }
+            if (dispatchSeedAfterCommit(candidate.noteId(), candidate.studyPackId())) {
                 queued++;
             } else {
                 rejected++;
@@ -266,20 +321,64 @@ public class OfficialChallengeQuizTemplateService {
     private boolean isEligibleOfficialTemplate(NoteEntity note, StudyPackEntity studyPack) {
         return note != null
                 && studyPack != null
-                && note.getId() != null
-                && note.getId().equals(studyPack.getNoteId())
-                && note.getVisibility() == NoteVisibility.PUBLIC
-                && note.getOwnerUserId() != null
-                && note.getOwnerUserId().equals(studyPack.getOwnerUserId())
+                && matchesOfficialTemplateShape(
+                        note.getId(), note.getOwnerUserId(), note.getVisibility(),
+                        studyPack.getNoteId(), studyPack.getOwnerUserId())
                 && isOfficialAuthor(note.getOwnerUserId());
+    }
+
+    /**
+     * The non-author half of {@link #isEligibleOfficialTemplate}, over scalars.
+     *
+     * <p>⚠️ ONE PREDICATE, TWO CALLERS. The entity path and the backfill's projection path must
+     * decide eligibility identically; a second copy of these legs is exactly how the two would
+     * drift, and {@code v0.125.0}'s anti-drift is that eligibility does not change.
+     */
+    private static boolean matchesOfficialTemplateShape(
+            UUID noteId,
+            UUID noteOwnerUserId,
+            NoteVisibility visibility,
+            UUID studyPackNoteId,
+            UUID studyPackOwnerUserId
+    ) {
+        return noteId != null
+                && noteId.equals(studyPackNoteId)
+                && visibility == NoteVisibility.PUBLIC
+                && noteOwnerUserId != null
+                && noteOwnerUserId.equals(studyPackOwnerUserId);
     }
 
     private boolean isOfficialAuthor(UUID userId) {
         return userId != null && !AccountPurgeService.DELETED_USER_ID.equals(userId)
                 && userRepository.findById(userId)
-                .map(user -> user.getRole() == UserRole.ADMIN
-                        || OFFICIAL_AUTHOR_EMAIL.equalsIgnoreCase(user.getEmail()))
+                .map(OfficialChallengeQuizTemplateService::isOfficialAuthorAccount)
                 .orElse(false);
+    }
+
+    /**
+     * The batched form of {@link #isOfficialAuthor(UUID)}: one {@code findAllById} for the distinct
+     * owner set instead of one {@code findById} per note. The {@code DELETED_USER_ID} and null legs
+     * are applied here, before the lookup, so a purged owner can never enter the result set.
+     */
+    private Set<UUID> resolveOfficialAuthorIds(Collection<UUID> ownerUserIds) {
+        Set<UUID> lookupIds = ownerUserIds.stream()
+                .filter(id -> id != null && !AccountPurgeService.DELETED_USER_ID.equals(id))
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+        if (lookupIds.isEmpty()) {
+            return Set.of();
+        }
+        Set<UUID> officialAuthorIds = new LinkedHashSet<>();
+        for (UserEntity user : userRepository.findAllById(lookupIds)) {
+            if (isOfficialAuthorAccount(user)) {
+                officialAuthorIds.add(user.getId());
+            }
+        }
+        return officialAuthorIds;
+    }
+
+    private static boolean isOfficialAuthorAccount(UserEntity user) {
+        return user != null
+                && (user.getRole() == UserRole.ADMIN || OFFICIAL_AUTHOR_EMAIL.equalsIgnoreCase(user.getEmail()));
     }
 
     /**
@@ -315,6 +414,10 @@ public class OfficialChallengeQuizTemplateService {
     }
 
     public record OfficialTemplateKey(UUID ownerUserId, UUID studyPackId) {
+    }
+
+    /** One public note that already passed the shape and Official-author legs of the predicate. */
+    private record OfficialTemplateCandidate(UUID noteId, UUID ownerUserId, UUID studyPackId) {
     }
 
     private record OfficialTemplateSeedTarget(

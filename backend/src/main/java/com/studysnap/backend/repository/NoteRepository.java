@@ -116,6 +116,27 @@ public interface NoteRepository extends JpaRepository<NoteEntity, UUID>, NoteLib
 
     List<NoteEntity> findByVisibilityOrderByUpdatedAtDesc(NoteVisibility visibility);
 
+    /**
+     * The projection form of {@link #findByVisibilityOrderByUpdatedAtDesc}, for callers that only
+     * need to decide ownership and visibility over the WHOLE public catalog.
+     *
+     * <p>⚠️ THE ORDER IS PART OF THE CONTRACT, not decoration: the Official Challenge template
+     * backfill queues in this order, so it decides which packs seed first.
+     */
+    @Query("""
+            select new com.studysnap.backend.repository.NoteOwnerVisibilityProjection(
+                n.id,
+                n.ownerUserId,
+                n.visibility
+            )
+            from NoteEntity n
+            where n.visibility = :visibility
+            order by n.updatedAt desc
+            """)
+    List<NoteOwnerVisibilityProjection> findOwnerVisibilityProjectionsByVisibilityOrderByUpdatedAtDesc(
+            @Param("visibility") NoteVisibility visibility
+    );
+
     @Query("""
             select count(distinct n.ownerUserId)
             from NoteEntity n
