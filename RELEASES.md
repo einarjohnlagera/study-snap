@@ -1,5 +1,199 @@
 # RELEASES.md - NoteLib
 
+## v0.124.0 - Collection Path Performance
+
+**Status: Released** (kicked off and signed off 2026-09-06, base branch `releases/v0.124.0`, cut from `main` after `v0.123.0` merged and tagged)
+
+**⚠️ IT OVERRIDES ITS OWN GATE BY EXPLICIT OWNER DECISION (2026-09-06), AND THE OVERRIDE IS WRITTEN DOWN RATHER THAN ROUTED AROUND.** `v0.123.0`'s Backlog row for the performance audit says: *"Re-read after `v0.123.0` deploys: if the Goal path is still the dominant cost on large Review Sets, sequencing 4 becomes its own Codex-routed release."* **`v0.123.0` HAS NOT BEEN OBSERVED IN PRODUCTION.** The owner took it anyway. **⚠️ A later session reading that row in isolation must come here first — recorded override, not drift.** **⚠️ THE ACCEPTED RESIDUAL, STATED AT KICKOFF: the release is sized from the audit's STATIC READ rather than from post-deploy evidence, so if `v0.123.0`'s lazy note list turns out to have already removed most of the felt cost, this release's benefit is smaller than its request-count arithmetic implies.** The arithmetic itself is not in doubt; what is unobserved is how much of it a curator actually feels.
+
+**⚠️ WIDENED MID-RELEASE BY OWNER DECISION (2026-09-06), FROM *Goal Path Request Cost* TO *Collection Path Performance*, AND THE TRIGGER WAS A FALSE CLAIM IN THE SHIPPED RECORD RATHER THAN A NEW IDEA.** Asked whether opening a collection was still slow, this session checked instead of answering from `RELEASES.md` — and found that **`v0.123.0` claimed the unbounded `listNotes()` had been made lazy on BOTH page loads when it had only been made lazy in the BUILDER.** `collection-detail-page-client.tsx` was never in that release's diff. **⚠️ SO THE AUDIT'S LEVER 1 — its own "biggest, and it repeats" — WAS STILL LIVE ON THE PAGE LEARNERS OPEN MOST**, and the record said otherwise. The release therefore covers **both** surfaces on the collection path, and `v0.123.0`'s bullet is corrected IN PLACE below rather than quietly rewritten.
+
+**THE DEFECT, AND IT IS ARITHMETIC RATHER THAN A BUG:** `refreshBuilder` loads the Goal, then issues **one `getCollection` per child Subject Plan** (`study-plan-builder-page-client.tsx:1447`). A Review Set with 20 plans is **21 requests and ~147 queries to render one page.** `Promise.all` makes them concurrent, **not cheap** — and **⚠️ CONCURRENCY IS THE SHARP EDGE HERE, NOT LATENCY: the connection pool is 20** (`application.yaml`), and `v0.112.0` documents pool exhaustion as a **live production failure mode**, so one curator opening one large Review Set can burst against the whole pool.
+
+**⚠️ THE SHAPE IS DECIDED AT KICKOFF BECAUSE THE OBVIOUS OPTION IS WRONG, AND IT WAS CHECKED RATHER THAN ASSUMED.** The audit offers *"return child detail WITH the goal, or add a batch read."* **`getCollectionGoal` HAS SEVEN FRONTEND CONSUMERS** — `progress-report-client`, `dashboard`, the **three** quiz prescreens (`challenge-quiz`, `adaptive-practice`, `quick-review`), `collection-detail-page-client` and the builder. **⚠️ SIX OF THEM NEED THE GOAL SHAPE AND NOT ONE CHILD'S ITEMS**, so fattening `GoalCollectionDetailResponse` — already a 24-field record carrying `weeklyFocusByDay` — would inflate the payload on the Dashboard and on three exam prestart paths to serve the builder alone. **⚠️ THAT IS THE `/notes/public` MISTAKE IN MINIATURE: a payload that grows with content on a surface that does not need it.** **DECISION: A SEPARATE BATCH READ. `GoalCollectionDetailResponse` IS NOT WIDENED.**
+
+### Planned Scope
+
+**(1)** A batch read returning the item detail for a Goal's children in **one** request, replacing the per-child fan-out at `:1447`. **⚠️ It must return the SAME per-child shape the builder already consumes** — `buildSubjects` takes `GoalCollectionDetailResponse` plus `NoteCollectionDetail[]`, so a divergent shape turns a request-count fix into a rendering rewrite.
+
+**(2)** The builder consumes it and stops fanning out. **⚠️ The Goal path keeps `refreshBuilder`; only the child loop is replaced.**
+
+### Anti-drift
+
+**⚠️ Do NOT widen `GoalCollectionDetailResponse`** — the seven-consumer finding above is the whole reason this is a batch read.
+
+**⚠️ Do NOT "fix" this by raising the connection pool.** `AppConfig:52-72` records that bound as a `v0.112.0` Phase 3 decision **gated on `[CHECKPOINT — due 2026-10-04]`**, and a raise has already failed once at 20.
+
+**⚠️ Do NOT restructure `toItemResponses`** — five bulk queries keyed by `noteIdIn`, no N+1, already correct. **The waste is the REQUEST COUNT, not the per-request work**, and a batch read must not become a reason to touch it.
+
+**⚠️ Do NOT re-open `v0.123.0`.** Its retry bound, canonical section labels, `applyLeafDetail` and lazy note list all stay exactly as shipped; **the deferred-save model (`v0.96.0`), the flush-first `savePendingLeafOrder`, `refreshBuilder`'s `skipNotes` option and the `editing`-gated combobox writer (`v0.88.0`) all remain locked.**
+
+**⚠️ NO migration. No quota, entitlement, limit or meter change. No new mode or sub-mode.**
+
+**⚠️ THE DATED-READ CLUSTER IS FOUR DAYS OUT AND THIS RELEASE MUST NOT TOUCH WHAT IT MEASURES.** `2026-09-10` (retention H1+H5 proximal), `2026-09-11` (onboarding funnel, and the freeze lifts), then ten more through `2026-09-19`. **⚠️ `frontend/app/onboarding` STAYS FROZEN — the freeze lifts when the `2026-09-11` READ IS TAKEN, not when the date passes.** **⚠️ NO Learning Connections promotion before `2026-09-19`.** The Goal builder path is measured by **none** of the twelve, which is what makes this release compatible with the window.
+
+### Verification
+
+**ONE SCOPED COLD AGENT framed as FALSIFICATION.** A new or changed endpoint is a response-contract change on a path six other surfaces share, and **⚠️ `v0.123.0` proved this session's own claims need attacking: its cold agent refuted two of six, one of them a defect that release INTRODUCED.**
+
+**⚠️ ANY NEW OR CHANGED ENDPOINT OWES ONE REAL-REQUEST TEST** — `MockMvc` with `.contentType(MediaType.APPLICATION_JSON)` and a body, as `NoteControllerTest` already does. **A direct handler call passes under the defect by construction (`v0.119.0`, where both JSON POSTs sent no `Content-Type` and 2,182 frontend tests stayed green).**
+
+**⚠️ PRE-DECLARED GUARDS, EACH NAMING THE FIXTURE THAT PROVES NOTHING: (a) assert the REQUEST COUNT — one call for N children, with N > 1.** A fixture with a **single** child cannot tell a batch read from a fan-out and passes under both. **(b) Assert the rendered subject shape is UNCHANGED for a multi-child Goal** — a request-count test alone would pass while the page renders wrong. **(c) Assert `GoalCollectionDetailResponse` did NOT grow** — pin its field set, because the cheapest way to make (a) pass is the widening this release forbids.
+
+**⚠️ CARRIED LESSONS, ALL PAID FOR IN `v0.123.0`: a guard must be MUTATION-VERIFIED, not merely written — three of its guards survived their own mutation before they discriminated, twice on timer/assertion shape and once on a fixture that put the state on the wrong note; a diff that changes behaviour while no test beside it moves is UNVERIFIED; and SWEEP BY SURFACE, not by diff — `collections.md` carried a false grouping rule that no PR touched.**
+
+**Routing: CODEX** — a backend DTO, a service method, an endpoint and a client, with a contract shared by seven consumers.
+
+### Shipped
+
+**Items 1-2 — the batch read and its consumer.**
+
+- **`GET /collections/{id}/goal/child-items` returns every child Subject plan's items in ONE request**,
+  replacing the per-child `getCollection` fan-out in `refreshBuilder`. **⚠️ COUNTING CONVENTION, STATED
+  RATHER THAN LEFT IMPLICIT: the kickoff's "21 requests" counts the goal read plus 20 children and
+  EXCLUDES the builder's own initial `getCollection` on the Goal, which the fix does not remove.** Whole
+  render, 20 plans: **22 requests → 3** (`getCollection` on the Goal, `getCollectionGoal`, one batch
+  read). By the kickoff's convention it is 21 → 2. The lazy note list stays lazy either way (`v0.123.0`).
+  **⚠️ `GoalCollectionDetailResponse` was NOT widened** — a backend test pins its
+  exact 24-component list, because hanging items on the goal response is the cheapest way to make the
+  request count fall and is precisely what this release forbids.
+- **The response is deliberately minimal — `(collectionId, items[])` per child, and nothing else.**
+  `buildSubjects` never read anything more off a child detail, so returning N full
+  `NoteCollectionDetailResponse` payloads would have defeated much of the point. `items` is the same
+  `NoteCollectionItemResponse` shape `getCollection` already returns, so the rendered shape is unchanged.
+- **Authorization is exactly the fan-out's, because the endpoint takes no id list.** Child ids are
+  derived server-side from the owner-scoped parent lookup, and the children query is itself
+  owner-filtered. **⚠️ Do NOT add an id-list request shape** — that is the IDOR version of this endpoint
+  and would need per-id authorization.
+- **Items for all children are built in ONE `toItemResponses` pass**, so the read costs the same five
+  bulk queries at 2 children as at 20. **⚠️ `toItemResponses` is untouched** — the waste was the request
+  count, not the per-request work.
+- **Both calls sit BELOW `applyLeafDetail`'s early return.** Hoisting either into the opening
+  `Promise.all` would add a wasted request to every leaf-plan refresh — a regression on the path this
+  release's anti-drift says is untouched.
+
+**Item 3 — opening a collection stops downloading the note library.** (Folded in 2026-09-06 by owner
+decision; audit Lever 1 on the detail page.)
+
+- **`collection-detail-page-client.tsx` no longer calls `listNotes()` on load.** It ran on EVERY
+  collection open, unbounded — the backend caps nothing when `limit` is null — with each row carrying
+  `contentPreview` and `summaryPreview`, **the same two fields that pushed `/notes/public` past
+  Next.js's 2 MB data-cache limit in the 2026-08-31 build failure.** For a curator that is ~900 rows
+  before the page renders.
+- **⚠️ WHAT IT WAS FOR IS THE PART THAT JUSTIFIES THE FIX: exactly two derived values, and for a
+  learner BOTH were discarded.** `noteVisibility` feeds four render sites that are **every one**
+  `isAdmin &&`-gated — the code's own comment already called it *"admin-only progressive
+  enhancement"* — and `noteStudyPackIdByNoteId` resolved a **single** value, `primaryExamStudyPackId`.
+  So a non-admin downloaded their whole library to produce **one Study Pack id**.
+- **`NoteCollectionItemResponse` gains `studyPackId`, and it is FREE.** `StudyPackProgressView.getId()`
+  was **already loaded** in `toItemResponses` for the due-concept lookup, so this adds **no query** —
+  one more argument to a record already being built. `CollectionExamCandidate`'s `Pick` widens with it.
+- **Visibility now loads in its own ADMIN-gated effect, deliberately not inside the loader.** `authUser`
+  resolves in its own effect, so `isAdmin` is false on first render; gating the loader on it there would
+  either read stale state or re-arm the whole load — **the same defect the cold agent found in the
+  builder, which this release also fixes.** A learner now issues **zero** `listNotes()` calls on open.
+- **`noteListLoadFailed` is deleted rather than left inert.** It existed only to disable the exam CTA
+  when the note list failed and the pack id could not be resolved; the id now arrives on the item, and
+  the remaining `!primaryExamStudyPackId` clause still covers the Board Exam case.
+- **⚠️ THE BOARD EXAM BRANCH WAS COMPLETELY UNCOVERED AND IS NOW GUARDED.** Hardcoding
+  `primaryExamStudyPackId = null` passed the **entire** detail-page suite, so the id's
+  provenance was unverified in both directions — `BOARD_EXAM` + `PRO` is the only combination reaching
+  `/study-packs/{packId}/challenge-quiz`, and nothing exercised it. The new guard asserts that route
+  **and** that `listNotes` is unused, so the id cannot be coming from the old lookup.
+- **⚠️⚠️ THE SHARED MAPPER PUT THE NEW FIELD ON AN ANONYMOUS PAYLOAD, AND NOTHING CAUGHT IT — FOUND
+  ONLY BY ASKING WHO ELSE CALLS `toItemResponse`.** `toPublicItemResponses` delegates to the SAME
+  mapper, and it backs `GET /collections/public/{id}`, which `SecurityConfig` declares `permitAll`.
+  **So a field added for the owner's detail page began riding on a payload served to callers with no
+  account** — `tsc`, 2204 backend tests and 2237 frontend tests all stayed green. **⚠️ THE PUBLIC
+  MAPPER NOW WITHHOLDS IT**, and `studyPackId` became a CALLER-SUPPLIED parameter rather than one
+  derived inside the mapper, following the precedent already set by `generatedQuizId` — the two callers
+  legitimately disagree, so the shared mapper must not decide. **⚠️ EXPOSURE WAS LOW, STATED HONESTLY
+  RATHER THAN INFLATED:** the notes are already `PUBLIC` and `/study-packs/{id}` is
+  `findByIdAndOwnerUserId`, so the id 404s for anyone else. **It was an unintended widening of an
+  anonymous contract, not a credential leak — and the lesson is the mechanism, not the blast radius.**
+  Guarded, and the fixture MUST stub an existing pack: with no pack the field is null under both the
+  defect and the fix.
+- **⚠️ GUARD FIXTURES ARE NON-ADMIN AND `PRO`-BOARD ON PURPOSE — an admin fixture still legitimately
+  calls `listNotes` for the badges and passes under the defect.** Mutation-verified: removing the admin
+  gate fails the learner guard (and the admin guard, which pins **exactly once**); nulling the pack id
+  fails the Board Exam guard and nothing else.
+
+**Cold-agent finding, folded in rather than deferred: the curator loaded the builder TWICE.**
+
+- **A `TEACHER` ran the whole builder load twice — 6 requests, not 3 — and the release's own headline
+  arithmetic was false for exactly the persona it is written about.** `labels` is memoized on
+  `authUser?.profileType`, and `authUser` resolves in a MOUNT EFFECT, so the first render sees
+  `undefined`. **⚠️ `STUDENT` and `BOARD_EXAM` both resolve `goalSingular` to the same `"Goal"` the
+  unresolved default gives, so the memo is referentially stable and they load once — `TEACHER` resolves
+  it to `"Course"`, which changed `loadBuilder`'s identity and re-armed the load effect.** The label was
+  read only for one error string, so it now goes through a ref (`v0.123.0`'s own `onLabelChangeRef`
+  shape, not a new one) and leaves the dependency array. **⚠️ PRE-EXISTING, NOT INTRODUCED HERE — it
+  doubled the fan-out too (44 requests, not 22).** It is fixed in this release rather than filed because
+  the release exists to cut Goal-path request cost and a curator is who owns 20-plan Review Sets.
+  **⚠️ THE GUARD'S FIXTURE IS A `TEACHER` FOR THAT REASON, AND A `STUDENT` FIXTURE PASSES UNDER THE
+  DEFECT** — which is why the shipped request-count guard could not see it.
+
+**Round-2 cold agent, run because the release doubled after round 1 covered only the first commit.**
+
+- **⚠️ IT FOUND A REGRESSION THIS RELEASE INTRODUCED, AND THE MECHANISM IS THE PRICE OF ITEM 3'S OWN
+  FIX: an ADMIN could reach an ENABLED Publish button while note visibility was still unknown.** Moving
+  the visibility fetch out of `loadCollection` means the page now reaches READY while that request is in
+  flight — and **an empty `noteVisibility` map is indistinguishable from "nothing is private"**, so
+  `privateCount` read 0, the *"N notes are private"* affordance did not render, and the admin met the
+  server's raw rejection instead. **⚠️ FIXED BY FAILING CLOSED: unknown blocks, only a COMPLETED read
+  unblocks**, so a failed visibility fetch also keeps Publish disabled. Server-side validation always
+  held, so no bad data was reachable. **⚠️ THE GUARD HOLDS `listNotes` UNRESOLVED — letting it resolve
+  reproduces the settled state, which is correct under both the defect and the fix.**
+- **⚠️ A LINE THIS RELEASE CHANGED WAS EXECUTED BY NO TEST, PROVEN BY MUTATION RATHER THAN SUSPECTED:**
+  replacing the builder's load-error copy outright left **all 54 tests green**. It is the ONE surviving
+  read of `labels.goalSingular` behind the new ref, so the ref's correctness rested entirely on reading.
+  **⚠️ IT IS UNCOVERED FOR A NARROW REASON WORTH RECORDING: `makeErrorMessage` returns `error.message`
+  for anything `instanceof Error`, so the fallback string is reachable ONLY when a NON-`Error` is
+  thrown** — an `Error` fixture renders the thrown message and never exercises the label. Now guarded,
+  and the mutant dies.
+- **Two comments still justified themselves by a dependency this release DELETED**, one of them stating
+  that `loadBuilder` re-fires for TEACHER profiles and that a ref absorbs it. **⚠️ That is precisely the
+  premise on which a later session restores `labels.goalSingular` to the deps array believing it is
+  covered**, so both are corrected in place rather than removed.
+- **`toOptimisticItem` hardcoded `studyPackId: null`** while holding the real value. Inert today, but
+  `CollectionExamCandidate` now carries the field, so an optimistically-added note would have read as
+  packless to any future exam-eligibility check over builder state.
+- **⚠️ THE ZERO-`listNotes` CLAIM IS TRUE FOR A REASON THAT IS NOT THE FIX, AND THE FEATURE DOC NOW SAYS
+  SO:** the detail page's own `AddNotesModal` still fetches unbounded on open and is simply
+  **UNREACHABLE** — `setAddOpen(true)` appears nowhere on that page. Re-wiring an *Add notes* button
+  there would silently restore the fetch this release removed.
+- **Not refuted, checked rather than assumed:** `toItemResponse` has exactly two callers and no third
+  path reaches the DTO; every study-pack-id endpoint is role-gated and the share routes are
+  token-addressed, so the brief anonymous exposure was harmless as stated; `uq_study_packs_note_id`
+  means the owner-unfiltered projection cannot disagree with the old client-side source.
+
+**Known limitations.**
+
+- **The endpoint's real-request test does NOT run the security filter chain, so `@PreAuthorize` is
+  pinned by reflection rather than enforced.** `buildMockMvc` uses `standaloneSetup`, which is the whole
+  controller test class's existing shape, so this is **pre-existing infrastructure and not specific to
+  this endpoint** — changing it would restructure a shared harness this release's anti-drift does not
+  open. **⚠️ What IS covered was verified by mutation: changing the `@GetMapping` path fails
+  `goalChildItemsResolveToTheirOwnHandlerAndSerializeOverTheWire`,** so routing and over-the-wire
+  serialization are genuinely exercised — and `v0.119.0`'s defect class (a JSON POST sent with no
+  `Content-Type`) cannot apply to a bodyless GET. The residual is that method security and the
+  application's own `ObjectMapper` bean are bypassed in that class.
+- **A child deleted mid-load now renders as an EMPTY plan instead of erroring.** The goal read and the
+  batch read are concurrent, so a child present in `goal.children` but absent from the batch response
+  falls through `?? []`. Under the fan-out, `getCollection(deletedChildId)` threw 404 and the page
+  surfaced `not-found`. The window is a delete from another tab or device between two in-flight
+  requests; it is arguably the better degradation, but it is a **behaviour change** and is recorded as
+  one rather than discovered later.
+- **The positional-partition guard is defensive and UNTESTED, and that is stated rather than papered
+  over.** `groupItemResponsesByCollectionId` throws if `toItemResponses` ever returns a different number
+  of responses than items — the shape that would silently misattribute an item to the wrong plan. It is
+  **unreachable today** (`toItemResponses` is a bare 1:1 `map`), so no mutant can kill it and no test
+  asserts it. It exists because its sibling `toPublicItemResponses` carries a `.filter()` and
+  `v0.104.0` already paid for this class once.
+- **`v0.123.0`'s residual stands: the release is sized from a static read.** It was not observed in
+  production before this release opened, so how much of the request cost a curator actually felt is
+  still unmeasured. The arithmetic is not in doubt.
+
 ## v0.123.0 - Collection Builder Integrity
 
 **Status: Released** (kicked off and signed off 2026-09-06, base branch `releases/v0.123.0`, cut from `main` after `v0.122.0` merged and tagged)
@@ -126,7 +320,12 @@ rewritten.
   item 4 actually lives.
 - **The note library is lazy (item 6).** `listNotes()` — unbounded, `contentPreview` and
   `summaryPreview` per row — used to fire on collection load, on builder load, and again after every
-  non-drag mutation. It now loads **on picker open**. **⚠️ EVERY CONSUMER WAS VERIFIED DOWNSTREAM OF THE
+  non-drag mutation. It now loads **on picker open**. **⚠️ CORRECTED AT THE `v0.124.0` SIGNOFF, IN
+  PLACE RATHER THAN SILENTLY REWRITTEN: THIS ITEM WAS BUILDER-ONLY, AND THE TWO SENTENCES BELOW
+  OVERCLAIMED IT.** `collection-detail-page-client.tsx` was never in this release's diff — `git log
+  v0.122.0..v0.123.0 -- <that file>` is EMPTY — and its own `listNotes()` at `:2832` kept firing on
+  every collection open. Item 6's scope text and its `:1031`/`:1738`/`:1852` refs are all BUILDER line
+  numbers; the summary generalised past them. **`v0.124.0` closed the detail-page half.** **⚠️ EVERY CONSUMER WAS VERIFIED DOWNSTREAM OF THE
   PICKER rather than assumed**, which is the audit's own precondition: all three `noteById` maps sit on
   add-note paths that cannot be reached without opening it, so nothing can read an empty map expecting a
   note outside the collection. `refreshBuilder` still refreshes the list for paths that change the note
@@ -135,7 +334,8 @@ rewritten.
   NOT RECKON WITH:** the picker filters **client-side over the whole library**, so passing a `limit`
   would silently make notes beyond it **unaddable**. The audit names server-side picker search as the
   longer-term fix; until that exists, bounding the fetch trades an invisible performance win for an
-  invisible correctness loss. Lazy loading already removes the fetch from both page loads.
+  invisible correctness loss. Lazy loading removes the fetch from the BUILDER's page load (see the
+  correction above); the collection detail page's own call was closed separately in `v0.124.0`.
 
 **⚠️ ITEM 7 IS CLOSED AS NOT-APPLICABLE, AND THIS IS AN EXECUTED RESULT RATHER THAN A SKIPPED ITEM.** The
 audit named six detail-page refetch sites and instructed that each be audited individually because "some

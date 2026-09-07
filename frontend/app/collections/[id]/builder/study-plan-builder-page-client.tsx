@@ -41,6 +41,7 @@ import {
   deleteCollection,
   getCollection,
   getCollectionGoal,
+  getGoalChildItems,
   listNotes,
   removeCollectionItem,
   reorderCollectionChildren,
@@ -50,6 +51,7 @@ import {
   updateCollection,
   type GoalCollectionChildResponse,
   type GoalCollectionDetailResponse,
+  type GoalChildItemsResponse,
   type NoteCollectionDetail,
   type NoteCollectionItem,
   type NoteListItemResponse,
@@ -212,6 +214,10 @@ function toOptimisticItem(note: NoteListItemResponse, position: number): NoteCol
     subject: note.subject,
     courseProgram: note.courseProgram,
     studyPackStatus: note.studyPackStatus,
+    // ⚠️ Carried, not nulled: `CollectionExamCandidate` includes `studyPackId` since `v0.124.0`, so a
+    // hardcoded null would make an optimistically-added note read as having no pack to any future
+    // exam-eligibility check over builder state.
+    studyPackId: note.studyPackId ?? null,
     generatedQuizId: note.generatedQuizId ?? null,
     lastSessionCompletedAt: note.lastSessionCompletedAt ?? null,
     dueConceptCount: 0,
@@ -1285,11 +1291,17 @@ function DeleteSubjectModal({
   );
 }
 
-function buildSubjects(goal: GoalCollectionDetailResponse, childDetails: NoteCollectionDetail[]): BuilderSubject[] {
-  const detailsById = new Map(childDetails.map((detail) => [detail.id, detail]));
+/**
+ * ⚠️ IT TAKES THE BATCH READ, NOT N CHILD DETAILS. Only `(collectionId, items)` was ever read off a
+ * child detail, which is why the batch response carries exactly that and nothing else — see
+ * `getGoalChildItems`. The rendered shape is unchanged: the same subjects, in `goal.children` order,
+ * with the same items in the same position order.
+ */
+function buildSubjects(goal: GoalCollectionDetailResponse, childItems: GoalChildItemsResponse[]): BuilderSubject[] {
+  const itemsByCollectionId = new Map(childItems.map((child) => [child.collectionId, child.items]));
   return goal.children.map((child) => ({
     ...child,
-    items: sortCollectionItemsByPosition(detailsById.get(child.collectionId)?.items ?? []),
+    items: sortCollectionItemsByPosition(itemsByCollectionId.get(child.collectionId) ?? []),
   }));
 }
 
@@ -1313,12 +1325,14 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
   const [notes, setNotes] = useState<NoteListItemResponse[]>([]);
   const [refreshingNotes, setRefreshingNotes] = useState(false);
   const [collapsedSubjectIds, setCollapsedSubjectIds] = useState<Set<string>>(new Set());
-  // Tracks which collectionId the initial collapse-seed has already run for. A plain
-  // "has seeded" boolean isn't enough: loadBuilder depends on labels.goalSingular,
-  // which changes once for TEACHER profiles when auth resolves ("Goal" -> "Course"),
-  // re-firing loadBuilder a second time for the *same* plan. Keying the guard by
-  // collectionId makes that second fire a no-op while still correctly reseeding if
-  // the user navigates to a different Goal plan without a full remount.
+  // Tracks which collectionId the initial collapse-seed has already run for, so it reseeds correctly
+  // when the user navigates to a different Goal plan without a full remount.
+  // ⚠️ ITS ORIGINAL JUSTIFICATION IS DEAD AND IS CORRECTED HERE RATHER THAN LEFT TO MISLEAD: it used
+  // to read "loadBuilder depends on labels.goalSingular, which changes once for TEACHER profiles when
+  // auth resolves, re-firing loadBuilder a second time for the same plan." `v0.124.0` moved that read
+  // behind `labelsRef` and removed the dependency, so the second fire no longer happens.
+  // ⚠️ Do NOT restore `labels.goalSingular` to `loadBuilder`'s deps believing this ref absorbs it --
+  // it would run the ENTIRE builder load twice for every curator, which is what that release fixed.
   const seededCollapseForCollectionIdRef = useRef<string | null>(null);
   const [mutationKind, setMutationKind] = useState<MutationKind>(null);
   const [mutationError, setMutationError] = useState<string | null>(null);
@@ -1412,7 +1426,7 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
     const serverItems = sortCollectionItemsByPosition(detail.items);
     // A background/auth-triggered refresh must never overwrite a visible pending order. Every
     // deliberate non-drag mutation flushes first; this guard covers refreshes not initiated by
-    // a mutation (including the second auth/profile load on this client page).
+    // a mutation (and formerly the second auth/profile load on this client page, which v0.124.0 removed).
     if (!leafOrderDirtyRef.current) {
       leafItemsRef.current = serverItems;
       lastSavedLeafItemsRef.current = serverItems;
@@ -1443,9 +1457,18 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
         return;
       }
       setCollection(collectionResult);
-      const goalResult = await getCollectionGoal(collectionId);
-      const childDetails = await Promise.all(goalResult.children.map((child) => getCollection(child.collectionId)));
-      const nextSubjects = buildSubjects(goalResult, childDetails);
+      // ⚠️ ONE BATCH READ, NOT ONE REQUEST PER CHILD. This used to be
+      // `Promise.all(goalResult.children.map(getCollection))` — 22 requests to render a 20-plan Review
+      // Set (this page's own getCollection, the goal read, and 20 child reads) against 3 now,
+      // concurrent against a connection pool of 20. The batch read does not depend on the goal
+      // response (the server derives the children itself), so the two run together.
+      // ⚠️ BOTH CALLS BELONG BELOW `applyLeafDetail`'s early return: a leaf plan has no children, and
+      // hoisting either into the opening Promise.all would add a wasted request to every leaf refresh.
+      const [goalResult, childItems] = await Promise.all([
+        getCollectionGoal(collectionId),
+        getGoalChildItems(collectionId),
+      ]);
+      const nextSubjects = buildSubjects(goalResult, childItems);
       setGoal(goalResult);
       setSubjects(nextSubjects);
       leafItemsRef.current = [];
@@ -1469,6 +1492,20 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
     }
   }, [collectionId]);
 
+  // ⚠️ THE LABEL IS READ THROUGH A REF, AND THAT IS A REQUEST-COUNT FIX RATHER THAN A STYLE CHOICE.
+  // `authUser` resolves in a mount effect, so `labels` is recomputed on the second render for any
+  // profile whose `goalSingular` differs from the unresolved default -- "Course" for TEACHER, while
+  // STUDENT and BOARD_EXAM both resolve to "Goal" and are referentially stable. As a dependency of
+  // `loadBuilder` that string changed the callback's identity, re-arming the load effect and running
+  // the ENTIRE builder load a SECOND time: 3 requests became 6, for exactly the curator persona that
+  // owns the large Review Sets v0.124.0 exists to make cheaper. The label is only ever read inside
+  // the catch below, so a ref serves it without putting it in the dependency array.
+  // ⚠️ Do NOT "simplify" this back to `[labels.goalSingular, refreshBuilder]`.
+  const labelsRef = useRef(labels);
+  useEffect(() => {
+    labelsRef.current = labels;
+  }, [labels]);
+
   const loadBuilder = useCallback(async () => {
     setLoadState("loading");
     setLoadError(null);
@@ -1481,10 +1518,10 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
         setLoadState("not-found");
         return;
       }
-      setLoadError(makeErrorMessage(error, `Could not load this ${labels.goalSingular.toLowerCase()}.`));
+      setLoadError(makeErrorMessage(error, `Could not load this ${labelsRef.current.goalSingular.toLowerCase()}.`));
       setLoadState("error");
     }
-  }, [labels.goalSingular, refreshBuilder]);
+  }, [refreshBuilder]);
 
   useEffect(() => {
     if (!requireAuthenticatedOnboardedUser(router)) {

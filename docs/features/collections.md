@@ -250,7 +250,9 @@ The v0.33.1 Goal builder turns hierarchy curation into one canvas:
 - Subject plans = draggable, collapsible section blocks.
 - Notes = cards inside each Subject.
 
-The Goal path loads the authoritative Goal shape from `GET /collections/{id}/goal`, then loads each child Subject's notes through the existing collection detail endpoint. Refreshing the page reconstructs the same structure from backend state; no client-only builder state is required for persistence.
+**⚠️ Since `v0.124.0` the collection DETAIL page (`/collections/{id}`) does NOT fetch the note library on load.** `listNotes()` is unbounded (the backend caps nothing when `limit` is null) and every row carries `contentPreview` and `summaryPreview` — the two fields that pushed `/notes/public` past Next.js's 2 MB data-cache limit on 2026-08-31. It used to run on every collection open to derive exactly two things: an **ADMIN-only** visibility map, and the primary exam's Study Pack id. The pack id now arrives on the item itself as `NoteCollectionItemResponse.studyPackId` (free — the projection was already loaded for the due-concept lookup), and the visibility map loads in its own effect **only when the viewer is an ADMIN**. **⚠️ A learner opening a collection issues zero `listNotes()` calls; do not reintroduce one.** **⚠️ ONE CAVEAT, STATED BECAUSE IT IS LOAD-BEARING AND INVISIBLE: the detail page's own `AddNotesModal` still calls unbounded `listNotes()` on open, and the claim holds only because that modal is CURRENTLY UNREACHABLE — `setAddOpen(true)` appears nowhere on this page (note addition moved to the Builder). Re-wiring an "Add notes" button here would silently restore the fetch this section forbids, so make it LAZY on picker open (the Builder's shape) at the same time.** The admin visibility load is deliberately outside `loadCollection` because `authUser` resolves in its own effect — gating the loader on `isAdmin` would re-arm the whole load, which is the defect `v0.124.0` fixed in the builder.
+
+The Goal path loads the authoritative Goal shape from `GET /collections/{id}/goal` and every child Subject's notes from `GET /collections/{id}/goal/child-items` — **one batch read, not one request per child**. **⚠️ Since `v0.124.0` the builder must NOT call `getCollection` per child.** It used to, which made the page an HTTP N+1: a Review Set with 20 Subject plans cost 22 requests to render once (its own `getCollection` on the Goal, `getCollectionGoal`, and 20 child reads) against 3 now, and `Promise.all` made those concurrent rather than cheap against a connection pool of 20 (`v0.112.0` documents pool exhaustion as a live production failure mode). Both calls sit BELOW the leaf early-return, so a leaf plan still issues neither. Refreshing the page reconstructs the same structure from backend state; no client-only builder state is required for persistence.
 
 The builder page header (leaf and Goal) has a single primary action, `Add {subjectSingular}`; there is no standalone header `Refresh`. A `Refresh` control lives inside the `Add notes` modal instead (next to the search field), scoped to re-fetching just the note list so newly created notes appear as selectable — and **since `v0.123.0` that note list is fetched LAZILY, on first picker open, rather than on page load**, because `listNotes()` is unbounded and its only builder consumers are the picker and the add-note handlers that read its selection. **⚠️ One automatic attempt only: a failed load surfaces an error and does not retry, because the retry re-armed itself through the effect's own dependency and hammered the endpoint.** Refresh remains the deliberate retry — it does not refetch the collection/goal shape and does not affect the modal's current selection (v0.36.1). The Subject-block row itself still switches from stacked to horizontal layout at the `xl` breakpoint rather than `lg`, because the persistent app-shell sidebar (present from `md` up) consumes real width the viewport-relative breakpoint doesn't otherwise account for (v0.36.1).
 
@@ -589,6 +591,42 @@ Goal readiness is deliberately cheap and derived from child Subject readiness co
 For a childless top-level collection, the same response instead derives those existing readiness fields from its own direct note items, using the same owned-Study-Pack and `ProgressReportService` classification path as `GET /collections/{id}/readiness`. A genuinely empty childless collection, or one whose direct notes have no Study Packs, returns the existing zero shape.
 
 Do not re-run concept classification over a Goal's merged child subtree. That would collapse same-named concepts across subjects (for example, "Assessment" in Professional Education and General Education) and lose the subject-weighted curriculum shape. If one child readiness computation fails, that child degrades to a zero/unavailable shape and the Goal response still succeeds.
+
+### Get Goal Child Items
+
+`GET /collections/{id}/goal/child-items`
+
+Returns the note items of **every** child Subject plan of a Goal, in one request, in the same child order
+`GET /collections/{id}/goal` uses. A child with no notes is present with an empty `items` list. A
+childless collection returns `[]`.
+
+Response: `GoalChildItemsResponse[]`, where each entry is
+
+- `collectionId`
+- `items: NoteCollectionItemResponse[]` — the identical item shape `GET /collections/{id}` returns
+
+`NoteCollectionItemResponse` carries `studyPackId` (nullable) as of `v0.124.0`. It costs no extra query
+— `toItemResponses` already loads the Study Pack projection for the due-concept lookup — and it exists so
+the detail page's Board Exam CTA can resolve its pack without the unbounded note-library fetch. **⚠️ `GET /collections/public/{id}` WITHHOLDS IT.** That route is `permitAll`, and the owner and public mappers share `toItemResponse`, so the field is passed IN by each caller rather than derived inside — nothing public consumes it, and a field added for one caller otherwise reaches both.
+
+**⚠️ It is deliberately minimal, and must stay that way.** The Goal builder reads only
+`(collectionId, items)` off a child, so returning N full `NoteCollectionDetailResponse` payloads would
+defeat much of the point of replacing the per-child fan-out.
+
+**⚠️ `GoalCollectionDetailResponse` is NOT widened to carry this.** `GET /collections/{id}/goal` has
+seven frontend consumers and **six of them need the goal shape and not one child's items**, so hanging
+items on it would inflate the Dashboard and three exam prestart paths to serve the builder alone. A
+backend test pins that record's exact component list so the shortcut fails loudly.
+
+**⚠️ Authorization: the child ids are derived server-side and this endpoint accepts no id list.** The
+whole gate is the owner-scoped parent lookup (missing, malformed or not-owned ids return
+`CollectionNotFoundException` / `404`) plus the children query, which is itself filtered by owner — so a
+child the caller does not own cannot appear. An id-list request shape would need per-id authorization
+and must not be introduced.
+
+Items for all children are assembled in ONE `toItemResponses` pass, so the read costs the same five
+bulk queries at 2 children as at 20. `toItemResponses` itself is unchanged — the waste this endpoint
+removes was the request count, not the per-request work.
 
 ### Set / Clear Parent
 

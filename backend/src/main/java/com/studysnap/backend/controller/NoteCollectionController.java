@@ -14,6 +14,7 @@ import com.studysnap.backend.dto.PlanReadinessResponse;
 import com.studysnap.backend.dto.QuickReviewAdaptiveQuizResponse;
 import com.studysnap.backend.dto.ReviewSetUpdateResponse;
 import com.studysnap.backend.dto.GoalCollectionDetailResponse;
+import com.studysnap.backend.dto.GoalChildItemsResponse;
 import com.studysnap.backend.dto.SetNoteCollectionParentRequest;
 import com.studysnap.backend.dto.SetNoteCollectionChildrenOrderRequest;
 import com.studysnap.backend.dto.SetNoteCollectionOrderRequest;
@@ -134,6 +135,26 @@ public class NoteCollectionController {
     ) {
         UUID collectionId = UuidParsingUtils.parseUuidOrThrow(id, CollectionNotFoundException::new);
         return service.getGoal(collectionId, user.userId());
+    }
+
+    /**
+     * The item detail of every child Subject Plan of a Goal, in ONE request.
+     *
+     * <p>⚠️ IT IS A SEPARATE READ RATHER THAN A WIDER {@code /goal}, AND THAT IS THE WHOLE DESIGN.
+     * {@code getGoal} has seven frontend consumers and SIX of them need the goal shape and not one
+     * child's items, so carrying items on it would inflate the Dashboard and three exam prestart paths
+     * to serve the builder alone. ⚠️ Do NOT widen {@code GoalCollectionDetailResponse}.
+     *
+     * <p>⚠️ The child ids are derived server-side from the parent; this endpoint takes no id list.
+     */
+    @GetMapping("/{id}/goal/child-items")
+    @PreAuthorize("hasAnyRole('USER','ADMIN')")
+    public List<GoalChildItemsResponse> getGoalChildItems(
+            @PathVariable String id,
+            @AuthenticationPrincipal AuthenticatedUser user
+    ) {
+        UUID collectionId = UuidParsingUtils.parseUuidOrThrow(id, CollectionNotFoundException::new);
+        return service.getGoalChildItems(collectionId, user.userId());
     }
 
     @PatchMapping("/{id}")

@@ -2379,6 +2379,7 @@ function PublishStudyPlanModal({
   collection,
   isOpen,
   privateNoteIds,
+  privateNotesUnknown,
   onClose,
   onSaved,
   onNotesPublished,
@@ -2386,6 +2387,7 @@ function PublishStudyPlanModal({
   collection: NoteCollectionDetail;
   isOpen: boolean;
   privateNoteIds: string[];
+  privateNotesUnknown: boolean;
   onClose: () => void;
   onSaved: (collection: NoteCollectionDetail) => void;
   onNotesPublished: () => Promise<void> | void;
@@ -2403,7 +2405,12 @@ function PublishStudyPlanModal({
   const courseProgramDirty = trimmedCourseProgram !== (collection.courseProgram ?? "").trim();
   const busy = savingCourseProgram || togglingVisibility || makingPublic;
   const privateCount = privateNoteIds.length;
-  const blockedByPrivateNotes = privateCount > 0;
+  // ⚠️ FAIL CLOSED WHILE VISIBILITY IS UNKNOWN. `v0.124.0` moved the admin visibility fetch OUT of
+  // `loadCollection`, so the page now renders READY while that request is still in flight -- and an
+  // empty `noteVisibility` map is indistinguishable from "no private notes". Treating unknown as
+  // unblocked let an admin press Publish, see no "N notes are private" affordance, and get the
+  // server's raw rejection instead. Unknown blocks; only a completed read can unblock.
+  const blockedByPrivateNotes = privateCount > 0 || privateNotesUnknown;
 
   // Publishing is a constrained surface: lock the field to known buckets, but keep
   // the plan's existing value selectable even if the suggestion fetch omits it.
@@ -2805,8 +2812,9 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
   const [editingSectionName, setEditingSectionName] = useState("");
   const [pendingSectionRename, setPendingSectionRename] = useState<{ oldName: string; newName: string } | null>(null);
   const [noteVisibility, setNoteVisibility] = useState<Map<string, NoteVisibility>>(new Map());
-  const [noteListItems, setNoteListItems] = useState<NoteListItemResponse[]>([]);
-  const [noteListLoadFailed, setNoteListLoadFailed] = useState(false);
+  // Distinguishes "read completed, nothing private" from "read has not completed" -- see
+  // `blockedByPrivateNotes`. A failed read leaves this false, which keeps Publish blocked.
+  const [noteVisibilityLoaded, setNoteVisibilityLoaded] = useState(false);
   const [showReviewFirstModal, setShowReviewFirstModal] = useState(false);
   const [skippedNoticeCount, setSkippedNoticeCount] = useState<number | null>(null);
   const [justAdopted, setJustAdopted] = useState(false);
@@ -2825,24 +2833,16 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
   const loadCollection = useCallback(async () => {
     setLoadState("loading");
     setLoadError(null);
-    setNoteListLoadFailed(false);
     try {
-      const [result, notesResult] = await Promise.allSettled([
-        getCollection(collectionId),
-        listNotes(),
-      ]);
-      if (result.status === "rejected") {
-        throw result.reason;
-      }
-      if (notesResult.status === "fulfilled") {
-        setNoteListItems(notesResult.value);
-        setNoteVisibility(new Map(notesResult.value.map((note) => [note.id, note.visibility])));
-      } else {
-        setNoteListItems([]);
-        setNoteVisibility(new Map());
-        setNoteListLoadFailed(true);
-      }
-      const collectionResult = result.value;
+      // ⚠️ THIS LOAD DOES NOT FETCH THE NOTE LIBRARY, AND MUST NOT START AGAIN. `listNotes()` is
+      // unbounded (the backend caps nothing when `limit` is null) and every row carries
+      // `contentPreview` and `summaryPreview` -- the two fields that pushed `/notes/public` past
+      // Next.js's 2 MB data-cache limit in the 2026-08-31 build failure. It used to run here on EVERY
+      // collection open, for a curator with ~900 notes, to derive exactly two things: an ADMIN-only
+      // visibility map, and the primary exam's Study Pack id. The pack id now arrives on the item
+      // itself (`NoteCollectionItemResponse.studyPackId`, free -- it was already loaded for the
+      // due-concept lookup), and the visibility map loads separately and only for an ADMIN.
+      const collectionResult = await getCollection(collectionId);
       setCollection(collectionResult);
       setItems(sortCollectionItemsByPosition(collectionResult.items));
       // Fetch the Goal endpoint for any top-level collection, not just ones with children today — a
@@ -2989,10 +2989,24 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
     try {
       const notes = await listNotes();
       setNoteVisibility(new Map(notes.map((note) => [note.id, note.visibility])));
+      setNoteVisibilityLoaded(true);
     } catch {
       // Visibility badges are admin-only progressive enhancement; ignore failures.
     }
   }, []);
+
+  // ⚠️ ADMIN-GATED ON PURPOSE, AND IT IS THE HALF THAT MAKES THE LOAD CHEAP FOR EVERYONE ELSE. Every
+  // consumer of `noteVisibility` is already `isAdmin &&`-gated at its render site, so for a learner
+  // this fetch produced nothing at all -- it was an unbounded note-library download whose entire
+  // output was discarded. It is deliberately NOT awaited inside `loadCollection`: `authUser` resolves
+  // in its own effect, so `isAdmin` is false on the first render and gating the loader on it there
+  // would either read stale state or re-arm the whole load (the v0.124.0 builder defect, same shape).
+  useEffect(() => {
+    if (!isAdmin) {
+      return;
+    }
+    void loadNoteVisibility();
+  }, [isAdmin, loadNoteVisibility]);
 
   const refetchAfterFailure = async (message: string) => {
     setMutationError(message);
@@ -3242,18 +3256,13 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
     [items],
   );
   const primaryExamItem = useMemo(() => getCollectionPrimaryPremiumExamItem(items), [items]);
-  const noteStudyPackIdByNoteId = useMemo(
-    () => new Map(noteListItems.map((noteItem) => [noteItem.id, noteItem.studyPackId])),
-    [noteListItems],
-  );
-  const primaryExamStudyPackId = primaryExamItem ? noteStudyPackIdByNoteId.get(primaryExamItem.noteId) ?? null : null;
+  const primaryExamStudyPackId = primaryExamItem?.studyPackId ?? null;
   const hasNonQuizReadyItems = quizReadyNoteIds.length < items.length;
   const hasNonPremiumReadyItems = premiumExamReadyNoteIds.length < items.length;
   const mutationInProgress = mutationKind !== null;
   const isPrimaryCollection = collection?.id === primaryCollectionId;
   const primaryActionLabel = isPrimaryCollection ? "Remove as primary" : "Set as primary";
-  const premiumExamDisabled = noteListLoadFailed
-    || !primaryExamItem
+  const premiumExamDisabled = !primaryExamItem
     || (terminalAction?.kind === "premium-exam" && terminalAction.mode === "board_exam" && !primaryExamStudyPackId);
   const continueAction = useMemo(() => {
     const latestPracticedItem = getLatestPracticedCollectionItem(items);
@@ -3698,6 +3707,7 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
             collection={collection}
             isOpen={publishOpen}
             privateNoteIds={privateNoteIds}
+            privateNotesUnknown={isAdmin && !noteVisibilityLoaded}
             onClose={() => setPublishOpen(false)}
             onSaved={(saved) => {
               setCollection(saved);
@@ -4068,6 +4078,7 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
           collection={collection}
           isOpen={publishOpen}
           privateNoteIds={privateNoteIds}
+          privateNotesUnknown={isAdmin && !noteVisibilityLoaded}
           onClose={() => setPublishOpen(false)}
           onSaved={(saved) => {
             setCollection(saved);

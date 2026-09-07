@@ -1,6 +1,6 @@
 import type { NoteCollectionDetail, NoteCollectionItem, NoteListItemResponse } from "@/lib/api";
 
-type CollectionExamCandidate = Pick<NoteCollectionItem, "noteId" | "position" | "studyPackStatus" | "generatedQuizId">;
+type CollectionExamCandidate = Pick<NoteCollectionItem, "noteId" | "position" | "studyPackStatus" | "generatedQuizId" | "studyPackId">;
 
 export function sortCollectionItemsByPosition<T extends Pick<NoteCollectionItem, "position">>(items: T[]): T[] {
   return [...items].sort((left, right) => left.position - right.position);

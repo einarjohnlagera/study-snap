@@ -16,6 +16,7 @@ import com.studysnap.backend.dto.GenerateCompanionRequest;
 import com.studysnap.backend.dto.GeneratedCompanionContentResponse;
 import com.studysnap.backend.dto.GoalCollectionChildResponse;
 import com.studysnap.backend.dto.GoalCollectionDetailResponse;
+import com.studysnap.backend.dto.GoalChildItemsResponse;
 import com.studysnap.backend.dto.NoteCollectionDetailResponse;
 import com.studysnap.backend.dto.NoteCollectionItemResponse;
 import com.studysnap.backend.dto.NoteCollectionSummaryResponse;
@@ -1492,6 +1493,165 @@ class NoteCollectionServiceTest {
         verify(itemRepository, never()).findByCollectionIdOrderByPositionAsc(goalId);
     }
 
+    /**
+     * ⚠️ GUARD (a), BACKEND HALF — THE BATCH READ IS ONE BULK PASS, NOT A LOOP.
+     *
+     * <p>A THREE-child fixture is deliberate: with one child a batch read and a per-child fan-out are
+     * indistinguishable, so a single-child fixture passes under both and proves nothing.
+     *
+     * <p>The discriminating assertion is that {@code findCollectionNoteProjectionsByIdIn} — one of
+     * {@code toItemResponses}' five bulk queries — is called EXACTLY ONCE for three children. A version
+     * that looped {@code toItemResponses} per child would call it three times and still return the same
+     * response, so asserting only the response shape would not catch it.
+     *
+     * <p>⚠️ OBSERVED KILL MECHANISM, RECORDED BECAUSE IT IS NOT THE ONE THIS COMMENT PREDICTS: when the
+     * per-child loop is actually introduced, the test dies EARLIER than the verify — with
+     * {@code NoteNotFoundException} out of {@code toItemResponse}, because the note-projection stub is
+     * keyed on the FULL note-id list and returns empty for a per-child sublist. The verify remains the
+     * assertion that would catch a loop which tolerated a missing note, so the guard is real either
+     * way; do not read the exception as a fixture defect and "fix" the stub to be lenient per child.
+     */
+    @Test
+    void getGoalChildItems_returnsEveryChildsItemsInOneBulkPass() {
+        UUID userId = UUID.randomUUID();
+        UUID goalId = UUID.randomUUID();
+        UUID firstChildId = UUID.randomUUID();
+        UUID secondChildId = UUID.randomUUID();
+        UUID thirdChildId = UUID.randomUUID();
+        UUID firstNoteId = UUID.randomUUID();
+        UUID secondNoteId = UUID.randomUUID();
+        UUID thirdNoteId = UUID.randomUUID();
+        NoteCollectionEntity goal = buildCollection(goalId, userId, "LET Mastery", Instant.now());
+        NoteCollectionEntity firstChild = buildCollection(firstChildId, userId, "Professional Education", Instant.now());
+        NoteCollectionEntity secondChild = buildCollection(secondChildId, userId, "General Education", Instant.now());
+        NoteCollectionEntity thirdChild = buildCollection(thirdChildId, userId, "Major Specialization", Instant.now());
+        List<UUID> childIds = List.of(firstChildId, secondChildId, thirdChildId);
+        // firstChild holds two notes, secondChild one, thirdChild none - so a mis-partition by one
+        // position lands an item in the wrong plan rather than merely reordering within a plan.
+        List<NoteCollectionItemEntity> items = List.of(
+                buildItem(firstChildId, firstNoteId, 0, WEEK_ONE_LABEL),
+                buildItem(firstChildId, secondNoteId, 1, WEEK_TWO_LABEL),
+                buildItem(secondChildId, thirdNoteId, 0, null)
+        );
+        List<UUID> noteIds = List.of(firstNoteId, secondNoteId, thirdNoteId);
+        when(collectionRepository.findByIdAndOwnerUserId(goalId, userId)).thenReturn(Optional.of(goal));
+        when(collectionRepository.findOrderedChildrenByParentCollectionIdAndOwnerUserId(goalId, userId))
+                .thenReturn(List.of(firstChild, secondChild, thirdChild));
+        when(itemRepository.findByCollectionIdInOrderByCollectionIdAscPositionAsc(childIds)).thenReturn(items);
+        // ⚠️ lenient() DELIBERATELY: a per-child loop would call this with each child's OWN note-id
+        // list, and under strict stubs that throws a PotentialStubbingProblem before the assertions
+        // run -- a kill, but for a stubbing reason rather than a behavioural one. Lenient lets the
+        // loop return empty instead, so the mutant is killed by the title/verify assertions below,
+        // which is the mechanism this test is named for.
+        lenient().when(noteRepository.findCollectionNoteProjectionsByIdIn(noteIds)).thenReturn(asNoteProjections(
+                buildNote(firstNoteId, userId, NOTE_TITLE_ONE),
+                buildNote(secondNoteId, userId, NOTE_TITLE_TWO),
+                buildNote(thirdNoteId, userId, NOTE_TITLE_THREE)
+        ));
+        lenient().when(studyPackRepository.findProgressViewsByNoteIdIn(noteIds)).thenReturn(List.of());
+        lenient().when(generatedQuizRepository.findNoteIdsByOwnerUserIdAndNoteIdIn(userId, noteIds)).thenReturn(List.of());
+        lenient().when(quizSessionHistoryService.findLatestSessionCompletedAtByNoteIds(userId, noteIds)).thenReturn(Map.of());
+
+        List<GoalChildItemsResponse> result = service.getGoalChildItems(goalId, userId);
+
+        assertThat(result).extracting(GoalChildItemsResponse::collectionId)
+                .containsExactly(firstChildId, secondChildId, thirdChildId);
+        assertThat(result.get(0).items()).extracting(NoteCollectionItemResponse::noteId)
+                .containsExactly(firstNoteId, secondNoteId);
+        assertThat(result.get(0).items()).extracting(NoteCollectionItemResponse::title)
+                .containsExactly(NOTE_TITLE_ONE, NOTE_TITLE_TWO);
+        assertThat(result.get(0).items()).extracting(NoteCollectionItemResponse::label)
+                .containsExactly(WEEK_ONE_LABEL, WEEK_TWO_LABEL);
+        assertThat(result.get(1).items()).extracting(NoteCollectionItemResponse::noteId)
+                .containsExactly(thirdNoteId);
+        assertThat(result.get(2).items()).isEmpty();
+        verify(noteRepository, times(1)).findCollectionNoteProjectionsByIdIn(noteIds);
+        verify(itemRepository, times(1)).findByCollectionIdInOrderByCollectionIdAscPositionAsc(childIds);
+        verify(itemRepository, never()).findByCollectionIdOrderByPositionAsc(any());
+    }
+
+    /**
+     * ⚠️ GUARD (e) — A BATCH READ MUST NOT BECOME A WAY TO READ A COLLECTION YOU COULD NOT READ ONE AT
+     * A TIME. The batch takes no id list, so the whole authorization surface is the parent lookup; if
+     * {@code getOwnedCollectionOrThrow} is deleted this test is the one that fails, and the children
+     * query must not even run.
+     */
+    @Test
+    void getGoalChildItems_rejectsCallerWhoDoesNotOwnTheGoal() {
+        UUID userId = UUID.randomUUID();
+        UUID goalId = UUID.randomUUID();
+        when(collectionRepository.findByIdAndOwnerUserId(goalId, userId)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.getGoalChildItems(goalId, userId))
+                .isInstanceOf(CollectionNotFoundException.class);
+
+        verify(collectionRepository, never())
+                .findOrderedChildrenByParentCollectionIdAndOwnerUserId(any(), any());
+        verifyNoInteractions(itemRepository);
+    }
+
+
+    /**
+     * ⚠️ A REGRESSION GUARD FOR A CONDITION THIS RELEASE NEWLY CREATES, not a bug fix.
+     *
+     * <p>Before the batch read each child got its OWN {@code toItemResponses} call, so one note placed in
+     * two Subject Plans of the same Review Set was never in a single note-id list. It is now — and
+     * {@code toItemResponses} builds {@code notesById} with {@code Collectors.toMap(noteId, identity())}
+     * and NO merge function, which throws {@code IllegalStateException: Duplicate key} on a repeated key.
+     *
+     * <p>It is safe because the {@code IN} query returns one row per id regardless of repeats, and
+     * {@code note_collection_items}' uniqueness is per COLLECTION, so this placement is legal for a
+     * curator. ⚠️ The three-child fixture above uses three distinct notes and cannot exhibit it.
+     */
+    @Test
+    void getGoalChildItems_toleratesOneNotePlacedInTwoChildPlans() {
+        UUID userId = UUID.randomUUID();
+        UUID goalId = UUID.randomUUID();
+        UUID firstChildId = UUID.randomUUID();
+        UUID secondChildId = UUID.randomUUID();
+        UUID sharedNoteId = UUID.randomUUID();
+        NoteCollectionEntity goal = buildCollection(goalId, userId, "LET Mastery", Instant.now());
+        NoteCollectionEntity firstChild = buildCollection(firstChildId, userId, "Professional Education", Instant.now());
+        NoteCollectionEntity secondChild = buildCollection(secondChildId, userId, "General Education", Instant.now());
+        List<UUID> childIds = List.of(firstChildId, secondChildId);
+        when(collectionRepository.findByIdAndOwnerUserId(goalId, userId)).thenReturn(Optional.of(goal));
+        when(collectionRepository.findOrderedChildrenByParentCollectionIdAndOwnerUserId(goalId, userId))
+                .thenReturn(List.of(firstChild, secondChild));
+        when(itemRepository.findByCollectionIdInOrderByCollectionIdAscPositionAsc(childIds)).thenReturn(List.of(
+                buildItem(firstChildId, sharedNoteId, 0, null),
+                buildItem(secondChildId, sharedNoteId, 0, null)
+        ));
+        // The IN query returns ONE row for a repeated id, which is what makes the merge-free toMap safe.
+        List<UUID> noteIds = List.of(sharedNoteId, sharedNoteId);
+        when(noteRepository.findCollectionNoteProjectionsByIdIn(noteIds))
+                .thenReturn(asNoteProjections(buildNote(sharedNoteId, userId, NOTE_TITLE_ONE)));
+        when(studyPackRepository.findProgressViewsByNoteIdIn(noteIds)).thenReturn(List.of());
+        when(generatedQuizRepository.findNoteIdsByOwnerUserIdAndNoteIdIn(userId, noteIds)).thenReturn(List.of());
+        when(quizSessionHistoryService.findLatestSessionCompletedAtByNoteIds(userId, noteIds)).thenReturn(Map.of());
+
+        List<GoalChildItemsResponse> result = service.getGoalChildItems(goalId, userId);
+
+        assertThat(result.get(0).items()).extracting(NoteCollectionItemResponse::noteId)
+                .containsExactly(sharedNoteId);
+        assertThat(result.get(1).items()).extracting(NoteCollectionItemResponse::noteId)
+                .containsExactly(sharedNoteId);
+        assertThat(result.get(0).items().get(0).title()).isEqualTo(NOTE_TITLE_ONE);
+        assertThat(result.get(1).items().get(0).title()).isEqualTo(NOTE_TITLE_ONE);
+    }
+
+    @Test
+    void getGoalChildItems_returnsEmptyForACollectionWithNoChildren() {
+        UUID userId = UUID.randomUUID();
+        UUID collectionId = UUID.randomUUID();
+        when(collectionRepository.findByIdAndOwnerUserId(collectionId, userId))
+                .thenReturn(Optional.of(buildCollection(collectionId, userId, COLLECTION_TITLE, Instant.now())));
+        when(collectionRepository.findOrderedChildrenByParentCollectionIdAndOwnerUserId(collectionId, userId))
+                .thenReturn(List.of());
+
+        assertThat(service.getGoalChildItems(collectionId, userId)).isEmpty();
+        verifyNoInteractions(itemRepository);
+    }
+
     @Test
     void getGoal_usesDirectItemReadinessForChildlessCollection() {
         UUID userId = UUID.randomUUID();
@@ -2823,6 +2983,44 @@ class NoteCollectionServiceTest {
             assertThat(summary.readyCount()).isEqualTo(1);
         });
         verify(collectionRepository).findByParentCollectionIdIn(List.of(goalId));
+    }
+
+    /**
+     * ⚠️ GUARD: THE ANONYMOUS PUBLIC PAYLOAD MUST NOT CARRY {@code studyPackId}.
+     *
+     * <p>{@code GET /collections/public/{id}} is {@code permitAll}, so this response reaches callers
+     * with no account. {@code studyPackId} was added in {@code v0.124.0} for the OWNER's detail page,
+     * and {@code toItemResponse} is SHARED between the owner and public mappers — so the field arrived
+     * on the anonymous payload as a side effect of a change made for a different caller. Nothing public
+     * consumes it, so the public mapper withholds it.
+     *
+     * <p>⚠️ THE FIXTURE MUST STUB A STUDY PACK THAT EXISTS. With no pack the field is null under both
+     * the defect and the fix, so a pack-less fixture passes either way and proves nothing --
+     * {@code readyCount} being 1 below is what proves the pack was found and deliberately withheld.
+     */
+    @Test
+    void getPublic_withholdsStudyPackIdFromTheAnonymousPayload() {
+        UUID collectionId = UUID.randomUUID();
+        UUID readyNoteId = UUID.randomUUID();
+        NoteCollectionEntity collection = buildCollection(collectionId, UUID.randomUUID(), COLLECTION_TITLE, Instant.now());
+        collection.setVisibility(CollectionVisibility.PUBLIC);
+        NoteEntity readyNote = buildNote(readyNoteId, collection.getOwnerUserId(), NOTE_TITLE_ONE);
+        readyNote.setVisibility(NoteVisibility.PUBLIC);
+        List<UUID> noteIds = List.of(readyNoteId);
+        when(collectionRepository.findByIdAndVisibility(collectionId, CollectionVisibility.PUBLIC)).thenReturn(Optional.of(collection));
+        when(collectionRepository.findByParentCollectionIdIn(List.of(collectionId))).thenReturn(List.of());
+        when(itemRepository.findByCollectionIdInOrderByCollectionIdAscPositionAsc(List.of(collectionId))).thenReturn(List.of(
+                buildItem(collectionId, readyNoteId, 0, null)
+        ));
+        when(noteRepository.findCollectionNoteProjectionsByIdIn(noteIds)).thenReturn(asNoteProjections(readyNote));
+        when(studyPackRepository.findProgressViewsByNoteIdIn(noteIds)).thenReturn(asProjections(buildStudyPack(readyNoteId)));
+        when(collectionRepository.countByParentCollectionId(collectionId)).thenReturn(0L);
+
+        NoteCollectionDetailResponse result = service.getPublic(collectionId);
+
+        assertThat(result.readyCount()).isEqualTo(1);
+        assertThat(result.items()).hasSize(1);
+        assertThat(result.items().getFirst().studyPackId()).isNull();
     }
 
     @Test
