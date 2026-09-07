@@ -16,6 +16,7 @@ public record NoteCollectionSummaryResponse(
         int itemCount,
         int readyCount,
         int childCount,
+        int adoptionCount,
         int notesPracticed,
         Instant createdAt,
         Instant updatedAt
@@ -31,11 +32,12 @@ public record NoteCollectionSummaryResponse(
             int itemCount,
             int readyCount,
             int childCount,
+            int adoptionCount,
             int notesPracticed,
             Instant createdAt,
             Instant updatedAt
     ) {
         this(id, title, description, visibility, courseProgram, null, null, sourcePlanId,
-                parentCollectionId, itemCount, readyCount, childCount, notesPracticed, createdAt, updatedAt);
+                parentCollectionId, itemCount, readyCount, childCount, adoptionCount, notesPracticed, createdAt, updatedAt);
     }
 }

@@ -555,6 +555,7 @@ class NoteCollectionControllerTest {
                 0,
                 0,
                 0,
+                0,
                 now,
                 now
         );
@@ -573,6 +574,7 @@ class NoteCollectionControllerTest {
                 null,
                 null,
                 null,
+                0,
                 0,
                 0,
                 now,

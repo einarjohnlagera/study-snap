@@ -292,6 +292,7 @@ class LinkedLearnerProgressServiceTest {
                 items,
                 ready,
                 0,
+                0,
                 practiced,
                 Instant.now(),
                 Instant.now()

@@ -54,6 +54,33 @@ The plan's §10 listed two reads as prerequisites and assumed both were the owne
 
 ### Shipped
 
+- **Official Review Set adoption counts are query-time, exact public aggregates.** The backend adds a
+  partial `source_plan_id` index (`V138`) and one batched JPQL self-join that excludes the Official
+  source's owner. `/collections/public` and `/collections/public/{id}` return non-null
+  `adoptionCount`; the display threshold remains a frontend-only rule. **⚠️ No `DISTINCT`** — `V76`'s
+  partial UNIQUE index already makes one-learner-one-adoption a database invariant — **and no
+  denormalized counter, no ordering by the count, and no threshold logic anywhere in the backend.**
+- **⚠️ The audit MUTATION-VERIFIED the two claims a green suite could not have proven, each confirmed
+  PRESENT before its run.** This is the `v0.93.0` lesson applied: that release's headline conditional
+  insert survived a mutated predicate because every repository reference in the test tree was a mock.
+  - **Dropping `adoption.ownerUserId <> source.ownerUserId`** fails
+    `countAdoptionsExcludesTheOfficialOwnerAndKeepsParentAndChildSourcesIndependent` — **against real
+    PostgreSQL, not a mock**: the count came back `3` where `2` was expected. Predicate correctness is
+    therefore actually exercised, not merely parsed.
+  - **Replacing the batched call with a per-collection one** — a real N+1 — fails
+    `listPublic_loadsAdoptionCountsOnceForTheFullVisibleCollectionList`, which asserts the repository
+    is invoked **once with the full id list**. **⚠️ That test asserts the INVOCATION, not the rendered
+    numbers**, which is the only form of the guard an N+1 cannot pass.
+- **`V138` was applied by Flyway against the real PostgreSQL 16 container** (*"Successfully applied 138
+  migrations … now at version v138"*), so the migration is verified as valid PostgreSQL rather than
+  assumed. It is a plain partial `CREATE INDEX` — **not `CONCURRENTLY`, which cannot run inside
+  Flyway's transaction.**
+- **Owner-scoped and non-public mappers pass `0` rather than issuing a query**, since adoption counts
+  are a discovery signal and those surfaces do not show one.
+
+**Backend build: `./mvnw clean install` green — 2227 tests, 0 failures**, re-run clean after every
+mutation was reverted.
+
 - **The adoption-count display rule lives in one module, so the two surfaces cannot drift.**
   `frontend/lib/adoption-count.ts` owns the threshold, the compact/detailed wording and the
   show/hide decision; `PublicStudyPlanCard` renders `40 adopted` on the card and

@@ -29,6 +29,13 @@ Admin-published collections are the v0.31.0 exception: an admin can publish a co
 
 The full published catalog is browseable to anonymous visitors both at `/collections/published` and in `/explore`'s default Review Sets tab. Preview and the Adopt affordance stay visible; authentication is gated only when Adopt is clicked. On Explore, that click stores the plan id, Goal-vs-leaf shape, and current Explore query context in the short-lived discovery-intent cookie, then routes to signup without calling the protected adopt endpoint. After verification and onboarding, Dashboard consumes the intent once and performs the existing authenticated adoption. An unavailable source clears the cookie and returns to Explore with a normal notice.
 
+Official Review Set public responses carry an exact, non-null `adoptionCount`: the current number of
+collections whose `sourcePlanId` is that Official source, excluding rows owned by the source's own owner.
+The database's one-owner-per-source invariant means the row count needs no `DISTINCT`. Parent Goals and
+child Subject Plans have independent counts and are never summed. Rows without `sourcePlanId` are excluded,
+so legacy missing provenance under-counts by design; the backend does not reconstruct it. The backend always
+returns the exact integer. The threshold for whether to display it is client display policy only.
+
 Anonymous published-catalog vocabulary reuses `getCollectionLabels("STUDENT")`, producing `Official Study Plans`; it must not fall through to the null-profile `Official Collections` default. Authenticated profile-aware labels and Start/Continue behavior are unchanged.
 
 **Study Plans vs saved library filters (do not consolidate).** A Study Plan is a *durable, ordered, named organizer* — the canonical way a learner groups notes by unit/grade level/preference. A saved library filter is a *transient quick lens* (a stored search/filter combo) over the whole library. They serve different jobs and both are intentionally kept: filters are how a learner narrows the library (including while assembling a plan from selection); the plan is the resulting durable grouping.
