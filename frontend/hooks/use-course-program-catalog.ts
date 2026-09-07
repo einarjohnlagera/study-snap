@@ -16,7 +16,10 @@ export type CourseProgramSelectionSurface =
   | "profile"
   | "note-editor"
   | "note-detail"
-  | "dashboard-prompt";
+  | "dashboard-prompt"
+  // ⚠️ `surface` rides in the analytics metadata map and is NOT server-validated, so adding a member
+  // needs no backend change -- the COURSE_PROGRAM_VALUE_SELECTED enum value already exists.
+  | "onboarding";
 
 export function useCourseProgramCatalogNames(): string[] | null {
   const [catalogNames, setCatalogNames] = useState<string[] | null>(null);
