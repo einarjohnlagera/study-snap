@@ -2,7 +2,7 @@
 
 ## v0.125.0 - Bounded Reads
 
-**Status: In Progress** (kicked off 2026-09-07, base branch `releases/v0.125.0`, cut from `main` after `v0.124.0` merged and tagged)
+**Status: Released** (kicked off and signed off 2026-09-07, base branch `releases/v0.125.0`, cut from `main` after `v0.124.0` merged and tagged)
 
 Theme: the last two places that read a whole collection when they needed a slice of one.
 
