@@ -727,6 +727,89 @@ class NoteCollectionServiceTest {
         assertThat(result.parentCollectionId()).isEqualTo(parentId);
     }
 
+    /**
+     * ⚠️ GUARD (a): THE LEARNER'S OWN EXAM DATE SURVIVES REPARENTING, BY PROMOTION.
+     *
+     * <p>A learner who set a target completion date on a top-level collection and later nested it
+     * under a Goal had that date silently NULLed. It is <strong>learner-entered and unrecoverable</strong>
+     * — nothing else records it. The adoption path at {@code persistAdoptedGoal} already promotes such a
+     * date to the parent; this path simply dropped it, and that asymmetry was the defect.
+     *
+     * <p>⚠️ A FIXTURE WHOSE CHILD HAS NO DATE PASSES UNDER THE DEFECT AND PROVES NOTHING — the child
+     * here carries one, and the parent deliberately does not, which is the case that loses data.
+     */
+    @Test
+    void updateParent_promotesTheLearnersOwnTargetDateToTheParentInsteadOfDiscardingIt() {
+        UUID userId = UUID.randomUUID();
+        UUID parentId = UUID.randomUUID();
+        UUID childId = UUID.randomUUID();
+        NoteCollectionEntity parent = buildCollection(parentId, userId, "LET Mastery", Instant.now());
+        NoteCollectionEntity child = buildCollection(childId, userId, "Professional Education", Instant.now());
+        child.setTargetCompletionDate(LocalDate.parse("2026-12-01"));
+        stubReparent(userId, parentId, childId, parent, child);
+
+        service.updateParent(childId, userId, new SetNoteCollectionParentRequest(parentId));
+
+        assertThat(parent.getTargetCompletionDate()).isEqualTo(LocalDate.parse("2026-12-01"));
+        // The clear on the child is NOT the defect and must stay -- see guard (b) below.
+        assertThat(child.getTargetCompletionDate()).isNull();
+    }
+
+    /**
+     * ⚠️ THE EARLIEST DATE WINS, because a completion target is a DEADLINE and the nearest one binds.
+     * Same rule the adoption path states. A fixture whose parent has NO date cannot tell "earliest wins"
+     * from "always overwrite".
+     */
+    @Test
+    void updateParent_keepsTheNearerDeadlineWhenBothParentAndChildCarryOne() {
+        UUID userId = UUID.randomUUID();
+        UUID parentId = UUID.randomUUID();
+        UUID childId = UUID.randomUUID();
+        NoteCollectionEntity parent = buildCollection(parentId, userId, "LET Mastery", Instant.now());
+        parent.setTargetCompletionDate(LocalDate.parse("2026-11-01"));
+        NoteCollectionEntity child = buildCollection(childId, userId, "Professional Education", Instant.now());
+        child.setTargetCompletionDate(LocalDate.parse("2026-12-01"));
+        stubReparent(userId, parentId, childId, parent, child);
+
+        service.updateParent(childId, userId, new SetNoteCollectionParentRequest(parentId));
+
+        // The parent's nearer deadline is NOT overwritten by the child's later one.
+        assertThat(parent.getTargetCompletionDate()).isEqualTo(LocalDate.parse("2026-11-01"));
+    }
+
+    @Test
+    void updateParent_promotesTheChildsDateWhenItIsNearerThanTheParents() {
+        UUID userId = UUID.randomUUID();
+        UUID parentId = UUID.randomUUID();
+        UUID childId = UUID.randomUUID();
+        NoteCollectionEntity parent = buildCollection(parentId, userId, "LET Mastery", Instant.now());
+        parent.setTargetCompletionDate(LocalDate.parse("2026-12-01"));
+        NoteCollectionEntity child = buildCollection(childId, userId, "Professional Education", Instant.now());
+        child.setTargetCompletionDate(LocalDate.parse("2026-11-01"));
+        stubReparent(userId, parentId, childId, parent, child);
+
+        service.updateParent(childId, userId, new SetNoteCollectionParentRequest(parentId));
+
+        assertThat(parent.getTargetCompletionDate()).isEqualTo(LocalDate.parse("2026-11-01"));
+    }
+
+    private void stubReparent(
+            UUID userId,
+            UUID parentId,
+            UUID childId,
+            NoteCollectionEntity parent,
+            NoteCollectionEntity child
+    ) {
+        when(collectionRepository.findByIdAndOwnerUserId(childId, userId)).thenReturn(Optional.of(child));
+        when(collectionRepository.findByIdAndOwnerUserId(parentId, userId)).thenReturn(Optional.of(parent));
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(parentId)).thenReturn(List.of());
+        when(collectionRepository.countByParentCollectionId(childId)).thenReturn(0L);
+        when(collectionRepository.findMaxSiblingPosition(parentId, userId)).thenReturn(0);
+        when(collectionRepository.save(any(NoteCollectionEntity.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(childId)).thenReturn(List.of());
+    }
+
     @Test
     void updateParent_clearsTopLevelOnlyFieldsWhenTopLevelGoalBecomesChild() {
         UUID userId = UUID.randomUUID();
@@ -742,7 +825,11 @@ class NoteCollectionServiceTest {
         when(itemRepository.findByCollectionIdOrderByPositionAsc(parentId)).thenReturn(List.of());
         when(collectionRepository.countByParentCollectionId(childId)).thenReturn(0L);
         when(collectionRepository.findMaxSiblingPosition(parentId, userId)).thenReturn(0);
-        when(collectionRepository.save(child)).thenAnswer(invocation -> invocation.getArgument(0));
+        // Widened from save(child) to any collection: v0.127.0 also saves the PARENT, because the
+        // learner's date is promoted there before the child's copy is cleared. Strict stubbing caught
+        // that change, which is the fixture doing its job.
+        when(collectionRepository.save(any(NoteCollectionEntity.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
         when(itemRepository.findByCollectionIdOrderByPositionAsc(childId)).thenReturn(List.of());
 
         NoteCollectionDetailResponse result = service.updateParent(
@@ -751,7 +838,12 @@ class NoteCollectionServiceTest {
                 new SetNoteCollectionParentRequest(parentId)
         );
 
+        // ⚠️ GUARD (b): the top-level-only fields are STILL cleared on the child. Preserving the
+        // learner's date must not become a licence to keep it here -- a child that carries one
+        // resurfaces stale top-level data if later detached via updateParent(null).
         assertThat(child.getTargetCompletionDate()).isNull();
+        // ...and the date was not destroyed in the process: it moved up.
+        assertThat(parent.getTargetCompletionDate()).isEqualTo(LocalDate.parse("2026-12-01"));
         assertThat(child.getCompanion()).isNull();
         assertThat(child.getCompanionStructureSnapshot()).isNull();
         assertThat(result.targetCompletionDate()).isNull();

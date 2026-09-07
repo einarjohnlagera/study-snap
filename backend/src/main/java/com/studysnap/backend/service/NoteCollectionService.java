@@ -772,9 +772,25 @@ public class NoteCollectionService {
         if (!parentId.equals(child.getParentCollectionId())) {
             child.setParentCollectionId(parentId);
             child.setSiblingPosition(collectionRepository.findMaxSiblingPosition(parentId, userId) + 1);
-            // targetCompletionDate and Companion are top-level-Goal-only fields; a collection
-            // that becomes a child must not keep carrying either one, or stale top-level data
-            // resurfaces if it is later detached back to top-level via updateParent(null).
+            // ⚠️ THE LEARNER'S OWN EXAM DATE IS PROMOTED, NOT DISCARDED — the same rule the adoption
+            // path already applies (see persistAdoptedGoal's rollup). A learner who set a date on a
+            // top-level collection and later nests it under a Goal was having that date silently
+            // NULLed here, and it is LEARNER-ENTERED AND UNRECOVERABLE: nothing else records it.
+            // The earliest date wins, because a completion target is a DEADLINE and the nearest one
+            // binds. A parent that already has its own date keeps it.
+            // ⚠️ THE NULL BELOW STAYS AND IS NOT THE DEFECT. targetCompletionDate and Companion are
+            // top-level-Goal-only fields; a collection that becomes a child must not keep carrying
+            // either one, or stale top-level data resurfaces if it is later detached back to
+            // top-level via updateParent(null). The fix is to PRESERVE the date on the parent before
+            // clearing it here -- do NOT "simplify" this by deleting the clear.
+            LocalDate promotedTargetDate = child.getTargetCompletionDate();
+            if (promotedTargetDate != null
+                    && (parent.getTargetCompletionDate() == null
+                        || promotedTargetDate.isBefore(parent.getTargetCompletionDate()))) {
+                parent.setTargetCompletionDate(promotedTargetDate);
+                touch(parent);
+                collectionRepository.save(parent);
+            }
             child.setTargetCompletionDate(null);
             child.setCompanion(null);
             child.setCompanionStructureSnapshot(null);
