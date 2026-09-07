@@ -23,6 +23,14 @@
 --   <BENCHMARK_MATCH>   a title fragment matching ONE root set to use as the depth benchmark.
 --                       'civil' is the usual choice — it is the deepest set built.
 --
+--   <RELATED_PROGRAMS>  program(s) that SHARE curriculum with the target but are not the target
+--                       itself, as a SQL list. Q4b reads these — it is how cross-program reuse
+--                       is found, and Q4 alone will never surface it.
+--                       ALE  = 'Civil Engineering'          (heavy shared structures/materials/utilities)
+--                       LET  = '' (none — verified: zero CE notes are Education-tagged)
+--                       ⚠️ If there is no related program, SKIP Q4b rather than passing an empty
+--                       list; an empty IN () is a syntax error.
+--
 --   <TARGET_PROGRAMS>   the catalog program name(s) the target set serves, as a SQL list.
 --                       LET  = 'Education', 'Special Needs Education – Generalist'
 --                       ALE  = 'Architecture', 'Architectural Engineering'
@@ -184,6 +192,47 @@ SELECT subject,
 FROM candidate
 GROUP BY subject
 ORDER BY available_notes DESC, subject;
+
+-- ---------------------------------------------------------------------------
+-- Q4b. ⚠️ THE CROSS-PROGRAM POOL — what Q4 structurally cannot see.
+--
+-- Q4 only finds notes ALREADY tagged for the target program. That misses material tagged for a
+-- SIBLING program that shares curriculum — which is most of the reuse when two programs overlap
+-- heavily (Architecture/Civil Engineering share structures, materials, utilities and site work).
+--
+-- ⚠️ THIS GAP IS MEASURED, NOT HYPOTHETICAL. On the LET pass, Q4 returned 103 notes and the
+-- strategist marked 102 of them Reuse — but a library-wide sweep afterwards found Civil Service,
+-- English, Mathematics and Logical Reasoning notes that no program-filtered query would ever
+-- return. Run Q4b before concluding that nothing else is reusable.
+--
+-- ⚠️ READ `authored_depth` BEFORE PROPOSING REUSE. The same sweep found 22 science and maths
+-- notes that look ideal by title and are authored at JUNIOR_HIGH — unusable in a licensure
+-- reviewer. Depth is a real generation constraint, not a label.
+--
+-- Skip this query when <RELATED_PROGRAMS> is empty.
+-- ---------------------------------------------------------------------------
+WITH RECURSIVE tree AS (
+    SELECT id, parent_collection_id FROM note_collections WHERE id = '<TARGET_ROOT_ID>'
+    UNION ALL
+    SELECT c.id, c.parent_collection_id FROM note_collections c JOIN tree t ON c.parent_collection_id = t.id
+), in_set AS (
+    SELECT DISTINCT i.note_id FROM note_collection_items i JOIN tree t ON t.id = i.collection_id
+)
+SELECT coalesce(n.subject,'(no subject)')                       AS subject,
+       coalesce(n.learner_level,'(none)')                       AS authored_depth,
+       count(*)                                                 AS notes,
+       count(*) FILTER (WHERE EXISTS (
+           SELECT 1 FROM note_course_program x JOIN course_programs c2 ON c2.id = x.course_program_id
+            WHERE x.note_id = n.id AND c2.name IN (<TARGET_PROGRAMS>)))  AS already_target_tagged,
+       string_agg(n.title, ' | ' ORDER BY n.title)              AS titles
+FROM notes n
+WHERE n.owner_user_id = '<CURATOR_ID>'
+  AND n.id NOT IN (SELECT note_id FROM in_set)
+  AND EXISTS (
+      SELECT 1 FROM note_course_program ncp JOIN course_programs cp ON cp.id = ncp.course_program_id
+       WHERE ncp.note_id = n.id AND cp.name IN (<RELATED_PROGRAMS>))
+GROUP BY n.subject, n.learner_level
+ORDER BY notes DESC, subject;
 
 -- ---------------------------------------------------------------------------
 -- Q5. THE OVERLAP QUESTION — subjects in the BENCHMARK set, and whether that material is
