@@ -20,8 +20,6 @@ import {
 } from "@/lib/api";
 import { getAuthUser, setAuthUser } from "@/lib/auth";
 import { shouldShowOfficialPlanRequestAction } from "@/lib/onboarding-v2";
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 
 const routerMock = {
   push: jest.fn(),
@@ -130,13 +128,22 @@ jest.mock("@/lib/api", () => ({
 }));
 
 describe("OnboardingPage", () => {
-  it("deliberately keeps the hardcoded Course / Program suggestions until the checkpoint", () => {
-    const source = readFileSync(join(process.cwd(), "app/onboarding/page.tsx"), "utf8");
-
-    expect(source).toContain("COURSE_PROGRAM_SUGGESTIONS");
-    expect(source).toContain("suggestions={COURSE_PROGRAM_SUGGESTIONS}");
-    expect(source).not.toContain("useCourseProgramCatalogNames");
-  });
+  /**
+   * ⚠️ REMOVED IN `v0.128.0`: "deliberately keeps the hardcoded Course / Program suggestions until
+   * the checkpoint".
+   *
+   * <p>That test was a source-level pin holding onboarding OUT of the catalog-first suggestions
+   * `v0.79.0` shipped to four other surfaces. Its premise was `[CHECKPOINT — due 2026-09-11]`, which
+   * froze `app/onboarding` to protect a signup-funnel read. **The checkpoint is discharged and the
+   * freeze lifted (owner, 2026-09-07)**, so the exclusion it pinned no longer exists — the pin is
+   * removed because its reason is gone, NOT to accommodate a change that broke it.
+   *
+   * <p>⚠️ It is not replaced by an inverted source assertion. Reading `page.tsx` as a string cannot
+   * tell whether the catalog actually REACHES the screen, which is the only thing worth guarding
+   * here. The real guards are behavioural and live in `onboarding-course-program.test.tsx`, where the
+   * catalog fixture is deliberately disjoint from `COURSE_PROGRAM_SUGGESTIONS` so a silent fallback
+   * fails the test instead of passing it.
+   */
 
   beforeEach(() => {
     routerMock.push.mockReset();

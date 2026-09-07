@@ -153,6 +153,31 @@ step numbering list above carried the same stale name and is corrected with it.
 Screen 2 asks for required `Course / Program` through `CourseProgramCombobox`. It remains a searchable catalog
 picker with the existing custom-entry behavior, not a plain text input, and keeps an explicit Continue button.
 
+**Suggestions are catalog-first as of `v0.128.0`.** The screen resolves its options through
+`useCourseProgramCatalogNames` + `buildCatalogFirstCourseProgramSuggestions` — the same hook and helper
+`v0.79.0` shipped to the Profile page, the dashboard completion prompt, and both note surfaces. Live catalog
+names are listed first and the hardcoded `COURSE_PROGRAM_SUGGESTIONS` are **appended, not replaced**.
+
+**Onboarding was `v0.79.0`'s one deliberate exclusion**, held out to protect a signup-funnel read behind
+`[CHECKPOINT — due 2026-09-11]`. That checkpoint was discharged on 2026-09-07 (the read was taken four days
+early; the deciding fact was an n=18 denominator, not the rate), the freeze was lifted by the owner, and the
+exclusion — along with the source-level test that pinned it — was removed with it.
+
+**⚠️ Free text stays allowed, and this did not change.** `v0.79.0` shipped the **counter-proposal**: the field
+is not locked to the catalog and there is no *"Request Program"* queue. The `ADR-001` amendment proposing both
+remains **PROPOSED AND UNRATIFIED**, and catalog-first shipping here does not ratify it. `allowCustom` stays
+on, and a behavioural test asserts the step still completes with a value absent from the catalog.
+
+**If the catalog fails to load the screen falls back to the hardcoded list and never blocks signup.** The hook
+swallows the failure to `null` and the helper returns the constant.
+
+**Analytics.** Selecting a value fires `COURSE_PROGRAM_VALUE_SELECTED` with `surface: "onboarding"` and
+`matchedCatalog`, from the existing `updateLearningProfileContext` write inside Screen 3's `selectLearnerLevel`
+— the same commit point that persists the program, so a failed save reports nothing. The event carries the last
+*committed* program as its `previousValue`, so returning to change only the learner level does not re-fire it.
+**⚠️ The event is suppressed entirely when the catalog did not load**, because `matchedCatalog` would be
+uncomputable and an unclassifiable selection would inflate the off-catalog rate the metric exists to measure.
+
 ### Screen 3 — Learner Level
 
 The level is **pre-filled from the profile type chosen on Screen 1** via `getDefaultLearnerLevel` — the same
