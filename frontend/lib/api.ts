@@ -4871,8 +4871,24 @@ export async function exportCombinedGeneratedQuizDocx(
   return { filename };
 }
 
-export async function listNotes(limit?: number): Promise<NoteListItemResponse[]> {
-  const query = typeof limit === "number" ? `?limit=${encodeURIComponent(String(limit))}` : "";
+/**
+ * ⚠️ `search` AND `limit` ARE A PAIR, NOT TWO INDEPENDENT OPTIONS. A caller that bounds this list
+ * without offering a search hides every note past the bound with no way to reach it — which is why
+ * `v0.123.0` declined to bound the Study Plan builder's picker at all. Callers that need the whole
+ * library (visibility badges, exam builders) still pass neither.
+ */
+export async function listNotes(limit?: number, search?: string): Promise<NoteListItemResponse[]> {
+  const parameters = new URLSearchParams();
+  if (typeof limit === "number") {
+    parameters.set("limit", String(limit));
+  }
+  const trimmedSearch = search?.trim();
+  if (trimmedSearch) {
+    // ⚠️ MUST STAY `q` — it is the backend's own @RequestParam name on GET /notes.
+    parameters.set("search", trimmedSearch);
+  }
+  const serialized = parameters.toString();
+  const query = serialized ? `?${serialized}` : "";
   const response = await fetchWithAuth(
     `/notes${query}`,
     {

@@ -2,6 +2,7 @@ package com.studysnap.backend.repository;
 
 import com.studysnap.backend.entity.ChallengeQuizQuestionBankEntity;
 import jakarta.persistence.LockModeType;
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -62,6 +63,27 @@ public interface ChallengeQuizQuestionBankRepository extends JpaRepository<Chall
     );
 
     boolean existsByUserIdAndStudyPackId(UUID userId, UUID studyPackId);
+
+    /**
+     * The batched form of {@link #existsByUserIdAndStudyPackId}: one query answering "which of these
+     * packs already has bank rows, and for whom?" instead of one existence check per candidate.
+     *
+     * <p>⚠️ IT FILTERS ON {@code studyPackId} ALONE AND MATCHES THE PAIR IN JAVA. A pack id is the
+     * selective half, and filtering on both columns independently would be a cross-product rather
+     * than a pair match — a row belonging to some OTHER user's copy of a pack would then satisfy the
+     * check for the Official author.
+     */
+    @Query("""
+            select distinct new com.studysnap.backend.repository.ChallengeQuizQuestionBankOwnerProjection(
+                question.userId,
+                question.studyPackId
+            )
+            from ChallengeQuizQuestionBankEntity question
+            where question.studyPackId in :studyPackIds
+            """)
+    List<ChallengeQuizQuestionBankOwnerProjection> findOwnerStudyPackPairsByStudyPackIdIn(
+            @Param("studyPackIds") Collection<UUID> studyPackIds
+    );
 
     List<ChallengeQuizQuestionBankEntity> findByUserIdAndStudyPackIdOrderByGeneratedAtAsc(
             UUID userId,

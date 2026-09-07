@@ -73,6 +73,7 @@ import com.studysnap.backend.config.StudySnapProperties;
 import com.studysnap.backend.security.InvitationRateLimitService;
 import com.studysnap.backend.model.NoteLibraryReadiness;
 import com.studysnap.backend.model.NoteListItemProjection;
+import com.studysnap.backend.model.NoteListItemView;
 import com.studysnap.backend.model.NoteLibrarySort;
 import com.studysnap.backend.model.PublicLibrarySort;
 import com.studysnap.backend.model.PublicLibrarySource;
@@ -1731,7 +1732,10 @@ class NativeQueryPostgresIntegrationTest {
                 noteLibraryRepository.findLibraryPage(allOwned, sort, 0, 10);
             }
         }
-        noteLibraryRepository.findListItemProjectionsByOwnerUserId(ownerUserId, 10);
+        noteLibraryRepository.findListItemProjectionsByOwnerUserId(ownerUserId, null, 10);
+        // ⚠️ The q= branch is a DIFFERENT statement (four LIKE legs plus a Postgres `unnest`),
+        // so PREPAREing the unsearched one proves nothing about it.
+        noteLibraryRepository.findListItemProjectionsByOwnerUserId(ownerUserId, SEARCH_PATTERN, 10);
         noteLibraryRepository.findLibraryListItemProjectionsByOwnerUserIdAndIdIn(ownerUserId, List.of(otherUserId));
         noteLibraryRepository.findAllLibrarySubjectCandidates(ownerUserId);
         noteLibraryRepository.countLibraryCoursePrograms(ownerUserId);
@@ -3056,6 +3060,93 @@ class NativeQueryPostgresIntegrationTest {
         assertThat(quickReviewSessionRepository.findQuizMasteredAt(owner, packId, 5, noteId))
                 .as("a legacy note keeps the mastery the learner already earned")
                 .isNotNull();
+    }
+
+    /**
+     * {@code GET /notes?q=}, against real rows. The PREPARE sweep proves the SQL parses; only this
+     * proves it MATCHES the right four fields.
+     *
+     * <p>⚠️ EVERY FIXTURE NOTE MATCHES BY EXACTLY ONE FIELD, AND THE MATCHED FIELD IS NEVER THE
+     * TITLE. A title-matching fixture passes under a title-only implementation and proves nothing —
+     * and a title-only server search is the single most likely way bounding the picker silently
+     * makes notes unreachable, because the client filter it replaces matched all four.
+     */
+    @Test
+    void theOwnedNoteSearchMatchesTitleSubjectCourseProgramAndTags() {
+        UUID owner = seedUser("owned-note-search");
+        UUID other = seedUser("owned-note-search-other");
+        UUID byTitle = seedOwnedSearchNote(owner, "Photosynthesis", "Botany", "Education", new String[]{"plants"});
+        UUID byTag = seedOwnedSearchNote(owner, "Cell Respiration", "Botany", "Education", new String[]{"photosynthesis"});
+        UUID bySubject = seedOwnedSearchNote(owner, "Light Reactions", "Photosynthesis", "Education", new String[]{"plants"});
+        UUID byCourseProgram = seedOwnedSearchNote(owner, "Leaf Anatomy", "Botany", "Photosynthesis Review", new String[]{"plants"});
+        UUID unrelated = seedOwnedSearchNote(owner, "Fluid Mechanics", "Hydraulics", "Civil Engineering", new String[]{"flow"});
+        UUID otherOwner = seedOwnedSearchNote(other, "Photosynthesis", "Botany", "Education", new String[]{"plants"});
+
+        assertThat(searchOwnedNoteIds(owner, "%photosynthesis%"))
+                .as("all four fields match, and the owner scope still holds")
+                .containsExactlyInAnyOrder(byTitle, byTag, bySubject, byCourseProgram)
+                .doesNotContain(unrelated, otherOwner);
+
+        assertThat(searchOwnedNoteIds(owner, "%PHOTOSYNTHESIS%".toLowerCase(java.util.Locale.ROOT)))
+                .as("matching is case-insensitive, as the client filter it replaces was")
+                .hasSize(4);
+
+        assertThat(searchOwnedNoteIds(owner, null))
+                .as("a null pattern means NO search -- never 'match nothing'")
+                .containsExactlyInAnyOrder(byTitle, byTag, bySubject, byCourseProgram, unrelated);
+    }
+
+    /**
+     * ⚠️ THE BOUND AND THE SEARCH ARE ONE FEATURE. A limited page hides the older notes by design;
+     * what makes that acceptable is that a search still reaches them. A fixture with fewer notes than
+     * the limit passes whether or not the search works at all.
+     */
+    @Test
+    void aNoteBeyondTheLimitIsStillReachableBySearch() {
+        UUID owner = seedUser("owned-note-search-bound");
+        UUID buried = seedOwnedSearchNote(owner, "Buried Thermodynamics", "Physics", "Engineering", new String[]{"heat"});
+        jdbcTemplate.update("update notes set updated_at = now() - interval '10 days' where id = ?", buried);
+        for (int index = 0; index < 3; index++) {
+            seedOwnedSearchNote(owner, "Recent " + index, "Physics", "Engineering", new String[]{"recent"});
+        }
+
+        assertThat(noteLibraryRepository.findListItemProjectionsByOwnerUserId(owner, null, 3)
+                .stream().map(NoteListItemView::getId).toList())
+                .as("the bound genuinely hides it -- otherwise the search assertion below is vacuous")
+                .doesNotContain(buried);
+
+        assertThat(searchOwnedNoteIds(owner, "%thermodynamics%", 3))
+                .as("and the search reaches it anyway, which is what makes the bound safe")
+                .containsExactly(buried);
+    }
+
+    private List<UUID> searchOwnedNoteIds(UUID ownerUserId, String searchPattern) {
+        return searchOwnedNoteIds(ownerUserId, searchPattern, 100);
+    }
+
+    private List<UUID> searchOwnedNoteIds(UUID ownerUserId, String searchPattern, int limit) {
+        return noteLibraryRepository.findListItemProjectionsByOwnerUserId(ownerUserId, searchPattern, limit)
+                .stream()
+                .map(NoteListItemView::getId)
+                .toList();
+    }
+
+    private UUID seedOwnedSearchNote(
+            UUID ownerUserId,
+            String title,
+            String subject,
+            String courseProgram,
+            String[] tags
+    ) {
+        UUID id = UUID.randomUUID();
+        jdbcTemplate.update(
+                "insert into notes (id, owner_user_id, title, subject, course_program, content,"
+                        + " visibility, tags, target_profile_type, status, created_at, updated_at)"
+                        + " values (?, ?, ?, ?, ?, 'body', 'PRIVATE', ?, 'STUDENT', 'GENERATED',"
+                        + " now(), now())",
+                id, ownerUserId, title, subject, courseProgram, tags
+        );
+        return id;
     }
 
     private void seedCompletedQuickReview(

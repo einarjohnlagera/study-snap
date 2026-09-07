@@ -7,7 +7,7 @@ Library surfaces make NoteLib a reusable note-first workspace with a clear split
 ## Key Files
 
 **Backend**
-- `backend/src/main/java/com/studysnap/backend/controller/NoteController.java` — `GET /notes` (private list), `POST /notes`, `PUT /notes/{id}`, `DELETE /notes/{id}`, `GET /notes/public` (public filter endpoint)
+- `backend/src/main/java/com/studysnap/backend/controller/NoteController.java` — `GET /notes` (private list; optional `limit` clamped 1–50, and since `v0.125.0` an optional additive `search` parameter matching title, subject, course program and tags — omitting it is byte-for-byte the previous behaviour), `POST /notes`, `PUT /notes/{id}`, `DELETE /notes/{id}`, `GET /notes/public` (public filter endpoint)
 - `backend/src/main/java/com/studysnap/backend/service/NoteService.java` — `listMine(userId)`, `listPublic(...)`, note CRUD, subject/courseProgram autocomplete queries
 - `backend/src/main/java/com/studysnap/backend/repository/NoteRepository.java` — JPQL queries for private and public note lists; subject/courseProgram suggestion queries
 
@@ -17,7 +17,7 @@ Library surfaces make NoteLib a reusable note-first workspace with a clear split
 - `frontend/components/notes/library-toolbar.tsx` — filter bar: search, subject rail, tags rail, readiness chips, sort
 - `frontend/components/notes/library-sheet-modal.tsx` — "More Filters" bottom sheet/modal (Course/Program, additional filters)
 - `frontend/components/notes/shared-note-card.tsx` — shared note card layout reused across library, public library, and dashboard
-- `frontend/lib/api.ts` — `listNotes()` (private list), `listPublicNotes(params?)`, `createNote()`, `updateNote()`, `deleteNote()`
+- `frontend/lib/api.ts` — `listNotes(limit?, search?)` (private list; **⚠️ the two arguments are a PAIR — a caller that bounds the list without offering a search hides every note past the bound with no way to reach it**), `listPublicNotes(params?)`, `createNote()`, `updateNote()`, `deleteNote()`
 
 ## Anti-drift Notes
 
