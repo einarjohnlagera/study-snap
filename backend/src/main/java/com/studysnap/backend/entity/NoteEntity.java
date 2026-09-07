@@ -91,4 +91,29 @@ public class NoteEntity implements NoteListItemView {
 
     @Column(name = "generation_enqueued_at")
     private OffsetDateTime generationEnqueuedAt;
+
+    /**
+     * WHY the last generation attempt on this note failed -- the code half of {@code v0.87.0}'s
+     * {@code (code, reason)} shape, normalized by {@link
+     * com.studysnap.backend.service.BulkGenerationFailureReasonNormalizer}.
+     *
+     * <p>⚠️ THIS IS A LAST-FAILURE RECORD, NOT A DESCRIPTION OF THE CURRENT STATUS, AND IT IS
+     * DELIBERATELY NOT CLEARED WHEN A LATER ATTEMPT SUCCEEDS. Regeneration mutates the note in place,
+     * so the owner's manual retry overwrote {@code status} and destroyed the only evidence of the
+     * 2026-09-05 incident; a retry must not be able to erase it a second time. Read it together with
+     * {@link #generationFailedAt}, which is what distinguishes a current failure from a recovered one.
+     */
+    @Column(name = "generation_failure_code")
+    private String generationFailureCode;
+
+    /**
+     * The safe, learner-readable half of the same pair. ⚠️ NEVER RAW EXCEPTION TEXT for a
+     * non-{@code AppException} failure -- see the normalizer.
+     */
+    @Column(name = "generation_failure_reason")
+    private String generationFailureReason;
+
+    /** When the failure above was recorded. Written with the reason, and never cleared with it. */
+    @Column(name = "generation_failed_at")
+    private OffsetDateTime generationFailedAt;
 }

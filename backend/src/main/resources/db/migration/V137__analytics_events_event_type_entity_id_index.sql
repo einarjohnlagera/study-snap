@@ -1,0 +1,27 @@
+-- v0.127.0 -- make the RECOMMENDED public-library ranking read index-only.
+--
+-- PublicLibraryRepositoryImpl's RANK_VIEWS_JOIN aggregates analytics_events once per request on the
+-- DEFAULT public-library sort:
+--     where event_type = 'PUBLIC_NOTE_VIEWED' and entity_id is not null group by entity_id
+-- analytics_events already carries an index on event_type alone, so the planner does a Bitmap Index
+-- Scan and then a BITMAP HEAP SCAN purely to fetch entity_id. The query reads no other column, so a
+-- composite (event_type, entity_id) index turns that into an index-only scan and removes the heap
+-- access entirely.
+--
+-- ⚠️ SIZED AGAINST REAL ROW COUNTS BEFORE BEING WRITTEN, WHICH THE BACKLOG ROW REQUIRED BECAUSE
+-- "this is a metrics table and the index is not free to maintain". Read-only production query,
+-- 2026-09-07: 49,265 rows total, 36,523 with a non-null entity_id, 14 MB total relation size,
+-- 5.2 MB of existing indexes, 112 distinct event types, and 4,601 events in the trailing 7 days
+-- (~660/day). Maintenance cost at that write rate is negligible, and the pre-change plan showed a
+-- Bitmap Heap Scan over 14,663 rows that this removes.
+--
+-- ⚠️ PLAIN `CREATE INDEX`, NOT `CONCURRENTLY`, AND THAT IS A DELIBERATE READ OF THE NUMBERS RATHER
+-- THAN A DEFAULT. `CONCURRENTLY` cannot run inside a transaction and every migration in this repo is
+-- a plain CREATE INDEX; at 49k rows the ACCESS SHARE/ROW EXCLUSIVE block is well under a second. If
+-- this table ever reaches the millions, a future index here needs the concurrent form and Flyway
+-- configuration to match.
+--
+-- ⚠️ NO behaviour change: an index changes the PLAN, never the RESULT. The ranking, its ordering and
+-- every metric it reads are untouched.
+CREATE INDEX idx_analytics_events_event_type_entity_id
+    ON analytics_events (event_type, entity_id);

@@ -3041,6 +3041,116 @@ class NativeQueryPostgresIntegrationTest {
                 .doesNotContain("Civil Engineering");
     }
 
+    /**
+     * GUARD (c), PRE-DECLARED, AND THE ONE THAT MATTERS: a failed regeneration's reason must still be
+     * readable AFTER a retry has overwritten {@code status}.
+     *
+     * <p>⚠️ THE FIXTURE THAT PROVES NOTHING IS THE OBVIOUS ONE. Asserting the reason immediately after
+     * the failure passes under a version whose reason is wiped by the next attempt -- and the retry is
+     * exactly what destroyed the evidence on 2026-09-05, when the database held ZERO failed notes by the
+     * time the incident was investigated. Both halves are therefore asserted in ONE test: the write, and
+     * its survival of a SUCCESSFUL retry that moves the row to GENERATED.
+     *
+     * <p>⚠️ THE ASYNC LEG IS REACHED FOR REAL, NOT SIMULATED. The account is left with exactly one
+     * note-generation unit, so the request thread's pre-dispatch assert PASSES; the last unit is then
+     * spent on the dispatcher, before the worker runs, so {@code NoteGenerationService}'s own second
+     * assert throws {@code MonthlyNoteGenerationLimitReachedException} on the generation thread against
+     * REAL {@code user_usage} rows. That is the production mechanism, not a stubbed exception.
+     */
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void asyncQuotaExhaustionIsRecordedOnTheNoteAndSurvivesTheRetryThatOverwritesStatus() {
+        UUID owner = seedUser("regen-quota-trace");
+        UUID noteId = seedRegenerationNote(owner, "Site Planning", "ORIGINAL BODY.");
+        seedStudyPack(owner, noteId, "Original pack title");
+        // FREE allows 10 note generations a month, so nine spent leaves exactly one -- the pre-dispatch
+        // check passes and the note is dispatched.
+        seedNoteGenerationUsage(owner, 9);
+
+        RegenerationHarness harness = new RegenerationHarness();
+        harness.noteContent = "Body that must never be persisted.";
+        harness.beforeWorker = () -> seedNoteGenerationUsage(owner, 1);
+
+        harness.service().startAsyncNoteAndStudyPackRegeneration(noteId.toString(), owner);
+
+        assertThat(readNoteColumn(noteId, "status"))
+                .as("the worker resolved the note out of GENERATING, as it always did")
+                .isEqualTo("FAILED");
+        assertThat(readNoteColumn(noteId, "generation_failure_code"))
+                .as("a QUOTA failure is distinguishable from a generic one -- the entire point")
+                .isEqualTo("NOTE_GENERATION_LIMIT_REACHED");
+        assertThat(readNoteColumn(noteId, "generation_failure_reason"))
+                .as("an AppException contributes its own safe message")
+                .isEqualTo("You have reached your note generation limit for this billing cycle.");
+        OffsetDateTime failedAt = jdbcTemplate.queryForObject(
+                "select generation_failed_at from notes where id = ?", OffsetDateTime.class, noteId);
+        assertThat(failedAt).as("the moment of failure is stamped").isNotNull();
+        assertThat(readNoteColumn(noteId, "content"))
+                .as("nothing was written -- otherwise this test measures a half-regenerated note")
+                .isEqualTo("ORIGINAL BODY.");
+
+        // The owner's manual retry, which is what erased the evidence in production. The meter is reset
+        // first, exactly as the billing cycle would.
+        jdbcTemplate.update("delete from user_usage where user_id = ?", owner);
+        RegenerationHarness retry = new RegenerationHarness();
+        retry.noteContent = "Freshly generated body.";
+        retry.service().startAsyncNoteAndStudyPackRegeneration(noteId.toString(), owner);
+
+        assertThat(readNoteColumn(noteId, "status"))
+                .as("the retry really did overwrite status -- otherwise the survival assertions are vacuous")
+                .isEqualTo("GENERATED");
+        assertThat(readNoteColumn(noteId, "content"))
+                .as("and really did regenerate the note")
+                .isEqualTo("Freshly generated body.");
+        assertThat(readNoteColumn(noteId, "generation_failure_code"))
+                .as("GUARD (c): the reason SURVIVES the retry -- it is a last-failure record, not a"
+                        + " description of the current status, and a successful attempt must never be able"
+                        + " to erase why an earlier one failed")
+                .isEqualTo("NOTE_GENERATION_LIMIT_REACHED");
+        assertThat(readNoteColumn(noteId, "generation_failure_reason"))
+                .as("both halves survive, not just the code")
+                .isEqualTo("You have reached your note generation limit for this billing cycle.");
+        assertThat(jdbcTemplate.queryForObject(
+                "select generation_failed_at from notes where id = ?", OffsetDateTime.class, noteId))
+                .as("and the stamp is the ORIGINAL failure's, not the retry's -- it is what tells a"
+                        + " reader this reason describes a recovered failure rather than a current one")
+                .isEqualTo(failedAt);
+    }
+
+    /**
+     * GUARD (d), PRE-DECLARED: a failure whose cause is NOT an {@code AppException} persists a SAFE
+     * reason and never raw exception text -- {@code v0.87.0}'s standing rule.
+     *
+     * <p>⚠️ THE EXCEPTION MESSAGE CARRIES A SECRET-SHAPED STRING ON PURPOSE. A fixture whose message is
+     * innocuous passes under a version that stores {@code ex.getMessage()} verbatim and proves nothing.
+     * The reason must also NAME THE EXCEPTION CLASS, which pins v0.87.0's actual template rather than
+     * accepting any generic sentence.
+     */
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void anUnexpectedGenerationFailurePersistsASafeReasonAndNeverTheRawExceptionText() {
+        UUID owner = seedUser("regen-safe-reason");
+        UUID noteId = seedRegenerationNote(owner, "Foundation Engineering", "ORIGINAL BODY.");
+        seedStudyPack(owner, noteId, "Original pack title");
+
+        RegenerationHarness harness = new RegenerationHarness();
+        harness.noteContent = "Body that must never be persisted.";
+        harness.studyPackFailure = new IllegalStateException("upstream said sk-live-leaked-secret");
+
+        harness.service().startAsyncNoteAndStudyPackRegeneration(noteId.toString(), owner);
+
+        assertThat(readNoteColumn(noteId, "status")).isEqualTo("FAILED");
+        assertThat(readNoteColumn(noteId, "generation_failure_code"))
+                .as("a non-AppException is generic by code, so it can never be mistaken for a quota block")
+                .isEqualTo("UNEXPECTED_ERROR");
+        assertThat(readNoteColumn(noteId, "generation_failure_reason"))
+                .as("GUARD (d): the raw exception message is NEVER persisted")
+                .doesNotContain("sk-live-leaked-secret")
+                .doesNotContain("upstream said")
+                .as("only the exception CLASS, which is v0.87.0's template")
+                .contains("IllegalStateException");
+    }
+
     // --- regeneration fixture helpers -----------------------------------------------------------------
 
     /**
@@ -3759,6 +3869,12 @@ class NativeQueryPostgresIntegrationTest {
         private RuntimeException studyPackFailure;
         /** Runs after the second LLM call returns and before the commit transaction opens. */
         private Runnable beforeCommit;
+        /**
+         * Runs on the dispatcher, AFTER the request thread's pre-dispatch quota check and BEFORE the
+         * worker's own second assert -- the window the 2026-09-05 incident fell through, and the one
+         * the finding doc records as unopenable in the BULK driver's harness. It is openable here.
+         */
+        private Runnable beforeWorker;
 
         private StudyPackService service() {
             LlmStudyPackService llm = mock(LlmStudyPackService.class);
@@ -3816,7 +3932,12 @@ class NativeQueryPostgresIntegrationTest {
                     mock(AiRateLimitService.class),
                     resolver,
                     new TransactionTemplate(transactionManager),
-                    new StudyPackGenerationTaskDispatcher(Runnable::run),
+                    new StudyPackGenerationTaskDispatcher(task -> {
+                        if (beforeWorker != null) {
+                            beforeWorker.run();
+                        }
+                        task.run();
+                    }),
                     mock(ContentModerationService.class),
                     mock(ExamQuestionPoolService.class),
                     mock(OfficialChallengeQuizTemplateService.class),

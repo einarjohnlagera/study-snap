@@ -1,6 +1,7 @@
 package com.studysnap.backend.service;
 
 import com.studysnap.backend.config.StudySnapProperties;
+import com.studysnap.backend.dto.BulkGenerationFailureReason;
 import com.studysnap.backend.dto.ConfirmTextRequest;
 import com.studysnap.backend.dto.CreateStudyPackRequest;
 import com.studysnap.backend.dto.GenerateNoteFromTopicRequest;
@@ -88,6 +89,9 @@ public class StudyPackService {
     private static final String STUDY_PACK = "study-pack";
     private static final String ERROR_NOTE_ALREADY_HAS_STUDY_PACK = "NOTE_ALREADY_HAS_STUDY_PACK";
     private static final String MESSAGE_NOTE_ALREADY_HAS_STUDY_PACK = "This note already has a Study Pack. Use Regenerate Study Pack to replace it.";
+    private static final String GENERATION_INTERRUPTED_CODE = "GENERATION_INTERRUPTED";
+    private static final String GENERATION_INTERRUPTED_REASON =
+            "Generation did not finish and was resolved by the generation recovery sweep.";
     private static final Comparator<String> SUBJECT_DISPLAY_COMPARATOR = (left, right) -> {
         int caseInsensitive = left.compareToIgnoreCase(right);
         return caseInsensitive != 0 ? caseInsensitive : left.compareTo(right);
@@ -931,15 +935,30 @@ public class StudyPackService {
             long latency = System.currentTimeMillis() - startedAt;
             log.info("requestId={} action=complete_async_studyPack_generation noteId={} latencyMs={}", requestId, noteId, latency);
         } catch (Exception ex) {
+            // ⚠️ THE EXCEPTION USED TO REACH THE LOG AND NEVER THE DATABASE. On 2026-09-05 a burst of
+            // regenerations exhausted the monthly note-generation meter; the ones that had already
+            // passed the pre-dispatch check hit the worker's own assert, landed here, and were marked
+            // FAILED with no reason recorded anywhere. The owner's manual retry then overwrote
+            // `status`, so by the time it was investigated the database held ZERO failed notes and the
+            // incident was reconstructable only because Render logs had not yet rotated.
+            // ⚠️ NORMALIZED THROUGH v0.87.0'S OWN NORMALIZER, NOT A SECOND COPY OF ITS RULE: an
+            // AppException persists its code and its safe message; anything else persists
+            // UNEXPECTED_ERROR and the exception CLASS name only. Raw exception text is never stored.
+            BulkGenerationFailureReason failure = BulkGenerationFailureReasonNormalizer.normalizeFailure(
+                    regeneratingNoteContent ? noteContentRegenerationRequest.topic() : null,
+                    ex
+            );
             studyPackGenerationTransactionOperations.execute(status -> {
-                markNoteGenerationFailed(noteId, ownerUserId);
+                markNoteGenerationFailed(noteId, ownerUserId, failure.code(), failure.reason());
                 return null;
             });
             long latency = System.currentTimeMillis() - startedAt;
             log.warn(
-                    "requestId={} action=complete_async_studyPack_generation noteId={} outcome=failed latencyMs={}",
+                    "requestId={} action=complete_async_studyPack_generation noteId={} outcome=failed"
+                            + " failureCode={} latencyMs={}",
                     requestId,
                     noteId,
+                    failure.code(),
                     latency,
                     ex
             );
@@ -1240,16 +1259,48 @@ public class StudyPackService {
         noteRepository.save(note);
     }
 
-    private void markNoteGenerationFailed(UUID noteId, UUID ownerUserId) {
-        noteRepository.findByIdAndOwnerUserId(noteId, ownerUserId).ifPresent(this::markNoteGenerationFailed);
+    private void markNoteGenerationFailed(
+            UUID noteId,
+            UUID ownerUserId,
+            String failureCode,
+            String failureReason
+    ) {
+        noteRepository.findByIdAndOwnerUserId(noteId, ownerUserId)
+                .ifPresent(note -> markNoteGenerationFailed(note, failureCode, failureReason));
     }
 
+    /**
+     * The recovery sweeper's entry point, and its only caller is
+     * {@code GenerationRecoveryRowWriter.recoverNote}.
+     *
+     * <p>⚠️ IT RECORDS A REASON TOO, AND THE REASON IS TRUE RATHER THAN GENERIC: the sweeper resolves a
+     * note whose worker never came back — a JVM kill during generation, which {@code v0.86.0} exists
+     * for. Leaving these columns NULL here would be worse than filling them, because the row would
+     * then carry {@code status = FAILED} beside failure columns describing a DIFFERENT, EARLIER
+     * failure. It cannot overwrite a more specific reason: {@code isRecoverableNote} matches only
+     * {@code GENERATING} rows, and a row carrying a recorded reason is {@code FAILED}.
+     */
     public void markNoteGenerationFailed(NoteEntity note) {
+        markNoteGenerationFailed(note, GENERATION_INTERRUPTED_CODE, GENERATION_INTERRUPTED_REASON);
+    }
+
+    /**
+     * ⚠️ THE FAILURE COLUMNS ARE A LAST-FAILURE RECORD AND ARE NEVER CLEARED ON A LATER SUCCESS.
+     * {@code markNoteGenerated} deliberately leaves them standing, because the manual retry is exactly
+     * what destroyed the evidence in production. {@code generation_failed_at} is what tells a reader
+     * whether the reason describes this row's current {@code FAILED} state or an earlier, recovered
+     * one — {@code updated_at} cannot, because the retry bumps it.
+     */
+    private void markNoteGenerationFailed(NoteEntity note, String failureCode, String failureReason) {
         if (note.getStatus() == NoteStatus.GENERATED) {
             return;
         }
+        OffsetDateTime now = OffsetDateTime.now();
         note.setStatus(NoteStatus.FAILED);
-        note.setUpdatedAt(OffsetDateTime.now());
+        note.setGenerationFailureCode(failureCode);
+        note.setGenerationFailureReason(failureReason);
+        note.setGenerationFailedAt(now);
+        note.setUpdatedAt(now);
         noteRepository.save(note);
     }
 

@@ -1003,7 +1003,10 @@ class NoteServicePublicLibraryPaginationIntegrationTest {
                     copied_at timestamp with time zone,
                     created_at timestamp with time zone not null,
                     updated_at timestamp with time zone not null,
-                    generation_enqueued_at timestamp with time zone
+                    generation_enqueued_at timestamp with time zone,
+                    generation_failure_code text,
+                    generation_failure_reason text,
+                    generation_failed_at timestamp with time zone
                 )
                 """);
         createApplicableProgramsSchema();

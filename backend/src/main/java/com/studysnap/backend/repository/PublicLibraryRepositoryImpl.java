@@ -64,9 +64,13 @@ public class PublicLibraryRepositoryImpl implements PublicLibraryRepository {
     private static final String EXCLUDED_NOTE_ID_PARAMETER = "rankExcludedNoteId";
     /**
      * ⚠️ Each engagement metric joins a derived table that aggregates ONCE, rather than a correlated
-     * subquery evaluated per row. That is deliberate for {@code analytics_events}: it carries indexes
-     * on {@code event_type}, {@code user_id} and {@code created_at} but NOT on {@code entity_id}, so a
-     * correlated count would scan it once per public note. The grouped form does the same single pass
+     * subquery evaluated per row. That is deliberate for {@code analytics_events}: a correlated count
+     * would scan it once per public note.
+     * <p>⚠️ Since {@code v0.127.0} that table also carries {@code (event_type, entity_id)}
+     * ({@code V137}), so this grouped read is INDEX-ONLY — the view metric reads no other column.
+     * Before it, the planner did a Bitmap Index Scan on {@code event_type} followed by a Bitmap Heap
+     * Scan over ~14,663 rows purely to fetch {@code entity_id}. Adding a column to this subquery's
+     * select list would silently reintroduce the heap access. The grouped form does the same single pass
      * the Java path's aggregate query did, and a metric is joined only when the chosen sort reads it.
      */
     private static final String RANK_COPIES_JOIN = " left join (select rank_copy_n.copied_from_note_id"
