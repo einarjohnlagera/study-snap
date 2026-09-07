@@ -28,9 +28,11 @@ The plan's §10 listed two reads as prerequisites and assumed both were the owne
 
 **⚠️⚠️ A THIRD FINDING THE PLAN COULD NOT HAVE ANTICIPATED, AND IT IS A DISPLAY PROBLEM RATHER THAN A COUNTING ONE: ADOPTING A GOAL FANS OUT TO ITS CHILDREN, so a parent and its subject plans show near-identical counts.** `LET Comprehensive Review` is 40 and each of its four children is **also 40**; `PNLE Core Nursing Review` is 15 and its seven children are **each 15**. **⚠️ The counts are CORRECT and the plan's parent/child independence rule is right — each child's `source_plan_id` genuinely points at the child source, and they must NEVER be summed into the parent.** But the numbers will read as duplicated down a Goal's subject list. **⚠️ AND THE FAN-OUT IS NOT UNIFORM, WHICH IS WHY IT CANNOT BE SPECIAL-CASED AWAY: `CPALE Comprehensive Review` is 8 while its children are 4, and `ALE` is 30 against a child at 28** — adopters who joined before a child existed. So "just show it on the parent" would be wrong too.
 
+**⚠️⚠️ CORRECTED 2026-09-07 BEFORE ANY CODE WAS WRITTEN — THE FAN-OUT IS REAL IN THE DATA BUT INERT ON BOTH SURFACES IN SCOPE, AND THE FIRST WORDING OVERSTATED IT.** `listPublic` calls `findByVisibilityAndParentCollectionIdIsNullOrderByUpdatedAtDesc`, so **Explore renders TOP-LEVEL collections only** — children are fetched solely to roll up item counts and are never cards. `getPublic`'s `toPublicDetailResponse` returns a `childCount` **number**, not child summaries, so the public detail page has no per-child list to hang a count on. **⚠️ THEREFORE THERE IS NO "duplicated down a Goal's subject list" TO FIX IN THIS RELEASE — do NOT build a suppression rule, a roll-up, or a parent/child display heuristic for a problem no surface currently exhibits.** The fact is kept because it goes live the instant any surface renders children with counts; it is not a `v0.129.0` deliverable.
+
 ### Owner decision — SETTLED
 
-**✅ THRESHOLD DECIDED BY THE OWNER 2026-09-07: **5**.** A Review Set shows its adoption count only when it has **5 or more** adopters; below that the count is **omitted entirely** — not shown as "fewer than 5", not shown as a range, which would leak the same smallness the threshold exists to hide. **⚠️ THIS IS DISPLAY POLICY ONLY — the stored/queried count is exact and unaffected.** Against the 2026-09-07 distribution it hides **nine** sets (seven at 4, two at 1) and shows everything from 8 upward. **⚠️ Do NOT re-derive this threshold from a fresh distribution read** — it is an owner decision, not a computed value, and a later read showing different counts does not change it. The alternative considered was 10, which would additionally have hidden the `8` (`CPALE Comprehensive Review`); it was not chosen.
+**✅ THRESHOLD DECIDED BY THE OWNER 2026-09-07: **5**.** A Review Set shows its adoption count only when it has **5 or more** adopters; below that the count is **omitted entirely** — not shown as "fewer than 5", not shown as a range, which would leak the same smallness the threshold exists to hide. **⚠️ THIS IS DISPLAY POLICY ONLY — the stored/queried count is exact and unaffected.** **⚠️ AND THE THRESHOLD IS CURRENTLY INERT TOO, WHICH IS THE OTHER HALF OF THE SAME CORRECTION: every top-level PUBLIC set is ALREADY ≥8** — LET 40, ALE 30, PNLE 15, CPALE 8, and those four are the entire Explore surface. **The `4`s and `1`s are all CHILDREN**, and the `1`s are PRIVATE. So threshold 5 hides **nothing today** — it is a DEFENSIVE policy for the first small set that gets published top-level, not an active filter. **⚠️ Do NOT claim it "hides nine sets"** — that counted rows the surfaces never render. **⚠️ Do NOT re-derive this threshold from a fresh distribution read** — it is an owner decision, not a computed value, and a later read showing different counts does not change it. The alternative considered was 10, which would additionally have hidden the `8` (`CPALE Comprehensive Review`); it was not chosen.
 
 ### Anti-drift
 
@@ -52,7 +54,30 @@ The plan's §10 listed two reads as prerequisites and assumed both were the owne
 
 ### Shipped
 
-_(nothing yet)_
+- **The adoption-count display rule lives in one module, so the two surfaces cannot drift.**
+  `frontend/lib/adoption-count.ts` owns the threshold, the compact/detailed wording and the
+  show/hide decision; `PublicStudyPlanCard` renders `40 adopted` on the card and
+  `Adopted by N study libraries` in its preview. **⚠️ Below the threshold NOTHING is rendered** —
+  not *"fewer than 5"*, not a range, since either still discloses the smallness the threshold exists
+  to hide, and a test asserts the **absence** of any adoption text rather than the presence of a
+  softer one.
+- **⚠️ The threshold is applied at DISPLAY ONLY and the API field stays exact.** `adoptionCount` is
+  optional on `NoteCollectionSummary`/`NoteCollectionDetail`, so a payload without it degrades to
+  silence rather than to *"0 adopted"* — which also means **this frontend is safe to ship before the
+  backend and renders nothing until it lands.**
+- **Wording is "adopted", never "N learners adopted this"**, with a test asserting no `/learner/i`
+  appears in either label — the repo cannot prove every counted owner is semantically a learner.
+- **Compact formatting truncates rather than rounds**, so `1999` reads `1.9K` and never `2K`: the
+  label must not claim more adopters than exist.
+
+**Verification (frontend half).** Three mutations, **each confirmed present in the file before its
+run**: threshold `5 → 0` fails six tests across both suites; `Math.floor → Math.round` fails exactly
+the truncation test; and stubbing the card's label to `null` — the silent no-op class — fails exactly
+the card's render test.
+
+**⚠️ Backend is a Codex prompt, not built here** (`docs/codex-prompts/v0.129.0-adoption-count-backend.md`,
+untracked by design). It carries the one index, the batched self-join query, and the guard that the
+backend must return the **exact** count with no threshold logic.
 
 ## v0.128.0 - Onboarding Unfrozen
 
