@@ -60,6 +60,7 @@ class ScheduledJobCronContractTest {
             Map.entry("studysnap.generation.bulk-result-cleanup-cron", "0 45 * * * *"),
             Map.entry("studysnap.generation.recovery-cron", "0 */10 * * * *"),
             Map.entry("studysnap.linked-learners.request-expiry-cron", "0 45 2 * * *"),
+            Map.entry("studysnap.notifications.cleanup-cron", "0 15 * * * *"),
             Map.entry("studysnap.retention.daily-cron", "0 45 2 * * *"),
             Map.entry("studysnap.retention.knowledge-impact-digest-monthly-cron", "0 0 9 1 * *"),
             Map.entry("studysnap.retention.weekly-cron", "0 0 18 * * SUN")
@@ -86,6 +87,7 @@ class ScheduledJobCronContractTest {
             Map.entry("studysnap.generation.bulk-result-cleanup-cron", ""),
             Map.entry("studysnap.generation.recovery-cron", ""),
             Map.entry("studysnap.linked-learners.request-expiry-cron", ""),
+            Map.entry("studysnap.notifications.cleanup-cron", ""),
             Map.entry("studysnap.retention.daily-cron", "Asia/Manila"),
             Map.entry("studysnap.retention.knowledge-impact-digest-monthly-cron", ""),
             Map.entry("studysnap.retention.weekly-cron", "Asia/Manila")
