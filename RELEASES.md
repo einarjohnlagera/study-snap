@@ -28,9 +28,9 @@ The plan's §10 listed two reads as prerequisites and assumed both were the owne
 
 **⚠️⚠️ A THIRD FINDING THE PLAN COULD NOT HAVE ANTICIPATED, AND IT IS A DISPLAY PROBLEM RATHER THAN A COUNTING ONE: ADOPTING A GOAL FANS OUT TO ITS CHILDREN, so a parent and its subject plans show near-identical counts.** `LET Comprehensive Review` is 40 and each of its four children is **also 40**; `PNLE Core Nursing Review` is 15 and its seven children are **each 15**. **⚠️ The counts are CORRECT and the plan's parent/child independence rule is right — each child's `source_plan_id` genuinely points at the child source, and they must NEVER be summed into the parent.** But the numbers will read as duplicated down a Goal's subject list. **⚠️ AND THE FAN-OUT IS NOT UNIFORM, WHICH IS WHY IT CANNOT BE SPECIAL-CASED AWAY: `CPALE Comprehensive Review` is 8 while its children are 4, and `ALE` is 30 against a child at 28** — adopters who joined before a child existed. So "just show it on the parent" would be wrong too.
 
-### Owner decision owed
+### Owner decision — SETTLED
 
-**The small-count threshold (§37) — now informed, and still the owner's.** The distribution is sharply tiered, so the choice is real: a threshold of **5** hides only the `4`s and `1`s (nine sets); **10** additionally hides the `8`. **⚠️ Do NOT pick one blind and do NOT ship display before it is chosen** — the count itself is exact and unaffected either way.
+**✅ THRESHOLD DECIDED BY THE OWNER 2026-09-07: **5**.** A Review Set shows its adoption count only when it has **5 or more** adopters; below that the count is **omitted entirely** — not shown as "fewer than 5", not shown as a range, which would leak the same smallness the threshold exists to hide. **⚠️ THIS IS DISPLAY POLICY ONLY — the stored/queried count is exact and unaffected.** Against the 2026-09-07 distribution it hides **nine** sets (seven at 4, two at 1) and shows everything from 8 upward. **⚠️ Do NOT re-derive this threshold from a fresh distribution read** — it is an owner decision, not a computed value, and a later read showing different counts does not change it. The alternative considered was 10, which would additionally have hidden the `8` (`CPALE Comprehensive Review`); it was not chosen.
 
 ### Anti-drift
 
