@@ -13,6 +13,8 @@ import com.studysnap.backend.dto.NoteConceptCountsResponse;
 import com.studysnap.backend.dto.PlanReadinessResponse;
 import com.studysnap.backend.dto.QuickReviewAdaptiveQuizResponse;
 import com.studysnap.backend.dto.ReviewSetUpdateResponse;
+import com.studysnap.backend.dto.ReviewSetPublicationStatusResponse;
+import com.studysnap.backend.dto.PublishReviewSetUpdateRequest;
 import com.studysnap.backend.dto.GoalCollectionDetailResponse;
 import com.studysnap.backend.dto.GoalChildItemsResponse;
 import com.studysnap.backend.dto.SetNoteCollectionParentRequest;
@@ -303,6 +305,27 @@ public class NoteCollectionController {
     ) {
         UUID collectionId = UuidParsingUtils.parseUuidOrThrow(id, CollectionNotFoundException::new);
         return service.applySourceUpdate(collectionId, user.userId());
+    }
+
+    @GetMapping("/{id}/publication-status")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ReviewSetPublicationStatusResponse getReviewSetPublicationStatus(
+            @PathVariable String id,
+            @AuthenticationPrincipal AuthenticatedUser user
+    ) {
+        UUID collectionId = UuidParsingUtils.parseUuidOrThrow(id, CollectionNotFoundException::new);
+        return service.getReviewSetPublicationStatus(collectionId, user.userId());
+    }
+
+    @PostMapping("/{id}/publish-update")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ReviewSetPublicationStatusResponse publishReviewSetUpdate(
+            @PathVariable String id,
+            @RequestBody PublishReviewSetUpdateRequest request,
+            @AuthenticationPrincipal AuthenticatedUser user
+    ) {
+        UUID collectionId = UuidParsingUtils.parseUuidOrThrow(id, CollectionNotFoundException::new);
+        return service.publishReviewSetUpdate(collectionId, user.userId());
     }
 
     @DeleteMapping("/{id}")

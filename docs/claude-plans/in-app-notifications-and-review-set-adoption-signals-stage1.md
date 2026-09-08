@@ -1,10 +1,32 @@
 # In-App Notifications + Official Review Set Adoption Signals — Stage 1 Audit
 
-**Status:** **STAGE 1 APPROVED FOR STAGES 2–5 — ready to prepare the Stage 2 implementation prompt.**
-**⚠️ STAGE 6 IS BLOCKED on one unresolved architecture correction (§8).** No implementation, no
-migration, no admin surface built.
-**Date:** 2026-09-07, **revised 2026-09-07** to incorporate owner tightening.
-**Scope:** two capabilities audited together, delivered as **Stages 2–7, not one release.**
+**Status:** **PARTLY HISTORICAL — Stages 2, 3 and 4 have SHIPPED.**
+**Date:** 2026-09-07, revised for owner tightening, **status corrected 2026-09-07 after delivery.**
+
+| Stage | State |
+|---|---|
+| 2 — Adoption signal | **SHIPPED in `v0.129.0`.** Display threshold settled at **5** |
+| 3 — Notification foundation | **SHIPPED in `v0.130.0`** |
+| 4 — Admin What's New | **SHIPPED in `v0.130.0`** |
+| 5 — Connection request + named Note share | **LIVE — not yet built.** This document still governs it |
+| 6 — Review Set update notifications | **MOVED.** Now owned by `official-review-set-update-publication-boundary.md` |
+| 7 — Future integrations | Out of scope |
+
+**⚠️ SECTIONS §1 AND §4 DESCRIBE A PRE-DELIVERY REPO AND ARE NOW FALSE.** They say notifications are
+"greenfield" and that no notification model, inbox, badge primitive or Announcement concept exists.
+**All of those now exist.** They are kept as the record of what the audit found at the time — **do not
+read them as current state.**
+
+**⚠️ §8's drift-signature dedup is SUPERSEDED and must not be implemented.** It was a workaround for
+the absence of a publication boundary. `official-review-set-update-publication-boundary.md` introduces
+one, which makes the workaround unnecessary — dedup there is `(recipient, adopted_collection_id)`
+while a behind episode is open.
+
+**What in this document is still binding:** Stage 5's event definitions (§10, §14), the
+adoption-count semantics (§9, §12), the badge, read/dismiss and retention contracts (§8, §12, §15),
+and the anti-drift checklist (§19).
+
+**Polish on the shipped inbox lives in `notification-inbox-polish.md`**, not here.
 
 ---
 

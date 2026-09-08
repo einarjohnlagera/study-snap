@@ -60,6 +60,8 @@ class NoteCollectionRepositoryTest {
                 )
                 """);
         jdbcTemplate.execute("alter table note_collections add column if not exists learner_level varchar(50)");
+        jdbcTemplate.execute("alter table note_collections add column if not exists published_at timestamp with time zone");
+        jdbcTemplate.execute("alter table note_collections add column if not exists last_update_published_at timestamp with time zone");
         jdbcTemplate.execute("delete from note_collections");
     }
 
@@ -105,5 +107,49 @@ class NoteCollectionRepositoryTest {
         assertThat(mentorTip.surfacingCondition().type())
                 .isEqualTo(CompanionMentorTipSurfacingConditionType.DAYS_BEFORE_TARGET_DATE);
         assertThat(mentorTip.surfacingCondition().threshold()).isEqualTo(14);
+    }
+
+    /**
+     * The counted row is an adopter copy, whose stamp deliberately has no meaning. The source has
+     * an actual unpublished child as well, so adding a published-at predicate to the adoption query
+     * makes this fail instead of passing against an all-backfilled fixture.
+     */
+    @Test
+    void adoptionCountIgnoresPublicationStampsOnAdopterRows() {
+        UUID curatorId = UUID.randomUUID();
+        UUID learnerId = UUID.randomUUID();
+        Instant now = Instant.parse("2026-09-08T00:00:00Z");
+        NoteCollectionEntity source = collection(curatorId, "Official source", now);
+        source.setVisibility(CollectionVisibility.PUBLIC);
+        source.setPublishedAt(now);
+        source = noteCollectionRepository.saveAndFlush(source);
+
+        NoteCollectionEntity unpublishedSourceAddition = collection(curatorId, "Working subject", now);
+        unpublishedSourceAddition.setParentCollectionId(source.getId());
+        unpublishedSourceAddition.setPublishedAt(null);
+        noteCollectionRepository.saveAndFlush(unpublishedSourceAddition);
+
+        NoteCollectionEntity adopter = collection(learnerId, "Learner copy", now);
+        adopter.setSourcePlanId(source.getId());
+        adopter.setPublishedAt(null);
+        noteCollectionRepository.saveAndFlush(adopter);
+        entityManager.clear();
+
+        assertThat(noteCollectionRepository.countAdoptionsByCollectionIds(List.of(source.getId())))
+                .singleElement()
+                .extracting(NoteCollectionAdoptionCountProjection::getCollectionId,
+                        NoteCollectionAdoptionCountProjection::getAdoptionCount)
+                .containsExactly(source.getId(), 1L);
+    }
+
+    private NoteCollectionEntity collection(UUID ownerId, String title, Instant now) {
+        NoteCollectionEntity collection = new NoteCollectionEntity();
+        collection.setId(UUID.randomUUID());
+        collection.setOwnerUserId(ownerId);
+        collection.setTitle(title);
+        collection.setVisibility(CollectionVisibility.PRIVATE);
+        collection.setCreatedAt(now);
+        collection.setUpdatedAt(now);
+        return collection;
     }
 }

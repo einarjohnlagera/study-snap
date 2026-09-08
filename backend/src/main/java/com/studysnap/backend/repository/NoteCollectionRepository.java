@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -116,4 +117,63 @@ public interface NoteCollectionRepository extends JpaRepository<NoteCollectionEn
             @Param("ownerUserId") UUID ownerUserId,
             @Param("sourcePlanId") UUID sourcePlanId
     );
+
+    /**
+     * Source-only status aggregation.  The source_plan_id predicate is intentional: adopted rows use
+     * the same tables but their publication stamp is meaningless and must never affect this result.
+     */
+    @Query(value = """
+            select
+                exists (
+                    select 1
+                    from note_collections candidate
+                    where candidate.source_plan_id is null
+                      and (candidate.id = :collectionId or candidate.parent_collection_id = :collectionId)
+                      and candidate.published_at is null
+                    union all
+                    select 1
+                    from note_collection_items item
+                    join note_collections candidate on candidate.id = item.collection_id
+                    where candidate.source_plan_id is null
+                      and (candidate.id = :collectionId or candidate.parent_collection_id = :collectionId)
+                      and item.published_at is null
+                ) as unpublished_changes,
+                (
+                    select count(*)
+                    from note_collection_items item
+                    join note_collections candidate on candidate.id = item.collection_id
+                    where candidate.source_plan_id is null
+                      and (candidate.id = :collectionId or candidate.parent_collection_id = :collectionId)
+                      and item.published_at is null
+                ) as topics_added,
+                (
+                    select count(*)
+                    from note_collections candidate
+                    where candidate.source_plan_id is null
+                      and candidate.parent_collection_id = :collectionId
+                      and candidate.published_at is null
+                ) as subject_plans_added
+            """, nativeQuery = true)
+    ReviewSetPublicationStatusProjection getReviewSetPublicationStatus(@Param("collectionId") UUID collectionId);
+
+    @Query(value = """
+            update note_collections
+            set published_at = :publishedAt
+            where source_plan_id is null
+              and published_at is null
+              and (id = :collectionId or parent_collection_id = :collectionId)
+            """, nativeQuery = true)
+    @org.springframework.data.jpa.repository.Modifying
+    int publishUnpublishedReviewSetCollections(
+            @Param("collectionId") UUID collectionId,
+            @Param("publishedAt") Instant publishedAt
+    );
+
+    @Query(value = """
+            update note_collections
+            set last_update_published_at = :publishedAt
+            where id = :collectionId
+            """, nativeQuery = true)
+    @org.springframework.data.jpa.repository.Modifying
+    int markReviewSetUpdatePublished(@Param("collectionId") UUID collectionId, @Param("publishedAt") Instant publishedAt);
 }

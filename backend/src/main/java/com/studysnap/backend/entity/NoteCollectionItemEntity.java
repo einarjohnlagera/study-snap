@@ -42,6 +42,10 @@ public class NoteCollectionItemEntity {
     @Column(name = "source_synced_at")
     private Instant sourceSyncedAt;
 
+    /** Source-side curriculum publication stamp. It has no meaning on adopted copies. */
+    @Column(name = "published_at")
+    private Instant publishedAt;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 }

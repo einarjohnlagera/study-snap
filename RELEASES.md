@@ -1,5 +1,87 @@
 # RELEASES.md - NoteLib
 
+## v0.132.0 - Publication Boundary
+
+**Status: Released** (kicked off 2026-09-08, signed off 2026-09-08, base branch `releases/v0.132.0`, **cut from `docs/planning-publication-boundary-and-plan-corrections` rather than `main`** so that branch's audit commit rides in via the release PR — the `v0.130.0`/`v0.120.0`/`v0.111.0` precedent, used here for convenience rather than because anything is blocked)
+
+**Scope is slices P1 and P2** of `docs/claude-plans/official-review-set-update-publication-boundary.md` (audit written 2026-09-07 by a peer session, every claim `file:line`-anchored). **⚠️ P3 IS DEFERRED — see below.**
+
+### The problem, in the audit's own words
+
+> **Editing an Official Review Set is not publishing an Official Review Set update.**
+> **Source changed != published update available.**
+> **New adopters should not accidentally receive unfinished curator work.**
+
+**There is exactly ONE source state today. No working/published separation exists anywhere**, so every curator edit is instantly learner-facing: adopters are immediately "behind", and a new adopter or a public viewer sees half-finished curriculum work.
+
+### Planned Scope
+
+**(P1) Publication boundary foundation.** Three columns plus a backfill; filter drift detection, adoption copy and `getPublic` to **published** rows only; a `Publish update` service and endpoint that is atomic, locked and idempotent. **⚠️ ONE MIGRATION. The whole contract lives in this slice.**
+
+**(P2) Curator UX.** The `Publish update` action, an `Unpublished changes` indicator, and a confirmation carrying additions-only counts. No migration.
+
+**⚠️ P1 AND P2 SHIP TOGETHER AND THAT PAIRING IS DELIBERATE, NOT PADDING.** P1 creates the endpoint but no way to press it; shipping it alone would leave curators unable to publish anything except through the API, while every edit silently stopped reaching learners. **That is the `v0.130.0` empty-inbox shape** — a substrate with no surface — and it was expensive enough once.
+
+### ✅ THREE OWNER DECISIONS — ALL SETTLED 2026-09-08, BEFORE THE CODEX PROMPT WAS WRITTEN
+
+The owner accepted all three of the audit's recommendations:
+
+1. **✅ THE NARROWED PUBLIC-VIEW CONTRACT (§6) IS ACCEPTED.** Public visitors see published **additions**; **removals and reorders remain live and are NOT hidden.** The alternatives were dual working/published columns per field plus soft-delete, or a full snapshot — both disproportionate. **⚠️ THIS IS A STATED LIMITATION, NOT A GAP TO CLOSE LATER BY DEFAULT, and it is recorded here rather than only in the prompt because the prompt is gitignored.** See "Known limitation" below.
+2. **✅ BACKFILL STAMPS THE COLLECTION'S `created_at`, not `now`** — so a future "Updated" date is not uniformly the deploy date.
+3. **✅ `last_update_published_at` PRESERVES THE CAPABILITY FOR A PUBLIC "Updated" DATE, AND SHIPS NO UI FOR IT.** **⚠️ Do NOT add that UI in this release.**
+
+### ⚠️ Known limitation, accepted at kickoff rather than discovered at signoff
+
+**The public view hides unpublished ADDITIONS ONLY.** A note the curator **removes**, or a section they **reorder or rename**, is visible to the public and to new adopters immediately — because `position` and `label` are single columns and a delete is a real delete, so there is nothing to hide behind without a second column per field or a soft-delete. **⚠️ Test 11 must be written to this narrowed contract and MUST NOT be reported as passing in full.** The learner-facing contracts are fully satisfied; only the public browsing view is partial, and the residual is small in practice because a mid-expansion curator is overwhelmingly *adding*.
+
+### Why P3 is deferred
+
+**P3 (the Review Set update notification) was Stage 6 of the notification plan and this audit unblocks it** — §7 supersedes that plan's §8 drift-signature dedup blocker, which must NOT be implemented. **It is deferred on SIZE, not on doubt:** P1 carries a migration and rewires what `getPublic` and adoption copy can see, which is enough surface for one release. **⚠️ Release SIZE is the biggest lever on verification cost, and it compounds.**
+
+### Anti-drift
+
+**⚠️ A PER-ROW PUBLICATION STAMP, NOT A SNAPSHOT ARCHITECTURE.** The audit's central structural finding is that `applySourceUpdate` is **additive-only** — `NoteCollectionService:2050` says *"THIS RELEASE REPORTS AND NEVER APPLIES"*, and `MOVED` changes are detected and reported but never applied. **So the boundary only has to gate what becomes visible as an ADDITION.** Do NOT build snapshots, versions or history. **⚠️ Do NOT implement §8's drift-signature dedup — it is SUPERSEDED.** **⚠️ NO Learning Connections work: `[CHECKPOINT — due 2026-09-19]` is ELEVEN DAYS OUT and its denominator is ONE.** **⚠️ Do NOT build the notification half (P3), and do NOT add a public "Updated" date UI.** **⚠️ Curriculum update != Note content overwrite, and one learner remains one adopter across every update** — publishing makes changes *available for review*, it never forces learner synchronization. **⚠️ Adoption counts must keep working: this release changes what `getPublic` can SEE, and `v0.129.0`'s count reads the same rows.** No quota, entitlement or pricing change; onboarding untouched.
+
+### Verification
+
+**⚠️ AT LEAST ONE SCOPED COLD AGENT, DECIDED AT KICKOFF RATHER THAN AT SIGNOFF.** This release **moves a visibility boundary** — it changes what an anonymous `getPublic` caller and a new adopter can see — and it carries a migration with a backfill over existing production rows. Both are named triggers. **⚠️ AND THE `v0.131.0` LESSON APPLIES DIRECTLY: that release decided its tier by the letter of the gate, shipped, and a cold agent then found a trap it had introduced. Decide the tier from the SHAPE of the change, not from the item count.**
+
+**⚠️ PRE-DECLARED GUARDS, from the audit's §12 and this repo's carried lessons:**
+- **(1)** an unpublished curator edit is invisible to `getPublic`, to a NEW adopter, and to drift detection — **assert all three, since they read the same rows by different paths.**
+- **(2)** publishing is **idempotent and atomic** — a second publish adds nothing, and a failure mid-way leaves no half-published set.
+- **(3)** **an existing adopter's already-copied content is UNTOUCHED by a publish** — publishing offers, it never overwrites.
+- **(4)** the backfill leaves every pre-existing set **published**, so nothing silently vanishes from Explore on deploy. **⚠️ ASSERT AGAINST REAL MIGRATED ROWS, AND THE HARNESS IS NAMED SO IT ACTUALLY HAPPENS: `NativeQueryPostgresIntegrationTest`**, which starts PostgreSQL 16 and applies the real Flyway migrations. **⚠️ Do NOT assert this in `NoteCollectionServiceProjectionIntegrationTest` — that file hand-writes its H2 DDL and can silently drift from the migration set**, which is the anti-pattern `v0.130.0` recorded.
+- **(5)** **⚠️ CORRECTED AT PROMPT TIME — THE ORIGINAL WORDING WAS UNTESTABLE AND POINTED THE WRONG WAY.** It read *"the adoption count still returns the same numbers for a set with no unpublished edits"* — but post-backfill every row is published, so that fixture never fires the filter. It is exactly what the audit lists under *"fixtures that prove nothing."* **The discriminating test uses a source set WITH unpublished additions.** And the direction that actually breaks is the opposite one: **⚠️ `published_at` IS A SOURCE-SIDE CONCEPT, but the migration adds the column to `note_collections` and `note_collection_items`, which hold ADOPTER rows too.** Nobody publishes a learner's copy, so those rows' stamps are meaningless. `countAdoptionsByCollectionIds` counts **adopter-side** collections by `sourcePlanId` and **MUST NOT filter on `published_at`** — if it does, `v0.129.0`'s counts start reading a column that means nothing on the rows it counts.
+- **(6)** **⚠️ A RENDERED CONTROL THAT IS DISABLED IS NOT A CONTROL** — if the curator UX disables `Publish update` in any state, assert what the curator can actually do in that state. This guard exists because `v0.131.0` verified an exit by its RENDER gate and missed that it was `disabled`.
+
+**⚠️ Routing: CODEX** — migration plus service plus controller plus frontend. **⚠️ Call `advisor()` BEFORE writing the prompt** — measured as the highest-yield checkpoint in this repo, and settle owner decision 1 first.
+
+### Shipped
+
+- Added `V141__review_set_publication_boundary.sql`: source collection and item publication stamps plus a root finalization marker. Its backfill stamps every existing collection with its own `created_at`, every existing item with its owning collection's `created_at`, and existing public source roots' `last_update_published_at` with `created_at`.
+- Curator additions remain working-only until an explicit, atomic `Publish update` action stamps the Official Review Set subtree. Drift, adoption copying, and public detail read published source rows; learner-owned library/detail reads and adoption counts remain unfiltered.
+- Added the curator-only `Published` / `Unpublished changes` state and additions-only publication confirmation. P3 notification fan-out and public Updated-date UI remain deferred.
+
+### Pressure test — two cold agents, and what they found
+
+Tier was pre-declared at kickoff ("AT LEAST ONE SCOPED COLD AGENT"). **Two were run**, on non-overlapping halves, framed as FALSIFICATION of the implementing session's named claims — and partitioned so the **frontend/backend seam was explicitly OWNED** rather than falling between them, which is the `v0.119.0` failure. Full report: `docs/claude-findings/v0.132.0-publication-boundary-pressure-test.md`. Four defects blocked signoff; **both agents independently found the same one from opposite halves.**
+
+- **Fixed — a Goal whose child Subject Plans were all unpublished produced a SILENTLY EMPTY adopted Goal.** The gate counted children unfiltered while the copy list beneath it filtered by publication, and `adoptGoal` never copies the root's own items. The learner got zero plans and zero notes, it became their **primary** collection, and `alreadyAdopted` made it **unrepairable by retrying**; the public adoption count incremented for it. This release had converted a loud `CollectionNotFoundException` into a silent one. The gate now reads the same filtered, owner-scoped list it copies.
+- **Fixed — `listPublic` was unfiltered while `getPublic` was filtered.** Explore, Exam Hub and dashboard cards counted unpublished plans and notes that the linked page would not show. Those count queries were unfiltered before this release too; **what this release introduced is the divergence.** `childCount > 0` also sets `isGoal`, which routes Adopt to `adoptGoal` — so it fed the defect above. **⚠️ The fix filters in Java over already-fetched rows on purpose: the authenticated `list()` shares those exact queries, and an adopted row is never published, so a predicate in the query would have emptied every learner's own library.**
+- **Fixed — the first publication of any PRE-EXISTING collection stamped nothing.** V141's first `UPDATE` carries no visibility predicate, so every pre-deploy row — private drafts included — was backfilled with a `published_at`, making the `published_at == null` guard false for all of them. A draft that existed at deploy, was filled in afterwards and then published would publish **nothing**. The discriminator is now `last_update_published_at`, which V141 stamps only for pre-existing public source roots. **⚠️ Not "always stamp": that would walk a `PUBLIC → PRIVATE → PUBLIC` flip's edits past the boundary.**
+- **Fixed — a publish failure was invisible.** `setPublishUpdateOpen(false)` sat inside the `try`, so on failure the modal stayed open and `AppModal`'s `fixed inset-0` portal covered the page-level error Card. The curator saw a click that did nothing. **⚠️ This defeated the obvious test — `getByText(message)` passed — so the new guard asserts `within(dialog)`.** It is the `v0.131.0` disabled-control lesson one layer up: the control was enabled, the FEEDBACK was occluded.
+- **Fixed — coverage gaps on added files.** `ReviewSetPublicationStatusProjection` was never produced by real Spring Data (every assertion ran against a hand-built stub over a mocked repository, and `PREPARE` cannot check alias→getter mapping); `ReviewSetUpdateNotPublishableException` had **zero** test references, so nothing proved a private, child or adopted root is rejected; and no `lib/api-*.test.ts` existed for either new endpoint despite the repo's named convention for exactly that. All three now exist. Each of the five fixes above is mutation-verified with the killing test named.
+
+**⚠️ Correction to this release's own claim.** The delivery was recorded as asserting the backfill "against REAL migrated rows, not a hand-built fixture." **That is false as worded** — the test seeds its own rows after Flyway and replays the shipped SQL. A V141 mutation *is* caught, so it retains its value, but **pre-declared guard #4 is structurally unsatisfiable** in a Flyway-on-empty-schema harness: reading the real SQL text is the best available approximation. The guard needs rewording; the test does not need changing.
+
+### Known limitations
+
+- **The public view hides unpublished ADDITIONS only.** Removals, reorders and renames stay live, because `position` and `label` are single columns and a delete retains no row. Accepted at kickoff as owner decision 1.
+- **There is no publication surface on the page where curators actually edit.** `addItems` refuses a collection that has children, so every topic addition happens on a child Subject Plan in the Builder — and the `Unpublished changes` indicator and `Publish update` action exist **only** on the root collection detail page. A curator can add a Subject Plan and ten topics in the Builder with nothing telling them the work is invisible to learners. **⚠️ This is the sibling of pre-declared guard 6: a control the curator never navigates to is not a control.** Not built in this release deliberately; recorded rather than discovered later.
+- **A directly-published child Subject Plan is a permanent dead end.** `publishInitialCurriculum` early-returns for a non-null `parentCollectionId` while `validatePublishable` rejects neither a child nor an adopted copy, so a hand-issued visibility POST on a child yields a `PUBLIC` collection at zero public items that no control can stamp — `assertOfficialReviewSetRoot` rejects children. ADMIN-only, no UI path reaches it.
+- **The item backfill uses the collection's `created_at`, not the item's**, so an item added long after its collection carries `published_at < created_at`. Nothing compares them today; it would matter only if a future release surfaces a per-item date.
+- **The `@Modifying` natives lack `clearAutomatically`.** Nothing dirties those entities after the natives today, so this is latent fragility rather than a live bug.
+
 ## v0.131.0 - Inbox Polish
 
 **Status: Released** (kicked off 2026-09-07, signed off 2026-09-08, base branch `releases/v0.131.0`, cut from `main` after `v0.130.0` merged as #1344 and tagged `3cec79bb`)
@@ -742,67 +824,3 @@ Theme: a learner stops losing a date they set themselves, and a failed regenerat
 - **⚠️ GUARD (c) ASSERTS BOTH POINTS IN ONE TEST, because asserting only after the retry passes under a version that never wrote the reason at all** — both reads are NULL. Adding a clear-on-success to `markNoteGenerated` kills exactly the two guard-(c) tests and nothing else. Guard (d) uses a secret-shaped exception message, since an innocuous one passes under a version that stores `ex.getMessage()` verbatim.
 - **The nine H2 fixtures that mirror `notes` were updated** — two of them failed the build until they were, which is the mechanism working.
 - `NoteBulkRegenerationService`'s comment saying the exact reason *"cannot be persisted without a column this release may not add"* is corrected; repointing its quota heuristic at the new column is recorded as a deliberate follow-up, because it moves a `BLOCKED`/`FAILED` classification the curator's retry keys on.
-
-## v0.126.0 - Context Budget
-
-**Status: Released** (kicked off and signed off 2026-09-07, base branch `releases/v0.126.0`, cut from `main` after `v0.125.0` merged and tagged)
-
-Theme: the governing documents stop charging every session for history that is already recorded somewhere else.
-
-**⚠️ IT RESUMES A DOCUMENTED CONVENTION, IT DOES NOT INVENT A TRIM — and that distinction is the whole safety argument.** `docs/archive/README.md` states the rationale verbatim: cold storage for content *"moved here specifically so it doesn't cost tokens to read on every pass through the live docs, while staying searchable (`git grep`)"*, and it is *"a MOVE, not a delete"*. It names the design for the two big files as **current + last few versions**. **`RELEASES.md` holds 116 sections (`v0.41.0` → `v0.125.0`).**
-
-**⚠️ THE CADENCE LAPSED 85 RELEASES AGO, AND THE REASON IS MECHANICAL RATHER THAN NEGLECT: the 2026-07-10 pass at `v0.40.1` was a ONE-OFF WITH NO RECURRING STEP.** Neither `.claude/commands/kickoff.md` nor `signoff.md` mentions archiving, so nothing has triggered it since. **Item 5 is therefore not housekeeping — without it items 1-4 regrow.**
-
-**MEASURED, NOT ESTIMATED (2026-09-07):** `CLAUDE.md` was **357,706 chars**, of which **one line was 322,329** — 63 chained `Previous:` blocks, ~80,000 tokens, **~90% of the file, on every session**. `AGENTS.md`'s preamble is **58,797 chars**. A live `/context` reading showed **memory files at 148.1k tokens, 14.8% of the window, before any code is read.**
-
-### Planned Scope
-
-**(1)** Archive `RELEASES.md` `v0.41.0` → `v0.120.x` into `docs/archive/RELEASES_ARCHIVE.md`, keeping current + last 5 live plus the one-line index, and update the archive header's version range. **(2)** Archive `ROADMAP.md`'s `(Released)` per-version retrospectives into `ROADMAP_ARCHIVE.md`, leaving one-line pointers — exactly the class that archive already holds. **(3)** `CLAUDE.md` line 39 → product description plus the OPEN release's anti-drift only. **(4)** `AGENTS.md` preamble → durable rules plus a pointer to `RELEASES.md`. **(5)** Patch `kickoff.md` to REPLACE rather than bump-and-prepend, and add an archiving step to `signoff.md`.
-
-### Anti-drift
-
-**⚠️ ITEMS 3 AND 4 ARE SAFE ONLY BECAUSE THE CONTENT IS DUPLICATED, AND THAT WAS VERIFIED ACROSS THE FULL `v0.37.0` → `v0.125.0` RANGE RATHER THAN SPOT-CHECKED.** All 72 versions named in `CLAUDE.md` were checked against `RELEASES.md`; two had no `## ` section and were chased individually — **`v0.37.0` is a rule citation** (*"locked since `v0.37.0`"*) that survives inside the rule itself, and **`v0.111.1` is a ruling about a version number that was REJECTED**, so it has no section, but its reasoning is duplicated in `RELEASES.md`'s `v0.110.1` section. **⚠️ A naive section-based check flags those two as data loss; they are not.**
-
-**⚠️ ITEMS 1 AND 2 ARE MOVES — content preserved VERBATIM, exactly as the 2026-07-10 pass did.** **⚠️ ITEMS 3 AND 4 DELETE FROM THE DOCUMENTS THAT GOVERN THIS PROJECT'S ANTI-DRIFT:** `## Key conventions`, `## Task routing`, the PRODUCTION DATABASE READ-ONLY rule, the source-of-truth list, and **every** `AGENTS.md` Anti-Drift Rules entry MUST survive untouched. Only shipped-release narrative goes.
-
-**⚠️ Do NOT prune the ROADMAP Backlog Index** (plan item 6, deliberately excluded) — it mixes LIVE `[CHECKPOINT — due …]` gates with closed rows, and kickoff step 8 requires every `docs/claude-plans/` and `docs/claude-findings/` file to keep a row. It needs judgment, not a script. **⚠️ Do NOT split `AGENTS.md`'s Required Product Architecture section** (plan item 7, held back) — this repo has **twice** recorded that a rule which stops being found stops being followed.
-
-**⚠️ NO product code, NO migration, NO quota/entitlement/meter change, NO behaviour change of any kind.** **⚠️ `frontend/app/onboarding` STAYS FROZEN** (`[CHECKPOINT — due 2026-09-11]`, four days out) and **NO Learning Connections promotion before `2026-09-19`** — this release touches **no product surface at all**, which is precisely why it can run inside the twelve-read window.
-
-### Verification
-
-**A single `advisor()` call on the diff** — no permission substrate, no cross-user read, no money semantics, no migration, and by construction no behaviour change.
-
-**⚠️ PRE-DECLARED GUARD, AND IT NAMES THE CHECK THAT PROVES NOTHING: a diff that merely looks smaller is not evidence.** The discriminating checks are **(a)** a `grep` for every surviving governing rule before and after, **(b)** that `RELEASES.md` + `RELEASES_ARCHIVE.md` together still contain every archived section **byte-for-byte**, and **(c)** a re-measurement of all four files against the figures above.
-
-**Routing: CLAUDE CODE inline.**
-
-### Shipped
-
-**Cold pressure test, and it found that this release's own headline word was wrong.**
-
-- **⚠️⚠️ `CLAUDE.md` LINE 39 WAS A *DELETE*, NOT A *MOVE* — AND IT TOOK A LIVE CORRECTION WITH IT.** `RELEASES.md` and `ROADMAP.md` were archived properly; the 322,329-char chain was simply removed, surviving only in git history, against `docs/archive/README.md`'s own *"a MOVE, not a delete"*. **⚠️ THE VERIFICATION THAT PRECEDED IT CHECKED THE WRONG THING: it proved every VERSION named in the chain had a `RELEASES.md` section — true, and beside the point — and never asked whether the chain carried CLAIMS with no duplicate.** It did. *"ALL THREE OF THOSE COPY FIXES HAVE SHIPPED — VERIFIED AGAINST CODE 2026-09-04"* and *"the ALE curator copy is NOT the blocker any more"* returned **zero** repo-wide matches, while `AGENTS.md:53` — in the file `CLAUDE.md` calls *"Always check this first"* — went on asserting the blocker those sentences had cleared. **A session would have redone shipped work or re-rejected `ARCHITECTURE`, which is precisely what the deleted *"Do NOT re-reject `ARCHITECTURE`"* line existed to prevent.** Fixed by making it a real move (`docs/archive/CLAUDE_ARCHIVE.md`) and correcting `AGENTS.md:53` in place. **⚠️ CARRIED LESSON, GENERALISED: "the content is duplicated" must be tested on the CLAIMS, not the version numbers — a chain of release narrative accumulates corrections to ITSELF, and a correction is by nature the one sentence with no duplicate.**
-- **⚠️ `AGENTS.md` FORBADE EXACTLY WHAT THE NEW `signoff.md` STEP MANDATES.** `AGENTS.md:1729` read *"Do not delete old release entries"* full stop, with **zero** mentions of the archive — so a session reading the anti-drift document refuses the step and one reading `signoff.md` performs it. **That contradiction is the better explanation of why the convention lapsed for 85 releases**, and this release had patched the command file and left the rule standing. Reconciled: archive ≠ delete, stated at the rule itself.
-- **⚠️ THE NEW INSTRUCTION WAS SELF-DELETING.** It lived in exactly two places — `signoff.md`, and `CLAUDE.md`'s `Current version:` block, **which the next kickoff REPLACES by this release's own new rule**. `kickoff.md` has no archive step, and `CLAUDE.md`'s own 9-step checklist said *"Bump"*, not REPLACE. **⚠️ A fix that survives one release is not a fix**; both are now in `CLAUDE.md`'s durable checklist, deliberately duplicated.
-- **⚠️ THE ROADMAP HALF POINTED AT A STRUCTURE THAT NO LONGER EXISTS.** It archived *"newly-`(Released)` per-version retrospectives"* — but kickoff stopped creating those at `v0.85.0` and live `ROADMAP.md` has **zero** `## v` sections, so it would have matched **nothing, forever**, while `## Current Release Baseline` — **247,345 chars naming 121 versions, one paragraph per release, structurally identical to the chain this release just removed** — grew unguarded. Repointed.
-- **⚠️ THE ITEM 4 HOLD WAS OVER-CAUTIOUS, AND ITS EVIDENCE WAS AN ARTIFACT OF THE SAME MISTAKE AS THE FIRST BULLET.** The "two of three rules exist nowhere else" test matched text **verbatim**; this repo restates rules in different words. Hand-checking ~45 rules put genuinely-unique at **~2%**, not 67%, and **zero** checkpoints are unique to `AGENTS.md` — all eight dates appear in `ROADMAP.md` with 8-35 references each. **⚠️ THE METHOD CONCERN SURVIVES AND IS WHY THE HOLD STANDS ANYWAY:** the largest block (27,031 chars) does **not** begin with a version tag, so a tag-based sweep cuts the small blocks and leaves the big one — and bullet 1 proves an in-place replace loses content. The shape is: classify each rule by destination, restore the nowhere-else ones first, then move the chain to a `docs/archive/AGENTS_ARCHIVE.md`. **Its own release.**
-- **Figures corrected:** `RELEASES.md` is **133,497** not 130,778; `ROADMAP.md` **844,282** not 842,841; live checkpoints **222** not 223 — verified by set comparison, no gate lost. **On a release whose deliverable is numbers, wrong numbers matter.**
-- **Not refuted:** both moves are byte-for-byte (117/117 sections, 60/60 retrospectives, independently re-split from `bc21785d`), and `diff` of old versus new `CLAUDE.md` is **exactly one changed line**, so nothing outside line 39 could have been lost.
-
-**⚠️ ITEM 4 IS NOT SHIPPED, AND IT IS HELD ON EVIDENCE RATHER THAN DEFERRED FOR TIME.** The plan's own safety premise — *"items 3 and 4 are safe ONLY because the content is duplicated in `RELEASES.md`"* — **is true for item 3 and FALSE for item 4**, which the plan could not see because it spot-checked three releases rather than testing the premise per line.
-
-**`CLAUDE.md`'s line 39 was pure release narrative. `AGENTS.md`'s preamble is not the same shape: it is durable RULES tagged with the version that introduced them.** Measured on the twelve candidate lines: **every one contains rule language**, and **line 53 alone carries 59 rule-words and 13 live `[CHECKPOINT — due …]` references**. Three rules were then tested directly against `RELEASES.md` plus its archive:
-
-| Rule text in `AGENTS.md` | Copies in `RELEASES.md` + archive |
-|---|---:|
-| `only after `lockAndReadBirthYear`` | **0** |
-| `Target Audience must never become a runtime` | 2 |
-| `age-threshold sweeper, NOT a shutdown drain` | **0** |
-
-**Two of three exist NOWHERE ELSE.** Trimming that preamble by pattern would have deleted rules — and live checkpoint pointers — from the document whose entire job is anti-drift, which is the failure this repo has recorded twice as *a rule that stops being found stops being followed.* **⚠️ The remaining work is hand-separating rule from narrative line by line; it is judgment, not a pass, and it wants its own release. `AGENTS.md` is therefore UNCHANGED at 211,638 chars.**
-
-**⚠️ `ROADMAP.md` is still ~210k tokens, and that is the excluded item 6 rather than a miss:** its Backlog Index (~139k) and Current Release Baseline (~62k) were deliberately left alone.
-
-**Item 3 landed in the kickoff commit itself, deliberately.** Prepending a `v0.126.0` block to line 39 in the normal way would have added another release's narrative to the very line this release exists to remove, then removed it hours later. **`CLAUDE.md`: 357,718 → 39,311 chars (~89k → ~9k tokens), matching the plan's prediction.** All twelve governing rules verified present after the replacement.
-
-**Items 1, 2 and 5 shipped.** `RELEASES.md` **1,866,861 → 133,497 chars (~466k → ~33k tokens)** — 111 sections (`v0.41.0` → `v0.120.0`) moved to `docs/archive/RELEASES_ARCHIVE.md`, keeping current + last 5 live. `ROADMAP.md` **1,189,862 → 844,282** — 60 `(Released)` retrospectives moved to `ROADMAP_ARCHIVE.md`. **⚠️ BOTH VERIFIED BYTE-FOR-BYTE, WHICH IS THE GUARD THAT MATTERED: all 117 `RELEASES.md` sections and all 60 ROADMAP retrospectives are present and unchanged across live + archive.** The only two flagged diffs in each case were the index block relocating and a section-parser boundary artifact, both confirmed by inspection rather than assumed. **222 live `[CHECKPOINT]` rows and every live ROADMAP section survive.** Item 5 patched `kickoff.md` to REPLACE rather than prepend and added an archive step to `signoff.md`, **which is the half that stops items 1-3 regrowing** — its absence is why the 2026-07-10 pass never ran again.

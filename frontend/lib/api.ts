@@ -2151,6 +2151,14 @@ export type ReviewSetUpdateResponse = {
   changes: ReviewSetUpdateChange[];
 };
 
+export type ReviewSetPublicationStatusResponse = {
+  collectionId: string;
+  unpublishedChanges: boolean;
+  topicsAdded: number;
+  subjectPlansAdded: number;
+  lastUpdatePublishedAt: string | null;
+};
+
 export type SetCollectionItemOrderRequestItem = {
   noteId: string;
   label?: string | null;
@@ -5581,6 +5589,24 @@ export async function applyReviewSetSourceUpdate(id: string): Promise<ReviewSetU
     true,
   );
   return parseApiResponse<ReviewSetUpdateResponse>(response, "Could not update this Review Set.");
+}
+
+export async function getReviewSetPublicationStatus(id: string): Promise<ReviewSetPublicationStatusResponse> {
+  const response = await fetchWithAuth(
+    `/collections/${encodeURIComponent(id)}/publication-status`,
+    { method: "GET", headers: buildAuthHeaders() },
+    true,
+  );
+  return parseApiResponse<ReviewSetPublicationStatusResponse>(response, "Could not check Review Set publication status.");
+}
+
+export async function publishReviewSetUpdate(id: string): Promise<ReviewSetPublicationStatusResponse> {
+  const response = await fetchWithAuth(
+    `/collections/${encodeURIComponent(id)}/publish-update`,
+    { method: "POST", headers: buildAuthHeaders("application/json"), body: JSON.stringify({}) },
+    true,
+  );
+  return parseApiResponse<ReviewSetPublicationStatusResponse>(response, "Could not publish this Review Set update.");
 }
 
 export async function deleteCollection(id: string): Promise<void> {

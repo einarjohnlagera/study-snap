@@ -47,6 +47,7 @@ import {
   getNoteConceptCounts,
   getPlanReadiness,
   getReviewSetSourceUpdate,
+  getReviewSetPublicationStatus,
   generateCompanion,
   listCoursePrograms,
   listNotes,
@@ -57,6 +58,7 @@ import {
   trackAnalyticsEvent,
   updateCollection,
   updateCollectionVisibility,
+  publishReviewSetUpdate,
   updateNoteVisibility,
   updateStudyDaysPerWeek,
   type CompanionContent,
@@ -75,6 +77,7 @@ import {
   type PlanReadinessResponse,
   type ReviewSetUpdateChange,
   type ReviewSetUpdateResponse,
+  type ReviewSetPublicationStatusResponse,
   generateAdaptivePracticeForCollection,
 } from "@/lib/api";
 import { getStudyPlanSkippedNotice } from "@/app/dashboard/dashboard-study-plan-section";
@@ -641,6 +644,82 @@ function sourceUpdateChangeText(change: ReviewSetUpdateChange): string {
     case "SKIPPED_NOT_PUBLIC":
       return `${note}${subject} is no longer public and will be skipped`;
   }
+}
+
+function ReviewSetPublicationCard({
+  collection,
+  status,
+  loading,
+  onPublish,
+}: Readonly<{
+  collection: NoteCollectionDetail;
+  status: ReviewSetPublicationStatusResponse | null;
+  loading: boolean;
+  onPublish: () => void;
+}>) {
+  const canPublish = collection.visibility === "PUBLIC" && Boolean(status?.unpublishedChanges);
+  return (
+    <Card className="flex flex-col gap-3 border-indigo-200 bg-indigo-50/50 p-4 dark:border-indigo-900 dark:bg-indigo-950/20 sm:flex-row sm:items-center sm:justify-between">
+      <div>
+        <p className="text-sm font-semibold text-foreground">
+          {status?.unpublishedChanges ? "Unpublished changes" : loading ? "Checking publication status…" : "Published"}
+        </p>
+        <p className="text-sm text-foreground/70">
+          {loading ? "Checking whether curriculum changes are ready to publish…" : "Only published additions become available to adopters."}
+        </p>
+      </div>
+      <Button type="button" size="sm" disabled={!canPublish} onClick={onPublish}>
+        Publish update
+      </Button>
+    </Card>
+  );
+}
+
+function PublishReviewSetUpdateModal({
+  isOpen,
+  status,
+  publishing,
+  error,
+  onClose,
+  onConfirm,
+}: Readonly<{
+  isOpen: boolean;
+  status: ReviewSetPublicationStatusResponse | null;
+  publishing: boolean;
+  error: string | null;
+  onClose: () => void;
+  onConfirm: () => void;
+}>) {
+  const additions = [
+    status?.topicsAdded ? `${status.topicsAdded} ${status.topicsAdded === 1 ? "topic" : "topics"} added` : null,
+    status?.subjectPlansAdded ? `${status.subjectPlansAdded} ${status.subjectPlansAdded === 1 ? "Subject Plan" : "Subject Plans"} added` : null,
+  ].filter((value): value is string => value !== null);
+  return (
+    <AppModal
+      isOpen={isOpen}
+      title="Publish Review Set update?"
+      description="Your latest changes will become available to learners who adopted this Review Set. Their personal progress and changes will be preserved."
+      onClose={onClose}
+      actions={(
+        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <Button type="button" variant="outline" disabled={publishing} onClick={onClose}>Keep editing</Button>
+          <Button type="button" loading={publishing} loadingText="Publishing..." onClick={onConfirm}>Publish update</Button>
+        </div>
+      )}
+    >
+      {additions.length > 0 ? <p className="text-sm font-medium text-foreground/80">{additions.join(" · ")}</p> : null}
+      {/*
+        ⚠️ THE FAILURE IS RENDERED INSIDE THE MODAL ON PURPOSE. This modal stays open when publishing
+        fails, and AppModal portals a `fixed inset-0` backdrop over the page, so the page-level
+        mutationError Card sits underneath it and is invisible to the curator. Do not delete this in
+        favour of that Card: a test asserting only getByText(message) passes while the curator sees
+        nothing, which is exactly how this shipped.
+      */}
+      {error ? (
+        <p role="alert" className="mt-3 text-sm text-destructive">{error}</p>
+      ) : null}
+    </AppModal>
+  );
 }
 
 function ReviewSetSourceUpdateCard({
@@ -2592,6 +2671,9 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
   const [mutationKind, setMutationKind] = useState<MutationKind>(null);
   const [sourceUpdate, setSourceUpdate] = useState<ReviewSetUpdateResponse | null>(null);
   const [sourceUpdateLoading, setSourceUpdateLoading] = useState(false);
+  const [publicationStatus, setPublicationStatus] = useState<ReviewSetPublicationStatusResponse | null>(null);
+  const [publicationStatusLoading, setPublicationStatusLoading] = useState(false);
+  const [publishUpdateOpen, setPublishUpdateOpen] = useState(false);
   const [actionToast, setActionToast] = useState<string | null>(null);
   const actionToastTimerRef = useRef<ReturnType<typeof globalThis.setTimeout> | null>(null);
 
@@ -2730,6 +2812,40 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
       mounted = false;
     };
   }, [collection?.sourcePlanId, collectionId]);
+
+  const isOfficialReviewSetCuratorView = isAdmin
+    && collection?.sourcePlanId === null
+    && collection?.parentCollectionId === null
+    && collection?.visibility === "PUBLIC";
+
+  useEffect(() => {
+    if (!isOfficialReviewSetCuratorView) {
+      setPublicationStatus(null);
+      setPublicationStatusLoading(false);
+      return;
+    }
+    let mounted = true;
+    setPublicationStatusLoading(true);
+    void getReviewSetPublicationStatus(collectionId)
+      .then((result) => {
+        if (mounted) {
+          setPublicationStatus(result);
+        }
+      })
+      .catch(() => {
+        if (mounted) {
+          setPublicationStatus(null);
+        }
+      })
+      .finally(() => {
+        if (mounted) {
+          setPublicationStatusLoading(false);
+        }
+      });
+    return () => {
+      mounted = false;
+    };
+  }, [collection?.updatedAt, collectionId, isOfficialReviewSetCuratorView]);
 
   useEffect(() => {
     let mounted = true;
@@ -2928,6 +3044,24 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
       }
     } catch (error) {
       setMutationError(error instanceof Error ? error.message : "Could not update this Review Set.");
+    } finally {
+      setMutationKind(null);
+    }
+  };
+
+  const handlePublishReviewSetUpdate = async () => {
+    if (!publicationStatus?.unpublishedChanges || collection?.visibility !== "PUBLIC") {
+      return;
+    }
+    setMutationKind("publish");
+    setMutationError(null);
+    try {
+      const result = await publishReviewSetUpdate(collectionId);
+      setPublicationStatus(result);
+      setPublishUpdateOpen(false);
+      showActionToast("Review Set update published.");
+    } catch (error) {
+      setMutationError(error instanceof Error ? error.message : "Could not publish this Review Set update.");
     } finally {
       setMutationKind(null);
     }
@@ -3376,6 +3510,15 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
           />
         ) : null}
 
+        {isOfficialReviewSetCuratorView ? (
+          <ReviewSetPublicationCard
+            collection={collection}
+            status={publicationStatus}
+            loading={publicationStatusLoading}
+            onPublish={() => { setMutationError(null); setPublishUpdateOpen(true); }}
+          />
+        ) : null}
+
         <section aria-label="Plan focus and readiness" data-testid="goal-focus-readiness-stack" className="space-y-3">
           <TodaysFocusCard
             action={primaryStudyAction}
@@ -3519,6 +3662,14 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
             onNotesPublished={loadNoteVisibility}
           />
         ) : null}
+        <PublishReviewSetUpdateModal
+          isOpen={publishUpdateOpen}
+          status={publicationStatus}
+          publishing={mutationKind === "publish"}
+          error={mutationError}
+          onClose={() => { setPublishUpdateOpen(false); setMutationError(null); }}
+          onConfirm={() => void handlePublishReviewSetUpdate()}
+        />
         {actionToast ? <ToastMessage message={actionToast} tone="success" /> : null}
       </main>
     );
@@ -3562,6 +3713,15 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
           loading={sourceUpdateLoading}
           applying={mutationKind === "source-update"}
           onApply={() => void handleSourceUpdate()}
+        />
+      ) : null}
+
+      {isOfficialReviewSetCuratorView ? (
+        <ReviewSetPublicationCard
+          collection={collection}
+          status={publicationStatus}
+          loading={publicationStatusLoading}
+          onPublish={() => { setMutationError(null); setPublishUpdateOpen(true); }}
         />
       ) : null}
 
@@ -3878,6 +4038,14 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
           onNotesPublished={loadNoteVisibility}
         />
       ) : null}
+      <PublishReviewSetUpdateModal
+        isOpen={publishUpdateOpen}
+        status={publicationStatus}
+        publishing={mutationKind === "publish"}
+        error={mutationError}
+        onClose={() => { setPublishUpdateOpen(false); setMutationError(null); }}
+        onConfirm={() => void handlePublishReviewSetUpdate()}
+      />
       <AppModal
         isOpen={pendingSectionRename !== null}
         title={`Merge into "${pendingSectionRename?.newName ?? ""}"`}

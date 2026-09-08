@@ -175,6 +175,8 @@ class NoteCollectionServiceProjectionIntegrationTest {
                 )
                 """);
         jdbcTemplate.execute("alter table note_collections add column if not exists learner_level varchar(50)");
+        jdbcTemplate.execute("alter table note_collections add column if not exists published_at timestamp with time zone");
+        jdbcTemplate.execute("alter table note_collections add column if not exists last_update_published_at timestamp with time zone");
         jdbcTemplate.execute("""
                 create table if not exists note_collection_item_removals (
                     adopted_collection_id uuid not null,
@@ -226,6 +228,7 @@ class NoteCollectionServiceProjectionIntegrationTest {
                     completed_at timestamp with time zone
                 )
                 """);
+        jdbcTemplate.execute("alter table note_collection_items add column if not exists published_at timestamp with time zone");
         jdbcTemplate.execute("alter table quick_review_sessions add column if not exists quota_exempt boolean not null default false");
         jdbcTemplate.execute("""
                 create table if not exists concept_health (
@@ -702,6 +705,7 @@ class NoteCollectionServiceProjectionIntegrationTest {
         collection.setEstimatedStudyHours(4);
         collection.setCreatedAt(Instant.parse("2026-05-01T09:00:00Z"));
         collection.setUpdatedAt(Instant.parse("2026-05-01T10:00:00Z"));
+        collection.setPublishedAt(collection.getCreatedAt());
         return collectionRepository.save(collection);
     }
 
@@ -765,6 +769,7 @@ class NoteCollectionServiceProjectionIntegrationTest {
         item.setLabel(WEEK_ONE_LABEL);
         item.setPosition(position);
         item.setCreatedAt(Instant.parse("2026-05-01T11:00:00Z").plusSeconds(position));
+        item.setPublishedAt(item.getCreatedAt());
         return itemRepository.save(item);
     }
 

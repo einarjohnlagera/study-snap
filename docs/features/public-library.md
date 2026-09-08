@@ -124,6 +124,14 @@ Public Library has two display modes:
 
 ### Official Study Plan readiness metadata
 
+**⚠️ From `v0.132.0`, every public count on these surfaces is PUBLISHED-ONLY.** `readyCount`, `itemCount`
+and `childCount` on `GET /collections/public` and `GET /collections/public/{id}` count source rows carrying a
+`published_at` stamp, so a curator's unfinished Subject Plan or unpublished topics are absent from the card,
+from the `Preview this plan · N notes` label and from the detail page alike. The Dashboard recommendation
+card reuses these same numbers. See `collections.md` → *Publication boundary*; the counts must not be made to
+disagree with the detail page, and the filtering happens in Java precisely because the underlying count
+queries are shared with the authenticated learner's own library.
+
 Public Study Plan list and detail responses expose a live `readyCount` alongside their existing note totals. `PublicStudyPlanCard` renders this as plain metadata — `{readyCount} of {itemCount} notes practice-ready` — on the published-plan and Dashboard recommendation surfaces. A note is practice-ready only when the existing `STUDY_PACK_READY` resolver says it is ready; zero, partial, and fully ready plans all show their real ratio. If an older cached list response does not include the aggregate, the card keeps its existing item-count metadata without rendering an incomplete ratio.
 
 ### Public Study Plan pre-adopt preview

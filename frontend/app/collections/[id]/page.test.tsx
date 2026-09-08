@@ -20,6 +20,7 @@ import {
   getNoteConceptCounts,
   getPlanReadiness,
   getReviewSetSourceUpdate,
+  getReviewSetPublicationStatus,
   listCoursePrograms,
   listNotes,
   setCompanion,
@@ -27,6 +28,7 @@ import {
   trackAnalyticsEvent,
   updateCollection,
   updateCollectionVisibility,
+  publishReviewSetUpdate,
   updateNoteVisibility,
   updateStudyDaysPerWeek,
   type NoteCollectionItem,
@@ -85,6 +87,7 @@ jest.mock("@/lib/api", () => {
     getNoteConceptCounts: jest.fn(),
     getPlanReadiness: jest.fn(),
     getReviewSetSourceUpdate: jest.fn(),
+    getReviewSetPublicationStatus: jest.fn(),
     listCoursePrograms: jest.fn(),
     listNotes: jest.fn(),
     setCompanion: jest.fn(),
@@ -92,6 +95,7 @@ jest.mock("@/lib/api", () => {
     trackAnalyticsEvent: jest.fn(),
     updateCollection: jest.fn(),
     updateCollectionVisibility: jest.fn(),
+    publishReviewSetUpdate: jest.fn(),
     updateNoteVisibility: jest.fn(),
     updateStudyDaysPerWeek: jest.fn(),
   };
@@ -305,12 +309,14 @@ describe("CollectionDetailPageClient", () => {
     (getNoteConceptCounts as jest.Mock).mockReset();
     (getPlanReadiness as jest.Mock).mockReset();
     (getReviewSetSourceUpdate as jest.Mock).mockReset();
+    (getReviewSetPublicationStatus as jest.Mock).mockReset();
     (listNotes as jest.Mock).mockReset();
     (setCompanion as jest.Mock).mockReset();
     (setPrimaryCollection as jest.Mock).mockReset();
     (trackAnalyticsEvent as jest.Mock).mockReset();
     (updateCollection as jest.Mock).mockReset();
     (updateCollectionVisibility as jest.Mock).mockReset();
+    (publishReviewSetUpdate as jest.Mock).mockReset();
     (updateStudyDaysPerWeek as jest.Mock).mockReset();
     (listCoursePrograms as jest.Mock).mockReset();
     (updateNoteVisibility as jest.Mock).mockReset();
@@ -359,6 +365,13 @@ describe("CollectionDetailPageClient", () => {
       subjectPlansAdded: 0,
       skippedCount: 0,
       changes: [],
+    });
+    (getReviewSetPublicationStatus as jest.Mock).mockResolvedValue({
+      collectionId: "collection-1",
+      unpublishedChanges: false,
+      topicsAdded: 0,
+      subjectPlansAdded: 0,
+      lastUpdatePublishedAt: "2026-09-08T00:00:00Z",
     });
     Object.defineProperty(globalThis.window, "innerWidth", {
       configurable: true,
@@ -2803,6 +2816,91 @@ describe("CollectionDetailPageClient", () => {
     await screen.findByRole("heading", { name: "Midterm Study Plan" });
 
     expect(screen.queryByRole("button", { name: "Publish settings" })).not.toBeInTheDocument();
+  });
+
+  it("keeps Publish update disabled until a public Review Set has unpublished curriculum rows", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ role: "ADMIN", profileType: "STUDENT", planType: "FREE" });
+    (getCollection as jest.Mock).mockResolvedValue(collection({ visibility: "PUBLIC" }));
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    const publishUpdate = await screen.findByRole("button", { name: "Publish update" });
+    await waitFor(() => expect(publishUpdate).toBeDisabled());
+    fireEvent.click(publishUpdate);
+    expect(screen.queryByText("Publish Review Set update?")).not.toBeInTheDocument();
+    expect(publishReviewSetUpdate).not.toHaveBeenCalled();
+  });
+
+  it("lets a curator publish only a public Review Set with unpublished source additions", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ role: "ADMIN", profileType: "STUDENT", planType: "FREE" });
+    (getCollection as jest.Mock).mockResolvedValue(collection({ visibility: "PUBLIC" }));
+    (getReviewSetPublicationStatus as jest.Mock).mockResolvedValue({
+      collectionId: "collection-1",
+      unpublishedChanges: true,
+      topicsAdded: 2,
+      subjectPlansAdded: 1,
+      lastUpdatePublishedAt: "2026-09-08T00:00:00Z",
+    });
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    const publishUpdate = await screen.findByRole("button", { name: "Publish update" });
+    await waitFor(() => expect(publishUpdate).toBeEnabled());
+    fireEvent.click(publishUpdate);
+    expect(await screen.findByText("Publish Review Set update?")).toBeInTheDocument();
+    expect(screen.getByText("2 topics added · 1 Subject Plan added")).toBeInTheDocument();
+
+    (publishReviewSetUpdate as jest.Mock).mockResolvedValue({
+      collectionId: "collection-1",
+      unpublishedChanges: false,
+      topicsAdded: 0,
+      subjectPlansAdded: 0,
+      lastUpdatePublishedAt: "2026-09-08T01:00:00Z",
+    });
+    fireEvent.click(screen.getAllByRole("button", { name: "Publish update" }).at(-1)!);
+    await waitFor(() => expect(publishReviewSetUpdate).toHaveBeenCalledWith("collection-1"));
+  });
+
+  /**
+   * ⚠️ GUARD (v0.132.0 pressure test, F4): A PUBLISH FAILURE MUST BE READABLE WHERE THE CURATOR IS
+   * LOOKING — INSIDE THE OPEN DIALOG.
+   *
+   * The catch always set `mutationError` and the page-level error Card was genuinely in the DOM, so
+   * the obvious test — `expect(screen.getByText(message)).toBeInTheDocument()` — PASSED while the
+   * curator could see nothing. `setPublishUpdateOpen(false)` sits inside the `try`, so on failure the
+   * modal stays open, and `AppModal` portals a `fixed inset-0 bg-black/55` backdrop directly over the
+   * page body that holds the Card.
+   *
+   * ⚠️ SO THIS ASSERTS CONTAINMENT, NOT PRESENCE. `within(dialog)` is the whole point of the test; a
+   * plain `getByText` here would re-introduce the defect it exists to catch. This is the `v0.131.0`
+   * disabled-control lesson one layer up: the control was enabled, the FEEDBACK was occluded.
+   */
+  it("shows a failed publish inside the still-open dialog, not behind its backdrop", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ profileType: "STUDENT", planType: "FREE", role: "ADMIN" });
+    (getCollection as jest.Mock).mockResolvedValue(collection({ visibility: "PUBLIC" }));
+    (getReviewSetPublicationStatus as jest.Mock).mockResolvedValue({
+      collectionId: "collection-1",
+      unpublishedChanges: true,
+      topicsAdded: 2,
+      subjectPlansAdded: 1,
+      lastUpdatePublishedAt: "2026-09-08T00:00:00Z",
+    });
+    (publishReviewSetUpdate as jest.Mock).mockRejectedValue(new Error("Could not publish this Review Set update."));
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    const publishUpdate = await screen.findByRole("button", { name: "Publish update" });
+    await waitFor(() => expect(publishUpdate).toBeEnabled());
+    fireEvent.click(publishUpdate);
+    expect(await screen.findByText("Publish Review Set update?")).toBeInTheDocument();
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Publish update" }).at(-1)!);
+    await waitFor(() => expect(publishReviewSetUpdate).toHaveBeenCalledWith("collection-1"));
+
+    const dialog = await screen.findByRole("dialog");
+    expect(await within(dialog).findByText("Could not publish this Review Set update.")).toBeInTheDocument();
+    // The curator must still be able to retry from where they are.
+    expect(within(dialog).getByRole("button", { name: "Publish update" })).toBeEnabled();
   });
 
   it("publishes a study plan from the admin publish modal", async () => {

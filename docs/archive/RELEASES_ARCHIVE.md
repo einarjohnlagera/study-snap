@@ -16530,3 +16530,67 @@ summaries (user-facing, no implementation detail) also exist at `docs/releases/v
 - `v0.6.0` - Landing Revamp & Positioning
 - `v0.5.0` - Public Profiles & Public Notes
 - `v0.4.0` - Profile-Based Experience & UX
+
+## v0.126.0 - Context Budget
+
+**Status: Released** (kicked off and signed off 2026-09-07, base branch `releases/v0.126.0`, cut from `main` after `v0.125.0` merged and tagged)
+
+Theme: the governing documents stop charging every session for history that is already recorded somewhere else.
+
+**⚠️ IT RESUMES A DOCUMENTED CONVENTION, IT DOES NOT INVENT A TRIM — and that distinction is the whole safety argument.** `docs/archive/README.md` states the rationale verbatim: cold storage for content *"moved here specifically so it doesn't cost tokens to read on every pass through the live docs, while staying searchable (`git grep`)"*, and it is *"a MOVE, not a delete"*. It names the design for the two big files as **current + last few versions**. **`RELEASES.md` holds 116 sections (`v0.41.0` → `v0.125.0`).**
+
+**⚠️ THE CADENCE LAPSED 85 RELEASES AGO, AND THE REASON IS MECHANICAL RATHER THAN NEGLECT: the 2026-07-10 pass at `v0.40.1` was a ONE-OFF WITH NO RECURRING STEP.** Neither `.claude/commands/kickoff.md` nor `signoff.md` mentions archiving, so nothing has triggered it since. **Item 5 is therefore not housekeeping — without it items 1-4 regrow.**
+
+**MEASURED, NOT ESTIMATED (2026-09-07):** `CLAUDE.md` was **357,706 chars**, of which **one line was 322,329** — 63 chained `Previous:` blocks, ~80,000 tokens, **~90% of the file, on every session**. `AGENTS.md`'s preamble is **58,797 chars**. A live `/context` reading showed **memory files at 148.1k tokens, 14.8% of the window, before any code is read.**
+
+### Planned Scope
+
+**(1)** Archive `RELEASES.md` `v0.41.0` → `v0.120.x` into `docs/archive/RELEASES_ARCHIVE.md`, keeping current + last 5 live plus the one-line index, and update the archive header's version range. **(2)** Archive `ROADMAP.md`'s `(Released)` per-version retrospectives into `ROADMAP_ARCHIVE.md`, leaving one-line pointers — exactly the class that archive already holds. **(3)** `CLAUDE.md` line 39 → product description plus the OPEN release's anti-drift only. **(4)** `AGENTS.md` preamble → durable rules plus a pointer to `RELEASES.md`. **(5)** Patch `kickoff.md` to REPLACE rather than bump-and-prepend, and add an archiving step to `signoff.md`.
+
+### Anti-drift
+
+**⚠️ ITEMS 3 AND 4 ARE SAFE ONLY BECAUSE THE CONTENT IS DUPLICATED, AND THAT WAS VERIFIED ACROSS THE FULL `v0.37.0` → `v0.125.0` RANGE RATHER THAN SPOT-CHECKED.** All 72 versions named in `CLAUDE.md` were checked against `RELEASES.md`; two had no `## ` section and were chased individually — **`v0.37.0` is a rule citation** (*"locked since `v0.37.0`"*) that survives inside the rule itself, and **`v0.111.1` is a ruling about a version number that was REJECTED**, so it has no section, but its reasoning is duplicated in `RELEASES.md`'s `v0.110.1` section. **⚠️ A naive section-based check flags those two as data loss; they are not.**
+
+**⚠️ ITEMS 1 AND 2 ARE MOVES — content preserved VERBATIM, exactly as the 2026-07-10 pass did.** **⚠️ ITEMS 3 AND 4 DELETE FROM THE DOCUMENTS THAT GOVERN THIS PROJECT'S ANTI-DRIFT:** `## Key conventions`, `## Task routing`, the PRODUCTION DATABASE READ-ONLY rule, the source-of-truth list, and **every** `AGENTS.md` Anti-Drift Rules entry MUST survive untouched. Only shipped-release narrative goes.
+
+**⚠️ Do NOT prune the ROADMAP Backlog Index** (plan item 6, deliberately excluded) — it mixes LIVE `[CHECKPOINT — due …]` gates with closed rows, and kickoff step 8 requires every `docs/claude-plans/` and `docs/claude-findings/` file to keep a row. It needs judgment, not a script. **⚠️ Do NOT split `AGENTS.md`'s Required Product Architecture section** (plan item 7, held back) — this repo has **twice** recorded that a rule which stops being found stops being followed.
+
+**⚠️ NO product code, NO migration, NO quota/entitlement/meter change, NO behaviour change of any kind.** **⚠️ `frontend/app/onboarding` STAYS FROZEN** (`[CHECKPOINT — due 2026-09-11]`, four days out) and **NO Learning Connections promotion before `2026-09-19`** — this release touches **no product surface at all**, which is precisely why it can run inside the twelve-read window.
+
+### Verification
+
+**A single `advisor()` call on the diff** — no permission substrate, no cross-user read, no money semantics, no migration, and by construction no behaviour change.
+
+**⚠️ PRE-DECLARED GUARD, AND IT NAMES THE CHECK THAT PROVES NOTHING: a diff that merely looks smaller is not evidence.** The discriminating checks are **(a)** a `grep` for every surviving governing rule before and after, **(b)** that `RELEASES.md` + `RELEASES_ARCHIVE.md` together still contain every archived section **byte-for-byte**, and **(c)** a re-measurement of all four files against the figures above.
+
+**Routing: CLAUDE CODE inline.**
+
+### Shipped
+
+**Cold pressure test, and it found that this release's own headline word was wrong.**
+
+- **⚠️⚠️ `CLAUDE.md` LINE 39 WAS A *DELETE*, NOT A *MOVE* — AND IT TOOK A LIVE CORRECTION WITH IT.** `RELEASES.md` and `ROADMAP.md` were archived properly; the 322,329-char chain was simply removed, surviving only in git history, against `docs/archive/README.md`'s own *"a MOVE, not a delete"*. **⚠️ THE VERIFICATION THAT PRECEDED IT CHECKED THE WRONG THING: it proved every VERSION named in the chain had a `RELEASES.md` section — true, and beside the point — and never asked whether the chain carried CLAIMS with no duplicate.** It did. *"ALL THREE OF THOSE COPY FIXES HAVE SHIPPED — VERIFIED AGAINST CODE 2026-09-04"* and *"the ALE curator copy is NOT the blocker any more"* returned **zero** repo-wide matches, while `AGENTS.md:53` — in the file `CLAUDE.md` calls *"Always check this first"* — went on asserting the blocker those sentences had cleared. **A session would have redone shipped work or re-rejected `ARCHITECTURE`, which is precisely what the deleted *"Do NOT re-reject `ARCHITECTURE`"* line existed to prevent.** Fixed by making it a real move (`docs/archive/CLAUDE_ARCHIVE.md`) and correcting `AGENTS.md:53` in place. **⚠️ CARRIED LESSON, GENERALISED: "the content is duplicated" must be tested on the CLAIMS, not the version numbers — a chain of release narrative accumulates corrections to ITSELF, and a correction is by nature the one sentence with no duplicate.**
+- **⚠️ `AGENTS.md` FORBADE EXACTLY WHAT THE NEW `signoff.md` STEP MANDATES.** `AGENTS.md:1729` read *"Do not delete old release entries"* full stop, with **zero** mentions of the archive — so a session reading the anti-drift document refuses the step and one reading `signoff.md` performs it. **That contradiction is the better explanation of why the convention lapsed for 85 releases**, and this release had patched the command file and left the rule standing. Reconciled: archive ≠ delete, stated at the rule itself.
+- **⚠️ THE NEW INSTRUCTION WAS SELF-DELETING.** It lived in exactly two places — `signoff.md`, and `CLAUDE.md`'s `Current version:` block, **which the next kickoff REPLACES by this release's own new rule**. `kickoff.md` has no archive step, and `CLAUDE.md`'s own 9-step checklist said *"Bump"*, not REPLACE. **⚠️ A fix that survives one release is not a fix**; both are now in `CLAUDE.md`'s durable checklist, deliberately duplicated.
+- **⚠️ THE ROADMAP HALF POINTED AT A STRUCTURE THAT NO LONGER EXISTS.** It archived *"newly-`(Released)` per-version retrospectives"* — but kickoff stopped creating those at `v0.85.0` and live `ROADMAP.md` has **zero** `## v` sections, so it would have matched **nothing, forever**, while `## Current Release Baseline` — **247,345 chars naming 121 versions, one paragraph per release, structurally identical to the chain this release just removed** — grew unguarded. Repointed.
+- **⚠️ THE ITEM 4 HOLD WAS OVER-CAUTIOUS, AND ITS EVIDENCE WAS AN ARTIFACT OF THE SAME MISTAKE AS THE FIRST BULLET.** The "two of three rules exist nowhere else" test matched text **verbatim**; this repo restates rules in different words. Hand-checking ~45 rules put genuinely-unique at **~2%**, not 67%, and **zero** checkpoints are unique to `AGENTS.md` — all eight dates appear in `ROADMAP.md` with 8-35 references each. **⚠️ THE METHOD CONCERN SURVIVES AND IS WHY THE HOLD STANDS ANYWAY:** the largest block (27,031 chars) does **not** begin with a version tag, so a tag-based sweep cuts the small blocks and leaves the big one — and bullet 1 proves an in-place replace loses content. The shape is: classify each rule by destination, restore the nowhere-else ones first, then move the chain to a `docs/archive/AGENTS_ARCHIVE.md`. **Its own release.**
+- **Figures corrected:** `RELEASES.md` is **133,497** not 130,778; `ROADMAP.md` **844,282** not 842,841; live checkpoints **222** not 223 — verified by set comparison, no gate lost. **On a release whose deliverable is numbers, wrong numbers matter.**
+- **Not refuted:** both moves are byte-for-byte (117/117 sections, 60/60 retrospectives, independently re-split from `bc21785d`), and `diff` of old versus new `CLAUDE.md` is **exactly one changed line**, so nothing outside line 39 could have been lost.
+
+**⚠️ ITEM 4 IS NOT SHIPPED, AND IT IS HELD ON EVIDENCE RATHER THAN DEFERRED FOR TIME.** The plan's own safety premise — *"items 3 and 4 are safe ONLY because the content is duplicated in `RELEASES.md`"* — **is true for item 3 and FALSE for item 4**, which the plan could not see because it spot-checked three releases rather than testing the premise per line.
+
+**`CLAUDE.md`'s line 39 was pure release narrative. `AGENTS.md`'s preamble is not the same shape: it is durable RULES tagged with the version that introduced them.** Measured on the twelve candidate lines: **every one contains rule language**, and **line 53 alone carries 59 rule-words and 13 live `[CHECKPOINT — due …]` references**. Three rules were then tested directly against `RELEASES.md` plus its archive:
+
+| Rule text in `AGENTS.md` | Copies in `RELEASES.md` + archive |
+|---|---:|
+| `only after `lockAndReadBirthYear`` | **0** |
+| `Target Audience must never become a runtime` | 2 |
+| `age-threshold sweeper, NOT a shutdown drain` | **0** |
+
+**Two of three exist NOWHERE ELSE.** Trimming that preamble by pattern would have deleted rules — and live checkpoint pointers — from the document whose entire job is anti-drift, which is the failure this repo has recorded twice as *a rule that stops being found stops being followed.* **⚠️ The remaining work is hand-separating rule from narrative line by line; it is judgment, not a pass, and it wants its own release. `AGENTS.md` is therefore UNCHANGED at 211,638 chars.**
+
+**⚠️ `ROADMAP.md` is still ~210k tokens, and that is the excluded item 6 rather than a miss:** its Backlog Index (~139k) and Current Release Baseline (~62k) were deliberately left alone.
+
+**Item 3 landed in the kickoff commit itself, deliberately.** Prepending a `v0.126.0` block to line 39 in the normal way would have added another release's narrative to the very line this release exists to remove, then removed it hours later. **`CLAUDE.md`: 357,718 → 39,311 chars (~89k → ~9k tokens), matching the plan's prediction.** All twelve governing rules verified present after the replacement.
+
+**Items 1, 2 and 5 shipped.** `RELEASES.md` **1,866,861 → 133,497 chars (~466k → ~33k tokens)** — 111 sections (`v0.41.0` → `v0.120.0`) moved to `docs/archive/RELEASES_ARCHIVE.md`, keeping current + last 5 live. `ROADMAP.md` **1,189,862 → 844,282** — 60 `(Released)` retrospectives moved to `ROADMAP_ARCHIVE.md`. **⚠️ BOTH VERIFIED BYTE-FOR-BYTE, WHICH IS THE GUARD THAT MATTERED: all 117 `RELEASES.md` sections and all 60 ROADMAP retrospectives are present and unchanged across live + archive.** The only two flagged diffs in each case were the index block relocating and a section-parser boundary artifact, both confirmed by inspection rather than assumed. **222 live `[CHECKPOINT]` rows and every live ROADMAP section survive.** Item 5 patched `kickoff.md` to REPLACE rather than prepend and added an archive step to `signoff.md`, **which is the half that stops items 1-3 regrowing** — its absence is why the 2026-07-10 pass never ran again.
