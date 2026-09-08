@@ -2,7 +2,7 @@
 
 ## v0.132.0 - Publication Boundary
 
-**Status: In Progress** (kicked off 2026-09-08, base branch `releases/v0.132.0`, **cut from `docs/planning-publication-boundary-and-plan-corrections` rather than `main`** so that branch's audit commit rides in via the release PR — the `v0.130.0`/`v0.120.0`/`v0.111.0` precedent, used here for convenience rather than because anything is blocked)
+**Status: Released** (kicked off 2026-09-08, signed off 2026-09-08, base branch `releases/v0.132.0`, **cut from `docs/planning-publication-boundary-and-plan-corrections` rather than `main`** so that branch's audit commit rides in via the release PR — the `v0.130.0`/`v0.120.0`/`v0.111.0` precedent, used here for convenience rather than because anything is blocked)
 
 **Scope is slices P1 and P2** of `docs/claude-plans/official-review-set-update-publication-boundary.md` (audit written 2026-09-07 by a peer session, every claim `file:line`-anchored). **⚠️ P3 IS DEFERRED — see below.**
 
