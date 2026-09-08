@@ -1,5 +1,8 @@
 # Review Set shaping — module
 
+> Last updated: v0.132.0 - 2026-09-08 (Released). Rule 5 (the publication boundary) and the
+> adopter-update note below it are new in this release.
+
 **Paste with `GPT_CONTEXT.md` when the task is designing or rebuilding a Review Set** (a board-exam
 curriculum such as the CE, ALE, LET, CPALE or PNLE review). Not needed for other work.
 
@@ -26,6 +29,24 @@ Four rules that constrain any proposal:
    or section name.**
 4. **Bulk Generate batches by Subject**, applying one Subject and one Domain Context to the whole
    batch. So the Subject you assign decides how the note is later generated, in groups.
+5. **Adding curriculum is not publishing it (`v0.132.0`).** Notes and Subject Plans you add to an
+   already-public Review Set are created **unpublished**: invisible to the public catalog, to new
+   adopters, and to the update offered to existing adopters, until the curator presses **Publish
+   update** on the Review Set's own page. **So a reshape can be built over several sittings without
+   anyone seeing a half-finished subject** — which is what makes a large one safe to do
+   incrementally. **⚠️ Hiding covers ADDITIONS ONLY: a note you REMOVE, or a section you rename or
+   reorder, changes what people see immediately.** Sequence accordingly — add first, and leave
+   removals and renames until close to when you publish.
+   **⚠️ The Publish control is NOT in the Builder**, which is where you will actually be adding
+   notes; it lives on the Review Set's root page, so work can sit unpublished with nothing prompting
+   you.
+
+**How an existing adopter receives your work.** Publishing makes an update **available**, never
+forced: the learner sees *"Official Review Set updates available"* on their own copy and chooses to
+apply it. **Applying is additive-only — new notes and new Subject Plans arrive; moves, renames and
+removals are reported to them but never applied** — and their own added notes and progress are kept.
+**So an adopter's copy DRIFTS from your source over time, by design.** Do not propose a reshape that
+depends on every adopter ending up with an identical set.
 
 ## The four metadata axes
 
