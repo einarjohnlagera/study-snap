@@ -278,7 +278,13 @@ learner who has never been sent an announcement still sees an empty inbox.
 - **Stage 5 events** — connection request, named note share. **⚠️ Deferred on CONTAMINATION, not
   effort: the connection-request notification nudges a PENDING invitation toward ACCEPTED, which is
   the kill criterion of `[CHECKPOINT — due 2026-09-19]`, whose denominator is ONE.**
-- **Stage 6** — Review Set update notifications, blocked on the §8 drift-signature dedup decision.
+- **Stage 6** — Review Set update notifications. **⚠️ CORRECTED 2026-09-09: this is NO LONGER blocked
+  on the §8 drift-signature dedup decision, and that design MUST NOT be implemented — `v0.132.0`'s
+  publication-boundary audit supersedes it.** The boundary now defines exactly when to fire
+  (`publishReviewSetUpdate` only, **never** raw source drift), and
+  `docs/claude-plans/attention-notifications-email-expansion-stage1.md` settles the key as
+  `REVIEW_SET_UPDATE:<adoptedCollectionId>`. It is now **Stage D** in that document and is the next
+  slice after `v0.134.0`, gated on the Stage B taxonomy landing first.
 - **Stage 7** — assignments, push/email/SMS, quiet hours, a preferences centre.
 - **Quiz-share notifications** — a share link has no addressee. **⚠️ Do not fabricate a recipient.**
 - A notification for a note becoming PUBLIC, or for a generic public link — **named shares only**.
