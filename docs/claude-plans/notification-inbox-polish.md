@@ -1,6 +1,27 @@
 # Notification Inbox Polish — Plan
 
-**Status:** PLAN ONLY — nothing implemented. Written 2026-09-07.
+**Status: ✅ SHIPPED as `v0.131.0`, 2026-09-08.** All three items are implemented and merged (#1345).
+Written 2026-09-07 as plan-only; the sections below are kept as the record of intent, with **two
+corrections that changed the work**:
+
+- **⚠️ §3's SURFACE LIST IS FOUR, NOT FIVE — THE SHARED QUIZ WAS DROPPED, AND ADDING THE HOOK THERE
+  WOULD BE A SILENT NO-OP.** The table at §3 lists `/quiz/[token]` as lacking focus mode, and §3's
+  warning tells a reader to check its exit "before the hook is added". **Do neither.**
+  `app-shell.tsx:593` returns early for that route with a bare `<main>`, so it renders **no header at
+  all** and the bell is already absent; focus mode's only consumer is the header gate. Adding it would
+  change nothing while reading as shipped work — the `v0.116.0`/`v0.117.0` class.
+- **⚠️ §3's exit warning was sound, but the audit run against it was WRONG and no exit work was owed.**
+  The `v0.131.0` kickoff concluded Quick Review's running branch had no in-page exit and widened the
+  item accordingly. It has one — a *Leave Quiz* button (`quick-review/page.tsx:1101`). The audit had
+  grepped for `BackLink`, `<Link` and `router.push` and **never searched for the
+  `onClick={() => requestLeave()}` button that is the actual running-state exit in this repo.** All
+  four surfaces already had one. Guard 7 shipped as a per-surface regression guard instead.
+
+**⚠️ Two implementation facts §1 and §4 could not have known, both load-bearing:** this project has
+**no `@testing-library/user-event`**, and `fireEvent.click` does not fire `mousedown` — so guard 2 must
+dispatch `mousedown` **then** `click` on the bell and assert the **request count**, or it passes under
+the defect by construction. And a sticky in-page bar on a newly-focused surface must move from
+`top-16` to `top-0`, because that offset exists to clear the header focus mode now hides.
 **Target:** v0.131.0. **Scope:** three fixes against the **shipped** `v0.130.0` inbox, plus the
 focus-mode expansion they imply.
 **Subject:** `frontend/components/notifications/notification-inbox.tsx` (190 lines) and

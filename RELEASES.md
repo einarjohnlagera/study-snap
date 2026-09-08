@@ -2,7 +2,7 @@
 
 ## v0.131.0 - Inbox Polish
 
-**Status: In Progress** (kicked off 2026-09-07, base branch `releases/v0.131.0`, cut from `main` after `v0.130.0` merged as #1344 and tagged `3cec79bb`)
+**Status: Released** (kicked off 2026-09-07, signed off 2026-09-08, base branch `releases/v0.131.0`, cut from `main` after `v0.130.0` merged as #1344 and tagged `3cec79bb`)
 
 **Three fixes against the SHIPPED `v0.130.0` inbox**, from `docs/claude-plans/notification-inbox-polish.md` (owner report, 2026-09-07). **⚠️ FRONTEND ONLY — no backend, no migration, no contract change, no new notification type.**
 
@@ -82,6 +82,10 @@
 **⚠️ THE `jest.mock` ALLOW-LIST TRAP FIRED TWICE DURING THIS RELEASE — ONCE ON THE EXISTING SUITE, ONCE ON WORK ADDED HERE.** `quick-review/page.test.tsx` mocked `exam-focus-context` with **only** `useBottomViewportClaim`, so the moment the page imported `useExamFocusMode` the call site would have received `undefined`. Then the new mock added to `adaptive-practice/page.test.tsx` omitted `useBottomViewportClaim` and broke an unrelated answer-review test — **because the CHILD `QuizAnswerReview` imports it, not the page.** A mock factory has to cover the whole subtree's use of a module, not the file's own import list. This is the `v0.130.0` carried lesson landing exactly where it was predicted to.
 
 **Guard 7 is asserted PER SURFACE**, in the same test as guard 6 rather than separately — focus mode hides the whole header, so the in-page exit is the only remaining way out and the two facts are one fact.
+
+**NO `[CHECKPOINT]` IS OWED, and the reason is that nothing here shipped ahead of its evidence.** All three items fix defects the owner reported against shipped behaviour, each verified directly against the code and pinned by a mutation-killed guard — there is no pre-committed rule, owner override, ambiguous read or bootstrap argument anywhere in the release. The one thing that *was* uncertain — whether the newly-focused surfaces keep a way out — was settled by reading the code before writing any, and is now a standing per-surface guard rather than a dated obligation.
+
+**Suites: 209 frontend suites / 2,325 tests, 0 failures; `tsc` clean; 0 lint errors** (one pre-existing `react-hooks/exhaustive-deps` warning at `challenge-quiz/page.tsx:1395`, on a line this release did not touch). **Backend untouched — frontend-only release, no migration.**
 
 ## v0.130.0 - Notification Inbox
 
