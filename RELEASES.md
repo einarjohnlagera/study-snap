@@ -39,11 +39,29 @@ Source: `docs/claude-plans/program-family-generalization-and-education-family.md
 
 **⚠️ NOT safe automatically: five free-text `course_program` columns** (`notes`, `note_collections`, `users`, `bulk_generation_result`, `official_study_plan_wishlist` — the last has `normalized_course_program` too) may hold the literal old string and would silently keep it. No repository method resolves a catalog entry by name, so nothing breaks — but a stale string stops matching the catalog, which affects discovery and wishlist normalization. **The precondition read counts these.**
 
+### ✅ PRECONDITION READ RUN 2026-09-08 — RESULTS, AND ONE CONDITION NOT MET
+
+Run read-only against `notelib-db-prod`. **The audit's central warning is now VERIFIED, not assumed: `program_families` shows Engineering with EIGHTEEN programs against `V106`'s THREE seeds**, so the catalog was indeed extended through the API and a repo-only duplicate audit would have been unsound.
+
+| Check | Result |
+|---|---|
+| Education-adjacent catalog rows | **Only two** — `Education` (`exam_goal_slug='let'`, no family) and `Special Needs Education – Generalist` (no slug, no family) |
+| Families | **One** — `Engineering`, 18 programs. `Education` does not exist as a family |
+| Collisions with the six proposed inserts | **None.** Elementary, Secondary, Early Childhood, Technical-Vocational Teacher, Physical Education and Teacher Certification are all clear |
+| Notes linked to the rename target via `note_course_program` | **ZERO** |
+| Free-text `course_program` hits | **ONE** — `users.course_program`, exactly `Special Needs Education – Generalist` (36 chars, en dash) |
+
+**⚠️ OWNER DECISION 1'S CONDITION IS NOT MET.** The rename was settled *conditional on zero free-text hits*; there is one. **⚠️ NOTHING BREAKS** — `users.course_program` is consumed by `StudyPackGenerationContextResolver` as **free text**, never resolved against the catalog by name — but that one account's profile program would stop corresponding to a catalog entry. **Handed over as an owner-run write in `docs/claude-plans/v0.133.0-owner-profile-string-update.sql`** with the expected row count and before/after verification. Three options are stated there; the recommendation is to run it **in the same maintenance step as the migration, not before it**.
+
+**⚠️ CONSEQUENCE FOR THE RENAME GUARD TEST: its production denominator is ZERO.** No Note is linked to the row being renamed, so the guard is a purely synthetic structural test. **Write it anyway — it is the regression guard for the migration — but do NOT record it as evidence that real data survived**, because there is no real data to survive.
+
+**✅ DECISIONS 2 AND 3 SETTLED 2026-09-08 (owner):** new Education programs carry `exam_goal_slug = 'let'` **only where learners genuinely sit the LET**, never as a family proxy; and **the admin family selector ships in this release.**
+
 ### Owner decisions
 
-1. ~~Reuse or rename `Special Needs Education – Generalist`?~~ **SETTLED 2026-09-08: RENAME**, keeping the row's `id`. **⚠️ CONDITIONAL on the precondition read returning ZERO free-text hits.** If it does not, what happens to those strings is a further owner decision **and a production write, which is the owner's to run.**
-2. **OPEN — do the new Education programs carry `exam_goal_slug = 'let'`?** Recommendation: **only where learners genuinely sit the LET**; leave NULL otherwise rather than making the exam goal a family proxy. `Education` already carries `'let'`.
-3. **OPEN — ship the admin family selector now or later?** Recommendation: **now**, per the gap table above.
+1. ~~Reuse or rename `Special Needs Education – Generalist`?~~ **SETTLED 2026-09-08: RENAME**, keeping the row's `id`. **⚠️ THE CONDITION WAS NOT MET — the read returned ONE hit in `users.course_program`.** The catalog rename still proceeds; the one stale profile string is handed over as an owner-run write (`docs/claude-plans/v0.133.0-owner-profile-string-update.sql`), and option (c) there reopens this decision if the owner prefers.
+2. **✅ SETTLED 2026-09-08 — `exam_goal_slug = 'let'` only where learners genuinely sit the LET.** Original recommendation, accepted: **only where learners genuinely sit the LET**; leave NULL otherwise rather than making the exam goal a family proxy. `Education` already carries `'let'`.
+3. **✅ SETTLED 2026-09-08 — the admin family selector SHIPS IN THIS RELEASE.**
 
 ### Verification tier
 
