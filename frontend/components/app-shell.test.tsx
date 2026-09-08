@@ -459,6 +459,39 @@ describe("AppShell", () => {
     expect(screen.queryByText("Public Navbar")).not.toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Note" })).not.toBeInTheDocument();
     expect(screen.queryByTestId("mobile-bottom-tab-bar")).not.toBeInTheDocument();
+    // ⚠️ The bell goes with the header — that is the whole point of extending focus mode in v0.131.0.
+    expect(screen.queryByLabelText("Open notifications")).not.toBeInTheDocument();
+  });
+
+  it("keeps polling the unread count while exam focus hides the bell", async () => {
+    // ⚠️ GUARDS A USER-FACING PROMISE THAT WOULD OTHERWISE BE UNTESTED. v0.131.0's release notes say the
+    // count "keeps updating quietly in the background, so the bell is accurate the moment you finish".
+    // That holds because the poll is a top-level effect in AppShell and focus mode only gates the header
+    // RENDER — but "it follows from where the effect sits" is reasoning, not a guard, and this repo has
+    // twice shipped a behaviour whose only evidence was that kind of reasoning (v0.116.0, v0.117.0).
+    //
+    // ⚠️ Stopping the poll here would look harmless and would leave the badge stale for the whole quiz,
+    // showing a wrong number at exactly the moment the learner comes back to it.
+    currentPathname = "/notes/note-1/long-exam";
+    window.history.replaceState({}, "", currentPathname);
+    (getNotificationUnreadCount as jest.Mock).mockResolvedValue({ count: 2 });
+
+    function ExamFocusActivator() {
+      useExamFocusMode(true);
+      return <div>Long Exam in session</div>;
+    }
+
+    render(
+      <ExamFocusProvider>
+        <AppShell>
+          <ExamFocusActivator />
+        </AppShell>
+      </ExamFocusProvider>,
+    );
+
+    await screen.findByText("Long Exam in session");
+    expect(screen.queryByLabelText("Open notifications")).not.toBeInTheDocument();
+    await waitFor(() => expect(getNotificationUnreadCount).toHaveBeenCalled());
   });
 
   it("hides mobile tabs while a Quick Review session owns the bottom viewport", async () => {
