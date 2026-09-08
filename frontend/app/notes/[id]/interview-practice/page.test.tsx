@@ -1,5 +1,15 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import InterviewPracticePage from "./page";
+
+const useExamFocusModeMock = jest.fn();
+
+// ⚠️ A jest.mock factory is an ALLOW-LIST. List every export this page's SUBTREE uses, not just the
+// page's own imports — a child component's import of an omitted name fails at the call site, silently,
+// and shows up as an unrelated test breaking.
+jest.mock("@/components/exam-mode/exam-focus-context", () => ({
+  useExamFocusMode: (active: boolean) => useExamFocusModeMock(active),
+  useBottomViewportClaim: jest.fn(),
+}));
 import {
   answerInterviewPracticeQuestion,
   completeInterviewPracticeSession,
@@ -152,6 +162,34 @@ describe("InterviewPracticePage", () => {
     expect(await screen.findByRole("button", { name: /Fallback Course Note/ })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Other Course Note/ })).not.toBeInTheDocument();
     expect(screen.getByText("1 note · 5 questions")).toBeInTheDocument();
+  });
+
+  it("hides the app-shell chrome once practice is running, and keeps the Leave Practice exit reachable", async () => {
+    // ⚠️ GUARD 6 + GUARD 7 for this surface, and note the gate: the hook is passed `phase === "running"`
+    // alone, deliberately matching the Leave Practice button's own gate rather than the session guard's
+    // narrower `&& Boolean(sessionId)`. Focus mode must never be active on a state the exit does not
+    // cover, so the two expressions have to be the same one.
+    (startInterviewPractice as jest.Mock).mockResolvedValue({
+      sessionId: "session-1",
+      status: "IN_PROGRESS",
+      question: {
+        question: "Which answer is strongest?",
+        choices: ["Option A", "Option B", "Option C", "Option D"],
+        correctIndex: 0,
+        concept: "System design",
+        explanation: "Explanation",
+      },
+      questionCount: 5,
+      currentQuestionIndex: 0,
+    });
+
+    render(<InterviewPracticePage />);
+    expect(useExamFocusModeMock).toHaveBeenLastCalledWith(false);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Start Interview Practice" }));
+
+    expect(await screen.findByRole("button", { name: "Leave Practice" })).toBeInTheDocument();
+    expect(useExamFocusModeMock).toHaveBeenLastCalledWith(true);
   });
 
   it("attributes readiness-gap launches to Interview Practice", async () => {

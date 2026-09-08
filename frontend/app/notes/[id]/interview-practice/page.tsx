@@ -24,6 +24,7 @@ import {
   type NoteResponse,
   type QuizItem,
 } from "@/lib/api";
+import { useExamFocusMode } from "@/components/exam-mode/exam-focus-context";
 import { BackLink } from "@/components/ui/back-link";
 import { getAuthUser } from "@/lib/auth";
 import { getCollectionLabels } from "@/lib/collection-labels";
@@ -302,6 +303,10 @@ export default function InterviewPracticePage() {
     setPhase("forfeited");
   }, [sessionId]);
 
+  // ⚠️ Gated on `phase === "running"` alone, deliberately matching the Leave Practice button's own gate
+  // rather than the session guard's narrower `&& Boolean(sessionId)`. The exit must be present whenever
+  // the chrome is hidden, so focus mode may never be active on a state the exit does not cover.
+  useExamFocusMode(phase === "running");
   const { requestLeave, LeaveQuizModal } = useQuizSessionGuard({
     active: phase === "running" && Boolean(sessionId),
     fallbackHref: noteHref,

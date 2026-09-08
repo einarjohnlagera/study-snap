@@ -51,6 +51,56 @@ number the learner could neither open nor clear. Fixed in the same release; both
 both**, and the lifecycle leg on the badge is mirroring rather than live (announcements are
 non-actionable, so no row has both today) — it is there so the two cannot drift.
 
+## Opening, closing, and the bell as a toggle
+
+The bell is a **toggle**, not a re-open. Clicking it while the panel is open **closes it and does NOT
+refetch**; clicking it while closed **opens it and loads**. **⚠️ Do NOT drop the load-on-open** — only
+the re-click while open skips the fetch. Shipped in `v0.131.0`; before that `openInbox` set open and
+called `loadInbox()` unconditionally, so clicking an open inbox re-opened and refetched it.
+
+The desktop panel closes on **outside click** and on **Escape**, matching every sibling dropdown (the
+avatar menu, the theme toggle, the export menu). There is deliberately **no `Close` button** — it
+existed only because closing was otherwise impossible.
+
+**⚠️ THE OUTSIDE-CLICK REF WRAPS THE BELL AND THE PANEL TOGETHER, AND THAT IS LOAD-BEARING.** If it
+wrapped only the panel, the bell would count as "outside": `mousedown` would close the panel and the
+bell's own `click` would immediately reopen **and refetch** it, so one click would flicker instead of
+closing. A test that clicks the page *body* passes while the bell double-fires — the guard has to
+dispatch `mousedown` **and** `click` on the bell itself, and assert the **request count** rather than
+what is on screen.
+
+**⚠️ MOBILE IS UNCHANGED AND MUST STAY THAT WAY.** That path renders `AppModal`, which already handles
+its own backdrop and Escape; the desktop handler is gated on `!isMobile` so the two cannot fight.
+
+**Trigger accessibility:** the `aria-label` stays **stable** and `aria-expanded` carries the state,
+which is the convention already used by `theme-toggle.tsx` and `export-dropdown-menu.tsx`. A label that
+swaps with state *alongside* `aria-expanded` announces the same fact twice.
+
+## The bell is hidden while a quiz is running
+
+`useExamFocusMode(active)` hides the whole app-shell header — and with it the bell — plus the mobile tab
+bar. As of `v0.131.0` it is active on **Challenge Quiz (every mode, not just Board Exam), Quick Review,
+Adaptive Practice, Interview Practice**, alongside Long Exam.
+
+**⚠️ EVERY FOCUSED SURFACE MUST KEEP AN IN-PAGE EXIT, AND THE HOOK'S GATE MUST MATCH THE EXIT'S GATE.**
+Hiding the chrome removes the normal way out, so focus mode may never be active in a state the exit does
+not cover. Each of these pages renders a *Leave Quiz* / *Leave Practice* control on the same expression
+passed to the hook, and a test asserts both together, **per surface**.
+
+**⚠️ A `BackLink` elsewhere in the file does NOT satisfy this.** The `v0.131.0` kickoff wrongly concluded
+Quick Review had no exit, because the audit grepped for `BackLink` and links and missed the
+`onClick={() => requestLeave()}` button that is the real running-state exit in this repo.
+
+**⚠️ DO NOT ADD `useExamFocusMode` TO THE SHARED QUIZ (`/quiz/[token]`) — IT WOULD BE A SILENT NO-OP.**
+`app-shell.tsx:593` returns early for that route with a bare `<main>`, so it renders no header and the
+bell is already absent. Focus mode's only consumer is the header gate.
+
+**⚠️ A sticky in-page bar on a focused surface belongs at `top-0`, not `top-16`.** The 4rem offset exists
+to clear the app-shell header; with the header hidden it leaves the bar floating with nothing above it.
+
+**⚠️ The unread poll keeps running during focus mode**, deliberately — stopping it would leave the badge
+stale the moment the learner exits.
+
 ## Read, dismiss, and what the panel must not do
 
 `read_at` is awareness; `dismissed_at` is inbox visibility. Both are idempotent — setting an already

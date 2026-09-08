@@ -1157,6 +1157,26 @@ describe("ChallengeQuizPage", () => {
     expect(screen.queryByRole("dialog", { name: "You’ve reached your quiz limit" })).not.toBeInTheDocument();
   });
 
+  it("hides the app-shell chrome during an ORDINARY Challenge Quiz, not just a Board Exam", async () => {
+    // ⚠️ GUARD 6 + GUARD 7. This hook was `isBoardExamMode && phase === "running"`, so the notification
+    // bell stayed visible through every ordinary Challenge Quiz. It is now `phase === "running"`.
+    //
+    // ⚠️ The fixture is deliberately an ORDINARY quiz: a Board Exam fixture passes under both the old
+    // and the new expression and would prove nothing about the change.
+    //
+    // ⚠️ Guard 7 rides along in the same test on purpose — focus mode hides the whole header, so the
+    // in-page Leave Quiz control is the only remaining way out and must be asserted beside it.
+    setupInProgressChallengeQuiz();
+
+    render(<ChallengeQuizPage />);
+
+    const topBar = await screen.findByTestId("challenge-quiz-top-bar");
+    expect(useExamFocusModeMock).toHaveBeenLastCalledWith(true);
+    expect(within(topBar).getByRole("button", { name: "Leave Quiz" })).toBeInTheDocument();
+    // ⚠️ top-0, not top-16: the 4rem offset cleared a header that focus mode now removes.
+    expect(topBar).toHaveClass("top-0");
+  });
+
   it("keeps the Challenge Quiz navigator expanded by default on desktop", async () => {
     setupInProgressChallengeQuiz();
 

@@ -140,6 +140,90 @@ describe("NotificationInbox", () => {
     expect(await screen.findByText("Someone wants to connect")).toBeInTheDocument();
   });
 
+  it("closes the desktop panel when a click lands outside it", async () => {
+    renderInbox(1);
+    fireEvent.click(screen.getByLabelText("Open notifications"));
+    await screen.findByText("Someone wants to connect");
+
+    fireEvent.mouseDown(document.body);
+
+    await waitFor(() => expect(screen.queryByText("Someone wants to connect")).not.toBeInTheDocument());
+  });
+
+  it("closes the desktop panel on Escape", async () => {
+    renderInbox(1);
+    fireEvent.click(screen.getByLabelText("Open notifications"));
+    await screen.findByText("Someone wants to connect");
+
+    fireEvent.keyDown(document, { key: "Escape" });
+
+    await waitFor(() => expect(screen.queryByText("Someone wants to connect")).not.toBeInTheDocument());
+  });
+
+  it("closes exactly once when the bell itself is clicked while open, without refetching", async () => {
+    // ⚠️⚠️ THE LOAD-BEARING GUARD, AND ITS EVENT SEQUENCE *IS* THE GUARD. A real click fires mousedown
+    // THEN click, so the outside-click handler and the toggle both see it. If the ref wrapped only the
+    // panel, the bell would count as "outside": mousedown closes, then click re-opens AND refetches, so
+    // the panel flickers instead of closing.
+    //
+    // ⚠️ fireEvent.click alone does NOT fire mousedown, and this project has no @testing-library/
+    // user-event — so a test that only clicks passes under the bug by construction. Both events are
+    // dispatched explicitly below for that reason.
+    //
+    // ⚠️ Asserting the REQUEST COUNT, not the DOM: the panel can close and reopen within one sequence
+    // and still read as "open", so visible state cannot tell the two behaviours apart.
+    renderInbox(1);
+    const bell = screen.getByLabelText("Open notifications");
+
+    fireEvent.click(bell);
+    await screen.findByText("Someone wants to connect");
+    expect(listNotifications).toHaveBeenCalledTimes(1);
+
+    fireEvent.mouseDown(bell);
+    fireEvent.click(bell);
+
+    await waitFor(() => expect(screen.queryByText("Someone wants to connect")).not.toBeInTheDocument());
+    expect(listNotifications).toHaveBeenCalledTimes(1);
+  });
+
+  it("still loads the inbox on a closed to open transition", async () => {
+    // ⚠️ The other half of the toggle. Only the re-click WHILE OPEN skips the fetch; opening always loads.
+    renderInbox(1);
+    const bell = screen.getByLabelText("Open notifications");
+
+    fireEvent.click(bell);
+    await waitFor(() => expect(listNotifications).toHaveBeenCalledTimes(1));
+
+    fireEvent.mouseDown(bell);
+    fireEvent.click(bell);
+    await waitFor(() => expect(screen.queryByText("Someone wants to connect")).not.toBeInTheDocument());
+
+    fireEvent.click(bell);
+
+    await waitFor(() => expect(listNotifications).toHaveBeenCalledTimes(2));
+  });
+
+  it("tracks open state on the trigger with aria-expanded and a stable label", async () => {
+    // ⚠️ The label stays put and aria-expanded carries the state — the convention already used by
+    // theme-toggle.tsx and export-dropdown-menu.tsx. Swapping both announces the same fact twice.
+    renderInbox(1);
+    const bell = screen.getByLabelText("Open notifications");
+    expect(bell).toHaveAttribute("aria-expanded", "false");
+
+    fireEvent.click(bell);
+
+    await screen.findByText("Someone wants to connect");
+    expect(screen.getByLabelText("Open notifications")).toHaveAttribute("aria-expanded", "true");
+  });
+
+  it("no longer renders a Close button, because closing no longer depends on one", async () => {
+    renderInbox(1);
+    fireEvent.click(screen.getByLabelText("Open notifications"));
+
+    await screen.findByText("Someone wants to connect");
+    expect(screen.queryByRole("button", { name: "Close" })).not.toBeInTheDocument();
+  });
+
   it("reverts the optimistic unread delta when marking read fails", async () => {
     (markNotificationRead as jest.Mock).mockRejectedValue(new Error("offline"));
     const onDelta = renderInbox(1);

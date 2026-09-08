@@ -1499,7 +1499,11 @@ export default function ChallengeQuizPage() {
   const challengeQuizActive = phase === "running" && Boolean(challengeSession?.sessionId);
   const boardExamTimerExpired = isBoardExamMode && remainingSeconds <= 0;
   useBottomViewportClaim(challengeQuizActive);
-  useExamFocusMode(isBoardExamMode && phase === "running");
+  // ⚠️ WAS `isBoardExamMode && phase === "running"`. Focus mode now covers an ordinary Challenge Quiz
+  // too — the header (and with it the notification bell) has no business interrupting any quiz, not
+  // just a Board Exam. The in-page exit is unchanged and gated on the same expression: the sticky top
+  // bar below renders on `phase === "running"` and carries its own Leave button.
+  useExamFocusMode(phase === "running");
 
   useEffect(() => {
     if (!isBoardExamMode || phase === "running") {
@@ -1665,7 +1669,11 @@ export default function ChallengeQuizPage() {
         ) : (
           <div
             data-testid="challenge-quiz-top-bar"
-            className="sticky top-16 z-20 -mx-4 flex items-center gap-3 border-b border-border bg-background/95 px-4 py-3 backdrop-blur sm:mx-0 sm:rounded-xl sm:border"
+            // ⚠️ top-0, NOT top-16. The 4rem offset cleared the app-shell header, and this bar only
+            // renders while `phase === "running"` — exactly when focus mode now hides that header. Left
+            // at top-16 the bar would float 4rem down with nothing above it. ExamTopBar, which already
+            // renders under focus mode, has always used top-0.
+            className="sticky top-0 z-20 -mx-4 flex items-center gap-3 border-b border-border bg-background/95 px-4 py-3 backdrop-blur sm:mx-0 sm:rounded-xl sm:border"
           >
             <Button type="button" variant="outline" size="sm" className="shrink-0 px-3" onClick={() => requestLeave()} disabled={submitting}>
               Leave Quiz

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { Bell, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AppModal } from "@/components/ui/app-modal";
 import {
   dismissNotification,
@@ -22,6 +22,11 @@ export function NotificationInbox({
   onActionableUnreadDelta,
 }: Readonly<NotificationInboxProps>) {
   const [isOpen, setIsOpen] = useState(false);
+  // ⚠️ THE REF WRAPS THE BELL *AND* THE PANEL, AND THAT IS THE WHOLE TRICK. If it wrapped only the
+  // panel the bell would count as "outside": mousedown would close, then the bell's own click would
+  // reopen and refetch, so a single click would flicker rather than close. Same placement as the
+  // avatar menu (app-shell.tsx:653), which puts its ref on the wrapper for exactly this reason.
+  const containerRef = useRef<HTMLDivElement | null>(null);
   const [isMobile, setIsMobile] = useState(false);
   const [notifications, setNotifications] = useState<NotificationResponse[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -42,6 +47,33 @@ export function NotificationInbox({
     return () => mediaQuery.removeEventListener?.("change", updateIsMobile);
   }, []);
 
+  // ⚠️ DESKTOP ONLY. The mobile path renders AppModal, which already closes on its own backdrop and on
+  // Escape (app-modal.tsx:109-111); a second handler here would fight it.
+  useEffect(() => {
+    if (!isOpen || isMobile) {
+      return;
+    }
+    const closeOnOutsideClick = (event: MouseEvent) => {
+      if (!containerRef.current) {
+        return;
+      }
+      if (!containerRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setIsOpen(false);
+      }
+    };
+    globalThis.addEventListener("mousedown", closeOnOutsideClick);
+    globalThis.addEventListener("keydown", closeOnEscape);
+    return () => {
+      globalThis.removeEventListener("mousedown", closeOnOutsideClick);
+      globalThis.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [isOpen, isMobile]);
+
   const loadInbox = async () => {
     setIsLoading(true);
     setHasLoadError(false);
@@ -54,7 +86,14 @@ export function NotificationInbox({
     }
   };
 
-  const openInbox = () => {
+  // ⚠️ A TOGGLE, NOT A RE-OPEN. This previously set open and called loadInbox() unconditionally, so
+  // clicking an already-open inbox refetched it — the "refresh, not toggle" the owner reported.
+  // ⚠️ Closing must NOT refetch, and opening must STILL load. Only the re-click while open skips it.
+  const toggleInbox = () => {
+    if (isOpen) {
+      setIsOpen(false);
+      return;
+    }
     setIsOpen(true);
     void loadInbox();
   };
@@ -150,12 +189,16 @@ export function NotificationInbox({
   );
 
   return (
-    <div className="relative">
+    <div className="relative" ref={containerRef}>
+      {/* ⚠️ The label stays STABLE and aria-expanded carries the state — the convention already in this
+          repo (theme-toggle.tsx:174, export-dropdown-menu.tsx:74). A label that swaps with state
+          alongside aria-expanded announces the same fact twice. */}
       <button
         type="button"
         className="relative inline-flex h-9 w-9 items-center justify-center rounded-md border border-border text-foreground hover:bg-muted"
         aria-label="Open notifications"
-        onClick={openInbox}
+        aria-expanded={isOpen}
+        onClick={toggleInbox}
       >
         <Bell className="h-4 w-4" />
         {actionableUnreadCount > 0 ? (
@@ -169,7 +212,6 @@ export function NotificationInbox({
         <section className="motion-dropdown-panel absolute right-0 top-11 z-20 flex max-h-[32rem] w-96 flex-col overflow-hidden rounded-md border border-border bg-background shadow-lg" aria-label="Notifications">
           <div className="flex items-center justify-between border-b border-border px-4 py-3">
             <h2 className="text-sm font-semibold">Notifications</h2>
-            <button type="button" className="text-sm text-muted-foreground hover:text-foreground" onClick={() => setIsOpen(false)}>Close</button>
           </div>
           {rows}
         </section>
