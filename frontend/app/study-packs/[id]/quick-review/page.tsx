@@ -22,7 +22,7 @@ import { CompanionResultBridgeCard, hasCompanionResultBridgeExcerpt } from "@/co
 import { ResultGuidanceGroup } from "@/components/study-pack/result-guidance-group";
 import { shouldRenderTwiceMissedCta, TwiceMissedAskCompanionCard } from "@/components/study-pack/twice-missed-ask-companion-card";
 import { useQuizSessionGuard } from "@/components/study-pack/quiz-session-guard";
-import { useBottomViewportClaim } from "@/components/exam-mode/exam-focus-context";
+import { useBottomViewportClaim, useExamFocusMode } from "@/components/exam-mode/exam-focus-context";
 import { hasComputationalWorkingSolution, QuizWorkingSolution } from "@/components/study-pack/quiz-working-solution";
 import { useBillingUsageSummary } from "@/hooks/use-billing-usage-summary";
 import { getAuthUser, setAuthUser } from "@/lib/auth";
@@ -1076,6 +1076,11 @@ export default function QuickReviewPage() {
 
   const quizSessionActive = Boolean(note && currentSessionId && !isComplete && totalQuestions > 0 && !error);
   useBottomViewportClaim(quizSessionActive);
+  // ⚠️ Hides the whole app-shell header, and with it the notification bell, for the duration of the
+  // quiz. Safe because the SAME expression gates the sticky top bar below, which carries the Leave
+  // Quiz button — so the learner never loses the way out. Challenge Quiz has paired focus mode with
+  // useBottomViewportClaim in Board Exam mode since v0.113.0; this is that pattern, not a new one.
+  useExamFocusMode(quizSessionActive);
   const { requestLeave, LeaveQuizModal } = useQuizSessionGuard({
     active: quizSessionActive,
     fallbackHref: noteDetailHref,
@@ -1096,7 +1101,9 @@ export default function QuickReviewPage() {
       {quizSessionActive ? (
         <div
           data-testid="quick-review-top-bar"
-          className="sticky top-16 z-20 -mx-4 flex items-center gap-3 border-b border-border bg-background/95 px-4 py-3 backdrop-blur sm:mx-0 sm:rounded-xl sm:border"
+          // ⚠️ top-0, NOT top-16 — see the same change on challenge-quiz. The 4rem offset cleared the
+          // app-shell header, which focus mode now hides for exactly the state this bar renders in.
+          className="sticky top-0 z-20 -mx-4 flex items-center gap-3 border-b border-border bg-background/95 px-4 py-3 backdrop-blur sm:mx-0 sm:rounded-xl sm:border"
         >
           <Button type="button" variant="outline" size="sm" className="shrink-0 px-3" onClick={() => requestLeave()}>
             Leave Quiz

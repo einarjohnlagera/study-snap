@@ -27,6 +27,7 @@ const searchParamsMock = {
   toString: () => searchParamsValue,
 };
 const useBottomViewportClaimMock = jest.fn();
+const useExamFocusModeMock = jest.fn();
 
 jest.mock("next/navigation", () => ({
   useRouter: () => routerMock,
@@ -48,8 +49,12 @@ jest.mock("@/hooks/use-billing-usage-summary", () => ({
   useBillingUsageSummary: jest.fn(),
 }));
 
+// ⚠️ A jest.mock factory is an ALLOW-LIST. This one listed only useBottomViewportClaim, so when the
+// page began importing useExamFocusMode the call site would have received `undefined` — the exact shape
+// that left app-shell.test.tsx green in v0.130.0 *because* its poll threw. Both are listed now.
 jest.mock("@/components/exam-mode/exam-focus-context", () => ({
   useBottomViewportClaim: (active: boolean) => useBottomViewportClaimMock(active),
+  useExamFocusMode: (active: boolean) => useExamFocusModeMock(active),
 }));
 
 jest.mock("@/lib/api", () => ({
@@ -125,6 +130,7 @@ describe("QuickReviewPage first-study onboarding", () => {
     (updateQuickReviewSessionProgress as jest.Mock).mockReset();
     (trackAnalyticsEvent as jest.Mock).mockReset();
     useBottomViewportClaimMock.mockReset();
+    useExamFocusModeMock.mockReset();
     (getPostSessionNextStep as jest.Mock).mockReset();
     (getPostSessionNextStep as jest.Mock).mockRejectedValue(new Error("next-step unavailable"));
     (useBillingUsageSummary as jest.Mock).mockReset();
@@ -562,6 +568,42 @@ describe("QuickReviewPage post-quiz UX", () => {
     expect(actionBar).toHaveClass("fixed");
     expect(screen.getByRole("button", { name: "Finish Quick Review" })).toBeInTheDocument();
     expect(useBottomViewportClaimMock).toHaveBeenLastCalledWith(true);
+  });
+
+  it("hides the app-shell chrome during an active session, and keeps the Leave Quiz exit reachable", async () => {
+    // ⚠️ GUARD 6 + GUARD 7 TOGETHER, AND THEY MUST BE ASSERTED TOGETHER ON PURPOSE. Focus mode hides
+    // the WHOLE header (with it the notification bell) plus the mobile tab bar, so the only way out of
+    // this page while a quiz runs is the in-page control. A surface that gains focus mode without an
+    // exit traps the learner, which is worse than a visible bell.
+    //
+    // ⚠️ The kickoff for this release claimed Quick Review had NO such exit and widened the whole item
+    // on that basis. It was wrong — the audit grepped for BackLink and links, not for the
+    // onClick={requestLeave} button that is the real running-state exit. This test is what makes that
+    // claim impossible to get wrong again.
+    setupCompleteState();
+
+    render(<QuickReviewPage />);
+
+    await screen.findByTestId("quick-review-top-bar");
+    expect(useExamFocusModeMock).toHaveBeenLastCalledWith(true);
+    expect(screen.getByRole("button", { name: "Leave Quiz" })).toBeInTheDocument();
+  });
+
+  it("restores the app-shell chrome once the quiz is finished", async () => {
+    // ⚠️ The other half of guard 6, and it drives the quiz to completion rather than asserting on the
+    // initial render: a focus mode that only ever turns ON would leave the learner on the results
+    // screen with no header, no bell and no navigation. Answer, finish, then assert it flipped back.
+    setupCompleteState();
+    render(<QuickReviewPage />);
+
+    await screen.findByTestId("quick-review-top-bar");
+    expect(useExamFocusModeMock).toHaveBeenLastCalledWith(true);
+
+    fireEvent.click(await screen.findByRole("button", { name: /Mitochondria/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Finish Quick Review" }));
+    await screen.findByText("Quick Review Complete");
+
+    expect(useExamFocusModeMock).toHaveBeenLastCalledWith(false);
   });
 
   it('result screen shows "Note" navigation link', async () => {

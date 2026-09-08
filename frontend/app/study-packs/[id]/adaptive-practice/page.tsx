@@ -7,6 +7,7 @@ import { VerifyEmailRequiredModal } from "@/components/auth/verify-email-require
 import { PaywallModal } from "@/components/billing/paywall-modal";
 import { QuizFeedbackPanel } from "@/components/feedback/quiz-feedback-panel";
 import { BackLink } from "@/components/ui/back-link";
+import { useExamFocusMode } from "@/components/exam-mode/exam-focus-context";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { QuizAnswerReview } from "@/components/study-pack/quiz-answer-review";
@@ -658,6 +659,11 @@ export default function AdaptivePracticePage() {
     && !completionTracked
     && !error,
   );
+  // ⚠️ Hides the app-shell header, and with it the notification bell, for the duration of the quiz.
+  // Safe because the SAME expression gates the Leave Quiz button below, so the exit is present exactly
+  // when the chrome is gone. No layout change is needed here: unlike Quick Review and Challenge Quiz,
+  // this page's leave control sits in an ordinary non-sticky row with no header offset to correct.
+  useExamFocusMode(adaptiveQuizActive);
   const { requestLeave, LeaveQuizModal } = useQuizSessionGuard({
     active: adaptiveQuizActive,
     fallbackHref: noteDetailHref,
