@@ -259,13 +259,34 @@ record is still new persistence and stays a follow-up (Contradiction B).
 
 ## 10. Mobile UX
 
-**Focus mode — narrowed per §5 of the response.** Apply `useExamFocusMode(true)` **to the shared quiz
-only** while answering. **Do NOT expand to Quick Review, Challenge Quiz, Adaptive Practice or
-Interview Practice** — recorded as a future audit, not this release.
+**⚠️ SUPERSEDED 2026-09-07 — focus mode IS now expanded repo-wide.** The owner's earlier instruction
+here was *"do NOT expand to Quick Review, Challenge Quiz, Adaptive Practice or Interview Practice —
+recorded as a future audit."* **That deferral is withdrawn**, on the owner's request that the
+notification bell be hidden while a learner is taking a quiz. The bell lives in the header, and the
+header is gated on `isExamFocusActive` (`app-shell.tsx:628-629`), so hiding it *is* focus mode.
 
-**⚠️ The exit affordance is mandatory, not polish.** The shared quiz page renders **no `BackLink`**,
-so hiding the tab bar leaves a signed-in recipient with only the browser back button. Ship an
-in-page Exit/Back with the focus change or not at all.
+**Now applies to every quiz surface while a quiz is in progress:** the shared quiz, ordinary Challenge
+Quiz, Quick Review, Adaptive Practice and Interview Practice — joining Long Exam and Board Exam mode,
+which already have it. `useExamFocusMode(true)` on each; **no new mechanism** — the hook, the context
+and the header gate all exist.
+
+**⚠️ The expansion is now owned by `in-app-notifications-and-review-set-adoption-signals-stage1.md`
+§20.3**, not by this plan. This section records the reversal so the two documents do not contradict
+each other; **do not re-derive the narrowing from this file's history.**
+
+**⚠️ Focus mode hides the WHOLE header** — page title, theme toggle, feedback widget and avatar — plus
+the mobile tab bar, not just the bell. That breadth was accepted deliberately: a partially-hidden
+header is a worse inconsistency than a fully-hidden one, and it matches what Board Exam already does.
+
+**⚠️ The exit affordance is mandatory, not polish — and the expansion multiplies it.** The shared quiz
+page renders **no `BackLink`**, so hiding the tab bar leaves a signed-in recipient with only the
+browser back button. Ship an in-page Exit/Back with the focus change or not at all.
+
+**⚠️ This now applies to EVERY newly-focused surface, not just the shared quiz.** Before giving Quick
+Review, Adaptive Practice, Interview Practice or ordinary Challenge Quiz focus mode, confirm each
+already renders a `BackLink` or equivalent in-page exit — Challenge Quiz does (`:1692`), the others
+must be checked. **A surface that gains focus mode without an exit traps the learner**, which is a
+worse outcome than the bell being visible.
 
 **⚠️ Narrower than it looks:** the shell only renders when authenticated (`app-shell.tsx:63`), so an
 **anonymous recipient already sees no bottom nav.** This affects signed-in recipients only.
@@ -335,7 +356,9 @@ consistency.
 - **⚠️ Do NOT infer activity from progress metrics** or show it under another label when ACTIVITY is
   off (§23).
 - **⚠️ Do NOT expose plan names** on the supporter page (§20, §24).
-- **⚠️ Do NOT expand focus mode to other quiz modes in this release** (§5).
+- **⚠️ Focus mode expansion to other quiz modes is APPROVED as of 2026-09-07** (§10) — superseding the
+  earlier deferral. It is owned by `in-app-notifications-and-review-set-adoption-signals-stage1.md`
+  §20.3. **⚠️ Do NOT give any surface focus mode without an in-page exit.**
 - **⚠️ Do NOT persist anonymous recipient answers** — `AGENTS.md` forbids anonymous session state on
   public surfaces; refresh-loses-progress stays a Known limitation.
 - **⚠️ Do NOT write a second Note-copy implementation** — reuse `copyNote` / the existing action.
