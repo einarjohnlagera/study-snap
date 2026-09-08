@@ -319,8 +319,16 @@ export function ApplicableProgramsCombobox({
           )}
         </div>
       ) : null}
+      {/*
+        ⚠️ THIS TEXT DELIBERATELY DOES NOT EXPLAIN THE RESOLVER. It used to say "only a single program
+        can inform the writing domain, and Domain Context overrides it" -- true, but it describes
+        backend mechanics a curator cannot act on, and it invited the reading that picking one program
+        is how you steer the writing. Keep the CONCEPTUAL separation (discovery vs. authoring); do not
+        reintroduce resolution rules here.
+      */}
       <p className="text-xs text-foreground/60">
-        These programs decide who finds the note. A program list never informs how the note is written — only a single program can inform the writing domain, and Domain Context overrides it.
+        Choose the programs this note genuinely applies to — they decide who finds it, never how it is
+        written. Use a program family to quickly add related programs.
       </p>
       <AppModal
         isOpen={createModalOpen}

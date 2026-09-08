@@ -29,6 +29,25 @@ const familyCatalog = [
   { id: "program-nursing", name: "Nursing", programFamilyId: null, programFamilyName: null },
 ];
 
+/**
+ * ⚠️ EVERY FIXTURE ABOVE HOLDS EXACTLY ONE FAMILY, AND UNTIL v0.133.0 SO DID PRODUCTION.
+ *
+ * Engineering was the only family with members, so the component's multi-family paths — which family a
+ * button expands, whether one expansion disturbs another family's selections, whether two families can
+ * be mixed — were never exercised by anything. `V142` seeds Education and makes them real.
+ *
+ * A single-family fixture cannot fail on a component that ignores which family was clicked and expands
+ * everything, so it proves nothing about family SCOPING. That is what this catalog is for.
+ */
+const twoFamilyCatalog = [
+  { id: "program-a", name: "Civil Engineering", programFamilyId: "family-engineering", programFamilyName: "Engineering" },
+  { id: "program-b", name: "Mechanical Engineering", programFamilyId: "family-engineering", programFamilyName: "Engineering" },
+  { id: "program-elem", name: "Elementary Education", programFamilyId: "family-education", programFamilyName: "Education" },
+  { id: "program-sec", name: "Secondary Education", programFamilyId: "family-education", programFamilyName: "Education" },
+  { id: "program-ece", name: "Early Childhood Education", programFamilyId: "family-education", programFamilyName: "Education" },
+  { id: "program-nursing", name: "Nursing", programFamilyId: null, programFamilyName: null },
+];
+
 describe("ApplicableProgramsCombobox", () => {
   beforeEach(() => {
     (createCourseProgram as jest.Mock).mockReset();
@@ -133,6 +152,62 @@ describe("ApplicableProgramsCombobox", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: "Add all 3 Engineering programs" }));
     expect(threeMemberExpansion).toHaveBeenCalledWith(["program-a", "program-b", "program-c"]);
+  });
+
+  it("offers each family its own expansion and adds only that family's members", () => {
+    const onChange = jest.fn();
+    render(
+      <ApplicableProgramsCombobox
+        id="applicable-programs-two-families"
+        catalog={twoFamilyCatalog}
+        selectedIds={[]}
+        onChange={onChange}
+      />,
+    );
+
+    // Both families are offered, each counting only its own unselected members.
+    expect(screen.getByRole("button", { name: "Add all 2 Engineering programs" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Add all 3 Education programs" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Add all 3 Education programs" }));
+
+    // ⚠️ THE ASSERTION IS THE ABSENCE AS MUCH AS THE PRESENCE: a component that expanded every family
+    // would pass a presence-only check while quietly selecting Engineering too.
+    expect(onChange).toHaveBeenCalledWith(["program-elem", "program-sec", "program-ece"]);
+  });
+
+  it("keeps a mixed-family selection intact when another family is expanded", () => {
+    const onChange = jest.fn();
+    render(
+      <ApplicableProgramsCombobox
+        id="applicable-programs-mixed"
+        catalog={twoFamilyCatalog}
+        selectedIds={["program-a", "program-elem", "program-nursing"]}
+        onChange={onChange}
+      />,
+    );
+
+    // Engineering has one member left; Education has two. Both counts are family-scoped.
+    expect(screen.getByRole("button", { name: "Add all 1 Engineering program" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Add all 1 Engineering program" }));
+
+    // The Education pick and the family-less pick survive, and nothing is duplicated.
+    expect(onChange).toHaveBeenCalledWith(["program-a", "program-elem", "program-nursing", "program-b"]);
+  });
+
+  it("drops a family's affordance once that family is fully selected, leaving the other's", () => {
+    render(
+      <ApplicableProgramsCombobox
+        id="applicable-programs-exhausted"
+        catalog={twoFamilyCatalog}
+        selectedIds={["program-elem", "program-sec", "program-ece"]}
+        onChange={jest.fn()}
+      />,
+    );
+
+    expect(screen.queryByRole("button", { name: /Education program/ })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Add all 2 Engineering programs" })).toBeInTheDocument();
   });
 
   it("keeps programs without a family individually selectable and renders no family affordance", () => {

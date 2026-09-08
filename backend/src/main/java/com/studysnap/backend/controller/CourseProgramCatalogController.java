@@ -2,6 +2,8 @@ package com.studysnap.backend.controller;
 
 import com.studysnap.backend.dto.CourseProgramCatalogItemResponse;
 import com.studysnap.backend.dto.CreateCourseProgramCatalogRequest;
+import com.studysnap.backend.dto.CreateProgramFamilyRequest;
+import com.studysnap.backend.dto.ProgramFamilyResponse;
 import com.studysnap.backend.service.CourseProgramCatalogService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -40,5 +42,20 @@ public class CourseProgramCatalogController {
     @PreAuthorize("hasRole('ADMIN')")
     public CourseProgramCatalogItemResponse create(@Valid @RequestBody CreateCourseProgramCatalogRequest request) {
         return courseProgramCatalogService.create(request);
+    }
+
+    // ⚠️ A families READ is required, not optional: a newly created family has no members yet, and the
+    // admin form derives its family options from the catalog. Without this endpoint a family created
+    // today would vanish from the picker on refresh until a program was assigned to it.
+    @GetMapping("/families")
+    @PreAuthorize("hasRole('ADMIN')")
+    public List<ProgramFamilyResponse> listProgramFamilies() {
+        return courseProgramCatalogService.listProgramFamilies();
+    }
+
+    @PostMapping("/families")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ProgramFamilyResponse createProgramFamily(@Valid @RequestBody CreateProgramFamilyRequest request) {
+        return courseProgramCatalogService.createProgramFamily(request);
     }
 }

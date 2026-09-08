@@ -9,7 +9,17 @@ class ExamGoalConfigTest {
     void getFallbackCoursePrograms_returnsFailOpenExamValues() {
         assertThat(ExamGoalConfig.getFallbackCoursePrograms(ExamGoalConfig.ALE)).containsExactly("Architecture");
         assertThat(ExamGoalConfig.getFallbackCoursePrograms(ExamGoalConfig.PNLE)).containsExactly("Nursing");
-        assertThat(ExamGoalConfig.getFallbackCoursePrograms(ExamGoalConfig.LET)).containsExactly("Education");
+        // ⚠️ EIGHT since V142 (v0.133.0). This assertion is what stops the fallback silently
+        // under-representing the LET exam goal the next time a 'let' program is seeded.
+        assertThat(ExamGoalConfig.getFallbackCoursePrograms(ExamGoalConfig.LET)).containsExactly(
+                "Education",
+                "Special Needs Education",
+                "Elementary Education",
+                "Secondary Education",
+                "Early Childhood Education",
+                "Technical-Vocational Teacher Education",
+                "Physical Education",
+                "Teacher Certification");
         assertThat(ExamGoalConfig.getFallbackCoursePrograms(ExamGoalConfig.CPALE)).containsExactly("Accountancy");
     }
 

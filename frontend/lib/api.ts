@@ -1823,6 +1823,11 @@ export type CourseProgramCatalogItem = {
   programFamilyName: string | null;
 };
 
+export type ProgramFamily = {
+  id: string;
+  name: string;
+};
+
 export type CreateCourseProgramRequest = {
   name: string;
   programFamilyId?: string | null;
@@ -5818,6 +5823,33 @@ function parseCourseProgramCatalogItem(payload: unknown, fallbackMessage: string
     throw new Error(fallbackMessage);
   }
   return payload as CourseProgramCatalogItem;
+}
+
+/**
+ * ⚠️ Families are READ from their own endpoint rather than derived from the catalog. The authoring
+ * combobox derives them (correctly — it only cares about families that have members), but the admin
+ * surface must also show a family created moments ago that has none yet.
+ */
+export async function listProgramFamilies(): Promise<ProgramFamily[]> {
+  const response = await fetchWithAuth(
+    "/course-program-catalog/families",
+    { method: "GET", headers: buildAuthHeaders() },
+    true,
+  );
+  return parseApiResponse<ProgramFamily[]>(response, "Could not load Program Families.");
+}
+
+export async function createProgramFamily(name: string): Promise<ProgramFamily> {
+  const response = await fetchWithAuth(
+    "/course-program-catalog/families",
+    {
+      method: "POST",
+      headers: buildAuthHeaders("application/json"),
+      body: JSON.stringify({ name }),
+    },
+    true,
+  );
+  return parseApiResponse<ProgramFamily>(response, "Could not add the Program Family.");
 }
 
 export async function createCourseProgram(request: CreateCourseProgramRequest): Promise<CourseProgramCatalogItem> {

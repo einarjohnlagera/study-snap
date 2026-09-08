@@ -1,6 +1,6 @@
 # Review Set shaping — module
 
-> Last updated: v0.132.0 - 2026-09-08 (Released). Rule 5 (the publication boundary) and the
+> Last updated: v0.133.0 - 2026-09-08 (Released). **⚠️ THE LET CATALOG CHANGED — THIS DIRECTLY CHANGES YOUR INPUT.** `V142` seeds the `Education` program family with EIGHT members, ALL tagged `exam_goal_slug = 'let'`: `Education`, `Special Needs Education`, `Elementary Education`, `Secondary Education`, `Early Childhood Education`, `Technical-Vocational Teacher Education`, `Physical Education`, `Teacher Certification`. Before this, exactly ONE carried the LET slug. **So Q4 (the ready-to-add pool) and Q6 (the exact catalog program names) of `docs/curriculum/review-set-reshape-read.sql` return MORE ROWS than they did before `v0.133.0` — re-run the read; do not reuse a pre-`v0.133.0` result set.** **⚠️ `Special Needs Education – Generalist` NO LONGER EXISTS UNDER THAT NAME** — it was renamed to `Special Needs Education` keeping its `id`, so use the new name in any TSV you emit. **⚠️ `Teacher Certification` is the canonical name for the non-education-graduate LET route — do NOT emit `Professional Education`, which already exists both as a `DomainContext` value and as a Subject, and do NOT emit credential abbreviations (BEEd, BSEd, BPEd, CPE) as program names.** --- PRIOR (v0.132.0): - 2026-09-08 (Released). Rule 5 (the publication boundary) and the
 > adopter-update note below it are new in this release.
 
 **Paste with `GPT_CONTEXT.md` when the task is designing or rebuilding a Review Set** (a board-exam

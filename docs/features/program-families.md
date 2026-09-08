@@ -11,7 +11,7 @@ Program Families reduce repetitive Course / Program(s) curation. They are a prod
 - Expansion is unconditional. The same family always produces the same member set regardless of the note's Subject, Domain Context, learner level, or any other metadata.
 - Added members appear immediately as the control's normal removable chips. Authors may trim the over-selected set before using the surface's existing save action.
 - A fully selected family offers no clickable no-op. Catalogs with no families show no family affordance, while programs without a family remain individually selectable.
-- The shortcut is available anywhere the shared control is used: Note Editor, Note Detail's inline metadata panel, and the Admin Dashboard curation modal.
+- The shortcut is available anywhere the shared control is used: Note Editor, Note Detail's inline metadata panel, the Admin Dashboard curation modal, and **Bulk Generate** (`bulk-generation-page-client.tsx:594`, inside its `isTeacherOrAdmin` branch). ⚠️ This list read as three surfaces until `v0.133.0`; Bulk Generate was missing. It was found by anchoring the claim to the four `ApplicableProgramsCombobox` consumers, not by reading a diff — the doc had not changed when the fourth consumer was added.
 
 ## Persistence and reads
 
@@ -24,6 +24,10 @@ Families are deliberately allowed to over-select because the author sees and can
 ## Catalog growth
 
 Catalog growth is incremental and authoring-driven. A program is added when real canonical notes are legitimately applicable to it, not to pre-seed a possible curriculum. Programs without a family are normal, and adding or changing family membership is the only way to change an expansion preset.
+
+**Families themselves are created from the admin Course / Program surface (v0.133.0).** Before that, only a program could be added in-app — a *family* needed a database migration, which is why `V106` seeded Engineering and `V142` seeded Education. A family is created **empty**: membership is set on the program, through the existing family field on program create. Duplicate names are rejected case- and whitespace-insensitively, because two identical-looking families would produce two identical-looking expansion shortcuts.
+
+⚠️ **The admin family picker reads the families endpoint; the authoring combobox derives families from the catalog.** Both are correct and the difference is deliberate: the combobox only cares about families that have members, while the admin surface must show a family created moments ago that has none yet. Do not "unify" these by deriving the admin list from the catalog — a newly created family would vanish on refresh, and it is the one the curator is about to assign a program to.
 
 ## Anti-drift tripwire
 
