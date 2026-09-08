@@ -1,6 +1,6 @@
 # RELEASES_ARCHIVE.md — NoteLib
 
-Archived sections of `RELEASES.md` (**v0.120.0 and earlier**). `v0.40.1` and earlier moved here
+Archived sections of `RELEASES.md`. **Contents are NOT one contiguous range:** `v0.41.0`–`v0.120.0`, plus `v0.126.0` (moved at the `v0.132.0` kickoff) and `v0.127.0` (moved at the `v0.133.0` kickoff) as the live file crossed its *current + last five* cap. Each version's own `## vX.Y.Z` heading is the index — search for it. `v0.40.1` and earlier moved here
 2026-07-10; **`v0.41.0` through `v0.120.0` moved here 2026-09-07** in the `v0.126.0` pass, which
 resumed this convention after it had lapsed for 85 releases — `RELEASES.md` had reached 116
 sections against its documented design of *current + last few versions*. Both passes are MOVES,
@@ -16594,3 +16594,79 @@ Theme: the governing documents stop charging every session for history that is a
 **Item 3 landed in the kickoff commit itself, deliberately.** Prepending a `v0.126.0` block to line 39 in the normal way would have added another release's narrative to the very line this release exists to remove, then removed it hours later. **`CLAUDE.md`: 357,718 → 39,311 chars (~89k → ~9k tokens), matching the plan's prediction.** All twelve governing rules verified present after the replacement.
 
 **Items 1, 2 and 5 shipped.** `RELEASES.md` **1,866,861 → 133,497 chars (~466k → ~33k tokens)** — 111 sections (`v0.41.0` → `v0.120.0`) moved to `docs/archive/RELEASES_ARCHIVE.md`, keeping current + last 5 live. `ROADMAP.md` **1,189,862 → 844,282** — 60 `(Released)` retrospectives moved to `ROADMAP_ARCHIVE.md`. **⚠️ BOTH VERIFIED BYTE-FOR-BYTE, WHICH IS THE GUARD THAT MATTERED: all 117 `RELEASES.md` sections and all 60 ROADMAP retrospectives are present and unchanged across live + archive.** The only two flagged diffs in each case were the index block relocating and a section-parser boundary artifact, both confirmed by inspection rather than assumed. **222 live `[CHECKPOINT]` rows and every live ROADMAP section survive.** Item 5 patched `kickoff.md` to REPLACE rather than prepend and added an archive step to `signoff.md`, **which is the half that stops items 1-3 regrowing** — its absence is why the 2026-07-10 pass never ran again.
+
+## v0.127.0 - Failure Attribution and Learner Dates
+
+**Status: Released** (kicked off and signed off 2026-09-07, base branch `releases/v0.127.0`, cut from `main` after `v0.126.0` merged and tagged)
+
+Theme: a learner stops losing a date they set themselves, and a failed regeneration stops leaving no trace of why.
+
+**⚠️ SCOPE IS TWO REAL DEFECTS, AND THE SELECTION REASON IS BUDGET SHAPE RATHER THAN PRIORITY — stated so a later session does not read it as the roadmap's ordering.** The Claude Max window closes **2026-09-10**, and what it buys is **cold-agent verification**, not the ability to edit documents. Both items here need the heavy tier; the largest remaining token cost (`ROADMAP.md`'s ~140k-token Backlog Index) is **cheap to verify and deliberately left for later**. Spending the last of an expensive-verification budget on work that needs none would waste it.
+
+### Planned Scope
+
+**(1) A learner loses an exam date they set themselves, and it is not recoverable.** `NoteCollectionService:778`'s reparent branch NULLs `targetCompletionDate` when a collection becomes a child, so a learner who sets a date and later adopts a parent Goal has it silently discarded. Nothing else records it.
+
+**⚠️ THE ASYMMETRY IS THE TELL, AND IT IS THE SHAPE OF THE FIX:** the sibling path at `:1005` **already promotes** the earliest child date up to the Goal (`:1023`). One path preserves the learner's date by rollup; the other simply drops it.
+
+**⚠️ THE EXISTING NULL IS NOT GRATUITOUS AND MUST NOT BE DELETED BLIND.** It carries a documented reason: `targetCompletionDate` and Companion are **top-level-Goal-only fields**, and a child that keeps carrying one **resurfaces stale top-level data** if later detached via `updateParent(null)`. The fix preserves the learner's date somewhere it survives; it does not simply stop nulling.
+
+**(2) A production regeneration failure left zero database trace.** `notes` has no failure-reason column, the async worker discards the exception, and the owner's manual retry overwrote `status` — the incident was reconstructable **only because Render logs had not rotated**. **⚠️ THIS IS `v0.87.0` (*Failure Attribution*) REPEATING ON THE SINGLE-NOTE SURFACE.** `v0.119.0` surfaced remaining allowance and made bulk report quota as `BLOCKED` without persisting the underlying reason. **⚠️ It needs a migration, which is why it was parked; this release may add one, so it un-parks here.** **⚠️ Consider at the same time whether the SECOND, in-worker quota assert should exist at all** — the caller already checked, and it converts a clean rejection into an opaque failure.
+
+### Anti-drift
+
+**⚠️ ITEM 1 WAS DEFERRED TWICE ON PURPOSE** (the `v0.115.0` adoption audit, then explicitly not folded into `v0.116.0`) because it is a data-loss defect on a **different axis** from the adoption-update contract. **Do NOT fold it into adoption work now either.** **⚠️ NEVER SURFACE RAW EXCEPTION TEXT for non-`AppException` failures** — `v0.87.0`'s standing rule, and the one rule a cold review found genuinely unique to `AGENTS.md`.
+
+**⚠️ No quota, entitlement, limit or meter CHANGE** — item 2 records *why* a failure happened and must not alter what anyone is entitled to. **⚠️ Do NOT change what `BOARD_EXAM_STARTED`, `ADAPTIVE_PRACTICE_STARTED`, `QUIZ_SHARE_LINK_*` or `GUIDANCE_TIP_SHOWN` record.** **⚠️ Do NOT raise the connection pool; do NOT start `v0.112.0` Phase 3** (gated on `[CHECKPOINT — due 2026-10-04]`). **⚠️ Do NOT prune the ROADMAP Backlog Index, and do NOT trim the `AGENTS.md` preamble** — `v0.126.0` held that on a method argument that survived its own pressure test: it needs hand-separation line by line, never a sweep.
+
+**⚠️ `frontend/app/onboarding` STAYS FROZEN — the freeze lifts when the `[CHECKPOINT — due 2026-09-11]` READ IS TAKEN, not when the date passes.** **⚠️ NO Learning Connections promotion before `2026-09-19`.** Neither defect approaches a surface the twelve dated reads measure.
+
+### Verification
+
+**ONE SCOPED COLD AGENT framed as falsification, per defect.** Item 1 is **learner data loss on a shared adoption path**; item 2 adds a **migration**. Either fires the gate on its own.
+
+**⚠️ ANY NEW OR CHANGED ENDPOINT OWES ONE REAL-REQUEST TEST** (`MockMvc` + `.contentType(...)` + body).
+
+**⚠️ PRE-DECLARED GUARDS, EACH NAMING THE FIXTURE THAT PROVES NOTHING:** **(a)** a learner-set date must SURVIVE reparenting end to end — **a fixture whose collection has no date passes under the defect**; **(b)** the stale-data hazard the existing NULL guards must STILL be closed — detaching via `updateParent(null)` must not resurface a top-level date the learner never set; **(c)** a failed regeneration must leave a persisted reason readable **AFTER a retry overwrites `status`**, since the retry is what destroyed the evidence in production; **(d)** a failure whose cause is NOT an `AppException` must persist a safe reason and never raw exception text.
+
+**⚠️ CARRIED LESSONS FROM `v0.126.0`: verify a claim on the CLAIMS, not on a proxy — a check that a thing is MENTIONED is not a check that it can be FOUND (that mistake deleted two corrections and mis-scored an entire hold); and MUTATION-VERIFY every guard.**
+
+**Routing: CLAUDE CODE inline for item 1; re-run the routing test for item 2** once the migration's shape is known.
+
+### Shipped
+
+**Item 3 — the RECOMMENDED public-library ranking reads index-only.** (Folded in 2026-09-07, because item 2 opened a migration and this was parked waiting for exactly that.)
+
+- **`V137` adds `(event_type, entity_id)` to `analytics_events`.** `RANK_VIEWS_JOIN` runs on the **DEFAULT** public-library sort and reads only those two columns, so the composite index removes the heap access entirely.
+- **⚠️ SIZED AGAINST REAL ROW COUNTS BEFORE BEING WRITTEN, WHICH IS WHAT THE BACKLOG ROW REQUIRED** — its gate said *"this is a metrics table and the index is not free to maintain"*. A read-only production query returned **49,265 rows, 36,523 with a non-null `entity_id`, 14 MB total, 5.2 MB of existing indexes, 112 distinct event types, 4,601 events in the trailing 7 days (~660/day)**. Maintenance at that write rate is negligible.
+- **⚠️ AND THE INDEX WAS PROVEN USEFUL BEFORE BEING ADDED, NOT ASSUMED: `EXPLAIN` on the live query showed a Bitmap Index Scan on `event_type` followed by a BITMAP HEAP SCAN over ~14,663 rows purely to fetch `entity_id`.** An index the planner would not pick is pure maintenance cost, so this was checked rather than reasoned.
+- **⚠️ PLAIN `CREATE INDEX`, NOT `CONCURRENTLY`, read from the numbers rather than defaulted:** `CONCURRENTLY` cannot run inside a transaction, every migration in this repo is a plain `CREATE INDEX`, and at 49k rows the lock is well under a second. **The migration records that a future index here needs the concurrent form if the table reaches the millions.**
+- **⚠️ NO BEHAVIOUR CHANGE — an index changes the PLAN, never the RESULT**, so there is no guard to write and none is faked. The `PREPARE` sweep in `NativeQueryPostgresIntegrationTest` applies the real Flyway set, which is what proves `V137` applies.
+- The comment at `PublicLibraryRepositoryImpl:66` stated the table had **no** `entity_id` index and is corrected — it now also warns that adding a column to that subquery's select list would silently reintroduce the heap access.
+
+**Item 1 — a learner's own exam date survives reparenting.**
+
+- **`NoteCollectionService.updateParent` now PROMOTES the date to the parent before clearing it on the child.** The earliest date wins; a parent that already holds a nearer deadline keeps it. **⚠️ THE CLEAR STAYS — it was never the defect.** Deleting it would let a nested collection carry a top-level-only field and resurface a stale date on detach, so the fix preserves the value rather than removing the guard.
+- **⚠️ THE FIX IS THE SIBLING PATH'S OWN RULE, NOT A NEW ONE.** `persistAdoptedGoal` already promoted the earliest child date to the Goal, with its reasoning written out — *"a completion target is a DEADLINE and the nearest one is the binding one"*. The two paths disagreed; that asymmetry was the whole defect, and the fix makes them agree rather than inventing semantics.
+- **⚠️ THE PRE-EXISTING TEST CAUGHT THE CHANGE BEFORE ANY NEW ONE DID** — strict stubbing rejected the new `save(parent)`. Its stub is widened and it now also asserts the date moved up, so it pins **both** halves: the child is still cleared **and** the value is not destroyed.
+- **Four guards, all mutation-verified, each discriminating a different property:** dropping the promotion kills three tests; making it always overwrite kills only `updateParent_keepsTheNearerDeadlineWhenBothParentAndChildCarryOne`; removing the child's clear kills two. **⚠️ A fixture whose child has NO date passes under the defect, and one whose parent has no date cannot tell "earliest wins" from "always overwrite" — both cases are covered explicitly.**
+- `docs/features/collections.md:168` documented the old behaviour verbatim and is corrected.
+
+**Item 2 — a failed generation records WHY, and the record survives the retry.**
+
+**⚠️ AUDIT ADDITIONS — three things verified independently rather than accepted from the delivery.**
+
+- **The critical mutant was re-run at audit and lands where it claims.** Clearing the columns on the SUCCESS path — the exact production evidence loss — is killed by `noteAndStudyPackRegeneration_failureReasonSurvivesASuccessfulRetryThatOverwritesStatus` and by nothing else. **⚠️ THE FIRST ATTEMPT AT THAT MUTATION SILENTLY DID NOT APPLY and the suite passed green; checking that the mutation was PRESENT before trusting the result is what caught it** — the same protocol failure a cold agent self-reported on this codebase two releases ago.
+- **No response payload exposes the new columns** — checked directly, because a shared mapper putting a new field on an anonymous payload is a defect this project shipped in `v0.125.0`. `generationFailureCode`/`Reason` appear in `NoteEntity` and nowhere else in `src/main/java`.
+- **The non-clearing property holds by construction, not by test alone:** `setGenerationFailure*` is called only in the failure path; `markNoteGenerated` never touches those fields.
+- **⚠️ THE FIX IS WIDER THAN THIS RELEASE'S OWN SCOPE TEXT SAID, AND THE DELIVERY SURFACED IT RATHER THAN LETTING IT BE FOUND: the catch is SHARED.** `generateStudyPackFromExistingNoteAsync` also serves `startAsyncGenerationFromNote`, and both bulk services route through it — so **first generation, bulk generation and bulk regeneration now stamp the note row too.** Same defect, same gap, so it is correct; recorded because "single-note regeneration" understates the blast radius.
+
+- **`notes` gains `generation_failure_code`, `generation_failure_reason` and `generation_failed_at` (`V136`), written by the async worker's `catch`.** The 2026-09-05 incident left ZERO database trace: the exception reached the log and never the database, and the owner's manual retry then overwrote `status`, so by investigation time the database held zero `FAILED` notes and the whole thing was reconstructable only because Render logs had not rotated.
+- **⚠️ THE REASON IS `v0.87.0`'S SHAPE, REUSED RATHER THAN REIMPLEMENTED.** `BulkGenerationFailureReasonNormalizer` gained a package-private `static` entry point and `StudyPackService` calls it: an `AppException` contributes its own code and safe message, anything else contributes `UNEXPECTED_ERROR` and a template naming only the exception CLASS. **Raw exception text is never persisted.** Static rather than injected because `StudyPackService` is constructed positionally in eight places — two implementations of the never-surface-raw-text rule is a correctness risk; a class named `Bulk*` called from the single-note path is a naming nit.
+- **⚠️ THE COLUMNS ARE A LAST-FAILURE RECORD AND ARE NEVER CLEARED ON A LATER SUCCESS.** That is the whole point: the retry is what destroyed the evidence. `generation_failed_at` is what makes them interpretable, because `updated_at` is bumped by the retry and cannot distinguish a current failure from a recovered one.
+- **⚠️ THE SECOND, IN-WORKER QUOTA ASSERT STAYS — and the argument is the code's own.** `NoteGenerationService`'s javadoc states that asserting and charging move together (*"charging without asserting bills past the limit"*), and the regeneration path charges the note meter at commit, so disabling the assert while still charging is verbatim the state that comment forbids. The assert also runs BEFORE the LLM call, so it SAVES a call rather than wasting one — corroborated by the recovered trace failing at 4612 ms against 10–27 s successes. **The defect was that its rejection was OPAQUE, not that it fired.** No quota, entitlement, limit or meter changed, and the race is deliberately still open (a user-row lock across the LLM call is forbidden by name, and reserve-then-refund breaks `v0.118.0`'s one-commit property).
+- **⚠️ THE CATCH IS SHARED, SO FIRST GENERATION GAINS ATTRIBUTION TOO** — stated rather than left to be found. `generateStudyPackFromExistingNoteAsync` serves `startAsyncGenerationFromNote` as well, and bulk generation and bulk regeneration both route through those entry points, so their items now stamp the note row alongside `note_bulk_regeneration_item.reason_code`. The recovery sweeper's own entry point records `GENERATION_INTERRUPTED`; it can never overwrite a specific reason, because `isRecoverableNote` matches only `GENERATING` rows.
+- **Six guards, all mutation-verified, and two of them are REAL-ROW.** `NativeQueryPostgresIntegrationTest` reaches the async leg for real rather than by stubbing an exception: the account is left with exactly one note-generation unit so the pre-dispatch check PASSES, and a new dispatcher hook spends the last unit before the worker runs, so the worker's own assert throws against real `user_usage` rows. **⚠️ The finding's *"a window the harness cannot open"* is scoped to the BULK driver's harness; the regeneration harness can open it.** Isolated by two SINGLE-VARIABLE fixture mutations rather than one that moved two things at once: removing ONLY the hook makes the run SUCCEED (so the hook is what opens the window), and exhausting the meter at request time instead makes the exception propagate SYNCHRONOUSLY out of the call (the clean 403 leg, which the passing test is therefore not measuring).
+- **⚠️ GUARD (c) ASSERTS BOTH POINTS IN ONE TEST, because asserting only after the retry passes under a version that never wrote the reason at all** — both reads are NULL. Adding a clear-on-success to `markNoteGenerated` kills exactly the two guard-(c) tests and nothing else. Guard (d) uses a secret-shaped exception message, since an innocuous one passes under a version that stores `ex.getMessage()` verbatim.
+- **The nine H2 fixtures that mirror `notes` were updated** — two of them failed the build until they were, which is the mechanism working.
+- `NoteBulkRegenerationService`'s comment saying the exact reason *"cannot be persisted without a column this release may not add"* is corrected; repointing its quota heuristic at the new column is recorded as a deliberate follow-up, because it moves a `BLOCKED`/`FAILED` classification the curator's retry keys on.
