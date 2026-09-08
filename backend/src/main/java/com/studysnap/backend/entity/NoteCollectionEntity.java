@@ -77,6 +77,14 @@ public class NoteCollectionEntity {
     @Column(name = "source_synced_at")
     private Instant sourceSyncedAt;
 
+    /** Source-side curriculum publication stamp. It has no meaning on adopted copies. */
+    @Column(name = "published_at")
+    private Instant publishedAt;
+
+    /** Finalization marker on an Official public source root. */
+    @Column(name = "last_update_published_at")
+    private Instant lastUpdatePublishedAt;
+
     @Column(name = "parent_collection_id")
     private UUID parentCollectionId;
 

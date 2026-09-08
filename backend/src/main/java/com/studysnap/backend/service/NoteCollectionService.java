@@ -21,6 +21,7 @@ import com.studysnap.backend.dto.NoteConceptCountsResponse;
 import com.studysnap.backend.dto.NoteResponse;
 import com.studysnap.backend.dto.PlanReadinessResponse;
 import com.studysnap.backend.dto.ReviewSetUpdateChange;
+import com.studysnap.backend.dto.ReviewSetPublicationStatusResponse;
 import com.studysnap.backend.dto.ReviewSetUpdateResponse;
 import com.studysnap.backend.dto.SetNoteCollectionParentRequest;
 import com.studysnap.backend.dto.SetNoteCollectionChildrenOrderRequest;
@@ -44,6 +45,7 @@ import com.studysnap.backend.exception.CollectionNotFoundException;
 import com.studysnap.backend.exception.CollectionNotPublishableException;
 import com.studysnap.backend.exception.InvalidCollectionRequestException;
 import com.studysnap.backend.exception.NoteNotFoundException;
+import com.studysnap.backend.exception.ReviewSetUpdateNotPublishableException;
 import com.studysnap.backend.exception.UserNotFoundException;
 import com.studysnap.backend.model.StudyPackProgressView;
 import com.studysnap.backend.repository.GeneratedQuizRepository;
@@ -55,6 +57,7 @@ import com.studysnap.backend.repository.NoteCollectionItemNoteProjection;
 import com.studysnap.backend.repository.NoteCollectionItemRepository;
 import com.studysnap.backend.repository.NoteCollectionItemRemovalRepository;
 import com.studysnap.backend.repository.NoteCollectionRepository;
+import com.studysnap.backend.repository.ReviewSetPublicationStatusProjection;
 import com.studysnap.backend.repository.QuickReviewSessionRepository;
 import com.studysnap.backend.repository.NoteCollectionNoteProjection;
 import com.studysnap.backend.repository.NoteRepository;
@@ -686,13 +689,62 @@ public class NoteCollectionService {
     public NoteCollectionDetailResponse getPublic(UUID collectionId) {
         NoteCollectionEntity collection = collectionRepository.findByIdAndVisibility(collectionId, CollectionVisibility.PUBLIC)
                 .orElseThrow(CollectionNotFoundException::new);
-        List<NoteCollectionEntity> children = collectionRepository.findByParentCollectionIdIn(List.of(collectionId));
+        // This is a source-side public read. Child Subject Plans added after the last curator
+        // finalization have no publication stamp and must not reach anonymous visitors.
+        List<NoteCollectionEntity> children = collectionRepository.findByParentCollectionIdIn(List.of(collectionId)).stream()
+                .filter(child -> child.getPublishedAt() != null)
+                .toList();
         List<NoteCollectionEntity> collectionsWithChildren = new ArrayList<>(List.of(collection));
         collectionsWithChildren.addAll(children);
         List<NoteCollectionItemEntity> items = itemRepository
-                .findByCollectionIdInOrderByCollectionIdAscPositionAsc(collectionIds(collectionsWithChildren));
+                .findByCollectionIdInOrderByCollectionIdAscPositionAsc(collectionIds(collectionsWithChildren)).stream()
+                .filter(item -> item.getPublishedAt() != null)
+                .toList();
         int adoptionCount = loadAdoptionCounts(List.of(collection)).getOrDefault(collectionId, 0);
-        return toPublicDetailResponse(collection, items, adoptionCount);
+        return toPublicDetailResponse(collection, items, adoptionCount, children.size());
+    }
+
+    /**
+     * Curator-only read of the source-side publication boundary. Adopted copies share these tables,
+     * so this deliberately starts from an owned, non-adopted root and delegates to a query that
+     * excludes source_plan_id rows.
+     */
+    @Transactional(readOnly = true)
+    public ReviewSetPublicationStatusResponse getReviewSetPublicationStatus(UUID collectionId, UUID userId) {
+        assertAdmin(getUserOrThrow(userId));
+        NoteCollectionEntity sourceRoot = getOwnedCollectionOrThrow(collectionId, userId);
+        assertOfficialReviewSetRoot(sourceRoot, false);
+        return toPublicationStatus(sourceRoot, collectionRepository.getReviewSetPublicationStatus(collectionId));
+    }
+
+    /**
+     * Finalizes every currently-unpublished source row under an Official root in one transaction.
+     * The pessimistic root lock turns two concurrent requests into one boundary: the second caller
+     * observes no unpublished rows and does not move last_update_published_at again.
+     */
+    @Transactional
+    public ReviewSetPublicationStatusResponse publishReviewSetUpdate(UUID collectionId, UUID userId) {
+        assertAdmin(getUserOrThrow(userId));
+        NoteCollectionEntity sourceRoot = collectionRepository.findByIdAndOwnerUserIdForUpdate(collectionId, userId)
+                .orElseThrow(CollectionNotFoundException::new);
+        assertOfficialReviewSetRoot(sourceRoot, true);
+
+        ReviewSetPublicationStatusProjection before = collectionRepository.getReviewSetPublicationStatus(collectionId);
+        Instant lastPublishedAt = sourceRoot.getLastUpdatePublishedAt();
+        if (before.getUnpublishedChanges()) {
+            Instant now = Instant.now();
+            itemRepository.publishUnpublishedReviewSetItems(collectionId, now);
+            collectionRepository.publishUnpublishedReviewSetCollections(collectionId, now);
+            collectionRepository.markReviewSetUpdatePublished(collectionId, now);
+            lastPublishedAt = now;
+        }
+        return new ReviewSetPublicationStatusResponse(
+                collectionId,
+                false,
+                0,
+                0,
+                lastPublishedAt
+        );
     }
 
     @Transactional
@@ -912,6 +964,7 @@ public class NoteCollectionService {
     @Transactional
     public NoteCollectionDetailResponse updateVisibility(UUID collectionId, UUID userId, String visibilityRaw) {
         NoteCollectionEntity collection = getOwnedCollectionOrThrow(collectionId, userId);
+        CollectionVisibility previousVisibility = collection.getVisibility();
         CollectionVisibility visibility = parseVisibility(visibilityRaw);
         if (visibility == CollectionVisibility.PUBLIC) {
             validatePublishable(collection);
@@ -921,6 +974,11 @@ public class NoteCollectionService {
         NoteCollectionEntity saved = collectionRepository.save(collection);
         if (visibility == CollectionVisibility.PUBLIC) {
             publishChildCollections(collectionId, userId);
+            // Initial publication is distinct from publishing an update: there are no adopters to
+            // notify, but every current source row must become the first published curriculum.
+            if (previousVisibility != CollectionVisibility.PUBLIC && saved.getPublishedAt() == null) {
+                publishInitialCurriculum(saved, userId);
+            }
         }
         List<NoteCollectionItemEntity> items = itemRepository.findByCollectionIdOrderByPositionAsc(collectionId);
         return toDetailResponse(saved, items);
@@ -974,6 +1032,9 @@ public class NoteCollectionService {
 
         List<NoteCollectionEntity> sourceChildren = collectionRepository
                 .findOrderedChildrenByParentCollectionIdAndOwnerUserId(sourceGoalId, source.getOwnerUserId());
+        // Goal adoption copies source children. Keep unfinished Subject Plans out of the new adopter's
+        // library until they receive a source-side publication stamp.
+        sourceChildren = sourceChildren.stream().filter(child -> child.getPublishedAt() != null).toList();
         AdoptedGoalPersistence persistedGoal;
         try {
             persistedGoal = persistAdoptedGoal(source, userId);
@@ -1733,6 +1794,38 @@ public class NoteCollectionService {
         collectionRepository.saveAll(children);
     }
 
+    /** Stamps the first public curriculum without creating an update boundary for a new set. */
+    private void publishInitialCurriculum(NoteCollectionEntity sourceRoot, UUID userId) {
+        if (sourceRoot.getSourcePlanId() != null || sourceRoot.getParentCollectionId() != null
+                || !Objects.equals(sourceRoot.getOwnerUserId(), userId)) {
+            return;
+        }
+        Instant now = Instant.now();
+        itemRepository.publishUnpublishedReviewSetItems(sourceRoot.getId(), now);
+        collectionRepository.publishUnpublishedReviewSetCollections(sourceRoot.getId(), now);
+        collectionRepository.markReviewSetUpdatePublished(sourceRoot.getId(), now);
+    }
+
+    private void assertOfficialReviewSetRoot(NoteCollectionEntity collection, boolean mustBePublic) {
+        if (collection.getSourcePlanId() != null || collection.getParentCollectionId() != null
+                || (mustBePublic && collection.getVisibility() != CollectionVisibility.PUBLIC)) {
+            throw new ReviewSetUpdateNotPublishableException();
+        }
+    }
+
+    private ReviewSetPublicationStatusResponse toPublicationStatus(
+            NoteCollectionEntity sourceRoot,
+            ReviewSetPublicationStatusProjection status
+    ) {
+        return new ReviewSetPublicationStatusResponse(
+                sourceRoot.getId(),
+                status.getUnpublishedChanges(),
+                Math.toIntExact(status.getTopicsAdded()),
+                Math.toIntExact(status.getSubjectPlansAdded()),
+                sourceRoot.getLastUpdatePublishedAt()
+        );
+    }
+
     private void cascadeCourseProgramToBlankChildren(UUID collectionId, UUID userId, String courseProgram) {
         List<NoteCollectionEntity> blankChildren = collectionRepository
                 .findOrderedChildrenByParentCollectionIdAndOwnerUserId(collectionId, userId)
@@ -1762,7 +1855,12 @@ public class NoteCollectionService {
     }
 
     private int copySourceItems(NoteCollectionEntity source, UUID userId, List<CopiedPlanItem> copiedItems) {
-        List<NoteCollectionItemEntity> sourceItems = itemRepository.findByCollectionIdOrderByPositionAsc(source.getId());
+        // Adoption reads the source side. An unpublished addition remains curator-only until the
+        // explicit publication transaction stamps it.
+        List<NoteCollectionItemEntity> sourceItems = itemRepository
+                .findByCollectionIdOrderByPositionAsc(source.getId()).stream()
+                .filter(item -> item.getPublishedAt() != null)
+                .toList();
         int skippedCount = 0;
         for (NoteCollectionItemEntity sourceItem : sourceItems) {
             try {
@@ -1943,11 +2041,15 @@ public class NoteCollectionService {
             return SourceUpdateInspection.detached(adoptedRoot);
         }
 
+        // Drift is a source-side read. Unpublished children are invisible, so ordinary additions
+        // cannot make an adopter appear behind before the curator finalizes the update.
         List<NoteCollectionEntity> sourceChildren = collectionRepository
                 .findOrderedChildrenByParentCollectionIdAndOwnerUserId(
                         sourceRoot.get().getId(),
                         sourceRoot.get().getOwnerUserId()
-                );
+                ).stream()
+                .filter(child -> child.getPublishedAt() != null)
+                .toList();
         List<NoteCollectionEntity> sourcePlans = sourceChildren.isEmpty()
                 ? List.of(sourceRoot.get())
                 : sourceChildren;
@@ -1979,8 +2081,10 @@ public class NoteCollectionService {
         Set<UUID> sourceNoteIds = new LinkedHashSet<>();
         Map<UUID, Set<UUID>> currentLocationsBySourceNote = new HashMap<>();
         for (NoteCollectionEntity sourcePlan : sourcePlans) {
-            List<NoteCollectionItemEntity> sourceItems =
-                    itemRepository.findByCollectionIdOrderByPositionAsc(sourcePlan.getId());
+            List<NoteCollectionItemEntity> sourceItems = itemRepository
+                    .findByCollectionIdOrderByPositionAsc(sourcePlan.getId()).stream()
+                    .filter(item -> item.getPublishedAt() != null)
+                    .toList();
             sourceItemsByPlan.put(sourcePlan.getId(), sourceItems);
             for (NoteCollectionItemEntity sourceItem : sourceItems) {
                 sourceNoteIds.add(sourceItem.getNoteId());
@@ -2994,7 +3098,8 @@ public class NoteCollectionService {
     private NoteCollectionDetailResponse toPublicDetailResponse(
             NoteCollectionEntity collection,
             List<NoteCollectionItemEntity> items,
-            int adoptionCount
+            int adoptionCount,
+            int publishedChildCount
     ) {
         List<NoteCollectionItemResponse> itemResponses = toPublicItemResponses(items);
         NoteCollectionProgressResponse progress = toProgressResponse(itemResponses);
@@ -3017,7 +3122,7 @@ public class NoteCollectionService {
                 collection.getCompanion(),
                 collection.getSourcePlanId(),
                 collection.getParentCollectionId(),
-                Math.toIntExact(collectionRepository.countByParentCollectionId(collection.getId())),
+                publishedChildCount,
                 adoptionCount,
                 progress.notesWithStudyPack(),
                 collection.getCreatedAt(),

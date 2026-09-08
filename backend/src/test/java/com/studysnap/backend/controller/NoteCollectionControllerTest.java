@@ -11,6 +11,8 @@ import com.studysnap.backend.dto.NoteCollectionSummaryResponse;
 import com.studysnap.backend.dto.NoteConceptCountsResponse;
 import com.studysnap.backend.dto.PlanReadinessResponse;
 import com.studysnap.backend.dto.ReviewSetUpdateResponse;
+import com.studysnap.backend.dto.ReviewSetPublicationStatusResponse;
+import com.studysnap.backend.dto.PublishReviewSetUpdateRequest;
 import com.studysnap.backend.dto.GoalCollectionDetailResponse;
 import com.studysnap.backend.dto.GoalChildItemsResponse;
 import com.studysnap.backend.dto.NoteCollectionItemResponse;
@@ -32,6 +34,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.core.MethodParameter;
@@ -54,6 +57,7 @@ import static org.mockito.Mockito.when;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.springframework.test.web.servlet.setup.MockMvcBuilders.standaloneSetup;
@@ -107,6 +111,12 @@ class NoteCollectionControllerTest {
         assertThat(NoteCollectionController.class
                 .getMethod("applySourceUpdate", String.class, AuthenticatedUser.class)
                 .getAnnotation(PreAuthorize.class).value()).isEqualTo(PREAUTHORIZE_ROLES);
+        assertThat(NoteCollectionController.class
+                .getMethod("getReviewSetPublicationStatus", String.class, AuthenticatedUser.class)
+                .getAnnotation(PreAuthorize.class).value()).isEqualTo(PREAUTHORIZE_ADMIN);
+        assertThat(NoteCollectionController.class
+                .getMethod("publishReviewSetUpdate", String.class, PublishReviewSetUpdateRequest.class, AuthenticatedUser.class)
+                .getAnnotation(PreAuthorize.class).value()).isEqualTo(PREAUTHORIZE_ADMIN);
         assertThat(NoteCollectionController.class
                 .getMethod("updateMetadata", String.class, UpdateNoteCollectionRequest.class, AuthenticatedUser.class)
                 .getAnnotation(PreAuthorize.class).value()).isEqualTo(PREAUTHORIZE_ROLES);
@@ -420,6 +430,29 @@ class NoteCollectionControllerTest {
         assertThat(controller.applySourceUpdate(COLLECTION_ID, user)).isEqualTo(applied);
         verify(service).getSourceUpdate(collectionId, user.userId());
         verify(service).applySourceUpdate(collectionId, user.userId());
+    }
+
+    /**
+     * The body is intentionally empty, but it is still a JSON POST. This uses MockMvc rather than a
+     * direct controller call so a missing Content-Type cannot make the endpoint unreachable unnoticed.
+     */
+    @Test
+    void publishReviewSetUpdate_acceptsARealJsonRequest() throws Exception {
+        UUID collectionId = UUID.fromString(COLLECTION_ID);
+        AuthenticatedUser admin = new AuthenticatedUser(UUID.randomUUID(), UserRole.ADMIN, true, 1);
+        ReviewSetPublicationStatusResponse response = new ReviewSetPublicationStatusResponse(
+                collectionId, false, 0, 0, Instant.parse("2026-09-08T10:00:00Z")
+        );
+        when(service.publishReviewSetUpdate(collectionId, admin.userId())).thenReturn(response);
+
+        buildMockMvc(admin).perform(post("/collections/" + COLLECTION_ID + "/publish-update")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.collectionId").value(COLLECTION_ID))
+                .andExpect(jsonPath("$.unpublishedChanges").value(false));
+
+        verify(service).publishReviewSetUpdate(collectionId, admin.userId());
     }
 
     @Test

@@ -73,4 +73,20 @@ public interface NoteCollectionItemRepository extends JpaRepository<NoteCollecti
             @Param("userId") UUID userId,
             @Param("excludedNoteId") UUID excludedNoteId
     );
+
+    /** Publishes only source-side rows beneath a locked Official root. */
+    @Query(value = """
+            update note_collection_items item
+            set published_at = :publishedAt
+            from note_collections collection
+            where collection.id = item.collection_id
+              and collection.source_plan_id is null
+              and item.published_at is null
+              and (collection.id = :collectionId or collection.parent_collection_id = :collectionId)
+            """, nativeQuery = true)
+    @org.springframework.data.jpa.repository.Modifying
+    int publishUnpublishedReviewSetItems(
+            @Param("collectionId") UUID collectionId,
+            @Param("publishedAt") java.time.Instant publishedAt
+    );
 }

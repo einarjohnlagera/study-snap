@@ -833,6 +833,33 @@ Behavior:
 
 ### Additive Official Review Set Updates
 
+#### Publication boundary (v0.132.0)
+
+Editing an Official Review Set is not publishing its update. Source additions are created with a null
+`published_at`; curators can keep editing until they choose **Publish update** on the public, top-level
+Official Review Set. The action is enabled only when that set is already `PUBLIC` and at least one source
+collection or item beneath it is unpublished. It stamps all outstanding rows and the root's
+`last_update_published_at` in one locked transaction. Repeating it after the stamp is a successful no-op.
+
+`published_at` is strictly a **source-side** concept even though source and adopted copies share the
+same tables. Drift inspection, the source side of adoption copy, and the anonymous public detail filter
+unpublished source rows. A learner's own library and collection detail must never filter their adopted
+rows by this field, and `countAdoptionsByCollectionIds` must never filter by it: an adopter never
+publishes their own copy.
+
+The curator confirmation counts only additions that exist as unpublished rows: topics from unpublished
+items and Subject Plans from unpublished child collections. It does not claim a removal or reorganization
+count because that provenance is not stored.
+
+**Public-view limitation:** the public surface hides unpublished additions. Removals, reorders, and
+section-label changes still appear live because a delete has no retained row and position/label have one
+stored value. This is a stated narrowed contract, not a guarantee of complete working/published isolation.
+
+The public **child count** follows the same filter as the child list: `getPublic` passes the filtered
+`children.size()`, so an unpublished Subject Plan is absent from both. This is deliberate — counting a
+plan the page will not show would advertise its existence and leave the public view contradicting itself.
+The curator's own Goal detail still counts every child, published or not.
+
 `GET /collections/{id}/source-update` inspects an owned adoption. It returns an explicit
 `UPDATES_AVAILABLE`, `ALREADY_UP_TO_DATE`, or `DETACHED_FROM_SOURCE` state and lists both additions and
 surface-only upstream changes. `POST /collections/{id}/source-update` is the learner's explicit choice

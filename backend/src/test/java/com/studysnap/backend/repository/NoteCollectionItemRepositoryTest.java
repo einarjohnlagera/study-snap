@@ -141,6 +141,9 @@ class NoteCollectionItemRepositoryTest {
                     completed_at timestamp with time zone
                 )
                 """);
+        jdbcTemplate.execute("alter table note_collections add column if not exists published_at timestamp with time zone");
+        jdbcTemplate.execute("alter table note_collections add column if not exists last_update_published_at timestamp with time zone");
+        jdbcTemplate.execute("alter table note_collection_items add column if not exists published_at timestamp with time zone");
         jdbcTemplate.execute("delete from note_collection_items");
         jdbcTemplate.execute("delete from quick_review_sessions");
         // ⚠️ v0.113.1. Mirrors V133's chk_quick_review_sessions_anchor so a test cannot persist an

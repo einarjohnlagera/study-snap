@@ -24,6 +24,7 @@ import com.studysnap.backend.dto.NoteConceptCountsResponse;
 import com.studysnap.backend.dto.NoteResponse;
 import com.studysnap.backend.dto.PlanReadinessResponse;
 import com.studysnap.backend.dto.ReviewSetUpdateResponse;
+import com.studysnap.backend.dto.ReviewSetPublicationStatusResponse;
 import com.studysnap.backend.dto.SetNoteCollectionChildrenOrderRequest;
 import com.studysnap.backend.dto.SetNoteCollectionParentRequest;
 import com.studysnap.backend.dto.SetNoteCollectionOrderRequest;
@@ -61,6 +62,7 @@ import com.studysnap.backend.repository.NoteCollectionItemNoteProjection;
 import com.studysnap.backend.repository.NoteCollectionItemRepository;
 import com.studysnap.backend.repository.NoteCollectionItemRemovalRepository;
 import com.studysnap.backend.repository.NoteCollectionRepository;
+import com.studysnap.backend.repository.ReviewSetPublicationStatusProjection;
 import com.studysnap.backend.repository.QuickReviewSessionRepository;
 import com.studysnap.backend.repository.NoteCollectionNoteProjection;
 import com.studysnap.backend.repository.NoteRepository;
@@ -558,6 +560,47 @@ class NoteCollectionServiceTest {
         assertThat(result.progress().notesPracticed()).isEqualTo(1);
         verify(quizSessionHistoryService, times(1))
                 .findLatestSessionCompletedAtByNoteIds(userId, List.of(firstNoteId, secondNoteId));
+    }
+
+    /**
+     * ⚠️ THE HIGHEST-BLAST-RADIUS FAILURE MODE OF THE v0.132.0 PUBLICATION BOUNDARY, AND IT WAS THE ONE
+     * REGRESSION GUARD THE DELIVERY LEFT UNWRITTEN.
+     *
+     * <p>{@code published_at} is a SOURCE-SIDE concept, but the migration adds the column to
+     * {@code note_collections} and {@code note_collection_items} — the same tables that hold a learner's
+     * OWN plans and their adopted copies. Nobody publishes a learner's copy, so those stamps are
+     * meaningless there.
+     *
+     * <p>⚠️ AND THIS IS NOT A THEORETICAL RISK: a note the learner adds to their own plan TODAY is
+     * inserted with {@code published_at} NULL, because only the curator publish path stamps anything. So
+     * the first read path that "helpfully" adds a published-at filter makes the learner's own note vanish
+     * from their own collection the instant they add it. {@code docs/features/collections.md} states the
+     * rule; a stated rule with no guard is what {@code v0.116.0} and {@code v0.117.0} shipped.
+     *
+     * <p>The fixture is deliberately ALL-UNPUBLISHED. A fixture whose rows are stamped would pass whether
+     * or not the filter exists, which is exactly the "fixtures that prove nothing" trap the audit names.
+     */
+    @Test
+    void get_returnsTheLearnersOwnUnpublishedItemsBecausePublicationIsASourceSideConceptOnly() {
+        UUID userId = UUID.randomUUID();
+        UUID collectionId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        NoteCollectionEntity collection = buildCollection(collectionId, userId, COLLECTION_TITLE, Instant.now());
+        collection.setPublishedAt(null);
+        NoteCollectionItemEntity justAddedByTheLearner = buildItem(collectionId, noteId, 0, null);
+        justAddedByTheLearner.setPublishedAt(null);
+        NoteEntity note = buildNote(noteId, userId, NOTE_TITLE_ONE);
+        when(collectionRepository.findByIdAndOwnerUserId(collectionId, userId)).thenReturn(Optional.of(collection));
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(collectionId)).thenReturn(List.of(justAddedByTheLearner));
+        when(noteRepository.findCollectionNoteProjectionsByIdIn(List.of(noteId))).thenReturn(asNoteProjections(note));
+        when(studyPackRepository.findProgressViewsByNoteIdIn(List.of(noteId))).thenReturn(List.of());
+        when(generatedQuizRepository.findNoteIdsByOwnerUserIdAndNoteIdIn(userId, List.of(noteId))).thenReturn(List.of());
+        when(quizSessionHistoryService.findLatestSessionCompletedAtByNoteIds(userId, List.of(noteId))).thenReturn(Map.of());
+
+        NoteCollectionDetailResponse result = service.get(collectionId, userId);
+
+        assertThat(result.items()).extracting(NoteCollectionItemResponse::noteId).containsExactly(noteId);
+        assertThat(result.progress().totalNotes()).isEqualTo(1);
     }
 
     @Test
@@ -3127,7 +3170,6 @@ class NoteCollectionServiceTest {
         ));
         when(noteRepository.findCollectionNoteProjectionsByIdIn(noteIds)).thenReturn(asNoteProjections(readyNote));
         when(studyPackRepository.findProgressViewsByNoteIdIn(noteIds)).thenReturn(asProjections(buildStudyPack(readyNoteId)));
-        when(collectionRepository.countByParentCollectionId(collectionId)).thenReturn(0L);
         when(collectionRepository.countAdoptionsByCollectionIds(List.of(collectionId))).thenReturn(List.of());
 
         NoteCollectionDetailResponse result = service.getPublic(collectionId);
@@ -3155,13 +3197,50 @@ class NoteCollectionServiceTest {
         when(collectionRepository.findByIdAndVisibility(collectionId, CollectionVisibility.PUBLIC)).thenReturn(Optional.of(collection));
         when(collectionRepository.findByParentCollectionIdIn(List.of(collectionId))).thenReturn(List.of());
         when(itemRepository.findByCollectionIdInOrderByCollectionIdAscPositionAsc(List.of(collectionId))).thenReturn(List.of());
-        when(collectionRepository.countByParentCollectionId(collectionId)).thenReturn(0L);
         when(collectionRepository.countAdoptionsByCollectionIds(List.of(collectionId)))
                 .thenReturn(List.of(adoptionCountProjection(collectionId, 12)));
 
         NoteCollectionDetailResponse result = service.getPublic(collectionId);
 
         assertThat(result.adoptionCount()).isEqualTo(12);
+    }
+
+    /**
+     * Test 11's narrowed contract: a public visitor cannot see an unpublished addition. This does
+     * not claim that a working reorder, rename, or deletion is hidden; those facts have no separate
+     * published value or tombstone to read.
+     */
+    @Test
+    void getPublic_hidesUnpublishedAdditionsButDoesNotClaimFullWorkingStateIsolation() {
+        UUID collectionId = UUID.randomUUID();
+        UUID publishedNoteId = UUID.randomUUID();
+        UUID unpublishedNoteId = UUID.randomUUID();
+        NoteCollectionEntity collection = buildCollection(collectionId, UUID.randomUUID(), COLLECTION_TITLE, Instant.now());
+        collection.setVisibility(CollectionVisibility.PUBLIC);
+        NoteCollectionItemEntity publishedItem = buildItem(collectionId, publishedNoteId, 0, WEEK_ONE_LABEL);
+        NoteCollectionItemEntity workingOnlyItem = buildItem(collectionId, unpublishedNoteId, 1, WEEK_TWO_LABEL);
+        workingOnlyItem.setPublishedAt(null);
+        NoteEntity publishedNote = buildNote(publishedNoteId, collection.getOwnerUserId(), NOTE_TITLE_ONE);
+        publishedNote.setVisibility(NoteVisibility.PUBLIC);
+        NoteEntity unpublishedNote = buildNote(unpublishedNoteId, collection.getOwnerUserId(), NOTE_TITLE_TWO);
+        unpublishedNote.setVisibility(NoteVisibility.PUBLIC);
+
+        when(collectionRepository.findByIdAndVisibility(collectionId, CollectionVisibility.PUBLIC)).thenReturn(Optional.of(collection));
+        when(collectionRepository.findByParentCollectionIdIn(List.of(collectionId))).thenReturn(List.of());
+        when(itemRepository.findByCollectionIdInOrderByCollectionIdAscPositionAsc(List.of(collectionId)))
+                .thenReturn(List.of(publishedItem, workingOnlyItem));
+        when(noteRepository.findCollectionNoteProjectionsByIdIn(List.of(publishedNoteId)))
+                .thenReturn(asNoteProjections(publishedNote));
+        when(studyPackRepository.findProgressViewsByNoteIdIn(List.of(publishedNoteId))).thenReturn(List.of());
+        when(collectionRepository.countAdoptionsByCollectionIds(List.of(collectionId)))
+                .thenReturn(List.of(adoptionCountProjection(collectionId, 4)));
+
+        NoteCollectionDetailResponse result = service.getPublic(collectionId);
+
+        assertThat(result.items()).extracting(NoteCollectionItemResponse::noteId).containsExactly(publishedNoteId);
+        assertThat(result.adoptionCount())
+                .as("the public source filter does not change the adopter-side adoption count")
+                .isEqualTo(4);
     }
 
     @Test
@@ -3184,8 +3263,6 @@ class NoteCollectionServiceTest {
         ));
         when(noteRepository.findCollectionNoteProjectionsByIdIn(noteIds)).thenReturn(asNoteProjections(readyNote, draftNote));
         when(studyPackRepository.findProgressViewsByNoteIdIn(noteIds)).thenReturn(asProjections(buildStudyPack(readyNoteId)));
-        when(collectionRepository.countByParentCollectionId(collectionId)).thenReturn(0L);
-
         NoteCollectionDetailResponse result = service.getPublic(collectionId);
 
         assertThat(result.readyCount()).isEqualTo(1);
@@ -3221,8 +3298,6 @@ class NoteCollectionServiceTest {
         ));
         when(noteRepository.findCollectionNoteProjectionsByIdIn(noteIds)).thenReturn(asNoteProjections(readyNote, draftNote));
         when(studyPackRepository.findProgressViewsByNoteIdIn(noteIds)).thenReturn(asProjections(buildStudyPack(readyNoteId)));
-        when(collectionRepository.countByParentCollectionId(goalId)).thenReturn(2L);
-
         NoteCollectionDetailResponse result = service.getPublic(goalId);
 
         assertThat(result.items()).extracting(NoteCollectionItemResponse::noteId)
@@ -3265,7 +3340,12 @@ class NoteCollectionServiceTest {
         UUID collectionId = UUID.randomUUID();
         UUID noteId = UUID.randomUUID();
         NoteCollectionEntity collection = buildCollection(collectionId, userId, COLLECTION_TITLE, Instant.now());
+        // A newly authored set has no migration backfill. Initial publication stamps the baseline
+        // rather than manufacturing an update for learners who do not yet exist.
+        collection.setPublishedAt(null);
+        collection.setVisibility(CollectionVisibility.PRIVATE);
         NoteCollectionItemEntity item = buildItem(collectionId, noteId, 0, null);
+        item.setPublishedAt(null);
         NoteEntity note = buildNote(noteId, userId, NOTE_TITLE_ONE);
         note.setVisibility(NoteVisibility.PUBLIC);
         when(collectionRepository.findByIdAndOwnerUserId(collectionId, userId)).thenReturn(Optional.of(collection));
@@ -3278,6 +3358,9 @@ class NoteCollectionServiceTest {
 
         assertThat(result.visibility()).isEqualTo(CollectionVisibility.PUBLIC.name());
         assertThat(collection.getVisibility()).isEqualTo(CollectionVisibility.PUBLIC);
+        verify(itemRepository).publishUnpublishedReviewSetItems(eq(collectionId), any(Instant.class));
+        verify(collectionRepository).publishUnpublishedReviewSetCollections(eq(collectionId), any(Instant.class));
+        verify(collectionRepository).markReviewSetUpdatePublished(eq(collectionId), any(Instant.class));
     }
 
     @Test
@@ -3461,6 +3544,39 @@ class NoteCollectionServiceTest {
         assertThat(collectionCaptor.getValue().getCompanionStructureSnapshot()).isNotNull();
     }
 
+    /** A new adopter gets the last published curriculum, not an unfinished source addition. */
+    @Test
+    void adopt_skipsUnpublishedSourceItems() {
+        UUID userId = UUID.randomUUID();
+        UUID sourcePlanId = UUID.randomUUID();
+        UUID sourceOwnerId = UUID.randomUUID();
+        UUID publishedNoteId = UUID.randomUUID();
+        UUID workingOnlyNoteId = UUID.randomUUID();
+        UUID copiedNoteId = UUID.randomUUID();
+        NoteCollectionEntity source = buildCollection(sourcePlanId, sourceOwnerId, COLLECTION_TITLE, Instant.now());
+        source.setVisibility(CollectionVisibility.PUBLIC);
+        NoteCollectionItemEntity publishedItem = buildItem(sourcePlanId, publishedNoteId, 0, WEEK_ONE_LABEL);
+        NoteCollectionItemEntity workingOnlyItem = buildItem(sourcePlanId, workingOnlyNoteId, 1, WEEK_TWO_LABEL);
+        workingOnlyItem.setPublishedAt(null);
+        NoteEntity publishedNote = buildNote(publishedNoteId, sourceOwnerId, NOTE_TITLE_ONE);
+        publishedNote.setVisibility(NoteVisibility.PUBLIC);
+
+        when(collectionRepository.findByIdAndVisibility(sourcePlanId, CollectionVisibility.PUBLIC)).thenReturn(Optional.of(source));
+        when(collectionRepository.findByOwnerUserIdAndSourcePlanIdForUpdate(userId, sourcePlanId)).thenReturn(Optional.empty());
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(sourcePlanId))
+                .thenReturn(List.of(publishedItem, workingOnlyItem));
+        when(noteRepository.findByIdAndVisibility(publishedNoteId, NoteVisibility.PUBLIC)).thenReturn(Optional.of(publishedNote));
+        when(noteService.copyNote(publishedNoteId.toString(), userId, true)).thenReturn(noteResponse(copiedNoteId));
+        when(collectionRepository.saveAndFlush(any(NoteCollectionEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(itemRepository.saveAll(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        AdoptStudyPlanResponse result = service.adopt(sourcePlanId, userId);
+
+        assertThat(result.copiedCount()).isOne();
+        verify(noteService).copyNote(publishedNoteId.toString(), userId, true);
+        verify(noteService, never()).copyNote(workingOnlyNoteId.toString(), userId, true);
+    }
+
     @Test
     void adopt_carriesNullEstimatedStudyHoursToPersonalPlan() {
         UUID userId = UUID.randomUUID();
@@ -3590,6 +3706,98 @@ class NoteCollectionServiceTest {
         ArgumentCaptor<List<NoteCollectionItemEntity>> itemsCaptor = ArgumentCaptor.forClass(List.class);
         verify(itemRepository).saveAll(itemsCaptor.capture());
         assertThat(itemsCaptor.getValue()).extracting(NoteCollectionItemEntity::getNoteId).containsExactly(copiedNoteId);
+    }
+
+    @Test
+    void publishReviewSetUpdate_stampsOnceAndLeavesARepeatAsANoOp() {
+        UUID adminId = UUID.randomUUID();
+        UUID collectionId = UUID.randomUUID();
+        UserEntity admin = buildUser(adminId);
+        admin.setRole(UserRole.ADMIN);
+        NoteCollectionEntity source = buildCollection(collectionId, adminId, "Official Biology", Instant.now());
+        source.setVisibility(CollectionVisibility.PUBLIC);
+        source.setLastUpdatePublishedAt(Instant.parse("2026-09-08T00:00:00Z"));
+        ReviewSetPublicationStatusProjection unpublished = publicationStatus(true, 2, 1);
+        ReviewSetPublicationStatusProjection none = publicationStatus(false, 0, 0);
+
+        when(userRepository.findById(adminId)).thenReturn(Optional.of(admin));
+        when(collectionRepository.findByIdAndOwnerUserIdForUpdate(collectionId, adminId)).thenReturn(Optional.of(source));
+        when(collectionRepository.getReviewSetPublicationStatus(collectionId)).thenReturn(unpublished, none);
+
+        ReviewSetPublicationStatusResponse first = service.publishReviewSetUpdate(collectionId, adminId);
+        ReviewSetPublicationStatusResponse second = service.publishReviewSetUpdate(collectionId, adminId);
+
+        assertThat(first.unpublishedChanges()).isFalse();
+        assertThat(second.unpublishedChanges()).isFalse();
+        verify(itemRepository, times(1)).publishUnpublishedReviewSetItems(eq(collectionId), any());
+        verify(collectionRepository, times(1)).publishUnpublishedReviewSetCollections(eq(collectionId), any());
+        verify(collectionRepository, times(1)).markReviewSetUpdatePublished(eq(collectionId), any());
+    }
+
+    @Test
+    void publishReviewSetUpdate_rejectsANonCuratorBeforeItCanWrite() {
+        UUID learnerId = UUID.randomUUID();
+
+        assertThatThrownBy(() -> service.publishReviewSetUpdate(UUID.randomUUID(), learnerId))
+                .isInstanceOf(AccessDeniedException.class);
+        verifyNoInteractions(collectionRepository, itemRepository);
+    }
+
+    /**
+     * Tests 1 and 2: the fixture has an adopter and an actual unpublished source row. Clearing the
+     * source item's stamp is the mutant this kills; a normal pre-boundary fixture would prove nothing.
+     */
+    @Test
+    void sourceUpdate_ignoresAnOrdinaryUnpublishedCuratorAddition() {
+        UUID learnerId = UUID.randomUUID();
+        UUID curatorId = UUID.randomUUID();
+        UUID sourcePlanId = UUID.randomUUID();
+        UUID adoptedPlanId = UUID.randomUUID();
+        UUID sourceExistingNoteId = UUID.randomUUID();
+        UUID sourceWorkingOnlyNoteId = UUID.randomUUID();
+        UUID learnerExistingNoteId = UUID.randomUUID();
+        Instant now = Instant.now();
+        NoteCollectionEntity source = buildCollection(sourcePlanId, curatorId, "Official Biology", now);
+        source.setVisibility(CollectionVisibility.PUBLIC);
+        NoteCollectionEntity adopted = buildCollection(adoptedPlanId, learnerId, "My Biology", now);
+        adopted.setSourcePlanId(sourcePlanId);
+        adopted.setSourceTitleAtSync(source.getTitle());
+        NoteCollectionItemEntity sourceExisting = buildItem(sourcePlanId, sourceExistingNoteId, 0, WEEK_ONE_LABEL);
+        NoteCollectionItemEntity sourceWorkingOnly = buildItem(sourcePlanId, sourceWorkingOnlyNoteId, 1, WEEK_TWO_LABEL);
+        sourceWorkingOnly.setPublishedAt(null);
+        NoteCollectionItemEntity learnerExisting = buildItem(adoptedPlanId, learnerExistingNoteId, 0, WEEK_ONE_LABEL);
+        learnerExisting.setSourceLabelAtSync(WEEK_ONE_LABEL);
+        learnerExisting.setSourcePositionAtSync(0);
+        learnerExisting.setSourceSyncedAt(now);
+        NoteEntity sourceExistingNote = buildNote(sourceExistingNoteId, curatorId, NOTE_TITLE_ONE);
+        sourceExistingNote.setVisibility(NoteVisibility.PUBLIC);
+        NoteEntity learnerExistingNote = buildNote(learnerExistingNoteId, learnerId, NOTE_TITLE_ONE);
+        learnerExistingNote.setCopiedFromNoteId(sourceExistingNoteId);
+
+        when(collectionRepository.findByIdAndOwnerUserId(adoptedPlanId, learnerId)).thenReturn(Optional.of(adopted));
+        when(collectionRepository.findByIdAndVisibility(sourcePlanId, CollectionVisibility.PUBLIC)).thenReturn(Optional.of(source));
+        when(collectionRepository.findOrderedChildrenByParentCollectionIdAndOwnerUserId(sourcePlanId, curatorId)).thenReturn(List.of());
+        when(collectionRepository.findOrderedChildrenByParentCollectionIdAndOwnerUserId(adoptedPlanId, learnerId)).thenReturn(List.of());
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(sourcePlanId))
+                .thenReturn(List.of(sourceExisting, sourceWorkingOnly));
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(adoptedPlanId)).thenReturn(List.of(learnerExisting));
+        when(itemRemovalRepository.findByAdoptedCollectionIdIn(List.of(adoptedPlanId))).thenReturn(List.of());
+        when(noteRepository.findAllById(any())).thenAnswer(invocation -> {
+            List<NoteEntity> notes = new ArrayList<>();
+            for (UUID noteId : invocation.<Iterable<UUID>>getArgument(0)) {
+                if (noteId.equals(sourceExistingNoteId)) {
+                    notes.add(sourceExistingNote);
+                } else if (noteId.equals(learnerExistingNoteId)) {
+                    notes.add(learnerExistingNote);
+                }
+            }
+            return notes;
+        });
+
+        ReviewSetUpdateResponse result = service.getSourceUpdate(adoptedPlanId, learnerId);
+
+        assertThat(result.status()).isEqualTo("ALREADY_UP_TO_DATE");
+        assertThat(result.changes()).isEmpty();
     }
 
     @Test
@@ -5343,6 +5551,9 @@ class NoteCollectionServiceTest {
         collection.setDescription(COLLECTION_DESCRIPTION);
         collection.setCreatedAt(updatedAt.minusSeconds(60));
         collection.setUpdatedAt(updatedAt);
+        // Existing source fixtures model rows that predate the publication boundary. New-row tests
+        // explicitly clear this stamp when they need to prove an unpublished addition is hidden.
+        collection.setPublishedAt(updatedAt);
         return collection;
     }
 
@@ -5381,6 +5592,7 @@ class NoteCollectionServiceTest {
         item.setPosition(position);
         item.setLabel(label);
         item.setCreatedAt(Instant.now());
+        item.setPublishedAt(Instant.now());
         return item;
     }
 
@@ -5583,6 +5795,29 @@ class NoteCollectionServiceTest {
             @Override
             public long getAdoptionCount() {
                 return adoptionCount;
+            }
+        };
+    }
+
+    private ReviewSetPublicationStatusProjection publicationStatus(
+            boolean unpublishedChanges,
+            long topicsAdded,
+            long subjectPlansAdded
+    ) {
+        return new ReviewSetPublicationStatusProjection() {
+            @Override
+            public boolean getUnpublishedChanges() {
+                return unpublishedChanges;
+            }
+
+            @Override
+            public long getTopicsAdded() {
+                return topicsAdded;
+            }
+
+            @Override
+            public long getSubjectPlansAdded() {
+                return subjectPlansAdded;
             }
         };
     }

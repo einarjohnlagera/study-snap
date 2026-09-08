@@ -161,7 +161,7 @@ class NativeQueryPostgresIntegrationTest {
      * v0.93.0 pressure test: at 25 against an actual 31, the reflective scan could silently degrade by
      * six queries and stay green, which is the same false comfort the harness exists to remove.
      */
-    private static final int EXPECTED_NATIVE_QUERIES = 40;
+    private static final int EXPECTED_NATIVE_QUERIES = 44;
     private static final String REPOSITORY_CLASSES =
             "classpath*:com/studysnap/backend/repository/**/*.class";
 
@@ -2731,6 +2731,60 @@ class NativeQueryPostgresIntegrationTest {
                 Integer.class,
                 adoptedPlanId
         )).isZero();
+    }
+
+    /**
+     * Killing test for replacing V141's created-at backfill with NULL-as-published semantics, a
+     * visibility-limited item update, or a deploy-time timestamp. The fixture has all three shapes
+     * the migration must preserve: a public source root, its private source child, and an adopted
+     * copy. Replaying the migration's actual SQL is deliberate: Flyway has already applied it to
+     * this PostgreSQL schema, so the only way to exercise its backfill is against rows seeded after
+     * startup.
+     */
+    @Test
+    void reviewSetPublicationBackfillStampsEveryExistingRowFromItsCollectionCreationTime() {
+        UUID curator = seedUser("publication-backfill-curator");
+        UUID learner = seedUser("publication-backfill-learner");
+        UUID sourceRoot = seedCollection(curator, "Published Review Set");
+        UUID privateSourceChild = seedCollection(curator, "Private source child");
+        UUID adoptedCopy = seedCollection(learner, "Learner copy");
+        jdbcTemplate.update("update note_collections set visibility = 'PUBLIC' where id = ?", sourceRoot);
+        jdbcTemplate.update("update note_collections set parent_collection_id = ? where id = ?", sourceRoot, privateSourceChild);
+        jdbcTemplate.update("update note_collections set source_plan_id = ? where id = ?", sourceRoot, adoptedCopy);
+
+        UUID rootNote = seedPublicNote(curator, "Published root topic", new String[] {});
+        UUID childNote = seedPublicNote(curator, "Private child topic", new String[] {});
+        UUID adoptedNote = seedPublicNote(learner, "Copied topic", new String[] {});
+        seedCollectionItem(sourceRoot, rootNote);
+        seedCollectionItem(privateSourceChild, childNote);
+        seedCollectionItem(adoptedCopy, adoptedNote);
+
+        // The DDL has already run during this harness's Flyway startup. Replay V141's real backfill
+        // statements below it, rather than a hand-copied approximation of the deployed migration.
+        String migration = migrationSql("V141__review_set_publication_boundary.sql");
+        jdbcTemplate.update(migration.substring(migration.indexOf("-- Every row")));
+
+        assertThat(jdbcTemplate.queryForObject(
+                "select count(*) from note_collections where id in (?, ?, ?) and published_at = created_at",
+                Integer.class,
+                sourceRoot, privateSourceChild, adoptedCopy
+        )).isEqualTo(3);
+        assertThat(jdbcTemplate.queryForObject(
+                "select count(*) from note_collection_items item join note_collections collection on collection.id = item.collection_id "
+                        + "where collection.id in (?, ?, ?) and item.published_at = collection.created_at",
+                Integer.class,
+                sourceRoot, privateSourceChild, adoptedCopy
+        )).isEqualTo(3);
+        assertThat(jdbcTemplate.queryForObject(
+                "select last_update_published_at = created_at from note_collections where id = ?",
+                Boolean.class,
+                sourceRoot
+        )).isTrue();
+        assertThat(jdbcTemplate.queryForObject(
+                "select count(*) from note_collections where id = ? and visibility = 'PUBLIC'",
+                Integer.class,
+                sourceRoot
+        )).as("the public source root remains eligible for Explore after its stamp is added").isOne();
     }
 
     // ------------------------------------------------------------------------------------------------
