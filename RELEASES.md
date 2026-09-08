@@ -1,5 +1,110 @@
 # RELEASES.md - NoteLib
 
+## v0.131.0 - Inbox Polish
+
+**Status: Released** (kicked off 2026-09-07, signed off 2026-09-08, base branch `releases/v0.131.0`, cut from `main` after `v0.130.0` merged as #1344 and tagged `3cec79bb`)
+
+**Three fixes against the SHIPPED `v0.130.0` inbox**, from `docs/claude-plans/notification-inbox-polish.md` (owner report, 2026-09-07). **⚠️ FRONTEND ONLY — no backend, no migration, no contract change, no new notification type.**
+
+### Planned Scope
+
+**(1) Close on outside click, and drop the `Close` button.** The desktop panel today can be closed ONLY by its `Close` button (`notification-inbox.tsx:172`); the component's sole `addEventListener` is a `matchMedia` listener for `isMobile` (`:41`). **⚠️ THE INBOX IS THE ODD ONE OUT** — the avatar menu in the same header (`app-shell.tsx:525`), the theme toggle (`theme-toggle.tsx:125,136`) and the export dropdown (`export-dropdown-menu.tsx:43`) all already close on outside click. Copy the avatar-menu pattern, then delete the `Close` button. Add `Escape` for the desktop panel. **⚠️ MOBILE NEEDS NO CHANGE** — that path renders `AppModal`, which already handles both (`app-modal.tsx:109-111`); do NOT add a second handler.
+
+**(2) The bell is a toggle, not a refresh.** `openInbox` (`:57-60`) does `setIsOpen(true)` + `loadInbox()` unconditionally, so clicking an open inbox re-opens and refetches. When open, close WITHOUT refetching; when closed, open and load. **⚠️ Do NOT drop load-on-open** — only the re-click while open skips the fetch. The trigger also carries a hardcoded `aria-label="Open notifications"` (`:157`) and **no `aria-expanded`**; a toggle owes both.
+
+**(3) Hide the bell while a learner is taking a quiz.** It is already hidden, but for two modes only: the bell renders inside the header (`app-shell.tsx:643`) which is wrapped in `{!isExamFocusActive ? (` (`:628-629`), and there are exactly **two** `useExamFocusMode` consumers — Long Exam (`phase === "running"`) and Challenge Quiz **Board Exam mode only**. Extend to ordinary Challenge Quiz, Quick Review, Adaptive Practice, Interview Practice and the shared quiz. **No new mechanism** — hook, context and header gate all exist.
+
+### ⚠️ SCOPE SET AT KICKOFF BY A VERIFIED FINDING — ITEM 3 SHIPS EXITS FIRST
+
+**⚠️⚠️ CORRECTED 2026-09-07, HOURS AFTER THIS KICKOFF — THE FINDING BELOW WAS WRONG, AND IT IS KEPT RATHER THAN DELETED BECAUSE IT IS THE SAME DEFECT CLASS `v0.130.0` SHIPPED A WHOLE PRESSURE TEST TO CATCH.** The claim was that Quick Review's running branch has no in-page exit. **It has one.** A sticky top bar carrying a **"Leave Quiz"** button (`quick-review/page.tsx:1101`, gated on `quizSessionActive`) renders *above* the branch chain that was read. The audit that produced the claim grepped for `BackLink`, `<Link` and `router.push` and **never searched for the `onClick={() => requestLeave()}` button pattern that is the actual running-state exit in this repo** — a claim asserted from an incomplete search rather than anchored to the code that implements it.
+
+**THE CORRECTED AUDIT — every surface, checked for the right pattern:**
+
+| Surface | Bell during quiz | Running-state exit |
+|---|---|---|
+| Long Exam | already hidden | ✅ `ExamTopBar` |
+| Challenge Quiz — Board Exam | already hidden | ✅ `ExamTopBar` |
+| Challenge Quiz — ordinary | **visible** | ✅ inline top bar, *Leave Quiz* (`:1670`) |
+| Quick Review | **visible** | ✅ *Leave Quiz* (`:1101`) |
+| Adaptive Practice | **visible** | ✅ *Leave Quiz* (`:782`) |
+| Interview Practice | **visible** | ✅ *Leave Practice* (`:327`) |
+| Shared quiz `/quiz/[token]` | **already absent** | n/a — see below |
+
+**⚠️ CONSEQUENCE 1: NO EXIT WORK IS OWED. All four surfaces that need focus mode already have a running-state exit**, so item 3 is the hook call alone. Guard 7 still gets asserted per surface — it is now a regression guard rather than a prerequisite.
+
+**⚠️⚠️ CONSEQUENCE 2, AND IT IS A REAL FINDING THE PLAN GOT WRONG: DO NOT ADD `useExamFocusMode` TO THE SHARED QUIZ — IT WOULD BE A SILENT NO-OP.** `app-shell.tsx:593` returns early for `/quiz/` with a bare `<main>`, **so that route never renders the header and the bell is already absent there.** Focus mode's only consumer is the header gate, so the hook would change nothing while reading as shipped work — precisely the `v0.116.0`/`v0.117.0` shape (a behaviour changed with no test that runs it). **The plan's five-surface list is therefore FOUR surfaces.**
+
+**⚠️⚠️ QUICK REVIEW'S RUNNING STATE HAS NO IN-PAGE EXIT, AND ADDING FOCUS MODE TO IT AS WRITTEN WOULD TRAP THE LEARNER.** Checked at kickoff rather than taken on trust: `app/study-packs/[id]/quick-review/page.tsx` renders a branch chain — loading → error → `totalQuestions === 0` → `!currentSessionId` → `isComplete` → `retry-transition` → **else, the running quiz**. All four `BackLink`s sit in NON-running branches (`:1116`, `:1146`, `:1154`, `:1319`); the running branch has none. **Focus mode hides the ENTIRE header plus the mobile tab bar** (accepted deliberately by the owner), so on that surface it would remove the only way out.
+
+**⚠️ THEREFORE ITEM 3 IS "AUDIT AND ADD EXITS, THEN APPLY FOCUS MODE" — owner decision 2026-09-07, taken with the finding in hand.** Every one of the five surfaces has its RUNNING-state branch audited and an in-page exit added where missing, *before* the hook goes in. **⚠️ A `BackLink` elsewhere in the file does NOT satisfy this** — that is exactly what made Quick Review look safe. **⚠️ Guard 7 is asserted PER SURFACE, never once.**
+
+### Anti-drift
+
+**⚠️ Do NOT let the outside-click handler treat the BELL as "outside"** — the handler and the toggle would both fire on one click and the panel reopens or flickers. **⚠️ Guard 2 exists for exactly this: a fixture that clicks the page BODY passes while the bell double-fires.** **⚠️ Do NOT stop loading the inbox when it OPENS.** **⚠️ Do NOT add a second dismissal handler to the mobile `AppModal` path.** **⚠️ Do NOT give any quiz surface focus mode without an in-page exit.** **⚠️ Do NOT change badge semantics** — announcements still never inflate the number and a zero count still renders no badge element at all. **⚠️ Do NOT change read/dismiss semantics** — opening the panel still must not mark everything read, and dismissal must never alter product state. **⚠️ NO backend change, NO migration, NO new notification type, NO Stage 5/6/7 event.** **⚠️ `[CHECKPOINT — due 2026-09-19]` is TWELVE DAYS OUT and its denominator is ONE — no Learning Connections work, and no connection-request notification.** **⚠️ §8's drift-signature dedup is SUPERSEDED and must NOT be implemented** (recorded by the peer session in the Stage 1 doc; Stage 6 now belongs to `official-review-set-update-publication-boundary.md`). **⚠️ This release SUPERSEDES `shared-quiz-recipient-experience-plan.md` §10's "do NOT expand focus mode to other quiz modes"** — that deferral was withdrawn 2026-09-07 and §10 now points at the polish plan. Do not re-derive the narrowing from that file's history. No quota, entitlement or pricing change; onboarding untouched.
+
+### Verification
+
+**A single `advisor()` call**, per the plan's own routing — one component plus hook calls, no backend, no migration, no authorization or privacy boundary moved. **⚠️ Routing: CLAUDE CODE inline.**
+
+**Pre-declared guards, from the plan's §4:**
+- **(1)** an outside click closes the desktop panel.
+- **(2)** **⚠️ clicking the BELL while open closes it EXACTLY ONCE — it must not reopen via the outside-click handler.** A fixture that clicks the page body passes while the bell double-fires.
+- **(3)** **⚠️ a re-click does NOT refetch — ASSERT THE REQUEST COUNT, not the visible state.**
+- **(4)** a closed → open transition still fetches.
+- **(5)** `Escape` closes the desktop panel.
+- **(6)** the bell is hidden during a quiz and restored on exit, including leaving mid-quiz.
+- **(7)** **⚠️ every focused surface has a reachable in-page exit IN ITS RUNNING BRANCH — asserted PER SURFACE.**
+
+**⚠️ CARRIED LESSONS.** From `v0.130.0`, three that bear directly on this release: **a `jest.mock` factory is an ALLOW-LIST** — a module the component imports and the factory omits fails silently at the call site, and `app-shell.test.tsx` was green *because* its poll threw; **confirm a mutation is PRESENT AND EFFECTIVE**, since a mutation that cannot reach its subject proves nothing; and **never revert a mutation by restoring the file from HEAD**, which discards the real fix alongside the mutant.
+
+### Shipped
+
+- **The desktop inbox closes on outside click and on `Escape`, and the `Close` button is gone.** It existed only because closing was otherwise impossible. **⚠️ THE REF WRAPS THE BELL *AND* THE PANEL, AND THAT IS THE WHOLE FIX** — had it wrapped only the panel, the bell would count as "outside", `mousedown` would close and the bell's own `click` would reopen **and refetch**, so one click would flicker instead of closing. Same placement as the avatar menu (`app-shell.tsx:653`). **⚠️ Mobile is untouched**: that path renders `AppModal`, which already handles backdrop and Escape, so the desktop handler is gated on `!isMobile` and the two cannot fight.
+- **The bell is a toggle.** Clicking an open inbox closes it **without refetching**; opening still loads. Previously `openInbox` set open and called `loadInbox()` unconditionally — the "refresh, not toggle" the owner reported. The trigger gained `aria-expanded`, with a **stable** `aria-label` beside it: that is the convention already in this repo (`theme-toggle.tsx:174`, `export-dropdown-menu.tsx:74`), and swapping both would announce the same fact twice.
+- **The bell is hidden for the duration of any quiz, not just the two exam modes.** `useExamFocusMode` now covers **ordinary Challenge Quiz, Quick Review, Adaptive Practice and Interview Practice** alongside Long Exam and Board Exam. No new mechanism — the hook, the context and the header gate all existed.
+- **Two sticky in-page bars moved from `top-16` to `top-0`** (`quick-review-top-bar`, `challenge-quiz-top-bar`). The 4rem offset cleared the app-shell header, which focus mode now hides for exactly the state those bars render in; left alone they would float 4rem down with nothing above them. **⚠️ Adaptive Practice and Interview Practice deliberately got NO layout change** — their leave controls sit in ordinary non-sticky rows with no offset to correct.
+
+**⚠️⚠️ THE KICKOFF'S OWN HEADLINE FINDING WAS WRONG, AND CORRECTING IT SHRANK THE RELEASE.** It claimed Quick Review's running branch had no in-page exit and widened item 3 to "audit and add exits first". Quick Review has a *Leave Quiz* button (`:1101`) rendered above the branch chain that was read; the audit had grepped for `BackLink`, `<Link` and `router.push` and **never searched for the `onClick={() => requestLeave()}` button that is the actual running-state exit in this repo.** **All four surfaces already had one, so ZERO exit work was owed.** Recorded rather than quietly dropped, because it is the same "claim not anchored to the code that implements it" defect `v0.130.0` shipped a whole pressure test to catch — committed as `35976007` before any code was written.
+
+**⚠️ AND THE PLAN'S FIVE-SURFACE LIST WAS FOUR: the shared quiz was DROPPED because the hook there would be a SILENT NO-OP.** `app-shell.tsx:593` returns early for `/quiz/` with a bare `<main>`, so that route renders no header and the bell is already absent; focus mode's only consumer is the header gate. Adding it would have changed nothing while reading as shipped work — the `v0.116.0`/`v0.117.0` class exactly.
+
+**Verification.** A single `advisor()` call, per the pre-declared tier — and it changed three decisions before any code was written: it caught that the label should stay stable (checked against the repo rather than assumed), that only two of the four surfaces have sticky bars needing the `top-0` change, and that guard 2's **event sequence is the guard**.
+
+**⚠️ MUTATION VERIFICATION — EACH MUTANT NAMED WITH THE TEST THAT KILLED IT:**
+- **Moving the ref from the wrapper onto the panel** (making the bell "outside") → killed by `closes exactly once when the bell itself is clicked while open, without refetching`, and **only** that test.
+- **Restoring the unconditional `setIsOpen(!isOpen); void loadInbox()`** → killed by that same test *and* `still loads the inbox on a closed to open transition` — the pair is what pins "close does not refetch, open still does".
+- **`useExamFocusMode(false)`** on Quick Review → killed by both of its focus guards, including the one that drives the quiz to completion and asserts the chrome comes **back**.
+- **Reverting Challenge Quiz to `isBoardExamMode && phase === "running"`** → killed by `hides the app-shell chrome during an ORDINARY Challenge Quiz, not just a Board Exam`. **⚠️ Its fixture is deliberately an ordinary quiz: a Board Exam fixture passes under both the old and the new expression and would prove nothing.**
+- **`useExamFocusMode(false)`** on Adaptive Practice and Interview Practice → one killed test each.
+
+**⚠️ GUARD 2's TEST SHAPE IS THE GUARD, AND THIS IS THE REUSABLE LESSON.** `fireEvent.click` does **not** fire `mousedown`, and this project has **no `@testing-library/user-event`** — so a test that merely clicks the bell passes under the defect by construction. The guard dispatches `mousedown` **then** `click`, and asserts the **request count** rather than the DOM, because the panel can close and reopen inside one sequence and still read as "open".
+
+**⚠️ THE `jest.mock` ALLOW-LIST TRAP FIRED TWICE DURING THIS RELEASE — ONCE ON THE EXISTING SUITE, ONCE ON WORK ADDED HERE.** `quick-review/page.test.tsx` mocked `exam-focus-context` with **only** `useBottomViewportClaim`, so the moment the page imported `useExamFocusMode` the call site would have received `undefined`. Then the new mock added to `adaptive-practice/page.test.tsx` omitted `useBottomViewportClaim` and broke an unrelated answer-review test — **because the CHILD `QuizAnswerReview` imports it, not the page.** A mock factory has to cover the whole subtree's use of a module, not the file's own import list. This is the `v0.130.0` carried lesson landing exactly where it was predicted to.
+
+**Guard 7 is asserted PER SURFACE**, in the same test as guard 6 rather than separately — focus mode hides the whole header, so the in-page exit is the only remaining way out and the two facts are one fact.
+
+**⚠️ THE POLL KEEPS RUNNING DURING FOCUS MODE, AND IT NOW HAS A GUARD RATHER THAN A REASON.** The release notes promise the count "keeps updating quietly in the background, so the bell is accurate the moment you finish." That holds because the poll is a top-level effect in `AppShell` while focus mode gates only the header *render* — but that is reasoning about effect placement, not evidence, and this repo has twice shipped a behaviour whose only support was exactly that kind of reasoning (`v0.116.0`, `v0.117.0`). `keeps polling the unread count while exam focus hides the bell` is killed by suppressing the poll when `isExamFocusActive`. **Caught at signoff by `advisor()` as a user-facing claim with no test behind it.**
+
+**⚠️ `docs/releases/v0.130.0.md` CARRIED TWO PRESENT-TENSE CLAIMS THIS RELEASE FALSIFIED, AND THEY WERE CORRECTED THERE RATHER THAN LEFT AS HISTORY.** *"A bell sits in the header on every signed-in page"* and the panel's `Close` button both describe how the product works, not what `v0.130.0` did, and a published release-notes file is somewhere people look to find that out. **This is the sweep-by-SURFACE rule, and the first instinct — "release notes are point-in-time, leave them" — was the wrong one.**
+
+### ⚠️⚠️ SCOPED COLD AGENT, RUN AFTER SIGNOFF — AND IT FOUND A REAL TRAP THIS RELEASE INTRODUCED
+
+**The tier was re-decided, and the first call was the weaker one.** By the letter of the gate no trigger fired — no authorization or privacy boundary moved, one feature PR, no money/quota/production-data semantics — so a single `advisor()` call was defensible. **But the fourth trigger, *"delivery introduced a defect the same session then fixed — a measured blind-spot signal"*, does fire, and it took the owner asking to see it:** this session made **three unanchored claims** in one release (Quick Review's exit, the `v0.130.0` notes being point-in-time, effect placement as evidence for the poll), two of them caught by something other than the author. **One scoped agent, framed as falsification, on `sonnet`.**
+
+**⚠️ FINDING 1 — CONFIRMED, AND IT IS A TRAP THIS RELEASE CREATED. Widening focus mode to `phase === "running"` left Challenge Quiz with the header hidden AND its only exit disabled for the entire submission round-trip.** Both Leave controls are `disabled={submitting}` (`:1662` Board Exam, `:1678` ordinary), and `finalizeChallengeSession` holds `submitting` true across the whole completion request while `phase` is **still `"running"`** — it flips to `"complete"` only *after* the await. So the learner had **no header and no working exit**, indefinitely if the request hung. **⚠️ Board Exam reaches this WITHOUT THE LEARNER DOING ANYTHING: its timer auto-submits on expiry.** Fixed by `useExamFocusMode(phase === "running" && !submitting)` — the header returns for exactly the window the in-page exit is unavailable, which is the cheap side of the trade. Guard: `gives the header back while submitting, because both Leave controls are disabled then`, killed by dropping the `!submitting` term.
+
+**⚠️ IT ALSO FALSIFIED THIS RELEASE'S OWN NOTES**, which claimed *"Every one of those screens keeps its own Leave button, so you can still stop at any point."* Corrected in `docs/releases/v0.131.0.md`.
+
+**⚠️ THE INVARIANT WAS RIGHT AND THE VERIFICATION OF IT WAS NOT.** This release stated *"focus mode may never be active in a state the exit does not cover"* and checked it by comparing the hook's gate to the exit's **render** gate on each surface. Those matched. **What went unchecked was whether the rendered exit was ENABLED** — a disabled exit is no exit, and no amount of comparing render gates would ever have surfaced it. Quick Review, Adaptive Practice and Interview Practice were re-checked and are clean: none of their Leave controls carries a `disabled` prop.
+
+**Known limitation — pre-existing, NOT introduced here, and deliberately not fixed here.** `long-exam/page.tsx:966` carries the identical `leaveDisabled={submitting}` against a focus mode that has been active since long before this release. **⚠️ It is a live instance of the same trap**, but that file is untouched by `v0.131.0` and fixing it is a change to a surface this release did not open. It gets a row rather than a silent ride-along.
+
+**Findings 2-7: could not disprove.** The outside-click ref genuinely wraps bell and panel; mobile cannot fight `AppModal` (the desktop effect is gated `!isMobile`, and the modal is a `document.body` portal that only mounts when `isOpen && isMobile`); no path opens the panel without loading or loads twice; the shared quiz genuinely renders no header for authenticated **or** anonymous viewers, so dropping it was correct. One cosmetic residual: because `useExamFocusMode` sets context state in an effect, the `top-0` bar can paint in the same frame as a still-visible header — **the bar is `z-20` against the header's `z-10`, so it overlaps rather than tucks under**, and it self-corrects on the next paint. Sub-frame, not reproducible in jsdom, recorded rather than chased.
+
+**NO `[CHECKPOINT]` IS OWED, and the reason is that nothing here shipped ahead of its evidence.** All three items fix defects the owner reported against shipped behaviour, each verified directly against the code and pinned by a mutation-killed guard — there is no pre-committed rule, owner override, ambiguous read or bootstrap argument anywhere in the release. The one thing that *was* uncertain — whether the newly-focused surfaces keep a way out — was settled by reading the code before writing any, and is now a standing per-surface guard rather than a dated obligation.
+
+**Suites: 209 frontend suites / 2,325 tests, 0 failures; `tsc` clean; 0 lint errors** (one pre-existing `react-hooks/exhaustive-deps` warning at `challenge-quiz/page.tsx:1395`, on a line this release did not touch). **Backend untouched — frontend-only release, no migration.**
+
 ## v0.130.0 - Notification Inbox
 
 **Status: Released** (kicked off 2026-09-07, signed off 2026-09-07, base branch `releases/v0.130.0`, **cut from `releases/v0.129.0` rather than `main`** because `v0.129.0`'s release PR #1340 is BLOCKED by the `main` ruleset's `require_extra_approval_for_unattributed_changes` parameter — the `v0.120.0`/`v0.111.0` precedent, where the signoff commit rides into `main` via the release PR)
@@ -701,261 +806,3 @@ Theme: the governing documents stop charging every session for history that is a
 **Item 3 landed in the kickoff commit itself, deliberately.** Prepending a `v0.126.0` block to line 39 in the normal way would have added another release's narrative to the very line this release exists to remove, then removed it hours later. **`CLAUDE.md`: 357,718 → 39,311 chars (~89k → ~9k tokens), matching the plan's prediction.** All twelve governing rules verified present after the replacement.
 
 **Items 1, 2 and 5 shipped.** `RELEASES.md` **1,866,861 → 133,497 chars (~466k → ~33k tokens)** — 111 sections (`v0.41.0` → `v0.120.0`) moved to `docs/archive/RELEASES_ARCHIVE.md`, keeping current + last 5 live. `ROADMAP.md` **1,189,862 → 844,282** — 60 `(Released)` retrospectives moved to `ROADMAP_ARCHIVE.md`. **⚠️ BOTH VERIFIED BYTE-FOR-BYTE, WHICH IS THE GUARD THAT MATTERED: all 117 `RELEASES.md` sections and all 60 ROADMAP retrospectives are present and unchanged across live + archive.** The only two flagged diffs in each case were the index block relocating and a section-parser boundary artifact, both confirmed by inspection rather than assumed. **222 live `[CHECKPOINT]` rows and every live ROADMAP section survive.** Item 5 patched `kickoff.md` to REPLACE rather than prepend and added an archive step to `signoff.md`, **which is the half that stops items 1-3 regrowing** — its absence is why the 2026-07-10 pass never ran again.
-
-## v0.125.0 - Bounded Reads
-
-**Status: Released** (kicked off and signed off 2026-09-07, base branch `releases/v0.125.0`, cut from `main` after `v0.124.0` merged and tagged)
-
-Theme: the last two places that read a whole collection when they needed a slice of one.
-
-**⚠️ IT CLOSES AN ARC RATHER THAN OPENING ONE, AND THE ARC IS EXPENSIVE: THE SAME DEFECT SHAPE — an unbounded read over a growing catalog — HAS NOW CAUSED THREE PRODUCTION EVENTS** (the 2026-09-01 build failure, and the 2026-09-04 and 2026-09-05 outages), and `v0.119.1`, `v0.123.0` and `v0.124.0` each removed one instance. **These are the two the Backlog Index still names.**
-
-**⚠️ SCOPE IS SET BY A DATED CLUSTER, NOT BY PREFERENCE — STATED SO IT IS NOT READ AS THE ROADMAP'S PRIORITY ORDER.** `[CHECKPOINT — due 2026-09-10]` is **THREE DAYS OUT** and `[CHECKPOINT — due 2026-09-11]` is **FOUR**, with twelve dated reads running to `2026-09-19`. **The onboarding freeze lifts when the `2026-09-11` READ IS TAKEN, not when the date passes**, and `2026-09-19` gates Learning Connections. **So the substantial onboarding work — catalog-first onboarding suggestions, the onboarding redesign, supporter onboarding — is BLOCKED FOR FOUR MORE DAYS and is next, not now.** This release is scoped to surfaces **none of the twelve measure.**
-
-### Planned Scope
-
-**(1) `OfficialChallengeQuizTemplateService.queueBackfill:81` stops loading the whole public catalog.** **⚠️ THE BACKLOG ROW UNDERSTATES IT, CORRECTED HERE BY READING THE CODE AT KICKOFF: IT IS THREE DEFECTS, NOT ONE.** It loads **every** public `NoteEntity` — **1,442 rows including `content`** — then runs **two queries PER NOTE** inside the loop: `isOfficialAuthor` calls `userRepository.findById` (`:104`) and the eligibility check calls `existsByUserIdAndStudyPackId`. **That is ~2,884 queries plus two full entity loads for one admin action.** **⚠️ THE RISK CLASS IS GENUINELY LOWER THAN THE THREE INCIDENTS AND MUST NOT BE OVERSOLD: it is `ADMIN`-only (`AdminStudyPackController:38`), manually triggered, and on no hot or anonymous path.** It is in scope because it is the LAST instance of a shape that has already cost three events, not because it is about to cause a fourth.
-
-**(2) The note picker gets server-side search, which is the stated prerequisite for bounding it.** **⚠️ THE ORDER IS A CORRECTNESS CONSTRAINT AND `v0.123.0` RECORDED WHY IT DECLINED THE BOUND: the picker filters CLIENT-SIDE over the whole library, so a `limit` alone would silently make every note beyond it UNADDABLE** — an invisible correctness loss traded for an invisible performance win. **⚠️ SO SEARCH SHIPS FIRST OR WITH THE BOUND, NEVER A BOUND ALONE.** **⚠️ SMALLER THAN IT READS, CHECKED NOT ASSUMED: `GET /notes` ALREADY TAKES A CLAMPED `limit`** (`NoteController:684-694`, `Math.clamp(limit, PRIVATE_NOTES_MIN_LIMIT, PRIVATE_NOTES_MAX_LIMIT)`), so this is an **additive `q` parameter on an existing endpoint**, not a new one — existing callers are unaffected by construction.
-
-**⚠️ THE SEARCH MUST MATCH THE SAME FIELDS THE CLIENT FILTER MATCHES, AND THIS IS THE ITEM'S SHARPEST EDGE.** `filterPickerNotes:194-206` matches **title, subject, courseProgram AND tags**. A server search over `title` alone would look correct in every demo and would silently make tag-findable notes unreachable — the same class of invisible narrowing the bound itself was declined for.
-
-### Anti-drift
-
-**⚠️ `frontend/app/onboarding` STAYS FROZEN** — `[CHECKPOINT — due 2026-09-11]` is FOUR DAYS OUT, the closest this constraint has ever been to its date. **⚠️ NO Learning Connections promotion before `2026-09-19`.** **⚠️ Do NOT raise the connection pool** (`AppConfig:52-72`; a `v0.112.0` Phase 3 decision gated on `[CHECKPOINT — due 2026-10-04]`, and a raise already failed once at 20). **⚠️ Do NOT trim `contentPreview`/`summaryPreview`** — `v0.100.0` rejected it, it only moves the threshold. **⚠️ Do NOT start `v0.112.0` Phase 3.** **⚠️ NO migration, no quota/entitlement/meter change, no new mode or sub-mode, no `ProfileType` gate.** **⚠️ Do NOT change what `BOARD_EXAM_STARTED`, `ADAPTIVE_PRACTICE_STARTED`, `QUIZ_SHARE_LINK_CREATED/OPENED/COMPLETED` or `GUIDANCE_TIP_SHOWN` record or when they fire** — several dated reads depend on them, and `v0.122.0`'s signoff caught exactly this class.
-
-**⚠️ ITEM 1 MUST NOT CHANGE WHICH NOTES ARE ELIGIBLE — only how they are found.** The eligibility predicate (`isEligibleOfficialTemplate`, `isOfficialAuthor` including its `OFFICIAL_AUTHOR_EMAIL` and `DELETED_USER_ID` legs) is **unchanged**; this release changes the QUERY SHAPE around it. **⚠️ Do NOT "simplify" the predicate while you are in there.** **⚠️ AND DO NOT PAGE THE BACKFILL** — its response is three counts over the whole catalog, so paging changes what the numbers MEAN; a projection plus batched lookups removes the cost without touching the contract.
-
-**⚠️ ITEM 2 MUST NOT NARROW WHAT THE PICKER CAN ADD.** Same four fields, same case-insensitive substring semantics. **⚠️ `v0.124.0`'s detail-page `AddNotesModal` finding rides on this item: it still calls unbounded `listNotes()` on open and is inert ONLY because it is unreachable (`setAddOpen(true)` appears nowhere on that page). If this release makes the picker lazy-and-bounded, it must NOT leave that second copy on the old shape.**
-
-### Verification
-
-**ONE SCOPED COLD AGENT framed as falsification.** Trigger: item 2 changes a **shared endpoint** (`GET /notes` has many consumers) and changes what a search can REACH, which is a correctness predicate rather than a performance one. **⚠️ NOT the three-agent tier** — no permission substrate, no cross-user read, no money or quota semantics, no migration. **⚠️ `GET /notes` is a CHANGED endpoint, so it owes ONE REAL-REQUEST test** (`MockMvc` + a real query string); a direct handler call passes under a binding defect by construction (`v0.119.0`).
-
-**⚠️ PRE-DECLARED GUARDS, EACH NAMING THE FIXTURE THAT PROVES NOTHING:**
-- **(a)** a note matching ONLY by **tag** — not by title — must still be returned by the server search. **A title-matching fixture passes under a title-only implementation and is the single most likely way this release silently narrows the product.**
-- **(b)** with the bound in place, a note **beyond the limit** must still be addable **via search**. A fixture with fewer notes than the limit passes under both the defect and the fix.
-- **(c)** item 1 must assert the **QUERY COUNT** with N > 1 eligible notes — a correctness-only test (right counts returned) passes under the N+1 by construction, which is `v0.124.0`'s own carried lesson.
-- **(d)** item 1's queued/skipped/rejected counts must be **IDENTICAL** before and after for a mixed fixture (eligible, ineligible, already-seeded).
-
-**⚠️ CARRIED LESSONS FROM `v0.124.0`, ALL PAID FOR: MUTATION-VERIFY every guard — one survived its own mutation and was found only by a cold agent; a diff that changes behaviour while no test beside it moves is UNVERIFIED; SWEEP BY SURFACE, not by diff; and ⚠️ WHEN A SHARED MAPPER OR ENDPOINT GAINS A FIELD OR PARAMETER, ENUMERATE EVERY CALLER — that release put a new field on an anonymous `permitAll` payload and `tsc` plus 4,400 tests stayed green.**
-
-**Routing: COLD AGENT implementation + inline audit** (no Codex token), the shape `v0.124.0` used successfully.
-
-### Shipped
-
-**⚠️ ONE AUDIT CORRECTION, RECORDED BECAUSE IT CHANGED A PUBLIC HTTP CONTRACT: the search parameter is `search`, NOT `q`.** The kickoff brief named `q`, the delivery followed it, and then **surfaced rather than buried** that `NoteController` already declares `SEARCH_REQUEST_PARAM = "search"` for three sibling endpoints. **Two names for one concept in one controller is drift the moment it merges**, so the duplicate constant was deleted and `GET /notes` reuses the existing one. Caught while uncommitted — **the brief was wrong, not the delivery.**
-
-
-- **`OfficialChallengeQuizTemplateService.queueBackfill` reads the catalog in three bounded queries instead of two per note.** It loaded every `PUBLIC` `NoteEntity` (~1,442 rows **including `content`**) plus every matching `StudyPackEntity`, then ran `userRepository.findById` **and** `existsByUserIdAndStudyPackId` inside the loop — ~2,884 queries and two full entity loads for one admin action. It now reads `NoteOwnerVisibilityProjection` and `StudyPackOwnerProjection` (id, owner, visibility / note id only), resolves Official authors once for the distinct owner set through `findAllById`, and batches the bank check into `ChallengeQuizQuestionBankRepository.findOwnerStudyPackPairsByStudyPackIdIn`.
-- **Eligibility is unchanged, and it is now one predicate rather than two copies.** `isEligibleOfficialTemplate`'s non-author legs were extracted to `matchesOfficialTemplateShape`, and `isOfficialAuthor`'s account test to `isOfficialAuthorAccount`; the entity path and the backfill's projection path both call them, so the two cannot drift. The bank check is still asked only about notes that already passed shape **and** author, exactly as the old `||` short-circuit did, so `queued`/`skipped`/`rejected` mean what they meant before. The backfill is **not** paged and the dispatch order stays `updated_at desc`.
-- **`GET /notes` takes an additive optional `search`.** It flows through `NoteService.listMine` — reusing the existing `toLibrarySearchPattern` escaping rather than a second helper — into a new `NoteLibraryRepositoryImpl.appendOwnedNoteSearchFilter` that matches **title, subject, course program AND tags**, case-insensitively, with the Postgres `unnest` / H2 `array_to_string` split the library filter already uses. **⚠️ `appendSearchFilter` was NOT widened** — it serves the public library, a different surface with SEO-indexed pages.
-- **The Study Plan builder's note picker is bounded and searches server-side.** It requests `listNotes(50, query)` (debounced 300 ms) instead of downloading the whole library and filtering it in the browser. **⚠️ The order was a correctness constraint: `v0.123.0` declined the bound outright because a limit over a client-side filter makes every note past it unaddable. Search ships with the bound, never a bound alone.**
-- **The picker's selection now holds the notes themselves, not just their ids.** `notes` became the current result page, so a note selected under one query is absent once the query changes — deriving "Selected (N)" or the optimistic add rows from `notes` dropped it silently. `AddNotesModal` keeps a `Map<id, note>` and hands the selected notes to `handleAddNotes` / `handleAddLeafNotes`.
-- **A truncated picker list says it is truncated.** A filled page renders "Showing your 50 most recently updated notes. Search to reach any of the others." (or "Showing the first 50 matches" when searching) — the same reason the empty state distinguishes loading and failure from an actually-empty library.
-- **The loop guard survived the rewrite in a different form.** The picker effect still does not depend on `refreshingNotes` (that dependency plus a `finally` reset is what produced 3,743 calls in five seconds in `v0.123.0`); `lastPickerRequestRef` records the query whose fetch has already been started, set before the first await and never cleared on failure, so a failed search cannot retry itself while a changed query still refetches. A request-sequence ref discards out-of-order responses.
-- **`v0.124.0`'s second copy of the picker is gone.** `collection-detail-page-client.tsx`'s `AddNotesModal` — which called unbounded `listNotes()` on open and was inert only because `setAddOpen(true)` appeared nowhere — was **deleted** along with that file's duplicate `filterPickerNotes`, its `handleAdd` and its `addOpen` state, rather than bounded. Bounding it would have duplicated the debounce-and-search machinery into code nothing renders, where no test could exercise it. Note addition lives in the Builder.
-
-**Cold-agent falsification pass, and it found the class of defect this repo keeps paying for.**
-
-- **⚠️⚠️ THE THREE NEW JPQL PROJECTIONS WERE EXECUTED BY NO TEST, AND A TRANSPOSED CONSTRUCTOR ARGUMENT PASSED ALL 2,213 TESTS — MEASURED, NOT SUSPECTED.** Every test reaching `queueBackfill` MOCKS the repositories and hands back correctly-ordered records; `NativeQueryPostgresIntegrationTest`'s `PREPARE` sweep covers **native** queries only; and Spring's bootstrap proves the JPQL parses but not the argument order, because **every component is a `UUID`** bar one enum. Swapping `s.id` and `s.noteId` made the admin backfill report `queued=0, skipped=1442` over the whole catalog — **a successful-looking response that seeds nothing** — with a green suite. **⚠️ THE LOGIC WAS WELL GUARDED AND THE DATA PLUMBING FEEDING IT WAS NOT GUARDED AT ALL**, the same shape as `v0.116.0`'s no-op and `v0.124.0`'s uncovered Board Exam branch. Now pinned in `NativeQueryPostgresIntegrationTest` — the **real Flyway schema on real PostgreSQL**, chosen over a hand-written H2 fixture so the DDL cannot drift from the migrations. **⚠️ EVERY ID IN THE FIXTURE IS DISTINCT AND ASSERTED BY IDENTITY: a fixture whose note, owner and pack ids could coincide passes under a transposition, which is exactly why this was invisible.** The real schema paid for itself immediately — it rejected an invented `last_known_outcome` value an H2 fixture would have accepted.
-- **`handleAddLeafNotes` was entirely unexercised, so the release's own fix covered the Goal path only.** Reverting its `noteById` to the pre-fix shape passed all 59 builder tests, and so did a bare `throw` as its first statement. **⚠️ `/collections/{leafId}/builder` is the COMMON curator surface**, and `handleAddNotes`/`handleAddLeafNotes` are separate functions with the same defect and the same fix — only one was pinned. Now guarded, with the add held IN FLIGHT (letting it resolve repaints from the server and passes under the defect) and the assertion scoped OUTSIDE the dialog (the modal's own *Selected* list still shows the title).
-- **The queue-order guard survived the exact reorder its own name forbids.** N=2 with random UUIDs meant a sort by pack id preserved the fixture order roughly half the time — **sound in principle, a coin flip in practice.** Now N=3 with deterministic descending ids, so any ascending sort differs every run; mutation-verified.
-- **⚠️ A COMMENT INSTRUCTED THE OPPOSITE OF THE CODE, AND THIS SESSION'S OWN RENAME LEFT IT THERE.** `api.ts` read *"MUST STAY `q`"* directly above `parameters.set("search", …)`. A later session obeying it would bind `search = null` server-side, appending no filter — **the picker keeps its 50-row bound while search reaches nothing**, precisely the every-note-past-the-bound-is-unaddable loss `v0.123.0` refused to ship. Seven further prose sites (javadoc, test comments, a test NAME, `collections.md`, and a `RELEASES.md` bullet contradicting its own audit note twelve lines above) still said `q`. **The rename swept the wire-format strings and not the prose — a rename is not done when the code compiles.**
-- **Not refuted, checked rather than assumed:** eligibility is leg-for-leg identical including null handling; `appendSearchFilter` is **byte-identical** to the pre-release commit; all nine `listNotes` call sites pass no search; the deleted modal left zero orphans; and the two dialects diverge only on a search string containing the literal `|||LIBRARY_TAG_BOUNDARY|||` separator — unreachable, and inherited unchanged from the existing public-library filter.
-
-### Known limitations
-
-- **The deleted detail-page `AddNotesModal` was unreachable, so its removal is unverifiable by test and is recorded rather than pinned.** No fixture can reach a component no code path renders; writing one would have hand-built a state production cannot produce, which is the `v0.116.0` / `v0.117.0` failure. What *is* pinned is the surrounding claim: `app/collections/[id]/page.test.tsx` still asserts a learner opening a collection issues zero `listNotes()` calls, and every pre-existing frontend suite passes unchanged (203 suites / 2,248 tests, up from the 202 / 2,240 baseline by exactly this release's new guards).
-- **`loadNoteVisibility` on the collection detail page still calls unbounded `listNotes()`.** It is ADMIN-only and deliberately untouched: it needs the visibility of *every* note in the collection, so bounding it would make the private-note count wrong on the publish path, which `v0.124.0` made fail closed. It is a separate decision, not this release's.
-- **The picker bound is 50, the server clamp, so a curator with a large library sees a genuinely partial list until they search.** That is the intended trade and the truncation copy states it; there is no "load more". **⚠️ ONE REACHABLE CONSEQUENCE IS NAMED RATHER THAN LEFT TO BE REPORTED AS A BUG: the bound is applied SERVER-SIDE and the already-in-this-plan exclusion is applied CLIENT-SIDE AFTER it, so a curator whose 50 most recently updated notes are ALL already in the plan opens an EMPTY picker reading "No notes available." while addable notes exist beyond the bound.** It is plausible — a plan built from recent authoring is exactly that shape — and it is **recoverable and disclosed**, because the truncation notice sits directly beneath and says *"Search to reach any of the others."* **⚠️ The fix is NOT to raise the bound (it would only move the threshold, which `v0.100.0` already rejected for `contentPreview`); it is to exclude present notes SERVER-SIDE, which needs the collection id on the request and is a contract change this release does not take.**
-
-## Archived releases (v0.124.0 and earlier)
-
-Full detail for every version below lives in `docs/archive/RELEASES_ARCHIVE.md`. `v0.40.1` and
-earlier moved there on 2026-07-10; `v0.41.0` through `v0.120.0` moved there on 2026-09-07 in the
-`v0.126.0` pass, which resumed a convention that had lapsed for 85 releases; `v0.121.0` followed at
-the `v0.127.0` signoff and `v0.122.0` at the `v0.128.0` signoff and `v0.123.0` at the `v0.129.0` kickoff and `v0.124.0` at the `v0.130.0` kickoff — the step now runs every time. Both are MOVES, not
-deletes — content preserved verbatim and searchable with `git grep`. Condensed per-version
-summaries (user-facing, no implementation detail) also exist at `docs/releases/vX.Y.Z.md`.
-
-- `v0.124.0` - Collection Path Performance
-- `v0.123.0` - Collection Builder Integrity
-- `v0.122.0` - Shared Quiz Discoverability
-- `v0.121.0` - Shared Quiz Recipient Experience
-- `v0.120.0` - Canonical Note Title Integrity
-- `v0.119.1` - Public Catalog Bounds
-- `v0.119.0` - Curator Bulk Regeneration
-- `v0.118.0` - Note and Study Pack Regeneration
-- `v0.117.0` - Authoring and Quiz Legibility
-- `v0.116.0` - Additive Review Set Updates
-- `v0.115.0` - Learner Publication Authority
-- `v0.114.0` - Connection Evidence
-- `v0.113.1` - Anchoring Hardening
-- `v0.113.0` - Session Anchoring
-- `v0.112.0` - Connection Pool Integrity
-- `v0.111.0` - Multidisciplinary Domain Context
-- `v0.110.2` - Shared Link Integrity
-- `v0.110.1` - Quiz Text Integrity
-- `v0.110.0` - Supporter Combined Quiz
-- `v0.109.0` - Assessment Discoverability
-- `v0.108.0` - Session Identity
-- `v0.107.0` - Curriculum-Scale Remediation
-- `v0.106.0` - Board Exam Review Set Identity
-- `v0.105.0` - Curriculum-Scale Exams
-- `v0.104.0` - Assessment Source Provenance
-- `v0.103.0` - Mixed Retrieval for Free and Plus
-- `v0.102.0` - Plan-Sourced Assessment
-- `v0.101.0` - Language and Observability
-- `v0.100.0` - Domain Context Resolution
-- `v0.99.0` - Connection Completeness
-- `v0.98.0` - Connection Consistency
-- `v0.97.0` - Connection Lifecycle
-- `v0.96.0` - Authoring Integrity
-- `v0.95.1` - Rendering and Reorder Fixes
-- `v0.95.0` - Redemption Integrity
-- `v0.94.0` - Connection Experience
-- `v0.93.0` - Progress Refinement
-- `v0.92.0` - Activity Sharing
-- `v0.91.0` - Shared Learning Material
-- `v0.90.0` - Invitation Integrity
-- `v0.89.1` - Birth Year Correction
-- `v0.89.0` - Support Another Learner
-- `v0.88.0` - Section Authoring
-- `v0.87.0` - Failure Attribution
-- `v0.86.0` - Generation Recovery
-- `v0.85.0` - Domain Signal Integrity
-- `v0.84.0` - Public Explore
-- `v0.83.2` - Anonymous Discovery Access
-- `v0.83.1` - Note Creation Integrity
-- `v0.83.0` - Target Audience Removal (Phase 2)
-- `v0.82.0` - Authored Depth Backfill
-- `v0.81.0` - Challenge Bank Integrity
-- `v0.80.0` - Instrumentation Integrity
-- `v0.79.0` - Catalog-First Vocabulary
-- `v0.78.0` - Post-Mastery Next Step
-- `v0.77.0` - Evidence-Gated Weak Concept Recommendation
-- `v0.76.1` - Adaptive Practice Entry Attribution
-- `v0.76.0` - Messaging Architecture: The Money Surfaces
-- `v0.75.0` - Authoring by Inference
-- `v0.74.0` - Quiz Progression
-- `v0.73.0` - Onboarding Redesign
-- `v0.72.1` - Constraint Check
-- `v0.72.0` - Return Loop
-- `v0.71.2` - Catalog Management
-- `v0.71.1` - Applicable Programs Follow-ups
-- `v0.71.0` - Applicable Programs
-- `v0.70.0` - Canonical Knowledge Completion
-- `v0.69.0` - Canonical Knowledge Foundation
-- `v0.68.0` - Topic Note Rename
-- `v0.67.1` - Explore Convergence Follow-ups
-- `v0.67.0` - Explore Convergence
-- `v0.66.2` - Card Surface Token Fix
-- `v0.66.1` - Goal Detail Due-Concept Signal
-- `v0.66.0` - Challenge Quiz Result Clarity
-- `v0.65.0` - Study Effectiveness Polish
-- `v0.64.0` - Add to Review Set
-- `v0.63.0` - Ask Companion
-- `v0.62.0` - Knowledge Impact
-- `v0.61.0` - Challenge Quiz Quota Increase
-- `v0.60.3` - Challenge Quiz Shaping
-- `v0.60.2` - Challenge Quiz Known-Limitations Cleanup
-- `v0.60.1` - Challenge Quiz Fix Pass
-- `v0.60.0` - Shared Official Pool Foundation
-- `v0.59.0` - Dashboard & Progress Reorg
-- `v0.58.0` - Reusable Practice Assets & the Return Loop
-- `v0.57.0` - Practice-First Activation Onboarding
-- `v0.56.0` - Weak-Concept Explanation Links
-- `v0.55.0` - Result-Screen Companion Bridge
-- `v0.54.1` - Public Note Copy Correctness Fixes
-- `v0.54.0` - CPALE Exam Hub (Wave 2)
-- `v0.53.0` - SEO Discoverability: Exam Hub Depth & Organic Attribution
-- `v0.52.1` - Early-Lifecycle Feedback Signals
-- `v0.52.0` - Proactive In-App Feedback Prompts
-- `v0.51.1` - Dashboard Stage-1 Limit Wiring
-- `v0.51.0` - Read-Path Performance Pass II
-- `v0.50.4` - Exam Hub Discovery Polish
-- `v0.50.3` - Public Note Copy Flow & Related-Notes Consistency
-- `v0.50.2` - Note Card Content Consistency
-- `v0.50.1` - Mobile UI Polish
-- `v0.50.0` - Mobile Bottom Tab Bar
-- `v0.49.0` - Progress Page: Private Library Links
-- `v0.48.0` - Retention Experiment: Open Loop & Digest Trigger
-- `v0.47.1` - V82 Migration Collision Hotfix
-- `v0.47.0` - Conversion Audit Tier 4: Cleanup Batch
-- `v0.46.0` - Retention Depth: Due-Concepts Digest & Exam Pacing
-- `v0.45.2` - Public Plan Preview Rollup Fix
-- `v0.45.1` - Study Plan Collection Fixes
-- `v0.45.0` - Conversion Audit Tier 3 — Landing, Pricing & Discovery Polish
-- `v0.44.0` - Conversion & Retention Polish
-- `v0.43.1` - Companion Mentor Tips
-- `v0.43.0` - Companion Coach Experience
-- `v0.42.1` - Companion & Progress Polish
-- `v0.42.0` - AI-assisted Companion authoring + regeneration
-- `v0.41.1` - Review Set Detail Page: This-Set Study Dashboard
-- `v0.41.0` - Learning Companion (MVP)
-
-- `v0.40.1` - Public Review Set Reachability
-- `v0.40.0` - Weekly Study Plan (Exam Countdown) + Primary Review Set
-- `v0.39.2` - Public Library Learning Experience
-- `v0.39.1` - Study Plan Builder Polish
-- `v0.39.0` - Flexible Review Methods
-- `v0.38.0` - Read-Path Optimization Pass
-- `v0.37.4` - Idle GC & Metaspace Ceiling Hotfix
-- `v0.37.3` - Study Plan Read-Path Memory Optimization
-- `v0.37.2` - Plan Data Integrity Hotfix
-- `v0.37.1` - Native Memory Hotfix
-- `v0.37.0` - Readiness-First Plans & Mastery Integrity
-- `v0.36.3` - OCR Fast-Follow: Messaging & Feedback
-- `v0.36.2` - OCR Disable Hotfix
-- `v0.36.1` - Post-Release Fixes
-- `v0.36.0` - Readiness/Progress Merge
-- `v0.35.0` - Mobile-First Builder
-- `v0.34.0` - Journey: Goal-First Study Experience
-- `v0.33.4` - Builder Surface Clarity
-- `v0.33.3` - Recursive Goal Adopt
-- `v0.33.2` - Plan Detail Redesign (view/edit split)
-- `v0.33.1` - Study Plan polish & Curated Plan Coverage
-- `v0.33.0` - Study Plans as a Retention Engine
-- `v0.32.2` - Conversion Diagnosis & Quota Honesty
-- `v0.32.1` - Monetization Surfacing & Pricing Clarity
-- `v0.32.0` - Account & Communication Controls
-- `v0.31.2` - Analytics Integrity & Funnel Visibility
-- `v0.31.1` - Adoptable Study Plans Discovery & Status
-- `v0.31.0` - Adoptable Study Plans
-- `v0.30.1` - Copy Flow Polish
-- `v0.30.0` - Readiness Signals
-- `v0.29.1` - Bulk Generation Polish
-- `v0.29.0` - Bulk Generation
-- `v0.28.0` - Feature Discoverability & Activation
-- `v0.27.0` - Material Import & Collections
-- `v0.26.1` - Guidance System
-- `v0.26.0` - Exam Depth
-- `v0.25.1` - Polish & Quick Review Fixes
-- `v0.25.0` - Exam Capture & Goal Setting
-- `v0.24.1` - Content Moderation Hotfix
-- `v0.24.0` - Guided Learning
-- `v0.23.1` - Quiz Format Fix
-- `v0.23.0` - From Readers to Learners
-- `v0.22.0` - Course & Subject Discovery
-- `v0.21.0` - Personalized Discovery & Library Organization
-- `v0.20.0` - Conversion & Re-engagement
-- `v0.19.0` - Multi-Note Depth & Simulation Parity
-- `v0.18.0` - Profile Completeness & Communication
-- `v0.17.0` - Quiz Quality & Depth
-- `v0.16.0` - Conversion & Growth
-- `v0.15.2` - UX Cleanup & Bug Fixes
-- `v0.15.1` - Teacher Power Features
-- `v0.15.0` - Premium Mode Uplift + Cost-Control Quota Refactor
-- `v0.14.0` - Grow the Surface, Deepen the Practice
-- `v0.13.0` - Complete the Promise, Reach New Audiences
-- `v0.12.0` - Learning Experience, Discovery, and Retention
-- `v0.11.0` - Learning Flow Foundation
-- `v0.10.1` - Landing & Pricing Conversion Polish
-- `v0.10.0` - Profile Type System & Teacher Flow Phase 1
-- `v0.9.0` - Learning Experience & Product Polish
-- `v0.8.0` - Board Exam Mode + Public Library Discovery System
-- `v0.7.0` - Learning & Metadata Foundation
-- `v0.6.0` - Landing Revamp & Positioning
-- `v0.5.0` - Public Profiles & Public Notes
-- `v0.4.0` - Profile-Based Experience & UX

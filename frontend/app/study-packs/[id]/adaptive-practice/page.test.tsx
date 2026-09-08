@@ -1,5 +1,17 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import AdaptivePracticePage from "./page";
+
+const useExamFocusModeMock = jest.fn();
+
+// ⚠️ A jest.mock factory is an ALLOW-LIST — anything the component imports and this omits arrives as
+// `undefined` at the call site, silently, at runtime rather than at import.
+// ⚠️ useBottomViewportClaim is listed because the CHILD QuizAnswerReview imports it, not this page —
+// omitting it failed one unrelated test with "is not a function". A mock factory has to cover the whole
+// subtree's use of the module, which is why the safe default is to list everything the module exports.
+jest.mock("@/components/exam-mode/exam-focus-context", () => ({
+  useExamFocusMode: (active: boolean) => useExamFocusModeMock(active),
+  useBottomViewportClaim: jest.fn(),
+}));
 import { getAuthUser } from "@/lib/auth";
 import { useBillingUsageSummary } from "@/hooks/use-billing-usage-summary";
 import {
@@ -353,6 +365,21 @@ describe("AdaptivePracticePage", () => {
     });
     const completeRequest = (completeAdaptivePracticeSession as jest.Mock).mock.calls[0]?.[1];
     expect(completeRequest).not.toHaveProperty("correctConceptNames");
+  });
+
+  it("hides the app-shell chrome while the quiz runs, and keeps the Leave Quiz exit reachable", async () => {
+    // ⚠️ GUARD 6 + GUARD 7 for this surface. Focus mode hides the whole header — page title, theme
+    // toggle, avatar and the notification bell — plus the mobile tab bar, so the in-page Leave Quiz
+    // button is the only remaining way out and is asserted in the same test.
+    //
+    // ⚠️ No layout change accompanies this one, deliberately: unlike Quick Review and Challenge Quiz,
+    // this page's leave control sits in an ordinary non-sticky row with no header offset to correct.
+    setupGeneratedAdaptiveQuiz();
+
+    render(<AdaptivePracticePage />);
+
+    expect(await screen.findByRole("button", { name: "Leave Quiz" })).toBeInTheDocument();
+    expect(useExamFocusModeMock).toHaveBeenLastCalledWith(true);
   });
 
   it("forfeits the active Adaptive Practice session before leaving", async () => {
