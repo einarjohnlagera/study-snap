@@ -841,6 +841,14 @@ Official Review Set. The action is enabled only when that set is already `PUBLIC
 collection or item beneath it is unpublished. It stamps all outstanding rows and the root's
 `last_update_published_at` in one locked transaction. Repeating it after the stamp is a successful no-op.
 
+**Initial publication vs. publishing an update.** Flipping a set to `PUBLIC` for the first time stamps its
+whole current curriculum — there are no adopters yet, so there is no update to announce. The discriminator
+is `last_update_published_at`, **not** `published_at`: V141 backfilled `published_at` for every pre-existing
+row with no visibility predicate, so a collection that existed at deploy carries one even as a private
+draft, and gating on it would mean such a set published nothing on its own first publication.
+⚠️ Do not simplify this to always stamping — on a `PUBLIC → PRIVATE → PUBLIC` flip the field is already
+set, so edits made while private stay unpublished and still require an explicit **Publish update**.
+
 `published_at` is strictly a **source-side** concept even though source and adopted copies share the
 same tables. Drift inspection, the source side of adoption copy, and the anonymous public detail filter
 unpublished source rows. A learner's own library and collection detail must never filter their adopted
@@ -855,10 +863,27 @@ count because that provenance is not stored.
 section-label changes still appear live because a delete has no retained row and position/label have one
 stored value. This is a stated narrowed contract, not a guarantee of complete working/published isolation.
 
-The public **child count** follows the same filter as the child list: `getPublic` passes the filtered
-`children.size()`, so an unpublished Subject Plan is absent from both. This is deliberate — counting a
-plan the page will not show would advertise its existence and leave the public view contradicting itself.
-The curator's own Goal detail still counts every child, published or not.
+**Both anonymous read paths filter, and they must agree.** There are two: `getPublic` (the detail page)
+and `listPublic` (the Explore / Exam Hub / dashboard cards). Every public count — `childCount`,
+`itemCount`, `readyCount`, and the `Preview this plan · N notes` label — is derived from published rows
+only. Counting a row the linked page will not show advertises unfinished curriculum and leaves the public
+view contradicting itself. `childCount` is not merely cosmetic: the public card derives
+`isGoal = childCount > 0`, and that is what routes the Adopt button to `adoptGoal`.
+
+⚠️ **`listPublic` filters in Java over already-fetched rows, deliberately.** Do **not** push a
+`published_at` predicate into `countItemsByCollectionIds`, `countChildrenByCollectionIds` or
+`findNoteIdsByCollectionIds` — the authenticated `list()` and the learner-owned reads share those exact
+queries, and an adopted row is never published, so that change would empty every learner's own library.
+
+Neither path filters the **root** collection itself, for the same reason: a `PUBLIC` set must never vanish
+from Explore because of a missing stamp. The curator's own Goal detail still counts every child, published
+or not.
+
+⚠️ **A Goal whose child Subject Plans are all unpublished is not adoptable.** `adoptGoal` gates on the
+same filtered, owner-scoped child list it copies. Gating on an unfiltered count instead let a Goal
+mid-restructure pass the gate, filter to nothing, and copy nothing — and `adoptGoal` never copies the
+root's own items, so the learner silently received an empty collection that became their primary and
+could not be repaired by re-adopting.
 
 `GET /collections/{id}/source-update` inspects an owned adoption. It returns an explicit
 `UPDATES_AVAILABLE`, `ALREADY_UP_TO_DATE`, or `DETACHED_FROM_SOURCE` state and lists both additions and
