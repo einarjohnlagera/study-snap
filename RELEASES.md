@@ -14,7 +14,7 @@ Source: `docs/claude-plans/program-family-generalization-and-education-family.md
 
 **⚠️ DO NOT MODIFY THE APPLICABLE-PROGRAMS COMBOBOX. If a diff touches it, the scope has drifted.**
 
-### The two gaps that are real
+### The two gaps the audit named — ⚠️ ONLY ONE OF THEM IS REAL (see below)
 
 | Gap | Detail |
 |---|---|
@@ -66,6 +66,25 @@ Run read-only against `notelib-db-prod`. **The audit's central warning is now VE
 ### Verification tier
 
 **A single `advisor()` call**, per the audit's §9 — a data migration plus one admin form field. No permission substrate, no cross-user read, no money semantics, no learner-facing behaviour change. **⚠️ But it writes to a production catalog table, so the precondition read is the gate.** **⚠️ THE `v0.131.0`/`v0.132.0` LESSON STILL APPLIES: decide the tier from the SHAPE of the change, and re-decide if the shape changes** — `v0.132.0` was tiered at one cold agent, ran two, and they found four blocking defects including one that silently emptied a learner's adopted Goal.
+
+### ⚠️ THE AUDIT'S SECOND "REAL GAP" IS ALSO FALSE — THE ADMIN FAMILY SELECTOR ALREADY SHIPPED
+
+The audit named two real gaps. **One of them is not real.** It claimed *"the admin UI cannot assign a family — `frontend/app/admin/course-programs/page.tsx` exposes no family field."* That is literally true of `page.tsx`, which is a 40-line shell — **but the field lives in `admin-course-program-catalog-section.tsx`, which that page renders.** It has a `<select id="catalog-program-family">` listing every family derived from the catalog, `create()` sends `programFamilyId`, the table shows a Family column, and its helper text already says assigning a family makes the program participate in that family's expansion.
+
+**It shipped 2026-08-11 in `9e77f412`, tagged `v0.100.0`** — verified as an ancestor of `main`, not merely present in a working tree.
+
+**⚠️ THIS IS THE SAME ERROR CLASS THE AUDIT ITSELF CAUGHT IN THE BRIEF: concluding a capability is missing by reading the wrong file.** Both times the mistake was to check a shell rather than the component doing the work. **So step 3 of the implementation plan is NOT BUILT HERE — it was already done**, and the release shrinks accordingly. The other gap in that table — *families can only be created by migration* — is real, and remains the deferred admin create-family surface.
+
+**⚠️ Do NOT re-add a family selector to the admin page. If a diff adds one, it is a duplicate.**
+
+### Shipped
+
+- **`V142__education_program_family.sql`** — seeds the `Education` family, assigns the EXISTING `Education` program to it, **renames `Special Needs Education – Generalist` to `Special Needs Education` keeping its `id`**, and adds Elementary, Secondary, Early Childhood, Technical-Vocational Teacher and Physical Education plus `Teacher Certification`. **The migration IS the feature** — the combobox is untouched and now renders *"Add all 8 Education programs"* on its own. **⚠️ The ID range was verified against production rather than assumed:** 44 programs exist, exactly 21 in `V106`'s seed range with `...021` highest, so `...022`+ cannot collide.
+- **⚠️ The renamed row also gains `exam_goal_slug = 'let'` — a user-visible change beyond a rename, flagged rather than buried.** `findNamesByExamGoalSlug` returns a `List`, so the field is one-to-many by design; leaving this row NULL would have made seven of eight family members LET-discoverable and one silently not. It now appears under the LET exam goal on the public endpoint.
+- **Helper-text copy polish.** The Applicable Programs hint no longer explains the resolver (*"only a single program can inform the writing domain, and Domain Context overrides it"*) — true, but backend mechanics a curator cannot act on, and it invited the reading that picking one program is how you steer the writing. It now states the conceptual separation and points at program families.
+- **Three multi-family combobox tests, guarding a bug class that was previously invisible.** Every existing fixture held exactly ONE family, because until `V142` production did too — so a component that ignored which family was clicked and expanded them all would have shipped green. **Mutation-verified with an isolating mutant that typechecks and is identical to correct behaviour under a single family: it kills ONLY the two new tests, with all 14 pre-existing tests passing.**
+- **`EducationProgramFamilyMigrationTest`** — the rename-guard fixture is created BEFORE the migration runs, since a link inserted afterwards resolves to the new name trivially. It also carries the Engineering-untouched regression guard. **⚠️ Its production denominator is ZERO** (no note is linked to the renamed row), so it is a structural guard and must not be reported as evidence that real data survived; its javadoc says so.
+
 
 ### Anti-drift
 
