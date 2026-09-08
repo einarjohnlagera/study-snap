@@ -1177,6 +1177,32 @@ describe("ChallengeQuizPage", () => {
     expect(topBar).toHaveClass("top-0");
   });
 
+  it("gives the header back while submitting, because both Leave controls are disabled then", async () => {
+    // ⚠️⚠️ THE TRAP THIS RELEASE ALMOST SHIPPED, found by a cold falsification agent at signoff.
+    //
+    // Both Leave controls here are `disabled={submitting}`, and finalizeChallengeSession holds
+    // `submitting` true across the whole completion round-trip while `phase` is STILL "running" — it
+    // only flips to "complete" after the await. So `useExamFocusMode(phase === "running")` meant the
+    // header was hidden AND the only exit was disabled for that entire window, with no way out at all
+    // if the request hung. Board Exam reaches it automatically when the timer expires and auto-submits.
+    //
+    // ⚠️ The invariant: focus mode may never be active in a state the in-page exit does not cover.
+    // Asserting the HOOK ARGUMENT rather than the rendered header, because the header lives in AppShell
+    // and is not part of this page's tree.
+    setupBoardExamSession({ currentQuestionIndex: 1, selectedChoices: { "0": 0, "1": 0 } });
+    // Never resolves: holds `submitting` true so the window under test stays open, which is also what a
+    // hung or very slow completion request looks like to the learner.
+    (completeChallengeQuizSession as jest.Mock).mockImplementation(() => new Promise(() => {}));
+
+    render(<ChallengeQuizPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Submit Exam" }));
+
+    await waitFor(() => expect(completeChallengeQuizSession).toHaveBeenCalledTimes(1));
+    expect(screen.getByRole("button", { name: "Leave Exam" })).toBeDisabled();
+    expect(useExamFocusModeMock).toHaveBeenLastCalledWith(false);
+  });
+
   it("keeps the Challenge Quiz navigator expanded by default on desktop", async () => {
     setupInProgressChallengeQuiz();
 

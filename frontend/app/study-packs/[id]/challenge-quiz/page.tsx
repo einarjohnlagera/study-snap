@@ -1501,9 +1501,19 @@ export default function ChallengeQuizPage() {
   useBottomViewportClaim(challengeQuizActive);
   // ⚠️ WAS `isBoardExamMode && phase === "running"`. Focus mode now covers an ordinary Challenge Quiz
   // too — the header (and with it the notification bell) has no business interrupting any quiz, not
-  // just a Board Exam. The in-page exit is unchanged and gated on the same expression: the sticky top
-  // bar below renders on `phase === "running"` and carries its own Leave button.
-  useExamFocusMode(phase === "running");
+  // just a Board Exam.
+  //
+  // ⚠️⚠️ `&& !submitting` IS LOAD-BEARING, NOT TIDINESS. Both Leave controls on this page are
+  // `disabled={submitting}` (`:1662` for Board Exam, `:1678` for the ordinary quiz), and
+  // `finalizeChallengeSession` holds `submitting` true across the whole completion round-trip while
+  // `phase` is still `"running"` — it only flips to `"complete"` AFTER the await. Without this term the
+  // learner spends that entire window with the header hidden AND the only exit disabled: no way out at
+  // all, and indefinitely so if the request hangs. Board Exam reaches it automatically when the timer
+  // expires and auto-submits.
+  //
+  // ⚠️ THE INVARIANT THIS UPHOLDS: focus mode may never be active in a state the in-page exit does not
+  // cover. Restoring the header for the duration of a submit is the cheap side of that trade.
+  useExamFocusMode(phase === "running" && !submitting);
 
   useEffect(() => {
     if (!isBoardExamMode || phase === "running") {
