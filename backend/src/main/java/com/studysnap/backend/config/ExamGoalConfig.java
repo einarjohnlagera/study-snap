@@ -33,7 +33,22 @@ public final class ExamGoalConfig {
             new ExamGoalDefinition(
                     "LET",
                     "Licensure Examination for Teachers",
-                    List.of(EDUCATION)
+                    // ⚠️ FALLBACK ONLY -- used when the live catalog read fails or returns empty.
+                    // It must mirror every course_program carrying exam_goal_slug = 'let'. V142
+                    // (v0.133.0) took that from ONE row to EIGHT, and this list was left behind:
+                    // found at the v0.133.0 signoff by sweeping the surface rather than the diff.
+                    // ⚠️ A stale fallback fails SILENTLY -- it under-represents the exam goal instead
+                    // of erroring -- so if a future migration adds a 'let' program, add it here too.
+                    List.of(
+                            EDUCATION,
+                            "Special Needs Education",
+                            "Elementary Education",
+                            "Secondary Education",
+                            "Early Childhood Education",
+                            "Technical-Vocational Teacher Education",
+                            "Physical Education",
+                            "Teacher Certification"
+                    )
             ),
             CPALE,
             new ExamGoalDefinition(

@@ -1,6 +1,7 @@
 package com.studysnap.backend.service;
 
 import com.studysnap.backend.dto.CourseProgramCatalogItemResponse;
+import com.studysnap.backend.exception.InvalidProgramFamilyNameException;
 import com.studysnap.backend.exception.ProgramFamilyNameConflictException;
 import com.studysnap.backend.dto.CreateProgramFamilyRequest;
 import com.studysnap.backend.dto.ProgramFamilyResponse;
@@ -202,6 +203,26 @@ class CourseProgramCatalogServiceTest {
         assertThat(classTransaction.readOnly()).isTrue();
         assertThat(createTransaction).isNotNull();
         assertThat(createTransaction.readOnly()).isFalse();
+    }
+
+    /**
+     * ⚠️ ADDED AT THE v0.133.0 SIGNOFF, after a cold agent found that
+     * {@link InvalidProgramFamilyNameException} had ZERO references anywhere in the test tree — an
+     * added file with no test that executes it, the exact heuristic {@code CLAUDE.md} names.
+     *
+     * <p>The branch looks redundant with {@code @Size(max = 120)} on the request record, and that is
+     * precisely why it was easy to skip: the annotation guards the CONTROLLER, while this guards the
+     * SERVICE, which anything calling it directly reaches without validation.
+     */
+    @Test
+    void rejectsAProgramFamilyNameLongerThanTheColumnRatherThanLettingTheInsertFail() {
+        String tooLong = "x".repeat(121);
+        CreateProgramFamilyRequest request = new CreateProgramFamilyRequest(tooLong);
+
+        assertThatThrownBy(() -> service.createProgramFamily(request))
+                .isInstanceOf(InvalidProgramFamilyNameException.class);
+
+        verify(repository, never()).insertProgramFamily(org.mockito.ArgumentMatchers.anyString());
     }
 
     private CourseProgramCatalogItemResponse item(UUID id, String name, UUID familyId, String familyName) {

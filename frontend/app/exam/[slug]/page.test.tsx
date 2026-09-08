@@ -114,7 +114,17 @@ describe("ExamHubPage", () => {
     expect(EXAM_HUB_SLUGS).toEqual(["ale", "pnle", "let", "cpale"]);
     expect(EXAM_HUBS.ale.coursePrograms).toEqual(["Architecture"]);
     expect(EXAM_HUBS.pnle.coursePrograms).toEqual(["Nursing"]);
-    expect(EXAM_HUBS.let.coursePrograms).toEqual(["Education"]);
+    // ⚠️ EIGHT since V142 (v0.133.0) seeded the Education family, all tagged 'let'.
+    expect(EXAM_HUBS.let.coursePrograms).toEqual([
+      "Education",
+      "Special Needs Education",
+      "Elementary Education",
+      "Secondary Education",
+      "Early Childhood Education",
+      "Technical-Vocational Teacher Education",
+      "Physical Education",
+      "Teacher Certification",
+    ]);
     expect(EXAM_HUBS.cpale.coursePrograms).toEqual(["Accountancy"]);
     expect(generateStaticParams()).toEqual([{ slug: "ale" }, { slug: "pnle" }, { slug: "let" }, { slug: "cpale" }]);
   });

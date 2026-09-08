@@ -11,7 +11,7 @@ Program Families reduce repetitive Course / Program(s) curation. They are a prod
 - Expansion is unconditional. The same family always produces the same member set regardless of the note's Subject, Domain Context, learner level, or any other metadata.
 - Added members appear immediately as the control's normal removable chips. Authors may trim the over-selected set before using the surface's existing save action.
 - A fully selected family offers no clickable no-op. Catalogs with no families show no family affordance, while programs without a family remain individually selectable.
-- The shortcut is available anywhere the shared control is used: Note Editor, Note Detail's inline metadata panel, and the Admin Dashboard curation modal.
+- The shortcut is available anywhere the shared control is used: Note Editor, Note Detail's inline metadata panel, the Admin Dashboard curation modal, and **Bulk Generate** (`bulk-generation-page-client.tsx:594`, inside its `isTeacherOrAdmin` branch). ⚠️ This list read as three surfaces until `v0.133.0`; Bulk Generate was missing. It was found by anchoring the claim to the four `ApplicableProgramsCombobox` consumers, not by reading a diff — the doc had not changed when the fourth consumer was added.
 
 ## Persistence and reads
 

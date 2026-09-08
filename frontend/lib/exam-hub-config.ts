@@ -28,7 +28,18 @@ export const EXAM_HUBS = {
     shortName: "LET",
     fullName: "Licensure Examination for Teachers (LET)",
     description: "Free LET reviewer notes and practice quizzes for Philippine teacher licensure exam takers",
-    coursePrograms: ["Education"],
+    // ⚠️ FALLBACK ONLY — mirrors every course_program carrying exam_goal_slug = 'let'. V142
+    // (v0.133.0) took that from ONE row to EIGHT; keep this in step with ExamGoalConfig.java.
+    coursePrograms: [
+      "Education",
+      "Special Needs Education",
+      "Elementary Education",
+      "Secondary Education",
+      "Early Childhood Education",
+      "Technical-Vocational Teacher Education",
+      "Physical Education",
+      "Teacher Certification",
+    ],
   },
   cpale: {
     slug: "cpale",

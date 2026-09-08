@@ -21,15 +21,31 @@
 --
 -- So exactly ONE user profile carries the literal string, and NO Note is linked to the row by id.
 --
--- ⚠️ NOTHING BREAKS IF THIS IS NOT RUN. `users.course_program` is consumed by
--- StudyPackGenerationContextResolver as FREE TEXT (a fallback authoring domain passed straight
--- through), never resolved against the catalog by name. Leaving it stale means that one account's
--- profile program no longer corresponds to any catalog entry, which affects catalog-scoped discovery
--- and matching for that account only — not correctness.
+-- ⚠️⚠️ CORRECTION, MADE AT THE v0.133.0 SIGNOFF — THIS FILE PREVIOUSLY SAID "NOTHING BREAKS", AND
+-- THAT WAS TOO STRONG. A cold agent falsified the underlying claim. The claim was that no code
+-- resolves a course program by NAME. That is true of the generation path — StudyPackGenerationContext-
+-- Resolver takes this column as FREE TEXT and resolves catalog entries by ID (`findNamesByIds`) — but
+-- it is NOT true of the whole product:
+--
+--   frontend/components/notes/bulk-generation-page-client.tsx:290
+--     courseProgramCatalog.find((program) => program.name === courseProgram.trim())
+--
+--   ...where `courseProgram` is seeded from this very profile field (`:182`).
+--
+-- ⚠️ SO THERE IS ONE CONCRETE, USER-VISIBLE CONSEQUENCE FOR THE ONE AFFECTED ACCOUNT: after the
+-- rename, Bulk Generate stops auto-selecting their program. It degrades gracefully — the form falls
+-- back to manual catalog selection, nothing is corrupted and nothing crashes — but it is a real
+-- regression for that account, not merely "a string that no longer matches."
+--
+-- ⚠️ NOTE ALSO: `V142`'s own inline comment still carries the original "nothing breaks" wording. It is
+-- deliberately NOT edited — the migration is committed and editing it would change its Flyway checksum
+-- and break startup wherever it has already been applied. THIS FILE IS THE CORRECTION OF RECORD.
 --
 -- THE OWNER'S THREE OPTIONS
---   (a) Run the UPDATE below, so the profile follows the rename.        <-- recommended
---   (b) Leave it stale. One account's profile stops matching the catalog.
+--   (a) Run the UPDATE below, so the profile follows the rename.        <-- recommended, and the
+--       correction above STRENGTHENS this recommendation rather than changing it.
+--   (b) Leave it stale. That one account keeps a profile program matching no catalog entry AND loses
+--       Bulk Generate's auto-selection.
 --   (c) Do not rename at all; keep `Special Needs Education – Generalist` and drop the proposed
 --       `Special Needs Education` from the insert list. This reopens owner decision 1.
 --
