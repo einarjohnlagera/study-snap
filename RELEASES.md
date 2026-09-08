@@ -2,7 +2,7 @@
 
 ## v0.133.0 - Education Family
 
-**Status: In Progress** (kicked off 2026-09-08, base branch `releases/v0.133.0`, cut from `main` after `v0.132.0` merged as #1347 and tagged)
+**Status: Released** (kicked off 2026-09-08, signed off 2026-09-08, base branch `releases/v0.133.0`, cut from `main` after `v0.132.0` merged as #1347 and tagged)
 
 Source: `docs/claude-plans/program-family-generalization-and-education-family.md` (audit complete 2026-09-08, every claim `file:line`-anchored).
 
@@ -90,6 +90,91 @@ The audit named two real gaps. **One of them is not real.** It claimed *"the adm
 - **`EducationProgramFamilyMigrationTest`** — the rename-guard fixture is created BEFORE the migration runs, since a link inserted afterwards resolves to the new name trivially. It also carries the Engineering-untouched regression guard. **⚠️ Its production denominator is ZERO** (no note is linked to the renamed row), so it is a structural guard and must not be reported as evidence that real data survived; its javadoc says so.
 
 
+### Scope completeness — the three planned items, reconciled
+
+**⚠️ THE PLANNED SCOPE LIST ABOVE READS AS THREE DELIVERABLES AND ONLY TWO OF THEM WERE BUILT. That is
+correct, and this table is why** — a later reader must not see a release that shipped 2 of 3.
+
+| Planned item | Outcome | Evidence |
+|---|---|---|
+| **1.** One migration | **SHIPPED** | `V142__education_program_family.sql`; guarded by `EducationProgramFamilyMigrationTest` |
+| **2.** Admin family **selector** on create | **⚠️ NOT BUILT — IT ALREADY EXISTED** | `<select id="catalog-program-family">` has been in `admin-course-program-catalog-section.tsx` since `9e77f412` (2026-08-11, `v0.100.0`), verified an ancestor of `main`. The audit concluded it was missing by reading `app/admin/course-programs/page.tsx`, a 40-line shell that renders it. |
+| **2′.** Admin family **create** surface — *substituted for item 2* | **SHIPPED** | `GET`/`POST /course-program-catalog/families` plus the create control. **This is what item 2 was actually for:** its stated justification was *"this is what stops the release recurring"*, and a selector alone does not — a family still could not be created without a migration. The substitution moved the work to the half of the gap that was real. |
+| **3a.** Copy polish, **Course / Program** helper text | **SHIPPED** | `applicable-programs-combobox.tsx:328-331`; the resolver sentence was replaced one-for-one, no paragraph added |
+| **3b.** Copy polish, **Domain Context** helper text | **NO CHANGE NEEDED — verified, not assumed** | `note-editor-form.tsx:512-515` already reads *"it shapes how the note is written, while the programs decide who finds it."* It carried no resolver mechanics to drop. Checked against the code rather than inferred from the item's wording. |
+
+**So: 2 of 3 planned items built, 1 found already built, plus 1 substitution and 1 verified no-op.** The
+release grew by one item (2′) and shrank by one (2).
+
+**⚠️ VERIFICATION TIER WAS RE-DECIDED WHEN THE SHAPE CHANGED, NOT WHEN THE COUNT DID.** Kickoff
+pre-declared *a single `advisor()` call* for "a data migration plus one admin form field." Folding 2′
+added **a new write endpoint** — a different shape, not merely a fourth item — and `V142` changes
+production catalog semantics (the renamed row gains `exam_goal_slug='let'` and becomes publicly
+LET-discoverable). Under the `v0.131.0` rule (*decide the tier from the SHAPE*), that fires the
+production-data trigger, so **`advisor()` plus one scoped cold agent ran**, framed as falsification of
+this session's own named claims.
+
+### Pressure test — one scoped cold agent, framed as falsification
+
+Tier was re-decided when the shape changed (see above), not when the item count did. One agent, a tight
+file list, and seven of this session's own named claims to DISPROVE rather than an open-ended audit.
+**Three claims were refuted. Four were confirmed, and the confirmations matter as much** — the
+`MockMvc` POST really does issue a request with `Content-Type` (not a method call), `exam_goal_slug` really
+is one-to-many at every consumer, the combobox really is family-generic, and the admin control really
+does GET on mount.
+
+- **Fixed — the new repository SQL was executed by NOTHING.** `CourseProgramCatalogRepository` is a plain
+  `JdbcTemplate` class with hand-written SQL constants and **zero** `@Query(nativeQuery = true)` methods,
+  and `NativeQueryPostgresIntegrationTest` finds its subjects by reflecting over `@Query` — so the class
+  is **structurally invisible** to the PostgreSQL harness that `CLAUDE.md` describes as covering *"every
+  native query."* The service test mocks the repository and the controller test mocks the service, so all
+  three new statements were verified **by inspection only**. Added
+  `CourseProgramCatalogRepositoryProgramFamilyIntegrationTest`, which runs them against a real database.
+  **⚠️ It also covers `mapProgramFamily`'s alias→getter mapping — the exact gap `v0.132.0` named, since
+  `PREPARE` validates syntax and types but never that `SELECT id, name` actually feeds
+  `getObject("id", …)`.** Mutation-verified: deleting the `jdbcTemplate.update(...)` inside
+  `insertProgramFamily` — which still typechecks and still returns a valid-looking response — is killed
+  by the new read-back assertion at `:88`, **with all 14 pre-existing service tests still passing.**
+- **Fixed — `InvalidProgramFamilyNameException` had zero test references.** An added file with no test
+  that executes it. It looks redundant with `@Size(max = 120)` on the request record, which is exactly why
+  it was skipped — but the annotation guards the CONTROLLER while the exception guards the SERVICE, which
+  a direct call reaches without validation.
+- **Fixed — `"nothing resolves a course_program by name"` IS FALSE, and it had already reached the owner.**
+  `bulk-generation-page-client.tsx:290` does `catalog.find(p => p.name === courseProgram.trim())`, where
+  `courseProgram` is seeded from the user's free-text profile field (`:182`). **So the ONE account holding
+  the stale `Special Needs Education – Generalist` string loses Bulk Generate's auto-selection after the
+  rename** — graceful degradation, not corruption, but a real regression rather than "a string that no
+  longer matches." The claim was true of the path it was checked against (`StudyPackGenerationContext-
+  Resolver` resolves by ID) and was over-generalized from there.
+  `docs/claude-plans/v0.133.0-owner-profile-string-update.sql` now carries the correction and it
+  **strengthens** the recommendation to run the write. **⚠️ `V142`'s inline comment still carries the
+  original wording and is deliberately NOT edited — the migration is committed, and changing it would
+  alter its Flyway checksum and break startup wherever it has already been applied.**
+- **Fixed — the LET fallback lists went stale the moment `V142` landed.** `ExamGoalConfig.java` and
+  `frontend/lib/exam-hub-config.ts` both hardcode `let → ["Education"]` as a **fail-open** fallback used
+  when the live catalog read fails or returns empty. Every consumer of the *live* list correctly treats it
+  as list-valued, so there is no single-value bug — but the fallback itself would have silently
+  under-represented the exam goal by **seven programs**. Both now list all eight, with their tests updated.
+  **⚠️ This is the "sweep by SURFACE, not by diff" rule paying out: neither file was in the diff, and a
+  stale fail-open fallback fails silently by design.**
+
+### Findings recorded and deliberately NOT fixed
+
+- **`CourseProgramCatalogRepository.resolveIdForLegacyName()` resolves by exact name and has ZERO callers**
+  anywhere in `backend/src`. Confirmed untouched by this release. Genuinely dead code — deleting it is a
+  separate change, and it is recorded here so the next reader does not rediscover it as a live risk.
+- **The family dedup SQL uses `lower(trim(name))` while the course-program dedup additionally collapses
+  internal whitespace** via `regexp_replace`. Not exploitable today: `normalizeForLookup` already collapses
+  whitespace in Java before the parameter is bound. Recorded because the two paths are described as
+  matching and, at the SQL level, they do not.
+
+### What the cold agent could NOT check
+
+**The production-collision claim.** `V142`'s comment asserts 44 programs with exactly 21 in the seed range,
+verified against production on 2026-09-08. **A repo-only reviewer cannot confirm or refute that** — which
+is the migration's own stated reason for requiring a precondition read. This is why the release owes a
+post-deploy read rather than treating the migration test as sufficient.
+
 ### Anti-drift
 
 - **⚠️ Do NOT modify the applicable-programs combobox** — it is already family-generic.
@@ -113,6 +198,39 @@ The audit's §14 is mostly covered already by the generic component. The genuine
 
 **⚠️ The Engineering-still-expands test is the regression guard for the migration** — if assigning the existing `Education` row a family accidentally touched Engineering rows, that is what catches it.
 
+
+### ⚠️ Deploy sequencing — two unrun migrations now queue behind each other
+
+`V141` (`v0.132.0`) and `V142` (this release) are **both unrun in production.** Flyway applies them in
+order on the next deploy, which is correct — but three dated obligations hang off *when that deploy
+happens*, and they are recorded here rather than left to be inferred:
+
+1. **`v0.132.0`'s `[CHECKPOINT — due 2026-09-22]` is deploy-relative, not merge-relative.** If the
+   deploy slips, that date must be re-dated — it does not start counting at merge.
+2. **`docs/claude-plans/v0.133.0-owner-profile-string-update.sql` must run in the SAME maintenance step
+   as `V142`, not before it.** Running it first points the one affected profile at a catalog name that
+   does not exist yet.
+3. **`docs/claude-plans/v0.130.0-owner-production-checks.sql` is still outstanding.**
+
+**⚠️ All three are the owner's to run. Claude does not execute writes or migrations against production.**
+
+### Known limitations
+
+- **All FOUR authoring surfaces render their own helper paragraph above the combobox's.**
+  `note-editor-form.tsx:437-441`, `private-note-detail-page-client.tsx:2704-2706`,
+  `bulk-generation-page-client.tsx:591-593` and `admin-applicable-programs-section.tsx:204` each carry a
+  discovery-vs-authoring sentence directly above the combobox's own *"they decide who finds it, never
+  how it is written."* They overlap without contradicting. **This predates the release** — the copy
+  polish replaced one paragraph with one paragraph and added none — and was found by sweeping the
+  surface rather than the diff. Left alone deliberately: consolidating it is a copy change across two
+  more files and would have made this a fifth item.
+- **`Physical Education` is seeded as an Education-family program carrying `exam_goal_slug = 'let'`.**
+  That is right for the teaching degree, and the name is also how the *school subject* is commonly
+  written. No collision exists today (the read found no such catalog row), but a future curator adding
+  a subject-flavoured entry should reuse this row rather than create a sibling.
+- **The families `GET` is ADMIN-only, matching the create endpoint.** The authoring combobox still
+  derives families from the catalog, deliberately — it only cares about families that have members.
+  **Do not unify the two paths.**
 
 ## v0.132.0 - Publication Boundary
 
