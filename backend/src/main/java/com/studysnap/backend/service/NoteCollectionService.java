@@ -245,14 +245,34 @@ public class NoteCollectionService {
         if (collections.isEmpty()) {
             return List.of();
         }
-        List<NoteCollectionEntity> children = collectionRepository.findByParentCollectionIdIn(collectionIds(collections));
+        // ⚠️ THIS IS THE SECOND ANONYMOUS PUBLIC READ PATH AND IT MUST AGREE WITH getPublic.
+        // Every number below is rendered on the public card (childCount, itemCount, readyCount, and the
+        // "Preview this plan - N notes" label). Counting a row the linked page will not show advertises
+        // unfinished curriculum and makes the public view contradict itself; childCount additionally
+        // decides isGoal on the card, which is what routes Adopt to adoptGoal.
+        //
+        // ⚠️ THE FILTERING IS DELIBERATELY DONE IN JAVA OVER ALREADY-FETCHED ROWS. Do NOT push a
+        // published_at predicate into countItemsByCollectionIds / countChildrenByCollectionIds /
+        // findNoteIdsByCollectionIds: the authenticated list() above shares those exact queries, and an
+        // adopted row is never published, so that change would empty every learner's own library --
+        // the one invariant this release exists to protect.
+        //
+        // The root collections are NOT filtered, for the same reason getPublic does not filter its root:
+        // a PUBLIC set must never vanish from Explore because of a missing stamp.
+        List<NoteCollectionEntity> children = collectionRepository.findByParentCollectionIdIn(collectionIds(collections)).stream()
+                .filter(child -> child.getPublishedAt() != null)
+                .toList();
         List<NoteCollectionEntity> collectionsWithChildren = new ArrayList<>(collections);
         collectionsWithChildren.addAll(children);
-        Map<UUID, Integer> itemCountsByCollectionId = loadItemCounts(collectionsWithChildren);
-        Map<UUID, Integer> readyCountsByCollectionId = loadReadyCounts(collectionsWithChildren);
+        List<NoteCollectionItemEntity> publishedItems = itemRepository
+                .findByCollectionIdInOrderByCollectionIdAscPositionAsc(collectionIds(collectionsWithChildren)).stream()
+                .filter(item -> item.getPublishedAt() != null)
+                .toList();
+        Map<UUID, Integer> itemCountsByCollectionId = countItemsByCollectionId(publishedItems);
+        Map<UUID, Integer> readyCountsByCollectionId = readyCountsForNoteIds(noteIdsByCollectionId(publishedItems));
         Map<UUID, Integer> rolledUpItemCountsByCollectionId = rollUpCounts(collections, children, itemCountsByCollectionId);
         Map<UUID, Integer> rolledUpReadyCountsByCollectionId = rollUpCounts(collections, children, readyCountsByCollectionId);
-        Map<UUID, Integer> childCountsByCollectionId = loadChildCounts(collections);
+        Map<UUID, Integer> childCountsByCollectionId = childCountsByParentId(children);
         Map<UUID, Integer> adoptionCountsByCollectionId = loadAdoptionCounts(collections);
         return collections.stream()
                 .map(collection -> toSummaryResponse(
@@ -976,7 +996,19 @@ public class NoteCollectionService {
             publishChildCollections(collectionId, userId);
             // Initial publication is distinct from publishing an update: there are no adopters to
             // notify, but every current source row must become the first published curriculum.
-            if (previousVisibility != CollectionVisibility.PUBLIC && saved.getPublishedAt() == null) {
+            //
+            // ⚠️ THE DISCRIMINATOR IS last_update_published_at, NOT published_at, AND THE DIFFERENCE
+            // IS LOAD-BEARING. V141 backfills published_at for EVERY pre-existing row with no
+            // visibility predicate, so a collection that already existed at deploy -- including a
+            // PRIVATE draft -- carries a non-null published_at and would skip this branch forever:
+            // its post-deploy curriculum would never be stamped by its own first publication.
+            // V141 stamps last_update_published_at only for pre-existing PUBLIC source roots, which
+            // makes it the exact "has this set ever been published" test.
+            //
+            // ⚠️ Do NOT "simplify" this to always stamping. On a PUBLIC -> PRIVATE -> PUBLIC flip the
+            // field is already set, so rows added while private stay unpublished and still require an
+            // explicit Publish update. Always-stamping would silently walk them past the boundary.
+            if (previousVisibility != CollectionVisibility.PUBLIC && saved.getLastUpdatePublishedAt() == null) {
                 publishInitialCurriculum(saved, userId);
             }
         }
@@ -1020,21 +1052,32 @@ public class NoteCollectionService {
         NoteCollectionEntity source = collectionRepository
                 .findByIdAndVisibility(sourceGoalId, CollectionVisibility.PUBLIC)
                 .orElseThrow(CollectionNotFoundException::new);
-        if (collectionRepository.countByParentCollectionId(sourceGoalId) == 0) {
-            throw new CollectionNotFoundException();
-        }
-
+        // ⚠️ EXISTING ADOPTERS ARE RESOLVED FIRST, BEFORE ANY PUBLICATION GATE. Their copy already
+        // exists; whether the source currently has publishable children is irrelevant to them.
         Optional<NoteCollectionEntity> alreadyAdopted =
                 collectionRepository.findByOwnerUserIdAndSourcePlanId(userId, sourceGoalId);
         if (alreadyAdopted.isPresent()) {
             return alreadyAdoptedGoalResponse(userId, sourceGoalId, alreadyAdopted.get());
         }
 
-        List<NoteCollectionEntity> sourceChildren = collectionRepository
-                .findOrderedChildrenByParentCollectionIdAndOwnerUserId(sourceGoalId, source.getOwnerUserId());
         // Goal adoption copies source children. Keep unfinished Subject Plans out of the new adopter's
         // library until they receive a source-side publication stamp.
-        sourceChildren = sourceChildren.stream().filter(child -> child.getPublishedAt() != null).toList();
+        //
+        // ⚠️ THE GATE BELOW MUST READ THE SAME FILTERED, OWNER-SCOPED LIST THE COPY LOOP READS.
+        // It previously gated on countByParentCollectionId, which filters by neither publication nor
+        // owner: a Goal whose children were all unpublished passed the gate, filtered to an empty list,
+        // and copied nothing. adoptGoal never copies the root's own items, so the learner received a
+        // collection with zero Subject Plans and zero notes -- silently, because both adoptedSubjectCount
+        // and skippedSubjectCount were 0 -- which then became their primary collection and could not be
+        // repaired by re-adopting, since findByOwnerUserIdAndSourcePlanId now matched.
+        List<NoteCollectionEntity> sourceChildren = collectionRepository
+                .findOrderedChildrenByParentCollectionIdAndOwnerUserId(sourceGoalId, source.getOwnerUserId())
+                .stream()
+                .filter(child -> child.getPublishedAt() != null)
+                .toList();
+        if (sourceChildren.isEmpty()) {
+            throw new CollectionNotFoundException();
+        }
         AdoptedGoalPersistence persistedGoal;
         try {
             persistedGoal = persistAdoptedGoal(source, userId);
@@ -2731,7 +2774,10 @@ public class NoteCollectionService {
     }
 
     private Map<UUID, Integer> loadReadyCounts(List<NoteCollectionEntity> collections) {
-        Map<UUID, List<UUID>> noteIdsByCollectionId = loadNoteIdsByCollectionId(collections);
+        return readyCountsForNoteIds(loadNoteIdsByCollectionId(collections));
+    }
+
+    private Map<UUID, Integer> readyCountsForNoteIds(Map<UUID, List<UUID>> noteIdsByCollectionId) {
         LinkedHashSet<UUID> allNoteIds = noteIdsByCollectionId.values().stream()
                 .flatMap(List::stream)
                 .collect(Collectors.toCollection(LinkedHashSet::new));
@@ -2759,6 +2805,37 @@ public class NoteCollectionService {
             readyCountsByCollectionId.put(entry.getKey(), readyCount);
         }
         return readyCountsByCollectionId;
+    }
+
+    /** Item counts over an already-published-filtered item list, for the anonymous public surface. */
+    private Map<UUID, Integer> countItemsByCollectionId(List<NoteCollectionItemEntity> items) {
+        Map<UUID, Integer> countsByCollectionId = new HashMap<>();
+        for (NoteCollectionItemEntity item : items) {
+            countsByCollectionId.merge(item.getCollectionId(), 1, Integer::sum);
+        }
+        return countsByCollectionId;
+    }
+
+    /** Note ids grouped by collection over an already-published-filtered item list. */
+    private Map<UUID, List<UUID>> noteIdsByCollectionId(List<NoteCollectionItemEntity> items) {
+        Map<UUID, List<UUID>> noteIdsByCollectionId = new HashMap<>();
+        for (NoteCollectionItemEntity item : items) {
+            noteIdsByCollectionId
+                    .computeIfAbsent(item.getCollectionId(), ignored -> new ArrayList<>())
+                    .add(item.getNoteId());
+        }
+        return noteIdsByCollectionId;
+    }
+
+    /** Child counts derived from an already-published-filtered child list. */
+    private Map<UUID, Integer> childCountsByParentId(List<NoteCollectionEntity> children) {
+        Map<UUID, Integer> countsByParentId = new HashMap<>();
+        for (NoteCollectionEntity child : children) {
+            if (child.getParentCollectionId() != null) {
+                countsByParentId.merge(child.getParentCollectionId(), 1, Integer::sum);
+            }
+        }
+        return countsByParentId;
     }
 
     private Map<UUID, Integer> loadChildCounts(List<NoteCollectionEntity> collections) {

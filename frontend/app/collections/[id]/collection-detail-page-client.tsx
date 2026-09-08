@@ -679,12 +679,14 @@ function PublishReviewSetUpdateModal({
   isOpen,
   status,
   publishing,
+  error,
   onClose,
   onConfirm,
 }: Readonly<{
   isOpen: boolean;
   status: ReviewSetPublicationStatusResponse | null;
   publishing: boolean;
+  error: string | null;
   onClose: () => void;
   onConfirm: () => void;
 }>) {
@@ -706,6 +708,16 @@ function PublishReviewSetUpdateModal({
       )}
     >
       {additions.length > 0 ? <p className="text-sm font-medium text-foreground/80">{additions.join(" · ")}</p> : null}
+      {/*
+        ⚠️ THE FAILURE IS RENDERED INSIDE THE MODAL ON PURPOSE. This modal stays open when publishing
+        fails, and AppModal portals a `fixed inset-0` backdrop over the page, so the page-level
+        mutationError Card sits underneath it and is invisible to the curator. Do not delete this in
+        favour of that Card: a test asserting only getByText(message) passes while the curator sees
+        nothing, which is exactly how this shipped.
+      */}
+      {error ? (
+        <p role="alert" className="mt-3 text-sm text-destructive">{error}</p>
+      ) : null}
     </AppModal>
   );
 }
@@ -3503,7 +3515,7 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
             collection={collection}
             status={publicationStatus}
             loading={publicationStatusLoading}
-            onPublish={() => setPublishUpdateOpen(true)}
+            onPublish={() => { setMutationError(null); setPublishUpdateOpen(true); }}
           />
         ) : null}
 
@@ -3654,7 +3666,8 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
           isOpen={publishUpdateOpen}
           status={publicationStatus}
           publishing={mutationKind === "publish"}
-          onClose={() => setPublishUpdateOpen(false)}
+          error={mutationError}
+          onClose={() => { setPublishUpdateOpen(false); setMutationError(null); }}
           onConfirm={() => void handlePublishReviewSetUpdate()}
         />
         {actionToast ? <ToastMessage message={actionToast} tone="success" /> : null}
@@ -3708,7 +3721,7 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
           collection={collection}
           status={publicationStatus}
           loading={publicationStatusLoading}
-          onPublish={() => setPublishUpdateOpen(true)}
+          onPublish={() => { setMutationError(null); setPublishUpdateOpen(true); }}
         />
       ) : null}
 
@@ -4029,7 +4042,8 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
         isOpen={publishUpdateOpen}
         status={publicationStatus}
         publishing={mutationKind === "publish"}
-        onClose={() => setPublishUpdateOpen(false)}
+        error={mutationError}
+        onClose={() => { setPublishUpdateOpen(false); setMutationError(null); }}
         onConfirm={() => void handlePublishReviewSetUpdate()}
       />
       <AppModal

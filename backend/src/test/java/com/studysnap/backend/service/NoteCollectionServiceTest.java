@@ -47,6 +47,7 @@ import com.studysnap.backend.entity.StudyPackEntity;
 import com.studysnap.backend.entity.StudyPackStatus;
 import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.entity.UserRole;
+import com.studysnap.backend.exception.ReviewSetUpdateNotPublishableException;
 import com.studysnap.backend.exception.CollectionItemNotFoundException;
 import com.studysnap.backend.model.StudyPackProgressProjection;
 import com.studysnap.backend.exception.CollectionNotFoundException;
@@ -100,6 +101,7 @@ import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -3014,10 +3016,17 @@ class NoteCollectionServiceTest {
                 CollectionVisibility.PUBLIC,
                 UPDATED_COURSE_PROGRAM
         )).thenReturn(List.of(collection));
-        when(itemRepository.countItemsByCollectionIds(List.of(collection.getId())))
-                .thenReturn(List.of(countProjection(collection.getId(), 2)));
-        when(collectionRepository.countChildrenByCollectionIds(List.of(collection.getId())))
-                .thenReturn(List.of(childCountProjection(collection.getId(), 1)));
+        // ⚠️ listPublic derives every public count from PUBLISHED rows in Java now, so the fixture must
+        // supply real rows rather than count projections -- projections would stub past the filter.
+        NoteCollectionEntity child = buildCollection(UUID.randomUUID(), collection.getOwnerUserId(), "Subject", Instant.now());
+        child.setVisibility(CollectionVisibility.PUBLIC);
+        child.setParentCollectionId(collection.getId());
+        when(collectionRepository.findByParentCollectionIdIn(List.of(collection.getId()))).thenReturn(List.of(child));
+        when(itemRepository.findByCollectionIdInOrderByCollectionIdAscPositionAsc(List.of(collection.getId(), child.getId())))
+                .thenReturn(List.of(
+                        buildItem(child.getId(), UUID.randomUUID(), 0, WEEK_ONE_LABEL),
+                        buildItem(child.getId(), UUID.randomUUID(), 1, WEEK_TWO_LABEL)
+                ));
 
         List<NoteCollectionSummaryResponse> result = service.listPublic("  " + UPDATED_COURSE_PROGRAM + "  ");
 
@@ -3077,13 +3086,11 @@ class NoteCollectionServiceTest {
         draftNote.setVisibility(NoteVisibility.PUBLIC);
         when(collectionRepository.findByVisibilityAndParentCollectionIdIsNullOrderByUpdatedAtDesc(CollectionVisibility.PUBLIC))
                 .thenReturn(List.of(collection));
-        when(itemRepository.countItemsByCollectionIds(List.of(collectionId)))
-                .thenReturn(List.of(countProjection(collectionId, noteIds.size())));
-        when(itemRepository.findNoteIdsByCollectionIds(List.of(collectionId))).thenReturn(List.of(
-                noteProjection(collectionId, readyNoteId),
-                noteProjection(collectionId, generatingNoteId),
-                noteProjection(collectionId, failedNoteId),
-                noteProjection(collectionId, draftNoteId)
+        when(itemRepository.findByCollectionIdInOrderByCollectionIdAscPositionAsc(List.of(collectionId))).thenReturn(List.of(
+                buildItem(collectionId, readyNoteId, 0, WEEK_ONE_LABEL),
+                buildItem(collectionId, generatingNoteId, 1, WEEK_TWO_LABEL),
+                buildItem(collectionId, failedNoteId, 2, WEEK_ONE_LABEL),
+                buildItem(collectionId, draftNoteId, 3, WEEK_TWO_LABEL)
         ));
         when(noteRepository.findCollectionNoteProjectionsByIdIn(noteIds))
                 .thenReturn(asNoteProjections(readyNote, generatingNote, failedNote, draftNote));
@@ -3092,7 +3099,6 @@ class NoteCollectionServiceTest {
                 buildStudyPack(generatingNoteId),
                 buildStudyPack(failedNoteId)
         ));
-        when(collectionRepository.countChildrenByCollectionIds(List.of(collectionId))).thenReturn(List.of());
 
         List<NoteCollectionSummaryResponse> result = service.listPublic(null);
 
@@ -3119,18 +3125,15 @@ class NoteCollectionServiceTest {
         when(collectionRepository.findByVisibilityAndParentCollectionIdIsNullOrderByUpdatedAtDesc(CollectionVisibility.PUBLIC))
                 .thenReturn(List.of(goal));
         when(collectionRepository.findByParentCollectionIdIn(List.of(goalId))).thenReturn(List.of(firstChild, secondChild));
-        when(itemRepository.countItemsByCollectionIds(collectionsWithChildren.stream().map(NoteCollectionEntity::getId).toList()))
-                .thenReturn(List.of(countProjection(firstChildId, 1), countProjection(secondChildId, 1)));
-        when(itemRepository.findNoteIdsByCollectionIds(collectionsWithChildren.stream().map(NoteCollectionEntity::getId).toList()))
-                .thenReturn(List.of(
-                        noteProjection(firstChildId, firstReadyNoteId),
-                        noteProjection(secondChildId, secondNotReadyNoteId)
-                ));
+        when(itemRepository.findByCollectionIdInOrderByCollectionIdAscPositionAsc(
+                collectionsWithChildren.stream().map(NoteCollectionEntity::getId).toList()
+        )).thenReturn(List.of(
+                buildItem(firstChildId, firstReadyNoteId, 0, WEEK_ONE_LABEL),
+                buildItem(secondChildId, secondNotReadyNoteId, 0, WEEK_TWO_LABEL)
+        ));
         when(noteRepository.findCollectionNoteProjectionsByIdIn(anyList()))
                 .thenReturn(asNoteProjections(firstReadyNote, secondNotReadyNote));
         when(studyPackRepository.findProgressViewsByNoteIdIn(anyList())).thenReturn(asProjections(buildStudyPack(firstReadyNoteId)));
-        when(collectionRepository.countChildrenByCollectionIds(List.of(goalId)))
-                .thenReturn(List.of(childCountProjection(goalId, 2)));
 
         List<NoteCollectionSummaryResponse> result = service.listPublic(null);
 
@@ -3139,6 +3142,62 @@ class NoteCollectionServiceTest {
             assertThat(summary.readyCount()).isEqualTo(1);
         });
         verify(collectionRepository).findByParentCollectionIdIn(List.of(goalId));
+    }
+
+    /**
+     * ⚠️ GUARD (v0.132.0 pressure test, F2): THE PUBLIC LISTING MUST AGREE WITH THE PUBLIC DETAIL PAGE.
+     *
+     * <p>{@code getPublic} was filtered to published rows and {@code listPublic} was not, so an Explore
+     * card advertised counts the page it links to would not show. That is not covered by the release's
+     * recorded Known limitation, which names removals, reorders and renames only.
+     *
+     * <p>⚠️ {@code childCount} IS THE DANGEROUS ONE, NOT MERELY COSMETIC: the public card derives
+     * {@code isGoal = childCount > 0}, and that is what routes the Adopt button to {@code adoptGoal}.
+     * An inflated child count therefore fed the F1 empty-adoption defect directly.
+     *
+     * <p>The fixture mixes both leak shapes -- an entirely unpublished child, and an unpublished item
+     * inside a published child -- because they are filtered by two different pieces of code.
+     */
+    @Test
+    void listPublic_excludesUnpublishedAdditionsFromEveryPublicSummaryCount() {
+        UUID goalId = UUID.randomUUID();
+        UUID publishedChildId = UUID.randomUUID();
+        UUID unpublishedChildId = UUID.randomUUID();
+        UUID publishedNoteId = UUID.randomUUID();
+        UUID unpublishedNoteId = UUID.randomUUID();
+        NoteCollectionEntity goal = buildCollection(goalId, UUID.randomUUID(), "Public Goal", Instant.now());
+        goal.setVisibility(CollectionVisibility.PUBLIC);
+        NoteCollectionEntity publishedChild = buildCollection(publishedChildId, goal.getOwnerUserId(), "Published Subject", Instant.now());
+        NoteCollectionEntity unpublishedChild = buildCollection(unpublishedChildId, goal.getOwnerUserId(), "Draft Subject", Instant.now());
+        publishedChild.setParentCollectionId(goalId);
+        unpublishedChild.setParentCollectionId(goalId);
+        unpublishedChild.setPublishedAt(null);
+        NoteEntity publishedNote = buildNote(publishedNoteId, goal.getOwnerUserId(), NOTE_TITLE_ONE);
+        NoteEntity unpublishedNote = buildNote(unpublishedNoteId, goal.getOwnerUserId(), NOTE_TITLE_TWO);
+        NoteCollectionItemEntity unpublishedItem = buildItem(publishedChildId, unpublishedNoteId, 1, WEEK_TWO_LABEL);
+        unpublishedItem.setPublishedAt(null);
+
+        when(collectionRepository.findByVisibilityAndParentCollectionIdIsNullOrderByUpdatedAtDesc(CollectionVisibility.PUBLIC))
+                .thenReturn(List.of(goal));
+        when(collectionRepository.findByParentCollectionIdIn(List.of(goalId)))
+                .thenReturn(List.of(publishedChild, unpublishedChild));
+        when(itemRepository.findByCollectionIdInOrderByCollectionIdAscPositionAsc(anyList()))
+                .thenReturn(List.of(
+                        buildItem(publishedChildId, publishedNoteId, 0, WEEK_ONE_LABEL),
+                        unpublishedItem
+                ));
+        when(noteRepository.findCollectionNoteProjectionsByIdIn(anyList()))
+                .thenReturn(asNoteProjections(publishedNote, unpublishedNote));
+        when(studyPackRepository.findProgressViewsByNoteIdIn(anyList()))
+                .thenReturn(asProjections(buildStudyPack(publishedNoteId), buildStudyPack(unpublishedNoteId)));
+
+        List<NoteCollectionSummaryResponse> result = service.listPublic(null);
+
+        assertThat(result).singleElement().satisfies(summary -> {
+            assertThat(summary.childCount()).isEqualTo(1);
+            assertThat(summary.itemCount()).isEqualTo(1);
+            assertThat(summary.readyCount()).isEqualTo(1);
+        });
     }
 
     /**
@@ -3361,6 +3420,76 @@ class NoteCollectionServiceTest {
         verify(itemRepository).publishUnpublishedReviewSetItems(eq(collectionId), any(Instant.class));
         verify(collectionRepository).publishUnpublishedReviewSetCollections(eq(collectionId), any(Instant.class));
         verify(collectionRepository).markReviewSetUpdatePublished(eq(collectionId), any(Instant.class));
+    }
+
+    /**
+     * ⚠️ GUARD (v0.132.0 pressure test, F3): A COLLECTION THAT EXISTED BEFORE THE MIGRATION MUST STILL
+     * STAMP ITS CURRICULUM ON ITS OWN FIRST PUBLICATION.
+     *
+     * <p>V141's first UPDATE carries NO visibility predicate, so every row alive at deploy -- including
+     * a PRIVATE draft -- was backfilled with a non-null {@code published_at}. The guard used to read
+     * {@code published_at == null}, which is therefore FALSE for every pre-existing collection: a draft
+     * that existed at deploy, was filled in afterwards and then published would publish NOTHING.
+     *
+     * <p>⚠️ THE DISCRIMINATOR MUST BE {@code last_update_published_at}, which V141 stamps only for
+     * pre-existing PUBLIC source roots. This fixture is the one the old guard fails on: backfilled
+     * {@code publishedAt}, null {@code lastUpdatePublishedAt}.
+     */
+    @Test
+    void updateVisibility_stampsInitialCurriculumForAPreExistingDraftCarryingABackfilledPublishedAt() {
+        UUID userId = UUID.randomUUID();
+        UUID collectionId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        NoteCollectionEntity collection = buildCollection(collectionId, userId, COLLECTION_TITLE, Instant.now());
+        collection.setPublishedAt(Instant.parse("2026-01-01T00:00:00Z"));
+        collection.setLastUpdatePublishedAt(null);
+        collection.setVisibility(CollectionVisibility.PRIVATE);
+        NoteCollectionItemEntity item = buildItem(collectionId, noteId, 0, null);
+        item.setPublishedAt(null);
+        NoteEntity note = buildNote(noteId, userId, NOTE_TITLE_ONE);
+        note.setVisibility(NoteVisibility.PUBLIC);
+        when(collectionRepository.findByIdAndOwnerUserId(collectionId, userId)).thenReturn(Optional.of(collection));
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(collectionId)).thenReturn(List.of(item));
+        when(noteRepository.findAllById(List.of(noteId))).thenReturn(List.of(note));
+        when(collectionRepository.save(collection)).thenAnswer(invocation -> invocation.getArgument(0));
+        stubDetailItemLoad(userId, List.of(noteId), List.of(note));
+
+        service.updateVisibility(collectionId, userId, CollectionVisibility.PUBLIC.name());
+
+        verify(itemRepository).publishUnpublishedReviewSetItems(eq(collectionId), any(Instant.class));
+        verify(collectionRepository).markReviewSetUpdatePublished(eq(collectionId), any(Instant.class));
+    }
+
+    /**
+     * ⚠️ GUARD (v0.132.0 pressure test, F3, opposite direction): RETURNING AN ALREADY-PUBLISHED SET TO
+     * PUBLIC MUST NOT WALK ITS UNPUBLISHED EDITS PAST THE BOUNDARY.
+     *
+     * <p>This is why F3's fix is a discriminator swap and not "always stamp". A curator who flips a
+     * live Review Set PRIVATE, edits it, and flips it back has NOT pressed Publish update -- those
+     * additions must stay invisible until they do.
+     */
+    @Test
+    void updateVisibility_doesNotRepublishASetThatHasAlreadyBeenPublishedOnce() {
+        UUID userId = UUID.randomUUID();
+        UUID collectionId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        NoteCollectionEntity collection = buildCollection(collectionId, userId, COLLECTION_TITLE, Instant.now());
+        collection.setLastUpdatePublishedAt(Instant.parse("2026-05-01T00:00:00Z"));
+        collection.setVisibility(CollectionVisibility.PRIVATE);
+        NoteCollectionItemEntity item = buildItem(collectionId, noteId, 0, null);
+        item.setPublishedAt(null);
+        NoteEntity note = buildNote(noteId, userId, NOTE_TITLE_ONE);
+        note.setVisibility(NoteVisibility.PUBLIC);
+        when(collectionRepository.findByIdAndOwnerUserId(collectionId, userId)).thenReturn(Optional.of(collection));
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(collectionId)).thenReturn(List.of(item));
+        when(noteRepository.findAllById(List.of(noteId))).thenReturn(List.of(note));
+        when(collectionRepository.save(collection)).thenAnswer(invocation -> invocation.getArgument(0));
+        stubDetailItemLoad(userId, List.of(noteId), List.of(note));
+
+        service.updateVisibility(collectionId, userId, CollectionVisibility.PUBLIC.name());
+
+        verify(itemRepository, never()).publishUnpublishedReviewSetItems(any(), any());
+        verify(collectionRepository, never()).markReviewSetUpdatePublished(any(), any());
     }
 
     @Test
@@ -3741,6 +3870,63 @@ class NoteCollectionServiceTest {
         assertThatThrownBy(() -> service.publishReviewSetUpdate(UUID.randomUUID(), learnerId))
                 .isInstanceOf(AccessDeniedException.class);
         verifyNoInteractions(collectionRepository, itemRepository);
+    }
+
+    /**
+     * ⚠️ GUARD (v0.132.0 pressure test, F6): {@code assertOfficialReviewSetRoot} HAD NO TEST AT ALL,
+     * and {@code ReviewSetUpdateNotPublishableException} had zero references in the whole test tree --
+     * an added file nothing executed. Each rejected shape gets its own test because Sonar S5778 allows
+     * exactly one method call inside an {@code assertThatThrownBy} lambda.
+     */
+    @Test
+    void publishReviewSetUpdate_rejectsASetThatIsNotPublic() {
+        UUID adminId = UUID.randomUUID();
+        UUID collectionId = UUID.randomUUID();
+        UserEntity admin = buildUser(adminId);
+        admin.setRole(UserRole.ADMIN);
+        NoteCollectionEntity privateSource = buildCollection(collectionId, adminId, "Draft Official Set", Instant.now());
+        privateSource.setVisibility(CollectionVisibility.PRIVATE);
+        when(userRepository.findById(adminId)).thenReturn(Optional.of(admin));
+        when(collectionRepository.findByIdAndOwnerUserIdForUpdate(collectionId, adminId)).thenReturn(Optional.of(privateSource));
+
+        assertThatThrownBy(() -> service.publishReviewSetUpdate(collectionId, adminId))
+                .isInstanceOf(ReviewSetUpdateNotPublishableException.class);
+        verify(itemRepository, never()).publishUnpublishedReviewSetItems(any(), any());
+    }
+
+    @Test
+    void publishReviewSetUpdate_rejectsAChildSubjectPlan() {
+        UUID adminId = UUID.randomUUID();
+        UUID childId = UUID.randomUUID();
+        UserEntity admin = buildUser(adminId);
+        admin.setRole(UserRole.ADMIN);
+        NoteCollectionEntity child = buildCollection(childId, adminId, "General Education", Instant.now());
+        child.setVisibility(CollectionVisibility.PUBLIC);
+        child.setParentCollectionId(UUID.randomUUID());
+        when(userRepository.findById(adminId)).thenReturn(Optional.of(admin));
+        when(collectionRepository.findByIdAndOwnerUserIdForUpdate(childId, adminId)).thenReturn(Optional.of(child));
+
+        assertThatThrownBy(() -> service.publishReviewSetUpdate(childId, adminId))
+                .isInstanceOf(ReviewSetUpdateNotPublishableException.class);
+        verify(itemRepository, never()).publishUnpublishedReviewSetItems(any(), any());
+    }
+
+    /** An adopted copy is a learner's own row; nobody publishes it, so it can never be a publish target. */
+    @Test
+    void publishReviewSetUpdate_rejectsAnAdoptedCopy() {
+        UUID adminId = UUID.randomUUID();
+        UUID adoptedId = UUID.randomUUID();
+        UserEntity admin = buildUser(adminId);
+        admin.setRole(UserRole.ADMIN);
+        NoteCollectionEntity adopted = buildCollection(adoptedId, adminId, "My Biology", Instant.now());
+        adopted.setVisibility(CollectionVisibility.PUBLIC);
+        adopted.setSourcePlanId(UUID.randomUUID());
+        when(userRepository.findById(adminId)).thenReturn(Optional.of(admin));
+        when(collectionRepository.findByIdAndOwnerUserIdForUpdate(adoptedId, adminId)).thenReturn(Optional.of(adopted));
+
+        assertThatThrownBy(() -> service.publishReviewSetUpdate(adoptedId, adminId))
+                .isInstanceOf(ReviewSetUpdateNotPublishableException.class);
+        verify(itemRepository, never()).publishUnpublishedReviewSetItems(any(), any());
     }
 
     /**
@@ -4649,7 +4835,6 @@ class NoteCollectionServiceTest {
 
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
         when(collectionRepository.findByIdAndVisibility(sourceGoalId, CollectionVisibility.PUBLIC)).thenReturn(Optional.of(sourceGoal));
-        when(collectionRepository.countByParentCollectionId(sourceGoalId)).thenReturn(2L);
         when(collectionRepository.findByOwnerUserIdAndSourcePlanId(userId, sourceGoalId)).thenReturn(Optional.empty());
         when(collectionRepository.findOrderedChildrenByParentCollectionIdAndOwnerUserId(sourceGoalId, sourceOwnerId))
                 .thenReturn(List.of(firstChild, secondChild));
@@ -4739,7 +4924,6 @@ class NoteCollectionServiceTest {
         NoteCollectionEntity existingChild = buildCollection(personalChildId, userId, "Professional Education", Instant.now());
         existingChild.setParentCollectionId(personalGoalId);
         when(collectionRepository.findByIdAndVisibility(sourceGoalId, CollectionVisibility.PUBLIC)).thenReturn(Optional.of(sourceGoal));
-        when(collectionRepository.countByParentCollectionId(sourceGoalId)).thenReturn(1L);
         when(collectionRepository.findByOwnerUserIdAndSourcePlanId(userId, sourceGoalId)).thenReturn(Optional.of(existingGoal));
         when(collectionRepository.findOrderedChildrenByParentCollectionIdAndOwnerUserId(personalGoalId, userId))
                 .thenReturn(List.of(existingChild));
@@ -4777,7 +4961,6 @@ class NoteCollectionServiceTest {
         nestedPersonalChild.setSourcePlanId(nestedSourceChildId);
         nestedPersonalChild.setParentCollectionId(otherGoalId);
         when(collectionRepository.findByIdAndVisibility(sourceGoalId, CollectionVisibility.PUBLIC)).thenReturn(Optional.of(sourceGoal));
-        when(collectionRepository.countByParentCollectionId(sourceGoalId)).thenReturn(2L);
         when(collectionRepository.findByOwnerUserIdAndSourcePlanId(userId, sourceGoalId)).thenReturn(Optional.empty());
         when(collectionRepository.findOrderedChildrenByParentCollectionIdAndOwnerUserId(sourceGoalId, sourceOwnerId))
                 .thenReturn(List.of(standaloneSourceChild, nestedSourceChild));
@@ -4820,7 +5003,6 @@ class NoteCollectionServiceTest {
         NoteCollectionEntity winner = buildCollection(winnerGoalId, userId, "LET Mastery", Instant.now());
         winner.setSourcePlanId(sourceGoalId);
         when(collectionRepository.findByIdAndVisibility(sourceGoalId, CollectionVisibility.PUBLIC)).thenReturn(Optional.of(sourceGoal));
-        when(collectionRepository.countByParentCollectionId(sourceGoalId)).thenReturn(1L);
         when(collectionRepository.findByOwnerUserIdAndSourcePlanId(userId, sourceGoalId))
                 .thenReturn(Optional.empty())
                 .thenReturn(Optional.of(winner));
@@ -4848,14 +5030,17 @@ class NoteCollectionServiceTest {
         sourceGoal.setVisibility(CollectionVisibility.PUBLIC);
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
         when(collectionRepository.findByIdAndVisibility(sourceGoalId, CollectionVisibility.PUBLIC)).thenReturn(Optional.of(sourceGoal));
-        when(collectionRepository.countByParentCollectionId(sourceGoalId)).thenReturn(1L);
         when(collectionRepository.findByOwnerUserIdAndSourcePlanId(userId, sourceGoalId)).thenReturn(Optional.empty());
+        NoteCollectionEntity adoptableChild = stubAdoptableSourceChild(sourceGoalId, sourceGoal.getOwnerUserId(), userId);
         when(collectionRepository.findOrderedChildrenByParentCollectionIdAndOwnerUserId(sourceGoalId, sourceGoal.getOwnerUserId()))
-                .thenReturn(List.of());
+                .thenReturn(List.of(adoptableChild));
         when(collectionRepository.findByOwnerUserIdAndSourcePlanIdForUpdate(userId, sourceGoalId)).thenReturn(Optional.empty());
         when(collectionRepository.saveAndFlush(any(NoteCollectionEntity.class))).thenAnswer(invocation -> {
-            savedGoal[0] = invocation.getArgument(0);
-            return savedGoal[0];
+            NoteCollectionEntity saved = invocation.getArgument(0);
+            if (savedGoal[0] == null) {
+                savedGoal[0] = saved;
+            }
+            return saved;
         });
         when(collectionRepository.countByOwnerUserIdAndParentCollectionIdIsNull(userId)).thenReturn(1L);
         when(collectionRepository.findByOwnerUserIdAndParentCollectionIdIsNullOrderByUpdatedAtDesc(userId))
@@ -4876,19 +5061,23 @@ class NoteCollectionServiceTest {
         sourceGoal.setTargetCompletionDate(LocalDate.parse("2026-12-01"));
         sourceGoal.setCompanion(companionContent());
         when(collectionRepository.findByIdAndVisibility(sourceGoalId, CollectionVisibility.PUBLIC)).thenReturn(Optional.of(sourceGoal));
-        when(collectionRepository.countByParentCollectionId(sourceGoalId)).thenReturn(1L);
         when(collectionRepository.findByOwnerUserIdAndSourcePlanId(userId, sourceGoalId)).thenReturn(Optional.empty());
+        NoteCollectionEntity adoptableChild = stubAdoptableSourceChild(sourceGoalId, sourceGoal.getOwnerUserId(), userId);
         when(collectionRepository.findOrderedChildrenByParentCollectionIdAndOwnerUserId(sourceGoalId, sourceGoal.getOwnerUserId()))
-                .thenReturn(List.of());
+                .thenReturn(List.of(adoptableChild));
         when(collectionRepository.findByOwnerUserIdAndSourcePlanIdForUpdate(userId, sourceGoalId)).thenReturn(Optional.empty());
         when(collectionRepository.saveAndFlush(any(NoteCollectionEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         service.adoptGoal(sourceGoalId, userId);
 
         ArgumentCaptor<NoteCollectionEntity> collectionCaptor = ArgumentCaptor.forClass(NoteCollectionEntity.class);
-        verify(collectionRepository).saveAndFlush(collectionCaptor.capture());
-        assertThat(collectionCaptor.getValue().getTargetCompletionDate()).isNull();
-        assertThat(collectionCaptor.getValue().getCompanion()).isEqualTo(companionContent());
+        verify(collectionRepository, atLeastOnce()).saveAndFlush(collectionCaptor.capture());
+        NoteCollectionEntity adoptedGoal = collectionCaptor.getAllValues().stream()
+                .filter(saved -> sourceGoalId.equals(saved.getSourcePlanId()))
+                .findFirst()
+                .orElseThrow();
+        assertThat(adoptedGoal.getTargetCompletionDate()).isNull();
+        assertThat(adoptedGoal.getCompanion()).isEqualTo(companionContent());
     }
 
     @Test
@@ -4900,19 +5089,23 @@ class NoteCollectionServiceTest {
         sourceGoal.setCompanion(companionContent());
         sourceGoal.setCompanionStructureSnapshot(new CompanionStructureSnapshot(0, List.of()));
         when(collectionRepository.findByIdAndVisibility(sourceGoalId, CollectionVisibility.PUBLIC)).thenReturn(Optional.of(sourceGoal));
-        when(collectionRepository.countByParentCollectionId(sourceGoalId)).thenReturn(1L);
         when(collectionRepository.findByOwnerUserIdAndSourcePlanId(userId, sourceGoalId)).thenReturn(Optional.empty());
+        NoteCollectionEntity adoptableChild = stubAdoptableSourceChild(sourceGoalId, userId, userId);
         when(collectionRepository.findOrderedChildrenByParentCollectionIdAndOwnerUserId(sourceGoalId, userId))
-                .thenReturn(List.of());
+                .thenReturn(List.of(adoptableChild));
         when(collectionRepository.findByOwnerUserIdAndSourcePlanIdForUpdate(userId, sourceGoalId)).thenReturn(Optional.empty());
         when(collectionRepository.saveAndFlush(any(NoteCollectionEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         service.adoptGoal(sourceGoalId, userId);
 
         ArgumentCaptor<NoteCollectionEntity> collectionCaptor = ArgumentCaptor.forClass(NoteCollectionEntity.class);
-        verify(collectionRepository).saveAndFlush(collectionCaptor.capture());
-        assertThat(collectionCaptor.getValue().getCompanion()).isNull();
-        assertThat(collectionCaptor.getValue().getCompanionStructureSnapshot()).isNull();
+        verify(collectionRepository, atLeastOnce()).saveAndFlush(collectionCaptor.capture());
+        NoteCollectionEntity adoptedGoal = collectionCaptor.getAllValues().stream()
+                .filter(saved -> sourceGoalId.equals(saved.getSourcePlanId()))
+                .findFirst()
+                .orElseThrow();
+        assertThat(adoptedGoal.getCompanion()).isNull();
+        assertThat(adoptedGoal.getCompanionStructureSnapshot()).isNull();
     }
 
     @Test
@@ -4934,10 +5127,52 @@ class NoteCollectionServiceTest {
         sourcePlan.setVisibility(CollectionVisibility.PUBLIC);
         when(collectionRepository.findByIdAndVisibility(sourcePlanId, CollectionVisibility.PUBLIC))
                 .thenReturn(Optional.of(sourcePlan));
-        when(collectionRepository.countByParentCollectionId(sourcePlanId)).thenReturn(0L);
+        when(collectionRepository.findByOwnerUserIdAndSourcePlanId(userId, sourcePlanId)).thenReturn(Optional.empty());
+        when(collectionRepository.findOrderedChildrenByParentCollectionIdAndOwnerUserId(sourcePlanId, sourcePlan.getOwnerUserId()))
+                .thenReturn(List.of());
 
         assertThatThrownBy(() -> service.adoptGoal(sourcePlanId, userId))
                 .isInstanceOf(CollectionNotFoundException.class);
+    }
+
+    /**
+     * ⚠️ GUARD (v0.132.0 pressure test, F1): A GOAL WHOSE CHILDREN ARE ALL UNPUBLISHED IS NOT
+     * ADOPTABLE, AND MUST FAIL LOUDLY RATHER THAN PRODUCE AN EMPTY LIBRARY ENTRY.
+     *
+     * <p>The gate used to be {@code countByParentCollectionId}, which filters by neither publication
+     * nor owner, while the copy list beneath it filtered by publication. A Goal mid-restructure passed
+     * the gate, filtered to nothing, and copied nothing -- and {@code adoptGoal} never copies the root's
+     * own items, so the learner received a collection with ZERO Subject Plans and ZERO notes. It was
+     * silent (both counts were 0), it became their PRIMARY collection, and re-adopting returned
+     * {@code alreadyAdopted}, so they could not repair it by retrying.
+     *
+     * <p>⚠️ THE FIXTURE'S CHILD IS PUBLIC BUT UNPUBLISHED ON PURPOSE. A private child would be rejected
+     * by the older visibility rule and would pass under the defect too, proving nothing.
+     *
+     * <p>The saveAndFlush assertion is the real subject: the failure must happen before anything is
+     * persisted, because a persisted empty Goal is what could not be undone.
+     */
+    @Test
+    void adoptGoal_rejectsAGoalWhoseChildrenAreAllUnpublishedRatherThanPersistingAnEmptyShell() {
+        UUID userId = UUID.randomUUID();
+        UUID sourceOwnerId = UUID.randomUUID();
+        UUID sourceGoalId = UUID.randomUUID();
+        NoteCollectionEntity sourceGoal = buildCollection(sourceGoalId, sourceOwnerId, "LET Mastery", Instant.now());
+        sourceGoal.setVisibility(CollectionVisibility.PUBLIC);
+        NoteCollectionEntity unpublishedChild =
+                buildCollection(UUID.randomUUID(), sourceOwnerId, "General Education", Instant.now());
+        unpublishedChild.setVisibility(CollectionVisibility.PUBLIC);
+        unpublishedChild.setParentCollectionId(sourceGoalId);
+        unpublishedChild.setPublishedAt(null);
+        when(collectionRepository.findByIdAndVisibility(sourceGoalId, CollectionVisibility.PUBLIC))
+                .thenReturn(Optional.of(sourceGoal));
+        when(collectionRepository.findByOwnerUserIdAndSourcePlanId(userId, sourceGoalId)).thenReturn(Optional.empty());
+        when(collectionRepository.findOrderedChildrenByParentCollectionIdAndOwnerUserId(sourceGoalId, sourceOwnerId))
+                .thenReturn(List.of(unpublishedChild));
+
+        assertThatThrownBy(() -> service.adoptGoal(sourceGoalId, userId))
+                .isInstanceOf(CollectionNotFoundException.class);
+        verify(collectionRepository, never()).saveAndFlush(any(NoteCollectionEntity.class));
     }
 
     @Test
@@ -5555,6 +5790,28 @@ class NoteCollectionServiceTest {
         // explicitly clear this stamp when they need to prove an unpublished addition is hidden.
         collection.setPublishedAt(updatedAt);
         return collection;
+    }
+
+    /**
+     * Stubs one genuinely publishable source child for a Goal-adoption fixture.
+     *
+     * <p>⚠️ A Goal with no PUBLISHED children is no longer adoptable. Three fixtures previously stubbed
+     * {@code countByParentCollectionId -> 1} against an EMPTY child list, which is the exact shape of
+     * the defect the pressure test found: the gate passed, the filtered list was empty, the copy loop
+     * never ran, and the learner received an empty adopted Goal. Those fixtures passed straight through
+     * it, so they proved nothing about adoption -- a fixture that wants to assert goal-level behaviour
+     * must now offer a child adoption can actually copy.
+     */
+    private NoteCollectionEntity stubAdoptableSourceChild(UUID sourceGoalId, UUID sourceOwnerId, UUID userId) {
+        UUID childId = UUID.randomUUID();
+        NoteCollectionEntity child = buildCollection(childId, sourceOwnerId, "General Education", Instant.now());
+        child.setVisibility(CollectionVisibility.PUBLIC);
+        child.setParentCollectionId(sourceGoalId);
+        when(collectionRepository.findByIdAndVisibility(childId, CollectionVisibility.PUBLIC)).thenReturn(Optional.of(child));
+        when(collectionRepository.findByOwnerUserIdAndSourcePlanId(userId, childId)).thenReturn(Optional.empty());
+        when(collectionRepository.findByOwnerUserIdAndSourcePlanIdForUpdate(userId, childId)).thenReturn(Optional.empty());
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(childId)).thenReturn(List.of());
+        return child;
     }
 
     private UserEntity buildUser(UUID userId) {

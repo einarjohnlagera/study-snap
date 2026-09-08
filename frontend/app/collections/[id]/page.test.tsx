@@ -2861,6 +2861,48 @@ describe("CollectionDetailPageClient", () => {
     await waitFor(() => expect(publishReviewSetUpdate).toHaveBeenCalledWith("collection-1"));
   });
 
+  /**
+   * ⚠️ GUARD (v0.132.0 pressure test, F4): A PUBLISH FAILURE MUST BE READABLE WHERE THE CURATOR IS
+   * LOOKING — INSIDE THE OPEN DIALOG.
+   *
+   * The catch always set `mutationError` and the page-level error Card was genuinely in the DOM, so
+   * the obvious test — `expect(screen.getByText(message)).toBeInTheDocument()` — PASSED while the
+   * curator could see nothing. `setPublishUpdateOpen(false)` sits inside the `try`, so on failure the
+   * modal stays open, and `AppModal` portals a `fixed inset-0 bg-black/55` backdrop directly over the
+   * page body that holds the Card.
+   *
+   * ⚠️ SO THIS ASSERTS CONTAINMENT, NOT PRESENCE. `within(dialog)` is the whole point of the test; a
+   * plain `getByText` here would re-introduce the defect it exists to catch. This is the `v0.131.0`
+   * disabled-control lesson one layer up: the control was enabled, the FEEDBACK was occluded.
+   */
+  it("shows a failed publish inside the still-open dialog, not behind its backdrop", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ profileType: "STUDENT", planType: "FREE", role: "ADMIN" });
+    (getCollection as jest.Mock).mockResolvedValue(collection({ visibility: "PUBLIC" }));
+    (getReviewSetPublicationStatus as jest.Mock).mockResolvedValue({
+      collectionId: "collection-1",
+      unpublishedChanges: true,
+      topicsAdded: 2,
+      subjectPlansAdded: 1,
+      lastUpdatePublishedAt: "2026-09-08T00:00:00Z",
+    });
+    (publishReviewSetUpdate as jest.Mock).mockRejectedValue(new Error("Could not publish this Review Set update."));
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    const publishUpdate = await screen.findByRole("button", { name: "Publish update" });
+    await waitFor(() => expect(publishUpdate).toBeEnabled());
+    fireEvent.click(publishUpdate);
+    expect(await screen.findByText("Publish Review Set update?")).toBeInTheDocument();
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Publish update" }).at(-1)!);
+    await waitFor(() => expect(publishReviewSetUpdate).toHaveBeenCalledWith("collection-1"));
+
+    const dialog = await screen.findByRole("dialog");
+    expect(await within(dialog).findByText("Could not publish this Review Set update.")).toBeInTheDocument();
+    // The curator must still be able to retry from where they are.
+    expect(within(dialog).getByRole("button", { name: "Publish update" })).toBeEnabled();
+  });
+
   it("publishes a study plan from the admin publish modal", async () => {
     (getAuthUser as jest.Mock).mockReturnValue({ profileType: "STUDENT", planType: "FREE", role: "ADMIN" });
     (getCollection as jest.Mock).mockResolvedValue(collection({ courseProgram: "LET" }));
