@@ -1,6 +1,9 @@
 package com.studysnap.backend.service;
 
 import com.studysnap.backend.dto.CourseProgramCatalogItemResponse;
+import com.studysnap.backend.exception.ProgramFamilyNameConflictException;
+import com.studysnap.backend.dto.CreateProgramFamilyRequest;
+import com.studysnap.backend.dto.ProgramFamilyResponse;
 import com.studysnap.backend.dto.CreateCourseProgramCatalogRequest;
 import com.studysnap.backend.exception.CourseProgramCatalogNameConflictException;
 import com.studysnap.backend.exception.InvalidExamGoalSlugException;
@@ -34,6 +37,64 @@ class CourseProgramCatalogServiceTest {
     void setUp() {
         repository = mock(CourseProgramCatalogRepository.class);
         service = new CourseProgramCatalogService(repository);
+    }
+
+    @Test
+    void createsAProgramFamilySoANewFamilyNoLongerNeedsAMigration() {
+        UUID familyId = UUID.randomUUID();
+        when(repository.findProgramFamilyByNormalizedName("health sciences")).thenReturn(Optional.empty());
+        when(repository.insertProgramFamily("Health Sciences"))
+                .thenReturn(new ProgramFamilyResponse(familyId, "Health Sciences"));
+
+        ProgramFamilyResponse result = service.createProgramFamily(new CreateProgramFamilyRequest("  Health Sciences  "));
+
+        assertThat(result.id()).isEqualTo(familyId);
+        assertThat(result.name()).isEqualTo("Health Sciences");
+    }
+
+    /**
+     * ⚠️ THE FIXTURE DIFFERS FROM THE STORED NAME IN CASE AND WHITESPACE ON PURPOSE. An exact-match
+     * duplicate check would pass a test that submitted "Engineering" verbatim, so that fixture would
+     * prove nothing about normalization -- and a second "engineering" family is exactly the mistake
+     * this check exists to stop, because the authoring expansion would then offer two identical-looking
+     * families.
+     */
+    @Test
+    void rejectsAFamilyWhoseNameDiffersOnlyByCaseOrWhitespace() {
+        when(repository.findProgramFamilyByNormalizedName(ENGINEERING.toLowerCase(java.util.Locale.ROOT)))
+                .thenReturn(Optional.of(new ProgramFamilyResponse(UUID.randomUUID(), ENGINEERING)));
+
+        assertThatThrownBy(() -> service.createProgramFamily(new CreateProgramFamilyRequest("  eNgInEeRiNg  ")))
+                .isInstanceOf(ProgramFamilyNameConflictException.class);
+
+        verify(repository, never()).insertProgramFamily(org.mockito.ArgumentMatchers.anyString());
+    }
+
+    /**
+     * The unique constraint can still lose a race after the pre-check passes. Resolving to the winner
+     * turns a raw constraint violation into the same conflict the caller already handles.
+     */
+    @Test
+    void resolvesAConcurrentFamilyCreateToTheWinningRow() {
+        when(repository.findProgramFamilyByNormalizedName("health sciences"))
+                .thenReturn(Optional.empty())
+                .thenReturn(Optional.of(new ProgramFamilyResponse(UUID.randomUUID(), "Health Sciences")));
+        when(repository.insertProgramFamily("Health Sciences"))
+                .thenThrow(new org.springframework.dao.DataIntegrityViolationException("uk_program_families_name"));
+
+        assertThatThrownBy(() -> service.createProgramFamily(new CreateProgramFamilyRequest("Health Sciences")))
+                .isInstanceOf(ProgramFamilyNameConflictException.class);
+    }
+
+    @Test
+    void listsProgramFamiliesIncludingOnesWithNoMembers() {
+        UUID emptyFamilyId = UUID.randomUUID();
+        when(repository.findAllProgramFamilies())
+                .thenReturn(List.of(new ProgramFamilyResponse(emptyFamilyId, "Health Sciences")));
+
+        assertThat(service.listProgramFamilies())
+                .singleElement()
+                .satisfies(family -> assertThat(family.id()).isEqualTo(emptyFamilyId));
     }
 
     @Test

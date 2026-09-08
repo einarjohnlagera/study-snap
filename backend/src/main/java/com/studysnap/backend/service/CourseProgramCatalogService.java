@@ -1,6 +1,10 @@
 package com.studysnap.backend.service;
 
 import com.studysnap.backend.dto.CourseProgramCatalogItemResponse;
+import com.studysnap.backend.exception.InvalidProgramFamilyNameException;
+import com.studysnap.backend.exception.ProgramFamilyNameConflictException;
+import com.studysnap.backend.dto.CreateProgramFamilyRequest;
+import com.studysnap.backend.dto.ProgramFamilyResponse;
 import com.studysnap.backend.dto.CreateCourseProgramCatalogRequest;
 import com.studysnap.backend.exception.CourseProgramCatalogNameConflictException;
 import com.studysnap.backend.exception.InvalidExamGoalSlugException;
@@ -28,6 +32,45 @@ public class CourseProgramCatalogService {
 
     public List<CourseProgramCatalogItemResponse> list() {
         return courseProgramCatalogRepository.findAll();
+    }
+
+    public List<ProgramFamilyResponse> listProgramFamilies() {
+        return courseProgramCatalogRepository.findAllProgramFamilies();
+    }
+
+    /**
+     * Creates a Program Family.
+     *
+     * <p>⚠️ THIS EXISTS SO THAT A NEW FAMILY NO LONGER REQUIRES A MIGRATION. Before it, assigning a
+     * family was possible from the admin surface but CREATING one was not, so every new family cost a
+     * migration -- {@code V106} seeded Engineering and {@code V142} seeded Education for exactly that
+     * reason. A third would have been a third migration.
+     *
+     * <p>⚠️ A FAMILY IS CREATED EMPTY AND THAT IS CORRECT. Membership is set on the program, through
+     * the existing {@code programFamilyId} on create. Do not add member selection here -- the family is
+     * a name plus a nullable FK, and the authoring expansion derives membership from the catalog.
+     */
+    @Transactional
+    public ProgramFamilyResponse createProgramFamily(CreateProgramFamilyRequest request) {
+        String name = CourseProgramNormalizationUtils.normalizeForStorage(request.name());
+        if (name.length() > 120) {
+            throw new InvalidProgramFamilyNameException();
+        }
+        String normalizedName = normalizeName(name);
+        courseProgramCatalogRepository.findProgramFamilyByNormalizedName(normalizedName)
+                .ifPresent(existing -> {
+                    throw new ProgramFamilyNameConflictException(existing.name());
+                });
+        try {
+            return courseProgramCatalogRepository.insertProgramFamily(name);
+        } catch (DataIntegrityViolationException ignored) {
+            // uk_program_families_name lost a race with a concurrent create. Resolve to the winner
+            // rather than surfacing a constraint violation, matching the course-program create path.
+            ProgramFamilyResponse existing = courseProgramCatalogRepository
+                    .findProgramFamilyByNormalizedName(normalizedName)
+                    .orElseThrow(CourseProgramCatalogWriteConflictException::new);
+            throw new ProgramFamilyNameConflictException(existing.name());
+        }
     }
 
     public List<CourseProgramCatalogItemResponse> findSimilar(String name) {

@@ -1,6 +1,7 @@
 package com.studysnap.backend.repository;
 
 import com.studysnap.backend.dto.CourseProgramCatalogItemResponse;
+import com.studysnap.backend.dto.ProgramFamilyResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
@@ -69,6 +70,22 @@ public class CourseProgramCatalogRepository {
             INSERT INTO course_programs (id, name, program_family_id, exam_goal_slug)
             VALUES (?, ?, ?, ?)
             """;
+    private static final String FIND_ALL_PROGRAM_FAMILIES = """
+            SELECT id, name
+            FROM program_families
+            ORDER BY name
+            """;
+    // ⚠️ Matched on the same lower(trim(...)) shape the course_programs duplicate check uses, so
+    // "Health Sciences" and " health sciences " cannot both be created.
+    private static final String FIND_PROGRAM_FAMILY_BY_NORMALIZED_NAME = """
+            SELECT id, name
+            FROM program_families
+            WHERE lower(trim(name)) = ?
+            """;
+    private static final String INSERT_PROGRAM_FAMILY = """
+            INSERT INTO program_families (id, name)
+            VALUES (?, ?)
+            """;
 
     private final JdbcTemplate jdbcTemplate;
 
@@ -95,6 +112,29 @@ public class CourseProgramCatalogRepository {
         return jdbcTemplate.query(FIND_PROGRAM_FAMILY_NAME, (resultSet, rowNumber) -> resultSet.getString("name"), programFamilyId)
                 .stream()
                 .findFirst();
+    }
+
+    public List<ProgramFamilyResponse> findAllProgramFamilies() {
+        return jdbcTemplate.query(FIND_ALL_PROGRAM_FAMILIES, this::mapProgramFamily);
+    }
+
+    public Optional<ProgramFamilyResponse> findProgramFamilyByNormalizedName(String normalizedName) {
+        return jdbcTemplate.query(FIND_PROGRAM_FAMILY_BY_NORMALIZED_NAME, this::mapProgramFamily, normalizedName)
+                .stream()
+                .findFirst();
+    }
+
+    public ProgramFamilyResponse insertProgramFamily(String name) {
+        UUID id = UUID.randomUUID();
+        jdbcTemplate.update(INSERT_PROGRAM_FAMILY, id, name);
+        return new ProgramFamilyResponse(id, name);
+    }
+
+    private ProgramFamilyResponse mapProgramFamily(java.sql.ResultSet resultSet, int rowNumber) throws java.sql.SQLException {
+        return new ProgramFamilyResponse(
+                resultSet.getObject("id", UUID.class),
+                resultSet.getString("name")
+        );
     }
 
     public CourseProgramCatalogItemResponse insert(

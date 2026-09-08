@@ -1,14 +1,17 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import {
   ApiRequestError,
   createCourseProgram,
+  createProgramFamily,
   findSimilarCoursePrograms,
   getCourseProgramCatalog,
+  listProgramFamilies,
   type CourseProgramCatalogItem,
+  type ProgramFamily,
 } from "@/lib/api";
 
 export function AdminCourseProgramCatalogSection() {
@@ -24,26 +27,48 @@ export function AdminCourseProgramCatalogSection() {
   const [nearMatches, setNearMatches] = useState<CourseProgramCatalogItem[]>([]);
   const [checkingNearMatches, setCheckingNearMatches] = useState(false);
 
-  const families = useMemo(() => {
-    const uniqueFamilies = new Map<string, string>();
-    catalog.forEach((program) => {
-      if (program.programFamilyId && program.programFamilyName) {
-        uniqueFamilies.set(program.programFamilyId, program.programFamilyName);
-      }
-    });
-    return Array.from(uniqueFamilies, ([id, familyName]) => ({ id, name: familyName }))
-      .sort((left, right) => left.name.localeCompare(right.name));
-  }, [catalog]);
+  // ⚠️ FAMILIES ARE FETCHED, NOT DERIVED FROM THE CATALOG. Deriving them is right for the authoring
+  // combobox, which only cares about families that have members — but a family created here starts
+  // EMPTY, so a derived list would drop it on the next refresh and the curator could never assign
+  // anything to it. That is the load-on-refresh gap this endpoint exists to close.
+  const [families, setFamilies] = useState<ProgramFamily[]>([]);
+  const [familyName, setFamilyName] = useState("");
+  const [creatingFamily, setCreatingFamily] = useState(false);
+  const [familyError, setFamilyError] = useState<string | null>(null);
 
   const load = async () => {
     setLoading(true);
     setLoadError(null);
     try {
-      setCatalog(await getCourseProgramCatalog());
+      const [loadedCatalog, loadedFamilies] = await Promise.all([
+        getCourseProgramCatalog(),
+        listProgramFamilies(),
+      ]);
+      setCatalog(loadedCatalog);
+      setFamilies(loadedFamilies);
     } catch (error) {
       setLoadError(error instanceof Error ? error.message : "Could not load the course program catalog.");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const addFamily = async () => {
+    const trimmed = familyName.trim();
+    if (!trimmed || creatingFamily) return;
+    setCreatingFamily(true);
+    setFamilyError(null);
+    try {
+      const created = await createProgramFamily(trimmed);
+      setFamilies((current) => [...current, created].sort((left, right) => left.name.localeCompare(right.name)));
+      // Select it immediately: the curator almost always creates a family in order to put the program
+      // they are adding into it.
+      setProgramFamilyId(created.id);
+      setFamilyName("");
+    } catch (error) {
+      setFamilyError(error instanceof Error ? error.message : "Could not add the Program Family.");
+    } finally {
+      setCreatingFamily(false);
     }
   };
 
@@ -140,6 +165,34 @@ export function AdminCourseProgramCatalogSection() {
           </div>
         </div>
         <p className="text-xs text-foreground/60">Assigning a family makes the new program participate in that family’s authoring expansion.</p>
+        <div className="space-y-2 rounded-lg border border-border/60 bg-muted/20 p-3">
+          <label htmlFor="catalog-family-name" className="text-sm font-medium text-foreground">New Program Family</label>
+          <p className="text-xs text-foreground/60">
+            A family starts empty — create it here, then assign programs to it above. Before this existed, a new family needed a database migration.
+          </p>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <input
+              id="catalog-family-name"
+              value={familyName}
+              maxLength={120}
+              onChange={(event) => setFamilyName(event.target.value)}
+              disabled={creatingFamily}
+              placeholder="e.g. Health Sciences"
+              className="h-11 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground"
+            />
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => void addFamily()}
+              disabled={!familyName.trim()}
+              loading={creatingFamily}
+              loadingText="Adding..."
+            >
+              Add family
+            </Button>
+          </div>
+          {familyError ? <p role="alert" className="text-sm text-red-600 dark:text-red-400">{familyError}</p> : null}
+        </div>
         {checkingNearMatches ? <p className="text-xs text-foreground/60">Checking for similar programs...</p> : null}
         {!checkingNearMatches && nearMatches.length > 0 ? (
           <div className="rounded-lg border border-amber-300 bg-amber-50/70 p-3 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-100">

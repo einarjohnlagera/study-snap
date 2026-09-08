@@ -25,6 +25,10 @@ Families are deliberately allowed to over-select because the author sees and can
 
 Catalog growth is incremental and authoring-driven. A program is added when real canonical notes are legitimately applicable to it, not to pre-seed a possible curriculum. Programs without a family are normal, and adding or changing family membership is the only way to change an expansion preset.
 
+**Families themselves are created from the admin Course / Program surface (v0.133.0).** Before that, only a program could be added in-app — a *family* needed a database migration, which is why `V106` seeded Engineering and `V142` seeded Education. A family is created **empty**: membership is set on the program, through the existing family field on program create. Duplicate names are rejected case- and whitespace-insensitively, because two identical-looking families would produce two identical-looking expansion shortcuts.
+
+⚠️ **The admin family picker reads the families endpoint; the authoring combobox derives families from the catalog.** Both are correct and the difference is deliberate: the combobox only cares about families that have members, while the admin surface must show a family created moments ago that has none yet. Do not "unify" these by deriving the admin list from the catalog — a newly created family would vanish on refresh, and it is the one the curator is about to assign a program to.
+
 ## Anti-drift tripwire
 
 If Program Families acquire subject rules, context rules, learner-level rules, curated subsets, read-time inference, or other curriculum intelligence, the feature has exceeded its responsibility. Remove those rules rather than turning the shortcut into a curriculum engine.
