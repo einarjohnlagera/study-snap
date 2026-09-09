@@ -26,7 +26,11 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.orm.jpa.EntityManagerFactoryUtils;
 import org.springframework.orm.jpa.EntityManagerHolder;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.core.task.TaskExecutor;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
+import org.springframework.test.util.AopTestUtils;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.lang.reflect.Field;
@@ -72,6 +76,15 @@ class AnnouncementServiceIntegrationTest {
     private JdbcTemplate jdbcTemplate;
     @Autowired
     private EntityManagerFactory entityManagerFactory;
+
+    @Autowired
+    private AnnouncementService springManagedAnnouncementService;
+    @Autowired
+    @Qualifier("notificationFanOutExecutor")
+    private TaskExecutor notificationFanOutExecutor;
+    @Autowired
+    @Qualifier("analyticsTaskExecutor")
+    private TaskExecutor analyticsTaskExecutor;
 
     private UUID adminUserId;
     private SimpleMeterRegistry meterRegistry;
@@ -158,6 +171,32 @@ class AnnouncementServiceIntegrationTest {
     }
 
     // ------------------------------------------------------------------ idempotency
+
+    /**
+     * ⚠️ THE WIRING ITSELF, WHICH NOTHING ELSE IN THIS RELEASE ASSERTS — raised by the pre-signoff cold
+     * agent. Every other test in this class builds {@link AnnouncementService} by hand with a
+     * test-double executor, and {@code AppConfigTest} calls {@code new AppConfig()} directly, so
+     * neither one proves the SPRING-MANAGED service receives the SPRING-MANAGED fan-out executor.
+     *
+     * <p>Context-load success proves only that SOME {@code TaskExecutor} resolved. A qualifier naming
+     * a different existing executor — {@code analyticsTaskExecutor} is the obvious one — would load,
+     * pass every test, and quietly put announcement fan-out on the pool that persists analytics,
+     * doubling the pressure on the 20 connections production has already exhausted twice.
+     */
+    @Test
+    void theSpringManagedServiceReceivesTheDedicatedFanOutExecutorAndNotTheAnalyticsPool() {
+        AnnouncementService springManaged = AopTestUtils.getTargetObject(springManagedAnnouncementService);
+        Object injected = ReflectionTestUtils.getField(springManaged, "notificationFanOutExecutor");
+
+        assertThat(injected)
+                .as("fan-out must run on its own bean, not merely on some TaskExecutor that resolved")
+                .isSameAs(notificationFanOutExecutor);
+        assertThat(((ThreadPoolTaskExecutor) injected).getThreadNamePrefix())
+                .isEqualTo("notification-fan-out-");
+        assertThat(injected)
+                .as("sharing the analytics pool would double the load on a pool that has failed twice")
+                .isNotSameAs(analyticsTaskExecutor);
+    }
 
     @Test
     void publishReturnsAfterQueueAcceptanceBeforeAnyNotificationIsDelivered() {

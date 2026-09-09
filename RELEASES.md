@@ -90,6 +90,46 @@ All four items change behaviour that file **currently documents as true**, and i
 
 **Item 2's key-format widening is free ONLY because there are no existing keys.** No stored dedup key has ever been written in production, so no format is a contract anyone can rely on. After the first producer ships, changing this format means reconciling live rows.
 
+### ✅ Pre-signoff cold agent — RAN 2026-09-09, ALL EIGHT CLAIMS UPHELD, ONE GAP CLOSED
+
+The scoped cold agent this release was re-tiered to **was run rather than waived**, framed as
+falsification against eight named claims plus the two structural questions. It read the real code and
+**re-ran the suites itself** rather than trusting this session's summary. **No claim was refuted** —
+R9, the detached-entity hand-off, `V143`'s predicate match, the retention split, the contract removal,
+the no-new-producer rule and the end-to-end badge all held.
+
+**⚠️ IT FOUND ONE REAL GAP, AND IT IS THE KIND ONLY A COLD READER FINDS: the executor WIRING was
+proven by nothing.** Every test in `AnnouncementServiceIntegrationTest` builds the service by hand
+with a test-double executor, and `AppConfigTest` calls `new AppConfig()` directly — so neither proves
+the **Spring-managed** service receives the **Spring-managed** fan-out executor. Context-load success
+proves only that *some* `TaskExecutor` resolved.
+
+**That gap was live, not theoretical.** Re-qualifying the constructor to `analyticsTaskExecutor`
+**loads the context and passes every other test in the class**, while quietly putting announcement
+fan-out on the pool that persists analytics — doubling pressure on the 20 connections production has
+already exhausted twice (R5/R13). Closed with
+`theSpringManagedServiceReceivesTheDedicatedFanOutExecutorAndNotTheAnalyticsPool`, which asserts bean
+identity and thread-name prefix on the Spring-managed instance. It fails under that mutant.
+
+**⚠️ It also credited a test this session had NOT: `aRetriedFanOutStillWorksWithAnOpenSessionInViewEntityManagerBoundToTheThread`**
+binds an `EntityManagerHolder` exactly as `OpenEntityManagerInViewInterceptor` does and asserts the
+persistence context is still readable after three caught constraint violations. That is the R9 angle
+the reflection guard cannot see, and the two are complementary rather than redundant — worth recording
+so neither is later deleted as duplicative.
+
+**⚠️ Method note, recorded against the next time: this session switched the working branch while the
+agent was running**, and the agent reported a file "changing under it" mid-review. It re-read and
+self-corrected, and its test runs post-date the switch, so the conclusions stand — **but do not check
+out another branch under a running cold agent.**
+
+**Part 2 mutants — three run, three killed:**
+
+| Mutant | Killed by |
+|---|---|
+| Fan-out reverted to synchronous | three async/rejection tests |
+| `@Transactional` added to `fanOut` (R9) | `FanOutTransactionBoundaryTest` — *added by this audit* |
+| **Fan-out re-qualified to `analyticsTaskExecutor`** | **`theSpringManagedServiceReceivesTheDedicatedFanOutExecutor…` — *added after the cold agent; it loaded the context and passed everything else*** |
+
 ### ⚠️ R1 IS A LIVE PRODUCTION FINDING THIS RELEASE DOES NOT FIX — recorded so it is not lost
 
 **The email daily cap is already breached.** Configured `EMAIL_DAILY_LIMIT` is **100** with a **40** reserve; observed production peaks are **156, 158, 157, 156** sends/day over the last 90. The budget gates **`INACTIVITY` only** — weak-concept, weekly-summary, due-concepts and knowledge-impact dispatches are all unbudgeted, so the "100/day limit" describes one of five channels. **This blocks every future email producer (Stage E) and is indexed in `ROADMAP.md`'s Backlog Index, not scoped here.**
