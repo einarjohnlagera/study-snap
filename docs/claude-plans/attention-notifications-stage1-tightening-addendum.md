@@ -239,8 +239,28 @@ Only two. Everything else above is settled by code or by the addendum.
 
 | # | Decision | Recommendation |
 |---|---|---|
-| **A1** | **Episode-close semantics.** A learner who **dismisses without applying** is still behind. Should the next publish re-notify them? | **YES — re-notify.** Dismiss means *"I have seen this"*, not *"stop telling me"*; a later publish is genuinely new information, and the alternative re-introduces suppression-until-applied, which is the bug in §1 wearing a different hat. ⚠️ The consequence is worth stating plainly: a learner who dismisses and never applies gets one notification per publish. |
-| **A2** | **Does episode suppression ship WITH D1, or does D1 ship key-only?** | **Ship it with D1.** Without it, D1's headline behaviour is one notification per publish per behind learner — the spam the addendum's own requirement forbids. It is one batch query, and adding it later means designing it against live rows instead of none. |
+| **A1** | ✅ **SETTLED 2026-09-09 (owner): YES, RE-NOTIFY.** Recommendation accepted. **Episode-close semantics.** A learner who **dismisses without applying** is still behind. Should the next publish re-notify them? | **YES — re-notify.** Dismiss means *"I have seen this"*, not *"stop telling me"*; a later publish is genuinely new information, and the alternative re-introduces suppression-until-applied, which is the bug in §1 wearing a different hat. ⚠️ The consequence is worth stating plainly: a learner who dismisses and never applies gets one notification per publish. |
+| **A2** | ✅ **SETTLED 2026-09-09 (owner): SHIP IT WITH D1.** Recommendation accepted — **and accepted against a production read that WEAKENED it, which is worth recording rather than smoothing over** (see the note below). **Does episode suppression ship WITH D1, or does D1 ship key-only?** | **Ship it with D1.** Without it, D1's headline behaviour is one notification per publish per behind learner — the spam the addendum's own requirement forbids. It is one batch query, and adding it later means designing it against live rows instead of none. |
+
+### ⚠️ Production read taken 2026-09-09, AFTER the decisions were framed — it changes two inputs
+
+**(1) The audit's "≤30 recipients" for Stage D is STALE. `LET Comprehensive Review` now has 42 adopters.**
+D2's justification cited the ≤30 figure. The executor (core 1 / max 2) is unaffected, but **any prompt
+or doc repeating "≤30" is repeating a number that is no longer true.** Current adopter counts: LET 42,
+ALE 30, PNLE 15, CPALE 8, Civil Engineering 1.
+
+**(2) ⚠️ EXACTLY ONE UPDATE PUBLISH EXISTS IN THE PRODUCT'S ENTIRE HISTORY, AND IT HAPPENED ON
+2026-09-09.** Four of the five public source roots have `published_at == last_update_published_at`,
+meaning they have never published an update at all. `LET` published one at `01:50:47` — forty seconds
+after the 88-note Education family tagging, and hours after `V141` deployed. **That is the `v0.132.0`
+publication boundary being used for real, and it is the first evidence the workflow is live.**
+
+**⚠️ This weakens A2's case rather than strengthening it, and the owner took the recommendation anyway.**
+At one publish per set ever, the duplicate-notification spam suppression prevents is **hypothetical
+today**. The surviving argument is the one about timing, not volume: suppression added later is
+designed against a populated `notifications` table, and the need would be discovered by having already
+sent duplicates to 42 people. **Do not re-derive this as "suppression was obviously necessary" — it
+was a judgement call made with the counter-evidence in view.**
 
 **Not decisions — already settled:** the revision key (§2.1, code-proven), the trigger rule (§2.2,
 code-proven), suppression's location (§2.3, an existing guarded contract decides it), and the no-count copy
