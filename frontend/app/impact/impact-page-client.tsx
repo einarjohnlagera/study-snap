@@ -109,18 +109,25 @@ export function ImpactPageClient() {
     };
   }, [loadInitial]);
 
+  const applyFreshTotals = useCallback((response: CreatorImpactPageResponse) => {
+    setImpacted((current) => current
+      ? { ...current, totalImpacted: response.totalImpacted, totalZeroImpact: response.totalZeroImpact }
+      : current);
+  }, []);
+
   const loadZeroPage = useCallback(async (page: number) => {
     setZeroState("loading");
     try {
       const response = await getCreatorImpact(false, page);
       setZeroNotes((current) => page === 0 ? response.notes : [...current, ...response.notes]);
+      applyFreshTotals(response);
       setZeroPage(page);
       setZeroState("ready");
     } catch {
       setZeroPage(page);
       setZeroState("error");
     }
-  }, []);
+  }, [applyFreshTotals]);
 
   const toggleZeroImpact = () => {
     const nextExpanded = !zeroExpanded;
@@ -137,6 +144,7 @@ export function ImpactPageClient() {
     try {
       const response = await getCreatorImpact(true, nextPage);
       setImpactedNotes((current) => [...current, ...response.notes]);
+      applyFreshTotals(response);
       setImpactedPage(nextPage);
     } catch {
       setImpactedPageFailed(true);

@@ -228,6 +228,32 @@ describe("ImpactPageClient", () => {
     expect(screen.getAllByText("Plant Cells")).toHaveLength(1);
   });
 
+  it("stops offering more zero-impact notes when a later page reports a shrunken total", async () => {
+    // A note can cross from zero-impact to impacted while the page is open. totalZeroImpact is
+    // captured at initial load, so without refreshing it from each page response the "Load more"
+    // button compares against a stale, too-high total and keeps requesting pages that come back
+    // empty. Every page response already carries fresh totals — this asserts they are not discarded.
+    (getCreatorImpact as jest.Mock).mockImplementation((isImpacted: boolean, page = 0) => {
+      if (isImpacted) {
+        return Promise.resolve({ ...impactedPage, totalImpacted: 1, totalZeroImpact: 3 });
+      }
+      return Promise.resolve({
+        notes: [{ noteId: `zero-${page}`, title: `Zero note ${page}`, distinctLearnersHelped: 0, viewCount: 0, copyCount: 0 }],
+        page,
+        size: 20,
+        totalImpacted: 1,
+        totalZeroImpact: 1,
+      });
+    });
+
+    render(<ImpactPageClient />);
+    fireEvent.click(await screen.findByRole("button", { name: /Other published notes/ }));
+
+    expect(await screen.findByText("Zero note 0")).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.queryByRole("button", { name: "Load more" })).not.toBeInTheDocument());
+  });
+
   it("offers a retry when the initial impact load fails", async () => {
     (getCreatorImpactSummary as jest.Mock)
       .mockRejectedValueOnce(new Error("Network error"))
