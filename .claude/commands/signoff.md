@@ -127,4 +127,18 @@ Commit directly on `releases/vX.Y.Z`. No sub-branch, no PR for this commit.
 
 Open a PR from `releases/vX.Y.Z` → `main`. PR description comes from the release notes file — do not draft a separate description. Merge after CI passes.
 
+**⚠️ THEN VERIFY THE MERGE ACTUALLY DEPLOYED — a merge is not a deploy, and this is the step whose absence shipped a broken feature.**
+
+```bash
+RENDER_API_KEY=… scripts/check-deploys.sh   # exit 0 = both platforms serve origin/main
+```
+
+**Why this exists.** On 2026-09-09 the `v0.136.0` merge to `main` auto-deployed on **neither** platform. Render's config was correct and every prior release had fired in 2–3 seconds; Vercel had a Production deployment for every prior release merge and **none** for this one. Both are GitHub App integrations consuming the same push event, and neither received it — GitHub declared no incident. The result was a live skew: a `v0.136.0` backend serving a `v0.135.0` frontend, calling an endpoint form that release had just made a 400. **The shipped feature was dead on arrival and nothing noticed for six hours.**
+
+**⚠️ RENDER'S `notifyOnFail` CANNOT CATCH THIS, AND NEITHER CAN AN `on: push` CI JOB.** Nothing failed — nothing was ever queued — so a notify-on-failure had nothing to fire on; and a workflow triggered by the push event cannot detect that same event going missing. **The check must test for ABSENCE, and it must run on a schedule or by hand.**
+
+**⚠️ THE SCRIPT EXITS 2 RATHER THAN 0 WHEN IT CANNOT CHECK** (missing key, API error). Do not read that as a pass — "I could not look" reported as "all clear" is the same failure class.
+
+**If it reports drift, redeploy the lagging platform before marking the version Released.** And if only ONE side is behind, check whether this release removed, renamed or made-required an endpoint form — that combination is a live API skew, not just a stale build.
+
 Then run `/kickoff` for the next version.

@@ -1,5 +1,84 @@
 # RELEASES.md - NoteLib
 
+## v0.137.0 - Deploy Integrity
+
+**Status: Released** (kicked off 2026-09-09, signed off 2026-09-09, base branch `releases/v0.137.0`, cut from `main` after `v0.136.0` merged as #1359. **⚠️ RE-SCOPED the same day — see below.** No feature or fix PRs: every commit is release-management or docs, plus one script.)
+
+Theme: the deploy pipeline failed silently and the record of what was deployed was wrong. Make both true again.
+
+### ⚠️⚠️ THIS RELEASE WAS SCOPED ON A FALSE PREMISE AND RE-SCOPED WITHIN THE HOUR — THE ORIGINAL IS RECORDED, NOT OVERWRITTEN
+
+It opened as **Deploy and Read**, justified by *"`v0.132.0` through `v0.136.0` are merged and none is deployed"*, taken from `ROADMAP.md`. **The owner chose that scope over two feature candidates on the strength of it. Read-only production queries then disproved it:**
+
+| Claim as written | Reality, read 2026-09-09 |
+|---|---|
+| `V141` has never been run | **RAN 2026-09-08T12:23:16Z**, `success = true`, on `v0.132.0`'s own auto-deploy |
+| `V142` has never been run | **RAN 2026-09-08T15:47:36Z**, on `v0.133.0`'s |
+| The profile-string write is still pending | **ALREADY APPLIED** — the read returns `0 old / 1 new` |
+| Five releases are undeployed | **The BACKEND deployed automatically every time.** Only `v0.136.0`'s FRONTEND is missing |
+
+`notifications` and `announcements` really are at zero rows, so the notification checkpoints genuinely remain unreadable. That half survived; the rest did not.
+
+**⚠️ THE CHEAPEST DETECTOR EXISTED AND NOBODY USED IT: the `v0.133.0` row said `V142` HAS NOT BEEN RUN in its Gate cell while its own Status cell said the read was *"READ AND CLOSED 2026-09-09, one day after the deploy, exactly on its date"* — which is only possible if it HAD deployed.** The Status was updated when the read closed; the Gate was not. **A row that contradicts itself is free to detect and nobody read the two cells against each other.**
+
+### ⚠️ The live defect this investigation actually found
+
+**`v0.136.0` did not auto-deploy on EITHER platform, and the resulting version skew broke Your Impact in production.**
+
+Render's config is correct and untouched (`autoDeploy: yes`, `autoDeployTrigger: commit`, `branch: main`) and every prior release fired in **2–3 seconds** with `trigger: new_commit`. For `4ee2c752` it never fired; the owner deployed manually 5.5 minutes later (`trigger: manual`). Vercel matches exactly — GitHub records a `vercel[bot]` Production deployment for every prior release merge and **ZERO** for this one. There are no repo-level webhooks and no CI workflows, so both platforms are GitHub App integrations consuming **the same push event**, and neither received it. GitHub declared no incident that day.
+
+**The consequence, verified against the live commit rather than assumed:** Vercel's newest Production deployment is still `7f371e65` (`v0.135.0`) while Render runs `v0.136.0`. `v0.135.0`'s `api.ts:5990` calls `/creator-impact/me` with **no** parameters, from `public-profile-page-client.tsx:225` and `settings/page.tsx:281` — and `v0.136.0` made `impacted` **required**, so both calls now 400. The owner sees *"Could not load your impact."* with a Retry that can never succeed, and the Knowledge Impact digest toggle hidden in Settings. Both degrade rather than crash, which was deliberate, but the feature is dead until Vercel ships.
+
+**⚠️ AND THE CHANGE WAS BREAKING IN BOTH DIRECTIONS — frontend-first would have 404'd on `/creator-impact/me/summary`. `v0.136.0` recorded no deploy-ordering requirement at all.**
+
+### Planned Scope
+
+1. **Restore the frontend deploy — OWNER ACTION.** Deploy `4ee2c752` (or later) on Vercel. Until then the skew above is live.
+2. **A detector for a merge that produced no deploy.** Nothing in the repo or the process noticed; it was found only because the owner happened to look. The cheapest form is a signoff-time check that the deployed commit matches `main` on both platforms — decide detector shape before building anything.
+3. **Two standing rules, written where they will be read.** (a) A release that removes, renames or makes-required an existing API form is **breaking in both directions** and must state its deploy ordering or that both sides ship together. (b) **A `ROADMAP.md` claim about PRODUCTION STATE is a snapshot, not a fact** — re-read it read-only before repeating it, and treat a row whose Gate and Status cells disagree as a defect in itself.
+4. **The reads that are now live**, which the false premise had wrongly deferred: `2026-09-10` (`v0.72.0` proximal retention, `v0.134.0` `deploy + 1 day`) and `2026-09-11` (onboarding funnel, `v0.62.0` Knowledge Impact).
+
+### ⚠️ Anti-drift
+
+- ❌ **NO `frontend/app/onboarding` work before the `2026-09-11` read.** It measures signup-funnel completion against a **62.4%** baseline (234/375) that cannot be re-run.
+- ❌ **NO Learning Connections work** — `[CHECKPOINT — due 2026-09-19]`, denominator ONE. Stage D2's connection-request notification is exactly the nudge that converts `PENDING` into `ACCEPTED`, the metric that checkpoint kills the arc on.
+- ❌ **Do NOT change any analytics event, fire site or gating condition a live checkpoint reads.** `v0.136.0` moved and re-gated `KNOWLEDGE_IMPACT_DASHBOARD_VIEWED` two days before the `2026-09-11` read that depends on it; a second such change would corrupt another read.
+- ❌ **Do NOT add a second entry point to `/impact`** before its own `[CHECKPOINT — due deploy + 30 days]` reads — adding one destroys the measurement.
+- ❌ **Do NOT add CI infrastructure as a reflex.** The repo has **no** `.github/workflows/`, and item 2 is a detection problem, not automatically a CI problem. State the shape before building.
+- ⚠️ **A quiet read is NOT a pass.** On rows with a denominator clause (`notifications` at zero, one curator, zero digest opt-ins), `no data` means **NOT YET MEASURABLE → RE-DATE**.
+- ⚠️ **⚠️ THE PRODUCTION DATABASE IS READ-ONLY FOR CLAUDE, ALWAYS** — every diagnostic in this section came from `SELECT`s. The deploy is the owner's.
+
+### ⚠️ What is actually deployed, as of 2026-09-09
+
+- **Backend (Render):** `4ee2c752` = `v0.136.0`, live, deployed manually 12:04:31Z.
+- **Frontend (Vercel):** `7f371e65` = `v0.135.0`. **One release behind, and that is the live defect.**
+- **Database:** migrations current at **`V143`**, matching the repo's highest. Nothing pending.
+
+### Scope completeness
+
+| Planned item | Outcome |
+|---|---|
+| 1. Restore the frontend deploy | **✅ SHIPPED (owner).** Vercel Production now carries `4ee2c752` at 2026-09-09T14:00:53Z, `state=success`; Render and `main` agree. Skew resolved, verified read-only rather than assumed. |
+| 2. Detector for a merge that produced no deploy | **✅ SHIPPED.** `scripts/check-deploys.sh`, wired into `/signoff`. Shape was decided before building, per the anti-drift, and CI was deliberately not introduced. |
+| 3. Two standing rules | **✅ SHIPPED** in `CLAUDE.md` — the production-state-is-a-snapshot rule and the API-form-is-breaking-both-ways rule. |
+| 4. The `2026-09-10` and `2026-09-11` reads | **❌ NOT SHIPPED — the dates had not arrived, and reading early is the failure those dates exist to prevent.** Nothing about them is blocked by this release; they are unchanged in the Backlog Index and land in the next cycle. Recorded here so a reader does not mistake the release's own scope list for work that silently vanished. |
+
+### Known limitations
+
+- **The Render half of `check-deploys.sh` has not been run against the live Render API.** No `RENDER_API_KEY` was available in the session that wrote it, so the request, auth and error paths are unexercised; only the response *parsing* is covered, by fixtures. **The first real run is the test** — if it fails, the fault is in the request/auth path, not the comparison. The Vercel half ran end-to-end against the live API and is confirmed working.
+- **The detector is manual.** It runs when `/signoff` says to run it, so a release that never reaches signoff is not covered, and neither is a deploy that goes missing between releases. Making it automatic requires a `schedule:`-triggered workflow — **not `on: push`, which cannot observe the absence of the event that triggers it** — and that was deliberately deferred rather than introduce CI to a repo with no workflows.
+
+### Routing
+
+**CLAUDE CODE** for the doc corrections, the rules and the reads. Item 2 is re-routed once its shape is decided.
+
+### Shipped
+
+- Added `scripts/check-deploys.sh`, a detector for a merge that produced no deploy, and wired it into `/signoff` after the release PR merges. It compares `origin/main` against Vercel's newest successful Production deployment (read through GitHub's deployments API, so it needs no new secret) and Render's newest live deploy. **It tests for ABSENCE rather than failure**, because Render's `notifyOnFail` had nothing to fire on — nothing failed, nothing was queued — and **it exits 2 rather than 0 when it cannot check**, since "I could not look" reported as "all clear" is the same failure class it exists to catch.
+- **Verified the detector against the defect itself rather than asserting it:** replayed today's 12:04 state (`main` at `4ee2c752`, Vercel newest `7f371e65`) through the comparison and confirmed it reports drift and exits 1. The Render response parser is covered by fixtures for the wrapped and unwrapped API shapes, a no-live-deploy list and an empty list.
+- Added two standing rules to `CLAUDE.md`: a claim about production state is a snapshot that must be re-read before it is repeated (with internal Gate/Status contradiction named as the free detector), and removing/renaming/making-required an API form is breaking in both directions and owes a deploy-ordering statement.
+- Corrected four false production-state claims in `ROADMAP.md` — the `V141`/`V142` gate cells and the profile-string write — each against the read-only query that disproves it, and recorded the self-contradicting row as the detector that was available and unused.
+
 ## v0.136.0 - Contribution Surface
 
 **Status: Released** (kicked off 2026-09-09, signed off 2026-09-09, base branch `releases/v0.136.0`, cut from `main` after `v0.135.0` merged as #1356 and tagged `7f371e65`. Shipped as PRs #1357 and #1358.)
@@ -783,107 +862,3 @@ Tier was pre-declared at kickoff ("AT LEAST ONE SCOPED COLD AGENT"). **Two were 
 - **The item backfill uses the collection's `created_at`, not the item's**, so an item added long after its collection carries `published_at < created_at`. Nothing compares them today; it would matter only if a future release surfaces a per-item date.
 - **The `@Modifying` natives lack `clearAutomatically`.** Nothing dirties those entities after the natives today, so this is latent fragility rather than a live bug.
 
-## v0.131.0 - Inbox Polish
-
-**Status: Released** (kicked off 2026-09-07, signed off 2026-09-08, base branch `releases/v0.131.0`, cut from `main` after `v0.130.0` merged as #1344 and tagged `3cec79bb`)
-
-**Three fixes against the SHIPPED `v0.130.0` inbox**, from `docs/claude-plans/notification-inbox-polish.md` (owner report, 2026-09-07). **⚠️ FRONTEND ONLY — no backend, no migration, no contract change, no new notification type.**
-
-### Planned Scope
-
-**(1) Close on outside click, and drop the `Close` button.** The desktop panel today can be closed ONLY by its `Close` button (`notification-inbox.tsx:172`); the component's sole `addEventListener` is a `matchMedia` listener for `isMobile` (`:41`). **⚠️ THE INBOX IS THE ODD ONE OUT** — the avatar menu in the same header (`app-shell.tsx:525`), the theme toggle (`theme-toggle.tsx:125,136`) and the export dropdown (`export-dropdown-menu.tsx:43`) all already close on outside click. Copy the avatar-menu pattern, then delete the `Close` button. Add `Escape` for the desktop panel. **⚠️ MOBILE NEEDS NO CHANGE** — that path renders `AppModal`, which already handles both (`app-modal.tsx:109-111`); do NOT add a second handler.
-
-**(2) The bell is a toggle, not a refresh.** `openInbox` (`:57-60`) does `setIsOpen(true)` + `loadInbox()` unconditionally, so clicking an open inbox re-opens and refetches. When open, close WITHOUT refetching; when closed, open and load. **⚠️ Do NOT drop load-on-open** — only the re-click while open skips the fetch. The trigger also carries a hardcoded `aria-label="Open notifications"` (`:157`) and **no `aria-expanded`**; a toggle owes both.
-
-**(3) Hide the bell while a learner is taking a quiz.** It is already hidden, but for two modes only: the bell renders inside the header (`app-shell.tsx:643`) which is wrapped in `{!isExamFocusActive ? (` (`:628-629`), and there are exactly **two** `useExamFocusMode` consumers — Long Exam (`phase === "running"`) and Challenge Quiz **Board Exam mode only**. Extend to ordinary Challenge Quiz, Quick Review, Adaptive Practice, Interview Practice and the shared quiz. **No new mechanism** — hook, context and header gate all exist.
-
-### ⚠️ SCOPE SET AT KICKOFF BY A VERIFIED FINDING — ITEM 3 SHIPS EXITS FIRST
-
-**⚠️⚠️ CORRECTED 2026-09-07, HOURS AFTER THIS KICKOFF — THE FINDING BELOW WAS WRONG, AND IT IS KEPT RATHER THAN DELETED BECAUSE IT IS THE SAME DEFECT CLASS `v0.130.0` SHIPPED A WHOLE PRESSURE TEST TO CATCH.** The claim was that Quick Review's running branch has no in-page exit. **It has one.** A sticky top bar carrying a **"Leave Quiz"** button (`quick-review/page.tsx:1101`, gated on `quizSessionActive`) renders *above* the branch chain that was read. The audit that produced the claim grepped for `BackLink`, `<Link` and `router.push` and **never searched for the `onClick={() => requestLeave()}` button pattern that is the actual running-state exit in this repo** — a claim asserted from an incomplete search rather than anchored to the code that implements it.
-
-**THE CORRECTED AUDIT — every surface, checked for the right pattern:**
-
-| Surface | Bell during quiz | Running-state exit |
-|---|---|---|
-| Long Exam | already hidden | ✅ `ExamTopBar` |
-| Challenge Quiz — Board Exam | already hidden | ✅ `ExamTopBar` |
-| Challenge Quiz — ordinary | **visible** | ✅ inline top bar, *Leave Quiz* (`:1670`) |
-| Quick Review | **visible** | ✅ *Leave Quiz* (`:1101`) |
-| Adaptive Practice | **visible** | ✅ *Leave Quiz* (`:782`) |
-| Interview Practice | **visible** | ✅ *Leave Practice* (`:327`) |
-| Shared quiz `/quiz/[token]` | **already absent** | n/a — see below |
-
-**⚠️ CONSEQUENCE 1: NO EXIT WORK IS OWED. All four surfaces that need focus mode already have a running-state exit**, so item 3 is the hook call alone. Guard 7 still gets asserted per surface — it is now a regression guard rather than a prerequisite.
-
-**⚠️⚠️ CONSEQUENCE 2, AND IT IS A REAL FINDING THE PLAN GOT WRONG: DO NOT ADD `useExamFocusMode` TO THE SHARED QUIZ — IT WOULD BE A SILENT NO-OP.** `app-shell.tsx:593` returns early for `/quiz/` with a bare `<main>`, **so that route never renders the header and the bell is already absent there.** Focus mode's only consumer is the header gate, so the hook would change nothing while reading as shipped work — precisely the `v0.116.0`/`v0.117.0` shape (a behaviour changed with no test that runs it). **The plan's five-surface list is therefore FOUR surfaces.**
-
-**⚠️⚠️ QUICK REVIEW'S RUNNING STATE HAS NO IN-PAGE EXIT, AND ADDING FOCUS MODE TO IT AS WRITTEN WOULD TRAP THE LEARNER.** Checked at kickoff rather than taken on trust: `app/study-packs/[id]/quick-review/page.tsx` renders a branch chain — loading → error → `totalQuestions === 0` → `!currentSessionId` → `isComplete` → `retry-transition` → **else, the running quiz**. All four `BackLink`s sit in NON-running branches (`:1116`, `:1146`, `:1154`, `:1319`); the running branch has none. **Focus mode hides the ENTIRE header plus the mobile tab bar** (accepted deliberately by the owner), so on that surface it would remove the only way out.
-
-**⚠️ THEREFORE ITEM 3 IS "AUDIT AND ADD EXITS, THEN APPLY FOCUS MODE" — owner decision 2026-09-07, taken with the finding in hand.** Every one of the five surfaces has its RUNNING-state branch audited and an in-page exit added where missing, *before* the hook goes in. **⚠️ A `BackLink` elsewhere in the file does NOT satisfy this** — that is exactly what made Quick Review look safe. **⚠️ Guard 7 is asserted PER SURFACE, never once.**
-
-### Anti-drift
-
-**⚠️ Do NOT let the outside-click handler treat the BELL as "outside"** — the handler and the toggle would both fire on one click and the panel reopens or flickers. **⚠️ Guard 2 exists for exactly this: a fixture that clicks the page BODY passes while the bell double-fires.** **⚠️ Do NOT stop loading the inbox when it OPENS.** **⚠️ Do NOT add a second dismissal handler to the mobile `AppModal` path.** **⚠️ Do NOT give any quiz surface focus mode without an in-page exit.** **⚠️ Do NOT change badge semantics** — announcements still never inflate the number and a zero count still renders no badge element at all. **⚠️ Do NOT change read/dismiss semantics** — opening the panel still must not mark everything read, and dismissal must never alter product state. **⚠️ NO backend change, NO migration, NO new notification type, NO Stage 5/6/7 event.** **⚠️ `[CHECKPOINT — due 2026-09-19]` is TWELVE DAYS OUT and its denominator is ONE — no Learning Connections work, and no connection-request notification.** **⚠️ §8's drift-signature dedup is SUPERSEDED and must NOT be implemented** (recorded by the peer session in the Stage 1 doc; Stage 6 now belongs to `official-review-set-update-publication-boundary.md`). **⚠️ This release SUPERSEDES `shared-quiz-recipient-experience-plan.md` §10's "do NOT expand focus mode to other quiz modes"** — that deferral was withdrawn 2026-09-07 and §10 now points at the polish plan. Do not re-derive the narrowing from that file's history. No quota, entitlement or pricing change; onboarding untouched.
-
-### Verification
-
-**A single `advisor()` call**, per the plan's own routing — one component plus hook calls, no backend, no migration, no authorization or privacy boundary moved. **⚠️ Routing: CLAUDE CODE inline.**
-
-**Pre-declared guards, from the plan's §4:**
-- **(1)** an outside click closes the desktop panel.
-- **(2)** **⚠️ clicking the BELL while open closes it EXACTLY ONCE — it must not reopen via the outside-click handler.** A fixture that clicks the page body passes while the bell double-fires.
-- **(3)** **⚠️ a re-click does NOT refetch — ASSERT THE REQUEST COUNT, not the visible state.**
-- **(4)** a closed → open transition still fetches.
-- **(5)** `Escape` closes the desktop panel.
-- **(6)** the bell is hidden during a quiz and restored on exit, including leaving mid-quiz.
-- **(7)** **⚠️ every focused surface has a reachable in-page exit IN ITS RUNNING BRANCH — asserted PER SURFACE.**
-
-**⚠️ CARRIED LESSONS.** From `v0.130.0`, three that bear directly on this release: **a `jest.mock` factory is an ALLOW-LIST** — a module the component imports and the factory omits fails silently at the call site, and `app-shell.test.tsx` was green *because* its poll threw; **confirm a mutation is PRESENT AND EFFECTIVE**, since a mutation that cannot reach its subject proves nothing; and **never revert a mutation by restoring the file from HEAD**, which discards the real fix alongside the mutant.
-
-### Shipped
-
-- **The desktop inbox closes on outside click and on `Escape`, and the `Close` button is gone.** It existed only because closing was otherwise impossible. **⚠️ THE REF WRAPS THE BELL *AND* THE PANEL, AND THAT IS THE WHOLE FIX** — had it wrapped only the panel, the bell would count as "outside", `mousedown` would close and the bell's own `click` would reopen **and refetch**, so one click would flicker instead of closing. Same placement as the avatar menu (`app-shell.tsx:653`). **⚠️ Mobile is untouched**: that path renders `AppModal`, which already handles backdrop and Escape, so the desktop handler is gated on `!isMobile` and the two cannot fight.
-- **The bell is a toggle.** Clicking an open inbox closes it **without refetching**; opening still loads. Previously `openInbox` set open and called `loadInbox()` unconditionally — the "refresh, not toggle" the owner reported. The trigger gained `aria-expanded`, with a **stable** `aria-label` beside it: that is the convention already in this repo (`theme-toggle.tsx:174`, `export-dropdown-menu.tsx:74`), and swapping both would announce the same fact twice.
-- **The bell is hidden for the duration of any quiz, not just the two exam modes.** `useExamFocusMode` now covers **ordinary Challenge Quiz, Quick Review, Adaptive Practice and Interview Practice** alongside Long Exam and Board Exam. No new mechanism — the hook, the context and the header gate all existed.
-- **Two sticky in-page bars moved from `top-16` to `top-0`** (`quick-review-top-bar`, `challenge-quiz-top-bar`). The 4rem offset cleared the app-shell header, which focus mode now hides for exactly the state those bars render in; left alone they would float 4rem down with nothing above them. **⚠️ Adaptive Practice and Interview Practice deliberately got NO layout change** — their leave controls sit in ordinary non-sticky rows with no offset to correct.
-
-**⚠️⚠️ THE KICKOFF'S OWN HEADLINE FINDING WAS WRONG, AND CORRECTING IT SHRANK THE RELEASE.** It claimed Quick Review's running branch had no in-page exit and widened item 3 to "audit and add exits first". Quick Review has a *Leave Quiz* button (`:1101`) rendered above the branch chain that was read; the audit had grepped for `BackLink`, `<Link` and `router.push` and **never searched for the `onClick={() => requestLeave()}` button that is the actual running-state exit in this repo.** **All four surfaces already had one, so ZERO exit work was owed.** Recorded rather than quietly dropped, because it is the same "claim not anchored to the code that implements it" defect `v0.130.0` shipped a whole pressure test to catch — committed as `35976007` before any code was written.
-
-**⚠️ AND THE PLAN'S FIVE-SURFACE LIST WAS FOUR: the shared quiz was DROPPED because the hook there would be a SILENT NO-OP.** `app-shell.tsx:593` returns early for `/quiz/` with a bare `<main>`, so that route renders no header and the bell is already absent; focus mode's only consumer is the header gate. Adding it would have changed nothing while reading as shipped work — the `v0.116.0`/`v0.117.0` class exactly.
-
-**Verification.** A single `advisor()` call, per the pre-declared tier — and it changed three decisions before any code was written: it caught that the label should stay stable (checked against the repo rather than assumed), that only two of the four surfaces have sticky bars needing the `top-0` change, and that guard 2's **event sequence is the guard**.
-
-**⚠️ MUTATION VERIFICATION — EACH MUTANT NAMED WITH THE TEST THAT KILLED IT:**
-- **Moving the ref from the wrapper onto the panel** (making the bell "outside") → killed by `closes exactly once when the bell itself is clicked while open, without refetching`, and **only** that test.
-- **Restoring the unconditional `setIsOpen(!isOpen); void loadInbox()`** → killed by that same test *and* `still loads the inbox on a closed to open transition` — the pair is what pins "close does not refetch, open still does".
-- **`useExamFocusMode(false)`** on Quick Review → killed by both of its focus guards, including the one that drives the quiz to completion and asserts the chrome comes **back**.
-- **Reverting Challenge Quiz to `isBoardExamMode && phase === "running"`** → killed by `hides the app-shell chrome during an ORDINARY Challenge Quiz, not just a Board Exam`. **⚠️ Its fixture is deliberately an ordinary quiz: a Board Exam fixture passes under both the old and the new expression and would prove nothing.**
-- **`useExamFocusMode(false)`** on Adaptive Practice and Interview Practice → one killed test each.
-
-**⚠️ GUARD 2's TEST SHAPE IS THE GUARD, AND THIS IS THE REUSABLE LESSON.** `fireEvent.click` does **not** fire `mousedown`, and this project has **no `@testing-library/user-event`** — so a test that merely clicks the bell passes under the defect by construction. The guard dispatches `mousedown` **then** `click`, and asserts the **request count** rather than the DOM, because the panel can close and reopen inside one sequence and still read as "open".
-
-**⚠️ THE `jest.mock` ALLOW-LIST TRAP FIRED TWICE DURING THIS RELEASE — ONCE ON THE EXISTING SUITE, ONCE ON WORK ADDED HERE.** `quick-review/page.test.tsx` mocked `exam-focus-context` with **only** `useBottomViewportClaim`, so the moment the page imported `useExamFocusMode` the call site would have received `undefined`. Then the new mock added to `adaptive-practice/page.test.tsx` omitted `useBottomViewportClaim` and broke an unrelated answer-review test — **because the CHILD `QuizAnswerReview` imports it, not the page.** A mock factory has to cover the whole subtree's use of a module, not the file's own import list. This is the `v0.130.0` carried lesson landing exactly where it was predicted to.
-
-**Guard 7 is asserted PER SURFACE**, in the same test as guard 6 rather than separately — focus mode hides the whole header, so the in-page exit is the only remaining way out and the two facts are one fact.
-
-**⚠️ THE POLL KEEPS RUNNING DURING FOCUS MODE, AND IT NOW HAS A GUARD RATHER THAN A REASON.** The release notes promise the count "keeps updating quietly in the background, so the bell is accurate the moment you finish." That holds because the poll is a top-level effect in `AppShell` while focus mode gates only the header *render* — but that is reasoning about effect placement, not evidence, and this repo has twice shipped a behaviour whose only support was exactly that kind of reasoning (`v0.116.0`, `v0.117.0`). `keeps polling the unread count while exam focus hides the bell` is killed by suppressing the poll when `isExamFocusActive`. **Caught at signoff by `advisor()` as a user-facing claim with no test behind it.**
-
-**⚠️ `docs/releases/v0.130.0.md` CARRIED TWO PRESENT-TENSE CLAIMS THIS RELEASE FALSIFIED, AND THEY WERE CORRECTED THERE RATHER THAN LEFT AS HISTORY.** *"A bell sits in the header on every signed-in page"* and the panel's `Close` button both describe how the product works, not what `v0.130.0` did, and a published release-notes file is somewhere people look to find that out. **This is the sweep-by-SURFACE rule, and the first instinct — "release notes are point-in-time, leave them" — was the wrong one.**
-
-### ⚠️⚠️ SCOPED COLD AGENT, RUN AFTER SIGNOFF — AND IT FOUND A REAL TRAP THIS RELEASE INTRODUCED
-
-**The tier was re-decided, and the first call was the weaker one.** By the letter of the gate no trigger fired — no authorization or privacy boundary moved, one feature PR, no money/quota/production-data semantics — so a single `advisor()` call was defensible. **But the fourth trigger, *"delivery introduced a defect the same session then fixed — a measured blind-spot signal"*, does fire, and it took the owner asking to see it:** this session made **three unanchored claims** in one release (Quick Review's exit, the `v0.130.0` notes being point-in-time, effect placement as evidence for the poll), two of them caught by something other than the author. **One scoped agent, framed as falsification, on `sonnet`.**
-
-**⚠️ FINDING 1 — CONFIRMED, AND IT IS A TRAP THIS RELEASE CREATED. Widening focus mode to `phase === "running"` left Challenge Quiz with the header hidden AND its only exit disabled for the entire submission round-trip.** Both Leave controls are `disabled={submitting}` (`:1662` Board Exam, `:1678` ordinary), and `finalizeChallengeSession` holds `submitting` true across the whole completion request while `phase` is **still `"running"`** — it flips to `"complete"` only *after* the await. So the learner had **no header and no working exit**, indefinitely if the request hung. **⚠️ Board Exam reaches this WITHOUT THE LEARNER DOING ANYTHING: its timer auto-submits on expiry.** Fixed by `useExamFocusMode(phase === "running" && !submitting)` — the header returns for exactly the window the in-page exit is unavailable, which is the cheap side of the trade. Guard: `gives the header back while submitting, because both Leave controls are disabled then`, killed by dropping the `!submitting` term.
-
-**⚠️ IT ALSO FALSIFIED THIS RELEASE'S OWN NOTES**, which claimed *"Every one of those screens keeps its own Leave button, so you can still stop at any point."* Corrected in `docs/releases/v0.131.0.md`.
-
-**⚠️ THE INVARIANT WAS RIGHT AND THE VERIFICATION OF IT WAS NOT.** This release stated *"focus mode may never be active in a state the exit does not cover"* and checked it by comparing the hook's gate to the exit's **render** gate on each surface. Those matched. **What went unchecked was whether the rendered exit was ENABLED** — a disabled exit is no exit, and no amount of comparing render gates would ever have surfaced it. Quick Review, Adaptive Practice and Interview Practice were re-checked and are clean: none of their Leave controls carries a `disabled` prop.
-
-**Known limitation — pre-existing, NOT introduced here, and deliberately not fixed here.** `long-exam/page.tsx:966` carries the identical `leaveDisabled={submitting}` against a focus mode that has been active since long before this release. **⚠️ It is a live instance of the same trap**, but that file is untouched by `v0.131.0` and fixing it is a change to a surface this release did not open. It gets a row rather than a silent ride-along.
-
-**Findings 2-7: could not disprove.** The outside-click ref genuinely wraps bell and panel; mobile cannot fight `AppModal` (the desktop effect is gated `!isMobile`, and the modal is a `document.body` portal that only mounts when `isOpen && isMobile`); no path opens the panel without loading or loads twice; the shared quiz genuinely renders no header for authenticated **or** anonymous viewers, so dropping it was correct. One cosmetic residual: because `useExamFocusMode` sets context state in an effect, the `top-0` bar can paint in the same frame as a still-visible header — **the bar is `z-20` against the header's `z-10`, so it overlaps rather than tucks under**, and it self-corrects on the next paint. Sub-frame, not reproducible in jsdom, recorded rather than chased.
-
-**NO `[CHECKPOINT]` IS OWED, and the reason is that nothing here shipped ahead of its evidence.** All three items fix defects the owner reported against shipped behaviour, each verified directly against the code and pinned by a mutation-killed guard — there is no pre-committed rule, owner override, ambiguous read or bootstrap argument anywhere in the release. The one thing that *was* uncertain — whether the newly-focused surfaces keep a way out — was settled by reading the code before writing any, and is now a standing per-surface guard rather than a dated obligation.
-
-**Suites: 209 frontend suites / 2,325 tests, 0 failures; `tsc` clean; 0 lint errors** (one pre-existing `react-hooks/exhaustive-deps` warning at `challenge-quiz/page.tsx:1395`, on a line this release did not touch). **Backend untouched — frontend-only release, no migration.**
