@@ -10,15 +10,16 @@ Public Profile is the public showcase surface for one creator's public identity 
 - `backend/src/main/java/com/studysnap/backend/controller/PublicProfileController.java` — `GET /public/creator/{username}`, `GET /public/profile/{userId}` (legacy compat), `PUT /users/profile/public-visibility`
 - `backend/src/main/java/com/studysnap/backend/service/PublicProfileService.java` — profile resolution; public notes aggregation (capped at 8, sorted copies→views→shares→title); metric aggregation (`totalCopies`, `totalViews`, `totalShares`, `totalProfileShares`); public subject-count aggregation
 - `backend/src/main/java/com/studysnap/backend/dto/PublicProfileResponse.java` — response shape: `displayName`, `username`, `publicNotesCount`, metrics, `notesBySubject`, `totalPublicSubjectCount`, capped note list
-- `backend/src/main/java/com/studysnap/backend/controller/CreatorImpactController.java` — authenticated self-only `GET /creator-impact/me`; never accepts another creator id
-- `backend/src/main/java/com/studysnap/backend/service/CreatorImpactService.java` — owner-private completed-session learner aggregation and per-note impact breakdown
+- `backend/src/main/java/com/studysnap/backend/controller/CreatorImpactController.java` — authenticated self-only paginated and summary endpoints; never accepts another creator id
+- `backend/src/main/java/com/studysnap/backend/service/CreatorImpactService.java` — owner-private completed-session aggregation, stable impact ranking, and page-bounded secondary metrics
 
 **Frontend**
 - `frontend/components/public/public-profile-page-client.tsx` — all public profile UI: header metrics, Learning Focus section (public note scope line, `learningFocusSummary`, subject chips), note grid, "View all notes →" link (v0.21.0), owner controls (Edit / Share / Visibility toggle)
 - `frontend/app/public/creator/[username]/page.tsx` — server component entry for username-based route
 - `frontend/app/public/profile/[userId]/page.tsx` — legacy `userId` route for backward-compat; resolves internally
+- `frontend/app/impact/` — authenticated private contribution page
 - `frontend/lib/server-public-profiles.ts` — server-side `getPublicCreatorProfile(username)` fetch helper
-- `frontend/lib/api.ts` — `getPublicCreatorProfile(username)`, `getPublicProfile(userId)` (legacy), `getCreatorImpact()`, `updatePublicProfileVisibility(visible)`
+- `frontend/lib/api.ts` — public-profile calls plus paginated `getCreatorImpact(...)`, `getCreatorImpactSummary()`, and profile visibility updates
 
 ## Anti-drift Notes
 
@@ -40,7 +41,8 @@ Current route compatibility note:
 Related APIs:
 
 - `GET /api/public/profile/{userId}`
-- `GET /api/creator-impact/me` (authenticated owner only)
+- `GET /api/creator-impact/me?impacted=true|false&page=&size=` (authenticated owner only)
+- `GET /api/creator-impact/me/summary` (authenticated owner only)
 - `PUT /api/users/profile/public-visibility` (owner only)
 
 ## What Public Profile Shows
@@ -161,25 +163,29 @@ The Learning Focus section turns public-note subject coverage into a lightweight
 
 Chips are hidden when `notesBySubject` is empty. Legacy `userId` profile routes remain compatible, but new subject-chip links must use the creator `username`.
 
-## Your Impact — Owner-Only Dashboard
+## Your Impact — Private Contribution Page
 
-Every account can open its own Public Profile from the existing "View Public Page" link on the top card of `/profile` (unconditional, unchanged by this feature) — this is the entry point into the Impact section below, not a new gated link.
+The authenticated, top-level `/impact` route is the durable private destination for creator impact. Public Profile keeps a compact owner-only card with `View impact →`; visitors see no card or impact data. Impact remains separate from `PublicProfileResponse` and is never served from `/public/**`.
 
-Below the existing public views/copies/shares stats, the profile owner sees a private `Your Impact` section backed by authenticated-only `GET /api/creator-impact/me`. This data is not part of `PublicProfileResponse`, is never served from `/public/**`, and is never rendered for another visitor or an admin viewing someone else's profile.
+The impact API accepts no user identifier. Identity always comes from the authenticated principal:
 
-The dashboard shows:
+- `GET /api/creator-impact/me/summary` returns exactly `distinctLearnersHelped` and `publicNoteCount`. Settings uses the note count for the Knowledge Impact digest gate, and `/impact` uses the distinct learner count as the sole headline source.
+- `GET /api/creator-impact/me?impacted=true|false&page=&size=` requires `impacted`, defaults `size` to 20, and caps it server-side. It returns the requested note page plus `totalImpacted` and `totalZeroImpact`.
+- Impacted notes are ordered by `distinctLearnersHelped DESC, noteId ASC`. Zero-impact notes are ordered by `noteId ASC` and load only after the learner expands “Other published notes.”
+- Views and copies are grouped only for the returned page IDs. This keeps every grouped `IN (:noteIds)` list bounded by the page size.
+- Every page response carries fresh `totalImpacted` / `totalZeroImpact`, and the page applies them on each load rather than only at mount. A note can cross from zero-impact to impacted while the page is open; without this the `Load more` control compares against a stale total and requests pages that come back empty.
 
-- one headline count of distinct learners helped across all of the creator's public notes
-- a per-note breakdown of distinct learners helped
-- raw per-note views and copies as smaller secondary context
+The page leads with learning impact. Per-note views are labelled **page views**, because `PUBLIC_NOTE_VIEWED` is anonymous traffic and cannot represent distinct people; page views and copies remain secondary text on each note card. Zero-impact notes are collapsed by default without a deficit counter.
 
 `Helped` has a deliberately stronger definition than copied or opened: a learner must copy the public note and genuinely complete at least one quiz session on that copied note (`quick_review_sessions.status = COMPLETED and completed_at IS NOT NULL` — both are required; `completed_at` alone is not sufficient because Long Exam and Interview Practice forfeit paths also set `completed_at` on a `FORFEITED` session). A session that was merely started, or one that was forfeited despite still recording a `completed_at` timestamp, does not count. The same learner is counted once in the creator-level headline even when they completed sessions from multiple notes, so per-note counts may add up to more than the headline.
 
-The section has neutral zero and retryable error states. An Impact API failure does not hide or break the public profile header, existing public stats, notes, or owner controls. The existing public `totalViews` / `totalCopies` / `totalShares` block is unchanged and remains visible to all eligible profile visitors.
+The page distinguishes published notes with no qualifying activity from accounts with no published notes. Initial failures keep a retry affordance, while a failure loading the expanded zero-impact section stays inline and leaves impacted notes visible. The existing public `totalViews` / `totalCopies` / `totalShares` block is unchanged and remains visible to eligible profile visitors.
 
-Owner views emit `KNOWLEDGE_IMPACT_DASHBOARD_VIEWED` once per page load. Publishing a note from a non-public state emits `PUBLIC_NOTE_PUBLISHED`; re-saving an already-public note does not emit it again.
+Opening `/impact` emits `KNOWLEDGE_IMPACT_DASHBOARD_VIEWED` once per page load. Publishing a note from a non-public state emits `PUBLIC_NOTE_PUBLISHED`; re-saving an already-public note does not emit it again.
 
-Creators with at least one public note can opt into the `Knowledge Impact digest` under Settings → Email Preferences. The digest runs monthly and reports the distinct learners who completed a quiz from the creator's public notes during the trailing 30 days. It is off by default, sends nothing when that window has zero learners, and uses the existing Email Preferences unsubscribe flow. Its copy stays retrospective and aggregate, with no rankings, comparisons, streaks, badges, or urgency framing.
+⚠️ **`KNOWLEDGE_IMPACT_DASHBOARD_VIEWED` changed meaning in v0.136.0 and its history is not comparable across that cut.** It previously fired whenever an *owner* opened their own Public Profile, regardless of whether impact data loaded — the tracker sat inside the owner-only section and rendered alongside the loading and error states. It now fires only on `/impact`, and only after the initial load succeeds, because the tracker renders after both early returns. The new number therefore measures *deliberate visits that showed data*; the old one measured *owner profile visits*. Any read that compares the two is comparing different events.
+
+Creators with at least one public note can opt into the `Knowledge Impact digest` under Settings → Email Preferences. The digest runs monthly and reports the distinct learners who completed a quiz from the creator's public notes during the trailing 30 days. Its `View Your Impact` button links to `/impact` (`RetentionService.buildImpactUrl`). Before v0.136.0 it linked to `/public/creator/{username}#your-impact-heading`; that anchor still exists but now resolves to the owner-only link card, so the email would have promised the dashboard and delivered another link. It is off by default, sends nothing when that window has zero learners, and uses the existing Email Preferences unsubscribe flow. Its copy stays retrospective and aggregate, with no rankings, comparisons, streaks, badges, or urgency framing.
 
 ## Notes
 

@@ -2262,9 +2262,17 @@ export type CreatorImpactNoteResponse = {
   copyCount: number;
 };
 
-export type CreatorImpactResponse = {
-  distinctLearnersHelped: number;
+export type CreatorImpactPageResponse = {
   notes: CreatorImpactNoteResponse[];
+  page: number;
+  size: number;
+  totalImpacted: number;
+  totalZeroImpact: number;
+};
+
+export type CreatorImpactSummaryResponse = {
+  distinctLearnersHelped: number;
+  publicNoteCount: number;
 };
 
 export type NotificationResponse = {
@@ -5985,16 +5993,37 @@ export async function getPublicCreatorProfile(username: string): Promise<PublicP
   return parseApiResponse<PublicProfileResponse>(response, "Could not load this public profile.");
 }
 
-export async function getCreatorImpact(): Promise<CreatorImpactResponse> {
+export async function getCreatorImpact(
+  impacted: boolean,
+  page = 0,
+  size = 20,
+): Promise<CreatorImpactPageResponse> {
+  const searchParams = new URLSearchParams({
+    impacted: String(impacted),
+    page: String(page),
+    size: String(size),
+  });
   const response = await fetchWithAuth(
-    "/creator-impact/me",
+    `/creator-impact/me?${searchParams.toString()}`,
     {
       method: "GET",
       headers: buildAuthHeaders(),
     },
     true,
   );
-  return parseApiResponse<CreatorImpactResponse>(response, "Could not load your impact.");
+  return parseApiResponse<CreatorImpactPageResponse>(response, "Could not load your impact.");
+}
+
+export async function getCreatorImpactSummary(): Promise<CreatorImpactSummaryResponse> {
+  const response = await fetchWithAuth(
+    "/creator-impact/me/summary",
+    {
+      method: "GET",
+      headers: buildAuthHeaders(),
+    },
+    true,
+  );
+  return parseApiResponse<CreatorImpactSummaryResponse>(response, "Could not load your impact.");
 }
 
 export async function updateNote(
