@@ -100,6 +100,13 @@ real newer revision, while the unique index still prevents duplicates for the sa
 does not close the episode; dismissal does, so a learner who dismisses without applying is notified
 again after the next real publication. The copied title and body are fixed and carry no change count.
 
+**⚠️ A CURATOR WHO ADOPTED THEIR OWN SET IS NOT A RECIPIENT.** `adopt()` carries no owner guard, so a
+curator can self-adopt their own PUBLIC Review Set; without an exclusion they would be told about a
+publish they just performed. `findReviewSetUpdateRecipients` excludes self-copies with
+`adoption.ownerUserId <> source.ownerUserId` — **the same predicate `countAdoptionsByCollectionIds`
+uses, deliberately, so the two queries agree on what an adoption is.** If they ever diverge, the
+adoption count and the notification audience disagree about the same relationship.
+
 ## Opening, closing, and the bell as a toggle
 
 The bell is a **toggle**, not a re-open. Clicking it while the panel is open **closes it and does NOT

@@ -841,6 +841,23 @@ Official Review Set. The action is enabled only when that set is already `PUBLIC
 collection or item beneath it is unpublished. It stamps all outstanding rows and the root's
 `last_update_published_at` in one locked transaction. Repeating it after the stamp is a successful no-op.
 
+**⚠️ SINCE `v0.135.0`, PUBLISHING AN UPDATE ALSO NOTIFIES ADOPTERS.** The publish is the trigger: it
+emits an event that, **after the transaction commits**, fans a `REVIEW_SET_UPDATE` notification out to
+everyone who adopted that source root, deep-linked to their own adopted copy. Editing still reaches
+nobody — that is what this boundary is for, and it is now load-bearing for a learner-visible signal
+rather than only for visibility.
+
+**Three consequences worth knowing before changing anything here:**
+
+- **The trigger is this call site, not the stamp.** `publishInitialCurriculum` advances
+  `last_update_published_at` too, so a producer keyed on the stamp would announce a set's first-ever
+  publication. See `docs/features/notifications.md`.
+- **Delivery must stay outside this transaction.** `publishReviewSetUpdate` is `@Transactional` and
+  holds a `FOR UPDATE` lock; notification delivery relies on catching a unique-index violation, which
+  inside an ambient transaction would mark it rollback-only and **roll back the publication itself**.
+- **A curator who adopted their own set is excluded**, the same way `countAdoptionsByCollectionIds`
+  excludes self-copies. Publishing must not notify the person who pressed the button.
+
 **Initial publication vs. publishing an update.** Flipping a set to `PUBLIC` for the first time stamps its
 whole current curriculum — there are no adopters yet, so there is no update to announce. The discriminator
 is `last_update_published_at`, **not** `published_at`: V141 backfilled `published_at` for every pre-existing
