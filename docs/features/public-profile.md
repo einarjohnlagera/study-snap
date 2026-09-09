@@ -173,6 +173,7 @@ The impact API accepts no user identifier. Identity always comes from the authen
 - `GET /api/creator-impact/me?impacted=true|false&page=&size=` requires `impacted`, defaults `size` to 20, and caps it server-side. It returns the requested note page plus `totalImpacted` and `totalZeroImpact`.
 - Impacted notes are ordered by `distinctLearnersHelped DESC, noteId ASC`. Zero-impact notes are ordered by `noteId ASC` and load only after the learner expands “Other published notes.”
 - Views and copies are grouped only for the returned page IDs. This keeps every grouped `IN (:noteIds)` list bounded by the page size.
+- Every page response carries fresh `totalImpacted` / `totalZeroImpact`, and the page applies them on each load rather than only at mount. A note can cross from zero-impact to impacted while the page is open; without this the `Load more` control compares against a stale total and requests pages that come back empty.
 
 The page leads with learning impact. Per-note views are labelled **page views**, because `PUBLIC_NOTE_VIEWED` is anonymous traffic and cannot represent distinct people; page views and copies remain secondary text on each note card. Zero-impact notes are collapsed by default without a deficit counter.
 

@@ -2,7 +2,7 @@
 
 ## v0.136.0 - Contribution Surface
 
-**Status: In Progress** (kicked off 2026-09-09, base branch `releases/v0.136.0`, cut from `main` after `v0.135.0` merged as #1356 and tagged `7f371e65`)
+**Status: Released** (kicked off 2026-09-09, signed off 2026-09-09, base branch `releases/v0.136.0`, cut from `main` after `v0.135.0` merged as #1356 and tagged `7f371e65`. Shipped as PRs #1357 and #1358.)
 
 Source: `docs/claude-plans/your-impact-private-contribution-surface-stage1.md`.
 
