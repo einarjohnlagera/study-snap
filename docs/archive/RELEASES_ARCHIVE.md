@@ -1,6 +1,6 @@
 # RELEASES_ARCHIVE.md — NoteLib
 
-Archived sections of `RELEASES.md`. **Contents are NOT one contiguous range:** `v0.41.0`–`v0.120.0`, plus `v0.126.0` (moved at the `v0.132.0` kickoff), `v0.127.0` (moved at the `v0.133.0` kickoff) `v0.128.0` (moved at the `v0.134.0` kickoff) and `v0.129.0` (moved at the `v0.135.0` kickoff) as the live file crossed its *current + last five* cap. Each version's own `## vX.Y.Z` heading is the index — search for it. `v0.40.1` and earlier moved here
+Archived sections of `RELEASES.md`. **Contents are NOT one contiguous range:** `v0.41.0`–`v0.120.0`, plus `v0.126.0` (moved at the `v0.132.0` kickoff), `v0.127.0` (moved at the `v0.133.0` kickoff) `v0.128.0` (moved at the `v0.134.0` kickoff) `v0.129.0` (moved at the `v0.135.0` kickoff) and `v0.130.0` (moved at the `v0.136.0` kickoff) as the live file crossed its *current + last five* cap. Each version's own `## vX.Y.Z` heading is the index — search for it. `v0.40.1` and earlier moved here
 2026-07-10; **`v0.41.0` through `v0.120.0` moved here 2026-09-07** in the `v0.126.0` pass, which
 resumed this convention after it had lapsed for 85 releases — `RELEASES.md` had reached 116
 sections against its documented design of *current + last few versions*. Both passes are MOVES,
@@ -16990,3 +16990,245 @@ the card's render test.
 **⚠️ Backend is a Codex prompt, not built here** (`docs/codex-prompts/v0.129.0-adoption-count-backend.md`,
 untracked by design). It carries the one index, the batched self-join query, and the guard that the
 backend must return the **exact** count with no threshold logic.
+
+## v0.130.0 - Notification Inbox
+
+**Status: Released** (kicked off 2026-09-07, signed off 2026-09-07, base branch `releases/v0.130.0`, **cut from `releases/v0.129.0` rather than `main`** because `v0.129.0`'s release PR #1340 is BLOCKED by the `main` ruleset's `require_extra_approval_for_unattributed_changes` parameter — the `v0.120.0`/`v0.111.0` precedent, where the signoff commit rides into `main` via the release PR)
+
+Theme: build the notification substrate, and give it the one producer that can actually fill it.
+
+Source: `docs/claude-plans/in-app-notifications-and-review-set-adoption-signals-stage1.md`, §17 — **Stages 3 and 4 together.**
+
+### Why 3 and 4 together, and why NOT 5, 6 or 7
+
+**⚠️ STAGE 3 ALONE SHIPS AN EMPTY INBOX, AND PRODUCTION SAYS SO RATHER THAN INTUITION.** Read read-only 2026-09-07:
+
+| producer | rows |
+|---|---:|
+| `linked_learner_relationships` ACCEPTED | **1** |
+| `linked_learner_invitations` PENDING | **1** |
+| `note_shares` | **0** |
+
+Stage 3's own producers are Stage 5 (those rows) and Stage 6 (blocked). **Stage 4 is the only producer that generates content on demand**, and it is admin-controlled, so pairing them is what makes the substrate demonstrable. They share one table, one fan-out path and one verification pass, so splitting them buys no isolation and costs a second cold agent.
+
+**⚠️ STAGE 5 IS DEFERRED FOR A REASON THAT IS NOT EFFORT: IT WOULD CONTAMINATE `[CHECKPOINT — due 2026-09-19]`.** That checkpoint decides whether the Learning Connections arc continues **at all**, and its kill criterion keys on `ACCEPTED` — **where the denominator is ONE.** Stage 5's headline event surfaces a pending connection request to the invitee, which is precisely the nudge that converts a pending invitation into an acceptance. **One notification-caused acceptance would DOUBLE the metric, and the checkpoint would then be reading the notification rather than demand.** Stage 5 also has almost nothing to notify about today (1 pending invitation, **0** note shares). **⚠️ Do NOT ship any Stage 5 event before 2026-09-19 reports.**
+
+**Stage 6 stays BLOCKED on §8** — the drift-signature dedup correction is an unresolved owner decision, and `(recipient, adopted_collection_id, source_synced_at)` is unsound in both directions. **Stage 7 is out of scope by the plan's own table.**
+
+### Planned Scope
+
+**(3) Notification foundation.** `notifications` table with **a UNIQUE index on `(recipient_user_id, dedup_key)` — that index IS the idempotency guarantee, not a service-side check that can race.** Inbox read, read/dismiss, actionable count, bell in the existing header, polling, mobile sheet, and the deep-link contract. **⚠️ Notification = awareness; the owning feature = truth.** A row stores recipient, type, dedup key, deep link and timestamps and **never** request/grant/update state.
+
+**(4) Admin What's New.** `announcements` with `DRAFT → PUBLISHED → ENDED`, **immutable content after publish** (to correct copy: end it and publish a replacement), audience `EVERYONE` / `PROFILE_TYPE` / `PLAN_TYPE`, fan-out to rows, optional expiry via the existing hourly-cleanup job pattern, and an internal-only CTA. **⚠️ Title/body/CTA are COPIED AT FAN-OUT and never re-read**, so `announcement_id` is provenance and lifecycle association, **not live content inheritance.**
+
+**Audit of the Stage 4 delivery (implemented by a cold agent, audited here).** Every claim was re-verified rather than accepted, and **two mutations were run independently of the agent's own**:
+- **Collapsing the delivery's `entityId` to a constant** — which would silently give every user only the FIRST announcement ever published, forever — is killed by `twoAnnouncementsToTheSameUserGetDistinctDedupKeysAndBothArrive` and **passes straight through the fan-out-twice test**, exactly as the agent predicted. **⚠️ THAT IS THE FINDING WORTH KEEPING: the obvious idempotency test cannot see this bug class**, and the agent wrote the test that can without being asked to.
+- **Removing the `DRAFT`-only guard on edit** fails both `editAfterPublishIsRefusedAndDeliveredRowsAreUnchanged` and `anEndedAnnouncementCannotBeEditedOrPublishedAgain`.
+
+**Independently confirmed:** `./mvnw clean install` **BUILD SUCCESS, 2278 tests**; `V140` applied by Flyway **against the real PostgreSQL 16 container**; frontend **209 suites / 2310 tests**, `tsc` clean, ESLint 0 errors. The immutability test asserts **both halves** — the refusal *and* that delivered rows are byte-identical — and the fan-out-twice test counts **database rows**, not a service return value.
+
+**Four deviations from the prompt, all judged sound and none reverted:**
+- **Expiry is evaluated ON READ, not by the cleanup job the Planned Scope named.** ⚠️ This is a correction, not drift: a job-driven expiry is wrong for as long as the job has not yet run, which the release's own error states forbid. The Planned Scope line above is superseded.
+- **`publish` on an already-`PUBLISHED` announcement re-runs fan-out** rather than refusing. Fan-out is thousands of committed inserts inside one admin request; the status transition commits *before* it and the unique index makes a re-run insert zero duplicates, so **a timed-out publish is recoverable instead of stranded**. `published_at` is stamped once and a test asserts it is never re-stamped; `ENDED → publish` is still refused.
+- **⚠️ THE PROMPT WAS WRONG ABOUT `PLAN_TYPE` AND THE AGENT CAUGHT IT.** The prompt asserted all three audiences are indexed columns on `users`; **plan is not on `users` at all** and resolves through `SubscriptionService.resolvePlan`. The audience query mirrors that precedence (PLUS+PRO resolves to PRO, so such a user is in the PRO audience and not the PLUS one) and is pinned by `planTypeAudienceMirrorsResolvePlanIncludingItsPrecedence`.
+- **Admin-only is proven REFLECTIVELY, not as a live 403** — `standaloneSetup` does not run the security filter chain, so a request-level assertion would prove nothing. The test asserts the class-level `hasRole('ADMIN')` exists and that none of the five mapped methods overrides it. **⚠️ This is a repo-wide limitation, not one introduced here: NO `Admin*ControllerTest` in this codebase asserts a live 403**, so this is stronger than the existing precedent rather than weaker.
+
+**Known limitation.** Fan-out runs synchronously inside the admin publish request, one insert per recipient in chunks of 500. **⚠️ THIS PARAGRAPH ORIGINALLY ENDED "Fine at current scale" AND THAT FRAME WAS WRONG — see `### Known limitations` below, rewritten after the pressure test.** The chunking bounds the log output, not the resource: `deliver` is deliberately not `@Transactional`, so each insert auto-commits, **but `open-in-view=ON` with `DELAYED_ACQUISITION_AND_HOLD` means the connection is held until the HTTP request ends regardless** — so the whole fan-out sits on one of twenty, and the blast radius is every learner request, not the admin's. **⚠️ `publish` and `fanOut` are deliberately NOT `@Transactional`** — `deliver` depends on catching `DataIntegrityViolationException`, which under an ambient transaction would mark it rollback-only and kill the whole fan-out.
+
+### Anti-drift
+
+**⚠️ NO Learning Connections work of any kind** — see the Stage 5 deferral above; `[CHECKPOINT — due 2026-09-19]` is twelve days out with `n=1`. **⚠️ Do NOT build ANY Stage 5, 6 or 7 event**: no connection-request notification, no note-share notification, no Review Set update sweep, no Assignment. **⚠️ Do NOT fabricate a recipient for a quiz share link** — a share link has no addressee. **⚠️ Do NOT notify on a Note becoming PUBLIC or on a generic public link.**
+
+**⚠️ POLL, DO NOT STREAM** — there is no WebSocket/SSE infrastructure; `lib/study-pack-generation.ts` is the proven polling pattern. **⚠️ Do NOT compute adopter drift on inbox load.** **⚠️ Never one feature query per notification row** — batch, or snapshot at fan-out.
+
+**⚠️ Announcements NEVER contribute to the numeric badge**, and **never render a literal `0`** — no badge at all at zero. **⚠️ Do NOT mark-all-read on panel open**; that discards the one signal a learner needs for a pending request. **⚠️ Dismissal must never** revoke a connection, decline a request, apply an update, unshare a note, or alter any product state. **⚠️ Do NOT add an authoritative `resolved` column.**
+
+**⚠️ Announcement targeting is EDITORIAL, NEVER AUTHORIZATION** — entitlement stays with `FeatureGateService`. **⚠️ Do NOT allow external or protocol-relative CTA URLs**: accept a relative path, reject anything with a scheme, `//`, or a host. **⚠️ Do NOT build push, email, SMS, quiet hours or a preferences centre. Do NOT build announcement funnels, CTR dashboards or attribution.** **⚠️ Do NOT add a fifth mobile bottom tab** — the bar is already contested by `ExamFocusContext`. **⚠️ Do NOT build on `analytics_events`** — it is telemetry by declaration (`V77` dropped its user FK). **⚠️ No quota, entitlement or pricing change; onboarding untouched.**
+
+### Verification
+
+**ONE SCOPED COLD AGENT**, per the plan's own Verification section — this is **a new cross-user delivery surface whose only duplicate-prevention is a single unique index**, which is exactly the shape that earns an independent read. **⚠️ UPGRADED AT SIGNOFF TO THE FULL THREE-AGENT TEST — this pledge was exceeded, not left unmet.** Two further triggers appeared during delivery that were not visible when this line was written: the implementing session ended up auditing its own inline half after Codex stopped on a usage limit, and **`v0.129.0` turned out to have been signed off with no pressure test at all**, so it was folded in as a third partition. See the pressure-test section under `### Shipped`.
+
+**⚠️⚠️ EVERY NEW ENDPOINT OWES ONE TEST THAT ISSUES A REAL REQUEST — `MockMvc` with `.contentType(MediaType.APPLICATION_JSON)` and a body, the pattern already in `NoteControllerTest`.** This release adds several endpoints, and `v0.119.0` is the measured precedent: **both of that feature's JSON POSTs sent no `Content-Type`**, Spring rejected every request **before the controller was entered**, and the feature could not make one successful request while **2,182 frontend tests passed**. A direct controller-method call is **not** a substitute — it bypasses content negotiation and passes under the defect by construction. On the client side, `lib/api-*.test.ts` pins the request shape; a component test that mocks `lib/api` proves nothing about it.
+
+**Pre-declared guards, from the plan's discriminating list:**
+- **(6) Idempotent fan-out** — the same event twice leaves **exactly one row**. ⚠️ Assert the **database**, not the service return.
+- **(7) Published Announcement is immutable** — an edit after publish is refused **and delivered rows are unchanged**.
+- **(8) Badge excludes Announcements** — one unread Announcement, zero actionable → **no numeric badge at all**, not a `0`.
+- **(9) Notification is not authority** — accepting a request through the normal flow leaves the row untouched and the inbox still renders sensibly.
+- **(10) No N+1 on inbox load** — a page of N notifications issues a **bounded** number of queries independent of N. ⚠️ **Assert the query count, not the rendered rows.**
+
+**⚠️ CARRIED LESSONS: confirm a mutation is PRESENT before trusting a green suite** (twice-burned), and **anchor every quoted defect to the CURRENT file at kickoff** — `v0.128.0` opened on an item that had already shipped nine days earlier because the kickoff copied planned-scope prose forward.
+
+**Routing: CODEX** — multi-system (two migrations, new entity/service/controller, plus frontend inbox and bell), which the routing table sends to Codex with a prompt. **⚠️ Call `advisor()` BEFORE writing that prompt** — measured as the highest-yield checkpoint in this repo.
+
+### Shipped
+
+**Stage 3 — the notification substrate.** ⚠️ **The inbox is EMPTY by construction until Stage 4 lands; that is the design, not a gap.**
+
+- **`V139` adds `notifications` with a UNIQUE index on `(recipient_user_id, dedup_key)`, and THAT INDEX IS THE DELIVERY GUARANTEE.** `dedup_key` is deterministic — one helper builds `"<TYPE>:<entity-id>"` — and `deliver` **attempts the insert and catches `DataIntegrityViolationException`**, returning the existing row. **⚠️ There is NO `existsBy` pre-check anywhere, deliberately: two concurrent deliveries can both pass one and still duplicate.** Same shape as `NoteCollectionService:952`'s adoption race.
+- **The actionable/announcement split is a property of `NotificationType`, not a call-site `if`** — `actionableTypes()` derives from the enum flag, so announcements can never inflate the numeric badge by accident. **⚠️ No badge element renders at zero** — not a `0`, not an empty circle.
+- **Cross-user access returns NOT-FOUND, not forbidden**, so an endpoint never confirms someone else's notification exists.
+- **Retention deletes read-or-dismissed rows past a config-backed window; unread AND UNDISMISSED actionable rows are RETAINED regardless of age** — such a row is the learner's only pointer to a pending request. **⚠️ The "undismissed" qualifier was missing from this line when it was first written and the sentence was therefore false:** the predicate is `read_at IS NOT NULL OR dismissed_at IS NOT NULL`, so a row dismissed without being read IS eligible for deletion. That is the correct behaviour — dismissing is the learner saying they are done — but it is not what the line said.
+- **⚠️ A polled 401 can no longer sign a learner out.** `fetchWithAuth` gained a `handleUnauthorized` parameter **defaulting to `true`, so every existing caller is byte-for-byte unchanged**; only `getNotificationUnreadCount` passes `false`. This is a change to shared auth plumbing and is called out rather than buried.
+- **Bell polls at 60s, stops while the tab is hidden, and a failed poll keeps the last known count silently** — clearing it would tell a learner they have nothing when a request is pending.
+
+**Verification.** **⚠️ BOTH `POST` ENDPOINTS HAVE REAL `MockMvc` REQUESTS WITH `.contentType(MediaType.APPLICATION_JSON)`** — the `v0.119.0` defect class, where two JSON POSTs sent no `Content-Type` and Spring rejected every request before the controller was entered. `lib/api-notifications.test.ts` pins the request shape independently. **⚠️ That file originally also asserted the poll issues EXACTLY ONE fetch on a 401 — a test protecting a defect, corrected below.**
+
+**⚠️ MUTATION VERIFICATION, AND ONE MUTATION FAILED TO REACH ITS SUBJECT — RECORDED BECAUSE THAT IS THE INSTRUCTIVE PART:**
+- Rendering the badge at zero (`> 0` → `>= 0`) fails the no-badge-at-zero test. ✅
+- **A first attempt at "mark everything read on panel open" PASSED ALL TESTS — and it was a false negative, not a missing guard.** The mutation iterated `notifications` from a **stale closure**, which is `[]` on first open, so it marked nothing. **⚠️ It compiled, it was present in the file, and it proved nothing.** Rewritten to mark read from the freshly-loaded list, it fails two tests. **This is the repo's own "the guard must reach its subject the way production does" lesson, hit from the mutation side rather than the fixture side.**
+
+**⚠️ TWO DEFECTS WERE FOUND IN THE HANDOVER, AND BOTH WERE FOUND BY GUARDS RATHER THAN BY READING:**
+- **`NotificationCleanupJob` was unregistered, and `ScheduledJobCronContractTest` failed the build for it** — the job declared a production cron but was absent from `EXPECTED_DEFAULTS`, `EXPECTED_ZONES` and the test profile's disable list. **⚠️ Its message names the real consequence: *"an unlisted cron job runs on the wall clock during the suite."*** Fixed by registering it in all three. **This is exactly what that guard exists for, and it worked with no human noticing the omission.**
+- **⚠️ THE INBOX CRASHED THE ENTIRE APP SHELL WHERE `matchMedia` IS UNAVAILABLE.** `globalThis.matchMedia(...)` was called unguarded, and **this component renders inside the header — so it takes down EVERY authenticated page, not just the bell.** It surfaced as 14 failures in `app-shell.test.tsx`. **⚠️ Fixed in the COMPONENT, not by mocking it in the test** — the fault was real, not a test gap — with optional chaining and a desktop-popover fallback, plus a guard asserting the component still renders.
+
+**Routing note.** Codex delivered the backend and part of the frontend, then stopped on a usage limit. **The backend was audited as third-party work and needed no correction.** The remainder — bell mount, count state and polling in `app-shell.tsx`, frontend tests, this documentation — was completed inline. **⚠️ The pre-declared scoped cold agent at release end is therefore doing double duty as the independent read on the inline half**, since the implementer also audited it.
+
+**Stage 4 — Admin "What's New", the inbox's first producer.**
+
+- **`V140` adds `announcements` with a `DRAFT → PUBLISHED → ENDED` lifecycle**, fanning out into the **existing** `notifications` table. **⚠️ NO SECOND DELIVERY PATH, no lazy eligibility evaluation, and no scheduler** — Draft → Published is manual. `ReEngagementCampaignService` was **not** extended: it has a hardcoded audience, a fixed template and email-only delivery, with no campaign entity to build on.
+- **⚠️ PUBLISHED CONTENT IS IMMUTABLE, AND AN EDIT IS REFUSED — NEVER A SILENT NO-OP.** `AnnouncementNotEditableException` (409) carries the remedy in its `action`: *end this announcement and publish a replacement*. **Title, body and CTA are COPIED onto each notification row at fan-out and never re-read**, so `announcement_id` is provenance and lifecycle association, not live content inheritance. The test asserts **both halves** — the edit is refused *and* the already-delivered rows are byte-identical afterwards.
+- **⚠️ IDEMPOTENCY IS PROMPT A's UNIQUE INDEX, WITH NO `existsBy` PRE-CHECK ADDED.** `dedup_key` is `"ANNOUNCEMENT:<announcementId>"` from the one existing helper. **Re-publishing RE-RUNS the fan-out rather than being refused, deliberately:** fan-out is one committed insert per recipient with no ambient transaction, so a few thousand recipients is a few thousand round trips inside one admin request — long enough to outrun a gateway timeout. The status transition commits *before* fan-out, so a timed-out publish is recoverable by pressing Publish again. **`published_at` is stamped once and never re-stamped; `ENDED` → publish is refused.**
+- **⚠️ `publish`/`fanOut` ARE DELIBERATELY NOT `@Transactional`.** `deliver` depends on catching `DataIntegrityViolationException`; under an ambient transaction that violation would mark the whole transaction rollback-only and take the entire fan-out down with it. **Partial failure never rolls back deliveries already made** — one recipient's failure is counted, logged and stepped over, and a retry picks up exactly the recipients that were missed.
+- **⚠️ ENDING AND EXPIRY ARE DECIDED ON READ, SO THEY BITE IMMEDIATELY** — no cleanup job stands between the admin's click and the learner's inbox. The lifecycle check is a correlated subquery inside the **single** inbox query, so the query count stays independent of row count. **⚠️ It is NOT-EXISTS-ended rather than EXISTS-live**: a notification outlives the thing it points at by design, so a vanished announcement row leaves the delivered row **visible** instead of silently eating inboxes. **This supersedes the Planned Scope line above that said "optional expiry via the existing hourly-cleanup job pattern"** — a job-driven expiry is wrong for as long as the job has not run.
+- **⚠️ CTA VALIDATION IS A SECURITY CONTROL, AND IT IS A RULE, NOT AN ALLOW-LIST.** `cta_path` must be a same-origin relative path — `^/[A-Za-z0-9\-._~/]*$` plus an optional query string — rejecting any scheme, host or protocol-relative `//` prefix. An allow-list of routes would need an application release for every new legitimate destination, which is the pressure that gets a check deleted. **Validated on write AND re-checked on render** (`lib/safe-relative-path.ts`), because `next/link` renders an absolute URL as a live external anchor and a stored value is still untrusted by the time it reaches an `href`.
+- **⚠️ TARGETING IS EDITORIAL, NEVER AUTHORIZATION.** Three audiences, no query builder. `AnnouncementAudienceResolver` holds no reference to `FeatureGateService` and a test asserts it; an untargeted account's rows are byte-identical after a publish. **The `PLAN_TYPE` leg mirrors `SubscriptionService.resolvePlan` including its precedence** — a user with both an active PLUS and an active PRO resolves to PRO, so they are in the PRO audience and not the PLUS one — using its own query rather than `findActiveUserIdsByPlanTypeInAndStatus`, which omits the `startAt` leg. **⚠️ `EVERYONE`/`PROFILE_TYPE` are ACTIVE accounts, deliberately NOT filtered on `emailVerifiedAt`**: delivery is in-app, unlike the email campaign path. **An audience resolving to zero users publishes successfully and delivers nothing** — a legitimate outcome, not an error.
+- **Admin surface at `/admin/announcements`**, modelled on the Campaigns page: list with status, draft form, and confirmed Publish / End. **Publish confirms before firing**, and **the form states immutability-after-publish up front** so Edit disappearing is never a surprise. Announcement rows render in the **existing** inbox — no new surface, no badge-rule change.
+
+**Verification (Stage 4).** **⚠️ ALL FIVE ENDPOINTS HAVE REAL `MockMvc` REQUESTS WITH `.contentType(MediaType.APPLICATION_JSON)` AND A BODY**, and `lib/api-announcements.test.ts` asserts the `Content-Type` header on the three POSTs and the PUT independently — the `v0.119.0` defect class. Admin-only is proven **reflectively and honestly**: `standaloneSetup` does not run the security filter chain, so the test asserts the class-level `hasRole('ADMIN')` gate exists and that **none of the five mapped methods overrides it** — it is not a live 403 assertion and is not written up as one.
+
+**⚠️ MUTATION VERIFICATION — EACH MUTANT NAMED WITH THE TEST THAT KILLED IT:**
+- Passing a **constant** instead of the announcement id as the delivery's `entityId` (which would collapse every announcement onto one dedup key and deliver only the first one, forever) → killed by `twoAnnouncementsToTheSameUserGetDistinctDedupKeysAndBothArrive`. **⚠️ The fan-out-twice test does NOT kill this one** — that is exactly why both exist.
+- Dropping the `expires_at` leg of the inbox predicate → killed by `anExpiredAnnouncementStopsPresentingWithoutAnyCleanupJobRunning`.
+- Dropping the protocol-relative `//` check while keeping the regex (the regex alone passes `//evil.example`, because `/` is in its character class) → killed by `rejectsAnythingThatIsNotASameOriginRelativePath` and `theProtocolRelativePrefixIsRejectedEvenThoughItStartsWithASlash`.
+- Rendering `notification.ctaPath` directly instead of the validated path → killed by `refuses to render a CTA that is not a same-origin relative path`.
+
+### Pre-signoff pressure test — FULL THREE-AGENT, and what it changed
+
+**Tier chosen: the FULL test, not the scoped one.** Two triggers fired together — this release added a
+substrate touched by two PRs plus a new admin write surface, and the implementing session also audited
+its own inline half after Codex stopped on a usage limit. **`v0.129.0` was folded into the same test
+because it was signed off without one**, and that decision paid for itself: three of the findings below
+are in that already-released version. Three cold agents on non-overlapping halves (`v0.130.0` backend /
+`v0.130.0` frontend+seam / `v0.129.0`), synthesized through `advisor()`.
+
+**⚠️ THE HEADLINE RESULT IS THAT EVERY DEFECT BELOW WAS INVISIBLE TO A GREEN SUITE.** 2,282 backend and
+2,300-odd frontend tests passed over all of it.
+
+**Fixed in this release:**
+
+- **⚠️ THE BADGE AND THE INBOX DISAGREED — found independently by BOTH the backend and the frontend
+  agent, which is why it is first.** `countActionableUnread` filtered on `read_at` alone while
+  `findVisibleInbox` also filters `dismissed_at`. An actionable row dismissed without being read left the
+  inbox and **kept incrementing the bell forever** — a number the learner could neither open nor clear.
+  Latent today only because Stage 5 has not shipped an actionable producer. Both queries now carry the
+  same visibility predicate, plus the announcement-lifecycle leg as mirroring (announcements are
+  non-actionable, so no row has both today — it is there so the two cannot drift). Guard:
+  `aDismissedActionableRowStopsCountingTowardTheBadge`, killed by removing the `dismissed_at` leg.
+- **⚠️ THE UNREAD POLL COULD NEVER REFRESH ITS TOKEN, SO THE BADGE FROZE AFTER 15 MINUTES IDLE.**
+  `getNotificationUnreadCount` passed `retry=false` **and** `handleUnauthorized=false`. Access tokens live
+  15 minutes and the poll runs every 60 seconds, so every poll after the first idle quarter-hour 401'd
+  without refreshing and the badge silently stuck on its last value for the rest of the session.
+  **⚠️ The "refresh storm" justification written into the code comment was never real** —
+  `tryRefreshAccessToken` already dedupes concurrent refreshes, and `trackAnalyticsEvent` has used exactly
+  this pairing all along. Now `retry=true, handleUnauthorized=false`; the two halves are separate
+  decisions and each has its own test, each mutation-verified.
+- **⚠️ A TEST WAS PROTECTING THAT DEFECT.** `does NOT retry or clear the session when the unread-count
+  poll returns 401` asserted **exactly one** fetch — so the fix could not land without the test failing.
+  This is the `v0.74.0` shape (a guard asserting the wrong behaviour) and is called out rather than
+  quietly rewritten.
+- **⚠️ A PURGED ACCOUNT LEFT ITS NOTIFICATIONS BEHIND PERMANENTLY.** `notifications` was missing from
+  `AccountPurgeService.deletePersonalRows`. **⚠️ Nothing else could ever take those rows:** retention
+  deliberately retains unread rows regardless of age, so the cleanup job is not a fallback. Added
+  `deleteByRecipientUserId`, asserted in `AccountPurgeServiceTest`.
+- **⚠️ `app-shell.test.tsx` MOCKED `@/lib/api` WITHOUT `getNotificationUnreadCount`, SO THE BADGE PATH WAS
+  EXECUTED BY NO TEST — AND THE SUITE WAS GREEN *BECAUSE* THE POLL FAILED.** The call was `undefined(...)`,
+  every poll threw, and the effect's own "a failed poll keeps the last count" catch swallowed it in all 18
+  tests. **⚠️ A `jest.mock` factory is an ALLOW-LIST: a module the component imports and the factory omits
+  fails silently at the call site, not at import.** Added the key, a missing `mockReset` (call counts were
+  leaking between tests), and three tests covering poll → state → prop → badge; the wiring test is killed
+  by replacing the prop with a literal `0`.
+- **⚠️ `deliver` ACCEPTED AN UNVALIDATED `ctaPath`, falsifying the validator's own "ONE VALIDATOR, ONE
+  LOCATION" javadoc.** Announcement create/update validate, so the guarantee held only while announcements
+  stayed the sole producer — and Stage 5 will not be an announcement. `deliver` now validates as the last
+  chokepoint before a link is persisted into an inbox.
+- **⚠️ RE-PUBLISH IS A TOP-UP, NOT A PURE RETRY, AND BOTH THE JAVADOC AND THE FEATURE DOC SAID OTHERWISE.**
+  `fanOut` re-resolves the audience **at call time**, so anyone who signed up, changed profile type or
+  upgraded plan since the first publish receives it on the second. Existing recipients are deduped by the
+  index. The behaviour is defensible and unchanged; the claim was wrong and is corrected in both places.
+- **⚠️ "Unread actionable rows are RETAINED regardless of age" was FALSE as written** — the predicate is
+  `read_at IS NOT NULL OR dismissed_at IS NOT NULL`, so a dismissed-unread row IS deletable. Corrected in
+  `RELEASES.md` and `docs/features/notifications.md`.
+- **Three `v0.129.0` defects, fixed here and corrected in that release's own section** — a vacuous
+  `applySourceUpdate` guard whose false claim reached both `RELEASES.md` and the published release notes,
+  and a completely unguarded public-detail adoption wiring (**mutation-proved: literal `0` left all 219
+  tests green**). Details under `v0.129.0` → Known limitations.
+
+**⚠️ SURFACE SWEEP — the false "creates none" claim had reached FIVE documents, and only two were in any
+diff.** The repo's rule is to sweep by SURFACE rather than by diff when a release changes what a claim
+means, and this is the fourth release running where that is where the finding was. Corrected at the
+origin (`docs/claude-plans/in-app-notifications-and-review-set-adoption-signals-stage1.md:417`, which is
+where the claim was first written and from which the vacuous guard was authored), in `RELEASES.md`, in
+`docs/releases/v0.129.0.md`, and in **`docs/gpt-contexts/GPT_CONTEXT.md`, which is pasted into GPT
+sessions as fact and was not in any diff.** The spent Codex prompts under `docs/codex-prompts/` carry it
+too and are left alone — untracked, and superseded by the shipped code. **⚠️ The same sweep caught the
+admin confirm dialog** saying re-publish *"re-runs delivery for anyone the first attempt missed. Nobody
+receives it twice"* — the copy an admin reads immediately before firing an irreversible action, and
+incomplete in exactly the way the javadoc was. It now names the top-up.
+
+### Known limitations
+
+- **⚠️⚠️ FAN-OUT HOLDS ONE OF TWENTY HIKARI CONNECTIONS FOR ITS WHOLE DURATION, AND THIS IS THE SHAPE OF
+  BOTH RECORDED PRODUCTION OUTAGES.** The previous wording of this limitation reasoned only about gateway
+  timeout and called it "a scaling ceiling rather than a correctness gap". **That was the wrong frame.**
+  With `open-in-view=ON` and `DELAYED_ACQUISITION_AND_HOLD`, the connection is held until the HTTP request
+  ends, not until each insert commits — so a publish to 400 recipients is 400 transactions and ~800
+  prepared statements on **one held connection**, with the persistence context never cleared (O(N²)
+  growth). **⚠️ The blast radius is the whole application, not the admin's request:** a large publish can
+  starve the pool that every learner request draws from. **Not fixed here on purpose** — bounding it means
+  moving fan-out off the request thread, which is a design change owed its own release and its own
+  verification, not a late patch to a release that has already had this much rework. **It now owes a
+  `[CHECKPOINT]` keyed on user count, not on a date** (below), because this is the one finding that will
+  hurt without warning.
+- **⚠️ A publish whose deliveries ALL fail still returns HTTP 200 "Published" with `delivered: 0`.** Read
+  alone this is a cosmetic reporting gap; read beside the item above it is not, because that item is what
+  makes total failure plausible. **The status code is left as-is deliberately** — partial failure must not
+  roll back, and choosing the right non-200 semantics for "published but delivered to nobody" belongs with
+  the fan-out redesign, not ahead of it. **Mitigated rather than fixed:** the admin surface now says
+  *"Nobody actually received it — check the logs before assuming it went out"* when `delivered` is 0 and
+  the audience was not empty, so the signal is no longer a number the admin has to notice unaided.
+- **⚠️ AND THE `deliver`-SIDE CTA VALIDATION ADDED IN THIS RELEASE CAN REACH THAT HOLE THROUGH A NEW DOOR
+  — recorded because the two findings are otherwise adjacent and unconnected.** `deliverOne` catches
+  `RuntimeException` broadly, so if a future producer hands `deliver` a bad `ctaPath`, **every** recipient
+  is counted as `skipped` and the publish reports `200 OK {delivered: 0}` rather than failing loudly. The
+  broad catch is the right call for the partial-failure contract and is not being narrowed here. **Not
+  reachable today**: announcement create *and* update both validate, `V140` is new so no legacy rows
+  exist, and announcements are the only producer. **⚠️ It becomes reachable the moment Stage 5 adds a
+  producer that does not validate on write** — which is exactly why the chokepoint was added.
+- **⚠️ ONE NEW GUARD RESTS ON A FIXTURE PRODUCTION HAS NOT CONFIRMED.**
+  `applyingSourceUpdateCreatesAnAdoptionOfANEWLYAddedChildSubjectPlan` — the test anchoring the
+  `v0.129.0` correction — builds the newly-added child as **PRIVATE** (the helper's default), and
+  `applySourceUpdate` copied it. Either Goal children are PUBLIC in production, making this the very
+  "fixture no code path can produce" shape this release documents elsewhere, or PRIVATE children really
+  are copied into an adopter's library and a collection shell crosses an ownership boundary on the update
+  path. **The guard kills its mutation either way, so the correction stands** — but which case it is, is
+  unresolved, and `docs/claude-plans/v0.130.0-owner-production-checks.sql` Q3 asks production. (The
+  *notes* inside are separately gated: `applyPlacementAddition` throws for a non-public source note.)
+- **⚠️ `NotificationCleanupJob.run()` is invoked by no test**, and its two exception classes are untested.
+  The scheduled-cron contract test proves it is *registered*; nothing proves it *deletes*.
+- **⚠️ THE NOTIFICATION INTEGRATION TESTS HAND-WRITE THEIR H2 DDL AND CAN SILENTLY DRIFT FROM `V139`/`V140`.**
+  This is the "fixture no code path can produce" anti-pattern at schema level, and it weakens every
+  confirmation those tests provide. Neither new JPQL query is executed against PostgreSQL by any test.
+  **⚠️ The existing `NativeQueryPostgresIntegrationTest` does not cover this** — it prepares *native*
+  queries, and these are JPQL.
+- **⚠️ `app/admin/announcements/page.tsx` is 460 lines with ZERO tests.** Admin-only and low blast radius,
+  which is why it is recorded rather than fixed, but it is the largest untested file the release added.
+- Smaller, each real and each recorded rather than fixed: a `datetime-local` round-trip shifts a draft's
+  expiry instant; a failed mark-read restores from a snapshot rather than functionally, so it can
+  resurrect a row dismissed server-side in between; the poll runs on routes that render no bell; the admin
+  form stays in edit mode after publishing; and the test named
+  `restores the row and the badge when a dismiss fails` asserts the row but never the badge.
+- **⚠️ AGENT 3's PRODUCTION INDEX CHECK WAS BLOCKED AND IS THEREFORE UNVERIFIED AGAINST PRODUCTION.** The
+  `v0.129.0` index claim is confirmed **in-repo only**. Two read-only SELECTs are handed to the owner in
+  `docs/claude-plans/v0.130.0-owner-production-checks.sql` rather than being reported as verified.
