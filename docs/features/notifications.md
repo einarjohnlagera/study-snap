@@ -198,14 +198,17 @@ the unique index is the guarantee.
 
 **Publish on an already-`PUBLISHED` announcement RE-RUNS the fan-out rather than being refused**, and
 that is deliberate. **⚠️ But it is a RETRY ONLY FOR PEOPLE WHO ALREADY HAVE IT — for anyone who has
-joined the audience since the first publish it is a FIRST SEND.** `fanOut` re-resolves the audience at
-call time, so a user who signed up, changed profile type or upgraded plan in between is included in the
-second resolution and receives the announcement; existing recipients are deduped by the unique index and
-get nothing new. The net effect is a **top-up**. This doc and the service javadoc both used to say
-"a retry, not a second send" flatly, which a `v0.130.0` pressure test disproved. Fan-out is one committed insert per recipient with no ambient transaction, so a
-few thousand recipients is a few thousand round trips inside one admin HTTP request — long enough to
-outrun a gateway timeout. The status transition commits *before* fan-out starts and the index makes a
-re-run insert zero duplicates, so a timed-out publish is recoverable by pressing Publish again.
+joined the audience since the first publish it is a FIRST SEND.** `publish` resolves the audience
+synchronously at call time, then hands that recipient list to the bounded `notificationFanOutExecutor`.
+A user who signed up, changed profile type or upgraded plan between publishes is therefore included in
+the second resolution; existing recipients are deduped by the unique index and get nothing new. The net
+effect is a **top-up**.
+
+Fan-out now runs in the background at core 1 / max 2, sized against the JDBC connection pool. The admin
+response is `announcement` / `recipientCount` / `queued`: `queued` equals the resolved count when the
+executor accepts the task and is zero when dispatch is rejected. A rejection is logged and leaves the
+announcement `PUBLISHED`; pressing Publish again is the recovery. **The response never claims delivery
+has completed.**
 **⚠️ `published_at` is stamped once and never re-stamped.** **⚠️ `ENDED` → publish is refused.**
 
 **⚠️ `AnnouncementService.publish` and `fanOut` are deliberately NOT `@Transactional`.** `deliver`
@@ -213,9 +216,8 @@ depends on catching `DataIntegrityViolationException`; under an ambient transact
 marks the whole transaction rollback-only and takes the entire fan-out down with it.
 
 **⚠️ Partial failure never rolls back deliveries already made** — a user who saw it cannot un-see it.
-One recipient's failed insert is counted, logged and stepped over; the response reports
-`recipientCount` / `delivered` / `skipped`, where a duplicate counts as *delivered* (it is already in
-that inbox) and only a genuine failure counts as *skipped*.
+One recipient's failed insert is counted, logged and stepped over inside the background fan-out. The
+existing chunk, total and per-recipient failure logs remain the delivery detail after dispatch.
 
 ### Ending and expiry are decided ON READ
 
@@ -291,6 +293,11 @@ half broken.
 
 A row the learner dismissed without reading remains eligible either way — dismissing is the learner
 saying they are done with it.
+
+The notification indexes are the V139 recipient/dedup unique index, the V139 recipient/unread index,
+and the V143 partial inbox index on `(recipient_user_id, created_at DESC) WHERE dismissed_at IS NULL`.
+The inbox index matches `findVisibleInbox`'s filter and sort. Retention intentionally has no supporting
+index before the measured table-size threshold warrants one.
 
 **⚠️ Retention is NOT erasure, and cannot stand in for it.** Because unread actionable rows are kept indefinitely,
 nothing on the retention path can ever clear a deleted account's inbox. `AccountPurgeService.deletePersonalRows`

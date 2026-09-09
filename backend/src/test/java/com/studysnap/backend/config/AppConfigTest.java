@@ -5,6 +5,7 @@ import org.springframework.core.task.AsyncTaskExecutor;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -71,6 +72,22 @@ class AppConfigTest {
         analyticsExecutor.shutdown();
 
         assertThat(completed.get()).isEqualTo(2);
+    }
+
+    @Test
+    void notificationFanOutExecutorKeepsItsConnectionPoolBoundAndObservableRejectionPolicy() {
+        ThreadPoolTaskExecutor executor =
+                (ThreadPoolTaskExecutor) new AppConfig().notificationFanOutExecutor();
+
+        try {
+            assertThat(executor.getCorePoolSize()).isEqualTo(1);
+            assertThat(executor.getMaxPoolSize()).isEqualTo(2);
+            assertThat(executor.getQueueCapacity()).isEqualTo(100);
+            assertThat(executor.getThreadPoolExecutor().getRejectedExecutionHandler())
+                    .isInstanceOf(ThreadPoolExecutor.AbortPolicy.class);
+        } finally {
+            executor.shutdown();
+        }
     }
 
     private static void sleepQuietly() {

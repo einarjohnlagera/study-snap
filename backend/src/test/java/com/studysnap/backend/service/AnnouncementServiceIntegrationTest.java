@@ -15,6 +15,7 @@ import com.studysnap.backend.exception.AnnouncementNotPublishableException;
 import com.studysnap.backend.exception.InvalidAnnouncementRequestException;
 import com.studysnap.backend.repository.AnnouncementRepository;
 import com.studysnap.backend.repository.NotificationRepository;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.EntityManagerFactory;
 import org.junit.jupiter.api.AfterEach;
@@ -25,15 +26,19 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.orm.jpa.EntityManagerFactoryUtils;
 import org.springframework.orm.jpa.EntityManagerHolder;
+import org.springframework.core.task.TaskExecutor;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.lang.reflect.Field;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.Arrays;
+import java.util.ArrayDeque;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -54,7 +59,6 @@ class AnnouncementServiceIntegrationTest {
     private static final String CTA_LABEL = "Try it";
     private static final String CTA_PATH = "/dashboard?tab=exams";
 
-    @Autowired
     private AnnouncementService announcementService;
     @Autowired
     private AnnouncementAudienceResolver audienceResolver;
@@ -70,6 +74,7 @@ class AnnouncementServiceIntegrationTest {
     private EntityManagerFactory entityManagerFactory;
 
     private UUID adminUserId;
+    private SimpleMeterRegistry meterRegistry;
 
     @BeforeEach
     void initSchema() {
@@ -135,6 +140,8 @@ class AnnouncementServiceIntegrationTest {
                 """);
 
         adminUserId = UUID.randomUUID();
+        meterRegistry = new SimpleMeterRegistry();
+        announcementService = service(Runnable::run, notificationService, meterRegistry);
     }
 
     /**
@@ -152,6 +159,81 @@ class AnnouncementServiceIntegrationTest {
 
     // ------------------------------------------------------------------ idempotency
 
+    @Test
+    void publishReturnsAfterQueueAcceptanceBeforeAnyNotificationIsDelivered() {
+        List<UUID> recipients = List.of(activeUser(), activeUser(), activeUser());
+        AnnouncementResponse draft = createDraft("EVERYONE", null, null);
+        RecordingTaskExecutor executor = new RecordingTaskExecutor();
+        SimpleMeterRegistry registry = new SimpleMeterRegistry();
+        AnnouncementService asynchronousService = service(executor, notificationService, registry);
+
+        AnnouncementPublishResponse published = asynchronousService.publish(draft.id());
+
+        assertThat(published.recipientCount()).isEqualTo(recipients.size());
+        assertThat(published.queued()).isEqualTo(recipients.size());
+        assertThat(executor.pendingTaskCount()).isOne();
+        assertThat(rowsFor(draft.id()))
+                .as("publish must return before the executor runs the fan-out")
+                .isZero();
+
+        executor.runNext();
+
+        assertThat(rowsFor(draft.id())).isEqualTo(recipients.size());
+        assertThat(registry.timer("announcement.fanout.duration").count()).isEqualTo(1);
+    }
+
+    @Test
+    void rejectedDispatchReturnsZeroAndRepublishQueuesTheRecoverableFanOut() {
+        List<UUID> recipients = List.of(activeUser(), activeUser());
+        AnnouncementResponse draft = createDraft("EVERYONE", null, null);
+        RejectOnceTaskExecutor executor = new RejectOnceTaskExecutor();
+        SimpleMeterRegistry registry = new SimpleMeterRegistry();
+        AnnouncementService asynchronousService = service(executor, notificationService, registry);
+
+        AnnouncementPublishResponse rejected = asynchronousService.publish(draft.id());
+
+        assertThat(rejected.queued()).isZero();
+        assertThat(announcementRepository.findById(draft.id()).orElseThrow().getStatus())
+                .isEqualTo(AnnouncementStatus.PUBLISHED);
+        assertThat(rowsFor(draft.id())).isZero();
+        assertThat(registry.counter("announcement.fanout.rejected").count()).isEqualTo(1);
+
+        AnnouncementPublishResponse retry = asynchronousService.publish(draft.id());
+        assertThat(retry.recipientCount()).isEqualTo(recipients.size());
+        assertThat(retry.queued()).isEqualTo(recipients.size());
+        executor.runNext();
+
+        assertThat(rowsFor(draft.id())).isEqualTo(recipients.size());
+    }
+
+    @Test
+    void executorTaskRunsFanOutWithoutAnAmbientTransaction() {
+        activeUser();
+        AnnouncementResponse draft = createDraft("EVERYONE", null, null);
+        AtomicBoolean transactionActiveDuringDelivery = new AtomicBoolean(true);
+        NotificationService observingDeliveryService = new NotificationService(
+                notificationRepository,
+                new SimpleMeterRegistry()
+        ) {
+            @Override
+            public NotificationResponse deliver(NotificationDelivery delivery) {
+                transactionActiveDuringDelivery.set(TransactionSynchronizationManager.isActualTransactionActive());
+                return super.deliver(delivery);
+            }
+        };
+        RecordingTaskExecutor executor = new RecordingTaskExecutor();
+        AnnouncementService asynchronousService =
+                service(executor, observingDeliveryService, new SimpleMeterRegistry());
+
+        asynchronousService.publish(draft.id());
+        executor.runNext();
+
+        assertThat(transactionActiveDuringDelivery.get())
+                .as("the unique-index conflict catch is unsafe inside an ambient transaction")
+                .isFalse();
+        assertThat(rowsFor(draft.id())).isOne();
+    }
+
     /**
      * ⚠️ THE DISCRIMINATING FORM: fan out TWICE for the same announcement and count the DATABASE. A
      * test that publishes once passes whether or not the dedup key exists at all.
@@ -163,7 +245,7 @@ class AnnouncementServiceIntegrationTest {
 
         AnnouncementPublishResponse firstPublish = announcementService.publish(draft.id());
         assertThat(rowsFor(draft.id())).isEqualTo(3);
-        assertThat(firstPublish.delivered()).isEqualTo(3);
+        assertThat(firstPublish.queued()).isEqualTo(3);
 
         AnnouncementPublishResponse retry = announcementService.publish(draft.id());
 
@@ -171,6 +253,7 @@ class AnnouncementServiceIntegrationTest {
                 .as("a retried fan-out must insert zero duplicates")
                 .isEqualTo(3);
         assertThat(retry.recipientCount()).isEqualTo(recipients.size());
+        assertThat(retry.queued()).isEqualTo(recipients.size());
         assertThat(publishedAt(draft.id()))
                 .as("published_at is stamped once and never re-stamped by a retry")
                 .isEqualTo(publishedAtOf(firstPublish));
@@ -200,6 +283,22 @@ class AnnouncementServiceIntegrationTest {
                 "ANNOUNCEMENT:" + first.id(),
                 "ANNOUNCEMENT:" + second.id()
         );
+    }
+
+    @Test
+    void republishRemainsARetryForExistingRecipientsAndATopUpForNewAudienceMembers() {
+        UUID existingRecipient = activeUser();
+        AnnouncementResponse draft = createDraft("EVERYONE", null, null);
+        AnnouncementPublishResponse first = announcementService.publish(draft.id());
+        UUID newRecipient = activeUser();
+
+        AnnouncementPublishResponse retryAndTopUp = announcementService.publish(draft.id());
+
+        assertThat(first.queued()).isEqualTo(1);
+        assertThat(retryAndTopUp.recipientCount()).isEqualTo(2);
+        assertThat(retryAndTopUp.queued()).isEqualTo(2);
+        assertThat(recipientsOf(draft.id())).containsExactlyInAnyOrder(existingRecipient, newRecipient);
+        assertThat(rowsFor(draft.id())).isEqualTo(2);
     }
 
     // ------------------------------------------------------------------ immutability
@@ -362,7 +461,7 @@ class AnnouncementServiceIntegrationTest {
 
         assertThat(published.announcement().status()).isEqualTo(AnnouncementStatus.PUBLISHED.name());
         assertThat(published.recipientCount()).isZero();
-        assertThat(published.delivered()).isZero();
+        assertThat(published.queued()).isZero();
         assertThat(rowsFor(draft.id())).isZero();
     }
 
@@ -402,7 +501,7 @@ class AnnouncementServiceIntegrationTest {
 
         AnnouncementService failingOnce = new AnnouncementService(
                 announcementRepository,
-                new NotificationService(notificationRepository) {
+                new NotificationService(notificationRepository, new SimpleMeterRegistry()) {
                     @Override
                     public NotificationResponse deliver(NotificationDelivery delivery) {
                         if (delivery.recipientUserId().equals(poisonedId)) {
@@ -411,7 +510,9 @@ class AnnouncementServiceIntegrationTest {
                         return super.deliver(delivery);
                     }
                 },
-                audienceResolver
+                audienceResolver,
+                Runnable::run,
+                new SimpleMeterRegistry()
         );
 
         AnnouncementService.AnnouncementFanOutResult partial =
@@ -482,6 +583,50 @@ class AnnouncementServiceIntegrationTest {
                 request(TITLE, BODY, CTA_LABEL, CTA_PATH, audience, audienceValue, expiresAt),
                 adminUserId
         );
+    }
+
+    private AnnouncementService service(
+            TaskExecutor executor,
+            NotificationService deliveryService,
+            SimpleMeterRegistry registry
+    ) {
+        return new AnnouncementService(
+                announcementRepository,
+                deliveryService,
+                audienceResolver,
+                executor,
+                registry
+        );
+    }
+
+    private static class RecordingTaskExecutor implements TaskExecutor {
+        private final ArrayDeque<Runnable> tasks = new ArrayDeque<>();
+
+        @Override
+        public void execute(Runnable task) {
+            tasks.addLast(task);
+        }
+
+        int pendingTaskCount() {
+            return tasks.size();
+        }
+
+        void runNext() {
+            tasks.removeFirst().run();
+        }
+    }
+
+    private static final class RejectOnceTaskExecutor extends RecordingTaskExecutor {
+        private boolean reject = true;
+
+        @Override
+        public void execute(Runnable task) {
+            if (reject) {
+                reject = false;
+                throw new RejectedExecutionException("queue full");
+            }
+            super.execute(task);
+        }
     }
 
     private UpsertAnnouncementRequest request(

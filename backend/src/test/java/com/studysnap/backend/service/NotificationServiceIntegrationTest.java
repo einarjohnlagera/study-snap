@@ -5,6 +5,7 @@ import com.studysnap.backend.entity.NotificationType;
 import com.studysnap.backend.exception.InvalidAnnouncementRequestException;
 import com.studysnap.backend.exception.NotificationNotFoundException;
 import com.studysnap.backend.repository.NotificationRepository;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -85,6 +86,23 @@ class NotificationServiceIntegrationTest {
                 "ACTION_REQUIRED:" + entityId
         );
         assertThat(rows).isEqualTo(1);
+    }
+
+    @Test
+    void deliveryMetersDistinguishFreshRowsFromDedupConflicts() {
+        SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
+        NotificationService meteredService = new NotificationService(notificationRepository, meterRegistry);
+        UUID recipientId = UUID.randomUUID();
+        UUID entityId = UUID.randomUUID();
+        NotificationService.NotificationDelivery delivery =
+                delivery(recipientId, entityId, NotificationType.ACTION_REQUIRED);
+
+        meteredService.deliver(delivery);
+        meteredService.deliver(delivery);
+
+        assertThat(meterRegistry.counter(
+                "notification.delivered", "type", NotificationType.ACTION_REQUIRED.name()).count()).isEqualTo(1);
+        assertThat(meterRegistry.counter("notification.dedup_conflict").count()).isEqualTo(1);
     }
 
     @Test
