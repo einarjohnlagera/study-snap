@@ -94,6 +94,32 @@ release can add its category together with its producer instead of preserving a 
 
 **Verification run:** backend 2,335 tests + the 102-query PostgreSQL harness against a real container; frontend 2,348 across 212 suites; `tsc --noEmit` clean; `npm run lint` 0 errors.
 
+### ✅ Pre-signoff cold agent — ONE CLAIM REFUTED, TWO INERT TESTS FOUND, ALL FIXED
+
+The scoped cold agent ran against the merged state and **refuted C6** while upholding the other seven.
+
+**⚠️ C6 REFUTED — a curator is notified of their own publish.** `adopt()` carries **no owner guard**, so a curator can self-adopt their own PUBLIC Review Set; `findReviewSetUpdateRecipients` had no self-copy exclusion, so publishing an update then told them about their own action. **The fix was already sitting eight lines above in the same file:** `countAdoptionsByCollectionIds` excludes self-copies with `adoption.ownerUserId <> source.ownerUserId` for the adoption COUNT. The two queries now agree on what an adoption is, and `aCuratorWhoAdoptedTheirOwnSetIsNotNotifiedOfTheirOwnPublish` fails if they diverge again. Cosmetic in severity, real as a gap.
+
+**⚠️⚠️ TWO TESTS PASSED FOR REASONS UNRELATED TO WHAT THEY CLAIMED — AND ONE OF THEM WAS WRITTEN BY THE AUDIT THAT WENT LOOKING FOR EXACTLY THIS SHAPE.** That is the finding worth keeping:
+
+1. **`curatorEditsWithoutPublishingReachNoAdopter`** — added by this release's own audit to guard *"editing is not publishing"*. Its act phase inserted rows with `jdbcTemplate` and **called no service method**, so a producer wired to fire on a WRITE rather than on the publish call would have sailed straight through it. **The test that existed to catch the release's boldest anti-drift claim could not catch it.** Renamed to `unpublishedRowsAloneDispatchNoFanOut` — which is what it actually proves — and the real guard now lives on the real edit path as `NoteCollectionServiceTest.addItems_doesNotAnnounceAnUnpublishedEdit`, which drives `addItems` and asserts the publisher is untouched.
+2. **The `taskTransactionActive` assertion** captured `isActualTransactionActive()` in a wrapper that runs **on the test thread after the publishing transaction already committed and unbound** — so it read `false` whether or not `fanOut` was transactional, and could not see the regression its own `.as(...)` named. The capture moved **inside `deliver`**, via a spy on the **Spring-managed** bean so the proxy is live. **Verified by mutation: `@Transactional` on `fanOut` now fails it, and previously did not.**
+
+**Four mutants run across this release, all killed:**
+
+| Mutant | Killed by |
+|---|---|
+| Dedup key reverted to the audit's `<adoptedCollectionId>` | `dismissingOneRevisionAllowsTheNextPublishedRevisionToCreateANewRow` |
+| `@Transactional` on the producer's `fanOut` | `FanOutTransactionBoundaryTest` — and **now also** the corrected runtime assertion |
+| **Self-copy exclusion removed** | **`aCuratorWhoAdoptedTheirOwnSetIsNotNotifiedOfTheirOwnPublish`** |
+
+**Upheld and worth recording:** the `LIKE` prefix cannot collide across sources (UUIDs are fixed-length and contain no wildcards); a same-millisecond key collision additionally requires a dismiss and a lock-serialized round trip inside 1 ms; adopted CHILD collections point at their own child source, not the root, so a Goal adoption cannot multi-notify. **`ACTION_REQUIRED` has zero references repo-wide, and production still holds zero notification rows of any type — re-verified read-only at this audit, not inherited.**
+
+**Known limitation, recorded not fixed:** no test exercises delivery on the real `ThreadPoolTaskExecutor` thread, and the mid-fan-out unique-index conflict is covered only with a mocked `NotificationService`, never against a real database for two recipients in one fan-out.
+
+**⚠️ Method note: the branch was NOT switched under the agent this time** — the `v0.134.0` lesson held.
+
+
 ### Shipped
 
 - Replaced the producerless `ACTION_REQUIRED` type/category pair with the actionable

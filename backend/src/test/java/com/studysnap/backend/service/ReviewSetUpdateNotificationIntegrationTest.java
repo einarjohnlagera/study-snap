@@ -39,7 +39,7 @@ class ReviewSetUpdateNotificationIntegrationTest {
 
     @Autowired
     private NoteCollectionService noteCollectionService;
-    @Autowired
+    @org.springframework.test.context.bean.override.mockito.MockitoSpyBean
     private NotificationService notificationService;
     @Autowired
     private NotificationRepository notificationRepository;
@@ -137,12 +137,21 @@ class ReviewSetUpdateNotificationIntegrationTest {
         jdbcTemplate.execute("delete from note_collections");
         submittedTasks.clear();
         taskTransactionActive.set(true);
+        // ⚠️ THE REAL R9 CAPTURE. deliver() is where the unique-index catch lives, so it is where an
+        // ambient transaction would do its damage. Spying the SPRING-MANAGED bean means the proxy is
+        // live: if fanOut were re-annotated @Transactional, a transaction would be active here.
+        doAnswer(invocation -> {
+            taskTransactionActive.set(TransactionSynchronizationManager.isActualTransactionActive());
+            return invocation.callRealMethod();
+        }).when(notificationService).deliver(any(NotificationService.NotificationDelivery.class));
         doAnswer(invocation -> {
             Runnable submitted = invocation.getArgument(0);
-            submittedTasks.addLast(() -> {
-                taskTransactionActive.set(TransactionSynchronizationManager.isActualTransactionActive());
-                submitted.run();
-            });
+            // ⚠️ DO NOT capture the transaction state HERE. This wrapper runs on the test thread after
+            // the publishing transaction has already committed and unbound, so it reads false whether
+            // fanOut is transactional or not — it cannot see the regression it names. The capture
+            // happens inside deliver (see the spy below), which is where an ambient transaction would
+            // actually exist if fanOut were re-annotated @Transactional.
+            submittedTasks.addLast(submitted);
             return null;
         }).when(notificationFanOutExecutor).execute(any(Runnable.class));
     }
@@ -280,12 +289,19 @@ class ReviewSetUpdateNotificationIntegrationTest {
     }
 
     /**
-     * ⚠️ EDITING IS NOT PUBLISHING — the boundary `v0.132.0` shipped exists to forbid exactly this, and
-     * it is the anti-drift line most easily lost by a producer that fires on a write rather than on the
-     * publish call. Adding unpublished items must reach nobody, however many are added.
+     * ⚠️ SCOPE CORRECTED after the pre-signoff cold agent, and the correction is the point: this test's
+     * act phase inserts rows with {@code jdbcTemplate} and calls NO service method, so it CANNOT detect
+     * "a producer that fires on a write rather than on the publish call" — the claim its javadoc
+     * originally made. It guards the weaker, still-real property that **no dispatch happens without a
+     * publish call**.
+     *
+     * <p>The edit path itself is guarded where the edit path actually lives:
+     * {@code NoteCollectionServiceTest.addItems_doesNotAnnounceAnUnpublishedEdit} drives a real service
+     * method and asserts the event publisher is untouched. **Do not delete that one believing this
+     * covers it.**
      */
     @Test
-    void curatorEditsWithoutPublishingReachNoAdopter() {
+    void unpublishedRowsAloneDispatchNoFanOut() {
         Fixture fixture = fixtureWithAdopters(3);
 
         addUnpublishedChange(fixture.sourceCollectionId(), 1);
@@ -298,6 +314,43 @@ class ReviewSetUpdateNotificationIntegrationTest {
         for (UUID learnerId : fixture.learnerIds()) {
             assertThat(notificationRows(learnerId)).isZero();
         }
+    }
+
+    /**
+     * ⚠️ A CURATOR MUST NOT BE NOTIFIED OF THEIR OWN PUBLISH — refuted claim from the pre-signoff cold
+     * agent, fixed rather than documented. {@code adopt()} carries no owner guard, so a curator can
+     * self-adopt their own PUBLIC Review Set; without the self-copy exclusion in
+     * {@code findReviewSetUpdateRecipients} they then receive "This Review Set has been updated" for an
+     * action they just took themselves.
+     *
+     * <p>{@code countAdoptionsByCollectionIds} already excludes self-copies for the adoption COUNT, so
+     * the two queries agree on what an adoption is. If they ever diverge, this test is the one that
+     * says so.
+     */
+    @Test
+    void aCuratorWhoAdoptedTheirOwnSetIsNotNotifiedOfTheirOwnPublish() {
+        Fixture fixture = fixtureWithAdopters(1);
+        UUID curatorAdoptionId = UUID.randomUUID();
+        Instant now = Instant.parse("2026-09-09T01:00:00Z");
+        jdbcTemplate.update("""
+                insert into note_collections (
+                    id, owner_user_id, title, visibility, source_plan_id, source_synced_at, created_at, updated_at
+                ) values (?, ?, ?, 'PRIVATE', ?, ?, ?, ?)
+                """,
+                curatorAdoptionId, fixture.curatorId(), "My own copy",
+                fixture.sourceCollectionId(), now.minusSeconds(60), now, now
+        );
+        addUnpublishedChange(fixture.sourceCollectionId(), 1);
+
+        noteCollectionService.publishReviewSetUpdate(fixture.sourceCollectionId(), fixture.curatorId());
+        runNextTask();
+
+        assertThat(notificationRows(fixture.curatorId()))
+                .as("the curator published this themselves; telling them about it is noise")
+                .isZero();
+        assertThat(notificationRows(fixture.learnerIds().get(0)))
+                .as("the real adopter must still be reached")
+                .isOne();
     }
 
     private Fixture fixtureWithAdopters(int adopterCount) {

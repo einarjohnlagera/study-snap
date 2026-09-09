@@ -326,6 +326,15 @@ is still kept indefinitely. **⚠️ The two behaviours are complements derived 
 retention test asserts BOTH directions**; asserting only the deletion half would pass with the retention
 half broken.
 
+**⚠️ ONE CONSEQUENCE OF THE ACTIONABLE/RETAINED SPLIT, NAMED BY THE `v0.135.0` COLD AGENT SO IT IS NOT
+DISCOVERED AS A BUG LATER: a `REVIEW_SET_UPDATE` that is UNREAD AND UNDISMISSED NEVER EXPIRES.** It is
+badge-eligible, so retention keeps it indefinitely, and episode suppression keys on `dismissed_at IS
+NULL` — so a learner who never opens their inbox holds exactly one such row and a badge stuck at 1,
+permanently, until they dismiss or read it. **That is intended** (a pending signal must not vanish, and
+one stuck badge is far better than the alternative the release exists to prevent — a learner silently
+never told again). It is documented because the dismissal path was the only one written down, and the
+permanence is the half a reader would otherwise meet as a surprise.
+
 A row the learner dismissed without reading remains eligible either way — dismissing is the learner
 saying they are done with it.
 

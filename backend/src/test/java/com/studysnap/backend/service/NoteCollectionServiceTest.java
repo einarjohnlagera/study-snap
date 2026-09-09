@@ -5257,6 +5257,35 @@ class NoteCollectionServiceTest {
         verify(analyticsService, never()).trackEvent(any(), eq(AnalyticsEventType.COLLECTION_CREATED), any(), any());
     }
 
+    /**
+     * ⚠️ EDITING IS NOT PUBLISHING, GUARDED ON THE REAL EDIT PATH — added after the pre-signoff cold
+     * agent showed the integration-test version could not detect this: its act phase inserted rows with
+     * {@code jdbcTemplate} and called no service method, so a producer wired to fire on a WRITE rather
+     * than on the publish call would have sailed straight through it.
+     *
+     * <p>This one drives {@code addItems}, a real curator edit, and asserts the event publisher is
+     * never touched. The `v0.132.0` publication boundary exists precisely so an edit is not learner-
+     * facing; a notification on this path would undo it.
+     */
+    @Test
+    void addItems_doesNotAnnounceAnUnpublishedEdit() {
+        UUID userId = UUID.randomUUID();
+        UUID collectionId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        NoteCollectionEntity collection = buildCollection(collectionId, userId, COLLECTION_TITLE, Instant.now());
+        NoteEntity note = buildNote(noteId, userId, NOTE_TITLE_ONE);
+        when(collectionRepository.findByIdAndOwnerUserId(collectionId, userId)).thenReturn(Optional.of(collection));
+        when(noteRepository.findByOwnerUserIdAndIdIn(userId, List.of(noteId))).thenReturn(List.of(note));
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(collectionId)).thenReturn(List.of());
+        when(itemRepository.saveAll(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(collectionRepository.save(collection)).thenAnswer(invocation -> invocation.getArgument(0));
+        stubDetailItemLoad(userId, List.of(noteId), List.of(note));
+
+        service.addItems(collectionId, userId, new AddNoteCollectionItemsRequest(List.of(noteId)));
+
+        verifyNoInteractions(applicationEventPublisher);
+    }
+
     @Test
     void addItems_emitsNoteAddedToCollectionCountingOnlyTheNotesActuallyAdded() {
         // The transition the retention hypothesis rests on: a learner deciding a note belongs in a
