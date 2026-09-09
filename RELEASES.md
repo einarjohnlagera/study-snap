@@ -87,7 +87,54 @@ All four items change behaviour that file **currently documents as true**, and i
 
 ### Shipped
 
-_(nothing yet)_
+- Added `NotificationCategory` as the single owner of numeric-badge policy, with badge-eligible and
+  retention-expirable category sets derived as complements from one flag. `NotificationType` remains
+  the two-value producer identity and now delegates policy to its category.
+- Widened notification dedup discriminators from UUID to string while preserving the existing
+  `ANNOUNCEMENT:<uuid>` keys and the unique-index catch-and-reread delivery contract.
+- Added the server-derived `actionable` field to inbox responses and moved the frontend badge update
+  and rollback branches to that field.
+- Extended the existing 90-day cleanup to expire unread non-actionable rows while retaining unread
+  actionable rows indefinitely; no new retention setting was added.
+- Added category-partition, retention-direction, real-response-shape, dedup-format and frontend badge
+  behavior coverage. No producer, notification type, endpoint, migration or index was added.
+
+### ⚠️ Audit finding — the frontend tests as delivered passed for the wrong reason, and mutation testing is what caught it
+
+**Reverting `notification-inbox.tsx` to its exact pre-release implementation (`type !== "ANNOUNCEMENT"`)
+left all 18 frontend tests GREEN.** Every fixture set `actionable` to *agree* with `type`, so the old
+branch and the new one returned the same answer for all of them — the suite could not distinguish the
+change it existed to verify. **⚠️ This is the `v0.116.0`/`v0.117.0` silent-no-op shape arriving from a
+new direction: tests WERE added, and they still proved nothing about the change.**
+
+Fixed by adding the one fixture where the two **disagree** — a non-actionable type whose name is not
+`"ANNOUNCEMENT"` (`IMPACT_MILESTONE`), which is exactly the case the taxonomy split exists to fix and
+the case the old code got wrong. That test fails against the old implementation and passes against the
+new one.
+
+**Four mutants were run and all four were killed, each by a named test:**
+
+| Mutant | Killed by |
+|---|---|
+| `retentionExpirableCategories()` stops filtering (partition broken) | `NotificationCategoryTest.badgeEligibleAndRetentionExpirableCategoriesPartitionEveryCategory` |
+| Every type made retention-expirable (unread actionable rows deleted) | `NotificationServiceIntegrationTest.retentionDeletesUnreadNonActionableAndReadRowsButKeepsUnreadActionableRowsPastTheWindow` |
+| Badge branch never fires | `decrements the badge when an actionable notification is marked read` + `reverts the optimistic unread delta when marking read fails` |
+| **Component reverted to the old `"ANNOUNCEMENT"` literal** | **`does not change the badge for a non-actionable type that is not ANNOUNCEMENT`** — *added by this audit; nothing killed this mutant before* |
+| `retentionExpirableTypes()` returns the wrong side of the split | `NotificationCategoryTest.retentionExpirableTypesAreTheComplementOfActionableTypes` — *added by this audit* |
+
+**⚠️ ONE MUTANT SURVIVES, KNOWINGLY, AND IT IS RECORDED RATHER THAN PAPERED OVER.** Hardcoding
+`NotificationType.isActionable()` to `this == ACTION_REQUIRED` — bypassing the category delegation
+entirely — **passes the whole suite.** That is not a fixable gap at this size: with two types mapped
+one-to-one onto two like-named categories, delegation and hardcoding are **observationally identical**,
+and no test can separate them without a third type, which this release forbids.
+
+What was added instead is the guard that fires when it *starts* to matter: `everyTypeDerivesItsActionabilityFromItsCategory`
+enumerates `values()`, so a third type that is misclassified fails immediately. A `category()` accessor
+was added to make that invariant assertable. **The javadoc on that test states outright that it cannot
+discriminate today**, so a later reader does not credit it with more than it proves.
+
+**Verification run:** backend 2,312 tests + the 101-query PostgreSQL native harness against a real
+container; frontend 2,346 tests across 211 suites; `tsc --noEmit` clean; `npm run lint` 0 errors.
 
 ## v0.133.0 - Education Family
 

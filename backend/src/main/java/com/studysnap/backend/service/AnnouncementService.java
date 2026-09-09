@@ -200,7 +200,7 @@ public class AnnouncementService {
                     // ⚠️ The announcement id is the dedup ENTITY id as well as the provenance column.
                     // Passing anything else here (a constant, or null) would collapse every announcement
                     // onto one dedup key and silently deliver only the first one, forever.
-                    announcement.getId(),
+                    announcement.getId().toString(),
                     announcement.getTitle(),
                     announcement.getBody(),
                     announcement.getCtaLabel(),

@@ -117,10 +117,13 @@ class NotificationServiceIntegrationTest {
     }
 
     @Test
-    void retentionKeepsUnreadActionableRowsAndDeletesReadRowsPastTheWindow() {
+    void retentionDeletesUnreadNonActionableAndReadRowsButKeepsUnreadActionableRowsPastTheWindow() {
         UUID recipientId = UUID.randomUUID();
         UUID unreadId = UUID.fromString(notificationService.deliver(
                 delivery(recipientId, UUID.randomUUID(), NotificationType.ACTION_REQUIRED)
+        ).id().toString());
+        UUID unreadAnnouncementId = UUID.fromString(notificationService.deliver(
+                delivery(recipientId, UUID.randomUUID(), NotificationType.ANNOUNCEMENT)
         ).id().toString());
         UUID readId = UUID.fromString(notificationService.deliver(
                 delivery(recipientId, UUID.randomUUID(), NotificationType.ACTION_REQUIRED)
@@ -129,8 +132,9 @@ class NotificationServiceIntegrationTest {
         OffsetDateTime old = OffsetDateTime.now(ZoneOffset.UTC).minusDays(91);
         jdbcTemplate.update("update notifications set created_at = ?", old);
 
-        assertThat(notificationService.deleteExpired(OffsetDateTime.now(ZoneOffset.UTC), 90)).isEqualTo(1);
+        assertThat(notificationService.deleteExpired(OffsetDateTime.now(ZoneOffset.UTC), 90)).isEqualTo(2);
         assertThat(notificationRepository.findById(unreadId)).isPresent();
+        assertThat(notificationRepository.findById(unreadAnnouncementId)).isEmpty();
         assertThat(notificationRepository.findById(readId)).isEmpty();
     }
 
@@ -169,7 +173,7 @@ class NotificationServiceIntegrationTest {
         var offSite = new NotificationService.NotificationDelivery(
                 recipientId,
                 NotificationType.ACTION_REQUIRED,
-                UUID.randomUUID(),
+                UUID.randomUUID().toString(),
                 "Action needed",
                 "Review this item.",
                 "Open",
@@ -188,7 +192,7 @@ class NotificationServiceIntegrationTest {
         return new NotificationService.NotificationDelivery(
                 recipientId,
                 type,
-                entityId,
+                entityId.toString(),
                 "Action needed",
                 "Review this item.",
                 "Open",

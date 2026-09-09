@@ -21,8 +21,14 @@ or alter any product state. It hides the row from the inbox and nothing more.
 `notifications` carries a **UNIQUE index on `(recipient_user_id, dedup_key)`** (`V139`). That index
 **is** the delivery guarantee.
 
-`dedup_key` is deterministic and built by one helper — `NotificationService.dedupKey(type, entityId)`
-— producing **`"<TYPE>:<entity-id>"`**, e.g. `ANNOUNCEMENT:9f3c…`.
+`dedup_key` is deterministic and built by one helper — `NotificationService.dedupKey(type, discriminator)`
+— producing **`"<TYPE>:<discriminator>"`**, e.g. `ANNOUNCEMENT:9f3c…`.
+
+**⚠️ The discriminator is a `String`, widened from `UUID` in `v0.134.0`** so a producer whose event
+identity is not a bare entity id can express it. **The format did not change** — announcements still
+key on `announcement.getId().toString()` and produce byte-identical keys. **⚠️ The widening was free
+only because no key had ever been written: `notifications` was empty in production. It is not a format
+any future producer may assume it can change cheaply.**
 
 **⚠️ Do NOT add an `existsBy…` check before the insert.** Two concurrent deliveries can both pass such
 a check and still create duplicate awareness. `NotificationService.deliver` instead attempts the
@@ -32,7 +38,15 @@ successful no-op, never an error surfaced to the caller.**
 
 ## Actionable vs announcement, and the badge
 
-`NotificationType` carries an `actionable` flag, and `actionableTypes()` derives the set from it.
+**`NotificationCategory` carries the badge policy; `NotificationType` is producer identity and
+delegates to its category** (`v0.134.0`). One `badgeEligible` flag on the category yields two derived,
+complementary sets — `badgeEligibleCategories()` and `retentionExpirableCategories()` — and
+`actionableTypes()` derives from the first. **⚠️ A test asserts the two sets PARTITION the categories:
+two hand-maintained lists is how they drift.**
+
+**⚠️ `ACTION_REQUIRED` is TRANSITIONAL and has no producer.** It exists for backward-compatible
+taxonomy transition and Stage D replaces it with the first type that has one. Do not build on it as a
+permanent value, and do not justify it by the tests that exercise it.
 
 - **Actionable unread → the numeric badge.**
 - **Announcements → appear in the inbox but NEVER contribute to the number.**
@@ -109,6 +123,20 @@ stale the moment the learner exits.
 **⚠️ Rows are marked read INDIVIDUALLY, on open or on CTA click. The panel must NEVER mark-all-read on
 open** — that silently discards the one signal a learner needs for a pending request.
 
+### ⚠️ The badge decrement reads a SERVER-PROVIDED field, never the type string
+
+`NotificationResponse` carries **`actionable`** (`v0.134.0`), derived server-side from the type's
+category, and `notification-inbox.tsx` branches its optimistic decrement and its rollback on that
+field. **It previously compared `notification.type !== "ANNOUNCEMENT"`** — a private client-side mirror
+of a server policy, which would have silently mis-counted the badge the moment a third non-actionable
+type existed.
+
+**⚠️ The response deliberately does NOT carry `category`.** The client needs exactly one field to branch
+on; exposing the category would invite it to re-derive policy from a category string — the same defect
+one level up. **⚠️ A fixture whose `actionable` merely agrees with its `type` cannot tell the two
+implementations apart** — the guard that pins this is a fixture where they DISAGREE (a non-actionable
+type that is not `"ANNOUNCEMENT"`).
+
 ## Scoping
 
 Every read and mutation is scoped to the authenticated recipient via
@@ -164,8 +192,8 @@ inheritance.**
 ### Idempotency, and what "retry" means here
 
 `dedup_key` is `"ANNOUNCEMENT:<announcementId>"`, built by the same
-`NotificationService.dedupKey(type, entityId)` helper — the announcement id is passed as **both** the
-delivery's `entityId` and its `announcementId`. **⚠️ There is NO service-side `existsBy` pre-check**;
+`NotificationService.dedupKey(type, discriminator)` helper — `announcement.getId().toString()` is passed
+as the delivery's `dedupDiscriminator`, and the same id again as its `announcementId`. **⚠️ There is NO service-side `existsBy` pre-check**;
 the unique index is the guarantee.
 
 **Publish on an already-`PUBLISHED` announcement RE-RUNS the fan-out rather than being refused**, and
@@ -248,17 +276,23 @@ delivery, with no campaign entity to build on. Do not refactor, merge or delete 
 
 ## Retention
 
-A `@Scheduled` job modelled on `BulkGenerationResultCleanupJob` deletes **read or dismissed**
-notifications older than a config-backed window (default 90 days).
+A `@Scheduled` job modelled on `BulkGenerationResultCleanupJob` deletes, past a config-backed window
+(default 90 days), any notification that is **read, dismissed, or of a retention-expirable type**.
 
-**⚠️ Unread AND UNDISMISSED actionable notifications are RETAINED regardless of age** — such a row is the
-learner's only pointer to a pending request. **⚠️ The qualifier matters and `RELEASES.md` originally
-omitted it:** the cleanup predicate is `read_at IS NOT NULL OR dismissed_at IS NOT NULL`, so a row the
-learner dismissed without reading IS eligible for deletion. That is correct — dismissing is the learner
-saying they are done with it — but "unread rows are retained regardless of age" is not what the query
-says.
+**⚠️ Unread AND UNDISMISSED ACTIONABLE notifications are RETAINED regardless of age** — such a row is the
+learner's only pointer to a pending request. **⚠️ The ACTIONABLE qualifier is load-bearing and was added
+in `v0.134.0`.** Before it, the predicate was `read_at IS NOT NULL OR dismissed_at IS NOT NULL` alone,
+which made **every** unread row immortal: a single `EVERYONE` announcement to 396 users left 396
+permanent rows, forever, because most people never open the bell. The predicate now also expires unread
+rows whose category is **not** badge-eligible — announcements today — while an unread **actionable** row
+is still kept indefinitely. **⚠️ The two behaviours are complements derived from one flag, and the
+retention test asserts BOTH directions**; asserting only the deletion half would pass with the retention
+half broken.
 
-**⚠️ Retention is NOT erasure, and cannot stand in for it.** Because unread rows are kept indefinitely,
+A row the learner dismissed without reading remains eligible either way — dismissing is the learner
+saying they are done with it.
+
+**⚠️ Retention is NOT erasure, and cannot stand in for it.** Because unread actionable rows are kept indefinitely,
 nothing on the retention path can ever clear a deleted account's inbox. `AccountPurgeService.deletePersonalRows`
 calls `deleteByRecipientUserId` for exactly that reason — it shipped missing in `v0.130.0` and was fixed in
 the same release, having left every purged account's notification history behind permanently.

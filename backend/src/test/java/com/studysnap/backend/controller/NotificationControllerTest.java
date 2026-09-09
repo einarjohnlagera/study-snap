@@ -48,9 +48,12 @@ class NotificationControllerTest {
 
         MockMvc mockMvc = buildMockMvc(user);
 
-        mockMvc.perform(get("/notifications").param("limit", "50"))
+        mockMvc.perform(get("/notifications")
+                        .param("limit", "50")
+                        .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].id").value(notificationId.toString()));
+                .andExpect(jsonPath("$[0].id").value(notificationId.toString()))
+                .andExpect(jsonPath("$[0].actionable").value(true));
         mockMvc.perform(get("/notifications/unread-count"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.count").value(2));
@@ -96,6 +99,7 @@ class NotificationControllerTest {
         return new NotificationResponse(
                 id,
                 "ACTION_REQUIRED",
+                true,
                 "Action needed",
                 "Review this item.",
                 "Open",

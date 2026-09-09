@@ -2270,6 +2270,7 @@ export type CreatorImpactResponse = {
 export type NotificationResponse = {
   id: string;
   type: string;
+  actionable: boolean;
   title: string;
   body: string | null;
   ctaLabel: string | null;

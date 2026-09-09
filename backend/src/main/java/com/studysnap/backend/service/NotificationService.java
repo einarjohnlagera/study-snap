@@ -28,7 +28,7 @@ public class NotificationService {
      * this insert: two concurrent deliveries could both pass it and still create duplicate awareness.
      */
     public NotificationResponse deliver(NotificationDelivery delivery) {
-        String dedupKey = dedupKey(delivery.type(), delivery.entityId());
+        String dedupKey = dedupKey(delivery.type(), delivery.dedupDiscriminator());
         NotificationEntity notification = new NotificationEntity();
         notification.setId(UUID.randomUUID());
         notification.setRecipientUserId(delivery.recipientUserId());
@@ -98,11 +98,14 @@ public class NotificationService {
 
     @Transactional
     public int deleteExpired(OffsetDateTime now, int retentionDays) {
-        return notificationRepository.deleteReadOrDismissedBefore(now.minusDays(retentionDays));
+        return notificationRepository.deleteExpiredBefore(
+                now.minusDays(retentionDays),
+                NotificationType.retentionExpirableTypes()
+        );
     }
 
-    public static String dedupKey(NotificationType type, UUID entityId) {
-        return type.name() + ":" + entityId;
+    public static String dedupKey(NotificationType type, String discriminator) {
+        return type.name() + ":" + discriminator;
     }
 
     private NotificationEntity findForRecipientOrThrow(UUID userId, UUID notificationId) {
@@ -114,6 +117,7 @@ public class NotificationService {
         return new NotificationResponse(
                 notification.getId(),
                 notification.getType().name(),
+                notification.getType().isActionable(),
                 notification.getTitle(),
                 notification.getBody(),
                 notification.getCtaLabel(),
@@ -127,7 +131,7 @@ public class NotificationService {
     public record NotificationDelivery(
             UUID recipientUserId,
             NotificationType type,
-            UUID entityId,
+            String dedupDiscriminator,
             String title,
             String body,
             String ctaLabel,

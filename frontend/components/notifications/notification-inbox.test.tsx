@@ -15,6 +15,7 @@ jest.mock("@/lib/api", () => ({
 const actionable = {
   id: "n-1",
   type: "ACTION_REQUIRED",
+  actionable: true,
   title: "Someone wants to connect",
   body: null,
   ctaLabel: "Review",
@@ -83,6 +84,7 @@ describe("NotificationInbox", () => {
       ...actionable,
       id: "n-announcement",
       type: "ANNOUNCEMENT",
+      actionable: false,
       title: "Board Exam Mode is here",
       ctaLabel: "Try it",
       ctaPath: "/dashboard?tab=exams",
@@ -105,6 +107,7 @@ describe("NotificationInbox", () => {
       ...actionable,
       id: "n-phishy",
       type: "ANNOUNCEMENT",
+      actionable: false,
       title: "Suspicious",
       ctaLabel: "Click here",
       ctaPath: "https://evil.example",
@@ -234,5 +237,71 @@ describe("NotificationInbox", () => {
     await waitFor(() => expect(markNotificationRead).toHaveBeenCalled());
     expect(onDelta).toHaveBeenNthCalledWith(1, -1);
     expect(onDelta).toHaveBeenNthCalledWith(2, 1);
+  });
+
+  it("decrements the badge when an actionable notification is marked read", async () => {
+    const onDelta = renderInbox(1);
+
+    fireEvent.click(screen.getByLabelText("Open notifications"));
+    fireEvent.click(await screen.findByRole("button", { name: "Mark read" }));
+
+    await waitFor(() => expect(markNotificationRead).toHaveBeenCalled());
+    expect(onDelta).toHaveBeenCalledTimes(1);
+    expect(onDelta).toHaveBeenCalledWith(-1);
+  });
+
+  it("does not change the badge when a non-actionable notification is marked read", async () => {
+    const nonActionable = {
+      ...actionable,
+      id: "n-non-actionable",
+      type: "ANNOUNCEMENT",
+      actionable: false,
+    };
+    (listNotifications as jest.Mock).mockResolvedValue([nonActionable]);
+    const onDelta = renderInbox(0);
+
+    fireEvent.click(screen.getByLabelText("Open notifications"));
+    fireEvent.click(await screen.findByRole("button", { name: "Mark read" }));
+
+    await waitFor(() => expect(markNotificationRead).toHaveBeenCalled());
+    expect(onDelta).not.toHaveBeenCalled();
+  });
+
+  // ⚠️ THE DISCRIMINATING TEST FOR THIS RELEASE. Every other fixture sets `actionable` to agree with
+  // `type`, so the old `type !== "ANNOUNCEMENT"` branch and the new `actionable` branch return the
+  // same answer for all of them -- they pass identically against both implementations. This fixture
+  // is the one where the two DISAGREE: a non-actionable type whose name is not "ANNOUNCEMENT" is
+  // exactly the case the taxonomy split exists to fix, and the old code decremented the badge for it.
+  it("does not change the badge for a non-actionable type that is not ANNOUNCEMENT", async () => {
+    (listNotifications as jest.Mock).mockResolvedValue([{
+      ...actionable,
+      id: "n-future-non-actionable",
+      type: "IMPACT_MILESTONE",
+      actionable: false,
+    }]);
+    const onDelta = renderInbox(0);
+
+    fireEvent.click(screen.getByLabelText("Open notifications"));
+    fireEvent.click(await screen.findByRole("button", { name: "Mark read" }));
+
+    await waitFor(() => expect(markNotificationRead).toHaveBeenCalled());
+    expect(onDelta).not.toHaveBeenCalled();
+  });
+
+  it("does not restore the badge on a failed non-actionable mark-read", async () => {
+    (listNotifications as jest.Mock).mockResolvedValue([{
+      ...actionable,
+      id: "n-non-actionable",
+      type: "ANNOUNCEMENT",
+      actionable: false,
+    }]);
+    (markNotificationRead as jest.Mock).mockRejectedValue(new Error("offline"));
+    const onDelta = renderInbox(0);
+
+    fireEvent.click(screen.getByLabelText("Open notifications"));
+    fireEvent.click(await screen.findByRole("button", { name: "Mark read" }));
+
+    await waitFor(() => expect(markNotificationRead).toHaveBeenCalled());
+    expect(onDelta).not.toHaveBeenCalled();
   });
 });
