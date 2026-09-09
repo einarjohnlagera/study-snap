@@ -1352,7 +1352,11 @@ class OpenAiLlmStudyPackServiceTest {
         serviceLogger.setLevel(Level.WARN);
         try {
             ObjectNode payload = generatedNotePayloadWithQuickRecall("First Law — law of inertia");
-            // 15 words: over the 12-word bound, and long enough that the count is unambiguous.
+            // 15 plain words, over the 12-word bound. ⚠️ The validator counts the NORMALIZED value, so
+            // this fixture deliberately contains no LaTeX and no irregular whitespace — normalization is
+            // the identity on it, which is why the asserted count equals the count you get by reading the
+            // string. If repairJsonEatenLatexCommands or the whitespace collapse ever changes the token
+            // count here, this assertion should fail loudly rather than quietly track the new behaviour.
             payload.put("title", "A Comprehensive and Deliberately Overlong Title About the Measurement of Discharge Over Sharp Crested Weirs");
             stubResponsesCall();
             when(responseSpec.body(String.class)).thenReturn(generatedQuizResponseJson(payload));
@@ -1374,6 +1378,50 @@ class OpenAiLlmStudyPackServiceTest {
                     .contains("bound=wordCount")
                     .contains("words=15")
                     .contains("max=12");
+        } finally {
+            serviceLogger.detachAppender(appender);
+        }
+    }
+
+    /**
+     * ⚠️ THE SAME LOG LINE MUST SPEAK FOR EVERY FIELD ON THIS PATH, NOT JUST THE TITLE. {@code overview}
+     * and {@code keyIdea} keep UNPUBLISHED word bounds deliberately — the standing instruction at the
+     * constants is evidence-gated ("if ONE starts rejecting valid content"), and neither has produced a
+     * single observed rejection. That decision is only safe if a first rejection would announce itself,
+     * so this asserts the field name is reported rather than assumed.
+     */
+    @Test
+    void rejectedGeneratedOverviewIsReportedUnderItsOwnFieldName() throws JsonProcessingException {
+        Logger serviceLogger = (Logger) org.slf4j.LoggerFactory.getLogger(OpenAiLlmStudyPackService.class);
+        ListAppender<ILoggingEvent> appender = new ListAppender<>();
+        appender.start();
+        serviceLogger.addAppender(appender);
+        serviceLogger.setLevel(Level.WARN);
+        try {
+            ObjectNode payload = generatedNotePayloadWithQuickRecall("First Law — law of inertia");
+            // ⚠️ 3 words x 31 = 93, deliberately OVER the 90-word bound and not AT it. The first draft of
+            // this fixture used repeat(30) — exactly 90 — and did not throw, because the check is
+            // `wordCount > maxWords`. A boundary fixture that sits ON the limit proves nothing about
+            // either side of it.
+            payload.put("overview", "weirs measure flow ".repeat(31).trim());
+            stubResponsesCall();
+            when(responseSpec.body(String.class)).thenReturn(generatedQuizResponseJson(payload));
+
+            assertThatThrownBy(() -> service.generateNoteFromTopic(
+                    "Weirs",
+                    new StudyPackGenerationContext(null, "Civil Engineering", null, List.of("hydraulics"))
+            )).isInstanceOf(AppException.class);
+
+            assertThat(appender.list.stream()
+                    .map(ILoggingEvent::getFormattedMessage)
+                    .filter(message -> message.startsWith("generated_note_text_rejected"))
+                    .findFirst()
+                    .orElseThrow(() -> new AssertionError("no generated_note_text_rejected line was emitted")))
+                    .as("the overview's own bound must be reported, not the title's")
+                    .contains("field=overview")
+                    .contains("bound=wordCount")
+                    .contains("words=93")
+                    .contains("max=90");
         } finally {
             serviceLogger.detachAppender(appender);
         }
