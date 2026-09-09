@@ -107,14 +107,14 @@ export function NotificationInbox({
     setNotifications((items) => items.map((item) => (
       item.id === notification.id ? { ...item, readAt: now } : item
     )));
-    if (notification.type !== "ANNOUNCEMENT") {
+    if (notification.actionable) {
       onActionableUnreadDelta(-1);
     }
     try {
       await markNotificationRead(notification.id);
     } catch {
       setNotifications(previous);
-      if (notification.type !== "ANNOUNCEMENT") {
+      if (notification.actionable) {
         onActionableUnreadDelta(1);
       }
     }
