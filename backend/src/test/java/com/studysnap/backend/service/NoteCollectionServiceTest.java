@@ -76,6 +76,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionOperations;
@@ -180,6 +181,9 @@ class NoteCollectionServiceTest {
     @Mock
     private UserRepository userRepository;
 
+    @Mock
+    private ApplicationEventPublisher applicationEventPublisher;
+
     private NoteCollectionService service;
 
     @BeforeEach
@@ -203,7 +207,8 @@ class NoteCollectionServiceTest {
                 noteService,
                 llmStudyPackService,
                 userRepository,
-                TransactionOperations.withoutTransaction()
+                TransactionOperations.withoutTransaction(),
+                applicationEventPublisher
         );
     }
 
@@ -3420,6 +3425,7 @@ class NoteCollectionServiceTest {
         verify(itemRepository).publishUnpublishedReviewSetItems(eq(collectionId), any(Instant.class));
         verify(collectionRepository).publishUnpublishedReviewSetCollections(eq(collectionId), any(Instant.class));
         verify(collectionRepository).markReviewSetUpdatePublished(eq(collectionId), any(Instant.class));
+        verifyNoInteractions(applicationEventPublisher);
     }
 
     /**
@@ -3846,12 +3852,14 @@ class NoteCollectionServiceTest {
         NoteCollectionEntity source = buildCollection(collectionId, adminId, "Official Biology", Instant.now());
         source.setVisibility(CollectionVisibility.PUBLIC);
         source.setLastUpdatePublishedAt(Instant.parse("2026-09-08T00:00:00Z"));
+        Instant persistedPublishedAt = Instant.parse("2026-09-09T01:50:47.123456Z");
         ReviewSetPublicationStatusProjection unpublished = publicationStatus(true, 2, 1);
         ReviewSetPublicationStatusProjection none = publicationStatus(false, 0, 0);
 
         when(userRepository.findById(adminId)).thenReturn(Optional.of(admin));
         when(collectionRepository.findByIdAndOwnerUserIdForUpdate(collectionId, adminId)).thenReturn(Optional.of(source));
         when(collectionRepository.getReviewSetPublicationStatus(collectionId)).thenReturn(unpublished, none);
+        when(collectionRepository.findLastUpdatePublishedAt(collectionId)).thenReturn(persistedPublishedAt);
 
         ReviewSetPublicationStatusResponse first = service.publishReviewSetUpdate(collectionId, adminId);
         ReviewSetPublicationStatusResponse second = service.publishReviewSetUpdate(collectionId, adminId);
@@ -3861,6 +3869,12 @@ class NoteCollectionServiceTest {
         verify(itemRepository, times(1)).publishUnpublishedReviewSetItems(eq(collectionId), any());
         verify(collectionRepository, times(1)).publishUnpublishedReviewSetCollections(eq(collectionId), any());
         verify(collectionRepository, times(1)).markReviewSetUpdatePublished(eq(collectionId), any());
+        verify(applicationEventPublisher).publishEvent(
+                new com.studysnap.backend.service.event.ReviewSetUpdatePublishedEvent(
+                        collectionId,
+                        persistedPublishedAt
+                )
+        );
     }
 
     @Test
@@ -5241,6 +5255,35 @@ class NoteCollectionServiceTest {
         assertThat(result.items()).extracting(item -> item.noteId()).containsExactly(existingNoteId, newNoteId);
         assertThat(result.items()).extracting(item -> item.position()).containsExactly(0, 1);
         verify(analyticsService, never()).trackEvent(any(), eq(AnalyticsEventType.COLLECTION_CREATED), any(), any());
+    }
+
+    /**
+     * ⚠️ EDITING IS NOT PUBLISHING, GUARDED ON THE REAL EDIT PATH — added after the pre-signoff cold
+     * agent showed the integration-test version could not detect this: its act phase inserted rows with
+     * {@code jdbcTemplate} and called no service method, so a producer wired to fire on a WRITE rather
+     * than on the publish call would have sailed straight through it.
+     *
+     * <p>This one drives {@code addItems}, a real curator edit, and asserts the event publisher is
+     * never touched. The `v0.132.0` publication boundary exists precisely so an edit is not learner-
+     * facing; a notification on this path would undo it.
+     */
+    @Test
+    void addItems_doesNotAnnounceAnUnpublishedEdit() {
+        UUID userId = UUID.randomUUID();
+        UUID collectionId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        NoteCollectionEntity collection = buildCollection(collectionId, userId, COLLECTION_TITLE, Instant.now());
+        NoteEntity note = buildNote(noteId, userId, NOTE_TITLE_ONE);
+        when(collectionRepository.findByIdAndOwnerUserId(collectionId, userId)).thenReturn(Optional.of(collection));
+        when(noteRepository.findByOwnerUserIdAndIdIn(userId, List.of(noteId))).thenReturn(List.of(note));
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(collectionId)).thenReturn(List.of());
+        when(itemRepository.saveAll(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(collectionRepository.save(collection)).thenAnswer(invocation -> invocation.getArgument(0));
+        stubDetailItemLoad(userId, List.of(noteId), List.of(note));
+
+        service.addItems(collectionId, userId, new AddNoteCollectionItemsRequest(List.of(noteId)));
+
+        verifyNoInteractions(applicationEventPublisher);
     }
 
     @Test

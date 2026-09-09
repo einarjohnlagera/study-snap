@@ -64,9 +64,11 @@ import com.studysnap.backend.repository.NoteRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
 import com.studysnap.backend.repository.UserRepository;
 import com.studysnap.backend.service.model.CompanionGenerationContext;
+import com.studysnap.backend.service.event.ReviewSetUpdatePublishedEvent;
 import com.studysnap.backend.util.CourseProgramNormalizationUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.access.AccessDeniedException;
@@ -178,6 +180,7 @@ public class NoteCollectionService {
     private final LlmStudyPackService llmStudyPackService;
     private final UserRepository userRepository;
     private final TransactionOperations collectionTransactionOperations;
+    private final ApplicationEventPublisher applicationEventPublisher;
 
     @Transactional(readOnly = true)
     public List<NoteCollectionSummaryResponse> list(UUID userId) {
@@ -756,7 +759,15 @@ public class NoteCollectionService {
             itemRepository.publishUnpublishedReviewSetItems(collectionId, now);
             collectionRepository.publishUnpublishedReviewSetCollections(collectionId, now);
             collectionRepository.markReviewSetUpdatePublished(collectionId, now);
-            lastPublishedAt = now;
+            // TIMESTAMPTZ persists microseconds while Instant carries nanoseconds. Read the stored
+            // value back before constructing event identity so retries cannot derive a different key
+            // from the same publication after a later entity reload.
+            lastPublishedAt = Objects.requireNonNull(collectionRepository.findLastUpdatePublishedAt(collectionId));
+            // ⚠️ Trigger from THIS call site only. publishInitialCurriculum also advances the stamp,
+            // but first publication has no update episode and must never notify.
+            applicationEventPublisher.publishEvent(
+                    new ReviewSetUpdatePublishedEvent(collectionId, lastPublishedAt)
+            );
         }
         return new ReviewSetPublicationStatusResponse(
                 collectionId,

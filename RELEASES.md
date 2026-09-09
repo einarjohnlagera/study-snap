@@ -1,5 +1,140 @@
 # RELEASES.md - NoteLib
 
+## v0.135.0 - Update Signal
+
+**Status: Released** (kicked off 2026-09-09, signed off 2026-09-09, base branch `releases/v0.135.0`, cut from `main` after `v0.134.0` merged as #1353 and tagged `eac429a4`. Shipped as PRs #1354 and #1355.)
+
+Source: `docs/claude-plans/attention-notifications-email-expansion-stage1.md` (Stage D) **as corrected by `docs/claude-plans/attention-notifications-stage1-tightening-addendum.md` §2, which is the binding design.**
+
+Theme: give the notification substrate its first real producer — when a curator publishes an Official Review Set update, the learners who adopted it are told.
+
+### ⚠️⚠️ READ THE ADDENDUM'S §2, NOT THE AUDIT'S §17.2 — THE AUDIT'S DEDUP KEY IS A PERMANENT SUPPRESSION BUG
+
+The audit proposes `REVIEW_SET_UPDATE:<adoptedCollectionId>`. Under the permanent unique index on `(recipient_user_id, dedup_key)` **that key can deliver exactly ONE notification per learner per set, ever.** `NotificationService.deliver` catches the constraint violation and **returns the OLD row** — no exception, no log line, publish reports success. `dismissed_at` is not in the index, so dismissing never frees the key, and retention only frees it after 90 days *and* a read/dismiss — so **a learner who never opens the bell is suppressed forever.**
+
+**The corrected key is source-side:**
+
+```
+REVIEW_SET_UPDATE:<sourceCollectionId>:<lastUpdatePublishedAt as epochMilli>
+```
+
+`lastUpdatePublishedAt` already advances **only** when `unpublishedChanges` is true (`NoteCollectionService:754-760`), so **re-press idempotency is inherited for free** and no migration is needed.
+
+### Planned Scope
+
+1. **`NotificationType.REVIEW_SET_UPDATE` + `NotificationCategory.LEARNING_SYSTEM` (backend).** The first type with a real producer.
+2. **The producer (backend).** Fires from the `publishReviewSetUpdate` **call site**, delivering to adopters of that source root, deep-linked to `/collections/{adoptedCollectionId}`.
+3. **Episode suppression (backend).** A batch filter in the producer, between audience resolution and fan-out, dropping recipients who already hold an **undismissed** `REVIEW_SET_UPDATE` row for that source. **Settled by owner decision A2 — ships WITH the producer, not later.**
+4. **Retire the transitional `ACTION_REQUIRED`.** Delete both the type and its producerless category;
+   the settled taxonomy decision is recorded below.
+
+### ⚠️ Anti-drift
+
+- ❌ **NEVER fire on raw source drift.** Only `publishReviewSetUpdate`. The publication boundary exists to forbid exactly this.
+- ⚠️ **THE TRIGGER IS THE CALL SITE, NOT THE STAMP.** `markReviewSetUpdatePublished` has **two** call sites — `publishReviewSetUpdate:758` and `publishInitialCurriculum:1849`. Wiring the producer to "the stamp advanced" would also fire on a set's first-ever publication.
+- ❌ **NO COUNT IN THE COPY.** Under episode suppression the single open row is the learner's only signal across N publishes, so *"3 new notes"* is false by the second one. Generic copy only — this also preserves R10, the inbox's zero-N+1-by-construction property.
+- ❌ **Do NOT call `deliver()` inside a transaction (R9).** It is deliberately non-transactional so a dedup-index violation cannot mark a whole fan-out rollback-only. `FanOutTransactionBoundaryTest` guards this — **do not delete it, and do not delete the open-in-view runtime test either; they cover different angles.**
+- ❌ **Do NOT put suppression in `AnnouncementAudienceResolver`** — that class is editorial, never authorization, and a test guards it.
+- ❌ **NO email** (decision D3; R1 unresolved — the 100/day cap is breached at 156–159 observed).
+- ❌ No new endpoint unless the producer genuinely needs one; no admin surface; no preferences centre.
+- ❌ **NO Learning Connections work** — `[CHECKPOINT — due 2026-09-19]` is ten days out and its kill criterion keys on `ACCEPTED`, denominator ONE.
+- ✅ **Reuse `notificationFanOutExecutor`** (core 1 / max 2) — do not add a second executor or resize it (R5/R13).
+- ✅ Dismiss must change no curriculum truth; applying an update stays authoritative in Review Set state.
+
+### ⚠️ Corrections to carry — the audit's own numbers are stale
+
+- **The audit says "≤30 recipients". `LET Comprehensive Review` now has 42 adopters** (ALE 30, PNLE 15, CPALE 8, Civil Engineering 1). D2's justification cited the old figure.
+- **Exactly ONE update publish exists in the product's history** — 2026-09-09 at 01:50:47, on LET, forty seconds after the Education tagging run. Four of five public source roots have never published an update at all.
+- **⚠️ That read WEAKENED the case for shipping suppression now, and the owner took the recommendation anyway.** Record it as a judgement call made with the counter-evidence in view, **not** as "suppression was obviously necessary."
+
+### Settled owner decisions (do not re-litigate)
+
+- **A1 — dismiss without applying → the next publish DOES re-notify.** Suppress-until-applied would reintroduce permanent silence through a different trigger.
+- **A2 — episode suppression ships WITH the first producer.**
+
+### Settled taxonomy decision
+
+**This release deletes both transitional `ACTION_REQUIRED` values.** `REVIEW_SET_UPDATE` maps to
+`LEARNING_SYSTEM`, so every shipped type and category has a real producer. A later connection-request
+release can add its category together with its producer instead of preserving a producerless slot.
+
+### ⚠️ Inherited checkpoint — `v0.134.0` is DEPLOYED and its clock has started
+
+`V143` ran **2026-09-09 03:53:07**, so `[CHECKPOINT — due deploy + 1 day]` is **2026-09-10**. **Proximal (a) is already ANSWERED: `idx_notifications_inbox` is live in production with the exact expected definition.** Proximal (b) — `/actuator/metrics/announcement.fanout.duration` resolves — is still owed. **⚠️ Its distal tier is gated on a first announcement publish, and ZERO announcements have ever been published**, so a quiet read is *not yet measurable* → re-date, never a pass.
+
+### Verification tier
+
+**To be decided when the shape is known**, but the prior is **one scoped cold agent**: this adds a producer to a fan-out path that has never run in production, and the last two releases each shipped a delivered test that passed for a reason unrelated to its change. **Routing: CODEX** — new enum values, a producer, a batch suppression query and its tests span backend service, repository and entity layers.
+
+### ⚠️ Audit note — Codex hit its session limit mid-delivery, and the completion gap was ONE test
+
+**The delivery was further along than the interruption implied: it compiled, the full backend suite passed, and 7 of the prompt's 12 required tests were present — including the discriminating one.** Auditing against the prompt's list rather than against the delivery's own shape found the real state:
+
+| Required test | Status |
+|---|---|
+| Dismiss → later publish → NEW row (**the discriminating test**) | ✅ delivered |
+| Re-press idempotency; episode suppression | ✅ delivered |
+| R9 through the real Spring-managed path | ✅ delivered, **plus the annotation guard extended to the new service and listener** |
+| Read ≠ resolved; no-count copy; learner's-own deep link | ✅ delivered |
+| Real `MockMvc` request | ✅ **already existed** from `v0.132.0` |
+| Taxonomy + badge counter | ✅ delivered |
+| First-ever publication notifies nobody (**two-writers trap**) | ✅ **already covered** — see the correction below |
+| **Editing without publishing reaches nobody** | ❌ **MISSING — added by this audit** |
+
+**⚠️ A CORRECTION WORTH RECORDING, BECAUSE THE FIRST READ WAS WRONG.** This audit initially judged the two-writers trap uncovered and wrote a duplicate test for it. It **is** covered: `NoteCollectionServiceTest.updateVisibility_publishesWhenEveryItemIsPublic` asserts `markReviewSetUpdatePublished` fires **and** `verifyNoInteractions(applicationEventPublisher)` — the stamp advances, no event does. **The grep missed it because the test is named for the visibility change, not for the private method it exercises.** The duplicate was removed. *Searching for a behaviour by the name of the method that implements it will keep missing tests named for the user action.*
+
+**The one genuine gap — `curatorEditsWithoutPublishingReachNoAdopter` — is the anti-drift line this release leans on hardest** (*editing is not publishing*), and it covers a path nothing else did: items added with **no publish call at all**. The existing no-op test covers publishing with nothing to publish, which is a different thing.
+
+**Two mutants run, both killed:**
+
+| Mutant | Killed by |
+|---|---|
+| **Dedup key reverted to the audit's `REVIEW_SET_UPDATE:<adoptedCollectionId>`** — the permanent suppression bug | **`dismissingOneRevisionAllowsTheNextPublishedRevisionToCreateANewRow`** — the design's whole reason for existing, caught |
+| `@Transactional` added to the new producer's `fanOut` (R9 on the new path) | `FanOutTransactionBoundaryTest.reviewSetUpdateFanOutIsNotTransactional` |
+
+**Verification run:** backend 2,335 tests + the 102-query PostgreSQL harness against a real container; frontend 2,348 across 212 suites; `tsc --noEmit` clean; `npm run lint` 0 errors.
+
+### ✅ Pre-signoff cold agent — ONE CLAIM REFUTED, TWO INERT TESTS FOUND, ALL FIXED
+
+The scoped cold agent ran against the merged state and **refuted C6** while upholding the other seven.
+
+**⚠️ C6 REFUTED — a curator is notified of their own publish.** `adopt()` carries **no owner guard**, so a curator can self-adopt their own PUBLIC Review Set; `findReviewSetUpdateRecipients` had no self-copy exclusion, so publishing an update then told them about their own action. **The fix was already sitting eight lines above in the same file:** `countAdoptionsByCollectionIds` excludes self-copies with `adoption.ownerUserId <> source.ownerUserId` for the adoption COUNT. The two queries now agree on what an adoption is, and `aCuratorWhoAdoptedTheirOwnSetIsNotNotifiedOfTheirOwnPublish` fails if they diverge again. Cosmetic in severity, real as a gap.
+
+**⚠️⚠️ TWO TESTS PASSED FOR REASONS UNRELATED TO WHAT THEY CLAIMED — AND ONE OF THEM WAS WRITTEN BY THE AUDIT THAT WENT LOOKING FOR EXACTLY THIS SHAPE.** That is the finding worth keeping:
+
+1. **`curatorEditsWithoutPublishingReachNoAdopter`** — added by this release's own audit to guard *"editing is not publishing"*. Its act phase inserted rows with `jdbcTemplate` and **called no service method**, so a producer wired to fire on a WRITE rather than on the publish call would have sailed straight through it. **The test that existed to catch the release's boldest anti-drift claim could not catch it.** Renamed to `unpublishedRowsAloneDispatchNoFanOut` — which is what it actually proves — and the real guard now lives on the real edit path as `NoteCollectionServiceTest.addItems_doesNotAnnounceAnUnpublishedEdit`, which drives `addItems` and asserts the publisher is untouched.
+2. **The `taskTransactionActive` assertion** captured `isActualTransactionActive()` in a wrapper that runs **on the test thread after the publishing transaction already committed and unbound** — so it read `false` whether or not `fanOut` was transactional, and could not see the regression its own `.as(...)` named. The capture moved **inside `deliver`**, via a spy on the **Spring-managed** bean so the proxy is live. **Verified by mutation: `@Transactional` on `fanOut` now fails it, and previously did not.**
+
+**Four mutants run across this release, all killed:**
+
+| Mutant | Killed by |
+|---|---|
+| Dedup key reverted to the audit's `<adoptedCollectionId>` | `dismissingOneRevisionAllowsTheNextPublishedRevisionToCreateANewRow` |
+| `@Transactional` on the producer's `fanOut` | `FanOutTransactionBoundaryTest` — and **now also** the corrected runtime assertion |
+| **Self-copy exclusion removed** | **`aCuratorWhoAdoptedTheirOwnSetIsNotNotifiedOfTheirOwnPublish`** |
+
+**Upheld and worth recording:** the `LIKE` prefix cannot collide across sources (UUIDs are fixed-length and contain no wildcards); a same-millisecond key collision additionally requires a dismiss and a lock-serialized round trip inside 1 ms; adopted CHILD collections point at their own child source, not the root, so a Goal adoption cannot multi-notify. **`ACTION_REQUIRED` has zero references repo-wide, and production still holds zero notification rows of any type — re-verified read-only at this audit, not inherited.**
+
+**Known limitation, recorded not fixed:** no test exercises delivery on the real `ThreadPoolTaskExecutor` thread, and the mid-fan-out unique-index conflict is covered only with a mocked `NotificationService`, never against a real database for two recipients in one fan-out.
+
+**⚠️ Method note: the branch was NOT switched under the agent this time** — the `v0.134.0` lesson held.
+
+
+### Shipped
+
+- Replaced the producerless `ACTION_REQUIRED` type/category pair with the actionable
+  `REVIEW_SET_UPDATE` / `LEARNING_SYSTEM` pair, backed by the first real feature producer.
+- Publishing real changes to an Official Review Set now emits a plain-value event and queues adopter
+  delivery only after the locked publication transaction commits, reusing the unchanged bounded
+  `notificationFanOutExecutor`.
+- Added source-revision identity as
+  `REVIEW_SET_UPDATE:<sourceCollectionId>:<persistedPublishedAtEpochMilli>`, fixed count-free copy and
+  deep links to each learner's adopted collection.
+- Added one-query adopter resolution and one-query undismissed-episode suppression. Dismissal closes an
+  episode, allowing the next genuinely published revision to create a new notification row.
+- Added real Spring-transaction, revision-key, suppression, dismissal, no-op retry, queue-rejection,
+  copy, deep-link and badge coverage while preserving both existing R9 guards.
+
 ## v0.134.0 - Notification Foundations
 
 **Status: Released** (kicked off 2026-09-09, signed off 2026-09-09, base branch `releases/v0.134.0`, cut from `main` after `v0.133.0` merged as #1349 and tagged. Shipped as PRs #1350, #1351, #1352.)
@@ -911,163 +1046,3 @@ incomplete in exactly the way the javadoc was. It now names the top-up.
 - **⚠️ AGENT 3's PRODUCTION INDEX CHECK WAS BLOCKED AND IS THEREFORE UNVERIFIED AGAINST PRODUCTION.** The
   `v0.129.0` index claim is confirmed **in-repo only**. Two read-only SELECTs are handed to the owner in
   `docs/claude-plans/v0.130.0-owner-production-checks.sql` rather than being reported as verified.
-
-## v0.129.0 - Adoption Signal
-
-**Status: Released** (kicked off and signed off 2026-09-07, base branch `releases/v0.129.0`, cut from `main` after `v0.128.0` merged)
-
-Theme: show how many learners have adopted an Official Review Set — **Stage 2 of the in-app notifications plan, which is the one stage that does not depend on notifications existing.**
-
-Source: `docs/claude-plans/in-app-notifications-and-review-set-adoption-signals-stage1.md`, §17. **⚠️ THAT DOCUMENT'S OWN INSTRUCTION IS TO KEEP THIS SEPARATE: *"Stage 2 is independent of every other stage and is the cheapest real user-visible win — one index, one query, two surfaces. Do not fold it into the notification work."* NO notification table, inbox, bell, badge, announcement or polling is in scope.**
-
-### Planned Scope
-
-**(1) The count, and the one index it needs.** `SELECT COUNT(*) FROM note_collections WHERE source_plan_id = :officialId AND owner_user_id <> :officialOwnerId`. **⚠️ NO `DISTINCT`:** `idx_note_collections_owner_source_plan` (`V76`) is a **partial UNIQUE** index on `(owner_user_id, source_plan_id)`, so one learner can hold at most one collection per source **as a database invariant** — rows-per-source already equals learners-per-source. **⚠️ THE ONLY SCHEMA CHANGE IS ONE INDEX**, and the reason is precise: that existing index leads on `owner_user_id`, so a query filtering on `source_plan_id` alone cannot use it.
-
-**(2) Two surfaces.** Explore/discovery cards (compact, `1.2K adopted`) and Official Review Set detail (fuller wording). **⚠️ NOT onboarding** — social proof during the one flow where NoteLib is making the recommendation distorts it. **⚠️ EXPLORE MUST BATCH: one grouped `WHERE source_plan_id IN (:visibleIds) GROUP BY source_plan_id`, never one count per card.**
-
-### Production reads — RUN 2026-09-07, read-only, BEFORE scoping rather than after
-
-The plan's §10 listed two reads as prerequisites and assumed both were the owner's. **⚠️ They are `SELECT`s, which are Claude's to run under this repo's own read-only rule, so they were run and the results are here rather than deferred.**
-
-| finding | value |
-|---|---|
-| provenance completeness | **91.2%** (536 of 588 collections carry `source_plan_id`) |
-| adopter distribution | **40, 40, 40, 40, 40, 30, 28, 15 ×7, 8, 4 ×7, 1, 1** |
-| curator self-copies | **zero** — `adopters_excl_owner` equals `adopters_incl_owner` on every row |
-
-**⚠️ §10's "if provenance completeness is materially low, public display should WAIT" DOES NOT TRIGGER — 91.2% is high.** The exclusion of the Official owner stays in the query for correctness even though it currently changes nothing.
-
-**⚠️⚠️ A THIRD FINDING THE PLAN COULD NOT HAVE ANTICIPATED, AND IT IS A DISPLAY PROBLEM RATHER THAN A COUNTING ONE: ADOPTING A GOAL FANS OUT TO ITS CHILDREN, so a parent and its subject plans show near-identical counts.** `LET Comprehensive Review` is 40 and each of its four children is **also 40**; `PNLE Core Nursing Review` is 15 and its seven children are **each 15**. **⚠️ The counts are CORRECT and the plan's parent/child independence rule is right — each child's `source_plan_id` genuinely points at the child source, and they must NEVER be summed into the parent.** But the numbers will read as duplicated down a Goal's subject list. **⚠️ AND THE FAN-OUT IS NOT UNIFORM, WHICH IS WHY IT CANNOT BE SPECIAL-CASED AWAY: `CPALE Comprehensive Review` is 8 while its children are 4, and `ALE` is 30 against a child at 28** — adopters who joined before a child existed. So "just show it on the parent" would be wrong too.
-
-**⚠️⚠️ CORRECTED 2026-09-07 BEFORE ANY CODE WAS WRITTEN — THE FAN-OUT IS REAL IN THE DATA BUT INERT ON BOTH SURFACES IN SCOPE, AND THE FIRST WORDING OVERSTATED IT.** `listPublic` calls `findByVisibilityAndParentCollectionIdIsNullOrderByUpdatedAtDesc`, so **Explore renders TOP-LEVEL collections only** — children are fetched solely to roll up item counts and are never cards. `getPublic`'s `toPublicDetailResponse` returns a `childCount` **number**, not child summaries, so the public detail page has no per-child list to hang a count on. **⚠️ THEREFORE THERE IS NO "duplicated down a Goal's subject list" TO FIX IN THIS RELEASE — do NOT build a suppression rule, a roll-up, or a parent/child display heuristic for a problem no surface currently exhibits.** The fact is kept because it goes live the instant any surface renders children with counts; it is not a `v0.129.0` deliverable.
-
-### Owner decision — SETTLED
-
-**✅ THRESHOLD DECIDED BY THE OWNER 2026-09-07: **5**.** A Review Set shows its adoption count only when it has **5 or more** adopters; below that the count is **omitted entirely** — not shown as "fewer than 5", not shown as a range, which would leak the same smallness the threshold exists to hide. **⚠️ THIS IS DISPLAY POLICY ONLY — the stored/queried count is exact and unaffected.** **⚠️ AND THE THRESHOLD IS CURRENTLY INERT TOO, WHICH IS THE OTHER HALF OF THE SAME CORRECTION: every top-level PUBLIC set is ALREADY ≥8** — LET 40, ALE 30, PNLE 15, CPALE 8, and those four are the entire Explore surface. **The `4`s and `1`s are all CHILDREN**, and the `1`s are PRIVATE. So threshold 5 hides **nothing today** — it is a DEFENSIVE policy for the first small set that gets published top-level, not an active filter. **⚠️ Do NOT claim it "hides nine sets"** — that counted rows the surfaces never render. **⚠️ Do NOT re-derive this threshold from a fresh distribution read** — it is an owner decision, not a computed value, and a later read showing different counts does not change it. The alternative considered was 10, which would additionally have hidden the `8` (`CPALE Comprehensive Review`); it was not chosen.
-
-### Anti-drift
-
-**⚠️ NO Learning Connections work** — `[CHECKPOINT — due 2026-09-19]` is **twelve days out** and decides whether that arc continues at all. **⚠️ Do NOT build any part of Stages 3-7** — no `notifications` table, inbox, bell, badge, announcement, fan-out, polling or scheduled sweep. **⚠️ Do NOT write "N learners adopted this"** — the repo cannot prove every counted owner is a learner, and `ProfileType` must NOT be used to filter adoptions to justify the word. **⚠️ Do NOT roll child adoptions into a parent's count. Do NOT rank Official Review Sets by adoption count** — popularity is not curriculum quality. **⚠️ Do NOT add a denormalized or event-maintained counter** before measurement; query-time count only. **⚠️ Do NOT expose adopter identities, avatars, or an adoption feed**, and never "N other learners also updated". **⚠️ Do NOT reconstruct provenance from titles, names or note overlap** — the 8.8% without it are excluded and under-count; report that, do not fix it. **⚠️ No quota, entitlement or pricing change; onboarding untouched.**
-
-### Verification
-
-**A single `advisor()` call, per the plan's own Verification section** — Stage 2 is one index, one query and two read-only surfaces, and it moves no authorization or privacy boundary. **⚠️ The migration adds an index only — no column, no data write — so it does not trigger the production-data-semantics escalation.**
-
-**Pre-declared guards, from the plan's discriminating list, reduced to the four that apply to this stage:**
-- **(1)** adopt → delete → re-adopt returns the count to its prior value.
-- **(2)** applying a source update does **not** change the count — asserted either side of `applySourceUpdate`, which mutates rows and creates none. **⚠️⚠️ THIS CLAIM WAS FALSE AND WAS DISPROVED BY THE `v0.130.0` PRESSURE TEST — see the correction under `v0.129.0` → Known limitations below.** `applySourceUpdate` DOES create rows carrying a `sourcePlanId`, via `createSubjectAddition`, and the guard that "proved" otherwise was vacuous.
-- **(3)** adopting a child Subject Plan leaves the parent's count unchanged.
-- **(4)** **⚠️ Explore issues ONE count query for N cards — ASSERT THE QUERY COUNT, NOT THE RENDERED NUMBERS.** A test that only checks the displayed figures passes an N+1 implementation.
-
-**⚠️ CARRIED LESSON, NOW TWICE-BURNED: confirm a mutation is PRESENT before trusting a green suite.** And the `v0.128.0` lesson on top of it: **anchor every quoted defect to the CURRENT file at kickoff** — that release opened on an item that had already shipped nine days earlier because the kickoff copied planned-scope prose forward instead of re-reading the code.
-
-**Routing: CLAUDE CODE inline for the frontend surfaces; the index + count query is a backend change and gets a Codex prompt if it grows past the query and its test.**
-
-### Shipped
-
-- **Official Review Set adoption counts are query-time, exact public aggregates.** The backend adds a
-  partial `source_plan_id` index (`V138`) and one batched JPQL self-join that excludes the Official
-  source's owner. `/collections/public` and `/collections/public/{id}` return non-null
-  `adoptionCount`; the display threshold remains a frontend-only rule. **⚠️ No `DISTINCT`** — `V76`'s
-  partial UNIQUE index already makes one-learner-one-adoption a database invariant — **and no
-  denormalized counter, no ordering by the count, and no threshold logic anywhere in the backend.**
-- **⚠️ The audit MUTATION-VERIFIED the two claims a green suite could not have proven, each confirmed
-  PRESENT before its run.** This is the `v0.93.0` lesson applied: that release's headline conditional
-  insert survived a mutated predicate because every repository reference in the test tree was a mock.
-  - **Dropping `adoption.ownerUserId <> source.ownerUserId`** fails
-    `countAdoptionsExcludesTheOfficialOwnerAndKeepsParentAndChildSourcesIndependent` — **against real
-    PostgreSQL, not a mock**: the count came back `3` where `2` was expected. Predicate correctness is
-    therefore actually exercised, not merely parsed.
-  - **Replacing the batched call with a per-collection one** — a real N+1 — fails
-    `listPublic_loadsAdoptionCountsOnceForTheFullVisibleCollectionList`, which asserts the repository
-    is invoked **once with the full id list**. **⚠️ That test asserts the INVOCATION, not the rendered
-    numbers**, which is the only form of the guard an N+1 cannot pass.
-- **`V138` was applied by Flyway against the real PostgreSQL 16 container** (*"Successfully applied 138
-  migrations … now at version v138"*), so the migration is verified as valid PostgreSQL rather than
-  assumed. It is a plain partial `CREATE INDEX` — **not `CONCURRENTLY`, which cannot run inside
-  Flyway's transaction.**
-- **Owner-scoped and non-public mappers pass `0` rather than issuing a query**, since adoption counts
-  are a discovery signal and those surfaces do not show one.
-
-**Backend build: `./mvnw clean install` green — 2227 tests, 0 failures**, re-run clean after every
-mutation was reverted.
-
-### Known limitations, and why NO checkpoint is owed
-
-**⚠️⚠️ CORRECTIONS ADDED 2026-09-07 BY THE `v0.130.0` PRESSURE TEST — TWO CLAIMS IN THIS ALREADY-SIGNED-OFF
-SECTION WERE FALSE.** Recorded here rather than only under `v0.130.0` because a future prompt reads this
-section as the truth about adoption counts, and a corrected claim is worthless if it lives somewhere the
-reader will not be.
-
-- **⚠️ CORRECTION — guard (2) was FALSE, and the test that "proved" it was VACUOUS.** The Verification
-  section above claimed `applySourceUpdate` "mutates rows and creates none". It does create rows:
-  `createSubjectAddition` (`NoteCollectionService.java:2307`) saves a new `NoteCollectionEntity` with
-  `setSourcePlanId(sourcePlan.getId())` whenever a curator has added a Subject Plan to a Goal upstream.
-  The guard, `applyingSourceUpdateDoesNotChangeTheAdoptionCount`, used a **leaf fixture with no
-  children**, so the loop that creates rows was never entered — short-circuiting the whole method also
-  passed it. **⚠️ THE NUMBER WAS NEVER WRONG: by the count's own definition an adopter who gains a copy
-  of a newly-added Subject Plan IS an adopter of it, so the child's count rising by one is correct.**
-  What was wrong was the claim and the guard. Fixed in `v0.130.0`: the test is renamed
-  `applyingSourceUpdateToALeafPlanDoesNotReCountItsExistingAdopter` (it does prove that a re-sync never
-  double-counts an existing adopter) and joined by
-  `applyingSourceUpdateCreatesAnAdoptionOfANEWLYAddedChildSubjectPlan`, which fails if the creation path
-  is removed. `docs/releases/v0.129.0.md` carried the same claim in user-facing wording and is corrected.
-- **⚠️ CORRECTION — the public-detail adoption wiring shipped with NO GUARD AT ALL.** Mutation-proved:
-  replacing the `adoptionCount` argument at `NoteCollectionService.java:3021` with a literal `0` left
-  **all 219 tests in `NoteCollectionServiceTest` green**, because the only test that touched the field
-  stubbed an empty projection list and asserted `isZero()` — the value the defect produces too. This is
-  the "a guard is only worth what it executes" failure in its purest form, and the zero-valued fixture is
-  the same shape as the vacuous guard above. Closed in `v0.130.0` by
-  `getPublic_carriesTheAdoptionCountThroughToTheAnonymousPayload`, which stubs a non-zero count and is
-  killed by that exact mutation.
-- **⚠️ `adoptionCount` is hardcoded `0` on the AUTHENTICATED detail mapper** (`NoteCollectionService.java:2985`)
-  while `lib/api.ts` documents the field as exact. No surface reads it there — the count renders from the
-  public payloads — so this is inert, but it is a live contradiction between code and its own API doc and
-  is recorded rather than silently left. **⚠️ Do not "fix" it by wiring a count in without a consumer**;
-  that is the `v0.116.0`/`v0.117.0` silent-no-op shape.
-- **⚠️ The threshold rationale slightly overstates its effect.** The exact sub-threshold count is still
-  returned to anonymous callers in the API payload; only the *rendering* is suppressed. The threshold
-  hides the number from the page, not from anyone reading the response.
-
-- **⚠️ THE THRESHOLD IS SHIPPED BUT UNEXERCISED IN PRODUCTION, AND THAT IS A KNOWN LIMITATION RATHER
-  THAN A DEFECT.** Every top-level PUBLIC set is already ≥8 (LET 40, ALE 30, PNLE 15, CPALE 8), and
-  only top-level sets render on Explore, so the hide branch **has never fired against real data**. It
-  is covered by unit tests and will fire the first time a small set is published top-level. **⚠️ Do
-  not "verify" it by lowering the threshold — that is an owner decision, not a test fixture.**
-- **Legacy rows without provenance (8.8% of collections) are excluded and under-count**, by decision.
-  **⚠️ Never reconstruct provenance from titles, names or note overlap.**
-- **NO `[CHECKPOINT]` ROW IS OWED, and the reason is the denominator rather than the absence of a
-  question.** The obvious one — *does showing adoption counts increase adoption?* — is measurable
-  from `note_collections` without new instrumentation, so it clears the "decorative checkpoint" bar
-  on that axis. **⚠️ But it fails clause 3 of the bootstrap test: it would be read across FOUR
-  top-level sets at ~0.7 signups/day, which cannot separate a social-proof effect from noise.**
-  Writing it would reproduce the underpowered read this release cycle has now diagnosed twice — the
-  onboarding `n=18` and the Learning Connections `n=1`. **⚠️ Stage 2's own EVIDENCE gate was CLEARED
-  before building** (provenance 91.2%, distribution read), so nothing here shipped ahead of its
-  evidence; the display threshold was an owner decision, not an evidence gate.
-
-- **The adoption-count display rule lives in one module, so the two surfaces cannot drift.**
-  `frontend/lib/adoption-count.ts` owns the threshold, the compact/detailed wording and the
-  show/hide decision; `PublicStudyPlanCard` renders `40 adopted` on the card and
-  `Adopted by N study libraries` in its preview. **⚠️ Below the threshold NOTHING is rendered** —
-  not *"fewer than 5"*, not a range, since either still discloses the smallness the threshold exists
-  to hide, and a test asserts the **absence** of any adoption text rather than the presence of a
-  softer one.
-- **⚠️ The threshold is applied at DISPLAY ONLY and the API field stays exact.** `adoptionCount` is
-  optional on `NoteCollectionSummary`/`NoteCollectionDetail`, so a payload without it degrades to
-  silence rather than to *"0 adopted"* — which also means **this frontend is safe to ship before the
-  backend and renders nothing until it lands.**
-- **Wording is "adopted", never "N learners adopted this"**, with a test asserting no `/learner/i`
-  appears in either label — the repo cannot prove every counted owner is semantically a learner.
-- **Compact formatting truncates rather than rounds**, so `1999` reads `1.9K` and never `2K`: the
-  label must not claim more adopters than exist.
-
-**Verification (frontend half).** Three mutations, **each confirmed present in the file before its
-run**: threshold `5 → 0` fails six tests across both suites; `Math.floor → Math.round` fails exactly
-the truncation test; and stubbing the card's label to `null` — the silent no-op class — fails exactly
-the card's render test.
-
-**⚠️ Backend is a Codex prompt, not built here** (`docs/codex-prompts/v0.129.0-adoption-count-backend.md`,
-untracked by design). It carries the one index, the batched self-join query, and the guard that the
-backend must return the **exact** count with no threshold logic.

@@ -7,12 +7,12 @@ import java.util.stream.Collectors;
 /**
  * Badge and retention policy shared by notification producer types.
  *
- * <p>Future category slots are {@code LEARNING_SYSTEM}, {@code SHARED_WITH_YOU}, {@code IMPACT}, and
- * {@code DISCOVERY}. Add one only when a notification type with a real producer maps to it.
+ * <p>Future category slots are {@code SHARED_WITH_YOU}, {@code IMPACT}, and {@code DISCOVERY}. Add one
+ * only when a notification type with a real producer maps to it.
  */
 public enum NotificationCategory {
     ANNOUNCEMENT(false),
-    ACTION_REQUIRED(true);
+    LEARNING_SYSTEM(true);
 
     private final boolean badgeEligible;
     // true: counts toward the numeric badge and is retained while unread.

@@ -1,8 +1,7 @@
 # Notifications
 
-In-app notification substrate (Stage 3) and its first producer, Admin "What's New" (Stage 4), both
-shipped in `v0.130.0` from
-`docs/claude-plans/in-app-notifications-and-review-set-adoption-signals-stage1.md`.
+The in-app notification substrate and Admin "What's New" shipped in `v0.130.0`. `v0.135.0` added its
+first feature-owned producer: published Official Review Set updates for learners who adopted the set.
 
 ## The model: notification = awareness, the owning feature = truth
 
@@ -36,7 +35,7 @@ insert and **catches `DataIntegrityViolationException`**, returning the existing
 `NoteCollectionService:952` uses for the adoption unique index. **A duplicate delivery is a
 successful no-op, never an error surfaced to the caller.**
 
-## Actionable vs announcement, and the badge
+## Categories, types, and the badge
 
 **`NotificationCategory` carries the badge policy; `NotificationType` is producer identity and
 delegates to its category** (`v0.134.0`). One `badgeEligible` flag on the category yields two derived,
@@ -44,9 +43,14 @@ complementary sets — `badgeEligibleCategories()` and `retentionExpirableCatego
 `actionableTypes()` derives from the first. **⚠️ A test asserts the two sets PARTITION the categories:
 two hand-maintained lists is how they drift.**
 
-**⚠️ `ACTION_REQUIRED` is TRANSITIONAL and has no producer.** It exists for backward-compatible
-taxonomy transition and Stage D replaces it with the first type that has one. Do not build on it as a
-permanent value, and do not justify it by the tests that exercise it.
+The shipped mappings are exactly:
+
+- `ANNOUNCEMENT` → `ANNOUNCEMENT(false)` — visible in the inbox, never badge-eligible.
+- `REVIEW_SET_UPDATE` → `LEARNING_SYSTEM(true)` — visible in the inbox and badge-eligible while unread.
+
+**`ACTION_REQUIRED` is gone.** It was a transitional producerless placeholder and was removed in
+`v0.135.0` while production still had zero notification rows, rather than preserving a category with no
+type or producer.
 
 - **Actionable unread → the numeric badge.**
 - **Announcements → appear in the inbox but NEVER contribute to the number.**
@@ -64,6 +68,44 @@ number the learner could neither open nor clear. Fixed in the same release; both
 `dismissed_at` and both apply the announcement-lifecycle subquery. **A change to either is a change to
 both**, and the lifecycle leg on the badge is mirroring rather than live (announcements are
 non-actionable, so no row has both today) — it is there so the two cannot drift.
+
+## Official Review Set update producer
+
+Only `NoteCollectionService.publishReviewSetUpdate` triggers this producer, and only when the locked
+Official source root actually has unpublished changes. Editing source curriculum emits nothing, a
+no-change re-press emits nothing, and first publication through `publishInitialCurriculum` emits
+nothing even though that path also initializes `last_update_published_at`.
+
+The transactional publish path emits a plain-value event containing the source collection id and the
+persisted publication stamp. A `TransactionalEventListener(AFTER_COMMIT, fallbackExecution = true)`
+then submits fan-out to the existing bounded `notificationFanOutExecutor`. Recipient resolution,
+suppression and every call to `NotificationService.deliver` therefore happen outside the publication
+transaction. A queue rejection is logged and cannot roll back or report the curriculum publication as
+failed; one recipient failure is logged and skipped while the loop continues.
+
+Adopters are resolved in one query from `note_collections.source_plan_id`. The adoption row supplies
+both `owner_user_id` and the learner-owned collection id, so each notification links to
+`/collections/{adoptedCollectionId}` rather than the curator's source.
+
+The dedup key is
+`REVIEW_SET_UPDATE:<sourceCollectionId>:<lastUpdatePublishedAtEpochMilli>`. The service reads the
+persisted `TIMESTAMPTZ` value before publishing the event, then computes the shared fan-out key once;
+this avoids nanosecond/microsecond precision drift. The permanent recipient/dedup unique index remains
+the sole identity and retry mechanism.
+
+Before fan-out, one batch query suppresses recipients who already hold an undismissed Review Set update
+row whose key starts `REVIEW_SET_UPDATE:<sourceCollectionId>:`. This compares different published
+revisions rather than pre-checking delivery identity. Its worst race produces one extra signal for a
+real newer revision, while the unique index still prevents duplicates for the same revision. Reading
+does not close the episode; dismissal does, so a learner who dismisses without applying is notified
+again after the next real publication. The copied title and body are fixed and carry no change count.
+
+**⚠️ A CURATOR WHO ADOPTED THEIR OWN SET IS NOT A RECIPIENT.** `adopt()` carries no owner guard, so a
+curator can self-adopt their own PUBLIC Review Set; without an exclusion they would be told about a
+publish they just performed. `findReviewSetUpdateRecipients` excludes self-copies with
+`adoption.ownerUserId <> source.ownerUserId` — **the same predicate `countAdoptionsByCollectionIds`
+uses, deliberately, so the two queries agree on what an adoption is.** If they ever diverge, the
+adoption count and the notification audience disagree about the same relationship.
 
 ## Opening, closing, and the bell as a toggle
 
@@ -291,6 +333,15 @@ is still kept indefinitely. **⚠️ The two behaviours are complements derived 
 retention test asserts BOTH directions**; asserting only the deletion half would pass with the retention
 half broken.
 
+**⚠️ ONE CONSEQUENCE OF THE ACTIONABLE/RETAINED SPLIT, NAMED BY THE `v0.135.0` COLD AGENT SO IT IS NOT
+DISCOVERED AS A BUG LATER: a `REVIEW_SET_UPDATE` that is UNREAD AND UNDISMISSED NEVER EXPIRES.** It is
+badge-eligible, so retention keeps it indefinitely, and episode suppression keys on `dismissed_at IS
+NULL` — so a learner who never opens their inbox holds exactly one such row and a badge stuck at 1,
+permanently, until they dismiss or read it. **That is intended** (a pending signal must not vanish, and
+one stuck badge is far better than the alternative the release exists to prevent — a learner silently
+never told again). It is documented because the dismissal path was the only one written down, and the
+permanence is the half a reader would otherwise meet as a surprise.
+
 A row the learner dismissed without reading remains eligible either way — dismissing is the learner
 saying they are done with it.
 
@@ -310,22 +361,14 @@ schedule.
 
 ## What deliberately does not exist yet
 
-`v0.130.0` shipped Stage 3 (the substrate) and Stage 4 (Admin "What's New", the first producer). The
-inbox is no longer empty by construction — but **Admin "What's New" is still its ONLY producer**, so a
-learner who has never been sent an announcement still sees an empty inbox.
+The inbox currently has two producers: Admin "What's New" announcements and published Official Review
+Set updates for adopters.
 
 **Not built, and not to be added without its own release:**
 
 - **Stage 5 events** — connection request, named note share. **⚠️ Deferred on CONTAMINATION, not
   effort: the connection-request notification nudges a PENDING invitation toward ACCEPTED, which is
   the kill criterion of `[CHECKPOINT — due 2026-09-19]`, whose denominator is ONE.**
-- **Stage 6** — Review Set update notifications. **⚠️ CORRECTED 2026-09-09: this is NO LONGER blocked
-  on the §8 drift-signature dedup decision, and that design MUST NOT be implemented — `v0.132.0`'s
-  publication-boundary audit supersedes it.** The boundary now defines exactly when to fire
-  (`publishReviewSetUpdate` only, **never** raw source drift), and
-  `docs/claude-plans/attention-notifications-email-expansion-stage1.md` settles the key as
-  `REVIEW_SET_UPDATE:<adoptedCollectionId>`. It is now **Stage D** in that document and is the next
-  slice after `v0.134.0`, gated on the Stage B taxonomy landing first.
 - **Stage 7** — assignments, push/email/SMS, quiet hours, a preferences centre.
 - **Quiz-share notifications** — a share link has no addressee. **⚠️ Do not fabricate a recipient.**
 - A notification for a note becoming PUBLIC, or for a generic public link — **named shares only**.
