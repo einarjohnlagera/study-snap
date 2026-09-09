@@ -28,6 +28,7 @@ Rules:
   - "Structural Applications of Differential Equations" -> correct; the structural application is itself the topic
 - concise and specific
 - anchored to the topic provided
+- keep the title at or under {MAX_TITLE_WORDS} words
 
 `overview`
 - 2 to 3 sentences maximum

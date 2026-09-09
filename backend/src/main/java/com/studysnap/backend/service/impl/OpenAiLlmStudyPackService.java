@@ -65,13 +65,25 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
     private static final int MAX_SUMMARY_WORDS = 350;
     private static final int MAX_STUDY_TIP_WORDS = 20;
     private static final int MAX_GENERATED_NOTE_WORDS = 700;
-    // ⚠️ These three are WORD bounds that the prompt does not state. `note-generation-developer.txt`
-    // gives the model sentence counts ("2 to 3 sentences maximum", "1 to 2 sentences") and no length
-    // at all for the title, so the model is judged against numbers it never sees -- the same defect
-    // v0.86.0 fixed for the bullet arrays below. It bites hardest on notation, where a whitespace
-    // word count inflates. Surviving deliberately, unfixed and unmeasured; see
-    // docs/claude-plans/v0.86.0-note-item-limit-mismatch.md. Do NOT treat them as a settled contract:
-    // if one starts rejecting valid content, publish the bound in the prompt rather than raising it.
+    // ⚠️ THE TITLE BOUND IS NOW PUBLISHED; THE OTHER TWO ARE NOT. This comment used to say all three
+    // were unstated word bounds "surviving deliberately, unfixed and unmeasured", and it ended with a
+    // standing instruction: "if one starts rejecting valid content, publish the bound in the prompt
+    // rather than raising it."
+    //
+    // ⚠️ THAT PREDICTION CAME TRUE AND THE INSTRUCTION WAS FOLLOWED. On 2026-09-09 the TITLE bound
+    // rejected valid content in production -- four notes, seven deterministic LLM_INVALID_OUTPUT
+    // failures, a retry batch that failed identically. v0.138.0 published it: MAX_TITLE_WORDS is
+    // templated into note-generation-developer.txt beside {MAX_ITEM_CHARS} and {MAX_WORDS}, so the
+    // model is now told the number it is judged against. The bound was NOT raised.
+    // See docs/claude-findings/2026-09-09-regeneration-invalid-title-failures.md.
+    //
+    // ⚠️ OVERVIEW AND KEY IDEA REMAIN UNPUBLISHED, DELIBERATELY -- the instruction is evidence-gated
+    // ("if ONE starts rejecting valid content"), and neither has produced a single observed rejection.
+    // Publishing them speculatively would add prompt text no failure has asked for. ⚠️ But v0.138.0
+    // also made every rejection on this path name its field, its failing bound and the measured count,
+    // so if either one does start rejecting valid content, the log will say so directly rather than
+    // leaving the next investigation to infer it. Do NOT treat these two as a settled contract.
+    // Background: docs/claude-plans/v0.86.0-note-item-limit-mismatch.md.
     private static final int MAX_GENERATED_NOTE_TITLE_WORDS = 12;
     private static final int MAX_GENERATED_NOTE_OVERVIEW_WORDS = 90;
     private static final int MAX_GENERATED_NOTE_KEY_IDEA_WORDS = 40;
@@ -712,6 +724,7 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
     private String buildNoteGenerationDeveloperPrompt() {
         return promptResources.noteGenerationDeveloperPromptTemplate()
                 .replace("{MAX_WORDS}", String.valueOf(MAX_GENERATED_NOTE_WORDS))
+                .replace("{MAX_TITLE_WORDS}", String.valueOf(MAX_GENERATED_NOTE_TITLE_WORDS))
                 .replace("{MAX_ITEM_CHARS}", String.valueOf(MAX_GENERATED_NOTE_ITEM_CHARS));
     }
 
@@ -2372,18 +2385,21 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
 
     private String buildGeneratedNoteContent(PromptGeneratedNote generatedNote, String normalizedTopic) {
         String title = normalizeGeneratedNoteText(
+                "title",
                 generatedNote.title(),
                 1,
                 MAX_GENERATED_NOTE_TITLE_WORDS,
                 "The note generation service returned an invalid title. Please try again."
         );
         String overview = normalizeGeneratedNoteText(
+                "overview",
                 generatedNote.overview(),
                 8,
                 MAX_GENERATED_NOTE_OVERVIEW_WORDS,
                 "The note generation service returned an invalid overview. Please try again."
         );
         String keyIdea = normalizeGeneratedNoteText(
+                "keyIdea",
                 generatedNote.keyIdea(),
                 4,
                 MAX_GENERATED_NOTE_KEY_IDEA_WORDS,
@@ -2541,14 +2557,69 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
         return repaired.toString();
     }
 
-    private String normalizeGeneratedNoteText(String value, int minWords, int maxWords, String errorMessage) {
+    /**
+     * ⚠️ THE REJECTION MUST SAY WHICH BOUND FAILED AND BY HOW MUCH. Before v0.138.0 this threw a bare
+     * {@code invalidOutput(errorMessage)} on either branch — blank-after-normalization, or a word count
+     * outside the range — and the log recorded only a failure code and a human sentence. On 2026-09-09
+     * four notes failed seven times in production and produced <b>no evidence of what was wrong</b>: not
+     * the rejected value, not its word count, not which of the two branches fired. The diagnosis could
+     * narrow it to "probably the word count" and no further.
+     *
+     * <p>⚠️ This is the {@code v0.87.0} lesson one layer down. That release added
+     * {@code failed_topic_reasons} because "which topic failed" without "why" had already cost two
+     * investigations; the same gap existed here, on the validator itself.
+     *
+     * <p>The value is logged <b>truncated</b> via the class's existing {@link #truncateForLog(String)} —
+     * a deliberate choice, not an omission. The bound and the measured count are the diagnostic payload
+     * and are always emitted; the value is what makes the next occurrence resolvable in one read, and
+     * truncation bounds model output reaching log storage. Reusing the shared helper keeps this line
+     * shaped like the other thirteen truncated-value logs in this class rather than inventing a second
+     * truncation rule.
+     */
+    private String normalizeGeneratedNoteText(
+            String fieldName,
+            String value,
+            int minWords,
+            int maxWords,
+            String errorMessage
+    ) {
         String normalized = StringNormalizationUtils.normalizeWhitespaceToSingleSpaceOrNull(
                 repairJsonEatenLatexCommands(value));
-        if (normalized == null || !StringNormalizationUtils.hasWordCountBetween(normalized, minWords, maxWords)) {
+        if (normalized == null) {
+            // The RAW value, not the normalized one: what is diagnostic here is what arrived and
+            // collapsed to nothing. repairJsonEatenLatexCommands or the whitespace collapse is the
+            // suspect, and neither is visible from a null.
+            logGeneratedNoteTextRejection(fieldName, "blank", 0, minWords, maxWords, value);
+            throw invalidOutput(errorMessage);
+        }
+        int wordCount = StringNormalizationUtils.countWords(normalized);
+        if (wordCount < minWords || wordCount > maxWords) {
+            logGeneratedNoteTextRejection(fieldName, "wordCount", wordCount, minWords, maxWords, normalized);
             throw invalidOutput(errorMessage);
         }
         return normalized;
     }
+
+    private void logGeneratedNoteTextRejection(
+            String fieldName,
+            String failedBound,
+            int measuredWords,
+            int minWords,
+            int maxWords,
+            String value
+    ) {
+        log.warn(
+                "generated_note_text_rejected field={} bound={} words={} min={} max={} chars={} value=\"{}\"",
+                fieldName,
+                failedBound,
+                measuredWords,
+                minWords,
+                maxWords,
+                value == null ? 0 : value.length(),
+                truncateForLog(value)
+        );
+    }
+
 
     /**
      * Bounds each bullet by CHARACTERS, which is the only bound the model is ever told about:
