@@ -6,15 +6,7 @@ import java.util.stream.Collectors;
 
 public enum NotificationType {
     ANNOUNCEMENT(NotificationCategory.ANNOUNCEMENT),
-    /**
-     * ⚠️ TRANSITIONAL, for BACKWARD-COMPATIBLE TAXONOMY TRANSITION ONLY. Stage D replaces this with
-     * the first type with a real producer and its learning-system category. Nothing produces
-     * ACTION_REQUIRED today.
-     *
-     * <p>⚠️ Do NOT justify this value by the tests that exercise it. Tests exercise the production
-     * model; they do not determine it. Do NOT build on this as a permanent value.
-     */
-    ACTION_REQUIRED(NotificationCategory.ACTION_REQUIRED);
+    REVIEW_SET_UPDATE(NotificationCategory.LEARNING_SYSTEM);
 
     private final NotificationCategory category;
 

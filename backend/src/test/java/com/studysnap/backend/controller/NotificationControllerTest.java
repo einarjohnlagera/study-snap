@@ -98,7 +98,7 @@ class NotificationControllerTest {
     private NotificationResponse notification(UUID id) {
         return new NotificationResponse(
                 id,
-                "ACTION_REQUIRED",
+                "REVIEW_SET_UPDATE",
                 true,
                 "Action needed",
                 "Review this item.",
