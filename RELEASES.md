@@ -21,7 +21,22 @@ Every item here is a mechanism change behind an inbox that has **never rendered 
 3. **The API response carries `actionable`/`category`, and the frontend stops comparing to the literal `"ANNOUNCEMENT"`.** `notification-inbox.tsx:110,117` is the frontend's private mirror of `NotificationType.actionable`; it mis-counts the badge the moment a third type exists.
 5. **Retention expires non-actionable unread rows.** `deleteReadOrDismissedBefore` deletes only rows with `read_at` or `dismissed_at` set, so **an unread row is immortal** — an `EVERYONE` announcement to 396 users leaves 396 permanent rows per announcement, forever. **90 days, reusing the existing `retention-days` constant — no second knob** (decision D7).
 
-### ⚠️ Item 4 (the `idx_notifications_inbox` index) IS EXPLICITLY OUT, AND SO IS EVERY DDL STATEMENT
+### ⚠️⚠️ SUPERSEDED 2026-09-09 — ITEM 4 IS BACK IN SCOPE, BECAUSE THE PREMISE BELOW EXPIRED
+
+**`V141` AND `V142` BOTH RAN IN PRODUCTION ON 2026-09-08** — verified read-only against
+`flyway_schema_history` at 2026-09-09 (V141 12:23, V142 15:47, both `success = true`). **The single
+stated reason item 4 was deferred no longer holds:** the queue is clean, `V142` is the tip, and a
+`V143` is now an isolated one-statement migration against a table that is still empty (0 rows,
+re-verified the same day).
+
+**⚠️ The owner elected to complete ALL of Stage B** — items **4, 6 and 7** ship as PART 2, after
+Part 1 merged as **PR #1350**. **So the DDL-free constraint below applied to Part 1 ONLY and is now
+lifted.** It is kept verbatim rather than deleted because it records *why* the split happened, and
+because the reasoning — do not add a migration to an unrun queue — is correct and will apply again.
+
+**⚠️ The verification tier is RE-DECIDED for Part 2 — see the Verification tier section.**
+
+### ⚠️ Item 4 (the `idx_notifications_inbox` index) WAS EXPLICITLY OUT OF PART 1, AND SO WAS EVERY DDL STATEMENT
 
 Items 1–3 need no DDL — `type` is already `VARCHAR(64)` with `EnumType.STRING`, `dedup_key` is already `VARCHAR(255)` (`V139__notifications.sql:4-5`) — and item 5 is a predicate change. Item 4 would be the **only** reason this release carries a migration, and **`V141` and `V142` are both still UNRUN in production**. Adding a third migration to an unrun queue to fix a sort the audit measured as immaterial at 0 rows is a bad trade. **Let the index ride the next migration that exists for another reason.**
 
@@ -79,9 +94,28 @@ All four items change behaviour that file **currently documents as true**, and i
 
 **The email daily cap is already breached.** Configured `EMAIL_DAILY_LIMIT` is **100** with a **40** reserve; observed production peaks are **156, 158, 157, 156** sends/day over the last 90. The budget gates **`INACTIVITY` only** — weak-concept, weekly-summary, due-concepts and knowledge-impact dispatches are all unbudgeted, so the "100/day limit" describes one of five channels. **This blocks every future email producer (Stage E) and is indexed in `ROADMAP.md`'s Backlog Index, not scoped here.**
 
-### Verification tier
+### ⚠️⚠️ Verification tier — RE-DECIDED 2026-09-09 FOR PART 2: ONE SCOPED COLD AGENT
 
-**A single `advisor()` call.** No authorization or privacy boundary moves, no money/quota/production-data semantics change, and `notifications` has **zero rows** so item 5 has nothing to delete in production. Declared at kickoff so signoff does not re-derive it — **but re-decide if the shape changes**, per `v0.133.0`, which was tiered at one `advisor()` call, gained a write endpoint, ran one cold agent, and had **three of seven named claims refuted**.
+**Part 1 was correctly tiered at a single `advisor()` call and shipped that way.** Part 2 changes the
+shape, and `CLAUDE.md`'s gate now fires on **three** independent triggers rather than one:
+
+1. **⚠️ Delivery introduced a defect this session that the session then fixed** — the measured
+   blind-spot signal, and the gate names it explicitly. Part 1's frontend tests passed against the
+   OLD implementation, and a backend mutant survived. That is not a hypothetical.
+2. **The bug class is one the gate says is inherently hard to reason about serially** — async
+   ordering. Fan-out moves off the request thread, and R9 (transaction poisoning) is an invariant that
+   a green suite will not notice being broken.
+3. **A second change touches the same shared methods** — `AnnouncementService.publish` / `fanOut` and
+   `NotificationService.deliver`, both already edited by Part 1.
+
+**Frame it as FALSIFICATION, not open-ended audit:** hand it a tight file list and the specific claims
+this session made, and ask it to disprove each. `model: "sonnet"` is enough for claim-checking.
+
+**⚠️ The claim most worth attacking: *"fan-out still runs outside any transaction."*** That is R9, it
+is what keeps a single duplicate key from taking down an entire fan-out, and it is invisible to a
+passing test suite.
+
+**Superseded rationale, kept as the record:** *A single `advisor()` call.* No authorization or privacy boundary moves, no money/quota/production-data semantics change, and `notifications` has **zero rows** so item 5 has nothing to delete in production. Declared at kickoff so signoff does not re-derive it — **but re-decide if the shape changes**, per `v0.133.0`, which was tiered at one `advisor()` call, gained a write endpoint, ran one cold agent, and had **three of seven named claims refuted**.
 
 **Routing: CODEX** — backend enum + service + JPQL + response DTO, plus the frontend component. Multi-system, so a prompt comes first. **Call `advisor()` before writing that prompt.**
 
@@ -335,9 +369,11 @@ The audit's §14 is mostly covered already by the generic component. The genuine
 **⚠️ The Engineering-still-expands test is the regression guard for the migration** — if assigning the existing `Education` row a family accidentally touched Engineering rows, that is what catches it.
 
 
-### ⚠️ Deploy sequencing — two unrun migrations now queue behind each other
+### ✅ Deploy sequencing — RESOLVED 2026-09-08, both migrations ran (note kept as the record)
 
-`V141` (`v0.132.0`) and `V142` (this release) are **both unrun in production.** Flyway applies them in
+**✅ RAN 2026-09-08 — V141 at 12:23, V142 at 15:47, both `success = true`, verified read-only against `flyway_schema_history` on 2026-09-09. The Education family has EIGHT members in production, which is this release's headline claim.** What follows described the state before that deploy and is kept as the record.
+
+`V141` (`v0.132.0`) and `V142` (this release) were **both unrun in production.** Flyway applies them in
 order on the next deploy, which is correct — but three dated obligations hang off *when that deploy
 happens*, and they are recorded here rather than left to be inferred:
 
