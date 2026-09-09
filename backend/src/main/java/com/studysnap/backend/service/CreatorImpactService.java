@@ -1,15 +1,16 @@
 package com.studysnap.backend.service;
 
-import com.studysnap.backend.dto.CreatorImpactResponse;
+import com.studysnap.backend.dto.CreatorImpactPageResponse;
+import com.studysnap.backend.dto.CreatorImpactSummaryResponse;
 import com.studysnap.backend.entity.AnalyticsEventType;
-import com.studysnap.backend.entity.NoteEntity;
 import com.studysnap.backend.entity.NoteVisibility;
 import com.studysnap.backend.repository.AnalyticsEventRepository;
+import com.studysnap.backend.repository.CreatorImpactNoteProjection;
 import com.studysnap.backend.repository.NoteCopyCountProjection;
-import com.studysnap.backend.repository.NoteLearnersHelpedProjection;
 import com.studysnap.backend.repository.NoteRepository;
 import com.studysnap.backend.repository.PublicNoteEventCountProjection;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -22,49 +23,55 @@ import java.util.UUID;
 @Transactional(readOnly = true)
 @RequiredArgsConstructor
 public class CreatorImpactService {
+    public static final int DEFAULT_PAGE_SIZE = 20;
+    public static final int MAX_PAGE_SIZE = 100;
+
     private final NoteRepository noteRepository;
     private final AnalyticsEventRepository analyticsEventRepository;
 
-    public CreatorImpactResponse getMine(UUID creatorUserId) {
-        List<NoteEntity> publicNotes = noteRepository.findByOwnerUserIdAndVisibilityOrderByUpdatedAtDesc(
-                creatorUserId,
-                NoteVisibility.PUBLIC
-        );
-        if (publicNotes.isEmpty()) {
-            return new CreatorImpactResponse(0, List.of());
+    public CreatorImpactPageResponse getMine(UUID creatorUserId, boolean impacted, int page, int requestedSize) {
+        int size = Math.clamp(requestedSize, 1, MAX_PAGE_SIZE);
+        PageRequest pageRequest = PageRequest.of(Math.max(0, page), size);
+        List<CreatorImpactNoteProjection> rankedNotes = impacted
+                ? noteRepository.findImpactedCreatorNotes(creatorUserId, pageRequest)
+                : noteRepository.findZeroImpactCreatorNotes(creatorUserId, pageRequest);
+
+        long totalImpacted = noteRepository.countImpactedNotesByCreatorUserId(creatorUserId);
+        long publicNoteCount = noteRepository.countByOwnerUserIdAndVisibility(creatorUserId, NoteVisibility.PUBLIC);
+        long totalZeroImpact = Math.max(0, publicNoteCount - totalImpacted);
+
+        if (rankedNotes.isEmpty()) {
+            return new CreatorImpactPageResponse(List.of(), page, size, totalImpacted, totalZeroImpact);
         }
 
-        List<UUID> noteIds = publicNotes.stream()
-                .map(NoteEntity::getId)
+        List<UUID> pageNoteIds = rankedNotes.stream()
+                .map(CreatorImpactNoteProjection::getNoteId)
                 .toList();
-        Map<UUID, Long> learnersByNoteId = loadLearnerCounts(noteIds);
-        Map<UUID, Long> viewsByNoteId = loadViewCounts(noteIds);
-        Map<UUID, Long> copiesByNoteId = loadCopyCounts(noteIds);
-        long distinctLearnersHelped = noteRepository.countDistinctLearnersHelpedByCreatorUserId(creatorUserId);
+        Map<UUID, Long> viewsByNoteId = loadViewCounts(pageNoteIds);
+        Map<UUID, Long> copiesByNoteId = loadCopyCounts(pageNoteIds);
 
-        return new CreatorImpactResponse(
-                distinctLearnersHelped,
-                publicNotes.stream()
-                        .map(note -> new CreatorImpactResponse.NoteImpact(
-                                note.getId().toString(),
+        return new CreatorImpactPageResponse(
+                rankedNotes.stream()
+                        .map(note -> new CreatorImpactPageResponse.NoteImpact(
+                                note.getNoteId().toString(),
                                 note.getTitle(),
-                                learnersByNoteId.getOrDefault(note.getId(), 0L),
-                                viewsByNoteId.getOrDefault(note.getId(), 0L),
-                                copiesByNoteId.getOrDefault(note.getId(), 0L)
+                                note.getLearnerCount(),
+                                viewsByNoteId.getOrDefault(note.getNoteId(), 0L),
+                                copiesByNoteId.getOrDefault(note.getNoteId(), 0L)
                         ))
-                        .toList()
+                        .toList(),
+                page,
+                size,
+                totalImpacted,
+                totalZeroImpact
         );
     }
 
-    private Map<UUID, Long> loadLearnerCounts(List<UUID> noteIds) {
-        Map<UUID, Long> countsByNoteId = new HashMap<>();
-        for (NoteLearnersHelpedProjection projection
-                : noteRepository.countDistinctLearnersHelpedBySourceNoteIds(noteIds)) {
-            if (projection.getNoteId() != null) {
-                countsByNoteId.put(projection.getNoteId(), projection.getLearnerCount());
-            }
-        }
-        return countsByNoteId;
+    public CreatorImpactSummaryResponse getSummary(UUID creatorUserId) {
+        return new CreatorImpactSummaryResponse(
+                noteRepository.countDistinctLearnersHelpedByCreatorUserId(creatorUserId),
+                noteRepository.countByOwnerUserIdAndVisibility(creatorUserId, NoteVisibility.PUBLIC)
+        );
     }
 
     private Map<UUID, Long> loadViewCounts(List<UUID> noteIds) {

@@ -70,7 +70,17 @@ setHasPublicNotes(Boolean(impact.value?.notes.length));
 
 ### Shipped
 
-_(nothing yet)_
+- Bounded creator-impact reads with required impacted/zero-impact pagination, stable database ordering, server-capped page sizes, page-sized views/copies aggregates, and section totals. Removed the parameterless full-payload response and its DTO.
+- Added `GET /creator-impact/me/summary` with exactly `distinctLearnersHelped` and `publicNoteCount`. Settings now uses this fixed-size response and preserves its retryable fallback when the check fails.
+- Added the authenticated top-level `/impact` destination. Its headline comes only from the summary endpoint; impacted notes load first, and zero-impact notes stay collapsed and unfetched until expanded.
+- Replaced the owner Public Profile dashboard with a compact owner-only `View impact →` card. Visitors remain unchanged and issue no impact request.
+- Added the two contribution zero states, retry handling for the page and expanded section, page-view labelling, mobile card layout, and an accessible keyboard-operable disclosure.
+- Added regression coverage for bounded metric ID lists, the required `impacted` parameter, absent user identifiers, summary response shape, deterministic impact ordering, headline deduplication, structural self-copy exclusion, Settings endpoint selection, Public Profile privacy, and lazy zero-impact loading.
+- **Repointed the Knowledge Impact digest email at `/impact`.** Its `View Your Impact` button linked to `/public/creator/{username}#your-impact-heading`, and that anchor now resolves to the owner-only link card rather than a dashboard — so the button promised the dashboard and would have delivered another link. Found by a surface sweep, not by the diff: `RetentionService` was not otherwise touched by this release, and the anchor id still exists, so it would have degraded silently in an email that cannot be corrected once sent.
+- Gave the impacted-notes `Load more` a visible failure state and a retry. It had a `finally` with no `catch`, so a failed second page produced an unhandled rejection and no user-visible change; the owner's 61 impacted notes at a page size of 20 make that the first-visit path, not an edge case.
+- Clamped paging inputs in `CreatorImpactService` (`Math.clamp`, repo convention per Sonar S6877) so a degenerate `size` or negative `page` cannot reach `PageRequest.of` and 500. The controller's `@Min` annotations are inert under `standaloneSetup`, so the guard now lives where it is actually exercised.
+- Restored `@Transactional(readOnly = true)` on `CreatorImpactService`, removed during delivery. Behaviourally near-neutral — OSIV plus `DELAYED_ACQUISITION_AND_HOLD` (pinned by `ConnectionHandlingModeContractTest`) holds one connection per request either way — but it is a defensive annotation on the release whose subject is pool pressure.
+- Finished the `IMPACT_MILESTONE` cross-reference in the notification audit. Delivery updated Appendix A's milestone row; §15's deep-link matrix, §7.1's verified-routes table, and Appendix A's note-copy row still pointed at `/progress`.
 
 ## v0.135.0 - Update Signal
 

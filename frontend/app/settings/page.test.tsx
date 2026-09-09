@@ -8,6 +8,7 @@ import {
   getBillingPricing,
   getBillingHistory,
   getCreatorImpact,
+  getCreatorImpactSummary,
   getMyPlan,
   getMe,
   requestEmailVerification,
@@ -72,6 +73,7 @@ jest.mock("@/lib/api", () => ({
   getBillingPricing: jest.fn(),
   getBillingHistory: jest.fn(),
   getCreatorImpact: jest.fn(),
+  getCreatorImpactSummary: jest.fn(),
   getMyPlan: jest.fn(),
   getMe: jest.fn(),
   isEmailNotVerifiedError: (error: unknown) => error instanceof Error && error.message === "EMAIL_VERIFICATION_REQUIRED",
@@ -222,6 +224,7 @@ describe("Settings page cancellation flow", () => {
     (getBillingHistory as jest.Mock).mockReset();
     (getBillingPricing as jest.Mock).mockReset();
     (getCreatorImpact as jest.Mock).mockReset();
+    (getCreatorImpactSummary as jest.Mock).mockReset();
     (cancelPremiumSubscription as jest.Mock).mockReset();
     (createPremiumCheckoutSession as jest.Mock).mockReset();
     (deleteAccount as jest.Mock).mockReset();
@@ -245,17 +248,9 @@ describe("Settings page cancellation flow", () => {
       transactions: [],
     });
     (getBillingPricing as jest.Mock).mockResolvedValue(proBillingPricing);
-    (getCreatorImpact as jest.Mock).mockResolvedValue({
+    (getCreatorImpactSummary as jest.Mock).mockResolvedValue({
       distinctLearnersHelped: 0,
-      notes: [
-        {
-          noteId: "public-note-1",
-          title: "Public note",
-          distinctLearnersHelped: 0,
-          viewCount: 0,
-          copyCount: 0,
-        },
-      ],
+      publicNoteCount: 1,
     });
     (createPremiumCheckoutSession as jest.Mock).mockResolvedValue({
       checkoutUrl: "https://checkout.xendit.test/invoice_123",
@@ -861,10 +856,12 @@ describe("Settings page cancellation flow", () => {
     render(<SettingsPage />);
 
     expect(await screen.findByRole("checkbox", { name: "Knowledge Impact digest" })).toBeChecked();
+    expect(getCreatorImpactSummary).toHaveBeenCalled();
+    expect(getCreatorImpact).not.toHaveBeenCalled();
   });
 
   it("hides the Knowledge Impact digest preference when the account has no public notes", async () => {
-    (getCreatorImpact as jest.Mock).mockResolvedValue({ distinctLearnersHelped: 0, notes: [] });
+    (getCreatorImpactSummary as jest.Mock).mockResolvedValue({ distinctLearnersHelped: 0, publicNoteCount: 0 });
 
     render(<SettingsPage />);
 
@@ -875,7 +872,7 @@ describe("Settings page cancellation flow", () => {
   });
 
   it("shows a retryable notice instead of silently hiding the digest option when the impact check fails", async () => {
-    (getCreatorImpact as jest.Mock).mockRejectedValueOnce(new Error("Network error"));
+    (getCreatorImpactSummary as jest.Mock).mockRejectedValueOnce(new Error("Network error"));
 
     render(<SettingsPage />);
 
@@ -885,9 +882,9 @@ describe("Settings page cancellation flow", () => {
     expect(screen.queryByRole("checkbox", { name: "Knowledge Impact digest" })).not.toBeInTheDocument();
     expect(screen.getByRole("checkbox", { name: "Weekly summary" })).toBeInTheDocument();
 
-    (getCreatorImpact as jest.Mock).mockResolvedValueOnce({
+    (getCreatorImpactSummary as jest.Mock).mockResolvedValueOnce({
       distinctLearnersHelped: 0,
-      notes: [{ noteId: "public-note-1", title: "Public note", distinctLearnersHelped: 0, viewCount: 0, copyCount: 0 }],
+      publicNoteCount: 1,
     });
     fireEvent.click(screen.getByRole("button", { name: "Retry" }));
 
