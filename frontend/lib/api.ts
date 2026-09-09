@@ -2318,8 +2318,7 @@ export type UpsertAnnouncementRequest = {
 export type AnnouncementPublishResponse = {
   announcement: AnnouncementResponse;
   recipientCount: number;
-  delivered: number;
-  skipped: number;
+  queued: number;
 };
 
 type ApiErrorPayload = {

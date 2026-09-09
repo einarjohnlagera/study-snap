@@ -5,6 +5,7 @@ import com.studysnap.backend.entity.NotificationEntity;
 import com.studysnap.backend.entity.NotificationType;
 import com.studysnap.backend.exception.NotificationNotFoundException;
 import com.studysnap.backend.repository.NotificationRepository;
+import io.micrometer.core.instrument.MeterRegistry;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.PageRequest;
@@ -22,6 +23,7 @@ public class NotificationService {
     private static final int MAX_INBOX_LIMIT = 100;
 
     private final NotificationRepository notificationRepository;
+    private final MeterRegistry meterRegistry;
 
     /**
      * The unique recipient/dedup index is the idempotency guarantee. Do not add an exists check before
@@ -46,8 +48,11 @@ public class NotificationService {
         notification.setCreatedAt(OffsetDateTime.now(ZoneOffset.UTC));
 
         try {
-            return toResponse(notificationRepository.saveAndFlush(notification));
+            NotificationResponse response = toResponse(notificationRepository.saveAndFlush(notification));
+            meterRegistry.counter("notification.delivered", "type", delivery.type().name()).increment();
+            return response;
         } catch (DataIntegrityViolationException duplicateDelivery) {
+            meterRegistry.counter("notification.dedup_conflict").increment();
             return notificationRepository.findByRecipientUserIdAndDedupKey(delivery.recipientUserId(), dedupKey)
                     .map(this::toResponse)
                     .orElseThrow(() -> duplicateDelivery);

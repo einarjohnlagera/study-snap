@@ -131,7 +131,16 @@ passing test suite.
 - Extended the existing 90-day cleanup to expire unread non-actionable rows while retaining unread
   actionable rows indefinitely; no new retention setting was added.
 - Added category-partition, retention-direction, real-response-shape, dedup-format and frontend badge
-  behavior coverage. No producer, notification type, endpoint, migration or index was added.
+  behavior coverage. Part 1 added no producer, notification type, endpoint, migration or index.
+- Added V143's partial inbox index on recipient and descending creation time for visible notifications,
+  closing the unindexed inbox sort now that the production migration queue is clear.
+- Moved announcement delivery to the bounded `notificationFanOutExecutor` (core 1 / max 2). Publish now
+  resolves the audience synchronously, reports queue acceptance immediately, and preserves retry/top-up
+  semantics through the existing unique dedup index.
+- Replaced synchronous publish delivery totals with `recipientCount` / `queued` and updated the admin
+  feedback to describe background delivery or a recoverable queue rejection accurately.
+- Added fresh-delivery, dedup-conflict, fan-out-duration and fan-out-rejection meters so asynchronous
+  delivery remains observable without a per-user reporting surface.
 
 ### ⚠️ Audit finding — the frontend tests as delivered passed for the wrong reason, and mutation testing is what caught it
 
@@ -166,6 +175,36 @@ What was added instead is the guard that fires when it *starts* to matter: `ever
 enumerates `values()`, so a third type that is misclassified fails immediately. A `category()` accessor
 was added to make that invariant assertable. **The javadoc on that test states outright that it cannot
 discriminate today**, so a later reader does not credit it with more than it proves.
+
+### ⚠️ Part 2 audit finding — the R9 guard could not fail, and only mutation revealed it
+
+**R9 is the invariant this release rests on:** `deliver()` catches the unique-index
+`DataIntegrityViolationException`; under an ambient transaction that marks the whole transaction
+rollback-only, so **one duplicate recipient would take an entire fan-out down**. Part 2 shipped a test
+asserting `TransactionSynchronizationManager.isActualTransactionActive()` is false during delivery,
+which reads exactly like the guard for it.
+
+**It is not one. Adding `@Transactional` to `fanOut` left all 20 of that class's tests GREEN.** The
+test constructs `AnnouncementService` with `new`, so there is **no Spring AOP proxy and the annotation
+is inert** — the fixture cannot express the state it claims to forbid. **⚠️ This is the repo's
+recurring "the guard must reach its subject the way production does" failure arriving from the
+opposite end**, and it is the second release running where a delivered test passed for a reason
+unrelated to the change.
+
+Closed with `FanOutTransactionBoundaryTest`, a reflection check over the declared annotations on
+`publish`, `fanOut`, `deliver` and both classes. It **cannot** be fooled by proxy absence, because the
+annotation is exactly what production reads. It fails under the mutant.
+
+**Also removed:** the single-argument `fanOut(AnnouncementEntity)` overload, left with **no callers in
+main or test** once `publish` began resolving the audience itself — dead public API on a service whose
+transaction boundary is load-bearing.
+
+**Part 2 mutants — two run, both killed after the fix:**
+
+| Mutant | Killed by |
+|---|---|
+| Fan-out reverted to synchronous | `publishReturnsAfterQueueAcceptanceBeforeAnyNotificationIsDelivered` + `rejectedDispatchReturnsZeroAndRepublish...` + `executorTaskRunsFanOutWithoutAnAmbientTransaction` |
+| **`@Transactional` added to `fanOut` (R9 violated)** | **`FanOutTransactionBoundaryTest.announcementPublishAndFanOutAreNotTransactional` — *added by this audit; the whole suite passed before it*** |
 
 **Verification run:** backend 2,312 tests + the 101-query PostgreSQL native harness against a real
 container; frontend 2,346 tests across 211 suites; `tsc --noEmit` clean; `npm run lint` 0 errors.
