@@ -44,8 +44,17 @@ The LLM should produce:
   and `bothTitleEmittingPromptsTeachTitleSemanticsRatherThanAWordingBan` asserts
   the rule's phrases are **present in each file**. **⚠️ It pins PRESENCE PER FILE, not EQUALITY BETWEEN
   FILES** — it kills a reversion or a wording ban, because those remove asserted phrases, but **additive**
-  divergence (appending a contradictory bullet to one prompt only) would pass. The two blocks are
-  byte-identical today, verified by hand at the `v0.97.0` pressure test; nothing in the build enforces it.
+  divergence (appending a contradictory bullet to one prompt only) would pass. **⚠️ The two blocks are NO LONGER byte-identical, as of `v0.138.0`, and the divergence is DELIBERATE.**
+  They were byte-identical from `v0.97.0` until then, verified by hand at that release's pressure test.
+  `note-generation-developer.txt` now carries one extra bullet — *"keep the title at or under
+  `{MAX_TITLE_WORDS}` words"* — because **only the note-generation path enforces a title word bound**
+  (`MAX_GENERATED_NOTE_TITLE_WORDS = 12`, validated in `buildGeneratedNoteContent`). The Study Pack
+  title has no word bound in code at all, so publishing one in `developer.txt` would state a rule
+  nothing enforces. **⚠️ This is the ADDITIVE divergence the paragraph above predicts would pass
+  `bothTitleEmittingPromptsTeachTitleSemanticsRatherThanAWordingBan`** — and it does pass, correctly,
+  because that test pins the SEMANTIC rule's phrases per file and this bullet is a length bound, not a
+  semantic title rule. **The semantic block itself is still identical; do not "restore" byte-equality
+  by copying the length bullet into `developer.txt`.** Nothing in the build enforces either property.
   Note generation additionally keeps a **topic-fidelity** bullet
   (*"anchored to the topic"*), pinned by its own test — a **different** idea from knowledge-versus-container,
   kept separate so tightening one cannot silently drop the other.
