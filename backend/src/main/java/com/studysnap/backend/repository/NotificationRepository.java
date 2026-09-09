@@ -100,12 +100,17 @@ public interface NotificationRepository extends JpaRepository<NotificationEntity
     @Query("""
             delete from NotificationEntity notification
             where notification.createdAt < :threshold
-              and (notification.readAt is not null or notification.dismissedAt is not null)
+              and (notification.readAt is not null
+                   or notification.dismissedAt is not null
+                   or notification.type in :expirableTypes)
             """)
-    int deleteReadOrDismissedBefore(@Param("threshold") OffsetDateTime threshold);
+    int deleteExpiredBefore(
+            @Param("threshold") OffsetDateTime threshold,
+            @Param("expirableTypes") Collection<NotificationType> expirableTypes
+    );
 
     /**
-     * ⚠️ ACCOUNT ERASURE, NOT RETENTION. {@link #deleteReadOrDismissedBefore} deliberately keeps unread
+     * ⚠️ ACCOUNT ERASURE, NOT RETENTION. {@link #deleteExpiredBefore} deliberately keeps unread
      * actionable rows forever; a purge must take them anyway, because after a purge there is no learner
      * left to act on them. Called from {@code AccountPurgeService.deletePersonalRows}.
      */

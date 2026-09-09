@@ -165,6 +165,19 @@ class NativeQueryPostgresIntegrationTest {
     private static final String REPOSITORY_CLASSES =
             "classpath*:com/studysnap/backend/repository/**/*.class";
 
+    @Test
+    void notificationInboxPartialIndexIsCreatedByFlyway() {
+        String indexDefinition = jdbcTemplate.queryForObject(
+                "select indexdef from pg_indexes where schemaname = 'public' and indexname = ?",
+                String.class,
+                "idx_notifications_inbox"
+        );
+
+        assertThat(indexDefinition)
+                .contains("(recipient_user_id, created_at DESC)")
+                .contains("WHERE (dismissed_at IS NULL)");
+    }
+
     @Container
     @ServiceConnection
     private static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:18");

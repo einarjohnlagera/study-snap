@@ -13,8 +13,12 @@ import com.studysnap.backend.exception.AnnouncementNotFoundException;
 import com.studysnap.backend.exception.AnnouncementNotPublishableException;
 import com.studysnap.backend.exception.InvalidAnnouncementRequestException;
 import com.studysnap.backend.repository.AnnouncementRepository;
-import lombok.RequiredArgsConstructor;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.core.task.TaskExecutor;
 import org.springframework.stereotype.Service;
 
 import java.time.OffsetDateTime;
@@ -39,7 +43,6 @@ import java.util.UUID;
  * announcement stops presenting immediately.
  */
 @Service
-@RequiredArgsConstructor
 @Slf4j
 public class AnnouncementService {
     /**
@@ -55,6 +58,24 @@ public class AnnouncementService {
     private final AnnouncementRepository announcementRepository;
     private final NotificationService notificationService;
     private final AnnouncementAudienceResolver audienceResolver;
+    private final TaskExecutor notificationFanOutExecutor;
+    private final Timer fanOutTimer;
+    private final Counter fanOutRejectedCounter;
+
+    public AnnouncementService(
+            AnnouncementRepository announcementRepository,
+            NotificationService notificationService,
+            AnnouncementAudienceResolver audienceResolver,
+            @Qualifier("notificationFanOutExecutor") TaskExecutor notificationFanOutExecutor,
+            MeterRegistry meterRegistry
+    ) {
+        this.announcementRepository = announcementRepository;
+        this.notificationService = notificationService;
+        this.audienceResolver = audienceResolver;
+        this.notificationFanOutExecutor = notificationFanOutExecutor;
+        this.fanOutTimer = meterRegistry.timer("announcement.fanout.duration");
+        this.fanOutRejectedCounter = meterRegistry.counter("announcement.fanout.rejected");
+    }
 
     public List<AnnouncementResponse> list() {
         OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
@@ -90,23 +111,22 @@ public class AnnouncementService {
     }
 
     /**
-     * Publishes a draft and fans it out, or RE-RUNS the fan-out for one that is already published.
+     * Publishes a draft and queues its fan-out, or queues a fresh fan-out for one already published.
      *
      * <p>⚠️ RE-PUBLISH IS A RETRY FOR EVERYONE WHO ALREADY HAS IT — AND A FIRST SEND FOR ANYONE WHO HAS
      * JOINED THE AUDIENCE SINCE. This javadoc previously said "a retry, not a second send" flatly, and a
-     * {@code v0.130.0} pressure test showed that is only half true: {@link #fanOut(AnnouncementEntity)}
-     * re-resolves the audience AT CALL TIME, so a user who signed up, changed profile type or upgraded
+     * {@code v0.130.0} pressure test showed that is only half true: {@code publish} re-resolves the
+     * audience AT CALL TIME, so a user who signed up, changed profile type or upgraded
      * plan between the two publishes is in the second resolution and receives the announcement. Existing
      * recipients are protected by the unique index and get nothing new; the effect is a TOP-UP.
      *
      * <p>That is a defensible behaviour — an admin pressing Publish again generally does want current
      * readers reached — but it is a real difference and must not be restated as pure retry.
      *
-     * <p>⚠️ THE RETRY HALF IS DELIBERATE. Fan-out is one committed
-     * insert per recipient with no ambient transaction, so a few thousand recipients is a few thousand
-     * round trips inside one admin HTTP request — long enough to outrun a gateway timeout. The status
-     * transition commits BEFORE fan-out starts, and the unique index makes a re-run insert zero
-     * duplicates, so a timed-out publish is recoverable by pressing Publish again.
+     * <p>⚠️ THE RETRY HALF IS DELIBERATE. The audience is resolved synchronously, then one background
+     * task performs a committed insert per recipient with no ambient transaction. A rejected dispatch
+     * leaves the announcement PUBLISHED and returns {@code queued = 0}; pressing Publish again is the
+     * recovery, and the unique index makes that retry safe.
      *
      * <p>⚠️ {@code published_at} IS STAMPED ONCE and never re-stamped on a retry. ⚠️ An ENDED
      * announcement is refused: to say it again, publish a replacement.
@@ -129,13 +149,27 @@ public class AnnouncementService {
             announcement = announcementRepository.saveAndFlush(announcement);
         }
 
-        AnnouncementFanOutResult result = fanOut(announcement);
+        List<UUID> recipientUserIds = audienceResolver.resolve(announcement);
+        int queued = queueFanOut(announcement, recipientUserIds) ? recipientUserIds.size() : 0;
         return new AnnouncementPublishResponse(
                 toResponse(announcement, now),
-                result.recipientCount(),
-                result.delivered(),
-                result.skipped()
+                recipientUserIds.size(),
+                queued
         );
+    }
+
+    private boolean queueFanOut(AnnouncementEntity announcement, List<UUID> recipientUserIds) {
+        try {
+            notificationFanOutExecutor.execute(() -> fanOut(announcement, recipientUserIds));
+            return true;
+        } catch (RuntimeException dispatchFailure) {
+            fanOutRejectedCounter.increment();
+            log.warn(
+                    "announcement.fan_out.rejected announcementId={} recipients={} message={}",
+                    announcement.getId(), recipientUserIds.size(), dispatchFailure.getMessage(), dispatchFailure
+            );
+            return false;
+        }
     }
 
     /**
@@ -153,10 +187,6 @@ public class AnnouncementService {
         return toResponse(announcementRepository.saveAndFlush(announcement), now);
     }
 
-    public AnnouncementFanOutResult fanOut(AnnouncementEntity announcement) {
-        return fanOut(announcement, audienceResolver.resolve(announcement));
-    }
-
     /**
      * ⚠️ IDEMPOTENCY IS THE UNIQUE INDEX, NOT A PRE-CHECK. There is deliberately no {@code existsBy}
      * before the insert: two concurrent fan-outs could both pass one and still duplicate. Every
@@ -169,27 +199,29 @@ public class AnnouncementService {
      * <p>⚠️ An audience resolving to zero users is a legitimate outcome, not an error.
      */
     public AnnouncementFanOutResult fanOut(AnnouncementEntity announcement, List<UUID> recipientUserIds) {
-        int delivered = 0;
-        int skipped = 0;
-        for (int chunkStart = 0; chunkStart < recipientUserIds.size(); chunkStart += FAN_OUT_CHUNK_SIZE) {
-            int chunkEnd = Math.min(chunkStart + FAN_OUT_CHUNK_SIZE, recipientUserIds.size());
-            for (UUID recipientUserId : recipientUserIds.subList(chunkStart, chunkEnd)) {
-                if (deliverOne(announcement, recipientUserId)) {
-                    delivered++;
-                } else {
-                    skipped++;
+        return fanOutTimer.record(() -> {
+            int delivered = 0;
+            int skipped = 0;
+            for (int chunkStart = 0; chunkStart < recipientUserIds.size(); chunkStart += FAN_OUT_CHUNK_SIZE) {
+                int chunkEnd = Math.min(chunkStart + FAN_OUT_CHUNK_SIZE, recipientUserIds.size());
+                for (UUID recipientUserId : recipientUserIds.subList(chunkStart, chunkEnd)) {
+                    if (deliverOne(announcement, recipientUserId)) {
+                        delivered++;
+                    } else {
+                        skipped++;
+                    }
                 }
+                log.info(
+                        "announcement.fan_out.chunk announcementId={} progress={}/{} delivered={} skipped={}",
+                        announcement.getId(), chunkEnd, recipientUserIds.size(), delivered, skipped
+                );
             }
             log.info(
-                    "announcement.fan_out.chunk announcementId={} progress={}/{} delivered={} skipped={}",
-                    announcement.getId(), chunkEnd, recipientUserIds.size(), delivered, skipped
+                    "announcement.fan_out announcementId={} recipients={} delivered={} skipped={}",
+                    announcement.getId(), recipientUserIds.size(), delivered, skipped
             );
-        }
-        log.info(
-                "announcement.fan_out announcementId={} recipients={} delivered={} skipped={}",
-                announcement.getId(), recipientUserIds.size(), delivered, skipped
-        );
-        return new AnnouncementFanOutResult(recipientUserIds.size(), delivered, skipped);
+            return new AnnouncementFanOutResult(recipientUserIds.size(), delivered, skipped);
+        });
     }
 
     private boolean deliverOne(AnnouncementEntity announcement, UUID recipientUserId) {
@@ -200,7 +232,7 @@ public class AnnouncementService {
                     // ⚠️ The announcement id is the dedup ENTITY id as well as the provenance column.
                     // Passing anything else here (a constant, or null) would collapse every announcement
                     // onto one dedup key and silently deliver only the first one, forever.
-                    announcement.getId(),
+                    announcement.getId().toString(),
                     announcement.getTitle(),
                     announcement.getBody(),
                     announcement.getCtaLabel(),

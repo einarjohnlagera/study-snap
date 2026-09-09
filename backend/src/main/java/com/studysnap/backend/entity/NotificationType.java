@@ -5,22 +5,40 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 public enum NotificationType {
-    ANNOUNCEMENT(false),
-    ACTION_REQUIRED(true);
+    ANNOUNCEMENT(NotificationCategory.ANNOUNCEMENT),
+    /**
+     * ⚠️ TRANSITIONAL, for BACKWARD-COMPATIBLE TAXONOMY TRANSITION ONLY. Stage D replaces this with
+     * the first type with a real producer and its learning-system category. Nothing produces
+     * ACTION_REQUIRED today.
+     *
+     * <p>⚠️ Do NOT justify this value by the tests that exercise it. Tests exercise the production
+     * model; they do not determine it. Do NOT build on this as a permanent value.
+     */
+    ACTION_REQUIRED(NotificationCategory.ACTION_REQUIRED);
 
-    private final boolean actionable;
+    private final NotificationCategory category;
 
-    NotificationType(boolean actionable) {
-        this.actionable = actionable;
+    NotificationType(NotificationCategory category) {
+        this.category = category;
+    }
+
+    public NotificationCategory category() {
+        return category;
     }
 
     public boolean isActionable() {
-        return actionable;
+        return category.isBadgeEligible();
     }
 
     public static Set<NotificationType> actionableTypes() {
         return Arrays.stream(values())
-                .filter(NotificationType::isActionable)
+                .filter(type -> NotificationCategory.badgeEligibleCategories().contains(type.category))
+                .collect(Collectors.toUnmodifiableSet());
+    }
+
+    public static Set<NotificationType> retentionExpirableTypes() {
+        return Arrays.stream(values())
+                .filter(type -> NotificationCategory.retentionExpirableCategories().contains(type.category))
                 .collect(Collectors.toUnmodifiableSet());
     }
 }

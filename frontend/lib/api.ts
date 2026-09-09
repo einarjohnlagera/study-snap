@@ -2270,6 +2270,7 @@ export type CreatorImpactResponse = {
 export type NotificationResponse = {
   id: string;
   type: string;
+  actionable: boolean;
   title: string;
   body: string | null;
   ctaLabel: string | null;
@@ -2317,8 +2318,7 @@ export type UpsertAnnouncementRequest = {
 export type AnnouncementPublishResponse = {
   announcement: AnnouncementResponse;
   recipientCount: number;
-  delivered: number;
-  skipped: number;
+  queued: number;
 };
 
 type ApiErrorPayload = {

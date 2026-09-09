@@ -14,12 +14,15 @@ import org.springframework.transaction.support.TransactionTemplate;
 import com.studysnap.backend.security.SecurityProperties;
 
 import java.time.Clock;
+import java.util.concurrent.ThreadPoolExecutor;
 
 @Configuration
 @EnableConfigurationProperties({StudySnapProperties.class, SecurityProperties.class})
 public class AppConfig {
     private static final int ANALYTICS_QUEUE_CAPACITY = 500;
     private static final int ANALYTICS_SHUTDOWN_AWAIT_SECONDS = 20;
+    private static final int NOTIFICATION_FAN_OUT_QUEUE_CAPACITY = 100;
+    private static final int NOTIFICATION_FAN_OUT_SHUTDOWN_AWAIT_SECONDS = 20;
 
     @Bean
     public PasswordEncoder passwordEncoder() {
@@ -44,6 +47,30 @@ public class AppConfig {
         executor.setQueueCapacity(ANALYTICS_QUEUE_CAPACITY);
         executor.setWaitForTasksToCompleteOnShutdown(true);
         executor.setAwaitTerminationSeconds(ANALYTICS_SHUTDOWN_AWAIT_SECONDS);
+        executor.initialize();
+        return executor;
+    }
+
+    /**
+     * ⚠️ SIZED AGAINST THE CONNECTION POOL, NOT THROUGHPUT. Each fan-out performs one committed insert
+     * per recipient, so these workers compete with request threads for the 20 JDBC connections that
+     * production has already exhausted twice. Core 1 / max 2 bounds that pressure independently of
+     * audience size; it must not be widened to match the 4/8 LLM executor.
+     *
+     * <p>The queue is bounded and uses an explicit abort policy so dispatch can detect saturation,
+     * increment its rejection meter, and tell the admin to press Publish again. Accepted work drains
+     * during the bounded shutdown window so a routine deploy does not silently discard it.
+     */
+    @Bean
+    public TaskExecutor notificationFanOutExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setThreadNamePrefix("notification-fan-out-");
+        executor.setCorePoolSize(1);
+        executor.setMaxPoolSize(2);
+        executor.setQueueCapacity(NOTIFICATION_FAN_OUT_QUEUE_CAPACITY);
+        executor.setRejectedExecutionHandler(new ThreadPoolExecutor.AbortPolicy());
+        executor.setWaitForTasksToCompleteOnShutdown(true);
+        executor.setAwaitTerminationSeconds(NOTIFICATION_FAN_OUT_SHUTDOWN_AWAIT_SECONDS);
         executor.initialize();
         return executor;
     }

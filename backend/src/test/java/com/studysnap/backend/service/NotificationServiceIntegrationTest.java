@@ -5,6 +5,7 @@ import com.studysnap.backend.entity.NotificationType;
 import com.studysnap.backend.exception.InvalidAnnouncementRequestException;
 import com.studysnap.backend.exception.NotificationNotFoundException;
 import com.studysnap.backend.repository.NotificationRepository;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -88,6 +89,23 @@ class NotificationServiceIntegrationTest {
     }
 
     @Test
+    void deliveryMetersDistinguishFreshRowsFromDedupConflicts() {
+        SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
+        NotificationService meteredService = new NotificationService(notificationRepository, meterRegistry);
+        UUID recipientId = UUID.randomUUID();
+        UUID entityId = UUID.randomUUID();
+        NotificationService.NotificationDelivery delivery =
+                delivery(recipientId, entityId, NotificationType.ACTION_REQUIRED);
+
+        meteredService.deliver(delivery);
+        meteredService.deliver(delivery);
+
+        assertThat(meterRegistry.counter(
+                "notification.delivered", "type", NotificationType.ACTION_REQUIRED.name()).count()).isEqualTo(1);
+        assertThat(meterRegistry.counter("notification.dedup_conflict").count()).isEqualTo(1);
+    }
+
+    @Test
     void inboxUsesOnePagedRepositoryQueryForAnyNumberOfRows() {
         UUID recipientId = UUID.randomUUID();
         for (int index = 0; index < 4; index++) {
@@ -117,10 +135,13 @@ class NotificationServiceIntegrationTest {
     }
 
     @Test
-    void retentionKeepsUnreadActionableRowsAndDeletesReadRowsPastTheWindow() {
+    void retentionDeletesUnreadNonActionableAndReadRowsButKeepsUnreadActionableRowsPastTheWindow() {
         UUID recipientId = UUID.randomUUID();
         UUID unreadId = UUID.fromString(notificationService.deliver(
                 delivery(recipientId, UUID.randomUUID(), NotificationType.ACTION_REQUIRED)
+        ).id().toString());
+        UUID unreadAnnouncementId = UUID.fromString(notificationService.deliver(
+                delivery(recipientId, UUID.randomUUID(), NotificationType.ANNOUNCEMENT)
         ).id().toString());
         UUID readId = UUID.fromString(notificationService.deliver(
                 delivery(recipientId, UUID.randomUUID(), NotificationType.ACTION_REQUIRED)
@@ -129,8 +150,9 @@ class NotificationServiceIntegrationTest {
         OffsetDateTime old = OffsetDateTime.now(ZoneOffset.UTC).minusDays(91);
         jdbcTemplate.update("update notifications set created_at = ?", old);
 
-        assertThat(notificationService.deleteExpired(OffsetDateTime.now(ZoneOffset.UTC), 90)).isEqualTo(1);
+        assertThat(notificationService.deleteExpired(OffsetDateTime.now(ZoneOffset.UTC), 90)).isEqualTo(2);
         assertThat(notificationRepository.findById(unreadId)).isPresent();
+        assertThat(notificationRepository.findById(unreadAnnouncementId)).isEmpty();
         assertThat(notificationRepository.findById(readId)).isEmpty();
     }
 
@@ -169,7 +191,7 @@ class NotificationServiceIntegrationTest {
         var offSite = new NotificationService.NotificationDelivery(
                 recipientId,
                 NotificationType.ACTION_REQUIRED,
-                UUID.randomUUID(),
+                UUID.randomUUID().toString(),
                 "Action needed",
                 "Review this item.",
                 "Open",
@@ -188,7 +210,7 @@ class NotificationServiceIntegrationTest {
         return new NotificationService.NotificationDelivery(
                 recipientId,
                 type,
-                entityId,
+                entityId.toString(),
                 "Action needed",
                 "Review this item.",
                 "Open",

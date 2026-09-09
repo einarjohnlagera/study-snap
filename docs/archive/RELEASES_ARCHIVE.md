@@ -1,6 +1,6 @@
 # RELEASES_ARCHIVE.md — NoteLib
 
-Archived sections of `RELEASES.md`. **Contents are NOT one contiguous range:** `v0.41.0`–`v0.120.0`, plus `v0.126.0` (moved at the `v0.132.0` kickoff) and `v0.127.0` (moved at the `v0.133.0` kickoff) as the live file crossed its *current + last five* cap. Each version's own `## vX.Y.Z` heading is the index — search for it. `v0.40.1` and earlier moved here
+Archived sections of `RELEASES.md`. **Contents are NOT one contiguous range:** `v0.41.0`–`v0.120.0`, plus `v0.126.0` (moved at the `v0.132.0` kickoff), `v0.127.0` (moved at the `v0.133.0` kickoff) and `v0.128.0` (moved at the `v0.134.0` kickoff) as the live file crossed its *current + last five* cap. Each version's own `## vX.Y.Z` heading is the index — search for it. `v0.40.1` and earlier moved here
 2026-07-10; **`v0.41.0` through `v0.120.0` moved here 2026-09-07** in the `v0.126.0` pass, which
 resumed this convention after it had lapsed for 85 releases — `RELEASES.md` had reached 116
 sections against its documented design of *current + last few versions*. Both passes are MOVES,
@@ -16670,3 +16670,163 @@ Theme: a learner stops losing a date they set themselves, and a failed regenerat
 - **⚠️ GUARD (c) ASSERTS BOTH POINTS IN ONE TEST, because asserting only after the retry passes under a version that never wrote the reason at all** — both reads are NULL. Adding a clear-on-success to `markNoteGenerated` kills exactly the two guard-(c) tests and nothing else. Guard (d) uses a secret-shaped exception message, since an innocuous one passes under a version that stores `ex.getMessage()` verbatim.
 - **The nine H2 fixtures that mirror `notes` were updated** — two of them failed the build until they were, which is the mechanism working.
 - `NoteBulkRegenerationService`'s comment saying the exact reason *"cannot be persisted without a column this release may not add"* is corrected; repointing its quota heuristic at the new column is recorded as a deliberate follow-up, because it moves a `BLOCKED`/`FAILED` classification the curator's retry keys on.
+
+## v0.128.0 - Onboarding Unfrozen
+
+**Status: Released** (kicked off and signed off 2026-09-07, base branch `releases/v0.128.0`, cut from `main` after `v0.127.0` merged and tagged)
+
+Theme: the work that was blocked only by the onboarding freeze, now that the read the freeze protected has been taken.
+
+**⚠️ THE FREEZE IS LIFTED BY OWNER DECISION (2026-09-07), AND THE READ IT PROTECTED WAS TAKEN FIRST RATHER THAN ABANDONED.** `[CHECKPOINT — due 2026-09-11]` froze `frontend/app/onboarding` to protect a signup-funnel read against a **62.4% completion baseline that cannot be re-run**. Taken read-only on 2026-09-07, four days early: **393 signups all-time, 249 completed, 63.4%** — essentially flat.
+
+**⚠️⚠️ THE FINDING THAT DISCHARGES THE CHECKPOINT IS THE DENOMINATOR, NOT THE RATE. The cohort since the `v0.73.0` redesign (2026-08-12) is EIGHTEEN SIGNUPS** — 15 completed, 83.3%. At ~0.7 signups/day, waiting to 2026-09-11 adds about three more. **83.3% on n=18 is noise, not a result.** The checkpoint was never going to be answerable on its own date; **the freeze was protecting a read that cannot be taken.** That is exactly the underpowered-denominator failure this repo's own checkpoint doctrine names, and it is why lifting is not a trade-off.
+
+**⚠️ Do NOT re-freeze onboarding for this checkpoint, and do NOT quote 62.4% or 83.3% as a current figure** — the first is a stale baseline, the second has n=18.
+
+### Planned Scope
+
+**(1) Summary maths renders. ⚠⚠ WITHDRAWN — THIS ALREADY SHIPPED IN `v0.96.0`, AND THE ITEM AS WRITTEN DESCRIBED CODE THAT NO LONGER EXISTED AT KICKOFF.**
+
+**The contract was wrong, not merely stale.** This section claimed `components/ui/summary-markdown.tsx` "runs `react-markdown` + `remark-gfm` with **no math plugin**." It does not, and had not for nine days. Verified 2026-09-07 against the working tree at `74cc0df5` (clean):
+
+| evidence | result |
+|---|---|
+| `git describe --contains 3652e3d6` | **`v0.96.0`** (commit dated 2026-08-29) |
+| `RELEASES_ARCHIVE.md:8280` | records it shipped, "on all nine consumers including the SEO-indexed public pages" |
+| file on disk | `remark-math` wired as tokenizer → `renderExtractedMath`, with the "`rehype-katex` deliberately NOT used" design comment intact |
+| declared guards (a)/(b) | already present in `components/ui/summary-markdown.test.tsx` — including the underscore fixture at `:16`, the one that **cannot** pass under the defect |
+
+**⚠️ The residual was checked, not assumed.** The concern behind guard (b) was a straggler rendering Summary through its own `react-markdown` instance. `grep -rln 'from "react-markdown"'` across `app/`, `components/` and `lib/` returns **exactly one file** — `summary-markdown.tsx` itself. Every consumer routes through `SummaryMarkdown`, so there is no leg (b) remainder. (The handoff's "ten consumers" against the archive's "nine" is doc drift in the count, not a missed surface.)
+
+**⚠️ CAUSE — recorded because it is a process finding, not a typo: the kickoff copied `v0.96.0`'s PLANNED-SCOPE PROSE FORWARD instead of re-reading the code.** `RELEASES_ARCHIVE.md:8188–8226` carries the same sentences ("runs `react-markdown` +", "Add `remark-math` for TOKENIZATION only"). Nothing was lost — no code was written against the false premise — but a release opened with an item that could never have been done. **⚠️ A kickoff that quotes a defect must anchor that quote to the current file, not to the section that first described it.**
+
+**⚠️ `v0.86.0`'s CORRUPTED-ESCAPE item is still open and is NOT closed by this** — it is a different defect, on stored content.
+
+**(2) Catalog-first suggestions in onboarding** — the deferred half of `v0.79.0`, **and by that release's own baseline the load-bearing one**. Onboarding was excluded from `v0.79.0` precisely to protect the read now discharged. **⚠️ WITH ITEM 1 WITHDRAWN THIS IS THE WHOLE RELEASE.**
+
+**⚠️ DO NOT BUILD A NEW MECHANISM — `v0.79.0` ALREADY SHIPPED IT.** `buildCatalogFirstCourseProgramSuggestions` (`lib/learning-profile.ts:133`) and the `useCourseProgramCatalogNames` hook are live on **four** surfaces (`app/profile/page.tsx`, `components/dashboard/lightweight-profile-completion-prompt.tsx`, `components/notes/note-editor-page-client.tsx`, `components/notes/private-note-detail-page-client.tsx`). Onboarding is the one deliberate exclusion and still passes the raw constant at `app/onboarding/page.tsx:1524`. The work is to fetch the catalog on that screen and route through the existing helper, mirroring the dashboard-prompt call site.
+
+**Instrumentation is included, by owner decision (2026-09-07).** `trackCourseProgramValueSelected` fires from the **existing** commit point at `page.tsx:1119` (`updateLearningProfileContext`), which is the direct analogue of the dashboard prompt's call site — **no new flow step, no reordering.** **⚠️ This adds ONE member (`"onboarding"`) to the frontend `CourseProgramSelectionSurface` union and NOTHING ELSE: the `COURSE_PROGRAM_VALUE_SELECTED` enum value already exists, `surface` is NOT server-validated (it rides in the free-form metadata map), so there is NO backend change and NO migration.** Rationale: `v0.79.0`'s whole measurement is the off-catalog selection rate, and without onboarding that metric has a hole exactly where pick volume is highest — every account passes this screen once.
+
+**⚠️ FREE TEXT STAYS ALLOWED.** `v0.79.0` shipped the **counter-proposal**; locking the field and the *"Request Program"* queue remain **PROPOSED AND UNRATIFIED** under `ADR-001`, and shipping this does **not** ratify them.
+
+### Anti-drift
+
+**⚠️ NO Learning Connections work.** `[CHECKPOINT — due 2026-09-19]` is **twelve days out**, its kill criterion keys on `ACCEPTED`, and it decides whether that arc continues at all — touching it would contaminate the one number that decides. **⚠️ Item 2 must NOT lock the course/program field or add a request queue**: `v0.79.0` shipped the **counter-proposal**, free text **stays allowed**, and the `ADR-001` amendment remains unratified — shipping this does not ratify it. **⚠️ Do NOT add, remove or reorder an onboarding FLOW step beyond what these two items require** — the freeze is lifted, not the judgment behind it. **⚠️ Do NOT change what `BOARD_EXAM_STARTED`, `ADAPTIVE_PRACTICE_STARTED`, `QUIZ_SHARE_LINK_*` or `GUIDANCE_TIP_SHOWN` record. NO migration, no quota/entitlement/meter change, no new mode or sub-mode, no `ProfileType` gate.**
+
+### Verification
+
+**⚠️ TIER RE-DECIDED 2026-09-07 AFTER ITEM 1 WAS WITHDRAWN — RECORDED, NOT SILENTLY DOWNGRADED.** The pre-declared tier was one scoped cold agent, justified by **two** things: a renderer shared by nine-plus consumers including SEO-indexed public pages (item 1), and the signup path (item 2). **Item 1 turned out to have shipped in `v0.96.0`, so half that rationale does not exist** and guards (a) and (b) are already-passing `v0.96.0` tests rather than work this release owes.
+
+**The tier is KEPT, narrowed to item 2, on `model: "sonnet"`.** The release is now one file plus a test, which does not justify Opus or a full pressure test — but the surviving half of the rationale is the signup path, and the specific risk is the one this repo has been bitten by twice (`v0.116.0`, `v0.117.0`): **a change that compiles, passes, and does nothing.** `useCourseProgramCatalogNames` swallows every failure to `null`, and `buildCatalogFirstCourseProgramSuggestions(null, …)` falls straight back to `COURSE_PROGRAM_SUGGESTIONS`, so a catalog that never arrives renders **identically to today and passes any test written against it**.
+
+**Single falsification claim handed to the agent:** *the catalog actually reaches the onboarding screen for an account with `onboardingCompletedAt == null`, and the rendered suggestion list differs from `COURSE_PROGRAM_SUGGESTIONS`.*
+
+**⚠️ THAT CLAIM WAS PRE-CHECKED AGAINST PRODUCTION AND THE BACKEND BEFORE ANY CODE WAS WRITTEN, so the agent is falsifying a claim with evidence behind it rather than guessing:** `CourseProgramCatalogController.list()` is `@PreAuthorize("hasAnyRole('USER','ADMIN')")` — **role-gated only, NOT gated on `onboardingCompletedAt`**, so it is reachable mid-onboarding; and a read-only production count returned **44 rows in `course_programs`** against **31** hardcoded `COURSE_PROGRAM_SUGGESTIONS`, so the list demonstrably changes.
+
+**⚠️ PRE-DECLARED GUARDS — status, each naming the fixture that proves nothing: (a)** a Summary containing `$x_1 + x_2$` renders maths and **not** `<em>` — **a fixture without an underscore passes under the defect**. **ALREADY MET by `v0.96.0`** (`summary-markdown.test.tsx:16`); not re-claimed here. **(b)** a Summary containing **no** maths renders **byte-identically** to today. **ALREADY MET by `v0.96.0`**, and the straggler check behind it (one `react-markdown` importer repo-wide) was re-run for this release. **(c)** onboarding completes end to end with a catalog-sourced program **and** with free text, because free text staying allowed is the counter-proposal's whole point — **THE ONLY GUARD THIS RELEASE OWES.**
+
+**⚠️ GUARD (c) FOUND A TEST ASSERTING THE OLD BEHAVIOUR, WHICH IS WHY IT IS WRITTEN AND NOT ASSUMED.** `app/onboarding/page.test.tsx` carried a source-level pin — *"deliberately keeps the hardcoded Course / Program suggestions until the checkpoint"* — asserting `suggestions={COURSE_PROGRAM_SUGGESTIONS}` **and** `not.toContain("useCourseProgramCatalogNames")`. It was correct when written: it pinned `v0.79.0`'s deliberate exclusion of onboarding, whose whole reason was the now-discharged checkpoint. **⚠️ It is removed because its PREMISE is gone, not because it broke** — and it is **not** replaced with an inverted source assertion, since reading `page.tsx` as a string cannot tell whether the catalog actually reaches the screen, which is the only thing worth guarding. The replacement guards are behavioural, in the new `app/onboarding/onboarding-course-program.test.tsx`.
+
+**⚠️ CARRIED LESSON FROM `v0.127.0`: confirm a mutation is PRESENT before trusting a green suite** — one silently failed to apply and the run passed.
+
+**Routing: CLAUDE CODE inline.**
+
+### Shipped
+
+- **Onboarding's Course / Program field is catalog-first, closing the deferred half of `v0.79.0`.**
+  `app/onboarding/page.tsx` was the one surface of five still passing the hardcoded
+  `COURSE_PROGRAM_SUGGESTIONS`; it now resolves suggestions through the **existing**
+  `useCourseProgramCatalogNames` hook and `buildCatalogFirstCourseProgramSuggestions` helper,
+  mirroring `lightweight-profile-completion-prompt.tsx`. **No new mechanism was built.** Catalog names
+  come first, the hardcoded list is appended rather than replaced, and **free text stays allowed** —
+  `v0.79.0` shipped the counter-proposal, so the field is **not** locked and no request queue was
+  added; the `ADR-001` amendment remains unratified.
+- **The selection is instrumented, closing the hole in `v0.79.0`'s own metric.**
+  `trackCourseProgramValueSelected("onboarding", …)` fires from the **existing** commit point inside
+  `selectLearnerLevel`, the awaited `updateLearningProfileContext` write — **no flow step was added,
+  removed or reordered.** One member added to the frontend `CourseProgramSelectionSurface` union;
+  **no backend change and no migration**, because `COURSE_PROGRAM_VALUE_SELECTED` already exists and
+  `surface` rides in the free-form metadata map. **⚠️ De-duplication is real, not incidental:** the
+  event is passed the last *committed* value as its `previousValue`, so a learner who returns and
+  changes only their learner level — which re-runs the same write — does not fire a second selection
+  for a program they never re-picked.
+- **⚠️ The event is deliberately SUPPRESSED when the catalog fails to load.** `matchedCatalog` cannot
+  be computed without a catalog, and an unclassifiable selection is worse than a missing one — it
+  would silently inflate the off-catalog rate the metric exists to measure.
+- **A stale test that pinned the old behaviour was removed, and the removal is the finding.**
+  `app/onboarding/page.test.tsx` asserted `suggestions={COURSE_PROGRAM_SUGGESTIONS}` and
+  `not.toContain("useCourseProgramCatalogNames")` under the name *"deliberately keeps the hardcoded
+  Course / Program suggestions until the checkpoint"*. **It was correct when written** — it pinned the
+  exclusion protecting the read this release discharged — and is removed because its premise is gone,
+  **not** to accommodate a change that broke it. **⚠️ It was NOT replaced by an inverted source
+  assertion:** reading the file as a string cannot tell whether the catalog reaches the screen.
+
+- **⚠️ Item 1 (Summary maths) was WITHDRAWN, not shipped — it was already done in `v0.96.0`.** See the
+  Planned Scope note above; the cause was a kickoff copying `v0.96.0`'s planned-scope prose forward
+  instead of re-reading the file, and the residual check (one `react-markdown` importer repo-wide) was
+  re-run to confirm nothing was left over.
+
+**Verification.** New `app/onboarding/onboarding-course-program.test.tsx` — four behavioural tests
+covering guard (c) in both directions. **⚠️ ALL THREE MUTATIONS WERE CONFIRMED PRESENT IN THE FILE
+BEFORE THEIR RUN, per the carried `v0.127.0` lesson**, and each named test that killed them:
+- **Reverting the wiring** to the raw constant — the `v0.116.0`/`v0.117.0` silent no-op, and the one
+  mutation that matters here — fails *"lists catalog names ahead of the hardcoded suggestions"* and
+  *"completes the step with a catalog-sourced program"*. **⚠️ It fails only because the catalog fixture
+  is disjoint from `COURSE_PROGRAM_SUGGESTIONS`; a fixture reusing a constant entry would PASS under
+  the no-op.**
+- **Dropping the analytics call** fails the catalog-sourced and free-text completion tests.
+- **Locking the field** (`allowCustom={false}`, the unratified `ADR-001` amendment) fails exactly
+  *"still completes the step with free text"* — the guard that keeps the counter-proposal from being
+  silently ratified.
+- **Removing the resume seeding** fails exactly *"does not re-report a program the learner already
+  committed in an earlier session"*.
+
+**A de-duplication hole was found in review and closed.** The tracking ref is per-page-load, so it
+started at `null` on every mount: a learner **resuming** onboarding with a program already committed
+in an earlier session, who stepped back through the learner-level screen, would fire a second
+`COURSE_PROGRAM_VALUE_SELECTED` for a value that never changed. The ref is now seeded from
+`me.courseProgram` when the draft loads. **⚠️ Seeded from the STORED value only, not the draft** — a
+draft value that was never committed has never been reported and must still be able to fire.
+
+Full frontend suite green (204 suites, 2253 tests); `tsc --noEmit` clean; ESLint 0 errors.
+
+**Cold agent (scoped, falsification, `sonnet`) — primary claim CONFIRMED, and confirmed the expensive
+way.** It did not merely read the wiring: it forced `useCourseProgramCatalogNames` to return `null`
+unconditionally — the exact `v0.116.0`/`v0.117.0` no-op class — and **all four tests then failed**,
+then verified its revert restored the file. It also independently confirmed the catalog is reachable
+mid-onboarding (no `OnboardingGuardService.assertProfileComplete` anywhere on the controller or
+service path; `SecurityConfig`/`JwtAuthenticationFilter` contain no onboarding gate), that the
+analytics call cannot fire on a failed save, that `allowCustom` is untouched, and that no forbidden
+item was tripped. **It found no runtime defect in the change.**
+
+**⚠️ IT FOUND TWO DOC-DRIFT DEFECTS, AND BOTH WERE FIXED RATHER THAN NOTED — this is exactly the
+"sweep by SURFACE, not by diff" class this repo has now been bitten by in four consecutive releases:**
+- **`docs/features/notes.md` contradicted itself inside this very diff.** The surface list two lines
+  above was updated to include onboarding while the line below still read *"Onboarding deliberately
+  continues using the hardcoded `COURSE_PROGRAM_SUGGESTIONS` list until after the 2026-09-11
+  completion checkpoint."* Removed, with the correction recorded in place. The neighbouring free-text
+  line was also stale and now names onboarding.
+- **⚠️ `ROADMAP.md`'s Backlog Index row for this very item still read "NOT SHIPPED — deliberately
+  deferred", and cited "a source-text test asserts this" — the test THIS RELEASE DELETED.** That row
+  is what kickoff scan steps 8 and 9 read, so leaving it would have handed the next kickoff false
+  state about the work just completed. Row closed, and its `[EVIDENCE]` gate marked discharged. The
+  adjacent `v0.79.0` checkpoint row was updated separately: its distal 2026-10-15 read was explicitly
+  gated on "the post-2026-09-11 onboarding follow-up", which is what shipped here, so that read must
+  now include `surface: "onboarding"` — **the fifth fire site, and the one the 13.9% profile baseline
+  actually turns on**, since the original four measure edits of existing values.
+
+**⚠️ A THIRD STALE CLAIM WAS FOUND BY WIDENING THE SWEEP, AND THE SCOPING IS THE LESSON.** The first
+sweep grepped `docs/features/` and `docs/architecture/` — **`docs/product/` was never in it**, which
+is precisely why the agent found the `ROADMAP.md` row and the implementing session did not. Two
+whole-tree greps closed it: `2026-09-11` and `COURSE_PROGRAM_SUGGESTIONS`, both excluding
+`docs/archive/`. They surfaced `docs/claude-plans/learning-connections-phase-plan.md:486`, which told
+a future session that `[CHECKPOINT — due 2026-09-11]` is a **live measurement window** and that
+editing the onboarding flow would **destroy** it. That is now false in both halves. A dated
+correction was added above the paragraph. **⚠️ It is scoped strictly to the 2026-09-11 onboarding
+read and explicitly reaffirms that `[CHECKPOINT — due 2026-09-19]` — that arc's own `ACCEPTED`-keyed
+kill criterion — remains live and untouched. NO Learning Connections code was modified; the only
+code files in this release are `app/onboarding/page.tsx` and `hooks/use-course-program-catalog.ts`.**
+`docs/product/SPEC.md` was checked and is clean. `docs/gpt-contexts/GPT_CONTEXT.md` is version-stamped
+to `v0.127.0` and is left to its normal per-release refresh. Historical files — `docs/releases/*.md`
+and `docs/archive/` — were deliberately not rewritten; they are the record of what was true then.

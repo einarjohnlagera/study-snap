@@ -1,5 +1,254 @@
 # RELEASES.md - NoteLib
 
+## v0.134.0 - Notification Foundations
+
+**Status: Released** (kicked off 2026-09-09, signed off 2026-09-09, base branch `releases/v0.134.0`, cut from `main` after `v0.133.0` merged as #1349 and tagged. Shipped as PRs #1350, #1351, #1352.)
+
+Source: `docs/claude-plans/attention-notifications-email-expansion-stage1.md` (Stage A audit, 2026-09-08, every claim `file:line`-anchored and backed by read-only production `SELECT`s).
+
+Theme: harden the notification substrate's taxonomy and dedup identity **while `notifications` still has zero rows in production**, so the first real producer lands on a shape that can carry it.
+
+### ⚠️⚠️ THIS RELEASE SHIPS NO USER-VISIBLE CHANGE, DELIBERATELY — DO NOT READ IT AS A STALLED RELEASE
+
+Every item here is a mechanism change behind an inbox that has **never rendered a numeric badge in production and could not have**. `countActionableUnread` filters `type IN actionableTypes()`, which resolves to `{ACTION_REQUIRED}`, and **zero code paths produce that type** — `AnnouncementService.deliverOne` is the only caller of `NotificationService.deliver` and it always passes `ANNOUNCEMENT`.
+
+**The entire argument for doing this now is the row count: `notifications` is EMPTY in production — RE-VERIFIED READ-ONLY AT THIS KICKOFF, 2026-09-09**, not carried over from the audit: `notifications` **0 rows**, `announcements` **0 rows**, **0** distinct dedup keys, **0** `ACTION_REQUIRED`. **⚠️ The re-read is not a formality — it is the `v0.133.0` precedent, where the precondition read found EIGHTEEN catalog programs against the migration's THREE seeds and a repo-only audit would have been unsound. One admin publish between the audit and the prompt would put up to 396 rows in the table and turn item 2's key-format change from free into a live reconciliation that is not scoped.** Items 1–3 are pure Java, item 5 is one JPQL predicate. **Every one of them becomes a data migration with a backfill and a reconciliation the day the first real notification lands.** That window closes permanently and silently — nothing will announce it.
+
+### Planned scope — Stage B items 1–3 + 5 only, DDL-FREE
+
+1. **Taxonomy split.** `NotificationType` becomes **producer-level identity**; a new `NotificationCategory` carries **badge policy**; `actionableTypes()` derives its set from the category rather than from a boolean on the type.
+2. **Widen `dedupKey` to accept a String discriminator.** Today `dedupKey(type, entityId)` returns `type.name() + ":" + entityId` (`NotificationService:104-106`) — so every future `ACTION_REQUIRED` producer shares one key space and two producers holding the same entity UUID collide silently under `idx_notifications_recipient_dedup`.
+3. **The API response carries `actionable`/`category`, and the frontend stops comparing to the literal `"ANNOUNCEMENT"`.** `notification-inbox.tsx:110,117` is the frontend's private mirror of `NotificationType.actionable`; it mis-counts the badge the moment a third type exists.
+5. **Retention expires non-actionable unread rows.** `deleteReadOrDismissedBefore` deletes only rows with `read_at` or `dismissed_at` set, so **an unread row is immortal** — an `EVERYONE` announcement to 396 users leaves 396 permanent rows per announcement, forever. **90 days, reusing the existing `retention-days` constant — no second knob** (decision D7).
+
+### ⚠️⚠️ SUPERSEDED 2026-09-09 — ITEM 4 IS BACK IN SCOPE, BECAUSE THE PREMISE BELOW EXPIRED
+
+**`V141` AND `V142` BOTH RAN IN PRODUCTION ON 2026-09-08** — verified read-only against
+`flyway_schema_history` at 2026-09-09 (V141 12:23, V142 15:47, both `success = true`). **The single
+stated reason item 4 was deferred no longer holds:** the queue is clean, `V142` is the tip, and a
+`V143` is now an isolated one-statement migration against a table that is still empty (0 rows,
+re-verified the same day).
+
+**⚠️ The owner elected to complete ALL of Stage B** — items **4, 6 and 7** ship as PART 2, after
+Part 1 merged as **PR #1350**. **So the DDL-free constraint below applied to Part 1 ONLY and is now
+lifted.** It is kept verbatim rather than deleted because it records *why* the split happened, and
+because the reasoning — do not add a migration to an unrun queue — is correct and will apply again.
+
+**⚠️ The verification tier is RE-DECIDED for Part 2 — see the Verification tier section.**
+
+### ⚠️ Item 4 (the `idx_notifications_inbox` index) WAS EXPLICITLY OUT OF PART 1, AND SO WAS EVERY DDL STATEMENT
+
+Items 1–3 need no DDL — `type` is already `VARCHAR(64)` with `EnumType.STRING`, `dedup_key` is already `VARCHAR(255)` (`V139__notifications.sql:4-5`) — and item 5 is a predicate change. Item 4 would be the **only** reason this release carries a migration, and **`V141` and `V142` are both still UNRUN in production**. Adding a third migration to an unrun queue to fix a sort the audit measured as immaterial at 0 rows is a bad trade. **Let the index ride the next migration that exists for another reason.**
+
+**⚠️ If a diff in this release adds a migration, the scope has drifted.**
+
+### ⚠️ THE VERIFICATION TRAP: "behaviour must be identical after items 1–3" IS THE `v0.116.0`/`v0.117.0` SILENT-NO-OP SHAPE
+
+`actionableTypes() == {ACTION_REQUIRED}` passes **before and after** the change, so a green run on it is evidence about nothing. **At least one assertion must be one that CANNOT pass against `main`** — the category **partition** test is the natural one, because no category enum exists today.
+
+Stage B's verification list (**not** the audit's "Verification the first producer owes" section — that is a **Stage D** list and seven of its ten items presuppose a Review Set update producer that is not shipping here):
+
+- `actionableTypes()` still resolves to exactly `{ACTION_REQUIRED}` — the regression guard for the derivation change.
+- **Badge-eligible and retention-expirable PARTITION the categories** — one flag, two derived sets, with a test asserting the partition. Two hand-maintained lists is how they drift. ⚠️ **This is the assertion that cannot pass before the change.**
+- A **non-actionable** unread row past 90 days is deleted; an **actionable** unread row past 90 days is **not**.
+- The `GET /notifications` JSON actually carries `actionable`/`category` — extend `NotificationControllerTest`'s existing **real request** (`.contentType(MediaType.APPLICATION_JSON)`), never a direct handler call (`v0.119.0`).
+- The frontend badge decrement reads the new field. **The existing tests asserting the `"ANNOUNCEMENT"` literal must MOVE WITH the change** — left as they are they pass for the wrong reason.
+
+### ⚠️ `docs/features/notifications.md` IS A DELIVERABLE OF THIS RELEASE, NOT A SIGNOFF SCRAMBLE
+
+All four items change behaviour that file **currently documents as true**, and it must move in the same PR — this is the failure CLAUDE.md flags hardest, and it has cost three consecutive releases:
+
+| Line | Claim that becomes false | Item |
+|---|---|---|
+| `:24` | `dedup_key` is built by `NotificationService.dedupKey(type, entityId)` | 2 |
+| `:35` | *"`NotificationType` carries an `actionable` flag, and `actionableTypes()` derives the set from it"* | 1 |
+| `:166-167` | the announcement id is passed as **both** arguments to `dedupKey` | 2 |
+| `:252-256` | retention deletes read/dismissed rows only, and *"Unread AND UNDISMISSED actionable notifications are RETAINED regardless of age"* | 5 |
+| inbox response shape | must gain `actionable`/`category` | 3 |
+
+**⚠️ `:252-256` is the sharp one: item 5 makes that sentence true only for the ACTIONABLE half.** Non-actionable unread rows start expiring at 90 days, and the doc currently states the opposite without qualification.
+
+**✅ One correction to that file was made AT KICKOFF, because it was stale independently of this release:** its *"Stage 6 — blocked on the §8 drift-signature dedup decision"* line pointed at a design `v0.132.0` already ruled must **not** be implemented. Corrected there and in the superseded Backlog row, which read the same way.
+
+### Anti-drift
+
+- ❌ **NO new enum values without a producer.** `NotificationType` keeps **exactly** its two current values. Adding `REVIEW_SET_UPDATE` / `CONNECTION_REQUEST` / `NOTE_SHARED` now recreates the exact defect this audit opens with — a type with zero producers whose only tests hand-build a state no code path reaches.
+- ⚠️ **`ACTION_REQUIRED` survives as an explicitly TRANSITIONAL placeholder for BACKWARD-COMPATIBLE TAXONOMY TRANSITION.** **Stage D replaces it** with `REVIEW_SET_UPDATE`. **Say this in the enum's javadoc**, or a future session reads it as permanent and builds on it. **⚠️ AMENDED 2026-09-09 by the owner's tightening addendum: do NOT justify it as "retained so badge behaviour stays exercised" — a domain-model value is not justified by the tests it keeps alive. Tests exercise the production model; they do not determine it.**
+- ❌ **`NotificationCategory` stays DERIVED IN JAVA, never a stored column.** A stored category is a second source of truth that can disagree with the type, and no query needs to filter on it independently — `countActionableUnread` already takes its set as a parameter.
+- ❌ **No DDL, no migration, no index** (see above).
+- ❌ **Do not call `NotificationService.deliver()` from inside a transaction.** `deliver()` is deliberately non-transactional so a `DataIntegrityViolationException` on the dedup index does not mark an entire fan-out rollback-only. Item 2 edits the key that catch depends on.
+- ❌ No `exists` check before a notification insert — the unique index is the mechanism.
+- ✅ **`findVisibleInbox` and `countActionableUnread` predicates change TOGETHER.** The `dismissed_at IS NULL` leg on the count was a `v0.130.0` pressure-test fix and the repository javadoc records why.
+- ✅ `read_at` = awareness, `dismissed_at` = inbox visibility. **No `resolved` column.**
+- ✅ Opening the panel marks nothing read; poll the count endpoint only, never more often than 60 s; never render a literal `0` badge.
+- ❌ **No Stage D producer, no Stage E email work, no executor change (item 6), no metrics (item 7).** Items 6 and 7 have **no closing window** — they cost the same in six months. That is the whole reason they are not here and item 1–3+5 are.
+- ❌ **No Learning Connections work** — `[CHECKPOINT — due 2026-09-19]` is ten days out and its kill criterion keys on `ACCEPTED`, denominator **ONE**.
+- ❌ **No `frontend/app/onboarding` work** — `[CHECKPOINT — due 2026-09-11]` is two days out.
+- ❌ `AnnouncementAudienceResolver` must not touch `FeatureGateService` — editorial, never authorization.
+
+### ⚠️ One thing to record while it is still true
+
+**Item 2's key-format widening is free ONLY because there are no existing keys.** No stored dedup key has ever been written in production, so no format is a contract anyone can rely on. After the first producer ships, changing this format means reconciling live rows.
+
+### ✅ Pre-signoff cold agent — RAN 2026-09-09, ALL EIGHT CLAIMS UPHELD, ONE GAP CLOSED
+
+The scoped cold agent this release was re-tiered to **was run rather than waived**, framed as
+falsification against eight named claims plus the two structural questions. It read the real code and
+**re-ran the suites itself** rather than trusting this session's summary. **No claim was refuted** —
+R9, the detached-entity hand-off, `V143`'s predicate match, the retention split, the contract removal,
+the no-new-producer rule and the end-to-end badge all held.
+
+**⚠️ IT FOUND ONE REAL GAP, AND IT IS THE KIND ONLY A COLD READER FINDS: the executor WIRING was
+proven by nothing.** Every test in `AnnouncementServiceIntegrationTest` builds the service by hand
+with a test-double executor, and `AppConfigTest` calls `new AppConfig()` directly — so neither proves
+the **Spring-managed** service receives the **Spring-managed** fan-out executor. Context-load success
+proves only that *some* `TaskExecutor` resolved.
+
+**That gap was live, not theoretical.** Re-qualifying the constructor to `analyticsTaskExecutor`
+**loads the context and passes every other test in the class**, while quietly putting announcement
+fan-out on the pool that persists analytics — doubling pressure on the 20 connections production has
+already exhausted twice (R5/R13). Closed with
+`theSpringManagedServiceReceivesTheDedicatedFanOutExecutorAndNotTheAnalyticsPool`, which asserts bean
+identity and thread-name prefix on the Spring-managed instance. It fails under that mutant.
+
+**⚠️ It also credited a test this session had NOT: `aRetriedFanOutStillWorksWithAnOpenSessionInViewEntityManagerBoundToTheThread`**
+binds an `EntityManagerHolder` exactly as `OpenEntityManagerInViewInterceptor` does and asserts the
+persistence context is still readable after three caught constraint violations. That is the R9 angle
+the reflection guard cannot see, and the two are complementary rather than redundant — worth recording
+so neither is later deleted as duplicative.
+
+**⚠️ Method note, recorded against the next time: this session switched the working branch while the
+agent was running**, and the agent reported a file "changing under it" mid-review. It re-read and
+self-corrected, and its test runs post-date the switch, so the conclusions stand — **but do not check
+out another branch under a running cold agent.**
+
+**Part 2 mutants — three run, three killed:**
+
+| Mutant | Killed by |
+|---|---|
+| Fan-out reverted to synchronous | three async/rejection tests |
+| `@Transactional` added to `fanOut` (R9) | `FanOutTransactionBoundaryTest` — *added by this audit* |
+| **Fan-out re-qualified to `analyticsTaskExecutor`** | **`theSpringManagedServiceReceivesTheDedicatedFanOutExecutor…` — *added after the cold agent; it loaded the context and passed everything else*** |
+
+### ⚠️ R1 IS A LIVE PRODUCTION FINDING THIS RELEASE DOES NOT FIX — recorded so it is not lost
+
+**The email daily cap is already breached.** Configured `EMAIL_DAILY_LIMIT` is **100** with a **40** reserve; observed production peaks are **156, 158, 157, 156** sends/day over the last 90. The budget gates **`INACTIVITY` only** — weak-concept, weekly-summary, due-concepts and knowledge-impact dispatches are all unbudgeted, so the "100/day limit" describes one of five channels. **This blocks every future email producer (Stage E) and is indexed in `ROADMAP.md`'s Backlog Index, not scoped here.**
+
+### ⚠️⚠️ Verification tier — RE-DECIDED 2026-09-09 FOR PART 2: ONE SCOPED COLD AGENT
+
+**Part 1 was correctly tiered at a single `advisor()` call and shipped that way.** Part 2 changes the
+shape, and `CLAUDE.md`'s gate now fires on **three** independent triggers rather than one:
+
+1. **⚠️ Delivery introduced a defect this session that the session then fixed** — the measured
+   blind-spot signal, and the gate names it explicitly. Part 1's frontend tests passed against the
+   OLD implementation, and a backend mutant survived. That is not a hypothetical.
+2. **The bug class is one the gate says is inherently hard to reason about serially** — async
+   ordering. Fan-out moves off the request thread, and R9 (transaction poisoning) is an invariant that
+   a green suite will not notice being broken.
+3. **A second change touches the same shared methods** — `AnnouncementService.publish` / `fanOut` and
+   `NotificationService.deliver`, both already edited by Part 1.
+
+**Frame it as FALSIFICATION, not open-ended audit:** hand it a tight file list and the specific claims
+this session made, and ask it to disprove each. `model: "sonnet"` is enough for claim-checking.
+
+**⚠️ The claim most worth attacking: *"fan-out still runs outside any transaction."*** That is R9, it
+is what keeps a single duplicate key from taking down an entire fan-out, and it is invisible to a
+passing test suite.
+
+**Superseded rationale, kept as the record:** *A single `advisor()` call.* No authorization or privacy boundary moves, no money/quota/production-data semantics change, and `notifications` has **zero rows** so item 5 has nothing to delete in production. Declared at kickoff so signoff does not re-derive it — **but re-decide if the shape changes**, per `v0.133.0`, which was tiered at one `advisor()` call, gained a write endpoint, ran one cold agent, and had **three of seven named claims refuted**.
+
+**Routing: CODEX** — backend enum + service + JPQL + response DTO, plus the frontend component. Multi-system, so a prompt comes first. **Call `advisor()` before writing that prompt.**
+
+### Shipped
+
+- Added `NotificationCategory` as the single owner of numeric-badge policy, with badge-eligible and
+  retention-expirable category sets derived as complements from one flag. `NotificationType` remains
+  the two-value producer identity and now delegates policy to its category.
+- Widened notification dedup discriminators from UUID to string while preserving the existing
+  `ANNOUNCEMENT:<uuid>` keys and the unique-index catch-and-reread delivery contract.
+- Added the server-derived `actionable` field to inbox responses and moved the frontend badge update
+  and rollback branches to that field.
+- Extended the existing 90-day cleanup to expire unread non-actionable rows while retaining unread
+  actionable rows indefinitely; no new retention setting was added.
+- Added category-partition, retention-direction, real-response-shape, dedup-format and frontend badge
+  behavior coverage. Part 1 added no producer, notification type, endpoint, migration or index.
+- Added V143's partial inbox index on recipient and descending creation time for visible notifications,
+  closing the unindexed inbox sort now that the production migration queue is clear.
+- Moved announcement delivery to the bounded `notificationFanOutExecutor` (core 1 / max 2). Publish now
+  resolves the audience synchronously, reports queue acceptance immediately, and preserves retry/top-up
+  semantics through the existing unique dedup index.
+- Replaced synchronous publish delivery totals with `recipientCount` / `queued` and updated the admin
+  feedback to describe background delivery or a recoverable queue rejection accurately.
+- Added fresh-delivery, dedup-conflict, fan-out-duration and fan-out-rejection meters so asynchronous
+  delivery remains observable without a per-user reporting surface.
+
+### ⚠️ Audit finding — the frontend tests as delivered passed for the wrong reason, and mutation testing is what caught it
+
+**Reverting `notification-inbox.tsx` to its exact pre-release implementation (`type !== "ANNOUNCEMENT"`)
+left all 18 frontend tests GREEN.** Every fixture set `actionable` to *agree* with `type`, so the old
+branch and the new one returned the same answer for all of them — the suite could not distinguish the
+change it existed to verify. **⚠️ This is the `v0.116.0`/`v0.117.0` silent-no-op shape arriving from a
+new direction: tests WERE added, and they still proved nothing about the change.**
+
+Fixed by adding the one fixture where the two **disagree** — a non-actionable type whose name is not
+`"ANNOUNCEMENT"` (`IMPACT_MILESTONE`), which is exactly the case the taxonomy split exists to fix and
+the case the old code got wrong. That test fails against the old implementation and passes against the
+new one.
+
+**Four mutants were run and all four were killed, each by a named test:**
+
+| Mutant | Killed by |
+|---|---|
+| `retentionExpirableCategories()` stops filtering (partition broken) | `NotificationCategoryTest.badgeEligibleAndRetentionExpirableCategoriesPartitionEveryCategory` |
+| Every type made retention-expirable (unread actionable rows deleted) | `NotificationServiceIntegrationTest.retentionDeletesUnreadNonActionableAndReadRowsButKeepsUnreadActionableRowsPastTheWindow` |
+| Badge branch never fires | `decrements the badge when an actionable notification is marked read` + `reverts the optimistic unread delta when marking read fails` |
+| **Component reverted to the old `"ANNOUNCEMENT"` literal** | **`does not change the badge for a non-actionable type that is not ANNOUNCEMENT`** — *added by this audit; nothing killed this mutant before* |
+| `retentionExpirableTypes()` returns the wrong side of the split | `NotificationCategoryTest.retentionExpirableTypesAreTheComplementOfActionableTypes` — *added by this audit* |
+
+**⚠️ ONE MUTANT SURVIVES, KNOWINGLY, AND IT IS RECORDED RATHER THAN PAPERED OVER.** Hardcoding
+`NotificationType.isActionable()` to `this == ACTION_REQUIRED` — bypassing the category delegation
+entirely — **passes the whole suite.** That is not a fixable gap at this size: with two types mapped
+one-to-one onto two like-named categories, delegation and hardcoding are **observationally identical**,
+and no test can separate them without a third type, which this release forbids.
+
+What was added instead is the guard that fires when it *starts* to matter: `everyTypeDerivesItsActionabilityFromItsCategory`
+enumerates `values()`, so a third type that is misclassified fails immediately. A `category()` accessor
+was added to make that invariant assertable. **The javadoc on that test states outright that it cannot
+discriminate today**, so a later reader does not credit it with more than it proves.
+
+### ⚠️ Part 2 audit finding — the R9 guard could not fail, and only mutation revealed it
+
+**R9 is the invariant this release rests on:** `deliver()` catches the unique-index
+`DataIntegrityViolationException`; under an ambient transaction that marks the whole transaction
+rollback-only, so **one duplicate recipient would take an entire fan-out down**. Part 2 shipped a test
+asserting `TransactionSynchronizationManager.isActualTransactionActive()` is false during delivery,
+which reads exactly like the guard for it.
+
+**It is not one. Adding `@Transactional` to `fanOut` left all 20 of that class's tests GREEN.** The
+test constructs `AnnouncementService` with `new`, so there is **no Spring AOP proxy and the annotation
+is inert** — the fixture cannot express the state it claims to forbid. **⚠️ This is the repo's
+recurring "the guard must reach its subject the way production does" failure arriving from the
+opposite end**, and it is the second release running where a delivered test passed for a reason
+unrelated to the change.
+
+Closed with `FanOutTransactionBoundaryTest`, a reflection check over the declared annotations on
+`publish`, `fanOut`, `deliver` and both classes. It **cannot** be fooled by proxy absence, because the
+annotation is exactly what production reads. It fails under the mutant.
+
+**Also removed:** the single-argument `fanOut(AnnouncementEntity)` overload, left with **no callers in
+main or test** once `publish` began resolving the audience itself — dead public API on a service whose
+transaction boundary is load-bearing.
+
+**Part 2 mutants — two run, both killed after the fix:**
+
+| Mutant | Killed by |
+|---|---|
+| Fan-out reverted to synchronous | `publishReturnsAfterQueueAcceptanceBeforeAnyNotificationIsDelivered` + `rejectedDispatchReturnsZeroAndRepublish...` + `executorTaskRunsFanOutWithoutAnAmbientTransaction` |
+| **`@Transactional` added to `fanOut` (R9 violated)** | **`FanOutTransactionBoundaryTest.announcementPublishAndFanOutAreNotTransactional` — *added by this audit; the whole suite passed before it*** |
+
+**Verification run:** backend 2,312 tests + the 101-query PostgreSQL native harness against a real
+container; frontend 2,346 tests across 211 suites; `tsc --noEmit` clean; `npm run lint` 0 errors.
+
 ## v0.133.0 - Education Family
 
 **Status: Released** (kicked off 2026-09-08, signed off 2026-09-08, base branch `releases/v0.133.0`, cut from `main` after `v0.132.0` merged as #1347 and tagged)
@@ -199,9 +448,11 @@ The audit's §14 is mostly covered already by the generic component. The genuine
 **⚠️ The Engineering-still-expands test is the regression guard for the migration** — if assigning the existing `Education` row a family accidentally touched Engineering rows, that is what catches it.
 
 
-### ⚠️ Deploy sequencing — two unrun migrations now queue behind each other
+### ✅ Deploy sequencing — RESOLVED 2026-09-08, both migrations ran (note kept as the record)
 
-`V141` (`v0.132.0`) and `V142` (this release) are **both unrun in production.** Flyway applies them in
+**✅ RAN 2026-09-08 — V141 at 12:23, V142 at 15:47, both `success = true`, verified read-only against `flyway_schema_history` on 2026-09-09. The Education family has EIGHT members in production, which is this release's headline claim.** What follows described the state before that deploy and is kept as the record.
+
+`V141` (`v0.132.0`) and `V142` (this release) were **both unrun in production.** Flyway applies them in
 order on the next deploy, which is correct — but three dated obligations hang off *when that deploy
 happens*, and they are recorded here rather than left to be inferred:
 
@@ -820,163 +1071,3 @@ the card's render test.
 **⚠️ Backend is a Codex prompt, not built here** (`docs/codex-prompts/v0.129.0-adoption-count-backend.md`,
 untracked by design). It carries the one index, the batched self-join query, and the guard that the
 backend must return the **exact** count with no threshold logic.
-
-## v0.128.0 - Onboarding Unfrozen
-
-**Status: Released** (kicked off and signed off 2026-09-07, base branch `releases/v0.128.0`, cut from `main` after `v0.127.0` merged and tagged)
-
-Theme: the work that was blocked only by the onboarding freeze, now that the read the freeze protected has been taken.
-
-**⚠️ THE FREEZE IS LIFTED BY OWNER DECISION (2026-09-07), AND THE READ IT PROTECTED WAS TAKEN FIRST RATHER THAN ABANDONED.** `[CHECKPOINT — due 2026-09-11]` froze `frontend/app/onboarding` to protect a signup-funnel read against a **62.4% completion baseline that cannot be re-run**. Taken read-only on 2026-09-07, four days early: **393 signups all-time, 249 completed, 63.4%** — essentially flat.
-
-**⚠️⚠️ THE FINDING THAT DISCHARGES THE CHECKPOINT IS THE DENOMINATOR, NOT THE RATE. The cohort since the `v0.73.0` redesign (2026-08-12) is EIGHTEEN SIGNUPS** — 15 completed, 83.3%. At ~0.7 signups/day, waiting to 2026-09-11 adds about three more. **83.3% on n=18 is noise, not a result.** The checkpoint was never going to be answerable on its own date; **the freeze was protecting a read that cannot be taken.** That is exactly the underpowered-denominator failure this repo's own checkpoint doctrine names, and it is why lifting is not a trade-off.
-
-**⚠️ Do NOT re-freeze onboarding for this checkpoint, and do NOT quote 62.4% or 83.3% as a current figure** — the first is a stale baseline, the second has n=18.
-
-### Planned Scope
-
-**(1) Summary maths renders. ⚠⚠ WITHDRAWN — THIS ALREADY SHIPPED IN `v0.96.0`, AND THE ITEM AS WRITTEN DESCRIBED CODE THAT NO LONGER EXISTED AT KICKOFF.**
-
-**The contract was wrong, not merely stale.** This section claimed `components/ui/summary-markdown.tsx` "runs `react-markdown` + `remark-gfm` with **no math plugin**." It does not, and had not for nine days. Verified 2026-09-07 against the working tree at `74cc0df5` (clean):
-
-| evidence | result |
-|---|---|
-| `git describe --contains 3652e3d6` | **`v0.96.0`** (commit dated 2026-08-29) |
-| `RELEASES_ARCHIVE.md:8280` | records it shipped, "on all nine consumers including the SEO-indexed public pages" |
-| file on disk | `remark-math` wired as tokenizer → `renderExtractedMath`, with the "`rehype-katex` deliberately NOT used" design comment intact |
-| declared guards (a)/(b) | already present in `components/ui/summary-markdown.test.tsx` — including the underscore fixture at `:16`, the one that **cannot** pass under the defect |
-
-**⚠️ The residual was checked, not assumed.** The concern behind guard (b) was a straggler rendering Summary through its own `react-markdown` instance. `grep -rln 'from "react-markdown"'` across `app/`, `components/` and `lib/` returns **exactly one file** — `summary-markdown.tsx` itself. Every consumer routes through `SummaryMarkdown`, so there is no leg (b) remainder. (The handoff's "ten consumers" against the archive's "nine" is doc drift in the count, not a missed surface.)
-
-**⚠️ CAUSE — recorded because it is a process finding, not a typo: the kickoff copied `v0.96.0`'s PLANNED-SCOPE PROSE FORWARD instead of re-reading the code.** `RELEASES_ARCHIVE.md:8188–8226` carries the same sentences ("runs `react-markdown` +", "Add `remark-math` for TOKENIZATION only"). Nothing was lost — no code was written against the false premise — but a release opened with an item that could never have been done. **⚠️ A kickoff that quotes a defect must anchor that quote to the current file, not to the section that first described it.**
-
-**⚠️ `v0.86.0`'s CORRUPTED-ESCAPE item is still open and is NOT closed by this** — it is a different defect, on stored content.
-
-**(2) Catalog-first suggestions in onboarding** — the deferred half of `v0.79.0`, **and by that release's own baseline the load-bearing one**. Onboarding was excluded from `v0.79.0` precisely to protect the read now discharged. **⚠️ WITH ITEM 1 WITHDRAWN THIS IS THE WHOLE RELEASE.**
-
-**⚠️ DO NOT BUILD A NEW MECHANISM — `v0.79.0` ALREADY SHIPPED IT.** `buildCatalogFirstCourseProgramSuggestions` (`lib/learning-profile.ts:133`) and the `useCourseProgramCatalogNames` hook are live on **four** surfaces (`app/profile/page.tsx`, `components/dashboard/lightweight-profile-completion-prompt.tsx`, `components/notes/note-editor-page-client.tsx`, `components/notes/private-note-detail-page-client.tsx`). Onboarding is the one deliberate exclusion and still passes the raw constant at `app/onboarding/page.tsx:1524`. The work is to fetch the catalog on that screen and route through the existing helper, mirroring the dashboard-prompt call site.
-
-**Instrumentation is included, by owner decision (2026-09-07).** `trackCourseProgramValueSelected` fires from the **existing** commit point at `page.tsx:1119` (`updateLearningProfileContext`), which is the direct analogue of the dashboard prompt's call site — **no new flow step, no reordering.** **⚠️ This adds ONE member (`"onboarding"`) to the frontend `CourseProgramSelectionSurface` union and NOTHING ELSE: the `COURSE_PROGRAM_VALUE_SELECTED` enum value already exists, `surface` is NOT server-validated (it rides in the free-form metadata map), so there is NO backend change and NO migration.** Rationale: `v0.79.0`'s whole measurement is the off-catalog selection rate, and without onboarding that metric has a hole exactly where pick volume is highest — every account passes this screen once.
-
-**⚠️ FREE TEXT STAYS ALLOWED.** `v0.79.0` shipped the **counter-proposal**; locking the field and the *"Request Program"* queue remain **PROPOSED AND UNRATIFIED** under `ADR-001`, and shipping this does **not** ratify them.
-
-### Anti-drift
-
-**⚠️ NO Learning Connections work.** `[CHECKPOINT — due 2026-09-19]` is **twelve days out**, its kill criterion keys on `ACCEPTED`, and it decides whether that arc continues at all — touching it would contaminate the one number that decides. **⚠️ Item 2 must NOT lock the course/program field or add a request queue**: `v0.79.0` shipped the **counter-proposal**, free text **stays allowed**, and the `ADR-001` amendment remains unratified — shipping this does not ratify it. **⚠️ Do NOT add, remove or reorder an onboarding FLOW step beyond what these two items require** — the freeze is lifted, not the judgment behind it. **⚠️ Do NOT change what `BOARD_EXAM_STARTED`, `ADAPTIVE_PRACTICE_STARTED`, `QUIZ_SHARE_LINK_*` or `GUIDANCE_TIP_SHOWN` record. NO migration, no quota/entitlement/meter change, no new mode or sub-mode, no `ProfileType` gate.**
-
-### Verification
-
-**⚠️ TIER RE-DECIDED 2026-09-07 AFTER ITEM 1 WAS WITHDRAWN — RECORDED, NOT SILENTLY DOWNGRADED.** The pre-declared tier was one scoped cold agent, justified by **two** things: a renderer shared by nine-plus consumers including SEO-indexed public pages (item 1), and the signup path (item 2). **Item 1 turned out to have shipped in `v0.96.0`, so half that rationale does not exist** and guards (a) and (b) are already-passing `v0.96.0` tests rather than work this release owes.
-
-**The tier is KEPT, narrowed to item 2, on `model: "sonnet"`.** The release is now one file plus a test, which does not justify Opus or a full pressure test — but the surviving half of the rationale is the signup path, and the specific risk is the one this repo has been bitten by twice (`v0.116.0`, `v0.117.0`): **a change that compiles, passes, and does nothing.** `useCourseProgramCatalogNames` swallows every failure to `null`, and `buildCatalogFirstCourseProgramSuggestions(null, …)` falls straight back to `COURSE_PROGRAM_SUGGESTIONS`, so a catalog that never arrives renders **identically to today and passes any test written against it**.
-
-**Single falsification claim handed to the agent:** *the catalog actually reaches the onboarding screen for an account with `onboardingCompletedAt == null`, and the rendered suggestion list differs from `COURSE_PROGRAM_SUGGESTIONS`.*
-
-**⚠️ THAT CLAIM WAS PRE-CHECKED AGAINST PRODUCTION AND THE BACKEND BEFORE ANY CODE WAS WRITTEN, so the agent is falsifying a claim with evidence behind it rather than guessing:** `CourseProgramCatalogController.list()` is `@PreAuthorize("hasAnyRole('USER','ADMIN')")` — **role-gated only, NOT gated on `onboardingCompletedAt`**, so it is reachable mid-onboarding; and a read-only production count returned **44 rows in `course_programs`** against **31** hardcoded `COURSE_PROGRAM_SUGGESTIONS`, so the list demonstrably changes.
-
-**⚠️ PRE-DECLARED GUARDS — status, each naming the fixture that proves nothing: (a)** a Summary containing `$x_1 + x_2$` renders maths and **not** `<em>` — **a fixture without an underscore passes under the defect**. **ALREADY MET by `v0.96.0`** (`summary-markdown.test.tsx:16`); not re-claimed here. **(b)** a Summary containing **no** maths renders **byte-identically** to today. **ALREADY MET by `v0.96.0`**, and the straggler check behind it (one `react-markdown` importer repo-wide) was re-run for this release. **(c)** onboarding completes end to end with a catalog-sourced program **and** with free text, because free text staying allowed is the counter-proposal's whole point — **THE ONLY GUARD THIS RELEASE OWES.**
-
-**⚠️ GUARD (c) FOUND A TEST ASSERTING THE OLD BEHAVIOUR, WHICH IS WHY IT IS WRITTEN AND NOT ASSUMED.** `app/onboarding/page.test.tsx` carried a source-level pin — *"deliberately keeps the hardcoded Course / Program suggestions until the checkpoint"* — asserting `suggestions={COURSE_PROGRAM_SUGGESTIONS}` **and** `not.toContain("useCourseProgramCatalogNames")`. It was correct when written: it pinned `v0.79.0`'s deliberate exclusion of onboarding, whose whole reason was the now-discharged checkpoint. **⚠️ It is removed because its PREMISE is gone, not because it broke** — and it is **not** replaced with an inverted source assertion, since reading `page.tsx` as a string cannot tell whether the catalog actually reaches the screen, which is the only thing worth guarding. The replacement guards are behavioural, in the new `app/onboarding/onboarding-course-program.test.tsx`.
-
-**⚠️ CARRIED LESSON FROM `v0.127.0`: confirm a mutation is PRESENT before trusting a green suite** — one silently failed to apply and the run passed.
-
-**Routing: CLAUDE CODE inline.**
-
-### Shipped
-
-- **Onboarding's Course / Program field is catalog-first, closing the deferred half of `v0.79.0`.**
-  `app/onboarding/page.tsx` was the one surface of five still passing the hardcoded
-  `COURSE_PROGRAM_SUGGESTIONS`; it now resolves suggestions through the **existing**
-  `useCourseProgramCatalogNames` hook and `buildCatalogFirstCourseProgramSuggestions` helper,
-  mirroring `lightweight-profile-completion-prompt.tsx`. **No new mechanism was built.** Catalog names
-  come first, the hardcoded list is appended rather than replaced, and **free text stays allowed** —
-  `v0.79.0` shipped the counter-proposal, so the field is **not** locked and no request queue was
-  added; the `ADR-001` amendment remains unratified.
-- **The selection is instrumented, closing the hole in `v0.79.0`'s own metric.**
-  `trackCourseProgramValueSelected("onboarding", …)` fires from the **existing** commit point inside
-  `selectLearnerLevel`, the awaited `updateLearningProfileContext` write — **no flow step was added,
-  removed or reordered.** One member added to the frontend `CourseProgramSelectionSurface` union;
-  **no backend change and no migration**, because `COURSE_PROGRAM_VALUE_SELECTED` already exists and
-  `surface` rides in the free-form metadata map. **⚠️ De-duplication is real, not incidental:** the
-  event is passed the last *committed* value as its `previousValue`, so a learner who returns and
-  changes only their learner level — which re-runs the same write — does not fire a second selection
-  for a program they never re-picked.
-- **⚠️ The event is deliberately SUPPRESSED when the catalog fails to load.** `matchedCatalog` cannot
-  be computed without a catalog, and an unclassifiable selection is worse than a missing one — it
-  would silently inflate the off-catalog rate the metric exists to measure.
-- **A stale test that pinned the old behaviour was removed, and the removal is the finding.**
-  `app/onboarding/page.test.tsx` asserted `suggestions={COURSE_PROGRAM_SUGGESTIONS}` and
-  `not.toContain("useCourseProgramCatalogNames")` under the name *"deliberately keeps the hardcoded
-  Course / Program suggestions until the checkpoint"*. **It was correct when written** — it pinned the
-  exclusion protecting the read this release discharged — and is removed because its premise is gone,
-  **not** to accommodate a change that broke it. **⚠️ It was NOT replaced by an inverted source
-  assertion:** reading the file as a string cannot tell whether the catalog reaches the screen.
-
-- **⚠️ Item 1 (Summary maths) was WITHDRAWN, not shipped — it was already done in `v0.96.0`.** See the
-  Planned Scope note above; the cause was a kickoff copying `v0.96.0`'s planned-scope prose forward
-  instead of re-reading the file, and the residual check (one `react-markdown` importer repo-wide) was
-  re-run to confirm nothing was left over.
-
-**Verification.** New `app/onboarding/onboarding-course-program.test.tsx` — four behavioural tests
-covering guard (c) in both directions. **⚠️ ALL THREE MUTATIONS WERE CONFIRMED PRESENT IN THE FILE
-BEFORE THEIR RUN, per the carried `v0.127.0` lesson**, and each named test that killed them:
-- **Reverting the wiring** to the raw constant — the `v0.116.0`/`v0.117.0` silent no-op, and the one
-  mutation that matters here — fails *"lists catalog names ahead of the hardcoded suggestions"* and
-  *"completes the step with a catalog-sourced program"*. **⚠️ It fails only because the catalog fixture
-  is disjoint from `COURSE_PROGRAM_SUGGESTIONS`; a fixture reusing a constant entry would PASS under
-  the no-op.**
-- **Dropping the analytics call** fails the catalog-sourced and free-text completion tests.
-- **Locking the field** (`allowCustom={false}`, the unratified `ADR-001` amendment) fails exactly
-  *"still completes the step with free text"* — the guard that keeps the counter-proposal from being
-  silently ratified.
-- **Removing the resume seeding** fails exactly *"does not re-report a program the learner already
-  committed in an earlier session"*.
-
-**A de-duplication hole was found in review and closed.** The tracking ref is per-page-load, so it
-started at `null` on every mount: a learner **resuming** onboarding with a program already committed
-in an earlier session, who stepped back through the learner-level screen, would fire a second
-`COURSE_PROGRAM_VALUE_SELECTED` for a value that never changed. The ref is now seeded from
-`me.courseProgram` when the draft loads. **⚠️ Seeded from the STORED value only, not the draft** — a
-draft value that was never committed has never been reported and must still be able to fire.
-
-Full frontend suite green (204 suites, 2253 tests); `tsc --noEmit` clean; ESLint 0 errors.
-
-**Cold agent (scoped, falsification, `sonnet`) — primary claim CONFIRMED, and confirmed the expensive
-way.** It did not merely read the wiring: it forced `useCourseProgramCatalogNames` to return `null`
-unconditionally — the exact `v0.116.0`/`v0.117.0` no-op class — and **all four tests then failed**,
-then verified its revert restored the file. It also independently confirmed the catalog is reachable
-mid-onboarding (no `OnboardingGuardService.assertProfileComplete` anywhere on the controller or
-service path; `SecurityConfig`/`JwtAuthenticationFilter` contain no onboarding gate), that the
-analytics call cannot fire on a failed save, that `allowCustom` is untouched, and that no forbidden
-item was tripped. **It found no runtime defect in the change.**
-
-**⚠️ IT FOUND TWO DOC-DRIFT DEFECTS, AND BOTH WERE FIXED RATHER THAN NOTED — this is exactly the
-"sweep by SURFACE, not by diff" class this repo has now been bitten by in four consecutive releases:**
-- **`docs/features/notes.md` contradicted itself inside this very diff.** The surface list two lines
-  above was updated to include onboarding while the line below still read *"Onboarding deliberately
-  continues using the hardcoded `COURSE_PROGRAM_SUGGESTIONS` list until after the 2026-09-11
-  completion checkpoint."* Removed, with the correction recorded in place. The neighbouring free-text
-  line was also stale and now names onboarding.
-- **⚠️ `ROADMAP.md`'s Backlog Index row for this very item still read "NOT SHIPPED — deliberately
-  deferred", and cited "a source-text test asserts this" — the test THIS RELEASE DELETED.** That row
-  is what kickoff scan steps 8 and 9 read, so leaving it would have handed the next kickoff false
-  state about the work just completed. Row closed, and its `[EVIDENCE]` gate marked discharged. The
-  adjacent `v0.79.0` checkpoint row was updated separately: its distal 2026-10-15 read was explicitly
-  gated on "the post-2026-09-11 onboarding follow-up", which is what shipped here, so that read must
-  now include `surface: "onboarding"` — **the fifth fire site, and the one the 13.9% profile baseline
-  actually turns on**, since the original four measure edits of existing values.
-
-**⚠️ A THIRD STALE CLAIM WAS FOUND BY WIDENING THE SWEEP, AND THE SCOPING IS THE LESSON.** The first
-sweep grepped `docs/features/` and `docs/architecture/` — **`docs/product/` was never in it**, which
-is precisely why the agent found the `ROADMAP.md` row and the implementing session did not. Two
-whole-tree greps closed it: `2026-09-11` and `COURSE_PROGRAM_SUGGESTIONS`, both excluding
-`docs/archive/`. They surfaced `docs/claude-plans/learning-connections-phase-plan.md:486`, which told
-a future session that `[CHECKPOINT — due 2026-09-11]` is a **live measurement window** and that
-editing the onboarding flow would **destroy** it. That is now false in both halves. A dated
-correction was added above the paragraph. **⚠️ It is scoped strictly to the 2026-09-11 onboarding
-read and explicitly reaffirms that `[CHECKPOINT — due 2026-09-19]` — that arc's own `ACCEPTED`-keyed
-kill criterion — remains live and untouched. NO Learning Connections code was modified; the only
-code files in this release are `app/onboarding/page.tsx` and `hooks/use-course-program-catalog.ts`.**
-`docs/product/SPEC.md` was checked and is clean. `docs/gpt-contexts/GPT_CONTEXT.md` is version-stamped
-to `v0.127.0` and is left to its normal per-release refresh. Historical files — `docs/releases/*.md`
-and `docs/archive/` — were deliberately not rewritten; they are the record of what was true then.

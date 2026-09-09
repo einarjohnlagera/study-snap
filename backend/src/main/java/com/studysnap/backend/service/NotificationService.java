@@ -5,6 +5,7 @@ import com.studysnap.backend.entity.NotificationEntity;
 import com.studysnap.backend.entity.NotificationType;
 import com.studysnap.backend.exception.NotificationNotFoundException;
 import com.studysnap.backend.repository.NotificationRepository;
+import io.micrometer.core.instrument.MeterRegistry;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.PageRequest;
@@ -22,13 +23,14 @@ public class NotificationService {
     private static final int MAX_INBOX_LIMIT = 100;
 
     private final NotificationRepository notificationRepository;
+    private final MeterRegistry meterRegistry;
 
     /**
      * The unique recipient/dedup index is the idempotency guarantee. Do not add an exists check before
      * this insert: two concurrent deliveries could both pass it and still create duplicate awareness.
      */
     public NotificationResponse deliver(NotificationDelivery delivery) {
-        String dedupKey = dedupKey(delivery.type(), delivery.entityId());
+        String dedupKey = dedupKey(delivery.type(), delivery.dedupDiscriminator());
         NotificationEntity notification = new NotificationEntity();
         notification.setId(UUID.randomUUID());
         notification.setRecipientUserId(delivery.recipientUserId());
@@ -46,8 +48,11 @@ public class NotificationService {
         notification.setCreatedAt(OffsetDateTime.now(ZoneOffset.UTC));
 
         try {
-            return toResponse(notificationRepository.saveAndFlush(notification));
+            NotificationResponse response = toResponse(notificationRepository.saveAndFlush(notification));
+            meterRegistry.counter("notification.delivered", "type", delivery.type().name()).increment();
+            return response;
         } catch (DataIntegrityViolationException duplicateDelivery) {
+            meterRegistry.counter("notification.dedup_conflict").increment();
             return notificationRepository.findByRecipientUserIdAndDedupKey(delivery.recipientUserId(), dedupKey)
                     .map(this::toResponse)
                     .orElseThrow(() -> duplicateDelivery);
@@ -98,11 +103,14 @@ public class NotificationService {
 
     @Transactional
     public int deleteExpired(OffsetDateTime now, int retentionDays) {
-        return notificationRepository.deleteReadOrDismissedBefore(now.minusDays(retentionDays));
+        return notificationRepository.deleteExpiredBefore(
+                now.minusDays(retentionDays),
+                NotificationType.retentionExpirableTypes()
+        );
     }
 
-    public static String dedupKey(NotificationType type, UUID entityId) {
-        return type.name() + ":" + entityId;
+    public static String dedupKey(NotificationType type, String discriminator) {
+        return type.name() + ":" + discriminator;
     }
 
     private NotificationEntity findForRecipientOrThrow(UUID userId, UUID notificationId) {
@@ -114,6 +122,7 @@ public class NotificationService {
         return new NotificationResponse(
                 notification.getId(),
                 notification.getType().name(),
+                notification.getType().isActionable(),
                 notification.getTitle(),
                 notification.getBody(),
                 notification.getCtaLabel(),
@@ -127,7 +136,7 @@ public class NotificationService {
     public record NotificationDelivery(
             UUID recipientUserId,
             NotificationType type,
-            UUID entityId,
+            String dedupDiscriminator,
             String title,
             String body,
             String ctaLabel,

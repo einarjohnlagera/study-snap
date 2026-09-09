@@ -81,7 +81,7 @@ class AdminAnnouncementControllerTest {
         when(announcementService.create(any(), eq(adminUserId))).thenReturn(draft);
         when(announcementService.update(eq(announcementId), any())).thenReturn(draft);
         when(announcementService.publish(announcementId))
-                .thenReturn(new AnnouncementPublishResponse(published, 12, 12, 0));
+                .thenReturn(new AnnouncementPublishResponse(published, 12, 12));
         when(announcementService.end(announcementId)).thenReturn(ended);
 
         MockMvc mockMvc = buildMockMvc(adminUserId);
@@ -109,8 +109,9 @@ class AdminAnnouncementControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.announcement.status").value("PUBLISHED"))
                 .andExpect(jsonPath("$.recipientCount").value(12))
-                .andExpect(jsonPath("$.delivered").value(12))
-                .andExpect(jsonPath("$.skipped").value(0));
+                .andExpect(jsonPath("$.queued").value(12))
+                .andExpect(jsonPath("$.delivered").doesNotExist())
+                .andExpect(jsonPath("$.skipped").doesNotExist());
 
         mockMvc.perform(post("/admin/announcements/" + announcementId + "/end")
                         .contentType(MediaType.APPLICATION_JSON)

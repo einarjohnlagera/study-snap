@@ -23,6 +23,6 @@ public class NotificationCleanupJob {
                 OffsetDateTime.now(ZoneOffset.UTC),
                 properties.getNotifications().getRetentionDays()
         );
-        log.info("notification.cleanup deleted {} read or dismissed notifications", deletedCount);
+        log.info("notification.cleanup deleted {} expired notifications", deletedCount);
     }
 }
