@@ -84,10 +84,19 @@ public interface NoteCollectionRepository extends JpaRepository<NoteCollectionEn
 
     Optional<NoteCollectionEntity> findByOwnerUserIdAndSourcePlanId(UUID ownerUserId, UUID sourcePlanId);
 
+    /**
+     * ⚠️ THE SELF-COPY EXCLUSION IS NOT OPTIONAL — a curator can adopt their OWN public Review Set
+     * ({@code adopt()} has no owner guard, and the service comments treat self-copies as a real state),
+     * so without this join the curator receives "This Review Set has been updated" for their own
+     * publish. {@link #countAdoptionsByCollectionIds} already excludes self-copies the same way and is
+     * the precedent this follows; the two must not drift apart.
+     */
     @Query("""
             select adoption.ownerUserId as recipientUserId, adoption.id as adoptedCollectionId
             from NoteCollectionEntity adoption
+            join NoteCollectionEntity source on source.id = adoption.sourcePlanId
             where adoption.sourcePlanId = :sourceCollectionId
+              and adoption.ownerUserId <> source.ownerUserId
             """)
     List<ReviewSetUpdateRecipientProjection> findReviewSetUpdateRecipients(
             @Param("sourceCollectionId") UUID sourceCollectionId
