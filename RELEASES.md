@@ -2,7 +2,7 @@
 
 ## v0.137.0 - Deploy Integrity
 
-**Status: In Progress** (kicked off 2026-09-09, base branch `releases/v0.137.0`, cut from `main` after `v0.136.0` merged as #1359. **⚠️ RE-SCOPED the same day — see below.**)
+**Status: Released** (kicked off 2026-09-09, signed off 2026-09-09, base branch `releases/v0.137.0`, cut from `main` after `v0.136.0` merged as #1359. **⚠️ RE-SCOPED the same day — see below.** No feature or fix PRs: every commit is release-management or docs, plus one script.)
 
 Theme: the deploy pipeline failed silently and the record of what was deployed was wrong. Make both true again.
 
@@ -53,6 +53,15 @@ Render's config is correct and untouched (`autoDeploy: yes`, `autoDeployTrigger:
 - **Backend (Render):** `4ee2c752` = `v0.136.0`, live, deployed manually 12:04:31Z.
 - **Frontend (Vercel):** `7f371e65` = `v0.135.0`. **One release behind, and that is the live defect.**
 - **Database:** migrations current at **`V143`**, matching the repo's highest. Nothing pending.
+
+### Scope completeness
+
+| Planned item | Outcome |
+|---|---|
+| 1. Restore the frontend deploy | **✅ SHIPPED (owner).** Vercel Production now carries `4ee2c752` at 2026-09-09T14:00:53Z, `state=success`; Render and `main` agree. Skew resolved, verified read-only rather than assumed. |
+| 2. Detector for a merge that produced no deploy | **✅ SHIPPED.** `scripts/check-deploys.sh`, wired into `/signoff`. Shape was decided before building, per the anti-drift, and CI was deliberately not introduced. |
+| 3. Two standing rules | **✅ SHIPPED** in `CLAUDE.md` — the production-state-is-a-snapshot rule and the API-form-is-breaking-both-ways rule. |
+| 4. The `2026-09-10` and `2026-09-11` reads | **❌ NOT SHIPPED — the dates had not arrived, and reading early is the failure those dates exist to prevent.** Nothing about them is blocked by this release; they are unchanged in the Backlog Index and land in the next cycle. Recorded here so a reader does not mistake the release's own scope list for work that silently vanished. |
 
 ### Known limitations
 
