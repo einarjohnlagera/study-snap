@@ -14,7 +14,7 @@ jest.mock("@/lib/api", () => ({
 
 const actionable = {
   id: "n-1",
-  type: "ACTION_REQUIRED",
+  type: "REVIEW_SET_UPDATE",
   actionable: true,
   title: "Someone wants to connect",
   body: null,

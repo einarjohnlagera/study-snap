@@ -25,7 +25,8 @@ REVIEW_SET_UPDATE:<sourceCollectionId>:<lastUpdatePublishedAt as epochMilli>
 1. **`NotificationType.REVIEW_SET_UPDATE` + `NotificationCategory.LEARNING_SYSTEM` (backend).** The first type with a real producer.
 2. **The producer (backend).** Fires from the `publishReviewSetUpdate` **call site**, delivering to adopters of that source root, deep-linked to `/collections/{adoptedCollectionId}`.
 3. **Episode suppression (backend).** A batch filter in the producer, between audience resolution and fan-out, dropping recipients who already hold an **undismissed** `REVIEW_SET_UPDATE` row for that source. **Settled by owner decision A2 — ships WITH the producer, not later.**
-4. **Retire the transitional `ACTION_REQUIRED`** — see the open decision below.
+4. **Retire the transitional `ACTION_REQUIRED`.** Delete both the type and its producerless category;
+   the settled taxonomy decision is recorded below.
 
 ### ⚠️ Anti-drift
 
@@ -51,9 +52,11 @@ REVIEW_SET_UPDATE:<sourceCollectionId>:<lastUpdatePublishedAt as epochMilli>
 - **A1 — dismiss without applying → the next publish DOES re-notify.** Suppress-until-applied would reintroduce permanent silence through a different trigger.
 - **A2 — episode suppression ships WITH the first producer.**
 
-### ⚠️ ONE OPEN DECISION
+### Settled taxonomy decision
 
-**Does this release delete `ACTION_REQUIRED`?** `v0.134.0` marked it transitional and said Stage D replaces it. **But deleting the type also strands the `ACTION_REQUIRED` category with no type mapped to it** — a category with no producer, which is the same defect the whole audit opens with. And **D2 (connection request) would want that category back.** Options: (a) delete both type and category now, re-adding at D2; (b) keep both until D2 gives them a real producer. **Decide before the Codex prompt.**
+**This release deletes both transitional `ACTION_REQUIRED` values.** `REVIEW_SET_UPDATE` maps to
+`LEARNING_SYSTEM`, so every shipped type and category has a real producer. A later connection-request
+release can add its category together with its producer instead of preserving a producerless slot.
 
 ### ⚠️ Inherited checkpoint — `v0.134.0` is DEPLOYED and its clock has started
 
@@ -63,9 +66,48 @@ REVIEW_SET_UPDATE:<sourceCollectionId>:<lastUpdatePublishedAt as epochMilli>
 
 **To be decided when the shape is known**, but the prior is **one scoped cold agent**: this adds a producer to a fan-out path that has never run in production, and the last two releases each shipped a delivered test that passed for a reason unrelated to its change. **Routing: CODEX** — new enum values, a producer, a batch suppression query and its tests span backend service, repository and entity layers.
 
+### ⚠️ Audit note — Codex hit its session limit mid-delivery, and the completion gap was ONE test
+
+**The delivery was further along than the interruption implied: it compiled, the full backend suite passed, and 7 of the prompt's 12 required tests were present — including the discriminating one.** Auditing against the prompt's list rather than against the delivery's own shape found the real state:
+
+| Required test | Status |
+|---|---|
+| Dismiss → later publish → NEW row (**the discriminating test**) | ✅ delivered |
+| Re-press idempotency; episode suppression | ✅ delivered |
+| R9 through the real Spring-managed path | ✅ delivered, **plus the annotation guard extended to the new service and listener** |
+| Read ≠ resolved; no-count copy; learner's-own deep link | ✅ delivered |
+| Real `MockMvc` request | ✅ **already existed** from `v0.132.0` |
+| Taxonomy + badge counter | ✅ delivered |
+| First-ever publication notifies nobody (**two-writers trap**) | ✅ **already covered** — see the correction below |
+| **Editing without publishing reaches nobody** | ❌ **MISSING — added by this audit** |
+
+**⚠️ A CORRECTION WORTH RECORDING, BECAUSE THE FIRST READ WAS WRONG.** This audit initially judged the two-writers trap uncovered and wrote a duplicate test for it. It **is** covered: `NoteCollectionServiceTest.updateVisibility_publishesWhenEveryItemIsPublic` asserts `markReviewSetUpdatePublished` fires **and** `verifyNoInteractions(applicationEventPublisher)` — the stamp advances, no event does. **The grep missed it because the test is named for the visibility change, not for the private method it exercises.** The duplicate was removed. *Searching for a behaviour by the name of the method that implements it will keep missing tests named for the user action.*
+
+**The one genuine gap — `curatorEditsWithoutPublishingReachNoAdopter` — is the anti-drift line this release leans on hardest** (*editing is not publishing*), and it covers a path nothing else did: items added with **no publish call at all**. The existing no-op test covers publishing with nothing to publish, which is a different thing.
+
+**Two mutants run, both killed:**
+
+| Mutant | Killed by |
+|---|---|
+| **Dedup key reverted to the audit's `REVIEW_SET_UPDATE:<adoptedCollectionId>`** — the permanent suppression bug | **`dismissingOneRevisionAllowsTheNextPublishedRevisionToCreateANewRow`** — the design's whole reason for existing, caught |
+| `@Transactional` added to the new producer's `fanOut` (R9 on the new path) | `FanOutTransactionBoundaryTest.reviewSetUpdateFanOutIsNotTransactional` |
+
+**Verification run:** backend 2,335 tests + the 102-query PostgreSQL harness against a real container; frontend 2,348 across 212 suites; `tsc --noEmit` clean; `npm run lint` 0 errors.
+
 ### Shipped
 
-_(nothing yet)_
+- Replaced the producerless `ACTION_REQUIRED` type/category pair with the actionable
+  `REVIEW_SET_UPDATE` / `LEARNING_SYSTEM` pair, backed by the first real feature producer.
+- Publishing real changes to an Official Review Set now emits a plain-value event and queues adopter
+  delivery only after the locked publication transaction commits, reusing the unchanged bounded
+  `notificationFanOutExecutor`.
+- Added source-revision identity as
+  `REVIEW_SET_UPDATE:<sourceCollectionId>:<persistedPublishedAtEpochMilli>`, fixed count-free copy and
+  deep links to each learner's adopted collection.
+- Added one-query adopter resolution and one-query undismissed-episode suppression. Dismissal closes an
+  episode, allowing the next genuinely published revision to create a new notification row.
+- Added real Spring-transaction, revision-key, suppression, dismissal, no-op retry, queue-rejection,
+  copy, deep-link and badge coverage while preserving both existing R9 guards.
 
 ## v0.134.0 - Notification Foundations
 

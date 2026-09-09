@@ -23,7 +23,7 @@ class NotificationCategoryTest {
     /**
      * ⚠️ THIS CANNOT DISCRIMINATE TODAY AND IS STILL WORTH HAVING — say so rather than let a later
      * reader assume it proves more than it does. With two types mapped one-to-one onto two
-     * like-named categories, a hardcoded {@code this == ACTION_REQUIRED} inside
+     * like-named categories, a hardcoded {@code this == REVIEW_SET_UPDATE} inside
      * {@link NotificationType#isActionable()} is observationally identical to the category
      * delegation, and a mutation test confirmed that mutant survives the whole suite.
      *
@@ -63,8 +63,8 @@ class NotificationCategoryTest {
     }
 
     @Test
-    void actionableTypesRetainTheirExistingBehaviour() {
-        assertThat(NotificationType.actionableTypes()).containsExactly(NotificationType.ACTION_REQUIRED);
+    void reviewSetUpdatesAreActionableAndAnnouncementsRemainNonActionable() {
+        assertThat(NotificationType.actionableTypes()).containsExactly(NotificationType.REVIEW_SET_UPDATE);
         assertThat(NotificationType.ANNOUNCEMENT.isActionable()).isFalse();
     }
 }

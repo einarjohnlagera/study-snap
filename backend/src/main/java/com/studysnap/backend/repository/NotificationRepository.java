@@ -96,6 +96,28 @@ public interface NotificationRepository extends JpaRepository<NotificationEntity
             @Param("now") OffsetDateTime now
     );
 
+    /**
+     * Episode suppression for genuinely different Review Set publication events. This is deliberately
+     * not an existence check for delivery identity: the permanent recipient/dedup unique index remains
+     * the sole identity mechanism, and each revision has a distinct key. This query only withholds a
+     * newer revision while the learner already holds an undismissed signal for the same source. A race
+     * can therefore produce one extra notification about a real newer revision; it can never duplicate
+     * awareness for one event or suppress that event through a pre-insert identity check.
+     */
+    @Query("""
+            select notification.recipientUserId
+            from NotificationEntity notification
+            where notification.type = :type
+              and notification.dismissedAt is null
+              and notification.recipientUserId in :recipientUserIds
+              and notification.dedupKey like :dedupKeyPrefix
+            """)
+    List<UUID> findRecipientsWithUndismissedEpisode(
+            @Param("type") NotificationType type,
+            @Param("recipientUserIds") Collection<UUID> recipientUserIds,
+            @Param("dedupKeyPrefix") String dedupKeyPrefix
+    );
+
     @Modifying
     @Query("""
             delete from NotificationEntity notification

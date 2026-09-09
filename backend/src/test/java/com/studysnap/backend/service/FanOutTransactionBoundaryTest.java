@@ -1,8 +1,11 @@
 package com.studysnap.backend.service;
 
 import com.studysnap.backend.entity.AnnouncementEntity;
+import com.studysnap.backend.service.event.ReviewSetUpdatePublishedEvent;
 import org.junit.jupiter.api.Test;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.event.TransactionPhase;
+import org.springframework.transaction.event.TransactionalEventListener;
 
 import java.lang.reflect.Method;
 import java.util.List;
@@ -66,5 +69,31 @@ class FanOutTransactionBoundaryTest {
         assertThat(NotificationService.class.isAnnotationPresent(Transactional.class))
                 .as("NotificationService annotates individual read/write methods, never the class")
                 .isFalse();
+    }
+
+    @Test
+    void reviewSetUpdateFanOutIsNotTransactional() throws NoSuchMethodException {
+        Method fanOut = ReviewSetUpdateNotificationService.class.getDeclaredMethod(
+                "fanOut", ReviewSetUpdatePublishedEvent.class
+        );
+
+        assertThat(fanOut.isAnnotationPresent(Transactional.class))
+                .as("Review Set fan-out must not let one dedup conflict poison every recipient")
+                .isFalse();
+        assertThat(ReviewSetUpdateNotificationService.class.isAnnotationPresent(Transactional.class))
+                .as("a class-level transaction would apply to Review Set fan-out")
+                .isFalse();
+    }
+
+    @Test
+    void reviewSetUpdateListenerRunsAfterCommitWithFallbackExecution() throws NoSuchMethodException {
+        Method listener = ReviewSetUpdateNotificationListener.class.getDeclaredMethod(
+                "onReviewSetUpdatePublished", ReviewSetUpdatePublishedEvent.class
+        );
+        TransactionalEventListener annotation = listener.getAnnotation(TransactionalEventListener.class);
+
+        assertThat(annotation).isNotNull();
+        assertThat(annotation.phase()).isEqualTo(TransactionPhase.AFTER_COMMIT);
+        assertThat(annotation.fallbackExecution()).isTrue();
     }
 }

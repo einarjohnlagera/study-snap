@@ -74,7 +74,7 @@ class NotificationServiceIntegrationTest {
     void duplicateDeliveryIsSwallowedByTheUniqueIndexAndLeavesOneDatabaseRow() {
         UUID recipientId = UUID.randomUUID();
         UUID entityId = UUID.randomUUID();
-        NotificationService.NotificationDelivery delivery = delivery(recipientId, entityId, NotificationType.ACTION_REQUIRED);
+        NotificationService.NotificationDelivery delivery = delivery(recipientId, entityId, NotificationType.REVIEW_SET_UPDATE);
 
         notificationService.deliver(delivery);
         notificationService.deliver(delivery);
@@ -83,7 +83,7 @@ class NotificationServiceIntegrationTest {
                 "select count(*) from notifications where recipient_user_id = ? and dedup_key = ?",
                 Integer.class,
                 recipientId,
-                "ACTION_REQUIRED:" + entityId
+                "REVIEW_SET_UPDATE:" + entityId
         );
         assertThat(rows).isEqualTo(1);
     }
@@ -95,13 +95,13 @@ class NotificationServiceIntegrationTest {
         UUID recipientId = UUID.randomUUID();
         UUID entityId = UUID.randomUUID();
         NotificationService.NotificationDelivery delivery =
-                delivery(recipientId, entityId, NotificationType.ACTION_REQUIRED);
+                delivery(recipientId, entityId, NotificationType.REVIEW_SET_UPDATE);
 
         meteredService.deliver(delivery);
         meteredService.deliver(delivery);
 
         assertThat(meterRegistry.counter(
-                "notification.delivered", "type", NotificationType.ACTION_REQUIRED.name()).count()).isEqualTo(1);
+                "notification.delivered", "type", NotificationType.REVIEW_SET_UPDATE.name()).count()).isEqualTo(1);
         assertThat(meterRegistry.counter("notification.dedup_conflict").count()).isEqualTo(1);
     }
 
@@ -109,7 +109,7 @@ class NotificationServiceIntegrationTest {
     void inboxUsesOnePagedRepositoryQueryForAnyNumberOfRows() {
         UUID recipientId = UUID.randomUUID();
         for (int index = 0; index < 4; index++) {
-            notificationService.deliver(delivery(recipientId, UUID.randomUUID(), NotificationType.ACTION_REQUIRED));
+            notificationService.deliver(delivery(recipientId, UUID.randomUUID(), NotificationType.REVIEW_SET_UPDATE));
         }
 
         assertThat(notificationService.listInbox(recipientId, 50)).hasSize(4);
@@ -121,7 +121,7 @@ class NotificationServiceIntegrationTest {
         UUID otherUserId = UUID.randomUUID();
         UUID entityId = UUID.randomUUID();
         UUID notificationId = UUID.fromString(notificationService.deliver(
-                delivery(ownerId, entityId, NotificationType.ACTION_REQUIRED)
+                delivery(ownerId, entityId, NotificationType.REVIEW_SET_UPDATE)
         ).id().toString());
 
         assertThatThrownBy(() -> notificationService.markRead(otherUserId, notificationId))
@@ -138,13 +138,13 @@ class NotificationServiceIntegrationTest {
     void retentionDeletesUnreadNonActionableAndReadRowsButKeepsUnreadActionableRowsPastTheWindow() {
         UUID recipientId = UUID.randomUUID();
         UUID unreadId = UUID.fromString(notificationService.deliver(
-                delivery(recipientId, UUID.randomUUID(), NotificationType.ACTION_REQUIRED)
+                delivery(recipientId, UUID.randomUUID(), NotificationType.REVIEW_SET_UPDATE)
         ).id().toString());
         UUID unreadAnnouncementId = UUID.fromString(notificationService.deliver(
                 delivery(recipientId, UUID.randomUUID(), NotificationType.ANNOUNCEMENT)
         ).id().toString());
         UUID readId = UUID.fromString(notificationService.deliver(
-                delivery(recipientId, UUID.randomUUID(), NotificationType.ACTION_REQUIRED)
+                delivery(recipientId, UUID.randomUUID(), NotificationType.REVIEW_SET_UPDATE)
         ).id().toString());
         notificationService.markRead(recipientId, readId);
         OffsetDateTime old = OffsetDateTime.now(ZoneOffset.UTC).minusDays(91);
@@ -160,7 +160,7 @@ class NotificationServiceIntegrationTest {
     void announcementsAreExcludedFromTheActionableUnreadCountByTheirType() {
         UUID recipientId = UUID.randomUUID();
         notificationService.deliver(delivery(recipientId, UUID.randomUUID(), NotificationType.ANNOUNCEMENT));
-        notificationService.deliver(delivery(recipientId, UUID.randomUUID(), NotificationType.ACTION_REQUIRED));
+        notificationService.deliver(delivery(recipientId, UUID.randomUUID(), NotificationType.REVIEW_SET_UPDATE));
 
         assertThat(notificationService.countActionableUnread(recipientId)).isEqualTo(1);
     }
@@ -173,7 +173,7 @@ class NotificationServiceIntegrationTest {
         // incrementing the bell — a number the learner could not open and could not clear.
         UUID recipientId = UUID.randomUUID();
         UUID entityId = UUID.randomUUID();
-        var delivered = notificationService.deliver(delivery(recipientId, entityId, NotificationType.ACTION_REQUIRED));
+        var delivered = notificationService.deliver(delivery(recipientId, entityId, NotificationType.REVIEW_SET_UPDATE));
         assertThat(notificationService.countActionableUnread(recipientId)).isEqualTo(1);
 
         notificationService.dismiss(recipientId, delivered.id());
@@ -190,7 +190,7 @@ class NotificationServiceIntegrationTest {
         UUID recipientId = UUID.randomUUID();
         var offSite = new NotificationService.NotificationDelivery(
                 recipientId,
-                NotificationType.ACTION_REQUIRED,
+                NotificationType.REVIEW_SET_UPDATE,
                 UUID.randomUUID().toString(),
                 "Action needed",
                 "Review this item.",

@@ -84,6 +84,15 @@ public interface NoteCollectionRepository extends JpaRepository<NoteCollectionEn
 
     Optional<NoteCollectionEntity> findByOwnerUserIdAndSourcePlanId(UUID ownerUserId, UUID sourcePlanId);
 
+    @Query("""
+            select adoption.ownerUserId as recipientUserId, adoption.id as adoptedCollectionId
+            from NoteCollectionEntity adoption
+            where adoption.sourcePlanId = :sourceCollectionId
+            """)
+    List<ReviewSetUpdateRecipientProjection> findReviewSetUpdateRecipients(
+            @Param("sourceCollectionId") UUID sourceCollectionId
+    );
+
     long countByParentCollectionId(UUID parentCollectionId);
 
     long countByOwnerUserIdAndParentCollectionIdIsNull(UUID ownerUserId);
@@ -176,4 +185,11 @@ public interface NoteCollectionRepository extends JpaRepository<NoteCollectionEn
             """, nativeQuery = true)
     @org.springframework.data.jpa.repository.Modifying
     int markReviewSetUpdatePublished(@Param("collectionId") UUID collectionId, @Param("publishedAt") Instant publishedAt);
+
+    @Query("""
+            select collection.lastUpdatePublishedAt
+            from NoteCollectionEntity collection
+            where collection.id = :collectionId
+            """)
+    Instant findLastUpdatePublishedAt(@Param("collectionId") UUID collectionId);
 }
