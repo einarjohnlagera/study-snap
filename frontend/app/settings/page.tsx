@@ -23,7 +23,7 @@ import {
   downloadMyData,
   getBillingPricing,
   getBillingHistory,
-  getCreatorImpact,
+  getCreatorImpactSummary,
   getMyPlan,
   getMe,
   isEmailNotVerifiedError,
@@ -278,7 +278,7 @@ export default function SettingsPage() {
         getMyPlan(),
         getBillingHistory(),
         getBillingPricing().catch(() => null),
-        getCreatorImpact()
+        getCreatorImpactSummary()
           .then((value) => ({ ok: true as const, value }))
           .catch(() => ({ ok: false as const, value: null })),
       ]);
@@ -293,7 +293,7 @@ export default function SettingsPage() {
       setDueConceptsDigestRemindersEnabled(me.dueConceptsDigestRemindersEnabled);
       setReviewDays(me.reviewDays ?? []);
       setKnowledgeImpactDigestRemindersEnabled(me.knowledgeImpactDigestRemindersEnabled);
-      setHasPublicNotes(Boolean(impact.value?.notes.length));
+      setHasPublicNotes((impact.value?.publicNoteCount ?? 0) > 0);
       setImpactCheckFailed(!impact.ok);
       setMarketingEmailsEnabled(me.marketingEmailsEnabled);
       setMobileTabBarEnabled(me.mobileTabBarEnabled !== false);

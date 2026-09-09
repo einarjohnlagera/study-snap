@@ -868,8 +868,11 @@ class RetentionServiceTest {
 
         assertThat(candidates).hasSize(1);
         assertThat(candidates.getFirst().newLearnersCount()).isEqualTo(2);
+        // v0.136.0: the digest button must land on the private /impact page. It previously pointed at
+        // /public/creator/{username}#your-impact-heading, which now resolves to a card holding only a
+        // "View impact →" link — the anchor still exists, so this would degrade silently, not loudly.
         assertThat(candidates.getFirst().impactUrl())
-                .isEqualTo("https://www.notelib.app/public/creator/note-creator#your-impact-heading");
+                .isEqualTo("https://www.notelib.app/impact");
     }
 
     @Test

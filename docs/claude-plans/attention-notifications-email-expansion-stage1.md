@@ -484,7 +484,7 @@ that starts from the product action, not from `deliver()`.**
 | A note shared with me | `/shared/notes/{id}` | ✅ |
 | Learning Connections | `/linked-learners` | ✅ (no per-request anchor) |
 | Supporter progress view | `/linked-learners/{relationshipId}/progress` | ✅ |
-| Knowledge Impact | `/progress` | ✅ |
+| Knowledge Impact | `/impact` | ✅ (added v0.136.0; was `/progress`) |
 | Program-filtered discovery | `/public/library?courseProgram=<encoded>&sort=recent` | ✅ |
 | Exam-goal hub | `/exam/{slug}` | ✅ |
 
@@ -783,7 +783,7 @@ ordering — global budget first, then email producers — is Stage E's precondi
 | Review Set update | **"ALE Comprehensive Review was updated"** / "24 new topics are available." / *Review update →* | `/collections/{adoptedCollectionId}` | ✅ | snapshot title in body; if the adopted collection is gone the page 404s → **resolve on click**, land on `/collections` with a notice |
 | Note shared | **"Maria shared a note with you"** / note title / *View note →* | `/shared/notes/{noteId}` | ✅ | share revocable → **resolve on click**; snapshot title so the row still reads sensibly |
 | Connection request | **"Someone asked to connect"** / *Review request →* | `/linked-learners` | ✅ (no per-request anchor) | request may be accepted/expired → surface resolves current state itself |
-| Impact milestone | **"Your note helped 50 learners"** / note title / *View impact →* | `/progress` | ✅ | snapshot only; never re-resolved |
+| Impact milestone | **"Your note helped 50 learners"** / note title / *View impact →* | `/impact` | ✅ | snapshot only; never re-resolved |
 | Discovery digest | **"12 new Civil Engineering notes this week"** / *Explore →* | `/public/library?courseProgram=Civil%20Engineering&sort=recent` | ✅ | none needed — a filter always resolves |
 | Announcement | admin-authored | admin-authored `cta_path` | validated ×3 | none — self-contained copy |
 
@@ -1192,8 +1192,8 @@ vocabulary: `ship` / `blocked` / `future` / `not recommended`.
 | **Official Review Set update** | `publishReviewSetUpdate` → `last_update_published_at` | ✅ yes — root adopters | **Low–Medium** (max **30**; 54 total across 4 sets) | ✅ yes | ✅ yes | ❌ not in first slice | ❌ no — one per adopter | `/collections/{adoptedCollectionId}` | `REVIEW_SET_UPDATE:<adoptedCollectionId>` | **background executor** (1/2) | **ship** — Stage D, the recommended first producer |
 | **Admin Announcement** | `announcements` (PUBLISHED) | ✅ yes — resolved audience | **Medium** (≤**396**) | ✅ yes | ❌ **no** | ❌ never | ❌ no | admin-authored `cta_path` | `ANNOUNCEMENT:<announcementId>` | ⚠️ **synchronous today** → move to background (Stage B) | **ship (hardening only)** — already live, R3 |
 | **Note like** | `public_note_likes` | ✅ yes — note owner | **High** per-event (**3 likes lifetime**) | ❌ no | ❌ no | ❌ never | ✅ milestone only | — | — | — | **not recommended** — §16/§42 anti-pattern, and no product signal |
-| **Note copy** | analytics / `notes.source_note_id` | ✅ yes — note owner | **High** per-event | ❌ no (per event) | ❌ no | ❌ never | ✅ milestone only | `/progress` | *(rolls into impact milestone)* | scheduled | **not recommended** as a per-event notification |
-| **Note impact milestone** | `CreatorImpactService` (computed, **no stored state**) | ✅ yes — creator | **Low** if thresholds are sparse | ✅ yes | ❌ **no** | ❌ never | ✅ yes — sparse deterministic thresholds | `/progress` | `IMPACT_MILESTONE:<noteId>:<threshold>` ⚠️ needs §17.1 composite key | scheduled job | **future** — Stage F; `knowledge_impact_digest` opt-in = **0 users** |
+| **Note copy** | analytics / `notes.source_note_id` | ✅ yes — note owner | **High** per-event | ❌ no (per event) | ❌ no | ❌ never | ✅ milestone only | `/impact` | *(rolls into impact milestone)* | scheduled | **not recommended** as a per-event notification |
+| **Note impact milestone** | `CreatorImpactService` (computed, **no stored state**) | ✅ yes — creator | **Low** if thresholds are sparse | ✅ yes | ❌ **no** | ❌ never | ✅ yes — sparse deterministic thresholds | `/impact` | `IMPACT_MILESTONE:<noteId>:<threshold>` ⚠️ needs §17.1 composite key | scheduled job | **future** — Stage F; `knowledge_impact_digest` opt-in = **0 users** |
 | **New public Note in program** | `notes.visibility=PUBLIC` + `note_course_program` | ❌ **no** — program ≠ subscription | **High** (**1,591** public notes) | ❌ not per note | ❌ no | ❌ never by default | ✅ **digest only** | `/public/library?courseProgram=…&sort=recent` | `DISCOVERY_DIGEST:<userId>:<isoWeek>` | scheduled digest | **future**, gated on **D5** — needs an explicit follow relationship (§36) |
 | **New Official Review Set content** (curator editing, pre-publish) | unpublished source rows | ✅ yes | — | ❌ **never** | ❌ no | ❌ no | — | — | — | — | **not recommended** — publication boundary forbids it (v0.132.0, brief §20) |
 | **Immediate next-step guidance** | Dashboard / `guidance-engine.ts` | ✅ yes — self | High | ❌ **no** | ❌ no | ❌ no | — | Dashboard | — | — | **not recommended** — Dashboard owns this (§10) |

@@ -59,9 +59,7 @@ public class RetentionService {
     private static final String QUICK_REVIEW_PATH_SUFFIX = "/quick-review?source=due-concepts-digest";
     private static final String DEFAULT_STUDY_PACK_TITLE = "your study pack";
     private static final String KNOWLEDGE_IMPACT_DIGEST_TEMPLATE = "knowledge-impact-digest";
-    private static final String PUBLIC_CREATOR_PATH_PREFIX = "/public/creator/";
-    private static final String PUBLIC_PROFILE_PATH_PREFIX = "/public/profile/";
-    private static final String IMPACT_SECTION_FRAGMENT = "#your-impact-heading";
+    private static final String IMPACT_PATH = "/impact";
     private static final ZoneId EMAIL_BUDGET_ZONE = ZoneId.of("Asia/Manila");
     private static final List<QuickReviewSessionMode> WEEKLY_SUMMARY_QUIZ_MODES = List.of(
             QuickReviewSessionMode.QUICK_REVIEW,
@@ -426,7 +424,7 @@ public class RetentionService {
                 user.getEmail(),
                 resolveFirstName(user),
                 newLearnersCount,
-                buildPublicProfileImpactUrl(user)
+                buildImpactUrl()
         ));
     }
 
@@ -749,11 +747,15 @@ public class RetentionService {
         return normalizedBase + path;
     }
 
-    private String buildPublicProfileImpactUrl(UserEntity user) {
-        String path = user.getUsername() == null || user.getUsername().isBlank()
-                ? PUBLIC_PROFILE_PATH_PREFIX + user.getId()
-                : PUBLIC_CREATOR_PATH_PREFIX + user.getUsername();
-        return buildAbsoluteUrl(path + IMPACT_SECTION_FRAGMENT);
+    /**
+     * The digest's "View Your Impact" button lands on the private {@code /impact} page, not on the
+     * public profile. Before v0.136.0 it pointed at {@code /public/creator/{username}#your-impact-heading},
+     * which as of this release resolves to a card holding only a "View impact →" link — so the button
+     * promised the dashboard and delivered another link. The route needs no username: identity comes
+     * from the authenticated session, exactly as the impact endpoints do.
+     */
+    private String buildImpactUrl() {
+        return buildAbsoluteUrl(IMPACT_PATH);
     }
 
     public record InactiveUserReminder(

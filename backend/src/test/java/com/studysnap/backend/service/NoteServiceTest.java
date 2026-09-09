@@ -1404,11 +1404,16 @@ class NoteServiceTest {
         assertThat(legacyNote.getTargetProfileType()).isEqualTo(NoteTargetProfileType.STUDENT);
     }
 
+    /**
+     * Structural impact guard: production currently has zero owner self-copy attribution rows, so
+     * no live data would reveal a regression. Keeping copiedFromNoteId null is what prevents a
+     * completed session on this draft from counting its owner as a learner helped.
+     */
     @Test
-    void copyOwnNote_createsDraftWithoutAttribution() {
+    void copyOwnPublicNote_createsIndependentDraftWithoutImpactAttribution() {
         UUID ownerUserId = UUID.randomUUID();
         UUID sourceNoteId = UUID.randomUUID();
-        NoteEntity source = buildNote(sourceNoteId, ownerUserId, NoteStatus.GENERATED, NoteVisibility.PRIVATE, "source content");
+        NoteEntity source = buildNote(sourceNoteId, ownerUserId, NoteStatus.GENERATED, NoteVisibility.PUBLIC, "source content");
         source.setTitle("Source title");
         source.setSubject("Math");
         source.setCourseProgram("Engineering");
@@ -1429,6 +1434,7 @@ class NoteServiceTest {
         assertThat(saved.getDomainContext()).isEqualTo(DomainContext.ENGINEERING_MATHEMATICS);
         assertThat(saved.getLearnerLevel()).isEqualTo(LearnerLevel.COLLEGE);
         assertThat(saved.getTargetProfileType()).isEqualTo(NoteTargetProfileType.STUDENT);
+        assertThat(saved.getCopiedFromNoteId()).isNull();
         assertThat(saved.getCopiedFromUserId()).isNull();
         assertThat(saved.getCopiedFromPublic()).isFalse();
         assertThat(copied.copiedFromUserId()).isNull();

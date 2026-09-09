@@ -86,6 +86,7 @@ public interface NoteRepository extends JpaRepository<NoteEntity, UUID>, NoteLib
 
     List<NoteEntity> findByOwnerUserIdAndIdIn(UUID ownerUserId, List<UUID> ids);
     List<NoteEntity> findByOwnerUserIdAndVisibilityOrderByUpdatedAtDesc(UUID ownerUserId, NoteVisibility visibility);
+    long countByOwnerUserIdAndVisibility(UUID ownerUserId, NoteVisibility visibility);
     Optional<NoteEntity> findByIdAndVisibility(UUID id, NoteVisibility visibility);
     List<NoteEntity> findByVisibilityAndSubjectIsNullOrderByUpdatedAtDesc(NoteVisibility visibility);
     long countByVisibility(NoteVisibility visibility);
@@ -256,20 +257,60 @@ public interface NoteRepository extends JpaRepository<NoteEntity, UUID>, NoteLib
     List<NoteCopyCountProjection> countCopiedPublicNotesBySourceNoteIds(@Param("noteIds") List<UUID> noteIds);
 
     @Query("""
-            select source.id as noteId, count(distinct copy.ownerUserId) as learnerCount
+            select source.id as noteId,
+                   source.title as title,
+                   count(distinct copy.ownerUserId) as learnerCount
             from NoteEntity source
             join NoteEntity copy on copy.copiedFromNoteId = source.id
             join QuickReviewSessionEntity session on session.noteId = copy.id
-            where source.id in :noteIds
+            where source.ownerUserId = :creatorUserId
               and source.visibility = com.studysnap.backend.entity.NoteVisibility.PUBLIC
               and copy.copiedFromPublic = true
               and session.status = com.studysnap.backend.entity.QuickReviewSessionStatus.COMPLETED
               and session.completedAt is not null
-            group by source.id
+            group by source.id, source.title
+            order by count(distinct copy.ownerUserId) desc, source.id asc
             """)
-    List<NoteLearnersHelpedProjection> countDistinctLearnersHelpedBySourceNoteIds(
-            @Param("noteIds") List<UUID> noteIds
+    List<CreatorImpactNoteProjection> findImpactedCreatorNotes(
+            @Param("creatorUserId") UUID creatorUserId,
+            Pageable pageable
     );
+
+    @Query("""
+            select source.id as noteId,
+                   source.title as title,
+                   0L as learnerCount
+            from NoteEntity source
+            where source.ownerUserId = :creatorUserId
+              and source.visibility = com.studysnap.backend.entity.NoteVisibility.PUBLIC
+              and not exists (
+                  select 1
+                  from NoteEntity copy
+                  join QuickReviewSessionEntity session on session.noteId = copy.id
+                  where copy.copiedFromNoteId = source.id
+                    and copy.copiedFromPublic = true
+                    and session.status = com.studysnap.backend.entity.QuickReviewSessionStatus.COMPLETED
+                    and session.completedAt is not null
+              )
+            order by source.id asc
+            """)
+    List<CreatorImpactNoteProjection> findZeroImpactCreatorNotes(
+            @Param("creatorUserId") UUID creatorUserId,
+            Pageable pageable
+    );
+
+    @Query("""
+            select count(distinct source.id)
+            from NoteEntity source
+            join NoteEntity copy on copy.copiedFromNoteId = source.id
+            join QuickReviewSessionEntity session on session.noteId = copy.id
+            where source.ownerUserId = :creatorUserId
+              and source.visibility = com.studysnap.backend.entity.NoteVisibility.PUBLIC
+              and copy.copiedFromPublic = true
+              and session.status = com.studysnap.backend.entity.QuickReviewSessionStatus.COMPLETED
+              and session.completedAt is not null
+            """)
+    long countImpactedNotesByCreatorUserId(@Param("creatorUserId") UUID creatorUserId);
 
     @Query("""
             select count(distinct copy.ownerUserId)

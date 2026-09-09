@@ -14,6 +14,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
@@ -155,12 +156,13 @@ class NoteRepositoryCreatorImpactIntegrationTest {
         entityManager.flush();
         entityManager.clear();
 
-        List<NoteLearnersHelpedProjection> perNote = noteRepository.countDistinctLearnersHelpedBySourceNoteIds(
-                List.of(firstSource.getId(), secondSource.getId())
+        List<CreatorImpactNoteProjection> perNote = noteRepository.findImpactedCreatorNotes(
+                firstCreatorId,
+                PageRequest.of(0, 20)
         );
         Map<UUID, Long> countsByNoteId = perNote.stream().collect(Collectors.toMap(
-                NoteLearnersHelpedProjection::getNoteId,
-                NoteLearnersHelpedProjection::getLearnerCount
+                CreatorImpactNoteProjection::getNoteId,
+                CreatorImpactNoteProjection::getLearnerCount
         ));
 
         assertThat(countsByNoteId).containsExactlyInAnyOrderEntriesOf(Map.of(
@@ -183,12 +185,116 @@ class NoteRepositoryCreatorImpactIntegrationTest {
         entityManager.flush();
         entityManager.clear();
 
-        List<NoteLearnersHelpedProjection> perNote = noteRepository.countDistinctLearnersHelpedBySourceNoteIds(
-                List.of(source.getId())
+        List<CreatorImpactNoteProjection> perNote = noteRepository.findImpactedCreatorNotes(
+                creatorId,
+                PageRequest.of(0, 20)
         );
 
         assertThat(perNote).isEmpty();
         assertThat(noteRepository.countDistinctLearnersHelpedByCreatorUserId(creatorId)).isZero();
+    }
+
+    @Test
+    void impactedPagingRanksByLearnersThenStablyBreaksTiesByNoteIdAlone() {
+        UUID creatorId = UUID.randomUUID();
+        UUID learnerId = UUID.randomUUID();
+        UUID secondLearnerId = UUID.randomUUID();
+        UUID lowerId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID higherId = UUID.fromString("00000000-0000-0000-0000-000000000002");
+        UUID mostLearnersId = UUID.fromString("00000000-0000-0000-0000-000000000003");
+        NoteEntity higherSource = saveNote(higherId, creatorId, "More copies", NoteVisibility.PUBLIC, null, false);
+        NoteEntity lowerSource = saveNote(lowerId, creatorId, "Fewer copies", NoteVisibility.PUBLIC, null, false);
+        NoteEntity mostLearnersSource = saveNote(
+                mostLearnersId,
+                creatorId,
+                "More learners",
+                NoteVisibility.PUBLIC,
+                null,
+                false
+        );
+        NoteEntity higherCopyOne = saveNote(learnerId, "Copy one", NoteVisibility.PRIVATE, higherSource, true);
+        saveNote(UUID.randomUUID(), "Copy without a session", NoteVisibility.PRIVATE, higherSource, true);
+        NoteEntity lowerCopy = saveNote(learnerId, "Only copy", NoteVisibility.PRIVATE, lowerSource, true);
+        NoteEntity mostLearnersCopyOne = saveNote(
+                learnerId,
+                "First learner copy",
+                NoteVisibility.PRIVATE,
+                mostLearnersSource,
+                true
+        );
+        NoteEntity mostLearnersCopyTwo = saveNote(
+                secondLearnerId,
+                "Second learner copy",
+                NoteVisibility.PRIVATE,
+                mostLearnersSource,
+                true
+        );
+        saveSession(learnerId, higherCopyOne.getId(), true);
+        saveSession(learnerId, lowerCopy.getId(), true);
+        saveSession(learnerId, mostLearnersCopyOne.getId(), true);
+        saveSession(secondLearnerId, mostLearnersCopyTwo.getId(), true);
+        entityManager.flush();
+        entityManager.clear();
+
+        List<UUID> firstRun = List.of(
+                noteRepository.findImpactedCreatorNotes(creatorId, PageRequest.of(0, 1)).getFirst().getNoteId(),
+                noteRepository.findImpactedCreatorNotes(creatorId, PageRequest.of(1, 1)).getFirst().getNoteId(),
+                noteRepository.findImpactedCreatorNotes(creatorId, PageRequest.of(2, 1)).getFirst().getNoteId()
+        );
+        List<UUID> secondRun = List.of(
+                noteRepository.findImpactedCreatorNotes(creatorId, PageRequest.of(0, 1)).getFirst().getNoteId(),
+                noteRepository.findImpactedCreatorNotes(creatorId, PageRequest.of(1, 1)).getFirst().getNoteId(),
+                noteRepository.findImpactedCreatorNotes(creatorId, PageRequest.of(2, 1)).getFirst().getNoteId()
+        );
+
+        assertThat(firstRun).containsExactly(mostLearnersId, lowerId, higherId);
+        assertThat(secondRun).containsExactlyElementsOf(firstRun);
+    }
+
+    @Test
+    void zeroImpactPagingExcludesImpactedNotesAndIsStableByNoteId() {
+        UUID creatorId = UUID.randomUUID();
+        UUID learnerId = UUID.randomUUID();
+        UUID lowerZeroId = UUID.fromString("00000000-0000-0000-0000-000000000011");
+        UUID impactedId = UUID.fromString("00000000-0000-0000-0000-000000000012");
+        UUID higherZeroId = UUID.fromString("00000000-0000-0000-0000-000000000013");
+        NoteEntity higherZero = saveNote(higherZeroId, creatorId, "Higher zero", NoteVisibility.PUBLIC, null, false);
+        NoteEntity impacted = saveNote(impactedId, creatorId, "Impacted", NoteVisibility.PUBLIC, null, false);
+        NoteEntity lowerZero = saveNote(lowerZeroId, creatorId, "Lower zero", NoteVisibility.PUBLIC, null, false);
+        NoteEntity impactedCopy = saveNote(learnerId, "Studied copy", NoteVisibility.PRIVATE, impacted, true);
+        saveSession(learnerId, impactedCopy.getId(), true);
+        entityManager.flush();
+        entityManager.clear();
+
+        List<UUID> firstRun = List.of(
+                noteRepository.findZeroImpactCreatorNotes(creatorId, PageRequest.of(0, 1)).getFirst().getNoteId(),
+                noteRepository.findZeroImpactCreatorNotes(creatorId, PageRequest.of(1, 1)).getFirst().getNoteId()
+        );
+        List<UUID> secondRun = List.of(
+                noteRepository.findZeroImpactCreatorNotes(creatorId, PageRequest.of(0, 1)).getFirst().getNoteId(),
+                noteRepository.findZeroImpactCreatorNotes(creatorId, PageRequest.of(1, 1)).getFirst().getNoteId()
+        );
+
+        assertThat(firstRun).containsExactly(lowerZero.getId(), higherZero.getId());
+        assertThat(secondRun).containsExactlyElementsOf(firstRun);
+        assertThat(firstRun).doesNotContain(impacted.getId());
+    }
+
+    /**
+     * Structural guard: production currently has no owner self-copy rows to reveal a regression.
+     * NoteService therefore must keep representing an owner's copy with no copied-from attribution.
+     */
+    @Test
+    void ownerCopyWithoutCopiedFromAttributionDoesNotCountAsALearnerHelped() {
+        UUID creatorId = UUID.randomUUID();
+        saveNote(creatorId, "Public source", NoteVisibility.PUBLIC, null, false);
+        NoteEntity ownerCopy = saveNote(creatorId, "Owner copy", NoteVisibility.PRIVATE, null, false);
+        saveSession(creatorId, ownerCopy.getId(), true);
+        entityManager.flush();
+        entityManager.clear();
+
+        assertThat(noteRepository.countDistinctLearnersHelpedByCreatorUserId(creatorId)).isZero();
+        assertThat(noteRepository.findImpactedCreatorNotes(creatorId, PageRequest.of(0, 20))).isEmpty();
     }
 
     @Test
@@ -252,8 +358,19 @@ class NoteRepositoryCreatorImpactIntegrationTest {
             NoteEntity source,
             boolean copiedFromPublic
     ) {
+        return saveNote(UUID.randomUUID(), ownerUserId, title, visibility, source, copiedFromPublic);
+    }
+
+    private NoteEntity saveNote(
+            UUID noteId,
+            UUID ownerUserId,
+            String title,
+            NoteVisibility visibility,
+            NoteEntity source,
+            boolean copiedFromPublic
+    ) {
         NoteEntity note = new NoteEntity();
-        note.setId(UUID.randomUUID());
+        note.setId(noteId);
         note.setOwnerUserId(ownerUserId);
         note.setTitle(title);
         note.setTags(new String[0]);
