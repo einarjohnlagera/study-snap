@@ -34,8 +34,13 @@ Current reminders include:
 ## Review Commitment Prompt
 
 The post-session review commitment prompt is the initial collection surface for `users.review_days`.
-It may appear after any completed review session when the learner has no chosen days, has not answered
-the prompt, has seen it fewer than three times, and was not prompted in the previous 14 days. The
+It may appear after any completed review session when the learner **has the due-concepts digest
+preference ON**, has no chosen days, has not answered the prompt, has seen it fewer than three times,
+and was not prompted in the previous 14 days. **⚠️ The digest-preference clause is not decoration:
+a learner with reminders off receives no digest at all, so choosing days could not change anything
+for them — the ask would be inert and the prompt's own copy false. 252 of 396 accounts had the
+preference off when this shipped.** Do not drop that clause to "restore reach", and do not make
+committing switch the preference on — that is an email-consent change. The
 server records impressions separately from answers: an impression increments
 `review_commitment_prompt_count` and updates `review_commitment_last_prompted_at`, while
 `review_commitment_prompted_at` continues to mean that the learner answered. The learner can save one

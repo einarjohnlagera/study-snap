@@ -2,7 +2,7 @@
 
 ## v0.139.0 - Reopened
 
-**Status: In Progress** (kicked off 2026-09-10, base branch `releases/v0.139.0`, cut from `main` after `v0.138.0` merged as #1363 and tagged)
+**Status: Released** (kicked off 2026-09-10, signed off 2026-09-10, base branch `releases/v0.139.0`, cut from `main` after `v0.138.0` merged as #1363 and tagged)
 
 Source: `docs/claude-findings/2026-09-10-september-checkpoint-reads.md` — the reads that came due, run at this kickoff **before** scope was proposed. **Read it first: item 1 is not a metrics chore, it is a pre-committed rule firing.**
 
@@ -60,6 +60,16 @@ Theme: a checkpoint fired, so the thing it was watching gets reopened — and th
 ### Routing
 
 **CODEX for items 1 and 2** — frontend across five call sites plus a backend analytics change; more than five files. **CLAUDE CODE inline for item 3** — one shell script, one exit path.
+
+### Scope completeness — each planned item against the code that implements it
+
+| # | Planned | Verdict | Evidence |
+|---|---|---|---|
+| 1 | Instrumentation first — a dismiss/abandon event, and a `user_id` on `DUE_CONCEPTS_DIGEST_LANDED` | **SHIPPED** | `REVIEW_COMMITMENT_DISMISSED` at `AnalyticsEventType:48` with **one real fire site** (`review-commitment-prompt.tsx:97`); the 401 at `AnalyticsController:28` |
+| 2 | Redesign the ask — re-showable trigger, committing becomes an upgrade | **SHIPPED, and CHANGED mid-release** | `V144`; `AuthService#isReviewCommitmentPromptEligible`; `MeController:39`; `RetentionService:51`. **⚠️ Changed twice against evidence — see below** |
+| 3 | `scripts/check-deploys.sh` reports a confirmed drift AS drift | **SHIPPED** | `scripts/check-deploys.sh` precedence block; `scripts/check-deploys.test.sh` (9 cases) |
+
+**⚠️ ITEM 2 CHANGED TWICE AFTER IT WAS SCOPED, AND BOTH REVERSALS ARE RECORDED RATHER THAN SMOOTHED INTO THE ORIGINAL PLAN.** (1) The first design re-triggered on *return after a gap*; its own query refuted it — only **7 of 136** stranded learners had returned in 14 days, so any in-app trigger tops out at 7–13/month. (2) `advisor()` then found, **before the Codex prompt was written**, that the ask had **no benefit to offer at all** — `isEligibleReviewDay` returns `true` for empty `review_days`, so choosing days *restricted* eligibility rather than granting reminders. A one-tap *"remind me"* button would have shipped as a no-op. The owner then chose to make committing genuinely mean something, and later to stop asking learners whose digest is off. **The release describes what was built, not what was first proposed.**
 
 ### Shipped
 
