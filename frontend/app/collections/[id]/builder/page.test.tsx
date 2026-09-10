@@ -29,6 +29,15 @@ jest.mock("next/navigation", () => ({
   useRouter: () => routerMock,
 }));
 
+const useBottomViewportClaimMock = jest.fn();
+// ⚠️ requireActual is not optional here. A jest.mock factory is an ALLOW-LIST, and this module also
+// exports useExamFocusContext / useExamFocusMode, which components in this tree import. Listing only the
+// hook under test would silently blank the others — the exact failure the quick-review suite records.
+jest.mock("@/components/exam-mode/exam-focus-context", () => ({
+  ...jest.requireActual("@/components/exam-mode/exam-focus-context"),
+  useBottomViewportClaim: (active: boolean) => useBottomViewportClaimMock(active),
+}));
+
 jest.mock("@/lib/route-guards", () => ({
   requireAuthenticatedOnboardedUser: () => true,
 }));
@@ -686,15 +695,45 @@ describe("StudyPlanBuilderPageClient", () => {
     const bar = screen.getByTestId("leaf-order-sticky-bar");
     expect(bar).toBeInTheDocument();
     expect(within(bar).getByText("Drag changes not saved")).toBeInTheDocument();
-    // Exactly one Save and one Discard in the whole document, and both inside the bar.
-    expect(screen.getAllByRole("button", { name: "Save changes" })).toHaveLength(1);
-    expect(screen.getAllByRole("button", { name: "Discard" })).toHaveLength(1);
-    expect(within(bar).getByRole("button", { name: "Save changes" })).toBeInTheDocument();
-    expect(within(bar).getByRole("button", { name: "Discard" })).toBeInTheDocument();
+    // ⚠️ MATCH ON /save/i, NOT ON THE EXACT LABEL. A cold pressure test showed the exact-label form was
+    // bypassable: the header control this release removed was called "Save order", so restoring it under
+    // its OWN name passed an assertion pinned to "Save changes" — the commit claimed CI would catch that
+    // and it would not have. The invariant is "one commit control on the page, and it lives in the bar",
+    // which no relabelling can satisfy twice.
+    const saveControls = screen.getAllByRole("button", { name: /save/i });
+    expect(saveControls).toHaveLength(1);
+    expect(within(bar).getByRole("button", { name: /save/i })).toBe(saveControls[0]);
+    const discardControls = screen.getAllByRole("button", { name: /discard/i });
+    expect(discardControls).toHaveLength(1);
+    expect(within(bar).getByRole("button", { name: /discard/i })).toBe(discardControls[0]);
 
     fireEvent.click(within(bar).getByRole("button", { name: "Save changes" }));
     await waitFor(() => expect(setCollectionItemOrder).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(screen.queryByTestId("leaf-order-sticky-bar")).not.toBeInTheDocument());
+  });
+
+  it("claims the bottom viewport while the bar is up, so it cannot cover the mobile tab bar", async () => {
+    // ⚠️ FOUND BY A COLD PRESSURE TEST, NOT BY THIS SUITE, AND IT IS DETERMINABLE FROM CLASS NAMES ALONE.
+    // The bar is `sticky bottom-4 z-30`; MobileBottomTabBar is `fixed inset-x-0 bottom-0 z-20 md:hidden`
+    // and 5.5rem tall. Higher stacking order plus a 1rem offset means that on a phone the bar pins
+    // directly OVER the navigation and wins. `mobile_tab_bar_enabled` defaults TRUE (V94), so that is the
+    // default experience. app-shell.tsx:584 gates the tab bar on `!isBottomViewportClaimed`, which is the
+    // mechanism Long Exam, Challenge Quiz and Quick Review already use.
+    // ⚠️ The claim must track the BAR, not the page: claiming it while merely browsing would delete the
+    // curator's navigation for no reason.
+    (getCollection as jest.Mock).mockResolvedValue(dirtyLeafPlan());
+    render(<StudyPlanBuilderPageClient collectionId="leaf-1" />);
+
+    await screen.findByLabelText("Move Skeletal System down");
+    expect(useBottomViewportClaimMock).toHaveBeenLastCalledWith(false);
+
+    fireEvent.click(screen.getByLabelText("Move Skeletal System down"));
+    expect(screen.getByTestId("leaf-order-sticky-bar")).toBeInTheDocument();
+    expect(useBottomViewportClaimMock).toHaveBeenLastCalledWith(true);
+
+    fireEvent.click(within(screen.getByTestId("leaf-order-sticky-bar")).getByRole("button", { name: /discard/i }));
+    expect(screen.queryByTestId("leaf-order-sticky-bar")).not.toBeInTheDocument();
+    expect(useBottomViewportClaimMock).toHaveBeenLastCalledWith(false);
   });
 
   it("does NOT navigate when Save and leave fails, and says so", async () => {

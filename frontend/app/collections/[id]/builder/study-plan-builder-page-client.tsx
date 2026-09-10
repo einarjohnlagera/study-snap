@@ -22,6 +22,7 @@ import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } 
 import { CSS } from "@dnd-kit/utilities";
 import { ArrowDown, ArrowUp, ChevronDown, ChevronRight, GripVertical, Plus, RefreshCw, Search, Trash2, X } from "lucide-react";
 import { AppModal } from "@/components/ui/app-modal";
+import { useBottomViewportClaim } from "@/components/exam-mode/exam-focus-context";
 import { BackLink } from "@/components/ui/back-link";
 import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
@@ -1651,6 +1652,17 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
     [lastSavedLeafItems, leafItems],
   );
   leafOrderDirtyRef.current = leafOrderDirty;
+  // ⚠️ THE STICKY BAR MUST CLAIM THE BOTTOM VIEWPORT, OR IT SITS ON TOP OF THE MOBILE TAB BAR.
+  // `MobileBottomTabBar` is `fixed inset-x-0 bottom-0 z-20 md:hidden` and 5.5rem tall, and the bar is
+  // `sticky bottom-4 z-30` — a HIGHER stacking order — so on a phone it would pin one rem above the
+  // viewport bottom, directly over the navigation, and win. `mobile_tab_bar_enabled` defaults TRUE
+  // (`V94`), so that is the default experience, not an edge case.
+  // This is the repo's existing mechanism for the same problem: `app-shell.tsx:584` computes
+  // `shouldShowMobileBottomTabs` from `!isBottomViewportClaimed`, which both hides the tab bar and drops
+  // the `pb-[5.5rem]` spacer. Long Exam, Challenge Quiz and Quick Review all already claim it.
+  // ⚠️ Claimed on `leafOrderDirty` specifically — exactly while the bar renders. Claiming it for the
+  // whole page would remove the learner's navigation while they are merely browsing the plan.
+  useBottomViewportClaim(leafOrderDirty);
   useEffect(() => {
     if (!leafOrderDirty) {
       return;
