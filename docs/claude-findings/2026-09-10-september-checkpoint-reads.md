@@ -87,7 +87,38 @@ stays authenticated-only."* `/actuator/health` is public (Render health-checks i
 ⚠️ **This is a fifth bad Backlog row, found the day after `v0.138.0`'s verification pass, by the rule
 that pass created.** It is not in the four that pass corrected.
 
-## 3. ⚠️ `v0.138.0` did NOT auto-deploy on Vercel — the second miss in three releases
+## 3. ⚠️ CORRECTED — `v0.138.0` DID auto-deploy on Vercel. I called a race an absence.
+
+**⚠️⚠️ THIS SECTION ORIGINALLY CLAIMED VERCEL MISSED `v0.138.0` AND THAT IT WAS THE SECOND MISS IN
+THREE RELEASES. BOTH CLAIMS ARE FALSE AND THE ORIGINAL TEXT IS KEPT BELOW SO THE ERROR IS LEGIBLE.**
+
+**VERIFIED:** the merge landed at `2026-09-10T01:16:42Z`; **Vercel's Production deployment for
+`05c367c4` was created at `01:21:06Z`, state `success` — 4 minutes 24 seconds later.** Render went
+live at `01:18:59Z`. **Both platforms auto-deployed normally.** I read the deployments API inside that
+window, saw no row, and reported an absence.
+
+**The true record is ONE confirmed miss — `v0.136.0` — not two of three.** `v0.137.0` and `v0.138.0`
+both fired on their own.
+
+⚠️ **This is `v0.137.0`'s own rule broken the day after it was written:** *a claim about production
+state is a snapshot, not a fact.* I took an instantaneous reading and asserted a standing property
+from it — and then scoped a release section around it.
+
+⚠️ **THE GENERAL LESSON IS FOR THE DETECTOR, NOT JUST FOR ME: a test for ABSENCE must wait past the
+thing's normal latency, or it manufactures its own false positive.** Observed auto-deploy latency is
+**~2–5 minutes** on both platforms (Render 2m17s, Vercel 4m24s for this release). A deploy check run
+immediately after a merge is not measuring absence; it is measuring the deploy window. `/signoff`
+should wait, or the script should say so.
+
+⚠️ **ITEM 3'S DEFECT IS UNAFFECTED AND STILL REAL.** It was never contingent on this drift: it was
+reproduced by mutation against the pre-fix script under stubbed conditions, and the pre-fix script
+fails the regression guard with `exit=2 want=1` while printing `VERCEL … BEHIND`. **A wrong motivating
+example does not make a verified defect go away — but it would have made the release describe a
+platform problem that does not exist.**
+
+### Original text, kept for the record — every claim below the first line is what I got wrong
+
+**~~`v0.138.0` did NOT auto-deploy on Vercel — the second miss in three releases~~**
 
 **VERIFIED.** Render auto-deployed `05c367c4` (`dep-dah09v15efls739b7t9g`, trigger `new_commit`,
 **status `live`** at 2026-09-10T01:18:59Z). **Vercel has no Production deployment for that commit at
