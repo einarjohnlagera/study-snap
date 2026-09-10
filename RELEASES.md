@@ -1,5 +1,52 @@
 # RELEASES.md - NoteLib
 
+## v0.141.0 - Formulas That Render
+
+**Status: In Progress** (kicked off 2026-09-10, base branch `releases/v0.141.0`, cut from `main` after `v0.140.0` merged as #1373 and tagged)
+
+Theme: a quiz question that mentions money and a formula in the same sentence prints the formula as raw LaTeX. Three surfaces render generated maths; each fails differently, and one does not render maths at all.
+
+Source: the `v0.140.0` cold pressure test (`RELEASES.md` v0.140.0, and the raw-LaTeX Backlog row). **⚠️ Read the row before scoping — this session proposed the WRONG fix first and the row records why.**
+
+### The defect, and why the obvious fix is a no-op
+
+`isInlineDollarOpen` (`frontend/components/study-pack/quiz-working-solution.tsx:62`) opens a math span on **any** `$` not followed by whitespace — so **`$50,000` opens one.** `findInlineDollarCloseIndex` (`:68`) then correctly skips intervening `$` preceded by a space, walks past `$5,000` and `$A = …`, and closes on the formula's **final** `$`, whose previous character is a digit. The span swallows the sentence; KaTeX fails on it; `renderMathSegment` falls back to re-emitting the source. **The reader sees the raw formula, backslashes and all.** A sibling case fails the other way, absorbing prose into run-together italics.
+
+**⚠️ `normalizeBareMath` IS NOT THE PROBLEM AND MUST NOT BE THE FIX.** `renderMathText` already calls it at every call site (`:206`), and it returns immediately on **any** delimiter (`math-normalization.ts:264-266`) — and **339 of 339** backslash-bearing questions plus **498 of 498** explanations already contain one. The repair is wired correctly and reaches nothing. **This release's predecessor proposed a fix aimed there and was wrong; a cold agent disproved it.** The bug is delimiter PAIRING, not missing delimiters.
+
+**⚠️ THE CURRENCY HANDLING IS NOT ABSENT — IT IS INCOMPLETE IN ONE DIRECTION.** `findInlineDollarCloseIndex` is currency-aware (it rejects a `$` preceded by whitespace or an operator) and four passing tests cover currency-only strings — *"two currency amounts"*, *"$10-$20"*, *"$5+$3"*, *"$12/$4"*. **The untested case is currency AND a real formula in the same string**, which is exactly what the model produces for finance questions.
+
+### Checkpoints landing during this release — recorded at kickoff, not discovered later
+
+Step 9 found **nothing past due**, but **four checkpoints land on 2026-09-11 and 2026-09-12** and none carries a closure marker: `v0.114.0`'s *"was the startup line ACTUALLY READ from the production log"*, `v0.101.0` Slice 1, Learning Connections, and `v0.74.0`'s *"does the perfect-score gate work as a progression, or as a wall?"*. **⚠️ `v0.114.0`'s needs a Render LOG read, not a database read** — it requires a workspace confirmation the owner must give, so it cannot be closed from inside a release. They are named here so that closing this release does not quietly carry four overdue gates into the next kickoff.
+
+### Planned Scope
+
+1. **Pair `$` delimiters correctly when currency and a formula share a string (frontend).** The opener needs the currency-awareness the closer already has. **⚠️ THIS HEURISTIC HAS BEEN WRONG TWICE AND THE COMMENT AT `:55-60` RECORDS THE LAST TIME:** a previous fix captured `"10-"` as LaTeX, which KaTeX renders **happily** because a trailing binary operator is legal — so the error fallback never fired and the reader silently saw a subtraction with the dollar signs eaten. **A test that only asserts "no crash" or "something rendered" passes under both the defect and the fix.** Assert what the reader sees.
+
+2. **`SummaryMarkdown` never repairs bare math (frontend).** `remark-math` tokenises **delimited** math only, and the component never calls `normalizeBareMath`, so an undelimited `\frac` in a summary renders literally on every surface that uses it. **36 production summaries carry a backslash and no delimiter at all.**
+
+3. **`app/shared/study-packs/[id]/page.tsx:69,75,81` render summary, keyConcepts and fullNotes as raw `{value}` — no math rendering of any kind.** **⚠️ SCOPED HONESTLY AND NOT TO BE OVERSOLD: that route has ONE linked-learner relationship and SIX share events in 90 days, and `share_token` is 0 across all 7,573 packs.** It is cheap (wire in the renderer the sibling surfaces already use) and its traffic today is ~1 person. It is in scope because it is the same defect class, not because it is urgent.
+
+### Verification tier, decided at kickoff
+
+**Three surfaces ⇒ signoff owes ONE SCOPED COLD AGENT, falsification-framed.** Recorded now so it is not re-litigated later. **⚠️ And the `v0.140.0` precedent is the reason: its cold agent found a blocking defect that 2,375 passing tests did not, and disproved a claim that had already been merged.** A green suite is evidence only about paths the suite executes.
+
+Anti-drift — locked:
+
+- **⚠️ Do NOT "fix" this in `normalizeBareMath`, and do NOT widen `ALLOWED_COMMANDS` as the remedy.** Both are the wrong layer. The allowlist gaps (`\to`, `\text{m/s}`, `90^\circ`) are a **separate** finding and are NOT in this release.
+- **⚠️ A DISPLAY PATH MUST NEVER REWRITE STORED CONTENT.** `v0.110.1` shipped a sanitizer that re-ran on every deserialization and progressively destroyed stored choice text. Every fix here returns nodes or a display string; nothing writes to the database.
+- **⚠️ Do NOT regress the four passing currency tests.** They encode real prior bugs, and the new behaviour must satisfy them **and** the mixed case.
+- **⚠️ No `rehype-katex`.** `summary-markdown.tsx` deliberately uses `remark-math` as a TOKENIZER and renders through the single existing KaTeX call; a second renderer is exactly what its comment forbids.
+- **No new maths or markdown dependency.** `katex`, `react-markdown`, `remark-gfm` and `remark-math` are already present.
+- **⚠️ NO hand regeneration of stored packs as part of this release.** The defect is in the display path; regenerating would spend curator time on the wrong layer and is the framing the raw-LaTeX row carried wrongly since `v0.78.0`.
+- **`globalThis`, never `window` / `self` / `global`.**
+- **New analytics events go in the `AnalyticsEventType` enum before being fired, with a real fire site.**
+
+### Shipped
+
+_(nothing yet)_
+
 ## v0.140.0 - Pending Work in Reach
 
 **Status: Released** (kicked off 2026-09-10, signed off 2026-09-10, base branch `releases/v0.140.0`, cut from `main` after `v0.139.0` merged and tagged)
@@ -461,138 +508,3 @@ setHasPublicNotes(Boolean(impact.value?.notes.length));
 - Restored `@Transactional(readOnly = true)` on `CreatorImpactService`, removed during delivery. Behaviourally near-neutral — OSIV plus `DELAYED_ACQUISITION_AND_HOLD` (pinned by `ConnectionHandlingModeContractTest`) holds one connection per request either way — but it is a defensive annotation on the release whose subject is pool pressure.
 - Stopped discarding the fresh section totals that every impact page response already carries. `totalImpacted` / `totalZeroImpact` were read once at initial load, so a note crossing from zero-impact to impacted while the page was open left `Load more` comparing against a stale total — the button kept requesting pages that came back empty and never resolved. Both loaders now refresh the pair from the response in hand, at no extra query cost. Found by the pre-signoff cold agent.
 - Finished the `IMPACT_MILESTONE` cross-reference in the notification audit. Delivery updated Appendix A's milestone row; §15's deep-link matrix, §7.1's verified-routes table, and Appendix A's note-copy row still pointed at `/progress`.
-
-## v0.135.0 - Update Signal
-
-**Status: Released** (kicked off 2026-09-09, signed off 2026-09-09, base branch `releases/v0.135.0`, cut from `main` after `v0.134.0` merged as #1353 and tagged `eac429a4`. Shipped as PRs #1354 and #1355.)
-
-Source: `docs/claude-plans/attention-notifications-email-expansion-stage1.md` (Stage D) **as corrected by `docs/claude-plans/attention-notifications-stage1-tightening-addendum.md` §2, which is the binding design.**
-
-Theme: give the notification substrate its first real producer — when a curator publishes an Official Review Set update, the learners who adopted it are told.
-
-### ⚠️⚠️ READ THE ADDENDUM'S §2, NOT THE AUDIT'S §17.2 — THE AUDIT'S DEDUP KEY IS A PERMANENT SUPPRESSION BUG
-
-The audit proposes `REVIEW_SET_UPDATE:<adoptedCollectionId>`. Under the permanent unique index on `(recipient_user_id, dedup_key)` **that key can deliver exactly ONE notification per learner per set, ever.** `NotificationService.deliver` catches the constraint violation and **returns the OLD row** — no exception, no log line, publish reports success. `dismissed_at` is not in the index, so dismissing never frees the key, and retention only frees it after 90 days *and* a read/dismiss — so **a learner who never opens the bell is suppressed forever.**
-
-**The corrected key is source-side:**
-
-```
-REVIEW_SET_UPDATE:<sourceCollectionId>:<lastUpdatePublishedAt as epochMilli>
-```
-
-`lastUpdatePublishedAt` already advances **only** when `unpublishedChanges` is true (`NoteCollectionService:754-760`), so **re-press idempotency is inherited for free** and no migration is needed.
-
-### Planned Scope
-
-1. **`NotificationType.REVIEW_SET_UPDATE` + `NotificationCategory.LEARNING_SYSTEM` (backend).** The first type with a real producer.
-2. **The producer (backend).** Fires from the `publishReviewSetUpdate` **call site**, delivering to adopters of that source root, deep-linked to `/collections/{adoptedCollectionId}`.
-3. **Episode suppression (backend).** A batch filter in the producer, between audience resolution and fan-out, dropping recipients who already hold an **undismissed** `REVIEW_SET_UPDATE` row for that source. **Settled by owner decision A2 — ships WITH the producer, not later.**
-4. **Retire the transitional `ACTION_REQUIRED`.** Delete both the type and its producerless category;
-   the settled taxonomy decision is recorded below.
-
-### ⚠️ Anti-drift
-
-- ❌ **NEVER fire on raw source drift.** Only `publishReviewSetUpdate`. The publication boundary exists to forbid exactly this.
-- ⚠️ **THE TRIGGER IS THE CALL SITE, NOT THE STAMP.** `markReviewSetUpdatePublished` has **two** call sites — `publishReviewSetUpdate:758` and `publishInitialCurriculum:1849`. Wiring the producer to "the stamp advanced" would also fire on a set's first-ever publication.
-- ❌ **NO COUNT IN THE COPY.** Under episode suppression the single open row is the learner's only signal across N publishes, so *"3 new notes"* is false by the second one. Generic copy only — this also preserves R10, the inbox's zero-N+1-by-construction property.
-- ❌ **Do NOT call `deliver()` inside a transaction (R9).** It is deliberately non-transactional so a dedup-index violation cannot mark a whole fan-out rollback-only. `FanOutTransactionBoundaryTest` guards this — **do not delete it, and do not delete the open-in-view runtime test either; they cover different angles.**
-- ❌ **Do NOT put suppression in `AnnouncementAudienceResolver`** — that class is editorial, never authorization, and a test guards it.
-- ❌ **NO email** (decision D3; R1 unresolved — the 100/day cap is breached at 156–159 observed).
-- ❌ No new endpoint unless the producer genuinely needs one; no admin surface; no preferences centre.
-- ❌ **NO Learning Connections work** — `[CHECKPOINT — due 2026-09-19]` is ten days out and its kill criterion keys on `ACCEPTED`, denominator ONE.
-- ✅ **Reuse `notificationFanOutExecutor`** (core 1 / max 2) — do not add a second executor or resize it (R5/R13).
-- ✅ Dismiss must change no curriculum truth; applying an update stays authoritative in Review Set state.
-
-### ⚠️ Corrections to carry — the audit's own numbers are stale
-
-- **The audit says "≤30 recipients". `LET Comprehensive Review` now has 42 adopters** (ALE 30, PNLE 15, CPALE 8, Civil Engineering 1). D2's justification cited the old figure.
-- **Exactly ONE update publish exists in the product's history** — 2026-09-09 at 01:50:47, on LET, forty seconds after the Education tagging run. Four of five public source roots have never published an update at all.
-- **⚠️ That read WEAKENED the case for shipping suppression now, and the owner took the recommendation anyway.** Record it as a judgement call made with the counter-evidence in view, **not** as "suppression was obviously necessary."
-
-### Settled owner decisions (do not re-litigate)
-
-- **A1 — dismiss without applying → the next publish DOES re-notify.** Suppress-until-applied would reintroduce permanent silence through a different trigger.
-- **A2 — episode suppression ships WITH the first producer.**
-
-### Settled taxonomy decision
-
-**This release deletes both transitional `ACTION_REQUIRED` values.** `REVIEW_SET_UPDATE` maps to
-`LEARNING_SYSTEM`, so every shipped type and category has a real producer. A later connection-request
-release can add its category together with its producer instead of preserving a producerless slot.
-
-### ⚠️ Inherited checkpoint — `v0.134.0` is DEPLOYED and its clock has started
-
-`V143` ran **2026-09-09 03:53:07**, so `[CHECKPOINT — due deploy + 1 day]` is **2026-09-10**. **Proximal (a) is already ANSWERED: `idx_notifications_inbox` is live in production with the exact expected definition.** Proximal (b) — `/actuator/metrics/announcement.fanout.duration` resolves — is still owed. **⚠️ Its distal tier is gated on a first announcement publish, and ZERO announcements have ever been published**, so a quiet read is *not yet measurable* → re-date, never a pass.
-
-### Verification tier
-
-**To be decided when the shape is known**, but the prior is **one scoped cold agent**: this adds a producer to a fan-out path that has never run in production, and the last two releases each shipped a delivered test that passed for a reason unrelated to its change. **Routing: CODEX** — new enum values, a producer, a batch suppression query and its tests span backend service, repository and entity layers.
-
-### ⚠️ Audit note — Codex hit its session limit mid-delivery, and the completion gap was ONE test
-
-**The delivery was further along than the interruption implied: it compiled, the full backend suite passed, and 7 of the prompt's 12 required tests were present — including the discriminating one.** Auditing against the prompt's list rather than against the delivery's own shape found the real state:
-
-| Required test | Status |
-|---|---|
-| Dismiss → later publish → NEW row (**the discriminating test**) | ✅ delivered |
-| Re-press idempotency; episode suppression | ✅ delivered |
-| R9 through the real Spring-managed path | ✅ delivered, **plus the annotation guard extended to the new service and listener** |
-| Read ≠ resolved; no-count copy; learner's-own deep link | ✅ delivered |
-| Real `MockMvc` request | ✅ **already existed** from `v0.132.0` |
-| Taxonomy + badge counter | ✅ delivered |
-| First-ever publication notifies nobody (**two-writers trap**) | ✅ **already covered** — see the correction below |
-| **Editing without publishing reaches nobody** | ❌ **MISSING — added by this audit** |
-
-**⚠️ A CORRECTION WORTH RECORDING, BECAUSE THE FIRST READ WAS WRONG.** This audit initially judged the two-writers trap uncovered and wrote a duplicate test for it. It **is** covered: `NoteCollectionServiceTest.updateVisibility_publishesWhenEveryItemIsPublic` asserts `markReviewSetUpdatePublished` fires **and** `verifyNoInteractions(applicationEventPublisher)` — the stamp advances, no event does. **The grep missed it because the test is named for the visibility change, not for the private method it exercises.** The duplicate was removed. *Searching for a behaviour by the name of the method that implements it will keep missing tests named for the user action.*
-
-**The one genuine gap — `curatorEditsWithoutPublishingReachNoAdopter` — is the anti-drift line this release leans on hardest** (*editing is not publishing*), and it covers a path nothing else did: items added with **no publish call at all**. The existing no-op test covers publishing with nothing to publish, which is a different thing.
-
-**Two mutants run, both killed:**
-
-| Mutant | Killed by |
-|---|---|
-| **Dedup key reverted to the audit's `REVIEW_SET_UPDATE:<adoptedCollectionId>`** — the permanent suppression bug | **`dismissingOneRevisionAllowsTheNextPublishedRevisionToCreateANewRow`** — the design's whole reason for existing, caught |
-| `@Transactional` added to the new producer's `fanOut` (R9 on the new path) | `FanOutTransactionBoundaryTest.reviewSetUpdateFanOutIsNotTransactional` |
-
-**Verification run:** backend 2,335 tests + the 102-query PostgreSQL harness against a real container; frontend 2,348 across 212 suites; `tsc --noEmit` clean; `npm run lint` 0 errors.
-
-### ✅ Pre-signoff cold agent — ONE CLAIM REFUTED, TWO INERT TESTS FOUND, ALL FIXED
-
-The scoped cold agent ran against the merged state and **refuted C6** while upholding the other seven.
-
-**⚠️ C6 REFUTED — a curator is notified of their own publish.** `adopt()` carries **no owner guard**, so a curator can self-adopt their own PUBLIC Review Set; `findReviewSetUpdateRecipients` had no self-copy exclusion, so publishing an update then told them about their own action. **The fix was already sitting eight lines above in the same file:** `countAdoptionsByCollectionIds` excludes self-copies with `adoption.ownerUserId <> source.ownerUserId` for the adoption COUNT. The two queries now agree on what an adoption is, and `aCuratorWhoAdoptedTheirOwnSetIsNotNotifiedOfTheirOwnPublish` fails if they diverge again. Cosmetic in severity, real as a gap.
-
-**⚠️⚠️ TWO TESTS PASSED FOR REASONS UNRELATED TO WHAT THEY CLAIMED — AND ONE OF THEM WAS WRITTEN BY THE AUDIT THAT WENT LOOKING FOR EXACTLY THIS SHAPE.** That is the finding worth keeping:
-
-1. **`curatorEditsWithoutPublishingReachNoAdopter`** — added by this release's own audit to guard *"editing is not publishing"*. Its act phase inserted rows with `jdbcTemplate` and **called no service method**, so a producer wired to fire on a WRITE rather than on the publish call would have sailed straight through it. **The test that existed to catch the release's boldest anti-drift claim could not catch it.** Renamed to `unpublishedRowsAloneDispatchNoFanOut` — which is what it actually proves — and the real guard now lives on the real edit path as `NoteCollectionServiceTest.addItems_doesNotAnnounceAnUnpublishedEdit`, which drives `addItems` and asserts the publisher is untouched.
-2. **The `taskTransactionActive` assertion** captured `isActualTransactionActive()` in a wrapper that runs **on the test thread after the publishing transaction already committed and unbound** — so it read `false` whether or not `fanOut` was transactional, and could not see the regression its own `.as(...)` named. The capture moved **inside `deliver`**, via a spy on the **Spring-managed** bean so the proxy is live. **Verified by mutation: `@Transactional` on `fanOut` now fails it, and previously did not.**
-
-**Four mutants run across this release, all killed:**
-
-| Mutant | Killed by |
-|---|---|
-| Dedup key reverted to the audit's `<adoptedCollectionId>` | `dismissingOneRevisionAllowsTheNextPublishedRevisionToCreateANewRow` |
-| `@Transactional` on the producer's `fanOut` | `FanOutTransactionBoundaryTest` — and **now also** the corrected runtime assertion |
-| **Self-copy exclusion removed** | **`aCuratorWhoAdoptedTheirOwnSetIsNotNotifiedOfTheirOwnPublish`** |
-
-**Upheld and worth recording:** the `LIKE` prefix cannot collide across sources (UUIDs are fixed-length and contain no wildcards); a same-millisecond key collision additionally requires a dismiss and a lock-serialized round trip inside 1 ms; adopted CHILD collections point at their own child source, not the root, so a Goal adoption cannot multi-notify. **`ACTION_REQUIRED` has zero references repo-wide, and production still holds zero notification rows of any type — re-verified read-only at this audit, not inherited.**
-
-**Known limitation, recorded not fixed:** no test exercises delivery on the real `ThreadPoolTaskExecutor` thread, and the mid-fan-out unique-index conflict is covered only with a mocked `NotificationService`, never against a real database for two recipients in one fan-out.
-
-**⚠️ Method note: the branch was NOT switched under the agent this time** — the `v0.134.0` lesson held.
-
-
-### Shipped
-
-- Replaced the producerless `ACTION_REQUIRED` type/category pair with the actionable
-  `REVIEW_SET_UPDATE` / `LEARNING_SYSTEM` pair, backed by the first real feature producer.
-- Publishing real changes to an Official Review Set now emits a plain-value event and queues adopter
-  delivery only after the locked publication transaction commits, reusing the unchanged bounded
-  `notificationFanOutExecutor`.
-- Added source-revision identity as
-  `REVIEW_SET_UPDATE:<sourceCollectionId>:<persistedPublishedAtEpochMilli>`, fixed count-free copy and
-  deep links to each learner's adopted collection.
-- Added one-query adopter resolution and one-query undismissed-episode suppression. Dismissal closes an
-  episode, allowing the next genuinely published revision to create a new notification row.
-- Added real Spring-transaction, revision-key, suppression, dismissal, no-op retry, queue-rejection,
-  copy, deep-link and badge coverage while preserving both existing R9 guards.
