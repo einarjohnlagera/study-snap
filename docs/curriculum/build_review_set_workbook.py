@@ -15,9 +15,16 @@ INPUT COLUMNS (tab-separated, header row required, order irrelevant):
     note_title         the note
     note_subject       canonical Subject metadata (NOT the section name)
     domain_context     enum value, or "(unset)"
-    applicable_programs  OPTIONAL, comma-separated catalog program names. When present, the
-                       Domain Context sheet gains an Applicable Programs column aggregated per
-                       (note subject, Domain Context).
+    applicable_programs  REQUIRED, comma-separated catalog program names, filled on EVERY row.
+                       The Domain Context sheet aggregates it per (note subject, Domain Context)
+                       and prints the union for that pair. That union is what makes the two hard
+                       Domain Context rules checkable instead of merely stated: which (unset) rows
+                       are legal, and which notes gain a second program on reuse and therefore now
+                       REQUIRE an explicit Domain Context.
+                       ⚠️ Legacy plan files predating this rule (civil-engineering, let) lack the
+                       column and are refused until it is backfilled. For LET that refusal is the
+                       point: rebuilding it from its own .tsv silently DROPS the Applicable
+                       Programs column its committed workbook already shows.
     status             Existing | Reuse | New | Excluded | Unmapped
                        Unmapped = a target shape not yet reconciled against production. Use it
                        when reshaping a set whose notes already exist but have not been matched
@@ -211,10 +218,21 @@ def main():
     with open(src, encoding="utf-8-sig", newline="") as f:
         rows = list(csv.DictReader(f, delimiter="\t"))
     required = {"plan_no","subject_plan","plan_description","section","note_title",
-                "note_subject","domain_context","status"}
+                "note_subject","domain_context","status","applicable_programs"}
     missing = required - set(rows[0])
     if missing:
-        sys.exit(f"input is missing required columns: {sorted(missing)}")
+        hint = ""
+        if "applicable_programs" in missing:
+            hint = ("\n\napplicable_programs is REQUIRED on every plan file. The Domain Context sheet "
+                    "aggregates it per (note subject, Domain Context); without it the two hard Domain "
+                    "Context rules cannot be checked, only recited. Backfill it from production "
+                    "(one program name per note, comma-separated for shared notes) and re-run. "
+                    "Building without it is how the column was silently lost twice.")
+        sys.exit(f"input is missing required columns: {sorted(missing)}{hint}")
+    blank = [r["note_title"] for r in rows if not (r.get("applicable_programs") or "").strip()]
+    if blank:
+        sys.exit(f"applicable_programs is empty on {len(blank)} row(s), first: {blank[0]!r}. "
+                 "Every row must name at least one catalog program.")
     bad = {r["status"] for r in rows} - set(STATUS_FILL)
     if bad:
         sys.exit(f"unknown status values: {sorted(bad)} (allowed: {sorted(STATUS_FILL)})")
