@@ -1,6 +1,6 @@
 # RELEASES_ARCHIVE.md — NoteLib
 
-Archived sections of `RELEASES.md`. **Contents are NOT one contiguous range:** `v0.41.0`–`v0.120.0`, plus `v0.126.0` (moved at the `v0.132.0` kickoff), `v0.127.0` (moved at the `v0.133.0` kickoff) `v0.128.0` (moved at the `v0.134.0` kickoff) `v0.129.0` (moved at the `v0.135.0` kickoff) `v0.130.0` (moved at the `v0.136.0` kickoff) `v0.131.0` (moved at the `v0.137.0` kickoff) `v0.132.0` (moved at the `v0.138.0` kickoff) and `v0.133.0` (moved at the `v0.139.0` kickoff) as the live file crossed its *current + last five* cap. Each version's own `## vX.Y.Z` heading is the index — search for it. `v0.40.1` and earlier moved here
+Archived sections of `RELEASES.md`. **Contents are NOT one contiguous range:** `v0.41.0`–`v0.120.0`, plus `v0.126.0` (moved at the `v0.132.0` kickoff), `v0.127.0` (moved at the `v0.133.0` kickoff) `v0.128.0` (moved at the `v0.134.0` kickoff) `v0.129.0` (moved at the `v0.135.0` kickoff) `v0.130.0` (moved at the `v0.136.0` kickoff) `v0.131.0` (moved at the `v0.137.0` kickoff) `v0.132.0` (moved at the `v0.138.0` kickoff) `v0.133.0` (moved at the `v0.139.0` kickoff) and `v0.134.0` (moved at the `v0.140.0` kickoff) as the live file crossed its *current + last five* cap. Each version's own `## vX.Y.Z` heading is the index — search for it. `v0.40.1` and earlier moved here
 2026-07-10; **`v0.41.0` through `v0.120.0` moved here 2026-09-07** in the `v0.126.0` pass, which
 resumed this convention after it had lapsed for 85 releases — `RELEASES.md` had reached 116
 sections against its documented design of *current + last few versions*. Both passes are MOVES,
@@ -17,6 +17,255 @@ See `RELEASES.md` for the current + most-recent versions, and its "Archived rele
 index for a one-line-per-version pointer back into this file.
 
 ---
+
+## v0.134.0 - Notification Foundations
+
+**Status: Released** (kicked off 2026-09-09, signed off 2026-09-09, base branch `releases/v0.134.0`, cut from `main` after `v0.133.0` merged as #1349 and tagged. Shipped as PRs #1350, #1351, #1352.)
+
+Source: `docs/claude-plans/attention-notifications-email-expansion-stage1.md` (Stage A audit, 2026-09-08, every claim `file:line`-anchored and backed by read-only production `SELECT`s).
+
+Theme: harden the notification substrate's taxonomy and dedup identity **while `notifications` still has zero rows in production**, so the first real producer lands on a shape that can carry it.
+
+### ⚠️⚠️ THIS RELEASE SHIPS NO USER-VISIBLE CHANGE, DELIBERATELY — DO NOT READ IT AS A STALLED RELEASE
+
+Every item here is a mechanism change behind an inbox that has **never rendered a numeric badge in production and could not have**. `countActionableUnread` filters `type IN actionableTypes()`, which resolves to `{ACTION_REQUIRED}`, and **zero code paths produce that type** — `AnnouncementService.deliverOne` is the only caller of `NotificationService.deliver` and it always passes `ANNOUNCEMENT`.
+
+**The entire argument for doing this now is the row count: `notifications` is EMPTY in production — RE-VERIFIED READ-ONLY AT THIS KICKOFF, 2026-09-09**, not carried over from the audit: `notifications` **0 rows**, `announcements` **0 rows**, **0** distinct dedup keys, **0** `ACTION_REQUIRED`. **⚠️ The re-read is not a formality — it is the `v0.133.0` precedent, where the precondition read found EIGHTEEN catalog programs against the migration's THREE seeds and a repo-only audit would have been unsound. One admin publish between the audit and the prompt would put up to 396 rows in the table and turn item 2's key-format change from free into a live reconciliation that is not scoped.** Items 1–3 are pure Java, item 5 is one JPQL predicate. **Every one of them becomes a data migration with a backfill and a reconciliation the day the first real notification lands.** That window closes permanently and silently — nothing will announce it.
+
+### Planned scope — Stage B items 1–3 + 5 only, DDL-FREE
+
+1. **Taxonomy split.** `NotificationType` becomes **producer-level identity**; a new `NotificationCategory` carries **badge policy**; `actionableTypes()` derives its set from the category rather than from a boolean on the type.
+2. **Widen `dedupKey` to accept a String discriminator.** Today `dedupKey(type, entityId)` returns `type.name() + ":" + entityId` (`NotificationService:104-106`) — so every future `ACTION_REQUIRED` producer shares one key space and two producers holding the same entity UUID collide silently under `idx_notifications_recipient_dedup`.
+3. **The API response carries `actionable`/`category`, and the frontend stops comparing to the literal `"ANNOUNCEMENT"`.** `notification-inbox.tsx:110,117` is the frontend's private mirror of `NotificationType.actionable`; it mis-counts the badge the moment a third type exists.
+5. **Retention expires non-actionable unread rows.** `deleteReadOrDismissedBefore` deletes only rows with `read_at` or `dismissed_at` set, so **an unread row is immortal** — an `EVERYONE` announcement to 396 users leaves 396 permanent rows per announcement, forever. **90 days, reusing the existing `retention-days` constant — no second knob** (decision D7).
+
+### ⚠️⚠️ SUPERSEDED 2026-09-09 — ITEM 4 IS BACK IN SCOPE, BECAUSE THE PREMISE BELOW EXPIRED
+
+**`V141` AND `V142` BOTH RAN IN PRODUCTION ON 2026-09-08** — verified read-only against
+`flyway_schema_history` at 2026-09-09 (V141 12:23, V142 15:47, both `success = true`). **The single
+stated reason item 4 was deferred no longer holds:** the queue is clean, `V142` is the tip, and a
+`V143` is now an isolated one-statement migration against a table that is still empty (0 rows,
+re-verified the same day).
+
+**⚠️ The owner elected to complete ALL of Stage B** — items **4, 6 and 7** ship as PART 2, after
+Part 1 merged as **PR #1350**. **So the DDL-free constraint below applied to Part 1 ONLY and is now
+lifted.** It is kept verbatim rather than deleted because it records *why* the split happened, and
+because the reasoning — do not add a migration to an unrun queue — is correct and will apply again.
+
+**⚠️ The verification tier is RE-DECIDED for Part 2 — see the Verification tier section.**
+
+### ⚠️ Item 4 (the `idx_notifications_inbox` index) WAS EXPLICITLY OUT OF PART 1, AND SO WAS EVERY DDL STATEMENT
+
+Items 1–3 need no DDL — `type` is already `VARCHAR(64)` with `EnumType.STRING`, `dedup_key` is already `VARCHAR(255)` (`V139__notifications.sql:4-5`) — and item 5 is a predicate change. Item 4 would be the **only** reason this release carries a migration, and **`V141` and `V142` are both still UNRUN in production**. Adding a third migration to an unrun queue to fix a sort the audit measured as immaterial at 0 rows is a bad trade. **Let the index ride the next migration that exists for another reason.**
+
+**⚠️ If a diff in this release adds a migration, the scope has drifted.**
+
+### ⚠️ THE VERIFICATION TRAP: "behaviour must be identical after items 1–3" IS THE `v0.116.0`/`v0.117.0` SILENT-NO-OP SHAPE
+
+`actionableTypes() == {ACTION_REQUIRED}` passes **before and after** the change, so a green run on it is evidence about nothing. **At least one assertion must be one that CANNOT pass against `main`** — the category **partition** test is the natural one, because no category enum exists today.
+
+Stage B's verification list (**not** the audit's "Verification the first producer owes" section — that is a **Stage D** list and seven of its ten items presuppose a Review Set update producer that is not shipping here):
+
+- `actionableTypes()` still resolves to exactly `{ACTION_REQUIRED}` — the regression guard for the derivation change.
+- **Badge-eligible and retention-expirable PARTITION the categories** — one flag, two derived sets, with a test asserting the partition. Two hand-maintained lists is how they drift. ⚠️ **This is the assertion that cannot pass before the change.**
+- A **non-actionable** unread row past 90 days is deleted; an **actionable** unread row past 90 days is **not**.
+- The `GET /notifications` JSON actually carries `actionable`/`category` — extend `NotificationControllerTest`'s existing **real request** (`.contentType(MediaType.APPLICATION_JSON)`), never a direct handler call (`v0.119.0`).
+- The frontend badge decrement reads the new field. **The existing tests asserting the `"ANNOUNCEMENT"` literal must MOVE WITH the change** — left as they are they pass for the wrong reason.
+
+### ⚠️ `docs/features/notifications.md` IS A DELIVERABLE OF THIS RELEASE, NOT A SIGNOFF SCRAMBLE
+
+All four items change behaviour that file **currently documents as true**, and it must move in the same PR — this is the failure CLAUDE.md flags hardest, and it has cost three consecutive releases:
+
+| Line | Claim that becomes false | Item |
+|---|---|---|
+| `:24` | `dedup_key` is built by `NotificationService.dedupKey(type, entityId)` | 2 |
+| `:35` | *"`NotificationType` carries an `actionable` flag, and `actionableTypes()` derives the set from it"* | 1 |
+| `:166-167` | the announcement id is passed as **both** arguments to `dedupKey` | 2 |
+| `:252-256` | retention deletes read/dismissed rows only, and *"Unread AND UNDISMISSED actionable notifications are RETAINED regardless of age"* | 5 |
+| inbox response shape | must gain `actionable`/`category` | 3 |
+
+**⚠️ `:252-256` is the sharp one: item 5 makes that sentence true only for the ACTIONABLE half.** Non-actionable unread rows start expiring at 90 days, and the doc currently states the opposite without qualification.
+
+**✅ One correction to that file was made AT KICKOFF, because it was stale independently of this release:** its *"Stage 6 — blocked on the §8 drift-signature dedup decision"* line pointed at a design `v0.132.0` already ruled must **not** be implemented. Corrected there and in the superseded Backlog row, which read the same way.
+
+### Anti-drift
+
+- ❌ **NO new enum values without a producer.** `NotificationType` keeps **exactly** its two current values. Adding `REVIEW_SET_UPDATE` / `CONNECTION_REQUEST` / `NOTE_SHARED` now recreates the exact defect this audit opens with — a type with zero producers whose only tests hand-build a state no code path reaches.
+- ⚠️ **`ACTION_REQUIRED` survives as an explicitly TRANSITIONAL placeholder for BACKWARD-COMPATIBLE TAXONOMY TRANSITION.** **Stage D replaces it** with `REVIEW_SET_UPDATE`. **Say this in the enum's javadoc**, or a future session reads it as permanent and builds on it. **⚠️ AMENDED 2026-09-09 by the owner's tightening addendum: do NOT justify it as "retained so badge behaviour stays exercised" — a domain-model value is not justified by the tests it keeps alive. Tests exercise the production model; they do not determine it.**
+- ❌ **`NotificationCategory` stays DERIVED IN JAVA, never a stored column.** A stored category is a second source of truth that can disagree with the type, and no query needs to filter on it independently — `countActionableUnread` already takes its set as a parameter.
+- ❌ **No DDL, no migration, no index** (see above).
+- ❌ **Do not call `NotificationService.deliver()` from inside a transaction.** `deliver()` is deliberately non-transactional so a `DataIntegrityViolationException` on the dedup index does not mark an entire fan-out rollback-only. Item 2 edits the key that catch depends on.
+- ❌ No `exists` check before a notification insert — the unique index is the mechanism.
+- ✅ **`findVisibleInbox` and `countActionableUnread` predicates change TOGETHER.** The `dismissed_at IS NULL` leg on the count was a `v0.130.0` pressure-test fix and the repository javadoc records why.
+- ✅ `read_at` = awareness, `dismissed_at` = inbox visibility. **No `resolved` column.**
+- ✅ Opening the panel marks nothing read; poll the count endpoint only, never more often than 60 s; never render a literal `0` badge.
+- ❌ **No Stage D producer, no Stage E email work, no executor change (item 6), no metrics (item 7).** Items 6 and 7 have **no closing window** — they cost the same in six months. That is the whole reason they are not here and item 1–3+5 are.
+- ❌ **No Learning Connections work** — `[CHECKPOINT — due 2026-09-19]` is ten days out and its kill criterion keys on `ACCEPTED`, denominator **ONE**.
+- ❌ **No `frontend/app/onboarding` work** — `[CHECKPOINT — due 2026-09-11]` is two days out.
+- ❌ `AnnouncementAudienceResolver` must not touch `FeatureGateService` — editorial, never authorization.
+
+### ⚠️ One thing to record while it is still true
+
+**Item 2's key-format widening is free ONLY because there are no existing keys.** No stored dedup key has ever been written in production, so no format is a contract anyone can rely on. After the first producer ships, changing this format means reconciling live rows.
+
+### ✅ Pre-signoff cold agent — RAN 2026-09-09, ALL EIGHT CLAIMS UPHELD, ONE GAP CLOSED
+
+The scoped cold agent this release was re-tiered to **was run rather than waived**, framed as
+falsification against eight named claims plus the two structural questions. It read the real code and
+**re-ran the suites itself** rather than trusting this session's summary. **No claim was refuted** —
+R9, the detached-entity hand-off, `V143`'s predicate match, the retention split, the contract removal,
+the no-new-producer rule and the end-to-end badge all held.
+
+**⚠️ IT FOUND ONE REAL GAP, AND IT IS THE KIND ONLY A COLD READER FINDS: the executor WIRING was
+proven by nothing.** Every test in `AnnouncementServiceIntegrationTest` builds the service by hand
+with a test-double executor, and `AppConfigTest` calls `new AppConfig()` directly — so neither proves
+the **Spring-managed** service receives the **Spring-managed** fan-out executor. Context-load success
+proves only that *some* `TaskExecutor` resolved.
+
+**That gap was live, not theoretical.** Re-qualifying the constructor to `analyticsTaskExecutor`
+**loads the context and passes every other test in the class**, while quietly putting announcement
+fan-out on the pool that persists analytics — doubling pressure on the 20 connections production has
+already exhausted twice (R5/R13). Closed with
+`theSpringManagedServiceReceivesTheDedicatedFanOutExecutorAndNotTheAnalyticsPool`, which asserts bean
+identity and thread-name prefix on the Spring-managed instance. It fails under that mutant.
+
+**⚠️ It also credited a test this session had NOT: `aRetriedFanOutStillWorksWithAnOpenSessionInViewEntityManagerBoundToTheThread`**
+binds an `EntityManagerHolder` exactly as `OpenEntityManagerInViewInterceptor` does and asserts the
+persistence context is still readable after three caught constraint violations. That is the R9 angle
+the reflection guard cannot see, and the two are complementary rather than redundant — worth recording
+so neither is later deleted as duplicative.
+
+**⚠️ Method note, recorded against the next time: this session switched the working branch while the
+agent was running**, and the agent reported a file "changing under it" mid-review. It re-read and
+self-corrected, and its test runs post-date the switch, so the conclusions stand — **but do not check
+out another branch under a running cold agent.**
+
+**Part 2 mutants — three run, three killed:**
+
+| Mutant | Killed by |
+|---|---|
+| Fan-out reverted to synchronous | three async/rejection tests |
+| `@Transactional` added to `fanOut` (R9) | `FanOutTransactionBoundaryTest` — *added by this audit* |
+| **Fan-out re-qualified to `analyticsTaskExecutor`** | **`theSpringManagedServiceReceivesTheDedicatedFanOutExecutor…` — *added after the cold agent; it loaded the context and passed everything else*** |
+
+### ⚠️ R1 IS A LIVE PRODUCTION FINDING THIS RELEASE DOES NOT FIX — recorded so it is not lost
+
+**The email daily cap is already breached.** Configured `EMAIL_DAILY_LIMIT` is **100** with a **40** reserve; observed production peaks are **156, 158, 157, 156** sends/day over the last 90. The budget gates **`INACTIVITY` only** — weak-concept, weekly-summary, due-concepts and knowledge-impact dispatches are all unbudgeted, so the "100/day limit" describes one of five channels. **This blocks every future email producer (Stage E) and is indexed in `ROADMAP.md`'s Backlog Index, not scoped here.**
+
+### ⚠️⚠️ Verification tier — RE-DECIDED 2026-09-09 FOR PART 2: ONE SCOPED COLD AGENT
+
+**Part 1 was correctly tiered at a single `advisor()` call and shipped that way.** Part 2 changes the
+shape, and `CLAUDE.md`'s gate now fires on **three** independent triggers rather than one:
+
+1. **⚠️ Delivery introduced a defect this session that the session then fixed** — the measured
+   blind-spot signal, and the gate names it explicitly. Part 1's frontend tests passed against the
+   OLD implementation, and a backend mutant survived. That is not a hypothetical.
+2. **The bug class is one the gate says is inherently hard to reason about serially** — async
+   ordering. Fan-out moves off the request thread, and R9 (transaction poisoning) is an invariant that
+   a green suite will not notice being broken.
+3. **A second change touches the same shared methods** — `AnnouncementService.publish` / `fanOut` and
+   `NotificationService.deliver`, both already edited by Part 1.
+
+**Frame it as FALSIFICATION, not open-ended audit:** hand it a tight file list and the specific claims
+this session made, and ask it to disprove each. `model: "sonnet"` is enough for claim-checking.
+
+**⚠️ The claim most worth attacking: *"fan-out still runs outside any transaction."*** That is R9, it
+is what keeps a single duplicate key from taking down an entire fan-out, and it is invisible to a
+passing test suite.
+
+**Superseded rationale, kept as the record:** *A single `advisor()` call.* No authorization or privacy boundary moves, no money/quota/production-data semantics change, and `notifications` has **zero rows** so item 5 has nothing to delete in production. Declared at kickoff so signoff does not re-derive it — **but re-decide if the shape changes**, per `v0.133.0`, which was tiered at one `advisor()` call, gained a write endpoint, ran one cold agent, and had **three of seven named claims refuted**.
+
+**Routing: CODEX** — backend enum + service + JPQL + response DTO, plus the frontend component. Multi-system, so a prompt comes first. **Call `advisor()` before writing that prompt.**
+
+### Shipped
+
+- Added `NotificationCategory` as the single owner of numeric-badge policy, with badge-eligible and
+  retention-expirable category sets derived as complements from one flag. `NotificationType` remains
+  the two-value producer identity and now delegates policy to its category.
+- Widened notification dedup discriminators from UUID to string while preserving the existing
+  `ANNOUNCEMENT:<uuid>` keys and the unique-index catch-and-reread delivery contract.
+- Added the server-derived `actionable` field to inbox responses and moved the frontend badge update
+  and rollback branches to that field.
+- Extended the existing 90-day cleanup to expire unread non-actionable rows while retaining unread
+  actionable rows indefinitely; no new retention setting was added.
+- Added category-partition, retention-direction, real-response-shape, dedup-format and frontend badge
+  behavior coverage. Part 1 added no producer, notification type, endpoint, migration or index.
+- Added V143's partial inbox index on recipient and descending creation time for visible notifications,
+  closing the unindexed inbox sort now that the production migration queue is clear.
+- Moved announcement delivery to the bounded `notificationFanOutExecutor` (core 1 / max 2). Publish now
+  resolves the audience synchronously, reports queue acceptance immediately, and preserves retry/top-up
+  semantics through the existing unique dedup index.
+- Replaced synchronous publish delivery totals with `recipientCount` / `queued` and updated the admin
+  feedback to describe background delivery or a recoverable queue rejection accurately.
+- Added fresh-delivery, dedup-conflict, fan-out-duration and fan-out-rejection meters so asynchronous
+  delivery remains observable without a per-user reporting surface.
+
+### ⚠️ Audit finding — the frontend tests as delivered passed for the wrong reason, and mutation testing is what caught it
+
+**Reverting `notification-inbox.tsx` to its exact pre-release implementation (`type !== "ANNOUNCEMENT"`)
+left all 18 frontend tests GREEN.** Every fixture set `actionable` to *agree* with `type`, so the old
+branch and the new one returned the same answer for all of them — the suite could not distinguish the
+change it existed to verify. **⚠️ This is the `v0.116.0`/`v0.117.0` silent-no-op shape arriving from a
+new direction: tests WERE added, and they still proved nothing about the change.**
+
+Fixed by adding the one fixture where the two **disagree** — a non-actionable type whose name is not
+`"ANNOUNCEMENT"` (`IMPACT_MILESTONE`), which is exactly the case the taxonomy split exists to fix and
+the case the old code got wrong. That test fails against the old implementation and passes against the
+new one.
+
+**Four mutants were run and all four were killed, each by a named test:**
+
+| Mutant | Killed by |
+|---|---|
+| `retentionExpirableCategories()` stops filtering (partition broken) | `NotificationCategoryTest.badgeEligibleAndRetentionExpirableCategoriesPartitionEveryCategory` |
+| Every type made retention-expirable (unread actionable rows deleted) | `NotificationServiceIntegrationTest.retentionDeletesUnreadNonActionableAndReadRowsButKeepsUnreadActionableRowsPastTheWindow` |
+| Badge branch never fires | `decrements the badge when an actionable notification is marked read` + `reverts the optimistic unread delta when marking read fails` |
+| **Component reverted to the old `"ANNOUNCEMENT"` literal** | **`does not change the badge for a non-actionable type that is not ANNOUNCEMENT`** — *added by this audit; nothing killed this mutant before* |
+| `retentionExpirableTypes()` returns the wrong side of the split | `NotificationCategoryTest.retentionExpirableTypesAreTheComplementOfActionableTypes` — *added by this audit* |
+
+**⚠️ ONE MUTANT SURVIVES, KNOWINGLY, AND IT IS RECORDED RATHER THAN PAPERED OVER.** Hardcoding
+`NotificationType.isActionable()` to `this == ACTION_REQUIRED` — bypassing the category delegation
+entirely — **passes the whole suite.** That is not a fixable gap at this size: with two types mapped
+one-to-one onto two like-named categories, delegation and hardcoding are **observationally identical**,
+and no test can separate them without a third type, which this release forbids.
+
+What was added instead is the guard that fires when it *starts* to matter: `everyTypeDerivesItsActionabilityFromItsCategory`
+enumerates `values()`, so a third type that is misclassified fails immediately. A `category()` accessor
+was added to make that invariant assertable. **The javadoc on that test states outright that it cannot
+discriminate today**, so a later reader does not credit it with more than it proves.
+
+### ⚠️ Part 2 audit finding — the R9 guard could not fail, and only mutation revealed it
+
+**R9 is the invariant this release rests on:** `deliver()` catches the unique-index
+`DataIntegrityViolationException`; under an ambient transaction that marks the whole transaction
+rollback-only, so **one duplicate recipient would take an entire fan-out down**. Part 2 shipped a test
+asserting `TransactionSynchronizationManager.isActualTransactionActive()` is false during delivery,
+which reads exactly like the guard for it.
+
+**It is not one. Adding `@Transactional` to `fanOut` left all 20 of that class's tests GREEN.** The
+test constructs `AnnouncementService` with `new`, so there is **no Spring AOP proxy and the annotation
+is inert** — the fixture cannot express the state it claims to forbid. **⚠️ This is the repo's
+recurring "the guard must reach its subject the way production does" failure arriving from the
+opposite end**, and it is the second release running where a delivered test passed for a reason
+unrelated to the change.
+
+Closed with `FanOutTransactionBoundaryTest`, a reflection check over the declared annotations on
+`publish`, `fanOut`, `deliver` and both classes. It **cannot** be fooled by proxy absence, because the
+annotation is exactly what production reads. It fails under the mutant.
+
+**Also removed:** the single-argument `fanOut(AnnouncementEntity)` overload, left with **no callers in
+main or test** once `publish` began resolving the audience itself — dead public API on a service whose
+transaction boundary is load-bearing.
+
+**Part 2 mutants — two run, both killed after the fix:**
+
+| Mutant | Killed by |
+|---|---|
+| Fan-out reverted to synchronous | `publishReturnsAfterQueueAcceptanceBeforeAnyNotificationIsDelivered` + `rejectedDispatchReturnsZeroAndRepublish...` + `executorTaskRunsFanOutWithoutAnAmbientTransaction` |
+| **`@Transactional` added to `fanOut` (R9 violated)** | **`FanOutTransactionBoundaryTest.announcementPublishAndFanOutAreNotTransactional` — *added by this audit; the whole suite passed before it*** |
+
+**Verification run:** backend 2,312 tests + the 101-query PostgreSQL native harness against a real
+container; frontend 2,346 tests across 211 suites; `tsc --noEmit` clean; `npm run lint` 0 errors.
 
 ## v0.133.0 - Education Family
 

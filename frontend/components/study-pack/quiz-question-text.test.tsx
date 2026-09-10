@@ -19,6 +19,42 @@ describe("QuizQuestionText", () => {
     expect(visualBranch?.textContent).not.toContain("\\(");
   });
 
+  // ⚠️ REGRESSION GUARD, NOT A BUG FIX -- and the distinction is the point of this comment.
+  // v0.140.0 went looking for a defect here on the theory that normalizeBareMath was wired to
+  // workingSolution alone, because grepping the consuming components for it finds nothing. That
+  // inference was WRONG: renderMathText calls it internally (quiz-working-solution.tsx:206), so every
+  // call site -- questions, choices, explanations -- already gets the repair. Checking whether the
+  // call was THERE instead of reading what the code DOES is the same error CLAUDE.md records against
+  // the v0.138.0 pass, which "verified" an unbounded read as unfixed because the branch still existed.
+  //
+  // The behaviour was nonetheless untested from this component's side, and it is load-bearing:
+  // undelimited math is real in production (measured 2026-09-10: 5 packs with bare backslash math in
+  // `question`, 15 in `explanation`), and the 11 generation prompts that DO instruct $...$ are complied
+  // with imperfectly. Mutation-verified: deleting the normalizeBareMath call inside renderMathText
+  // fails this test and nothing else in this file.
+  it("renders UNDELIMITED LaTeX as math, not as visible backslashes", () => {
+    const { container } = render(
+      <QuizQuestionText text={"Compute \\frac{a}{b} for the given values."} />,
+    );
+
+    expect(container.querySelector(".katex")).toBeInTheDocument();
+    const visualBranch = container.querySelector(".katex-html");
+    expect(visualBranch?.textContent).not.toContain("\\frac");
+    // The prose either side must survive untouched -- the repair wraps the math span only.
+    expect(container.textContent).toContain("Compute");
+    expect(container.textContent).toContain("for the given values.");
+  });
+
+  // The counterpart guard: normalizeBareMath's first design rule is "NEVER make things worse." A
+  // bare backslash that is NOT a known math command must pass through untouched, or Windows paths
+  // and literal "\n" in question text would be mangled into math.
+  it("leaves a non-math backslash alone", () => {
+    const { container } = render(<QuizQuestionText text={"Save the file to C:\\Users\\notes"} />);
+
+    expect(container.querySelector(".katex")).not.toBeInTheDocument();
+    expect(container.textContent).toBe("Save the file to C:\\Users\\notes");
+  });
+
   // Plain text must come back as a bare string, not wrapped in an extra element: wrapping moves which
   // node getByText resolves to, which silently relocates styling like break-words off the element
   // callers put it on.

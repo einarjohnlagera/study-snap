@@ -29,6 +29,15 @@ jest.mock("next/navigation", () => ({
   useRouter: () => routerMock,
 }));
 
+const useBottomViewportClaimMock = jest.fn();
+// ⚠️ requireActual is not optional here. A jest.mock factory is an ALLOW-LIST, and this module also
+// exports useExamFocusContext / useExamFocusMode, which components in this tree import. Listing only the
+// hook under test would silently blank the others — the exact failure the quick-review suite records.
+jest.mock("@/components/exam-mode/exam-focus-context", () => ({
+  ...jest.requireActual("@/components/exam-mode/exam-focus-context"),
+  useBottomViewportClaim: (active: boolean) => useBottomViewportClaimMock(active),
+}));
+
 jest.mock("@/lib/route-guards", () => ({
   requireAuthenticatedOnboardedUser: () => true,
 }));
@@ -522,7 +531,7 @@ describe("StudyPlanBuilderPageClient", () => {
     fireEvent.pointerUp(renameInput, { clientX: 20, clientY: 20, pointerId: 1 });
 
     expect(renameInput).toHaveValue("Algebra");
-    expect(screen.queryByRole("button", { name: "Save order" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Save changes" })).not.toBeInTheDocument();
     expect(setCollectionItemOrder).not.toHaveBeenCalled();
   });
 
@@ -581,8 +590,8 @@ describe("StudyPlanBuilderPageClient", () => {
     fireEvent.click(moveDown);
 
     expect(setCollectionItemOrder).not.toHaveBeenCalled();
-    expect(screen.getByText(/order not saved/i)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Save order" }));
+    expect(screen.getByText("Drag changes not saved")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
 
     await waitFor(() => expect(setCollectionItemOrder).toHaveBeenCalledTimes(1));
     expect(setCollectionItemOrder).toHaveBeenCalledWith("leaf-1", [
@@ -606,7 +615,7 @@ describe("StudyPlanBuilderPageClient", () => {
     render(<StudyPlanBuilderPageClient collectionId="leaf-1" />);
 
     fireEvent.click(await screen.findByLabelText("Move Skeletal System down"));
-    const saveButton = screen.getByRole("button", { name: "Save order" });
+    const saveButton = screen.getByRole("button", { name: "Save changes" });
     fireEvent.click(saveButton);
 
     expect(await screen.findByText(/Saving order/i)).toBeInTheDocument();
@@ -631,7 +640,7 @@ describe("StudyPlanBuilderPageClient", () => {
     fireEvent.click(screen.getByLabelText("Move Skeletal System down"));
 
     expect(setCollectionItemOrder).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole("button", { name: "Save order" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
 
     await waitFor(() => expect(setCollectionItemOrder).toHaveBeenCalledTimes(1));
     expect(setCollectionItemOrder).toHaveBeenCalledWith("leaf-1", [
@@ -650,15 +659,149 @@ describe("StudyPlanBuilderPageClient", () => {
     render(<StudyPlanBuilderPageClient collectionId="leaf-1" />);
 
     fireEvent.click(await screen.findByLabelText("Move Skeletal System down"));
-    fireEvent.click(screen.getByRole("button", { name: "Save order" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
 
     // ⚠️ The message must carry the CONSEQUENCE as well as the cause. makeErrorMessage returns
     // error.message whenever one exists, so a tailored message passed as a *fallback* is dead on
     // every real server error — the curator would see a bare cause and never learn what it stopped.
     const failure = await screen.findByText(/Order service unavailable/);
     expect(failure).toHaveTextContent(/could not save/i);
-    expect(screen.getByRole("button", { name: "Save order" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Save changes" })).toBeInTheDocument();
     expect(screen.getByText("Muscle Groups").compareDocumentPosition(screen.getByText("Skeletal System")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  // ---- v0.140.0: the dirty-state sticky bar and the three-choice navigation dialog ----
+
+  const dirtyLeafPlan = () => collectionDetail("leaf-1", "Anatomy Plan", [
+    { ...collectionItem("note-1", "Skeletal System", 0), label: "Algebra" },
+    { ...collectionItem("note-2", "Muscle Groups", 1), label: "Algebra" },
+  ], { parentCollectionId: null, childCount: 0 });
+
+  it("shows the sticky bar only while changes are pending, and never a second Save control", async () => {
+    // ⚠️ THE "NEVER A SECOND SAVE" HALF IS THE POINT, not a nicety. The whole defect is that the
+    // only commit control lived in a card header that scrolls out of view on a 79-note plan. If a
+    // future change restores the header buttons "for convenience", the bar stops being the dominant
+    // affordance and this release is undone — so assert there is exactly ONE.
+    (getCollection as jest.Mock).mockResolvedValue(dirtyLeafPlan());
+    render(<StudyPlanBuilderPageClient collectionId="leaf-1" />);
+
+    // Clean: no bar at all.
+    await screen.findByLabelText("Move Skeletal System down");
+    expect(screen.queryByTestId("leaf-order-sticky-bar")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Save changes" })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByLabelText("Move Skeletal System down"));
+
+    const bar = screen.getByTestId("leaf-order-sticky-bar");
+    expect(bar).toBeInTheDocument();
+    expect(within(bar).getByText("Drag changes not saved")).toBeInTheDocument();
+    // ⚠️ MATCH ON /save/i, NOT ON THE EXACT LABEL. A cold pressure test showed the exact-label form was
+    // bypassable: the header control this release removed was called "Save order", so restoring it under
+    // its OWN name passed an assertion pinned to "Save changes" — the commit claimed CI would catch that
+    // and it would not have. The invariant is "one commit control on the page, and it lives in the bar",
+    // which no relabelling can satisfy twice.
+    const saveControls = screen.getAllByRole("button", { name: /save/i });
+    expect(saveControls).toHaveLength(1);
+    expect(within(bar).getByRole("button", { name: /save/i })).toBe(saveControls[0]);
+    const discardControls = screen.getAllByRole("button", { name: /discard/i });
+    expect(discardControls).toHaveLength(1);
+    expect(within(bar).getByRole("button", { name: /discard/i })).toBe(discardControls[0]);
+
+    fireEvent.click(within(bar).getByRole("button", { name: "Save changes" }));
+    await waitFor(() => expect(setCollectionItemOrder).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.queryByTestId("leaf-order-sticky-bar")).not.toBeInTheDocument());
+  });
+
+  it("claims the bottom viewport while the bar is up, so it cannot cover the mobile tab bar", async () => {
+    // ⚠️ FOUND BY A COLD PRESSURE TEST, NOT BY THIS SUITE, AND IT IS DETERMINABLE FROM CLASS NAMES ALONE.
+    // The bar is `sticky bottom-4 z-30`; MobileBottomTabBar is `fixed inset-x-0 bottom-0 z-20 md:hidden`
+    // and 5.5rem tall. Higher stacking order plus a 1rem offset means that on a phone the bar pins
+    // directly OVER the navigation and wins. `mobile_tab_bar_enabled` defaults TRUE (V94), so that is the
+    // default experience. app-shell.tsx:584 gates the tab bar on `!isBottomViewportClaimed`, which is the
+    // mechanism Long Exam, Challenge Quiz and Quick Review already use.
+    // ⚠️ The claim must track the BAR, not the page: claiming it while merely browsing would delete the
+    // curator's navigation for no reason.
+    (getCollection as jest.Mock).mockResolvedValue(dirtyLeafPlan());
+    render(<StudyPlanBuilderPageClient collectionId="leaf-1" />);
+
+    await screen.findByLabelText("Move Skeletal System down");
+    expect(useBottomViewportClaimMock).toHaveBeenLastCalledWith(false);
+
+    fireEvent.click(screen.getByLabelText("Move Skeletal System down"));
+    expect(screen.getByTestId("leaf-order-sticky-bar")).toBeInTheDocument();
+    expect(useBottomViewportClaimMock).toHaveBeenLastCalledWith(true);
+
+    fireEvent.click(within(screen.getByTestId("leaf-order-sticky-bar")).getByRole("button", { name: /discard/i }));
+    expect(screen.queryByTestId("leaf-order-sticky-bar")).not.toBeInTheDocument();
+    expect(useBottomViewportClaimMock).toHaveBeenLastCalledWith(false);
+  });
+
+  it("does NOT navigate when Save and leave fails, and says so", async () => {
+    // ⚠️ THE DISCRIMINATING TEST FOR THIS RELEASE. A three-choice dialog that navigates on a FAILED
+    // save is a NEW way to lose pending work — strictly worse than the two-choice confirm() it
+    // replaced. A test that only asserts "the dialog appears" passes under both the defect and the
+    // fix; this one fails under the defect.
+    (setCollectionItemOrder as jest.Mock).mockRejectedValueOnce(new Error("Order service unavailable"));
+    (getCollection as jest.Mock).mockResolvedValue(dirtyLeafPlan());
+    render(<StudyPlanBuilderPageClient collectionId="leaf-1" />);
+
+    fireEvent.click(await screen.findByLabelText("Move Skeletal System down"));
+    fireEvent.click(screen.getByRole("link", { name: "Back to plan" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save and leave" }));
+
+    await screen.findByRole("alert");
+    expect(pushMock).not.toHaveBeenCalled();
+    // Still here, still dirty, and the work is still on screen in its pending order.
+    expect(screen.getByRole("button", { name: "Save and leave" })).toBeInTheDocument();
+    expect(screen.getByTestId("leaf-order-sticky-bar")).toBeInTheDocument();
+    expect(screen.getByText("Muscle Groups").compareDocumentPosition(screen.getByText("Skeletal System")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("navigates on Save and leave once the save succeeds", async () => {
+    (getCollection as jest.Mock).mockResolvedValue(dirtyLeafPlan());
+    render(<StudyPlanBuilderPageClient collectionId="leaf-1" />);
+
+    fireEvent.click(await screen.findByLabelText("Move Skeletal System down"));
+    fireEvent.click(screen.getByRole("link", { name: "Back to plan" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save and leave" }));
+
+    await waitFor(() => expect(setCollectionItemOrder).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(pushMock).toHaveBeenCalledWith("/collections/leaf-1"));
+  });
+
+  it("drops the pending order and navigates on Discard and leave", async () => {
+    (getCollection as jest.Mock).mockResolvedValue(dirtyLeafPlan());
+    render(<StudyPlanBuilderPageClient collectionId="leaf-1" />);
+
+    fireEvent.click(await screen.findByLabelText("Move Skeletal System down"));
+    fireEvent.click(screen.getByRole("link", { name: "Back to plan" }));
+    // Pending state before: the drag put Muscle Groups ahead of Skeletal System.
+    expect(screen.getByText("Muscle Groups").compareDocumentPosition(screen.getByText("Skeletal System")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Discard and leave" }));
+
+    // ⚠️ Assert the discard ACTUALLY TOOK EFFECT, not merely that nothing was written.
+    // handleDiscardLeafOrder early-returns when a mutation is in flight, so "no write happened"
+    // is also true of a discard that silently did nothing — the curator would then navigate away
+    // believing their pending drags were dropped when the state was never touched.
+    expect(screen.getByText("Skeletal System").compareDocumentPosition(screen.getByText("Muscle Groups")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.queryByTestId("leaf-order-sticky-bar")).not.toBeInTheDocument();
+    await waitFor(() => expect(pushMock).toHaveBeenCalledWith("/collections/leaf-1"));
+    // "Discard" means discard: nothing was written on the way out.
+    expect(setCollectionItemOrder).not.toHaveBeenCalled();
+  });
+
+  it("leaves a modified click alone, because it does not replace this page", async () => {
+    // ⚠️ A cmd/ctrl-click opens a new tab and leaves the builder — and its pending drags — exactly
+    // where they are. Interrupting it would be a dialog for a problem that does not exist, and the
+    // curator would lose the new tab. Regression guard for over-eager interception.
+    (getCollection as jest.Mock).mockResolvedValue(dirtyLeafPlan());
+    render(<StudyPlanBuilderPageClient collectionId="leaf-1" />);
+
+    fireEvent.click(await screen.findByLabelText("Move Skeletal System down"));
+    const held = fireEvent.click(screen.getByRole("link", { name: "Back to plan" }), { metaKey: true });
+
+    expect(held).toBe(true);
+    expect(screen.queryByRole("button", { name: "Save and leave" })).not.toBeInTheDocument();
   });
 
   it("discards back to the last-saved order and guards leaving while dirty", async () => {
@@ -672,13 +815,21 @@ describe("StudyPlanBuilderPageClient", () => {
     const beforeUnload = new Event("beforeunload", { cancelable: true });
     globalThis.dispatchEvent(beforeUnload);
     expect(beforeUnload.defaultPrevented).toBe(true);
-    const confirmSpy = jest.spyOn(globalThis, "confirm").mockReturnValue(false);
+    // ⚠️ v0.140.0 replaced the two-choice confirm() with a three-choice dialog. A curator who had
+    // genuinely finished previously had NO way to leave WITH their work — the only options were
+    // "lose it" or "stay". The click must still be held (returns false = default prevented).
     expect(fireEvent.click(screen.getByRole("link", { name: "Back to plan" }))).toBe(false);
-    expect(confirmSpy).toHaveBeenCalledWith(expect.stringMatching(/without saving/i));
-    confirmSpy.mockRestore();
+    expect(screen.getByRole("button", { name: "Save and leave" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Discard and leave" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Keep editing" })).toBeInTheDocument();
+    // Holding the navigation means exactly that: nothing has navigated yet.
+    expect(pushMock).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Keep editing" }));
+    expect(screen.queryByRole("button", { name: "Save and leave" })).not.toBeInTheDocument();
+    expect(pushMock).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole("button", { name: "Discard" }));
-    expect(screen.queryByRole("button", { name: "Save order" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Save changes" })).not.toBeInTheDocument();
     expect(screen.getByText("Skeletal System").compareDocumentPosition(screen.getByText("Muscle Groups")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(setCollectionItemOrder).not.toHaveBeenCalled();
   });
