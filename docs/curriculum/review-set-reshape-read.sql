@@ -41,6 +41,14 @@
 --   reads them; every query uses the placeholders above.
 --     ALE  root = b0db3648-c520-40a5-8e0b-f8ebfcdef102   programs = 'Architecture', 'Architectural Engineering'
 --     LET  root = d84dcf18-f4aa-409c-91e9-36c02d6c7580   programs = 'Education', 'Special Needs Education – Generalist'
+--     PNLE root = 682e0abc-9aa6-46b2-9b4a-2b238cbf2084   programs = 'Nursing'
+--     CE   root = b292e737-bb40-4146-9e2e-38f539b82433   programs = 'Civil Engineering'
+--
+-- ⚠️ CHOOSE THE BENCHMARK BY WHAT THE TARGET *IS*, NOT BY WHICH SET IS BIGGEST. 'civil' is the
+-- deepest set, but Civil Engineering is deliberately BROADER than its licensure exam, so for a
+-- licensure reviewer it models the wrong shape. For PNLE the benchmark was 'LET' — the freshest
+-- PRC-aligned rebuild (6 plans / 42 sections / 321 notes). Supply exactly ONE benchmark: two
+-- incompatible templates invite the strategist to average them.
 --
 -- ⚠️ THIS FILE MUST STAY PROGRAM-AGNOSTIC. It shipped once half-templated — three queries kept a
 -- hardcoded root id while others used the placeholder — so a find-and-replace for a DIFFERENT set
@@ -237,6 +245,11 @@ ORDER BY notes DESC, subject;
 -- ---------------------------------------------------------------------------
 -- Q5. THE OVERLAP QUESTION — subjects in the BENCHMARK set, and whether that material is
 -- already applicable to the target program(s).
+--
+-- ⚠️ SKIP Q5 WHEN THE BENCHMARK SHARES NO CONTENT WITH THE TARGET. Q5 only says something when
+-- benchmark and target are neighbouring disciplines (Architecture/Civil Engineering). On the PNLE
+-- pass the benchmark was LET, and 0 of 319 LET notes were Nursing-tagged — Q5 would have been 42
+-- rows of zeros. Check that one count first; if it is 0, say so in notes.md and omit the sheet.
 --
 -- Read as: "CE teaches this; is it tagged for Architecture, and is it in the Archi set?"
 -- `arch_tagged = 0` with a high `ce_notes` means the material exists but nobody has decided
