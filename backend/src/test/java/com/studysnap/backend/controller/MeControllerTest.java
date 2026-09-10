@@ -10,6 +10,7 @@ import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.entity.UserRole;
 import com.studysnap.backend.repository.UserRepository;
 import com.studysnap.backend.security.AuthenticatedUser;
+import com.studysnap.backend.service.AuthService;
 import com.studysnap.backend.service.MePlanService;
 import com.studysnap.backend.service.ProgressReportService;
 import org.junit.jupiter.api.BeforeEach;
@@ -17,6 +18,13 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.core.MethodParameter;
+import org.springframework.http.MediaType;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.web.bind.support.WebDataBinderFactory;
+import org.springframework.web.context.request.NativeWebRequest;
+import org.springframework.web.method.support.HandlerMethodArgumentResolver;
+import org.springframework.web.method.support.ModelAndViewContainer;
 
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -29,6 +37,10 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.springframework.test.web.servlet.setup.MockMvcBuilders.standaloneSetup;
 
 @ExtendWith(MockitoExtension.class)
 class MeControllerTest {
@@ -41,12 +53,14 @@ class MeControllerTest {
 
     @Mock
     private UserRepository userRepository;
+    @Mock
+    private AuthService authService;
 
     private MeController meController;
 
     @BeforeEach
     void setUp() {
-        meController = new MeController(mePlanService, progressReportService, userRepository);
+        meController = new MeController(mePlanService, progressReportService, userRepository, authService);
     }
 
     @Test
@@ -152,5 +166,42 @@ class MeControllerTest {
 
         assertThat(response).isNull();
         verify(progressReportService).buildGoalNudge(eq(userId), eq("Biochemistry"), any(OffsetDateTime.class));
+    }
+    @Test
+    void recordReviewCommitmentPrompted_acceptsAJsonPostRequest() throws Exception {
+        UUID userId = UUID.randomUUID();
+        AuthenticatedUser user = new AuthenticatedUser(userId, UserRole.USER, true, 1);
+        when(authService.recordReviewCommitmentPrompted(userId))
+                .thenReturn(new com.studysnap.backend.dto.SimpleMessageResponse("recorded"));
+
+        buildMockMvc(user)
+                .perform(post("/me/review-commitment/prompted")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("recorded"));
+
+        verify(authService).recordReviewCommitmentPrompted(userId);
+    }
+
+    private MockMvc buildMockMvc(AuthenticatedUser routeUser) {
+        return standaloneSetup(meController)
+                .setCustomArgumentResolvers(new HandlerMethodArgumentResolver() {
+                    @Override
+                    public boolean supportsParameter(MethodParameter parameter) {
+                        return parameter.getParameterType() == AuthenticatedUser.class;
+                    }
+
+                    @Override
+                    public Object resolveArgument(
+                            MethodParameter parameter,
+                            ModelAndViewContainer mavContainer,
+                            NativeWebRequest webRequest,
+                            WebDataBinderFactory binderFactory
+                    ) {
+                        return routeUser;
+                    }
+                })
+                .build();
     }
 }

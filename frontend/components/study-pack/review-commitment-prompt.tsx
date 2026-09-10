@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   getMe,
+  recordReviewCommitmentPrompted,
   trackAnalyticsEvent,
   updateReviewCommitment,
   type ReviewDay,
@@ -20,13 +21,18 @@ const REVIEW_DAY_OPTIONS: ReadonlyArray<{ value: ReviewDay; label: string }> = [
 ];
 const DEFAULT_REVIEW_DAYS: ReviewDay[] = ["MONDAY", "WEDNESDAY", "FRIDAY"];
 
-type ReviewCommitmentPromptProps = {
-  isFirstCompletedSessionEver?: boolean;
-  noteId: string | null;
-};
+type ReviewCommitmentPromptProps = { noteId: string | null };
 
+// ⚠️ THIS COMPONENT NO LONGER GATES ITSELF ON SESSION COMPLETION, AND THAT IS A CONTRACT CHANGE.
+// It used to take `isFirstCompletedSessionEver` and hide itself when the prop was not true, so it was
+// safe to render anywhere. Server-owned eligibility replaced that prop, and the server's rule is
+// deliberately about the ASK (unanswered, under the cap, outside the cooldown) -- it says nothing
+// about whether a session just finished. All five current call sites render inside a completion
+// branch (`isComplete`, a `masteryReport`, or a `result`), so the behaviour is unchanged today.
+// ⚠️ RENDERING THIS OUTSIDE A COMPLETION BRANCH WOULD SHOW THE PROMPT TO SOMEONE WHO HAS JUST OPENED
+// THE PAGE, and would burn one of their three lifetime impressions doing it. Keep it in a completion
+// branch, or reintroduce an explicit gate -- do not rely on this comment alone.
 export function ReviewCommitmentPrompt({
-  isFirstCompletedSessionEver,
   noteId,
 }: Readonly<ReviewCommitmentPromptProps>) {
   const [visible, setVisible] = useState(false);
@@ -71,11 +77,6 @@ export function ReviewCommitmentPrompt({
   }, [trackDismissed]);
 
   useEffect(() => {
-    if (isFirstCompletedSessionEver !== true) {
-      promptVisibleRef.current = false;
-      setVisible(false);
-      return;
-    }
     let active = true;
     void getMe()
       .then((me) => {
@@ -86,7 +87,7 @@ export function ReviewCommitmentPrompt({
         // exam date would exclude every STUDENT (~27% of accounts) because onboarding only collects that
         // date for BOARD_EXAM. The post-session surface is itself the filter -- only people who study
         // reach it -- and the digest self-limits later when nothing is due.
-        const shouldShow = me.reviewCommitmentOutstanding;
+        const shouldShow = me.reviewCommitmentPromptEligible;
         // The exam-date sub-field stays where the field already lives, rather than generalising it.
         setShowExamDate(me.examDate !== null || me.profileType === "BOARD_EXAM");
         setExamDate(me.examDate ?? "");
@@ -95,9 +96,15 @@ export function ReviewCommitmentPrompt({
         setVisible(shouldShow);
         if (shouldShow && shownTrackedRef.current === "unseen") {
           shownTrackedRef.current = "shown";
+          const impressionKey = `notelib-review-commitment-prompted-${me.id}-${me.reviewCommitmentPromptCount}`;
+          if (!globalThis.sessionStorage?.getItem(impressionKey)) {
+            void recordReviewCommitmentPrompted()
+              .then(() => globalThis.sessionStorage?.setItem(impressionKey, "1"))
+              .catch(() => undefined);
+          }
           void trackAnalyticsEvent({
             eventType: "REVIEW_COMMITMENT_PROMPT_SHOWN",
-            entityId: noteId,
+            entityId: noteIdRef.current,
             metadata: { hasExamDate: me.examDate !== null, profileType: me.profileType },
           });
         }
@@ -106,7 +113,7 @@ export function ReviewCommitmentPrompt({
     return () => {
       active = false;
     };
-  }, [isFirstCompletedSessionEver, noteId]);
+  }, []);
 
   const toggleReviewDay = (day: ReviewDay) => {
     setReviewDays((current) => current.includes(day)
@@ -116,12 +123,6 @@ export function ReviewCommitmentPrompt({
   };
 
   const save = async (declined: boolean) => {
-    // Only require the date where the field is rendered; a STUDENT cannot have one and would be
-    // permanently blocked from committing otherwise.
-    if (!declined && showExamDate && !examDate) {
-      setError("Choose your exam date before setting your review plan.");
-      return;
-    }
     if (!declined && reviewDays.length === 0) {
       setError("Choose at least one review day.");
       return;
@@ -157,7 +158,16 @@ export function ReviewCommitmentPrompt({
       <div className="space-y-1">
         <p className="text-xs font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300">Plan your next chapter</p>
         <h2 className="text-lg font-semibold">When will you come back?</h2>
-        <p className="text-sm text-foreground/75">Choose the days you want NoteLib to remind you when concepts are due.</p>
+        {/* ⚠️ This sentence is unconditional ON PURPOSE, and it is only true because the SERVER
+            refuses to render this prompt when the due-concepts digest is off (see
+            AuthService#isReviewCommitmentPromptEligible). It was briefly conditional, after the
+            v0.139.0 cold agent found it was false for 252 of 396 accounts; the owner then chose not
+            to ask those learners at all, which makes the claim true by construction and the other
+            branch dead. ⚠️ If eligibility ever stops checking the preference, this line becomes a
+            lie again -- change them together or not at all. */}
+        <p className="text-sm text-foreground/75">
+          You already get a weekly nudge when concepts are due. Choose your review days to get a nudge on every selected day when there is something to review.
+        </p>
       </div>
       {showExamDate ? (
       <label className="block space-y-1 text-sm font-medium">

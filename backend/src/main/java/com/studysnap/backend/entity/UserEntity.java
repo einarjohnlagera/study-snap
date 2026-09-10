@@ -111,6 +111,12 @@ public class UserEntity {
     @Column(name = "review_commitment_prompted_at")
     private OffsetDateTime reviewCommitmentPromptedAt;
 
+    @Column(name = "review_commitment_prompt_count", nullable = false)
+    private Integer reviewCommitmentPromptCount = 0;
+
+    @Column(name = "review_commitment_last_prompted_at")
+    private OffsetDateTime reviewCommitmentLastPromptedAt;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "engagement_mode", nullable = false, length = 32)
     private EngagementMode engagementMode;

@@ -115,6 +115,8 @@ class DashboardServiceProjectionIntegrationTest {
                     exam_date date,
                     review_days text array,
                     review_commitment_prompted_at timestamp with time zone,
+                    review_commitment_prompt_count integer not null default 0,
+                    review_commitment_last_prompted_at timestamp with time zone,
                     engagement_mode varchar(32) not null,
                     inactivity_reminders_enabled boolean not null,
                     weak_concept_reminders_enabled boolean not null,

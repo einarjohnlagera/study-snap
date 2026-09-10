@@ -1211,7 +1211,6 @@ export default function QuickReviewPage() {
           </div>
 
           <ReviewCommitmentPrompt
-            isFirstCompletedSessionEver={persistedResult?.isFirstCompletedSessionEver}
             noteId={note?.id ?? null}
           />
           {hasNextStepGuidance ? (

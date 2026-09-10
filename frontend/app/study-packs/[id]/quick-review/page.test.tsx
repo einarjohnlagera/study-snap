@@ -67,6 +67,7 @@ jest.mock("@/lib/api", () => ({
   getMyStudyPack: jest.fn(),
   getPostSessionNextStep: jest.fn(),
   getNote: jest.fn(),
+  recordReviewCommitmentPrompted: jest.fn().mockResolvedValue({ message: "recorded" }),
   saveQuickReviewConfidence: jest.fn(),
   startQuickReviewSession: jest.fn(),
   trackAnalyticsEvent: jest.fn(),
@@ -217,6 +218,7 @@ describe("QuickReviewPage post-quiz UX", () => {
     searchParamsValue = "";
     pushMock.mockReset();
     window.localStorage.clear();
+    window.sessionStorage.clear();
     (getAuthUser as jest.Mock).mockReset();
     (setAuthUser as jest.Mock).mockReset();
     (completeProductOnboarding as jest.Mock).mockReset();
@@ -347,6 +349,15 @@ describe("QuickReviewPage post-quiz UX", () => {
 
   it("keeps the standard header for a returning learner", async () => {
     setupCompleteState();
+    (getMe as jest.Mock).mockResolvedValue({
+      id: "user-1",
+      learnerLevel: "COLLEGE",
+      examDate: null,
+      profileType: "STUDENT",
+      reviewDays: [],
+      reviewCommitmentPromptEligible: true,
+      reviewCommitmentPromptCount: 0,
+    });
     (completeQuickReviewSession as jest.Mock).mockResolvedValue({
       ...baseResult,
       isFirstCompletedQuiz: false,
@@ -360,6 +371,7 @@ describe("QuickReviewPage post-quiz UX", () => {
 
     expect(await screen.findByRole("heading", { name: "Your results" })).toBeInTheDocument();
     expect(screen.queryByText(/concept secured/)).not.toBeInTheDocument();
+    expect(await screen.findByText("When will you come back?")).toBeInTheDocument();
   });
 
   it("does not re-announce the unlock when the pack was mastered in an earlier session", async () => {

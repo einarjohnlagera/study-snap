@@ -75,6 +75,7 @@ jest.mock("@/lib/api", () => ({
     error?.code === "NOT_ENOUGH_MISSED_CHALLENGE_QUESTIONS"
   ),
   listNotes: jest.fn(),
+  recordReviewCommitmentPrompted: jest.fn().mockResolvedValue({ message: "recorded" }),
   startRedoMissedChallengeQuizSession: jest.fn(),
   startChallengeQuizSession: jest.fn(),
   trackAnalyticsEvent: jest.fn(),
@@ -1433,6 +1434,15 @@ describe("ChallengeQuizPage", () => {
   it("submits immediately on manual submit when every question is answered", async () => {
     setupInProgressChallengeQuiz();
     mockCompletedChallengeQuiz();
+    (getMe as jest.Mock).mockResolvedValue({
+      id: "user-1",
+      learnerLevel: "COLLEGE",
+      examDate: null,
+      profileType: "STUDENT",
+      reviewDays: [],
+      reviewCommitmentPromptEligible: true,
+      reviewCommitmentPromptCount: 0,
+    });
 
     render(<ChallengeQuizPage />);
 
@@ -1443,6 +1453,7 @@ describe("ChallengeQuizPage", () => {
 
     await waitFor(() => expect(completeChallengeQuizSession).toHaveBeenCalledTimes(1));
     expect(screen.queryByRole("dialog", { name: "Submit with unanswered questions?" })).not.toBeInTheDocument();
+    expect(await screen.findByText("When will you come back?")).toBeInTheDocument();
   });
 
   it("blocks manual submit and shows the unanswered count", async () => {
@@ -1905,6 +1916,15 @@ describe("ChallengeQuizPage", () => {
       completedAt: "2026-03-21T10:01:00Z",
       isFirstCompletedSessionEver: false,
     });
+    (getMe as jest.Mock).mockResolvedValue({
+      id: "user-1",
+      learnerLevel: "COLLEGE",
+      examDate: null,
+      profileType: "STUDENT",
+      reviewDays: [],
+      reviewCommitmentPromptEligible: true,
+      reviewCommitmentPromptCount: 0,
+    });
 
     render(<ChallengeQuizPage />);
 
@@ -1913,6 +1933,7 @@ describe("ChallengeQuizPage", () => {
     await screen.findByText("Board Exam Result");
 
     expect(screen.queryByRole("button", { name: /^Note$/ })).not.toBeInTheDocument();
+    expect(await screen.findByText("When will you come back?")).toBeInTheDocument();
     expect(screen.getByText("Was this quiz helpful?")).toBeInTheDocument();
     expect(screen.queryByText("How did your first quiz go?")).not.toBeInTheDocument();
   });

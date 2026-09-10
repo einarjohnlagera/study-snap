@@ -48,6 +48,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 @Slf4j
 public class RetentionService {
+    private static final int COMMITTED_DUE_CONCEPTS_DIGEST_COOLDOWN_DAYS = 1;
     private static final int SESSION_LOOKBACK_LIMIT = 10;
     private static final String SESSION_STATE_FOCUS_CONCEPTS = "focusConcepts";
     private static final String FOCUS_SOURCE_STUDY_PACK_ID_KEY = "sourceStudyPackId";
@@ -349,7 +350,7 @@ public class RetentionService {
         if (!cooldownElapsed(
                 user.getId(),
                 RetentionEmailType.DUE_CONCEPTS_DIGEST,
-                properties.getRetention().getDueConceptsDigestCooldownDays(),
+                dueConceptsDigestCooldownDays(user),
                 now
         )) {
             return Optional.empty();
@@ -406,6 +407,13 @@ public class RetentionService {
             return true;
         }
         return Arrays.stream(reviewDays).anyMatch(dispatchDay.name()::equals);
+    }
+
+    private int dueConceptsDigestCooldownDays(UserEntity user) {
+        String[] reviewDays = user.getReviewDays();
+        return reviewDays == null || reviewDays.length == 0
+                ? properties.getRetention().getDueConceptsDigestCooldownDays()
+                : COMMITTED_DUE_CONCEPTS_DIGEST_COOLDOWN_DAYS;
     }
 
     private Optional<KnowledgeImpactDigestReminder> buildKnowledgeImpactDigestReminder(
