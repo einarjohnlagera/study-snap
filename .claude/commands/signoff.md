@@ -130,12 +130,15 @@ Open a PR from `releases/vX.Y.Z` → `main`. PR description comes from the relea
 **⚠️ THEN VERIFY THE MERGE ACTUALLY DEPLOYED — a merge is not a deploy, and this is the step whose absence shipped a broken feature.**
 
 ```bash
+# ⚠️ WAIT ~5 MINUTES AFTER THE MERGE FIRST — see below.
 RENDER_API_KEY=… scripts/check-deploys.sh   # exit 0 = both platforms serve origin/main
 ```
 
 **Why this exists.** On 2026-09-09 the `v0.136.0` merge to `main` auto-deployed on **neither** platform. Render's config was correct and every prior release had fired in 2–3 seconds; Vercel had a Production deployment for every prior release merge and **none** for this one. Both are GitHub App integrations consuming the same push event, and neither received it — GitHub declared no incident. The result was a live skew: a `v0.136.0` backend serving a `v0.135.0` frontend, calling an endpoint form that release had just made a 400. **The shipped feature was dead on arrival and nothing noticed for six hours.**
 
 **⚠️ RENDER'S `notifyOnFail` CANNOT CATCH THIS, AND NEITHER CAN AN `on: push` CI JOB.** Nothing failed — nothing was ever queued — so a notify-on-failure had nothing to fire on; and a workflow triggered by the push event cannot detect that same event going missing. **The check must test for ABSENCE, and it must run on a schedule or by hand.**
+
+**⚠️⚠️ WAIT PAST THE DEPLOY WINDOW BEFORE RUNNING IT — A TEST FOR ABSENCE THAT RUNS TOO EARLY MANUFACTURES ITS OWN FALSE POSITIVE.** On 2026-09-10 a session ran this ~4 minutes after a merge, saw no Vercel deployment, and reported `v0.138.0` as MISSED. **It had not been missed:** Vercel created the deployment at 01:21:06Z against a 01:16:42Z merge (**4m24s**), Render went live at 01:18:59Z, and **both platforms had auto-deployed normally.** An in-flight deploy was read as an absence, and a release section was scoped around it before the error was caught. **Observed latency is ~2–5 minutes on both platforms, so wait at least five.** The script cannot know when you merged, so it cannot enforce this — **the waiting is yours.** ⚠️ **The real record: ONE confirmed Vercel miss (`v0.136.0`), not a chronic fault.** Do not repeat a "Vercel keeps missing deploys" claim without re-reading the deployments API.
 
 **⚠️ THE SCRIPT EXITS 2 RATHER THAN 0 WHEN IT CANNOT CHECK** (missing key, API error). Do not read that as a pass — "I could not look" reported as "all clear" is the same failure class.
 
