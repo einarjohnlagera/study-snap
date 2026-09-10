@@ -136,16 +136,41 @@ hard Domain Context rules can actually be *checked* rather than recited:
 
 **This rule exists because the column was lost twice.** It first existed only as a HAND-EDIT of the
 `.xlsx`, which regeneration silently destroyed. It was then generated from the plan file for ALE —
-but LET's `.tsv` was never backfilled, so `let-comprehensive-review.tsv` does **not** reproduce
-`let-comprehensive-review-target-shape.xlsx`: rebuilding LET from its own committed source drops
-the Applicable Programs column. That is the documented rule ("edit the TSV and regenerate")
-destroying data by being followed. A missing column that only shows up as a silent omission is
-worth a hard failure.
+but LET's `.tsv` was never backfilled, so `let-comprehensive-review.tsv` did **not** reproduce
+`let-comprehensive-review-target-shape.xlsx`: rebuilding LET from its own committed source dropped
+the Applicable Programs column. That was the documented rule ("edit the TSV and regenerate")
+destroying data by being followed.
 
-**Legacy files that predate this rule** — `civil-engineering-comprehensive-review.tsv` and
-`let-comprehensive-review.tsv` — need `applicable_programs` backfilled from production before they
-can be rebuilt. Until then the builder will refuse them, which is the correct outcome: for LET,
-refusing to build is strictly better than building something lossy.
+**LET was backfilled 2026-09-10 and is now idempotent** — its `.tsv` reproduces its workbook
+exactly. The values were recovered from the workbook by reverse-mapping on
+`(note_subject, domain_context)`, **not** re-read from production, because they are a curated
+DECISION about what each note should carry rather than a snapshot of what it carries today. That
+distinction matters: a production read would have silently overwritten the policy below.
+
+**⚠️ The backfill also showed the first diagnosis was incomplete, which is worth recording.** The
+loss was reported as "the Domain Context sheet loses its Applicable Programs column". True, but the
+hand-edit had added that column in FOUR places — the Domain Context sheet, every plan sheet, the By
+Subject sheet, and two prose policy blocks — and the builder generated only the first. It had also
+been applied INCONSISTENTLY: plan sheets 5 and 6 carried it and sheets 1–4 did not, which no reader
+would notice. **When you find a hand edit, enumerate every sheet before assuming you have found all
+of it.** The builder now emits the column on every sheet, so the inconsistency cannot recur.
+
+**`civil-engineering-comprehensive-review.tsv` is the one file still owing a backfill** and the
+builder refuses it until it gets one. Unlike LET there is nothing to recover from its workbook —
+that workbook predates the column entirely — so its values must come from a production read or a
+fresh curation decision.
+
+## The policy sidecar
+
+A set may carry `<set>-policy.tsv` (columns: `topic`, `decision`; the first row is the header pair).
+It renders beside the Domain Context table and as a summary under the Overview totals. Use it for
+decisions that govern Applicable Programs but are not per-note — LET's, for example, records that
+General Education notes must NOT get the broad `Education` umbrella while Education-specific notes
+must.
+
+**It exists for the same reason the column does.** LET's policy started as prose typed directly into
+the `.xlsx`, so regenerating destroyed it — the identical failure, one layer up. **Anything a
+curator writes into a workbook needs a file that regenerates it, or the next rebuild is a delete.**
 
 ## Editing the workbook later
 
@@ -169,6 +194,7 @@ column — rebuild from the TSV and diff, or the check is not a check.**
 | `review-set-reshape-read.sql` | the read that gathers a strategist's inputs; parameterised by collection id |
 | `build_review_set_workbook.py` | the builder — data-driven, no per-set logic |
 | `<set>.tsv` | the source rows; regenerable input, diffable, **the thing to edit** |
+| `<set>-policy.tsv` | OPTIONAL per-set Applicable Programs policy (`topic`, `decision`); renders beside the Domain Context table and under the Overview totals |
 | `<set>-target-shape.xlsx` | the generated deliverable |
 
 A `.csv` deliverable was tried and dropped: it duplicated the TSV's content while being worse to
