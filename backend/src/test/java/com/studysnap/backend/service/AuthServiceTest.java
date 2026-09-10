@@ -1068,6 +1068,56 @@ class AuthServiceTest {
         assertThat(user.getReviewCommitmentPromptedAt()).isNotNull();
     }
 
+    @Test
+    void recordReviewCommitmentPrompted_isIdempotentAndKeepsTheCommitmentOutstanding() {
+        UUID userId = UUID.randomUUID();
+        UserEntity user = reviewCommitmentUser(userId);
+        when(userRepository.findByIdForUpdate(userId)).thenReturn(Optional.of(user));
+        stubReviewCommitmentResponse(userId, user);
+
+        authService.recordReviewCommitmentPrompted(userId);
+        authService.recordReviewCommitmentPrompted(userId);
+        MeResponse response = authService.getMe(userId);
+
+        assertThat(user.getReviewCommitmentPromptCount()).isEqualTo(1);
+        assertThat(user.getReviewCommitmentLastPromptedAt()).isNotNull();
+        assertThat(user.getReviewCommitmentPromptedAt()).isNull();
+        assertThat(response.reviewCommitmentOutstanding()).isTrue();
+        assertThat(response.reviewCommitmentPromptEligible()).isFalse();
+    }
+
+    @Test
+    void getMe_capsReviewCommitmentPromptsAfterThreeImpressions() {
+        UUID userId = UUID.randomUUID();
+        UserEntity user = reviewCommitmentUser(userId);
+        user.setReviewCommitmentPromptCount(3);
+        user.setReviewCommitmentLastPromptedAt(OffsetDateTime.now().minusDays(15));
+        stubReviewCommitmentResponse(userId, user);
+
+        assertThat(authService.getMe(userId).reviewCommitmentPromptEligible()).isFalse();
+    }
+
+    @Test
+    void getMe_hidesReviewCommitmentPromptInsideFourteenDayCooldown() {
+        UUID userId = UUID.randomUUID();
+        UserEntity user = reviewCommitmentUser(userId);
+        user.setReviewCommitmentPromptCount(1);
+        user.setReviewCommitmentLastPromptedAt(OffsetDateTime.now().minusDays(13));
+        stubReviewCommitmentResponse(userId, user);
+
+        assertThat(authService.getMe(userId).reviewCommitmentPromptEligible()).isFalse();
+    }
+
+    @Test
+    void getMe_neverShowsReviewCommitmentPromptAfterItWasAnswered() {
+        UUID userId = UUID.randomUUID();
+        UserEntity user = reviewCommitmentUser(userId);
+        user.setReviewCommitmentPromptedAt(OffsetDateTime.now().minusDays(30));
+        stubReviewCommitmentResponse(userId, user);
+
+        assertThat(authService.getMe(userId).reviewCommitmentPromptEligible()).isFalse();
+    }
+
     private UserEntity reviewCommitmentUser(UUID userId) {
         UserEntity user = new UserEntity();
         user.setId(userId);

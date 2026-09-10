@@ -16,7 +16,9 @@ The write endpoint is `POST /auth/preferences/email-preferences`.
 
 Settings also lets learners edit `reviewDays`, the weekdays on which the daily due-concepts digest
 sweep may select them. Those days are initially collected by the post-session review commitment
-prompt; its current behavior and the null/empty scheduling rule are documented in
+prompt. Choosing days changes the digest from a seven-day cooldown to a one-day cooldown while
+restricting delivery to those selected days; learners without chosen days keep the existing weekly
+nudge. The prompt rules and the null/empty scheduling rule are documented in
 [`retention-emails.md`](retention-emails.md#review-commitment-prompt).
 
 ## Unsubscribe Links

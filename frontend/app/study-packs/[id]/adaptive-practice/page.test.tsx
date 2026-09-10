@@ -64,12 +64,14 @@ jest.mock("@/lib/api", () => ({
   getNote: jest.fn(),
   getPostSessionNextStep: jest.fn(),
   isEmailNotVerifiedError: () => false,
+  recordReviewCommitmentPrompted: jest.fn().mockResolvedValue({ message: "recorded" }),
   trackAnalyticsEvent: jest.fn(),
 }));
 
 describe("AdaptivePracticePage", () => {
   beforeEach(() => {
     window.localStorage.clear();
+    window.sessionStorage.clear();
     searchParamsMock = new URLSearchParams();
     pathnameMock = "/notes/note-1/adaptive-practice";
     routerMock.push.mockReset();
@@ -797,6 +799,15 @@ describe("AdaptivePracticePage", () => {
   });
 
   it('result screen shows "Note" navigation link', async () => {
+    (getMe as jest.Mock).mockResolvedValue({
+      id: "user-1",
+      learnerLevel: "COLLEGE",
+      examDate: null,
+      profileType: "STUDENT",
+      reviewDays: [],
+      reviewCommitmentPromptEligible: true,
+      reviewCommitmentPromptCount: 0,
+    });
     (getAuthUser as jest.Mock).mockReturnValue({
       id: "user-1",
       emailVerifiedAt: "2026-03-21T09:00:00Z",
@@ -843,6 +854,7 @@ describe("AdaptivePracticePage", () => {
     expect(screen.getAllByRole("link", { name: "Note" }).length).toBeGreaterThan(0);
     expect(await screen.findByText("How did your first quiz go?")).toBeInTheDocument();
     expect(screen.queryByText("Was this quiz helpful?")).not.toBeInTheDocument();
+    expect(await screen.findByText("When will you come back?")).toBeInTheDocument();
   });
 
   it("opens answer review with selected answer, correct answer, explanation, and concept", async () => {

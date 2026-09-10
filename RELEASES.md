@@ -82,6 +82,29 @@ Theme: a checkpoint fired, so the thing it was watching gets reopened — and th
 - **Documented the commitment surface and its actual scheduling meaning.** `users.review_days` is
   initially collected after a completed session, later editable in Settings, and narrows eligible
   digest weekdays; null or empty days do not disable the digest.
+- **Item 2 — the commitment prompt is re-askable and committing is now an upgrade.** Server-owned
+  eligibility allows an unanswered learner to see the prompt after a later completed session, with a
+  14-day cooldown and a lifetime cap of three impressions. A transactional, row-locked
+  `POST /me/review-commitment/prompted` records each eligible impression without writing
+  `review_commitment_prompted_at`, which continues to mean *answered*; client `sessionStorage`
+  deduplication and the server eligibility update make the impression idempotent across remounts and
+  duplicate requests.
+- **All five completion call sites now use the same server decision.** Long Exam, Adaptive Practice,
+  Board Exam, Challenge Quiz, and Quick Review no longer pass `isFirstCompletedSessionEver` into the
+  prompt. The prompt explains the existing weekly nudge and the benefit of choosing days, keeps
+  Monday/Wednesday/Friday selected by default, and keeps the BOARD_EXAM exam-date field.
+- **⚠️ CORRECTED IN THE AUDIT: the exam date was NOT "kept optional" — it was REQUIRED, and this release makes it optional.** A BOARD_EXAM learner previously could not commit at all without supplying one (`review-commitment-prompt.tsx:121-124`, *"Choose your exam date before setting your review plan."*). That gate is now removed, because the prompt's stated purpose is review days and the release brief said the exam date must not block the primary action. **⚠️ THE CONSEQUENCE IS A WEAKER COLLECTION PATH AND IT IS NAMED HERE RATHER THAN LEFT TO BE DISCOVERED: 79 of 185 BOARD_EXAM accounts (43%) still have a NULL `exam_date`, and this prompt was one of the few places that collected it.** Fewer will now be captured. The field still renders and still saves when filled. **Mutation-verified: restoring the requirement fails `lets a BOARD_EXAM learner commit while the optional exam date is empty`, so the change is deliberate and covered rather than incidental.**
+- **⚠️ The completion gate moved from the component to its callers, which is a contract change worth stating.** The prompt used to hide itself unless `isFirstCompletedSessionEver` was true, so it was safe to render anywhere; server-owned eligibility is about the **ask**, not about whether a session just finished. All five call sites render inside a completion branch (`isComplete`, a `masteryReport`, or a `result`), **verified individually in the audit**, so behaviour is unchanged today — but a sixth call site placed outside such a branch would show the prompt on page load and burn one of three lifetime impressions. The contract is now documented at the component.
+- **Choosing review days now improves the due-concepts digest schedule without removing anyone's
+  existing digest.** Learners with null or empty `review_days` retain every-day eligibility and the
+  seven-day cooldown. Learners with chosen days remain eligible only on those weekdays and use a
+  one-day cooldown, allowing a digest on each chosen day when concepts are due. This may spread future
+  sends across the week, but it does **not** fix R1: non-committers keep the synchronized default and
+  committers can receive more messages.
+- **Mutation-verified, killing tests named — the two destructive changes this design makes available are both guarded.** Flipping `isEligibleReviewDay`'s empty case to `false` — the naive reading of *make the commitment mean something*, which would cut off **all 115 current digest recipients** — fails four tests, including a **pre-existing** one (`findDueConceptsDigestUsers_nullAndEmptyReviewDaysKeepExistingScheduleEligibility`) that was already protecting it, plus `sendDueConceptsDigestEmails_stillSendsToAnUncommittedLearner`. Making an impression stamp `review_commitment_prompted_at` — which would silently resolve **395 outstanding rows** and close the ask permanently for every one of them — fails `recordReviewCommitmentPrompted_isIdempotentAndKeepsTheCommitmentOutstanding`, and only that test.
+- **The reach claim stays bounded by the production read.** This redesign compounds for future
+  learners by giving them more than one chance to answer. It does **not** recover the 128 already
+  stranded learners who no longer open the app; reaching them requires email work still blocked by R1.
 - **Item 3 — `scripts/check-deploys.sh` reports a confirmed drift AS drift.** The precedence is now explicit and commented: **drift > unknown > ok**. Both platforms' "cannot check" paths set a flag instead of exiting early, so neither short-circuits the other — a confirmed Vercel drift survives a missing `RENDER_API_KEY`, and a confirmed **Render** drift now survives an unreadable Vercel, which the old order could not even reach.
 - **The guard asserts the EXIT CODE, because the message was never the bug.** `scripts/check-deploys.test.sh` establishes a shell-test convention this repo did not have (no `.test.sh`, no CI workflow existed). It stubs only `gh`, `curl` and `git` on `PATH` — **`jq` stays real, because the script's `jq` filters are part of what is under test** — and covers nine exit-code cases.
 - **Mutation-verified against the pre-fix script, with the killing cases named.** Restoring the original makes exactly two cases fail: *"Vercel BEHIND + no `RENDER_API_KEY` → DRIFT"* (`exit=2 want=1`) and *"Render BEHIND + Vercel API failure → DRIFT"*. The other seven pass under both, correctly — they were never affected. ⚠️ **The failing output reproduces the real symptom verbatim**: it prints `VERCEL … BEHIND` and still exits 2. **A test asserting the message passes under the defect; that is why the guard asserts the code.**

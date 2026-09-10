@@ -1,36 +1,64 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { ReviewCommitmentPrompt } from "./review-commitment-prompt";
-import { getMe, trackAnalyticsEvent, updateReviewCommitment } from "@/lib/api";
+import { getMe, recordReviewCommitmentPrompted, trackAnalyticsEvent, updateReviewCommitment } from "@/lib/api";
 
 jest.mock("@/lib/api", () => ({
   getMe: jest.fn(),
+  recordReviewCommitmentPrompted: jest.fn(),
   trackAnalyticsEvent: jest.fn(),
   updateReviewCommitment: jest.fn(),
 }));
 
 const examLearner = {
+  id: "user-1",
   examDate: "2026-11-08",
   profileType: "STUDENT",
   reviewDays: [],
   reviewCommitmentOutstanding: true,
+  reviewCommitmentPromptEligible: true,
+  reviewCommitmentPromptCount: 0,
 };
 
 describe("ReviewCommitmentPrompt", () => {
   beforeEach(() => {
+    globalThis.sessionStorage.clear();
     (getMe as jest.Mock).mockReset();
+    (recordReviewCommitmentPrompted as jest.Mock).mockReset().mockResolvedValue({ message: "recorded" });
     (trackAnalyticsEvent as jest.Mock).mockReset().mockResolvedValue(undefined);
     (updateReviewCommitment as jest.Mock).mockReset();
   });
 
-  it("shows after the first completed session for an exam-dated learner", async () => {
+  it("shows for an eligible learner whose first completed session was earlier", async () => {
     (getMe as jest.Mock).mockResolvedValue(examLearner);
 
-    render(<ReviewCommitmentPrompt isFirstCompletedSessionEver noteId="note-1" />);
+    render(<ReviewCommitmentPrompt noteId="note-1" />);
 
     expect(await screen.findByText("When will you come back?")).toBeInTheDocument();
     expect(trackAnalyticsEvent).toHaveBeenCalledWith(expect.objectContaining({
       eventType: "REVIEW_COMMITMENT_PROMPT_SHOWN",
     }));
+  });
+
+  it("records an impression at most once across remounts", async () => {
+    (getMe as jest.Mock).mockResolvedValue(examLearner);
+
+    const firstRender = render(<ReviewCommitmentPrompt noteId="note-1" />);
+    await screen.findByText("When will you come back?");
+    await waitFor(() => expect(recordReviewCommitmentPrompted).toHaveBeenCalledTimes(1));
+    firstRender.unmount();
+    render(<ReviewCommitmentPrompt noteId="note-1" />);
+    await screen.findByText("When will you come back?");
+
+    expect(recordReviewCommitmentPrompted).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the prompt usable when recording the impression fails", async () => {
+    (getMe as jest.Mock).mockResolvedValue(examLearner);
+    (recordReviewCommitmentPrompted as jest.Mock).mockRejectedValue(new Error("offline"));
+
+    render(<ReviewCommitmentPrompt noteId="note-1" />);
+
+    expect(await screen.findByRole("button", { name: "Set my review plan" })).toBeEnabled();
   });
 
   it("shows for a learner with no exam date, and hides the exam-date field", async () => {
@@ -47,7 +75,7 @@ describe("ReviewCommitmentPrompt", () => {
       profileType: "STUDENT",
     });
 
-    render(<ReviewCommitmentPrompt isFirstCompletedSessionEver noteId="note-1" />);
+    render(<ReviewCommitmentPrompt noteId="note-1" />);
 
     expect(await screen.findByText("When will you come back?")).toBeInTheDocument();
     expect(screen.queryByLabelText("Exam date")).not.toBeInTheDocument();
@@ -60,9 +88,26 @@ describe("ReviewCommitmentPrompt", () => {
       profileType: "BOARD_EXAM",
     });
 
-    render(<ReviewCommitmentPrompt isFirstCompletedSessionEver noteId="note-1" />);
+    render(<ReviewCommitmentPrompt noteId="note-1" />);
 
     expect(await screen.findByLabelText("Exam date")).toBeInTheDocument();
+  });
+
+  it("lets a BOARD_EXAM learner commit while the optional exam date is empty", async () => {
+    (getMe as jest.Mock).mockResolvedValue({
+      ...examLearner,
+      examDate: null,
+      profileType: "BOARD_EXAM",
+    });
+
+    render(<ReviewCommitmentPrompt noteId="note-1" />);
+    await screen.findByLabelText("Exam date");
+    fireEvent.click(screen.getByRole("button", { name: "Set my review plan" }));
+
+    await waitFor(() => expect(updateReviewCommitment).toHaveBeenCalledWith({
+      examDate: null,
+      reviewDays: ["MONDAY", "WEDNESDAY", "FRIDAY"],
+    }));
   });
 
   it("lets a learner with no exam date commit review days", async () => {
@@ -73,7 +118,7 @@ describe("ReviewCommitmentPrompt", () => {
       profileType: "STUDENT",
     });
 
-    render(<ReviewCommitmentPrompt isFirstCompletedSessionEver noteId="note-1" />);
+    render(<ReviewCommitmentPrompt noteId="note-1" />);
 
     await screen.findByText("When will you come back?");
     fireEvent.click(screen.getByRole("button", { name: /set my review plan/i }));
@@ -85,12 +130,12 @@ describe("ReviewCommitmentPrompt", () => {
   it("does not return after reload when the server says it is resolved", async () => {
     (getMe as jest.Mock)
       .mockResolvedValueOnce(examLearner)
-      .mockResolvedValueOnce({ ...examLearner, reviewCommitmentOutstanding: false });
-    const firstRender = render(<ReviewCommitmentPrompt isFirstCompletedSessionEver noteId="note-1" />);
+      .mockResolvedValueOnce({ ...examLearner, reviewCommitmentPromptEligible: false });
+    const firstRender = render(<ReviewCommitmentPrompt noteId="note-1" />);
     expect(await screen.findByText("When will you come back?")).toBeInTheDocument();
     firstRender.unmount();
 
-    render(<ReviewCommitmentPrompt isFirstCompletedSessionEver noteId="note-1" />);
+    render(<ReviewCommitmentPrompt noteId="note-1" />);
 
     // AGENTS.md "an absence assertion must be able to fail": waiting only for getMe to have been
     // CALLED is the named wrong-timing antipattern -- it is satisfied during the effect, before the
@@ -104,11 +149,10 @@ describe("ReviewCommitmentPrompt", () => {
     expect(screen.queryByText("When will you come back?")).not.toBeInTheDocument();
   });
 
-  it("does not show before the learner's first completed session", async () => {
-    // The first-session gate was entirely unpinned: mutating it to `if (false)` left every test green.
-    (getMe as jest.Mock).mockResolvedValue(examLearner);
+  it("does not show when the server says the learner is ineligible", async () => {
+    (getMe as jest.Mock).mockResolvedValue({ ...examLearner, reviewCommitmentPromptEligible: false });
 
-    render(<ReviewCommitmentPrompt isFirstCompletedSessionEver={false} noteId="note-1" />);
+    render(<ReviewCommitmentPrompt noteId="note-1" />);
 
     await act(async () => {
       await Promise.resolve();
@@ -119,7 +163,7 @@ describe("ReviewCommitmentPrompt", () => {
   it("preserves selected days and date after a failed save", async () => {
     (getMe as jest.Mock).mockResolvedValue(examLearner);
     (updateReviewCommitment as jest.Mock).mockRejectedValue(new Error("Save failed"));
-    render(<ReviewCommitmentPrompt isFirstCompletedSessionEver noteId="note-1" />);
+    render(<ReviewCommitmentPrompt noteId="note-1" />);
     await screen.findByText("When will you come back?");
 
     fireEvent.click(screen.getByRole("button", { name: "Tue" }));
@@ -133,7 +177,7 @@ describe("ReviewCommitmentPrompt", () => {
 
   it("tracks page abandonment as a dismissal with the exit taken", async () => {
     (getMe as jest.Mock).mockResolvedValue(examLearner);
-    const rendered = render(<ReviewCommitmentPrompt isFirstCompletedSessionEver noteId="note-1" />);
+    const rendered = render(<ReviewCommitmentPrompt noteId="note-1" />);
     await screen.findByText("When will you come back?");
 
     globalThis.dispatchEvent(new Event("pagehide"));
@@ -148,7 +192,7 @@ describe("ReviewCommitmentPrompt", () => {
 
   it("tracks at most one dismissal per prompt impression", async () => {
     (getMe as jest.Mock).mockResolvedValue(examLearner);
-    const rendered = render(<ReviewCommitmentPrompt isFirstCompletedSessionEver noteId="note-1" />);
+    const rendered = render(<ReviewCommitmentPrompt noteId="note-1" />);
     await screen.findByText("When will you come back?");
 
     globalThis.dispatchEvent(new Event("pagehide"));
@@ -166,10 +210,10 @@ describe("ReviewCommitmentPrompt", () => {
   // dismissal the learner never performed. This fails if noteId is ever closed over again.
   it("does not report abandonment when noteId resolves while the prompt is open", async () => {
     (getMe as jest.Mock).mockResolvedValue(examLearner);
-    const rendered = render(<ReviewCommitmentPrompt isFirstCompletedSessionEver noteId={null} />);
+    const rendered = render(<ReviewCommitmentPrompt noteId={null} />);
     await screen.findByText("When will you come back?");
 
-    rendered.rerender(<ReviewCommitmentPrompt isFirstCompletedSessionEver noteId="note-1" />);
+    rendered.rerender(<ReviewCommitmentPrompt noteId="note-1" />);
 
     expect(trackAnalyticsEvent).not.toHaveBeenCalledWith(expect.objectContaining({
       eventType: "REVIEW_COMMITMENT_DISMISSED",
@@ -188,7 +232,7 @@ describe("ReviewCommitmentPrompt", () => {
   it("does not report a saved decline as abandonment", async () => {
     (getMe as jest.Mock).mockResolvedValue(examLearner);
     (updateReviewCommitment as jest.Mock).mockResolvedValue(undefined);
-    const rendered = render(<ReviewCommitmentPrompt isFirstCompletedSessionEver noteId="note-1" />);
+    const rendered = render(<ReviewCommitmentPrompt noteId="note-1" />);
     await screen.findByText("When will you come back?");
 
     fireEvent.click(screen.getByRole("button", { name: "Not now" }));

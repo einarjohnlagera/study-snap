@@ -51,6 +51,7 @@ jest.mock("@/lib/api", () => ({
   getMe: jest.fn(),
   getNote: jest.fn(),
   listNotes: jest.fn(),
+  recordReviewCommitmentPrompted: jest.fn().mockResolvedValue({ message: "recorded" }),
   resumeLongExamSession: jest.fn(),
   saveLongExamProgress: jest.fn(),
   startLongExam: jest.fn(),
@@ -60,6 +61,7 @@ jest.mock("@/lib/api", () => ({
 describe("LongExamPage", () => {
   beforeEach(() => {
     window.localStorage.clear();
+    window.sessionStorage.clear();
     pushMock.mockReset();
     replaceMock.mockReset();
     searchParamsMock = new URLSearchParams();
@@ -403,6 +405,15 @@ describe("LongExamPage", () => {
     [true, "How did your first quiz go?", "Was this quiz helpful?"],
     [false, "Was this quiz helpful?", "How did your first quiz go?"],
   ])("selects the correct feedback panel on the mastery report", async (isFirstCompletedSessionEver, expectedTitle, absentTitle) => {
+    (getMe as jest.Mock).mockResolvedValue({
+      id: "user-1",
+      learnerLevel: "COLLEGE",
+      examDate: null,
+      profileType: "STUDENT",
+      reviewDays: [],
+      reviewCommitmentPromptEligible: true,
+      reviewCommitmentPromptCount: 0,
+    });
     (startLongExam as jest.Mock).mockResolvedValue({
       sessionId: "session-1",
       status: "IN_PROGRESS",
@@ -448,6 +459,7 @@ describe("LongExamPage", () => {
     expect(await screen.findByRole("heading", { name: "Long Exam Complete" })).toBeInTheDocument();
     expect(screen.getByText(expectedTitle)).toBeInTheDocument();
     expect(screen.queryByText(absentTitle)).not.toBeInTheDocument();
+    expect(await screen.findByText("When will you come back?")).toBeInTheDocument();
   });
 
 });
