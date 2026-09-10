@@ -1,6 +1,44 @@
 # Onboarding redesign — UX review and design direction
 
-**Status:** design direction, not scoped work. No release is open against this.
+> ## ⚠️⚠️ IMPLEMENTED. THIS DOCUMENT IS A HISTORICAL RECORD, NOT A PROPOSAL.
+>
+> **Shipped as `v0.73.0 — Onboarding Redesign`** — signed off **2026-08-12**, first served to learners
+> **2026-08-14T02:48:14Z**. Eight of ten planned items landed. The 5→8 screen split described below is
+> **live** in `frontend/app/onboarding/page.tsx:117-126`.
+>
+> **⚠️ This header exists because its absence had a cost.** Every recommendation below is written in the
+> future tense (*"split 5 screens into 8"*, *"renumbering is a live migration hazard"*), and until
+> 2026-09-10 the file carried nothing marking it as built. Read cold it is indistinguishable from an open
+> proposal — and on 2026-09-10 it was, coming within one verification step of being scoped and rebuilt.
+>
+> **What did NOT ship, so the record is not misread as a to-do list:**
+> - **Item 1, "land the learner on their Study Pack" — DROPPED** by owner decision 2026-08-11. The
+>   three-CTA completion screen stays; its first CTA already resolves to `/study-packs/{id}`.
+> - **Item 3, "remove the exam-date question" — CLOSED 2026-08-12, and it is doubly dead.** It was
+>   decided against on reach (the post-session prompt reaches only session-completers; onboarding reaches
+>   everyone), **and its stated justification has since been removed from the code**: `v0.139.0` deleted
+>   the requirement that a date be set before a review plan can be, gated that prompt on a preference
+>   **252 of 396 accounts have OFF**, and capped it at 3 lifetime impressions. **Do not re-propose it
+>   from this document.**
+> - **Item 4's Screen 1 tap-to-advance — REVERSED** mid-release; Screen 1 keeps an explicit Continue,
+>   because re-choosing an already-selected `<select>` fires no `change` event.
+> - **Universal onboarding (pre-verification) — OUT OF SCOPE and still is.** Step 4 calls
+>   `/notes/generate`, which calls `requireEmailVerified`; it would 403 at the moment onboarding promises
+>   the first Study Pack.
+>
+> **⚠️ The migration hazard below is DISCHARGED**, not pending — verified in code 2026-09-10 at
+> `frontend/lib/onboarding-v2.ts:105-170`, not taken from the release note. `loadOnboardingDraft` compares
+> the stored `schemaVersion`; a non-current draft is routed through `resolveMigratedResumeStep`, which
+> recomputes the position from the earliest unanswered requirement, and a current-schema draft is passed
+> through `clampOnboardingStep` (`ONBOARDING_FIRST_STEP`…`ONBOARDING_LAST_STEP`) and then capped at that
+> same earliest-unanswered step.
+>
+> **The checkpoint this work owed has since closed as NOT CLEARED** — post-deploy completion 15/18 =
+> 83.3% against a 62.4% baseline, **p = 0.0506**, while the 13 days *before* it shipped ran 92.6% at
+> p = 0.00043. The comprehension hypothesis is **unsupported** and the framing is **reopened**. See
+> `docs/claude-findings/2026-09-10-onboarding-redesign-checkpoint-read.md`.
+
+**Status:** ~~design direction, not scoped work. No release is open against this.~~ **SUPERSEDED — see the header above. This shipped as `v0.73.0`.**
 **Companion:** `docs/claude-plans/onboarding-redesign-product-ux-consultation-prompt.md` (the brief this answers),
 `docs/gpt-contexts/GPT_CONTEXT.md` (funnel numbers, positioning).
 **Indexing:** this file and the consultation prompt share one Backlog Index row.
