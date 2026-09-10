@@ -2,6 +2,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 import { renderExtractedMath } from "@/components/study-pack/quiz-working-solution";
+import { normalizeBareMath } from "@/lib/math-normalization";
 import { cn } from "@/lib/utils";
 
 /**
@@ -38,6 +39,21 @@ type SummaryMarkdownProps = {
 };
 
 export function SummaryMarkdown({ content, className }: Readonly<SummaryMarkdownProps>) {
+  // ⚠️ `remark-math` TOKENISES DELIMITED MATH ONLY — it has nothing to say about a bare `\frac{a}{b}`.
+  // Without this, an undelimited expression in a summary reached the renderer as literal text and
+  // printed with its backslash visible, on every surface that uses this component. 36 production
+  // summaries carry a backslash and no delimiter at all.
+  //
+  // ⚠️ ONE LIMITATION, STATED RATHER THAN DISCOVERED: `normalizeBareMath` returns early on ANY
+  // delimiter anywhere in the string it is given, and a summary is one long multi-paragraph string.
+  // So a summary that already contains a single `$` is left entirely alone, including its bare
+  // expressions elsewhere. That is the 36 measured above and no more — do not read this as covering
+  // every summary. Splitting per paragraph to widen it would change what remark-gfm sees and is not
+  // worth the blast radius.
+  //
+  // ⚠️ Display-time only. It returns a string for rendering and never writes back — `v0.110.1`
+  // shipped a sanitizer that re-ran on every deserialization and progressively destroyed stored text.
+  const normalized = normalizeBareMath(content);
   return (
     <div className={cn("space-y-3 text-sm leading-relaxed text-foreground/80", className)}>
       <ReactMarkdown
@@ -78,7 +94,7 @@ export function SummaryMarkdown({ content, className }: Readonly<SummaryMarkdown
           ),
         }}
       >
-        {content}
+        {normalized}
       </ReactMarkdown>
     </div>
   );

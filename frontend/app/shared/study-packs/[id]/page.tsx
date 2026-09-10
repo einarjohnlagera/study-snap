@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { renderMathText } from "@/components/study-pack/quiz-working-solution";
+import { SummaryMarkdown } from "@/components/ui/summary-markdown";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { ApiRequestError } from "@/lib/api";
@@ -66,20 +68,26 @@ export default function SharedStudyPackPage() {
             </div>
             <section className="space-y-2">
               <h2 className="text-lg font-semibold">Summary</h2>
-              <p className="whitespace-pre-wrap text-sm leading-7 text-foreground/80">{studyPack.summary}</p>
+              {/* ⚠️ Was a raw `{studyPack.summary}` in a `whitespace-pre-wrap` paragraph — NO math
+                  rendering of any kind, while every sibling surface (study-pack results, the public
+                  library page, demo) already used SummaryMarkdown. 372 production summaries carry a
+                  backslash. Matching the canonical component rather than inventing a fourth path. */}
+              <div className="text-sm leading-7 text-foreground/80">
+                <SummaryMarkdown content={studyPack.summary} />
+              </div>
             </section>
             {studyPack.keyConcepts.length > 0 ? (
               <section className="space-y-2">
                 <h2 className="text-lg font-semibold">Key concepts</h2>
                 <ul className="list-disc space-y-1 pl-5 text-sm leading-6 text-foreground/80">
-                  {studyPack.keyConcepts.map((concept) => <li key={concept}>{concept}</li>)}
+                  {studyPack.keyConcepts.map((concept) => <li key={concept}>{renderMathText(concept)}</li>)}
                 </ul>
               </section>
             ) : null}
             {studyPack.fullNotes ? (
               <section className="space-y-2">
                 <h2 className="text-lg font-semibold">Full notes</h2>
-                <div className="whitespace-pre-wrap text-sm leading-7 text-foreground/80">{studyPack.fullNotes}</div>
+                <div className="whitespace-pre-wrap text-sm leading-7 text-foreground/80">{renderMathText(studyPack.fullNotes)}</div>
               </section>
             ) : null}
           </Card>
