@@ -38,6 +38,7 @@ export function ReviewCommitmentPrompt({
   const [visible, setVisible] = useState(false);
   const [examDate, setExamDate] = useState("");
   const [showExamDate, setShowExamDate] = useState(false);
+  const [digestEnabled, setDigestEnabled] = useState(true);
   const [reviewDays, setReviewDays] = useState<ReviewDay[]>(DEFAULT_REVIEW_DAYS);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -90,6 +91,11 @@ export function ReviewCommitmentPrompt({
         const shouldShow = me.reviewCommitmentPromptEligible;
         // The exam-date sub-field stays where the field already lives, rather than generalising it.
         setShowExamDate(me.examDate !== null || me.profileType === "BOARD_EXAM");
+        // ⚠️ The digest is gated on this preference AND a verified email
+        // (RetentionService:188). 252 of 396 accounts have it OFF, so a single unconditional
+        // "you already get a weekly nudge" is FALSE for roughly two thirds of the audience --
+        // and for them choosing days is inert, because no digest is sent either way.
+        setDigestEnabled(me.dueConceptsDigestRemindersEnabled);
         setExamDate(me.examDate ?? "");
         setReviewDays(me.reviewDays?.length > 0 ? me.reviewDays : DEFAULT_REVIEW_DAYS);
         promptVisibleRef.current = shouldShow;
@@ -159,7 +165,9 @@ export function ReviewCommitmentPrompt({
         <p className="text-xs font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300">Plan your next chapter</p>
         <h2 className="text-lg font-semibold">When will you come back?</h2>
         <p className="text-sm text-foreground/75">
-          You already get a weekly nudge when concepts are due. Choose your review days to get a nudge on every selected day when there is something to review.
+          {digestEnabled
+            ? "You already get a weekly nudge when concepts are due. Choose your review days to get a nudge on every selected day when there is something to review."
+            : "Due-concept reminders are currently off, so we will not email you. Choose your review days now and they will be used the moment you turn reminders back on in Settings."}
         </p>
       </div>
       {showExamDate ? (

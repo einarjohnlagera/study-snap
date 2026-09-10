@@ -93,6 +93,26 @@ describe("ReviewCommitmentPrompt", () => {
     expect(await screen.findByLabelText("Exam date")).toBeInTheDocument();
   });
 
+  // ⚠️ 252 of 396 production accounts have the digest preference OFF. Telling them they
+  // "already get a weekly nudge" is false, and for them choosing days is inert. Found by the
+  // v0.139.0 cold agent; these two pin both branches so the claim can never go unconditional again.
+  it("does not claim an existing nudge when due-concept reminders are off", async () => {
+    (getMe as jest.Mock).mockResolvedValue({ ...examLearner, dueConceptsDigestRemindersEnabled: false });
+    render(<ReviewCommitmentPrompt noteId="note-1" />);
+    await screen.findByText("When will you come back?");
+
+    expect(screen.queryByText(/You already get a weekly nudge/)).not.toBeInTheDocument();
+    expect(screen.getByText(/Due-concept reminders are currently off/)).toBeInTheDocument();
+  });
+
+  it("states the existing nudge when due-concept reminders are on", async () => {
+    (getMe as jest.Mock).mockResolvedValue({ ...examLearner, dueConceptsDigestRemindersEnabled: true });
+    render(<ReviewCommitmentPrompt noteId="note-1" />);
+    await screen.findByText("When will you come back?");
+
+    expect(screen.getByText(/You already get a weekly nudge/)).toBeInTheDocument();
+  });
+
   it("lets a BOARD_EXAM learner commit while the optional exam date is empty", async () => {
     (getMe as jest.Mock).mockResolvedValue({
       ...examLearner,
