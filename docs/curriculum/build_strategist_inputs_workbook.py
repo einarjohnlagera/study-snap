@@ -3,7 +3,8 @@
 
     python3 build_strategist_inputs_workbook.py <results_dir> <output.xlsx> "<Review Set name>"
 
-`results_dir` holds one CSV per query, named q0.csv … q7.csv. Export them straight from the
+`results_dir` holds one CSV per query, named q0.csv … q7.csv (q4b.csv is the cross-program
+pool). An optional notes.md there renders onto the README sheet. Export them straight from the
 SQL client; a header row is expected. Missing files are skipped, so you can build the workbook
 from whichever queries you have run.
 
@@ -33,6 +34,10 @@ QUERIES = {
         "HAND OVER — the cheapest coverage available. ⚠️ A CANDIDATE POOL, NOT AN ANSWER: "
         "program tags were partly set by a profile default, so expect material that shares a "
         "jobsite with the discipline without belonging in its licensure review."),
+ "q4b": ("Q4b Cross-program pool", "Notes tagged for a RELATED program, not the target — what Q4 structurally cannot see.",
+        "HAND OVER — but read the `relevance` column first. This pool is assembled by program tag, "
+        "so it surfaces material that shares a tag with the discipline without belonging in its "
+        "licensure review; the column marks which rows are actually worth proposing."),
  "q5": ("Q5 Overlap map", "Per benchmark subject: notes, how many are target-tagged, how many already in the set.",
         "HAND OVER — a high count with zero tagged is a metadata decision, not an authoring job."),
  "q6": ("Q6 Catalog programs", "Exact catalog program names and how many notes carry each.",
@@ -98,6 +103,21 @@ def main():
         r += 1
     if not built:
         sys.exit(f"no q*.csv files found in {src}")
+    # Optional notes.md in the results dir renders under the table. Use it for what the queries
+    # cannot say themselves: why a benchmark was chosen, a caveat about what a count really means,
+    # a headline the reader would otherwise have to derive by comparing sheets.
+    notes = os.path.join(src, "notes.md")
+    if os.path.exists(notes):
+        r += 1
+        for line in open(notes, encoding="utf-8").read().splitlines():
+            c = ov.cell(row=r, column=1, value=line.lstrip("# ") or None)
+            if line.startswith("#"):
+                c.font = Font(bold=True, size=12)
+            elif line.startswith(("- ", "* ")):
+                c.alignment = Alignment(wrap_text=True, vertical="top")
+                ov.row_dimensions[r].height = max(15, 13 * (1 + len(line) // 110))
+            ov.merge_cells(start_row=r, start_column=1, end_row=r, end_column=3)
+            r += 1
     for col, w in zip("ABC", [28, 8, 24]):
         ov.column_dimensions[col].width = w
     wb.save(out)
