@@ -52,6 +52,30 @@ implements it and confirm the claim still describes it. **A claim you cannot anc
 was never true** — resolve it either way before committing. Pay particular attention to docs a PR touched
 *early* in the release, since those are the ones a later PR is most likely to have invalidated.
 
+## Backlog-row closure gate — run this BEFORE the commit
+
+**For every item this release shipped, find the Backlog Index row that described it and mark it shipped, with a `file:line`.** Not "check whether one exists" — open the row and change it.
+
+**⚠️ THIS GATE EXISTS BECAUSE ITS ABSENCE IS THE MOST EXPENSIVE RECURRING FAILURE IN THIS REPO, AND IT IS STRUCTURAL RATHER THAN CARELESS.** A row is written when work is *proposed* and is never touched again, because the release that *ships* the work has no step that re-reads it. `v0.138.0` added a verification procedure to **kickoff** — that catches a stale row only if someone happens to scan it later, which is months of drift and, in the meantime, the Index is the input to every kickoff's scope decision.
+
+**The measured cost, all found by opening code:**
+
+| Row claimed | Actually shipped | Stale for |
+|---|---|---|
+| Onboarding redesign: *"design direction only, nothing scoped"* | `v0.73.0`, 2026-08-12 | ~1 month |
+| LaTeX (b): *"BLOCKED … candidate for `v0.96.0`"* | `v0.100.0`, 2026-08-29 | **39 releases** |
+| Public catalog unbounded read: *"STILL OPEN … NOBODY ACTED"* | `v0.119.1`, 2026-09-06 | 20 releases |
+| Builder section-label refresh loop | shipped, comment describes it in past tense | — |
+| Study Plan Builder reorder: *"NOT SHIPPED"* | `v0.96.0` | **41 releases** |
+
+**⚠️ EVERY ONE WAS STALE IN THE SAME DIRECTION — OVERSTATING OPEN WORK.** That is what makes it dangerous rather than merely untidy: a row that overstates open work gets *offered to the owner as a release candidate*. The Study Plan Builder row was offered as a `v0.137.0` candidate; had the owner picked it, a Codex prompt would have been written to build something that already existed. On 2026-09-10 the onboarding row came within one verification step of being scoped as an 8-screen rewrite of a 2506-line file.
+
+**Method — three steps, and only the first is mandatory:**
+
+1. **Walk this release's own Planned Scope list.** For each item, grep `ROADMAP.md` for the row that motivated it. Update its Status to shipped, with the `file:line` that proves it, and the version and date. **A row you cannot find is itself a finding** — say so in the release rather than moving on.
+2. **⚠️ If the row's `Gate` names a condition this release satisfied, update the GATE TOO.** Cells are updated when their own trigger fires and the others are not, so a half-updated row is the *normal* failure, not a rare one — `v0.138.0` found two rows whose Gate and Status flatly contradicted each other.
+3. **⚠️ Do NOT mark a row shipped from the release notes alone.** That is the same class of error as the claim the row makes: `v0.138.0`'s verification pass "verified" the unbounded-read row as *still unfixed* because it checked that the legacy branch **existed** (true) and concluded **unfixed** (false — the branch existed *and had been bounded*). **Open the code and read what it does, not whether it is there.**
+
 ## Checkpoint gate — run this BEFORE the commit
 
 **Ask: did anything in this release ship ahead of its own evidence?** That means an item whose `EVIDENCE` gate was never cleared — it shipped on a pre-committed rule, an owner override, an ambiguous read, or a bootstrap-test argument. If yes, it owes a `[CHECKPOINT — due YYYY-MM-DD]` row in `ROADMAP.md`'s Backlog Index, **added in this same signoff commit** (`ROADMAP.md` is already one of the three files).
