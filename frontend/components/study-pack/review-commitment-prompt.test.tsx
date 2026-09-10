@@ -108,6 +108,40 @@ describe("ReviewCommitmentPrompt", () => {
     }));
   });
 
+  // ⚠️ v0.139.0 PRE-SIGNOFF FINDING, cross-PR. `globalThis.sessionStorage` THROWS when site data is
+  // blocked; optional chaining does not guard that. The throw landed after the state machine had been
+  // advanced to "shown" but before PROMPT_SHOWN fired, so a later unmount reported a DISMISSAL for a
+  // prompt nobody saw — inflating the abandonment funnel item 1 was built to measure.
+  // jsdom's sessionStorage never throws, which is why nothing caught this; the accessor is stubbed.
+  it("still reports the impression, and never a phantom dismissal, when storage throws", async () => {
+    const throwing = {
+      getItem: () => { throw new Error("SecurityError: access denied"); },
+      setItem: () => { throw new Error("SecurityError: access denied"); },
+    };
+    const original = Object.getOwnPropertyDescriptor(globalThis, "sessionStorage");
+    Object.defineProperty(globalThis, "sessionStorage", { value: throwing, configurable: true });
+    try {
+      (getMe as jest.Mock).mockResolvedValue(examLearner);
+      const rendered = render(<ReviewCommitmentPrompt noteId="note-1" />);
+      await screen.findByText("When will you come back?");
+
+      // The prompt renders, the impression is still recorded, and SHOWN still fires.
+      expect(recordReviewCommitmentPrompted).toHaveBeenCalled();
+      expect(trackAnalyticsEvent).toHaveBeenCalledWith(expect.objectContaining({
+        eventType: "REVIEW_COMMITMENT_PROMPT_SHOWN",
+      }));
+
+      // ⚠️ And a real abandonment is still reported exactly once — not suppressed, not phantom.
+      rendered.unmount();
+      const dismissals = (trackAnalyticsEvent as jest.Mock).mock.calls.filter(
+        ([e]) => e.eventType === "REVIEW_COMMITMENT_DISMISSED",
+      );
+      expect(dismissals).toHaveLength(1);
+    } finally {
+      if (original) Object.defineProperty(globalThis, "sessionStorage", original);
+    }
+  });
+
   it("lets a BOARD_EXAM learner commit while the optional exam date is empty", async () => {
     (getMe as jest.Mock).mockResolvedValue({
       ...examLearner,

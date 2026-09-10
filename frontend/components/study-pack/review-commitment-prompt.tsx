@@ -21,6 +21,39 @@ const REVIEW_DAY_OPTIONS: ReadonlyArray<{ value: ReviewDay; label: string }> = [
 ];
 const DEFAULT_REVIEW_DAYS: ReviewDay[] = ["MONDAY", "WEDNESDAY", "FRIDAY"];
 
+// ⚠️ `globalThis.sessionStorage` THROWS — it does not merely return null — when site data is blocked
+// (Chrome "block all cookies", some embedded webviews, restricted iOS contexts). Optional chaining
+// guards a NULL storage object, not a THROWING accessor, so `globalThis.sessionStorage?.getItem(k)`
+// is not safe. `lib/guidance.ts:9-33` already wraps every access for exactly this reason; these two
+// helpers keep this component consistent with it.
+//
+// ⚠️ THIS IS THE v0.139.0 PRE-SIGNOFF FINDING, AND IT IS A CROSS-PR ONE. Item 1 added a state
+// machine whose guarded block, at that time, contained nothing that could throw. Item 2 then added
+// the impression bookkeeping INSIDE that block, after `shownTrackedRef` had already been advanced to
+// "shown" and `promptVisibleRef` to true, but BEFORE `REVIEW_COMMITMENT_PROMPT_SHOWN` fires. A throw
+// there left the machine claiming the prompt was shown while the outer `.catch` reset only `visible`
+// -- so a later pagehide/unmount emitted REVIEW_COMMITMENT_DISMISSED FOR A PROMPT NOBODY SAW, with
+// no matching PROMPT_SHOWN, inflating the very abandonment funnel item 1 exists to build.
+// Neither PR's own review could see it: one supplied the guard, the other supplied the throw.
+function hasRecordedImpression(key: string): boolean {
+  try {
+    return globalThis.sessionStorage?.getItem(key) === "1";
+  } catch {
+    // Unreadable storage means "not yet recorded": re-POSTing is harmless (the server re-checks
+    // eligibility and the cooldown makes a repeat a no-op), whereas treating it as ALREADY recorded
+    // would silently drop the impression.
+    return false;
+  }
+}
+
+function markImpressionRecorded(key: string): void {
+  try {
+    globalThis.sessionStorage?.setItem(key, "1");
+  } catch {
+    // ignore
+  }
+}
+
 type ReviewCommitmentPromptProps = { noteId: string | null };
 
 // ⚠️ THIS COMPONENT NO LONGER GATES ITSELF ON SESSION COMPLETION, AND THAT IS A CONTRACT CHANGE.
@@ -97,9 +130,9 @@ export function ReviewCommitmentPrompt({
         if (shouldShow && shownTrackedRef.current === "unseen") {
           shownTrackedRef.current = "shown";
           const impressionKey = `notelib-review-commitment-prompted-${me.id}-${me.reviewCommitmentPromptCount}`;
-          if (!globalThis.sessionStorage?.getItem(impressionKey)) {
+          if (!hasRecordedImpression(impressionKey)) {
             void recordReviewCommitmentPrompted()
-              .then(() => globalThis.sessionStorage?.setItem(impressionKey, "1"))
+              .then(() => markImpressionRecorded(impressionKey))
               .catch(() => undefined);
           }
           void trackAnalyticsEvent({
@@ -158,13 +191,19 @@ export function ReviewCommitmentPrompt({
       <div className="space-y-1">
         <p className="text-xs font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300">Plan your next chapter</p>
         <h2 className="text-lg font-semibold">When will you come back?</h2>
-        {/* ⚠️ This sentence is unconditional ON PURPOSE, and it is only true because the SERVER
-            refuses to render this prompt when the due-concepts digest is off (see
+        {/* ⚠️ This sentence is unconditional ON PURPOSE, and it holds because the SERVER refuses to
+            render this prompt when the due-concepts digest preference is off (see
             AuthService#isReviewCommitmentPromptEligible). It was briefly conditional, after the
-            v0.139.0 cold agent found it was false for 252 of 396 accounts; the owner then chose not
-            to ask those learners at all, which makes the claim true by construction and the other
-            branch dead. ⚠️ If eligibility ever stops checking the preference, this line becomes a
-            lie again -- change them together or not at all. */}
+            v0.139.0 cold agent found it false for 252 of 396 accounts; the owner then chose not to
+            ask those learners at all, which makes the other branch dead.
+            ⚠️ BUT "true by construction" WOULD BE OVERSTATED, and the pre-signoff pressure test said
+            so: the digest audience is preference AND emailVerifiedAt NOT NULL AND status ACTIVE
+            (RetentionService#findDueConceptsDigestUsers), while eligibility checks only the
+            PREFERENCE. The other two clauses are a snapshot, not an invariant -- 3 accounts today
+            have the preference on with no verified email, and they are believed unable to reach a
+            completed session at all. Treat this line as true-in-practice, not proven.
+            ⚠️ If eligibility ever stops checking the preference, it becomes a lie outright --
+            change them together or not at all. */}
         <p className="text-sm text-foreground/75">
           You already get a weekly nudge when concepts are due. Choose your review days to get a nudge on every selected day when there is something to review.
         </p>

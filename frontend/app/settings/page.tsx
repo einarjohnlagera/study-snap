@@ -913,7 +913,9 @@ export default function SettingsPage() {
                 <span className="space-y-1">
                   <span className="block text-sm font-medium">Review days</span>
                   <span className="block text-xs text-foreground/60">
-                    Pick when due-concept reminders may arrive. With no days selected, the existing weekly schedule continues.
+                    Pick the days your due-concept reminders arrive. With no days selected you keep the weekly reminder on
+                    whichever day it lands. Picking days moves it onto those days — and you may get one on each of them,
+                    when there is something due.
                   </span>
                 </span>
                 <div className="flex flex-wrap gap-2" aria-label="Review days">
@@ -968,7 +970,8 @@ export default function SettingsPage() {
                 <span className="space-y-1">
                   <span className="block text-sm font-medium">Due-concepts digest</span>
                   <span className="block text-xs text-foreground/60">
-                    A weekly reminder when concepts are due for review in your Study Packs.
+                    A reminder when concepts are due for review in your Study Packs. Weekly by default, or on each of your
+                    review days below once you pick some.
                   </span>
                 </span>
                 <Checkbox

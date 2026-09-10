@@ -47,7 +47,7 @@ Choosing weekdays upgrades that schedule: the learner becomes eligible only on t
 cooldown drops to one day, allowing a nudge on each chosen day that has due concepts. A null or empty
 selection retains the existing daily eligibility and seven-day cooldown, so nobody loses the digest
 by leaving the prompt unanswered. Learners can later edit the same weekdays and the digest preference
-under Settings → Email Preferences; see
+under Settings → Email Preferences. **⚠️ THAT SURFACE'S COPY MUST STATE BOTH CADENCES — weekly by default, and one per chosen day once days are picked.** It was left reading *"a weekly reminder"* after `v0.139.0` changed the cadence, and was caught only by that release's pre-signoff pressure test, **on a file that appeared nowhere in the release diff**. When this cadence changes again, sweep by SURFACE, not by diff. See
 [`email-preferences.md`](email-preferences.md).
 
 Prompt impressions, commits, declines, and abandonments are analytics events. Abandonment is recorded
