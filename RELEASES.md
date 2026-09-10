@@ -2,7 +2,7 @@
 
 ## v0.138.0 - Stated and Enforced
 
-**Status: In Progress** (kicked off 2026-09-09, base branch `releases/v0.138.0`, cut from `main` after `v0.137.0` merged as #1360 and tagged)
+**Status: Released** (kicked off 2026-09-09, signed off 2026-09-10, base branch `releases/v0.138.0`, cut from `main` after `v0.137.0` merged as #1360 and tagged)
 
 Sources: `docs/claude-findings/2026-09-09-regeneration-invalid-title-failures.md` (the diagnosis) and `docs/claude-plans/2026-09-09-generated-title-bound-and-failure-observability-plan.md` (the fix plan). **Read the findings first — Leg A looks like a nice-to-have until you have seen its §4.**
 
@@ -63,6 +63,17 @@ Owner-reported 2026-09-09. Seven `LLM_INVALID_OUTPUT` failures across four notes
 ### Routing
 
 **CLAUDE CODE inline** for Legs A and B1 — two files, no migration, no endpoint, per the plan's §7. Items 3–4 are docs and are Claude Code by definition.
+
+### Scope completeness — each planned item against the code that implements it
+
+| # | Planned | Verdict | Evidence |
+|---|---|---|---|
+| 1 | **Leg A** — log the field, failing bound, measured count, limits, value truncated | **SHIPPED** | `OpenAiLlmStudyPackService:2592`/`:2597` (both branches), emitter at `:2603-2612` |
+| 2 | **Leg B1** — publish `{MAX_TITLE_WORDS}` into the prompt | **SHIPPED** | `note-generation-developer.txt:31`, substituted at `OpenAiLlmStudyPackService:727`; bound unchanged at `:87` |
+| 3 | Verify **the 16 scope-eligible** Backlog rows | **⚠️ CHANGED — the stated number could not be reproduced** | No filter was ever written down at kickoff. A defensible filter yields **26 raw / 23 after 3 stated over-catches**; 7 read against code, 4 stale. **Deliberately not reverse-engineered to return 16** |
+| 4 | Extend the `v0.137.0` rule to SHIPPED-CODE claims, and index the two artifacts | **SHIPPED** | Six-step procedure in `CLAUDE.md`; both source artifacts carry Backlog rows (3 references each) |
+
+**⚠️ Item 3's verdict is recorded as CHANGED rather than SHIPPED on purpose.** The release was scoped on a number, the number turned out to be unverifiable, and a pass that quietly delivered "16 rows" would have reproduced the exact failure the release exists to fix — a stated figure nobody can re-derive. **The count found is reported instead of the count asserted.**
 
 ### Shipped
 
