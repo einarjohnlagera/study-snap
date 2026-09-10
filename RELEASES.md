@@ -1,5 +1,101 @@
 # RELEASES.md - NoteLib
 
+## v0.138.0 - Stated and Enforced
+
+**Status: Released** (kicked off 2026-09-09, signed off 2026-09-10, base branch `releases/v0.138.0`, cut from `main` after `v0.137.0` merged as #1360 and tagged)
+
+Sources: `docs/claude-findings/2026-09-09-regeneration-invalid-title-failures.md` (the diagnosis) and `docs/claude-plans/2026-09-09-generated-title-bound-and-failure-observability-plan.md` (the fix plan). **Read the findings first — Leg A looks like a nice-to-have until you have seen its §4.**
+
+Theme: make what is *enforced* match what is *stated* — in the prompt contract, and in the backlog.
+
+### ⚠️⚠️ A LIVE PRODUCTION DEFECT, DETERMINISTIC, WITH FOUR NOTES STUCK `FAILED` RIGHT NOW
+
+Owner-reported 2026-09-09. Seven `LLM_INVALID_OUTPUT` failures across four notes, all `BOARD_EXAM_REVIEW`. **⚠️ Batch `6a7a8fa9` is a RETRY of the three that failed in `f5c690f5`, and all three failed identically — so this is DETERMINISTIC and retrying is not a workaround.**
+
+**The probable cause is a bound the model is never told.** The title is validated at **12 WORDS** (`MAX_GENERATED_NOTE_TITLE_WORDS`, `OpenAiLlmStudyPackService:75`), while the published contract carries **no numeric bound at all** — schema `maxLength: 160` **characters**, plus prose "concise and specific". The same prompt file already templates `{MAX_ITEM_CHARS}` (3×) and `{MAX_WORDS}`. **⚠️ AND THE CODEBASE DOCUMENTS THIS EXACT ANTI-PATTERN AGAINST ITSELF:** `OpenAiLlmStudyPackService:2553-2561` records removing an unpublished word ceiling from *bullets* and instructs *"do not reintroduce a bound the model cannot see."* **The title kept its.**
+
+**⚠️⚠️ BUT THE FAILING BRANCH IS INFERRED, NOT CONFIRMED — AND THAT IS WHY LEG A COMES FIRST.** `normalizeGeneratedNoteText` throws on *either* a blank value or a word count outside `1..12`, and **the log records neither the rejected title, its word count, nor which bound failed.** Four notes failed seven times and produced zero evidence of what was wrong. **⚠️ The source-title length correlation is NOT discriminating and must not be cited as support** — the FAILED titles average 8.5 words, well inside the cap.
+
+### Planned Scope
+
+1. **Leg A — log what was actually rejected.** When `normalizeGeneratedNoteText` rejects: the field, which bound failed (`blank` vs `wordCount`), the measured count, the limits, and **the offending value TRUNCATED** (owner decision, 2026-09-09). **⚠️ Independently shippable and ships even if Leg B slips** — without it the next occurrence is equally unresolvable. **This is the `v0.87.0` lesson one layer down:** that release added `failed_topic_reasons` because "which topic failed" without "why" had already cost two investigations.
+2. **Leg B1 — publish the bound** (owner decision, 2026-09-09). Template a `{MAX_TITLE_WORDS}` line into `note-generation-developer.txt`, exactly as `{MAX_ITEM_CHARS}` and `{MAX_WORDS}` already are. Smallest change, output shape unchanged, contract made honest.
+3. **Backlog Index verification pass over the 16 scope-eligible rows** — every row claiming OPEN or NOT SHIPPED, checked against real code or a read-only query, stale ones corrected.
+4. **Extend the `v0.137.0` rule to cover SHIPPED-CODE claims, not just production state**, and index the two artifacts above.
+
+### ⚠️ Why item 3 exists: three stale rows surfaced by accident in ONE day
+
+`v0.137.0` added the rule that a claim about *production state* is a snapshot. **That rule does not reach a claim about shipped CODE, and the third failure was exactly that.**
+
+| Claim | Reality |
+|---|---|
+| `V141`/`V142` never run | Ran 2026-09-08 |
+| Profile-string write pending | Already applied |
+| **Study Plan Builder reorder NOT SHIPPED** | **Shipped in `v0.96.0` (`185e0cc7`, 2026-08-29) — 41 releases ago** |
+
+**⚠️ THE THIRD ONE WAS OFFERED TO THE OWNER AS A RELEASE CANDIDATE AT THE `v0.137.0` KICKOFF AND IS RECORDED IN THAT RELEASE'S NARRATIVE AS AN OPTION THEY CHOSE AGAINST.** Had it been picked, a Codex prompt would have been written to build something that already exists — the `Save order` button is at `study-plan-builder-page-client.tsx:2513`, and two of that row's three "verified traps" were also already addressed. **A stale Backlog row costs a whole release, not a paragraph**, because the Index is the input to every kickoff's scope decision.
+
+### ⚠️ Anti-drift
+
+- ❌ **Do NOT do B1 and B2 together.** Two bounds on one field is how this defect was created. **B1 is authoritative; B2 and B3 are not in scope.**
+- ❌ **Do NOT increase `MAX_INVALID_OUTPUT_ATTEMPTS`.** The failure is deterministic — the retry already ran and failed identically. More retries buy nothing and cost an LLM call each.
+- ❌ **Do NOT skip or soften title validation on the regeneration path only.** The generated title becomes the note body's **first line**; a divergent rule between first generation and regeneration is a new defect.
+- ❌ **Do NOT rename or retitle the four failed notes to work around it.** `v0.120.0` established the typed title as canonical. Their titles are correct; the validator rejected the model's *output*.
+- ❌ **Do NOT bundle the `OfficialChallengeQuizTemplateService` seed failures** (findings §7) — separate symptom, unproven relation, and folding it moves the verification tier.
+- ❌ **Do NOT touch the `subject value='Education' … overly broad ai suggestion ignored` path** — it appeared 6× in the window and is a working guard reporting normal operation.
+- ⚠️ **Nothing here may make `generateStudyPackFromExistingNoteAsync` public or route it through the `@Transactional` proxy** — both LLM calls run with no transaction and no JDBC connection held (`v0.112.0`), and that must survive.
+- ❌ **NO `frontend/app/onboarding` work before the `2026-09-11` read** (62.4% baseline, cannot be re-run). **NO Learning Connections work** — `[CHECKPOINT — due 2026-09-19]`, denominator ONE.
+- ⚠️ **The four failed notes are NOT repaired by this release.** They stay `FAILED` until re-run, and **that re-run is the OWNER's** — it is also the only real end-to-end confirmation, since the failing branch could not be confirmed from logs.
+
+### ⚠️ Pre-declared guards — written so a fixture cannot pass under both the defect and the fix
+
+- **Leg A:** assert the emitted payload **names the bound and the measured count**. ⚠️ A test asserting only that generation fails **passes under both the defect and the fix** — it already fails today.
+- **Leg B1:** assert the **RENDERED** prompt contains the numeric bound. ⚠️ Not the template file — the placeholder is substituted at build time, and a test that greps the raw template passes even if substitution is broken.
+- **Regression, all legs:** the four real titles from findings §1 must round-trip. ⚠️ **Use those exact strings, not invented ones** — they are the only known-failing inputs, and an invented "long title" fixture is a guess about a failure mode the logs never confirmed.
+- ⚠️ **Reach the validator the way production does** — through the real response-parsing path. A fixture that hand-builds a `PromptGeneratedNote` skips `repairJsonEatenLatexCommands` and the whitespace normaliser, **either of which could be the branch that actually fired.**
+
+### ⚠️ Size, and what the fold does to the verification tier
+
+**The owner took both the title fix and the backlog pass in one release, after being told the repo's rule that release size is the biggest lever on verification cost. Recorded rather than smoothed over.** **The honest consequence here is mild, and only because the second half changes NO code:** items 3–4 are docs, so the code diff stays at two files with no migration and no endpoint. **Tier: one `advisor()` call on the code diff**, per the plan's §7, plus the rendered-prompt guard. **⚠️ It would NOT stay there if Leg B2 were taken** — that changes what is accepted into a note body on a shipped generation path and would need a scoped cold agent. B2 is explicitly out of scope.
+
+**⚠️ The transport lesson does not apply: no new endpoint is added, so nothing here owes a real-request `MockMvc` test.**
+
+### Routing
+
+**CLAUDE CODE inline** for Legs A and B1 — two files, no migration, no endpoint, per the plan's §7. Items 3–4 are docs and are Claude Code by definition.
+
+### Scope completeness — each planned item against the code that implements it
+
+| # | Planned | Verdict | Evidence |
+|---|---|---|---|
+| 1 | **Leg A** — log the field, failing bound, measured count, limits, value truncated | **SHIPPED** | `OpenAiLlmStudyPackService:2592`/`:2597` (both branches), emitter at `:2603-2612` |
+| 2 | **Leg B1** — publish `{MAX_TITLE_WORDS}` into the prompt | **SHIPPED** | `note-generation-developer.txt:31`, substituted at `OpenAiLlmStudyPackService:727`; bound unchanged at `:87` |
+| 3 | Verify **the 16 scope-eligible** Backlog rows | **⚠️ CHANGED — the stated number could not be reproduced** | No filter was ever written down at kickoff. A defensible filter yields **26 raw / 23 after 3 stated over-catches**; 7 read against code, 4 stale. **Deliberately not reverse-engineered to return 16** |
+| 4 | Extend the `v0.137.0` rule to SHIPPED-CODE claims, and index the two artifacts | **SHIPPED** | Six-step procedure in `CLAUDE.md`; both source artifacts carry Backlog rows (3 references each) |
+
+**⚠️ Item 3's verdict is recorded as CHANGED rather than SHIPPED on purpose.** The release was scoped on a number, the number turned out to be unverifiable, and a pass that quietly delivered "16 rows" would have reproduced the exact failure the release exists to fix — a stated figure nobody can re-derive. **The count found is reported instead of the count asserted.**
+
+### Shipped
+
+- **Leg A — every generated-note text rejection now names what failed.** `normalizeGeneratedNoteText` threw a bare `LLM_INVALID_OUTPUT` on either branch; it now emits `generated_note_text_rejected field=… bound=blank|wordCount words=… min=… max=… chars=… value="…"` before throwing, and the two branches are separated so the bound is reported rather than inferred. Applies to `title`, `overview` and `keyIdea` alike. **On the blank branch the RAW value is logged, not the normalized one** — what is diagnostic there is what arrived and collapsed to nothing, which a `null` cannot show.
+- **Leg B1 — the title bound is published.** `note-generation-developer.txt` now states *"keep the title at or under `{MAX_TITLE_WORDS}` words"*, templated beside the existing `{MAX_ITEM_CHARS}` and `{MAX_WORDS}`. **The bound was NOT raised** — 12 words is unchanged; the model is simply told the number it is judged against.
+- **Reused the class's existing `truncateForLog` rather than adding a second truncation rule.** The first attempt defined a duplicate helper, which failed the build; the existing one already backs thirteen other truncated-value logs and caps at `MAX_LOG_VALUE_LENGTH = 80`. ⚠️ **That does not mean the rejected value always survives intact, and the note should not be read as claiming it does:** the four production titles are 48–71 characters and fit, but a title rejected *for exceeding* the word bound is by construction longer than those, and the 15-word regression fixture (~105 chars) is truncated in the log. That is accepted deliberately — **the diagnostic payload is the field name, the failing bound and the measured count, all of which are logged unconditionally and in full**; the value is context, not the evidence.
+- **Corrected the `:68` comment that predicted this defect.** It said all three word bounds were unpublished and "surviving deliberately", ending with a standing instruction: *"if one starts rejecting valid content, publish the bound in the prompt rather than raising it."* **That prediction came true and the instruction was followed.** The comment now records which bound was published and why the other two deliberately were not — the instruction is evidence-gated (*"if ONE starts rejecting valid content"*), and neither `overview` nor `keyIdea` has produced a single observed rejection.
+- **Corrected `docs/features/study-pack-generation.md`, which claimed the two title-rule blocks are "byte-identical today".** That stopped being true with Leg B1. The divergence is deliberate and one line: only the note path enforces a title word bound, so publishing one in `developer.txt` would state a rule nothing enforces. The doc now says so and warns against "restoring" byte-equality.
+- **Five guards, each mutation-verified with the killing test named.** Deleting the published bound from the real prompt kills `noteGenerationPromptResourceDeclaresTheTitleWordPlaceholder`; breaking the substitution kills `noteGenerationPromptStatesTheTitleWordBound`; silencing the rejection log kills `rejectedGeneratedTitleLogsWhichBoundFailedAndTheMeasuredCount`. The fourth, `theFourTitlesThatFailedInProductionRoundTripThroughTheRealParsingPath`, uses the four real production titles rather than invented ones and drives the real response-parsing path.
+- **A fifth guard, added by `advisor()` on the diff, closes a claim that was asserted rather than tested.** Leg A logs the field name for all three bounds, and the release justifies leaving `overview` and `keyIdea` unpublished on the grounds that *a first rejection would announce itself*. **No test exercised either of them** — the discriminating guard covered `title` only, so that justification rested on two of three fields being untested. `rejectedGeneratedOverviewIsReportedUnderItsOwnFieldName` asserts `field=overview`, `words=93`, `max=90`; mutating the overview call site to log under the title's field name kills it, and kills nothing else. ⚠️ **Its first draft used a 90-word overview — exactly the bound — and did not throw, because the check is `> maxWords`.** A boundary fixture sitting ON the limit proves nothing about either side of it; the fixture is now 93 words and the comment says why.
+- **Derived the asserted word count instead of fitting it to observed output.** The title fixture's `words=15` was reached by writing 17, watching it fail, and changing the number — the shape of an assertion tuned to whatever the code emits. The count is 15 because the fixture carries no LaTeX and no irregular whitespace, so `repairJsonEatenLatexCommands` and the whitespace collapse are the identity on it. That reasoning is now a comment on the fixture, so a future change to either normalizer fails the test loudly rather than quietly shifting the count.
+- Backend suite: **2350 tests, 0 failures, 0 errors, 0 skipped**, PostgreSQL container included — up exactly five from the 2345 baseline, which is the five guards above and nothing else.
+- **Item 3 — the Backlog Index was checked against code for the first time, and the release's own stated scope did not survive it.** The scope said *"the 16 scope-eligible rows"*. **That number was asserted at kickoff with no filter written down and could not be reproduced** — a defensible filter (live rows whose Status asserts something about **code state**, excluding date-gated checkpoints and already-struck rows) yields **26 raw, 23 after removing 3 over-catches** — rows the filter hit on the word *OPEN* inside their own strikethrough. **The over-catches are stated rather than quietly trimmed**, for the same reason the pass refused to reverse-engineer 16. ⚠️ **The filter was NOT reverse-engineered to return 16**, because fitting a filter to an expected number is the same error `advisor()` caught in this release's own `words=15` assertion hours earlier. 26 classified, **7 read against code** (the rest were classified as out-of-scope or already-corrected without opening a file).
+- **Four rows were stale, and all four asserted the absence of code that exists.** (1) *"Unconfirmed connection requests never expire — no `expires_at` and no sweep, **verified**"* — **false on all three clauses**; `LinkedLearnerRelationshipEntity:56-59` carries `expiredAt` and `expiresAt`, `LinkedLearnerRequestExpiryJob:24` is the sweep, shipped `4b701532` 2026-08-30. (2) Domain Context curator copy read **NOT SHIPPED**; landed `607e12e5` 2026-08-31. (3) `adoptGoal` NULLing a learner's exam date read **STILL OPEN**; fixed in `v0.127.0` (`f7269474`) **two days before this release opened** — `NoteCollectionService.java:864-883` promotes the date instead. (4) *"notes strand in `GENERATING`"* — **mechanism true, headline false**: `AppConfig.java:102-110` still sets no drain, but `GenerationRecoveryJob:18` has swept `GENERATING` every ten minutes since 2026-08-18, so the strand is bounded at one interval.
+- **⚠️ Two of the four were free to catch — the row's own cells contradicted each other.** One had `Gate` = *"✅ SHIPPED in `v0.97.0`"* sitting beside `Status` = *"NOT SHIPPED"*; the other a **struck-through title reading "DISCHARGED … verified shipped"** beside a live `Status` of NOT SHIPPED. **No code read was needed for either.** `CLAUDE.md` already named this detector after `v0.133.0`; this is its first deliberate application, and it out-yielded every grep in the pass.
+- **⚠️ The word "verified" in a row turned out to be worth nothing.** The connection-request row stamped its claim as verified and was wrong on every clause. Every row that survived this pass now carries a **`file:line`** in its Status cell instead — a row with no anchor has been *read*, not verified.
+- **⚠️ A structural defect was found that defeats kickoff step 8 itself: 19 rows carried FOUR columns instead of five**, so the ritual's `Last reviewed` bump could never have reached them, and nothing announced it. Eighteen now carry an explicit **`⚠️ never stamped`** (the nineteenth was verified in this pass and carries a real date) — deliberately **not** a back-dated guess, since a stamp advancing without the claim being re-read is worse than an old date (`v0.93.0`'s own scan note said exactly this). **When a check iterates a structure, verify the structure before trusting the iteration.**
+- **⚠️ One Gate was found already true and unactioned.** The public-catalog unbounded read (a real production outage fix) un-parks *"the moment `v0.119.0` is signed off"* — **19 releases ago** — and the legacy branch is still live at `NoteService.java:774`/`:872`. **This is the other half of step 8**: it checks whether a Gate became true, and a Gate that quietly came true is as invisible as an unindexed file. Left open and anchored rather than folded in — it is a backend fix with a product decision attached, and folding it would move this release's tier.
+- **Seven rows marked out of scope for a code check with the reason written into the row** — production reads, curator work, an unreproduced variance — so the next pass does not re-litigate them. **And the nine this pass did not treat are named in the scan note with a reason each**, because a completeness pass that silently skips a third of its own set reads as complete to the next scan. None is an unverified code claim: each is already closed, already gated on a read this release must not pre-empt, or is this release's own subject.
+- **⚠️ One of the four corrections was itself wrong on first writing, was caught by `advisor()` before commit, and the error is kept on the record.** The `GENERATING` row's replacement text said notes strand *"at most one sweep interval"* — **mistaking the recovery job's 10-minute cron cadence for the strand bound**, which is actually `noteBoundMinutes` (default **120**, `application.yaml:535`) plus a cadence, understating it roughly twelve-fold. It also passed over a branch already visible on screen: rows with a null `generation_enqueued_at` are counted, logged *"leaving them untouched"*, and **strand indefinitely** — so the original headline is exactly right for that class. ⚠️ **A correction is a claim like any other and decays the same way.** `CLAUDE.md` step 2 now carries this as its worked example, including the near-miss: when a job bounds something the bound is a **configured property** — read the value — and always check what the sweep **refuses** to touch.
+- **Item 4 — the rule is the procedure this pass actually ran, not a rule written beside it.** `v0.137.0`'s snapshot rule reached `flyway_schema_history`, row counts and deploy state; it did **not** reach *"X is NOT SHIPPED"* or *"nothing does Y"*, which rot just as fast because the fix ships in a release that never re-reads the row claiming it is missing. The extension carries six numbered steps — classify by claim type before reading, **verify the title's claim and not only the Status cell's** (the `GENERATING` row diverged exactly there), anchor every survivor to `file:line`, read the row's cells against each other first, never advance `Last reviewed` on a row you did not re-read, and check the table's structure before trusting an iteration over it — plus the standing instruction to **report the count you actually found rather than the one that was asserted**.
+
 ## v0.137.0 - Deploy Integrity
 
 **Status: Released** (kicked off 2026-09-09, signed off 2026-09-09, base branch `releases/v0.137.0`, cut from `main` after `v0.136.0` merged as #1359. **⚠️ RE-SCOPED the same day — see below.** No feature or fix PRs: every commit is release-management or docs, plus one script.)
@@ -779,86 +875,4 @@ happens*, and they are recorded here rather than left to be inferred:
 - **The families `GET` is ADMIN-only, matching the create endpoint.** The authoring combobox still
   derives families from the catalog, deliberately — it only cares about families that have members.
   **Do not unify the two paths.**
-
-## v0.132.0 - Publication Boundary
-
-**Status: Released** (kicked off 2026-09-08, signed off 2026-09-08, base branch `releases/v0.132.0`, **cut from `docs/planning-publication-boundary-and-plan-corrections` rather than `main`** so that branch's audit commit rides in via the release PR — the `v0.130.0`/`v0.120.0`/`v0.111.0` precedent, used here for convenience rather than because anything is blocked)
-
-**Scope is slices P1 and P2** of `docs/claude-plans/official-review-set-update-publication-boundary.md` (audit written 2026-09-07 by a peer session, every claim `file:line`-anchored). **⚠️ P3 IS DEFERRED — see below.**
-
-### The problem, in the audit's own words
-
-> **Editing an Official Review Set is not publishing an Official Review Set update.**
-> **Source changed != published update available.**
-> **New adopters should not accidentally receive unfinished curator work.**
-
-**There is exactly ONE source state today. No working/published separation exists anywhere**, so every curator edit is instantly learner-facing: adopters are immediately "behind", and a new adopter or a public viewer sees half-finished curriculum work.
-
-### Planned Scope
-
-**(P1) Publication boundary foundation.** Three columns plus a backfill; filter drift detection, adoption copy and `getPublic` to **published** rows only; a `Publish update` service and endpoint that is atomic, locked and idempotent. **⚠️ ONE MIGRATION. The whole contract lives in this slice.**
-
-**(P2) Curator UX.** The `Publish update` action, an `Unpublished changes` indicator, and a confirmation carrying additions-only counts. No migration.
-
-**⚠️ P1 AND P2 SHIP TOGETHER AND THAT PAIRING IS DELIBERATE, NOT PADDING.** P1 creates the endpoint but no way to press it; shipping it alone would leave curators unable to publish anything except through the API, while every edit silently stopped reaching learners. **That is the `v0.130.0` empty-inbox shape** — a substrate with no surface — and it was expensive enough once.
-
-### ✅ THREE OWNER DECISIONS — ALL SETTLED 2026-09-08, BEFORE THE CODEX PROMPT WAS WRITTEN
-
-The owner accepted all three of the audit's recommendations:
-
-1. **✅ THE NARROWED PUBLIC-VIEW CONTRACT (§6) IS ACCEPTED.** Public visitors see published **additions**; **removals and reorders remain live and are NOT hidden.** The alternatives were dual working/published columns per field plus soft-delete, or a full snapshot — both disproportionate. **⚠️ THIS IS A STATED LIMITATION, NOT A GAP TO CLOSE LATER BY DEFAULT, and it is recorded here rather than only in the prompt because the prompt is gitignored.** See "Known limitation" below.
-2. **✅ BACKFILL STAMPS THE COLLECTION'S `created_at`, not `now`** — so a future "Updated" date is not uniformly the deploy date.
-3. **✅ `last_update_published_at` PRESERVES THE CAPABILITY FOR A PUBLIC "Updated" DATE, AND SHIPS NO UI FOR IT.** **⚠️ Do NOT add that UI in this release.**
-
-### ⚠️ Known limitation, accepted at kickoff rather than discovered at signoff
-
-**The public view hides unpublished ADDITIONS ONLY.** A note the curator **removes**, or a section they **reorder or rename**, is visible to the public and to new adopters immediately — because `position` and `label` are single columns and a delete is a real delete, so there is nothing to hide behind without a second column per field or a soft-delete. **⚠️ Test 11 must be written to this narrowed contract and MUST NOT be reported as passing in full.** The learner-facing contracts are fully satisfied; only the public browsing view is partial, and the residual is small in practice because a mid-expansion curator is overwhelmingly *adding*.
-
-### Why P3 is deferred
-
-**P3 (the Review Set update notification) was Stage 6 of the notification plan and this audit unblocks it** — §7 supersedes that plan's §8 drift-signature dedup blocker, which must NOT be implemented. **It is deferred on SIZE, not on doubt:** P1 carries a migration and rewires what `getPublic` and adoption copy can see, which is enough surface for one release. **⚠️ Release SIZE is the biggest lever on verification cost, and it compounds.**
-
-### Anti-drift
-
-**⚠️ A PER-ROW PUBLICATION STAMP, NOT A SNAPSHOT ARCHITECTURE.** The audit's central structural finding is that `applySourceUpdate` is **additive-only** — `NoteCollectionService:2050` says *"THIS RELEASE REPORTS AND NEVER APPLIES"*, and `MOVED` changes are detected and reported but never applied. **So the boundary only has to gate what becomes visible as an ADDITION.** Do NOT build snapshots, versions or history. **⚠️ Do NOT implement §8's drift-signature dedup — it is SUPERSEDED.** **⚠️ NO Learning Connections work: `[CHECKPOINT — due 2026-09-19]` is ELEVEN DAYS OUT and its denominator is ONE.** **⚠️ Do NOT build the notification half (P3), and do NOT add a public "Updated" date UI.** **⚠️ Curriculum update != Note content overwrite, and one learner remains one adopter across every update** — publishing makes changes *available for review*, it never forces learner synchronization. **⚠️ Adoption counts must keep working: this release changes what `getPublic` can SEE, and `v0.129.0`'s count reads the same rows.** No quota, entitlement or pricing change; onboarding untouched.
-
-### Verification
-
-**⚠️ AT LEAST ONE SCOPED COLD AGENT, DECIDED AT KICKOFF RATHER THAN AT SIGNOFF.** This release **moves a visibility boundary** — it changes what an anonymous `getPublic` caller and a new adopter can see — and it carries a migration with a backfill over existing production rows. Both are named triggers. **⚠️ AND THE `v0.131.0` LESSON APPLIES DIRECTLY: that release decided its tier by the letter of the gate, shipped, and a cold agent then found a trap it had introduced. Decide the tier from the SHAPE of the change, not from the item count.**
-
-**⚠️ PRE-DECLARED GUARDS, from the audit's §12 and this repo's carried lessons:**
-- **(1)** an unpublished curator edit is invisible to `getPublic`, to a NEW adopter, and to drift detection — **assert all three, since they read the same rows by different paths.**
-- **(2)** publishing is **idempotent and atomic** — a second publish adds nothing, and a failure mid-way leaves no half-published set.
-- **(3)** **an existing adopter's already-copied content is UNTOUCHED by a publish** — publishing offers, it never overwrites.
-- **(4)** the backfill leaves every pre-existing set **published**, so nothing silently vanishes from Explore on deploy. **⚠️ ASSERT AGAINST REAL MIGRATED ROWS, AND THE HARNESS IS NAMED SO IT ACTUALLY HAPPENS: `NativeQueryPostgresIntegrationTest`**, which starts PostgreSQL 16 and applies the real Flyway migrations. **⚠️ Do NOT assert this in `NoteCollectionServiceProjectionIntegrationTest` — that file hand-writes its H2 DDL and can silently drift from the migration set**, which is the anti-pattern `v0.130.0` recorded.
-- **(5)** **⚠️ CORRECTED AT PROMPT TIME — THE ORIGINAL WORDING WAS UNTESTABLE AND POINTED THE WRONG WAY.** It read *"the adoption count still returns the same numbers for a set with no unpublished edits"* — but post-backfill every row is published, so that fixture never fires the filter. It is exactly what the audit lists under *"fixtures that prove nothing."* **The discriminating test uses a source set WITH unpublished additions.** And the direction that actually breaks is the opposite one: **⚠️ `published_at` IS A SOURCE-SIDE CONCEPT, but the migration adds the column to `note_collections` and `note_collection_items`, which hold ADOPTER rows too.** Nobody publishes a learner's copy, so those rows' stamps are meaningless. `countAdoptionsByCollectionIds` counts **adopter-side** collections by `sourcePlanId` and **MUST NOT filter on `published_at`** — if it does, `v0.129.0`'s counts start reading a column that means nothing on the rows it counts.
-- **(6)** **⚠️ A RENDERED CONTROL THAT IS DISABLED IS NOT A CONTROL** — if the curator UX disables `Publish update` in any state, assert what the curator can actually do in that state. This guard exists because `v0.131.0` verified an exit by its RENDER gate and missed that it was `disabled`.
-
-**⚠️ Routing: CODEX** — migration plus service plus controller plus frontend. **⚠️ Call `advisor()` BEFORE writing the prompt** — measured as the highest-yield checkpoint in this repo, and settle owner decision 1 first.
-
-### Shipped
-
-- Added `V141__review_set_publication_boundary.sql`: source collection and item publication stamps plus a root finalization marker. Its backfill stamps every existing collection with its own `created_at`, every existing item with its owning collection's `created_at`, and existing public source roots' `last_update_published_at` with `created_at`.
-- Curator additions remain working-only until an explicit, atomic `Publish update` action stamps the Official Review Set subtree. Drift, adoption copying, and public detail read published source rows; learner-owned library/detail reads and adoption counts remain unfiltered.
-- Added the curator-only `Published` / `Unpublished changes` state and additions-only publication confirmation. P3 notification fan-out and public Updated-date UI remain deferred.
-
-### Pressure test — two cold agents, and what they found
-
-Tier was pre-declared at kickoff ("AT LEAST ONE SCOPED COLD AGENT"). **Two were run**, on non-overlapping halves, framed as FALSIFICATION of the implementing session's named claims — and partitioned so the **frontend/backend seam was explicitly OWNED** rather than falling between them, which is the `v0.119.0` failure. Full report: `docs/claude-findings/v0.132.0-publication-boundary-pressure-test.md`. Four defects blocked signoff; **both agents independently found the same one from opposite halves.**
-
-- **Fixed — a Goal whose child Subject Plans were all unpublished produced a SILENTLY EMPTY adopted Goal.** The gate counted children unfiltered while the copy list beneath it filtered by publication, and `adoptGoal` never copies the root's own items. The learner got zero plans and zero notes, it became their **primary** collection, and `alreadyAdopted` made it **unrepairable by retrying**; the public adoption count incremented for it. This release had converted a loud `CollectionNotFoundException` into a silent one. The gate now reads the same filtered, owner-scoped list it copies.
-- **Fixed — `listPublic` was unfiltered while `getPublic` was filtered.** Explore, Exam Hub and dashboard cards counted unpublished plans and notes that the linked page would not show. Those count queries were unfiltered before this release too; **what this release introduced is the divergence.** `childCount > 0` also sets `isGoal`, which routes Adopt to `adoptGoal` — so it fed the defect above. **⚠️ The fix filters in Java over already-fetched rows on purpose: the authenticated `list()` shares those exact queries, and an adopted row is never published, so a predicate in the query would have emptied every learner's own library.**
-- **Fixed — the first publication of any PRE-EXISTING collection stamped nothing.** V141's first `UPDATE` carries no visibility predicate, so every pre-deploy row — private drafts included — was backfilled with a `published_at`, making the `published_at == null` guard false for all of them. A draft that existed at deploy, was filled in afterwards and then published would publish **nothing**. The discriminator is now `last_update_published_at`, which V141 stamps only for pre-existing public source roots. **⚠️ Not "always stamp": that would walk a `PUBLIC → PRIVATE → PUBLIC` flip's edits past the boundary.**
-- **Fixed — a publish failure was invisible.** `setPublishUpdateOpen(false)` sat inside the `try`, so on failure the modal stayed open and `AppModal`'s `fixed inset-0` portal covered the page-level error Card. The curator saw a click that did nothing. **⚠️ This defeated the obvious test — `getByText(message)` passed — so the new guard asserts `within(dialog)`.** It is the `v0.131.0` disabled-control lesson one layer up: the control was enabled, the FEEDBACK was occluded.
-- **Fixed — coverage gaps on added files.** `ReviewSetPublicationStatusProjection` was never produced by real Spring Data (every assertion ran against a hand-built stub over a mocked repository, and `PREPARE` cannot check alias→getter mapping); `ReviewSetUpdateNotPublishableException` had **zero** test references, so nothing proved a private, child or adopted root is rejected; and no `lib/api-*.test.ts` existed for either new endpoint despite the repo's named convention for exactly that. All three now exist. Each of the five fixes above is mutation-verified with the killing test named.
-
-**⚠️ Correction to this release's own claim.** The delivery was recorded as asserting the backfill "against REAL migrated rows, not a hand-built fixture." **That is false as worded** — the test seeds its own rows after Flyway and replays the shipped SQL. A V141 mutation *is* caught, so it retains its value, but **pre-declared guard #4 is structurally unsatisfiable** in a Flyway-on-empty-schema harness: reading the real SQL text is the best available approximation. The guard needs rewording; the test does not need changing.
-
-### Known limitations
-
-- **The public view hides unpublished ADDITIONS only.** Removals, reorders and renames stay live, because `position` and `label` are single columns and a delete retains no row. Accepted at kickoff as owner decision 1.
-- **There is no publication surface on the page where curators actually edit.** `addItems` refuses a collection that has children, so every topic addition happens on a child Subject Plan in the Builder — and the `Unpublished changes` indicator and `Publish update` action exist **only** on the root collection detail page. A curator can add a Subject Plan and ten topics in the Builder with nothing telling them the work is invisible to learners. **⚠️ This is the sibling of pre-declared guard 6: a control the curator never navigates to is not a control.** Not built in this release deliberately; recorded rather than discovered later.
-- **A directly-published child Subject Plan is a permanent dead end.** `publishInitialCurriculum` early-returns for a non-null `parentCollectionId` while `validatePublishable` rejects neither a child nor an adopted copy, so a hand-issued visibility POST on a child yields a `PUBLIC` collection at zero public items that no control can stamp — `assertOfficialReviewSetRoot` rejects children. ADMIN-only, no UI path reaches it.
-- **The item backfill uses the collection's `created_at`, not the item's**, so an item added long after its collection carries `published_at < created_at`. Nothing compares them today; it would matter only if a future release surfaces a per-item date.
-- **The `@Modifying` natives lack `clearAutomatically`.** Nothing dirties those entities after the natives today, so this is latent fragility rather than a live bug.
 

@@ -1,6 +1,6 @@
 # RELEASES_ARCHIVE.md — NoteLib
 
-Archived sections of `RELEASES.md`. **Contents are NOT one contiguous range:** `v0.41.0`–`v0.120.0`, plus `v0.126.0` (moved at the `v0.132.0` kickoff), `v0.127.0` (moved at the `v0.133.0` kickoff) `v0.128.0` (moved at the `v0.134.0` kickoff) `v0.129.0` (moved at the `v0.135.0` kickoff) `v0.130.0` (moved at the `v0.136.0` kickoff) and `v0.131.0` (moved at the `v0.137.0` kickoff) as the live file crossed its *current + last five* cap. Each version's own `## vX.Y.Z` heading is the index — search for it. `v0.40.1` and earlier moved here
+Archived sections of `RELEASES.md`. **Contents are NOT one contiguous range:** `v0.41.0`–`v0.120.0`, plus `v0.126.0` (moved at the `v0.132.0` kickoff), `v0.127.0` (moved at the `v0.133.0` kickoff) `v0.128.0` (moved at the `v0.134.0` kickoff) `v0.129.0` (moved at the `v0.135.0` kickoff) `v0.130.0` (moved at the `v0.136.0` kickoff) `v0.131.0` (moved at the `v0.137.0` kickoff) and `v0.132.0` (moved at the `v0.138.0` kickoff) as the live file crossed its *current + last five* cap. Each version's own `## vX.Y.Z` heading is the index — search for it. `v0.40.1` and earlier moved here
 2026-07-10; **`v0.41.0` through `v0.120.0` moved here 2026-09-07** in the `v0.126.0` pass, which
 resumed this convention after it had lapsed for 85 releases — `RELEASES.md` had reached 116
 sections against its documented design of *current + last few versions*. Both passes are MOVES,
@@ -17,6 +17,88 @@ See `RELEASES.md` for the current + most-recent versions, and its "Archived rele
 index for a one-line-per-version pointer back into this file.
 
 ---
+
+## v0.132.0 - Publication Boundary
+
+**Status: Released** (kicked off 2026-09-08, signed off 2026-09-08, base branch `releases/v0.132.0`, **cut from `docs/planning-publication-boundary-and-plan-corrections` rather than `main`** so that branch's audit commit rides in via the release PR — the `v0.130.0`/`v0.120.0`/`v0.111.0` precedent, used here for convenience rather than because anything is blocked)
+
+**Scope is slices P1 and P2** of `docs/claude-plans/official-review-set-update-publication-boundary.md` (audit written 2026-09-07 by a peer session, every claim `file:line`-anchored). **⚠️ P3 IS DEFERRED — see below.**
+
+### The problem, in the audit's own words
+
+> **Editing an Official Review Set is not publishing an Official Review Set update.**
+> **Source changed != published update available.**
+> **New adopters should not accidentally receive unfinished curator work.**
+
+**There is exactly ONE source state today. No working/published separation exists anywhere**, so every curator edit is instantly learner-facing: adopters are immediately "behind", and a new adopter or a public viewer sees half-finished curriculum work.
+
+### Planned Scope
+
+**(P1) Publication boundary foundation.** Three columns plus a backfill; filter drift detection, adoption copy and `getPublic` to **published** rows only; a `Publish update` service and endpoint that is atomic, locked and idempotent. **⚠️ ONE MIGRATION. The whole contract lives in this slice.**
+
+**(P2) Curator UX.** The `Publish update` action, an `Unpublished changes` indicator, and a confirmation carrying additions-only counts. No migration.
+
+**⚠️ P1 AND P2 SHIP TOGETHER AND THAT PAIRING IS DELIBERATE, NOT PADDING.** P1 creates the endpoint but no way to press it; shipping it alone would leave curators unable to publish anything except through the API, while every edit silently stopped reaching learners. **That is the `v0.130.0` empty-inbox shape** — a substrate with no surface — and it was expensive enough once.
+
+### ✅ THREE OWNER DECISIONS — ALL SETTLED 2026-09-08, BEFORE THE CODEX PROMPT WAS WRITTEN
+
+The owner accepted all three of the audit's recommendations:
+
+1. **✅ THE NARROWED PUBLIC-VIEW CONTRACT (§6) IS ACCEPTED.** Public visitors see published **additions**; **removals and reorders remain live and are NOT hidden.** The alternatives were dual working/published columns per field plus soft-delete, or a full snapshot — both disproportionate. **⚠️ THIS IS A STATED LIMITATION, NOT A GAP TO CLOSE LATER BY DEFAULT, and it is recorded here rather than only in the prompt because the prompt is gitignored.** See "Known limitation" below.
+2. **✅ BACKFILL STAMPS THE COLLECTION'S `created_at`, not `now`** — so a future "Updated" date is not uniformly the deploy date.
+3. **✅ `last_update_published_at` PRESERVES THE CAPABILITY FOR A PUBLIC "Updated" DATE, AND SHIPS NO UI FOR IT.** **⚠️ Do NOT add that UI in this release.**
+
+### ⚠️ Known limitation, accepted at kickoff rather than discovered at signoff
+
+**The public view hides unpublished ADDITIONS ONLY.** A note the curator **removes**, or a section they **reorder or rename**, is visible to the public and to new adopters immediately — because `position` and `label` are single columns and a delete is a real delete, so there is nothing to hide behind without a second column per field or a soft-delete. **⚠️ Test 11 must be written to this narrowed contract and MUST NOT be reported as passing in full.** The learner-facing contracts are fully satisfied; only the public browsing view is partial, and the residual is small in practice because a mid-expansion curator is overwhelmingly *adding*.
+
+### Why P3 is deferred
+
+**P3 (the Review Set update notification) was Stage 6 of the notification plan and this audit unblocks it** — §7 supersedes that plan's §8 drift-signature dedup blocker, which must NOT be implemented. **It is deferred on SIZE, not on doubt:** P1 carries a migration and rewires what `getPublic` and adoption copy can see, which is enough surface for one release. **⚠️ Release SIZE is the biggest lever on verification cost, and it compounds.**
+
+### Anti-drift
+
+**⚠️ A PER-ROW PUBLICATION STAMP, NOT A SNAPSHOT ARCHITECTURE.** The audit's central structural finding is that `applySourceUpdate` is **additive-only** — `NoteCollectionService:2050` says *"THIS RELEASE REPORTS AND NEVER APPLIES"*, and `MOVED` changes are detected and reported but never applied. **So the boundary only has to gate what becomes visible as an ADDITION.** Do NOT build snapshots, versions or history. **⚠️ Do NOT implement §8's drift-signature dedup — it is SUPERSEDED.** **⚠️ NO Learning Connections work: `[CHECKPOINT — due 2026-09-19]` is ELEVEN DAYS OUT and its denominator is ONE.** **⚠️ Do NOT build the notification half (P3), and do NOT add a public "Updated" date UI.** **⚠️ Curriculum update != Note content overwrite, and one learner remains one adopter across every update** — publishing makes changes *available for review*, it never forces learner synchronization. **⚠️ Adoption counts must keep working: this release changes what `getPublic` can SEE, and `v0.129.0`'s count reads the same rows.** No quota, entitlement or pricing change; onboarding untouched.
+
+### Verification
+
+**⚠️ AT LEAST ONE SCOPED COLD AGENT, DECIDED AT KICKOFF RATHER THAN AT SIGNOFF.** This release **moves a visibility boundary** — it changes what an anonymous `getPublic` caller and a new adopter can see — and it carries a migration with a backfill over existing production rows. Both are named triggers. **⚠️ AND THE `v0.131.0` LESSON APPLIES DIRECTLY: that release decided its tier by the letter of the gate, shipped, and a cold agent then found a trap it had introduced. Decide the tier from the SHAPE of the change, not from the item count.**
+
+**⚠️ PRE-DECLARED GUARDS, from the audit's §12 and this repo's carried lessons:**
+- **(1)** an unpublished curator edit is invisible to `getPublic`, to a NEW adopter, and to drift detection — **assert all three, since they read the same rows by different paths.**
+- **(2)** publishing is **idempotent and atomic** — a second publish adds nothing, and a failure mid-way leaves no half-published set.
+- **(3)** **an existing adopter's already-copied content is UNTOUCHED by a publish** — publishing offers, it never overwrites.
+- **(4)** the backfill leaves every pre-existing set **published**, so nothing silently vanishes from Explore on deploy. **⚠️ ASSERT AGAINST REAL MIGRATED ROWS, AND THE HARNESS IS NAMED SO IT ACTUALLY HAPPENS: `NativeQueryPostgresIntegrationTest`**, which starts PostgreSQL 16 and applies the real Flyway migrations. **⚠️ Do NOT assert this in `NoteCollectionServiceProjectionIntegrationTest` — that file hand-writes its H2 DDL and can silently drift from the migration set**, which is the anti-pattern `v0.130.0` recorded.
+- **(5)** **⚠️ CORRECTED AT PROMPT TIME — THE ORIGINAL WORDING WAS UNTESTABLE AND POINTED THE WRONG WAY.** It read *"the adoption count still returns the same numbers for a set with no unpublished edits"* — but post-backfill every row is published, so that fixture never fires the filter. It is exactly what the audit lists under *"fixtures that prove nothing."* **The discriminating test uses a source set WITH unpublished additions.** And the direction that actually breaks is the opposite one: **⚠️ `published_at` IS A SOURCE-SIDE CONCEPT, but the migration adds the column to `note_collections` and `note_collection_items`, which hold ADOPTER rows too.** Nobody publishes a learner's copy, so those rows' stamps are meaningless. `countAdoptionsByCollectionIds` counts **adopter-side** collections by `sourcePlanId` and **MUST NOT filter on `published_at`** — if it does, `v0.129.0`'s counts start reading a column that means nothing on the rows it counts.
+- **(6)** **⚠️ A RENDERED CONTROL THAT IS DISABLED IS NOT A CONTROL** — if the curator UX disables `Publish update` in any state, assert what the curator can actually do in that state. This guard exists because `v0.131.0` verified an exit by its RENDER gate and missed that it was `disabled`.
+
+**⚠️ Routing: CODEX** — migration plus service plus controller plus frontend. **⚠️ Call `advisor()` BEFORE writing the prompt** — measured as the highest-yield checkpoint in this repo, and settle owner decision 1 first.
+
+### Shipped
+
+- Added `V141__review_set_publication_boundary.sql`: source collection and item publication stamps plus a root finalization marker. Its backfill stamps every existing collection with its own `created_at`, every existing item with its owning collection's `created_at`, and existing public source roots' `last_update_published_at` with `created_at`.
+- Curator additions remain working-only until an explicit, atomic `Publish update` action stamps the Official Review Set subtree. Drift, adoption copying, and public detail read published source rows; learner-owned library/detail reads and adoption counts remain unfiltered.
+- Added the curator-only `Published` / `Unpublished changes` state and additions-only publication confirmation. P3 notification fan-out and public Updated-date UI remain deferred.
+
+### Pressure test — two cold agents, and what they found
+
+Tier was pre-declared at kickoff ("AT LEAST ONE SCOPED COLD AGENT"). **Two were run**, on non-overlapping halves, framed as FALSIFICATION of the implementing session's named claims — and partitioned so the **frontend/backend seam was explicitly OWNED** rather than falling between them, which is the `v0.119.0` failure. Full report: `docs/claude-findings/v0.132.0-publication-boundary-pressure-test.md`. Four defects blocked signoff; **both agents independently found the same one from opposite halves.**
+
+- **Fixed — a Goal whose child Subject Plans were all unpublished produced a SILENTLY EMPTY adopted Goal.** The gate counted children unfiltered while the copy list beneath it filtered by publication, and `adoptGoal` never copies the root's own items. The learner got zero plans and zero notes, it became their **primary** collection, and `alreadyAdopted` made it **unrepairable by retrying**; the public adoption count incremented for it. This release had converted a loud `CollectionNotFoundException` into a silent one. The gate now reads the same filtered, owner-scoped list it copies.
+- **Fixed — `listPublic` was unfiltered while `getPublic` was filtered.** Explore, Exam Hub and dashboard cards counted unpublished plans and notes that the linked page would not show. Those count queries were unfiltered before this release too; **what this release introduced is the divergence.** `childCount > 0` also sets `isGoal`, which routes Adopt to `adoptGoal` — so it fed the defect above. **⚠️ The fix filters in Java over already-fetched rows on purpose: the authenticated `list()` shares those exact queries, and an adopted row is never published, so a predicate in the query would have emptied every learner's own library.**
+- **Fixed — the first publication of any PRE-EXISTING collection stamped nothing.** V141's first `UPDATE` carries no visibility predicate, so every pre-deploy row — private drafts included — was backfilled with a `published_at`, making the `published_at == null` guard false for all of them. A draft that existed at deploy, was filled in afterwards and then published would publish **nothing**. The discriminator is now `last_update_published_at`, which V141 stamps only for pre-existing public source roots. **⚠️ Not "always stamp": that would walk a `PUBLIC → PRIVATE → PUBLIC` flip's edits past the boundary.**
+- **Fixed — a publish failure was invisible.** `setPublishUpdateOpen(false)` sat inside the `try`, so on failure the modal stayed open and `AppModal`'s `fixed inset-0` portal covered the page-level error Card. The curator saw a click that did nothing. **⚠️ This defeated the obvious test — `getByText(message)` passed — so the new guard asserts `within(dialog)`.** It is the `v0.131.0` disabled-control lesson one layer up: the control was enabled, the FEEDBACK was occluded.
+- **Fixed — coverage gaps on added files.** `ReviewSetPublicationStatusProjection` was never produced by real Spring Data (every assertion ran against a hand-built stub over a mocked repository, and `PREPARE` cannot check alias→getter mapping); `ReviewSetUpdateNotPublishableException` had **zero** test references, so nothing proved a private, child or adopted root is rejected; and no `lib/api-*.test.ts` existed for either new endpoint despite the repo's named convention for exactly that. All three now exist. Each of the five fixes above is mutation-verified with the killing test named.
+
+**⚠️ Correction to this release's own claim.** The delivery was recorded as asserting the backfill "against REAL migrated rows, not a hand-built fixture." **That is false as worded** — the test seeds its own rows after Flyway and replays the shipped SQL. A V141 mutation *is* caught, so it retains its value, but **pre-declared guard #4 is structurally unsatisfiable** in a Flyway-on-empty-schema harness: reading the real SQL text is the best available approximation. The guard needs rewording; the test does not need changing.
+
+### Known limitations
+
+- **The public view hides unpublished ADDITIONS only.** Removals, reorders and renames stay live, because `position` and `label` are single columns and a delete retains no row. Accepted at kickoff as owner decision 1.
+- **There is no publication surface on the page where curators actually edit.** `addItems` refuses a collection that has children, so every topic addition happens on a child Subject Plan in the Builder — and the `Unpublished changes` indicator and `Publish update` action exist **only** on the root collection detail page. A curator can add a Subject Plan and ten topics in the Builder with nothing telling them the work is invisible to learners. **⚠️ This is the sibling of pre-declared guard 6: a control the curator never navigates to is not a control.** Not built in this release deliberately; recorded rather than discovered later.
+- **A directly-published child Subject Plan is a permanent dead end.** `publishInitialCurriculum` early-returns for a non-null `parentCollectionId` while `validatePublishable` rejects neither a child nor an adopted copy, so a hand-issued visibility POST on a child yields a `PUBLIC` collection at zero public items that no control can stamp — `assertOfficialReviewSetRoot` rejects children. ADMIN-only, no UI path reaches it.
+- **The item backfill uses the collection's `created_at`, not the item's**, so an item added long after its collection carries `published_at < created_at`. Nothing compares them today; it would matter only if a future release surfaces a per-item date.
+- **The `@Modifying` natives lack `clearAutomatically`.** Nothing dirties those entities after the natives today, so this is latent fragility rather than a live bug.
 
 ## v0.131.0 - Inbox Polish
 

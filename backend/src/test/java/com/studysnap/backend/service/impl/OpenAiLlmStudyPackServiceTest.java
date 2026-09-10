@@ -13,6 +13,10 @@ import com.studysnap.backend.dto.CompanionSection;
 import com.studysnap.backend.dto.QuizItem;
 import com.studysnap.backend.entity.DomainContext;
 import com.studysnap.backend.entity.LearnerLevel;
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.studysnap.backend.exception.AppException;
 import com.studysnap.backend.service.model.GeneratedChallengeQuizContent;
 import com.studysnap.backend.service.model.GeneratedStudyPackContent;
@@ -90,7 +94,7 @@ class OpenAiLlmStudyPackServiceTest {
                 "Developer prompt with {QUIZ_COUNT} questions. Use Domain for terminology and Note learner level for depth. {TRUE_FALSE_GUIDANCE} {COMPUTATION_GUIDANCE} {TIME_EXPECTATION}",
                 objectMapper.createObjectNode(),
                 "Note generation system prompt",
-                "Note generation developer prompt. Use Domain for terminology and Note learner level for depth. Built for studying, not just exploring information. Max {MAX_WORDS} words. Quick Recall bullets: at or under {MAX_ITEM_CHARS} characters.",
+                "Note generation developer prompt. Use Domain for terminology and Note learner level for depth. Built for studying, not just exploring information. Max {MAX_WORDS} words. Title: at or under {MAX_TITLE_WORDS} words. Quick Recall bullets: at or under {MAX_ITEM_CHARS} characters.",
                 "Companion system prompt",
                 "Companion developer prompt {REQUESTED_SECTIONS} {COLLECTION_TITLE} {COLLECTION_DESCRIPTION} {COURSE_PROGRAM} {STRUCTURE_CONTEXT}",
                 "Challenge quiz system prompt",
@@ -1289,6 +1293,180 @@ class OpenAiLlmStudyPackServiceTest {
         assertThat(template.split("\\{MAX_ITEM_CHARS\\}", -1).length - 1)
                 .as("the character bound must be stated in every section it is enforced on")
                 .isEqualTo(3);
+    }
+
+    /**
+     * ⚠️ LEG B1's DISCRIMINATING GUARD — asserts the RENDERED prompt, not the template file.
+     * The placeholder is substituted at build time, so a test that greps the raw resource stays green
+     * even when substitution is broken and the model ships a literal "{MAX_TITLE_WORDS}".
+     *
+     * <p>Background: on 2026-09-09 four notes failed regeneration seven times because the title was
+     * validated at 12 WORDS while the published contract stated no numeric bound at all.
+     */
+    @Test
+    void noteGenerationPromptStatesTheTitleWordBound() throws JsonProcessingException {
+        stubResponsesCall();
+        when(responseSpec.body(String.class))
+                .thenReturn(generatedQuizResponseJson(generatedNotePayloadWithQuickRecall("First Law — law of inertia")));
+
+        service.generateNoteFromTopic(
+                "Weirs",
+                new StudyPackGenerationContext(null, "Civil Engineering", null, List.of("hydraulics"))
+        );
+
+        ArgumentCaptor<String> requestCaptor = ArgumentCaptor.forClass(String.class);
+        verify(requestSpec).body(requestCaptor.capture());
+        assertThat(requestCaptor.getValue())
+                .contains("12 words")
+                .doesNotContain("{MAX_TITLE_WORDS}");
+    }
+
+    @Test
+    void noteGenerationPromptResourceDeclaresTheTitleWordPlaceholder() throws Exception {
+        // The test above proves substitution works. This one proves the real prompt actually asks for
+        // the bound -- without it, deleting the line from the resource leaves the model uninstructed
+        // and the substitution test still green, because there would be nothing left to substitute.
+        String template = new String(
+                new ClassPathResource("prompts/study-pack-v1/note-generation-developer.txt")
+                        .getInputStream().readAllBytes(),
+                StandardCharsets.UTF_8
+        );
+        assertThat(template.split("\\{MAX_TITLE_WORDS\\}", -1).length - 1)
+                .as("the title word bound must be stated exactly once, in the title section")
+                .isEqualTo(1);
+    }
+
+    /**
+     * ⚠️ LEG A's DISCRIMINATING GUARD. A test asserting only that generation FAILS passes under both
+     * the defect and the fix — it already failed before v0.138.0. The assertion that discriminates is
+     * that the emitted payload NAMES the failing bound and the MEASURED count, which is exactly what
+     * production could not tell us: four notes failed seven times and produced no evidence of what was
+     * wrong.
+     */
+    @Test
+    void rejectedGeneratedTitleLogsWhichBoundFailedAndTheMeasuredCount() throws JsonProcessingException {
+        Logger serviceLogger = (Logger) org.slf4j.LoggerFactory.getLogger(OpenAiLlmStudyPackService.class);
+        ListAppender<ILoggingEvent> appender = new ListAppender<>();
+        appender.start();
+        serviceLogger.addAppender(appender);
+        serviceLogger.setLevel(Level.WARN);
+        try {
+            ObjectNode payload = generatedNotePayloadWithQuickRecall("First Law — law of inertia");
+            // 15 plain words, over the 12-word bound. ⚠️ The validator counts the NORMALIZED value, so
+            // this fixture deliberately contains no LaTeX and no irregular whitespace — normalization is
+            // the identity on it, which is why the asserted count equals the count you get by reading the
+            // string. If repairJsonEatenLatexCommands or the whitespace collapse ever changes the token
+            // count here, this assertion should fail loudly rather than quietly track the new behaviour.
+            payload.put("title", "A Comprehensive and Deliberately Overlong Title About the Measurement of Discharge Over Sharp Crested Weirs");
+            stubResponsesCall();
+            when(responseSpec.body(String.class)).thenReturn(generatedQuizResponseJson(payload));
+
+            assertThatThrownBy(() -> service.generateNoteFromTopic(
+                    "Weirs",
+                    new StudyPackGenerationContext(null, "Civil Engineering", null, List.of("hydraulics"))
+            )).isInstanceOf(AppException.class);
+
+            String rejection = appender.list.stream()
+                    .map(ILoggingEvent::getFormattedMessage)
+                    .filter(message -> message.startsWith("generated_note_text_rejected"))
+                    .findFirst()
+                    .orElseThrow(() -> new AssertionError("no generated_note_text_rejected line was emitted"));
+
+            assertThat(rejection)
+                    .as("the rejection must name the field, the failing bound and the measured count")
+                    .contains("field=title")
+                    .contains("bound=wordCount")
+                    .contains("words=15")
+                    .contains("max=12");
+        } finally {
+            serviceLogger.detachAppender(appender);
+        }
+    }
+
+    /**
+     * ⚠️ THE SAME LOG LINE MUST SPEAK FOR EVERY FIELD ON THIS PATH, NOT JUST THE TITLE. {@code overview}
+     * and {@code keyIdea} keep UNPUBLISHED word bounds deliberately — the standing instruction at the
+     * constants is evidence-gated ("if ONE starts rejecting valid content"), and neither has produced a
+     * single observed rejection. That decision is only safe if a first rejection would announce itself,
+     * so this asserts the field name is reported rather than assumed.
+     */
+    @Test
+    void rejectedGeneratedOverviewIsReportedUnderItsOwnFieldName() throws JsonProcessingException {
+        Logger serviceLogger = (Logger) org.slf4j.LoggerFactory.getLogger(OpenAiLlmStudyPackService.class);
+        ListAppender<ILoggingEvent> appender = new ListAppender<>();
+        appender.start();
+        serviceLogger.addAppender(appender);
+        serviceLogger.setLevel(Level.WARN);
+        try {
+            ObjectNode payload = generatedNotePayloadWithQuickRecall("First Law — law of inertia");
+            // ⚠️ 3 words x 31 = 93, deliberately OVER the 90-word bound and not AT it. The first draft of
+            // this fixture used repeat(30) — exactly 90 — and did not throw, because the check is
+            // `wordCount > maxWords`. A boundary fixture that sits ON the limit proves nothing about
+            // either side of it.
+            payload.put("overview", "weirs measure flow ".repeat(31).trim());
+            stubResponsesCall();
+            when(responseSpec.body(String.class)).thenReturn(generatedQuizResponseJson(payload));
+
+            assertThatThrownBy(() -> service.generateNoteFromTopic(
+                    "Weirs",
+                    new StudyPackGenerationContext(null, "Civil Engineering", null, List.of("hydraulics"))
+            )).isInstanceOf(AppException.class);
+
+            assertThat(appender.list.stream()
+                    .map(ILoggingEvent::getFormattedMessage)
+                    .filter(message -> message.startsWith("generated_note_text_rejected"))
+                    .findFirst()
+                    .orElseThrow(() -> new AssertionError("no generated_note_text_rejected line was emitted")))
+                    .as("the overview's own bound must be reported, not the title's")
+                    .contains("field=overview")
+                    .contains("bound=wordCount")
+                    .contains("words=93")
+                    .contains("max=90");
+        } finally {
+            serviceLogger.detachAppender(appender);
+        }
+    }
+
+    /**
+     * ⚠️ REGRESSION GUARD, using the FOUR REAL TITLES that failed in production on 2026-09-09 rather
+     * than invented ones. They are the only known-failing inputs, and an invented "long title" fixture
+     * would be a guess about a failure mode the logs never confirmed. Every one is 8-9 words — well
+     * inside the 12-word bound — which is also why the source-title length correlation was explicitly
+     * ruled non-discriminating in the diagnosis.
+     */
+    @Test
+    void theFourTitlesThatFailedInProductionRoundTripThroughTheRealParsingPath() throws JsonProcessingException {
+        List<String> productionTitles = List.of(
+                "The Thomasites and Their Contributions to Philippine Education",
+                "Code of Ethics for Professional Teachers: Principles and Implementation",
+                "Magna Carta for Public School Teachers (RA 4670)",
+                "Code of Conduct for Public Officials under RA 6713"
+        );
+
+        stubResponsesCall();
+        when(responseSpec.body(String.class)).thenReturn(
+                responseJsonWithTitle(productionTitles.get(0)),
+                responseJsonWithTitle(productionTitles.get(1)),
+                responseJsonWithTitle(productionTitles.get(2)),
+                responseJsonWithTitle(productionTitles.get(3))
+        );
+
+        for (String productionTitle : productionTitles) {
+            String content = service.generateNoteFromTopic(
+                    "Philippine Education",
+                    new StudyPackGenerationContext(null, "Education", null, List.of("teaching"))
+            );
+
+            assertThat(content)
+                    .as("%s must survive validation and reach the note body", productionTitle)
+                    .contains(productionTitle);
+        }
+    }
+
+    private String responseJsonWithTitle(String title) throws JsonProcessingException {
+        ObjectNode payload = generatedNotePayloadWithQuickRecall("First Law — law of inertia");
+        payload.put("title", title);
+        return generatedQuizResponseJson(payload);
     }
 
     private ObjectNode generatedNotePayloadWithQuickRecall(String firstQuickRecallItem) {
