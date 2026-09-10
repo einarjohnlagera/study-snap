@@ -1086,6 +1086,36 @@ class AuthServiceTest {
         assertThat(response.reviewCommitmentPromptEligible()).isFalse();
     }
 
+    /**
+     * ⚠️ Owner decision 2026-09-10: do not ask when the digest is off, because choosing review days
+     * cannot change what such a learner receives -- the digest is gated on this same preference in
+     * {@code RetentionService#findDueConceptsDigestUsers}. Measured that day: 252 of 396 accounts
+     * have it OFF and 79 of those were otherwise prompt-eligible, so this is the difference between
+     * a meaningful ask and an inert one for a large share of the audience.
+     */
+    @Test
+    void getMe_doesNotOfferTheCommitmentPromptWhenTheDigestIsOff() {
+        UUID userId = UUID.randomUUID();
+        UserEntity user = reviewCommitmentUser(userId);
+        user.setDueConceptsDigestRemindersEnabled(false);
+        stubReviewCommitmentResponse(userId, user);
+
+        assertThat(authService.getMe(userId).reviewCommitmentPromptEligible()).isFalse();
+    }
+
+    @Test
+    void recordReviewCommitmentPrompted_doesNotCountAnImpressionWhenTheDigestIsOff() {
+        UUID userId = UUID.randomUUID();
+        UserEntity user = reviewCommitmentUser(userId);
+        user.setDueConceptsDigestRemindersEnabled(false);
+        when(userRepository.findByIdForUpdate(userId)).thenReturn(Optional.of(user));
+
+        authService.recordReviewCommitmentPrompted(userId);
+
+        assertThat(user.getReviewCommitmentPromptCount()).isZero();
+        assertThat(user.getReviewCommitmentLastPromptedAt()).isNull();
+    }
+
     @Test
     void getMe_capsReviewCommitmentPromptsAfterThreeImpressions() {
         UUID userId = UUID.randomUUID();
@@ -1127,6 +1157,10 @@ class AuthServiceTest {
         user.setStatus(UserStatus.ACTIVE);
         user.setEngagementMode(EngagementMode.CONSISTENCY);
         user.setExamDate(LocalDate.of(2026, 11, 8));
+        // Eligibility requires the due-concepts digest to be ON (the ask is inert otherwise), so the
+        // baseline fixture is a learner who can actually benefit. Tests that need the off case set it
+        // explicitly rather than relying on the field's null default.
+        user.setDueConceptsDigestRemindersEnabled(true);
         return user;
     }
 

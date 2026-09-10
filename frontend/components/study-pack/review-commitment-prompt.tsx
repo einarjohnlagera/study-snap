@@ -38,7 +38,6 @@ export function ReviewCommitmentPrompt({
   const [visible, setVisible] = useState(false);
   const [examDate, setExamDate] = useState("");
   const [showExamDate, setShowExamDate] = useState(false);
-  const [digestEnabled, setDigestEnabled] = useState(true);
   const [reviewDays, setReviewDays] = useState<ReviewDay[]>(DEFAULT_REVIEW_DAYS);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -91,11 +90,6 @@ export function ReviewCommitmentPrompt({
         const shouldShow = me.reviewCommitmentPromptEligible;
         // The exam-date sub-field stays where the field already lives, rather than generalising it.
         setShowExamDate(me.examDate !== null || me.profileType === "BOARD_EXAM");
-        // ⚠️ The digest is gated on this preference AND a verified email
-        // (RetentionService:188). 252 of 396 accounts have it OFF, so a single unconditional
-        // "you already get a weekly nudge" is FALSE for roughly two thirds of the audience --
-        // and for them choosing days is inert, because no digest is sent either way.
-        setDigestEnabled(me.dueConceptsDigestRemindersEnabled);
         setExamDate(me.examDate ?? "");
         setReviewDays(me.reviewDays?.length > 0 ? me.reviewDays : DEFAULT_REVIEW_DAYS);
         promptVisibleRef.current = shouldShow;
@@ -164,10 +158,15 @@ export function ReviewCommitmentPrompt({
       <div className="space-y-1">
         <p className="text-xs font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300">Plan your next chapter</p>
         <h2 className="text-lg font-semibold">When will you come back?</h2>
+        {/* ⚠️ This sentence is unconditional ON PURPOSE, and it is only true because the SERVER
+            refuses to render this prompt when the due-concepts digest is off (see
+            AuthService#isReviewCommitmentPromptEligible). It was briefly conditional, after the
+            v0.139.0 cold agent found it was false for 252 of 396 accounts; the owner then chose not
+            to ask those learners at all, which makes the claim true by construction and the other
+            branch dead. ⚠️ If eligibility ever stops checking the preference, this line becomes a
+            lie again -- change them together or not at all. */}
         <p className="text-sm text-foreground/75">
-          {digestEnabled
-            ? "You already get a weekly nudge when concepts are due. Choose your review days to get a nudge on every selected day when there is something to review."
-            : "Due-concept reminders are currently off, so we will not email you. Choose your review days now and they will be used the moment you turn reminders back on in Settings."}
+          You already get a weekly nudge when concepts are due. Choose your review days to get a nudge on every selected day when there is something to review.
         </p>
       </div>
       {showExamDate ? (

@@ -668,10 +668,28 @@ public class AuthService {
         );
     }
 
+    /**
+     * ⚠️ THE DIGEST PREFERENCE IS PART OF ELIGIBILITY, AND THAT IS THE POINT OF THE ASK.
+     *
+     * <p>The due-concepts digest is gated on {@code dueConceptsDigestRemindersEnabled} (and a
+     * verified, active account) in {@code RetentionService#findDueConceptsDigestUsers}. A learner who
+     * has turned reminders off receives no digest at all, so choosing review days changes nothing for
+     * them -- the ask is inert, and the prompt's own copy would be false.
+     *
+     * <p>Measured 2026-09-10: <strong>252 of 396 accounts have the preference OFF</strong>, and 79 of
+     * them were otherwise prompt-eligible. Owner decision the same day: do not ask when the digest is
+     * off. This cuts the eligible pool from 136 to 57 while costing roughly ONE learner of near-term
+     * in-app reach (7 -> 6), because most of the excluded were not returning anyway.
+     *
+     * <p>⚠️ Do NOT "restore reach" by dropping this clause. It would reinstate an ask that cannot
+     * affect what the learner receives. ⚠️ And do NOT make committing turn the preference on -- that
+     * is an email-consent change and is explicitly not in scope.
+     */
     private boolean isReviewCommitmentPromptEligible(UserEntity user, OffsetDateTime now) {
         String[] reviewDays = user.getReviewDays();
         OffsetDateTime lastPromptedAt = user.getReviewCommitmentLastPromptedAt();
-        return (reviewDays == null || reviewDays.length == 0)
+        return Boolean.TRUE.equals(user.getDueConceptsDigestRemindersEnabled())
+                && (reviewDays == null || reviewDays.length == 0)
                 && user.getReviewCommitmentPromptedAt() == null
                 && reviewCommitmentPromptCount(user) < REVIEW_COMMITMENT_PROMPT_LIMIT
                 && (lastPromptedAt == null

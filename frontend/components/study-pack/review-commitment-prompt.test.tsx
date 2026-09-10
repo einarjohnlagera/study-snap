@@ -93,24 +93,19 @@ describe("ReviewCommitmentPrompt", () => {
     expect(await screen.findByLabelText("Exam date")).toBeInTheDocument();
   });
 
-  // ⚠️ 252 of 396 production accounts have the digest preference OFF. Telling them they
-  // "already get a weekly nudge" is false, and for them choosing days is inert. Found by the
-  // v0.139.0 cold agent; these two pin both branches so the claim can never go unconditional again.
-  it("does not claim an existing nudge when due-concept reminders are off", async () => {
-    (getMe as jest.Mock).mockResolvedValue({ ...examLearner, dueConceptsDigestRemindersEnabled: false });
+  // ⚠️ The digest preference is now part of SERVER eligibility (owner decision 2026-09-10: do not
+  // ask when the digest is off, because choosing days cannot change what such a learner receives).
+  // The component therefore renders on one boolean and must honour it — this is the client half of
+  // that invariant; the server half is AuthServiceTest.
+  it("does not render when the server says the learner is not eligible", async () => {
+    (getMe as jest.Mock).mockResolvedValue({ ...examLearner, reviewCommitmentPromptEligible: false });
     render(<ReviewCommitmentPrompt noteId="note-1" />);
-    await screen.findByText("When will you come back?");
 
-    expect(screen.queryByText(/You already get a weekly nudge/)).not.toBeInTheDocument();
-    expect(screen.getByText(/Due-concept reminders are currently off/)).toBeInTheDocument();
-  });
-
-  it("states the existing nudge when due-concept reminders are on", async () => {
-    (getMe as jest.Mock).mockResolvedValue({ ...examLearner, dueConceptsDigestRemindersEnabled: true });
-    render(<ReviewCommitmentPrompt noteId="note-1" />);
-    await screen.findByText("When will you come back?");
-
-    expect(screen.getByText(/You already get a weekly nudge/)).toBeInTheDocument();
+    await waitFor(() => expect(getMe).toHaveBeenCalled());
+    expect(screen.queryByTestId("review-commitment-prompt")).not.toBeInTheDocument();
+    expect(trackAnalyticsEvent).not.toHaveBeenCalledWith(expect.objectContaining({
+      eventType: "REVIEW_COMMITMENT_PROMPT_SHOWN",
+    }));
   });
 
   it("lets a BOARD_EXAM learner commit while the optional exam date is empty", async () => {
