@@ -1,5 +1,139 @@
 # RELEASES.md - NoteLib
 
+## v0.139.0 - Reopened
+
+**Status: Released** (kicked off 2026-09-10, signed off 2026-09-10, base branch `releases/v0.139.0`, cut from `main` after `v0.138.0` merged as #1363 and tagged)
+
+Source: `docs/claude-findings/2026-09-10-september-checkpoint-reads.md` — the reads that came due, run at this kickoff **before** scope was proposed. **Read it first: item 1 is not a metrics chore, it is a pre-committed rule firing.**
+
+Theme: a checkpoint fired, so the thing it was watching gets reopened — and the detector that missed a deploy learns to report what it found.
+
+### ⚠️⚠️ THE `v0.72.0` RETENTION CHECKPOINT FIRED ITS KILL CRITERION
+
+**VERIFIED read-only, 2026-09-10, window 2026-08-11 (deploy) → 2026-09-09: nine learners were shown the review-commitment prompt. ZERO committed. One declined.**
+
+**⚠️ THE ZERO IS REAL, AND TWO INDEPENDENT INSTRUMENTS AGREE — this was checked first, because `v0.116.0` and `v0.117.0` both shipped events that could never fire.** `COMMITTED` and `DECLINED` are emitted from **the same line** (`review-commitment-prompt.tsx:102`, a ternary); `DECLINED` fired once, so the call site provably executes and the other branch simply never happened. Independently, `SELECT count(*) FROM users WHERE cardinality(review_days) > 0` returns **0** — **the entity table agrees with the event stream, which rules out analytics delivery loss**, the bias that made `v0.80.0` necessary.
+
+**The pre-committed rule, quoted from the row and written before the read:** *"the return-loop framing reverts to **unconfirmed** and is **reopened rather than iterated on with further nudge tuning**."*
+
+### ⚠️ OWNER OVERRIDE, RECORDED RATHER THAN SMOOTHED OVER
+
+**The owner elected to REDESIGN THE PROMPT rather than only reopen the framing — which is the "nudge tuning" the pre-committed rule names.** They were told that before choosing. It is recorded here because a pre-committed rule that is quietly stepped over stops being a rule, and the next checkpoint inherits the precedent. **The consequence: this release ships a redesign on a `n=9` signal, so it owes a checkpoint with a real denominator — see below.**
+
+**⚠️ WHY `n=9` IS SMALL BUT NOT NOTHING, STATED HONESTLY:** at nine impressions a modest true commit rate (~10%) is not excluded by chance; a high one (≥30%, P(zero) ≈ 4%) effectively is. **The redesign is therefore a bet, not a correction.**
+
+### Planned Scope
+
+1. **Instrumentation first — the redesign is unmeasurable without it, and this is NOT optional.** (a) The prompt fires **only after a successful save** (`review-commitment-prompt.tsx:96-107`), so **8 of 9 learners vanished with nothing recorded** and the funnel cannot tell *ignored* from *considered and rejected*. Add a dismiss/abandon event. (b) All 11 `DUE_CONCEPTS_DIGEST_LANDED` rows carry a **NULL `user_id`**, so the checkpoint's second metric — *"digest → first answer **among committers**"* — **was never computable**. Give the event its user.
+2. **Redesign the commitment ask** (owner decision, 2026-09-10). **⚠️ The design constraint that matters is the trigger, not the copy:** it renders on `isFirstCompletedSessionEver === true`, so it is **ONE impression per learner, ever**, asking for a weekday multi-select plus an exam date **immediately after a first session, before the learner has seen any payoff**. Nine impressions in a month is the trigger being narrow, not the copy being weak.
+3. **`scripts/check-deploys.sh` — report a confirmed drift as drift.** **VERIFIED empirically against today's live miss:** the script prints *"VERCEL: serving 98ef1955, but origin/main is 05c367c4 — BEHIND"* and then **exits 2**, which its own contract defines as *"could not check"* rather than *"drift"*. `drift=1` is set at `:63` and discarded by the `exit 2` at `:82`. **A caller reading the exit code — `/signoff`, or any CI job — sees "I could not look" when the truth is "Vercel is definitively behind."**
+
+### ⚠️ Vercel and the deploy-latency false positive — CORRECTED
+
+**⚠️⚠️ CORRECTED 2026-09-10, SAME DAY: VERCEL DID NOT MISS `v0.138.0`. It deployed `05c367c4` at 01:21:06Z, **4 minutes 24 seconds after the 01:16:42Z merge** — it was IN FLIGHT when this session checked, and the check was read as an absence. **The true record is ONE confirmed miss (`v0.136.0`), not two of three: `v0.137.0` and `v0.138.0` both auto-deployed normally.** ⚠️ **THIS IS `v0.137.0`'s OWN RULE BROKEN THE DAY AFTER IT WAS WRITTEN** — a production-state reading taken at one instant and asserted as a standing property. **⚠️ AND IT IS A REAL LESSON FOR THE DETECTOR, NOT JUST AN EMBARRASSMENT: testing for ABSENCE requires waiting past the normal deploy latency, or the test manufactures its own false positive.** Observed latency is ~2–5 minutes on both platforms. **Item 3's defect is UNAFFECTED and still real** — it was reproduced by mutation against the pre-fix script, independently of any live drift.** 
+
+**Original (wrong) reading, kept for the record:** Render auto-deployed `v0.138.0` (`dep-dah09v15efls739b7t9g`, `new_commit`, **live** 01:18:59Z); **Vercel has no Production deployment for that commit at all.** Missed `v0.136.0`, fired for `v0.137.0`, missed `v0.138.0`.
+
+**⚠️ THE CONSEQUENCE WAS COSMETIC THIS TIME AND THAT IS LUCK, NOT DESIGN:** `v0.138.0`'s only frontend change is the `package.json` bump and **no controller or `lib/api` file changed**, so there is no API-form skew of the kind that killed Your Impact in `v0.136.0`. **⚠️ THE UPSTREAM CAUSE IS NOT FIXABLE FROM THIS REPO** — transient GitHub push-event delivery loss to the Vercel GitHub App, INFERRED and unchanged from the `v0.136.0` diagnosis. **This release fixes the reporting, not the cause, and must say so.**
+
+### ⚠️ Anti-drift
+
+- ❌ **Do NOT ship item 2 without item 1.** A redesign that cannot be measured reproduces the exact position this release is in — and the read that would judge it is already blind in two places.
+- ❌ **Do NOT re-date the `v0.72.0` proximal checkpoint as though it had not fired.** It fired. The row records FIRED plus the owner override; a silent re-date would erase the only evidence the rule was overridden.
+- ❌ **Do NOT claim this release fixes the Vercel auto-deploy.** It fixes the exit contract. The cause is upstream and stays unfixed.
+- ❌ **Do NOT make `/actuator/metrics` public to make a checkpoint readable.** The `v0.134.0` row's *"externally readable"* claim is simply WRONG — `application.yaml`'s own comment says *"not permitAll … stays authenticated-only"*. **Correct the row, not the security posture.**
+- ❌ **Do NOT add a new analytics event without a fire site** — that is the `v0.116.0`/`v0.117.0` defect, and this release's own headline finding only survived scrutiny because the fire site was proven live first.
+- ❌ **No Learning Connections work** (`[CHECKPOINT — due 2026-09-19]`, denominator ONE). **No `frontend/app/onboarding` work before the `2026-09-11` read.**
+- ⚠️ **The four `FAILED` notes from `v0.138.0` are still the OWNER's to re-run** — the backend is live on `v0.138.0` as of 01:18:59Z, so that clock has started.
+
+### ⚠️ Pre-declared guards
+
+- **Item 1a:** assert the dismiss event fires on the **close/ignore path specifically** — ⚠️ a test that only asserts "some event fires" passes under the current code, which already fires on save.
+- **Item 1b:** assert the persisted `DUE_CONCEPTS_DIGEST_LANDED` row **carries a non-null `user_id`** — ⚠️ not that the client sent one; the 11 existing rows prove the gap is at persistence or auth-resolution time.
+- **Item 3:** assert **exit code 1** when Vercel is behind and `RENDER_API_KEY` is absent. ⚠️ **A test asserting only that the message is printed passes under the defect** — the message already prints today; the exit code is the whole bug.
+- **Item 2:** at least one test must exercise the trigger condition, not just render the component with `visible=true` — the trigger is the finding.
+
+### Verification tier
+
+**Three items, one of them docs-adjacent.** Items 1 and 3 are small and testable; item 2 is a frontend redesign across the five surfaces that render the prompt. **Tier: one `advisor()` call on the diff**, plus the four guards above. **⚠️ It rises to one scoped cold agent if item 2 grows a backend surface** — the `reviewCommitmentOutstanding` flag and `users.review_days` are already there, so it should not.
+
+### Routing
+
+**CODEX for items 1 and 2** — frontend across five call sites plus a backend analytics change; more than five files. **CLAUDE CODE inline for item 3** — one shell script, one exit path.
+
+### Scope completeness — each planned item against the code that implements it
+
+| # | Planned | Verdict | Evidence |
+|---|---|---|---|
+| 1 | Instrumentation first — a dismiss/abandon event, and a `user_id` on `DUE_CONCEPTS_DIGEST_LANDED` | **SHIPPED** | `REVIEW_COMMITMENT_DISMISSED` at `AnalyticsEventType:48` with **one real fire site** (`review-commitment-prompt.tsx:97`); the 401 at `AnalyticsController:28` |
+| 2 | Redesign the ask — re-showable trigger, committing becomes an upgrade | **SHIPPED, and CHANGED mid-release** | `V144`; `AuthService#isReviewCommitmentPromptEligible`; `MeController:39`; `RetentionService:51`. **⚠️ Changed twice against evidence — see below** |
+| 3 | `scripts/check-deploys.sh` reports a confirmed drift AS drift | **SHIPPED** | `scripts/check-deploys.sh` precedence block; `scripts/check-deploys.test.sh` (9 cases) |
+
+**⚠️ ITEM 2 CHANGED TWICE AFTER IT WAS SCOPED, AND BOTH REVERSALS ARE RECORDED RATHER THAN SMOOTHED INTO THE ORIGINAL PLAN.** (1) The first design re-triggered on *return after a gap*; its own query refuted it — only **7 of 136** stranded learners had returned in 14 days, so any in-app trigger tops out at 7–13/month. (2) `advisor()` then found, **before the Codex prompt was written**, that the ask had **no benefit to offer at all** — `isEligibleReviewDay` returns `true` for empty `review_days`, so choosing days *restricted* eligibility rather than granting reminders. A one-tap *"remind me"* button would have shipped as a no-op. The owner then chose to make committing genuinely mean something, and later to stop asking learners whose digest is off. **The release describes what was built, not what was first proposed.**
+
+### Shipped
+
+- **Item 1 — commitment and digest instrumentation.** Review-prompt abandonment now emits
+  `REVIEW_COMMITMENT_DISMISSED` with `exit=pagehide|unmount`, deduplicated to one dismissal per
+  impression and suppressed after either saved outcome. `DUE_CONCEPTS_DIGEST_LANDED` now requires a
+  resolved principal: an expired bearer on the otherwise-public analytics endpoint receives `401`,
+  allowing the existing analytics refresh-and-retry path to persist the landing with its `user_id`;
+  events that genuinely originate anonymously remain accepted.
+- **⚠️ THE `401` EXCEEDED THIS ITEM'S STATED CONSTRAINT AND WAS ACCEPTED ON REVIEW — recorded as an expansion, not as the plan.** The prompt said the fix *"must not delay or drop the `LANDED` event"* and *"do not make the analytics endpoint reject anonymous events"*. The delivery does both, narrowly: a new `AuthenticationRequiredException`, a new status on a `permitAll` endpoint, and a behaviour change to a shared analytics path — none of which item 1 was scoped for. **It was accepted because the diagnosis is correct and the alternative is worse** (an unattributable landing can never answer the checkpoint's question), and because the rejection is scoped to one event type with `anonymousAnalyticsEvents_remainAccepted` guarding the boundary. **The reasoning is stated so a later reader does not mistake it for what was asked.**
+- **⚠️ AND THE `401` HAS A COST THE NOTE MUST NOT OMIT: a landing whose token cannot be refreshed is now DROPPED, where it previously persisted with a NULL `user_id`.** `dueConceptsDigestLanding_withoutResolvedPrincipal_requestsAuthenticationRetry` asserts exactly that — 401 **and zero rows**. The trade is deliberate: an unattributable landing could never answer the checkpoint's question (*digest → first answer **among committers***), and the refresh-and-retry path it now reaches **already existed** at `lib/api.ts:3351` and was simply unreachable while the endpoint answered `200` to an expired bearer. **⚠️ But it changes what a landing COUNT means** — the 619-sends/11-landings ratio is not comparable across this change, and `trackAnalyticsEvent` still returns without retrying when `visibilityState === "hidden"`. **⚠️ FOR THE DISMISS EVENT THAT IS NOT AN EDGE CASE, IT IS THE COMMON PATH: abandonment fires on `pagehide`, when visibility is hidden BY DEFINITION**, so a dismissal sent with an expired token is lost **every time**, not occasionally. The `unmount` exit can still retry. **This is a known limitation of item 1's headline metric and is recorded rather than papered over** — the dismiss count is a floor, not a total.
+- **Hardened the abandonment effect against a false positive found in the audit, and pinned it with a test.** `trackDismissed` closed over `noteId`, and **four of the five call sites pass `note?.id ?? null`** — so a `null → value` transition while mounted would run the effect's **cleanup**, firing a dismissal the learner never performed, with a stale `entityId`, and latching the state machine to `dismissed` so the real abandonment could never be recorded. Today's ordering makes it unlikely (the prompt renders only after a completed session), **but that is ordering, not a guarantee.** `noteId` is now read through a ref and the effect owns an empty dep array. ⚠️ **Mutation-verified: closing over `noteId` again fails `does not report abandonment when noteId resolves while the prompt is open`, and nothing else.**
+- **The dismissal guard is discriminating, verified by mutation with the killing test named.** Deleting the `resolved` transition on save — so a saved outcome would later report as abandonment — fails **`does not report a saved decline as abandonment`** and only that test. ⚠️ **A test asserting merely that "some analytics event fires" passes under the defect**, because save already fired one; that is why this one asserts the absence after a save.
+- **The forbidden over-broad change is guarded too.** Rejecting *every* anonymous analytics event — which the prompt explicitly ruled out, since other callers legitimately have no user — fails `anonymousAnalyticsEvents_remainAccepted`.
+- **The zero first-answer result is genuine engagement data, not a dead query-string gate.** The email
+  links directly to `/notes/{noteId}/quick-review?source=due-concepts-digest`; that route renders the
+  quiz without navigation, session creation does not replace the URL, and the only legacy
+  `/study-packs/{id}` redirect copies the full query string. The answer handlers therefore still see
+  `source=due-concepts-digest`. No first-answer code changed. **⚠️ VERIFIED IN THE AUDIT RATHER THAN TAKEN ON REPORT** — the one `router.replace` on that page (`quick-review/page.tsx:396`) is the legacy `/study-packs/` → `/notes/` redirect, it sits inside an error handler, and it **explicitly copies the query string** into its target; the other two `router.push` calls are exits to `/dashboard`. **So the dead-gate hypothesis this release opened with is REFUTED, and the zero is a real product finding: 619 digests sent, 11 landings, 0 first answers.**
+- **Documented the commitment surface and its actual scheduling meaning.** `users.review_days` is
+  initially collected after a completed session, later editable in Settings, and narrows eligible
+  digest weekdays; null or empty days do not disable the digest.
+- **Item 2 — the commitment prompt is re-askable and committing is now an upgrade.** Server-owned
+  eligibility allows an unanswered learner to see the prompt after a later completed session, with a
+  14-day cooldown and a lifetime cap of three impressions. A transactional, row-locked
+  `POST /me/review-commitment/prompted` records each eligible impression without writing
+  `review_commitment_prompted_at`, which continues to mean *answered*; client `sessionStorage`
+  deduplication and the server eligibility update make the impression idempotent across remounts and
+  duplicate requests.
+- **All five completion call sites now use the same server decision.** Long Exam, Adaptive Practice,
+  Board Exam, Challenge Quiz, and Quick Review no longer pass `isFirstCompletedSessionEver` into the
+  prompt. The prompt explains the existing weekly nudge and the benefit of choosing days, keeps
+  Monday/Wednesday/Friday selected by default, and keeps the BOARD_EXAM exam-date field.
+- **⚠️ CORRECTED IN THE AUDIT: the exam date was NOT "kept optional" — it was REQUIRED, and this release makes it optional.** A BOARD_EXAM learner previously could not commit at all without supplying one (`review-commitment-prompt.tsx:121-124`, *"Choose your exam date before setting your review plan."*). That gate is now removed, because the prompt's stated purpose is review days and the release brief said the exam date must not block the primary action. **⚠️ THE CONSEQUENCE IS A WEAKER COLLECTION PATH AND IT IS NAMED HERE RATHER THAN LEFT TO BE DISCOVERED: 79 of 185 BOARD_EXAM accounts (43%) still have a NULL `exam_date`, and this prompt was one of the few places that collected it.** Fewer will now be captured. The field still renders and still saves when filled. **Mutation-verified: restoring the requirement fails `lets a BOARD_EXAM learner commit while the optional exam date is empty`, so the change is deliberate and covered rather than incidental.**
+- **⚠️ The completion gate moved from the component to its callers, which is a contract change worth stating.** The prompt used to hide itself unless `isFirstCompletedSessionEver` was true, so it was safe to render anywhere; server-owned eligibility is about the **ask**, not about whether a session just finished. All five call sites render inside a completion branch (`isComplete`, a `masteryReport`, or a `result`), **verified individually in the audit**, so behaviour is unchanged today — but a sixth call site placed outside such a branch would show the prompt on page load and burn one of three lifetime impressions. The contract is now documented at the component.
+- **Choosing review days now improves the due-concepts digest schedule without removing anyone's
+  existing digest.** Learners with null or empty `review_days` retain every-day eligibility and the
+  seven-day cooldown. Learners with chosen days remain eligible only on those weekdays and use a
+  one-day cooldown, allowing a digest on each chosen day when concepts are due. This may spread future
+  sends across the week, but it does **not** fix R1: non-committers keep the synchronized default and
+  committers can receive more messages.
+- **Mutation-verified, killing tests named — the two destructive changes this design makes available are both guarded.** Flipping `isEligibleReviewDay`'s empty case to `false` — the naive reading of *make the commitment mean something*, which would cut off **all 115 current digest recipients** — fails four tests, including a **pre-existing** one (`findDueConceptsDigestUsers_nullAndEmptyReviewDaysKeepExistingScheduleEligibility`) that was already protecting it, plus `sendDueConceptsDigestEmails_stillSendsToAnUncommittedLearner`. Making an impression stamp `review_commitment_prompted_at` — which would silently resolve **395 outstanding rows** and close the ask permanently for every one of them — fails `recordReviewCommitmentPrompted_isIdempotentAndKeepsTheCommitmentOutstanding`, and only that test.
+- **⚠️⚠️ THE SCOPED COLD AGENT CONFIRMED ALL SIX NAMED CLAIMS AND FOUND TWO DEFECTS BEYOND THEM — both are fixed here, and the second is the more serious.** This is the tier the owner re-decided for item 2, and it earned its cost.
+- **⚠️ THE PROMPT TOLD 64% OF THE USER BASE SOMETHING FALSE.** The copy asserted *"You already get a weekly nudge when concepts are due"* unconditionally, but the digest is gated on `dueConceptsDigestRemindersEnabled` **and** a verified email (`RetentionService:188`). **VERIFIED read-only: 252 of 396 accounts have that preference OFF; 255 would have seen the false line; 79 of those are otherwise prompt-eligible.** ⚠️ **And for them the whole ask is INERT — choosing days changes nothing, because no digest is sent either way.** `MeResponse` already carried the flag and the component never read it. **⚠️ OWNER DECISION, SAME DAY: DO NOT ASK WHEN THE DIGEST IS OFF.** The conditional copy was an interim fix and is gone; `dueConceptsDigestRemindersEnabled` is now part of **server** eligibility (`AuthService#isReviewCommitmentPromptEligible`), which is the same preference `RetentionService` gates the digest on. **That makes the prompt's claim true BY CONSTRUCTION rather than by wording** — the off-branch became unreachable and was deleted rather than left as dead code, because dead code is how a false claim quietly returns. The invariant is documented at both ends, with the instruction to change them together or not at all. **⚠️ THE REACH COST IS REAL AND MEASURED, NOT WAVED AWAY: the eligible pool drops from 136 to 57.** But near-term in-app reach moves by **one** learner (7 → 6), because the 79 excluded were largely not returning — and every one of them was being asked to configure something that could not affect what they receive. **All 57 who remain are email-verified**, so no further clause was needed. ⚠️ **Do not "restore reach" by dropping the clause, and do not make committing switch the preference on — that is an email-consent change and is explicitly out of scope.** Mutation-verified: dropping the clause fails `getMe_doesNotOfferTheCommitmentPromptWhenTheDigestIsOff` and `recordReviewCommitmentPrompted_doesNotCountAnImpressionWhenTheDigestIsOff`, and nothing else.
+- **⚠️ The new endpoint's CLIENT request shape was untested, which is the `v0.119.0` defect class exactly.** All five frontend suites mock `@/lib/api` wholesale, so not one line of the real request executed — no method, no headers, no body — while the repo already had **sixteen** `lib/api-*.test.ts` files establishing the pattern. `lib/api-review-commitment.test.ts` now pins it. **⚠️ THE DEMONSTRATION IS THE POINT: dropping the `Content-Type` — which makes Spring reject the request before the controller is entered — fails the new test and is MISSED by all sixteen component tests, which pass.** That is `v0.119.0` reproduced on demand.
+- **One claim was confirmed for the wrong stated reason, and the agent said so.** `POST /me/review-commitment/prompted` cannot inflate the count — but not because `findByIdForUpdate` prevents a race. Under OSIV the `UserEntity` is already managed before the lock is taken (the anti-pattern `UserRepository:66-75` documents against itself), so two concurrent impressions read the same pre-lock state and both compute the same `+1`. **It under-counts rather than over-counts**, which is safe for a cap, and is recorded so nobody later "fixes" it on a wrong mental model.
+- **⚠️⚠️ THE PRE-SIGNOFF PRESSURE TEST WAS OWED, WAS NEARLY SKIPPED, AND FOUND A CROSS-PR DEFECT — the owner asked for it before signoff, correctly.** The per-item cold agent did NOT discharge it: that one was scoped to item 2's diff and never saw item 1's code. **Items 1 and 2 both rewrote `review-commitment-prompt.tsx`**, which is precisely the interaction class `CLAUDE.md` says a diff-scoped review structurally cannot see.
+- **⚠️ THE FINDING: a dismissal could fire for a prompt nobody ever saw.** `globalThis.sessionStorage` **THROWS** — it does not return null — when site data is blocked (Chrome *block all cookies*, some embedded webviews, restricted iOS contexts), and **optional chaining guards a null storage object, not a throwing accessor.** Item 2 put that access **inside item 1's guarded block**, after `shownTrackedRef` had advanced to `"shown"` and `promptVisibleRef` to `true`, but **before `REVIEW_COMMITMENT_PROMPT_SHOWN` fires**. The outer `.catch` reset only `visible`. Net: a later pagehide/unmount emitted `REVIEW_COMMITMENT_DISMISSED` with **no matching `PROMPT_SHOWN`** — inflating the exact abandonment funnel item 1 was built to measure. ⚠️ **Neither PR's review could have caught it: one supplied the guard, the other supplied the throw.** ⚠️ **And the repo already knew** — `lib/guidance.ts:9-33` wraps every storage access in try/catch; this was the only frontend access that did not. Fixed with total accessors; **mutation-verified** — restoring the unguarded form fails `still reports the impression, and never a phantom dismissal, when storage throws`, and nothing else. **No existing test could have caught it: jsdom's `sessionStorage` never throws.**
+- **⚠️ A user-facing claim went stale on a file that appears NOWHERE in this release's diff.** `settings/page.tsx:971` still read *"A weekly reminder when concepts are due"* — false for a committed learner, who can now receive up to **seven** a week — and `:917` described only the no-days case. **`docs/features/email-preferences.md`, updated BY THIS RELEASE, points learners at that exact surface.** This is the *sweep by SURFACE, not by diff* failure `CLAUDE.md` records as having cost three releases running; it has now cost a fourth. Both strings corrected, and `retention-emails.md` now carries the standing obligation so the next cadence change sweeps the surface.
+- **⚠️ Three findings are RECORDED, NOT FIXED — deliberately, because shipping unreviewed behaviour at signoff is worse than a stated limitation.** **(a) No volume ceiling on the digest:** `resolveReengagementBudget` gates the inactivity dispatch only, so the per-learner ceiling moves 1/week → 7/week with nothing capping it. **Zero impact today (0 accounts have chosen days), so it is a forward exposure — and it compounds R1**, whose cause this release already attributed to this same producer. **(b) A below-the-fold impression burns one of three lifetime chances:** the prompt renders inside a `weakConceptsRef` block far down long result pages — challenge-quiz even has a button that *scrolls to it*, which is in-repo evidence it is off-screen. Before item 2 an unseen render cost nothing; now it permanently consumes an impression and starts a 14-day cooldown. **This corrupts the checkpoint's own denominator and is named in its clause.** **(c) `PROMPT_SHOWN` and `DISMISSED` can carry different `entityId`s** — the release's own test fixture demonstrates the mismatched pair. Analytics-only.
+- **⚠️ One overstated claim corrected rather than defended.** A code comment said the prompt's copy is true *"by construction"*. It is not: the digest audience is preference **AND** verified email **AND** active status, while eligibility checks only the preference. Three accounts today have the preference on with no verified email. Now documented as true-in-practice, not proven.
+- **⚠️ Item 3's guard is MANUAL-ONLY and the release says so rather than implying enforcement.** `scripts/check-deploys.test.sh` is referenced nowhere outside itself — **this repo has no `.github/workflows` at all** — so nothing runs it automatically. The `/signoff` change added a wait warning, not a trigger.
+- **The reach claim stays bounded by the production read.** This redesign compounds for future
+  learners by giving them more than one chance to answer. It does **not** recover the 128 already
+  stranded learners who no longer open the app; reaching them requires email work still blocked by R1.
+- **Item 3 — `scripts/check-deploys.sh` reports a confirmed drift AS drift.** The precedence is now explicit and commented: **drift > unknown > ok**. Both platforms' "cannot check" paths set a flag instead of exiting early, so neither short-circuits the other — a confirmed Vercel drift survives a missing `RENDER_API_KEY`, and a confirmed **Render** drift now survives an unreadable Vercel, which the old order could not even reach.
+- **The guard asserts the EXIT CODE, because the message was never the bug.** `scripts/check-deploys.test.sh` establishes a shell-test convention this repo did not have (no `.test.sh`, no CI workflow existed). It stubs only `gh`, `curl` and `git` on `PATH` — **`jq` stays real, because the script's `jq` filters are part of what is under test** — and covers nine exit-code cases.
+- **Mutation-verified against the pre-fix script, with the killing cases named.** Restoring the original makes exactly two cases fail: *"Vercel BEHIND + no `RENDER_API_KEY` → DRIFT"* (`exit=2 want=1`) and *"Render BEHIND + Vercel API failure → DRIFT"*. The other seven pass under both, correctly — they were never affected. ⚠️ **The failing output reproduces the real symptom verbatim**: it prints `VERCEL … BEHIND` and still exits 2. **A test asserting the message passes under the defect; that is why the guard asserts the code.**
+- **⚠️⚠️ THE MOTIVATING EXAMPLE WAS WRONG, AND THE CORRECTION IS THE MOST USEFUL THING IN THIS ITEM.** This session claimed Vercel had **missed** `v0.138.0` and had missed *"2 of the last 3 release merges"*. **Both false.** Vercel created the deployment at **01:21:06Z against a 01:16:42Z merge — 4m24s** — and Render went live at 01:18:59Z. **An in-flight deploy was read as an absence**, ~4 minutes after merge, and a release section was scoped around it before it was caught. **The true record is ONE confirmed miss (`v0.136.0`).**
+- **⚠️ That broke `v0.137.0`'s own rule the day after it was written** — *a claim about production state is a snapshot, not a fact.* An instantaneous reading was asserted as a standing property. **Recorded rather than quietly fixed, because this is the second consecutive release in which a claim reached a tracker before it was re-read.**
+- **⚠️ The generalizable lesson went into the code, not just the write-up: a test for ABSENCE must wait past the thing's normal latency or it manufactures its own false positive.** Observed auto-deploy latency is **~2–5 minutes** on both platforms. The script cannot know when you merged, so it cannot enforce the wait — **`/signoff` now states it, and the script's header explains why.**
+- **⚠️ WHAT THE 9 PASSING GUARDS DO AND DO NOT COVER, because "9 passed" invites over-reading.** Every case is **stubbed** — `gh`, `curl` and `git` are faked on `PATH`. **The drift path is verified by MUTATION under stubs and has NOT been observed against a live drift**: the one live run (`RENDER_API_KEY` absent, 2026-09-10) exercised the *unknown* path, because Vercel matched `main` by then. **No drift was manufactured in production to test it, deliberately.**
+- **⚠️ The defect itself was never contingent on the false reading.** It was reproduced by mutation under stubbed conditions, so item 3 stands exactly as scoped — but without the correction the release would have described a platform problem that does not exist.
+
 ## v0.138.0 - Stated and Enforced
 
 **Status: Released** (kicked off 2026-09-09, signed off 2026-09-10, base branch `releases/v0.138.0`, cut from `main` after `v0.137.0` merged as #1360 and tagged)
@@ -641,238 +775,3 @@ transaction boundary is load-bearing.
 
 **Verification run:** backend 2,312 tests + the 101-query PostgreSQL native harness against a real
 container; frontend 2,346 tests across 211 suites; `tsc --noEmit` clean; `npm run lint` 0 errors.
-
-## v0.133.0 - Education Family
-
-**Status: Released** (kicked off 2026-09-08, signed off 2026-09-08, base branch `releases/v0.133.0`, cut from `main` after `v0.132.0` merged as #1347 and tagged)
-
-Source: `docs/claude-plans/program-family-generalization-and-education-family.md` (audit complete 2026-09-08, every claim `file:line`-anchored).
-
-### ⚠️⚠️ THE BRIEF'S CENTRAL PREMISE IS FALSE, AND THAT IS THE MOST IMPORTANT THING IN THIS SECTION
-
-**There is no Engineering-specific authoring shortcut, so there is no generalization to build.** The button at `applicable-programs-combobox.tsx:290` interpolates the family name and count, and the families are derived **dynamically from the catalog** (`:88-111`) by mapping each program's `programFamilyId`/`programFamilyName`. **There is no Engineering literal anywhere in it.** It reads *"Add all 18 Engineering programs"* only because **Engineering is the only family that has members**.
-
-**So this release is a DATA change plus one admin form field. Seed the Education family and the existing UI renders *"Add all 8 Education programs"* with no code change.** §6 of the brief is already satisfied too — all four authoring surfaces share that one component.
-
-**⚠️ DO NOT MODIFY THE APPLICABLE-PROGRAMS COMBOBOX. If a diff touches it, the scope has drifted.**
-
-### The two gaps the audit named — ⚠️ ONLY ONE OF THEM IS REAL (see below)
-
-| Gap | Detail |
-|---|---|
-| Families can only be created by migration | Zero `ProgramFamilyEntity` construction or `save` anywhere in the backend |
-| The admin UI cannot assign a family | `POST /course-programs` **already accepts and validates** `programFamilyId` (`CourseProgramCatalogService:54-56`, `UnknownProgramFamilyException`) — `app/admin/course-programs/page.tsx` just exposes no field for it |
-
-### Planned scope
-
-1. **One migration** — insert the `Education` family; assign the **existing** `Education` program row to it; **RENAME** `Special Needs Education – Generalist` → `Special Needs Education` keeping its `id`; insert the remaining programs from the audit's §4 (Elementary Education, Secondary Education, Early Childhood Education, Technical-Vocational Teacher Education, Physical Education, Teacher Certification).
-2. **Admin family selector on create** — the endpoint already supports it. **This is what stops the release recurring**: without it, every future family member is another migration.
-3. **Copy polish** on the Course/Program and Domain Context helper text. **⚠️ Drop resolver mechanics from it** — keep the conceptual separation, do not explain the backend.
-
-### ⚠️⚠️ THE MIGRATION SEED IS NOT THE LIVE CATALOG — THE READ-ONLY AUDIT IS A PRECONDITION, NOT A FORMALITY
-
-`V106` seeds **three** Engineering programs; production reportedly has **18**, and no later migration inserts any. **The catalog has been extended through `POST /course-programs` in production, so a duplicate audit from the repo alone is UNSOUND.** Run `docs/claude-plans/v0.133.0-education-family-precondition-read.sql` (read-only) **before writing the migration**. An inserted duplicate is visible to every curator immediately and is awkward to withdraw once Notes reference it.
-
-**⚠️ `GET /course-programs/similar?name=` already exists** (ADMIN-only) — the duplicate check the brief asks for is already built; the admin create flow should use it per name.
-
-### ⚠️ What the rename touches
-
-**Safe:** `note_course_program` joins by `course_program_id` (`V107:4`), so every Note keeps its link through a rename — the row keeps its `id`, only `name` changes.
-
-**⚠️ NOT safe automatically: five free-text `course_program` columns** (`notes`, `note_collections`, `users`, `bulk_generation_result`, `official_study_plan_wishlist` — the last has `normalized_course_program` too) may hold the literal old string and would silently keep it. No repository method resolves a catalog entry by name, so nothing breaks — but a stale string stops matching the catalog, which affects discovery and wishlist normalization. **The precondition read counts these.**
-
-### ✅ PRECONDITION READ RUN 2026-09-08 — RESULTS, AND ONE CONDITION NOT MET
-
-Run read-only against `notelib-db-prod`. **The audit's central warning is now VERIFIED, not assumed: `program_families` shows Engineering with EIGHTEEN programs against `V106`'s THREE seeds**, so the catalog was indeed extended through the API and a repo-only duplicate audit would have been unsound.
-
-| Check | Result |
-|---|---|
-| Education-adjacent catalog rows | **Only two** — `Education` (`exam_goal_slug='let'`, no family) and `Special Needs Education – Generalist` (no slug, no family) |
-| Families | **One** — `Engineering`, 18 programs. `Education` does not exist as a family |
-| Collisions with the six proposed inserts | **None.** Elementary, Secondary, Early Childhood, Technical-Vocational Teacher, Physical Education and Teacher Certification are all clear |
-| Notes linked to the rename target via `note_course_program` | **ZERO** |
-| Free-text `course_program` hits | **ONE** — `users.course_program`, exactly `Special Needs Education – Generalist` (36 chars, en dash) |
-
-**⚠️ OWNER DECISION 1'S CONDITION IS NOT MET.** The rename was settled *conditional on zero free-text hits*; there is one. **⚠️ NOTHING BREAKS** — `users.course_program` is consumed by `StudyPackGenerationContextResolver` as **free text**, never resolved against the catalog by name — but that one account's profile program would stop corresponding to a catalog entry. **Handed over as an owner-run write in `docs/claude-plans/v0.133.0-owner-profile-string-update.sql`** with the expected row count and before/after verification. Three options are stated there; the recommendation is to run it **in the same maintenance step as the migration, not before it**.
-
-**⚠️ CONSEQUENCE FOR THE RENAME GUARD TEST: its production denominator is ZERO.** No Note is linked to the row being renamed, so the guard is a purely synthetic structural test. **Write it anyway — it is the regression guard for the migration — but do NOT record it as evidence that real data survived**, because there is no real data to survive.
-
-**✅ DECISIONS 2 AND 3 SETTLED 2026-09-08 (owner):** new Education programs carry `exam_goal_slug = 'let'` **only where learners genuinely sit the LET**, never as a family proxy; and **the admin family selector ships in this release.**
-
-### Owner decisions
-
-1. ~~Reuse or rename `Special Needs Education – Generalist`?~~ **SETTLED 2026-09-08: RENAME**, keeping the row's `id`. **⚠️ THE CONDITION WAS NOT MET — the read returned ONE hit in `users.course_program`.** The catalog rename still proceeds; the one stale profile string is handed over as an owner-run write (`docs/claude-plans/v0.133.0-owner-profile-string-update.sql`), and option (c) there reopens this decision if the owner prefers.
-2. **✅ SETTLED 2026-09-08 — `exam_goal_slug = 'let'` only where learners genuinely sit the LET.** Original recommendation, accepted: **only where learners genuinely sit the LET**; leave NULL otherwise rather than making the exam goal a family proxy. `Education` already carries `'let'`.
-3. **✅ SETTLED 2026-09-08 — the admin family selector SHIPS IN THIS RELEASE.**
-
-### Verification tier
-
-**A single `advisor()` call**, per the audit's §9 — a data migration plus one admin form field. No permission substrate, no cross-user read, no money semantics, no learner-facing behaviour change. **⚠️ But it writes to a production catalog table, so the precondition read is the gate.** **⚠️ THE `v0.131.0`/`v0.132.0` LESSON STILL APPLIES: decide the tier from the SHAPE of the change, and re-decide if the shape changes** — `v0.132.0` was tiered at one cold agent, ran two, and they found four blocking defects including one that silently emptied a learner's adopted Goal.
-
-### ⚠️ THE AUDIT'S SECOND "REAL GAP" IS ALSO FALSE — THE ADMIN FAMILY SELECTOR ALREADY SHIPPED
-
-The audit named two real gaps. **One of them is not real.** It claimed *"the admin UI cannot assign a family — `frontend/app/admin/course-programs/page.tsx` exposes no family field."* That is literally true of `page.tsx`, which is a 40-line shell — **but the field lives in `admin-course-program-catalog-section.tsx`, which that page renders.** It has a `<select id="catalog-program-family">` listing every family derived from the catalog, `create()` sends `programFamilyId`, the table shows a Family column, and its helper text already says assigning a family makes the program participate in that family's expansion.
-
-**It shipped 2026-08-11 in `9e77f412`, tagged `v0.100.0`** — verified as an ancestor of `main`, not merely present in a working tree.
-
-**⚠️ THIS IS THE SAME ERROR CLASS THE AUDIT ITSELF CAUGHT IN THE BRIEF: concluding a capability is missing by reading the wrong file.** Both times the mistake was to check a shell rather than the component doing the work. **So step 3 of the implementation plan is NOT BUILT HERE — it was already done**, and the release shrinks accordingly. The other gap in that table — *families can only be created by migration* — is real, and remains the deferred admin create-family surface.
-
-**⚠️ Do NOT re-add a family selector to the admin page. If a diff adds one, it is a duplicate.**
-
-### Shipped
-
-- **`V142__education_program_family.sql`** — seeds the `Education` family, assigns the EXISTING `Education` program to it, **renames `Special Needs Education – Generalist` to `Special Needs Education` keeping its `id`**, and adds Elementary, Secondary, Early Childhood, Technical-Vocational Teacher and Physical Education plus `Teacher Certification`. **The migration IS the feature** — the combobox is untouched and now renders *"Add all 8 Education programs"* on its own. **⚠️ The ID range was verified against production rather than assumed:** 44 programs exist, exactly 21 in `V106`'s seed range with `...021` highest, so `...022`+ cannot collide.
-- **⚠️ The renamed row also gains `exam_goal_slug = 'let'` — a user-visible change beyond a rename, flagged rather than buried.** `findNamesByExamGoalSlug` returns a `List`, so the field is one-to-many by design; leaving this row NULL would have made seven of eight family members LET-discoverable and one silently not. It now appears under the LET exam goal on the public endpoint.
-- **Helper-text copy polish.** The Applicable Programs hint no longer explains the resolver (*"only a single program can inform the writing domain, and Domain Context overrides it"*) — true, but backend mechanics a curator cannot act on, and it invited the reading that picking one program is how you steer the writing. It now states the conceptual separation and points at program families.
-- **Three multi-family combobox tests, guarding a bug class that was previously invisible.** Every existing fixture held exactly ONE family, because until `V142` production did too — so a component that ignored which family was clicked and expanded them all would have shipped green. **Mutation-verified with an isolating mutant that typechecks and is identical to correct behaviour under a single family: it kills ONLY the two new tests, with all 14 pre-existing tests passing.**
-- **A Program Family can now be CREATED from the admin surface, so a new family no longer needs a migration.** `POST /course-program-catalog/families` plus a create control beside the existing family picker. **⚠️ THIS IS THE GAP THE AUDIT'S STEP 3 WAS SUPPOSED TO CLOSE BUT COULD NOT, BECAUSE STEP 3 ALREADY EXISTED** — assigning a family was already possible; creating one was not, which is why `V106` seeded Engineering and `V142` seeded Education. A third family would have been a third migration.
-- **⚠️ A families READ endpoint ships with it, and it is not garnish.** A family is created EMPTY, and the admin form previously derived its options from the catalog — so a family created today would have vanished from the picker on refresh, before any program could be assigned to it. **The authoring combobox still derives families from the catalog, deliberately: it only cares about families that have members.** Do not unify the two.
-- **Duplicate family names are rejected case- and whitespace-insensitively**, matching the course-program check, because two identical-looking families would produce two identical-looking expansion shortcuts. A lost race on `uk_program_families_name` resolves to the winning row rather than surfacing a constraint violation.
-- **⚠️ The new endpoint owes and has a REAL request test.** The pre-existing `CourseProgramCatalogControllerTest` only reflected on annotations — the exact `v0.119.0` shape — so a `MockMvc` POST with `.contentType(APPLICATION_JSON)` was added and **mutation-verified: deleting the header reproduces `HttpMediaTypeNotSupportedException` and a 415.** `lib/api-program-families.test.ts` pins the client's own request shape, since the component test mocks `@/lib/api` wholesale.
-- **`EducationProgramFamilyMigrationTest`** — the rename-guard fixture is created BEFORE the migration runs, since a link inserted afterwards resolves to the new name trivially. It also carries the Engineering-untouched regression guard. **⚠️ Its production denominator is ZERO** (no note is linked to the renamed row), so it is a structural guard and must not be reported as evidence that real data survived; its javadoc says so.
-
-
-### Scope completeness — the three planned items, reconciled
-
-**⚠️ THE PLANNED SCOPE LIST ABOVE READS AS THREE DELIVERABLES AND ONLY TWO OF THEM WERE BUILT. That is
-correct, and this table is why** — a later reader must not see a release that shipped 2 of 3.
-
-| Planned item | Outcome | Evidence |
-|---|---|---|
-| **1.** One migration | **SHIPPED** | `V142__education_program_family.sql`; guarded by `EducationProgramFamilyMigrationTest` |
-| **2.** Admin family **selector** on create | **⚠️ NOT BUILT — IT ALREADY EXISTED** | `<select id="catalog-program-family">` has been in `admin-course-program-catalog-section.tsx` since `9e77f412` (2026-08-11, `v0.100.0`), verified an ancestor of `main`. The audit concluded it was missing by reading `app/admin/course-programs/page.tsx`, a 40-line shell that renders it. |
-| **2′.** Admin family **create** surface — *substituted for item 2* | **SHIPPED** | `GET`/`POST /course-program-catalog/families` plus the create control. **This is what item 2 was actually for:** its stated justification was *"this is what stops the release recurring"*, and a selector alone does not — a family still could not be created without a migration. The substitution moved the work to the half of the gap that was real. |
-| **3a.** Copy polish, **Course / Program** helper text | **SHIPPED** | `applicable-programs-combobox.tsx:328-331`; the resolver sentence was replaced one-for-one, no paragraph added |
-| **3b.** Copy polish, **Domain Context** helper text | **NO CHANGE NEEDED — verified, not assumed** | `note-editor-form.tsx:512-515` already reads *"it shapes how the note is written, while the programs decide who finds it."* It carried no resolver mechanics to drop. Checked against the code rather than inferred from the item's wording. |
-
-**So: 2 of 3 planned items built, 1 found already built, plus 1 substitution and 1 verified no-op.** The
-release grew by one item (2′) and shrank by one (2).
-
-**⚠️ VERIFICATION TIER WAS RE-DECIDED WHEN THE SHAPE CHANGED, NOT WHEN THE COUNT DID.** Kickoff
-pre-declared *a single `advisor()` call* for "a data migration plus one admin form field." Folding 2′
-added **a new write endpoint** — a different shape, not merely a fourth item — and `V142` changes
-production catalog semantics (the renamed row gains `exam_goal_slug='let'` and becomes publicly
-LET-discoverable). Under the `v0.131.0` rule (*decide the tier from the SHAPE*), that fires the
-production-data trigger, so **`advisor()` plus one scoped cold agent ran**, framed as falsification of
-this session's own named claims.
-
-### Pressure test — one scoped cold agent, framed as falsification
-
-Tier was re-decided when the shape changed (see above), not when the item count did. One agent, a tight
-file list, and seven of this session's own named claims to DISPROVE rather than an open-ended audit.
-**Three claims were refuted. Four were confirmed, and the confirmations matter as much** — the
-`MockMvc` POST really does issue a request with `Content-Type` (not a method call), `exam_goal_slug` really
-is one-to-many at every consumer, the combobox really is family-generic, and the admin control really
-does GET on mount.
-
-- **Fixed — the new repository SQL was executed by NOTHING.** `CourseProgramCatalogRepository` is a plain
-  `JdbcTemplate` class with hand-written SQL constants and **zero** `@Query(nativeQuery = true)` methods,
-  and `NativeQueryPostgresIntegrationTest` finds its subjects by reflecting over `@Query` — so the class
-  is **structurally invisible** to the PostgreSQL harness that `CLAUDE.md` describes as covering *"every
-  native query."* The service test mocks the repository and the controller test mocks the service, so all
-  three new statements were verified **by inspection only**. Added
-  `CourseProgramCatalogRepositoryProgramFamilyIntegrationTest`, which runs them against a real database.
-  **⚠️ It also covers `mapProgramFamily`'s alias→getter mapping — the exact gap `v0.132.0` named, since
-  `PREPARE` validates syntax and types but never that `SELECT id, name` actually feeds
-  `getObject("id", …)`.** Mutation-verified: deleting the `jdbcTemplate.update(...)` inside
-  `insertProgramFamily` — which still typechecks and still returns a valid-looking response — is killed
-  by the new read-back assertion at `:88`, **with all 14 pre-existing service tests still passing.**
-- **Fixed — `InvalidProgramFamilyNameException` had zero test references.** An added file with no test
-  that executes it. It looks redundant with `@Size(max = 120)` on the request record, which is exactly why
-  it was skipped — but the annotation guards the CONTROLLER while the exception guards the SERVICE, which
-  a direct call reaches without validation.
-- **Fixed — `"nothing resolves a course_program by name"` IS FALSE, and it had already reached the owner.**
-  `bulk-generation-page-client.tsx:290` does `catalog.find(p => p.name === courseProgram.trim())`, where
-  `courseProgram` is seeded from the user's free-text profile field (`:182`). **So the ONE account holding
-  the stale `Special Needs Education – Generalist` string loses Bulk Generate's auto-selection after the
-  rename** — graceful degradation, not corruption, but a real regression rather than "a string that no
-  longer matches." The claim was true of the path it was checked against (`StudyPackGenerationContext-
-  Resolver` resolves by ID) and was over-generalized from there.
-  `docs/claude-plans/v0.133.0-owner-profile-string-update.sql` now carries the correction and it
-  **strengthens** the recommendation to run the write. **⚠️ `V142`'s inline comment still carries the
-  original wording and is deliberately NOT edited — the migration is committed, and changing it would
-  alter its Flyway checksum and break startup wherever it has already been applied.**
-- **Fixed — the LET fallback lists went stale the moment `V142` landed.** `ExamGoalConfig.java` and
-  `frontend/lib/exam-hub-config.ts` both hardcode `let → ["Education"]` as a **fail-open** fallback used
-  when the live catalog read fails or returns empty. Every consumer of the *live* list correctly treats it
-  as list-valued, so there is no single-value bug — but the fallback itself would have silently
-  under-represented the exam goal by **seven programs**. Both now list all eight, with their tests updated.
-  **⚠️ This is the "sweep by SURFACE, not by diff" rule paying out: neither file was in the diff, and a
-  stale fail-open fallback fails silently by design.**
-
-### Findings recorded and deliberately NOT fixed
-
-- **`CourseProgramCatalogRepository.resolveIdForLegacyName()` resolves by exact name and has ZERO callers**
-  anywhere in `backend/src`. Confirmed untouched by this release. Genuinely dead code — deleting it is a
-  separate change, and it is recorded here so the next reader does not rediscover it as a live risk.
-- **The family dedup SQL uses `lower(trim(name))` while the course-program dedup additionally collapses
-  internal whitespace** via `regexp_replace`. Not exploitable today: `normalizeForLookup` already collapses
-  whitespace in Java before the parameter is bound. Recorded because the two paths are described as
-  matching and, at the SQL level, they do not.
-
-### What the cold agent could NOT check
-
-**The production-collision claim.** `V142`'s comment asserts 44 programs with exactly 21 in the seed range,
-verified against production on 2026-09-08. **A repo-only reviewer cannot confirm or refute that** — which
-is the migration's own stated reason for requiring a precondition read. This is why the release owes a
-post-deploy read rather than treating the migration test as sufficient.
-
-### Anti-drift
-
-- **⚠️ Do NOT modify the applicable-programs combobox** — it is already family-generic.
-- **⚠️ Do NOT create a new Domain Context** — `GENERAL_EDUCATION`, `PROFESSIONAL_EDUCATION` and `PROFESSIONAL_PRACTICE_AND_REGULATION` already cover LET.
-- **⚠️ Do NOT let Program Family select or override Domain Context**, and do not infer the Education family from `GENERAL_EDUCATION`.
-- **⚠️ Do NOT feed Program Family or an expanded program list to the LLM.** `StudyPackGenerationContext` has no field for either and `courseProgram` is a single resolved String, so this is **structurally impossible today — keep it that way.**
-- **⚠️ Do NOT delete or migrate away the existing `Education` program** — assign it a family only.
-- **⚠️ Do NOT mass-update existing Notes' applicable programs.** No backfill of `note_course_program`.
-- **⚠️ Do NOT infer Applicable Programs from Review Set membership**, and do NOT make family membership dynamic inheritance — expansion writes explicit program IDs at authoring time and nothing more.
-- **⚠️ Do NOT create duplicate catalog entries**, and **do NOT use a credential abbreviation (BEEd, BSEd, CPE/DPE) as a canonical name.** `Teacher Certification` is the endorsed canonical name because `Professional Education` already exists as a `DomainContext` value and as a Subject, so it would collide across two axes.
-- **⚠️ Do NOT block mixed-family selections** or add warning UX for them.
-- **⚠️ Do NOT redesign the program taxonomy, touch learner-owned Notes, or change pricing, entitlements or Review Set architecture.**
-- **⚠️ NO Review Set publication work.** `v0.132.0` shipped that boundary and owes `[CHECKPOINT — due 2026-09-22, deploy-relative]`; its F5 gap (no publish surface in the Builder) is recorded and **is not this release's to fix.**
-- **⚠️ NO Learning Connections work** — `[CHECKPOINT — due 2026-09-19]` has a denominator of ONE.
-
-### Tests
-
-The audit's §14 is mostly covered already by the generic component. The genuinely new cases: **Education family expands to its explicit member IDs**; expansion creates no duplicate selections **asserted with two families present**; **mixed-family selection survives — ⚠️ a single-family fixture proves nothing**; the generation context receives no family or expanded list; `GENERAL_EDUCATION` does not auto-select Education programs; Review Set membership does not alter Applicable Programs.
-
-**⚠️ RENAME GUARD: a Note linked to `Special Needs Education – Generalist` BEFORE the rename must still be linked after it and render the NEW name. A fixture created after the rename passes trivially and proves nothing.**
-
-**⚠️ The Engineering-still-expands test is the regression guard for the migration** — if assigning the existing `Education` row a family accidentally touched Engineering rows, that is what catches it.
-
-
-### ✅ Deploy sequencing — RESOLVED 2026-09-08, both migrations ran (note kept as the record)
-
-**✅ RAN 2026-09-08 — V141 at 12:23, V142 at 15:47, both `success = true`, verified read-only against `flyway_schema_history` on 2026-09-09. The Education family has EIGHT members in production, which is this release's headline claim.** What follows described the state before that deploy and is kept as the record.
-
-`V141` (`v0.132.0`) and `V142` (this release) were **both unrun in production.** Flyway applies them in
-order on the next deploy, which is correct — but three dated obligations hang off *when that deploy
-happens*, and they are recorded here rather than left to be inferred:
-
-1. **`v0.132.0`'s `[CHECKPOINT — due 2026-09-22]` is deploy-relative, not merge-relative.** If the
-   deploy slips, that date must be re-dated — it does not start counting at merge.
-2. **`docs/claude-plans/v0.133.0-owner-profile-string-update.sql` must run in the SAME maintenance step
-   as `V142`, not before it.** Running it first points the one affected profile at a catalog name that
-   does not exist yet.
-3. **`docs/claude-plans/v0.130.0-owner-production-checks.sql` is still outstanding.**
-
-**⚠️ All three are the owner's to run. Claude does not execute writes or migrations against production.**
-
-### Known limitations
-
-- **All FOUR authoring surfaces render their own helper paragraph above the combobox's.**
-  `note-editor-form.tsx:437-441`, `private-note-detail-page-client.tsx:2704-2706`,
-  `bulk-generation-page-client.tsx:591-593` and `admin-applicable-programs-section.tsx:204` each carry a
-  discovery-vs-authoring sentence directly above the combobox's own *"they decide who finds it, never
-  how it is written."* They overlap without contradicting. **This predates the release** — the copy
-  polish replaced one paragraph with one paragraph and added none — and was found by sweeping the
-  surface rather than the diff. Left alone deliberately: consolidating it is a copy change across two
-  more files and would have made this a fifth item.
-- **`Physical Education` is seeded as an Education-family program carrying `exam_goal_slug = 'let'`.**
-  That is right for the teaching degree, and the name is also how the *school subject* is commonly
-  written. No collision exists today (the read found no such catalog row), but a future curator adding
-  a subject-flavoured entry should reuse this row rather than create a sibling.
-- **The families `GET` is ADMIN-only, matching the create endpoint.** The authoring combobox still
-  derives families from the catalog, deliberately — it only cares about families that have members.
-  **Do not unify the two paths.**
-

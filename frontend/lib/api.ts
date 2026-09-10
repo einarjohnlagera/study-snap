@@ -625,6 +625,7 @@ export type AnalyticsEventType =
   | "REVIEW_COMMITMENT_PROMPT_SHOWN"
   | "REVIEW_COMMITMENT_COMMITTED"
   | "REVIEW_COMMITMENT_DECLINED"
+  | "REVIEW_COMMITMENT_DISMISSED"
   | "DUE_CONCEPTS_DIGEST_LANDED"
   | "DUE_CONCEPTS_DIGEST_FIRST_ANSWER_SUBMITTED"
   | "CHALLENGE_QUIZ_STARTED"
@@ -1051,6 +1052,8 @@ export type MeResponse = {
   examDate: string | null;
   reviewDays: ReviewDay[];
   reviewCommitmentOutstanding: boolean;
+  reviewCommitmentPromptEligible: boolean;
+  reviewCommitmentPromptCount: number;
   engagementMode: EngagementMode;
   inactivityRemindersEnabled: boolean;
   weakConceptRemindersEnabled: boolean;
@@ -3448,6 +3451,22 @@ export async function updateReviewCommitment(request: UpdateReviewCommitmentRequ
   const me = await parseApiResponse<MeResponse>(response, "Could not save your review plan. Please try again.");
   syncStoredAuthUserFromMe(me);
   return me;
+}
+
+export async function recordReviewCommitmentPrompted(): Promise<SimpleMessageResponse> {
+  const response = await fetchWithAuth(
+    "/me/review-commitment/prompted",
+    {
+      method: "POST",
+      headers: buildAuthHeaders("application/json"),
+      body: JSON.stringify({}),
+    },
+    true,
+  );
+  return parseApiResponse<SimpleMessageResponse>(
+    response,
+    "Could not record review commitment prompt impression.",
+  );
 }
 
 export async function updateMobileTabBarPreference(request: UpdateMobileTabBarPreferenceRequest): Promise<MeResponse> {

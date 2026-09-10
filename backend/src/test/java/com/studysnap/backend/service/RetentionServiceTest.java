@@ -353,6 +353,37 @@ class RetentionServiceTest {
     }
 
     @Test
+    void findDueConceptsDigestUsers_usesOneDayCooldownForCommittedAndSevenDaysForUncommittedLearners() {
+        OffsetDateTime now = OffsetDateTime.parse("2026-03-24T18:00:00Z");
+        UserEntity committed = verifiedUser(UUID.randomUUID(), "committed@example.com");
+        committed.setReviewDays(new String[]{"WEDNESDAY"});
+        UserEntity uncommitted = verifiedUser(UUID.randomUUID(), "uncommitted@example.com");
+        when(userRepository.findByStatusAndEmailVerifiedAtIsNotNullAndDueConceptsDigestRemindersEnabledTrue(UserStatus.ACTIVE))
+                .thenReturn(List.of(committed, uncommitted));
+        when(emailLogRepository.existsByUserIdAndEmailTypeAndSentAtAfter(
+                committed.getId(), RetentionEmailType.DUE_CONCEPTS_DIGEST, now.minusDays(1)
+        )).thenReturn(false);
+        when(emailLogRepository.existsByUserIdAndEmailTypeAndSentAtAfter(
+                uncommitted.getId(), RetentionEmailType.DUE_CONCEPTS_DIGEST, now.minusDays(7)
+        )).thenReturn(false);
+        UUID packId = UUID.randomUUID();
+        StudyPackEntity studyPack = studyPackWithConcepts(packId, "Cell Biology", List.of("Mitosis"));
+        when(studyPackRepository.findByOwnerUserIdOrderByCreatedAtDescIdDesc(any(), eq(Pageable.unpaged())))
+                .thenReturn(List.of(studyPack));
+        when(conceptHealthService.getDueConceptsByStudyPackIds(any(), any(), eq(now)))
+                .thenReturn(Map.of(packId, List.of("Mitosis")));
+
+        List<RetentionService.DueConceptsDigestReminder> candidates = retentionService.findDueConceptsDigestUsers(now);
+
+        assertThat(candidates).extracting(RetentionService.DueConceptsDigestReminder::userId)
+                .containsExactly(committed.getId(), uncommitted.getId());
+        verify(emailLogRepository).existsByUserIdAndEmailTypeAndSentAtAfter(
+                committed.getId(), RetentionEmailType.DUE_CONCEPTS_DIGEST, now.minusDays(1));
+        verify(emailLogRepository).existsByUserIdAndEmailTypeAndSentAtAfter(
+                uncommitted.getId(), RetentionEmailType.DUE_CONCEPTS_DIGEST, now.minusDays(7));
+    }
+
+    @Test
     void findDueConceptsDigestUsers_linksMostDueNoteToQuickReview() {
         OffsetDateTime now = OffsetDateTime.parse("2026-03-25T00:00:00Z");
         UserEntity user = verifiedUser();
@@ -763,7 +794,7 @@ class RetentionServiceTest {
     }
 
     @Test
-    void sendDueConceptsDigestEmails_logsSentEmailWithDueConceptCount() {
+    void sendDueConceptsDigestEmails_stillSendsToAnUncommittedLearner() {
         OffsetDateTime now = OffsetDateTime.parse("2026-03-29T10:00:00Z");
         UserEntity user = verifiedUser();
 

@@ -33,6 +33,8 @@ public record MeResponse(
         LocalDate examDate,
         List<String> reviewDays,
         boolean reviewCommitmentOutstanding,
+        boolean reviewCommitmentPromptEligible,
+        int reviewCommitmentPromptCount,
         EngagementMode engagementMode,
         boolean inactivityRemindersEnabled,
         boolean weakConceptRemindersEnabled,
@@ -94,7 +96,7 @@ public record MeResponse(
         this(
                 id, email, pendingEmail, firstName, lastName, displayName, username, bio, learnerLevel,
                 courseProgram, studyGoal, focusSubjects, schoolName, publicProfileVisible, countryCode,
-                profileType, examDate, List.of(), true, engagementMode, inactivityRemindersEnabled,
+                profileType, examDate, List.of(), true, true, 0, engagementMode, inactivityRemindersEnabled,
                 weakConceptRemindersEnabled, weeklySummaryRemindersEnabled, dueConceptsDigestRemindersEnabled,
                 knowledgeImpactDigestRemindersEnabled, marketingEmailsEnabled, mobileTabBarEnabled,
                 themePreference, emailVerifiedAt, onboardingCompletedAt, productOnboardingCompletedAt,

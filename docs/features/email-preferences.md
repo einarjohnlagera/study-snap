@@ -9,9 +9,17 @@ Users can opt in or out of:
 - Study reminders: `inactivityRemindersEnabled`
 - Weak-concept nudges: `weakConceptRemindersEnabled`
 - Weekly summary: `weeklySummaryRemindersEnabled`
+- Due-concepts digest: `dueConceptsDigestRemindersEnabled`
 - Product news & tips: `marketingEmailsEnabled`
 
-All four flags default to `false` until the user opts in. The write endpoint is `POST /auth/preferences/email-preferences`.
+The write endpoint is `POST /auth/preferences/email-preferences`.
+
+Settings also lets learners edit `reviewDays`, the weekdays on which the daily due-concepts digest
+sweep may select them. Those days are initially collected by the post-session review commitment
+prompt. Choosing days changes the digest from a seven-day cooldown to a one-day cooldown while
+restricting delivery to those selected days; learners without chosen days keep the existing weekly
+nudge. The prompt rules and the null/empty scheduling rule are documented in
+[`retention-emails.md`](retention-emails.md#review-commitment-prompt).
 
 ## Unsubscribe Links
 
@@ -23,6 +31,7 @@ Category mapping:
 - `WEEKLY_SUMMARY` -> `weeklySummaryRemindersEnabled`
 - `STUDY_REMINDERS` -> `inactivityRemindersEnabled`
 - `WEAK_CONCEPT` -> `weakConceptRemindersEnabled`
+- `DUE_CONCEPTS_DIGEST` -> `dueConceptsDigestRemindersEnabled`
 
 Unsubscribe is idempotent. Valid tokens for missing or already-deleted users succeed as a no-op so the endpoint never reveals account existence. Users re-enable or manage all categories from the authenticated Email Preferences center in Settings.
 

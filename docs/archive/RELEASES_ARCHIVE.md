@@ -1,6 +1,6 @@
 # RELEASES_ARCHIVE.md — NoteLib
 
-Archived sections of `RELEASES.md`. **Contents are NOT one contiguous range:** `v0.41.0`–`v0.120.0`, plus `v0.126.0` (moved at the `v0.132.0` kickoff), `v0.127.0` (moved at the `v0.133.0` kickoff) `v0.128.0` (moved at the `v0.134.0` kickoff) `v0.129.0` (moved at the `v0.135.0` kickoff) `v0.130.0` (moved at the `v0.136.0` kickoff) `v0.131.0` (moved at the `v0.137.0` kickoff) and `v0.132.0` (moved at the `v0.138.0` kickoff) as the live file crossed its *current + last five* cap. Each version's own `## vX.Y.Z` heading is the index — search for it. `v0.40.1` and earlier moved here
+Archived sections of `RELEASES.md`. **Contents are NOT one contiguous range:** `v0.41.0`–`v0.120.0`, plus `v0.126.0` (moved at the `v0.132.0` kickoff), `v0.127.0` (moved at the `v0.133.0` kickoff) `v0.128.0` (moved at the `v0.134.0` kickoff) `v0.129.0` (moved at the `v0.135.0` kickoff) `v0.130.0` (moved at the `v0.136.0` kickoff) `v0.131.0` (moved at the `v0.137.0` kickoff) `v0.132.0` (moved at the `v0.138.0` kickoff) and `v0.133.0` (moved at the `v0.139.0` kickoff) as the live file crossed its *current + last five* cap. Each version's own `## vX.Y.Z` heading is the index — search for it. `v0.40.1` and earlier moved here
 2026-07-10; **`v0.41.0` through `v0.120.0` moved here 2026-09-07** in the `v0.126.0` pass, which
 resumed this convention after it had lapsed for 85 releases — `RELEASES.md` had reached 116
 sections against its documented design of *current + last few versions*. Both passes are MOVES,
@@ -17,6 +17,240 @@ See `RELEASES.md` for the current + most-recent versions, and its "Archived rele
 index for a one-line-per-version pointer back into this file.
 
 ---
+
+## v0.133.0 - Education Family
+
+**Status: Released** (kicked off 2026-09-08, signed off 2026-09-08, base branch `releases/v0.133.0`, cut from `main` after `v0.132.0` merged as #1347 and tagged)
+
+Source: `docs/claude-plans/program-family-generalization-and-education-family.md` (audit complete 2026-09-08, every claim `file:line`-anchored).
+
+### ⚠️⚠️ THE BRIEF'S CENTRAL PREMISE IS FALSE, AND THAT IS THE MOST IMPORTANT THING IN THIS SECTION
+
+**There is no Engineering-specific authoring shortcut, so there is no generalization to build.** The button at `applicable-programs-combobox.tsx:290` interpolates the family name and count, and the families are derived **dynamically from the catalog** (`:88-111`) by mapping each program's `programFamilyId`/`programFamilyName`. **There is no Engineering literal anywhere in it.** It reads *"Add all 18 Engineering programs"* only because **Engineering is the only family that has members**.
+
+**So this release is a DATA change plus one admin form field. Seed the Education family and the existing UI renders *"Add all 8 Education programs"* with no code change.** §6 of the brief is already satisfied too — all four authoring surfaces share that one component.
+
+**⚠️ DO NOT MODIFY THE APPLICABLE-PROGRAMS COMBOBOX. If a diff touches it, the scope has drifted.**
+
+### The two gaps the audit named — ⚠️ ONLY ONE OF THEM IS REAL (see below)
+
+| Gap | Detail |
+|---|---|
+| Families can only be created by migration | Zero `ProgramFamilyEntity` construction or `save` anywhere in the backend |
+| The admin UI cannot assign a family | `POST /course-programs` **already accepts and validates** `programFamilyId` (`CourseProgramCatalogService:54-56`, `UnknownProgramFamilyException`) — `app/admin/course-programs/page.tsx` just exposes no field for it |
+
+### Planned scope
+
+1. **One migration** — insert the `Education` family; assign the **existing** `Education` program row to it; **RENAME** `Special Needs Education – Generalist` → `Special Needs Education` keeping its `id`; insert the remaining programs from the audit's §4 (Elementary Education, Secondary Education, Early Childhood Education, Technical-Vocational Teacher Education, Physical Education, Teacher Certification).
+2. **Admin family selector on create** — the endpoint already supports it. **This is what stops the release recurring**: without it, every future family member is another migration.
+3. **Copy polish** on the Course/Program and Domain Context helper text. **⚠️ Drop resolver mechanics from it** — keep the conceptual separation, do not explain the backend.
+
+### ⚠️⚠️ THE MIGRATION SEED IS NOT THE LIVE CATALOG — THE READ-ONLY AUDIT IS A PRECONDITION, NOT A FORMALITY
+
+`V106` seeds **three** Engineering programs; production reportedly has **18**, and no later migration inserts any. **The catalog has been extended through `POST /course-programs` in production, so a duplicate audit from the repo alone is UNSOUND.** Run `docs/claude-plans/v0.133.0-education-family-precondition-read.sql` (read-only) **before writing the migration**. An inserted duplicate is visible to every curator immediately and is awkward to withdraw once Notes reference it.
+
+**⚠️ `GET /course-programs/similar?name=` already exists** (ADMIN-only) — the duplicate check the brief asks for is already built; the admin create flow should use it per name.
+
+### ⚠️ What the rename touches
+
+**Safe:** `note_course_program` joins by `course_program_id` (`V107:4`), so every Note keeps its link through a rename — the row keeps its `id`, only `name` changes.
+
+**⚠️ NOT safe automatically: five free-text `course_program` columns** (`notes`, `note_collections`, `users`, `bulk_generation_result`, `official_study_plan_wishlist` — the last has `normalized_course_program` too) may hold the literal old string and would silently keep it. No repository method resolves a catalog entry by name, so nothing breaks — but a stale string stops matching the catalog, which affects discovery and wishlist normalization. **The precondition read counts these.**
+
+### ✅ PRECONDITION READ RUN 2026-09-08 — RESULTS, AND ONE CONDITION NOT MET
+
+Run read-only against `notelib-db-prod`. **The audit's central warning is now VERIFIED, not assumed: `program_families` shows Engineering with EIGHTEEN programs against `V106`'s THREE seeds**, so the catalog was indeed extended through the API and a repo-only duplicate audit would have been unsound.
+
+| Check | Result |
+|---|---|
+| Education-adjacent catalog rows | **Only two** — `Education` (`exam_goal_slug='let'`, no family) and `Special Needs Education – Generalist` (no slug, no family) |
+| Families | **One** — `Engineering`, 18 programs. `Education` does not exist as a family |
+| Collisions with the six proposed inserts | **None.** Elementary, Secondary, Early Childhood, Technical-Vocational Teacher, Physical Education and Teacher Certification are all clear |
+| Notes linked to the rename target via `note_course_program` | **ZERO** |
+| Free-text `course_program` hits | **ONE** — `users.course_program`, exactly `Special Needs Education – Generalist` (36 chars, en dash) |
+
+**⚠️ OWNER DECISION 1'S CONDITION IS NOT MET.** The rename was settled *conditional on zero free-text hits*; there is one. **⚠️ NOTHING BREAKS** — `users.course_program` is consumed by `StudyPackGenerationContextResolver` as **free text**, never resolved against the catalog by name — but that one account's profile program would stop corresponding to a catalog entry. **Handed over as an owner-run write in `docs/claude-plans/v0.133.0-owner-profile-string-update.sql`** with the expected row count and before/after verification. Three options are stated there; the recommendation is to run it **in the same maintenance step as the migration, not before it**.
+
+**⚠️ CONSEQUENCE FOR THE RENAME GUARD TEST: its production denominator is ZERO.** No Note is linked to the row being renamed, so the guard is a purely synthetic structural test. **Write it anyway — it is the regression guard for the migration — but do NOT record it as evidence that real data survived**, because there is no real data to survive.
+
+**✅ DECISIONS 2 AND 3 SETTLED 2026-09-08 (owner):** new Education programs carry `exam_goal_slug = 'let'` **only where learners genuinely sit the LET**, never as a family proxy; and **the admin family selector ships in this release.**
+
+### Owner decisions
+
+1. ~~Reuse or rename `Special Needs Education – Generalist`?~~ **SETTLED 2026-09-08: RENAME**, keeping the row's `id`. **⚠️ THE CONDITION WAS NOT MET — the read returned ONE hit in `users.course_program`.** The catalog rename still proceeds; the one stale profile string is handed over as an owner-run write (`docs/claude-plans/v0.133.0-owner-profile-string-update.sql`), and option (c) there reopens this decision if the owner prefers.
+2. **✅ SETTLED 2026-09-08 — `exam_goal_slug = 'let'` only where learners genuinely sit the LET.** Original recommendation, accepted: **only where learners genuinely sit the LET**; leave NULL otherwise rather than making the exam goal a family proxy. `Education` already carries `'let'`.
+3. **✅ SETTLED 2026-09-08 — the admin family selector SHIPS IN THIS RELEASE.**
+
+### Verification tier
+
+**A single `advisor()` call**, per the audit's §9 — a data migration plus one admin form field. No permission substrate, no cross-user read, no money semantics, no learner-facing behaviour change. **⚠️ But it writes to a production catalog table, so the precondition read is the gate.** **⚠️ THE `v0.131.0`/`v0.132.0` LESSON STILL APPLIES: decide the tier from the SHAPE of the change, and re-decide if the shape changes** — `v0.132.0` was tiered at one cold agent, ran two, and they found four blocking defects including one that silently emptied a learner's adopted Goal.
+
+### ⚠️ THE AUDIT'S SECOND "REAL GAP" IS ALSO FALSE — THE ADMIN FAMILY SELECTOR ALREADY SHIPPED
+
+The audit named two real gaps. **One of them is not real.** It claimed *"the admin UI cannot assign a family — `frontend/app/admin/course-programs/page.tsx` exposes no family field."* That is literally true of `page.tsx`, which is a 40-line shell — **but the field lives in `admin-course-program-catalog-section.tsx`, which that page renders.** It has a `<select id="catalog-program-family">` listing every family derived from the catalog, `create()` sends `programFamilyId`, the table shows a Family column, and its helper text already says assigning a family makes the program participate in that family's expansion.
+
+**It shipped 2026-08-11 in `9e77f412`, tagged `v0.100.0`** — verified as an ancestor of `main`, not merely present in a working tree.
+
+**⚠️ THIS IS THE SAME ERROR CLASS THE AUDIT ITSELF CAUGHT IN THE BRIEF: concluding a capability is missing by reading the wrong file.** Both times the mistake was to check a shell rather than the component doing the work. **So step 3 of the implementation plan is NOT BUILT HERE — it was already done**, and the release shrinks accordingly. The other gap in that table — *families can only be created by migration* — is real, and remains the deferred admin create-family surface.
+
+**⚠️ Do NOT re-add a family selector to the admin page. If a diff adds one, it is a duplicate.**
+
+### Shipped
+
+- **`V142__education_program_family.sql`** — seeds the `Education` family, assigns the EXISTING `Education` program to it, **renames `Special Needs Education – Generalist` to `Special Needs Education` keeping its `id`**, and adds Elementary, Secondary, Early Childhood, Technical-Vocational Teacher and Physical Education plus `Teacher Certification`. **The migration IS the feature** — the combobox is untouched and now renders *"Add all 8 Education programs"* on its own. **⚠️ The ID range was verified against production rather than assumed:** 44 programs exist, exactly 21 in `V106`'s seed range with `...021` highest, so `...022`+ cannot collide.
+- **⚠️ The renamed row also gains `exam_goal_slug = 'let'` — a user-visible change beyond a rename, flagged rather than buried.** `findNamesByExamGoalSlug` returns a `List`, so the field is one-to-many by design; leaving this row NULL would have made seven of eight family members LET-discoverable and one silently not. It now appears under the LET exam goal on the public endpoint.
+- **Helper-text copy polish.** The Applicable Programs hint no longer explains the resolver (*"only a single program can inform the writing domain, and Domain Context overrides it"*) — true, but backend mechanics a curator cannot act on, and it invited the reading that picking one program is how you steer the writing. It now states the conceptual separation and points at program families.
+- **Three multi-family combobox tests, guarding a bug class that was previously invisible.** Every existing fixture held exactly ONE family, because until `V142` production did too — so a component that ignored which family was clicked and expanded them all would have shipped green. **Mutation-verified with an isolating mutant that typechecks and is identical to correct behaviour under a single family: it kills ONLY the two new tests, with all 14 pre-existing tests passing.**
+- **A Program Family can now be CREATED from the admin surface, so a new family no longer needs a migration.** `POST /course-program-catalog/families` plus a create control beside the existing family picker. **⚠️ THIS IS THE GAP THE AUDIT'S STEP 3 WAS SUPPOSED TO CLOSE BUT COULD NOT, BECAUSE STEP 3 ALREADY EXISTED** — assigning a family was already possible; creating one was not, which is why `V106` seeded Engineering and `V142` seeded Education. A third family would have been a third migration.
+- **⚠️ A families READ endpoint ships with it, and it is not garnish.** A family is created EMPTY, and the admin form previously derived its options from the catalog — so a family created today would have vanished from the picker on refresh, before any program could be assigned to it. **The authoring combobox still derives families from the catalog, deliberately: it only cares about families that have members.** Do not unify the two.
+- **Duplicate family names are rejected case- and whitespace-insensitively**, matching the course-program check, because two identical-looking families would produce two identical-looking expansion shortcuts. A lost race on `uk_program_families_name` resolves to the winning row rather than surfacing a constraint violation.
+- **⚠️ The new endpoint owes and has a REAL request test.** The pre-existing `CourseProgramCatalogControllerTest` only reflected on annotations — the exact `v0.119.0` shape — so a `MockMvc` POST with `.contentType(APPLICATION_JSON)` was added and **mutation-verified: deleting the header reproduces `HttpMediaTypeNotSupportedException` and a 415.** `lib/api-program-families.test.ts` pins the client's own request shape, since the component test mocks `@/lib/api` wholesale.
+- **`EducationProgramFamilyMigrationTest`** — the rename-guard fixture is created BEFORE the migration runs, since a link inserted afterwards resolves to the new name trivially. It also carries the Engineering-untouched regression guard. **⚠️ Its production denominator is ZERO** (no note is linked to the renamed row), so it is a structural guard and must not be reported as evidence that real data survived; its javadoc says so.
+
+
+### Scope completeness — the three planned items, reconciled
+
+**⚠️ THE PLANNED SCOPE LIST ABOVE READS AS THREE DELIVERABLES AND ONLY TWO OF THEM WERE BUILT. That is
+correct, and this table is why** — a later reader must not see a release that shipped 2 of 3.
+
+| Planned item | Outcome | Evidence |
+|---|---|---|
+| **1.** One migration | **SHIPPED** | `V142__education_program_family.sql`; guarded by `EducationProgramFamilyMigrationTest` |
+| **2.** Admin family **selector** on create | **⚠️ NOT BUILT — IT ALREADY EXISTED** | `<select id="catalog-program-family">` has been in `admin-course-program-catalog-section.tsx` since `9e77f412` (2026-08-11, `v0.100.0`), verified an ancestor of `main`. The audit concluded it was missing by reading `app/admin/course-programs/page.tsx`, a 40-line shell that renders it. |
+| **2′.** Admin family **create** surface — *substituted for item 2* | **SHIPPED** | `GET`/`POST /course-program-catalog/families` plus the create control. **This is what item 2 was actually for:** its stated justification was *"this is what stops the release recurring"*, and a selector alone does not — a family still could not be created without a migration. The substitution moved the work to the half of the gap that was real. |
+| **3a.** Copy polish, **Course / Program** helper text | **SHIPPED** | `applicable-programs-combobox.tsx:328-331`; the resolver sentence was replaced one-for-one, no paragraph added |
+| **3b.** Copy polish, **Domain Context** helper text | **NO CHANGE NEEDED — verified, not assumed** | `note-editor-form.tsx:512-515` already reads *"it shapes how the note is written, while the programs decide who finds it."* It carried no resolver mechanics to drop. Checked against the code rather than inferred from the item's wording. |
+
+**So: 2 of 3 planned items built, 1 found already built, plus 1 substitution and 1 verified no-op.** The
+release grew by one item (2′) and shrank by one (2).
+
+**⚠️ VERIFICATION TIER WAS RE-DECIDED WHEN THE SHAPE CHANGED, NOT WHEN THE COUNT DID.** Kickoff
+pre-declared *a single `advisor()` call* for "a data migration plus one admin form field." Folding 2′
+added **a new write endpoint** — a different shape, not merely a fourth item — and `V142` changes
+production catalog semantics (the renamed row gains `exam_goal_slug='let'` and becomes publicly
+LET-discoverable). Under the `v0.131.0` rule (*decide the tier from the SHAPE*), that fires the
+production-data trigger, so **`advisor()` plus one scoped cold agent ran**, framed as falsification of
+this session's own named claims.
+
+### Pressure test — one scoped cold agent, framed as falsification
+
+Tier was re-decided when the shape changed (see above), not when the item count did. One agent, a tight
+file list, and seven of this session's own named claims to DISPROVE rather than an open-ended audit.
+**Three claims were refuted. Four were confirmed, and the confirmations matter as much** — the
+`MockMvc` POST really does issue a request with `Content-Type` (not a method call), `exam_goal_slug` really
+is one-to-many at every consumer, the combobox really is family-generic, and the admin control really
+does GET on mount.
+
+- **Fixed — the new repository SQL was executed by NOTHING.** `CourseProgramCatalogRepository` is a plain
+  `JdbcTemplate` class with hand-written SQL constants and **zero** `@Query(nativeQuery = true)` methods,
+  and `NativeQueryPostgresIntegrationTest` finds its subjects by reflecting over `@Query` — so the class
+  is **structurally invisible** to the PostgreSQL harness that `CLAUDE.md` describes as covering *"every
+  native query."* The service test mocks the repository and the controller test mocks the service, so all
+  three new statements were verified **by inspection only**. Added
+  `CourseProgramCatalogRepositoryProgramFamilyIntegrationTest`, which runs them against a real database.
+  **⚠️ It also covers `mapProgramFamily`'s alias→getter mapping — the exact gap `v0.132.0` named, since
+  `PREPARE` validates syntax and types but never that `SELECT id, name` actually feeds
+  `getObject("id", …)`.** Mutation-verified: deleting the `jdbcTemplate.update(...)` inside
+  `insertProgramFamily` — which still typechecks and still returns a valid-looking response — is killed
+  by the new read-back assertion at `:88`, **with all 14 pre-existing service tests still passing.**
+- **Fixed — `InvalidProgramFamilyNameException` had zero test references.** An added file with no test
+  that executes it. It looks redundant with `@Size(max = 120)` on the request record, which is exactly why
+  it was skipped — but the annotation guards the CONTROLLER while the exception guards the SERVICE, which
+  a direct call reaches without validation.
+- **Fixed — `"nothing resolves a course_program by name"` IS FALSE, and it had already reached the owner.**
+  `bulk-generation-page-client.tsx:290` does `catalog.find(p => p.name === courseProgram.trim())`, where
+  `courseProgram` is seeded from the user's free-text profile field (`:182`). **So the ONE account holding
+  the stale `Special Needs Education – Generalist` string loses Bulk Generate's auto-selection after the
+  rename** — graceful degradation, not corruption, but a real regression rather than "a string that no
+  longer matches." The claim was true of the path it was checked against (`StudyPackGenerationContext-
+  Resolver` resolves by ID) and was over-generalized from there.
+  `docs/claude-plans/v0.133.0-owner-profile-string-update.sql` now carries the correction and it
+  **strengthens** the recommendation to run the write. **⚠️ `V142`'s inline comment still carries the
+  original wording and is deliberately NOT edited — the migration is committed, and changing it would
+  alter its Flyway checksum and break startup wherever it has already been applied.**
+- **Fixed — the LET fallback lists went stale the moment `V142` landed.** `ExamGoalConfig.java` and
+  `frontend/lib/exam-hub-config.ts` both hardcode `let → ["Education"]` as a **fail-open** fallback used
+  when the live catalog read fails or returns empty. Every consumer of the *live* list correctly treats it
+  as list-valued, so there is no single-value bug — but the fallback itself would have silently
+  under-represented the exam goal by **seven programs**. Both now list all eight, with their tests updated.
+  **⚠️ This is the "sweep by SURFACE, not by diff" rule paying out: neither file was in the diff, and a
+  stale fail-open fallback fails silently by design.**
+
+### Findings recorded and deliberately NOT fixed
+
+- **`CourseProgramCatalogRepository.resolveIdForLegacyName()` resolves by exact name and has ZERO callers**
+  anywhere in `backend/src`. Confirmed untouched by this release. Genuinely dead code — deleting it is a
+  separate change, and it is recorded here so the next reader does not rediscover it as a live risk.
+- **The family dedup SQL uses `lower(trim(name))` while the course-program dedup additionally collapses
+  internal whitespace** via `regexp_replace`. Not exploitable today: `normalizeForLookup` already collapses
+  whitespace in Java before the parameter is bound. Recorded because the two paths are described as
+  matching and, at the SQL level, they do not.
+
+### What the cold agent could NOT check
+
+**The production-collision claim.** `V142`'s comment asserts 44 programs with exactly 21 in the seed range,
+verified against production on 2026-09-08. **A repo-only reviewer cannot confirm or refute that** — which
+is the migration's own stated reason for requiring a precondition read. This is why the release owes a
+post-deploy read rather than treating the migration test as sufficient.
+
+### Anti-drift
+
+- **⚠️ Do NOT modify the applicable-programs combobox** — it is already family-generic.
+- **⚠️ Do NOT create a new Domain Context** — `GENERAL_EDUCATION`, `PROFESSIONAL_EDUCATION` and `PROFESSIONAL_PRACTICE_AND_REGULATION` already cover LET.
+- **⚠️ Do NOT let Program Family select or override Domain Context**, and do not infer the Education family from `GENERAL_EDUCATION`.
+- **⚠️ Do NOT feed Program Family or an expanded program list to the LLM.** `StudyPackGenerationContext` has no field for either and `courseProgram` is a single resolved String, so this is **structurally impossible today — keep it that way.**
+- **⚠️ Do NOT delete or migrate away the existing `Education` program** — assign it a family only.
+- **⚠️ Do NOT mass-update existing Notes' applicable programs.** No backfill of `note_course_program`.
+- **⚠️ Do NOT infer Applicable Programs from Review Set membership**, and do NOT make family membership dynamic inheritance — expansion writes explicit program IDs at authoring time and nothing more.
+- **⚠️ Do NOT create duplicate catalog entries**, and **do NOT use a credential abbreviation (BEEd, BSEd, CPE/DPE) as a canonical name.** `Teacher Certification` is the endorsed canonical name because `Professional Education` already exists as a `DomainContext` value and as a Subject, so it would collide across two axes.
+- **⚠️ Do NOT block mixed-family selections** or add warning UX for them.
+- **⚠️ Do NOT redesign the program taxonomy, touch learner-owned Notes, or change pricing, entitlements or Review Set architecture.**
+- **⚠️ NO Review Set publication work.** `v0.132.0` shipped that boundary and owes `[CHECKPOINT — due 2026-09-22, deploy-relative]`; its F5 gap (no publish surface in the Builder) is recorded and **is not this release's to fix.**
+- **⚠️ NO Learning Connections work** — `[CHECKPOINT — due 2026-09-19]` has a denominator of ONE.
+
+### Tests
+
+The audit's §14 is mostly covered already by the generic component. The genuinely new cases: **Education family expands to its explicit member IDs**; expansion creates no duplicate selections **asserted with two families present**; **mixed-family selection survives — ⚠️ a single-family fixture proves nothing**; the generation context receives no family or expanded list; `GENERAL_EDUCATION` does not auto-select Education programs; Review Set membership does not alter Applicable Programs.
+
+**⚠️ RENAME GUARD: a Note linked to `Special Needs Education – Generalist` BEFORE the rename must still be linked after it and render the NEW name. A fixture created after the rename passes trivially and proves nothing.**
+
+**⚠️ The Engineering-still-expands test is the regression guard for the migration** — if assigning the existing `Education` row a family accidentally touched Engineering rows, that is what catches it.
+
+
+### ✅ Deploy sequencing — RESOLVED 2026-09-08, both migrations ran (note kept as the record)
+
+**✅ RAN 2026-09-08 — V141 at 12:23, V142 at 15:47, both `success = true`, verified read-only against `flyway_schema_history` on 2026-09-09. The Education family has EIGHT members in production, which is this release's headline claim.** What follows described the state before that deploy and is kept as the record.
+
+`V141` (`v0.132.0`) and `V142` (this release) were **both unrun in production.** Flyway applies them in
+order on the next deploy, which is correct — but three dated obligations hang off *when that deploy
+happens*, and they are recorded here rather than left to be inferred:
+
+1. **`v0.132.0`'s `[CHECKPOINT — due 2026-09-22]` is deploy-relative, not merge-relative.** If the
+   deploy slips, that date must be re-dated — it does not start counting at merge.
+2. **`docs/claude-plans/v0.133.0-owner-profile-string-update.sql` must run in the SAME maintenance step
+   as `V142`, not before it.** Running it first points the one affected profile at a catalog name that
+   does not exist yet.
+3. **`docs/claude-plans/v0.130.0-owner-production-checks.sql` is still outstanding.**
+
+**⚠️ All three are the owner's to run. Claude does not execute writes or migrations against production.**
+
+### Known limitations
+
+- **All FOUR authoring surfaces render their own helper paragraph above the combobox's.**
+  `note-editor-form.tsx:437-441`, `private-note-detail-page-client.tsx:2704-2706`,
+  `bulk-generation-page-client.tsx:591-593` and `admin-applicable-programs-section.tsx:204` each carry a
+  discovery-vs-authoring sentence directly above the combobox's own *"they decide who finds it, never
+  how it is written."* They overlap without contradicting. **This predates the release** — the copy
+  polish replaced one paragraph with one paragraph and added none — and was found by sweeping the
+  surface rather than the diff. Left alone deliberately: consolidating it is a copy change across two
+  more files and would have made this a fifth item.
+- **`Physical Education` is seeded as an Education-family program carrying `exam_goal_slug = 'let'`.**
+  That is right for the teaching degree, and the name is also how the *school subject* is commonly
+  written. No collision exists today (the read found no such catalog row), but a future curator adding
+  a subject-flavoured entry should reuse this row rather than create a sibling.
+- **The families `GET` is ADMIN-only, matching the create endpoint.** The authoring combobox still
+  derives families from the catalog, deliberately — it only cares about families that have members.
+  **Do not unify the two paths.**
 
 ## v0.132.0 - Publication Boundary
 

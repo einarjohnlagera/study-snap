@@ -2544,7 +2544,6 @@ export default function ChallengeQuizPage() {
 
           <div ref={weakConceptsRef} className="space-y-4">
             <ReviewCommitmentPrompt
-              isFirstCompletedSessionEver={result.isFirstCompletedSessionEver}
               noteId={note?.id ?? null}
             />
             {hasNextStepGuidance ? (
@@ -2777,7 +2776,6 @@ export default function ChallengeQuizPage() {
           </Card>
           <div ref={weakConceptsRef} className="space-y-4">
             <ReviewCommitmentPrompt
-              isFirstCompletedSessionEver={result.isFirstCompletedSessionEver}
               noteId={note?.id ?? null}
             />
             {hasNextStepGuidance ? (

@@ -943,7 +943,6 @@ export default function AdaptivePracticePage() {
             </div>
           )}
           <ReviewCommitmentPrompt
-            isFirstCompletedSessionEver={completionResult?.isFirstCompletedSessionEver}
             noteId={note?.id ?? null}
           />
           {hasNextStepGuidance ? (

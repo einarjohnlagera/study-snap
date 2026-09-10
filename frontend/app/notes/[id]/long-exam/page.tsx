@@ -1409,7 +1409,6 @@ export default function LongExamPage() {
                     </div>
 
                     <ReviewCommitmentPrompt
-                        isFirstCompletedSessionEver={masteryReport.isFirstCompletedSessionEver}
                         noteId={noteId}
                     />
 
