@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   getMe,
@@ -35,10 +35,44 @@ export function ReviewCommitmentPrompt({
   const [reviewDays, setReviewDays] = useState<ReviewDay[]>(DEFAULT_REVIEW_DAYS);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const shownTrackedRef = useRef(false);
+  const shownTrackedRef = useRef<"unseen" | "shown" | "resolved" | "dismissed">("unseen");
+  const promptVisibleRef = useRef(false);
+
+  // ⚠️ noteId is read through a ref, NOT closed over, and the effect below owns an EMPTY dep array.
+  // Four of the five call sites pass `note?.id ?? null`, so noteId transitions null -> value while
+  // this component is mounted. If the abandonment effect depended on noteId (directly or through a
+  // useCallback), that transition would run the effect's CLEANUP -- firing a dismissal the learner
+  // never performed, with the stale entityId, and latching the state machine to "dismissed" so the
+  // real abandonment could never be recorded afterwards. Today the ordering makes that unlikely
+  // (the prompt only renders after a completed session, by which point the note has loaded), but it
+  // is ordering, not a guarantee. Subscribe once per mount and keep the payload in refs.
+  const noteIdRef = useRef(noteId);
+  noteIdRef.current = noteId;
+
+  const trackDismissed = useCallback((exit: "pagehide" | "unmount") => {
+    if (!promptVisibleRef.current || shownTrackedRef.current !== "shown") {
+      return;
+    }
+    shownTrackedRef.current = "dismissed";
+    void trackAnalyticsEvent({
+      eventType: "REVIEW_COMMITMENT_DISMISSED",
+      entityId: noteIdRef.current,
+      metadata: { exit },
+    });
+  }, []);
+
+  useEffect(() => {
+    const handlePageHide = () => trackDismissed("pagehide");
+    globalThis.addEventListener("pagehide", handlePageHide);
+    return () => {
+      globalThis.removeEventListener("pagehide", handlePageHide);
+      trackDismissed("unmount");
+    };
+  }, [trackDismissed]);
 
   useEffect(() => {
     if (isFirstCompletedSessionEver !== true) {
+      promptVisibleRef.current = false;
       setVisible(false);
       return;
     }
@@ -57,9 +91,10 @@ export function ReviewCommitmentPrompt({
         setShowExamDate(me.examDate !== null || me.profileType === "BOARD_EXAM");
         setExamDate(me.examDate ?? "");
         setReviewDays(me.reviewDays?.length > 0 ? me.reviewDays : DEFAULT_REVIEW_DAYS);
+        promptVisibleRef.current = shouldShow;
         setVisible(shouldShow);
-        if (shouldShow && !shownTrackedRef.current) {
-          shownTrackedRef.current = true;
+        if (shouldShow && shownTrackedRef.current === "unseen") {
+          shownTrackedRef.current = "shown";
           void trackAnalyticsEvent({
             eventType: "REVIEW_COMMITMENT_PROMPT_SHOWN",
             entityId: noteId,
@@ -98,6 +133,8 @@ export function ReviewCommitmentPrompt({
         examDate: examDate || null,
         reviewDays: declined ? [] : reviewDays,
       });
+      shownTrackedRef.current = "resolved";
+      promptVisibleRef.current = false;
       void trackAnalyticsEvent({
         eventType: declined ? "REVIEW_COMMITMENT_DECLINED" : "REVIEW_COMMITMENT_COMMITTED",
         entityId: noteId,

@@ -1,11 +1,18 @@
 package com.studysnap.backend.service;
 
+import com.studysnap.backend.controller.AnalyticsController;
+import com.studysnap.backend.dto.AnalyticsEventRequest;
 import com.studysnap.backend.entity.AnalyticsEventType;
+import com.studysnap.backend.entity.UserRole;
+import com.studysnap.backend.security.AuthenticatedUser;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.http.MediaType;
+import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -14,14 +21,21 @@ import java.util.Map;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest
+@AutoConfigureMockMvc
 class AnalyticsEventListenerIntegrationTest {
     private static final Duration ASYNC_WAIT_TIMEOUT = Duration.ofSeconds(2);
     private static final Duration ROLLBACK_SETTLE_TIME = Duration.ofMillis(300);
 
     @Autowired
     private AnalyticsService analyticsService;
+    @Autowired
+    private AnalyticsController analyticsController;
+    @Autowired
+    private MockMvc mockMvc;
     @Autowired
     private JdbcTemplate jdbcTemplate;
     private TransactionTemplate transactionTemplate;
@@ -78,6 +92,51 @@ class AnalyticsEventListenerIntegrationTest {
         UUID userId = UUID.randomUUID();
 
         analyticsService.trackEvent(userId, AnalyticsEventType.LANDING_PAGE_VIEWED, null, Map.of("page", "home"));
+
+        awaitEventCount(AnalyticsEventType.LANDING_PAGE_VIEWED, 1);
+    }
+
+    @Test
+    void dueConceptsDigestLanding_withoutResolvedPrincipal_requestsAuthenticationRetry() throws Exception {
+        mockMvc.perform(post("/analytics/events")
+                        // An expired bearer is the production shape: the permitAll endpoint used to
+                        // accept it as anonymous with 200, preventing the client from refreshing it.
+                        .header("Authorization", "Bearer expired-access-token")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"eventType":"DUE_CONCEPTS_DIGEST_LANDED","metadata":{}}
+                                """))
+                .andExpect(status().isUnauthorized());
+
+        assertEventCount(AnalyticsEventType.DUE_CONCEPTS_DIGEST_LANDED, 0);
+    }
+
+    @Test
+    void dueConceptsDigestLanding_persistsResolvedPrincipalUserId() {
+        UUID userId = UUID.randomUUID();
+        AuthenticatedUser principal = new AuthenticatedUser(userId, UserRole.USER, true, 0);
+        analyticsController.trackEvent(
+                principal,
+                new AnalyticsEventRequest(AnalyticsEventType.DUE_CONCEPTS_DIGEST_LANDED, null, Map.of())
+        );
+
+        awaitEventCount(AnalyticsEventType.DUE_CONCEPTS_DIGEST_LANDED, 1);
+        UUID persistedUserId = jdbcTemplate.queryForObject(
+                "select user_id from analytics_events where event_type = ?",
+                UUID.class,
+                AnalyticsEventType.DUE_CONCEPTS_DIGEST_LANDED.name()
+        );
+        assertThat(persistedUserId).isEqualTo(userId);
+    }
+
+    @Test
+    void anonymousAnalyticsEvents_remainAccepted() throws Exception {
+        mockMvc.perform(post("/analytics/events")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"eventType":"LANDING_PAGE_VIEWED","metadata":{}}
+                                """))
+                .andExpect(status().isOk());
 
         awaitEventCount(AnalyticsEventType.LANDING_PAGE_VIEWED, 1);
     }
