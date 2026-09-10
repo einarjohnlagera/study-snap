@@ -1385,6 +1385,10 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
   const [activeDrag, setActiveDrag] = useState<ActiveDrag>(null);
   const [pendingSectionRename, setPendingSectionRename] = useState<{ oldName: string; newName: string } | null>(null);
   const [setSectionsConfirmOpen, setSetSectionsConfirmOpen] = useState(false);
+  // The in-app navigation the curator attempted while drag changes were pending, held until they
+  // choose save / discard / stay. Null means no navigation is being intercepted.
+  const [pendingNavigationHref, setPendingNavigationHref] = useState<string | null>(null);
+  const [navigationSaveError, setNavigationSaveError] = useState<string | null>(null);
 
   // ⚠️ Both sensors need an activation constraint, and the reason is not tuning. Without one a drag
   // begins on the first pixel of pointer movement, so clicking the section rename INPUT — which sits
@@ -1657,13 +1661,35 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
     };
     const handleInAppNavigation = (event: MouseEvent) => {
       const target = event.target;
-      if (!(target instanceof Element) || !target.closest("a[href]")) {
+      if (!(target instanceof Element)) {
         return;
       }
-      if (!globalThis.confirm("Leave without saving this order?")) {
-        event.preventDefault();
-        event.stopPropagation();
+      const anchor = target.closest("a[href]");
+      if (!(anchor instanceof HTMLAnchorElement)) {
+        return;
       }
+      // ⚠️ Only intercept a navigation that would actually REPLACE this page. A modified click
+      // (cmd/ctrl/shift/alt, middle button) or target="_blank" opens elsewhere and leaves the
+      // builder — and its pending drags — exactly where they are, so interrupting it would be a
+      // dialog for a problem that does not exist. An in-page "#" jump is not a navigation either.
+      if (event.defaultPrevented || event.button !== 0
+        || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+        return;
+      }
+      if (anchor.target && anchor.target !== "_self") {
+        return;
+      }
+      const href = anchor.getAttribute("href");
+      if (!href || href.startsWith("#")) {
+        return;
+      }
+      // Always hold the navigation: the choice is made in the dialog, not here. The old code called
+      // a blocking confirm() with only two outcomes, which forced the curator to lose the work or
+      // abandon the navigation.
+      event.preventDefault();
+      event.stopPropagation();
+      setNavigationSaveError(null);
+      setPendingNavigationHref(href);
     };
     globalThis.addEventListener("beforeunload", handleBeforeUnload);
     globalThis.document.addEventListener("click", handleInAppNavigation, true);
@@ -1769,6 +1795,43 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
     pendingDragAssignmentCountRef.current = 0;
     setLeafItems(savedItems);
     setMutationError(null);
+  };
+
+  // ⚠️ A FAILED SAVE MUST NOT NAVIGATE. This dialog exists so a curator never loses pending drags;
+  // if it navigated on a failed save it would become a NEW way to lose them — strictly worse than
+  // the two-choice confirm() it replaces. On failure we stay put, keep the dialog open, and say so.
+  const handleSaveAndLeave = async () => {
+    const href = pendingNavigationHref;
+    if (!href || mutationKind !== null) {
+      return;
+    }
+    setNavigationSaveError(null);
+    const saved = await savePendingLeafOrder({
+      // No refresh: we are leaving this page, so re-fetching the list we are about to unmount is waste.
+      refreshAfter: false,
+      failureMessage: "Could not save this order.",
+    });
+    if (!saved) {
+      setNavigationSaveError("We couldn't save your changes, so you're still here and nothing was lost. Try again, or discard and leave.");
+      return;
+    }
+    setPendingNavigationHref(null);
+    router.push(href);
+  };
+
+  const handleDiscardAndLeave = () => {
+    const href = pendingNavigationHref;
+    if (!href || mutationKind !== null) {
+      return;
+    }
+    handleDiscardLeafOrder();
+    setPendingNavigationHref(null);
+    router.push(href);
+  };
+
+  const handleKeepEditing = () => {
+    setPendingNavigationHref(null);
+    setNavigationSaveError(null);
   };
 
   const persistLeafItems = async (
@@ -2484,36 +2547,19 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
               </CardDescription>
             </div>
             <div className="flex flex-wrap items-center gap-3">
+              {/* ⚠️ STATUS TEXT ONLY — the Save/Discard controls that used to sit here now live in the
+                  sticky bar at the bottom of this page. Do NOT restore them: the bar is the dominant
+                  pending-state affordance and two equally-prominent Save controls is the exact thing
+                  the v0.140.0 anti-drift forbids. This header scrolls out of view on a long plan,
+                  which is the whole reason the bar exists.
+                  The dirty branch is deliberately absent here too — the bar carries that message. */}
               <p className="text-xs text-foreground/55" role="status">
                 {orderSaveInProgress
                   ? "Saving order… dragging is paused until this finishes."
                   : mutationInProgress
                     ? "Saving… dragging is paused until this finishes."
-                    : leafOrderDirty
-                      ? "Order not saved. Save or discard your changes."
-                      : `Drag notes or ${labels.sectionSingular.toLowerCase()}s to reorganize.`}
+                    : `Drag notes or ${labels.sectionSingular.toLowerCase()}s to reorganize.`}
               </p>
-              {leafOrderDirty ? (
-                <div className="flex items-center gap-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={handleDiscardLeafOrder}
-                    disabled={mutationInProgress}
-                  >
-                    Discard
-                  </Button>
-                  <Button
-                    type="button"
-                    size="sm"
-                    onClick={() => void handleSaveLeafOrder()}
-                    disabled={mutationInProgress}
-                  >
-                    {orderSaveInProgress ? "Saving…" : "Save order"}
-                  </Button>
-                </div>
-              ) : null}
               <Button
                 type="button"
                 variant="outline"
@@ -2689,6 +2735,93 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
             </div>
           )}
         />
+
+        {/* ⚠️ THE DIRTY-STATE STICKY BAR — the point of v0.140.0.
+            The Save/Discard controls used to live ONLY in the "Your notes" card header, which scrolls
+            out of view. Production holds a 79-note plan and two at 77, so a curator arranging one works
+            hundreds of pixels below the only control that commits their work.
+
+            ⚠️ COPY IS OWNER-DECIDED AND IS NOT A FREE CHOICE (plan §10 Finding B). "Unsaved changes"
+            OVER-claims — it implies the combobox section pick is pending, and it is not: that path calls
+            moveLeafNote(..., deferSave = false, ...) and persists immediately ("flush, never discard").
+            "Order changes not saved" UNDER-claims — leafOrdersMatch compares noteId sequence AND label,
+            so a pending drag can also have moved a note between sections. "Drag changes not saved"
+            covers both, and everything from the combobox is already saved.
+            ⚠️ ONE RESIDUAL IMPRECISION, RECORDED RATHER THAN GLOSSED: the plan justified this wording
+            as "everything pending came from a drag". That is not exactly true — the keyboard Move
+            up / Move down controls are the accessible equivalent of dragging and ALSO defer, so a
+            curator who never touches a pointer can still be shown "Drag changes not saved". The
+            wording is the owner's call and was made knowingly; "Arrangement not saved" is the
+            candidate that covers both without naming an input device.
+            Do not "improve" this wording without re-reading §10 Finding B AND this note. */}
+        {leafOrderDirty ? (
+          <div
+            className="sticky bottom-4 z-30 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-background/95 px-4 py-3 shadow-lg backdrop-blur"
+            data-testid="leaf-order-sticky-bar"
+          >
+            <p className="text-sm font-medium text-foreground" role="status">
+              {orderSaveInProgress ? "Saving…" : "Drag changes not saved"}
+            </p>
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleDiscardLeafOrder}
+                disabled={mutationInProgress}
+              >
+                Discard
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                onClick={() => void handleSaveLeafOrder()}
+                disabled={mutationInProgress}
+              >
+                {orderSaveInProgress ? "Saving…" : "Save changes"}
+              </Button>
+            </div>
+          </div>
+        ) : null}
+
+        {/* Three choices, because two were never enough: the old confirm() offered "leave and lose it"
+            or "stay", so a curator who had genuinely finished had no way to leave WITH their work.
+            ⚠️ beforeunload (refresh / tab close) stays a WARNING ONLY and is deliberately not given
+            these actions — the browser renders its own dialog, permits no custom buttons and no
+            reliable async save, and promising a save path the page lifecycle cannot guarantee is
+            worse than warning honestly. */}
+        <AppModal
+          isOpen={pendingNavigationHref !== null}
+          title="Save your drag changes before leaving?"
+          description="You moved notes around and haven't saved yet. Choose what happens to those changes."
+          onClose={handleKeepEditing}
+          actions={(
+            <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+              <Button type="button" variant="outline" onClick={handleKeepEditing}>
+                Keep editing
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleDiscardAndLeave}
+                disabled={mutationInProgress}
+              >
+                Discard and leave
+              </Button>
+              <Button
+                type="button"
+                onClick={() => void handleSaveAndLeave()}
+                disabled={mutationInProgress}
+              >
+                {orderSaveInProgress ? "Saving…" : "Save and leave"}
+              </Button>
+            </div>
+          )}
+        >
+          {navigationSaveError ? (
+            <p className="text-sm text-destructive" role="alert">{navigationSaveError}</p>
+          ) : null}
+        </AppModal>
       </main>
     );
   }

@@ -79,7 +79,7 @@ For Study Plan detail sections, there is no separate section entity or nested-pl
 - null or empty labels belong to a trailing **Not in a section** bucket. That display string is also the reserved name, defined once in `frontend/lib/collection-labels.ts` and shared by every surface — a second copy would let a curator type the displayed name and mint a lookalike section.
 - **The reserved name is refused at the authoring surfaces, and folded on read.** The Builder's per-note control, its section rename, `Group by subject`, and Bulk Generate all reject it in any casing or spacing, and all four now write the **canonical** form. **⚠️ Bulk Generate was the outlier until `v0.123.0` — it sent `trim()` only, and its Section field is pre-filled from the free-text Subject, so a doubled space in a pasted Subject minted an uncollapsed label with no action on the Section field at all; `buildAdoptedItems` then copied it verbatim to every adopter.** The backend does **not** enforce it — `validateOptionalLabel` trims and length-checks only, keeping the server free of frontend display vocabulary — so a direct API call can still store it. Both reading surfaces therefore compare **normalized** against the sentinel and fold any casing into the bucket, so such a value can never render as a section. Only the sentinel comparison is case-folded; grouping between real sections stays case-sensitive.
 - when no item in the plan has a label, detail renders the existing flat ordered list with no section cards.
-- reordering preserves the displayed relative order of notes and sections. The detail page's dormant organize-mode path scopes drag to a section, while the Builder deliberately allows cross-section note drag. Builder drag results remain local until **Save order** submits the whole collection and rewrites every row position; notes in untouched sections retain their relative display order.
+- reordering preserves the displayed relative order of notes and sections. The detail page's dormant organize-mode path scopes drag to a section, while the Builder deliberately allows cross-section note drag. Builder drag results remain local until **Save changes** submits the whole collection and rewrites every row position; notes in untouched sections retain their relative display order. **⚠️ Since `v0.140.0` that control lives in a sticky bar at the bottom of the Builder, NOT in the "Your notes" card header** — the header scrolls out of view on a long plan (production holds a 79-note plan), which left a curator working hundreds of pixels from the only control that commits their work. **There is exactly one Save and one Discard on the page, both in the bar**, asserted by test; the header carries status text only.
 - the Builder owns the per-note profile-aware **Section** / **Part** control. It uses the shared `SuggestionCombobox` (existing names as suggestions + free-type a new one), clears back to **Not in a section**, and snaps a typed case-variant to the existing section's exact casing. **⚠️ SAVING SPLITS BY ACT SINCE `v0.117.0`, and this line previously said only "auto-saves on a 500 ms debounce":** TYPING a new name still saves 500 ms after focus leaves the field — the debounce is gated on `editing` because mid-keystroke saves tear down the control, and typing *"Week"*, pausing, then *" 1"* once created a section called *"Week"*. **CHOOSING an existing option commits immediately**, through a separate `onOptionSelect` path: a clicked option is final at the click, with nothing partial to protect. **⚠️ A commit also FLUSHES any pending drag ordering** (`persistLeafItems` writes the in-memory list), so the unsaved-arrangement indicator clears at that moment. Deliberate — pending work is saved, never discarded. Grouping itself remains case-sensitive for backward compatibility.
 
 Sections are strictly sections within one plan. They are not child collections, independent plans, or module entities.
@@ -1165,9 +1165,29 @@ Reordering in the leaf Study Plan Builder is deferred. Dragging notes within or 
 dragging real section headers changes local item positions only; the equivalent keyboard up/down
 controls use the same pending order. The dirty check compares the full item-id/section sequence with
 the last successfully persisted baseline, because sections have no independently stored order.
-**Save order** sends exactly one whole-plan `PUT /collections/{id}/items/order`, then refreshes the
+**Save changes** sends exactly one whole-plan `PUT /collections/{id}/items/order`, then refreshes the
 collection once without refetching `listNotes()`. **Discard** restores that baseline. A failed save
 keeps the pending order visible and retryable, and duplicate saves are coalesced.
+
+**The pending-state bar reads `Drag changes not saved` (`v0.140.0`, owner-decided).** The wording is
+load-bearing and constrained by the dirty derivation: *"Unsaved changes"* would over-claim, because a
+combobox section pick is already persisted by the flush above; *"Order changes not saved"* would
+under-claim, because the dirty check compares section label as well as sequence, so a pending drag may
+also have moved a note between sections. **⚠️ One residual imprecision, recorded rather than glossed:
+the keyboard Move up / Move down controls share the same pending order (see above), so a curator who
+never touches a pointer can still be shown "Drag changes not saved".**
+
+**Leaving the Builder with pending drags offers three choices (`v0.140.0`), not two.** An in-app link
+click while dirty opens a dialog with **Save and leave**, **Discard and leave** and **Keep editing**.
+It replaced a `confirm()` that offered only "leave and lose it" or "stay", so a curator who had
+finished had no way to leave *with* their work. **⚠️ A FAILED SAVE DOES NOT NAVIGATE** — the dialog
+stays open and offers a retry, because navigating on a failed save would be a new way to lose pending
+work. `beforeunload` still fires for refresh and tab close but is a **warning only**: the browser
+permits no custom actions and no reliable async save. **⚠️ Modified clicks (cmd/ctrl/shift/alt, middle
+button, `target` other than `_self`) are deliberately NOT intercepted** — they open elsewhere and leave
+the Builder and its pending drags untouched. **⚠️ Known gap: the interceptor covers `a[href]` clicks
+only; programmatic `router.push`, browser back/forward and non-anchor controls are not covered, and on
+those paths pending drags are lost silently.**
 
 Non-drag mutations remain immediate. Before rename, add, remove, per-note section assignment, or
 `Group by subject` writes, the Builder flushes a dirty order first; if that flush fails, the mutation
