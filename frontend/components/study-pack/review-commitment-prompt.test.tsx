@@ -130,4 +130,75 @@ describe("ReviewCommitmentPrompt", () => {
     expect(screen.getByLabelText("Exam date")).toHaveValue("2026-11-08");
     expect(screen.getByTestId("review-commitment-prompt")).toBeInTheDocument();
   });
+
+  it("tracks page abandonment as a dismissal with the exit taken", async () => {
+    (getMe as jest.Mock).mockResolvedValue(examLearner);
+    const rendered = render(<ReviewCommitmentPrompt isFirstCompletedSessionEver noteId="note-1" />);
+    await screen.findByText("When will you come back?");
+
+    globalThis.dispatchEvent(new Event("pagehide"));
+    rendered.unmount();
+
+    expect(trackAnalyticsEvent).toHaveBeenCalledWith({
+      eventType: "REVIEW_COMMITMENT_DISMISSED",
+      entityId: "note-1",
+      metadata: { exit: "pagehide" },
+    });
+  });
+
+  it("tracks at most one dismissal per prompt impression", async () => {
+    (getMe as jest.Mock).mockResolvedValue(examLearner);
+    const rendered = render(<ReviewCommitmentPrompt isFirstCompletedSessionEver noteId="note-1" />);
+    await screen.findByText("When will you come back?");
+
+    globalThis.dispatchEvent(new Event("pagehide"));
+    globalThis.dispatchEvent(new Event("pagehide"));
+    rendered.unmount();
+
+    const dismissals = (trackAnalyticsEvent as jest.Mock).mock.calls.filter(
+      ([event]) => event.eventType === "REVIEW_COMMITMENT_DISMISSED",
+    );
+    expect(dismissals).toHaveLength(1);
+  });
+
+  // ⚠️ Four of the five call sites pass `note?.id ?? null`, so noteId transitions null -> value while
+  // mounted. If the abandonment effect re-subscribed on that change, its CLEANUP would fire a
+  // dismissal the learner never performed. This fails if noteId is ever closed over again.
+  it("does not report abandonment when noteId resolves while the prompt is open", async () => {
+    (getMe as jest.Mock).mockResolvedValue(examLearner);
+    const rendered = render(<ReviewCommitmentPrompt isFirstCompletedSessionEver noteId={null} />);
+    await screen.findByText("When will you come back?");
+
+    rendered.rerender(<ReviewCommitmentPrompt isFirstCompletedSessionEver noteId="note-1" />);
+
+    expect(trackAnalyticsEvent).not.toHaveBeenCalledWith(expect.objectContaining({
+      eventType: "REVIEW_COMMITMENT_DISMISSED",
+    }));
+
+    // ...and the real abandonment is still recorded afterwards, with the RESOLVED id rather than the
+    // stale null — proving the state machine was not latched to "dismissed" by the transition.
+    rendered.unmount();
+    expect(trackAnalyticsEvent).toHaveBeenCalledWith({
+      eventType: "REVIEW_COMMITMENT_DISMISSED",
+      entityId: "note-1",
+      metadata: { exit: "unmount" },
+    });
+  });
+
+  it("does not report a saved decline as abandonment", async () => {
+    (getMe as jest.Mock).mockResolvedValue(examLearner);
+    (updateReviewCommitment as jest.Mock).mockResolvedValue(undefined);
+    const rendered = render(<ReviewCommitmentPrompt isFirstCompletedSessionEver noteId="note-1" />);
+    await screen.findByText("When will you come back?");
+
+    fireEvent.click(screen.getByRole("button", { name: "Not now" }));
+    await waitFor(() => expect(trackAnalyticsEvent).toHaveBeenCalledWith(expect.objectContaining({
+      eventType: "REVIEW_COMMITMENT_DECLINED",
+    })));
+    rendered.unmount();
+
+    expect(trackAnalyticsEvent).not.toHaveBeenCalledWith(expect.objectContaining({
+      eventType: "REVIEW_COMMITMENT_DISMISSED",
+    }));
+  });
 });

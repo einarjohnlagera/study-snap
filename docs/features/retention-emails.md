@@ -31,6 +31,24 @@ Current reminders include:
   - gated by `marketingEmailsEnabled` (default off until the user opts in)
   - deduped by `email_log`
 
+## Review Commitment Prompt
+
+The post-session review commitment prompt is the initial collection surface for `users.review_days`.
+It appears after the learner's first completed review session while the server reports that the
+commitment is outstanding. The learner can save one or more review weekdays (and an exam date when
+that field applies) or choose `Not now`; either saved outcome resolves the current prompt.
+
+The selected weekdays control which daily due-concepts digest sweep may select the learner. A null or
+empty selection retains the existing daily eligibility and the seven-day cooldown still limits sends,
+so the prompt records a scheduling preference rather than turning the digest on. Learners can later
+edit the same weekdays and the digest preference under Settings → Email Preferences; see
+[`email-preferences.md`](email-preferences.md).
+
+Prompt impressions, commits, declines, and abandonments are analytics events. Abandonment is recorded
+on page exit or component unmount, at most once for each rendered impression. Digest landing requires
+an authenticated principal before it is persisted, while analytics events that originate on public
+surfaces may still be anonymous.
+
 ## Persistence
 
 Sent emails are tracked in `email_log`:
@@ -46,8 +64,8 @@ The log prevents same-type reminders from being sent again before cooldown expir
 
 `RetentionEmailScheduler` runs:
 
-- daily for inactivity and weak concept reminders
-- weekly for the weekly study summary and due-concepts digest
+- daily for inactivity, weak concept reminders, and the due-concepts digest
+- weekly for the weekly study summary
 
 Default cron:
 
