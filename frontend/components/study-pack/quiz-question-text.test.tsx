@@ -45,6 +45,66 @@ describe("QuizQuestionText", () => {
     expect(container.textContent).toContain("for the given values.");
   });
 
+  // ⚠️ v0.141.0 — THE REAL PRODUCTION STRING, not an invented one. Verified affected: 44 quiz strings
+  // carry BOTH a currency amount and a formula (6 questions, 26 explanations, 12 working solutions).
+  //
+  // The mechanism: isInlineDollarOpen opens a math span on any `$` not followed by whitespace, so
+  // `$50,000` opens one. findInlineDollarCloseIndex then correctly REJECTS each intervening `$`
+  // preceded by a space -- it walks past `$5,000` and past `$A = ...` -- and closes on the formula's
+  // FINAL `$`, whose previous character is a digit. KaTeX is handed the entire sentence, fails, and
+  // renderMathSegment re-emits the source. The reader sees the raw formula, backslashes and all.
+  it("renders the formula, not raw LaTeX, when a question mentions money AND a formula", () => {
+    const eac = "Calculate the Equivalent Annual Cost (EAC) if an asset costs $50,000, has a salvage "
+      + "value of $5,000 after 5 years, and the interest rate is 10% per year. (Use capital recovery "
+      + "factor formula: $A = P \\times \\frac{i(1+i)^n}{(1+i)^n -1}$)";
+    const { container } = render(<QuizQuestionText text={eac} />);
+
+    // ⚠️ ASSERT WHAT THE READER SEES. The comment at quiz-working-solution.tsx:55-60 records the last
+    // time this heuristic was fixed wrongly: it captured "10-" as LaTeX, which KaTeX renders HAPPILY
+    // because a trailing binary operator is legal -- so the error fallback never fired and the reader
+    // silently saw a subtraction with the dollar signs eaten. A test asserting "something rendered"
+    // or "did not crash" passes under both the defect and the fix.
+    expect(container.querySelector(".katex")).toBeInTheDocument();
+    const visual = container.querySelector(".katex-html");
+    expect(visual?.textContent).not.toContain("\\frac");
+    expect(visual?.textContent).not.toContain("\\times");
+
+    // The money stays money: both amounts must survive as readable text, with their dollar signs.
+    expect(container.textContent).toContain("$50,000");
+    expect(container.textContent).toContain("$5,000");
+    // And the prose must not have been swallowed into the math span.
+    expect(container.textContent).toContain("has a salvage value of");
+    expect(container.textContent).toContain("interest rate is 10% per year");
+  });
+
+  // ⚠️ THE REGRESSION THIS FIX COULD EASILY CAUSE, GUARDED WITH ANOTHER REAL PRODUCTION STRING.
+  // `$10000$` is the model writing a NUMBER as math -- properly paired delimiters around digits. A
+  // naive "digits after $ means currency" rule would skip the opener, leaving the CLOSING `$` to be
+  // read as an opener, which would swallow the rest of the sentence including the real formula. This
+  // string renders correctly today and must still render correctly after the fix.
+  it("still treats a properly-delimited number as math, not currency", () => {
+    const aw = "Calculate the Annual Worth of a project with NPV $10000$, interest rate 5% per year, "
+      + "and a project life of 4 years. Use $CRF=\\frac{i(1+i)^n}{(1+i)^n-1}$.";
+    const { container } = render(<QuizQuestionText text={aw} />);
+
+    expect(container.querySelectorAll(".katex").length).toBeGreaterThanOrEqual(2);
+    const visual = container.querySelector(".katex-html");
+    expect(visual?.textContent).not.toContain("\\frac");
+    expect(container.textContent).toContain("interest rate 5% per year");
+    expect(container.textContent).toContain("a project life of 4 years");
+  });
+
+  // Math that legitimately BEGINS with a digit, also a real production string. `$3x^2$` must not be
+  // mistaken for a currency amount.
+  it("still renders math that begins with a digit", () => {
+    const { container } = render(
+      <QuizQuestionText text={"The function is a product of two functions, $3x^2$ and $\\sin x$."} />,
+    );
+
+    expect(container.querySelectorAll(".katex").length).toBeGreaterThanOrEqual(2);
+    expect(container.querySelector(".katex-html")?.textContent).not.toContain("\\sin");
+  });
+
   // The counterpart guard: normalizeBareMath's first design rule is "NEVER make things worse." A
   // bare backslash that is NOT a known math command must pass through untouched, or Windows paths
   // and literal "\n" in question text would be mangled into math.
