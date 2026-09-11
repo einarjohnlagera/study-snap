@@ -723,19 +723,53 @@ describe("CollectionDetailPageClient", () => {
       notesAdded: 1,
       subjectPlansAdded: 0,
       skippedCount: 0,
-      changes: [],
+      changes: [
+        {
+          type: "ADDED_NOTE",
+          sourcePlanId: "source-1",
+          sourceNoteId: "source-note-3",
+          subjectTitle: "Biology",
+          noteTitle: "Genetics",
+          previousValue: null,
+          currentValue: "Genetics",
+          applied: true,
+        },
+        {
+          type: "REORDERED",
+          sourcePlanId: "source-1",
+          sourceNoteId: "source-note-1",
+          subjectTitle: "Biology",
+          noteTitle: "Cell Respiration",
+          previousValue: "0",
+          currentValue: "1",
+          applied: false,
+        },
+      ],
     });
 
     render(<CollectionDetailPageClient collectionId="collection-1" />);
 
     expect(await screen.findByText("Official Review Set updates available")).toBeInTheDocument();
-    expect(screen.getByText("Genetics in Biology")).toBeInTheDocument();
-    expect(screen.getByText("Changed upstream — no action taken")).toBeInTheDocument();
+    expect(screen.getByText("1 new topic available")).toBeInTheDocument();
+    expect(screen.getByText("1 other curriculum change")).toBeInTheDocument();
+    expect(screen.queryByText("Genetics")).not.toBeInTheDocument();
+    expect(screen.queryByText(/upstream/i)).not.toBeInTheDocument();
     expect(applyReviewSetSourceUpdate).not.toHaveBeenCalled();
 
-    fireEvent.click(screen.getByRole("button", { name: "Apply additions" }));
+    fireEvent.click(screen.getByRole("button", { name: "Review update" }));
+    const dialog = screen.getByRole("dialog", { name: "Review update" });
+    expect(within(dialog).getByText("Biology · 1 new topic")).toBeInTheDocument();
+    expect(within(dialog).getByText("Genetics")).toBeInTheDocument();
+    expect(within(dialog).getByText("Other curriculum changes")).toBeInTheDocument();
+    expect(within(dialog).getByText("Cell Respiration in Biology was reordered in the Official Review Set")).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByText("Close"));
+
+    fireEvent.click(screen.getByRole("button", { name: "Add 1 new topic" }));
 
     await waitFor(() => expect(applyReviewSetSourceUpdate).toHaveBeenCalledWith("collection-1"));
+    expect(await screen.findByText("1 new topic added. Your existing work was kept.")).toBeInTheDocument();
+    expect(screen.queryByText("1 new topic available")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Add 1 new topic" })).not.toBeInTheDocument();
   });
 
   it("renders a detached adoption as usable ordinary information with no update action", async () => {
@@ -751,11 +785,260 @@ describe("CollectionDetailPageClient", () => {
       changes: [],
     });
 
-    render(<CollectionDetailPageClient collectionId="collection-1" />);
+    const rendered = render(<CollectionDetailPageClient collectionId="collection-1" />);
 
     expect(await screen.findByText("Detached from source")).toBeInTheDocument();
     expect(screen.getByText(/still yours to use/)).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Apply additions" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Add \d+ new topics?/ })).not.toBeInTheDocument();
+
+    // A detached-only absence assertion passes against any button label. Render a connected control
+    // so this test also fails if the retired label is restored.
+    rendered.unmount();
+    (getCollection as jest.Mock).mockResolvedValue(collection({ sourcePlanId: "source-1" }));
+    (getReviewSetSourceUpdate as jest.Mock).mockResolvedValue({
+      collectionId: "collection-1",
+      sourceState: "CONNECTED",
+      status: "UPDATES_AVAILABLE",
+      additionsAvailable: 1,
+      notesAdded: 0,
+      subjectPlansAdded: 0,
+      skippedCount: 0,
+      changes: [{
+        type: "ADDED_NOTE",
+        sourcePlanId: "source-1",
+        sourceNoteId: "source-note-3",
+        subjectTitle: "Biology",
+        noteTitle: "Genetics",
+        previousValue: null,
+        currentValue: "Genetics",
+        applied: false,
+      }],
+    });
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+    expect(await screen.findByRole("button", { name: "Add 1 new topic" })).toBeInTheDocument();
+  });
+
+  it("counts only added notes in the action label and groups them by Subject Plan", async () => {
+    (getCollection as jest.Mock).mockResolvedValue(collection({ sourcePlanId: "source-1" }));
+    (getReviewSetSourceUpdate as jest.Mock).mockResolvedValue({
+      collectionId: "collection-1",
+      sourceState: "CONNECTED",
+      status: "UPDATES_AVAILABLE",
+      additionsAvailable: 6,
+      notesAdded: 0,
+      subjectPlansAdded: 0,
+      skippedCount: 0,
+      changes: [
+        {
+          type: "ADDED_SUBJECT_PLAN",
+          sourcePlanId: "biology-plan",
+          sourceNoteId: null,
+          subjectTitle: "Biology",
+          noteTitle: null,
+          previousValue: null,
+          currentValue: "Biology",
+          applied: false,
+        },
+        ...["Genetics", "Cell Division"].map((noteTitle, index) => ({
+          type: "ADDED_NOTE" as const,
+          sourcePlanId: "biology-plan",
+          sourceNoteId: `biology-note-${index}`,
+          subjectTitle: "Biology",
+          noteTitle,
+          previousValue: null,
+          currentValue: noteTitle,
+          applied: false,
+        })),
+        {
+          type: "ADDED_SUBJECT_PLAN",
+          sourcePlanId: "chemistry-plan",
+          sourceNoteId: null,
+          subjectTitle: "Chemistry",
+          noteTitle: null,
+          previousValue: null,
+          currentValue: "Chemistry",
+          applied: false,
+        },
+        {
+          type: "ADDED_NOTE",
+          sourcePlanId: "chemistry-plan",
+          sourceNoteId: "chemistry-note-1",
+          subjectTitle: "Chemistry",
+          noteTitle: "Organic Chemistry",
+          previousValue: null,
+          currentValue: "Organic Chemistry",
+          applied: false,
+        },
+        {
+          type: "ADDED_SUBJECT_PLAN",
+          sourcePlanId: "physics-plan",
+          sourceNoteId: null,
+          subjectTitle: "Physics",
+          noteTitle: null,
+          previousValue: null,
+          currentValue: "Physics",
+          applied: false,
+        },
+      ],
+    });
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    expect(await screen.findByRole("button", { name: "Add 3 new topics" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Add 6 new topics" })).not.toBeInTheDocument();
+    expect(screen.getByText("3 new topics across 2 subjects")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Review update" }));
+    const dialog = screen.getByRole("dialog", { name: "Review update" });
+    expect(within(dialog).getByRole("button", { name: "Biology · 2 new topics" })).toHaveAttribute("aria-expanded", "true");
+    const chemistryGroup = within(dialog).getByRole("button", { name: "Chemistry · 1 new topic" });
+    expect(within(dialog).getByRole("button", { name: "Physics · New Subject Plan" })).toBeInTheDocument();
+    expect(chemistryGroup).toHaveAttribute("aria-expanded", "false");
+    expect(within(dialog).queryByText("Organic Chemistry")).not.toBeInTheDocument();
+    fireEvent.click(chemistryGroup);
+    expect(within(dialog).getByText("Organic Chemistry")).toBeInTheDocument();
+  });
+
+  it("labels the action by Subject Plan when the only addition has no notes yet", async () => {
+    (getCollection as jest.Mock).mockResolvedValue(collection({ sourcePlanId: "source-1" }));
+    (getReviewSetSourceUpdate as jest.Mock).mockResolvedValue({
+      collectionId: "collection-1",
+      sourceState: "CONNECTED",
+      status: "UPDATES_AVAILABLE",
+      additionsAvailable: 1,
+      notesAdded: 0,
+      subjectPlansAdded: 0,
+      skippedCount: 0,
+      changes: [{
+        type: "ADDED_SUBJECT_PLAN",
+        sourcePlanId: "physics-plan",
+        sourceNoteId: null,
+        subjectTitle: "Physics",
+        noteTitle: null,
+        previousValue: null,
+        currentValue: "Physics",
+        applied: false,
+      }],
+    });
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    const button = await screen.findByRole("button", { name: "Add 1 new Subject Plan" });
+    expect(screen.queryByRole("button", { name: /Add 0 new topics?/ })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Review update" }));
+    const dialog = screen.getByRole("dialog", { name: "Review update" });
+    expect(within(dialog).getByRole("button", { name: "Add 1 new Subject Plan" })).toBeInTheDocument();
+
+    fireEvent.click(button);
+    await waitFor(() => expect(applyReviewSetSourceUpdate).toHaveBeenCalledWith("collection-1"));
+  });
+
+  it("partitions unavailable topics away from other curriculum changes", async () => {
+    (getCollection as jest.Mock).mockResolvedValue(collection({ sourcePlanId: "source-1" }));
+    (getReviewSetSourceUpdate as jest.Mock).mockResolvedValue({
+      collectionId: "collection-1",
+      sourceState: "CONNECTED",
+      status: "UPDATES_AVAILABLE",
+      additionsAvailable: 0,
+      notesAdded: 0,
+      subjectPlansAdded: 0,
+      skippedCount: 1,
+      changes: [{
+        type: "SKIPPED_NOT_PUBLIC",
+        sourcePlanId: "source-1",
+        sourceNoteId: "source-note-private",
+        subjectTitle: "Biology",
+        noteTitle: "Private Genetics",
+        previousValue: null,
+        currentValue: null,
+        applied: false,
+      }],
+    });
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    expect(await screen.findByText("1 topic is no longer available")).toBeInTheDocument();
+    expect(screen.queryByText("Private Genetics in Biology is no longer public and will be skipped")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Review update" }));
+
+    const dialog = screen.getByRole("dialog", { name: "Review update" });
+    expect(within(dialog).getByRole("heading", { name: "Unavailable" })).toBeInTheDocument();
+    expect(within(dialog).getByText("Private Genetics in Biology is no longer public and will be skipped")).toBeInTheDocument();
+    expect(within(dialog).queryByRole("heading", { name: "Other curriculum changes" })).not.toBeInTheDocument();
+    expect(document.body).not.toHaveTextContent(/no action taken|upstream/i);
+  });
+
+  it("aggregates repeated curriculum changes and reveals their rows only on request", async () => {
+    (getCollection as jest.Mock).mockResolvedValue(collection({ sourcePlanId: "source-1" }));
+    (getReviewSetSourceUpdate as jest.Mock).mockResolvedValue({
+      collectionId: "collection-1",
+      sourceState: "CONNECTED",
+      status: "UPDATES_AVAILABLE",
+      additionsAvailable: 0,
+      notesAdded: 0,
+      subjectPlansAdded: 0,
+      skippedCount: 0,
+      changes: Array.from({ length: 5 }, (_, index) => ({
+        type: "REORDERED" as const,
+        sourcePlanId: "source-1",
+        sourceNoteId: `source-note-${index}`,
+        subjectTitle: "Biology",
+        noteTitle: `Reordered topic ${index + 1}`,
+        previousValue: String(index),
+        currentValue: String(index + 1),
+        applied: false,
+      })),
+    });
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    expect(await screen.findByText("5 other curriculum changes")).toBeInTheDocument();
+    expect(screen.queryByText(/Reordered topic 1/)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Review update" }));
+
+    const dialog = screen.getByRole("dialog", { name: "Review update" });
+    expect(within(dialog).getByText("5 topics were reordered in the Official Review Set")).toBeInTheDocument();
+    expect(within(dialog).queryByText(/Reordered topic 1/)).not.toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Show details" }));
+    expect(within(dialog).getByText("Reordered topic 1 in Biology was reordered in the Official Review Set")).toBeInTheDocument();
+    expect(within(dialog).getAllByText(/Reordered topic \d in Biology was reordered/)).toHaveLength(5);
+  });
+
+  it("keeps review optional and surfaces an apply failure inside the open modal", async () => {
+    (getCollection as jest.Mock).mockResolvedValue(collection({ sourcePlanId: "source-1" }));
+    (getReviewSetSourceUpdate as jest.Mock).mockResolvedValue({
+      collectionId: "collection-1",
+      sourceState: "CONNECTED",
+      status: "UPDATES_AVAILABLE",
+      additionsAvailable: 1,
+      notesAdded: 0,
+      subjectPlansAdded: 0,
+      skippedCount: 0,
+      changes: [{
+        type: "ADDED_NOTE",
+        sourcePlanId: "source-1",
+        sourceNoteId: "source-note-3",
+        subjectTitle: "Biology",
+        noteTitle: "Genetics",
+        previousValue: null,
+        currentValue: "Genetics",
+        applied: false,
+      }],
+    });
+    (applyReviewSetSourceUpdate as jest.Mock).mockRejectedValue(new Error("Could not add these topics."));
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+    fireEvent.click(await screen.findByRole("button", { name: "Review update" }));
+    fireEvent.click(within(screen.getByRole("dialog", { name: "Review update" })).getByText("Close"));
+    expect(screen.queryByRole("dialog", { name: "Review update" })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Review update" }));
+    const dialog = screen.getByRole("dialog", { name: "Review update" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Add 1 new topic" }));
+
+    await waitFor(() => expect(applyReviewSetSourceUpdate).toHaveBeenCalledWith("collection-1"));
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent("Could not add these topics.");
   });
 
   it("keeps Adopted near the title and renders Primary as a hero accent", async () => {

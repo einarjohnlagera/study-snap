@@ -85,6 +85,14 @@ verified findings, and the rejected alternatives are in
 
 ### Shipped
 
+- **The adopted Review Set update panel now summarizes meaning instead of exposing raw diff rows.**
+  Changes are partitioned into new topics, unavailable topics, and other curriculum changes;
+  repeated reorder, retire, and move rows collapse to counts with full details available in the
+  new **Review update** modal, grouped by Subject Plan. The main card stays compact, its headline
+  reflects changes in any category, and learner-facing copy no longer says “upstream.” The action
+  is now **Add N new topics**, with N derived only from `ADDED_NOTE` rows so Subject Plan summary
+  rows cannot double-count it; the success toast reports the actual topic count and retains “Your
+  existing work was kept.”
 - **Notification rows are now coherent, single-target cards.** Unread rows have a theme-safe
   background tint, dot, and slightly stronger title; every row shows a relative timestamp. The
   title/body region is now the one primary control: a safe destination renders as a native link

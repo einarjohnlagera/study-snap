@@ -904,8 +904,15 @@ could not be repaired by re-adopting.
 
 `GET /collections/{id}/source-update` inspects an owned adoption. It returns an explicit
 `UPDATES_AVAILABLE`, `ALREADY_UP_TO_DATE`, or `DETACHED_FROM_SOURCE` state and lists both additions and
-surface-only upstream changes. `POST /collections/{id}/source-update` is the learner's explicit choice
+surface-only source changes. `POST /collections/{id}/source-update` is the learner's explicit choice
 to apply the additions. Page load only inspects; it never applies.
+
+The learner-facing update card partitions the payload into **New topics**, **Unavailable**, and
+**Other curriculum changes**. The collection page shows compact counts; **Review update** opens the
+Subject Plan-grouped detail. Repeated `REORDERED`, `RETIRED`, and `MOVED` rows collapse to a count
+past the display threshold, with their complete per-topic list behind **Show details**. The additive
+action is labelled **Add N new topics**, where N counts `ADDED_NOTE` rows only; the separate
+`ADDED_SUBJECT_PLAN` summary rows do not inflate the topic count.
 
 | Source change | Behaviour |
 |---|---|
@@ -929,7 +936,7 @@ placements became invisible to the diff, so every source item looked new.
 
 **⚠️ APPLYING ACKNOWLEDGES ONLY WHAT IT APPLIED.** A pass re-baselines the source facts for plans that
 actually received an addition, and nothing else. Acknowledging every matched plan meant a learner who
-pressed *Apply additions* to get three new notes silently accepted an unrelated rename as their new
+pressed *Add 3 new topics* to get three new notes silently accepted an unrelated rename as their new
 baseline — never applied, never shown again, and unrecoverable because the previous value was
 overwritten. A structural change the learner has not acted on stays surfaced on every visit.
 
