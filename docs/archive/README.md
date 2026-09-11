@@ -16,7 +16,11 @@ needed.
   invariants, pre-signoff test-gap lists) that this archive preserves in full.
 - **`ROADMAP_ARCHIVE.md`** — full `docs/product/ROADMAP.md` "(released)" per-version retrospective
   sections. `ROADMAP.md` itself stays forward-looking (current baseline, backlogs, future
-  directions, open candidates) plus a one-line pointer per archived version.
+  directions, open candidates) plus a one-line pointer per archived version. **Also holds a
+  "Backlog Index — archived rows" section** (added 2026-09-11): six Backlog Index rows whose
+  status was unambiguously shipped/resolved with no live checkpoint and no remaining action,
+  moved per `docs/claude-plans/context-doc-token-reduction-plan.md` item 6 — the first time that
+  item ran, having been deliberately deferred at `v0.126.0` pending per-row judgment.
 - **`STUDY_PLAN_ARCHITECTURE_V2.md`** / **`STUDY_PLAN_HIERARCHY_PLAN.md`** — one-time vision and
   architecture-audit docs written while planning the Goal→Subject hierarchy. The design they
   describe shipped by v0.33.1–v0.34.0; still referenced by ROADMAP.md's "Deeper plan nesting"
