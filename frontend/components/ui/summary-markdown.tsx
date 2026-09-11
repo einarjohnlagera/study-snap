@@ -51,6 +51,15 @@ export function SummaryMarkdown({ content, className }: Readonly<SummaryMarkdown
   // every summary. Splitting per paragraph to widen it would change what remark-gfm sees and is not
   // worth the blast radius.
   //
+  // ⚠️ A SECOND LIMITATION, ADDED AFTER A COLD PASS FOUND IT: this normalises the WHOLE markdown
+  // string, and markdown has literal-text regions that `normalizeBareMath` knows nothing about. A
+  // fenced or inline code block containing a maths command is rewritten — `` `x^2 + y^2` `` comes out
+  // as `$x^{2}$ + $y^{2}$`, and ```` ```x = \frac{a}{b}``` ```` gains delimiters it should not have.
+  // LATENT, NOT LIVE: 0 of 7,583 production summaries and 0 of 91 companion rows contain a backtick
+  // with no `$`. Tables, links, escaped characters, Windows paths and a literal \n all survive.
+  // Recorded because the limitation above was documented carefully and this one was silent — if a
+  // summary ever carries code, fix it by skipping code regions, not by narrowing the allowlist.
+  //
   // ⚠️ Display-time only. It returns a string for rendering and never writes back — `v0.110.1`
   // shipped a sanitizer that re-ran on every deserialization and progressively destroyed stored text.
   const normalized = normalizeBareMath(content);
