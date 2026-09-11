@@ -123,6 +123,21 @@ the most-touched areas.
 **Costs nothing, leave alone:** `docs/archive/` (602k chars) is referenced by no instruction, and
 `docs/claude-plans/` loads only when a session names a file.
 
+**⚠️ CORRECTION, found at the `v0.142.0` signoff: `GPT_CONTEXT.md` DOES have a runaway line, and it
+is invisible to the detection method used above.** The `"No runaway line"` verdict for this file was
+reached by the same method that found `CLAUDE.md`'s — grepping for the literal `Previous:` chain
+marker. `GPT_CONTEXT.md`'s `Last updated:` line (line 6) chains release summaries back to at least
+`v0.110.2` using **inconsistent, non-greppable transition phrases** (`Previously v0.140.0`, `PRIOR
+RELEASE — v0.138.0`, `*(previously v0.120.0)*`, `Previously:`) rather than one fixed marker, so a
+`Previous:`-pattern grep returns **zero** hits and the line reads as "no chain" when it has one
+anyway. **Measured at signoff: 56,303 characters on one line, zero `Previous:` markers.** This is
+why it survived the `v0.126.0` pass that fixed `CLAUDE.md`'s identical shape — that pass's own
+detection method could not see this file's version of the same problem. Not resolved here: fixing
+it needs the same REPLACE-not-append discipline `CLAUDE.md`'s kickoff step 3 now enforces, applied
+to whichever step re-stamps `GPT_CONTEXT.md` at signoff, plus an archive destination for the
+displaced history (this file does not have its own `_ARCHIVE.md` today). Should become its own item
+in the plan below once items 1–5 are complete.
+
 ---
 
 ## 6. Plan

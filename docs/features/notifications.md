@@ -118,6 +118,17 @@ The desktop panel closes on **outside click** and on **Escape**, matching every 
 avatar menu, the theme toggle, the export menu). There is deliberately **no `Close` button** — it
 existed only because closing was otherwise impossible.
 
+**⚠️ The notification body is the primary activation target.** When `cta_path` passes
+`toSafeRelativePath`, the body is a real link whose accessible name is the notification title;
+activating it marks the row read, closes the panel, and navigates. With no safe destination, the
+body is a button that marks the row read and leaves the panel open. There is no separate CTA link
+or **Mark read** button. The dismiss button remains a sibling outside the body's hit area, so it
+can hide an unread row without also reading or opening it.
+
+The same body interaction renders in the desktop dropdown and mobile `AppModal` sheet through the
+shared `rows` block. The desktop and mobile close-path tests both activate that body and assert the
+panel is gone; the mobile test sets `matchMedia` to `matches: true` so the sheet branch executes.
+
 **⚠️ THE OUTSIDE-CLICK REF WRAPS THE BELL AND THE PANEL TOGETHER, AND THAT IS LOAD-BEARING.** If it
 wrapped only the panel, the bell would count as "outside": `mousedown` would close the panel and the
 bell's own `click` would immediately reopen **and refetch** it, so one click would flicker instead of
@@ -125,7 +136,7 @@ closing. A test that clicks the page *body* passes while the bell double-fires �
 dispatch `mousedown` **and** `click` on the bell itself, and assert the **request count** rather than
 what is on screen.
 
-**⚠️ MOBILE IS UNCHANGED AND MUST STAY THAT WAY.** That path renders `AppModal`, which already handles
+**⚠️ The mobile closing machinery is unchanged.** That path renders `AppModal`, which already handles
 its own backdrop and Escape; the desktop handler is gated on `!isMobile` so the two cannot fight.
 
 **Trigger accessibility:** the `aria-label` stays **stable** and `aria-expanded` carries the state,
@@ -162,8 +173,14 @@ stale the moment the learner exits.
 `read_at` is awareness; `dismissed_at` is inbox visibility. Both are idempotent — setting an already
 -set timestamp is a no-op.
 
-**⚠️ Rows are marked read INDIVIDUALLY, on open or on CTA click. The panel must NEVER mark-all-read on
-open** — that silently discards the one signal a learner needs for a pending request.
+Unread rows use a theme-safe `bg-muted` tint, a small dot, and slightly stronger title weight. Read
+rows keep the neutral background, normal title weight, full text contrast, and remain navigable.
+Every row also shows a secondary relative timestamp derived locally from `createdAt`.
+
+**⚠️ Rows are marked read INDIVIDUALLY, only when their body is explicitly activated. The panel must
+NEVER mark-all-read on open** — that silently discards the one signal a learner needs for a pending
+request. Read and dismiss stay independent: dismissing does not mark read, and reading does not
+dismiss.
 
 ### ⚠️ The badge decrement reads a SERVER-PROVIDED field, never the type string
 

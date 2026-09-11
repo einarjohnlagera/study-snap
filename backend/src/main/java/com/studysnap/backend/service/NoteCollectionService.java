@@ -1219,24 +1219,31 @@ public class NoteCollectionService {
                 if (!Objects.equals(child.getParentCollectionId(), inspection.adoptedRoot().getId())) {
                     continue;
                 }
+                // A concurrent pass landing this first is still "applied" from the caller's point of
+                // view — the Subject Plan exists either way — so appliedKeys marks it regardless of
+                // which branch created it. additionsResolvedByConcurrentPass is separate: it only
+                // adjusts additionsRemaining so the response doesn't imply this pass has more to add.
+                appliedKeys.add(changeKey("ADDED_SUBJECT_PLAN", pending.sourcePlan().getId(), null));
                 if (created.created()) {
                     subjectPlansAdded++;
-                    appliedKeys.add(changeKey("ADDED_SUBJECT_PLAN", pending.sourcePlan().getId(), null));
                 } else {
                     additionsResolvedByConcurrentPass++;
                 }
                 for (NoteCollectionItemEntity sourceItem : pending.placements()) {
                     try {
-                        if (applyPlacementAddition(
+                        boolean placementApplied = applyPlacementAddition(
                                 new PendingPlacementAddition(child, pending.sourcePlan(), sourceItem),
                                 userId
-                        )) {
+                        );
+                        // Only reached without throwing, so the placement genuinely exists now — by
+                        // this call or a concurrent one — and appliedKeys must mark it regardless.
+                        appliedKeys.add(changeKey(
+                                "ADDED_NOTE",
+                                pending.sourcePlan().getId(),
+                                sourceItem.getNoteId()
+                        ));
+                        if (placementApplied) {
                             notesAdded++;
-                            appliedKeys.add(changeKey(
-                                    "ADDED_NOTE",
-                                    pending.sourcePlan().getId(),
-                                    sourceItem.getNoteId()
-                            ));
                         } else {
                             additionsResolvedByConcurrentPass++;
                         }
@@ -1266,13 +1273,16 @@ public class NoteCollectionService {
 
         for (PendingPlacementAddition pending : inspection.placementAdditions()) {
             try {
-                if (applyPlacementAddition(pending, userId)) {
+                boolean placementApplied = applyPlacementAddition(pending, userId);
+                // Only reached without throwing, so the placement genuinely exists now — by this
+                // call or a concurrent one — and appliedKeys must mark it regardless.
+                appliedKeys.add(changeKey(
+                        "ADDED_NOTE",
+                        pending.sourcePlan().getId(),
+                        pending.sourceItem().getNoteId()
+                ));
+                if (placementApplied) {
                     notesAdded++;
-                    appliedKeys.add(changeKey(
-                            "ADDED_NOTE",
-                            pending.sourcePlan().getId(),
-                            pending.sourceItem().getNoteId()
-                    ));
                     appliedPlanIds.add(pending.adoptedPlan().getId());
                 } else {
                     additionsResolvedByConcurrentPass++;

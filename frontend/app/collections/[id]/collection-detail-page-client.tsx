@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { DndContext, PointerSensor, KeyboardSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
 import { SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { ArrowRight, ChevronDown, GripVertical, Globe, Lock, MoreHorizontal, Search, Settings2, Star, X } from "lucide-react";
+import { ArrowRight, ChevronDown, GripVertical, Globe, Lock, MoreHorizontal, Settings2, Star, X } from "lucide-react";
 import { AppModal } from "@/components/ui/app-modal";
 import { BackLink } from "@/components/ui/back-link";
 import { Button } from "@/components/ui/button";
@@ -34,7 +34,6 @@ import {
   sortCollectionItemsByPosition,
 } from "@/lib/collection-exam";
 import {
-  addCollectionItems,
   applyReviewSetSourceUpdate,
   ApiRequestError,
   clearCollectionTargetDate,
@@ -72,7 +71,6 @@ import {
   type NoteConceptCountsResponse,
   type NoteCollectionDetail,
   type NoteCollectionItem,
-  type NoteListItemResponse,
   type NoteVisibility,
   type PlanReadinessResponse,
   type ReviewSetUpdateChange,
@@ -634,16 +632,272 @@ function sourceUpdateChangeText(change: ReviewSetUpdateChange): string {
     case "ADDED_SUBJECT_PLAN":
       return change.subjectTitle ?? "A new Subject Plan";
     case "RENAMED":
-      return `${note}${subject} was renamed upstream`;
+      return `${note}${subject} was renamed in the Official Review Set`;
     case "REORDERED":
-      return `${note}${subject} was reordered upstream`;
+      return `${note}${subject} was reordered in the Official Review Set`;
     case "RETIRED":
-      return `${note}${subject} was retired upstream`;
+      return `${note}${subject} was retired from the Official Review Set`;
     case "MOVED":
-      return `${note}${subject} moved upstream`;
+      return `${note}${subject} moved in the Official Review Set`;
     case "SKIPPED_NOT_PUBLIC":
       return `${note}${subject} is no longer public and will be skipped`;
   }
+}
+
+type ReviewSetChangeGroups = {
+  additions: ReviewSetUpdateChange[];
+  unavailable: ReviewSetUpdateChange[];
+  otherChanges: ReviewSetUpdateChange[];
+};
+
+type ReviewSetSubjectGroup = {
+  key: string;
+  title: string;
+  changes: ReviewSetUpdateChange[];
+  topicCount: number;
+};
+
+const REVIEW_SET_AGGREGATION_THRESHOLD = 4;
+
+function groupReviewSetChanges(changes: ReviewSetUpdateChange[]): ReviewSetChangeGroups {
+  const groups: ReviewSetChangeGroups = {
+    additions: [],
+    unavailable: [],
+    otherChanges: [],
+  };
+  changes.forEach((change) => {
+    switch (change.type) {
+      case "ADDED_NOTE":
+      case "ADDED_SUBJECT_PLAN":
+        groups.additions.push(change);
+        break;
+      case "SKIPPED_NOT_PUBLIC":
+        groups.unavailable.push(change);
+        break;
+      case "RENAMED":
+      case "REORDERED":
+      case "RETIRED":
+      case "MOVED":
+        groups.otherChanges.push(change);
+        break;
+      default: {
+        const unhandledType: never = change.type;
+        throw new Error(`Unhandled Review Set change type: ${unhandledType}`);
+      }
+    }
+  });
+  return groups;
+}
+
+function groupAdditionsBySubject(additions: ReviewSetUpdateChange[]): ReviewSetSubjectGroup[] {
+  const groups = new Map<string, ReviewSetSubjectGroup>();
+  additions.forEach((change) => {
+    const title = change.subjectTitle ?? "Other topics";
+    const key = `${change.sourcePlanId}:${title}`;
+    const existing = groups.get(key);
+    if (existing) {
+      existing.changes.push(change);
+      if (change.type === "ADDED_NOTE") {
+        existing.topicCount += 1;
+      }
+      return;
+    }
+    groups.set(key, {
+      key,
+      title,
+      changes: [change],
+      topicCount: change.type === "ADDED_NOTE" ? 1 : 0,
+    });
+  });
+  return Array.from(groups.values());
+}
+
+function aggregatedChangeText(type: "REORDERED" | "RETIRED" | "MOVED", count: number): string {
+  switch (type) {
+    case "REORDERED":
+      return `${count} topics were reordered in the Official Review Set`;
+    case "RETIRED":
+      return `${count} topics were retired from the Official Review Set`;
+    case "MOVED":
+      return `${count} topics moved in the Official Review Set`;
+  }
+}
+
+function ReviewSetUpdateDetailModal({
+  isOpen,
+  update,
+  groups,
+  subjectGroups,
+  topicCount,
+  addLabel,
+  applying,
+  error,
+  onClose,
+  onApply,
+}: Readonly<{
+  isOpen: boolean;
+  update: ReviewSetUpdateResponse;
+  groups: ReviewSetChangeGroups;
+  subjectGroups: ReviewSetSubjectGroup[];
+  topicCount: number;
+  addLabel: string;
+  applying: boolean;
+  error: string | null;
+  onClose: () => void;
+  onApply: () => void;
+}>) {
+  const [expandedSubjectGroups, setExpandedSubjectGroups] = useState<Record<string, boolean>>({});
+  const [showOtherDetails, setShowOtherDetails] = useState(false);
+  const fanOutTypes = ["REORDERED", "RETIRED", "MOVED"] as const;
+  const fanOutCounts = new Map(fanOutTypes.map((type) => [
+    type,
+    groups.otherChanges.filter((change) => change.type === type).length,
+  ]));
+  const aggregatedTypes = fanOutTypes.filter(
+    (type) => (fanOutCounts.get(type) ?? 0) > REVIEW_SET_AGGREGATION_THRESHOLD,
+  );
+  const directOtherChanges = groups.otherChanges.filter((change) => (
+    change.type === "RENAMED"
+    || (change.type === "REORDERED" && !aggregatedTypes.includes(change.type))
+    || (change.type === "RETIRED" && !aggregatedTypes.includes(change.type))
+    || (change.type === "MOVED" && !aggregatedTypes.includes(change.type))
+  ));
+  const aggregatedDetails = groups.otherChanges.filter((change) => (
+    (change.type === "REORDERED" && aggregatedTypes.includes("REORDERED"))
+    || (change.type === "RETIRED" && aggregatedTypes.includes("RETIRED"))
+    || (change.type === "MOVED" && aggregatedTypes.includes("MOVED"))
+  ));
+
+  return (
+    <AppModal
+      isOpen={isOpen}
+      title="Review update"
+      description="See what changed in the Official Review Set before deciding whether to add new topics."
+      onClose={onClose}
+      actions={(
+        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <Button type="button" variant="outline" disabled={applying} onClick={onClose}>Close</Button>
+          {update.additionsAvailable > 0 ? (
+            <Button type="button" loading={applying} loadingText="Adding topics…" onClick={onApply}>
+              {addLabel}
+            </Button>
+          ) : null}
+        </div>
+      )}
+    >
+      <div className="space-y-5">
+        <div className="space-y-2">
+          <ul className="space-y-1 text-sm font-medium text-foreground/80">
+            {topicCount > 0 ? <li>{topicCount} new {topicCount === 1 ? "topic" : "topics"}</li> : null}
+            {groups.unavailable.length > 0 ? (
+              <li>{groups.unavailable.length} {groups.unavailable.length === 1 ? "topic is" : "topics are"} no longer available</li>
+            ) : null}
+            {groups.otherChanges.length > 0 ? (
+              <li>{groups.otherChanges.length} other curriculum {groups.otherChanges.length === 1 ? "change" : "changes"}</li>
+            ) : null}
+          </ul>
+          <p className="text-sm text-foreground/70">Your notes, sections, order, and study history stay unchanged.</p>
+        </div>
+
+        {subjectGroups.length > 0 ? (
+          <section aria-labelledby="review-update-new-topics" className="space-y-3">
+            <h3 id="review-update-new-topics" className="text-sm font-semibold">New topics</h3>
+            {subjectGroups.map((group, index) => {
+              const expanded = subjectGroups.length === 1 || (expandedSubjectGroups[group.key] ?? index === 0);
+              const heading = group.topicCount > 0
+                ? `${group.title} · ${group.topicCount} new ${group.topicCount === 1 ? "topic" : "topics"}`
+                : `${group.title} · New Subject Plan`;
+              return (
+                <div key={group.key} className="rounded-lg border border-border bg-muted/20 p-3">
+                  {subjectGroups.length > 1 ? (
+                    <button
+                      type="button"
+                      className="flex w-full items-center justify-between gap-3 text-left text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
+                      aria-expanded={expanded}
+                      onClick={() => setExpandedSubjectGroups((current) => ({
+                        ...current,
+                        [group.key]: !expanded,
+                      }))}
+                    >
+                      <span>{heading}</span>
+                      <span aria-hidden="true">{expanded ? "−" : "+"}</span>
+                    </button>
+                  ) : (
+                    <p className="text-sm font-medium">{heading}</p>
+                  )}
+                  {expanded ? (
+                    <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-foreground/75">
+                      {group.changes.map((change) => (
+                        <li key={`${change.type}:${change.sourcePlanId}:${change.sourceNoteId ?? "subject"}`}>
+                          {change.type === "ADDED_NOTE"
+                            ? change.noteTitle ?? "A topic"
+                            : `${change.subjectTitle ?? "A Subject Plan"} was added as a Subject Plan`}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+                </div>
+              );
+            })}
+          </section>
+        ) : null}
+
+        {groups.unavailable.length > 0 ? (
+          <section aria-labelledby="review-update-unavailable">
+            <h3 id="review-update-unavailable" className="text-sm font-semibold">Unavailable</h3>
+            <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-foreground/75">
+              {groups.unavailable.map((change) => (
+                <li key={`${change.type}:${change.sourcePlanId}:${change.sourceNoteId ?? "subject"}`}>
+                  {sourceUpdateChangeText(change)}
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : null}
+
+        {groups.otherChanges.length > 0 ? (
+          <section aria-labelledby="review-update-other-changes">
+            <h3 id="review-update-other-changes" className="text-sm font-semibold">Other curriculum changes</h3>
+            <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-foreground/75">
+              {aggregatedTypes.map((type) => (
+                <li key={type}>{aggregatedChangeText(type, fanOutCounts.get(type) ?? 0)}</li>
+              ))}
+              {directOtherChanges.map((change) => (
+                <li key={`${change.type}:${change.sourcePlanId}:${change.sourceNoteId ?? "subject"}`}>
+                  {sourceUpdateChangeText(change)}
+                </li>
+              ))}
+            </ul>
+            {aggregatedDetails.length > 0 ? (
+              <div className="mt-3">
+                <button
+                  type="button"
+                  className="text-sm font-medium text-blue-600 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 dark:text-blue-400"
+                  aria-expanded={showOtherDetails}
+                  onClick={() => setShowOtherDetails((current) => !current)}
+                >
+                  {showOtherDetails ? "Hide details" : "Show details"}
+                </button>
+                {showOtherDetails ? (
+                  <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-foreground/75">
+                    {aggregatedDetails.map((change) => (
+                      <li key={`${change.type}:${change.sourcePlanId}:${change.sourceNoteId ?? "subject"}`}>
+                        {sourceUpdateChangeText(change)}
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+              </div>
+            ) : null}
+          </section>
+        ) : null}
+
+        {/* The page-level mutation error sits behind AppModal's fixed backdrop, so an apply failure
+            must also render in the open inspection surface. This reuses the same state. */}
+        {error ? <p role="alert" className="text-sm text-destructive">{error}</p> : null}
+      </div>
+    </AppModal>
+  );
 }
 
 function ReviewSetPublicationCard({
@@ -726,13 +980,17 @@ function ReviewSetSourceUpdateCard({
   update,
   loading,
   applying,
+  error,
   onApply,
 }: Readonly<{
   update: ReviewSetUpdateResponse | null;
   loading: boolean;
   applying: boolean;
+  error: string | null;
   onApply: () => void;
 }>) {
+  const [reviewOpen, setReviewOpen] = useState(false);
+
   if (loading && !update) {
     return <Card className="p-4 text-sm text-foreground/65">Checking the Official Review Set for updates…</Card>;
   }
@@ -750,61 +1008,85 @@ function ReviewSetSourceUpdateCard({
     );
   }
 
-  const additions = update.changes.filter((change) =>
-    change.type === "ADDED_NOTE" || change.type === "ADDED_SUBJECT_PLAN",
-  );
-  const upstreamOnly = update.changes.filter((change) =>
-    change.type !== "ADDED_NOTE" && change.type !== "ADDED_SUBJECT_PLAN",
-  );
+  const groups = groupReviewSetChanges(update.changes);
+  const pendingAdditions = groups.additions.filter((change) => !change.applied);
+  const subjectGroups = groupAdditionsBySubject(pendingAdditions);
+  const topicCount = subjectGroups.reduce((total, group) => total + group.topicCount, 0);
+  const subjectCount = subjectGroups.filter((group) => group.topicCount > 0).length;
+  const subjectPlanOnlyCount = subjectGroups.filter((group) => group.topicCount === 0).length;
+  const hasChanges = pendingAdditions.length > 0
+    || groups.unavailable.length > 0
+    || groups.otherChanges.length > 0;
   const appliedSummary = update.notesAdded > 0 || update.subjectPlansAdded > 0
     ? `${update.notesAdded} ${update.notesAdded === 1 ? "topic" : "topics"}${update.subjectPlansAdded > 0 ? ` and ${update.subjectPlansAdded} Subject ${update.subjectPlansAdded === 1 ? "Plan" : "Plans"}` : ""} added. Your existing work was kept.`
     : null;
+  const newTopicsSummary = subjectCount > 1
+    ? `${topicCount} new ${topicCount === 1 ? "topic" : "topics"} across ${subjectCount} subjects`
+    : `${topicCount} new ${topicCount === 1 ? "topic" : "topics"} available`;
+  // topicCount only counts ADDED_NOTE rows (the double-count fix). A Subject Plan added with no
+  // notes yet is still something to add — additionsAvailable > 0 for it — so the action label
+  // falls back to counting those plans rather than reading "Add 0 new topics".
+  const addActionLabel = topicCount > 0
+    ? `Add ${topicCount} new ${topicCount === 1 ? "topic" : "topics"}`
+    : `Add ${subjectPlanOnlyCount} new ${subjectPlanOnlyCount === 1 ? "Subject Plan" : "Subject Plans"}`;
 
   return (
-    <Card className="space-y-4 p-4" data-testid="review-set-source-update">
-      <div>
-        <CardTitle className="text-base">
-          {update.additionsAvailable > 0 ? "Official Review Set updates available" : "Official Review Set is up to date"}
-        </CardTitle>
-        <CardDescription className="mt-1">
-          {appliedSummary ?? (update.additionsAvailable > 0
-            ? "Choose whether to add new upstream topics. Your notes, sections, order, and study history stay unchanged."
-            : "There are no new upstream topics to add.")}
-        </CardDescription>
-      </div>
-
-      {additions.length > 0 ? (
+    <>
+      <Card className="space-y-4 p-4" data-testid="review-set-source-update">
         <div>
-          <p className="text-sm font-medium">{additions.some((change) => change.applied) ? "Added" : "Would be added"}</p>
-          <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-foreground/75">
-            {additions.map((change) => (
-              <li key={`${change.type}:${change.sourcePlanId}:${change.sourceNoteId ?? "subject"}`}>
-                {sourceUpdateChangeText(change)}
-              </li>
-            ))}
-          </ul>
+          <CardTitle className="text-base">
+            {hasChanges ? "Official Review Set updates available" : "Official Review Set is up to date"}
+          </CardTitle>
+          <CardDescription className="mt-1">
+            {appliedSummary ?? (hasChanges
+              ? topicCount > 0
+                ? "Choose whether to add new topics from the Official Review Set. Your notes, sections, order, and study history stay unchanged."
+                : "Review changes from the Official Review Set. Your notes, sections, order, and study history stay unchanged."
+              : "There are no new topics or curriculum changes to review.")}
+          </CardDescription>
         </div>
-      ) : null}
 
-      {upstreamOnly.length > 0 ? (
-        <div>
-          <p className="text-sm font-medium">Changed upstream — no action taken</p>
-          <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-foreground/75">
-            {upstreamOnly.map((change) => (
-              <li key={`${change.type}:${change.sourcePlanId}:${change.sourceNoteId ?? "subject"}`}>
-                {sourceUpdateChangeText(change)}
-              </li>
-            ))}
+        {hasChanges ? (
+          <ul className="space-y-1 text-sm font-medium text-foreground/80">
+            {topicCount > 0 ? <li>{newTopicsSummary}</li> : null}
+            {groups.unavailable.length > 0 ? (
+              <li>{groups.unavailable.length} {groups.unavailable.length === 1 ? "topic is" : "topics are"} no longer available</li>
+            ) : null}
+            {groups.otherChanges.length > 0 ? (
+              <li>{groups.otherChanges.length} other curriculum {groups.otherChanges.length === 1 ? "change" : "changes"}</li>
+            ) : null}
           </ul>
-        </div>
-      ) : null}
+        ) : null}
 
-      {update.additionsAvailable > 0 ? (
-        <Button type="button" size="sm" disabled={applying} onClick={onApply}>
-          {applying ? "Applying updates…" : "Apply additions"}
-        </Button>
-      ) : null}
-    </Card>
+        {hasChanges || update.additionsAvailable > 0 ? (
+          <div className="flex flex-wrap gap-2">
+            {hasChanges ? (
+              <Button type="button" size="sm" variant="outline" onClick={() => setReviewOpen(true)}>
+                Review update
+              </Button>
+            ) : null}
+            {update.additionsAvailable > 0 ? (
+              <Button type="button" size="sm" disabled={applying} onClick={onApply}>
+                {applying ? "Adding topics…" : addActionLabel}
+              </Button>
+            ) : null}
+          </div>
+        ) : null}
+      </Card>
+
+      <ReviewSetUpdateDetailModal
+        isOpen={reviewOpen}
+        update={update}
+        groups={groups}
+        subjectGroups={subjectGroups}
+        topicCount={topicCount}
+        addLabel={addActionLabel}
+        applying={applying}
+        error={error}
+        onClose={() => setReviewOpen(false)}
+        onApply={onApply}
+      />
+    </>
   );
 }
 
@@ -3040,7 +3322,7 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
       setSourceUpdate(result);
       await loadCollection();
       if (result.notesAdded > 0 || result.subjectPlansAdded > 0) {
-        showActionToast("Review Set additions applied. Your existing work was kept.");
+        showActionToast(`${result.notesAdded} new ${result.notesAdded === 1 ? "topic" : "topics"} added. Your existing work was kept.`);
       }
     } catch (error) {
       setMutationError(error instanceof Error ? error.message : "Could not update this Review Set.");
@@ -3506,6 +3788,7 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
             update={sourceUpdate}
             loading={sourceUpdateLoading}
             applying={mutationKind === "source-update"}
+            error={mutationError}
             onApply={() => void handleSourceUpdate()}
           />
         ) : null}
@@ -3712,6 +3995,7 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
           update={sourceUpdate}
           loading={sourceUpdateLoading}
           applying={mutationKind === "source-update"}
+          error={mutationError}
           onApply={() => void handleSourceUpdate()}
         />
       ) : null}
