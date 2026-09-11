@@ -118,6 +118,15 @@ The desktop panel closes on **outside click** and on **Escape**, matching every 
 avatar menu, the theme toggle, the export menu). There is deliberately **no `Close` button** — it
 existed only because closing was otherwise impossible.
 
+**⚠️ Activating a notification's CTA also closes the panel (both the desktop dropdown and the
+mobile `AppModal` sheet, since both render the same `rows` block) — fixed in `v0.142.0` item A5.**
+Before the fix, the CTA `<Link>` called `markRead` and never `setIsOpen(false)`, so the panel stayed
+open over the destination page. This fires on the close path a learner actually takes, not an edge
+case: at fix time, 42 of 42 production notifications carried a CTA. **Both paths are covered by a
+test asserting the panel is gone after the CTA click** — every other test in this file mocks
+`matchMedia` to `matches: false`, so a dedicated mobile-branch test (`matches: true`) was added
+rather than assuming the shared `rows` render made the desktop test sufficient for the sheet too.
+
 **⚠️ THE OUTSIDE-CLICK REF WRAPS THE BELL AND THE PANEL TOGETHER, AND THAT IS LOAD-BEARING.** If it
 wrapped only the panel, the bell would count as "outside": `mousedown` would close the panel and the
 bell's own `click` would immediately reopen **and refetch** it, so one click would flicker instead of

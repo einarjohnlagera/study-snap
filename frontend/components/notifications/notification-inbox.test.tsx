@@ -163,6 +163,42 @@ describe("NotificationInbox", () => {
     await waitFor(() => expect(screen.queryByText("Someone wants to connect")).not.toBeInTheDocument());
   });
 
+  it("closes the desktop panel when the CTA is activated, not just marks it read", async () => {
+    // ⚠️ A5. Of the three existing close-path tests here (outside click, Escape, bell toggle), NONE
+    // covered the close path a learner actually takes — following the CTA. The bug: the CTA <Link>
+    // called markRead and never setIsOpen(false), so the panel stayed open over the destination page.
+    renderInbox(1);
+    fireEvent.click(screen.getByLabelText("Open notifications"));
+    await screen.findByText("Someone wants to connect");
+
+    fireEvent.click(screen.getByRole("link", { name: "Review" }));
+
+    await waitFor(() => expect(markNotificationRead).toHaveBeenCalledWith("n-1"));
+    expect(screen.queryByText("Someone wants to connect")).not.toBeInTheDocument();
+  });
+
+  it("closes the mobile sheet when the CTA is activated too, sharing the same fix", async () => {
+    // ⚠️ A5, mobile half. Desktop and mobile render the same `rows` block, so one fix covers both —
+    // but every OTHER test in this file mocks matchMedia to matches: false, so isMobile is never
+    // true when the suite runs. This is the one test that actually exercises the AppModal sheet
+    // branch, matching the repo's own rule: a behaviour change with no test that runs the path it
+    // touched is unverified, not "covered by construction".
+    globalThis.matchMedia = jest.fn().mockReturnValue({
+      matches: true,
+      addEventListener: jest.fn(),
+      removeEventListener: jest.fn(),
+    }) as unknown as typeof globalThis.matchMedia;
+
+    renderInbox(1);
+    fireEvent.click(screen.getByLabelText("Open notifications"));
+    await screen.findByText("Someone wants to connect");
+
+    fireEvent.click(screen.getByRole("link", { name: "Review" }));
+
+    await waitFor(() => expect(markNotificationRead).toHaveBeenCalledWith("n-1"));
+    expect(screen.queryByText("Someone wants to connect")).not.toBeInTheDocument();
+  });
+
   it("closes exactly once when the bell itself is clicked while open, without refetching", async () => {
     // ⚠️⚠️ THE LOAD-BEARING GUARD, AND ITS EVENT SEQUENCE *IS* THE GUARD. A real click fires mousedown
     // THEN click, so the outside-click handler and the toggle both see it. If the ref wrapped only the
