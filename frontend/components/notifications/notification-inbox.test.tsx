@@ -25,10 +25,21 @@ const actionable = {
   dismissedAt: null,
 };
 
+const ctaLessActionable = {
+  ...actionable,
+  ctaLabel: null,
+  ctaPath: null,
+};
+
 function renderInbox(count = 0) {
   const onDelta = jest.fn();
   render(<NotificationInbox actionableUnreadCount={count} onActionableUnreadDelta={onDelta} />);
   return onDelta;
+}
+
+function clickLinkWithoutLeavingTestPage(link: HTMLElement) {
+  link.addEventListener("click", (event) => event.preventDefault(), { once: true });
+  fireEvent.click(link);
 }
 
 describe("NotificationInbox", () => {
@@ -93,7 +104,7 @@ describe("NotificationInbox", () => {
     fireEvent.click(screen.getByLabelText("Open notifications"));
 
     expect(await screen.findByText("Board Exam Mode is here")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Try it" })).toHaveAttribute("href", "/dashboard?tab=exams");
+    expect(screen.getByRole("link", { name: "Board Exam Mode is here" })).toHaveAttribute("href", "/dashboard?tab=exams");
     // ⚠️ Guard 8, from the render side: an unread announcement with zero actionable leaves NO badge
     // element — not a "0".
     expect(screen.queryByLabelText(/unread notifications/)).not.toBeInTheDocument();
@@ -116,7 +127,8 @@ describe("NotificationInbox", () => {
     fireEvent.click(screen.getByLabelText("Open notifications"));
 
     expect(await screen.findByText("Suspicious")).toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: "Click here" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Suspicious" })).toBeInTheDocument();
   });
 
   it("distinguishes a failed load from an empty inbox", async () => {
@@ -171,7 +183,9 @@ describe("NotificationInbox", () => {
     fireEvent.click(screen.getByLabelText("Open notifications"));
     await screen.findByText("Someone wants to connect");
 
-    fireEvent.click(screen.getByRole("link", { name: "Review" }));
+    const cardBody = screen.getByRole("link", { name: "Someone wants to connect" });
+    expect(cardBody).toHaveAttribute("href", "/linked-learners");
+    clickLinkWithoutLeavingTestPage(cardBody);
 
     await waitFor(() => expect(markNotificationRead).toHaveBeenCalledWith("n-1"));
     expect(screen.queryByText("Someone wants to connect")).not.toBeInTheDocument();
@@ -193,7 +207,9 @@ describe("NotificationInbox", () => {
     fireEvent.click(screen.getByLabelText("Open notifications"));
     await screen.findByText("Someone wants to connect");
 
-    fireEvent.click(screen.getByRole("link", { name: "Review" }));
+    const cardBody = screen.getByRole("link", { name: "Someone wants to connect" });
+    expect(cardBody).toHaveAttribute("href", "/linked-learners");
+    clickLinkWithoutLeavingTestPage(cardBody);
 
     await waitFor(() => expect(markNotificationRead).toHaveBeenCalledWith("n-1"));
     expect(screen.queryByText("Someone wants to connect")).not.toBeInTheDocument();
@@ -264,22 +280,35 @@ describe("NotificationInbox", () => {
   });
 
   it("reverts the optimistic unread delta when marking read fails", async () => {
-    (markNotificationRead as jest.Mock).mockRejectedValue(new Error("offline"));
+    let rejectMarkRead: (reason: Error) => void = () => undefined;
+    (markNotificationRead as jest.Mock).mockImplementation(() => new Promise((_resolve, reject) => {
+      rejectMarkRead = reject;
+    }));
+    (listNotifications as jest.Mock).mockResolvedValue([ctaLessActionable]);
     const onDelta = renderInbox(1);
 
     fireEvent.click(screen.getByLabelText("Open notifications"));
-    fireEvent.click(await screen.findByRole("button", { name: "Mark read" }));
+    const cardBody = await screen.findByRole("button", { name: "Someone wants to connect" });
+    const row = cardBody.closest("article");
+    expect(row).toHaveClass("bg-muted/40");
+    fireEvent.click(cardBody);
 
     await waitFor(() => expect(markNotificationRead).toHaveBeenCalled());
+    expect(row).toHaveClass("bg-background");
+    expect(screen.queryByTestId("unread-indicator-n-1")).not.toBeInTheDocument();
+    rejectMarkRead(new Error("offline"));
+    await waitFor(() => expect(row).toHaveClass("bg-muted/40"));
+    expect(screen.getByTestId("unread-indicator-n-1")).toBeInTheDocument();
     expect(onDelta).toHaveBeenNthCalledWith(1, -1);
     expect(onDelta).toHaveBeenNthCalledWith(2, 1);
   });
 
   it("decrements the badge when an actionable notification is marked read", async () => {
+    (listNotifications as jest.Mock).mockResolvedValue([ctaLessActionable]);
     const onDelta = renderInbox(1);
 
     fireEvent.click(screen.getByLabelText("Open notifications"));
-    fireEvent.click(await screen.findByRole("button", { name: "Mark read" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Someone wants to connect" }));
 
     await waitFor(() => expect(markNotificationRead).toHaveBeenCalled());
     expect(onDelta).toHaveBeenCalledTimes(1);
@@ -288,7 +317,7 @@ describe("NotificationInbox", () => {
 
   it("does not change the badge when a non-actionable notification is marked read", async () => {
     const nonActionable = {
-      ...actionable,
+      ...ctaLessActionable,
       id: "n-non-actionable",
       type: "ANNOUNCEMENT",
       actionable: false,
@@ -297,7 +326,7 @@ describe("NotificationInbox", () => {
     const onDelta = renderInbox(0);
 
     fireEvent.click(screen.getByLabelText("Open notifications"));
-    fireEvent.click(await screen.findByRole("button", { name: "Mark read" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Someone wants to connect" }));
 
     await waitFor(() => expect(markNotificationRead).toHaveBeenCalled());
     expect(onDelta).not.toHaveBeenCalled();
@@ -310,7 +339,7 @@ describe("NotificationInbox", () => {
   // exactly the case the taxonomy split exists to fix, and the old code decremented the badge for it.
   it("does not change the badge for a non-actionable type that is not ANNOUNCEMENT", async () => {
     (listNotifications as jest.Mock).mockResolvedValue([{
-      ...actionable,
+      ...ctaLessActionable,
       id: "n-future-non-actionable",
       type: "IMPACT_MILESTONE",
       actionable: false,
@@ -318,7 +347,7 @@ describe("NotificationInbox", () => {
     const onDelta = renderInbox(0);
 
     fireEvent.click(screen.getByLabelText("Open notifications"));
-    fireEvent.click(await screen.findByRole("button", { name: "Mark read" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Someone wants to connect" }));
 
     await waitFor(() => expect(markNotificationRead).toHaveBeenCalled());
     expect(onDelta).not.toHaveBeenCalled();
@@ -326,7 +355,7 @@ describe("NotificationInbox", () => {
 
   it("does not restore the badge on a failed non-actionable mark-read", async () => {
     (listNotifications as jest.Mock).mockResolvedValue([{
-      ...actionable,
+      ...ctaLessActionable,
       id: "n-non-actionable",
       type: "ANNOUNCEMENT",
       actionable: false,
@@ -335,9 +364,98 @@ describe("NotificationInbox", () => {
     const onDelta = renderInbox(0);
 
     fireEvent.click(screen.getByLabelText("Open notifications"));
-    fireEvent.click(await screen.findByRole("button", { name: "Mark read" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Someone wants to connect" }));
 
     await waitFor(() => expect(markNotificationRead).toHaveBeenCalled());
     expect(onDelta).not.toHaveBeenCalled();
+  });
+
+  it("gives unread notifications a tinted background and unread indicator", async () => {
+    renderInbox(1);
+    fireEvent.click(screen.getByLabelText("Open notifications"));
+
+    const cardBody = await screen.findByRole("link", { name: "Someone wants to connect" });
+    expect(cardBody.closest("article")).toHaveClass("bg-muted/40");
+    expect(screen.getByTestId("unread-indicator-n-1")).toBeInTheDocument();
+  });
+
+  it("uses the destination card body as the only CTA and marks read before closing", async () => {
+    renderInbox(1);
+    fireEvent.click(screen.getByLabelText("Open notifications"));
+
+    const cardBody = await screen.findByRole("link", { name: "Someone wants to connect" });
+    expect(cardBody).toHaveAttribute("href", "/linked-learners");
+    expect(screen.queryByText("Review")).not.toBeInTheDocument();
+    clickLinkWithoutLeavingTestPage(cardBody);
+
+    await waitFor(() => expect(markNotificationRead).toHaveBeenCalledWith("n-1"));
+    expect(screen.queryByText("Someone wants to connect")).not.toBeInTheDocument();
+  });
+
+  it("marks a CTA-less notification read from its card body without navigation", async () => {
+    (listNotifications as jest.Mock).mockResolvedValue([ctaLessActionable]);
+    renderInbox(1);
+    fireEvent.click(screen.getByLabelText("Open notifications"));
+
+    const cardBody = await screen.findByRole("button", { name: "Someone wants to connect" });
+    expect(screen.queryByRole("link")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Mark read" })).not.toBeInTheDocument();
+    fireEvent.click(cardBody);
+
+    await waitFor(() => expect(markNotificationRead).toHaveBeenCalledWith("n-1"));
+    expect(screen.getByText("Someone wants to connect")).toBeInTheDocument();
+  });
+
+  it("keeps dismiss separate from reading and navigation", async () => {
+    renderInbox(1);
+    fireEvent.click(screen.getByLabelText("Open notifications"));
+    const cardBody = await screen.findByRole("link", { name: "Someone wants to connect" });
+    const dismissButton = screen.getByRole("button", { name: "Dismiss Someone wants to connect" });
+    expect(cardBody).not.toContainElement(dismissButton);
+
+    fireEvent.click(dismissButton);
+
+    await waitFor(() => expect(dismissNotification).toHaveBeenCalledWith("n-1"));
+    expect(markNotificationRead).not.toHaveBeenCalled();
+    expect(screen.queryByText("Someone wants to connect")).not.toBeInTheDocument();
+  });
+
+  it("keeps read destination notifications neutral and navigable", async () => {
+    (listNotifications as jest.Mock).mockResolvedValue([{
+      ...actionable,
+      readAt: "2026-09-07T01:00:00Z",
+    }]);
+    renderInbox(0);
+    fireEvent.click(screen.getByLabelText("Open notifications"));
+
+    const cardBody = await screen.findByRole("link", { name: "Someone wants to connect" });
+    expect(cardBody).toHaveAttribute("href", "/linked-learners");
+    expect(cardBody.closest("article")).toHaveClass("bg-background");
+    expect(screen.queryByTestId("unread-indicator-n-1")).not.toBeInTheDocument();
+    clickLinkWithoutLeavingTestPage(cardBody);
+
+    expect(markNotificationRead).not.toHaveBeenCalled();
+    expect(screen.queryByText("Someone wants to connect")).not.toBeInTheDocument();
+  });
+
+  it("uses a keyboard-reachable native link for destination card activation", async () => {
+    renderInbox(1);
+    fireEvent.click(screen.getByLabelText("Open notifications"));
+
+    const cardBody = await screen.findByRole("link", { name: "Someone wants to connect" });
+    expect(cardBody.tagName).toBe("A");
+    expect(cardBody).toHaveAttribute("href", "/linked-learners");
+    expect(cardBody).toHaveProperty("tabIndex", 0);
+  });
+
+  it("renders a secondary relative timestamp", async () => {
+    (listNotifications as jest.Mock).mockResolvedValue([{
+      ...actionable,
+      createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+    }]);
+    renderInbox(1);
+    fireEvent.click(screen.getByLabelText("Open notifications"));
+
+    expect(await screen.findByText("2h ago")).toHaveClass("text-xs", "text-muted-foreground");
   });
 });
