@@ -85,14 +85,21 @@ verified findings, and the rejected alternatives are in
 
 ### Shipped
 
+- **Notification rows are now coherent, single-target cards.** Unread rows have a theme-safe
+  background tint, dot, and slightly stronger title; every row shows a relative timestamp. The
+  title/body region is now the one primary control: a safe destination renders as a native link
+  that marks read, closes the desktop dropdown or mobile sheet, and navigates, while a CTA-less or
+  rejected destination renders as a mark-read-only button. The standalone **Mark read** button and
+  duplicate CTA link are gone; dismiss remains an independently focusable sibling and does not
+  mark read or navigate. All 21 existing tests were retained and reconciled, with seven focused
+  interaction and visual guards added; all 16 changed tests failed against the pre-change row.
 - **A5 — the notification panel now closes when a CTA is activated**, on both the desktop dropdown
   and the mobile sheet (both render the same `rows` block, so one fix — an added `setIsOpen(false)`
   alongside the existing `markRead` call — covers both). Of the three existing close-path tests in
   the suite (outside click, Escape, bell toggle), none covered the close path a learner actually
   takes; two tests were added (desktop and mobile), each verified to fail against the pre-fix code
-  and pass against the fix. **⚠️ Short-lived by design: Workstream 1 (the card redesign) will
-  delete this CTA `<Link>` entirely once the card body becomes the single tap target — re-point
-  these tests at the card body then, don't read their removal as a regression.**
+  and pass against the fix. Workstream 1 subsequently moved this behavior from the deleted CTA
+  link to the card body's native link and re-pointed both tests without dropping the coverage.
 
 
 ## v0.141.0 - Formulas That Render

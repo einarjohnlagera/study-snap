@@ -12,6 +12,42 @@ import {
 } from "@/lib/api";
 import { toSafeRelativePath } from "@/lib/safe-relative-path";
 
+function formatRelativeTime(createdAt: string): string {
+  const created = new Date(createdAt);
+  if (Number.isNaN(created.getTime())) {
+    return "";
+  }
+
+  const elapsedMilliseconds = Math.max(0, Date.now() - created.getTime());
+  const elapsedMinutes = Math.floor(elapsedMilliseconds / 60_000);
+  if (elapsedMinutes < 1) {
+    return "Just now";
+  }
+  if (elapsedMinutes < 60) {
+    return `${elapsedMinutes}m ago`;
+  }
+
+  const elapsedHours = Math.floor(elapsedMinutes / 60);
+  if (elapsedHours < 24) {
+    return `${elapsedHours}h ago`;
+  }
+  if (elapsedHours < 48) {
+    return "Yesterday";
+  }
+
+  const elapsedDays = Math.floor(elapsedHours / 24);
+  if (elapsedDays < 7) {
+    return `${elapsedDays}d ago`;
+  }
+
+  const includeYear = created.getFullYear() !== new Date().getFullYear();
+  return created.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    ...(includeYear ? { year: "numeric" } : {}),
+  });
+}
+
 type NotificationInboxProps = {
   actionableUnreadCount: number;
   onActionableUnreadDelta: (delta: number) => void;
@@ -150,46 +186,69 @@ export function NotificationInbox({
         // next/link renders an absolute URL as a live external anchor. Anything that is not a
         // same-origin relative path renders as NO link rather than as a link somewhere else.
         const ctaPath = toSafeRelativePath(notification.ctaPath);
+        const titleId = `notification-title-${notification.id}`;
+        const body = (
+          <>
+            <span className="flex items-center gap-2">
+              {!notification.readAt ? (
+                <span
+                  className="h-2 w-2 shrink-0 rounded-full bg-primary"
+                  data-testid={`unread-indicator-${notification.id}`}
+                  aria-hidden="true"
+                />
+              ) : null}
+              <span
+                id={titleId}
+                className={notification.readAt ? "text-sm font-normal" : "text-sm font-semibold"}
+              >
+                {notification.title}
+              </span>
+            </span>
+            {notification.body ? <span className="mt-1 block text-sm text-muted-foreground">{notification.body}</span> : null}
+            <span className="mt-1 block text-xs text-muted-foreground">{formatRelativeTime(notification.createdAt)}</span>
+          </>
+        );
+        const bodyClassName = "block min-w-0 flex-1 rounded-md text-left transition-colors hover:bg-highlight focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 focus-visible:ring-offset-background";
+
         return (
-        <article key={notification.id} className="border-b border-border px-4 py-3 last:border-b-0">
-          <div className="flex items-start gap-3">
-            <div className="min-w-0 flex-1">
-              <p className={notification.readAt ? "text-sm font-medium" : "text-sm font-semibold"}>{notification.title}</p>
-              {notification.body ? <p className="mt-1 text-sm text-muted-foreground">{notification.body}</p> : null}
-              <div className="mt-3 flex items-center gap-3">
-                {ctaPath ? (
-                  <Link
-                    href={ctaPath}
-                    className="text-sm font-medium text-primary underline-offset-4 hover:underline"
-                    // ⚠️ A5: activating the CTA must close the inbox too, not just mark it read.
-                    // Without this the panel (desktop dropdown AND mobile AppModal sheet, since both
-                    // render this same `rows` block) stays open over the destination page. Verified
-                    // this fires on 100% of today's production notifications: all 42 carry a CTA.
-                    onClick={() => {
-                      void markRead(notification);
-                      setIsOpen(false);
-                    }}
-                  >
-                    {notification.ctaLabel ?? "Open"}
-                  </Link>
-                ) : null}
-                {!notification.readAt ? (
-                  <button type="button" className="text-sm text-muted-foreground underline-offset-4 hover:underline" onClick={() => void markRead(notification)}>
-                    Mark read
-                  </button>
-                ) : null}
-              </div>
+          <article
+            key={notification.id}
+            className={`border-b border-border px-4 py-3 last:border-b-0 ${notification.readAt ? "bg-background" : "bg-muted/40"}`}
+            data-unread={!notification.readAt}
+          >
+            <div className="flex items-start gap-3">
+              {ctaPath ? (
+                <Link
+                  href={ctaPath}
+                  aria-labelledby={titleId}
+                  className={bodyClassName}
+                  onClick={() => {
+                    void markRead(notification);
+                    setIsOpen(false);
+                  }}
+                >
+                  {body}
+                </Link>
+              ) : (
+                <button
+                  type="button"
+                  aria-labelledby={titleId}
+                  className={bodyClassName}
+                  onClick={() => void markRead(notification)}
+                >
+                  {body}
+                </button>
+              )}
+              <button
+                type="button"
+                className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+                aria-label={`Dismiss ${notification.title}`}
+                onClick={() => void dismiss(notification)}
+              >
+                <X className="h-4 w-4" />
+              </button>
             </div>
-            <button
-              type="button"
-              className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
-              aria-label={`Dismiss ${notification.title}`}
-              onClick={() => void dismiss(notification)}
-            >
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-        </article>
+          </article>
         );
       }) : null}
     </div>
