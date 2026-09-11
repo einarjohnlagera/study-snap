@@ -31,6 +31,19 @@ shipped arc.
 pass** (Onboarding Intent Router's C8/C9 residuals — both already fixed in commit `826ca155`,
 2026-08-12, row never updated). Full detail in `ROADMAP.md`'s Backlog Index scan note.
 
+**Item 2's own scope was widened again before its Codex prompt was written.** Tracing the fix
+surfaced that gating the pool invalidation on `regeneratingNoteContent` — the kickoff's own framing
+— would have missed the *default* regeneration path: `POST /notes/{id}/regenerate` resolves an
+absent/blank scope to `NoteRegenerationScope.STUDY_PACK`, which reaches the same worker method with
+that flag `false`, even though the Study Pack's content is replaced in place either way. The prompt
+(`docs/codex-prompts/v0.143.0-exam-pool-invalidation.md`, gitignored) calls the invalidation
+unconditionally instead, and adds a `generationStatusAt`-stamp guard against a
+concurrent-regeneration race the unconditional call would otherwise make more likely to trigger.
+Not yet sent to Codex. **A related, separate, already-shipped defect surfaced during the same trace
+and was flagged rather than folded in**: `deactivateShareLinksForNote` (the `v0.110.2` precedent
+item 2 reuses) has the identical gate gap on the same default regeneration scope — recorded as its
+own Backlog Index row in `ROADMAP.md`, not code-verified against production, and not fixed here.
+
 ### Planned Scope
 
 - **Item 1 — Long Exam's focus-mode trap (frontend, isolated bug).** `long-exam/page.tsx:255`
@@ -94,7 +107,12 @@ on the diff is enough.
 
 ### Shipped
 
-_(nothing yet)_
+- **Item 1 — Long Exam focus-mode trap fixed.** `useExamFocusMode` in `long-exam/page.tsx` now
+  reads `phase === "running" && !submitting`, matching Challenge Quiz's `v0.131.0` guard.
+  Regression test added and mutation-verified against pre-fix code, both in isolation and in the
+  full suite. Checked the sibling `interview-practice/page.tsx:309`, which has the same bare
+  `phase === "running"` expression — confirmed clean, its Leave Practice button carries no
+  `disabled` state to trap behind. PR #1381 (`fix/v0.143.0-long-exam-focus-trap`), not yet merged.
 
 ## v0.142.0 - Awareness Before Action
 
