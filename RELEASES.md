@@ -1,5 +1,93 @@
 # RELEASES.md - NoteLib
 
+## v0.142.0 - Awareness Before Action
+
+**Status: In Progress**
+
+Theme: the notification inbox and the adopted-Review-Set update panel both went live for the first
+time in `v0.134.0`–`v0.141.0` and have never been polished against real production shape. This
+release fixes a bug that sits on 100% of today's live notification population, redesigns the card
+for read/unread and one-tap activation, and replaces the update panel's uncapped raw diff with a
+meaning-partitioned summary plus a progressive-disclosure detail surface.
+
+Source: `docs/claude-plans/v0.142.0-adoption-and-notifications-plan.md`, written from a tightened
+product spec the owner returned after a second GPT opinion. Verified against code and against a
+2026-09-11 read-only production read.
+
+### Planned Scope
+
+- **A5 — the notification panel does not close on CTA activation (frontend, isolated bug).** The
+  CTA `<Link>` at `notification-inbox.tsx:163-169` marks the notification read and never calls
+  `setIsOpen(false)`. **⚠️ This fires on 100% of today's live notification population** — all 42
+  production notifications share one type (`REVIEW_SET_UPDATE`), all carry a CTA, and the CTA is
+  the only route in. Ship first; cheapest item in the release.
+- **Workstream 1 — notification card (frontend).** Unread today is font-weight only
+  (`font-medium` vs `font-semibold`, `:157`) with no background distinction — genuinely missing,
+  though the owner's stated reason (no borders) is not: borders exist
+  (`border-b border-border last:border-b-0`, `:154`) and are simply invisible with one notification
+  on screen. Card body becomes the single tap target (mark read + close + navigate); CTA-less
+  notifications mark read on tap with no separate button; dismiss stays a distinct control outside
+  the tap area; add a relative timestamp (`createdAt` is already in the DTO, no backend work
+  needed). Reconcile, not delete, the 5 of 20 existing tests that use the old **Mark read** button
+  as their entry point.
+- **Workstream 2 — Review Set update panel (frontend + one backend field).** Replace the two
+  uncapped raw-diff lists with meaning-based partitioning (additions / unavailable / other
+  curriculum changes — `SKIPPED_NOT_PUBLIC` currently sits, wrongly, under a heading that says "no
+  action taken"), aggregate the three per-note fan-out types (`REORDERED`, `RETIRED`, `MOVED`) into
+  counts, replace the raw wall with a compact summary plus a **Review update** detail surface, and
+  rename **Apply additions** → **Add N new topics** (production copy check returned zero
+  collisions — see Verified findings below). The topic count must come from counting `ADDED_NOTE`
+  alone, not `additionsAvailable()` (`NoteCollectionService.java:3523-3529`), which also counts
+  `ADDED_SUBJECT_PLAN` and would overstate the promised count.
+- **Section grouping (owner decision, defaulted for kickoff): ship Option A — Subject Plan
+  grouping only, no Section level.** `ReviewSetUpdateChange` carries no Section field and a
+  Section is a string label on `NoteCollectionItemEntity.label`, not an entity — adding
+  `sourceSectionLabel` is a real, small, zero-extra-query DTO addition (the variable is already in
+  scope at the `ADDED_NOTE` construction site), but it makes this a backend release and raises the
+  verification tier. Defaulting to A keeps the release frontend-only; B is a stated fast-follow if
+  the owner wants the extra hierarchy level. **Revisit if the owner objects.**
+
+### Verified findings this scope rests on (read-only, 2026-09-11)
+
+- Production notifications: **1 distinct type** (`REVIEW_SET_UPDATE`), **42/42 with a CTA**,
+  **41/42 unread**, **0 ever dismissed**, all created in one batch the day before this kickoff.
+  The unread ratio means the card's unread treatment is what nearly every viewer sees, not an edge
+  case.
+- The rename-collision check returned **zero rows** — no notification title, body, or CTA label in
+  production references "Apply additions", "upstream", or "addition".
+- `docs/features/collections.md:932` and `frontend/app/collections/[id]/page.test.tsx:736,758` both
+  reference "Apply additions" by exact string and must be swept in the same PR as the rename.
+
+Anti-drift: do NOT let notification activation apply a Review Set update — activation navigates and
+marks read only, the update itself stays an explicit, separate action; do NOT title-based-group the
+detail surface — Subject Plan grouping uses stored `sourcePlanId`/`subjectTitle` identity, never a
+note title; do NOT overwrite learner content, reset progress, or make adopted Review Sets
+live-synced; do NOT change `additionsAvailable()` — it correctly gates whether the Apply action
+renders at all and must stay a boolean threshold, not a display count; do NOT add pagination, a new
+diff engine, or new notification infrastructure — the existing payload already carries what the
+grouping/aggregation work needs under Option A; do NOT sweep `AGENTS.md`'s preamble or the Backlog
+Index as a side effect of this release (both are explicitly held per
+`docs/claude-plans/context-doc-token-reduction-plan.md`, items 4/6/7 — item 6 ran once this
+kickoff, six rows, and is not repeated here).
+
+Verification tier decided at kickoff: **one scoped cold agent minimum, falsification-framed** — two
+PRs touch the same shared classification surface (the update panel's partitioning function feeds
+both the compact summary and the detail surface), and this release changes what a user-facing claim
+means (which "Changed upstream — no action taken" currently misstates for `SKIPPED_NOT_PUBLIC`) —
+three releases running have been bitten by that surface-sweep gap. **Escalates to the full
+three-agent test if Option B (Section grouping) is taken instead of A**, since that adds a backend
+DTO change touching adopted-learner-content semantics.
+
+Routing: **CODEX** for both workstreams — each exceeds the ≤50 LOC / 1–3 file inline threshold (A5
+alone is inline-sized, and should be shipped as its own small PR ahead of the rest). Full scope,
+verified findings, and the rejected alternatives are in
+`docs/claude-plans/v0.142.0-adoption-and-notifications-plan.md`.
+
+### Shipped
+
+_(nothing yet)_
+
+
 ## v0.141.0 - Formulas That Render
 
 **Status: Released** (kicked off 2026-09-10, signed off 2026-09-11, base branch `releases/v0.141.0`, cut from `main` after `v0.140.0` merged as #1373 and tagged)
@@ -460,86 +548,3 @@ Render's config is correct and untouched (`autoDeploy: yes`, `autoDeployTrigger:
 - **Verified the detector against the defect itself rather than asserting it:** replayed today's 12:04 state (`main` at `4ee2c752`, Vercel newest `7f371e65`) through the comparison and confirmed it reports drift and exits 1. The Render response parser is covered by fixtures for the wrapped and unwrapped API shapes, a no-live-deploy list and an empty list.
 - Added two standing rules to `CLAUDE.md`: a claim about production state is a snapshot that must be re-read before it is repeated (with internal Gate/Status contradiction named as the free detector), and removing/renaming/making-required an API form is breaking in both directions and owes a deploy-ordering statement.
 - Corrected four false production-state claims in `ROADMAP.md` — the `V141`/`V142` gate cells and the profile-string write — each against the read-only query that disproves it, and recorded the self-contradicting row as the detector that was available and unused.
-
-## v0.136.0 - Contribution Surface
-
-**Status: Released** (kicked off 2026-09-09, signed off 2026-09-09, base branch `releases/v0.136.0`, cut from `main` after `v0.135.0` merged as #1356 and tagged `7f371e65`. Shipped as PRs #1357 and #1358.)
-
-Source: `docs/claude-plans/your-impact-private-contribution-surface-stage1.md`.
-
-Theme: make Your Impact a real destination — and stop it costing every Settings page load a 1,587-record read.
-
-### ⚠️⚠️ THE HEADLINE IS A LIVE DEFECT, NOT THE IA MOVE
-
-`frontend/app/settings/page.tsx:276-296` calls `getCreatorImpact()` in a page-load `Promise.all` and uses the result for **exactly one thing**:
-
-```ts
-setHasPublicNotes(Boolean(impact.value?.notes.length));
-```
-
-**To evaluate a boolean it pulls the entire creator-impact payload — 1,587 note records on the owner's account** — via three `IN (:noteIds)` grouped queries over a 1,587-element list plus an aggregate, **on the 256 MB Postgres behind the 20-connection pool that has already failed twice from unbounded reads** (2026-09-04, 2026-09-05, whose recorded lesson was *bound the work instead*). Payload precedent too: `docs/claude-findings/2026-09-01-prod-frontend-build-failure-public-notes-2mb.md`.
-
-**⚠️ This is live on the owner's account today, and it is independent of whether the page ever moves.**
-
-### ❌ THE BRIEF'S PERFORMANCE PREMISE IS FALSE — DO NOT REPEAT IT
-
-**Impact was never part of the Public Profile payload.** It is a separate `GET /creator-impact/me`, fetched client-side in an effect gated on `isOwner`, and the controller takes **no `userId` parameter at all**. A public visitor triggers no impact query. **So moving the page saves Public Profile NOTHING** — the IA move is a discoverability fix (7 lifetime dashboard views), not a performance one. **Do not write a test asserting a Public Profile improvement that cannot occur.**
-
-### Planned Scope — all 7 items, by owner decision
-
-1. **Bound the impact query** — server-side sort by impact, pagination or a cap, and a filter for the zero-impact set.
-2. **Lightweight summary endpoint** (`{distinctLearnersHelped, publicNoteCount}`) and **switch Settings to it**.
-3. **Dedicated `/impact` route**, reusing `CreatorImpactService` — **no duplicated analytics logic**.
-4. **Public Profile:** remove the full dashboard, add an owner-only `View impact →`.
-5. **Per-note hierarchy:** impacted first, zero-impact collapsed, deterministic tie-break.
-6. **Zero states** per the audit's F.2.
-7. **Preserve mobile;** the collapse control must be keyboard-reachable and not hover-dependent.
-
-### ⚠️ Anti-drift
-
-- ❌ **NEVER add a `userId` parameter to the impact endpoint. Its ABSENCE is the privacy control** — `/impact?userId=…` must stay *unrepresentable*, not merely blocked.
-- ❌ No public impact metrics: no rankings, leaderboards, top-contributor badges, follower counts, XP, points, levels, trophies or streaks.
-- ❌ Do not merge Impact into Progress or into Learning Connections. **Progress = how I am learning. Your Impact = how my shared knowledge is helping other learners.**
-- ❌ Do not add Impact to the permanent sidebar — a first-class page does not require first-class navigation, and the denominator is one.
-- ❌ Do not expose learner identities, scores, weak concepts, or who copied/studied.
-- ❌ Do not duplicate the analytics logic — move and reuse `CreatorImpactService`.
-- ❌ Do not load full impact analytics from the app shell, notification polling, or Dashboard.
-- ❌ **`/impact?note=<id>` is DEFERRED, not optional** — no shipped consumer needs it, and building it now creates an unused deep-link contract.
-- ⚠️ **The tie-breaker is `noteId ASC` ALONE — NOT `copyCount DESC`.** `copyCount` is not in the ranking query, and it would promote a distribution metric into semantic ranking. `noteId` is immutable and unique: the only tie-break that guarantees stable pagination.
-- ⚠️ **Label views as "page views".** `PUBLIC_NOTE_VIEWED` has 25,262 rows and **ZERO** with a `user_id` — all anonymous traffic — so views can never be deduplicated per person. Not taste; the metric cannot support it.
-- ⚠️ **Do NOT put a prominent "Awaiting first study · 1,526" counter on the page.** It turns a contribution surface into a deficit scoreboard and would be the largest number on it. Show the impacted count; do not promote the zero-impact one.
-- ✅ **Preserve:** the `PRIVATE TO YOU` labelling; the headline-dedup explanatory copy (**it is accurate — verified against the queries**); the self-copy exclusion; the `impactRequestIdRef` out-of-order guard; and `public-profile-page-client.test.tsx:277` (a visitor issues no impact request).
-- ❌ No Learning Connections work — `[CHECKPOINT — due 2026-09-19]`, denominator ONE. No `frontend/app/onboarding` work — `[CHECKPOINT — due 2026-09-11]` is two days out.
-
-### ⚠️ Denominator, and why it does NOT justify deferral here
-
-**Exactly one account in production has any impact, and it is the owner's own ADMIN account** (1,587 public notes, 56 learners helped); three other accounts have 1–2 public notes and zero learners. **The denominator-based deferral used for note likes and Learning Connections does NOT transfer:** the single user is the owner, who is asking for the feature, and 56 learners helped is *measured* impact rather than a speculative event stream.
-
-### ⚠️ Size and verification tier — the owner took both halves against the audit's advice
-
-**The audit recommended splitting this into two releases** (items 1–2, then 3–7) precisely so R2 never consumes an unbounded endpoint, and because **7 items is well past the 3–4 band where verification stays at a single `advisor()` call.** The owner elected to take both halves together. **That is recorded rather than smoothed over, and the consequence is stated up front: verification is AT LEAST one scoped cold agent, and the tier must be re-decided if the diff grows** — this touches an owner-only privacy surface, and four of the last four releases each shipped a test that passed for a reason unrelated to its change.
-
-**⚠️ Ordering still binds inside the release: bound the query (item 1) BEFORE the new page consumes it (item 3), so the new surface is never briefly worse than the old one.**
-
-### Cross-reference to settle when this ships
-
-`/impact` becomes the canonical `IMPACT_MILESTONE` destination. `attention-notifications-email-expansion-stage1.md` §15 currently points at `/progress` and must be updated — the tightening addendum already forbids contracting it to `/progress`.
-
-### Routing
-
-**CODEX** — a bounded/paginated endpoint, a new summary endpoint, a new route and a Public Profile change span backend service, controller, DTO and several frontend surfaces.
-
-### Shipped
-
-- Bounded creator-impact reads with required impacted/zero-impact pagination, stable database ordering, server-capped page sizes, page-sized views/copies aggregates, and section totals. Removed the parameterless full-payload response and its DTO.
-- Added `GET /creator-impact/me/summary` with exactly `distinctLearnersHelped` and `publicNoteCount`. Settings now uses this fixed-size response and preserves its retryable fallback when the check fails.
-- Added the authenticated top-level `/impact` destination. Its headline comes only from the summary endpoint; impacted notes load first, and zero-impact notes stay collapsed and unfetched until expanded.
-- Replaced the owner Public Profile dashboard with a compact owner-only `View impact →` card. Visitors remain unchanged and issue no impact request.
-- Added the two contribution zero states, retry handling for the page and expanded section, page-view labelling, mobile card layout, and an accessible keyboard-operable disclosure.
-- Added regression coverage for bounded metric ID lists, the required `impacted` parameter, absent user identifiers, summary response shape, deterministic impact ordering, headline deduplication, structural self-copy exclusion, Settings endpoint selection, Public Profile privacy, and lazy zero-impact loading.
-- **Repointed the Knowledge Impact digest email at `/impact`.** Its `View Your Impact` button linked to `/public/creator/{username}#your-impact-heading`, and that anchor now resolves to the owner-only link card rather than a dashboard — so the button promised the dashboard and would have delivered another link. Found by a surface sweep, not by the diff: `RetentionService` was not otherwise touched by this release, and the anchor id still exists, so it would have degraded silently in an email that cannot be corrected once sent.
-- Gave the impacted-notes `Load more` a visible failure state and a retry. It had a `finally` with no `catch`, so a failed second page produced an unhandled rejection and no user-visible change; the owner's 61 impacted notes at a page size of 20 make that the first-visit path, not an edge case.
-- Clamped paging inputs in `CreatorImpactService` (`Math.clamp`, repo convention per Sonar S6877) so a degenerate `size` or negative `page` cannot reach `PageRequest.of` and 500. The controller's `@Min` annotations are inert under `standaloneSetup`, so the guard now lives where it is actually exercised.
-- Restored `@Transactional(readOnly = true)` on `CreatorImpactService`, removed during delivery. Behaviourally near-neutral — OSIV plus `DELAYED_ACQUISITION_AND_HOLD` (pinned by `ConnectionHandlingModeContractTest`) holds one connection per request either way — but it is a defensive annotation on the release whose subject is pool pressure.
-- Stopped discarding the fresh section totals that every impact page response already carries. `totalImpacted` / `totalZeroImpact` were read once at initial load, so a note crossing from zero-impact to impacted while the page was open left `Load more` comparing against a stale total — the button kept requesting pages that came back empty and never resolved. Both loaders now refresh the pair from the response in hand, at no extra query cost. Found by the pre-signoff cold agent.
-- Finished the `IMPACT_MILESTONE` cross-reference in the notification audit. Delivery updated Appendix A's milestone row; §15's deep-link matrix, §7.1's verified-routes table, and Appendix A's note-copy row still pointed at `/progress`.
