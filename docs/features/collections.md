@@ -949,7 +949,7 @@ skipped. New placements append after the learner's current last position.
 Each placement copy/insert is isolated and rerunnable. A failed or newly-private note is reported as
 skipped; successful earlier additions remain valid, and the next pass resumes from the remaining set
 difference. A concurrent second insert resolves as a no-op through the collection/item uniqueness
-constraints. Removing an upstream-derived learner placement writes a tombstone, so later passes do not
+constraints. Removing a source-derived learner placement writes a tombstone, so later passes do not
 re-add it. Updates spend no quota.
 
 When the source collection no longer resolves, the adoption is `Detached from source`. It remains fully

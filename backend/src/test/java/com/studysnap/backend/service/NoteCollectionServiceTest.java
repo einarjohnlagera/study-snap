@@ -4236,6 +4236,23 @@ class NoteCollectionServiceTest {
                 .as("the racing pass already landed this placement, so this pass must add nothing")
                 .isZero();
         verify(itemRepository, never()).saveAndFlush(any(NoteCollectionItemEntity.class));
+
+        // ⚠️ v0.142.0. additionsResolvedByConcurrentPass discounts result.additionsAvailable() (the
+        // post-apply "remaining" count) but earlier releases never added the matching key to
+        // appliedKeys, so markApplied left this change's `applied` flag false. The frontend derives
+        // its own topic count from `applied == false` changes, so it disagreed with the backend's
+        // already-discounted remaining count and could render "Add 1 new topic" for a placement the
+        // backend considers fully resolved. A fixture asserting only notesAdded==0 (above) passes
+        // under both the defect and the fix — this change's own applied flag is the only place that
+        // distinguishes them.
+        assertThat(result.additionsAvailable())
+                .as("nothing is left to add once the concurrent pass's landing is accounted for")
+                .isZero();
+        assertThat(result.changes())
+                .as("the concurrently-landed placement must read as applied, not still pending")
+                .filteredOn(change -> "ADDED_NOTE".equals(change.type()) && sourceNoteId.equals(change.sourceNoteId()))
+                .singleElement()
+                .satisfies(change -> assertThat(change.applied()).isTrue());
     }
 
     /**

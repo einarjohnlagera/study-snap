@@ -108,6 +108,26 @@ verified findings, and the rejected alternatives are in
   takes; two tests were added (desktop and mobile), each verified to fail against the pre-fix code
   and pass against the fix. Workstream 1 subsequently moved this behavior from the deleted CTA
   link to the card body's native link and re-pointed both tests without dropping the coverage.
+- **Fixed a race in `applySourceUpdate` found by this release's pre-signoff falsification pass:**
+  when a second concurrent (or retried) apply request landed a placement or Subject Plan first,
+  that item's `additionsResolvedByConcurrentPass` correctly discounted the backend's own
+  `additionsAvailable` remaining-count, but the same item's `ReviewSetUpdateChange.applied` flag
+  was never set — `appliedKeys` only recorded the branch where *this* pass created the item. The
+  new frontend panel derives its own topic count from `!applied` changes, so the two disagreed:
+  the button could read e.g. "Add 3 new topics" while the backend's own count said only 1 remained.
+  `appliedKeys` now records the item on either branch, since it genuinely exists either way — only
+  `additionsResolvedByConcurrentPass`/`additionsAvailable` distinguish which pass gets credit.
+  `NoteCollectionServiceTest#sourceUpdate_concurrentApplyLandingFirstMakesTheSecondPassANoOpRatherThanADuplicateInsert`
+  gained two assertions on `applied`/`additionsAvailable`, both mutation-verified to fail against
+  the pre-fix code. **Scope note:** this makes v0.142.0 touch the backend; `applied`'s semantics
+  changed only for the already-narrow concurrent-resolution case. Deploy-ordering: benign either
+  way — an old frontend reading `applied` for its "Added"/"Would be added" label now reads a
+  concurrently-resolved item as "Added" (more accurate, not less); a frontend built against this
+  fix talking to a backend one deploy behind reproduces the exact bug this bullet describes, not a
+  new failure mode. No stored data is affected; `appliedPlanIds`/snapshot re-baselining (governed
+  by the "Applying acknowledges only what it applied" invariant, `docs/features/collections.md`)
+  is untouched — that invariant constrains which plans get their source snapshot re-baselined, not
+  this flag, and this fix never touches a RENAMED/REORDERED/RETIRED/MOVED change.
 
 
 ## v0.141.0 - Formulas That Render
