@@ -85,7 +85,14 @@ verified findings, and the rejected alternatives are in
 
 ### Shipped
 
-_(nothing yet)_
+- **A5 — the notification panel now closes when a CTA is activated**, on both the desktop dropdown
+  and the mobile sheet (both render the same `rows` block, so one fix — an added `setIsOpen(false)`
+  alongside the existing `markRead` call — covers both). Of the three existing close-path tests in
+  the suite (outside click, Escape, bell toggle), none covered the close path a learner actually
+  takes; two tests were added (desktop and mobile), each verified to fail against the pre-fix code
+  and pass against the fix. **⚠️ Short-lived by design: Workstream 1 (the card redesign) will
+  delete this CTA `<Link>` entirely once the card body becomes the single tap target — re-point
+  these tests at the card body then, don't read their removal as a regression.**
 
 
 ## v0.141.0 - Formulas That Render

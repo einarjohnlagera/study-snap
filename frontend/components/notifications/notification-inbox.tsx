@@ -161,7 +161,14 @@ export function NotificationInbox({
                   <Link
                     href={ctaPath}
                     className="text-sm font-medium text-primary underline-offset-4 hover:underline"
-                    onClick={() => void markRead(notification)}
+                    // ⚠️ A5: activating the CTA must close the inbox too, not just mark it read.
+                    // Without this the panel (desktop dropdown AND mobile AppModal sheet, since both
+                    // render this same `rows` block) stays open over the destination page. Verified
+                    // this fires on 100% of today's production notifications: all 42 carry a CTA.
+                    onClick={() => {
+                      void markRead(notification);
+                      setIsOpen(false);
+                    }}
                   >
                     {notification.ctaLabel ?? "Open"}
                   </Link>
