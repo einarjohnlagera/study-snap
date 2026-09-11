@@ -2,7 +2,9 @@
 
 ## v0.142.0 - Awareness Before Action
 
-**Status: In Progress**
+**Status: Released** (kicked off 2026-09-11, signed off 2026-09-11, base branch
+`releases/v0.142.0`, PRs #1378, #1379; A5 and the notification card redesign merged directly on
+the release branch without a separate GitHub PR)
 
 Theme: the notification inbox and the adopted-Review-Set update panel both went live for the first
 time in `v0.134.0`–`v0.141.0` and have never been polished against real production shape. This
@@ -128,6 +130,45 @@ verified findings, and the rejected alternatives are in
   by the "Applying acknowledges only what it applied" invariant, `docs/features/collections.md`)
   is untouched — that invariant constrains which plans get their source snapshot re-baselined, not
   this flag, and this fix never touches a RENAMED/REORDERED/RETIRED/MOVED change.
+
+### Pre-signoff falsification pass
+
+One scoped cold agent (Sonnet, no inherited context), handed 13 specific claims from the
+implementing session across A5, Workstream 1, and Workstream 2, and asked to disprove each against
+the actual code rather than trust any summary. **11 confirmed, 2 broken** — both fixed above before
+signoff: `docs/features/collections.md:952` still said "upstream" (trivial), and the
+`appliedKeys`/concurrent-pass race (the backend fix above). Full claim list and per-claim evidence
+are in this session's transcript; nothing else survived the falsification attempt.
+
+### Backlog-row closure gate
+
+**No pre-existing Backlog Index row proposed this release's scope.** All four planned items (A5,
+Workstream 1, Workstream 2, the Section-grouping decision) were scoped fresh at this kickoff from a
+same-day owner conversation and a tightened spec written directly into
+`docs/claude-plans/v0.142.0-adoption-and-notifications-plan.md` — searched the Backlog Index for
+"notification card"/"notification inbox", "Review Set update"/"update panel", "Apply additions",
+and "additionsAvailable"/double-count language; none predate this kickoff. This is a legitimate
+"not found," not a miss: not every release originates from an aged Backlog row. The plan file stays
+exempt as a release artifact (per the Backlog Index's stated exemption), traceable through this
+section rather than a separate row.
+
+### Checkpoint gate
+
+**Nothing in this release shipped ahead of its own evidence.** A5 fixed a defect verified against
+100% of production's live notification population; the rename's collision risk was cleared by a
+read-only production check returning zero rows; the concurrency fix is a deterministic code
+correction, mutation-verified, not a hypothesis awaiting outcome data. No new checkpoint owed.
+
+**⚠️ Three checkpoints from `v0.141.0`'s section (one release above, signed off the same day) are
+still standing and NOT closed by this release either:** `v0.114.0`, `v0.101.0` Slice 1, and
+Learning Connections. None are this release's to close — `v0.114.0` needs a Render application log
+read, and the other two are unrelated to notifications or Review Sets.
+
+### Verification
+
+Full backend suite (2,361 tests, incl. the Postgres/Flyway native-query integration test) green;
+frontend collections + notification suites green with 6 and 16 mutation-verified new/changed tests
+respectively; `tsc --noEmit` and `eslint` clean on every touched frontend file.
 
 
 ## v0.141.0 - Formulas That Render
