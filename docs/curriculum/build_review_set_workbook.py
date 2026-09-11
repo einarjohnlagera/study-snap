@@ -15,20 +15,32 @@ INPUT COLUMNS (tab-separated, header row required, order irrelevant):
     note_title         the note
     note_subject       canonical Subject metadata (NOT the section name)
     domain_context     enum value, or "(unset)"
-    applicable_programs  OPTIONAL, comma-separated catalog program names. When present, the
-                       Domain Context sheet gains an Applicable Programs column aggregated per
-                       (note subject, Domain Context).
+    applicable_programs  REQUIRED, comma-separated catalog program names, filled on EVERY row.
+                       The Domain Context sheet aggregates it per (note subject, Domain Context)
+                       and prints the union for that pair. That union is what makes the two hard
+                       Domain Context rules checkable instead of merely stated: which (unset) rows
+                       are legal, and which notes gain a second program on reuse and therefore now
+                       REQUIRE an explicit Domain Context.
+                       ⚠️ Legacy plan files predating this rule (civil-engineering, let) lack the
+                       column and are refused until it is backfilled. For LET that refusal is the
+                       point: rebuilding it from its own .tsv silently DROPS the Applicable
+                       Programs column its committed workbook already shows.
     status             Existing | Reuse | New | Excluded | Unmapped
                        Unmapped = a target shape not yet reconciled against production. Use it
                        when reshaping a set whose notes already exist but have not been matched
                        title-by-title. It is honest; guessing "New" is not.
+
+OPTIONAL SIDECAR: `<input>-policy.tsv` (columns: topic, decision; first row is the header pair
+printed bold) renders beside the Domain Context table as the set's Applicable Programs policy.
+Use it for decisions that govern the column but are not per-note -- e.g. which program families a
+General Education note should and should not carry. Without it, no policy block is drawn.
 
 Row ORDER is authoritative: sections appear in first-seen order, notes in file order.
 Nothing is sorted, so the strategist's sequencing survives into the workbook.
 
 See docs/curriculum/review-set-workbook-spec.md for why each sheet exists.
 """
-import sys, csv, collections
+import sys, csv, collections, os, re
 from openpyxl import Workbook
 from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
 
@@ -67,7 +79,7 @@ def sheet_name(plan_no, title):
     return f"{plan_no} {clean}"[:31]
 
 
-def build(rows, out, set_title, set_desc):
+def build(rows, out, set_title, set_desc, policy=None):
     plans = collections.OrderedDict()
     for r in rows:
         plans.setdefault(int(r["plan_no"]), {"title": r["subject_plan"],
@@ -102,6 +114,12 @@ def build(rows, out, set_title, set_desc):
     for i, v in enumerate(["", "TOTAL", "", sum(v for k, v in tot.items() if k != EXCLUDED),
                            tot["Existing"], tot["Reuse"], tot["New"], tot["Unmapped"], tot[EXCLUDED]], 1):
         c = ov.cell(row=r, column=i, value=v); c.font = Font(bold=True); c.border = BOX
+    if policy:
+        r += 2
+        ov.cell(row=r, column=1, value=policy[0][0]).font = Font(bold=True, size=12)
+        ov.merge_cells(start_row=r, start_column=1, end_row=r, end_column=9)
+        summary = "  ".join(f"{t}: {d}" for t, d in policy[1:])
+        _banner(ov, f"A{r + 1}", summary, f"A{r + 1}:I{r + 1}", 44, italic=True, color="666666")
     _widths(ov, [5, 40, 9, 8, 9, 8, 7, 10, 9]); ov.freeze_panes = "A7"
 
     dc = wb.create_sheet("Domain Context")
@@ -115,15 +133,22 @@ def build(rows, out, set_title, set_desc):
     _banner(dc, "A4", "NOTE — (unset) falls back to the program name. If that name matches no quantitative "
             "keyword, computation guidance stays OFF for every quiz generated from the note.", "A4:D4", 30,
             italic=True, color="666666")
-    # Applicable Programs is OPTIONAL: emitted only when the input carries the column, so a plan
-    # file without it (the CE set) still builds. Added 2026-09-04 -- this column previously existed
-    # only as a HAND-EDIT of the .xlsx, which regenerating silently destroyed. Generating it from
-    # the plan file is what makes the workbook safe to rebuild.
+    # Applicable Programs is REQUIRED as of 2026-09-10 and main() refuses a file without it, so
+    # has_programs is always True on the supported path. The branch stays only so build() is safe to
+    # call directly from a future script that has not run main()'s validation -- it is DEFENSIVE, not
+    # a live option.
+    # ⚠️ THIS COMMENT PREVIOUSLY READ "OPTIONAL ... so a plan file without it (the CE set) still
+    # builds", which the same change made FALSE: the CE set no longer builds, by design. Corrected
+    # rather than left, because a stale comment beside a dead branch is how the next reader concludes
+    # the column is optional and re-introduces the loss this rule exists to prevent.
+    # Added 2026-09-04 -- the column previously existed only as a HAND-EDIT of the .xlsx, which
+    # regenerating silently destroyed. Generating it from the plan file is what makes the workbook
+    # safe to rebuild.
     has_programs = "applicable_programs" in rows[0]
     _head(dc, 6, ["Note subject", "Domain Context", "Notes in set"]
           + (["Applicable Programs"] if has_programs else []))
     per = collections.OrderedDict()
-    progs = collections.defaultdict(set)
+    progs = collections.defaultdict(dict)   # dict preserves first-seen order; set would alphabetise
     for r_ in rows:
         key = (r_["note_subject"], r_["domain_context"])
         per.setdefault(key, 0)
@@ -131,10 +156,10 @@ def build(rows, out, set_title, set_desc):
         if has_programs:
             for prog in (r_.get("applicable_programs") or "").split(","):
                 if prog.strip():
-                    progs[key].add(prog.strip())
+                    progs[key][prog.strip()] = None
     r = 7
     for (subj, v), n in sorted(per.items()):
-        vals = [subj, v, n] + ([" · ".join(sorted(progs[(subj, v)]))] if has_programs else [])
+        vals = [subj, v, n] + ([", ".join(progs[(subj, v)])] if has_programs else [])
         for i, x in enumerate(vals, 1):
             c = dc.cell(row=r, column=i, value=x); c.border = BOX
             if i == 2:
@@ -142,13 +167,32 @@ def build(rows, out, set_title, set_desc):
             if i == 4:
                 c.alignment = Alignment(wrap_text=True, vertical="top")
         r += 1
+    # Per-set Applicable Programs policy, from <input>-policy.tsv. It sits BESIDE the table rather
+    # than under it because it governs the column next to it. Optional: sets without a policy file
+    # simply have no F/G block. This exists because the block was originally a HAND-EDIT of the
+    # .xlsx -- the same way the Applicable Programs column itself started -- and regeneration
+    # destroyed it. Anything a curator writes into the workbook must have a file that regenerates it.
+    if policy:
+        for i, (topic, decision) in enumerate(policy):
+            tc = dc.cell(row=1 + i, column=6, value=topic)
+            vc = dc.cell(row=1 + i, column=7, value=decision)
+            tc.border = BOX; vc.border = BOX
+            vc.alignment = Alignment(wrap_text=True, vertical="top")
+            if i == 0:
+                tc.font = Font(bold=True, color="FFFFFF"); tc.fill = HDR
+                vc.font = Font(bold=True, color="FFFFFF"); vc.fill = HDR
+            else:
+                tc.font = Font(bold=True)
+        dc.column_dimensions["F"].width = 30
+        dc.column_dimensions["G"].width = 96
     _widths(dc, [34, 40, 14, 64]); dc.freeze_panes = "A7"
 
     for pno, p in plans.items():
         ws = wb.create_sheet(sheet_name(pno, p["title"]))
         ws["A1"] = p["title"]; ws["A1"].font = Font(size=14, bold=True); ws.merge_cells("A1:G1")
         _banner(ws, "A2", p["desc"], "A2:G2", 42)
-        _head(ws, 4, ["Section", "#", "Note title", "Note subject", "Domain Context", "Status", "Flags"])
+        _head(ws, 4, ["Section", "#", "Note title", "Note subject", "Domain Context", "Status", "Flags",
+                      "Applicable Programs"])
         r = 5
         for sec, notes in p["sections"].items():
             for i, n in enumerate(notes):
@@ -162,7 +206,8 @@ def build(rows, out, set_title, set_desc):
                 elif n["domain_context"] == "(unset)":
                     flags.append("unset requires a SINGLE applicable program")
                 vals = [sec if i == 0 else "", i + 1, n["note_title"], n["note_subject"],
-                        n["domain_context"], n["status"], " · ".join(flags)]
+                        n["domain_context"], n["status"], " · ".join(flags),
+                        n.get("applicable_programs", "")]
                 for ci, x in enumerate(vals, 1):
                     c = ws.cell(row=r, column=ci, value=x); c.border = BOX
                     if ci == 1: c.font = Font(bold=True)
@@ -170,27 +215,30 @@ def build(rows, out, set_title, set_desc):
                     if ci == 5: c.fill = PatternFill("solid", fgColor=DC_FILL.get(x, "FFFFFF"))
                     if ci == 6 and x in STATUS_FILL: c.fill = PatternFill("solid", fgColor=STATUS_FILL[x])
                     if ci == 7 and flags: c.font = Font(italic=True, color="B06000", size=9)
+                    if ci == 8: c.alignment = Alignment(wrap_text=True, vertical="top")
                 r += 1
             r += 1
-        _widths(ws, [34, 4, 60, 30, 34, 11, 58]); ws.freeze_panes = "A5"
+        _widths(ws, [34, 4, 60, 30, 34, 11, 58, 52]); ws.freeze_panes = "A5"
 
     bs = wb.create_sheet("By Subject (bulk generate)")
     bs["A1"] = "Generation batches — Bulk Generate applies ONE subject and ONE Domain Context per batch"
     bs["A1"].font = Font(size=13, bold=True); bs.merge_cells("A1:F1")
     _banner(bs, "A2", "Only 'New' and 'Unmapped' notes appear. Each block is one Bulk Generate run: set the Subject and Domain "
             "Context shown, paste the titles as topics.", "A2:F2", 16, italic=True, color="666666")
-    _head(bs, 4, ["Note subject", "Domain Context", "New notes", "Subject Plan", "Section", "Note title"])
+    _head(bs, 4, ["Note subject", "Domain Context", "New notes", "Subject Plan", "Section", "Note title",
+                  "Applicable Programs"])
     by = collections.defaultdict(list)
     for pno, p in plans.items():
         for sec, notes in p["sections"].items():
             for n in notes:
                 if n["status"] in ("New", "Unmapped"):
-                    by[(n["note_subject"], n["domain_context"])].append((p["title"], sec, n["note_title"]))
+                    by[(n["note_subject"], n["domain_context"])].append(
+                        (p["title"], sec, n["note_title"], n.get("applicable_programs", "")))
     r = 5
     for key in sorted(by, key=lambda k: (-len(by[k]), k[0])):
         subj, v = key
-        for i, (pl, sec, t) in enumerate(by[key]):
-            vals = [subj if i == 0 else "", v if i == 0 else "", len(by[key]) if i == 0 else "", pl, sec, t]
+        for i, (pl, sec, t, ap) in enumerate(by[key]):
+            vals = [subj if i == 0 else "", v if i == 0 else "", len(by[key]) if i == 0 else "", pl, sec, t, ap]
             for ci, x in enumerate(vals, 1):
                 c = bs.cell(row=r, column=ci, value=x); c.border = BOX
                 if ci in (1, 3): c.font = Font(bold=True)
@@ -198,7 +246,7 @@ def build(rows, out, set_title, set_desc):
                     c.fill = PatternFill("solid", fgColor=DC_FILL.get(v, "FFFFFF")); c.font = Font(bold=True)
             r += 1
         r += 1
-    _widths(bs, [32, 34, 10, 36, 32, 60]); bs.freeze_panes = "A5"
+    _widths(bs, [32, 34, 10, 36, 32, 60, 52]); bs.freeze_panes = "A5"
 
     wb.save(out)
     return plans, tot, by
@@ -211,14 +259,31 @@ def main():
     with open(src, encoding="utf-8-sig", newline="") as f:
         rows = list(csv.DictReader(f, delimiter="\t"))
     required = {"plan_no","subject_plan","plan_description","section","note_title",
-                "note_subject","domain_context","status"}
+                "note_subject","domain_context","status","applicable_programs"}
     missing = required - set(rows[0])
     if missing:
-        sys.exit(f"input is missing required columns: {sorted(missing)}")
+        hint = ""
+        if "applicable_programs" in missing:
+            hint = ("\n\napplicable_programs is REQUIRED on every plan file. The Domain Context sheet "
+                    "aggregates it per (note subject, Domain Context); without it the two hard Domain "
+                    "Context rules cannot be checked, only recited. Backfill it from production "
+                    "(one program name per note, comma-separated for shared notes) and re-run. "
+                    "Building without it is how the column was silently lost twice.")
+        sys.exit(f"input is missing required columns: {sorted(missing)}{hint}")
+    blank = [r["note_title"] for r in rows if not (r.get("applicable_programs") or "").strip()]
+    if blank:
+        sys.exit(f"applicable_programs is empty on {len(blank)} row(s), first: {blank[0]!r}. "
+                 "Every row must name at least one catalog program.")
     bad = {r["status"] for r in rows} - set(STATUS_FILL)
     if bad:
         sys.exit(f"unknown status values: {sorted(bad)} (allowed: {sorted(STATUS_FILL)})")
-    plans, tot, by = build(rows, out, title, desc)
+    policy_path = re.sub(r"\.tsv$", "", src) + "-policy.tsv"
+    policy = None
+    if os.path.exists(policy_path):
+        with open(policy_path, encoding="utf-8-sig", newline="") as f:
+            policy = [tuple(r[:2]) for r in csv.reader(f, delimiter="\t") if r and any(x.strip() for x in r)]
+        print(f"policy: {len(policy) - 1} decision(s) from {os.path.basename(policy_path)}")
+    plans, tot, by = build(rows, out, title, desc, policy)
     print(f"saved {out}")
     print(f"{len(plans)} plans · {len(rows)} rows · "
           + " · ".join(f"{k}={v}" for k, v in sorted(tot.items())))

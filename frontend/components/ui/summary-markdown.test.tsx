@@ -41,3 +41,28 @@ it("still renders ordinary markdown, and leaves non-math spans alone", () => {
   expect(screen.getByText("Common Misconceptions:").tagName).toBe("STRONG");
   expect(screen.getByText(/discharge varies/)).toBeInTheDocument();
 });
+
+// ⚠️ v0.141.0. `remark-math` tokenises DELIMITED math only, so an undelimited expression in a summary
+// printed literally with its backslash visible — on every surface that uses this component. 36
+// production summaries carry a backslash and no delimiter at all. The fix normalises before the
+// tokenizer runs; it returns a display string and never writes back (the v0.110.1 rule).
+it("renders undelimited math in a summary instead of printing the backslash", () => {
+  const { container } = render(
+    <SummaryMarkdown content={"The area is \\frac{1}{2}bh for a triangle."} />,
+  );
+
+  expect(container.querySelector(".katex")).not.toBeNull();
+  expect(container.querySelector(".katex-html")?.textContent ?? "").not.toContain("\\frac");
+  expect(container.textContent ?? "").toContain("for a triangle.");
+});
+
+// The counterpart guard: normalizeBareMath's first design rule is "NEVER make things worse", so prose
+// that merely contains a backslash must survive untouched rather than being mangled into math.
+it("leaves a non-math backslash in a summary alone", () => {
+  const { container } = render(
+    <SummaryMarkdown content={"Save it to C:\\Users\\notes for later."} />,
+  );
+
+  expect(container.querySelector(".katex")).toBeNull();
+  expect(container.textContent ?? "").toContain("C:\\Users\\notes");
+});

@@ -2,6 +2,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 import { renderExtractedMath } from "@/components/study-pack/quiz-working-solution";
+import { normalizeBareMath } from "@/lib/math-normalization";
 import { cn } from "@/lib/utils";
 
 /**
@@ -38,6 +39,30 @@ type SummaryMarkdownProps = {
 };
 
 export function SummaryMarkdown({ content, className }: Readonly<SummaryMarkdownProps>) {
+  // ⚠️ `remark-math` TOKENISES DELIMITED MATH ONLY — it has nothing to say about a bare `\frac{a}{b}`.
+  // Without this, an undelimited expression in a summary reached the renderer as literal text and
+  // printed with its backslash visible, on every surface that uses this component. 36 production
+  // summaries carry a backslash and no delimiter at all.
+  //
+  // ⚠️ ONE LIMITATION, STATED RATHER THAN DISCOVERED: `normalizeBareMath` returns early on ANY
+  // delimiter anywhere in the string it is given, and a summary is one long multi-paragraph string.
+  // So a summary that already contains a single `$` is left entirely alone, including its bare
+  // expressions elsewhere. That is the 36 measured above and no more — do not read this as covering
+  // every summary. Splitting per paragraph to widen it would change what remark-gfm sees and is not
+  // worth the blast radius.
+  //
+  // ⚠️ A SECOND LIMITATION, ADDED AFTER A COLD PASS FOUND IT: this normalises the WHOLE markdown
+  // string, and markdown has literal-text regions that `normalizeBareMath` knows nothing about. A
+  // fenced or inline code block containing a maths command is rewritten — `` `x^2 + y^2` `` comes out
+  // as `$x^{2}$ + $y^{2}$`, and ```` ```x = \frac{a}{b}``` ```` gains delimiters it should not have.
+  // LATENT, NOT LIVE: 0 of 7,583 production summaries and 0 of 91 companion rows contain a backtick
+  // with no `$`. Tables, links, escaped characters, Windows paths and a literal \n all survive.
+  // Recorded because the limitation above was documented carefully and this one was silent — if a
+  // summary ever carries code, fix it by skipping code regions, not by narrowing the allowlist.
+  //
+  // ⚠️ Display-time only. It returns a string for rendering and never writes back — `v0.110.1`
+  // shipped a sanitizer that re-ran on every deserialization and progressively destroyed stored text.
+  const normalized = normalizeBareMath(content);
   return (
     <div className={cn("space-y-3 text-sm leading-relaxed text-foreground/80", className)}>
       <ReactMarkdown
@@ -78,7 +103,7 @@ export function SummaryMarkdown({ content, className }: Readonly<SummaryMarkdown
           ),
         }}
       >
-        {content}
+        {normalized}
       </ReactMarkdown>
     </div>
   );

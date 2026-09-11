@@ -90,7 +90,7 @@ normalise the title on touch. A string join manufactures phantom `New` rows at s
 | Sheet | Contents | Why |
 |---|---|---|
 | **Overview** | one row per Subject Plan: sections, in-set total, and a status breakdown, plus a TOTAL row | the size of the job at a glance, and the reuse-vs-authoring split, which is the number that drives sequencing |
-| **Domain Context** | every Subject with its Domain Context and note count, above the two hard rules | the rules must sit beside the values, not in prose someone skips |
+| **Domain Context** | every Subject with its Domain Context, note count, **and the Applicable Programs union for that subject**, above the two hard rules | the rules must sit beside the values, not in prose someone skips — and the programs are what make the two rules checkable rather than merely stated |
 | **one per Subject Plan** | plan title in A1, **description once in A2**, then Section / # / Note title / Note subject / Domain Context / Status / Flags | the working sheet |
 | **By Subject (bulk generate)** | `New` notes grouped by (Subject, Domain Context), largest batch first | Bulk Generate applies one Subject and one Domain Context per run, so each block is literally one run's setup |
 
@@ -118,11 +118,74 @@ It is generated, not authored, and it carries the three things a reader would ot
 3. `unset requires a SINGLE applicable program` — the server rejects a save with 2+ Applicable
    Programs and no Domain Context, so an unset row is a landmine on any shared note.
 
+## `applicable_programs` is REQUIRED, and it is required PER NOTE SUBJECT
+
+**Every plan file must carry an `applicable_programs` column, and every row must fill it.** The
+builder rejects a file without it. This is a rule, not a preference, and it is enforced in
+`build_review_set_workbook.py` rather than left to memory.
+
+**Why per note subject.** The Domain Context sheet aggregates on `(note_subject, domain_context)`
+and prints the union of Applicable Programs for that pair. That union is the only place the two
+hard Domain Context rules can actually be *checked* rather than recited:
+
+- `(unset)` is legal only on a note with exactly ONE Applicable Program. Without the programs
+  beside the subject, a reader cannot tell which `(unset)` rows are landmines and which are fine.
+- A note that gains a second program **must** gain an explicit Domain Context. Reuse is where this
+  bites: pulling a single-program note into a second program's Review Set flips it from legal to
+  illegal, and the aggregate is what makes that visible before the save fails.
+
+**This rule exists because the column was lost twice.** It first existed only as a HAND-EDIT of the
+`.xlsx`, which regeneration silently destroyed. It was then generated from the plan file for ALE —
+but LET's `.tsv` was never backfilled, so `let-comprehensive-review.tsv` did **not** reproduce
+`let-comprehensive-review-target-shape.xlsx`: rebuilding LET from its own committed source dropped
+the Applicable Programs column. That was the documented rule ("edit the TSV and regenerate")
+destroying data by being followed.
+
+**LET was backfilled 2026-09-10 and is now idempotent** — its `.tsv` reproduces its workbook
+exactly. The values were recovered from the workbook by reverse-mapping on
+`(note_subject, domain_context)`, **not** re-read from production, because they are a curated
+DECISION about what each note should carry rather than a snapshot of what it carries today. That
+distinction matters: a production read would have silently overwritten the policy below.
+
+**⚠️ The backfill also showed the first diagnosis was incomplete, which is worth recording.** The
+loss was reported as "the Domain Context sheet loses its Applicable Programs column". True, but the
+hand-edit had added that column in FOUR places — the Domain Context sheet, every plan sheet, the By
+Subject sheet, and two prose policy blocks — and the builder generated only the first. It had also
+been applied INCONSISTENTLY: plan sheets 5 and 6 carried it and sheets 1–4 did not, which no reader
+would notice. **When you find a hand edit, enumerate every sheet before assuming you have found all
+of it.** The builder now emits the column on every sheet, so the inconsistency cannot recur.
+
+**`civil-engineering-comprehensive-review.tsv` is the one file still owing a backfill** and the
+builder refuses it until it gets one. Unlike LET there is nothing to recover from its workbook —
+that workbook predates the column entirely — so its values must come from a production read or a
+fresh curation decision.
+
+## The policy sidecar
+
+A set may carry `<set>-policy.tsv` (columns: `topic`, `decision`; the first row is the header pair).
+It renders beside the Domain Context table and as a summary under the Overview totals. Use it for
+decisions that govern Applicable Programs but are not per-note — LET's, for example, records that
+General Education notes must NOT get the broad `Education` umbrella while Education-specific notes
+must.
+
+**It exists for the same reason the column does.** LET's policy started as prose typed directly into
+the `.xlsx`, so regenerating destroyed it — the identical failure, one layer up. **Anything a
+curator writes into a workbook needs a file that regenerates it, or the next rebuild is a delete.**
+
 ## Editing the workbook later
 
 **Edit the TSV and regenerate. Do not hand-edit the .xlsx.** A hand edit is lost on the next
 regeneration and leaves no diff anyone can review; the TSV is the source of truth and diffs
 cleanly in git.
+
+**A hand edit does not merely get lost — it goes STALE IN PLACE and keeps rendering.** Generated
+columns are computed from the whole file, so editing one cell leaves every derived value beside it
+describing the old data. Measured on PNLE 2026-09-10: 25 `New` rows had their placeholder titles
+hand-edited into real ones, and all 25 kept the `same canonical note in another plan` flag they had
+earned only because the placeholder `(to author)` legitimately repeated 25 times. The workbook read
+as if 25 distinct new notes were duplicates. Totals still reconciled and the row count was
+unchanged, so nothing looked wrong. **Row counts and totals cannot detect a stale generated
+column — rebuild from the TSV and diff, or the check is not a check.**
 
 ## Files
 
@@ -131,6 +194,7 @@ cleanly in git.
 | `review-set-reshape-read.sql` | the read that gathers a strategist's inputs; parameterised by collection id |
 | `build_review_set_workbook.py` | the builder — data-driven, no per-set logic |
 | `<set>.tsv` | the source rows; regenerable input, diffable, **the thing to edit** |
+| `<set>-policy.tsv` | OPTIONAL per-set Applicable Programs policy (`topic`, `decision`); renders beside the Domain Context table and under the Overview totals |
 | `<set>-target-shape.xlsx` | the generated deliverable |
 
 A `.csv` deliverable was tried and dropped: it duplicated the TSV's content while being worse to
