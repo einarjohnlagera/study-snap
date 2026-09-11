@@ -252,7 +252,14 @@ export default function LongExamPage() {
     const longExamActive = phase === "running" && Boolean(sessionId);
     const isLastQuestion = (currentMatchingGroup?.endIndex ?? currentQuestionIndex) === totalQuestions - 1;
     useBottomViewportClaim(longExamActive);
-    useExamFocusMode(phase === "running");
+    // ⚠️ `&& !submitting` IS LOAD-BEARING, NOT TIDINESS — same invariant as Challenge Quiz
+    // (`v0.131.0`, `challenge-quiz/page.tsx:1516`). The Leave control here is
+    // `leaveDisabled={submitting}` (`:966`), and `handleComplete` holds `submitting` true across the
+    // whole completion round-trip while `phase` is still `"running"` — it only flips away AFTER the
+    // await. Without this term, a hung completion request leaves the learner with the header hidden
+    // AND the only exit disabled: no way out at all. Focus mode may never be active in a state the
+    // in-page exit does not cover.
+    useExamFocusMode(phase === "running" && !submitting);
 
     const showToast = useCallback((message: string, tone: ToastState["tone"] = "info") => {
         setToast({message, tone});
