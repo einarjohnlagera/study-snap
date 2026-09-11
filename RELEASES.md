@@ -1,5 +1,101 @@
 # RELEASES.md - NoteLib
 
+## v0.143.0 - No Way Out
+
+**Status: In Progress** (kicked off 2026-09-11, base branch `releases/v0.143.0`, cut from `main`
+after `v0.142.0` merged as #1380 and tagged, deployed and verified — Vercel and Render both
+confirmed live on `61153cc6`.)
+
+Theme: two live defects found by re-verifying Backlog Index candidates against current code
+rather than trusting their rows — a focus-mode trap that leaves a learner with no exit if Long
+Exam submission hangs, and an exam question pool that silently keeps serving questions from a
+Note's pre-regeneration content.
+
+### How this scope was reached
+
+Four Backlog Index candidates were checked before these two survived: **"Official Review Set
+publication boundary" P3** claimed un-parked/unbuilt but is fully shipped
+(`ReviewSetUpdateNotificationService.java`, commit `83074463`, `v0.135.0`); **Adaptive Practice's
+recommendation engine** is population-blocked — `[CHECKPOINT — due 2026-10-05]`'s own kill
+criterion says single digits means re-date, and a fresh read found 3 eligible users, unchanged in
+a month, and 0 users with a cross-pack actionable weak concept; **Learning Connections supporter
+onboarding** has a real, shipped-nowhere definition (`v0.97.0`, `learning-connections-phase-plan.md:443-522`)
+but sits 8 days from `[CHECKPOINT — due 2026-09-19]`, which 6 consecutive releases have protected
+from exactly this class of promotion — owner chose to defer it to `v0.144.0` rather than risk
+contaminating the count; **"Support Another Learner" Phase 1** claimed a `[DECISION]+[EVIDENCE]`-blocked
+axis-error gate but is fully shipped (`requireTeacherOrAdmin` removed in commit `cbc7d13c`,
+`v0.89.0`) — this row also duplicates "Learning Connections" under a different name for the same
+shipped arc.
+
+**All three stale rows corrected in this kickoff commit, along with a fourth found in the same
+pass** (Onboarding Intent Router's C8/C9 residuals — both already fixed in commit `826ca155`,
+2026-08-12, row never updated). Full detail in `ROADMAP.md`'s Backlog Index scan note.
+
+### Planned Scope
+
+- **Item 1 — Long Exam's focus-mode trap (frontend, isolated bug).** `long-exam/page.tsx:255`
+  calls `useExamFocusMode(phase === "running")` with no `!submitting` guard, while its Leave
+  button is `leaveDisabled={submitting}` (`:966`). If a completion request hangs, the learner has
+  no visible exit — focus mode hides the header and the one exit control is disabled. Challenge
+  Quiz already fixed this exact trap in `v0.131.0`: `challenge-quiz/page.tsx:1516` reads
+  `useExamFocusMode(phase === "running" && !submitting)`, with a comment explaining why the guard
+  is load-bearing. Long Exam was left out of that release's diff. Fix: apply the same guard.
+  Inline-sized, ships first, its own PR.
+- **Item 2 — exam question pools are not invalidated when a Note+Study Pack regeneration
+  replaces content (backend).** `ExamQuestionPoolService.initiatePoolForMode` (`:220-227`)
+  early-returns when a pool already exists and is READY/PENDING/GENERATING. Regeneration keeps
+  the same `studyPackId` (the documented in-place versioning rule — quiz/session history stays
+  linked), so the `initiatePool` call after regeneration (`StudyPackService.java:933`) is a
+  silent no-op: Long Exam and Board Exam keep serving questions drawn from replaced content. The
+  fix pattern already exists three lines above the omission, in the same method:
+  `deactivateShareLinksForNote` (`:908`) does the analogous thing for shared quiz links, citing
+  `v0.110.2`'s precedent explicitly in its own comment. Touches a `@Transactional` regeneration
+  path carrying two quota meters — not copy-fix-sized, owes its own verification tier (below).
+
+**Explicitly NOT in scope:** the Challenge Quiz question bank was flagged in the same Backlog row
+as carrying the same staleness gap, but this kickoff traced only as far as confirming
+`queueOfficialChallengeQuizTemplateSeed` is an official-template path, not the per-user bank —
+where the per-user bank is actually populated is unknown. Scoping a third invalidation seam on a
+structural analogy, without having traced it, is exactly the failure mode this kickoff's own scan
+spent the night correcting. Leave it as an open question for whoever verifies it next, not a
+planned item.
+
+### Checkpoint reads closed at this kickoff
+
+- **`[CHECKPOINT — due 2026-09-11]` `v0.114.0` — CLOSED, kill criterion (i) confirmed.** Read-only
+  Render application log query, `ConnectionLifetimeStartupLogger` at boot, 2026-09-04 through
+  2026-09-07 (8+ instances sampled): every single line reports
+  `hibernate.connection.handling_mode=DELAYED_ACQUISITION_AND_HOLD` with `open-in-view=ON`,
+  matching the test measurement exactly. `v0.112.0` §7 holds in the environment that matters.
+- **`v0.62.0` Knowledge Impact conditional-rate checkpoint — RE-DATED, not closed.** The row's own
+  premise (*"the new event has fired ZERO times because `v0.136.0` is not deployed"*) is now
+  stale — `v0.136.0` deployed days ago. Fresh read: 1 distinct viewer, 3 `KNOWLEDGE_IMPACT_DASHBOARD_VIEWED`
+  events, all 2026-09-09, none more than 2 days old. The conditional rate this row measures (did a
+  viewer publish again within N days) is genuinely not yet measurable — N days have not elapsed —
+  not a null read. Re-dated rather than read as a pass or fail.
+- **⚠️ Tool-reliability finding, not a product one:** a read-only Render Postgres query without any
+  `GROUP BY` returned an array for a scalar `user_id` column, and the identical array recurred
+  verbatim across two unrelated queries against two different tables. Caught before it reached
+  this file — re-ran with `count(DISTINCT user_id)` instead of raw ids. Treat any non-scalar
+  result from this tool as suspect until re-verified with an aggregate query.
+
+### Verification tier
+
+**One scoped cold agent, falsification-framed**, for item 2 only — it changes what questions a
+learner is served and touches a `@Transactional` path with two quota meters, the class of change
+CLAUDE.md's verification-tier gate reserves for more than a single `advisor()` call. Item 1 is a
+single-expression fix with a direct precedent in the same codebase; a normal test plus `advisor()`
+on the diff is enough.
+
+### Routing
+
+**CLAUDE CODE inline** for item 1 (one file, one expression, direct precedent). **CODEX** for item
+2 (backend service + regeneration path + tests) — write the prompt after item 1 ships.
+
+### Shipped
+
+_(nothing yet)_
+
 ## v0.142.0 - Awareness Before Action
 
 **Status: Released** (kicked off 2026-09-11, signed off 2026-09-11, base branch
@@ -551,83 +647,3 @@ Owner-reported 2026-09-09. Seven `LLM_INVALID_OUTPUT` failures across four notes
 - **⚠️ One Gate was found already true and unactioned.** The public-catalog unbounded read (a real production outage fix) un-parks *"the moment `v0.119.0` is signed off"* — **19 releases ago** — and the legacy branch is still live at `NoteService.java:774`/`:872`. **This is the other half of step 8**: it checks whether a Gate became true, and a Gate that quietly came true is as invisible as an unindexed file. Left open and anchored rather than folded in — it is a backend fix with a product decision attached, and folding it would move this release's tier.
 - **Seven rows marked out of scope for a code check with the reason written into the row** — production reads, curator work, an unreproduced variance — so the next pass does not re-litigate them. **And the nine this pass did not treat are named in the scan note with a reason each**, because a completeness pass that silently skips a third of its own set reads as complete to the next scan. None is an unverified code claim: each is already closed, already gated on a read this release must not pre-empt, or is this release's own subject.
 - **⚠️ One of the four corrections was itself wrong on first writing, was caught by `advisor()` before commit, and the error is kept on the record.** The `GENERATING` row's replacement text said notes strand *"at most one sweep interval"* — **mistaking the recovery job's 10-minute cron cadence for the strand bound**, which is actually `noteBoundMinutes` (default **120**, `application.yaml:535`) plus a cadence, understating it roughly twelve-fold. It also passed over a branch already visible on screen: rows with a null `generation_enqueued_at` are counted, logged *"leaving them untouched"*, and **strand indefinitely** — so the original headline is exactly right for that class. ⚠️ **A correction is a claim like any other and decays the same way.** `CLAUDE.md` step 2 now carries this as its worked example, including the near-miss: when a job bounds something the bound is a **configured property** — read the value — and always check what the sweep **refuses** to touch.
-- **Item 4 — the rule is the procedure this pass actually ran, not a rule written beside it.** `v0.137.0`'s snapshot rule reached `flyway_schema_history`, row counts and deploy state; it did **not** reach *"X is NOT SHIPPED"* or *"nothing does Y"*, which rot just as fast because the fix ships in a release that never re-reads the row claiming it is missing. The extension carries six numbered steps — classify by claim type before reading, **verify the title's claim and not only the Status cell's** (the `GENERATING` row diverged exactly there), anchor every survivor to `file:line`, read the row's cells against each other first, never advance `Last reviewed` on a row you did not re-read, and check the table's structure before trusting an iteration over it — plus the standing instruction to **report the count you actually found rather than the one that was asserted**.
-
-## v0.137.0 - Deploy Integrity
-
-**Status: Released** (kicked off 2026-09-09, signed off 2026-09-09, base branch `releases/v0.137.0`, cut from `main` after `v0.136.0` merged as #1359. **⚠️ RE-SCOPED the same day — see below.** No feature or fix PRs: every commit is release-management or docs, plus one script.)
-
-Theme: the deploy pipeline failed silently and the record of what was deployed was wrong. Make both true again.
-
-### ⚠️⚠️ THIS RELEASE WAS SCOPED ON A FALSE PREMISE AND RE-SCOPED WITHIN THE HOUR — THE ORIGINAL IS RECORDED, NOT OVERWRITTEN
-
-It opened as **Deploy and Read**, justified by *"`v0.132.0` through `v0.136.0` are merged and none is deployed"*, taken from `ROADMAP.md`. **The owner chose that scope over two feature candidates on the strength of it. Read-only production queries then disproved it:**
-
-| Claim as written | Reality, read 2026-09-09 |
-|---|---|
-| `V141` has never been run | **RAN 2026-09-08T12:23:16Z**, `success = true`, on `v0.132.0`'s own auto-deploy |
-| `V142` has never been run | **RAN 2026-09-08T15:47:36Z**, on `v0.133.0`'s |
-| The profile-string write is still pending | **ALREADY APPLIED** — the read returns `0 old / 1 new` |
-| Five releases are undeployed | **The BACKEND deployed automatically every time.** Only `v0.136.0`'s FRONTEND is missing |
-
-`notifications` and `announcements` really are at zero rows, so the notification checkpoints genuinely remain unreadable. That half survived; the rest did not.
-
-**⚠️ THE CHEAPEST DETECTOR EXISTED AND NOBODY USED IT: the `v0.133.0` row said `V142` HAS NOT BEEN RUN in its Gate cell while its own Status cell said the read was *"READ AND CLOSED 2026-09-09, one day after the deploy, exactly on its date"* — which is only possible if it HAD deployed.** The Status was updated when the read closed; the Gate was not. **A row that contradicts itself is free to detect and nobody read the two cells against each other.**
-
-### ⚠️ The live defect this investigation actually found
-
-**`v0.136.0` did not auto-deploy on EITHER platform, and the resulting version skew broke Your Impact in production.**
-
-Render's config is correct and untouched (`autoDeploy: yes`, `autoDeployTrigger: commit`, `branch: main`) and every prior release fired in **2–3 seconds** with `trigger: new_commit`. For `4ee2c752` it never fired; the owner deployed manually 5.5 minutes later (`trigger: manual`). Vercel matches exactly — GitHub records a `vercel[bot]` Production deployment for every prior release merge and **ZERO** for this one. There are no repo-level webhooks and no CI workflows, so both platforms are GitHub App integrations consuming **the same push event**, and neither received it. GitHub declared no incident that day.
-
-**The consequence, verified against the live commit rather than assumed:** Vercel's newest Production deployment is still `7f371e65` (`v0.135.0`) while Render runs `v0.136.0`. `v0.135.0`'s `api.ts:5990` calls `/creator-impact/me` with **no** parameters, from `public-profile-page-client.tsx:225` and `settings/page.tsx:281` — and `v0.136.0` made `impacted` **required**, so both calls now 400. The owner sees *"Could not load your impact."* with a Retry that can never succeed, and the Knowledge Impact digest toggle hidden in Settings. Both degrade rather than crash, which was deliberate, but the feature is dead until Vercel ships.
-
-**⚠️ AND THE CHANGE WAS BREAKING IN BOTH DIRECTIONS — frontend-first would have 404'd on `/creator-impact/me/summary`. `v0.136.0` recorded no deploy-ordering requirement at all.**
-
-### Planned Scope
-
-1. **Restore the frontend deploy — OWNER ACTION.** Deploy `4ee2c752` (or later) on Vercel. Until then the skew above is live.
-2. **A detector for a merge that produced no deploy.** Nothing in the repo or the process noticed; it was found only because the owner happened to look. The cheapest form is a signoff-time check that the deployed commit matches `main` on both platforms — decide detector shape before building anything.
-3. **Two standing rules, written where they will be read.** (a) A release that removes, renames or makes-required an existing API form is **breaking in both directions** and must state its deploy ordering or that both sides ship together. (b) **A `ROADMAP.md` claim about PRODUCTION STATE is a snapshot, not a fact** — re-read it read-only before repeating it, and treat a row whose Gate and Status cells disagree as a defect in itself.
-4. **The reads that are now live**, which the false premise had wrongly deferred: `2026-09-10` (`v0.72.0` proximal retention, `v0.134.0` `deploy + 1 day`) and `2026-09-11` (onboarding funnel, `v0.62.0` Knowledge Impact).
-
-### ⚠️ Anti-drift
-
-- ❌ **NO `frontend/app/onboarding` work before the `2026-09-11` read.** It measures signup-funnel completion against a **62.4%** baseline (234/375) that cannot be re-run.
-- ❌ **NO Learning Connections work** — `[CHECKPOINT — due 2026-09-19]`, denominator ONE. Stage D2's connection-request notification is exactly the nudge that converts `PENDING` into `ACCEPTED`, the metric that checkpoint kills the arc on.
-- ❌ **Do NOT change any analytics event, fire site or gating condition a live checkpoint reads.** `v0.136.0` moved and re-gated `KNOWLEDGE_IMPACT_DASHBOARD_VIEWED` two days before the `2026-09-11` read that depends on it; a second such change would corrupt another read.
-- ❌ **Do NOT add a second entry point to `/impact`** before its own `[CHECKPOINT — due deploy + 30 days]` reads — adding one destroys the measurement.
-- ❌ **Do NOT add CI infrastructure as a reflex.** The repo has **no** `.github/workflows/`, and item 2 is a detection problem, not automatically a CI problem. State the shape before building.
-- ⚠️ **A quiet read is NOT a pass.** On rows with a denominator clause (`notifications` at zero, one curator, zero digest opt-ins), `no data` means **NOT YET MEASURABLE → RE-DATE**.
-- ⚠️ **⚠️ THE PRODUCTION DATABASE IS READ-ONLY FOR CLAUDE, ALWAYS** — every diagnostic in this section came from `SELECT`s. The deploy is the owner's.
-
-### ⚠️ What is actually deployed, as of 2026-09-09
-
-- **Backend (Render):** `4ee2c752` = `v0.136.0`, live, deployed manually 12:04:31Z.
-- **Frontend (Vercel):** `7f371e65` = `v0.135.0`. **One release behind, and that is the live defect.**
-- **Database:** migrations current at **`V143`**, matching the repo's highest. Nothing pending.
-
-### Scope completeness
-
-| Planned item | Outcome |
-|---|---|
-| 1. Restore the frontend deploy | **✅ SHIPPED (owner).** Vercel Production now carries `4ee2c752` at 2026-09-09T14:00:53Z, `state=success`; Render and `main` agree. Skew resolved, verified read-only rather than assumed. |
-| 2. Detector for a merge that produced no deploy | **✅ SHIPPED.** `scripts/check-deploys.sh`, wired into `/signoff`. Shape was decided before building, per the anti-drift, and CI was deliberately not introduced. |
-| 3. Two standing rules | **✅ SHIPPED** in `CLAUDE.md` — the production-state-is-a-snapshot rule and the API-form-is-breaking-both-ways rule. |
-| 4. The `2026-09-10` and `2026-09-11` reads | **❌ NOT SHIPPED — the dates had not arrived, and reading early is the failure those dates exist to prevent.** Nothing about them is blocked by this release; they are unchanged in the Backlog Index and land in the next cycle. Recorded here so a reader does not mistake the release's own scope list for work that silently vanished. |
-
-### Known limitations
-
-- **The Render half of `check-deploys.sh` has not been run against the live Render API.** No `RENDER_API_KEY` was available in the session that wrote it, so the request, auth and error paths are unexercised; only the response *parsing* is covered, by fixtures. **The first real run is the test** — if it fails, the fault is in the request/auth path, not the comparison. The Vercel half ran end-to-end against the live API and is confirmed working.
-- **The detector is manual.** It runs when `/signoff` says to run it, so a release that never reaches signoff is not covered, and neither is a deploy that goes missing between releases. Making it automatic requires a `schedule:`-triggered workflow — **not `on: push`, which cannot observe the absence of the event that triggers it** — and that was deliberately deferred rather than introduce CI to a repo with no workflows.
-
-### Routing
-
-**CLAUDE CODE** for the doc corrections, the rules and the reads. Item 2 is re-routed once its shape is decided.
-
-### Shipped
-
-- Added `scripts/check-deploys.sh`, a detector for a merge that produced no deploy, and wired it into `/signoff` after the release PR merges. It compares `origin/main` against Vercel's newest successful Production deployment (read through GitHub's deployments API, so it needs no new secret) and Render's newest live deploy. **It tests for ABSENCE rather than failure**, because Render's `notifyOnFail` had nothing to fire on — nothing failed, nothing was queued — and **it exits 2 rather than 0 when it cannot check**, since "I could not look" reported as "all clear" is the same failure class it exists to catch.
-- **Verified the detector against the defect itself rather than asserting it:** replayed today's 12:04 state (`main` at `4ee2c752`, Vercel newest `7f371e65`) through the comparison and confirmed it reports drift and exits 1. The Render response parser is covered by fixtures for the wrapped and unwrapped API shapes, a no-live-deploy list and an empty list.
-- Added two standing rules to `CLAUDE.md`: a claim about production state is a snapshot that must be re-read before it is repeated (with internal Gate/Status contradiction named as the free detector), and removing/renaming/making-required an API form is breaking in both directions and owes a deploy-ordering statement.
-- Corrected four false production-state claims in `ROADMAP.md` — the `V141`/`V142` gate cells and the profile-string write — each against the read-only query that disproves it, and recorded the self-contradicting row as the detector that was available and unused.

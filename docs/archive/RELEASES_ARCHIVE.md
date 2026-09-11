@@ -1,6 +1,6 @@
 # RELEASES_ARCHIVE.md — NoteLib
 
-Archived sections of `RELEASES.md`. **Contents are NOT one contiguous range:** `v0.41.0`–`v0.120.0`, plus `v0.126.0` (moved at the `v0.132.0` kickoff), `v0.127.0` (moved at the `v0.133.0` kickoff) `v0.128.0` (moved at the `v0.134.0` kickoff) `v0.129.0` (moved at the `v0.135.0` kickoff) `v0.130.0` (moved at the `v0.136.0` kickoff) `v0.131.0` (moved at the `v0.137.0` kickoff) `v0.132.0` (moved at the `v0.138.0` kickoff) `v0.133.0` (moved at the `v0.139.0` kickoff), `v0.134.0` (moved at the `v0.140.0` kickoff), `v0.135.0` (moved at the `v0.141.0` kickoff) and `v0.136.0` (moved at the `v0.142.0` kickoff) as the live file crossed its *current + last five* cap. Each version's own `## vX.Y.Z` heading is the index — search for it. `v0.40.1` and earlier moved here
+Archived sections of `RELEASES.md`. **Contents are NOT one contiguous range:** `v0.41.0`–`v0.120.0`, plus `v0.126.0` (moved at the `v0.132.0` kickoff), `v0.127.0` (moved at the `v0.133.0` kickoff) `v0.128.0` (moved at the `v0.134.0` kickoff) `v0.129.0` (moved at the `v0.135.0` kickoff) `v0.130.0` (moved at the `v0.136.0` kickoff) `v0.131.0` (moved at the `v0.137.0` kickoff) `v0.132.0` (moved at the `v0.138.0` kickoff) `v0.133.0` (moved at the `v0.139.0` kickoff), `v0.134.0` (moved at the `v0.140.0` kickoff), `v0.135.0` (moved at the `v0.141.0` kickoff), `v0.136.0` (moved at the `v0.142.0` kickoff) and `v0.137.0` (moved at the `v0.143.0` kickoff) as the live file crossed its *current + last five* cap. Each version's own `## vX.Y.Z` heading is the index — search for it. `v0.40.1` and earlier moved here
 2026-07-10; **`v0.41.0` through `v0.120.0` moved here 2026-09-07** in the `v0.126.0` pass, which
 resumed this convention after it had lapsed for 85 releases — `RELEASES.md` had reached 116
 sections against its documented design of *current + last few versions*. Both passes are MOVES,
@@ -18120,3 +18120,82 @@ setHasPublicNotes(Boolean(impact.value?.notes.length));
 - Restored `@Transactional(readOnly = true)` on `CreatorImpactService`, removed during delivery. Behaviourally near-neutral — OSIV plus `DELAYED_ACQUISITION_AND_HOLD` (pinned by `ConnectionHandlingModeContractTest`) holds one connection per request either way — but it is a defensive annotation on the release whose subject is pool pressure.
 - Stopped discarding the fresh section totals that every impact page response already carries. `totalImpacted` / `totalZeroImpact` were read once at initial load, so a note crossing from zero-impact to impacted while the page was open left `Load more` comparing against a stale total — the button kept requesting pages that came back empty and never resolved. Both loaders now refresh the pair from the response in hand, at no extra query cost. Found by the pre-signoff cold agent.
 - Finished the `IMPACT_MILESTONE` cross-reference in the notification audit. Delivery updated Appendix A's milestone row; §15's deep-link matrix, §7.1's verified-routes table, and Appendix A's note-copy row still pointed at `/progress`.
+
+## v0.137.0 - Deploy Integrity
+
+**Status: Released** (kicked off 2026-09-09, signed off 2026-09-09, base branch `releases/v0.137.0`, cut from `main` after `v0.136.0` merged as #1359. **⚠️ RE-SCOPED the same day — see below.** No feature or fix PRs: every commit is release-management or docs, plus one script.)
+
+Theme: the deploy pipeline failed silently and the record of what was deployed was wrong. Make both true again.
+
+### ⚠️⚠️ THIS RELEASE WAS SCOPED ON A FALSE PREMISE AND RE-SCOPED WITHIN THE HOUR — THE ORIGINAL IS RECORDED, NOT OVERWRITTEN
+
+It opened as **Deploy and Read**, justified by *"`v0.132.0` through `v0.136.0` are merged and none is deployed"*, taken from `ROADMAP.md`. **The owner chose that scope over two feature candidates on the strength of it. Read-only production queries then disproved it:**
+
+| Claim as written | Reality, read 2026-09-09 |
+|---|---|
+| `V141` has never been run | **RAN 2026-09-08T12:23:16Z**, `success = true`, on `v0.132.0`'s own auto-deploy |
+| `V142` has never been run | **RAN 2026-09-08T15:47:36Z**, on `v0.133.0`'s |
+| The profile-string write is still pending | **ALREADY APPLIED** — the read returns `0 old / 1 new` |
+| Five releases are undeployed | **The BACKEND deployed automatically every time.** Only `v0.136.0`'s FRONTEND is missing |
+
+`notifications` and `announcements` really are at zero rows, so the notification checkpoints genuinely remain unreadable. That half survived; the rest did not.
+
+**⚠️ THE CHEAPEST DETECTOR EXISTED AND NOBODY USED IT: the `v0.133.0` row said `V142` HAS NOT BEEN RUN in its Gate cell while its own Status cell said the read was *"READ AND CLOSED 2026-09-09, one day after the deploy, exactly on its date"* — which is only possible if it HAD deployed.** The Status was updated when the read closed; the Gate was not. **A row that contradicts itself is free to detect and nobody read the two cells against each other.**
+
+### ⚠️ The live defect this investigation actually found
+
+**`v0.136.0` did not auto-deploy on EITHER platform, and the resulting version skew broke Your Impact in production.**
+
+Render's config is correct and untouched (`autoDeploy: yes`, `autoDeployTrigger: commit`, `branch: main`) and every prior release fired in **2–3 seconds** with `trigger: new_commit`. For `4ee2c752` it never fired; the owner deployed manually 5.5 minutes later (`trigger: manual`). Vercel matches exactly — GitHub records a `vercel[bot]` Production deployment for every prior release merge and **ZERO** for this one. There are no repo-level webhooks and no CI workflows, so both platforms are GitHub App integrations consuming **the same push event**, and neither received it. GitHub declared no incident that day.
+
+**The consequence, verified against the live commit rather than assumed:** Vercel's newest Production deployment is still `7f371e65` (`v0.135.0`) while Render runs `v0.136.0`. `v0.135.0`'s `api.ts:5990` calls `/creator-impact/me` with **no** parameters, from `public-profile-page-client.tsx:225` and `settings/page.tsx:281` — and `v0.136.0` made `impacted` **required**, so both calls now 400. The owner sees *"Could not load your impact."* with a Retry that can never succeed, and the Knowledge Impact digest toggle hidden in Settings. Both degrade rather than crash, which was deliberate, but the feature is dead until Vercel ships.
+
+**⚠️ AND THE CHANGE WAS BREAKING IN BOTH DIRECTIONS — frontend-first would have 404'd on `/creator-impact/me/summary`. `v0.136.0` recorded no deploy-ordering requirement at all.**
+
+### Planned Scope
+
+1. **Restore the frontend deploy — OWNER ACTION.** Deploy `4ee2c752` (or later) on Vercel. Until then the skew above is live.
+2. **A detector for a merge that produced no deploy.** Nothing in the repo or the process noticed; it was found only because the owner happened to look. The cheapest form is a signoff-time check that the deployed commit matches `main` on both platforms — decide detector shape before building anything.
+3. **Two standing rules, written where they will be read.** (a) A release that removes, renames or makes-required an existing API form is **breaking in both directions** and must state its deploy ordering or that both sides ship together. (b) **A `ROADMAP.md` claim about PRODUCTION STATE is a snapshot, not a fact** — re-read it read-only before repeating it, and treat a row whose Gate and Status cells disagree as a defect in itself.
+4. **The reads that are now live**, which the false premise had wrongly deferred: `2026-09-10` (`v0.72.0` proximal retention, `v0.134.0` `deploy + 1 day`) and `2026-09-11` (onboarding funnel, `v0.62.0` Knowledge Impact).
+
+### ⚠️ Anti-drift
+
+- ❌ **NO `frontend/app/onboarding` work before the `2026-09-11` read.** It measures signup-funnel completion against a **62.4%** baseline (234/375) that cannot be re-run.
+- ❌ **NO Learning Connections work** — `[CHECKPOINT — due 2026-09-19]`, denominator ONE. Stage D2's connection-request notification is exactly the nudge that converts `PENDING` into `ACCEPTED`, the metric that checkpoint kills the arc on.
+- ❌ **Do NOT change any analytics event, fire site or gating condition a live checkpoint reads.** `v0.136.0` moved and re-gated `KNOWLEDGE_IMPACT_DASHBOARD_VIEWED` two days before the `2026-09-11` read that depends on it; a second such change would corrupt another read.
+- ❌ **Do NOT add a second entry point to `/impact`** before its own `[CHECKPOINT — due deploy + 30 days]` reads — adding one destroys the measurement.
+- ❌ **Do NOT add CI infrastructure as a reflex.** The repo has **no** `.github/workflows/`, and item 2 is a detection problem, not automatically a CI problem. State the shape before building.
+- ⚠️ **A quiet read is NOT a pass.** On rows with a denominator clause (`notifications` at zero, one curator, zero digest opt-ins), `no data` means **NOT YET MEASURABLE → RE-DATE**.
+- ⚠️ **⚠️ THE PRODUCTION DATABASE IS READ-ONLY FOR CLAUDE, ALWAYS** — every diagnostic in this section came from `SELECT`s. The deploy is the owner's.
+
+### ⚠️ What is actually deployed, as of 2026-09-09
+
+- **Backend (Render):** `4ee2c752` = `v0.136.0`, live, deployed manually 12:04:31Z.
+- **Frontend (Vercel):** `7f371e65` = `v0.135.0`. **One release behind, and that is the live defect.**
+- **Database:** migrations current at **`V143`**, matching the repo's highest. Nothing pending.
+
+### Scope completeness
+
+| Planned item | Outcome |
+|---|---|
+| 1. Restore the frontend deploy | **✅ SHIPPED (owner).** Vercel Production now carries `4ee2c752` at 2026-09-09T14:00:53Z, `state=success`; Render and `main` agree. Skew resolved, verified read-only rather than assumed. |
+| 2. Detector for a merge that produced no deploy | **✅ SHIPPED.** `scripts/check-deploys.sh`, wired into `/signoff`. Shape was decided before building, per the anti-drift, and CI was deliberately not introduced. |
+| 3. Two standing rules | **✅ SHIPPED** in `CLAUDE.md` — the production-state-is-a-snapshot rule and the API-form-is-breaking-both-ways rule. |
+| 4. The `2026-09-10` and `2026-09-11` reads | **❌ NOT SHIPPED — the dates had not arrived, and reading early is the failure those dates exist to prevent.** Nothing about them is blocked by this release; they are unchanged in the Backlog Index and land in the next cycle. Recorded here so a reader does not mistake the release's own scope list for work that silently vanished. |
+
+### Known limitations
+
+- **The Render half of `check-deploys.sh` has not been run against the live Render API.** No `RENDER_API_KEY` was available in the session that wrote it, so the request, auth and error paths are unexercised; only the response *parsing* is covered, by fixtures. **The first real run is the test** — if it fails, the fault is in the request/auth path, not the comparison. The Vercel half ran end-to-end against the live API and is confirmed working.
+- **The detector is manual.** It runs when `/signoff` says to run it, so a release that never reaches signoff is not covered, and neither is a deploy that goes missing between releases. Making it automatic requires a `schedule:`-triggered workflow — **not `on: push`, which cannot observe the absence of the event that triggers it** — and that was deliberately deferred rather than introduce CI to a repo with no workflows.
+
+### Routing
+
+**CLAUDE CODE** for the doc corrections, the rules and the reads. Item 2 is re-routed once its shape is decided.
+
+### Shipped
+
+- Added `scripts/check-deploys.sh`, a detector for a merge that produced no deploy, and wired it into `/signoff` after the release PR merges. It compares `origin/main` against Vercel's newest successful Production deployment (read through GitHub's deployments API, so it needs no new secret) and Render's newest live deploy. **It tests for ABSENCE rather than failure**, because Render's `notifyOnFail` had nothing to fire on — nothing failed, nothing was queued — and **it exits 2 rather than 0 when it cannot check**, since "I could not look" reported as "all clear" is the same failure class it exists to catch.
+- **Verified the detector against the defect itself rather than asserting it:** replayed today's 12:04 state (`main` at `4ee2c752`, Vercel newest `7f371e65`) through the comparison and confirmed it reports drift and exits 1. The Render response parser is covered by fixtures for the wrapped and unwrapped API shapes, a no-live-deploy list and an empty list.
+- Added two standing rules to `CLAUDE.md`: a claim about production state is a snapshot that must be re-read before it is repeated (with internal Gate/Status contradiction named as the free detector), and removing/renaming/making-required an API form is breaking in both directions and owes a deploy-ordering statement.
+- Corrected four false production-state claims in `ROADMAP.md` — the `V141`/`V142` gate cells and the profile-string write — each against the read-only query that disproves it, and recorded the self-contradicting row as the detector that was available and unused.
