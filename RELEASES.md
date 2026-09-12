@@ -110,7 +110,7 @@ on the diff is enough.
 - **Item 1 — Long Exam focus-mode trap fixed.** `useExamFocusMode` in `long-exam/page.tsx` now
   reads `phase === "running" && !submitting`, matching Challenge Quiz's `v0.131.0` guard.
   Regression test added and mutation-verified against pre-fix code, both in isolation and in the
-  full suite. Checked the sibling `interview-practice/page.tsx:309`, which has the same bare
+  full suite. Checked the sibling `interview-practice/page.tsx`, which has the same bare
   `phase === "running"` expression — confirmed clean, its Leave Practice button carries no
   `disabled` state to trap behind. PR #1381 (`fix/v0.143.0-long-exam-focus-trap`), not yet merged.
 - **Item 2 — regenerated Study Packs now invalidate their exam question pools.** Both the combined
@@ -118,7 +118,29 @@ on the diff is enough.
   pools inside the content-write transaction. Pool generation now uses `generationStatusAt` as an
   optimistic stamp so an older in-flight task cannot publish stale questions over a newer attempt.
   If that newer attempt fails after superseding an older successful result, the pool remains
-  `FAILED` and self-heals through the existing refresh-on-use path.
+  `FAILED` and self-heals through the existing refresh-on-use path. **⚠️ The stamp guard is applied
+  to the `READY` write only, deliberately not to the `catch` block's `FAILED` write** — a superseded
+  task that later throws (rather than completing) can still flip a good, newer `READY` pool back to
+  `FAILED`, costing one wasted regeneration cycle on the pool's next use. Accepted, not fixed: the
+  pool's `questions` are untouched (only the status field is stomped), and `sampleQuestions` already
+  refreshes any `FAILED` pool on next use.
+- **A scoped cold falsification pass on item 2 found and fixed a real deadlock risk before merge.**
+  The unconditional invalidation call locked `exam_question_pool` (via `refreshPool`) BEFORE the
+  regeneration's own pending `study_packs` update actually flushed — Hibernate's auto-flush is
+  query-space aware and does not flush an unrelated table's pending write before a JPQL query
+  against a disjoint one. Every other caller that touches both tables locks `study_packs` first,
+  then `exam_question_pool` (`LongExamService.startSession` → `sampleQuestions`); this inverted
+  that order, opening a genuine deadlock window against a concurrent exam start. **Verified
+  empirically**, not just reasoned through: a scratch `StatementInspector`-backed test against a
+  real Postgres instance reproduced the inversion (`select … for update` on the pool preceding the
+  `update study_packs`), and confirmed an explicit `studyPackRepository.flush()` before the
+  invalidation calls restores the correct order. Fixed by adding that flush call.
+- **Flagged, not fixed: a fourth path replaces Study Pack content in place with no invalidation.**
+  `AdminStudyPackTransactionHelper.regenerateOnePack` (admin-only) overwrites `summary` — a direct
+  exam-pool generation input — outside `generateStudyPackFromExistingNoteAsync` entirely, so this
+  release's fix does not reach it. Traced with `file:line` evidence, not a structural analogy;
+  recorded as its own `ROADMAP.md` Backlog Index row rather than folded into this PR, matching how
+  the `deactivateShareLinksForNote` finding was handled at kickoff.
 
 ## v0.142.0 - Awareness Before Action
 

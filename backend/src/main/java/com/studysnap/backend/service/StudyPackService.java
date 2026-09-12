@@ -890,6 +890,19 @@ public class StudyPackService {
                         recordUsage
                 );
                 markNoteGenerated(noteId, sourceNote);
+                // ⚠️ THE FLUSH IS LOAD-BEARING, NOT TIDINESS. Every other caller that touches both a
+                // Study Pack and its exam pool locks study_packs FIRST, then exam_question_pool
+                // (LongExamService.startSession -> findOwnedStudyPackForGenerationOrThrow, then
+                // ExamQuestionPoolService.sampleQuestions). Without this flush, saveStudyPack's UPDATE
+                // to the already-managed StudyPackEntity stays a PENDING, unflushed change -- Hibernate's
+                // auto-flush is query-space aware and does NOT flush it before refreshPool's JPQL
+                // @Lock query, which targets the disjoint exam_question_pool table -- so refreshPool
+                // would acquire the exam_question_pool row lock BEFORE the study_packs row lock lands
+                // (only at commit), inverting the lock order every other caller relies on and opening a
+                // real deadlock window against a concurrent exam start. Verified empirically with a
+                // StatementInspector against a real Postgres instance: the inversion reproduces without
+                // this flush and disappears with it.
+                studyPackRepository.flush();
                 // Both regeneration scopes replace this Study Pack in place, so both must invalidate
                 // exam questions derived from its previous content. On first generation there is no
                 // existing pool row, and refreshPool is deliberately a safe no-op.
