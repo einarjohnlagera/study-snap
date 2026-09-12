@@ -16,6 +16,13 @@ import {
 const pushMock = jest.fn();
 const replaceMock = jest.fn();
 let searchParamsMock = new URLSearchParams();
+const useBottomViewportClaimMock = jest.fn();
+const useExamFocusModeMock = jest.fn();
+
+jest.mock("@/components/exam-mode/exam-focus-context", () => ({
+  useBottomViewportClaim: (active: boolean) => useBottomViewportClaimMock(active),
+  useExamFocusMode: (active: boolean) => useExamFocusModeMock(active),
+}));
 
 jest.mock("next/navigation", () => ({
   useParams: () => ({ id: "note-1" }),
@@ -64,11 +71,16 @@ describe("LongExamPage", () => {
     window.sessionStorage.clear();
     pushMock.mockReset();
     replaceMock.mockReset();
+    useBottomViewportClaimMock.mockReset();
+    useExamFocusModeMock.mockReset();
     searchParamsMock = new URLSearchParams();
     (forfeitLongExamSession as jest.Mock).mockReset();
     (getCollection as jest.Mock).mockReset();
     (startLongExam as jest.Mock).mockReset();
     (getActiveLongExamSession as jest.Mock).mockReset();
+    // ⚠️ Call-count reset, not just implementation — a prior test's resolved calls otherwise bleed
+    // into a later `toHaveBeenCalledTimes` assertion on this mock.
+    (completeLongExamSession as jest.Mock).mockReset();
     (getAuthUser as jest.Mock).mockReturnValue({
       id: "user-1",
       planType: "PRO",
@@ -460,6 +472,47 @@ describe("LongExamPage", () => {
     expect(screen.getByText(expectedTitle)).toBeInTheDocument();
     expect(screen.queryByText(absentTitle)).not.toBeInTheDocument();
     expect(await screen.findByText("When will you come back?")).toBeInTheDocument();
+  });
+
+  it("gives the header back while submitting, because the Leave control is disabled then", async () => {
+    // ⚠️⚠️ THE TRAP: `leaveDisabled={submitting}` (`:966`), and `handleComplete` holds `submitting`
+    // true across the whole completion round-trip while `phase` is still "running" — it only flips
+    // away AFTER the await. `useExamFocusMode(phase === "running")` alone meant the header stayed
+    // hidden AND the only exit stayed disabled for that entire window, with no way out at all if the
+    // request hung. Same invariant Challenge Quiz fixed in `v0.131.0`
+    // (`challenge-quiz/page.tsx:1516`), applied here.
+    //
+    // Never resolves: holds `submitting` true so the window under test stays open, which is also what
+    // a hung or very slow completion request looks like to the learner.
+    (completeLongExamSession as jest.Mock).mockImplementation(() => new Promise(() => {}));
+    (startLongExam as jest.Mock).mockResolvedValue({
+      sessionId: "session-1",
+      status: "IN_PROGRESS",
+      quiz: [{
+        question: "What powers the cell?",
+        choices: ["Mitochondria", "Nucleus", "Golgi apparatus", "Cell wall"],
+        correctIndex: 0,
+        concept: "Cell Biology",
+        explanation: "Mitochondria produce cellular energy.",
+      }],
+      totalQuestions: 1,
+      difficulty: "mixed",
+      canResume: false,
+      timeLimitSeconds: 90,
+      timerStartedAtEpochSeconds: Math.floor(Date.now() / 1000),
+      sourceNoteRefs: [],
+      usedThisMonth: 1,
+      monthlyLimit: 10,
+    });
+
+    render(<LongExamPage />);
+    fireEvent.click(await screen.findByRole("button", { name: "Begin Long Exam" }));
+    fireEvent.click(await screen.findByRole("button", { name: /Mitochondria/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Submit Exam" }));
+
+    await waitFor(() => expect(completeLongExamSession).toHaveBeenCalledTimes(1));
+    expect(screen.getByRole("button", { name: "Leave Exam" })).toBeDisabled();
+    expect(useExamFocusModeMock).toHaveBeenLastCalledWith(false);
   });
 
 });
