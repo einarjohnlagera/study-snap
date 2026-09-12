@@ -890,6 +890,13 @@ public class StudyPackService {
                         recordUsage
                 );
                 markNoteGenerated(noteId, sourceNote);
+                // Both regeneration scopes replace this Study Pack in place, so both must invalidate
+                // exam questions derived from its previous content. On first generation there is no
+                // existing pool row, and refreshPool is deliberately a safe no-op.
+                examQuestionPoolService.refreshPool(
+                        savedEntity.getId(), ExamQuestionPoolService.MODE_LONG_EXAM);
+                examQuestionPoolService.refreshPool(
+                        savedEntity.getId(), ExamQuestionPoolService.MODE_BOARD_EXAM);
                 if (regeneratingNoteContent) {
                     if (recordUsage) {
                         // The second meter. saveStudyPack above charged the Study Pack one; both land in

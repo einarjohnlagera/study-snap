@@ -80,7 +80,7 @@ Set. Subject Plans supply coverage spread rather than weights, and the bounded s
 for a session. Board generation is asynchronous after the start commits; if it cannot assemble a valid exam,
 both meters it reserved (the shared Challenge Quiz meter and Board Exam meter) are reversed.
 
-Single-note exam-pool generation also carries an attempt clock. Every transition into `PENDING` or `GENERATING` refreshes `generation_status_at`; an age-based recovery sweep resolves stale non-terminal pools to `FAILED`. This prevents a pool killed while queued or generating from permanently forcing every later exam start on that Study Pack onto live generation. The sweep stops at `FAILED`: the existing `sampleQuestions` path refreshes the pool only when a learner next uses it. Pool `created_at` is never the recovery clock because pool rows are reused, and a late live task that finishes after recovery may still write the correct `READY` outcome.
+Single-note exam-pool generation also carries an attempt clock. Every transition into `PENDING` or `GENERATING` refreshes `generation_status_at`; an age-based recovery sweep resolves stale non-terminal pools to `FAILED`. This prevents a pool killed while queued or generating from permanently forcing every later exam start on that Study Pack onto live generation. The sweep stops at `FAILED`: the existing `sampleQuestions` path refreshes the pool only when a learner next uses it. Pool `created_at` is never the recovery clock because pool rows are reused. Once recovery advances the attempt clock, a late older task's `READY` write is skipped; the refresh triggered by the learner's next use owns the next generation attempt.
 
 ## Conversion
 

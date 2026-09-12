@@ -39,8 +39,8 @@ that flag `false`, even though the Study Pack's content is replaced in place eit
 (`docs/codex-prompts/v0.143.0-exam-pool-invalidation.md`, gitignored) calls the invalidation
 unconditionally instead, and adds a `generationStatusAt`-stamp guard against a
 concurrent-regeneration race the unconditional call would otherwise make more likely to trigger.
-Not yet sent to Codex. **A related, separate, already-shipped defect surfaced during the same trace
-and was flagged rather than folded in**: `deactivateShareLinksForNote` (the `v0.110.2` precedent
+Delivered through Codex on 2026-09-12. **A related, separate, already-shipped defect surfaced during
+the same trace and was flagged rather than folded in**: `deactivateShareLinksForNote` (the `v0.110.2` precedent
 item 2 reuses) has the identical gate gap on the same default regeneration scope — recorded as its
 own Backlog Index row in `ROADMAP.md`, not code-verified against production, and not fixed here.
 
@@ -113,6 +113,12 @@ on the diff is enough.
   full suite. Checked the sibling `interview-practice/page.tsx:309`, which has the same bare
   `phase === "running"` expression — confirmed clean, its Leave Practice button carries no
   `disabled` state to trap behind. PR #1381 (`fix/v0.143.0-long-exam-focus-trap`), not yet merged.
+- **Item 2 — regenerated Study Packs now invalidate their exam question pools.** Both the combined
+  and default `STUDY_PACK`-only regeneration scopes reset and re-dispatch Long Exam and Board Exam
+  pools inside the content-write transaction. Pool generation now uses `generationStatusAt` as an
+  optimistic stamp so an older in-flight task cannot publish stale questions over a newer attempt.
+  If that newer attempt fails after superseding an older successful result, the pool remains
+  `FAILED` and self-heals through the existing refresh-on-use path.
 
 ## v0.142.0 - Awareness Before Action
 

@@ -1070,6 +1070,40 @@ class StudyPackServiceTest {
     }
 
     @Test
+    void startAsyncGenerationFromNote_existingStudyPackRefreshesBothExamPoolsForStudyPackOnlyScope() {
+        UUID userId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        NoteEntity generatedNote = buildDraftNote(noteId, userId, "updated note content");
+        generatedNote.setStatus(NoteStatus.GENERATED);
+        StudyPackEntity existingStudyPack = new StudyPackEntity();
+        existingStudyPack.setId(studyPackId);
+        existingStudyPack.setOwnerUserId(userId);
+        existingStudyPack.setNoteId(noteId);
+        existingStudyPack.setCreatedAt(OffsetDateTime.now().minusDays(5));
+
+        when(noteRepository.findByIdAndOwnerUserId(noteId, userId)).thenReturn(Optional.of(generatedNote));
+        when(studyPackRepository.findByOwnerUserIdAndNoteId(userId, noteId))
+                .thenReturn(Optional.of(existingStudyPack));
+        when(studyPackRepository.findByNoteId(noteId)).thenReturn(Optional.of(existingStudyPack));
+        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.FREE);
+        when(studyPackUsageService.resolveUsage(eq(userId), any(OffsetDateTime.class)))
+                .thenReturn(new StudyPackUsageService.UsageSnapshot(
+                        OffsetDateTime.now().minusDays(10), OffsetDateTime.now().plusDays(20), 0));
+        when(llmStudyPackService.generateStudyPack(
+                eq("updated note content"), any(StudyPackGenerationContext.class)))
+                .thenReturn(generatedContent("Regenerated pack"));
+
+        studyPackService.startAsyncGenerationFromNote(noteId.toString(), userId);
+
+        verify(examQuestionPoolService).refreshPool(
+                studyPackId, ExamQuestionPoolService.MODE_LONG_EXAM);
+        verify(examQuestionPoolService).refreshPool(
+                studyPackId, ExamQuestionPoolService.MODE_BOARD_EXAM);
+        verify(generatedQuizService, never()).deactivateShareLinksForNote(any(), any());
+    }
+
+    @Test
     void startAsyncGenerationFromNote_regenerationFailurePreservesExistingStudyPack() {
         UUID userId = UUID.randomUUID();
         UUID noteId = UUID.randomUUID();
@@ -1500,10 +1534,10 @@ class StudyPackServiceTest {
      * was wrong in the implementation prompt, here, and in the feature doc:
      * {@code ExamQuestionPoolService} returns early when a pool row already exists with status
      * {@code READY}, {@code PENDING} or {@code GENERATING}, and every note on this path already has a
-     * pack, so any pool it has is one of those. What this test actually pins is that the combined path
-     * still performs the SAME post-commit side effects as the existing path — no more, no less. The
-     * stale pool is a REAL, SEPARATE limitation recorded in {@code RELEASES.md}; do not re-derive this
-     * comment into a claim that this call fixes it.
+     * pack, so any pool it has is one of those. The separate {@code refreshPool} calls now invalidate
+     * both Long Exam and Board Exam pools inside the content-write transaction for both regeneration
+     * scopes. The assertions below pin that invalidation on this combined scope while preserving the
+     * accurate claim that {@code initiatePool} itself does not refresh an existing pool.
      *
      * <p>The combined path inherits all three by extending the shared async method rather than adding a
      * sibling, which is precisely the shape that drops them. This test pins that inheritance.
@@ -1531,6 +1565,10 @@ class StudyPackServiceTest {
 
         studyPackService.startAsyncNoteAndStudyPackRegeneration(noteId.toString(), ownerUserId);
 
+        verify(examQuestionPoolService).refreshPool(
+                existingPack.getId(), ExamQuestionPoolService.MODE_LONG_EXAM);
+        verify(examQuestionPoolService).refreshPool(
+                existingPack.getId(), ExamQuestionPoolService.MODE_BOARD_EXAM);
         verify(examQuestionPoolService).initiatePool(any(StudyPackEntity.class), eq(ownerUserId));
         verify(analyticsService).trackEvent(
                 eq(ownerUserId), eq(AnalyticsEventType.STUDY_PACK_GENERATED), any(UUID.class), any());
