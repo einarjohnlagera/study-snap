@@ -2,9 +2,10 @@
 
 ## v0.143.0 - No Way Out
 
-**Status: In Progress** (kicked off 2026-09-11, base branch `releases/v0.143.0`, cut from `main`
-after `v0.142.0` merged as #1380 and tagged, deployed and verified — Vercel and Render both
-confirmed live on `61153cc6`.)
+**Status: Released** (kicked off 2026-09-11, signed off 2026-09-12, base branch
+`releases/v0.143.0`, cut from `main` after `v0.142.0` merged as #1380 and tagged, deployed and
+verified — Vercel and Render both confirmed live on `61153cc6`. PRs #1381 and #1382 merged into
+the release branch at `f715dada` and `77b6c226`.)
 
 Theme: two live defects found by re-verifying Backlog Index candidates against current code
 rather than trusting their rows — a focus-mode trap that leaves a learner with no exit if Long
