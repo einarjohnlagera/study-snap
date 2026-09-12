@@ -3,7 +3,19 @@
 > **This is the core brief. Paste it as your first message in a new GPT chat session.**
 > Then paste any module below that matches the conversation — see "Which modules to paste".
 > Update this file whenever a new version ships or the roadmap shifts significantly.
-> Last updated: v0.142.0 - 2026-09-11 (Released). **`v0.142.0` polished two already-shipped
+> Last updated: v0.143.0 - 2026-09-12 (Released). **`v0.143.0` fixed two live defects found by
+re-verifying Backlog Index candidates against current code rather than trusting their rows.**
+**(1)** Long Exam's focus-mode hook lacked the `!submitting` guard Challenge Quiz already carried
+(`v0.131.0`) — a hung completion request trapped the learner behind a hidden header with no
+working exit. **(2)** Exam question pools (Long Exam + Board Exam) silently kept serving questions
+built from pre-regeneration content — `ExamQuestionPoolService.refreshPool` is now called
+unconditionally on every Study Pack regeneration, both the combined and default `STUDY_PACK`-only
+scopes. **⚠️ A scoped cold falsification pass found and fixed a real deadlock risk this fix would
+otherwise have introduced** (a lock-order inversion between `study_packs` and `exam_question_pool`,
+verified empirically against real Postgres) **and confirmed a fourth path —
+`AdminStudyPackTransactionHelper.regenerateOnePack`/`repairMalformedQuiz` — still bypasses the fix
+entirely**, tracked as its own Backlog Index row, not yet resolved. See
+`docs/gpt-contexts/QUIZ_AND_PRACTICE_CONTEXT.md` for detail. *(previously v0.142.0)* - 2026-09-11 (Released). **`v0.142.0` polished two already-shipped
 surfaces the owner started actively announcing to users: the in-app notification inbox and the
 adopted Official Review Set update panel — neither had been touched since it first went live.**
 **⚠️ THE HEADLINE WAS A LIVE BUG ON 100% OF PRODUCTION'S NOTIFICATION POPULATION:** all 42

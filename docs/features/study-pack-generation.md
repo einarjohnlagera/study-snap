@@ -395,10 +395,16 @@ a sibling. A sibling is the shape that drops them.
 
 **⚠️ `initiatePool` does NOT refresh a stale pool, and an earlier version of this document said it did.**
 `ExamQuestionPoolService` returns early when a pool row already exists with status `READY`, `PENDING` or
-`GENERATING`; every note on this path already has a Study Pack, so any pool it has is one of those. After
-a combined regeneration the exam question pool — and the Challenge question bank, which has no
-invalidation path at all — keep serving questions drawn from the replaced content. That is a **named
-Known limitation**, not something this call fixes.
+`GENERATING`; every note on this path already has a Study Pack, so any pool it has is one of those. The
+separate pool-refresh seam now invalidates both Long Exam and Board Exam pools on every regeneration
+that goes through `generateStudyPackFromExistingNoteAsync` — both the combined `NOTE_AND_STUDY_PACK`
+and `STUDY_PACK`-only scopes reached via `startAsyncNoteAndStudyPackRegeneration` and
+`startAsyncGenerationFromNote`. **⚠️ It does NOT cover every path that replaces a Study Pack's content
+in place** — `AdminStudyPackTransactionHelper.regenerateOnePack` (admin-only, `POST
+/admin/study-packs/regenerate-summaries`) overwrites `summary` — a direct exam-pool generation input
+— with no invalidation call, a real gap traced but not fixed here; see `ROADMAP.md`'s Backlog Index.
+The Challenge question bank, which has no pool mechanism or invalidation path at all, remains the
+other open leg of the original limitation.
 
 ### Live quiz share links
 
