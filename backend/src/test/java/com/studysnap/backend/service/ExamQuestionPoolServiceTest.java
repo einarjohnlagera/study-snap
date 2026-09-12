@@ -11,8 +11,8 @@ import com.studysnap.backend.service.model.StudyPackGenerationContext;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.Mock;
 import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.core.task.SimpleAsyncTaskExecutor;
 import org.springframework.transaction.TransactionException;
@@ -372,6 +372,39 @@ class ExamQuestionPoolServiceTest {
     }
 
     @Test
+    void refreshPool_resetsExistingPoolAndDispatchesGeneration() {
+        properties.getPricing().setExamPoolPrewarmEnabled(false);
+        UUID studyPackId = UUID.randomUUID();
+        OffsetDateTime previousAttempt = OffsetDateTime.now().minusDays(1);
+        ExamQuestionPoolEntity pool = pool(
+                studyPackId, ExamQuestionPoolService.MODE_LONG_EXAM, "READY", buildQuiz(48));
+        pool.setServedQuestionKeys(List.of("question 1", "question 2"));
+        pool.setGenerationStatusAt(previousAttempt);
+        when(examQuestionPoolRepository.findByStudyPackIdAndModeForUpdate(
+                studyPackId, ExamQuestionPoolService.MODE_LONG_EXAM)).thenReturn(Optional.of(pool));
+
+        service.refreshPool(studyPackId, ExamQuestionPoolService.MODE_LONG_EXAM);
+
+        assertThat(pool.getGenerationStatus()).isEqualTo("PENDING");
+        assertThat(pool.getGenerationStatusAt()).isAfter(previousAttempt);
+        assertThat(pool.getServedQuestionKeys()).isEmpty();
+        verify(examQuestionPoolRepository).save(pool);
+        verify(studyPackGenerationTaskDispatcher).execute(any(Runnable.class));
+    }
+
+    @Test
+    void refreshPool_isNoopWhenPoolDoesNotExist() {
+        UUID studyPackId = UUID.randomUUID();
+        when(examQuestionPoolRepository.findByStudyPackIdAndModeForUpdate(
+                studyPackId, ExamQuestionPoolService.MODE_BOARD_EXAM)).thenReturn(Optional.empty());
+
+        service.refreshPool(studyPackId, ExamQuestionPoolService.MODE_BOARD_EXAM);
+
+        verify(examQuestionPoolRepository, never()).save(any(ExamQuestionPoolEntity.class));
+        verify(studyPackGenerationTaskDispatcher, never()).execute(any(Runnable.class));
+    }
+
+    @Test
     void initiatePool_isNoopWhenReadyPoolAlreadyExists() {
         UUID studyPackId = UUID.randomUUID();
         UUID userId = UUID.randomUUID();
@@ -496,6 +529,104 @@ class ExamQuestionPoolServiceTest {
         ArgumentCaptor<ExamQuestionPoolEntity> savedPool = ArgumentCaptor.forClass(ExamQuestionPoolEntity.class);
         verify(examQuestionPoolRepository, org.mockito.Mockito.atLeastOnce()).save(savedPool.capture());
         assertThat(savedPool.getValue().getLearnerLevel()).isEqualTo(LearnerLevel.BOARD_EXAM_REVIEW.name());
+    }
+
+    @Test
+    void generatePoolAsync_publishesWithADistinctDatabaseSnapshotAtMicrosecondPrecision() {
+        UUID poolId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+        ExamQuestionPoolEntity firstSnapshot = pool(
+                studyPackId, ExamQuestionPoolService.MODE_LONG_EXAM, "PENDING", List.of());
+        firstSnapshot.setId(poolId);
+        ExamQuestionPoolEntity secondSnapshot = pool(
+                studyPackId, ExamQuestionPoolService.MODE_LONG_EXAM, "GENERATING", List.of());
+        secondSnapshot.setId(poolId);
+        StudyPackEntity studyPack = new StudyPackEntity();
+        studyPack.setId(studyPackId);
+        studyPack.setOwnerUserId(userId);
+        studyPack.setTitle("Current content");
+        studyPack.setSummary("Current summary");
+        studyPack.setKeyConcepts(List.of("Current concept"));
+        StudyPackGenerationContext context = new StudyPackGenerationContext(
+                LearnerLevel.COLLEGE, "Civil Engineering", "Mechanics", List.of());
+        when(examQuestionPoolRepository.findByIdForUpdate(poolId))
+                .thenReturn(Optional.of(firstSnapshot))
+                .thenAnswer(invocation -> {
+                    secondSnapshot.setGenerationStatusAt(firstSnapshot.getGenerationStatusAt());
+                    return Optional.of(secondSnapshot);
+                });
+        when(studyPackRepository.findById(studyPackId)).thenReturn(Optional.of(studyPack));
+        when(generationContextResolver.resolveForStudyPack(userId, studyPack)).thenReturn(context);
+        when(quizGenerationService.generateLongExamParallel(
+                anyString(), anyString(), any(), any(), anyInt(), anyString(), eq(context), any()))
+                .thenReturn(buildQuiz(properties.getPricing().getLongExamPoolSize()));
+
+        service.generatePoolAsync(poolId);
+
+        assertThat(firstSnapshot.getGenerationStatusAt().getNano() % 1_000).isZero();
+        assertThat(secondSnapshot).isNotSameAs(firstSnapshot);
+        assertThat(secondSnapshot.getGenerationStatus()).isEqualTo("READY");
+        assertThat(secondSnapshot.getQuestions()).hasSize(properties.getPricing().getLongExamPoolSize());
+        verify(examQuestionPoolRepository).save(secondSnapshot);
+    }
+
+    @Test
+    void databaseGenerationStatusStamp_truncatesNanosecondsToPostgresPrecision() {
+        OffsetDateTime nanosecondStamp = OffsetDateTime.parse("2026-09-12T00:00:00.123456789Z");
+
+        OffsetDateTime databaseStamp = ExamQuestionPoolService.databaseGenerationStatusStamp(nanosecondStamp);
+
+        assertThat(databaseStamp).isEqualTo(OffsetDateTime.parse("2026-09-12T00:00:00.123456Z"));
+    }
+
+    @Test
+    void generatePoolAsync_skipsReadyWriteWhenANewerGenerationAdvancedTheStamp() {
+        UUID poolId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+        ExamQuestionPoolEntity firstSnapshot = pool(
+                studyPackId, ExamQuestionPoolService.MODE_LONG_EXAM, "PENDING", List.of());
+        firstSnapshot.setId(poolId);
+        ExamQuestionPoolEntity secondSnapshotWithALaterStamp = pool(
+                studyPackId,
+                ExamQuestionPoolService.MODE_LONG_EXAM,
+                "GENERATING",
+                List.of(new QuizItem(
+                        "Newer generation question",
+                        List.of("A", "B", "C", "D"),
+                        0,
+                        "Newer concept",
+                        "Newer explanation"
+                ))
+        );
+        secondSnapshotWithALaterStamp.setId(poolId);
+        secondSnapshotWithALaterStamp.setGenerationStatusAt(OffsetDateTime.now().plusDays(1));
+        StudyPackEntity studyPack = new StudyPackEntity();
+        studyPack.setId(studyPackId);
+        studyPack.setOwnerUserId(userId);
+        studyPack.setTitle("Old content");
+        studyPack.setSummary("Old summary");
+        studyPack.setKeyConcepts(List.of("Old concept"));
+        StudyPackGenerationContext context = new StudyPackGenerationContext(
+                LearnerLevel.COLLEGE, "Civil Engineering", "Mechanics", List.of());
+        when(examQuestionPoolRepository.findByIdForUpdate(poolId))
+                .thenReturn(Optional.of(firstSnapshot))
+                .thenReturn(Optional.of(secondSnapshotWithALaterStamp));
+        when(studyPackRepository.findById(studyPackId)).thenReturn(Optional.of(studyPack));
+        when(generationContextResolver.resolveForStudyPack(userId, studyPack)).thenReturn(context);
+        when(quizGenerationService.generateLongExamParallel(
+                anyString(), anyString(), any(), any(), anyInt(), anyString(), eq(context), any()))
+                .thenReturn(buildQuiz(properties.getPricing().getLongExamPoolSize()));
+
+        service.generatePoolAsync(poolId);
+
+        assertThat(secondSnapshotWithALaterStamp.getGenerationStatus()).isEqualTo("GENERATING");
+        assertThat(secondSnapshotWithALaterStamp.getQuestions())
+                .extracting(QuizItem::question)
+                .containsExactly("Newer generation question");
+        verify(examQuestionPoolRepository).save(firstSnapshot);
+        verify(examQuestionPoolRepository, never()).save(secondSnapshotWithALaterStamp);
     }
 
     @Test

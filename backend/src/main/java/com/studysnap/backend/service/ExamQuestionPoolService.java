@@ -23,6 +23,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashSet;
@@ -152,8 +153,12 @@ public class ExamQuestionPoolService {
                     return null;
                 }
                 pool.setGenerationStatus(STATUS_GENERATING);
-                pool.setGenerationStatusAt(OffsetDateTime.now(ZoneOffset.UTC));
+                // PostgreSQL TIMESTAMPTZ persists microseconds. Keep the optimistic stamp at that
+                // precision so the value captured here survives the transaction round trip exactly.
+                pool.setGenerationStatusAt(databaseGenerationStatusStamp(
+                        OffsetDateTime.now(ZoneOffset.UTC)));
                 examQuestionPoolRepository.save(pool);
+                OffsetDateTime generationStatusAt = pool.getGenerationStatusAt();
 
                 StudyPackEntity studyPack = studyPackRepository.findById(pool.getStudyPackId())
                         .orElseThrow(StudyPackNotFoundException::new);
@@ -166,7 +171,8 @@ public class ExamQuestionPoolService {
                         studyPack.getOwnerUserId(),
                         studyPack
                 );
-                return new PoolGenerationTarget(pool.getId(), pool.getMode(), studyPack, context);
+                return new PoolGenerationTarget(
+                        pool.getId(), pool.getMode(), studyPack, context, generationStatusAt);
             });
             if (target == null) {
                 return;
@@ -185,6 +191,14 @@ public class ExamQuestionPoolService {
             studyPackGenerationTransactionOperations.execute(status -> {
                 ExamQuestionPoolEntity pool = examQuestionPoolRepository.findByIdForUpdate(target.poolId())
                         .orElseThrow(ExamQuestionPoolGenerationFailedException::new);
+                if (!target.generationStatusAt().equals(pool.getGenerationStatusAt())) {
+                    log.info(
+                            "Exam question pool generation superseded for poolId={} mode={}",
+                            target.poolId(),
+                            target.mode()
+                    );
+                    return null;
+                }
                 pool.setQuestions(poolQuestions);
                 pool.setPoolSize(poolQuestions.size());
                 pool.setGenerationStatus(STATUS_READY);
@@ -434,6 +448,10 @@ public class ExamQuestionPoolService {
         return learnerLevel == null ? null : learnerLevel.name();
     }
 
+    static OffsetDateTime databaseGenerationStatusStamp(OffsetDateTime timestamp) {
+        return timestamp.truncatedTo(ChronoUnit.MICROS);
+    }
+
     private List<QuizItem> safeQuestions(ExamQuestionPoolEntity pool) {
         return pool.getQuestions() == null ? List.of() : pool.getQuestions();
     }
@@ -454,7 +472,8 @@ public class ExamQuestionPoolService {
             UUID poolId,
             String mode,
             StudyPackEntity studyPack,
-            StudyPackGenerationContext context
+            StudyPackGenerationContext context,
+            OffsetDateTime generationStatusAt
     ) {
     }
 }
