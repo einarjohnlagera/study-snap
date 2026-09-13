@@ -6,19 +6,24 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-**Kicked off 2026-09-13.** `v0.144.0 — No Backdoor Left` is **In Progress** — one item, the
-fourth and last known path through `v0.143.0`'s "derived artifacts" defect class.
-`AdminStudyPackTransactionHelper.regenerateOnePack` (`:66-67`) and `repairMalformedQuiz`
-(`:121-123`) each replace a Study Pack's `summary`/`quiz` in place with no exam-pool invalidation.
-Two read-only production queries (`docs/backlog-rows-475-476-production-read`, PR #1384, merged
-into this release branch) found the row's own "check call volume" gate is permanently
-unanswerable — no admin-action audit trail exists, and the one plausible proxy (a `"|"` "enriched
-summary" marker) is a content-shape artifact of ordinary summary generation, not a
-repair-provenance signal. **The fix ships on precedent, not exposure evidence** — one file, two
-call sites, the exact `refreshPool` + flush-ordering pattern `v0.143.0` already proved out. The
-same PR verified the sibling row (shared quiz links, `STUDY_PACK`-only regeneration) as NOT
-currently live (1 active link in production, unaffected) — left open at low priority, not folded
-in. Full detail in `RELEASES.md`.
+**Kicked off 2026-09-13, signed off 2026-09-13.** `v0.144.0 — No Backdoor Left` is **Released** —
+its one planned item shipped as scoped, PR #1385, merged into `releases/v0.144.0` at `e61ee2ce`.
+**Two pieces of bookkeeping rode along, neither in the Planned Scope**: PR #1384 (the two
+production-read backlog-row verifications this item's own scope decision rests on, merged in at
+kickoff) and commit `786f46b9` (indexing two untracked planning artifacts found on disk mid-release,
+left uncommitted at the owner's instruction).
+`AdminStudyPackTransactionHelper.regenerateOnePack` and `repairMalformedQuiz` now call
+`examQuestionPoolService.refreshPool` for both exam modes immediately after saving, with the same
+`studyPackRepository.flush()` ordering `v0.143.0`'s falsification pass proved necessary — closing
+the fourth and last known path through `v0.143.0`'s "derived artifacts" defect class. Two read-only
+production queries (`docs/backlog-rows-475-476-production-read`, PR #1384, merged into this release
+branch) found the row's own "check call volume" gate permanently unanswerable — no admin-action
+audit trail exists — so **the fix shipped on precedent, not exposure evidence**. The same PR
+verified the sibling row (shared quiz links, `STUDY_PACK`-only regeneration) as NOT currently live
+(1 active link in production, unaffected) — left open at low priority, not folded in. Verification
+tier stayed at a single `advisor()` call; the nearest-miss cold-agent trigger (`refreshPool` gaining
+callers across two releases) was checked explicitly and does not fire within this one release. Full
+detail in `RELEASES.md` and `docs/releases/v0.144.0.md`.
 
 **Kicked off 2026-09-11, signed off 2026-09-12.** `v0.143.0 — No Way Out` is **Released** — both
 planned items shipped as scoped, PRs #1381 and #1382, merged into `releases/v0.143.0` at

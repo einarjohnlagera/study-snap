@@ -2,9 +2,9 @@
 
 ## v0.144.0 - No Backdoor Left
 
-**Status: In Progress** (kicked off 2026-09-13, base branch `releases/v0.144.0`, cut from `main`
-after `v0.143.0` merged as #1383 and tagged — Vercel and Render both confirmed live on
-`c899d418`.)
+**Status: Released** (kicked off 2026-09-13, signed off 2026-09-13, base branch `releases/v0.144.0`,
+cut from `main` after `v0.143.0` merged as #1383 and tagged — Vercel and Render both confirmed live
+on `c899d418`. PR #1385 merged into the release branch at `e61ee2ce`.)
 
 Theme: close the fourth and last known path that lets an exam question pool keep serving
 questions from a Study Pack's replaced content — the two admin-only repair endpoints `v0.143.0`'s
@@ -71,6 +71,12 @@ unscoped infrastructure work this release does not take on.
   confirmed to fail against the pre-fix code. Full backend suite: 2368/2368 passing.
   `docs/features/study-pack-generation.md` corrected — it previously named this as the one known
   unfixed gap.
+- **Verification tier: single `advisor()` call, no cold agent** — checked against the nearest-miss
+  trigger explicitly rather than leaving it unstated: `ExamQuestionPoolService.refreshPool` now has
+  callers added by both `v0.143.0` (`StudyPackService`, PR #1382) and `v0.144.0` (this admin helper,
+  PR #1385), but that is two releases touching a shared method, not two PRs *within* this release —
+  the trigger as written did not fire. No auth/privacy boundary moved, no money/quota/production-data
+  semantics changed, and no defect was introduced by this session and then fixed.
 
 ## v0.143.0 - No Way Out
 

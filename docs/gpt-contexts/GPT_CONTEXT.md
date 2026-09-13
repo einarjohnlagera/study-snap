@@ -3,7 +3,14 @@
 > **This is the core brief. Paste it as your first message in a new GPT chat session.**
 > Then paste any module below that matches the conversation — see "Which modules to paste".
 > Update this file whenever a new version ships or the roadmap shifts significantly.
-> Last updated: v0.143.0 - 2026-09-12 (Released). **`v0.143.0` fixed two live defects found by
+> Last updated: v0.144.0 - 2026-09-13 (Released). **`v0.144.0` closed the fourth path `v0.143.0`'s
+exam-pool fix did not reach: the two admin-only Study Pack repair endpoints**
+(`AdminStudyPackTransactionHelper.regenerateOnePack`, `repairMalformedQuiz`) **now call the same
+`refreshPool` invalidation, with the same flush-before-lock ordering, right after each save.**
+Shipped on precedent and cheapness, not exposure evidence — production carries no admin-action
+audit trail, so call volume for these endpoints is permanently unknowable. **The Challenge question
+bank remains the one open leg of the original "derived artifacts" defect class.** See
+`docs/gpt-contexts/QUIZ_AND_PRACTICE_CONTEXT.md` for detail. *(previously v0.143.0)* - 2026-09-12 (Released). **`v0.143.0` fixed two live defects found by
 re-verifying Backlog Index candidates against current code rather than trusting their rows.**
 **(1)** Long Exam's focus-mode hook lacked the `!submitting` guard Challenge Quiz already carried
 (`v0.131.0`) — a hung completion request trapped the learner behind a hidden header with no
