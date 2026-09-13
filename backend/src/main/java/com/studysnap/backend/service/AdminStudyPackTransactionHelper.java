@@ -31,6 +31,7 @@ public class AdminStudyPackTransactionHelper {
     private final StudyPackGenerationContextResolver generationContextResolver;
     private final LlmStudyPackService llmStudyPackService;
     private final RegenerationProgressTracker progressTracker;
+    private final ExamQuestionPoolService examQuestionPoolService;
 
     @Transactional
     public void regenerateOnePack(StudyPackEntity pack) {
@@ -66,6 +67,15 @@ public class AdminStudyPackTransactionHelper {
             String newSummary = llmStudyPackService.regenerateSummary(note.getContent(), context);
             currentPack.setSummary(newSummary);
             studyPackRepository.save(currentPack);
+            // Same invalidation StudyPackService's regeneration path uses (v0.143.0) — this repair
+            // replaces the pack's summary in place, and the summary is a direct exam-pool generation
+            // input, so a READY pool must be reset or it keeps serving questions from the old one.
+            // The flush is load-bearing for the same reason it is there: without it, the UPDATE above
+            // stays a pending, unflushed change when refreshPool's JPQL @Lock query runs, inverting the
+            // study_packs -> exam_question_pool lock order every caller relies on.
+            studyPackRepository.flush();
+            examQuestionPoolService.refreshPool(currentPack.getId(), ExamQuestionPoolService.MODE_LONG_EXAM);
+            examQuestionPoolService.refreshPool(currentPack.getId(), ExamQuestionPoolService.MODE_BOARD_EXAM);
             progressTracker.recordSuccess();
         } catch (Exception ex) {
             progressTracker.recordFailure();
@@ -121,6 +131,12 @@ public class AdminStudyPackTransactionHelper {
             GeneratedStudyPackContent generated = llmStudyPackService.generateStudyPack(note.getContent(), context);
             currentPack.setQuiz(generated.quiz());
             studyPackRepository.save(currentPack);
+            // Same invalidation as regenerateOnePack above, and for the same reason: this replaces the
+            // pack's quiz in place, which feeds the pool's answer-key exclusion filter, so a READY pool
+            // must be reset. The flush ordering is load-bearing — see the comment above.
+            studyPackRepository.flush();
+            examQuestionPoolService.refreshPool(currentPack.getId(), ExamQuestionPoolService.MODE_LONG_EXAM);
+            examQuestionPoolService.refreshPool(currentPack.getId(), ExamQuestionPoolService.MODE_BOARD_EXAM);
             progressTracker.recordSuccess();
         } catch (Exception ex) {
             progressTracker.recordFailure();

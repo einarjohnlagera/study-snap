@@ -59,7 +59,18 @@ unscoped infrastructure work this release does not take on.
 
 ### Shipped
 
-_(nothing yet)_
+- **Admin summary/quiz repair paths now invalidate the exam pool.** `AdminStudyPackTransactionHelper.regenerateOnePack`
+  (`POST /admin/study-packs/regenerate-summaries`) and `repairMalformedQuiz` (`POST
+  /admin/study-packs/repair-malformed-quizzes`) each call `examQuestionPoolService.refreshPool` for both
+  `MODE_LONG_EXAM` and `MODE_BOARD_EXAM` immediately after saving, with the same `studyPackRepository.flush()`
+  before the pool call that `v0.143.0`'s falsification pass found necessary to avoid inverting the
+  `study_packs` → `exam_question_pool` lock order. New `AdminStudyPackTransactionHelperTest` coverage
+  (2 tests, `InOrder`-asserted save → flush → refresh-long-exam → refresh-board-exam) plus `never()`
+  assertions on `examQuestionPoolService` added to all 6 pre-existing skip/failure tests, confirming the
+  invalidation only fires on an actual content replacement. Both new/extended tests mutation-verified —
+  confirmed to fail against the pre-fix code. Full backend suite: 2368/2368 passing.
+  `docs/features/study-pack-generation.md` corrected — it previously named this as the one known
+  unfixed gap.
 
 ## v0.143.0 - No Way Out
 

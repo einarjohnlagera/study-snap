@@ -399,12 +399,14 @@ a sibling. A sibling is the shape that drops them.
 separate pool-refresh seam now invalidates both Long Exam and Board Exam pools on every regeneration
 that goes through `generateStudyPackFromExistingNoteAsync` — both the combined `NOTE_AND_STUDY_PACK`
 and `STUDY_PACK`-only scopes reached via `startAsyncNoteAndStudyPackRegeneration` and
-`startAsyncGenerationFromNote`. **⚠️ It does NOT cover every path that replaces a Study Pack's content
-in place** — `AdminStudyPackTransactionHelper.regenerateOnePack` (admin-only, `POST
-/admin/study-packs/regenerate-summaries`) overwrites `summary` — a direct exam-pool generation input
-— with no invalidation call, a real gap traced but not fixed here; see `ROADMAP.md`'s Backlog Index.
-The Challenge question bank, which has no pool mechanism or invalidation path at all, remains the
-other open leg of the original limitation.
+`startAsyncGenerationFromNote`. **✅ `v0.144.0` closed the last known gap: `AdminStudyPackTransactionHelper`'s
+two admin-only repair endpoints** (`regenerateOnePack`, `POST /admin/study-packs/regenerate-summaries`;
+`repairMalformedQuiz`, `POST /admin/study-packs/repair-malformed-quizzes`) **now call the same
+`refreshPool` invalidation, with the same flush-before-lock ordering, right after each save** — both
+replace Study Pack content in place (`summary`/`quiz` respectively, both direct exam-pool generation
+inputs) and previously bypassed invalidation entirely by not going through
+`generateStudyPackFromExistingNoteAsync`. The Challenge question bank, which has no pool mechanism or
+invalidation path at all, remains the one open leg of the original limitation.
 
 ### Live quiz share links
 
