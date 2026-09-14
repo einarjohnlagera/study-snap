@@ -304,6 +304,12 @@ User-facing generation statuses:
 - `FAILED`: generation did not complete and can be retried from Note Detail. Since `v0.127.0` the
   row also records WHY — see *Why a generation failed is recorded on the note* below.
 
+These statuses describe the latest Note generation attempt; they do not decide whether existing learning
+material is usable. Quick Review and Challenge Quiz follow a non-empty Study Pack `quiz`, Flashcards and
+Memorization follow non-empty `keyConcepts`, and session-assembly eligibility follows the Study Pack's own
+`StudyPackStatus.DONE`. A prior intact pack therefore stays usable while regeneration runs and after it
+fails, while the `GENERATING` or `FAILED` lifecycle remains visible so the owner can wait or retry.
+
 ## Why a generation failed is recorded on the note (v0.127.0)
 
 A `FAILED` note carries three nullable columns saying **why**: `notes.generation_failure_code`,
@@ -515,6 +521,14 @@ The scheduled generation-recovery job covers three independently processed surfa
 - notes stamp nullable `generation_enqueued_at` in the same transaction that sets `GENERATING`, refreshing it on every retry. The default `120`-minute bound covers both queue wait and the single LLM call. A stale note becomes `FAILED` through the same entity transition used by generation errors and exposes the existing Retry Generation action. Since `v0.127.0` that transition also stamps `generation_failure_code = 'GENERATION_INTERRUPTED'`, so a swept note is not left carrying failure columns that describe a different, earlier failure. This protection is prospective: production sizing found zero stuck notes.
 
 The job runs every ten minutes by default, processes at most `200` candidates per surface per run, reports recovered count and oldest age, and has a deploy kill switch. Every bound, the cron and batch size are configuration-owned placeholders; they can be tightened after production observation without a code change. `V118` seeds existing non-terminal pool attempts with deploy time rather than reused-row `created_at`, so no live attempt is swept early and genuinely stuck rows become eligible one full bound after deploy. Notes with a null enqueue clock are left untouched and warned. `V118` seeds the clock for any note already `GENERATING` at deploy time — on the same argument as pools, because the deploy that installs the sweeper is itself the event that strands in-flight generation — and `StudyPackService` is the single writer of `GENERATING` and stamps in the same transaction. So a null clock after that means a **new writer** appeared without a stamp, and silently recovering it would hide that bug rather than surface it.
+
+For the rare null-clock case, the note owner can call
+`POST /notes/{id}/recover-stranded-generation` after the configured `noteBoundMinutes` has elapsed. The
+transaction locks and rechecks the owner-scoped Note, requires `GENERATING`, and invokes the same
+`markNoteGenerationFailed` transition as scheduled recovery. It never dispatches generation or charges
+quota. Success changes the Note to `FAILED`, after which the normal Retry action is available; an early,
+repeated, or otherwise ineligible request returns `409 GENERATION_RECOVERY_NOT_ELIGIBLE`. Note Detail shows
+this low-prominence recovery action only for a first generation with no usable artifacts after the bound.
 
 Recovery is status-only and idempotent. It never auto-regenerates, re-dispatches a task, calls pool refresh directly, refunds or increments quota, changes executor shutdown, or runs as a startup sweep. Age thresholds and locked status rechecks provide multi-instance safety on all three surfaces. **Live-task safety is not uniform:** the pool and note surfaces take a pessimistic lock and recheck under it, while the Long Exam session surface gets its safety from the age threshold sitting far above the worker envelope plus the one-active-generation index — its own generation path reads with a plain `findById` and takes no row lock until commit. A late note worker discards its generated result when the note is no longer `GENERATING`; a late pool worker may write `READY`, which is already a correct terminal outcome.
 

@@ -32,6 +32,10 @@ import com.studysnap.backend.entity.UserRole;
 import com.studysnap.backend.exception.AppException;
 import com.studysnap.backend.exception.NoteNotFoundException;
 import com.studysnap.backend.exception.UnknownNoteRegenerationScopeException;
+import com.studysnap.backend.exception.GlobalExceptionHandler;
+import com.studysnap.backend.exception.QuickReviewNotAvailableException;
+import com.studysnap.backend.entity.NoteEntity;
+import com.studysnap.backend.entity.NoteStatus;
 import com.studysnap.backend.dto.CopyOnSignupRequest;
 import com.studysnap.backend.dto.CopyOnSignupResponse;
 import com.studysnap.backend.security.AuthenticatedUser;
@@ -57,6 +61,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.core.MethodParameter;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.util.unit.DataSize;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.test.web.servlet.MockMvc;
@@ -80,6 +85,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -128,6 +135,10 @@ class NoteControllerTest {
     private GeneratedQuizService generatedQuizService;
     @Mock
     private QuizSessionHistoryService quizSessionHistoryService;
+    @Mock
+    private com.studysnap.backend.repository.NoteRepository noteRepository;
+    @Mock
+    private com.studysnap.backend.config.StudySnapProperties properties;
 
     private NoteController noteController;
     private com.studysnap.backend.service.NoteBulkRegenerationService noteBulkRegenerationService;
@@ -142,6 +153,8 @@ class NoteControllerTest {
                 org.mockito.Mockito.mock(com.studysnap.backend.service.NoteRegenerationPreflightService.class);
         noteBulkRegenerationReceiptService =
                 org.mockito.Mockito.mock(com.studysnap.backend.service.NoteBulkRegenerationReceiptService.class);
+        lenient().when(properties.getGeneration())
+                .thenReturn(new com.studysnap.backend.config.StudySnapProperties.Generation());
         noteController = new NoteController(
                 authService,
                 bulkGenerationResultService,
@@ -160,7 +173,9 @@ class NoteControllerTest {
                 challengeQuizService,
                 quickReviewAdaptivePracticeService,
                 generatedQuizService,
-                quizSessionHistoryService
+                quizSessionHistoryService,
+                noteRepository,
+                properties
         );
     }
 
@@ -376,7 +391,8 @@ class NoteControllerTest {
                 null,
                 false,
                 false,
-                List.of()
+                List.of(),
+                null
         );
     }
 
@@ -1149,7 +1165,8 @@ class NoteControllerTest {
                         null,
                         false,
                         false,
-                        List.of("Nursing")
+                        List.of("Nursing"),
+                        true
                 )
         );
         when(noteService.listPublic(userId, null, null, null, null, null, null, null, null, null, null, false, null))
@@ -1314,8 +1331,94 @@ class NoteControllerTest {
         verify(noteService, never()).getById("bulk-regenerate", routeUser.userId());
     }
 
+    @Test
+    void startQuickReviewReturnsTheEmptyQuizErrorThroughARealRequest() throws Exception {
+        AuthenticatedUser routeUser = new AuthenticatedUser(UUID.randomUUID(), UserRole.USER, true, 1);
+        UUID noteId = UUID.randomUUID();
+        String studyPackId = UUID.randomUUID().toString();
+        when(noteService.getOwnedStudyPackIdOrThrow(noteId.toString(), routeUser.userId())).thenReturn(studyPackId);
+        doThrow(new QuickReviewNotAvailableException())
+                .when(quickReviewSessionService).startSession(studyPackId, routeUser.userId());
+
+        buildMockMvc(routeUser).perform(post("/notes/" + noteId + "/quick-review/start")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.code").value("QUICK_REVIEW_NOT_AVAILABLE"));
+    }
+
+    @Test
+    void recoverStrandedGenerationMarksAnOldGeneratingNoteFailedOnce() throws Exception {
+        AuthenticatedUser routeUser = new AuthenticatedUser(UUID.randomUUID(), UserRole.USER, true, 1);
+        NoteEntity note = recoverableNote(routeUser.userId(), OffsetDateTime.now().minusMinutes(121));
+        when(noteRepository.findByIdAndOwnerUserIdForUpdate(note.getId(), routeUser.userId()))
+                .thenReturn(java.util.Optional.of(note));
+        doAnswer(invocation -> {
+            invocation.<NoteEntity>getArgument(0).setStatus(NoteStatus.FAILED);
+            return null;
+        }).when(studyPackService).markNoteGenerationFailed(any(NoteEntity.class));
+
+        MockMvc mockMvc = buildMockMvc(routeUser);
+        mockMvc.perform(post("/notes/" + note.getId() + "/recover-stranded-generation")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(post("/notes/" + note.getId() + "/recover-stranded-generation")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.error.code").value("GENERATION_RECOVERY_NOT_ELIGIBLE"));
+
+        ArgumentCaptor<NoteEntity> noteCaptor = ArgumentCaptor.forClass(NoteEntity.class);
+        verify(studyPackService, times(1)).markNoteGenerationFailed(noteCaptor.capture());
+        assertThat(noteCaptor.getValue().getStatus()).isEqualTo(NoteStatus.FAILED);
+    }
+
+    @Test
+    void recoverStrandedGenerationRejectsANoteThatIsNotGenerating() throws Exception {
+        AuthenticatedUser routeUser = new AuthenticatedUser(UUID.randomUUID(), UserRole.USER, true, 1);
+        NoteEntity note = recoverableNote(routeUser.userId(), OffsetDateTime.now().minusMinutes(121));
+        note.setStatus(NoteStatus.FAILED);
+        when(noteRepository.findByIdAndOwnerUserIdForUpdate(note.getId(), routeUser.userId()))
+                .thenReturn(java.util.Optional.of(note));
+
+        buildMockMvc(routeUser).perform(post("/notes/" + note.getId() + "/recover-stranded-generation")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.error.code").value("GENERATION_RECOVERY_NOT_ELIGIBLE"));
+        verify(studyPackService, never()).markNoteGenerationFailed(any(NoteEntity.class));
+    }
+
+    @Test
+    void recoverStrandedGenerationRejectsARecentGeneratingNote() throws Exception {
+        AuthenticatedUser routeUser = new AuthenticatedUser(UUID.randomUUID(), UserRole.USER, true, 1);
+        NoteEntity note = recoverableNote(routeUser.userId(), OffsetDateTime.now().minusMinutes(119));
+        when(noteRepository.findByIdAndOwnerUserIdForUpdate(note.getId(), routeUser.userId()))
+                .thenReturn(java.util.Optional.of(note));
+
+        buildMockMvc(routeUser).perform(post("/notes/" + note.getId() + "/recover-stranded-generation")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.error.code").value("GENERATION_RECOVERY_NOT_ELIGIBLE"));
+        verify(studyPackService, never()).markNoteGenerationFailed(any(NoteEntity.class));
+    }
+
+    private NoteEntity recoverableNote(UUID ownerUserId, OffsetDateTime generationEnqueuedAt) {
+        NoteEntity note = new NoteEntity();
+        note.setId(UUID.randomUUID());
+        note.setOwnerUserId(ownerUserId);
+        note.setStatus(NoteStatus.GENERATING);
+        note.setGenerationEnqueuedAt(generationEnqueuedAt);
+        note.setUpdatedAt(generationEnqueuedAt);
+        return note;
+    }
+
     private MockMvc buildMockMvc(AuthenticatedUser routeUser) {
         return standaloneSetup(noteController)
+                .setControllerAdvice(new GlobalExceptionHandler(DataSize.ofMegabytes(10)))
                 .setCustomArgumentResolvers(new HandlerMethodArgumentResolver() {
                     @Override
                     public boolean supportsParameter(MethodParameter parameter) {
@@ -1384,7 +1487,9 @@ class NoteControllerTest {
                 false,
                 false,
                 false,
-                "Site Grading Principles in Civil Engineering"
+                "Site Grading Principles in Civil Engineering",
+                true,
+                null
         ));
 
         mockMvc.perform(get("/notes/" + noteId))

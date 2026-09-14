@@ -19,6 +19,7 @@ import com.studysnap.backend.dto.GoalCollectionDetailResponse;
 import com.studysnap.backend.dto.GoalChildItemsResponse;
 import com.studysnap.backend.dto.NoteCollectionDetailResponse;
 import com.studysnap.backend.dto.NoteCollectionItemResponse;
+import com.studysnap.backend.dto.QuizItem;
 import com.studysnap.backend.dto.NoteCollectionSummaryResponse;
 import com.studysnap.backend.dto.NoteConceptCountsResponse;
 import com.studysnap.backend.dto.NoteResponse;
@@ -558,8 +559,11 @@ class NoteCollectionServiceTest {
 
         assertThat(result.items()).extracting(item -> item.noteId()).containsExactly(firstNoteId, secondNoteId);
         assertThat(result.items().get(0).studyPackStatus()).isEqualTo(NoteStudyPackStatusResolver.DRAFT);
+        assertThat(result.items().get(0).studyPackDone()).isNull();
+        assertThat(result.items().get(0).hasKeyConcepts()).isFalse();
         assertThat(result.items().get(0).lastSessionCompletedAt()).isNull();
         assertThat(result.items().get(1).studyPackStatus()).isEqualTo(NoteStudyPackStatusResolver.STUDY_PACK_READY);
+        assertThat(result.items().get(1).studyPackDone()).isTrue();
         assertThat(result.items().get(1).generatedQuizId()).isEqualTo(generatedQuiz.getId().toString());
         assertThat(result.items().get(1).lastSessionCompletedAt()).isEqualTo(FIRST_PRACTICED_AT);
         assertThat(result.progress().totalNotes()).isEqualTo(2);
@@ -567,6 +571,45 @@ class NoteCollectionServiceTest {
         assertThat(result.progress().notesPracticed()).isEqualTo(1);
         verify(quizSessionHistoryService, times(1))
                 .findLatestSessionCompletedAtByNoteIds(userId, List.of(firstNoteId, secondNoteId));
+    }
+
+    @Test
+    void get_keepsPriorPackCapabilitiesForGeneratingAndFailedNotes() {
+        UUID userId = UUID.randomUUID();
+        UUID collectionId = UUID.randomUUID();
+        UUID generatingNoteId = UUID.randomUUID();
+        UUID failedNoteId = UUID.randomUUID();
+        NoteCollectionEntity collection = buildCollection(collectionId, userId, COLLECTION_TITLE, Instant.now());
+        NoteEntity generatingNote = buildNote(generatingNoteId, userId, NOTE_TITLE_ONE);
+        generatingNote.setStatus(NoteStatus.GENERATING);
+        NoteEntity failedNote = buildNote(failedNoteId, userId, NOTE_TITLE_TWO);
+        failedNote.setStatus(NoteStatus.FAILED);
+        StudyPackEntity generatingPack = buildStudyPack(generatingNoteId, List.of("Concept"));
+        StudyPackEntity failedPack = buildStudyPack(failedNoteId, List.of("Concept"));
+        List<QuizItem> quiz = List.of(new QuizItem("Question", List.of("A", "B"), 0, "Concept", "Why"));
+        generatingPack.setQuiz(quiz);
+        failedPack.setQuiz(quiz);
+        List<UUID> noteIds = List.of(generatingNoteId, failedNoteId);
+        when(collectionRepository.findByIdAndOwnerUserId(collectionId, userId)).thenReturn(Optional.of(collection));
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(collectionId)).thenReturn(List.of(
+                buildItem(collectionId, generatingNoteId, 0, null),
+                buildItem(collectionId, failedNoteId, 1, null)
+        ));
+        when(noteRepository.findCollectionNoteProjectionsByIdIn(noteIds))
+                .thenReturn(asNoteProjections(generatingNote, failedNote));
+        when(studyPackRepository.findProgressViewsByNoteIdIn(noteIds))
+                .thenReturn(asProjections(generatingPack, failedPack));
+        when(generatedQuizRepository.findNoteIdsByOwnerUserIdAndNoteIdIn(userId, noteIds)).thenReturn(List.of());
+        when(quizSessionHistoryService.findLatestSessionCompletedAtByNoteIds(userId, noteIds)).thenReturn(Map.of());
+
+        NoteCollectionDetailResponse result = service.get(collectionId, userId);
+
+        assertThat(result.items()).allSatisfy(item -> {
+            assertThat(item.hasKeyConcepts()).isTrue();
+            assertThat(item.studyPackDone()).isTrue();
+        });
+        assertThat(result.items()).extracting(NoteCollectionItemResponse::studyPackStatus)
+                .containsExactly(NoteStudyPackStatusResolver.GENERATING, NoteStudyPackStatusResolver.FAILED);
     }
 
     /**
@@ -5982,6 +6025,7 @@ class NoteCollectionServiceTest {
                         pack.getOwnerUserId(),
                         pack.getSubject(),
                         pack.getKeyConcepts(),
+                        pack.getQuiz(),
                         pack.getStatus()
                 ))
                 .toList();
@@ -5993,6 +6037,7 @@ class NoteCollectionServiceTest {
             UUID ownerUserId,
             String subject,
             List<String> keyConcepts,
+            List<com.studysnap.backend.dto.QuizItem> quiz,
             StudyPackStatus status
     ) implements StudyPackProgressProjection {
         @Override

@@ -2,7 +2,7 @@
 
 ## Goal
 
-Flashcards is a lightweight, non-scored review surface for a Study Pack-ready private note.
+Flashcards is a lightweight, non-scored review surface for a private note with Study Pack key concepts.
 
 It should feel:
 
@@ -51,12 +51,17 @@ Flashcards must never request new generated content to fill that gap. Closing th
 
 ## Generation states
 
-Flashcards follows the same category of guard states as the private Note Detail Key Concepts tab:
+Availability follows the key-concept artifact itself, independently of Note generation lifecycle. Existing
+key concepts remain usable while regeneration is `GENERATING` and after it becomes `FAILED`. When no key
+concepts exist, Flashcards uses these guard states:
 
-- `DRAFT`: no key concepts yet; generate a Study Pack first.
+- `DRAFT`: no key concepts yet; the page offers Generate Study Pack.
 - `GENERATING`: key concepts are being generated.
-- `FAILED`: generation did not complete; retry generation from Note Detail.
+- `FAILED`: generation did not complete; the page offers Retry Generation.
 - ready Study Pack with no key concepts: explicit empty state, not a broken deck.
+
+Generate and Retry both reuse `createStudyPackFromNote(note.id)`, refetch the Note after success, and render
+the real deck as soon as key concepts appear.
 
 ## ConceptHealth
 

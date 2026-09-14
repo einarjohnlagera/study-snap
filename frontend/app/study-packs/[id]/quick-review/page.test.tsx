@@ -91,7 +91,9 @@ const baseNote = {
   ],
   keyConcepts: ["Cell organelles"],
   adaptivePracticeAvailable: false,
+  quickReviewAvailable: true,
   challengeQuizAvailable: true,
+  studyPackDone: true,
 };
 const baseSession = {
   sessionId: "session-1",
@@ -166,6 +168,7 @@ describe("QuickReviewPage first-study onboarding", () => {
           explanation: "Mitochondria produce ATP.",
         },
       ],
+      quickReviewAvailable: true,
       adaptivePracticeAvailable: false,
     });
     (startQuickReviewSession as jest.Mock).mockResolvedValue({
@@ -270,6 +273,19 @@ describe("QuickReviewPage post-quiz UX", () => {
     (startQuickReviewSession as jest.Mock).mockResolvedValue(baseSession);
     (completeQuickReviewSession as jest.Mock).mockResolvedValue(baseResult);
   }
+
+  it.each(["GENERATING", "FAILED"] as const)(
+    "starts from an intact quiz while Note lifecycle is %s",
+    async (studyPackStatus) => {
+      setupCompleteState();
+      (getNote as jest.Mock).mockResolvedValue({ ...baseNote, studyPackStatus });
+
+      render(<QuickReviewPage />);
+
+      expect(await screen.findByRole("button", { name: /Mitochondria/i })).toBeInTheDocument();
+      expect(startQuickReviewSession).toHaveBeenCalled();
+    },
+  );
 
   it("tracks a due-concepts digest landing and its first submitted answer", async () => {
     searchParamsValue = "source=due-concepts-digest";

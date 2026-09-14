@@ -3,7 +3,14 @@
 > **This is the core brief. Paste it as your first message in a new GPT chat session.**
 > Then paste any module below that matches the conversation — see "Which modules to paste".
 > Update this file whenever a new version ships or the roadmap shifts significantly.
-> Last updated: v0.145.0 - 2026-09-14 (Released). **`v0.145.0` took the Domain Context taxonomy from
+> Last updated: v0.146.0 - 2026-09-14 (Released). **`v0.146.0` made every learning action (Quick
+Review, Challenge Quiz, Adaptive Practice, Flashcards, Memorization, Long/Board Exam eligibility,
+Review Set premium-exam launch, public note pages) derive availability from the Study Pack's own
+artifacts instead of the Note's generation lifecycle — a note whose regeneration is running or has
+failed now keeps every learning action it had before, fixing the only generation-failure pattern ever
+seen in production (7/7 historical failures were regenerations on notes that already had a complete
+pack). No migration, no new persisted state, no pricing/entitlement change. **Previously — v0.145.0 -
+2026-09-14 (Released).** **`v0.145.0` took the Domain Context taxonomy from
 ELEVEN values to TWELVE, adding `Basic Medical Sciences` (`quantitative = false`).** Boundary: a
 professional role in the knowledge itself → `Nursing`; a role only in the audience → `Basic Medical
 Sciences`. Six canonical, multi-program Pharmacology notes were already authored, already assigned

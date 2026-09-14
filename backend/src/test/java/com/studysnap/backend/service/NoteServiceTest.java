@@ -861,6 +861,38 @@ class NoteServiceTest {
     }
 
     @Test
+    void getById_derivesCapabilitiesFromArtifactsAcrossLifecycleAndPlan() {
+        UUID ownerUserId = UUID.randomUUID();
+        List<QuizItem> quiz = List.of(new QuizItem(
+                "Question", List.of("A", "B"), 0, "Concept", "Explanation"
+        ));
+        for (NoteStatus noteStatus : NoteStatus.values()) {
+            for (int artifactCase = 0; artifactCase < 4; artifactCase++) {
+                UUID noteId = UUID.randomUUID();
+                NoteEntity note = buildNote(noteId, ownerUserId, noteStatus, NoteVisibility.PRIVATE, "content");
+                StudyPackEntity pack = artifactCase == 0 ? null : buildStudyPack(noteId, "Summary");
+                if (pack != null) {
+                    pack.setStatus(StudyPackStatus.DONE);
+                    pack.setQuiz(artifactCase == 1 ? List.of() : quiz);
+                    pack.setKeyConcepts(artifactCase == 2 ? List.of() : List.of("Concept"));
+                }
+                when(noteRepository.findByIdAndOwnerUserId(noteId, ownerUserId)).thenReturn(Optional.of(note));
+                when(studyPackRepository.findByNoteId(noteId)).thenReturn(Optional.ofNullable(pack));
+
+                for (PlanType planType : PlanType.values()) {
+                    when(subscriptionService.resolvePlan(ownerUserId)).thenReturn(planType);
+                    NoteResponse response = noteService.getById(noteId.toString(), ownerUserId);
+
+                    assertThat(response.studyPackDone()).isEqualTo(pack == null ? null : true);
+                    assertThat(response.quickReviewAvailable()).isEqualTo(artifactCase == 2 || artifactCase == 3);
+                    assertThat(response.challengeQuizAvailable()).isEqualTo(artifactCase == 2 || artifactCase == 3);
+                    assertThat(response.keyConcepts()).hasSize(artifactCase == 1 || artifactCase == 3 ? 1 : 0);
+                }
+            }
+        }
+    }
+
+    @Test
     void updateVisibility_queuesOfficialTemplateSeedWithTheSavedNoteAndLinkedStudyPack() {
         UUID ownerUserId = UUID.randomUUID();
         UUID noteId = UUID.randomUUID();
@@ -1556,11 +1588,11 @@ class NoteServiceTest {
     }
 
     @Test
-    void copyPublicNoteForPracticeFirst_copiesReadyStudyPackAndSetsAttributionFields() {
+    void copyPublicFailedLifecycleNote_copiesItsIntactStudyPackAndSetsAttributionFields() {
         UUID ownerUserId = UUID.randomUUID();
         UUID sourceOwnerUserId = UUID.randomUUID();
         UUID sourceNoteId = UUID.randomUUID();
-        NoteEntity source = buildNote(sourceNoteId, sourceOwnerUserId, NoteStatus.GENERATED, NoteVisibility.PUBLIC, "source content");
+        NoteEntity source = buildNote(sourceNoteId, sourceOwnerUserId, NoteStatus.FAILED, NoteVisibility.PUBLIC, "source content");
         source.setTitle("Public source");
         source.setSubject("History");
         source.setCourseProgram("Humanities");

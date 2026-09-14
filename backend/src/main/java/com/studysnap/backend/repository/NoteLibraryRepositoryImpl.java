@@ -104,10 +104,9 @@ public class NoteLibraryRepositoryImpl implements NoteLibraryRepository {
             """;
     private static final String STUDY_PACK_READY_PREDICATE = """
             (
-                n.status = 'GENERATED'
-                or (
-                    (n.status is null or n.status = 'DRAFT')
-                    and exists (select 1 from study_packs sp where sp.note_id = n.id)
+                exists (
+                    select 1 from study_packs sp
+                    where sp.note_id = n.id and sp.status = 'DONE'
                 )
             )
             """;

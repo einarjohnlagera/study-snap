@@ -1,6 +1,6 @@
 import type { NoteCollectionDetail, NoteCollectionItem, NoteListItemResponse } from "@/lib/api";
 
-type CollectionExamCandidate = Pick<NoteCollectionItem, "noteId" | "position" | "studyPackStatus" | "generatedQuizId" | "studyPackId">;
+type CollectionExamCandidate = Pick<NoteCollectionItem, "noteId" | "position" | "studyPackDone" | "generatedQuizId" | "studyPackId">;
 
 export function sortCollectionItemsByPosition<T extends Pick<NoteCollectionItem, "position">>(items: T[]): T[] {
   return [...items].sort((left, right) => left.position - right.position);
@@ -13,10 +13,10 @@ export function canIncludeCollectionItemInExam(item: Pick<NoteCollectionItem, "g
 }
 
 // Premium-exam (Long / Board / Interview) eligibility: these modes generate
-// their own question set from the Study Pack at start, so a ready Study Pack is
+// their own question set from the Study Pack at start, so a DONE Study Pack is
 // the only requirement — no pre-generated quiz needed.
-export function canIncludeCollectionItemInPremiumExam(item: Pick<NoteCollectionItem, "studyPackStatus">): boolean {
-  return item.studyPackStatus === "STUDY_PACK_READY";
+export function canIncludeCollectionItemInPremiumExam(item: Pick<NoteCollectionItem, "studyPackDone">): boolean {
+  return item.studyPackDone === true;
 }
 
 export function getCollectionQuizReadyNoteIds(items: CollectionExamCandidate[]): string[] {
@@ -49,6 +49,6 @@ export function resolveCollectionScopedSourceNotes(
     .filter((item) => item.noteId !== primaryNoteId)
     .map((item) => noteById.get(item.noteId))
     .filter((note): note is NoteListItemResponse => Boolean(note))
-    .filter((note) => note.studyPackStatus === "STUDY_PACK_READY")
+    .filter((note) => note.studyPackDone === true)
     .filter((note) => !options.requireStudyPackId || Boolean(note.studyPackId));
 }

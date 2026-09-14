@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { FlashcardsPageClient } from "./flashcards-page-client";
 import { getAuthUser } from "@/lib/auth";
-import { getConceptHealth, getNote } from "@/lib/api";
+import { createStudyPackFromNote, getConceptHealth, getNote } from "@/lib/api";
 
 const replaceMock = jest.fn();
 
@@ -16,6 +16,7 @@ jest.mock("@/lib/auth", () => ({
 }));
 
 jest.mock("@/lib/api", () => ({
+  createStudyPackFromNote: jest.fn(),
   getConceptHealth: jest.fn(),
   getNote: jest.fn(),
 }));
@@ -37,6 +38,7 @@ const readyNote = {
   copiedAt: null,
   studyPackId: "sp-1",
   studyPackStatus: "STUDY_PACK_READY" as const,
+  studyPackDone: true,
   summary: "Summary",
   keyConcepts: ["Cells", "DNA"],
   quiz: [
@@ -68,9 +70,11 @@ describe("FlashcardsPageClient", () => {
     replaceMock.mockReset();
     (getAuthUser as jest.Mock).mockReset();
     (getConceptHealth as jest.Mock).mockReset();
+    (createStudyPackFromNote as jest.Mock).mockReset();
     (getNote as jest.Mock).mockReset();
     (getAuthUser as jest.Mock).mockReturnValue({ profileType: "STUDENT" });
     (getNote as jest.Mock).mockResolvedValue(readyNote);
+    (createStudyPackFromNote as jest.Mock).mockResolvedValue({});
   });
 
   it("renders matched key concepts as flip cards", async () => {
@@ -166,6 +170,28 @@ describe("FlashcardsPageClient", () => {
     expect(await screen.findByRole("heading", { name: title })).toBeInTheDocument();
     expect(screen.getByText(message)).toBeInTheDocument();
     expect(screen.queryByLabelText("Flashcard deck")).not.toBeInTheDocument();
+  });
+
+  it.each(["GENERATING", "FAILED"] as const)("keeps flashcards usable while lifecycle is %s", async (studyPackStatus) => {
+    (getNote as jest.Mock).mockResolvedValue({ ...readyNote, studyPackStatus });
+
+    render(<FlashcardsPageClient noteId="note-1" />);
+
+    expect(await screen.findByLabelText("Flashcard deck")).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Flashcards are not available yet" })).not.toBeInTheDocument();
+  });
+
+  it("refetches after generation and replaces the guard with real content", async () => {
+    (getNote as jest.Mock)
+      .mockResolvedValueOnce({ ...readyNote, studyPackId: null, studyPackStatus: "DRAFT", studyPackDone: null, keyConcepts: [], quiz: [] })
+      .mockResolvedValueOnce(readyNote);
+
+    render(<FlashcardsPageClient noteId="note-1" />);
+    fireEvent.click(await screen.findByRole("button", { name: "Generate Study Pack" }));
+
+    await waitFor(() => expect(createStudyPackFromNote).toHaveBeenCalledWith("note-1"));
+    expect(await screen.findByLabelText("Flashcard deck")).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "No key concepts yet" })).not.toBeInTheDocument();
   });
 
   it("shows a retry-back error state when loading the note fails", async () => {

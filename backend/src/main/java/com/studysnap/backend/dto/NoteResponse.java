@@ -45,7 +45,9 @@ public record NoteResponse(
          * just to compare titles would make merely VIEWING a note rewrite that recommendation.
          * Populated on the detail response only; list responses pass null.
          */
-        String studyPackTitle
+        String studyPackTitle,
+        Boolean studyPackDone,
+        OffsetDateTime generationEnqueuedAt
 ) {
     public NoteResponse(
             String id,
@@ -106,6 +108,8 @@ public record NoteResponse(
                 quickReviewAvailable,
                 challengeQuizAvailable,
                 adaptivePracticeAvailable,
+                null,
+                null,
                 null
         );
     }
@@ -168,6 +172,8 @@ public record NoteResponse(
                 quickReviewAvailable,
                 challengeQuizAvailable,
                 adaptivePracticeAvailable,
+                null,
+                null,
                 null
         );
     }

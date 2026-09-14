@@ -1114,6 +1114,11 @@ class StudyPackServiceTest {
         existingStudyPack.setOwnerUserId(userId);
         existingStudyPack.setNoteId(noteId);
         existingStudyPack.setSummary("Old summary");
+        existingStudyPack.setStatus(StudyPackStatus.DONE);
+        existingStudyPack.setKeyConcepts(List.of("Old concept"));
+        existingStudyPack.setQuiz(List.of(new QuizItem(
+                "Old question", List.of("Correct", "Wrong"), 0, "Old concept", "Old explanation"
+        )));
 
         when(noteRepository.findByIdAndOwnerUserId(noteId, userId)).thenReturn(Optional.of(generatedNote));
         when(studyPackRepository.findByOwnerUserIdAndNoteId(userId, noteId)).thenReturn(Optional.of(existingStudyPack));
@@ -1131,6 +1136,11 @@ class StudyPackServiceTest {
 
         assertThat(generatedNote.getStatus()).isEqualTo(NoteStatus.FAILED);
         assertThat(existingStudyPack.getSummary()).isEqualTo("Old summary");
+        assertThat(existingStudyPack.getStatus()).isEqualTo(StudyPackStatus.DONE);
+        assertThat(existingStudyPack.getKeyConcepts()).containsExactly("Old concept");
+        assertThat(existingStudyPack.getQuiz()).singleElement()
+                .extracting(QuizItem::question)
+                .isEqualTo("Old question");
         verify(studyPackRepository, never()).save(any(StudyPackEntity.class));
         verify(userUsageService, never()).incrementStudyPackGeneration(any(UUID.class), any(OffsetDateTime.class));
     }

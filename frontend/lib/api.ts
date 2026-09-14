@@ -1801,6 +1801,8 @@ export type NoteResponse = {
   copiedAt: string | null;
   studyPackId?: string | null;
   studyPackStatus?: NoteStudyPackStatus;
+  studyPackDone: boolean | null;
+  generationEnqueuedAt: string | null;
   /**
    * The Study Pack's OWN generated title — not the note's. Since v0.120.0 the two can legitimately
    * differ, and the note detail page offers this one as a dismissible, opt-in suggestion. Present on
@@ -1930,6 +1932,7 @@ export type NoteListItemResponse = {
   visibility: NoteVisibility;
   studyPackId: string | null;
   studyPackStatus: NoteStudyPackStatus;
+  studyPackDone: boolean | null;
   quizCount: number | null;
   keyConceptCount: number | null;
   copyCount: number | null;
@@ -2073,6 +2076,8 @@ export type NoteCollectionItem = {
   subject: string | null;
   courseProgram: string | null;
   studyPackStatus: NoteStudyPackStatus;
+  hasKeyConcepts: boolean;
+  studyPackDone: boolean | null;
   /**
    * ⚠️ Present so the collection detail page can resolve its primary exam's Study Pack WITHOUT
    * calling `listNotes()`, which is unbounded and carries `contentPreview`/`summaryPreview` per row.
@@ -2207,6 +2212,7 @@ export type PublicNoteDetailResponse = {
   content: string;
   contentPreview: string;
   studyPackStatus: NoteStudyPackStatus;
+  studyPackDone: boolean | null;
   summary: string | null;
   keyConcepts: string[];
   quiz: QuizItem[];
@@ -3539,6 +3545,21 @@ export async function createStudyPackFromNote(
   return parseApiResponse<NoteResponse>(
     response,
     "We could not generate your study pack right now. Please try again.",
+  );
+}
+
+export async function recoverStrandedGeneration(noteId: string): Promise<void> {
+  const response = await fetchWithAuth(
+    `/notes/${noteId}/recover-stranded-generation`,
+    {
+      method: "POST",
+      headers: buildAuthHeaders(),
+    },
+    true,
+  );
+  await parseApiResponse<{ message: string }>(
+    response,
+    "We could not recover this generation right now. Please try again.",
   );
 }
 

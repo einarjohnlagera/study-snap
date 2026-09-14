@@ -132,6 +132,8 @@ function collection(overrides: Record<string, unknown> = {}) {
         courseProgram: "Nursing",
         studyPackStatus: "DRAFT",
         studyPackId: null,
+        hasKeyConcepts: false,
+        studyPackDone: null,
         generatedQuizId: null,
         lastSessionCompletedAt: null,
         dueConceptCount: 0,
@@ -147,6 +149,8 @@ function collection(overrides: Record<string, unknown> = {}) {
         courseProgram: "Nursing",
         studyPackStatus: "STUDY_PACK_READY",
         studyPackId: null,
+        hasKeyConcepts: true,
+        studyPackDone: true,
         generatedQuizId: "quiz-2",
         lastSessionCompletedAt: "2026-06-02T00:00:00Z",
         dueConceptCount: 0,
@@ -2923,6 +2927,7 @@ describe("CollectionDetailPageClient", () => {
       items: collection().items.map((item) => ({
         ...item,
         studyPackStatus: "STUDY_PACK_READY",
+        studyPackDone: true,
         studyPackId: null,
         generatedQuizId: null,
         lastSessionCompletedAt: "2026-06-02T00:00:00Z",
@@ -2944,6 +2949,7 @@ describe("CollectionDetailPageClient", () => {
       items: collection().items.map((item) => ({
         ...item,
         studyPackStatus: "STUDY_PACK_READY",
+        studyPackDone: true,
         lastSessionCompletedAt: null,
       })),
     }));
@@ -2966,6 +2972,7 @@ describe("CollectionDetailPageClient", () => {
       items: collection().items.map((item) => ({
         ...item,
         studyPackStatus: "STUDY_PACK_READY",
+        studyPackDone: true,
         lastSessionCompletedAt: "2026-06-02T00:00:00Z",
       })),
     }));
@@ -3022,6 +3029,7 @@ describe("CollectionDetailPageClient", () => {
         ...item,
         studyPackId: `sp-${item.noteId}`,
         studyPackStatus: "STUDY_PACK_READY",
+        studyPackDone: true,
         lastSessionCompletedAt: "2026-06-02T00:00:00Z",
       })),
     }));
@@ -3066,6 +3074,7 @@ describe("CollectionDetailPageClient", () => {
       items: collection().items.map((item) => ({
         ...item,
         studyPackStatus: "DRAFT",
+        studyPackDone: null,
         studyPackId: null,
         generatedQuizId: null,
       })),

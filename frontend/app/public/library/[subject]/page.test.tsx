@@ -39,6 +39,7 @@ function buildNote(overrides: Partial<TestNote> & Pick<TestNote, "id" | "title" 
     copiedFromPublic: false,
     likedByCurrentUser: false,
     ...overrides,
+    studyPackDone: overrides.studyPackDone ?? true,
   };
 }
 

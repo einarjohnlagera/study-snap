@@ -93,7 +93,7 @@ export default async function PublicLibrarySeoPage({ params }: Readonly<PublicLi
         .slice(0, 3)
     : [];
   const relatedNotes = allSubjectNotes
-    .filter((n) => n.id !== note.id && n.studyPackStatus === "STUDY_PACK_READY")
+    .filter((n) => n.id !== note.id && n.studyPackDone === true)
     .sort((a, b) => {
       const scoreA = (a.viewCount ?? 0) + (a.copyCount ?? 0) * 3 + (a.likeCount ?? 0) * 2;
       const scoreB = (b.viewCount ?? 0) + (b.copyCount ?? 0) * 3 + (b.likeCount ?? 0) * 2;
@@ -115,7 +115,7 @@ export default async function PublicLibrarySeoPage({ params }: Readonly<PublicLi
   const examSlug = await getServerExamSlugForCourseProgram(courseProgram);
   const moreByCourseProgram = courseProgram
     ? (await getServerPublicNotesByCourseProgram(courseProgram))
-        .filter((n) => n.id !== note.id && n.studyPackStatus === "STUDY_PACK_READY")
+        .filter((n) => n.id !== note.id && n.studyPackDone === true)
         .sort((a, b) => {
           const scoreA = (a.viewCount ?? 0) + (a.copyCount ?? 0) * 3 + (a.likeCount ?? 0) * 2;
           const scoreB = (b.viewCount ?? 0) + (b.copyCount ?? 0) * 3 + (b.likeCount ?? 0) * 2;
@@ -136,7 +136,7 @@ export default async function PublicLibrarySeoPage({ params }: Readonly<PublicLi
     summary: note.summary,
     content: note.content,
   });
-  const isDraft = note.studyPackStatus !== "STUDY_PACK_READY";
+  const isDraft = !note.studyPackDone;
   const normalizedSummary = normalizePublicNoteText(note.summary);
   const keyConcepts = note.keyConcepts.map((concept) => normalizePublicNoteText(concept)).filter((concept) => concept.length > 0);
   const hasVisibleStudyPackPreviews = !isDraft && normalizedSummary.length > 0 && keyConcepts.length > 0 && note.quiz.length > 0;

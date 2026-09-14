@@ -6,8 +6,10 @@ import { useEffect, useMemo, useState } from "react";
 import { BackLink } from "@/components/ui/back-link";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { ResponsiveActionButton } from "@/components/ui/action-button";
 import {
   getMemorizationCards,
+  createStudyPackFromNote,
   getNote,
   gradeMemorizationCard,
   type MemorizationCardResponse,
@@ -43,13 +45,35 @@ const GRADE_HELP: Record<MemorizationGrade, string> = {
   EASY: "Longer interval",
 };
 
-function MemorizationGuard({ title, message }: Readonly<{ title: string; message: string }>) {
+function MemorizationGuard({
+  title,
+  message,
+  actionLabel,
+  onAction,
+  actionPending,
+}: Readonly<{
+  title: string;
+  message: string;
+  actionLabel?: string;
+  onAction?: () => void;
+  actionPending?: boolean;
+}>) {
   return (
     <Card className="space-y-4 p-5 sm:p-6">
       <div className="space-y-2">
         <h1 className="text-2xl font-semibold tracking-tight text-foreground">{title}</h1>
         <p className="text-sm leading-relaxed text-foreground/75">{message}</p>
       </div>
+      {actionLabel && onAction ? (
+        <ResponsiveActionButton
+          type="button"
+          onClick={onAction}
+          disabled={actionPending}
+          action="studyPack"
+          label={actionPending ? "Working..." : actionLabel}
+          showTextOnMobile
+        />
+      ) : null}
     </Card>
   );
 }
@@ -102,6 +126,7 @@ export function MemorizationPageClient({ noteId }: Readonly<{ noteId: string }>)
   const [gradingGrade, setGradingGrade] = useState<MemorizationGrade | null>(null);
   const [gradeError, setGradeError] = useState<string | null>(null);
   const [referenceNow, setReferenceNow] = useState<Date>(() => new Date());
+  const [retrying, setRetrying] = useState(false);
 
   useEffect(() => {
     if (isTeacherMode) {
@@ -115,7 +140,7 @@ export function MemorizationPageClient({ noteId }: Readonly<{ noteId: string }>)
         if (!active) return;
         setNote(loadedNote);
         setReferenceNow(new Date());
-        if (loadedNote.studyPackStatus === "STUDY_PACK_READY" && loadedNote.studyPackId) {
+        if (loadedNote.keyConcepts.length > 0 && loadedNote.studyPackId) {
           const memorizationCards = await getMemorizationCards(loadedNote.studyPackId);
           if (!active) return;
           setScheduleByConcept(buildScheduleByConcept(memorizationCards));
@@ -144,7 +169,27 @@ export function MemorizationPageClient({ noteId }: Readonly<{ noteId: string }>)
   const currentCard = dueCards.find((card) => card.key === currentKey) ?? dueCards[0] ?? null;
   const nextDueCard = reviewCards.find((card) => card.dueAt.getTime() > referenceNow.getTime()) ?? null;
   const studyPackStatus = note?.studyPackStatus ?? "DRAFT";
-  const hasGeneratedStudyPack = studyPackStatus === "STUDY_PACK_READY";
+  const hasKeyConcepts = (note?.keyConcepts.length ?? 0) > 0;
+
+  const handleGenerate = async () => {
+    if (!note || retrying) return;
+    setRetrying(true);
+    setError(null);
+    try {
+      await createStudyPackFromNote(note.id);
+      const refreshed = await getNote(note.id);
+      setNote(refreshed);
+      setReferenceNow(new Date());
+      if (refreshed.keyConcepts.length > 0 && refreshed.studyPackId) {
+        const memorizationCards = await getMemorizationCards(refreshed.studyPackId);
+        setScheduleByConcept(buildScheduleByConcept(memorizationCards));
+      }
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Could not generate this Study Pack.");
+    } finally {
+      setRetrying(false);
+    }
+  };
 
   useEffect(() => {
     if (loadState !== "ready") {
@@ -229,35 +274,41 @@ export function MemorizationPageClient({ noteId }: Readonly<{ noteId: string }>)
             </div>
           </header>
 
-          {studyPackStatus === "GENERATING" ? (
+          {!hasKeyConcepts && studyPackStatus === "GENERATING" ? (
             <MemorizationGuard
               title="Key concepts are being generated"
               message="Key concepts are being generated from your note."
             />
           ) : null}
 
-          {studyPackStatus === "FAILED" ? (
+          {!hasKeyConcepts && studyPackStatus === "FAILED" ? (
             <MemorizationGuard
               title="Memorization is not available yet"
               message="Generation did not complete, so key concepts are not available yet. Retry generation when you are ready."
+              actionLabel="Retry Generation"
+              onAction={() => void handleGenerate()}
+              actionPending={retrying}
             />
           ) : null}
 
-          {!hasGeneratedStudyPack && studyPackStatus !== "GENERATING" && studyPackStatus !== "FAILED" ? (
+          {!hasKeyConcepts && studyPackStatus === "DRAFT" ? (
             <MemorizationGuard
               title="No key concepts yet"
               message="No key concepts yet. Generate a Study Pack to extract the most important ideas from this note."
+              actionLabel="Generate Study Pack"
+              onAction={() => void handleGenerate()}
+              actionPending={retrying}
             />
           ) : null}
 
-          {hasGeneratedStudyPack && reviewCards.length === 0 ? (
+          {(hasKeyConcepts || studyPackStatus === "STUDY_PACK_READY") && reviewCards.length === 0 ? (
             <MemorizationGuard
               title="Nothing to memorize yet"
               message="This Study Pack does not have key concepts with matched quiz explanations yet."
             />
           ) : null}
 
-          {hasGeneratedStudyPack && reviewCards.length > 0 && dueCards.length === 0 ? (
+          {hasKeyConcepts && reviewCards.length > 0 && dueCards.length === 0 ? (
             <Card className="space-y-4 p-5 sm:p-6">
               <div className="flex items-start gap-3">
                 <CheckCircle2 className="mt-1 h-5 w-5 text-emerald-600" aria-hidden="true" />
@@ -272,7 +323,7 @@ export function MemorizationPageClient({ noteId }: Readonly<{ noteId: string }>)
             </Card>
           ) : null}
 
-          {hasGeneratedStudyPack && currentCard ? (
+          {currentCard ? (
             <section className="space-y-4" aria-label="Memorization review">
               <div className="flex items-center justify-between gap-3 text-sm text-foreground/65">
                 <span>{dueCards.length} due</span>

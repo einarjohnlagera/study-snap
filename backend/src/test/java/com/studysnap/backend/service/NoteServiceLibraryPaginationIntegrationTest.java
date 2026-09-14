@@ -254,6 +254,7 @@ class NoteServiceLibraryPaginationIntegrationTest {
                 new String[]{"clinical-pharmacology"}, NoteStatus.DRAFT, NoteVisibility.PUBLIC, 2, 7);
         NoteEntity generated = saveNote(ownerUserId, "Generated pack", "Biology", "BS Biology",
                 new String[]{"cells"}, NoteStatus.GENERATED, NoteVisibility.PRIVATE, 3, 6);
+        insertStudyPack(generated);
         NoteEntity legacyPack = saveNote(ownerUserId, "Legacy pack", "Anatomy", "Nursing",
                 new String[]{"legacy"}, NoteStatus.DRAFT, NoteVisibility.PRIVATE, 4, 5);
         NoteEntity quizReady = saveNote(ownerUserId, "Teacher quiz", "Education", "BSEd",
@@ -262,6 +263,12 @@ class NoteServiceLibraryPaginationIntegrationTest {
                 NoteStatus.GENERATING, NoteVisibility.PRIVATE, 6, 3);
         saveNote(ownerUserId, "Failed", "Physics", "STEM", new String[]{"motion"},
                 NoteStatus.FAILED, NoteVisibility.PRIVATE, 7, 2);
+        // ⚠️ v0.146.0 headline regression case: a regeneration-FAILED note whose PRIOR Study Pack is
+        // still DONE must still count as STUDY_PACK_READY -- this is the entire reason the predicate
+        // moved from Note lifecycle to `study_packs.status = 'DONE'`.
+        NoteEntity failedWithIntactPack = saveNote(ownerUserId, "Regeneration failed", "Geology", "STEM",
+                new String[]{"rocks"}, NoteStatus.FAILED, NoteVisibility.PRIVATE, 9, 10);
+        insertStudyPack(failedWithIntactPack);
         saveNote(UUID.randomUUID(), "Foreign Cardiac", "Cardiology", "Nursing", new String[]{HEART_REVIEW_TAG},
                 NoteStatus.DRAFT, NoteVisibility.PRIVATE, 8, 9);
         insertStudyPack(legacyPack);
@@ -277,7 +284,8 @@ class NoteServiceLibraryPaginationIntegrationTest {
                 .containsExactlyInAnyOrder(cardiac.getId().toString(), tagSearch.getId().toString(), quizReady.getId().toString());
         assertThat(ids(page(ownerUserId, null, "STUDY_PACK_READY", null, null, List.of(), FILTER_ALL,
                 SORT_RECENTLY_UPDATED, 0, 20)))
-                .containsExactlyInAnyOrder(generated.getId().toString(), legacyPack.getId().toString());
+                .containsExactlyInAnyOrder(generated.getId().toString(), legacyPack.getId().toString(),
+                        failedWithIntactPack.getId().toString());
         assertThat(ids(page(ownerUserId, null, "QUIZ_READY", null, null, List.of(), FILTER_ALL,
                 SORT_RECENTLY_UPDATED, 0, 20))).containsExactly(quizReady.getId().toString());
         assertThat(ids(page(ownerUserId, null, FILTER_ALL, "BS Biology", null, List.of(), FILTER_ALL,
@@ -555,7 +563,7 @@ class NoteServiceLibraryPaginationIntegrationTest {
                             id, owner_user_id, note_id, input_type, title, summary, key_concepts, quiz,
                             model_tier, model_used, status, tags, created_at, updated_at
                         ) values (?, ?, ?, 'TEXT', 'Pack', 'Summary', '[]', '{}',
-                                  'STANDARD', 'test-model', 'READY', array['test'], ?, ?)
+                                  'STANDARD', 'test-model', 'DONE', array['test'], ?, ?)
                         """,
                 UUID.randomUUID(), note.getOwnerUserId(), note.getId(), BASE_TIME, BASE_TIME
         );

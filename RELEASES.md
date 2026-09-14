@@ -1,5 +1,86 @@
 # RELEASES.md - NoteLib
 
+## v0.146.0 - Knowledge, Not Lost
+
+**Status: Released** (kicked off 2026-09-14, signed off 2026-09-14, base branch `releases/v0.146.0`,
+cut from `main` after `v0.145.0` merged as #1388 and tagged — Vercel and Render both confirmed live on
+`1be308b7`. PR #1389 (implementation) and PR #1390 (pre-signoff findings) merged into the release branch.)
+
+Theme: an intact Study Pack stays usable for every learning action even when the note's most recent
+generation attempt is still running or has failed — fixing the only generation-failure pattern that has
+ever occurred in production (7 of 7 historical failures were regenerations on notes that already had a
+complete, valid Study Pack).
+
+**Production facts, re-verified read-only at kickoff, 2026-09-14 (not carried over from the Stage 2
+plan's 2026-09-13 read):** all 7 historical `generation_failed_at IS NOT NULL` notes are `GENERATED` with
+a `DONE` pack today — fully recovered, so the defect has 7/7 historical occurrences but zero current live
+instance. Zero `study_packs` rows have an empty/null `quiz` (the Quick Review guard, D1/D5, is a latent
+fix). Zero notes are currently `GENERATING` (the stranded-generation recovery endpoint, §I, currently
+serves a population of zero). None of this changes the design — all three gaps are real and worth closing
+— but the release note is honest that it is closing gaps with no current live instance, not an active
+incident.
+
+### Planned Scope
+
+- **Artifact-first learning availability (backend + frontend).** Derives `studyPackDone` (and, on
+  `NoteCollectionItemResponse`, `hasKeyConcepts`) from the Study Pack's own `quiz`/`keyConcepts`/`status`
+  fields via a new `StudyPackArtifactFacts` utility, and repoints every
+  learning-action gate (Quick Review, Challenge Quiz, Adaptive Practice, Flashcards, Memorization,
+  Long/Board Exam eligibility, Review Set premium-exam launch, public note pages) at that fact instead of
+  Note lifecycle (`NoteStatus`/the `studyPackStatus` string). Fixes the live defect where a `FAILED` or
+  `GENERATING` note hides an intact, complete Study Pack across nearly every surface. Reconciles the
+  frontend's Long/Board Exam entry gates with the backend's already-correct `StudyPackStatus.DONE` rule.
+  Adds a missing Quick Review backend guard (empty-quiz packs can no longer start a 0-question session).
+  Gives the Flashcards/Memorization guard components a real recovery action instead of dead-end copy. Adds
+  a narrow, owner-callable manual recovery endpoint for notes stranded indefinitely in `GENERATING` with no
+  `generation_enqueued_at` timestamp (the sweeper itself is not redesigned).
+  Source: `docs/claude-plans/note-visibility-learning-status-stage1.md` (Stage 1 audit) +
+  `docs/claude-plans/artifact-first-learning-availability-stage2.md` (Stage 2 implementation plan, final
+  decision block approved by the owner at this kickoff). Both untracked on disk, indexed in `ROADMAP.md`'s
+  Backlog Index.
+
+Anti-drift: no database migration, no new persisted state (every fact is derived at response-build time
+from data already stored) — every new/changed DTO field is additive. No change to `PRIVATE`/`PUBLIC`
+visibility, no new Library filter, no sixth exam mode, no `ConceptHealth`/mastery/readiness semantics
+change, no quota/pricing change, no automatic generation or regeneration, no Cross-Note Review design, and
+no re-opening of `v0.143.0`'s exam-pool invalidation work or its two adjacent seams
+(`deactivateShareLinksForNote`, Challenge Quiz question bank). Backend entitlement enforcement
+(`FeatureGateService`) is untouched everywhere. Deploy ordering: backend first (additive DTO fields), then
+frontend (which makes `studyPackDone` load-bearing for the Long Exam entry gate and the Review Set
+premium-exam predicate) — do not deploy frontend before backend this release.
+
+### Shipped
+
+- **Learning actions now follow the Study Pack artifacts they consume.** Quick Review, Challenge Quiz,
+  Adaptive Practice, Flashcards, Memorization, Long/Board Exam entry, Review Set premium-exam launch,
+  collection planning, and public note rendering no longer hide an intact pack merely because its Note is
+  `GENERATING` or `FAILED`. Lifecycle status remains visible for retry and progress messaging.
+- **Artifact facts are additive and derived at response time.** `StudyPackArtifactFacts` owns quiz,
+  key-concept, and `StudyPackStatus.DONE` checks; note, collection-item, list-item, and public-detail DTOs
+  now expose the precise facts their clients need. The private Library's ready predicate now matches the
+  backend exam-source rule by checking for a `DONE` Study Pack.
+- **Empty Quick Reviews fail before persistence.** Starting Quick Review with no quiz questions returns
+  `400 QUICK_REVIEW_NOT_AVAILABLE`; resuming an existing in-progress session remains allowed.
+- **Stranded first-generation work has an owner-only recovery path.**
+  `POST /notes/{id}/recover-stranded-generation` reuses the configured note generation bound and the
+  existing failure transition, performs no generation or quota charge, and returns
+  `409 GENERATION_RECOVERY_NOT_ELIGIBLE` for early, repeated, or otherwise ineligible calls. Note Detail
+  exposes the action after the bound and refetches the recovered note so its Retry action is reachable.
+- **Flashcards and Memorization have working Generate/Retry actions.** Their guards call the existing
+  generation API and refetch the Note; existing key concepts remain usable during and after a failed
+  regeneration.
+- **Pre-signoff falsification review (cold agent, no inherited context), PR #1390.** Confirmed
+  `studyPackDone` derivation, per-mode entry-gate correctness, and deploy-ordering fail-safety across the
+  merged diff. Found and fixed two gaps the implementing session's own pre-commit audit missed: a stale
+  `docs/features/collections.md` claim describing a `hasQuizQuestions` field that was added by Codex then
+  correctly reverted before commit (it would have widened a shared "lean projection" used by
+  Dashboard/Progress/Adaptive Practice to pull the full `quiz` JSONB column, violating an existing
+  performance guard test, and had zero real consumers) but never removed from the doc; and a missing
+  regression test for this release's own headline Library scenario — a `FAILED` note whose prior Study
+  Pack is still `DONE` now has a dedicated case in `NoteServiceLibraryPaginationIntegrationTest`.
+
+---
+
 ## v0.145.0 - Knowledge, Not Role
 
 **Status: Released** (kicked off 2026-09-14, signed off 2026-09-14, base branch `releases/v0.145.0`,
@@ -656,74 +737,3 @@ Named here so that closing this release does not carry them silently into the ne
 - **⚠️ A FOURTH SURFACE HAS THE SAME DEFECT AND IS DELIBERATELY NOT FIXED HERE.** `app/study/study-pack-results.tsx:114` renders `keyConcepts` as raw `{concept}`, exactly as the shared page did. It is a one-line change, but the verification tier for this release was set at kickoff on **three** surfaces, and widening it after the fact is how a release quietly outgrows its own tier. Named so it is a known candidate rather than a future rediscovery.
 - **⚠️ `SummaryMarkdown`'s repair covers the 36 measured summaries and no more.** `normalizeBareMath` returns early on **any** delimiter anywhere in the string it is handed, and a summary is one long multi-paragraph string — so a summary already containing a single `$` is left entirely alone, bare expressions elsewhere in it included. Splitting per paragraph to widen this would change what `remark-gfm` sees and was judged not worth the blast radius.
 - **The allowlist gaps are still open and still out of scope**: `\to`, `\text{m/s}` and `90^\circ` render raw, the last because `readScriptValue` rejects a backslash as a script value. A separate finding, deliberately not bundled.
-
-## v0.140.0 - Pending Work in Reach
-
-**Status: Released** (kicked off 2026-09-10, signed off 2026-09-10, base branch `releases/v0.140.0`, cut from `main` after `v0.139.0` merged and tagged)
-
-Theme: a curator arranging a 79-note review set works hundreds of pixels below the only control that commits their arrangement. This puts the commit in reach, and says honestly what is pending.
-
-Source: `docs/claude-plans/authoring-and-quiz-legibility-fix-plan.md` §§5-7 and **§10** — owner-reported 2026-09-05 from real use with screenshots, audited against code, tightened by the owner, then a GPT tightening pass. **⚠️ Read §10 FIRST.** It is the plan's own record of three places where the code contradicts the tightening, and one of them removes a premise this release would otherwise ship on.
-
-**⚠️ THIS IS A LEGIBILITY FIX, NOT A DATA-LOSS DEFECT — stated so the release is not oversold.** Navigation protection already exists and was **verified in code at kickoff** (`study-plan-builder-page-client.tsx:1663-1671`: a `beforeunload` handler plus an in-app click interceptor, both gated on `leafOrderDirty`). **Work is not silently lost today.** The failure is a curator who drags on a long plan, scrolls away from the header that holds Save, and redoes the arrangement. Recoverable, and worth fixing because it lands on the only people actually using the product.
-
-**The trigger is verified live, not assumed:** production holds a **79-note** plan (General Education), two **77-note** plans (Engineering Mathematics), a **76-note** plan (Geotechnical Engineering) and five more at 59+. In the 14 days to 2026-09-10, **12 authors created 1,768 notes** — 7 `BOARD_EXAM` learners (919), the admin account (782) and 4 students (67). This release serves them.
-
-### Planned Scope
-
-1. **The dirty-state sticky bar (frontend).** Shown only while there are pending changes, absent otherwise, holding the pending-state text plus Discard and Save. **⚠️ No two equally-prominent Save controls** — the buttons at `study-plan-builder-page-client.tsx:2496-2515` move INTO the bar; if the card header retains anything it is status text, never a competing primary action.
-
-2. **Copy that describes what is actually pending — `[DECISION]`, owner's call, owed before implementation.** **⚠️ Both obvious wordings are wrong in opposite directions**, per §10 Finding B: `Unsaved changes` **over-claims** (it implies the already-persisted combobox pick is pending), and `Order changes not saved` **under-claims** (`leafOrdersMatch` at `:118-125` compares `noteId` sequence **and** `label`, so a pending drag can also have moved a note between sections). The plan proposes `Arrangement not saved` or `Drag changes not saved`. **The semantic requirement is fixed even though the words are not: the bar must describe drag-originated order AND placement, and must not promise isolation.**
-
-3. **§7 navigation protection — narrowed, and narrowed on evidence.** §7's stated premise (*"current silent loss is unacceptable"*) is **false** and §10 Finding C says so; the handler exists. What remains is real but smaller: the existing `confirm()` offers **two** choices where the owner requires **three**, plus §7's named coverage gap. **Scope it as the gap, not as the original item.**
-
-4. **Backlog Index corrections — three rows that claim open work which has shipped.** **⚠️ Each was found by opening the code, and each would have been offered to the owner as a release candidate.** (a) The **LaTeX (b)** row reads *"BLOCKED until 2026-09-11 … candidate for `v0.96.0`"*; `remark-math` is at `summary-markdown.tsx:3`, shipped **`v0.100.0`, 2026-08-29**. (b) The **public-catalog unbounded read** row reads *"⚠️ STILL OPEN IN CODE, BUT ITS GATE BECAME TRUE AND NOBODY ACTED"*; **all three legs shipped in `v0.119.1` on 2026-09-06** (`d10d92bc` Legs B+C, `542622f1` Leg A) — the gate said *"un-parks the moment `v0.119.0` is signed off"* and the fix landed in the very next release, so somebody acted immediately. (c) That row was **"verified" as unfixed by the `v0.138.0` verification pass**, which is recorded as an error of that pass, not quietly repaired.
-
-### The structural finding this release records
-
-**Every stale row found across `v0.138.0`, `v0.139.0` and this kickoff was stale in the SAME direction — overstating open work — and every one shipped in a release that never re-read the row.** `v0.138.0` added a verification procedure to **kickoff**; nothing updates a Backlog row when the thing it describes **ships**. That is a missing signoff step, and it is the cheap fix. **⚠️ The near-miss that makes this concrete: on 2026-09-10 the onboarding redesign — shipped as `v0.73.0` a month earlier — came within one verification step of being scoped and rebuilt as an 8-screen rewrite of a 2506-line file.**
-
-Anti-drift — locked:
-
-- **⚠️ Autosave-per-drop stays REJECTED. Do not re-propose it.** It raced itself: each drop awaited a save plus a full refresh, nothing gated dragging meanwhile, so a second drag wrote from a diverging base and was clobbered when the first refresh landed. **Two releases were paid to close this.**
-- **⚠️ Do NOT change the combobox flush (§10 Finding A).** `handleLeafLabelChange` calls `moveLeafNote(..., deferSave = false, ...)`, so a section pick persists the curator's pending drags too and clears the dirty state. That is deliberate — `CLAUDE.md` records that non-drag mutations must **"flush, never discard"** — and it is the safe direction, because pending work is saved rather than lost. **Requirement 9 is satisfied vacuously, not by isolation; fix the COPY, not the behaviour.**
-- **⚠️ Item 4 (immediate section commit) already SHIPPED in `v0.117.0` and is not reopened here.** The reason items 4 and 5 were split stands: immediate commit makes the flush reachable in one click, so the sticky bar will disappear the moment a section is picked. **Benign — the work is saved — and it must not be "fixed".**
-- **⚠️ The Challenge Quiz bank-write isolation is NOT in this release.** Verified genuinely unshipped at kickoff (`ChallengeQuizQuestionBankService.java:118-125`; the `REQUIRES_NEW` at `:235` is `releaseClaims`, a different method). It carries `[DECISION]` with three shapes that differ in **failure semantics**, not just mechanics. It needs that decision before it can be scoped, and must not be folded in because it is nearby.
-- **⚠️ No `frontend/app/onboarding` work.** The `2026-09-11` checkpoint closed 2026-09-10 as **KILL CRITERION NOT CLEARED**; its own pre-committed wording says **reopen the framing rather than iterate on further onboarding polish**. Do not treat the closure as permission.
-- **No new drag-and-drop or animation dependency.** Use the motion vocabulary already in `globals.css`.
-- **`globalThis`, never `window` / `self` / `global`** — ESLint enforces it.
-- **Collection vocabulary stays profile-aware** — no hardcoded "Study Plan" or "Review Set" in copy.
-- **New analytics events go in the `AnalyticsEventType` enum before being fired, with a real fire site** (`v0.116.0` / `v0.117.0` both shipped events that could never fire).
-
-### Shipped
-
-- **The dirty-state sticky bar (frontend).** While drag changes are pending, a bar sticks to the bottom of the builder carrying **`Drag changes not saved`** plus Discard and Save changes. **The Save/Discard controls were MOVED out of the "Your notes" card header, not duplicated** — that header scrolls out of view on a long plan, which is the whole defect, and a test now asserts there is exactly **one** Save and **one** Discard in the document. The header keeps status text only (progress states plus the idle "Drag notes or …s to reorganize."), never a competing action.
-- **Copy decided by the owner, with its reasoning pinned in the code.** `Drag changes not saved`, chosen over `Unsaved changes` (over-claims — implies the combobox section pick is pending, and it is not: that path persists immediately) and `Order changes not saved` (under-claims — `leafOrdersMatch` compares `noteId` sequence AND `label`, so a pending drag can also have moved a note between sections). The comment at the bar tells the next reader not to "improve" it without re-reading §10 Finding B.
-- **A three-choice navigation dialog replaces the two-choice `confirm()` (frontend).** In-app link clicks while dirty now offer **Save and leave**, **Discard and leave** and **Keep editing**. The old dialog offered only "lose it" or "stay", so a curator who had genuinely finished had no way to leave *with* their work. **⚠️ A FAILED SAVE DOES NOT NAVIGATE** — the dialog stays open, says nothing was lost, and offers a retry; a dialog that navigated on a failed save would be a *new* way to lose pending work, strictly worse than what it replaced. `beforeunload` stays a **warning only**, deliberately: the browser permits no custom actions and no reliable async save, and promising a save path the page lifecycle cannot guarantee is worse than warning honestly.
-- **Modified clicks are deliberately not intercepted.** A cmd/ctrl/shift/alt or middle click, and any `target` other than `_self`, opens elsewhere and leaves the builder and its pending drags exactly where they are — interrupting it would be a dialog for a problem that does not exist, and would cost the curator the new tab. Guarded by its own test.
-- **Verification: 66 tests in `app/collections/[id]/builder/page.test.tsx` (6 new), `tsc --noEmit` clean, `npm run lint` 0 errors.** **Six mutations were applied and each was killed by a named test:** navigating despite a failed save; intercepting modified clicks; restoring a second Save control in the header; a *"Discard and leave"* that does not discard; **removing the bottom-viewport claim**; and **restoring the header control under its own old `"Save order"` label**. **⚠️ Five existing tests were CORRECTED rather than left passing for the wrong reason** — four pinned the old `"Save order"` label and one pinned the old `confirm()` two-choice guard.
-- **⚠️⚠️ FIXED BEFORE SHIPPING, FOUND BY A COLD PRESSURE TEST AND BY NOTHING ELSE: the sticky bar covered the mobile navigation.** The bar is `sticky bottom-4 z-30`; `MobileBottomTabBar` is `fixed inset-x-0 bottom-0 z-20 md:hidden` and 5.5rem tall. A **higher** stacking order plus a 1rem offset means that on a phone the bar pinned directly over the tab bar and won — and `mobile_tab_bar_enabled` defaults **TRUE** (`V94`), so that was the default experience, not an edge case. The builder now calls **`useBottomViewportClaim(leafOrderDirty)`**, the repo's existing mechanism for exactly this (`app-shell.tsx:584` gates the tab bar on `!isBottomViewportClaimed`, and Long Exam, Challenge Quiz and Quick Review all already claim it). Claimed on `leafOrderDirty` specifically, so browsing a plan never removes the curator's navigation. **⚠️ This was determinable from CLASS NAMES ALONE, so the release's own "sticky positioning is unverified because jsdom computes no layout" caveat did NOT cover it** — the caveat named the right gap and still missed what was sitting inside it.
-- **⚠️ A guard this release advertised as binding was bypassable, and the claim is corrected rather than quietly fixed.** Commit `49bc12ea` states *"a test asserts exactly one Save and one Discard exist in the document, so restoring the header buttons fails CI"*. **It did not.** The assertion pinned the accessible name `"Save changes"`, while the header control this release removed was labelled **`"Save order"`** — so restoring it under its own name passed every cited assertion. The guard now matches `/save/i` and `/discard/i` and asserts the single match lives inside the bar, which no relabelling satisfies twice. Mutation-verified by re-injecting a header `"Save order"` button: it now fails.
-
-- **`/signoff` gains a Backlog-row closure gate, which is the structural fix for five stale rows (docs).** For every item a release ships, the row that described it must be opened and marked shipped **with a `file:line`** — plus its `Gate` cell when the release satisfied it, and **never from the release notes alone**. **⚠️ `v0.138.0` added a verification procedure to KICKOFF; nothing updated a row when the thing it describes SHIPPED**, so a row written at proposal time was never touched again. Every stale row found so far was stale in the **same direction — overstating open work** — which is what makes it dangerous rather than untidy: such a row gets offered to the owner as a release candidate. Recorded in `.claude/commands/signoff.md` and `CLAUDE.md`.
-- **Eight Backlog rows had content in the wrong columns, and the repair recovered eight real dates (docs).** Distinct from `v0.138.0`'s four-column class. Three rows were missing a **`Source`** cell (folded into `Item`); five were missing a **`Gate`** cell, so `v0.138.0`'s appended `⚠️ never stamped` shunted a **genuine `Last reviewed` date into the `Gate` column** — where kickoff step 9 would read it as a gate condition. Each is repaired in place, and the five carry an explicit note that they never had a `Gate` cell rather than an invented one.
-- **The Study Plan Builder section-label refresh loop is confirmed SHIPPED — the fifth stale row of this cycle, and the first found by the new gate (docs).** Verified at `study-plan-builder-page-client.tsx:498-531`: the guard now compares through the shared `canonicalSectionLabel`, holds a `lastRequestedLabelRef` keyed on both current and requested label, and reads `onLabelChangeRef` instead of putting a re-created callback in the dependency array — which was what made the effect re-run on every render. **⚠️ Its ingress question is still unresolved and is NOT closed by the mechanics fix.**
-- **Two "unmeasured by decision" rows are now measured, both by read-only production `SELECT`s (docs).** **⚠️ Both rows also claimed the query was *"the owner's to run"* — that is wrong and is corrected: a `LIKE` scan is a `SELECT`, which `CLAUDE.md` permits; only WRITES are the owner's.**
-  - **Contaminated note titles: the debt is 89 notes across 8 programs, and it is a closed population.** Discriminating on titles ending in the note's **own** `course_program` — the Bulk Generate overwrite shape — rather than the raw `% in %` scan, which returns 1,077 mostly-legitimate matches. Earliest 2026-05-23, **latest 2026-08-02, none since**. ⚠️ It stopped a month *before* `v0.120.0` shipped, so the row's claim that `v0.120.0` is what stopped it is **not** established by this read.
-  - **⚠️ The raw-LaTeX row is not the closed curator backlog it describes — it is a live generation defect.** Re-running its own `v0.74.0` query: `NEEDS_FIX` = **15** (down from ~23, as the row predicted), `MIXED_CHECK_IT` = 189, `LIKELY_OK` = 224. **But 7 of the 15 were generated in the last 14 days**, and 184 of the 189 `MIXED_CHECK_IT` since `v0.74.0` deployed. Its `Math notation` prompt rule **reduces but does not eliminate** undelimited math. **⚠️⚠️ THIS BULLET WAS WRONG TWICE BEFORE A COLD PRESSURE TEST SETTLED IT, AND BOTH ERRORS ARE KEPT HERE BECAUSE THE SECOND ONE ALMOST DISMISSED A REAL LEARNER-FACING DEFECT.** (1) It first concluded an unscoped *engineering* half existed because the consuming components contain no call to `normalizeBareMath` — that inference was wrong, `renderMathText` calls it internally (`quiz-working-solution.tsx:206`). (2) It then concluded there was therefore **no defect and the work is curator-only** — **that was wrong too.** **What the cold agent established by running the real renderer against strings pulled from production:** `normalizeBareMath` returns immediately on **any** delimiter (`math-normalization.ts:264-266`), and **313 of 339** backslash-bearing questions and **470 of 498** explanations already contain one — so the repair fires on almost nothing in the live corpus, and the premise is true of the CODE while false of the DATA. **The real defect is delimiter MIS-PAIRING, not missing delimiters:** in a question reading *"if an asset costs `$50,000` … `$A = P \times \frac{i(1+i)^n}{(1+i)^n-1}$`"*, the currency `$` opens a math span that closes on the formula's `$`, KaTeX fails on the enclosed text and the fallback re-emits the source — **zero rendered math, full raw LaTeX on screen**. A sibling case swallows the prose instead, collapsing *"benefit of $10,000 received 3 years from now"* into run-together italics. **Population at risk: 22 questions and 49 explanations** carrying `$<digit>` with two or more `$`. **⚠️ NONE OF THIS IS FIXED IN `v0.140.0` and it must not be read as fixed** — it is recorded so the next scoping pass starts from the right mechanism. Two adjacent gaps the same pass found: `app/shared/study-packs/[id]/page.tsx:69,75,81` render summary/keyConcepts/fullNotes as raw `{value}` with **no math rendering at all** (372 production summaries carry a backslash), and `SummaryMarkdown` never calls `normalizeBareMath`, so bare math in a summary is never repaired (12 production summaries). **What `v0.140.0` ships is only the regression guard** in `quiz-question-text.test.tsx`, mutation-verified against deleting the repair call.
-
-### Checkpoint gate — no checkpoint owed, and the reasoning is recorded rather than the step skipped
-
-**Nothing in this release shipped ahead of its own evidence.** The sticky bar answers an owner report from real use whose trigger was verified in production before any code was written (a 79-note plan, two at 77, one at 76, five more at 59+; 12 authors creating 1,768 notes in 14 days). The copy is an owner `[DECISION]`, not a bet. §7 shipped **narrowed by evidence that falsified its own premise** — *"current silent loss is unacceptable"* was false, because `beforeunload` and an in-app interceptor already existed. The Backlog corrections, the closure gate and the two sizing reads are verification work and assert no outcome.
-
-**⚠️ AND A CHECKPOINT HERE WOULD HAVE BEEN DECORATIVE, WHICH IS THE OTHER HALF OF THE GATE.** The gate requires instrumentation shipped in the same release and verified emitting. **This release added ZERO analytics events** — the only event the builder fires is `COLLECTION_SECTION_ASSIGNED`, which measures section assignment and not the save-order flow. With no metric and a denominator of 12 authors, any checkpoint would have been a date with nothing behind it. `v0.134.0`'s row is the standing example of a checkpoint whose instrumentation claim was wrong; writing one here to look thorough would repeat it.
-
-**What this release owes instead is a VERIFICATION debt, not a measurement one, and it is the owner's:** one look in a real browser at the sticky bar against a long plan, at phone and desktop width. That is recorded below rather than counted as done.
-
-### Known limitations
-
-- **⚠️ The navigation interceptor still covers `a[href]` clicks only — named here rather than left to be discovered.** Programmatic `router.push`, browser back/forward, and any navigation from a control that is not an anchor are **not** covered. §7 of the plan put extending this in scope for Release B and instructed that the residual ship as a named limitation if it could not be done; App Router makes `popstate` interception unreliable enough that half-building it would give a false sense of coverage. **On those paths pending drags ARE lost silently** — `beforeunload` covers only refresh and tab close, not an in-app programmatic navigation, so nothing warns the curator.
-- **⚠️ The chosen copy names an input device, and one pending path is not a drag.** The plan justified `Drag changes not saved` as *"everything pending came from a drag"*. That is not exactly true: the keyboard **Move up / Move down** controls are the accessible equivalent of dragging and also defer, so a curator who never touches a pointer can still be shown this wording. The owner chose it knowing the alternatives; `Arrangement not saved` is the candidate that covers both without naming a device. Recorded in the code comment beside the bar.
-- **⚠️ The sticky positioning is still not covered by any test, but the gap is now NARROWER than first recorded.** jsdom computes no layout, so the suite passes whether the bar pins or sits in normal flow. **⚠️ This caveat was originally written as though "unverifiable" and "unknown" were the same thing, and they are not — a cold pressure test read the ancestor chain and the stacking context from class names and found a real, shipping defect inside the gap this bullet had already declared (the mobile tab-bar collision above).** What is now verified statically: the ancestor chain `body.min-h-screen` → AppShell → `<main>` → page `<main class="flex flex-col">` carries no `overflow` other than visible, so `sticky bottom-4` resolves against the document scroller; and the bar no longer competes with the mobile tab bar. **What remains genuinely unverifiable here is only whether it LOOKS right** — one look in a real browser against a long plan, at phone width and desktop.
-- **⚠️ The cross-section drag case has no UI test, because the suite cannot reach it.** `leafOrdersMatch` comparing `label` is what makes the copy honest about section placement, but the only deferred path that changes `label` is `handleLeafDragEnd`, and this suite has **no dnd-kit simulation at all** — every existing "drag" test uses the arrow controls, which are within-section. Rather than hand-build a state no code path in the test can produce (the `v0.116.0` / `v0.117.0` failure), the gap is recorded. The within-section pending case **is** covered.
-
