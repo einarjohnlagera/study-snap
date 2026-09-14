@@ -451,7 +451,6 @@ Item response is intentionally lean and private-owner focused:
 - `subject`
 - `courseProgram`
 - `studyPackStatus`
-- `hasQuizQuestions`
 - `hasKeyConcepts`
 - `studyPackDone` (nullable; `null` means no Study Pack)
 - `generatedQuizId`
@@ -468,10 +467,15 @@ Item response is intentionally lean and private-owner focused:
 - no linked Study Pack -> `DRAFT`
 - linked Study Pack otherwise -> `STUDY_PACK_READY`
 
-Learning capability is derived separately from the Study Pack itself: `hasQuizQuestions` and
-`hasKeyConcepts` reflect non-empty artifact arrays, while `studyPackDone` reflects
-`StudyPackStatus.DONE`. These facts remain true for an intact prior pack while its Note lifecycle reports
-`GENERATING` or `FAILED`.
+Learning capability is derived separately from the Study Pack itself: `hasKeyConcepts` reflects a
+non-empty `keyConcepts` array, while `studyPackDone` reflects `StudyPackStatus.DONE`. These facts remain
+true for an intact prior pack while its Note lifecycle reports `GENERATING` or `FAILED`. **⚠️ No
+`hasQuizQuestions` field exists on this response** — an earlier v0.146.0 implementation pass added it,
+sourced from the same `StudyPackProgressView` projection every other collection consumer
+(Dashboard/Progress/Adaptive Practice) shares, but that would have pulled the `quiz` JSONB column into a
+projection this endpoint's own performance guard (`assertProjectionQueriesAvoidLargeColumns`) explicitly
+forbids for a collection that can hold 70+ items — and no frontend consumer ever read it. Reverted before
+merge; `hasQuizQuestions` is intentionally absent here even though it exists on other Note responses.
 
 The detail response also includes a read-only `progress` summary:
 
