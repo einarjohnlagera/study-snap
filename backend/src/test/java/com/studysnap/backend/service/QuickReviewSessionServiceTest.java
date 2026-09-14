@@ -9,6 +9,7 @@ import com.studysnap.backend.dto.QuizSessionReviewResponse;
 import com.studysnap.backend.config.StudySnapProperties;
 import com.studysnap.backend.exception.SharedNoteNotFoundException;
 import com.studysnap.backend.exception.QuickReviewSessionNotFoundException;
+import com.studysnap.backend.exception.QuickReviewNotAvailableException;
 import com.studysnap.backend.entity.AnalyticsEventType;
 import com.studysnap.backend.entity.ActivityType;
 import com.studysnap.backend.entity.PlanType;
@@ -661,7 +662,9 @@ class QuickReviewSessionServiceTest {
         studyPack.setId(studyPackId);
         studyPack.setNoteId(noteId);
         studyPack.setOwnerUserId(userId);
-        studyPack.setQuiz(List.of());
+        studyPack.setQuiz(List.of(new QuizItem(
+                "Question?", List.of("A", "B"), 0, "Concept", "Because."
+        )));
         when(studyPackRepository.findByIdAndOwnerUserIdForUpdate(studyPackId, userId)).thenReturn(Optional.of(studyPack));
         when(quickReviewSessionRepository.findTopByUserIdAndStudyPackIdAndSessionModeAndStatusOrderByCreatedAtDesc(
                 userId,
@@ -674,6 +677,56 @@ class QuickReviewSessionServiceTest {
 
         assertThat(response.sessionId()).isNotNull();
         verify(analyticsService).trackEvent(eq(userId), eq(AnalyticsEventType.QUICK_REVIEW_STARTED), eq(studyPackId), any());
+    }
+
+    @Test
+    void startSession_rejectsAnEmptyQuizWithoutPersistingASession() {
+        UUID userId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        StudyPackEntity studyPack = buildStudyPack(studyPackId, userId, 0);
+        when(studyPackRepository.findByIdAndOwnerUserIdForUpdate(studyPackId, userId))
+                .thenReturn(Optional.of(studyPack));
+        when(quickReviewSessionRepository
+                .findTopByUserIdAndStudyPackIdAndSessionModeAndStatusOrderByCreatedAtDesc(
+                        userId,
+                        studyPackId,
+                        QuickReviewSessionMode.QUICK_REVIEW,
+                        QuickReviewSessionStatus.IN_PROGRESS
+                )).thenReturn(Optional.empty());
+
+        String studyPackIdRaw = studyPackId.toString();
+        assertThatThrownBy(() -> quickReviewSessionService.startSession(studyPackIdRaw, userId))
+                .isInstanceOf(QuickReviewNotAvailableException.class)
+                .extracting(exception -> ((QuickReviewNotAvailableException) exception).getCode())
+                .isEqualTo("QUICK_REVIEW_NOT_AVAILABLE");
+
+        verify(quickReviewSessionRepository, never()).save(any(QuickReviewSessionEntity.class));
+        verifyNoInteractions(activityTrackingService, analyticsService);
+    }
+
+    @Test
+    void startSession_resumesAnExistingSessionEvenIfThePackQuizIsNowEmpty() {
+        UUID userId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        StudyPackEntity studyPack = buildStudyPack(studyPackId, userId, 0);
+        QuickReviewSessionEntity existing = buildInProgressSession(UUID.randomUUID(), userId, studyPackId);
+        when(studyPackRepository.findByIdAndOwnerUserIdForUpdate(studyPackId, userId))
+                .thenReturn(Optional.of(studyPack));
+        when(quickReviewSessionRepository
+                .findTopByUserIdAndStudyPackIdAndSessionModeAndStatusOrderByCreatedAtDesc(
+                        userId,
+                        studyPackId,
+                        QuickReviewSessionMode.QUICK_REVIEW,
+                        QuickReviewSessionStatus.IN_PROGRESS
+                )).thenReturn(Optional.of(existing));
+
+        QuickReviewSessionStartResponse response = quickReviewSessionService.startSession(
+                studyPackId.toString(),
+                userId
+        );
+
+        assertThat(response.sessionId()).isEqualTo(existing.getId().toString());
+        verify(quickReviewSessionRepository, never()).save(any(QuickReviewSessionEntity.class));
     }
 
     @Test

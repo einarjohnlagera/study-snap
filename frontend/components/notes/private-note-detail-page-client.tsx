@@ -76,6 +76,7 @@ import {
   updateNote,
   updateNoteVisibility,
   regenerateNote,
+  recoverStrandedGeneration,
   type NoteRegenerationScope,
   isNoteGenerationInProgressError,
   type ChallengeQuizPerformanceSummaryResponse,
@@ -363,6 +364,7 @@ type PendingSuggestion = {
 };
 
 const TEACHER_QUIZ_QUESTION_COUNTS: TeacherQuizQuestionCount[] = [10, 20, 30];
+const STRANDED_GENERATION_BOUND_MS = 120 * 60 * 1000;
 
 function StudyPackGeneratingCard({
   eyebrow = "Study Pack generation",
@@ -416,6 +418,40 @@ function StudyPackFailureCard({
         label={retrying ? "Retrying..." : "Retry Generation"}
         showTextOnMobile
       />
+    </Card>
+  );
+}
+
+function UpdatingOrFailedBanner({
+  status,
+  hasStudyPack,
+  retrying,
+  onRetry,
+}: Readonly<{
+  status: "GENERATING" | "FAILED";
+  hasStudyPack: boolean;
+  retrying: boolean;
+  onRetry?: () => void;
+}>) {
+  const message = status === "GENERATING"
+    ? "Updating this Study Pack…"
+    : hasStudyPack
+      ? "The last update to this Study Pack didn't finish. Your previous Study Pack is still available below."
+      : "We couldn't generate the Study Pack this time. Your note is saved.";
+  return (
+    <Card className="flex flex-col gap-3 border-amber-500/30 bg-amber-500/5 p-4 sm:flex-row sm:items-center sm:justify-between">
+      <p className="text-sm text-foreground/80">{message}</p>
+      {status === "FAILED" && onRetry ? (
+        <ResponsiveActionButton
+          type="button"
+          variant="outline"
+          onClick={onRetry}
+          disabled={retrying}
+          action="studyPack"
+          label={retrying ? "Retrying..." : "Retry Generation"}
+          showTextOnMobile
+        />
+      ) : null}
     </Card>
   );
 }
@@ -523,6 +559,8 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
   const [shareModalCopied, setShareModalCopied] = useState(false);
   const shareModalInputRef = useRef<HTMLInputElement | null>(null);
   const [pendingPublicCopyGenerate, setPendingPublicCopyGenerate] = useState(false);
+  const [recoveringGeneration, setRecoveringGeneration] = useState(false);
+  const [recoveryClockMs, setRecoveryClockMs] = useState(() => Date.now());
 
   const [isPaidPlan, setIsPaidPlan] = useState(() => (getAuthUser()?.planType ?? "FREE") !== "FREE");
   const [isEmailVerified, setIsEmailVerified] = useState(() => Boolean(getAuthUser()?.emailVerifiedAt));
@@ -990,9 +1028,15 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
   const canTriggerStudyPackGeneration = canGenerateStudyPack || isStudyPackReady;
   const isDraft = !isStudyPackReady;
   const hasQuizQuestions = (note?.quiz?.length ?? 0) > 0;
+  const hasKeyConcepts = (note?.keyConcepts?.length ?? 0) > 0;
+  const hasLearningArtifacts = hasQuizQuestions || hasKeyConcepts;
+  const canRecoverStrandedGeneration = isGeneratingStudyPack
+    && !hasLearningArtifacts
+    && note?.generationEnqueuedAt == null
+    && note?.createdAt != null
+    && recoveryClockMs - new Date(note.createdAt).getTime() >= STRANDED_GENERATION_BOUND_MS;
   const quizMasteryLockBypassed = isQuizMasteryLockBypassed(profileType, userRole);
-  const isQuizMasteryLocked = isStudyPackReady
-    && hasQuizQuestions
+  const isQuizMasteryLocked = hasQuizQuestions
     && !quizMasteryLockBypassed
     && note?.quizMastered !== true;
 
@@ -1457,6 +1501,28 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
     openStudyPackLimitModal,
     refreshUsageSummary,
   ]);
+
+  const handleRecoverStrandedGeneration = useCallback(async () => {
+    if (!note || recoveringGeneration) return;
+    setRecoveringGeneration(true);
+    setError(null);
+    try {
+      await recoverStrandedGeneration(note.id);
+      setNote(await getNote(note.id));
+      setToast("The stuck generation can now be retried.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not recover this generation.");
+    } finally {
+      setRecoveringGeneration(false);
+    }
+  }, [note, recoveringGeneration]);
+
+  useEffect(() => {
+    if (!isGeneratingStudyPack || hasLearningArtifacts) return;
+    setRecoveryClockMs(Date.now());
+    const intervalId = globalThis.setInterval(() => setRecoveryClockMs(Date.now()), 30_000);
+    return () => globalThis.clearInterval(intervalId);
+  }, [hasLearningArtifacts, isGeneratingStudyPack]);
 
   useEffect(() => {
     const shouldAutoGenerate = searchParams.get(PUBLIC_NOTE_COPY_QUERY_PARAMS.generate) === "1";
@@ -2944,8 +3010,37 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                         <span>Generate Quiz</span>
                       </Button>
                     )
+                  ) : hasLearningArtifacts ? (
+                    <>
+                      {hasQuizQuestions ? (
+                        <>
+                          <ResponsiveActionButton type="button" onClick={() => void handleStartQuickReview()} action="quickReview" label="Start Quick Review" showTextOnMobile />
+                          <ResponsiveActionButton type="button" variant="outline" onClick={handleStartChallengeQuiz} action="challengeQuiz" label="Challenge Quiz" />
+                          {hasAdaptiveTargets ? (
+                            <ResponsiveActionButton type="button" variant="outline" onClick={handleStartAdaptivePractice} action="adaptivePractice" label="Adaptive Practice" />
+                          ) : null}
+                        </>
+                      ) : null}
+                      {profileType === "PROFESSIONAL" && currentPlan === "PRO" && note.studyPackDone ? (
+                        <ResponsiveActionButton type="button" variant="outline" onClick={() => router.push(`/notes/${routeId}/interview-practice`)} action="interviewPractice" label="Interview Practice" />
+                      ) : null}
+                    </>
                   ) : isGeneratingStudyPack ? (
-                    <ResponsiveActionButton type="button" disabled action="studyPack" label="Generating..." showTextOnMobile />
+                    <div className="flex flex-col items-start gap-2">
+                      <ResponsiveActionButton type="button" disabled action="studyPack" label="Generating..." showTextOnMobile />
+                      {canRecoverStrandedGeneration ? (
+                        <button
+                          type="button"
+                          className="text-left text-xs font-medium text-blue-700 underline underline-offset-4 dark:text-blue-300"
+                          onClick={() => void handleRecoverStrandedGeneration()}
+                          disabled={recoveringGeneration}
+                        >
+                          {recoveringGeneration
+                            ? "Checking generation…"
+                            : "This is taking longer than expected — Check for a stuck generation"}
+                        </button>
+                      ) : null}
+                    </div>
                   ) : canGenerateStudyPack ? (
                     <ResponsiveActionButton
                       type="button"
@@ -2957,19 +3052,8 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                       label={hasGenerationFailed ? "Retry Generation" : "Generate Study Pack"}
                       showTextOnMobile
                     />
-                  ) : (
-                    <>
-                      <ResponsiveActionButton type="button" onClick={() => void handleStartQuickReview()} action="quickReview" label="Start Quick Review" showTextOnMobile />
-                      <ResponsiveActionButton type="button" variant="outline" onClick={handleStartChallengeQuiz} action="challengeQuiz" label="Challenge Quiz" />
-                      {hasAdaptiveTargets ? (
-                        <ResponsiveActionButton type="button" variant="outline" onClick={handleStartAdaptivePractice} action="adaptivePractice" label="Adaptive Practice" />
-                      ) : null}
-                      {profileType === "PROFESSIONAL" && currentPlan === "PRO" ? (
-                        <ResponsiveActionButton type="button" variant="outline" onClick={() => router.push(`/notes/${routeId}/interview-practice`)} action="interviewPractice" label="Interview Practice" />
-                      ) : null}
-                    </>
-                  )}
-                  {!isTeacherMode && !isGeneratingStudyPack && !canGenerateStudyPack ? (
+                  ) : null}
+                  {!isTeacherMode && hasQuizQuestions ? (
                     <p className="w-full text-xs text-foreground/60 sm:w-auto sm:self-center">
                       Quick Review uses saved questions &bull; Challenge Quiz generates new timed questions
                     </p>
@@ -2980,19 +3064,28 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
           </Card>
 
           <>
-            {isGeneratingStudyPack ? (
+            {isGeneratingStudyPack && !hasLearningArtifacts ? (
               <StudyPackGeneratingCard
                 message={generationMessage}
                 hint="This may take a little while depending on note length. You can stay here while the page checks for updates."
               />
             ) : null}
 
-            {hasGenerationFailed ? (
+            {hasGenerationFailed && !hasLearningArtifacts ? (
               <StudyPackFailureCard
                 retrying={generating}
                 onRetry={() => {
                   void handleGenerate();
                 }}
+              />
+            ) : null}
+
+            {hasLearningArtifacts && (isGeneratingStudyPack || hasGenerationFailed) ? (
+              <UpdatingOrFailedBanner
+                status={isGeneratingStudyPack ? "GENERATING" : "FAILED"}
+                hasStudyPack={Boolean(note.studyPackId)}
+                retrying={generating}
+                onRetry={hasGenerationFailed ? () => void handleGenerate() : undefined}
               />
             ) : null}
 
@@ -3030,7 +3123,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
               <Card className="space-y-3 p-4 sm:p-6">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <h2 className="text-lg font-semibold sm:text-xl">Key Concepts</h2>
-                  {!isTeacherMode && !isGeneratingStudyPack && !hasGenerationFailed && !isDraft && note.keyConcepts.length > 0 ? (
+                  {!isTeacherMode && note.keyConcepts.length > 0 ? (
                     <div className="flex flex-wrap items-center gap-2">
                       <ResponsiveActionButton
                         type="button"

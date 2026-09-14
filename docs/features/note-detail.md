@@ -31,13 +31,17 @@ Draft note actions:
 Generating note behavior:
 
 - Note Detail is the status surface after a user starts Study Pack generation.
-- `GENERATING` shows a clear in-page status message, friendly rotating loading copy, and placeholder/skeleton content for Summary, Key Concepts, and Quiz.
-- actions that depend on finished Study Pack output stay disabled or hidden until the status becomes ready.
+- `GENERATING` with no prior artifacts shows the existing status message, rotating loading copy, and
+  placeholder content. If a prior Study Pack still has quiz questions or key concepts, its learning actions
+  stay live and a small `Updating this Study Pack…` message reports the lifecycle alongside them.
+- each learning action follows the artifact it consumes: quiz questions for quiz actions and key concepts
+  for Flashcards/Memorization. Note lifecycle never substitutes for those facts.
 - Note Detail polls lightly while generation is active and stops polling when the note becomes `STUDY_PACK_READY` or `FAILED`.
 
 Failed generation behavior:
 
-- `FAILED` shows a friendly recovery state instead of empty Study Pack content.
+- `FAILED` with no artifacts shows the friendly recovery state. With an intact prior pack, Note Detail
+  keeps its learning actions live, reports that the last update did not finish, and retains Retry Generation.
 - copy should make clear that the note is saved and generation did not complete.
 - `Retry Generation` queues generation again without consuming quota unless a Study Pack is successfully persisted.
 - `FAILED` may come from an LLM error or from age-based recovery after a queued/running task disappears during deploy or process exit. Both use the same saved-note recovery UI and retry path; recovery itself never re-dispatches generation.

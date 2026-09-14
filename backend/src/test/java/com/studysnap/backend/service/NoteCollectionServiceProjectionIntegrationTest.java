@@ -690,7 +690,9 @@ class NoteCollectionServiceProjectionIntegrationTest {
                 null,
                 dueConcepts.size(),
                 dueConcepts.stream().limit(3).toList(),
-                note.getUpdatedAt()
+                note.getUpdatedAt(),
+                studyPack != null && studyPack.getKeyConcepts() != null && !studyPack.getKeyConcepts().isEmpty(),
+                studyPack == null ? null : studyPack.getStatus() == StudyPackStatus.DONE
         );
     }
 

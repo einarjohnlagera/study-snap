@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemorizationPageClient } from "./memorization-page-client";
 import { getAuthUser } from "@/lib/auth";
 import {
+  createStudyPackFromNote,
   getConceptHealth,
   getMemorizationCards,
   getNote,
@@ -21,6 +22,7 @@ jest.mock("@/lib/auth", () => ({
 }));
 
 jest.mock("@/lib/api", () => ({
+  createStudyPackFromNote: jest.fn(),
   getConceptHealth: jest.fn(),
   getMemorizationCards: jest.fn(),
   getNote: jest.fn(),
@@ -44,6 +46,7 @@ const readyNote = {
   copiedAt: null,
   studyPackId: "sp-1",
   studyPackStatus: "STUDY_PACK_READY" as const,
+  studyPackDone: true,
   summary: "Summary",
   keyConcepts: ["Cells", "DNA", "Mitosis"],
   quiz: [
@@ -76,11 +79,13 @@ describe("MemorizationPageClient", () => {
     replaceMock.mockReset();
     (getAuthUser as jest.Mock).mockReset();
     (getConceptHealth as jest.Mock).mockReset();
+    (createStudyPackFromNote as jest.Mock).mockReset();
     (getMemorizationCards as jest.Mock).mockReset();
     (getNote as jest.Mock).mockReset();
     (gradeMemorizationCard as jest.Mock).mockReset();
     (getAuthUser as jest.Mock).mockReturnValue({ profileType: "STUDENT" });
     (getNote as jest.Mock).mockResolvedValue(readyNote);
+    (createStudyPackFromNote as jest.Mock).mockResolvedValue({});
     (getMemorizationCards as jest.Mock).mockResolvedValue([]);
     (gradeMemorizationCard as jest.Mock).mockImplementation(async (_studyPackId, concept, grade) => ({
       concept: concept.toLowerCase(),
@@ -199,6 +204,28 @@ describe("MemorizationPageClient", () => {
     expect(await screen.findByRole("heading", { name: title })).toBeInTheDocument();
     expect(screen.getByText(message)).toBeInTheDocument();
     expect(getMemorizationCards).not.toHaveBeenCalled();
+  });
+
+  it.each(["GENERATING", "FAILED"] as const)("keeps memorization usable while lifecycle is %s", async (studyPackStatus) => {
+    (getNote as jest.Mock).mockResolvedValue({ ...readyNote, studyPackStatus });
+
+    render(<MemorizationPageClient noteId="note-1" />);
+
+    expect(await screen.findByRole("heading", { name: "Cells" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Memorization is not available yet" })).not.toBeInTheDocument();
+  });
+
+  it("refetches after generation and replaces the guard with real content", async () => {
+    (getNote as jest.Mock)
+      .mockResolvedValueOnce({ ...readyNote, studyPackId: null, studyPackStatus: "DRAFT", studyPackDone: null, keyConcepts: [], quiz: [] })
+      .mockResolvedValueOnce(readyNote);
+
+    render(<MemorizationPageClient noteId="note-1" />);
+    fireEvent.click(await screen.findByRole("button", { name: "Generate Study Pack" }));
+
+    await waitFor(() => expect(createStudyPackFromNote).toHaveBeenCalledWith("note-1"));
+    expect(await screen.findByRole("heading", { name: "Cells" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "No key concepts yet" })).not.toBeInTheDocument();
   });
 
   it("keeps the same card visible when grading fails", async () => {

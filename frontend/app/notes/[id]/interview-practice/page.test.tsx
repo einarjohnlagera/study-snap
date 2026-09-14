@@ -124,17 +124,17 @@ describe("InterviewPracticePage", () => {
     (getCollection as jest.Mock).mockResolvedValue({
       id: "collection-1",
       items: [
-        { noteId: "note-1", position: 0, studyPackStatus: "STUDY_PACK_READY", generatedQuizId: "quiz-1" },
-        { noteId: "note-2", position: 1, studyPackStatus: "STUDY_PACK_READY", generatedQuizId: "quiz-2" },
-        { noteId: "note-3", position: 2, studyPackStatus: "STUDY_PACK_READY", generatedQuizId: "quiz-3" },
-        { noteId: "note-4", position: 3, studyPackStatus: "STUDY_PACK_READY", generatedQuizId: "quiz-4" },
+        { noteId: "note-1", position: 0, studyPackStatus: "STUDY_PACK_READY", studyPackDone: true, generatedQuizId: "quiz-1" },
+        { noteId: "note-2", position: 1, studyPackStatus: "STUDY_PACK_READY", studyPackDone: true, generatedQuizId: "quiz-2" },
+        { noteId: "note-3", position: 2, studyPackStatus: "STUDY_PACK_READY", studyPackDone: true, generatedQuizId: "quiz-3" },
+        { noteId: "note-4", position: 3, studyPackStatus: "STUDY_PACK_READY", studyPackDone: true, generatedQuizId: "quiz-4" },
       ],
     });
     (listNotes as jest.Mock).mockResolvedValue([
-      { id: "note-2", title: "Plan Interview Two", courseProgram: "Software Engineering", subject: "Backend", studyPackStatus: "STUDY_PACK_READY" },
-      { id: "note-3", title: "Plan Interview Three", courseProgram: "Software Engineering", subject: "Backend", studyPackStatus: "STUDY_PACK_READY" },
-      { id: "note-4", title: "Plan Interview Four", courseProgram: "Software Engineering", subject: "Backend", studyPackStatus: "STUDY_PACK_READY" },
-      { id: "note-9", title: "Outside Interview Note", courseProgram: "Software Engineering", subject: "Backend", studyPackStatus: "STUDY_PACK_READY" },
+      { id: "note-2", title: "Plan Interview Two", courseProgram: "Software Engineering", subject: "Backend", studyPackStatus: "STUDY_PACK_READY", studyPackDone: true },
+      { id: "note-3", title: "Plan Interview Three", courseProgram: "Software Engineering", subject: "Backend", studyPackStatus: "STUDY_PACK_READY", studyPackDone: true },
+      { id: "note-4", title: "Plan Interview Four", courseProgram: "Software Engineering", subject: "Backend", studyPackStatus: "STUDY_PACK_READY", studyPackDone: true },
+      { id: "note-9", title: "Outside Interview Note", courseProgram: "Software Engineering", subject: "Backend", studyPackStatus: "STUDY_PACK_READY", studyPackDone: true },
     ]);
 
     render(<InterviewPracticePage />);

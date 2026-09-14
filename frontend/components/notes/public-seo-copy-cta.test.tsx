@@ -109,7 +109,7 @@ describe("PublicSeoCopyCta", () => {
 
   it("copies a ready Study Pack as-is and starts Quick Review for authenticated visitors", async () => {
     (getAuthUser as jest.Mock).mockReturnValue({ id: "user-1" });
-    (copyNote as jest.Mock).mockResolvedValue({ id: "copied-note-1", studyPackStatus: "STUDY_PACK_READY" });
+    (copyNote as jest.Mock).mockResolvedValue({ id: "copied-note-1", studyPackId: "study-pack-1", studyPackStatus: "STUDY_PACK_READY" });
 
     render(<PublicSeoCopyCta noteId="note-1" label="Quiz yourself on this note" redirectTarget="quick-review" />);
 
@@ -176,7 +176,7 @@ describe("PublicSeoCopyCta", () => {
   it("auto-copies into quick review after login when the intent is quick-review", async () => {
     searchParamsMock = new URLSearchParams("copy=1&intent=quick-review");
     (getAuthUser as jest.Mock).mockReturnValue({ id: "user-1" });
-    (copyNote as jest.Mock).mockResolvedValue({ id: "copied-note-1", studyPackStatus: "STUDY_PACK_READY" });
+    (copyNote as jest.Mock).mockResolvedValue({ id: "copied-note-1", studyPackId: "study-pack-1", studyPackStatus: "STUDY_PACK_READY" });
 
     render(<PublicSeoCopyCta noteId="note-1" redirectTarget="quick-review" />);
 
@@ -196,6 +196,22 @@ describe("PublicSeoCopyCta", () => {
     await waitFor(() => {
       expect(copyNote).toHaveBeenCalledWith("note-1", { includeStudyPack: true });
       expect(replaceMock).toHaveBeenCalledWith("/notes/copied-note-1?copied=1");
+    });
+  });
+
+  it("starts Quick Review for a failed-lifecycle copy when its Study Pack was copied", async () => {
+    searchParamsMock = new URLSearchParams("copy=1&intent=quick-review");
+    (getAuthUser as jest.Mock).mockReturnValue({ id: "user-1" });
+    (copyNote as jest.Mock).mockResolvedValue({
+      id: "copied-note-1",
+      studyPackId: "study-pack-1",
+      studyPackStatus: "FAILED",
+    });
+
+    render(<PublicSeoCopyCta noteId="note-1" redirectTarget="quick-review" />);
+
+    await waitFor(() => {
+      expect(replaceMock).toHaveBeenCalledWith("/notes/copied-note-1?copied=1&startQuickReview=1");
     });
   });
 

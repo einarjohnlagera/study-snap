@@ -154,6 +154,8 @@ function collectionItem(noteId: string, title: string, position: number): NoteCo
     courseProgram: "LET",
     studyPackStatus: "DRAFT",
     studyPackId: null,
+    hasKeyConcepts: false,
+    studyPackDone: null,
     generatedQuizId: null,
     lastSessionCompletedAt: null,
     dueConceptCount: 0,

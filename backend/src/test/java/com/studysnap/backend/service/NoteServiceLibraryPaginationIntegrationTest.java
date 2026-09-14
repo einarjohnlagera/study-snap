@@ -254,6 +254,7 @@ class NoteServiceLibraryPaginationIntegrationTest {
                 new String[]{"clinical-pharmacology"}, NoteStatus.DRAFT, NoteVisibility.PUBLIC, 2, 7);
         NoteEntity generated = saveNote(ownerUserId, "Generated pack", "Biology", "BS Biology",
                 new String[]{"cells"}, NoteStatus.GENERATED, NoteVisibility.PRIVATE, 3, 6);
+        insertStudyPack(generated);
         NoteEntity legacyPack = saveNote(ownerUserId, "Legacy pack", "Anatomy", "Nursing",
                 new String[]{"legacy"}, NoteStatus.DRAFT, NoteVisibility.PRIVATE, 4, 5);
         NoteEntity quizReady = saveNote(ownerUserId, "Teacher quiz", "Education", "BSEd",
@@ -555,7 +556,7 @@ class NoteServiceLibraryPaginationIntegrationTest {
                             id, owner_user_id, note_id, input_type, title, summary, key_concepts, quiz,
                             model_tier, model_used, status, tags, created_at, updated_at
                         ) values (?, ?, ?, 'TEXT', 'Pack', 'Summary', '[]', '{}',
-                                  'STANDARD', 'test-model', 'READY', array['test'], ?, ?)
+                                  'STANDARD', 'test-model', 'DONE', array['test'], ?, ?)
                         """,
                 UUID.randomUUID(), note.getOwnerUserId(), note.getId(), BASE_TIME, BASE_TIME
         );

@@ -32,6 +32,7 @@ import {
   startQuickReviewSession,
   trackAnalyticsEvent,
   regenerateNote,
+  recoverStrandedGeneration,
   updateNote,
   updateNoteVisibility,
 } from "@/lib/api";
@@ -80,6 +81,7 @@ jest.mock("@/components/ui/summary-markdown", () => ({
 jest.mock("@/lib/api", () => ({
   addCollectionItems: jest.fn(),
   regenerateNote: jest.fn(),
+  recoverStrandedGeneration: jest.fn(),
   isNoteGenerationInProgressError: (error: unknown) => error instanceof Error && error.message === "NOTE_GENERATION_IN_PROGRESS",
   completeProductOnboarding: jest.fn(),
   copyNote: jest.fn(),
@@ -132,6 +134,7 @@ const baseNote = {
   copiedAt: null,
   studyPackId: null,
   studyPackStatus: "DRAFT" as const,
+  studyPackDone: null,
   summary: null,
   keyConcepts: [],
   quiz: [],
@@ -177,6 +180,7 @@ describe("PrivateNoteDetailPageClient", () => {
     (replaceNoteShares as jest.Mock).mockReset();
     (getAuthUser as jest.Mock).mockReset();
     (createStudyPackFromNote as jest.Mock).mockReset();
+    (recoverStrandedGeneration as jest.Mock).mockReset().mockResolvedValue(undefined);
     (completeProductOnboarding as jest.Mock).mockReset();
     (copyNote as jest.Mock).mockReset();
     (deleteNote as jest.Mock).mockReset();
@@ -473,6 +477,7 @@ describe("PrivateNoteDetailPageClient", () => {
       ...baseNote,
       studyPackStatus: "STUDY_PACK_READY",
       studyPackId: "sp-1",
+      quiz: createQuiz(1),
       quickReviewAvailable: true,
     });
 
@@ -617,6 +622,7 @@ describe("PrivateNoteDetailPageClient", () => {
       ...baseNote,
       studyPackStatus: "STUDY_PACK_READY",
       studyPackId: "sp-1",
+      quiz: createQuiz(1),
     });
 
     render(<PrivateNoteDetailPageClient routeId="note-1" />);
@@ -1227,6 +1233,7 @@ describe("PrivateNoteDetailPageClient", () => {
       ...baseNote,
       studyPackStatus: "STUDY_PACK_READY",
       studyPackId: "sp-1",
+      quiz: createQuiz(1),
       quickReviewAvailable: true,
       challengeQuizAvailable: true,
     });
@@ -1314,6 +1321,7 @@ describe("PrivateNoteDetailPageClient", () => {
       ...baseNote,
       studyPackStatus: "STUDY_PACK_READY",
       studyPackId: "sp-1",
+      quiz: createQuiz(1),
       quickReviewAvailable: true,
       challengeQuizAvailable: true,
     });
@@ -1532,6 +1540,7 @@ describe("PrivateNoteDetailPageClient", () => {
       ...baseNote,
       studyPackStatus: "STUDY_PACK_READY",
       studyPackId: "sp-1",
+      quiz: createQuiz(1),
       quickReviewAvailable: true,
       challengeQuizAvailable: true,
       adaptivePracticeAvailable: false,
@@ -1577,6 +1586,7 @@ describe("PrivateNoteDetailPageClient", () => {
       ...baseNote,
       studyPackStatus: "STUDY_PACK_READY",
       studyPackId: "sp-1",
+      quiz: createQuiz(1),
       quickReviewAvailable: true,
       challengeQuizAvailable: true,
       adaptivePracticeAvailable: false,
@@ -1622,6 +1632,7 @@ describe("PrivateNoteDetailPageClient", () => {
       ...baseNote,
       studyPackStatus: "STUDY_PACK_READY",
       studyPackId: "sp-1",
+      quiz: createQuiz(1),
       quickReviewAvailable: true,
       challengeQuizAvailable: true,
       adaptivePracticeAvailable: true,
@@ -1666,6 +1677,7 @@ describe("PrivateNoteDetailPageClient", () => {
       ...baseNote,
       studyPackStatus: "STUDY_PACK_READY",
       studyPackId: "sp-1",
+      quiz: createQuiz(1),
       quickReviewAvailable: true,
       challengeQuizAvailable: true,
       adaptivePracticeAvailable: true,
@@ -2491,6 +2503,7 @@ describe("PrivateNoteDetailPageClient", () => {
       ...baseNote,
       studyPackStatus: "STUDY_PACK_READY",
       studyPackId: "sp-1",
+      quiz: createQuiz(1),
       quickReviewAvailable: true,
     });
     (startQuickReviewSession as jest.Mock).mockResolvedValue({ sessionId: "qr-1" });
@@ -2974,6 +2987,80 @@ describe("PrivateNoteDetailPageClient", () => {
       expect(createStudyPackFromNote).toHaveBeenCalledWith("note-1");
     });
     expect(await screen.findByText("Your Study Pack is being generated...")).toBeInTheDocument();
+  });
+
+  it.each(["GENERATING", "FAILED"] as const)(
+    "keeps prior learning actions live while Note lifecycle is %s",
+    async (studyPackStatus) => {
+      (getAuthUser as jest.Mock).mockReturnValue({
+        id: "user-1",
+        planType: "FREE",
+        emailVerifiedAt: "2026-03-21T09:00:00Z",
+        profileType: "STUDENT",
+      });
+      (getNote as jest.Mock).mockResolvedValue({
+        ...baseNote,
+        studyPackId: "sp-1",
+        studyPackStatus,
+        studyPackDone: true,
+        summary: "Prior summary",
+        keyConcepts: ["Cells"],
+        quiz: [{
+          question: "What is the nucleus?",
+          choices: ["Control center", "Energy source"],
+          correctIndex: 0,
+          concept: "Cells",
+          explanation: "The nucleus controls cell activity.",
+        }],
+        quickReviewAvailable: true,
+        challengeQuizAvailable: true,
+      });
+
+      const { rerender } = render(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+      expect(await screen.findByRole("button", { name: "Start Quick Review" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Challenge Quiz" })).toBeInTheDocument();
+      expect(screen.getByText(studyPackStatus === "GENERATING"
+        ? "Updating this Study Pack…"
+        : "The last update to this Study Pack didn't finish. Your previous Study Pack is still available below.")).toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole("tab", { name: "Key Concepts" }));
+      searchParamValues = { tab: "key-concepts" };
+      searchParamsMock = createSearchParamsMock();
+      rerender(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+      expect(await screen.findByRole("button", { name: "Flashcards" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Memorization" })).toBeInTheDocument();
+    },
+  );
+
+  it("recovers an eligible stranded first generation and refetches the failed state", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({
+      id: "user-1",
+      planType: "FREE",
+      emailVerifiedAt: "2026-03-21T09:00:00Z",
+      profileType: "STUDENT",
+    });
+    (getNote as jest.Mock)
+      .mockResolvedValueOnce({
+        ...baseNote,
+        studyPackStatus: "GENERATING",
+        generationEnqueuedAt: null,
+      })
+      .mockResolvedValueOnce({
+        ...baseNote,
+        studyPackStatus: "FAILED",
+      });
+
+    render(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /Check for a stuck generation/i }));
+
+    await waitFor(() => {
+      expect(recoverStrandedGeneration).toHaveBeenCalledWith("note-1");
+      expect(getNote).toHaveBeenCalledTimes(2);
+    });
+    expect(await screen.findAllByRole("button", { name: "Retry Generation" })).not.toHaveLength(0);
   });
 
   it("surfaces the multi-program generation contract instead of a generic error", async () => {
@@ -3752,6 +3839,7 @@ describe("PrivateNoteDetailPageClient", () => {
       ...baseNote,
       studyPackStatus: "STUDY_PACK_READY",
       studyPackId: "sp-1",
+      quiz: createQuiz(1),
       quickReviewAvailable: true,
       challengeQuizAvailable: true,
       adaptivePracticeAvailable: true,

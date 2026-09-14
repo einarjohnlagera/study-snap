@@ -6,8 +6,9 @@ import { useEffect, useMemo, useState } from "react";
 import { BackLink } from "@/components/ui/back-link";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { ResponsiveActionButton } from "@/components/ui/action-button";
 import { getAuthUser } from "@/lib/auth";
-import { getNote, type NoteResponse } from "@/lib/api";
+import { createStudyPackFromNote, getNote, type NoteResponse } from "@/lib/api";
 import { buildFlashcardDeck } from "@/lib/flashcards";
 import { buildNoteDetailPathWithTab } from "@/lib/note-entry";
 import { cn } from "@/lib/utils";
@@ -15,13 +16,35 @@ import { renderMathText } from "@/components/study-pack/quiz-working-solution";
 
 type LoadState = "loading" | "ready" | "error";
 
-function FlashcardsGuard({ title, message }: Readonly<{ title: string; message: string }>) {
+function FlashcardsGuard({
+  title,
+  message,
+  actionLabel,
+  onAction,
+  actionPending,
+}: Readonly<{
+  title: string;
+  message: string;
+  actionLabel?: string;
+  onAction?: () => void;
+  actionPending?: boolean;
+}>) {
   return (
     <Card className="space-y-4 p-5 sm:p-6">
       <div className="space-y-2">
         <h1 className="text-2xl font-semibold tracking-tight text-foreground">{title}</h1>
         <p className="text-sm leading-relaxed text-foreground/75">{message}</p>
       </div>
+      {actionLabel && onAction ? (
+        <ResponsiveActionButton
+          type="button"
+          onClick={onAction}
+          disabled={actionPending}
+          action="studyPack"
+          label={actionPending ? "Working..." : actionLabel}
+          showTextOnMobile
+        />
+      ) : null}
     </Card>
   );
 }
@@ -35,6 +58,7 @@ export function FlashcardsPageClient({ noteId }: Readonly<{ noteId: string }>) {
   const [error, setError] = useState<string | null>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [flipped, setFlipped] = useState(false);
+  const [retrying, setRetrying] = useState(false);
 
   useEffect(() => {
     if (isTeacherMode) {
@@ -65,7 +89,24 @@ export function FlashcardsPageClient({ noteId }: Readonly<{ noteId: string }>) {
   const deck = useMemo(() => buildFlashcardDeck(note?.keyConcepts ?? [], note?.quiz ?? []), [note]);
   const currentCard = deck[currentIndex] ?? null;
   const studyPackStatus = note?.studyPackStatus ?? "DRAFT";
-  const hasGeneratedStudyPack = studyPackStatus === "STUDY_PACK_READY";
+  const hasKeyConcepts = (note?.keyConcepts.length ?? 0) > 0;
+
+  const handleGenerate = async () => {
+    if (!note || retrying) return;
+    setRetrying(true);
+    setError(null);
+    try {
+      await createStudyPackFromNote(note.id);
+      const refreshed = await getNote(note.id);
+      setNote(refreshed);
+      setCurrentIndex(0);
+      setFlipped(false);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Could not generate this Study Pack.");
+    } finally {
+      setRetrying(false);
+    }
+  };
 
   const handlePrevious = () => {
     setCurrentIndex((value) => Math.max(0, value - 1));
@@ -120,35 +161,41 @@ export function FlashcardsPageClient({ noteId }: Readonly<{ noteId: string }>) {
             </div>
           </header>
 
-          {studyPackStatus === "GENERATING" ? (
+          {!hasKeyConcepts && studyPackStatus === "GENERATING" ? (
             <FlashcardsGuard
               title="Key concepts are being generated"
               message="Key concepts are being generated from your note."
             />
           ) : null}
 
-          {studyPackStatus === "FAILED" ? (
+          {!hasKeyConcepts && studyPackStatus === "FAILED" ? (
             <FlashcardsGuard
               title="Flashcards are not available yet"
               message="Generation did not complete, so key concepts are not available yet. Retry generation when you are ready."
+              actionLabel="Retry Generation"
+              onAction={() => void handleGenerate()}
+              actionPending={retrying}
             />
           ) : null}
 
-          {!hasGeneratedStudyPack && studyPackStatus !== "GENERATING" && studyPackStatus !== "FAILED" ? (
+          {!hasKeyConcepts && studyPackStatus === "DRAFT" ? (
             <FlashcardsGuard
               title="No key concepts yet"
               message="No key concepts yet. Generate a Study Pack to extract the most important ideas from this note."
+              actionLabel="Generate Study Pack"
+              onAction={() => void handleGenerate()}
+              actionPending={retrying}
             />
           ) : null}
 
-          {hasGeneratedStudyPack && deck.length === 0 ? (
+          {(hasKeyConcepts || studyPackStatus === "STUDY_PACK_READY") && deck.length === 0 ? (
             <FlashcardsGuard
               title="Nothing to review yet"
               message="This Study Pack does not have key concepts to review yet."
             />
           ) : null}
 
-          {hasGeneratedStudyPack && currentCard ? (
+          {currentCard ? (
             <section className="space-y-4" aria-label="Flashcard deck">
               <div className="flex items-center justify-between gap-3 text-sm text-foreground/65">
                 <span>Card {currentIndex + 1} of {deck.length}</span>

@@ -231,6 +231,8 @@ function toOptimisticItem(note: NoteListItemResponse, position: number): NoteCol
     // hardcoded null would make an optimistically-added note read as having no pack to any future
     // exam-eligibility check over builder state.
     studyPackId: note.studyPackId ?? null,
+    hasKeyConcepts: (note.keyConceptCount ?? 0) > 0,
+    studyPackDone: note.studyPackDone,
     generatedQuizId: note.generatedQuizId ?? null,
     lastSessionCompletedAt: note.lastSessionCompletedAt ?? null,
     dueConceptCount: 0,

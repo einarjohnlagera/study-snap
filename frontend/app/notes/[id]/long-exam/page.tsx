@@ -167,7 +167,7 @@ function resolveSameSubjectSourceNotes(
     }
     return notes
     .filter((candidate) => candidate.id !== currentNote.id)
-    .filter((candidate) => candidate.studyPackStatus === "STUDY_PACK_READY" && Boolean(candidate.studyPackId))
+    .filter((candidate) => candidate.studyPackDone === true && Boolean(candidate.studyPackId))
     .filter((candidate) => normalizeSubjectForMatch(candidate.subject) === currentSubject)
     .slice(0, LONG_EXAM_MAX_ADDITIONAL_NOTES);
 }
@@ -346,7 +346,7 @@ export default function LongExamPage() {
             const [noteDetail, me] = await Promise.all([getNote(noteId), getMe().catch(() => null)]);
             setNote(noteDetail);
             setProfileLearnerLevel(me?.learnerLevel ?? null);
-            if (!noteDetail.studyPackId || noteDetail.studyPackStatus !== "STUDY_PACK_READY") {
+            if (!noteDetail.studyPackId || !noteDetail.studyPackDone) {
                 setError("Generate a Study Pack before starting a Long Exam.");
                 return;
             }

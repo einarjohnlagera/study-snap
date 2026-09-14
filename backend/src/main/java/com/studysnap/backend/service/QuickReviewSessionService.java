@@ -22,6 +22,7 @@ import com.studysnap.backend.entity.StudyPackEntity;
 import com.studysnap.backend.exception.AppException;
 import com.studysnap.backend.exception.SharedNoteNotFoundException;
 import com.studysnap.backend.exception.QuickReviewSessionNotFoundException;
+import com.studysnap.backend.exception.QuickReviewNotAvailableException;
 import com.studysnap.backend.exception.StudyPackNotFoundException;
 import com.studysnap.backend.model.StudyPackProgressProjection;
 import com.studysnap.backend.repository.ActivityEventRepository;
@@ -31,6 +32,7 @@ import com.studysnap.backend.repository.StudyPackRepository;
 import com.studysnap.backend.service.model.StudyPackQuizMastery;
 import com.studysnap.backend.util.QuizSessionReviewUtils;
 import com.studysnap.backend.util.QuizSessionStateUtils;
+import com.studysnap.backend.util.StudyPackArtifactFacts;
 import com.studysnap.backend.util.UuidParsingUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
@@ -98,6 +100,9 @@ public class QuickReviewSessionService {
                 .orElse(null);
         if (existing != null) {
             return toStartResponse(existing);
+        }
+        if (!StudyPackArtifactFacts.hasQuizQuestions(studyPack.getQuiz())) {
+            throw new QuickReviewNotAvailableException();
         }
 
         QuickReviewSessionEntity session = new QuickReviewSessionEntity();

@@ -93,7 +93,7 @@ describe("LongExamPage", () => {
       title: "Comprehensive Biology",
       subject: "Biology",
       studyPackId: "sp-1",
-      studyPackStatus: "STUDY_PACK_READY",
+      studyPackStatus: "STUDY_PACK_READY", studyPackDone: true,
     });
     // No active session, but the endpoint still returns the caller's Long Exam quota
     // (mirrors the backend's buildEmptyStartResponse).
@@ -161,6 +161,24 @@ describe("LongExamPage", () => {
     expect(startLongExam).not.toHaveBeenCalled();
   });
 
+  it.each(["GENERATING", "FAILED"] as const)(
+    "offers Long Exam from a DONE pack while Note lifecycle is %s",
+    async (studyPackStatus) => {
+      (getNote as jest.Mock).mockResolvedValue({
+        id: "note-1",
+        title: "Comprehensive Biology",
+        subject: "Biology",
+        studyPackId: "sp-1",
+        studyPackStatus,
+        studyPackDone: true,
+      });
+
+      render(<LongExamPage />);
+
+      expect(await screen.findByRole("button", { name: "Begin Long Exam" })).toBeInTheDocument();
+    },
+  );
+
   it("routes Choose another mode back to the shared mode picker", async () => {
     render(<LongExamPage />);
 
@@ -176,14 +194,14 @@ describe("LongExamPage", () => {
         title: "Cell Transport",
         subject: "Biology",
         studyPackId: "sp-2",
-        studyPackStatus: "STUDY_PACK_READY",
+        studyPackStatus: "STUDY_PACK_READY", studyPackDone: true,
       },
       {
         id: "note-3",
         title: "Organic Chemistry",
         subject: "Chemistry",
         studyPackId: "sp-3",
-        studyPackStatus: "STUDY_PACK_READY",
+        studyPackStatus: "STUDY_PACK_READY", studyPackDone: true,
       },
     ]);
 
@@ -206,19 +224,19 @@ describe("LongExamPage", () => {
     (getCollection as jest.Mock).mockResolvedValue({
       id: "collection-1",
       items: [
-        { noteId: "note-1", position: 0, studyPackStatus: "STUDY_PACK_READY", generatedQuizId: "quiz-1" },
-        { noteId: "note-2", position: 1, studyPackStatus: "STUDY_PACK_READY", generatedQuizId: "quiz-2" },
-        { noteId: "note-3", position: 2, studyPackStatus: "STUDY_PACK_READY", generatedQuizId: "quiz-3" },
-        { noteId: "note-4", position: 3, studyPackStatus: "STUDY_PACK_READY", generatedQuizId: "quiz-4" },
-        { noteId: "note-5", position: 4, studyPackStatus: "STUDY_PACK_READY", generatedQuizId: "quiz-5" },
+        { noteId: "note-1", position: 0, studyPackStatus: "STUDY_PACK_READY", studyPackDone: true, generatedQuizId: "quiz-1" },
+        { noteId: "note-2", position: 1, studyPackStatus: "STUDY_PACK_READY", studyPackDone: true, generatedQuizId: "quiz-2" },
+        { noteId: "note-3", position: 2, studyPackStatus: "STUDY_PACK_READY", studyPackDone: true, generatedQuizId: "quiz-3" },
+        { noteId: "note-4", position: 3, studyPackStatus: "STUDY_PACK_READY", studyPackDone: true, generatedQuizId: "quiz-4" },
+        { noteId: "note-5", position: 4, studyPackStatus: "STUDY_PACK_READY", studyPackDone: true, generatedQuizId: "quiz-5" },
       ],
     });
     (listNotes as jest.Mock).mockResolvedValue([
-      { id: "note-2", title: "Plan Two", subject: "Biology", studyPackId: "sp-2", studyPackStatus: "STUDY_PACK_READY" },
-      { id: "note-3", title: "Plan Three", subject: "Biology", studyPackId: "sp-3", studyPackStatus: "STUDY_PACK_READY" },
-      { id: "note-4", title: "Plan Four", subject: "Biology", studyPackId: "sp-4", studyPackStatus: "STUDY_PACK_READY" },
-      { id: "note-5", title: "Plan Five", subject: "Biology", studyPackId: "sp-5", studyPackStatus: "STUDY_PACK_READY" },
-      { id: "note-9", title: "Outside Plan", subject: "Biology", studyPackId: "sp-9", studyPackStatus: "STUDY_PACK_READY" },
+      { id: "note-2", title: "Plan Two", subject: "Biology", studyPackId: "sp-2", studyPackStatus: "STUDY_PACK_READY", studyPackDone: true },
+      { id: "note-3", title: "Plan Three", subject: "Biology", studyPackId: "sp-3", studyPackStatus: "STUDY_PACK_READY", studyPackDone: true },
+      { id: "note-4", title: "Plan Four", subject: "Biology", studyPackId: "sp-4", studyPackStatus: "STUDY_PACK_READY", studyPackDone: true },
+      { id: "note-5", title: "Plan Five", subject: "Biology", studyPackId: "sp-5", studyPackStatus: "STUDY_PACK_READY", studyPackDone: true },
+      { id: "note-9", title: "Outside Plan", subject: "Biology", studyPackId: "sp-9", studyPackStatus: "STUDY_PACK_READY", studyPackDone: true },
     ]);
 
     render(<LongExamPage />);
@@ -242,12 +260,12 @@ describe("LongExamPage", () => {
     (getCollection as jest.Mock).mockResolvedValue({
       id: "collection-1",
       items: [
-        { noteId: "note-1", position: 0, studyPackStatus: "STUDY_PACK_READY", generatedQuizId: "quiz-1" },
-        { noteId: "note-2", position: 1, studyPackStatus: "STUDY_PACK_READY", generatedQuizId: "quiz-2" },
+        { noteId: "note-1", position: 0, studyPackStatus: "STUDY_PACK_READY", studyPackDone: true, generatedQuizId: "quiz-1" },
+        { noteId: "note-2", position: 1, studyPackStatus: "STUDY_PACK_READY", studyPackDone: true, generatedQuizId: "quiz-2" },
       ],
     });
     (listNotes as jest.Mock).mockResolvedValue([
-      { id: "note-2", title: "Plan Two", subject: "Chemistry", studyPackId: "sp-2", studyPackStatus: "STUDY_PACK_READY" },
+      { id: "note-2", title: "Plan Two", subject: "Chemistry", studyPackId: "sp-2", studyPackStatus: "STUDY_PACK_READY", studyPackDone: true },
     ]);
     (startLongExam as jest.Mock).mockResolvedValue({
       sessionId: "session-1",
@@ -273,8 +291,8 @@ describe("LongExamPage", () => {
     searchParamsMock = new URLSearchParams("collectionId=missing");
     (getCollection as jest.Mock).mockRejectedValue(new Error("Not found"));
     (listNotes as jest.Mock).mockResolvedValue([
-      { id: "note-2", title: "Fallback Same Subject", subject: "Biology", studyPackId: "sp-2", studyPackStatus: "STUDY_PACK_READY" },
-      { id: "note-3", title: "Other Subject", subject: "Chemistry", studyPackId: "sp-3", studyPackStatus: "STUDY_PACK_READY" },
+      { id: "note-2", title: "Fallback Same Subject", subject: "Biology", studyPackId: "sp-2", studyPackStatus: "STUDY_PACK_READY", studyPackDone: true },
+      { id: "note-3", title: "Other Subject", subject: "Chemistry", studyPackId: "sp-3", studyPackStatus: "STUDY_PACK_READY", studyPackDone: true },
     ]);
 
     render(<LongExamPage />);
@@ -291,14 +309,14 @@ describe("LongExamPage", () => {
         title: "Cell Transport",
         subject: "Biology",
         studyPackId: "sp-2",
-        studyPackStatus: "STUDY_PACK_READY",
+        studyPackStatus: "STUDY_PACK_READY", studyPackDone: true,
       },
       {
         id: "note-3",
         title: "Genetics Lab",
         subject: "Biology",
         studyPackId: "sp-3",
-        studyPackStatus: "STUDY_PACK_READY",
+        studyPackStatus: "STUDY_PACK_READY", studyPackDone: true,
       },
     ]);
 
@@ -328,14 +346,14 @@ describe("LongExamPage", () => {
         title: "Cell Transport",
         subject: "Biology",
         studyPackId: "sp-2",
-        studyPackStatus: "STUDY_PACK_READY",
+        studyPackStatus: "STUDY_PACK_READY", studyPackDone: true,
       },
       {
         id: "note-3",
         title: "Genetics Lab",
         subject: "Biology",
         studyPackId: "sp-3",
-        studyPackStatus: "STUDY_PACK_READY",
+        studyPackStatus: "STUDY_PACK_READY", studyPackDone: true,
       },
     ]);
 

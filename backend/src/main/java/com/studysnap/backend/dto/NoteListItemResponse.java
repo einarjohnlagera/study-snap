@@ -36,6 +36,7 @@ public record NoteListItemResponse(
         String copiedFromNoteId,
         boolean copiedFromPublic,
         boolean likedByCurrentUser,
-        List<String> applicablePrograms
+        List<String> applicablePrograms,
+        Boolean studyPackDone
 ) {
 }

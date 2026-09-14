@@ -2,7 +2,7 @@
 
 ## Goal
 
-Memorization is a spaced-repetition review surface for Study Pack-ready private notes.
+Memorization is a spaced-repetition review surface for private notes with Study Pack key concepts.
 
 It should feel:
 
@@ -24,7 +24,7 @@ Teacher stays scoped to Quiz Preview and Export. Memorization is not shown on te
 
 ## Core Flow
 
-Study Pack-ready private note
+Private note with key concepts
 -> Key Concepts tab
 -> Memorization
 -> one due concept card
@@ -38,6 +38,10 @@ There is no timer, score, quiz result screen, session history row, or quiz-sessi
 ## Data Source And Eligibility
 
 Memorization uses the same concept-matching logic as Flashcards:
+
+Its entry and page availability follow `keyConcepts`, not Note generation lifecycle. Existing cards remain
+usable during regeneration and after a failed regeneration. A `DRAFT` or `FAILED` Note with no key concepts
+offers the existing Generate/Retry action and refetches the Note after generation succeeds.
 
 - `keyConcepts: string[]` supplies possible card fronts.
 - `quiz[].concept` is matched to each key concept using normalized, bidirectional-substring fuzzy matching.

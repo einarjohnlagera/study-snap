@@ -19,6 +19,8 @@ public record NoteCollectionItemResponse(
         OffsetDateTime lastSessionCompletedAt,
         int dueConceptCount,
         List<String> dueConcepts,
-        OffsetDateTime updatedAt
+        OffsetDateTime updatedAt,
+        boolean hasKeyConcepts,
+        Boolean studyPackDone
 ) {
 }

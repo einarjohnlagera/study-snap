@@ -243,7 +243,7 @@ function resolveSameSubjectSourceNotes(
   }
   return notes
     .filter((candidate) => candidate.id !== currentNote.id)
-    .filter((candidate) => candidate.studyPackStatus === "STUDY_PACK_READY" && Boolean(candidate.studyPackId))
+    .filter((candidate) => candidate.studyPackDone === true && Boolean(candidate.studyPackId))
     .filter((candidate) => normalizeSubjectForMatch(candidate.subject) === currentSubject);
 }
 
@@ -836,7 +836,7 @@ export default function ChallengeQuizPage() {
     timeoutAutoSubmitRequestedRef.current = false;
     try {
       const detail = await getNote(noteId);
-      if (detail.studyPackStatus !== "STUDY_PACK_READY") {
+      if (!detail.challengeQuizAvailable) {
         setNote(detail);
         setError("Generate a Study Pack first.");
         return;
