@@ -61,16 +61,27 @@ depends on every adopter ending up with an identical set.
 
 ## Domain Context — the closed vocabulary
 
-Only these eleven values exist. **Adding one is an architecture decision, not a curation call — do
+Only these twelve values exist. **Adding one is an architecture decision, not a curation call — do
 not propose a new value.**
 
 `ENGINEERING_MATHEMATICS` · `ENGINEERING_SCIENCES` · `CIVIL_ENGINEERING` ·
 `PROFESSIONAL_PRACTICE_AND_REGULATION` · `GENERAL_EDUCATION` · `PROFESSIONAL_EDUCATION` ·
 `NURSING` · `ACCOUNTANCY` · `ARCHITECTURAL_DESIGN` · `ARCHITECTURAL_HISTORY_AND_THEORY` ·
-`PLANNING_AND_SITE_DEVELOPMENT`
+`PLANNING_AND_SITE_DEVELOPMENT` · `BASIC_MEDICAL_SCIENCES`
 
-**⚠️ The last three were added in `v0.111.0`** to close a real gap: 132 of 364 ALE rows had no honest
+**⚠️ Three were added in `v0.111.0`** to close a real gap: 132 of 364 ALE rows had no honest
 value under the previous eight, and 8 notes carrying two programs could not be generated at all.
+
+**⚠️ `BASIC_MEDICAL_SCIENCES` was added in `v0.145.0`, `quantitative = false`.** Boundary test: does a
+professional role appear in the knowledge itself, or only in who is reading it? Role in the knowledge
+(medication administration rights, nursing assessment and monitoring duties, prioritization, nursing
+documentation) → `NURSING`. Role only in the audience (drug action and therapeutic mechanisms,
+pharmacokinetics and pharmacodynamics, drug classes, disease mechanisms and pathophysiology, normal
+physiology, shared laboratory or diagnostic parameters) → `BASIC_MEDICAL_SCIENCES`. Licensure, codes,
+ethics and professional regulation → `PROFESSIONAL_PRACTICE_AND_REGULATION`, not here. Its initial
+population (6 mechanism-framed multi-program Pharmacology notes) is named in
+`docs/claude-plans/domain-context-biomedical-business-calibration-stage2.md` §A11 — classify those by
+reading their content, never their title.
 
 **⚠️ MEASURED 2026-09-05 — READ THIS BEFORE RECOMMENDING `(unset)` ANYWHERE. Leaving a note unset is
 NOT a neutral act, and the cost has already been paid at scale.**

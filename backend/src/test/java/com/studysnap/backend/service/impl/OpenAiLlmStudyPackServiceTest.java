@@ -604,6 +604,26 @@ class OpenAiLlmStudyPackServiceTest {
         assertThat(invokeIsQuantitativeContext(context)).isTrue();
     }
 
+    // v0.145.0 owner decision 2's own guard: without this, the "pharmacokinetic" keyword addition
+    // is an unexercised data change per CLAUDE.md's unexercised-change rule. Uses the Quick Review
+    // tier (conceptHints=List.of(), summary=null via invokeIsQuantitativeContext) deliberately --
+    // the Stage 2 plan measured that this is the ONLY tier where the regression the keyword closes
+    // is actually observable; at the full tier every candidate string looked like a no-op.
+    @Test
+    void isQuantitativeContext_pharmacokineticKeywordRescuesBasicMedicalSciencesAtQuickReviewTier()
+            throws Exception {
+        StudyPackGenerationContext context = new StudyPackGenerationContext(
+                LearnerLevel.BOARD_EXAM_REVIEW,
+                null,
+                "Pharmacokinetics",
+                List.of(),
+                DomainContext.BASIC_MEDICAL_SCIENCES,
+                LearnerLevel.BOARD_EXAM_REVIEW
+        );
+
+        assertThat(invokeIsQuantitativeContext(context)).isTrue();
+    }
+
     @Test
     void keywordScanStillUsesCourseProgramWhenDomainContextIsNull() throws Exception {
         StudyPackGenerationContext context = new StudyPackGenerationContext(
@@ -951,6 +971,41 @@ class OpenAiLlmStudyPackServiceTest {
             .doesNotContain(READER_SCAFFOLDING_PREFIX)
             .doesNotContain("{LEARNER_LEVEL}")
             .doesNotContain("{LEARNER_LEVEL_GUIDANCE}");
+    }
+
+    // v0.145.0 §A9 test 8 (Stage 2 plan): the LABEL reaches the prompt, never the underlying
+    // program list -- effectiveAuthoringDomain returns getLabel() whenever domainContext is set
+    // (StudyPackGenerationContextResolver:190-192), ignoring courseProgram entirely. courseProgram
+    // is deliberately set to a distinctive joined multi-program string (not "Medicine, Nursing,
+    // Pharmacy" -- those words legitimately appear elsewhere in the fixed prompt boilerplate, e.g.
+    // "Business, Medicine, Engineering, or Law", which would make a substring check a false
+    // positive) so the negative assertion is real: if the resolver ever regressed to leaking the
+    // program list, this would catch it.
+    @Test
+    void generateStudyPack_emitsBasicMedicalSciencesLabelNeverTheUnderlyingProgramList()
+            throws JsonProcessingException {
+        stubResponsesCall();
+        when(responseSpec.body(String.class)).thenReturn(studyPackResponseJson(buildValidStudyPackPayload()));
+
+        service.generateStudyPack(
+            "Antibiotic mechanism notes",
+            new StudyPackGenerationContext(
+                LearnerLevel.COLLEGE,
+                "Zzyzx Medical College, Quixotic School of Pharmacy",
+                "Pharmacology",
+                List.of("antibiotics"),
+                DomainContext.BASIC_MEDICAL_SCIENCES,
+                LearnerLevel.COLLEGE
+            )
+        );
+
+        ArgumentCaptor<String> requestCaptor = ArgumentCaptor.forClass(String.class);
+        verify(requestSpec).body(requestCaptor.capture());
+        String requestBody = requestCaptor.getValue();
+
+        assertThat(requestBody).contains("Domain: Basic Medical Sciences")
+            .doesNotContain("Zzyzx")
+            .doesNotContain("Quixotic");
     }
 
     @Test

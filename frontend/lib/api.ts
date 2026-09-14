@@ -544,7 +544,8 @@ export type DomainContext =
   | "ACCOUNTANCY"
   | "ARCHITECTURAL_DESIGN"
   | "ARCHITECTURAL_HISTORY_AND_THEORY"
-  | "PLANNING_AND_SITE_DEVELOPMENT";
+  | "PLANNING_AND_SITE_DEVELOPMENT"
+  | "BASIC_MEDICAL_SCIENCES";
 export type PaidPlanType = "PLUS" | "PRO";
 export type LearnerLevel =
   | "GRADE_SCHOOL"
