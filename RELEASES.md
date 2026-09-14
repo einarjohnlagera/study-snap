@@ -21,8 +21,8 @@ incident.
 ### Planned Scope
 
 - **Artifact-first learning availability (backend + frontend).** Derives `studyPackDone` (and, on
-  `NoteCollectionItemResponse`, `hasQuizQuestions`/`hasKeyConcepts`) from the Study Pack's own
-  `quiz`/`keyConcepts`/`status` fields via a new `StudyPackArtifactFacts` utility, and repoints every
+  `NoteCollectionItemResponse`, `hasKeyConcepts`) from the Study Pack's own `quiz`/`keyConcepts`/`status`
+  fields via a new `StudyPackArtifactFacts` utility, and repoints every
   learning-action gate (Quick Review, Challenge Quiz, Adaptive Practice, Flashcards, Memorization,
   Long/Board Exam eligibility, Review Set premium-exam launch, public note pages) at that fact instead of
   Note lifecycle (`NoteStatus`/the `studyPackStatus` string). Fixes the live defect where a `FAILED` or
