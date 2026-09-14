@@ -6,6 +6,7 @@ import { AlertTriangle, Globe, Link2Off, Loader2 } from "lucide-react";
 import { AppModal } from "@/components/ui/app-modal";
 import { Button } from "@/components/ui/button";
 import {
+  ApiRequestError,
   bulkRegenerateNotes,
   getBulkRegenerationReceipt,
   preflightNoteRegeneration,
@@ -133,7 +134,25 @@ export function BulkRegenerateModal({
         if (!cancelled) {
           setReceipt(next);
         }
-      } catch {
+      } catch (caught) {
+        if (cancelled) {
+          return;
+        }
+        // ⚠️ A 404 here means the batch itself is GONE (expired past its 24h receipt TTL, or never
+        // existed) -- this is TERMINAL, not a transient read failure. Every other failure shape stays
+        // swallowed below and retries next tick; only this one stops the poll and clears the stored id,
+        // otherwise the curator is wedged on this view forever with no way back to the start screen.
+        if (caught instanceof ApiRequestError && caught.status === 404) {
+          // ⚠️ Do NOT also call `runPreflight` here: it synchronously clears `error` before this
+          // message ever renders (both run in the same tick, and the later `setError(null)` wins) --
+          // that would silently swallow the one thing this fix exists to show. The curator's next
+          // scope toggle or modal reopen already re-runs preflight through the existing mount effect.
+          writeStoredBatchId(null);
+          setBatchId(null);
+          setReceipt(null);
+          setError(caught.message);
+          return;
+        }
         // A transient read failure must not kill the batch view; the next tick retries.
       }
     };
@@ -182,6 +201,18 @@ export function BulkRegenerateModal({
       setStarting(false);
     }
   }, [batchId, receipt]);
+
+  // ⚠️ LEG B — an escape hatch that does not depend on the poll noticing anything. Leg A above
+  // self-heals a 404, but this covers every other reason the receipt might stay unreachable (a
+  // network issue, a bug not yet found). Without this, the only way out was DevTools or closing the
+  // tab -- what actually happened in production before this fix.
+  const handleStartNewBatch = useCallback(() => {
+    writeStoredBatchId(null);
+    setBatchId(null);
+    setReceipt(null);
+    setError(null);
+    void runPreflight(scope);
+  }, [runPreflight, scope]);
 
   const handleGroupKeyDown = useCallback((event: ReactKeyboardEvent<HTMLDivElement>) => {
     const keys = ["ArrowRight", "ArrowDown", "ArrowLeft", "ArrowUp", "Home", "End"];
@@ -365,9 +396,26 @@ export function BulkRegenerateModal({
     </div>
   );
 
+  // ⚠️ LEG B — always reachable while a batch is being viewed, independent of whether the poll has
+  // ever heard back. This is the escape hatch: it does not wait for or depend on any receipt state.
+  const startNewBatchLink = (
+    <button
+      type="button"
+      onClick={handleStartNewBatch}
+      className="text-left text-xs font-medium text-primary underline-offset-2 hover:underline"
+    >
+      Start a new batch
+    </button>
+  );
+
   const renderProgress = () => {
     if (!receipt) {
-      return <p className="text-sm text-foreground/70">Starting…</p>;
+      return (
+        <div className="space-y-3">
+          <p className="text-sm text-foreground/70">Starting…</p>
+          {startNewBatchLink}
+        </div>
+      );
     }
     const done = receipt.totalCount - receipt.pendingCount;
     const unresolved = receipt.items.filter(
@@ -421,6 +469,8 @@ export function BulkRegenerateModal({
             ))}
           </ul>
         ) : null}
+
+        {startNewBatchLink}
       </div>
     );
   };

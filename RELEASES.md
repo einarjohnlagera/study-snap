@@ -39,7 +39,10 @@ clear root cause), verification tier is one `advisor()` call.
 
 ### Shipped
 
-_(nothing yet)_
+- **Bulk Regenerate stuck-batch fix (frontend).** `frontend/components/library/bulk-regenerate-modal.tsx`
+  — Leg A discriminates a 404 on the receipt poll as terminal (stops polling, clears the stored batch id,
+  returns to preflight with the server's own message); Leg B adds a "Start a new batch" action that does
+  the same reset independent of the poll. `docs/features/bulk-regeneration.md` updated.
 
 ---
 
