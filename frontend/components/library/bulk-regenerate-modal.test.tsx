@@ -3,14 +3,30 @@ import { act } from "react";
 import { BulkRegenerateModal } from "./bulk-regenerate-modal";
 import type { NoteRegenerationPreflightResponse } from "@/lib/api";
 
-jest.mock("@/lib/api", () => ({
-  preflightNoteRegeneration: jest.fn(),
-  bulkRegenerateNotes: jest.fn(),
-  getBulkRegenerationReceipt: jest.fn(),
-  retryBulkRegeneration: jest.fn(),
-}));
+jest.mock("@/lib/api", () => {
+  class ApiRequestError extends Error {
+    status: number;
+    code: string | null;
+
+    constructor(message: string, options: { status: number; code?: string | null }) {
+      super(message);
+      this.name = "ApiRequestError";
+      this.status = options.status;
+      this.code = options.code ?? null;
+    }
+  }
+
+  return {
+    ApiRequestError,
+    preflightNoteRegeneration: jest.fn(),
+    bulkRegenerateNotes: jest.fn(),
+    getBulkRegenerationReceipt: jest.fn(),
+    retryBulkRegeneration: jest.fn(),
+  };
+});
 
 const api = jest.requireMock("@/lib/api") as {
+  ApiRequestError: new (message: string, options: { status: number; code?: string | null }) => Error;
   preflightNoteRegeneration: jest.Mock;
   bulkRegenerateNotes: jest.Mock;
   getBulkRegenerationReceipt: jest.Mock;
@@ -222,5 +238,146 @@ describe("BulkRegenerateModal", () => {
 
     expect(await screen.findByText(/Finished · 3 of 3 regenerated/i)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Retry/i })).not.toBeInTheDocument();
+  });
+
+  // ⚠️ v0.147.0 — the fix for the modal wedging permanently on a stale/expired batch id.
+  const ACTIVE_BATCH_STORAGE_KEY = "notelib-bulk-regeneration-batch";
+
+  it("treats a 404 on the receipt as terminal: stops polling, clears the stored batch, and returns to preflight", async () => {
+    jest.useFakeTimers();
+    try {
+      api.bulkRegenerateNotes.mockResolvedValue({ batchId: "batch-1", scope: "STUDY_PACK", acceptedCount: 3 });
+      api.getBulkRegenerationReceipt.mockRejectedValue(
+        new api.ApiRequestError("That regeneration batch is no longer available.", {
+          status: 404,
+          code: "NOTE_BULK_REGENERATION_BATCH_NOT_FOUND",
+        }),
+      );
+
+      render(<BulkRegenerateModal isOpen noteIds={NOTE_IDS} onClose={jest.fn()} />);
+      const start = await screen.findByRole("button", { name: /Regenerate 3 notes/i });
+      await act(async () => {
+        fireEvent.click(start);
+      });
+
+      // Discriminating: the curator is told WHY the view reset, using the backend's own sentence.
+      expect(await screen.findByText(/no longer available/i)).toBeInTheDocument();
+      // The stuck state is exactly this: the control that starts a new batch must be reachable again.
+      expect(screen.getByRole("button", { name: /Regenerate 3 notes/i })).toBeInTheDocument();
+      expect(globalThis.sessionStorage?.getItem(ACTIVE_BATCH_STORAGE_KEY)).toBeNull();
+
+      const callsAfterFirst404 = api.getBulkRegenerationReceipt.mock.calls.length;
+      await act(async () => {
+        jest.advanceTimersByTime(5_000);
+      });
+      // The poll must actually have STOPPED, not merely be showing preflight while still ticking.
+      expect(api.getBulkRegenerationReceipt).toHaveBeenCalledTimes(callsAfterFirst404);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it("swallows a non-404 receipt failure and keeps polling on the next tick", async () => {
+    jest.useFakeTimers();
+    try {
+      api.bulkRegenerateNotes.mockResolvedValue({ batchId: "batch-1", scope: "STUDY_PACK", acceptedCount: 3 });
+      const finishedReceipt = {
+        batchId: "batch-1",
+        scope: "STUDY_PACK",
+        totalCount: 3,
+        regeneratedCount: 3,
+        blockedCount: 0,
+        failedCount: 0,
+        notRunCount: 0,
+        pendingCount: 0,
+        finished: true,
+        stale: false,
+        retryableNoteIds: [],
+        items: [],
+      };
+      // A fixture that mocks only a SUCCESSFUL receipt passes under both the defect and the fix and
+      // proves nothing -- the first tick must actually reject, and transiently, before recovering.
+      api.getBulkRegenerationReceipt
+        .mockRejectedValueOnce(new Error("network blip"))
+        .mockResolvedValueOnce(finishedReceipt);
+
+      render(<BulkRegenerateModal isOpen noteIds={NOTE_IDS} onClose={jest.fn()} />);
+      const start = await screen.findByRole("button", { name: /Regenerate 3 notes/i });
+      await act(async () => {
+        fireEvent.click(start);
+      });
+
+      await waitFor(() => {
+        expect(api.getBulkRegenerationReceipt).toHaveBeenCalledTimes(1);
+      });
+      // Still on the progress view -- a transient failure must not bounce the curator back to preflight.
+      expect(screen.queryByRole("button", { name: /Regenerate 3 notes/i })).not.toBeInTheDocument();
+
+      await act(async () => {
+        jest.advanceTimersByTime(3_000);
+      });
+
+      expect(api.getBulkRegenerationReceipt).toHaveBeenCalledTimes(2);
+      expect(await screen.findByText(/Finished · 3 of 3 regenerated/i)).toBeInTheDocument();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it("opens straight into the progress view when a batch id is already in storage on mount", async () => {
+    globalThis.sessionStorage?.setItem(ACTIVE_BATCH_STORAGE_KEY, "batch-1");
+    api.getBulkRegenerationReceipt.mockResolvedValue({
+      batchId: "batch-1",
+      scope: "STUDY_PACK",
+      totalCount: 3,
+      regeneratedCount: 1,
+      blockedCount: 0,
+      failedCount: 0,
+      notRunCount: 0,
+      pendingCount: 2,
+      finished: false,
+      stale: false,
+      retryableNoteIds: [],
+      items: [],
+    });
+
+    render(<BulkRegenerateModal isOpen noteIds={NOTE_IDS} onClose={jest.fn()} />);
+
+    expect(await screen.findByText(/1 of 3 done/i)).toBeInTheDocument();
+    // The preflight-only start control must NOT be reachable -- a stored batch id means this mount
+    // is resuming a receipt, never re-offering to run the same selection again.
+    expect(screen.queryByRole("button", { name: /Regenerate 3 notes/i })).not.toBeInTheDocument();
+  });
+
+  it("lets the curator start a new batch independent of the poll, and the next mount opens on preflight", async () => {
+    globalThis.sessionStorage?.setItem(ACTIVE_BATCH_STORAGE_KEY, "batch-1");
+    api.getBulkRegenerationReceipt.mockResolvedValue({
+      batchId: "batch-1",
+      scope: "STUDY_PACK",
+      totalCount: 3,
+      regeneratedCount: 1,
+      blockedCount: 0,
+      failedCount: 0,
+      notRunCount: 0,
+      pendingCount: 2,
+      finished: false,
+      stale: false,
+      retryableNoteIds: [],
+      items: [],
+    });
+
+    const { unmount } = render(<BulkRegenerateModal isOpen noteIds={NOTE_IDS} onClose={jest.fn()} />);
+    await screen.findByText(/1 of 3 done/i);
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /Start a new batch/i }));
+    });
+
+    expect(globalThis.sessionStorage?.getItem(ACTIVE_BATCH_STORAGE_KEY)).toBeNull();
+    expect(await screen.findByRole("button", { name: /Regenerate 3 notes/i })).toBeInTheDocument();
+
+    unmount();
+    render(<BulkRegenerateModal isOpen noteIds={NOTE_IDS} onClose={jest.fn()} />);
+    expect(await screen.findByRole("button", { name: /Regenerate 3 notes/i })).toBeInTheDocument();
   });
 });
