@@ -38,6 +38,13 @@ public interface NoteRepository extends JpaRepository<NoteEntity, UUID>, NoteLib
     Optional<NoteEntity> findByIdAndOwnerUserId(UUID id, UUID ownerUserId);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select n from NoteEntity n where n.id = :id and n.ownerUserId = :ownerUserId")
+    Optional<NoteEntity> findByIdAndOwnerUserIdForUpdate(
+            @Param("id") UUID id,
+            @Param("ownerUserId") UUID ownerUserId
+    );
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select n from NoteEntity n where n.id = :id")
     Optional<NoteEntity> findByIdForUpdate(@Param("id") UUID id);
 

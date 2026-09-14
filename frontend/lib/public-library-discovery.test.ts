@@ -44,6 +44,7 @@ function makeNote(
     updatedAt: NOW.toISOString(),
     likedByCurrentUser: false,
     ...overrides,
+    studyPackDone: overrides.studyPackDone ?? true,
   };
 }
 

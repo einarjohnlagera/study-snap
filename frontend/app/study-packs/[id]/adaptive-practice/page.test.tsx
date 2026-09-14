@@ -68,6 +68,14 @@ jest.mock("@/lib/api", () => ({
   trackAnalyticsEvent: jest.fn(),
 }));
 
+const adaptiveArtifactQuiz = [{
+  question: "What is the derivative of sin(x)?",
+  choices: ["cos(x)", "-cos(x)", "-sin(x)", "tan(x)"],
+  correctIndex: 0,
+  concept: "Trigonometric derivatives",
+  explanation: "The derivative of sin(x) is cos(x).",
+}];
+
 describe("AdaptivePracticePage", () => {
   beforeEach(() => {
     window.localStorage.clear();
@@ -97,6 +105,9 @@ describe("AdaptivePracticePage", () => {
           challengeQuizzesRemaining: 50,
           adaptivePracticeRemaining: 30,
           ocrRemaining: 100,
+        },
+        features: {
+          adaptivePracticeAvailable: true,
         },
       },
       usageLoaded: true,
@@ -164,7 +175,7 @@ describe("AdaptivePracticePage", () => {
     expect(getNote).not.toHaveBeenCalled();
   });
 
-  function setupGeneratedAdaptiveQuiz() {
+  function setupGeneratedAdaptiveQuiz(noteStatus: "STUDY_PACK_READY" | "GENERATING" | "FAILED" = "STUDY_PACK_READY") {
     (getAuthUser as jest.Mock).mockReturnValue({
       id: "user-1",
       emailVerifiedAt: "2026-03-21T09:00:00Z",
@@ -172,7 +183,8 @@ describe("AdaptivePracticePage", () => {
     (getNote as jest.Mock).mockResolvedValue({
       id: "note-1",
       title: "Derivatives",
-      studyPackStatus: "STUDY_PACK_READY",
+      studyPackStatus: noteStatus,
+      quiz: adaptiveArtifactQuiz,
       keyConcepts: ["Trigonometric derivatives"],
       adaptivePracticeAvailable: true,
     });
@@ -215,6 +227,37 @@ describe("AdaptivePracticePage", () => {
       isFirstCompletedSessionEver: true,
     });
   }
+
+  it.each(["GENERATING", "FAILED"] as const)(
+    "offers Adaptive Practice from an intact quiz while Note lifecycle is %s",
+    async (noteStatus) => {
+      setupGeneratedAdaptiveQuiz(noteStatus);
+
+      render(<AdaptivePracticePage />);
+
+      expect(await screen.findByText("1. What is the derivative of sin(x)?")).toBeInTheDocument();
+    },
+  );
+
+  it("reports plan entitlement separately when an intact quiz is present", async () => {
+    setupGeneratedAdaptiveQuiz("FAILED");
+    (useBillingUsageSummary as jest.Mock).mockReturnValue({
+      usageSummary: {
+        plan: "FREE",
+        limits: { adaptivePracticePerMonth: 0 },
+        usage: { adaptivePracticeUsed: 0 },
+        remaining: { adaptivePracticeRemaining: 0 },
+        features: { adaptivePracticeAvailable: false },
+      },
+      usageLoaded: true,
+      refreshUsageSummary: jest.fn(),
+    });
+
+    render(<AdaptivePracticePage />);
+
+    expect(await screen.findByText("You've used your free Adaptive Practice sessions")).toBeInTheDocument();
+    expect(generateAdaptiveQuickReviewQuiz).not.toHaveBeenCalled();
+  });
 
   it.each([
     ["DUE", "Reviewing: Trigonometric derivatives — due for review"],
@@ -283,6 +326,7 @@ describe("AdaptivePracticePage", () => {
       id: "note-1",
       title: "Derivatives",
       studyPackStatus: "STUDY_PACK_READY",
+      quiz: adaptiveArtifactQuiz,
       adaptivePracticeAvailable: true,
     });
     (generateAdaptiveQuickReviewQuiz as jest.Mock).mockResolvedValue({
@@ -409,6 +453,7 @@ describe("AdaptivePracticePage", () => {
       id: "note-1",
       title: "Derivatives",
       studyPackStatus: "STUDY_PACK_READY",
+      quiz: adaptiveArtifactQuiz,
       adaptivePracticeAvailable: true,
     });
     (generateAdaptiveQuickReviewQuiz as jest.Mock).mockImplementation(() => new Promise(() => {}));
@@ -471,6 +516,7 @@ describe("AdaptivePracticePage", () => {
           adaptivePracticeRemaining: 0,
           ocrRemaining: 100,
         },
+        features: { adaptivePracticeAvailable: true },
       },
       usageLoaded: true,
       refreshUsageSummary: jest.fn(),
@@ -483,6 +529,7 @@ describe("AdaptivePracticePage", () => {
       id: "note-1",
       title: "Derivatives",
       studyPackStatus: "STUDY_PACK_READY",
+      quiz: adaptiveArtifactQuiz,
       adaptivePracticeAvailable: true,
     });
 
@@ -515,6 +562,7 @@ describe("AdaptivePracticePage", () => {
           adaptivePracticeRemaining: 0,
           ocrRemaining: 20,
         },
+        features: { adaptivePracticeAvailable: true },
       },
       usageLoaded: true,
       refreshUsageSummary: jest.fn(),
@@ -527,6 +575,7 @@ describe("AdaptivePracticePage", () => {
       id: "note-1",
       title: "Derivatives",
       studyPackStatus: "STUDY_PACK_READY",
+      quiz: adaptiveArtifactQuiz,
       adaptivePracticeAvailable: true,
     });
 
@@ -544,6 +593,7 @@ describe("AdaptivePracticePage", () => {
       id: "note-1",
       title: "Derivatives",
       studyPackStatus: "STUDY_PACK_READY",
+      quiz: adaptiveArtifactQuiz,
       adaptivePracticeAvailable: true,
     });
     (generateAdaptiveQuickReviewQuiz as jest.Mock).mockResolvedValue({
@@ -644,6 +694,7 @@ describe("AdaptivePracticePage", () => {
       id: "note-1",
       title: "Derivatives",
       studyPackStatus: "STUDY_PACK_READY",
+      quiz: adaptiveArtifactQuiz,
       adaptivePracticeAvailable: true,
     });
     (generateAdaptiveQuickReviewQuiz as jest.Mock).mockResolvedValue({
@@ -706,6 +757,7 @@ describe("AdaptivePracticePage", () => {
       id: "note-1",
       title: "Derivatives",
       studyPackStatus: "STUDY_PACK_READY",
+      quiz: adaptiveArtifactQuiz,
       adaptivePracticeAvailable: true,
     });
     (generateAdaptiveQuickReviewQuiz as jest.Mock).mockResolvedValue({
@@ -762,6 +814,7 @@ describe("AdaptivePracticePage", () => {
       id: "note-1",
       title: "Derivatives",
       studyPackStatus: "STUDY_PACK_READY",
+      quiz: adaptiveArtifactQuiz,
       adaptivePracticeAvailable: true,
     });
     (generateAdaptiveQuickReviewQuiz as jest.Mock).mockResolvedValue({
@@ -816,6 +869,7 @@ describe("AdaptivePracticePage", () => {
       id: "note-1",
       title: "Derivatives",
       studyPackStatus: "STUDY_PACK_READY",
+      quiz: adaptiveArtifactQuiz,
       adaptivePracticeAvailable: true,
     });
     (generateAdaptiveQuickReviewQuiz as jest.Mock).mockResolvedValue({
@@ -865,6 +919,7 @@ describe("AdaptivePracticePage", () => {
       id: "note-1",
       title: "Derivatives",
       studyPackStatus: "STUDY_PACK_READY",
+      quiz: adaptiveArtifactQuiz,
       adaptivePracticeAvailable: true,
     });
     (generateAdaptiveQuickReviewQuiz as jest.Mock).mockResolvedValue({
@@ -954,6 +1009,7 @@ describe("AdaptivePracticePage", () => {
       id: "note-1",
       title: "Derivatives",
       studyPackStatus: "STUDY_PACK_READY",
+      quiz: adaptiveArtifactQuiz,
       keyConcepts: [],
       adaptivePracticeAvailable: true,
     });

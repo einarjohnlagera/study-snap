@@ -191,7 +191,8 @@ class PublicNotesScoringUtilsTest {
                 null,
                 false,
                 false,
-                List.of()
+                List.of(),
+                "STUDY_PACK_READY".equals(studyPackStatus)
         );
     }
 }

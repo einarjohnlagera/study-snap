@@ -318,7 +318,7 @@ Profile-aware presentation is a frontend responsibility. The backend responses s
 
 The non-teacher premium-exam mapping is owned by `resolvePlanPremiumExamMode` in `frontend/lib/exam-mode-visibility.ts`, and the profile-aware CTA labels live in `getCollectionTerminalAction`. Do not hardcode profile checks in collection UI components.
 
-Premium-exam eligibility differs from the Teacher Exam Builder: Long/Board/Interview generate their own questions at start, so a note only needs a **ready Study Pack** (`canIncludeCollectionItemInPremiumExam` = `STUDY_PACK_READY`) — a pre-generated quiz is **not** required. The Teacher Exam Builder still requires a generated quiz (`canIncludeCollectionItemInExam` = `generatedQuizId`) because it exports that quiz.
+Premium-exam eligibility differs from the Teacher Exam Builder: Long/Board/Interview generate their own questions at start, so a note only needs a Study Pack whose own status is `DONE` (`canIncludeCollectionItemInPremiumExam` = `studyPackDone === true`) — a pre-generated quiz is **not** required. A Note lifecycle of `GENERATING` or `FAILED` does not exclude an intact `DONE` pack. The Teacher Exam Builder still requires a generated quiz (`canIncludeCollectionItemInExam` = `generatedQuizId`) because it exports that quiz.
 
 The Study Plan premium-exam launch carries `collectionId` in the URL, not a caller-provided note list. Each exam prescreen fetches the collection, intersects its Study Pack-ready items with the user's Study Pack-ready notes, scopes the additional-notes picker to that plan set, and pre-selects up to the existing per-exam cap **(all modes EXCEPT Long Exam — Board Exam, Challenge Quiz and Interview Practice all still scope-and-preselect. A plan-sourced Long Exam shows no picker at all since `v0.105.0`; the server samples representatively across the plan.)**:
 
@@ -451,19 +451,27 @@ Item response is intentionally lean and private-owner focused:
 - `subject`
 - `courseProgram`
 - `studyPackStatus`
+- `hasQuizQuestions`
+- `hasKeyConcepts`
+- `studyPackDone` (nullable; `null` means no Study Pack)
 - `generatedQuizId`
 - `lastSessionCompletedAt`
 - `dueConceptCount`
 - `dueConcepts` (up to 3 ordered names for display)
 - `updatedAt`
 
-`studyPackStatus` uses the same note readiness rule as the Note API:
+`studyPackStatus` uses the same Note lifecycle projection as the Note API and remains a messaging field:
 
 - note `GENERATED` -> `STUDY_PACK_READY`
 - note `GENERATING` -> `GENERATING`
 - note `FAILED` -> `FAILED`
 - no linked Study Pack -> `DRAFT`
 - linked Study Pack otherwise -> `STUDY_PACK_READY`
+
+Learning capability is derived separately from the Study Pack itself: `hasQuizQuestions` and
+`hasKeyConcepts` reflect non-empty artifact arrays, while `studyPackDone` reflects
+`StudyPackStatus.DONE`. These facts remain true for an intact prior pack while its Note lifecycle reports
+`GENERATING` or `FAILED`.
 
 The detail response also includes a read-only `progress` summary:
 
@@ -1046,7 +1054,7 @@ The core Collections UI ships as the universal organization surface:
 - Both leaf and Goal collection detail render as a this-set study dashboard: Identity (hero title, profile-aware eyebrow, Adopted status, Primary accent, a lightweight metadata line, and a compact authoring-controls cluster) -> Today's Focus (Coach: resolved primary action, Continue Studying, a pacing sentence, Quick Actions) -> Progress (readiness, plus a countdown line when a target date exists) -> Guidance (Companion, collapsed behind "View Full Guide") -> Subject Plans/Notes. Goal view visually groups Today’s Focus, Progress, and the conditional post-adopt target-date tip as one tight study-decision cluster, then groups the collapsed Companion card with its conditional Ask Companion panel; their render conditions, Companion collapse behavior, and the teaser remain independent and unchanged. (This order supersedes the pre-v0.43.0 shape; see `docs/features/companion.md`'s "Coach Experience" section for the redesign rationale.) There is no separate "Supporting info" page section — the hero owns both the metadata line and the authoring chrome, so nothing about managing the {label} occupies its own tier in the learner's scroll path.
 - Primary status is a persistent hero-card accent treatment with a small indicator near the title, not a badge pill. Adopted remains an identity badge. Course/program, Study Pack coverage or child Subject Plan count, and estimated study hours render as one muted text line beneath the title/description (e.g. `Nursing · 4/6 notes ready · ~3 hrs`), never as hero badges.
 - Goal hero descriptions and child Subject Plan card descriptions retain their existing three-line and two-line collapsed limits, respectively. When their rendered text actually overflows, a local `Read more` / `Show less` toggle reveals or re-collapses the full description; descriptions that already fit render no toggle.
-- The per-note hint is a learner practice signal, not exam-readiness: `Needs Study Pack` (no `STUDY_PACK_READY` pack yet) → `Not started` (pack ready, `lastSessionCompletedAt == null`) → `Practiced` (`lastSessionCompletedAt != null`), with transient `Generating` / `Generation failed` states preserved for operational feedback. It deliberately does **not** show `Study Pack ready` / `Quiz ready` (the prior hint): plan-level Study Pack readiness already lives in the Progress rollup, and exam-eligibility (quiz-readiness) is surfaced on the Exam Builder, not here.
+- The per-note hint is a learner practice signal, not exam-readiness: `Needs Study Pack` (no usable Study Pack) → `Not started` (pack usable, `lastSessionCompletedAt == null`) → `Practiced` (`lastSessionCompletedAt != null`). An intact pack whose Note lifecycle is `Generating` or `Generation failed` keeps that plain lifecycle label without the incorrect `Needs Study Pack` framing. It deliberately does **not** show `Study Pack ready` / `Quiz ready` (the prior hint): plan-level Study Pack readiness already lives in the Progress rollup, and exam-eligibility (quiz-readiness) is surfaced on the Exam Builder, not here.
 - `/collections/[id]` authoring controls (`Build`, the `⋯` menu holding `Edit` / `Set-Remove primary` / `Manage Companion` / `Delete`, and the admin-only Publish/Private control) render as a compact cluster in the hero's top-right corner, next to the title. **Design rule: if a control helps the learner study today, it belongs in the learning flow; if it changes the {label} itself, it stays compact chrome** — the failure mode being guarded against is *prominence*, not *location*, so this cluster must not grow back into a dedicated page card or section regardless of where it sits. On-page controls are entry points only (`Build` routes to the Builder, the rest open single-action modals) — there is no separate "authoring surface" beyond the Builder that already exists.
 - The publish modal (not an inline panel): a Course/Program **combobox locked to known buckets** (`CourseProgramCombobox` with `allowCustom={false}` + `inlineDropdown` so the options panel renders in-flow and is not clipped by the modal's overflow — the plan's existing value is always kept selectable), a single `Publish` (requires a non-empty course/program) / `Unpublish` action, and a `Save` for course/program edits while published. The `X` is the only close affordance (no redundant `Close` button).
 - Because adopters copy the plan's notes, the publish modal flags any still-private item notes and offers a one-tap `Make N public` (loops `updateNoteVisibility`); admins also see per-row `Private` badges on plan items. Private status is computed frontend-side by joining plan items against the owner's note list (`listNotes`) — no collection-item DTO change. `Publish` is disabled until every plan note is public, matching the backend rule that publishing requires all item notes `PUBLIC`.
@@ -1061,7 +1069,7 @@ The core Collections UI ships as the universal organization surface:
 - **Set sections from note subjects** is a confirmed Builder action that overwrites every current assignment from each note's already-authored subject in one whole-plan write. It is disabled when every subject is blank. Per-note assignment, rename, and this action emit `COLLECTION_SECTION_ASSIGNED` with only collection id and the assignment source.
 - Section headers may show the v0.34.0 Free readiness stat `N% · M due`, computed by lazy-loading `GET /collections/{id}/note-concept-counts` after initial render and aggregating by item label client-side. The stat is hidden while organize mode is active and when a section has zero concepts or the lazy fetch fails. Item rows remain execution organization only: no subject mastery, milestones, goals, streaks, weakest-subject routing, or progress bars.
 - `getNextPlanAction` phases are evaluated globally in this order, choosing the first matching note in saved order within each phase when no continue action is present:
-  1. First note without `STUDY_PACK_READY` -> `Generate Study Pack`.
+  1. First note without `studyPackDone === true` -> `Generate Study Pack`.
   2. When all Study Packs are ready, first note with no completed practice -> `Study this note`.
   3. When all notes are practiced, first note with due concepts -> `Review due concepts` for entitled users only.
   4. Otherwise -> `All caught up in this plan`.

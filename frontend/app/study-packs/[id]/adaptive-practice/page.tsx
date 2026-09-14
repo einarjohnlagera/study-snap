@@ -366,14 +366,14 @@ export default function AdaptivePracticePage() {
       }
       const detail = await getNote(noteId);
       loadedForNoteRef.current = routeId;
-      if (detail.studyPackStatus !== "STUDY_PACK_READY") {
+      if (!detail.quiz.length) {
         setNote(detail);
         setError("Generate a Study Pack first.");
         setAdaptiveQuiz(null);
         return;
       }
       setNote(detail);
-      if (!detail.adaptivePracticeAvailable) {
+      if (usageSummary && !usageSummary.features.adaptivePracticeAvailable) {
         setAdaptiveQuiz(null);
         setPremiumLocked(true);
         setShowPremiumPaywall(true);
@@ -420,7 +420,7 @@ export default function AdaptivePracticePage() {
       setLoading(false);
       requestInFlightRef.current = false;
     }
-  }, [applyAdaptiveSession, hasReachedAdaptivePracticeLimit, noteId, pathname, routeId, router, searchParams, sessionAddressed, shouldUpgradeForAdaptivePracticeLimit]);
+  }, [applyAdaptiveSession, hasReachedAdaptivePracticeLimit, noteId, pathname, routeId, router, searchParams, sessionAddressed, shouldUpgradeForAdaptivePracticeLimit, usageSummary]);
 
   useEffect(() => {
     if (!routeId) {
@@ -577,7 +577,13 @@ export default function AdaptivePracticePage() {
       setShowVerifyEmailModal(true);
       return;
     }
-    if (!note.adaptivePracticeAvailable) {
+    if (!note.quiz.length) {
+      setError("Generate a Study Pack first.");
+      setAdaptiveQuiz(null);
+      return;
+    }
+    if (usageSummary && !usageSummary.features.adaptivePracticeAvailable) {
+      setAdaptiveQuiz(null);
       setPremiumLocked(true);
       openAdaptivePracticePaywall("adaptive_practice_start");
       return;
@@ -619,7 +625,7 @@ export default function AdaptivePracticePage() {
       requestInFlightRef.current = false;
       setStartingAdaptive(false);
     }
-  }, [adaptivePracticeEntry, applyAdaptiveSession, currentPlan, hasReachedAdaptivePracticeLimit, note, openAdaptivePracticePaywall, sessionAddressed, shouldUpgradeForAdaptivePracticeLimit]);
+  }, [adaptivePracticeEntry, applyAdaptiveSession, currentPlan, hasReachedAdaptivePracticeLimit, note, openAdaptivePracticePaywall, sessionAddressed, shouldUpgradeForAdaptivePracticeLimit, usageSummary]);
 
   const adaptiveGenerationLocked = startingAdaptive || adaptiveQuiz?.status === "GENERATING";
   // Display names for the focus list. Duplicates are preserved DELIBERATELY: two packs weak on the

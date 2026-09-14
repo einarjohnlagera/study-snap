@@ -685,6 +685,8 @@ class NoteCollectionControllerTest {
                         null,
                         0,
                         List.of(),
+                        null,
+                        false,
                         null
                 )))
         ));

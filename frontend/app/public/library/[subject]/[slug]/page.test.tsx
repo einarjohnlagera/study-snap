@@ -104,6 +104,7 @@ const baseNote = {
   content: "Cells are the basic unit of life.\n\nThey contain organelles that support cell function.",
   contentPreview: "Cells are the basic unit of life.",
   studyPackStatus: "STUDY_PACK_READY",
+  studyPackDone: true,
   summary: "Cell structure is fundamental to biology. Every living organism is made of cells. Cells vary widely in size and function.",
   keyConcepts: ["Cell membrane", "Nucleus"],
   quiz: [
@@ -202,6 +203,7 @@ describe("PublicLibrarySeoPage", () => {
     (getServerPublicNoteBySeoPath as jest.Mock).mockResolvedValue({
       ...baseNote,
       studyPackStatus: "DRAFT",
+      studyPackDone: false,
     });
 
     render(
@@ -226,10 +228,29 @@ describe("PublicLibrarySeoPage", () => {
     expect(screen.getByText(/Mini quiz for note-1: What controls the cell\?/i)).toBeInTheDocument();
   });
 
+  it("fully renders an intact Study Pack after the latest generation failed", async () => {
+    (getServerPublicNoteBySeoPath as jest.Mock).mockResolvedValue({
+      ...baseNote,
+      studyPackStatus: "FAILED",
+      studyPackDone: true,
+    });
+
+    render(
+      await PublicLibrarySeoPage({
+        params: Promise.resolve({ subject: "science", slug: "cell-structure" }),
+      }),
+    );
+
+    expect(screen.getByRole("heading", { name: "Summary" })).toBeInTheDocument();
+    expect(screen.getByTestId("mini-quiz-preview")).toBeInTheDocument();
+    expect(screen.getByTestId("flashcards-preview")).toBeInTheDocument();
+  });
+
   it("does not render the mini quiz preview for a draft note", async () => {
     (getServerPublicNoteBySeoPath as jest.Mock).mockResolvedValue({
       ...baseNote,
       studyPackStatus: "DRAFT",
+      studyPackDone: false,
     });
 
     render(
@@ -275,6 +296,7 @@ describe("PublicLibrarySeoPage", () => {
     (getServerPublicNoteBySeoPath as jest.Mock).mockResolvedValue({
       ...baseNote,
       studyPackStatus: "DRAFT",
+      studyPackDone: false,
     });
 
     render(

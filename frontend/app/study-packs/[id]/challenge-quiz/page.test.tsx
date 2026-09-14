@@ -172,6 +172,7 @@ describe("ChallengeQuizPage", () => {
       currentQuestionIndex?: number;
       selectedChoices?: Record<string, number>;
       timeLimitSeconds?: number;
+      noteStatus?: "STUDY_PACK_READY" | "GENERATING" | "FAILED";
     } = {},
   ) {
     const quiz = options.quiz ?? [
@@ -203,7 +204,7 @@ describe("ChallengeQuizPage", () => {
       copiedFromPublic: false,
       copiedAt: null,
       studyPackId: "sp-1",
-      studyPackStatus: "STUDY_PACK_READY",
+      studyPackStatus: options.noteStatus ?? "STUDY_PACK_READY", studyPackDone: true,
       summary: "Summary",
       keyConcepts: ["Concept"],
       quiz: [],
@@ -231,6 +232,19 @@ describe("ChallengeQuizPage", () => {
       },
     });
   }
+
+  it.each([
+    ["challenge", "GENERATING"],
+    ["challenge", "FAILED"],
+    ["board_exam", "GENERATING"],
+    ["board_exam", "FAILED"],
+  ] as const)("resumes %s from an intact pack while Note lifecycle is %s", async (mode, noteStatus) => {
+    setupInProgressChallengeQuiz(mode, Math.floor(Date.now() / 1000), { noteStatus });
+
+    render(<ChallengeQuizPage />);
+
+    expect(await screen.findByText("What powers the cell?")).toBeInTheDocument();
+  });
 
   function setupChallengePrestart(
     useProDefaults = true,
@@ -266,7 +280,7 @@ describe("ChallengeQuizPage", () => {
       copiedFromPublic: false,
       copiedAt: null,
       studyPackId: "sp-1",
-      studyPackStatus: "STUDY_PACK_READY",
+      studyPackStatus: "STUDY_PACK_READY", studyPackDone: true,
       summary: "Summary",
       keyConcepts: ["Concept"],
       quiz: [],
@@ -323,7 +337,7 @@ describe("ChallengeQuizPage", () => {
       copiedFromPublic: false,
       copiedAt: null,
       studyPackId: "sp-1",
-      studyPackStatus: "STUDY_PACK_READY",
+      studyPackStatus: "STUDY_PACK_READY", studyPackDone: true,
       summary: "Summary",
       keyConcepts: ["Cell Biology"],
       quiz: [],
@@ -537,7 +551,7 @@ describe("ChallengeQuizPage", () => {
       copiedFromPublic: false,
       copiedAt: null,
       studyPackId: "sp-1",
-      studyPackStatus: "STUDY_PACK_READY",
+      studyPackStatus: "STUDY_PACK_READY", studyPackDone: true,
       summary: "Summary",
       keyConcepts: ["Concept"],
       quiz: [],
@@ -928,14 +942,14 @@ describe("ChallengeQuizPage", () => {
     (getCollection as jest.Mock).mockResolvedValue({
       id: "collection-1",
       items: [
-        { noteId: "note-1", position: 0, studyPackStatus: "STUDY_PACK_READY", generatedQuizId: "quiz-1" },
-        { noteId: "note-2", position: 1, studyPackStatus: "STUDY_PACK_READY", generatedQuizId: "quiz-2" },
-        { noteId: "note-3", position: 2, studyPackStatus: "STUDY_PACK_READY", generatedQuizId: "quiz-3" },
+        { noteId: "note-1", position: 0, studyPackStatus: "STUDY_PACK_READY", studyPackDone: true, generatedQuizId: "quiz-1" },
+        { noteId: "note-2", position: 1, studyPackStatus: "STUDY_PACK_READY", studyPackDone: true, generatedQuizId: "quiz-2" },
+        { noteId: "note-3", position: 2, studyPackStatus: "STUDY_PACK_READY", studyPackDone: true, generatedQuizId: "quiz-3" },
       ],
     });
     (listNotes as jest.Mock).mockResolvedValue([
-      { id: "note-2", title: "Plan Two", subject: "Biology", studyPackId: "sp-2", studyPackStatus: "STUDY_PACK_READY" },
-      { id: "note-3", title: "Plan Three", subject: "Chemistry", studyPackId: "sp-3", studyPackStatus: "STUDY_PACK_READY" },
+      { id: "note-2", title: "Plan Two", subject: "Biology", studyPackId: "sp-2", studyPackStatus: "STUDY_PACK_READY", studyPackDone: true },
+      { id: "note-3", title: "Plan Three", subject: "Chemistry", studyPackId: "sp-3", studyPackStatus: "STUDY_PACK_READY", studyPackDone: true },
     ]);
 
     render(<ChallengeQuizPage />);
@@ -959,12 +973,12 @@ describe("ChallengeQuizPage", () => {
     (getCollection as jest.Mock).mockResolvedValue({
       id: "collection-1",
       items: [
-        { noteId: "note-1", position: 0, studyPackStatus: "STUDY_PACK_READY", generatedQuizId: "quiz-1" },
-        { noteId: "note-2", position: 1, studyPackStatus: "STUDY_PACK_READY", generatedQuizId: "quiz-2" },
+        { noteId: "note-1", position: 0, studyPackStatus: "STUDY_PACK_READY", studyPackDone: true, generatedQuizId: "quiz-1" },
+        { noteId: "note-2", position: 1, studyPackStatus: "STUDY_PACK_READY", studyPackDone: true, generatedQuizId: "quiz-2" },
       ],
     });
     (listNotes as jest.Mock).mockResolvedValue([
-      { id: "note-2", title: "Plan Two", subject: "Biology", studyPackId: "sp-2", studyPackStatus: "STUDY_PACK_READY" },
+      { id: "note-2", title: "Plan Two", subject: "Biology", studyPackId: "sp-2", studyPackStatus: "STUDY_PACK_READY", studyPackDone: true },
     ]);
 
     render(<ChallengeQuizPage />);
@@ -985,7 +999,7 @@ describe("ChallengeQuizPage", () => {
     setupChallengePrestart(true, "BOARD_EXAM", "PRO");
     (getCollection as jest.Mock).mockRejectedValue(new Error("Not found"));
     (listNotes as jest.Mock).mockResolvedValue([
-      { id: "note-2", title: "Fallback Board Note", subject: "Biology", studyPackId: "sp-2", studyPackStatus: "STUDY_PACK_READY" },
+      { id: "note-2", title: "Fallback Board Note", subject: "Biology", studyPackId: "sp-2", studyPackStatus: "STUDY_PACK_READY", studyPackDone: true },
     ]);
     (startChallengeQuizSession as jest.Mock).mockResolvedValue({
       sessionId: "session-1",
@@ -1026,7 +1040,7 @@ describe("ChallengeQuizPage", () => {
     setupChallengePrestart(true, "BOARD_EXAM", "PRO");
     (getCollection as jest.Mock).mockResolvedValue({
       id: "collection-1",
-      items: [{ noteId: "note-1", position: 0, studyPackStatus: "STUDY_PACK_READY", generatedQuizId: "quiz-1" }],
+      items: [{ noteId: "note-1", position: 0, studyPackStatus: "STUDY_PACK_READY", studyPackDone: true, generatedQuizId: "quiz-1" }],
     });
     (startChallengeQuizSession as jest.Mock).mockResolvedValue({
       sessionId: "session-1",
@@ -1066,17 +1080,17 @@ describe("ChallengeQuizPage", () => {
     (getCollection as jest.Mock).mockResolvedValue({
       id: "collection-1",
       items: [
-        { noteId: "note-1", position: 0, studyPackStatus: "STUDY_PACK_READY", generatedQuizId: "quiz-1" },
-        { noteId: "note-2", position: 1, studyPackStatus: "STUDY_PACK_READY", generatedQuizId: "quiz-2" },
-        { noteId: "note-3", position: 2, studyPackStatus: "STUDY_PACK_READY", generatedQuizId: "quiz-3" },
-        { noteId: "note-4", position: 3, studyPackStatus: "STUDY_PACK_READY", generatedQuizId: "quiz-4" },
+        { noteId: "note-1", position: 0, studyPackStatus: "STUDY_PACK_READY", studyPackDone: true, generatedQuizId: "quiz-1" },
+        { noteId: "note-2", position: 1, studyPackStatus: "STUDY_PACK_READY", studyPackDone: true, generatedQuizId: "quiz-2" },
+        { noteId: "note-3", position: 2, studyPackStatus: "STUDY_PACK_READY", studyPackDone: true, generatedQuizId: "quiz-3" },
+        { noteId: "note-4", position: 3, studyPackStatus: "STUDY_PACK_READY", studyPackDone: true, generatedQuizId: "quiz-4" },
       ],
     });
     (listNotes as jest.Mock).mockResolvedValue([
-      { id: "note-2", title: "Plan Board Two", subject: "Biology", studyPackId: "sp-2", studyPackStatus: "STUDY_PACK_READY" },
-      { id: "note-3", title: "Plan Board Three", subject: "Biology", studyPackId: "sp-3", studyPackStatus: "STUDY_PACK_READY" },
-      { id: "note-4", title: "Plan Board Four", subject: "Biology", studyPackId: "sp-4", studyPackStatus: "STUDY_PACK_READY" },
-      { id: "note-9", title: "Outside Board Note", subject: "Biology", studyPackId: "sp-9", studyPackStatus: "STUDY_PACK_READY" },
+      { id: "note-2", title: "Plan Board Two", subject: "Biology", studyPackId: "sp-2", studyPackStatus: "STUDY_PACK_READY", studyPackDone: true },
+      { id: "note-3", title: "Plan Board Three", subject: "Biology", studyPackId: "sp-3", studyPackStatus: "STUDY_PACK_READY", studyPackDone: true },
+      { id: "note-4", title: "Plan Board Four", subject: "Biology", studyPackId: "sp-4", studyPackStatus: "STUDY_PACK_READY", studyPackDone: true },
+      { id: "note-9", title: "Outside Board Note", subject: "Biology", studyPackId: "sp-9", studyPackStatus: "STUDY_PACK_READY", studyPackDone: true },
     ]);
 
     render(<ChallengeQuizPage />);
@@ -1099,8 +1113,8 @@ describe("ChallengeQuizPage", () => {
       boardExamMonthlyLimit: 10,
     });
     (listNotes as jest.Mock).mockResolvedValue([
-      { id: "note-2", title: "Board Two", subject: "Biology", studyPackId: "sp-2", studyPackStatus: "STUDY_PACK_READY" },
-      { id: "note-3", title: "Board Three", subject: "Biology", studyPackId: "sp-3", studyPackStatus: "STUDY_PACK_READY" },
+      { id: "note-2", title: "Board Two", subject: "Biology", studyPackId: "sp-2", studyPackStatus: "STUDY_PACK_READY", studyPackDone: true },
+      { id: "note-3", title: "Board Three", subject: "Biology", studyPackId: "sp-3", studyPackStatus: "STUDY_PACK_READY", studyPackDone: true },
     ]);
 
     render(<ChallengeQuizPage />);
@@ -1119,8 +1133,8 @@ describe("ChallengeQuizPage", () => {
     setupChallengePrestart(true, "BOARD_EXAM", "PRO");
     (getCollection as jest.Mock).mockRejectedValue(new Error("Not found"));
     (listNotes as jest.Mock).mockResolvedValue([
-      { id: "note-2", title: "Fallback Board Note", subject: "Biology", studyPackId: "sp-2", studyPackStatus: "STUDY_PACK_READY" },
-      { id: "note-3", title: "Other Board Subject", subject: "Chemistry", studyPackId: "sp-3", studyPackStatus: "STUDY_PACK_READY" },
+      { id: "note-2", title: "Fallback Board Note", subject: "Biology", studyPackId: "sp-2", studyPackStatus: "STUDY_PACK_READY", studyPackDone: true },
+      { id: "note-3", title: "Other Board Subject", subject: "Chemistry", studyPackId: "sp-3", studyPackStatus: "STUDY_PACK_READY", studyPackDone: true },
     ]);
 
     render(<ChallengeQuizPage />);
@@ -1595,7 +1609,7 @@ describe("ChallengeQuizPage", () => {
       copiedFromPublic: false,
       copiedAt: null,
       studyPackId: "sp-1",
-      studyPackStatus: "STUDY_PACK_READY",
+      studyPackStatus: "STUDY_PACK_READY", studyPackDone: true,
       summary: "Summary",
       keyConcepts: ["Concept"],
       quiz: [],
@@ -1751,7 +1765,7 @@ describe("ChallengeQuizPage", () => {
       copiedFromPublic: false,
       copiedAt: null,
       studyPackId: "sp-1",
-      studyPackStatus: "STUDY_PACK_READY",
+      studyPackStatus: "STUDY_PACK_READY", studyPackDone: true,
       summary: "Summary",
       keyConcepts: ["Concept"],
       quiz: [],
@@ -1865,7 +1879,7 @@ describe("ChallengeQuizPage", () => {
       copiedFromPublic: false,
       copiedAt: null,
       studyPackId: "sp-1",
-      studyPackStatus: "STUDY_PACK_READY",
+      studyPackStatus: "STUDY_PACK_READY", studyPackDone: true,
       summary: "Summary",
       keyConcepts: [],
       quiz: [],
@@ -2087,7 +2101,7 @@ describe("ChallengeQuizPage", () => {
       copiedFromPublic: false,
       copiedAt: null,
       studyPackId: "sp-1",
-      studyPackStatus: "STUDY_PACK_READY",
+      studyPackStatus: "STUDY_PACK_READY", studyPackDone: true,
       summary: "Summary",
       keyConcepts: [],
       quiz: [],
@@ -2174,7 +2188,7 @@ describe("ChallengeQuizPage", () => {
       copiedFromPublic: false,
       copiedAt: null,
       studyPackId: "sp-1",
-      studyPackStatus: "STUDY_PACK_READY",
+      studyPackStatus: "STUDY_PACK_READY", studyPackDone: true,
       summary: "Summary",
       keyConcepts: [],
       quiz: [],
@@ -2278,7 +2292,7 @@ describe("ChallengeQuizPage", () => {
       copiedFromPublic: false,
       copiedAt: null,
       studyPackId: "sp-1",
-      studyPackStatus: "STUDY_PACK_READY",
+      studyPackStatus: "STUDY_PACK_READY", studyPackDone: true,
       summary: "Summary",
       keyConcepts: [],
       quiz: [],
@@ -2354,7 +2368,7 @@ describe("ChallengeQuizPage", () => {
       copiedFromPublic: false,
       copiedAt: null,
       studyPackId: "sp-1",
-      studyPackStatus: "STUDY_PACK_READY",
+      studyPackStatus: "STUDY_PACK_READY", studyPackDone: true,
       summary: "Summary",
       keyConcepts: [],
       quiz: [],

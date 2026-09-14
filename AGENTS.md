@@ -1,5 +1,7 @@
 # AGENTS.md - NoteLib
 
+Never use Note generation lifecycle (`NoteStatus`, or the `studyPackStatus` string derived from it) as a proxy for learning artifact availability. Derive capability from the Study Pack's own artifacts (`quiz`, `keyConcepts`, `status`) via `StudyPackArtifactFacts`.
+
 **v0.116.0 implementation note:** additive Review Set drift compares source facts at last sync with the
 source now. Never compare source label/position with the learner placement, because adoption may already
 have renumbered after filtering. Updates append additions only; learner removal writes the composite

@@ -16,6 +16,7 @@ describe("StudyPackGrid", () => {
       visibility: "PRIVATE",
       studyPackId: "sp-1",
       studyPackStatus: "STUDY_PACK_READY",
+      studyPackDone: true,
       quizCount: 8,
       keyConceptCount: 5,
       copyCount: 0,

@@ -20,7 +20,8 @@ public record PublicNoteDetailResponse(
         String authorUsername,
         boolean isOfficialAuthor,
         boolean isCurrentUser,
-        OffsetDateTime updatedAt
+        OffsetDateTime updatedAt,
+        Boolean studyPackDone
 ) {
     public PublicNoteDetailResponse(
             String id,
@@ -42,7 +43,7 @@ public record PublicNoteDetailResponse(
     ) {
         this(
                 id, ownerUserId, title, subject, List.of(), tags, content, contentPreview, studyPackStatus, summary,
-                keyConcepts, quiz, authorDisplayName, authorUsername, isOfficialAuthor, isCurrentUser, updatedAt
+                keyConcepts, quiz, authorDisplayName, authorUsername, isOfficialAuthor, isCurrentUser, updatedAt, null
         );
     }
 }

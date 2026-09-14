@@ -25,6 +25,9 @@ Notes are the primary user-authored workspace in NoteLib. Users organize note me
 
 ## Anti-drift Notes
 
+- Learning availability comes from the Study Pack artifacts a feature consumes (`quiz`, `keyConcepts`, or
+  the pack's own `StudyPackStatus`), never from Note lifecycle or its `studyPackStatus` projection. An intact
+  prior pack remains usable while regeneration is running and after it fails.
 - Note content is **locked** after Study Pack generation (`STUDY_PACK_READY`) — do not re-enable the content editor for ready notes; title, courseProgram, subject, and tags remain editable for everyone, plus Domain Context and `Authored Depth` for Teacher/Admin authors (`private-note-detail-page-client.tsx` → `canEditAuthoringMetadata`)
 - `Generate Study Pack` saves the note then navigates immediately to Note Detail — **never wait** for LLM completion before navigation; generation is always async
 - `domainContext` is the authoritative authoring-domain signal for generation; fallback is note `courseProgram`, then profile `courseProgram`

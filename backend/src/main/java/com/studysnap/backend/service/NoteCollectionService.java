@@ -66,6 +66,7 @@ import com.studysnap.backend.repository.UserRepository;
 import com.studysnap.backend.service.model.CompanionGenerationContext;
 import com.studysnap.backend.service.event.ReviewSetUpdatePublishedEvent;
 import com.studysnap.backend.util.CourseProgramNormalizationUtils;
+import com.studysnap.backend.util.StudyPackArtifactFacts;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
@@ -3477,7 +3478,9 @@ public class NoteCollectionService {
                 lastSessionCompletedAt,
                 dueConcepts.size(),
                 dueConcepts.stream().limit(DUE_CONCEPT_DISPLAY_LIMIT).toList(),
-                note.updatedAt()
+                note.updatedAt(),
+                studyPack != null && StudyPackArtifactFacts.hasKeyConcepts(studyPack.getKeyConcepts()),
+                studyPack == null ? null : StudyPackArtifactFacts.isDone(studyPack.getStatus())
         );
     }
 

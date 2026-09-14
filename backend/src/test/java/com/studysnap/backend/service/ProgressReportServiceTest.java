@@ -268,6 +268,7 @@ class ProgressReportServiceTest {
                 fullPack.getOwnerUserId(),
                 fullPack.getSubject(),
                 fullPack.getKeyConcepts(),
+                fullPack.getQuiz(),
                 fullPack.getStatus()
         );
         List<UUID> studyPackIds = List.of(fullPack.getId());
@@ -693,6 +694,7 @@ class ProgressReportServiceTest {
                         pack.getOwnerUserId(),
                         pack.getSubject(),
                         pack.getKeyConcepts(),
+                        pack.getQuiz(),
                         pack.getStatus()
                 ))
                 .toList();
@@ -704,6 +706,7 @@ class ProgressReportServiceTest {
             UUID ownerUserId,
             String subject,
             List<String> keyConcepts,
+            List<com.studysnap.backend.dto.QuizItem> quiz,
             StudyPackStatus status
     ) implements StudyPackProgressProjection {
         @Override

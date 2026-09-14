@@ -1,5 +1,6 @@
 package com.studysnap.backend.controller;
 
+import com.studysnap.backend.config.StudySnapProperties;
 import com.studysnap.backend.dto.NoteListItemResponse;
 import com.studysnap.backend.dto.NoteQuickReviewLastReviewedResponse;
 import com.studysnap.backend.dto.NoteResponse;
@@ -36,6 +37,7 @@ import com.studysnap.backend.dto.QuizSessionReviewResponse;
 import com.studysnap.backend.dto.SubjectStatsResponse;
 import com.studysnap.backend.dto.SharedNoteResponse;
 import com.studysnap.backend.dto.SharedNotesPageResponse;
+import com.studysnap.backend.dto.SimpleMessageResponse;
 import com.studysnap.backend.dto.ChallengeQuizPerformanceSummaryResponse;
 import com.studysnap.backend.dto.ChallengeQuizSessionSummaryResponse;
 import com.studysnap.backend.dto.ChallengeQuizStartRequest;
@@ -49,8 +51,10 @@ import com.studysnap.backend.dto.RegenerateNoteRequest;
 import com.studysnap.backend.dto.UpsertNoteRequest;
 import com.studysnap.backend.entity.LearnerLevel;
 import com.studysnap.backend.entity.NoteRegenerationScope;
+import com.studysnap.backend.entity.NoteStatus;
 import com.studysnap.backend.entity.UserRole;
 import com.studysnap.backend.exception.NoteNotFoundException;
+import com.studysnap.backend.exception.GenerationRecoveryNotEligibleException;
 import com.studysnap.backend.exception.SharedNoteNotFoundException;
 import com.studysnap.backend.security.AuthenticatedUser;
 import com.studysnap.backend.service.AuthService;
@@ -71,6 +75,7 @@ import com.studysnap.backend.service.QuickReviewSessionService;
 import com.studysnap.backend.service.QuickReviewStudyTipService;
 import com.studysnap.backend.service.QuizSessionHistoryService;
 import com.studysnap.backend.service.StudyPackService;
+import com.studysnap.backend.repository.NoteRepository;
 import com.studysnap.backend.util.UuidParsingUtils;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -88,8 +93,10 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -146,6 +153,8 @@ public class NoteController {
     private final QuickReviewAdaptivePracticeService quickReviewAdaptivePracticeService;
     private final GeneratedQuizService generatedQuizService;
     private final QuizSessionHistoryService quizSessionHistoryService;
+    private final NoteRepository noteRepository;
+    private final StudySnapProperties properties;
 
     @PostMapping
     @PreAuthorize("hasAnyRole('USER','ADMIN')")
@@ -312,6 +321,36 @@ public class NoteController {
         authService.requireEmailVerified(userId);
         studyPackService.startAsyncGenerationFromNote(id, userId, autoApplyMetadata);
         return noteService.getById(id, userId);
+    }
+
+    @PostMapping("/{id}/recover-stranded-generation")
+    @PreAuthorize("hasAnyRole('USER','ADMIN')")
+    @Transactional
+    public SimpleMessageResponse recoverStrandedGeneration(
+            @PathVariable String id,
+            @AuthenticationPrincipal AuthenticatedUser user
+    ) {
+        UUID noteId = UuidParsingUtils.parseUuidOrThrow(id, NoteNotFoundException::new);
+        var note = noteRepository.findByIdAndOwnerUserIdForUpdate(noteId, user.userId())
+                .orElseThrow(NoteNotFoundException::new);
+        // ⚠️ updatedAt is a fallback for the stranded case this endpoint exists for (a null
+        // generationEnqueuedAt). It is set to generationEnqueuedAt at the exact moment generation
+        // starts (StudyPackService:226,328), so it approximates the true start time -- but it is not
+        // append-only like generationEnqueuedAt: any other write to this note while GENERATING would
+        // push the bound further out. No known write path touches a GENERATING note today; if one is
+        // added, it should leave updatedAt alone or this endpoint's bound silently weakens.
+        OffsetDateTime generationStartedAt = note.getGenerationEnqueuedAt() == null
+                ? note.getUpdatedAt()
+                : note.getGenerationEnqueuedAt();
+        OffsetDateTime cutoff = OffsetDateTime.now(ZoneOffset.UTC)
+                .minusMinutes(properties.getGeneration().getNoteBoundMinutes());
+        if (note.getStatus() != NoteStatus.GENERATING
+                || generationStartedAt == null
+                || !generationStartedAt.isBefore(cutoff)) {
+            throw new GenerationRecoveryNotEligibleException();
+        }
+        studyPackService.markNoteGenerationFailed(note);
+        return new SimpleMessageResponse("The stuck generation was marked failed and can now be retried.");
     }
 
     /**

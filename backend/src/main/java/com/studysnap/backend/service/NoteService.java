@@ -74,6 +74,7 @@ import com.studysnap.backend.util.ContentPreviewUtils;
 import com.studysnap.backend.util.CourseProgramNormalizationUtils;
 import com.studysnap.backend.util.SubjectNormalizationUtils;
 import com.studysnap.backend.util.SummaryPreviewUtils;
+import com.studysnap.backend.util.StudyPackArtifactFacts;
 import com.studysnap.backend.util.UuidParsingUtils;
 import com.studysnap.backend.util.NoteCourseProgramShadowing;
 import com.studysnap.backend.util.NoteMetadataBounds;
@@ -1542,7 +1543,9 @@ public class NoteService {
                 // request -- GET /study-packs/{id} records OPENED_STUDY_PACK, which drives the
                 // Dashboard's last-opened pack, so fetching it to compare titles would let merely
                 // VIEWING a note rewrite that recommendation.
-                studyPack == null ? null : studyPack.getTitle()
+                studyPack == null ? null : studyPack.getTitle(),
+                studyPack == null ? null : StudyPackArtifactFacts.isDone(studyPack.getStatus()),
+                entity.getGenerationEnqueuedAt()
         );
     }
 
@@ -1594,7 +1597,8 @@ public class NoteService {
                 note.getCopiedFromNoteId() == null ? null : note.getCopiedFromNoteId().toString(),
                 Boolean.TRUE.equals(note.getCopiedFromPublic()),
                 likedByCurrentUser,
-                applicablePrograms(note)
+                applicablePrograms(note),
+                studyPack == null ? null : StudyPackArtifactFacts.isDone(studyPack.getStatus())
         );
     }
 
@@ -1625,7 +1629,8 @@ public class NoteService {
                 resolvePublicAuthorUsername(owner),
                 isOfficialAuthor,
                 isCurrentUser(note.getOwnerUserId(), viewerUserId),
-                note.getUpdatedAt()
+                note.getUpdatedAt(),
+                studyPack == null ? null : StudyPackArtifactFacts.isDone(studyPack.getStatus())
         );
     }
 

@@ -49,7 +49,24 @@ premium-exam predicate) — do not deploy frontend before backend this release.
 
 ### Shipped
 
-_(nothing yet)_
+- **Learning actions now follow the Study Pack artifacts they consume.** Quick Review, Challenge Quiz,
+  Adaptive Practice, Flashcards, Memorization, Long/Board Exam entry, Review Set premium-exam launch,
+  collection planning, and public note rendering no longer hide an intact pack merely because its Note is
+  `GENERATING` or `FAILED`. Lifecycle status remains visible for retry and progress messaging.
+- **Artifact facts are additive and derived at response time.** `StudyPackArtifactFacts` owns quiz,
+  key-concept, and `StudyPackStatus.DONE` checks; note, collection-item, list-item, and public-detail DTOs
+  now expose the precise facts their clients need. The private Library's ready predicate now matches the
+  backend exam-source rule by checking for a `DONE` Study Pack.
+- **Empty Quick Reviews fail before persistence.** Starting Quick Review with no quiz questions returns
+  `400 QUICK_REVIEW_NOT_AVAILABLE`; resuming an existing in-progress session remains allowed.
+- **Stranded first-generation work has an owner-only recovery path.**
+  `POST /notes/{id}/recover-stranded-generation` reuses the configured note generation bound and the
+  existing failure transition, performs no generation or quota charge, and returns
+  `409 GENERATION_RECOVERY_NOT_ELIGIBLE` for early, repeated, or otherwise ineligible calls. Note Detail
+  exposes the action after the bound and refetches the recovered note so its Retry action is reachable.
+- **Flashcards and Memorization have working Generate/Retry actions.** Their guards call the existing
+  generation API and refetch the Note; existing key concepts remain usable during and after a failed
+  regeneration.
 
 ---
 

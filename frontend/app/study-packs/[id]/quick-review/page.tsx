@@ -364,11 +364,13 @@ export default function QuickReviewPage() {
           quickReviewAvailable: sharedPack.quiz.length > 0,
           challengeQuizAvailable: false,
           adaptivePracticeAvailable: false,
+          studyPackDone: true,
+          generationEnqueuedAt: null,
         };
       } else {
         detail = await getNote(noteId);
       }
-      if (detail.studyPackStatus !== "STUDY_PACK_READY") {
+      if (!detail.quickReviewAvailable) {
         setNote(detail);
         loadedNoteIdRef.current = noteId;
         setError("Generate a Study Pack first.");

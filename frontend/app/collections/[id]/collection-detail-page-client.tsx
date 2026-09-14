@@ -1351,8 +1351,14 @@ type NoteExecutionStatus = { label: string; className: string };
 // model is Needs Study Pack -> Not started -> Practiced; the transient
 // Generating / Generation failed states are kept for operational feedback.
 function getNoteExecutionStatus(
-  item: Pick<NoteCollectionItem, "studyPackStatus" | "lastSessionCompletedAt">,
+  item: Pick<NoteCollectionItem, "studyPackStatus" | "studyPackDone" | "lastSessionCompletedAt">,
 ): NoteExecutionStatus {
+  if (item.studyPackDone === true && item.studyPackStatus === "FAILED") {
+    return { label: "Generation failed", className: "text-red-700 dark:text-red-300" };
+  }
+  if (item.studyPackDone === true && item.studyPackStatus === "GENERATING") {
+    return { label: "Generating", className: "text-foreground/60" };
+  }
   if (item.studyPackStatus === "GENERATING") {
     return { label: "Generating", className: "text-foreground/60" };
   }
@@ -1373,7 +1379,7 @@ function canViewConceptHealth(currentPlan: AppPlanType): boolean {
 }
 
 function getNextPlanAction(items: NoteCollectionItem[], canReviewDueConcepts: boolean): NextPlanAction | null {
-  const needsStudyPack = items.find((item) => item.studyPackStatus !== "STUDY_PACK_READY");
+  const needsStudyPack = items.find((item) => item.studyPackDone !== true);
   if (needsStudyPack) {
     return {
       item: needsStudyPack,
