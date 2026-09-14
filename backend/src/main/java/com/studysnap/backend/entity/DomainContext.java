@@ -29,7 +29,14 @@ public enum DomainContext {
     // had to be corrected. Do not flip one of these to true without an owner decision.
     ARCHITECTURAL_DESIGN("Architectural Design", false),
     ARCHITECTURAL_HISTORY_AND_THEORY("History and Theory of Architecture", false),
-    PLANNING_AND_SITE_DEVELOPMENT("Planning and Site Development", false);
+    PLANNING_AND_SITE_DEVELOPMENT("Planning and Site Development", false),
+    // Added in v0.145.0 (owner decision, 2026-09-14). Appended rather than inserted, per the same
+    // rule as the block above: DomainContextTest asserts labels with containsExactly and ordinal
+    // position carries no persisted data. quantitative = false is a decision, not a default -- the
+    // repair keyword for the false-negative class this creates ("pharmacokinetic" in
+    // QUANTITATIVE_KEYWORDS) is discipline-specific and was measured working; do not flip this to
+    // true without an owner decision, since a true signal is permanent per note.
+    BASIC_MEDICAL_SCIENCES("Basic Medical Sciences", false);
 
     private final String label;
     private final boolean quantitative;

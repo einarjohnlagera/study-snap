@@ -105,10 +105,21 @@ save rather than erroring. Run `scripts/check-deploys.sh` after the release PR m
 - **Widen `QUANTITATIVE_KEYWORDS` by exactly one string.** Add `"pharmacokinetic"` with a comment
   recording the coupling to the unanchored-matching defect (Backlog Index).
 - **Tests, same diff:** `DomainContextTest` (label + `@CsvSource` row + method rename to
-  `...Twelve...`), `domain-context.test.ts` (length 12 + new-value routing assertions),
-  `OpenAiLlmStudyPackServiceTest` (the keyword's own guard: a Pharmacokinetics-subject context
-  becomes quantitative via the keyword path), `StudyPackGenerationContextResolverTest` (new value
-  resolves to its label), multi-program guard test (new value + 3 programs does not throw).
+  `...Twelve...` + `fromString` round-trip), `domain-context.test.ts` (length 12 + new-value
+  routing assertions), `OpenAiLlmStudyPackServiceTest` (the keyword's own guard: a
+  Pharmacokinetics-subject context becomes quantitative via the keyword path at the Quick Review
+  tier, plus a negative assertion that the label reaches the prompt and a distinctive
+  multi-program `courseProgram` string never does), `StudyPackGenerationContextResolverTest` (new
+  value resolves to its label, not the enum constant name). **The plan's §A9 item 10
+  (multi-program guard: new value + 3 programs does not throw) was deliberately NOT added as a
+  separate test** — `StudyPackGenerationContextResolver.assertGenerationReady` only checks
+  `domainContext == null && programCount > 1`; it never switches on which value is set, so a
+  BASIC_MEDICAL_SCIENCES-specific case could not fail differently from the existing generic
+  coverage (`assertGenerationReady_allowsRetryAfterDomainContextIsSet`,
+  `assertGenerationReady_rejectsMultipleProgramsWithoutDomainContext`). Recorded here rather than
+  silently omitted. **§A9 item 6 (a PPR routing assertion in `domain-context.test.ts`) travels
+  with item 3** — it is only meaningful once the PPR description itself changes, so it ships in
+  the same follow-up PR if Arm B passes, not in this diff.
 - **`docs/architecture/ADR-001-canonical-knowledge-architecture.md`** — revision-log entry
   recording the owner decision (name, enum, `quantitative = false`, the keyword condition as
   actually shipped, clause-(a) evidence), plus correcting two stale lines the plan's own
@@ -119,8 +130,16 @@ save rather than erroring. Run `scripts/check-deploys.sh` after the release PR m
   `docs/claude-plans/domain-context-ppr-validation-armB.sql` (on disk, deliberately **not**
   committed — see "How this scope was reached" above); ships as a follow-up PR only if Arm B
   passes.
-- **`docs/features/domain-context.md`** (new file — no Domain Context feature doc exists among the
-  existing 48).
+- **`docs/features/domain-context.md`** — **NOT built, by decision rather than oversight.**
+  `docs/features/study-pack-generation.md` already documents the mechanism in depth (fallback
+  chain, the declared-`quantitative`-flag design, the keyword scan); a second dedicated doc
+  covering the same ground risks the two silently diverging, which is a worse failure mode than
+  the gap the plan named. Instead, swept every doc that enumerates the taxonomy by name so none
+  goes stale invisibly: `study-pack-generation.md` and `challenge-quiz.md` (the duplicated
+  `quantitative = false` value lists), `docs/features/notes.md` (the twelve-value list and count),
+  and `docs/gpt-contexts/REVIEW_SET_SHAPING_CONTEXT.md` (the curriculum-shaping pipeline's closed
+  vocabulary — the one place this would have gone stale with no diff to notice, since it is never
+  touched by code changes).
 
 ### Shipped
 

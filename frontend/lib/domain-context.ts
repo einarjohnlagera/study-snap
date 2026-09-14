@@ -91,6 +91,15 @@ export const DOMAIN_CONTEXT_OPTIONS: Array<{ value: DomainContext; label: string
     label: "Planning and Site Development",
     description: "Site- and district-scale planning: site selection and analysis, topography and orientation, solar and wind siting, land use and zoning, parking provision, urban planning, and landscape architecture. Hydraulic, structural or utility treatment of a site problem belongs in Engineering Sciences.",
   },
+  {
+    value: "BASIC_MEDICAL_SCIENCES",
+    label: "Basic Medical Sciences",
+    // Added in v0.145.0 (owner decision, 2026-09-14). Boundary test: does a professional role
+    // appear in the KNOWLEDGE itself, or only in who is reading it? Role in the knowledge -> Nursing.
+    // Role only in the audience -> here. The two routing sentences are load-bearing, not decoration
+    // -- an enumeration-only description is the same defect that left 215 ALE rows unclassified.
+    description: "Foundational biomedical knowledge shared across health professions: drug action and therapeutic mechanisms, pharmacokinetics and pharmacodynamics, drug classes, mechanisms of resistance and interaction, disease mechanisms and pathophysiology, normal physiology, and shared laboratory or diagnostic parameters. Use biomedical mechanisms and standard scientific terminology without assuming a specific professional role. Knowledge whose subject is the nursing role itself — medication administration rights, nursing assessment and monitoring duties, prioritization, or nursing documentation — belongs in Nursing. Licensure, codes, ethics, and professional regulation belong in Professional Practice & Regulation.",
+  },
 ];
 
 export function getDomainContextLabel(value: DomainContext): string {

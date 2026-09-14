@@ -95,6 +95,34 @@ class StudyPackGenerationContextResolverTest {
                 .isEqualTo(LearnerLevel.PROFESSIONAL);
     }
 
+    // v0.145.0 §A9 test 9: the LABEL reaches the prompt, never the enum constant name -- effective
+    // AuthoringDomain calls getLabel() (:190-192), and the enum name ("BASIC_MEDICAL_SCIENCES")
+    // would be a visibly broken prompt payload if that call were ever dropped.
+    @Test
+    void resolve_returnsBasicMedicalSciencesLabelNotTheEnumConstantName() {
+        UUID userId = UUID.randomUUID();
+        UserEntity user = new UserEntity();
+        user.setId(userId);
+        user.setLearnerLevel(LearnerLevel.COLLEGE);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+
+        NoteEntity note = new NoteEntity();
+        note.setCourseProgram("Medicine, Nursing, Pharmacy");
+        note.setSubject("Pharmacology");
+        note.setDomainContext(DomainContext.BASIC_MEDICAL_SCIENCES);
+
+        StudyPackGenerationContextResolver resolver = new StudyPackGenerationContextResolver(
+                userRepository, noteRepository, noteCourseProgramRepository, courseProgramCatalogRepository);
+
+        StudyPackGenerationContext context = resolver.resolve(userId, note);
+
+        assertThat(context.domainContext()).isEqualTo(DomainContext.BASIC_MEDICAL_SCIENCES);
+        assertThat(StudyPackGenerationContextResolver.effectiveAuthoringDomain(context))
+                .isEqualTo("Basic Medical Sciences")
+                .isNotEqualTo("BASIC_MEDICAL_SCIENCES")
+                .isNotEqualTo("Medicine, Nursing, Pharmacy");
+    }
+
     @Test
     void resolve_usesExactlyOneJoinedProgramNameBeforeThePersonalString() {
         UUID userId = UUID.randomUUID();

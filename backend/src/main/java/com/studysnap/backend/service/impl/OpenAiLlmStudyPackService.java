@@ -165,14 +165,20 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
             "remember to",
             "help you understand"
     );
+    // v0.145.0: added "pharmacokinetic" (owner decision 2, measured against production rather than
+    // assumed -- see the Stage 2 domain-context plan §A5). It reaches its target ONLY because
+    // matching is unanchored below (contains("pharmacokinetic") matches the subject
+    // "Pharmacokinetics"). If the substring-matching defect is ever fixed with word boundaries,
+    // this entry silently stops working and must become a "pharmacokinetic(s)?" pattern.
     private static final List<String> QUANTITATIVE_KEYWORDS = List.of(
             "accounting", "algebra", "algorithm", "algorithms", "amortization", "analysis", "anatomy",
             "balance", "calculus", "cash flow", "chemistry", "circuit", "circuits", "computation",
             "compute", "current", "derivative", "derivatives", "differential", "electric", "electrical",
             "engineering", "equation", "equations", "finance", "formula", "formulas", "geometry",
             "interest", "integral", "kinematics", "laws of motion", "math", "mathematics", "mechanics",
-            "numerical", "ohm", "physics", "probability", "ratio", "resistance", "solve", "statistics",
-            "stoichiometry", "thermodynamics", "unit conversion", "units", "variance", "voltage"
+            "numerical", "ohm", "pharmacokinetic", "physics", "probability", "ratio", "resistance",
+            "solve", "statistics", "stoichiometry", "thermodynamics", "unit conversion", "units",
+            "variance", "voltage"
     );
 
     private final StudySnapProperties properties;

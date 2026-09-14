@@ -6,7 +6,7 @@ import {
 
 describe("Domain Context descriptions", () => {
   it("declares curator guidance for every option", () => {
-    expect(DOMAIN_CONTEXT_OPTIONS).toHaveLength(11);
+    expect(DOMAIN_CONTEXT_OPTIONS).toHaveLength(12);
     DOMAIN_CONTEXT_OPTIONS.forEach((option) => {
       expect(getDomainContextDescription(option.value)).toBe(option.description);
       expect(option.description).not.toHaveLength(0);
@@ -49,6 +49,20 @@ describe("Domain Context descriptions", () => {
 
     expect(descriptionFor("PLANNING_AND_SITE_DEVELOPMENT")).toContain("land use and zoning");
     expect(descriptionFor("PLANNING_AND_SITE_DEVELOPMENT")).toContain("belongs in Engineering Sciences");
+  });
+
+  // ⚠️ Pins the ROUTING clause specifically, not merely that a description exists (v0.145.0). The
+  // boundary decision is "role in the knowledge -> Nursing, role only in the audience -> here";
+  // without this assertion a future edit could narrow the description to an enumeration and this
+  // suite would stay green while the boundary silently broke.
+  it("routes role-framed and regulatory material away from Basic Medical Sciences", () => {
+    const description = DOMAIN_CONTEXT_OPTIONS.find(
+      (option) => option.value === "BASIC_MEDICAL_SCIENCES",
+    )?.description;
+
+    expect(description).toContain("without assuming a specific professional role");
+    expect(description).toContain("belongs in Nursing");
+    expect(description).toContain("belong in Professional Practice & Regulation");
   });
 
   // ⚠️ The label is the PROMPT PAYLOAD -- effectiveAuthoringDomain returns getLabel(), so changing
