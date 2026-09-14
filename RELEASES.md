@@ -2,7 +2,9 @@
 
 ## v0.146.0 - Knowledge, Not Lost
 
-**Status: In Progress**
+**Status: Released** (kicked off 2026-09-14, signed off 2026-09-14, base branch `releases/v0.146.0`,
+cut from `main` after `v0.145.0` merged as #1388 and tagged — Vercel and Render both confirmed live on
+`1be308b7`. PR #1389 (implementation) and PR #1390 (pre-signoff findings) merged into the release branch.)
 
 Theme: an intact Study Pack stays usable for every learning action even when the note's most recent
 generation attempt is still running or has failed — fixing the only generation-failure pattern that has
@@ -67,6 +69,15 @@ premium-exam predicate) — do not deploy frontend before backend this release.
 - **Flashcards and Memorization have working Generate/Retry actions.** Their guards call the existing
   generation API and refetch the Note; existing key concepts remain usable during and after a failed
   regeneration.
+- **Pre-signoff falsification review (cold agent, no inherited context), PR #1390.** Confirmed
+  `studyPackDone` derivation, per-mode entry-gate correctness, and deploy-ordering fail-safety across the
+  merged diff. Found and fixed two gaps the implementing session's own pre-commit audit missed: a stale
+  `docs/features/collections.md` claim describing a `hasQuizQuestions` field that was added by Codex then
+  correctly reverted before commit (it would have widened a shared "lean projection" used by
+  Dashboard/Progress/Adaptive Practice to pull the full `quiz` JSONB column, violating an existing
+  performance guard test, and had zero real consumers) but never removed from the doc; and a missing
+  regression test for this release's own headline Library scenario — a `FAILED` note whose prior Study
+  Pack is still `DONE` now has a dedicated case in `NoteServiceLibraryPaginationIntegrationTest`.
 
 ---
 
