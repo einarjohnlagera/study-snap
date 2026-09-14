@@ -1,5 +1,188 @@
 # RELEASES.md - NoteLib
 
+## v0.145.0 - Knowledge, Not Role
+
+**Status: Released** (kicked off 2026-09-14, signed off 2026-09-14, base branch `releases/v0.145.0`,
+cut from `main` after `v0.144.0` merged as #1386 and tagged — Vercel and Render both confirmed live
+on `22983935`. PR #1387 merged into the release branch at `94d2bbd3`.)
+
+Theme: teach the LLM authoring pipeline that a professional role belongs to *who reads* a note,
+not to the biomedical mechanism itself — closing a live mis-instruction on six production notes
+that are currently generated under `Domain: Nursing` with no nursing content at all.
+
+### How this scope was reached
+
+Source: `docs/claude-plans/domain-context-biomedical-business-calibration-stage2.md`, a Stage 2
+tightening of `docs/claude-plans/domain-context-biomedical-business-calibration-stage1.md` (both
+untracked on disk at the owner's instruction; indexed in `ROADMAP.md`'s Backlog Index rather than
+committed). Both `[PROD]` figures the plan's ADR-001 correction depends on were independently
+re-verified at this kickoff via read-only `SELECT` (`course_programs` = 51, `NURSING` = 46,
+`ACCOUNTANCY` = 0, `PROFESSIONAL_EDUCATION` = 232, total notes = 7,617, `NULL` context = 5,671) —
+all matched the plan's one-day-stale figures exactly, so nothing had moved further.
+
+**Workstream A — `BASIC_MEDICAL_SCIENCES` — is this release's entire code scope.** Six canonical,
+multi-program Pharmacology notes (`Antibiotics: Mechanism of Action and Resistance`,
+`Antibiotic Classes in Pharmacology`, `Pharmacological Management of Hypertension`,
+`Pharmacological Management of Diabetes`, `Pharmacology of Insulin`,
+`Respiratory and Gastrointestinal Pharmacology`) are mechanism-framed content, correctly clearing
+`ADR-001:397` clause (a)'s ~10-note floor once the ~9 firmly-planned PNLE rows are counted, but are
+currently forced onto `NURSING` because no coarser value exists — and are actively mis-instructed
+today, generating under a `DOMAIN_CONSTRAINT` that names a professional role their content never
+uses. The boundary test the plan validated against all 18 multi-program Pharmacology notes'
+real summaries: *does a professional role appear in the knowledge itself, or only in who is
+reading it?* — 6 mechanism-framed, 11 role-framed (stay `NURSING`), 1 unclassified pending a
+curator reading its summary (not this release's work).
+
+**Workstream B — Accountancy/Business/Finance — ships nothing in this release.** The plan's own
+verdict is pre-CPALE calibration, not implementation. `ACCOUNTANCY` keeps `quantitative = true`
+unchanged: the plan measured that `false` would be a 5-save/4-lose trade across the 154
+Accountancy-program notes (all `domain_context IS NULL` today, zero currently classified
+`ACCOUNTANCY`) — a coin flip, not the protective change its advocates wanted, because the
+asymmetry argument that correctly justified `false` for Basic Medical Sciences (a precise,
+discipline-specific repair keyword exists) does not transfer to accounting, where the
+discriminating words are generic English (`tax`, `cost`, `income`, `return`) and would be
+catastrophic under the codebase's unanchored `String.contains` matching. No new Domain Context is
+minted for Business/Finance; the re-audit trigger (≥10 canonical notes stably shared across 2+
+live programs, arriving via a committed CPALE curriculum plan) stands at 0 today.
+
+**Owner decision 2 (widen `QUANTITATIVE_KEYWORDS`) ships, but not as a regression fix.** Of the
+three strings Stage 1 proposed, two are measurably wrong: `"half-life"` matches zero notes
+anywhere in the corpus, and `"clearance"` is a live false positive (77 corpus-wide matches, mostly
+building/construction clearance, including 2 new false positives at the full keyword tier — one on
+`PROFESSIONAL_PRACTICE_AND_REGULATION`, a value whose `quantitative = false` is a documented,
+tested decision). Only `"pharmacokinetic"` survives measurement: +17 net-new matches at the Quick
+Review tier (2 canonical notes, 15 learner copies of one already-`NURSING(true)` note). **This is
+not a regression mitigation** — the plan measured that the regression Stage 1's condition was
+meant to prevent affects zero notes (all three `NURSING`-today candidates already trip existing
+keywords at both tiers). It closes a pre-existing Quick Review computation-guidance gap. Recording
+it as regression prevention would be the `v0.116.0` / `v0.117.0` failure mode — a shipped item with
+a named consequence that does not exist — so it is written up here as what it actually is.
+
+**Owner decision 3 (widen the PPR description to cover Business Law / RFBT) is BLOCKED, not
+dropped.** It is gated on a two-arm comparison (`ADR-001:291`'s tie-break) that requires *setting*
+`domain_context` on three real production notes — a production WRITE, which is the owner's to run
+under `CLAUDE.md`'s read-only rule, never Claude's, regardless of the plan itself being approved.
+The exact `UPDATE`/verify/revert statements, the three notes' UUIDs (independently confirmed by a
+read-only query at this kickoff), and the pass/fail condition were written to
+`docs/claude-plans/domain-context-ppr-validation-armB.sql` and handed to the owner directly —
+**deliberately not committed**, since a production `UPDATE` statement sitting in `docs/claude-plans/`
+would read as a sanctioned runbook to a future session, the same shape as the read-only scripts
+this repo *does* commit and instruct sessions to run. If the owner runs it and Arm B passes
+(preserves statutory citations and legal terminology, does not import engineering-contract
+framing), item 3 ships as a follow-up PR into this release branch; if it fails or is not run,
+`BASIC_MEDICAL_SCIENCES` ships without it — the two are independent array entries in
+`DomainContext.java`, bundled by owner convenience only, never coupled technically.
+
+Anti-drift: no database migration (`notes.domain_context` is `VARCHAR` with zero CHECK
+constraints; `@Enumerated(EnumType.STRING)` persists the name), no backfill of existing notes (the
+six mechanism-framed notes are curator follow-up, outside this release), no
+`isQuantitativeContext` resolver rewrite (only one keyword-array element changes), no program
+catalog or Program Family change, and no Workstream B implementation of any kind. The
+`QUANTITATIVE_KEYWORDS` unanchored-substring-matching defect (`ratio` ⊂ `corporation`, `solve` ⊂
+`resolve`, `interest` ⊂ `interested`, etc. — proved against production) is reported in
+`ROADMAP.md`'s Backlog Index and explicitly out of scope for this release; note that fixing it with
+word boundaries would silently
+break the `"pharmacokinetic"` entry this release adds, which depends on unanchored matching to
+reach the subject "Pharmacokinetics".
+
+Verification tier: **one `advisor()` call.** No new endpoint, so no `MockMvc` real-request test is
+owed — said here rather than skipped silently. `frontend/lib/api.ts` is touched but the change is
+a TypeScript union member only, emitting no JavaScript, so no `api-*.test.ts` request-shape test is
+owed either. The diff does change behaviour (a new quantitative fall-through path, and — if item 3
+ships — a PPR routing change), so the tests the plan's §A9 names must land in the same diff as
+that behaviour, per the unexercised-change rule.
+
+Deploy ordering: ship frontend and backend together. Backend-first is harmless (an unused enum
+value); frontend-first is not — the new dropdown option would appear before an old backend can
+persist it, and `DomainContext.fromString`'s `null`-on-unknown return silently drops a curator's
+save rather than erroring. Run `scripts/check-deploys.sh` after the release PR merges.
+
+### Planned Scope
+
+- **Add `DomainContext.BASIC_MEDICAL_SCIENCES` (backend + frontend).** Append (never insert) the
+  enum value with `quantitative = false`; append the matching `DOMAIN_CONTEXT_OPTIONS` entry with
+  the plan's §A3 curator-facing description, which routes adjacent material to `Nursing` and to
+  `Professional Practice & Regulation` in the same prose; add the TypeScript union member.
+- **Widen `QUANTITATIVE_KEYWORDS` by exactly one string.** Add `"pharmacokinetic"` with a comment
+  recording the coupling to the unanchored-matching defect (Backlog Index).
+- **Tests, same diff:** `DomainContextTest` (label + `@CsvSource` row + method rename to
+  `...Twelve...` + `fromString` round-trip), `domain-context.test.ts` (length 12 + new-value
+  routing assertions), `OpenAiLlmStudyPackServiceTest` (the keyword's own guard: a
+  Pharmacokinetics-subject context becomes quantitative via the keyword path at the Quick Review
+  tier, plus a negative assertion that the label reaches the prompt and a distinctive
+  multi-program `courseProgram` string never does), `StudyPackGenerationContextResolverTest` (new
+  value resolves to its label, not the enum constant name). **The plan's §A9 item 10
+  (multi-program guard: new value + 3 programs does not throw) was deliberately NOT added as a
+  separate test** — `StudyPackGenerationContextResolver.assertGenerationReady` only checks
+  `domainContext == null && programCount > 1`; it never switches on which value is set, so a
+  BASIC_MEDICAL_SCIENCES-specific case could not fail differently from the existing generic
+  coverage (`assertGenerationReady_allowsRetryAfterDomainContextIsSet`,
+  `assertGenerationReady_rejectsMultipleProgramsWithoutDomainContext`). Recorded here rather than
+  silently omitted. **§A9 item 6 (a PPR routing assertion in `domain-context.test.ts`) travels
+  with item 3** — it is only meaningful once the PPR description itself changes, so it ships in
+  the same follow-up PR if Arm B passes, not in this diff.
+- **`docs/architecture/ADR-001-canonical-knowledge-architecture.md`** — revision-log entry
+  recording the owner decision (name, enum, `quantitative = false`, the keyword condition as
+  actually shipped, clause-(a) evidence), plus correcting two stale lines the plan's own
+  re-verification found: *"three unused values"* → two are now in use (`PROFESSIONAL_EDUCATION`
+  232, `NURSING` 46) `[PROD 2026-09-14]`; *"41 programs"* → 51 `[PROD 2026-09-14]`, ratio
+  `12:51 = 0.235`.
+- **`[BLOCKED — owner validation required]` PPR description widening (frontend).** Handed off via
+  `docs/claude-plans/domain-context-ppr-validation-armB.sql` (on disk, deliberately **not**
+  committed — see "How this scope was reached" above); ships as a follow-up PR only if Arm B
+  passes.
+- **`docs/features/domain-context.md`** — **NOT built, by decision rather than oversight.**
+  `docs/features/study-pack-generation.md` already documents the mechanism in depth (fallback
+  chain, the declared-`quantitative`-flag design, the keyword scan); a second dedicated doc
+  covering the same ground risks the two silently diverging, which is a worse failure mode than
+  the gap the plan named. Instead, swept every doc that enumerates the taxonomy by name so none
+  goes stale invisibly: `study-pack-generation.md` and `challenge-quiz.md` (the duplicated
+  `quantitative = false` value lists), `docs/features/notes.md` (the twelve-value list and count),
+  and `docs/gpt-contexts/REVIEW_SET_SHAPING_CONTEXT.md` (the curriculum-shaping pipeline's closed
+  vocabulary — the one place this would have gone stale with no diff to notice, since it is never
+  touched by code changes).
+
+### Shipped
+
+- **`DomainContext.BASIC_MEDICAL_SCIENCES`** (`quantitative = false`), appended after
+  `PLANNING_AND_SITE_DEVELOPMENT` — `DomainContext.java:33-39`. Curator-facing description added
+  to `DOMAIN_CONTEXT_OPTIONS` — `frontend/lib/domain-context.ts`. TypeScript union member added —
+  `frontend/lib/api.ts`.
+- **`QUANTITATIVE_KEYWORDS` widened by exactly one string, `"pharmacokinetic"`** —
+  `OpenAiLlmStudyPackService.java:179`, with a comment recording the coupling to the
+  unanchored-substring defect tracked in `ROADMAP.md`'s Backlog Index.
+- **Tests, same diff:** `DomainContextTest` (label + `@CsvSource` row + method rename + `fromString`
+  round-trip), `domain-context.test.ts` (length 12 + new-value routing assertions),
+  `OpenAiLlmStudyPackServiceTest` (keyword guard at the Quick Review tier + a negative assertion
+  that the label reaches the prompt, never a multi-program `courseProgram` string),
+  `StudyPackGenerationContextResolverTest` (new value resolves to its label, not the enum constant
+  name). Backend full suite 2373/2373, frontend 216 suites / 2402 tests, `tsc --noEmit` clean.
+- **`ADR-001-canonical-knowledge-architecture.md`** — revision-log entry (clause b) recording the
+  owner decision, plus two stale-line corrections found by re-verifying production during this
+  edit: *"three unused values"* → two now in use (`PROFESSIONAL_EDUCATION` 232, `NURSING` 46); *"41
+  programs"* → 51, ratio `12:51 = 0.235`.
+- **Doc sweep** — every place that enumerates the Domain Context taxonomy by name, whether or not it
+  was in the code diff: `docs/features/study-pack-generation.md`, `docs/features/challenge-quiz.md`
+  (the duplicated `quantitative = false` value lists), `docs/features/notes.md` (the twelve-value
+  list and count), `docs/gpt-contexts/REVIEW_SET_SHAPING_CONTEXT.md` (the curriculum-shaping
+  pipeline's own closed vocabulary — never touched by a code diff and the one place this would have
+  gone stale invisibly), `docs/gpt-contexts/GPT_CONTEXT.md` and
+  `docs/gpt-contexts/NOTES_AND_COLLECTIONS_CONTEXT.md` (both re-stamped at this signoff; the core
+  brief's own "don't propose a 12th value" line was corrected, since a 12th had just shipped).
+- **PR #1387**, merged into `releases/v0.145.0` at `94d2bbd3`.
+
+### Not shipped
+
+- **`[BLOCKED]` PPR description widening (owner decision 3).** Re-checked read-only at this
+  signoff: all three RFBT notes named in `docs/claude-plans/domain-context-ppr-validation-armB.sql`
+  still carry `domain_context IS NULL` `[PROD 2026-09-14]`, so the owner has not yet run the
+  two-arm validation. Ships as a follow-up PR into a later release if and when Arm B passes; the
+  two are independent `DomainContext.java` array entries, bundled by convenience only.
+- **`docs/features/domain-context.md`.** Not built, by decision — see the Planned Scope note above.
+- **§A9 test item 10** (a multi-program-guard test naming the new value specifically) — not added;
+  `assertGenerationReady` is value-agnostic, so it could not fail differently from existing
+  coverage. See the Planned Scope note above.
+
 ## v0.144.0 - No Backdoor Left
 
 **Status: Released** (kicked off 2026-09-13, signed off 2026-09-13, base branch `releases/v0.144.0`,
@@ -544,136 +727,3 @@ Anti-drift — locked:
 - **⚠️ The sticky positioning is still not covered by any test, but the gap is now NARROWER than first recorded.** jsdom computes no layout, so the suite passes whether the bar pins or sits in normal flow. **⚠️ This caveat was originally written as though "unverifiable" and "unknown" were the same thing, and they are not — a cold pressure test read the ancestor chain and the stacking context from class names and found a real, shipping defect inside the gap this bullet had already declared (the mobile tab-bar collision above).** What is now verified statically: the ancestor chain `body.min-h-screen` → AppShell → `<main>` → page `<main class="flex flex-col">` carries no `overflow` other than visible, so `sticky bottom-4` resolves against the document scroller; and the bar no longer competes with the mobile tab bar. **What remains genuinely unverifiable here is only whether it LOOKS right** — one look in a real browser against a long plan, at phone width and desktop.
 - **⚠️ The cross-section drag case has no UI test, because the suite cannot reach it.** `leafOrdersMatch` comparing `label` is what makes the copy honest about section placement, but the only deferred path that changes `label` is `handleLeafDragEnd`, and this suite has **no dnd-kit simulation at all** — every existing "drag" test uses the arrow controls, which are within-section. Rather than hand-build a state no code path in the test can produce (the `v0.116.0` / `v0.117.0` failure), the gap is recorded. The within-section pending case **is** covered.
 
-## v0.139.0 - Reopened
-
-**Status: Released** (kicked off 2026-09-10, signed off 2026-09-10, base branch `releases/v0.139.0`, cut from `main` after `v0.138.0` merged as #1363 and tagged)
-
-Source: `docs/claude-findings/2026-09-10-september-checkpoint-reads.md` — the reads that came due, run at this kickoff **before** scope was proposed. **Read it first: item 1 is not a metrics chore, it is a pre-committed rule firing.**
-
-Theme: a checkpoint fired, so the thing it was watching gets reopened — and the detector that missed a deploy learns to report what it found.
-
-### ⚠️⚠️ THE `v0.72.0` RETENTION CHECKPOINT FIRED ITS KILL CRITERION
-
-**VERIFIED read-only, 2026-09-10, window 2026-08-11 (deploy) → 2026-09-09: nine learners were shown the review-commitment prompt. ZERO committed. One declined.**
-
-**⚠️ THE ZERO IS REAL, AND TWO INDEPENDENT INSTRUMENTS AGREE — this was checked first, because `v0.116.0` and `v0.117.0` both shipped events that could never fire.** `COMMITTED` and `DECLINED` are emitted from **the same line** (`review-commitment-prompt.tsx:102`, a ternary); `DECLINED` fired once, so the call site provably executes and the other branch simply never happened. Independently, `SELECT count(*) FROM users WHERE cardinality(review_days) > 0` returns **0** — **the entity table agrees with the event stream, which rules out analytics delivery loss**, the bias that made `v0.80.0` necessary.
-
-**The pre-committed rule, quoted from the row and written before the read:** *"the return-loop framing reverts to **unconfirmed** and is **reopened rather than iterated on with further nudge tuning**."*
-
-### ⚠️ OWNER OVERRIDE, RECORDED RATHER THAN SMOOTHED OVER
-
-**The owner elected to REDESIGN THE PROMPT rather than only reopen the framing — which is the "nudge tuning" the pre-committed rule names.** They were told that before choosing. It is recorded here because a pre-committed rule that is quietly stepped over stops being a rule, and the next checkpoint inherits the precedent. **The consequence: this release ships a redesign on a `n=9` signal, so it owes a checkpoint with a real denominator — see below.**
-
-**⚠️ WHY `n=9` IS SMALL BUT NOT NOTHING, STATED HONESTLY:** at nine impressions a modest true commit rate (~10%) is not excluded by chance; a high one (≥30%, P(zero) ≈ 4%) effectively is. **The redesign is therefore a bet, not a correction.**
-
-### Planned Scope
-
-1. **Instrumentation first — the redesign is unmeasurable without it, and this is NOT optional.** (a) The prompt fires **only after a successful save** (`review-commitment-prompt.tsx:96-107`), so **8 of 9 learners vanished with nothing recorded** and the funnel cannot tell *ignored* from *considered and rejected*. Add a dismiss/abandon event. (b) All 11 `DUE_CONCEPTS_DIGEST_LANDED` rows carry a **NULL `user_id`**, so the checkpoint's second metric — *"digest → first answer **among committers**"* — **was never computable**. Give the event its user.
-2. **Redesign the commitment ask** (owner decision, 2026-09-10). **⚠️ The design constraint that matters is the trigger, not the copy:** it renders on `isFirstCompletedSessionEver === true`, so it is **ONE impression per learner, ever**, asking for a weekday multi-select plus an exam date **immediately after a first session, before the learner has seen any payoff**. Nine impressions in a month is the trigger being narrow, not the copy being weak.
-3. **`scripts/check-deploys.sh` — report a confirmed drift as drift.** **VERIFIED empirically against today's live miss:** the script prints *"VERCEL: serving 98ef1955, but origin/main is 05c367c4 — BEHIND"* and then **exits 2**, which its own contract defines as *"could not check"* rather than *"drift"*. `drift=1` is set at `:63` and discarded by the `exit 2` at `:82`. **A caller reading the exit code — `/signoff`, or any CI job — sees "I could not look" when the truth is "Vercel is definitively behind."**
-
-### ⚠️ Vercel and the deploy-latency false positive — CORRECTED
-
-**⚠️⚠️ CORRECTED 2026-09-10, SAME DAY: VERCEL DID NOT MISS `v0.138.0`. It deployed `05c367c4` at 01:21:06Z, **4 minutes 24 seconds after the 01:16:42Z merge** — it was IN FLIGHT when this session checked, and the check was read as an absence. **The true record is ONE confirmed miss (`v0.136.0`), not two of three: `v0.137.0` and `v0.138.0` both auto-deployed normally.** ⚠️ **THIS IS `v0.137.0`'s OWN RULE BROKEN THE DAY AFTER IT WAS WRITTEN** — a production-state reading taken at one instant and asserted as a standing property. **⚠️ AND IT IS A REAL LESSON FOR THE DETECTOR, NOT JUST AN EMBARRASSMENT: testing for ABSENCE requires waiting past the normal deploy latency, or the test manufactures its own false positive.** Observed latency is ~2–5 minutes on both platforms. **Item 3's defect is UNAFFECTED and still real** — it was reproduced by mutation against the pre-fix script, independently of any live drift.** 
-
-**Original (wrong) reading, kept for the record:** Render auto-deployed `v0.138.0` (`dep-dah09v15efls739b7t9g`, `new_commit`, **live** 01:18:59Z); **Vercel has no Production deployment for that commit at all.** Missed `v0.136.0`, fired for `v0.137.0`, missed `v0.138.0`.
-
-**⚠️ THE CONSEQUENCE WAS COSMETIC THIS TIME AND THAT IS LUCK, NOT DESIGN:** `v0.138.0`'s only frontend change is the `package.json` bump and **no controller or `lib/api` file changed**, so there is no API-form skew of the kind that killed Your Impact in `v0.136.0`. **⚠️ THE UPSTREAM CAUSE IS NOT FIXABLE FROM THIS REPO** — transient GitHub push-event delivery loss to the Vercel GitHub App, INFERRED and unchanged from the `v0.136.0` diagnosis. **This release fixes the reporting, not the cause, and must say so.**
-
-### ⚠️ Anti-drift
-
-- ❌ **Do NOT ship item 2 without item 1.** A redesign that cannot be measured reproduces the exact position this release is in — and the read that would judge it is already blind in two places.
-- ❌ **Do NOT re-date the `v0.72.0` proximal checkpoint as though it had not fired.** It fired. The row records FIRED plus the owner override; a silent re-date would erase the only evidence the rule was overridden.
-- ❌ **Do NOT claim this release fixes the Vercel auto-deploy.** It fixes the exit contract. The cause is upstream and stays unfixed.
-- ❌ **Do NOT make `/actuator/metrics` public to make a checkpoint readable.** The `v0.134.0` row's *"externally readable"* claim is simply WRONG — `application.yaml`'s own comment says *"not permitAll … stays authenticated-only"*. **Correct the row, not the security posture.**
-- ❌ **Do NOT add a new analytics event without a fire site** — that is the `v0.116.0`/`v0.117.0` defect, and this release's own headline finding only survived scrutiny because the fire site was proven live first.
-- ❌ **No Learning Connections work** (`[CHECKPOINT — due 2026-09-19]`, denominator ONE). **No `frontend/app/onboarding` work before the `2026-09-11` read.**
-- ⚠️ **The four `FAILED` notes from `v0.138.0` are still the OWNER's to re-run** — the backend is live on `v0.138.0` as of 01:18:59Z, so that clock has started.
-
-### ⚠️ Pre-declared guards
-
-- **Item 1a:** assert the dismiss event fires on the **close/ignore path specifically** — ⚠️ a test that only asserts "some event fires" passes under the current code, which already fires on save.
-- **Item 1b:** assert the persisted `DUE_CONCEPTS_DIGEST_LANDED` row **carries a non-null `user_id`** — ⚠️ not that the client sent one; the 11 existing rows prove the gap is at persistence or auth-resolution time.
-- **Item 3:** assert **exit code 1** when Vercel is behind and `RENDER_API_KEY` is absent. ⚠️ **A test asserting only that the message is printed passes under the defect** — the message already prints today; the exit code is the whole bug.
-- **Item 2:** at least one test must exercise the trigger condition, not just render the component with `visible=true` — the trigger is the finding.
-
-### Verification tier
-
-**Three items, one of them docs-adjacent.** Items 1 and 3 are small and testable; item 2 is a frontend redesign across the five surfaces that render the prompt. **Tier: one `advisor()` call on the diff**, plus the four guards above. **⚠️ It rises to one scoped cold agent if item 2 grows a backend surface** — the `reviewCommitmentOutstanding` flag and `users.review_days` are already there, so it should not.
-
-### Routing
-
-**CODEX for items 1 and 2** — frontend across five call sites plus a backend analytics change; more than five files. **CLAUDE CODE inline for item 3** — one shell script, one exit path.
-
-### Scope completeness — each planned item against the code that implements it
-
-| # | Planned | Verdict | Evidence |
-|---|---|---|---|
-| 1 | Instrumentation first — a dismiss/abandon event, and a `user_id` on `DUE_CONCEPTS_DIGEST_LANDED` | **SHIPPED** | `REVIEW_COMMITMENT_DISMISSED` at `AnalyticsEventType:48` with **one real fire site** (`review-commitment-prompt.tsx:97`); the 401 at `AnalyticsController:28` |
-| 2 | Redesign the ask — re-showable trigger, committing becomes an upgrade | **SHIPPED, and CHANGED mid-release** | `V144`; `AuthService#isReviewCommitmentPromptEligible`; `MeController:39`; `RetentionService:51`. **⚠️ Changed twice against evidence — see below** |
-| 3 | `scripts/check-deploys.sh` reports a confirmed drift AS drift | **SHIPPED** | `scripts/check-deploys.sh` precedence block; `scripts/check-deploys.test.sh` (9 cases) |
-
-**⚠️ ITEM 2 CHANGED TWICE AFTER IT WAS SCOPED, AND BOTH REVERSALS ARE RECORDED RATHER THAN SMOOTHED INTO THE ORIGINAL PLAN.** (1) The first design re-triggered on *return after a gap*; its own query refuted it — only **7 of 136** stranded learners had returned in 14 days, so any in-app trigger tops out at 7–13/month. (2) `advisor()` then found, **before the Codex prompt was written**, that the ask had **no benefit to offer at all** — `isEligibleReviewDay` returns `true` for empty `review_days`, so choosing days *restricted* eligibility rather than granting reminders. A one-tap *"remind me"* button would have shipped as a no-op. The owner then chose to make committing genuinely mean something, and later to stop asking learners whose digest is off. **The release describes what was built, not what was first proposed.**
-
-### Shipped
-
-- **Item 1 — commitment and digest instrumentation.** Review-prompt abandonment now emits
-  `REVIEW_COMMITMENT_DISMISSED` with `exit=pagehide|unmount`, deduplicated to one dismissal per
-  impression and suppressed after either saved outcome. `DUE_CONCEPTS_DIGEST_LANDED` now requires a
-  resolved principal: an expired bearer on the otherwise-public analytics endpoint receives `401`,
-  allowing the existing analytics refresh-and-retry path to persist the landing with its `user_id`;
-  events that genuinely originate anonymously remain accepted.
-- **⚠️ THE `401` EXCEEDED THIS ITEM'S STATED CONSTRAINT AND WAS ACCEPTED ON REVIEW — recorded as an expansion, not as the plan.** The prompt said the fix *"must not delay or drop the `LANDED` event"* and *"do not make the analytics endpoint reject anonymous events"*. The delivery does both, narrowly: a new `AuthenticationRequiredException`, a new status on a `permitAll` endpoint, and a behaviour change to a shared analytics path — none of which item 1 was scoped for. **It was accepted because the diagnosis is correct and the alternative is worse** (an unattributable landing can never answer the checkpoint's question), and because the rejection is scoped to one event type with `anonymousAnalyticsEvents_remainAccepted` guarding the boundary. **The reasoning is stated so a later reader does not mistake it for what was asked.**
-- **⚠️ AND THE `401` HAS A COST THE NOTE MUST NOT OMIT: a landing whose token cannot be refreshed is now DROPPED, where it previously persisted with a NULL `user_id`.** `dueConceptsDigestLanding_withoutResolvedPrincipal_requestsAuthenticationRetry` asserts exactly that — 401 **and zero rows**. The trade is deliberate: an unattributable landing could never answer the checkpoint's question (*digest → first answer **among committers***), and the refresh-and-retry path it now reaches **already existed** at `lib/api.ts:3351` and was simply unreachable while the endpoint answered `200` to an expired bearer. **⚠️ But it changes what a landing COUNT means** — the 619-sends/11-landings ratio is not comparable across this change, and `trackAnalyticsEvent` still returns without retrying when `visibilityState === "hidden"`. **⚠️ FOR THE DISMISS EVENT THAT IS NOT AN EDGE CASE, IT IS THE COMMON PATH: abandonment fires on `pagehide`, when visibility is hidden BY DEFINITION**, so a dismissal sent with an expired token is lost **every time**, not occasionally. The `unmount` exit can still retry. **This is a known limitation of item 1's headline metric and is recorded rather than papered over** — the dismiss count is a floor, not a total.
-- **Hardened the abandonment effect against a false positive found in the audit, and pinned it with a test.** `trackDismissed` closed over `noteId`, and **four of the five call sites pass `note?.id ?? null`** — so a `null → value` transition while mounted would run the effect's **cleanup**, firing a dismissal the learner never performed, with a stale `entityId`, and latching the state machine to `dismissed` so the real abandonment could never be recorded. Today's ordering makes it unlikely (the prompt renders only after a completed session), **but that is ordering, not a guarantee.** `noteId` is now read through a ref and the effect owns an empty dep array. ⚠️ **Mutation-verified: closing over `noteId` again fails `does not report abandonment when noteId resolves while the prompt is open`, and nothing else.**
-- **The dismissal guard is discriminating, verified by mutation with the killing test named.** Deleting the `resolved` transition on save — so a saved outcome would later report as abandonment — fails **`does not report a saved decline as abandonment`** and only that test. ⚠️ **A test asserting merely that "some analytics event fires" passes under the defect**, because save already fired one; that is why this one asserts the absence after a save.
-- **The forbidden over-broad change is guarded too.** Rejecting *every* anonymous analytics event — which the prompt explicitly ruled out, since other callers legitimately have no user — fails `anonymousAnalyticsEvents_remainAccepted`.
-- **The zero first-answer result is genuine engagement data, not a dead query-string gate.** The email
-  links directly to `/notes/{noteId}/quick-review?source=due-concepts-digest`; that route renders the
-  quiz without navigation, session creation does not replace the URL, and the only legacy
-  `/study-packs/{id}` redirect copies the full query string. The answer handlers therefore still see
-  `source=due-concepts-digest`. No first-answer code changed. **⚠️ VERIFIED IN THE AUDIT RATHER THAN TAKEN ON REPORT** — the one `router.replace` on that page (`quick-review/page.tsx:396`) is the legacy `/study-packs/` → `/notes/` redirect, it sits inside an error handler, and it **explicitly copies the query string** into its target; the other two `router.push` calls are exits to `/dashboard`. **So the dead-gate hypothesis this release opened with is REFUTED, and the zero is a real product finding: 619 digests sent, 11 landings, 0 first answers.**
-- **Documented the commitment surface and its actual scheduling meaning.** `users.review_days` is
-  initially collected after a completed session, later editable in Settings, and narrows eligible
-  digest weekdays; null or empty days do not disable the digest.
-- **Item 2 — the commitment prompt is re-askable and committing is now an upgrade.** Server-owned
-  eligibility allows an unanswered learner to see the prompt after a later completed session, with a
-  14-day cooldown and a lifetime cap of three impressions. A transactional, row-locked
-  `POST /me/review-commitment/prompted` records each eligible impression without writing
-  `review_commitment_prompted_at`, which continues to mean *answered*; client `sessionStorage`
-  deduplication and the server eligibility update make the impression idempotent across remounts and
-  duplicate requests.
-- **All five completion call sites now use the same server decision.** Long Exam, Adaptive Practice,
-  Board Exam, Challenge Quiz, and Quick Review no longer pass `isFirstCompletedSessionEver` into the
-  prompt. The prompt explains the existing weekly nudge and the benefit of choosing days, keeps
-  Monday/Wednesday/Friday selected by default, and keeps the BOARD_EXAM exam-date field.
-- **⚠️ CORRECTED IN THE AUDIT: the exam date was NOT "kept optional" — it was REQUIRED, and this release makes it optional.** A BOARD_EXAM learner previously could not commit at all without supplying one (`review-commitment-prompt.tsx:121-124`, *"Choose your exam date before setting your review plan."*). That gate is now removed, because the prompt's stated purpose is review days and the release brief said the exam date must not block the primary action. **⚠️ THE CONSEQUENCE IS A WEAKER COLLECTION PATH AND IT IS NAMED HERE RATHER THAN LEFT TO BE DISCOVERED: 79 of 185 BOARD_EXAM accounts (43%) still have a NULL `exam_date`, and this prompt was one of the few places that collected it.** Fewer will now be captured. The field still renders and still saves when filled. **Mutation-verified: restoring the requirement fails `lets a BOARD_EXAM learner commit while the optional exam date is empty`, so the change is deliberate and covered rather than incidental.**
-- **⚠️ The completion gate moved from the component to its callers, which is a contract change worth stating.** The prompt used to hide itself unless `isFirstCompletedSessionEver` was true, so it was safe to render anywhere; server-owned eligibility is about the **ask**, not about whether a session just finished. All five call sites render inside a completion branch (`isComplete`, a `masteryReport`, or a `result`), **verified individually in the audit**, so behaviour is unchanged today — but a sixth call site placed outside such a branch would show the prompt on page load and burn one of three lifetime impressions. The contract is now documented at the component.
-- **Choosing review days now improves the due-concepts digest schedule without removing anyone's
-  existing digest.** Learners with null or empty `review_days` retain every-day eligibility and the
-  seven-day cooldown. Learners with chosen days remain eligible only on those weekdays and use a
-  one-day cooldown, allowing a digest on each chosen day when concepts are due. This may spread future
-  sends across the week, but it does **not** fix R1: non-committers keep the synchronized default and
-  committers can receive more messages.
-- **Mutation-verified, killing tests named — the two destructive changes this design makes available are both guarded.** Flipping `isEligibleReviewDay`'s empty case to `false` — the naive reading of *make the commitment mean something*, which would cut off **all 115 current digest recipients** — fails four tests, including a **pre-existing** one (`findDueConceptsDigestUsers_nullAndEmptyReviewDaysKeepExistingScheduleEligibility`) that was already protecting it, plus `sendDueConceptsDigestEmails_stillSendsToAnUncommittedLearner`. Making an impression stamp `review_commitment_prompted_at` — which would silently resolve **395 outstanding rows** and close the ask permanently for every one of them — fails `recordReviewCommitmentPrompted_isIdempotentAndKeepsTheCommitmentOutstanding`, and only that test.
-- **⚠️⚠️ THE SCOPED COLD AGENT CONFIRMED ALL SIX NAMED CLAIMS AND FOUND TWO DEFECTS BEYOND THEM — both are fixed here, and the second is the more serious.** This is the tier the owner re-decided for item 2, and it earned its cost.
-- **⚠️ THE PROMPT TOLD 64% OF THE USER BASE SOMETHING FALSE.** The copy asserted *"You already get a weekly nudge when concepts are due"* unconditionally, but the digest is gated on `dueConceptsDigestRemindersEnabled` **and** a verified email (`RetentionService:188`). **VERIFIED read-only: 252 of 396 accounts have that preference OFF; 255 would have seen the false line; 79 of those are otherwise prompt-eligible.** ⚠️ **And for them the whole ask is INERT — choosing days changes nothing, because no digest is sent either way.** `MeResponse` already carried the flag and the component never read it. **⚠️ OWNER DECISION, SAME DAY: DO NOT ASK WHEN THE DIGEST IS OFF.** The conditional copy was an interim fix and is gone; `dueConceptsDigestRemindersEnabled` is now part of **server** eligibility (`AuthService#isReviewCommitmentPromptEligible`), which is the same preference `RetentionService` gates the digest on. **That makes the prompt's claim true BY CONSTRUCTION rather than by wording** — the off-branch became unreachable and was deleted rather than left as dead code, because dead code is how a false claim quietly returns. The invariant is documented at both ends, with the instruction to change them together or not at all. **⚠️ THE REACH COST IS REAL AND MEASURED, NOT WAVED AWAY: the eligible pool drops from 136 to 57.** But near-term in-app reach moves by **one** learner (7 → 6), because the 79 excluded were largely not returning — and every one of them was being asked to configure something that could not affect what they receive. **All 57 who remain are email-verified**, so no further clause was needed. ⚠️ **Do not "restore reach" by dropping the clause, and do not make committing switch the preference on — that is an email-consent change and is explicitly out of scope.** Mutation-verified: dropping the clause fails `getMe_doesNotOfferTheCommitmentPromptWhenTheDigestIsOff` and `recordReviewCommitmentPrompted_doesNotCountAnImpressionWhenTheDigestIsOff`, and nothing else.
-- **⚠️ The new endpoint's CLIENT request shape was untested, which is the `v0.119.0` defect class exactly.** All five frontend suites mock `@/lib/api` wholesale, so not one line of the real request executed — no method, no headers, no body — while the repo already had **sixteen** `lib/api-*.test.ts` files establishing the pattern. `lib/api-review-commitment.test.ts` now pins it. **⚠️ THE DEMONSTRATION IS THE POINT: dropping the `Content-Type` — which makes Spring reject the request before the controller is entered — fails the new test and is MISSED by all sixteen component tests, which pass.** That is `v0.119.0` reproduced on demand.
-- **One claim was confirmed for the wrong stated reason, and the agent said so.** `POST /me/review-commitment/prompted` cannot inflate the count — but not because `findByIdForUpdate` prevents a race. Under OSIV the `UserEntity` is already managed before the lock is taken (the anti-pattern `UserRepository:66-75` documents against itself), so two concurrent impressions read the same pre-lock state and both compute the same `+1`. **It under-counts rather than over-counts**, which is safe for a cap, and is recorded so nobody later "fixes" it on a wrong mental model.
-- **⚠️⚠️ THE PRE-SIGNOFF PRESSURE TEST WAS OWED, WAS NEARLY SKIPPED, AND FOUND A CROSS-PR DEFECT — the owner asked for it before signoff, correctly.** The per-item cold agent did NOT discharge it: that one was scoped to item 2's diff and never saw item 1's code. **Items 1 and 2 both rewrote `review-commitment-prompt.tsx`**, which is precisely the interaction class `CLAUDE.md` says a diff-scoped review structurally cannot see.
-- **⚠️ THE FINDING: a dismissal could fire for a prompt nobody ever saw.** `globalThis.sessionStorage` **THROWS** — it does not return null — when site data is blocked (Chrome *block all cookies*, some embedded webviews, restricted iOS contexts), and **optional chaining guards a null storage object, not a throwing accessor.** Item 2 put that access **inside item 1's guarded block**, after `shownTrackedRef` had advanced to `"shown"` and `promptVisibleRef` to `true`, but **before `REVIEW_COMMITMENT_PROMPT_SHOWN` fires**. The outer `.catch` reset only `visible`. Net: a later pagehide/unmount emitted `REVIEW_COMMITMENT_DISMISSED` with **no matching `PROMPT_SHOWN`** — inflating the exact abandonment funnel item 1 was built to measure. ⚠️ **Neither PR's review could have caught it: one supplied the guard, the other supplied the throw.** ⚠️ **And the repo already knew** — `lib/guidance.ts:9-33` wraps every storage access in try/catch; this was the only frontend access that did not. Fixed with total accessors; **mutation-verified** — restoring the unguarded form fails `still reports the impression, and never a phantom dismissal, when storage throws`, and nothing else. **No existing test could have caught it: jsdom's `sessionStorage` never throws.**
-- **⚠️ A user-facing claim went stale on a file that appears NOWHERE in this release's diff.** `settings/page.tsx:971` still read *"A weekly reminder when concepts are due"* — false for a committed learner, who can now receive up to **seven** a week — and `:917` described only the no-days case. **`docs/features/email-preferences.md`, updated BY THIS RELEASE, points learners at that exact surface.** This is the *sweep by SURFACE, not by diff* failure `CLAUDE.md` records as having cost three releases running; it has now cost a fourth. Both strings corrected, and `retention-emails.md` now carries the standing obligation so the next cadence change sweeps the surface.
-- **⚠️ Three findings are RECORDED, NOT FIXED — deliberately, because shipping unreviewed behaviour at signoff is worse than a stated limitation.** **(a) No volume ceiling on the digest:** `resolveReengagementBudget` gates the inactivity dispatch only, so the per-learner ceiling moves 1/week → 7/week with nothing capping it. **Zero impact today (0 accounts have chosen days), so it is a forward exposure — and it compounds R1**, whose cause this release already attributed to this same producer. **(b) A below-the-fold impression burns one of three lifetime chances:** the prompt renders inside a `weakConceptsRef` block far down long result pages — challenge-quiz even has a button that *scrolls to it*, which is in-repo evidence it is off-screen. Before item 2 an unseen render cost nothing; now it permanently consumes an impression and starts a 14-day cooldown. **This corrupts the checkpoint's own denominator and is named in its clause.** **(c) `PROMPT_SHOWN` and `DISMISSED` can carry different `entityId`s** — the release's own test fixture demonstrates the mismatched pair. Analytics-only.
-- **⚠️ One overstated claim corrected rather than defended.** A code comment said the prompt's copy is true *"by construction"*. It is not: the digest audience is preference **AND** verified email **AND** active status, while eligibility checks only the preference. Three accounts today have the preference on with no verified email. Now documented as true-in-practice, not proven.
-- **⚠️ Item 3's guard is MANUAL-ONLY and the release says so rather than implying enforcement.** `scripts/check-deploys.test.sh` is referenced nowhere outside itself — **this repo has no `.github/workflows` at all** — so nothing runs it automatically. The `/signoff` change added a wait warning, not a trigger.
-- **The reach claim stays bounded by the production read.** This redesign compounds for future
-  learners by giving them more than one chance to answer. It does **not** recover the 128 already
-  stranded learners who no longer open the app; reaching them requires email work still blocked by R1.
-- **Item 3 — `scripts/check-deploys.sh` reports a confirmed drift AS drift.** The precedence is now explicit and commented: **drift > unknown > ok**. Both platforms' "cannot check" paths set a flag instead of exiting early, so neither short-circuits the other — a confirmed Vercel drift survives a missing `RENDER_API_KEY`, and a confirmed **Render** drift now survives an unreadable Vercel, which the old order could not even reach.
-- **The guard asserts the EXIT CODE, because the message was never the bug.** `scripts/check-deploys.test.sh` establishes a shell-test convention this repo did not have (no `.test.sh`, no CI workflow existed). It stubs only `gh`, `curl` and `git` on `PATH` — **`jq` stays real, because the script's `jq` filters are part of what is under test** — and covers nine exit-code cases.
-- **Mutation-verified against the pre-fix script, with the killing cases named.** Restoring the original makes exactly two cases fail: *"Vercel BEHIND + no `RENDER_API_KEY` → DRIFT"* (`exit=2 want=1`) and *"Render BEHIND + Vercel API failure → DRIFT"*. The other seven pass under both, correctly — they were never affected. ⚠️ **The failing output reproduces the real symptom verbatim**: it prints `VERCEL … BEHIND` and still exits 2. **A test asserting the message passes under the defect; that is why the guard asserts the code.**
-- **⚠️⚠️ THE MOTIVATING EXAMPLE WAS WRONG, AND THE CORRECTION IS THE MOST USEFUL THING IN THIS ITEM.** This session claimed Vercel had **missed** `v0.138.0` and had missed *"2 of the last 3 release merges"*. **Both false.** Vercel created the deployment at **01:21:06Z against a 01:16:42Z merge — 4m24s** — and Render went live at 01:18:59Z. **An in-flight deploy was read as an absence**, ~4 minutes after merge, and a release section was scoped around it before it was caught. **The true record is ONE confirmed miss (`v0.136.0`).**
-- **⚠️ That broke `v0.137.0`'s own rule the day after it was written** — *a claim about production state is a snapshot, not a fact.* An instantaneous reading was asserted as a standing property. **Recorded rather than quietly fixed, because this is the second consecutive release in which a claim reached a tracker before it was re-read.**
-- **⚠️ The generalizable lesson went into the code, not just the write-up: a test for ABSENCE must wait past the thing's normal latency or it manufactures its own false positive.** Observed auto-deploy latency is **~2–5 minutes** on both platforms. The script cannot know when you merged, so it cannot enforce the wait — **`/signoff` now states it, and the script's header explains why.**
-- **⚠️ WHAT THE 9 PASSING GUARDS DO AND DO NOT COVER, because "9 passed" invites over-reading.** Every case is **stubbed** — `gh`, `curl` and `git` are faked on `PATH`. **The drift path is verified by MUTATION under stubs and has NOT been observed against a live drift**: the one live run (`RENDER_API_KEY` absent, 2026-09-10) exercised the *unknown* path, because Vercel matched `main` by then. **No drift was manufactured in production to test it, deliberately.**
-- **⚠️ The defect itself was never contingent on the false reading.** It was reproduced by mutation under stubbed conditions, so item 3 stands exactly as scoped — but without the correction the release would have described a platform problem that does not exist.

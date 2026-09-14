@@ -20,7 +20,16 @@ class DomainContextTest {
     }
 
     @Test
-    void valuesExposeTheElevenRatifiedLabels() {
+    void fromString_roundTripsTheNewestValueAndStillRejectsUnknown() {
+        assertThat(DomainContext.fromString("basic_medical_sciences"))
+                .isEqualTo(DomainContext.BASIC_MEDICAL_SCIENCES);
+        assertThat(DomainContext.fromString("BASIC_MEDICAL_SCIENCES"))
+                .isEqualTo(DomainContext.BASIC_MEDICAL_SCIENCES);
+        assertThat(DomainContext.fromString("basic_medical_science")).isNull();
+    }
+
+    @Test
+    void valuesExposeTheTwelveRatifiedLabels() {
         assertThat(DomainContext.values()).extracting(DomainContext::getLabel).containsExactly(
                 "Engineering Mathematics",
                 "Engineering Sciences",
@@ -32,7 +41,8 @@ class DomainContextTest {
                 "Accountancy",
                 "Architectural Design",
                 "History and Theory of Architecture",
-                "Planning and Site Development"
+                "Planning and Site Development",
+                "Basic Medical Sciences"
         );
     }
 
@@ -51,7 +61,11 @@ class DomainContextTest {
             // auto-regenerate. This row is the guard: mutate the enum and this test names itself.
             "ARCHITECTURAL_DESIGN, false",
             "ARCHITECTURAL_HISTORY_AND_THEORY, false",
-            "PLANNING_AND_SITE_DEVELOPMENT, false"
+            "PLANNING_AND_SITE_DEVELOPMENT, false",
+            // v0.145.0, owner decision: false, with a discipline-specific repair keyword
+            // ("pharmacokinetic") added to QUANTITATIVE_KEYWORDS in the same release. Flipping this
+            // to true without an owner decision is irreversible per note.
+            "BASIC_MEDICAL_SCIENCES, false"
     })
     void declaresWhetherEachDomainContextIsQuantitative(DomainContext domainContext, boolean quantitative) {
         assertThat(domainContext.isQuantitative()).isEqualTo(quantitative);
