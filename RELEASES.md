@@ -2,8 +2,9 @@
 
 ## v0.145.0 - Knowledge, Not Role
 
-**Status: In Progress** (kicked off 2026-09-14, base branch `releases/v0.145.0`, cut from `main`
-after `v0.144.0` merged as #1386 and tagged — Vercel and Render both confirmed live on `22983935`.)
+**Status: Released** (kicked off 2026-09-14, signed off 2026-09-14, base branch `releases/v0.145.0`,
+cut from `main` after `v0.144.0` merged as #1386 and tagged — Vercel and Render both confirmed live
+on `22983935`. PR #1387 merged into the release branch at `94d2bbd3`.)
 
 Theme: teach the LLM authoring pipeline that a professional role belongs to *who reads* a note,
 not to the biomedical mechanism itself — closing a live mis-instruction on six production notes
@@ -143,7 +144,44 @@ save rather than erroring. Run `scripts/check-deploys.sh` after the release PR m
 
 ### Shipped
 
-_(nothing yet)_
+- **`DomainContext.BASIC_MEDICAL_SCIENCES`** (`quantitative = false`), appended after
+  `PLANNING_AND_SITE_DEVELOPMENT` — `DomainContext.java:33-39`. Curator-facing description added
+  to `DOMAIN_CONTEXT_OPTIONS` — `frontend/lib/domain-context.ts`. TypeScript union member added —
+  `frontend/lib/api.ts`.
+- **`QUANTITATIVE_KEYWORDS` widened by exactly one string, `"pharmacokinetic"`** —
+  `OpenAiLlmStudyPackService.java:179`, with a comment recording the coupling to the
+  unanchored-substring defect tracked in `ROADMAP.md`'s Backlog Index.
+- **Tests, same diff:** `DomainContextTest` (label + `@CsvSource` row + method rename + `fromString`
+  round-trip), `domain-context.test.ts` (length 12 + new-value routing assertions),
+  `OpenAiLlmStudyPackServiceTest` (keyword guard at the Quick Review tier + a negative assertion
+  that the label reaches the prompt, never a multi-program `courseProgram` string),
+  `StudyPackGenerationContextResolverTest` (new value resolves to its label, not the enum constant
+  name). Backend full suite 2373/2373, frontend 216 suites / 2402 tests, `tsc --noEmit` clean.
+- **`ADR-001-canonical-knowledge-architecture.md`** — revision-log entry (clause b) recording the
+  owner decision, plus two stale-line corrections found by re-verifying production during this
+  edit: *"three unused values"* → two now in use (`PROFESSIONAL_EDUCATION` 232, `NURSING` 46); *"41
+  programs"* → 51, ratio `12:51 = 0.235`.
+- **Doc sweep** — every place that enumerates the Domain Context taxonomy by name, whether or not it
+  was in the code diff: `docs/features/study-pack-generation.md`, `docs/features/challenge-quiz.md`
+  (the duplicated `quantitative = false` value lists), `docs/features/notes.md` (the twelve-value
+  list and count), `docs/gpt-contexts/REVIEW_SET_SHAPING_CONTEXT.md` (the curriculum-shaping
+  pipeline's own closed vocabulary — never touched by a code diff and the one place this would have
+  gone stale invisibly), `docs/gpt-contexts/GPT_CONTEXT.md` and
+  `docs/gpt-contexts/NOTES_AND_COLLECTIONS_CONTEXT.md` (both re-stamped at this signoff; the core
+  brief's own "don't propose a 12th value" line was corrected, since a 12th had just shipped).
+- **PR #1387**, merged into `releases/v0.145.0` at `94d2bbd3`.
+
+### Not shipped
+
+- **`[BLOCKED]` PPR description widening (owner decision 3).** Re-checked read-only at this
+  signoff: all three RFBT notes named in `docs/claude-plans/domain-context-ppr-validation-armB.sql`
+  still carry `domain_context IS NULL` `[PROD 2026-09-14]`, so the owner has not yet run the
+  two-arm validation. Ships as a follow-up PR into a later release if and when Arm B passes; the
+  two are independent `DomainContext.java` array entries, bundled by convenience only.
+- **`docs/features/domain-context.md`.** Not built, by decision — see the Planned Scope note above.
+- **§A9 test item 10** (a multi-program-guard test naming the new value specifically) — not added;
+  `assertGenerationReady` is value-agnostic, so it could not fail differently from existing
+  coverage. See the Planned Scope note above.
 
 ## v0.144.0 - No Backdoor Left
 
