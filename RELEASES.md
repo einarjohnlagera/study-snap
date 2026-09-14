@@ -9,6 +9,15 @@ generation attempt is still running or has failed — fixing the only generation
 ever occurred in production (7 of 7 historical failures were regenerations on notes that already had a
 complete, valid Study Pack).
 
+**Production facts, re-verified read-only at kickoff, 2026-09-14 (not carried over from the Stage 2
+plan's 2026-09-13 read):** all 7 historical `generation_failed_at IS NOT NULL` notes are `GENERATED` with
+a `DONE` pack today — fully recovered, so the defect has 7/7 historical occurrences but zero current live
+instance. Zero `study_packs` rows have an empty/null `quiz` (the Quick Review guard, D1/D5, is a latent
+fix). Zero notes are currently `GENERATING` (the stranded-generation recovery endpoint, §I, currently
+serves a population of zero). None of this changes the design — all three gaps are real and worth closing
+— but the release note is honest that it is closing gaps with no current live instance, not an active
+incident.
+
 ### Planned Scope
 
 - **Artifact-first learning availability (backend + frontend).** Derives `studyPackDone` (and, on

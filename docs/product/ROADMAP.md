@@ -12,6 +12,11 @@ Challenge Quiz, Adaptive Practice, Flashcards, Memorization, Long/Board Exam eli
 premium-exam launch, public note pages) even while the note's most recent generation attempt is still
 running or has failed, fixing the only generation-failure pattern that has ever occurred in production
 (7 of 7 historical failures were regenerations on notes that already had a complete, valid Study Pack).
+**Re-verified read-only at this kickoff, 2026-09-14** (the Stage 2 plan's own read was 2026-09-13): all 7
+are `GENERATED`/`DONE` today (fully recovered, zero current live instance of the defect); zero
+`study_packs` rows have an empty `quiz` (Quick Review guard is a latent fix); zero notes are currently
+`GENERATING` (the stranded-generation recovery endpoint currently serves a population of zero). Design
+unchanged by any of this — see `RELEASES.md` for the full framing.
 Source: `docs/claude-plans/note-visibility-learning-status-stage1.md` (Stage 1 audit, 2026-09-13) and
 `docs/claude-plans/artifact-first-learning-availability-stage2.md` (Stage 2 implementation plan,
 2026-09-13, final decision block approved by the owner at this kickoff — both untracked on disk,
