@@ -365,6 +365,7 @@ export default function QuickReviewPage() {
           challengeQuizAvailable: false,
           adaptivePracticeAvailable: false,
           studyPackDone: true,
+          generationEnqueuedAt: null,
         };
       } else {
         detail = await getNote(noteId);
