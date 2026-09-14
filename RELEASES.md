@@ -2,7 +2,7 @@
 
 ## v0.147.0 - The Escape Hatch
 
-**Status: In Progress**
+**Status: Released**
 
 Theme: a curator whose Bulk Regenerate batch expires can no longer see it start again — a permanent
 dead end from a single 404 that this release turns into a real return-to-start path.
