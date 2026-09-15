@@ -19,9 +19,13 @@ public class RetentionEmailScheduler {
 
     // The due-concepts digest dispatches DAILY and selects recipients by their chosen review days.
     // It previously rode the weekly Sunday job, which meant the day filter could only ever match one
-    // weekday: any learner whose review days omitted it was silently dropped forever. Frequency is
-    // unchanged for everyone -- dueConceptsDigestCooldownDays (7) is the throttle, so a learner still
-    // receives at most one digest a week; the daily sweep only decides WHICH day it lands on.
+    // weekday: any learner whose review days omitted it was silently dropped forever. The daily sweep
+    // only decides WHICH day a digest lands on; frequency is throttled per learner by
+    // RetentionService.dueConceptsDigestCooldownDays -- 1 day for a learner with chosen review days
+    // (isEligibleReviewDay still gates on those exact days), 6 days for a learner with none (v0.148.0:
+    // isEligibleReviewDay assigns those learners a deterministic hash-based day instead of matching
+    // every day, so they too land on one day a week; 6, not 7, only to leave slack for the day
+    // assignment shifting during the first week post-deploy without producing two sends inside 7 days).
     @Scheduled(cron = "${studysnap.retention.daily-cron:0 45 2 * * *}", zone = DISPATCH_ZONE)
     public void runDaily() {
         RetentionService.DailyRetentionDispatchSummary summary = retentionService.sendDailyEmails();
