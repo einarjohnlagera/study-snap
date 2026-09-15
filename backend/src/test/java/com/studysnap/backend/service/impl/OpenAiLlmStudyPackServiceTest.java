@@ -624,6 +624,102 @@ class OpenAiLlmStudyPackServiceTest {
         assertThat(invokeIsQuantitativeContext(context)).isTrue();
     }
 
+    // v0.148.0: proves the word-boundary anchoring on "ratio" is not a no-op. Before the fix,
+    // "corporation" tripped "ratio" as an embedded substring and this context scored quantitative;
+    // no other keyword appears in this subject/domain combination.
+    @Test
+    void isQuantitativeContext_anchoredKeywordDoesNotMatchAsEmbeddedSubstring() throws Exception {
+        StudyPackGenerationContext context = new StudyPackGenerationContext(
+                LearnerLevel.COLLEGE,
+                null,
+                "Corporation Code and Business Entities",
+                List.of(),
+                DomainContext.GENERAL_EDUCATION,
+                LearnerLevel.COLLEGE
+        );
+
+        assertThat(invokeIsQuantitativeContext(context)).isFalse();
+    }
+
+    // Companion to the above: anchoring must still match the keyword as a genuine standalone word.
+    @Test
+    void isQuantitativeContext_anchoredKeywordStillMatchesAsStandaloneWord() throws Exception {
+        StudyPackGenerationContext context = new StudyPackGenerationContext(
+                LearnerLevel.COLLEGE,
+                null,
+                "Debt to Equity Ratio in Corporate Solvency",
+                List.of(),
+                DomainContext.GENERAL_EDUCATION,
+                LearnerLevel.COLLEGE
+        );
+
+        assertThat(invokeIsQuantitativeContext(context)).isTrue();
+    }
+
+    // v0.148.0: a production sample of the flip set found ~28% of the notes anchoring would otherwise
+    // reclassify trip only on a plain plural/verb inflection of one of the 7 anchored keywords -- a
+    // bare `\bratio\b` does not match "ratios", and `\bsolve\b` does not match "solving". These are
+    // NOT a re-opening of the substring bug (see the QUANTITATIVE_KEYWORDS_ANCHORED comment for why
+    // "interest(s)?" still excludes "interested"); they are the anchored patterns catching genuine
+    // standalone words the bare stem alone would miss.
+    @Test
+    void isQuantitativeContext_anchoredKeywordMatchesPluralInflection() throws Exception {
+        StudyPackGenerationContext context = new StudyPackGenerationContext(
+                LearnerLevel.COLLEGE,
+                null,
+                "Common Stock Ratios in Business Entities",
+                List.of(),
+                DomainContext.GENERAL_EDUCATION,
+                LearnerLevel.COLLEGE
+        );
+
+        assertThat(invokeIsQuantitativeContext(context)).isTrue();
+    }
+
+    @Test
+    void isQuantitativeContext_anchoredKeywordMatchesVerbInflection() throws Exception {
+        StudyPackGenerationContext context = new StudyPackGenerationContext(
+                LearnerLevel.COLLEGE,
+                null,
+                "Solving for the Unknown Variable in Legal Case Studies",
+                List.of(),
+                DomainContext.GENERAL_EDUCATION,
+                LearnerLevel.COLLEGE
+        );
+
+        assertThat(invokeIsQuantitativeContext(context)).isTrue();
+    }
+
+    // v0.148.0: the cold-agent falsification pass found that anchoring alone would declassify
+    // Nursing/Accountancy content that reaches "quantitative" today only via this same accidental
+    // substring match -- both domains are declared quantitative=true, so losing it on regeneration
+    // would be a real regression. "nursing" and "accountancy" ship as new unanchored keywords in the
+    // same diff specifically to keep this true when domain_context is unset. The nursing case is
+    // authored via courseProgram (not subject) to mirror the production path: notes reach this scan
+    // with domain_context unset far more often via an assigned course/program than via subject text.
+    @Test
+    void isQuantitativeContext_nursingAndAccountancyKeywordsRescueUnclassifiedContent() throws Exception {
+        StudyPackGenerationContext nursingContext = new StudyPackGenerationContext(
+                LearnerLevel.COLLEGE,
+                "BS Nursing",
+                null,
+                List.of(),
+                null,
+                LearnerLevel.COLLEGE
+        );
+        StudyPackGenerationContext accountancyContext = new StudyPackGenerationContext(
+                LearnerLevel.COLLEGE,
+                null,
+                "Financial Statement Preparation in Accountancy",
+                List.of(),
+                null,
+                LearnerLevel.COLLEGE
+        );
+
+        assertThat(invokeIsQuantitativeContext(nursingContext)).isTrue();
+        assertThat(invokeIsQuantitativeContext(accountancyContext)).isTrue();
+    }
+
     @Test
     void keywordScanStillUsesCourseProgramWhenDomainContextIsNull() throws Exception {
         StudyPackGenerationContext context = new StudyPackGenerationContext(
