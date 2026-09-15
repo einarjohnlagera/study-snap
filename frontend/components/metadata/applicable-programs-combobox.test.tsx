@@ -291,7 +291,7 @@ describe("ApplicableProgramsCombobox", () => {
     render(
       <ApplicableProgramsCombobox
         id="applicable-programs-stale-cache"
-        catalog={staleCatalog as typeof catalog}
+        catalog={staleCatalog as unknown as typeof catalog}
         selectedIds={[]}
         onChange={jest.fn()}
       />,
@@ -301,22 +301,17 @@ describe("ApplicableProgramsCombobox", () => {
     expect(screen.getByRole("option", { name: "Pharmacy" })).toBeInTheDocument();
   });
 
-  it("collapses a large mobile selection until the author asks to show every chip", () => {
-    const matchMedia = jest.fn((query: string) => ({
-      matches: query === "(max-width: 639px)",
-      media: query,
-      onchange: null,
-      addListener: jest.fn(),
-      removeListener: jest.fn(),
-      addEventListener: jest.fn(),
-      removeEventListener: jest.fn(),
-      dispatchEvent: jest.fn(),
-    }));
-    Object.defineProperty(window, "matchMedia", {
-      configurable: true,
-      writable: true,
-      value: matchMedia,
-    });
+  // v0.149.0: a mobile-only collapse (initially rendered 8 of N chips, behind a "Show all" toggle) was
+  // built and shipped on an unverified "measured browser check" claim, then removed at audit -- read
+  // through the actual layout, all four consumers either sit in normal page flow (scrolling to a Save
+  // button below a tall chip row is ordinary, expected mobile behavior, not a bug) or inside `AppModal`,
+  // whose own `flex-1 overflow-y-auto` content region plus `shrink-0` actions row already guarantees the
+  // actions stay visible regardless of how much content renders above them. There is no viewport where
+  // this component needs to hide a chip to keep Save reachable, so it renders every selected program
+  // unconditionally, at any width. This test is the "no collapse" companion to the acceptance check
+  // the plan itself asked for, not a screenshot -- it can't observe wrapping, but proves the component
+  // itself imposes no artificial limit.
+  it("renders every selected program regardless of viewport width, with no artificial limit", () => {
     const largeCatalog = Array.from({ length: 18 }, (_, index) => ({
       id: `engineering-${index}`,
       name: `Engineering Program ${index + 1}`,
@@ -334,15 +329,8 @@ describe("ApplicableProgramsCombobox", () => {
       />,
     );
 
-    expect(screen.getAllByRole("button", { name: /^Remove Engineering Program/ })).toHaveLength(8);
-    const showAll = screen.getByRole("button", { name: "Show all 18 selected programs" });
-    expect(showAll).toHaveAttribute("aria-expanded", "false");
-    fireEvent.click(showAll);
     expect(screen.getAllByRole("button", { name: /^Remove Engineering Program/ })).toHaveLength(18);
-    expect(screen.getByRole("button", { name: "Show fewer selected programs" }))
-      .toHaveAttribute("aria-expanded", "true");
-
-    Reflect.deleteProperty(window, "matchMedia");
+    expect(screen.queryByRole("button", { name: /^Show all/ })).not.toBeInTheDocument();
   });
 
   it("keeps programs without a family individually selectable and renders no family affordance", () => {

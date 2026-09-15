@@ -15,10 +15,12 @@ release's code** — as of this stamp only `Engineering` (18 members) and `Educa
 actually populated in production; see `docs/claude-plans/v0.149.0-program-family-data-ops-handoff.md`
 for the exact handoff. Two falsification passes (pre-implementation on the Codex prompt,
 post-merge on the actual diff) found and closed 4 real issues, including a frontend/backend
-deploy-skew risk and a feature-doc line that overclaimed the `is_active` filter's scope. **Known
-limitation, not yet resolved:** the plan's own mobile-wrapping acceptance check for 18+ selected
-programs was never actually run against a real viewport — an 8-item collapse shipped as a judgment
-call instead. **Previously — v0.148.0 - 2026-09-15 (Released).** **`v0.148.0` shipped two small, unrelated backend
+deploy-skew risk and a feature-doc line that overclaimed the `is_active` filter's scope. **The
+8-item mobile collapse this shipped with was removed after signoff, not left as an owed check**:
+reading `AppModal`'s own layout (a `flex-1 overflow-y-auto` content region beside a `shrink-0`
+actions row) plus the ordinary page flow of the other three consumers showed the collapse solved a
+problem structurally impossible in all four real usage contexts — every selected program now renders
+unconditionally at any width. **Previously — v0.148.0 - 2026-09-15 (Released).** **`v0.148.0` shipped two small, unrelated backend
 correctness fixes.** (1) `isQuantitativeContext`'s keyword scan word-boundary-anchored 7 of
 `QUANTITATIVE_KEYWORDS`' 50 entries (`ratio`, `solve`, `current`, `interest`, `integral`, `balance`,
 `units`) that matched as embedded substrings of unrelated words (`ratio` ⊂ `corporation`, `current` ⊂

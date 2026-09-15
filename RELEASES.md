@@ -155,6 +155,21 @@ plan's complete decision block are in
   chips resolving correctly end to end, `CourseProgramNotFoundException`/`UnknownCourseProgramException`
   staying genuinely separate (4 untouched pre-existing call sites), and the update endpoint's two-read
   transaction being race-safe by construction (Postgres row-lock + MVCC, not luck).
+- **The mobile-collapse UI (above) was removed, not left as an owed check.** Reading the actual layout
+  of all four consumers (`note-editor-form.tsx`, `private-note-detail-page-client.tsx`'s inline panel,
+  `bulk-generation-page-client.tsx`, and `admin-applicable-programs-section.tsx` via `AppModal`) found
+  it solves a problem that cannot occur in any of them: three sit in ordinary page flow, where scrolling
+  to a Save button below a tall chip row is normal mobile behavior; the fourth renders inside
+  `AppModal`, whose `flex-1 overflow-y-auto` content region plus `shrink-0` actions row (`app-modal.tsx`)
+  already guarantees the actions stay visible regardless of content height — a deterministic CSS
+  property, not a guess, though still not the same as an actual device render. `MOBILE_SELECTED_PROGRAM_LIMIT`,
+  the `matchMedia` viewport listener, and the "Show all N" toggle were removed; every selected program
+  now renders unconditionally at any width, which is the `NO CHANGE — CURRENT WRAPPING ACCEPTABLE`
+  outcome the plan's own §K asked for if the check passed, arrived at by reading the layout architecture
+  rather than by measuring a screenshot. `tsc --noEmit`, the full frontend suite, and lint all re-verified
+  clean after the removal — this pass also fixed one unrelated, pre-existing TypeScript compile error in
+  the same test file (a fixture cast that needed to go through `unknown` first) that had shipped in PR
+  #1399 uncaught, since neither the pre-merge audit nor the post-merge cold agent had run `tsc --noEmit`.
 - Added migration, repository, service, real-request controller, and component coverage for lifecycle
   defaults, joined row mapping, family reassignment and clearing, endpoint errors and authorization,
   inactive candidates, and all family-chip states.

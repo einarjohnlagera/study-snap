@@ -37,8 +37,6 @@ type AvailableProgramFamily = {
   unselectedCount: number;
 };
 
-const MOBILE_SELECTED_PROGRAM_LIMIT = 8;
-
 export function ApplicableProgramsCombobox({
   id,
   catalog,
@@ -73,8 +71,6 @@ export function ApplicableProgramsCombobox({
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const [duplicateExisting, setDuplicateExisting] = useState<CourseProgramCatalogItem | null>(null);
-  const [isNarrowViewport, setIsNarrowViewport] = useState(false);
-  const [showAllSelectedPrograms, setShowAllSelectedPrograms] = useState(false);
   const mergedCatalog = useMemo(() => {
     const existingIds = new Set(catalog.map((program) => program.id));
     return [...catalog, ...createdPrograms.filter((program) => !existingIds.has(program.id))];
@@ -84,11 +80,6 @@ export function ApplicableProgramsCombobox({
     () => mergedCatalog.filter((program) => selectedIdSet.has(program.id)),
     [mergedCatalog, selectedIdSet],
   );
-  const shouldCollapseSelectedPrograms = isNarrowViewport
-    && selectedPrograms.length > MOBILE_SELECTED_PROGRAM_LIMIT;
-  const visibleSelectedPrograms = shouldCollapseSelectedPrograms && !showAllSelectedPrograms
-    ? selectedPrograms.slice(0, MOBILE_SELECTED_PROGRAM_LIMIT)
-    : selectedPrograms;
   const availablePrograms = useMemo(
     () => mergedCatalog.filter((program) => (
       !selectedIdSet.has(program.id) && program.isActive !== false
@@ -135,17 +126,6 @@ export function ApplicableProgramsCombobox({
     return Array.from(families, ([familyId, familyName]) => ({ id: familyId, name: familyName }))
       .sort((left, right) => left.name.localeCompare(right.name));
   }, [mergedCatalog]);
-
-  useEffect(() => {
-    if (typeof window.matchMedia !== "function") {
-      return;
-    }
-    const mediaQuery = window.matchMedia("(max-width: 639px)");
-    const syncViewport = () => setIsNarrowViewport(mediaQuery.matches);
-    syncViewport();
-    mediaQuery.addEventListener("change", syncViewport);
-    return () => mediaQuery.removeEventListener("change", syncViewport);
-  }, []);
 
   useEffect(() => {
     if (!canCreateCatalogProgram || normalizedDraft.length === 0 || exactCatalogMatch) {
@@ -332,7 +312,7 @@ export function ApplicableProgramsCombobox({
       ) : null}
       {!error && !loading ? (
         <div className="flex min-h-8 flex-wrap gap-2" aria-label="Selected course programs">
-          {selectedPrograms.length > 0 ? visibleSelectedPrograms.map((program) => (
+          {selectedPrograms.length > 0 ? selectedPrograms.map((program) => (
             <span
               key={program.id}
               className="inline-flex items-center gap-1 rounded-full border border-border bg-background px-2.5 py-1 text-xs text-foreground/80"
@@ -356,19 +336,6 @@ export function ApplicableProgramsCombobox({
             </span>
           )}
         </div>
-      ) : null}
-      {!error && !loading && shouldCollapseSelectedPrograms ? (
-        <Button
-          type="button"
-          size="sm"
-          variant="ghost"
-          onClick={() => setShowAllSelectedPrograms((current) => !current)}
-          aria-expanded={showAllSelectedPrograms}
-        >
-          {showAllSelectedPrograms
-            ? "Show fewer selected programs"
-            : `Show all ${selectedPrograms.length} selected programs`}
-        </Button>
       ) : null}
       {/*
         ⚠️ THIS TEXT DELIBERATELY DOES NOT EXPLAIN THE RESOLVER. It used to say "only a single program
