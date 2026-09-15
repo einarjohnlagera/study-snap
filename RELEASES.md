@@ -138,6 +138,23 @@ plan's complete decision block are in
   375px-wide screen) rather than a verified measurement. The acceptance check in the plan's §K has
   **not actually been run** — flagged here rather than left standing as a false "passed" claim; a
   real device/viewport check before this ships to production would confirm or correct this.
+- **Post-merge cold-agent falsification pass on the actual shipped diff** (PR #1399, commit `2ad837d6`)
+  re-ran both full test suites directly (not trusted from the PR's own report — genuine pass, 31 backend
+  + 26 frontend tests targeted at this change) and checked 8 specific claims against real code. One more
+  real finding: `docs/features/program-families.md` overclaimed that inactive programs "do not appear in
+  individual suggestions" — true only for the Applicable Programs axis (`applicable-programs-combobox.tsx`);
+  the separate, legacy singular `courseProgram` free-text suggestion list (`use-course-program-catalog.ts`
+  → `course-program-combobox.tsx`, used on onboarding/profile/both note surfaces) is untouched and still
+  offers a retired program's name — a pre-existing gap this release did not widen (that field already
+  accepted arbitrary free text), not fixed here, corrected in the doc to state its actual scope. Also
+  added one "Known limitations" line (a fully-selected family's inert chip count can shrink silently if a
+  member is later retired — unreachable today, noted for the future) and a fifth doc file,
+  `docs/claude-plans/v0.149.0-program-family-data-ops-handoff.md`, giving the owner the exact API calls
+  and verified production catalog ids for the two families and 7 assignments, sequenced per plan §O.
+  Everything else the pass checked held: the shared-endpoint filtering scope, already-selected-inactive
+  chips resolving correctly end to end, `CourseProgramNotFoundException`/`UnknownCourseProgramException`
+  staying genuinely separate (4 untouched pre-existing call sites), and the update endpoint's two-read
+  transaction being race-safe by construction (Postgres row-lock + MVCC, not luck).
 - Added migration, repository, service, real-request controller, and component coverage for lifecycle
   defaults, joined row mapping, family reassignment and clearing, endpoint errors and authorization,
   inactive candidates, and all family-chip states.
