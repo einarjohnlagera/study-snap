@@ -20,11 +20,23 @@ public class CourseProgramCatalogRepository {
             SELECT course_programs.id,
                    course_programs.name,
                    program_families.id AS program_family_id,
-                   program_families.name AS program_family_name
+                   program_families.name AS program_family_name,
+                   course_programs.is_active
             FROM course_programs
             LEFT JOIN program_families
               ON program_families.id = course_programs.program_family_id
             ORDER BY course_programs.name
+            """;
+    private static final String FIND_BY_ID = """
+            SELECT course_programs.id,
+                   course_programs.name,
+                   program_families.id AS program_family_id,
+                   program_families.name AS program_family_name,
+                   course_programs.is_active
+            FROM course_programs
+            LEFT JOIN program_families
+              ON program_families.id = course_programs.program_family_id
+            WHERE course_programs.id = ?
             """;
     private static final String FIND_ID_BY_NAME = """
             SELECT id
@@ -41,7 +53,8 @@ public class CourseProgramCatalogRepository {
             SELECT course_programs.id,
                    course_programs.name,
                    program_families.id AS program_family_id,
-                   program_families.name AS program_family_name
+                   program_families.name AS program_family_name,
+                   course_programs.is_active
             FROM course_programs
             LEFT JOIN program_families
               ON program_families.id = course_programs.program_family_id
@@ -52,7 +65,8 @@ public class CourseProgramCatalogRepository {
             SELECT course_programs.id,
                    course_programs.name,
                    program_families.id AS program_family_id,
-                   program_families.name AS program_family_name
+                   program_families.name AS program_family_name,
+                   course_programs.is_active
             FROM course_programs
             LEFT JOIN program_families
               ON program_families.id = course_programs.program_family_id
@@ -86,6 +100,11 @@ public class CourseProgramCatalogRepository {
             INSERT INTO program_families (id, name)
             VALUES (?, ?)
             """;
+    private static final String UPDATE_PROGRAM_FAMILY = """
+            UPDATE course_programs
+            SET program_family_id = ?
+            WHERE id = ?
+            """;
 
     private final JdbcTemplate jdbcTemplate;
 
@@ -95,6 +114,12 @@ public class CourseProgramCatalogRepository {
 
     public List<CourseProgramCatalogItemResponse> findAll() {
         return jdbcTemplate.query(FIND_ALL, this::mapCatalogItem);
+    }
+
+    public Optional<CourseProgramCatalogItemResponse> findById(UUID id) {
+        return jdbcTemplate.query(FIND_BY_ID, this::mapCatalogItem, id)
+                .stream()
+                .findFirst();
     }
 
     public Optional<CourseProgramCatalogItemResponse> findByNormalizedName(String normalizedName) {
@@ -145,7 +170,11 @@ public class CourseProgramCatalogRepository {
     ) {
         UUID id = UUID.randomUUID();
         jdbcTemplate.update(INSERT, id, name, programFamilyId, examGoalSlug);
-        return new CourseProgramCatalogItemResponse(id, name, programFamilyId, programFamilyName);
+        return new CourseProgramCatalogItemResponse(id, name, programFamilyId, programFamilyName, true);
+    }
+
+    public void updateProgramFamily(UUID id, UUID programFamilyId) {
+        jdbcTemplate.update(UPDATE_PROGRAM_FAMILY, programFamilyId, id);
     }
 
     public Optional<UUID> resolveIdForLegacyName(String courseProgram) {
@@ -188,7 +217,8 @@ public class CourseProgramCatalogRepository {
                 resultSet.getObject("id", UUID.class),
                 resultSet.getString("name"),
                 resultSet.getObject("program_family_id", UUID.class),
-                resultSet.getString("program_family_name")
+                resultSet.getString("program_family_name"),
+                resultSet.getBoolean("is_active")
         );
     }
 }

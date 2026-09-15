@@ -1827,6 +1827,7 @@ export type CourseProgramCatalogItem = {
   name: string;
   programFamilyId: string | null;
   programFamilyName: string | null;
+  isActive: boolean;
 };
 
 export type ProgramFamily = {
@@ -5868,9 +5869,15 @@ function parseCourseProgramCatalogItem(payload: unknown, fallbackMessage: string
     || (payload.programFamilyId !== null && typeof payload.programFamilyId !== "string")
     || !("programFamilyName" in payload)
     || (payload.programFamilyName !== null && typeof payload.programFamilyName !== "string")
+    || ("isActive" in payload && typeof payload.isActive !== "boolean")
   ) {
     throw new Error(fallbackMessage);
   }
+  // `isActive` is intentionally NOT required here: during the deploy window between merge and both
+  // platforms finishing their independent rollouts, this frontend can reach a backend that hasn't yet
+  // run the is_active migration and so never sends the field at all. Every consumer of this field
+  // already treats it as active via `!== false` / `=== false` checks, so a missing field degrades to
+  // "active" (the correct default) instead of failing the whole catalog load.
   return payload as CourseProgramCatalogItem;
 }
 

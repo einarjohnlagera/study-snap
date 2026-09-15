@@ -47,8 +47,8 @@ describe("LightweightProfileCompletionPrompt", () => {
     (updateLearningProfileContext as jest.Mock).mockResolvedValue(completedProfile);
     (completeOnboarding as jest.Mock).mockResolvedValue(completedProfile);
     (getCourseProgramCatalog as jest.Mock).mockResolvedValue([
-      { id: "program-pharmacy", name: "Pharmacy", programFamilyId: null, programFamilyName: null },
-      { id: "program-nursing", name: "Nursing", programFamilyId: null, programFamilyName: null },
+      { id: "program-pharmacy", name: "Pharmacy", programFamilyId: null, programFamilyName: null, isActive: true },
+      { id: "program-nursing", name: "Nursing", programFamilyId: null, programFamilyName: null, isActive: true },
     ]);
     (trackAnalyticsEvent as jest.Mock).mockResolvedValue(undefined);
   });

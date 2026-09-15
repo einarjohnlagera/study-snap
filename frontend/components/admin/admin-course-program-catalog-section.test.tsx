@@ -21,7 +21,7 @@ jest.mock("@/lib/api", () => ({
   listProgramFamilies: jest.fn(),
 }));
 
-const civil = { id: "program-a", name: "Civil Engineering", programFamilyId: "family-engineering", programFamilyName: "Engineering" };
+const civil = { id: "program-a", name: "Civil Engineering", programFamilyId: "family-engineering", programFamilyName: "Engineering", isActive: true };
 
 describe("AdminCourseProgramCatalogSection", () => {
   beforeEach(() => {
@@ -90,7 +90,7 @@ describe("AdminCourseProgramCatalogSection", () => {
   });
 
   it("creates a program and adds it to the list without refetching", async () => {
-    const created = { id: "program-new", name: "Chemical Engineering", programFamilyId: "family-engineering", programFamilyName: "Engineering" };
+    const created = { id: "program-new", name: "Chemical Engineering", programFamilyId: "family-engineering", programFamilyName: "Engineering", isActive: true };
     (createCourseProgram as jest.Mock).mockResolvedValue(created);
     render(<AdminCourseProgramCatalogSection />);
     await screen.findByText("Civil Engineering");

@@ -13,9 +13,9 @@ jest.mock("@/lib/api", () => ({
 }));
 
 const catalog = [
-  { id: "program-a", name: "Civil Engineering", programFamilyId: "family-engineering", programFamilyName: "Engineering" },
-  { id: "program-b", name: "Mechanical Engineering", programFamilyId: "family-engineering", programFamilyName: "Engineering" },
-  { id: "program-c", name: "Electrical Engineering", programFamilyId: "family-engineering", programFamilyName: "Engineering" },
+  { id: "program-a", name: "Civil Engineering", programFamilyId: "family-engineering", programFamilyName: "Engineering", isActive: true },
+  { id: "program-b", name: "Mechanical Engineering", programFamilyId: "family-engineering", programFamilyName: "Engineering", isActive: true },
+  { id: "program-c", name: "Electrical Engineering", programFamilyId: "family-engineering", programFamilyName: "Engineering", isActive: true },
 ];
 
 describe("AdminApplicableProgramsSection", () => {
@@ -79,7 +79,7 @@ describe("AdminApplicableProgramsSection", () => {
     await screen.findByText("Engineering Algebra");
     fireEvent.click(screen.getByRole("button", { name: "Edit" }));
     expect(screen.getByText(/Applicable Programs determine where this note applies and is discoverable/)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Add all 2 Engineering programs" }));
+    fireEvent.click(screen.getByRole("button", { name: "Engineering · 2 remaining" }));
     fireEvent.click(screen.getByRole("button", { name: "Remove Mechanical Engineering" }));
     fireEvent.click(screen.getByRole("button", { name: "Save Applicable Programs" }));
 
@@ -99,7 +99,7 @@ describe("AdminApplicableProgramsSection", () => {
 
     await screen.findByText("Engineering Algebra");
     fireEvent.click(screen.getByRole("button", { name: "Edit" }));
-    fireEvent.click(screen.getByRole("button", { name: "Add all 2 Engineering programs" }));
+    fireEvent.click(screen.getByRole("button", { name: "Engineering · 2 remaining" }));
     fireEvent.click(screen.getByRole("button", { name: "Save Applicable Programs" }));
 
     expect(await screen.findAllByText("Save failed")).not.toHaveLength(0);
@@ -131,7 +131,7 @@ describe("AdminApplicableProgramsSection", () => {
 
     await screen.findByText("Engineering Algebra");
     fireEvent.click(screen.getByRole("button", { name: "Edit" }));
-    fireEvent.click(screen.getByRole("button", { name: "Add all 2 Engineering programs" }));
+    fireEvent.click(screen.getByRole("button", { name: "Engineering · 2 remaining" }));
     fireEvent.click(screen.getByRole("button", { name: "Save Applicable Programs" }));
 
     await waitFor(() => expect(replaceNoteApplicablePrograms).toHaveBeenCalledWith(

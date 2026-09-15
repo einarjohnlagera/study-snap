@@ -645,7 +645,7 @@ export function BulkGenerationPageClient() {
                 <p className="text-xs text-foreground/60">
                   {courseProgramIds.length > 1
                     ? "You've added more than one program. Choose the academic domain this note should be written in — it shapes how the note is written, while the programs decide who finds it."
-                    : "Required when this note applies to more than one program."}
+                    : "Needed before you can generate a Study Pack for a note in more than one program."}
                 </p>
               </div>
             ) : null}

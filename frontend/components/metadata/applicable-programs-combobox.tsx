@@ -37,6 +37,8 @@ type AvailableProgramFamily = {
   unselectedCount: number;
 };
 
+const MOBILE_SELECTED_PROGRAM_LIMIT = 8;
+
 export function ApplicableProgramsCombobox({
   id,
   catalog,
@@ -71,6 +73,8 @@ export function ApplicableProgramsCombobox({
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const [duplicateExisting, setDuplicateExisting] = useState<CourseProgramCatalogItem | null>(null);
+  const [isNarrowViewport, setIsNarrowViewport] = useState(false);
+  const [showAllSelectedPrograms, setShowAllSelectedPrograms] = useState(false);
   const mergedCatalog = useMemo(() => {
     const existingIds = new Set(catalog.map((program) => program.id));
     return [...catalog, ...createdPrograms.filter((program) => !existingIds.has(program.id))];
@@ -80,15 +84,22 @@ export function ApplicableProgramsCombobox({
     () => mergedCatalog.filter((program) => selectedIdSet.has(program.id)),
     [mergedCatalog, selectedIdSet],
   );
+  const shouldCollapseSelectedPrograms = isNarrowViewport
+    && selectedPrograms.length > MOBILE_SELECTED_PROGRAM_LIMIT;
+  const visibleSelectedPrograms = shouldCollapseSelectedPrograms && !showAllSelectedPrograms
+    ? selectedPrograms.slice(0, MOBILE_SELECTED_PROGRAM_LIMIT)
+    : selectedPrograms;
   const availablePrograms = useMemo(
-    () => mergedCatalog.filter((program) => !selectedIdSet.has(program.id)),
+    () => mergedCatalog.filter((program) => (
+      !selectedIdSet.has(program.id) && program.isActive !== false
+    )),
     [mergedCatalog, selectedIdSet],
   );
   const availableProgramFamilies = useMemo(() => {
     const families = new Map<string, Omit<AvailableProgramFamily, "unselectedCount">>();
 
     mergedCatalog.forEach((program) => {
-      if (!program.programFamilyId || !program.programFamilyName) {
+      if (!program.programFamilyId || !program.programFamilyName || program.isActive === false) {
         return;
       }
       const family = families.get(program.programFamilyId);
@@ -107,8 +118,7 @@ export function ApplicableProgramsCombobox({
       .map((family) => ({
         ...family,
         unselectedCount: family.memberIds.filter((id) => !selectedIdSet.has(id)).length,
-      }))
-      .filter((family) => family.unselectedCount > 0);
+      }));
   }, [mergedCatalog, selectedIdSet]);
   const controlDisabled = disabled || loading || Boolean(error);
   const normalizedDraft = selectionDraft.trim().replaceAll(/\s+/g, " ").toLowerCase();
@@ -127,6 +137,17 @@ export function ApplicableProgramsCombobox({
   }, [mergedCatalog]);
 
   useEffect(() => {
+    if (typeof window.matchMedia !== "function") {
+      return;
+    }
+    const mediaQuery = window.matchMedia("(max-width: 639px)");
+    const syncViewport = () => setIsNarrowViewport(mediaQuery.matches);
+    syncViewport();
+    mediaQuery.addEventListener("change", syncViewport);
+    return () => mediaQuery.removeEventListener("change", syncViewport);
+  }, []);
+
+  useEffect(() => {
     if (!canCreateCatalogProgram || normalizedDraft.length === 0 || exactCatalogMatch) {
       setNearMatches([]);
       setCheckingNearMatches(false);
@@ -137,7 +158,7 @@ export function ApplicableProgramsCombobox({
     const timeoutId = globalThis.setTimeout(() => {
       void findSimilarCoursePrograms(selectionDraft.trim())
         .then((matches) => {
-          if (active) setNearMatches(matches);
+          if (active) setNearMatches(matches.filter((program) => program.isActive !== false));
         })
         .catch(() => {
           if (active) setNearMatches([]);
@@ -163,7 +184,7 @@ export function ApplicableProgramsCombobox({
   };
 
   const selectProgram = (program: CourseProgramCatalogItem) => {
-    if (!selectedIdSet.has(program.id)) {
+    if (!selectedIdSet.has(program.id) && program.isActive !== false) {
       onChange([...selectedIds, program.id]);
     }
     setSelectionDraft("");
@@ -194,9 +215,10 @@ export function ApplicableProgramsCombobox({
           program.name.trim().replaceAll(/\s+/g, " ").toLowerCase() === normalizedDraft
           || program.name === creationError.details
         )) ?? nearMatches.find((program) => program.name === creationError.details);
-        setDuplicateExisting(existing ?? null);
-        setCreateError(existing
-          ? `“${existing.name}” already exists. Select the existing program instead.`
+        const selectableExisting = existing?.isActive === false ? null : existing;
+        setDuplicateExisting(selectableExisting ?? null);
+        setCreateError(selectableExisting
+          ? `“${selectableExisting.name}” already exists. Select the existing program instead.`
           : creationError.message);
       } else {
         setCreateError(creationError instanceof Error
@@ -279,22 +301,38 @@ export function ApplicableProgramsCombobox({
       ) : null}
       {!controlDisabled && availableProgramFamilies.length > 0 ? (
         <div className="flex flex-wrap gap-2" aria-label="Program family shortcuts">
-          {availableProgramFamilies.map((family) => (
-            <Button
-              key={family.id}
-              type="button"
-              size="sm"
-              variant="outline"
-              onClick={() => handleFamilyExpansion(family.memberIds)}
-            >
-              Add all {family.unselectedCount} {family.name} {family.unselectedCount === 1 ? "program" : "programs"}
-            </Button>
-          ))}
+          {availableProgramFamilies.map((family) => {
+            if (family.unselectedCount === 0) {
+              return (
+                <span
+                  key={family.id}
+                  aria-label={`${family.name} — all ${family.memberIds.length} programs added`}
+                  className="inline-flex h-9 items-center rounded-md border border-border bg-muted px-3 text-sm text-foreground/70"
+                >
+                  ✓ {family.name} · {family.memberIds.length}
+                </span>
+              );
+            }
+            const noneSelected = family.unselectedCount === family.memberIds.length;
+            return (
+              <Button
+                key={family.id}
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => handleFamilyExpansion(family.memberIds)}
+              >
+                {family.name} · {noneSelected
+                  ? family.memberIds.length
+                  : `${family.unselectedCount} remaining`}
+              </Button>
+            );
+          })}
         </div>
       ) : null}
       {!error && !loading ? (
         <div className="flex min-h-8 flex-wrap gap-2" aria-label="Selected course programs">
-          {selectedPrograms.length > 0 ? selectedPrograms.map((program) => (
+          {selectedPrograms.length > 0 ? visibleSelectedPrograms.map((program) => (
             <span
               key={program.id}
               className="inline-flex items-center gap-1 rounded-full border border-border bg-background px-2.5 py-1 text-xs text-foreground/80"
@@ -318,6 +356,19 @@ export function ApplicableProgramsCombobox({
             </span>
           )}
         </div>
+      ) : null}
+      {!error && !loading && shouldCollapseSelectedPrograms ? (
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          onClick={() => setShowAllSelectedPrograms((current) => !current)}
+          aria-expanded={showAllSelectedPrograms}
+        >
+          {showAllSelectedPrograms
+            ? "Show fewer selected programs"
+            : `Show all ${selectedPrograms.length} selected programs`}
+        </Button>
       ) : null}
       {/*
         ⚠️ THIS TEXT DELIBERATELY DOES NOT EXPLAIN THE RESOLVER. It used to say "only a single program

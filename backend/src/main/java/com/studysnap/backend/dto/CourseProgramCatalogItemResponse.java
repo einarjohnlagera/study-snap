@@ -6,6 +6,7 @@ public record CourseProgramCatalogItemResponse(
         UUID id,
         String name,
         UUID programFamilyId,
-        String programFamilyName
+        String programFamilyName,
+        boolean isActive
 ) {
 }
