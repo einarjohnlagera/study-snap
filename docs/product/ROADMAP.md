@@ -6,35 +6,39 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-**Kicked off 2026-09-15.** `v0.149.0 — Precision Before Coverage` is **In Progress**. Source:
-`docs/claude-plans/program-family-health-accounting-expansion-final-plan.md` (FINAL, Product
-UX-approved, tightening pass 2 of 2, untracked on disk — indexed in the Backlog Index below).
-Ships two new Program Family shortcuts (Health Sciences: Nursing/Medicine/Pharmacy, LOCKED per
-Product UX; Accounting: Accountancy/Management Accounting/Accounting Information Systems/Internal
-Auditing, Business Administration explicitly excluded on a ~22%-overlap curriculum-structure
-argument the plan itself flags as external domain knowledge, not a verifiable row) on the existing
-generic `program_families` mechanism (same one Engineering and Education already use — no new
-abstraction). Adds the admin capability that mechanism was missing: `PATCH
-/course-program-catalog/{id}` to reassign an existing catalog program's family (none existed
-before), and an `is_active` lifecycle column on `course_programs` (reusing the
-`discount_vouchers`/`quiz_share_links` convention) to retire the two legacy fused rows ("Nursing ·
-Medicine", "Nursing · Pharmacy") from new authoring without a frontend denylist — **the column-add
-migration and the 2-row backfill ship as separate steps, the backfill gated on confirming Health
-Sciences is actually populated in production first**, so a curator is never stranded between losing
-the fused shortcut and gaining its replacement. Frontend: `applicable-programs-combobox.tsx`'s
-family buttons become compact chips (`Family · N` / `Family · N remaining` / inert `✓ Family · N`
-when full) — `availableProgramFamilies`/`handleFamilyExpansion` untouched, already
-family-count-agnostic. Out of scope, flagged rather than folded in: Finance as a Course/Program
-(deferred to CPALE curation, trigger likely to fire soon per the plan's §G); the CPALE TSV's own
-`applicable_programs` under-tagging (`Accountancy` on all 359 rows) and several RFBT titles baking
-"Accountancy"/"Business Law" into title text (a Note Title doctrine violation) — both curriculum-
-content issues for the strategist pipeline, not this release. **Routing: Codex** (backend migration
-+ new endpoint + frontend together). **Verification tier: at minimum one scoped cold agent,
-falsification-framed** — an ADMIN-only mutation endpoint with no prior tests to anchor against, a
-lifecycle column consumed by two different list paths where filtering the wrong one hides inactive
-rows from the admin screen meant to manage them, and the Business Administration exclusion is the
-plan's own flagged external-domain-knowledge call; re-decide once the actual diff exists. Full scope
-in `RELEASES.md`.
+**Kicked off 2026-09-15, signed off 2026-09-15.** `v0.149.0 — Precision Before Coverage` is
+**Released**. Source: `docs/claude-plans/program-family-health-accounting-expansion-final-plan.md`
+(FINAL, Product UX-approved, tightening pass 2 of 2). Ships the mechanism for two new Program Family
+shortcuts (Health Sciences: Nursing/Medicine/Pharmacy, LOCKED per Product UX; Accounting:
+Accountancy/Management Accounting/Accounting Information Systems/Internal Auditing, Business
+Administration explicitly excluded on a ~22%-overlap curriculum-structure argument the plan itself
+flags as external domain knowledge, not a verifiable row) on the existing generic `program_families`
+mechanism (same one Engineering and Education already use — no new abstraction). **PR #1399**
+(`feat/v0.149.0-program-family-expansion`, merged `2ad837d6`): the admin capability
+that mechanism was missing, `PATCH /course-program-catalog/{id}` to reassign an existing catalog
+program's family (confirmed none existed before), and an `is_active` lifecycle column on
+`course_programs` (`V145`, additive-only, no backfill) to retire the two legacy fused rows ("Nursing
+· Medicine", "Nursing · Pharmacy") from new authoring later, without a frontend denylist. Frontend:
+`applicable-programs-combobox.tsx`'s family buttons became compact chips (`Family · N` /
+`Family · N remaining` / inert `✓ Family · N` when full). **Two rounds of falsification found and
+closed 4 real issues before/after merge**: (pre-merge) a frontend/backend deploy-skew risk from
+strict `isActive` parsing, an import-ordering fix, and a fabricated-sounding "measured browser
+check" claim with specific pixel coordinates that no tool in this environment could have produced;
+(post-merge, cold agent on the actual shipped diff) `docs/features/program-families.md` overclaimed
+the `is_active` filter's scope — it only covers the Applicable Programs axis, not the separate
+legacy `courseProgram` free-text suggestion list, a pre-existing gap this release didn't widen.
+**Data operations are owner-run, not code**: the 2 families, 7 assignments, and the gated fused-row
+retirement have exact API calls and verified production catalog ids in
+`docs/claude-plans/v0.149.0-program-family-data-ops-handoff.md`, sequenced per the plan's §O.
+**⚠️ Known limitation, stated rather than silently accepted: the plan's own §K mobile-wrapping
+acceptance check (18 selected programs at 375px) was never actually run** — an 8-item collapse
+shipped as a judgment call instead, and a real device/viewport check remains owed. Out of scope,
+flagged rather than folded in: Finance as a Course/Program (deferred to CPALE curation); the CPALE
+TSV's `applicable_programs` under-tagging and RFBT titles baking "Accountancy"/"Business Law" into
+title text — both curriculum-content issues for the strategist pipeline, flagged to the owner
+separately. **Verification tier delivered: one scoped cold agent, falsification-framed, run twice**
+(once on the Codex prompt before implementation, once on the merged diff after) — both rounds found
+real, fixed issues, matching the tier the release declared at kickoff. Full scope in `RELEASES.md`.
 
 **Kicked off 2026-09-15, signed off 2026-09-15.** `v0.148.0 — Say What You Mean` is **Released**. Scope:
 two small, unrelated backend correctness fixes. **Item 1** (PR #1396, `OpenAiLlmStudyPackService.java`)

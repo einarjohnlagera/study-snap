@@ -3,7 +3,22 @@
 > **This is the core brief. Paste it as your first message in a new GPT chat session.**
 > Then paste any module below that matches the conversation — see "Which modules to paste".
 > Update this file whenever a new version ships or the roadmap shifts significantly.
-> Last updated: v0.148.0 - 2026-09-15 (Released). **`v0.148.0` shipped two small, unrelated backend
+> Last updated: v0.149.0 - 2026-09-15 (Released). **`v0.149.0` shipped the admin mechanism for two new
+Program Family shortcuts** — `PATCH /course-program-catalog/{id}` (reassign an existing catalog
+program's family; no such endpoint existed before) and an `is_active` lifecycle column on
+`course_programs` to retire a catalog program from new authoring without deleting it. Health Sciences
+(Nursing, Medicine, Pharmacy) and Accounting (Accountancy, Management Accounting, Accounting
+Information Systems, Internal Auditing — Business Administration explicitly excluded) are the two new
+families this unlocks, decided from CPALE curriculum structure rather than the 35-note bulk-tagging
+action that prompted the release. **Populating them is an owner-run post-deploy step, not part of this
+release's code** — as of this stamp only `Engineering` (18 members) and `Education` (8 members) are
+actually populated in production; see `docs/claude-plans/v0.149.0-program-family-data-ops-handoff.md`
+for the exact handoff. Two falsification passes (pre-implementation on the Codex prompt,
+post-merge on the actual diff) found and closed 4 real issues, including a frontend/backend
+deploy-skew risk and a feature-doc line that overclaimed the `is_active` filter's scope. **Known
+limitation, not yet resolved:** the plan's own mobile-wrapping acceptance check for 18+ selected
+programs was never actually run against a real viewport — an 8-item collapse shipped as a judgment
+call instead. **Previously — v0.148.0 - 2026-09-15 (Released).** **`v0.148.0` shipped two small, unrelated backend
 correctness fixes.** (1) `isQuantitativeContext`'s keyword scan word-boundary-anchored 7 of
 `QUANTITATIVE_KEYWORDS`' 50 entries (`ratio`, `solve`, `current`, `interest`, `integral`, `balance`,
 `units`) that matched as embedded substrings of unrelated words (`ratio` ⊂ `corporation`, `current` ⊂

@@ -2,7 +2,7 @@
 
 ## v0.149.0 - Precision Before Coverage
 
-**Status: In Progress**
+**Status: Released**
 
 Theme: two new Program Family shortcuts for curators (Health Sciences, Accounting), built on the
 existing generic family mechanism, plus the admin capability and legacy-catalog cleanup needed to
