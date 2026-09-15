@@ -3,7 +3,13 @@
 > **This is the core brief. Paste it as your first message in a new GPT chat session.**
 > Then paste any module below that matches the conversation — see "Which modules to paste".
 > Update this file whenever a new version ships or the roadmap shifts significantly.
-> Last updated: v0.146.0 - 2026-09-14 (Released). **`v0.146.0` made every learning action (Quick
+> Last updated: v0.147.0 - 2026-09-14 (Released). **`v0.147.0` fixed the Bulk Regenerate modal
+permanently wedging when its batch id expired or was unknown: an expired receipt 404s, but the poll
+swallowed that failure and kept polling forever with no way back to the start screen short of clearing
+browser storage. The poll now treats a 404 as terminal (stop, clear the stuck id, show the server's own
+message) and a new "Start a new batch" action gives an explicit way out independent of the poll. Frontend
+only, no migration, no backend change. **Previously — v0.146.0 - 2026-09-14 (Released).** **`v0.146.0`
+made every learning action (Quick
 Review, Challenge Quiz, Adaptive Practice, Flashcards, Memorization, Long/Board Exam eligibility,
 Review Set premium-exam launch, public note pages) derive availability from the Study Pack's own
 artifacts instead of the Note's generation lifecycle — a note whose regeneration is running or has

@@ -1,5 +1,51 @@
 # RELEASES.md - NoteLib
 
+## v0.147.0 - The Escape Hatch
+
+**Status: Released**
+
+Theme: a curator whose Bulk Regenerate batch expires can no longer see it start again — a permanent
+dead end from a single 404 that this release turns into a real return-to-start path.
+
+### Planned Scope
+
+- **Bulk Regenerate stuck-batch fix (frontend).** `bulk-regenerate-modal.tsx` seeds `batchId` from
+  `sessionStorage` with no TTL awareness. Receipts expire 24h after creation
+  (`NoteBulkRegenerationReceiptService.RECEIPT_TTL_HOURS`); an expired or unknown batch id 404s at
+  `NoteBulkRegenerationReceiptService:55` (deliberately indistinguishable from "not yours"). The poll's
+  `catch {}` swallows every failure including that 404, and the stop condition requires a `200`
+  (`finished`/`stale`), so the poll runs forever at its 3s cadence while the stored `batchId` keeps the
+  preflight (start) view permanently hidden behind the progress view. **Leg A** discriminates the 404 as
+  terminal — stop polling, clear the stored id, return to preflight, surface the backend's own message
+  ("That regeneration batch is no longer available.") rather than inventing new copy. **Leg B** adds an
+  explicit "start a new batch" / dismiss action that clears the stored id independent of the poll, so a
+  curator is never dependent on the poll noticing anything to escape a stuck view. Source:
+  `docs/claude-findings/2026-09-12-bulk-regeneration-modal-wedged-stale-batch-id.md` (finding) and
+  `docs/claude-plans/2026-09-12-bulk-regeneration-404-terminal-state-fix-plan.md` (fix plan), both
+  untracked on disk, indexed in `ROADMAP.md`'s Backlog Index.
+
+Anti-drift: do NOT extend the 24h receipt TTL (deliberate retention choice — a longer TTL only moves the
+threshold and leaves the wedge intact past it). Do NOT remove `sessionStorage` persistence (deliberate —
+it lets a curator navigate away and return to a running batch). Do NOT make the poll's `catch` rethrow
+everything — a transient non-404 failure must still be swallowed and retried, only a 404 is terminal. Do
+NOT change the 404 contract's indistinguishable unknown/not-yours/expired semantics, and do NOT add a
+distinguishable "expired" status — that would leak batch existence to a non-owner. Do NOT touch
+`queueBatch`'s write-before-return ordering (`NoteBulkRegenerationService.java:238-243`) — it is what
+makes "no rows" a reliable diagnostic elsewhere. Do NOT fold in the unrelated `INVALID_REFRESH_TOKEN` 401
+finding — unproven relation, would change the verification tier. A1 alone (discriminate on 404 status),
+not A1+A2 (a retry-count bound) — the bound would address a different, unconfirmed failure mode. No
+backend change, no migration, no new endpoint — routing is Claude Code inline (frontend only, one file,
+clear root cause), verification tier is one `advisor()` call.
+
+### Shipped
+
+- **Bulk Regenerate stuck-batch fix (frontend).** `frontend/components/library/bulk-regenerate-modal.tsx`
+  — Leg A discriminates a 404 on the receipt poll as terminal (stops polling, clears the stored batch id,
+  returns to preflight with the server's own message); Leg B adds a "Start a new batch" action that does
+  the same reset independent of the poll. `docs/features/bulk-regeneration.md` updated.
+
+---
+
 ## v0.146.0 - Knowledge, Not Lost
 
 **Status: Released** (kicked off 2026-09-14, signed off 2026-09-14, base branch `releases/v0.146.0`,
@@ -655,85 +701,3 @@ Full backend suite (2,361 tests, incl. the Postgres/Flyway native-query integrat
 frontend collections + notification suites green with 6 and 16 mutation-verified new/changed tests
 respectively; `tsc --noEmit` and `eslint` clean on every touched frontend file.
 
-
-## v0.141.0 - Formulas That Render
-
-**Status: Released** (kicked off 2026-09-10, signed off 2026-09-11, base branch `releases/v0.141.0`, cut from `main` after `v0.140.0` merged as #1373 and tagged)
-
-Theme: a quiz question that mentions money and a formula in the same sentence prints the formula as raw LaTeX. Three surfaces render generated maths; each fails differently, and one does not render maths at all.
-
-Source: the `v0.140.0` cold pressure test (`RELEASES.md` v0.140.0, and the raw-LaTeX Backlog row). **⚠️ Read the row before scoping — this session proposed the WRONG fix first and the row records why.**
-
-### The defect, and why the obvious fix is a no-op
-
-`isInlineDollarOpen` (`frontend/components/study-pack/quiz-working-solution.tsx:62`) opens a math span on **any** `$` not followed by whitespace — so **`$50,000` opens one.** `findInlineDollarCloseIndex` (`:68`) then correctly skips intervening `$` preceded by a space, walks past `$5,000` and `$A = …`, and closes on the formula's **final** `$`, whose previous character is a digit. The span swallows the sentence; KaTeX fails on it; `renderMathSegment` falls back to re-emitting the source. **The reader sees the raw formula, backslashes and all.** A sibling case fails the other way, absorbing prose into run-together italics.
-
-**⚠️ `normalizeBareMath` IS NOT THE PROBLEM AND MUST NOT BE THE FIX.** `renderMathText` already calls it at every call site (`:206`), and it returns immediately on **any** delimiter (`math-normalization.ts:264-266`) — and **339 of 339** backslash-bearing questions plus **498 of 498** explanations already contain one. The repair is wired correctly and reaches nothing. **This release's predecessor proposed a fix aimed there and was wrong; a cold agent disproved it.** The bug is delimiter PAIRING, not missing delimiters.
-
-**⚠️ THE CURRENCY HANDLING IS NOT ABSENT — IT IS INCOMPLETE IN ONE DIRECTION.** `findInlineDollarCloseIndex` is currency-aware (it rejects a `$` preceded by whitespace or an operator) and four passing tests cover currency-only strings — *"two currency amounts"*, *"$10-$20"*, *"$5+$3"*, *"$12/$4"*. **The untested case is currency AND a real formula in the same string**, which is exactly what the model produces for finance questions.
-
-### Checkpoints landing during this release — recorded at kickoff, not discovered later
-
-Step 9 found **nothing past due**, but **four checkpoints land on 2026-09-11 and 2026-09-12** and none carries a closure marker: `v0.114.0`'s *"was the startup line ACTUALLY READ from the production log"*, `v0.101.0` Slice 1, Learning Connections, and `v0.74.0`'s *"does the perfect-score gate work as a progression, or as a wall?"*. **⚠️ `v0.114.0`'s needs a Render LOG read, not a database read** — it requires a workspace confirmation the owner must give, so it cannot be closed from inside a release. They are named here so that closing this release does not quietly carry four overdue gates into the next kickoff.
-
-### Planned Scope
-
-1. **Pair `$` delimiters correctly when currency and a formula share a string (frontend).** The opener needs the currency-awareness the closer already has. **⚠️ THIS HEURISTIC HAS BEEN WRONG TWICE AND THE COMMENT AT `:55-60` RECORDS THE LAST TIME:** a previous fix captured `"10-"` as LaTeX, which KaTeX renders **happily** because a trailing binary operator is legal — so the error fallback never fired and the reader silently saw a subtraction with the dollar signs eaten. **A test that only asserts "no crash" or "something rendered" passes under both the defect and the fix.** Assert what the reader sees.
-
-2. **`SummaryMarkdown` never repairs bare math (frontend).** `remark-math` tokenises **delimited** math only, and the component never calls `normalizeBareMath`, so an undelimited `\frac` in a summary renders literally on every surface that uses it. **36 production summaries carry a backslash and no delimiter at all.**
-
-3. **`app/shared/study-packs/[id]/page.tsx:69,75,81` render summary, keyConcepts and fullNotes as raw `{value}` — no math rendering of any kind.** **⚠️ SCOPED HONESTLY AND NOT TO BE OVERSOLD: that route has ONE linked-learner relationship and SIX share events in 90 days, and `share_token` is 0 across all 7,573 packs.** It is cheap (wire in the renderer the sibling surfaces already use) and its traffic today is ~1 person. It is in scope because it is the same defect class, not because it is urgent.
-
-### Verification tier, decided at kickoff
-
-**Three surfaces ⇒ signoff owes ONE SCOPED COLD AGENT, falsification-framed.** Recorded now so it is not re-litigated later. **⚠️ And the `v0.140.0` precedent is the reason: its cold agent found a blocking defect that 2,375 passing tests did not, and disproved a claim that had already been merged.** A green suite is evidence only about paths the suite executes.
-
-Anti-drift — locked:
-
-- **⚠️ Do NOT "fix" this in `normalizeBareMath`, and do NOT widen `ALLOWED_COMMANDS` as the remedy.** Both are the wrong layer. The allowlist gaps (`\to`, `\text{m/s}`, `90^\circ`) are a **separate** finding and are NOT in this release.
-- **⚠️ A DISPLAY PATH MUST NEVER REWRITE STORED CONTENT.** `v0.110.1` shipped a sanitizer that re-ran on every deserialization and progressively destroyed stored choice text. Every fix here returns nodes or a display string; nothing writes to the database.
-- **⚠️ Do NOT regress the four passing currency tests.** They encode real prior bugs, and the new behaviour must satisfy them **and** the mixed case.
-- **⚠️ No `rehype-katex`.** `summary-markdown.tsx` deliberately uses `remark-math` as a TOKENIZER and renders through the single existing KaTeX call; a second renderer is exactly what its comment forbids.
-- **No new maths or markdown dependency.** `katex`, `react-markdown`, `remark-gfm` and `remark-math` are already present.
-- **⚠️ NO hand regeneration of stored packs as part of this release.** The defect is in the display path; regenerating would spend curator time on the wrong layer and is the framing the raw-LaTeX row carried wrongly since `v0.78.0`.
-- **`globalThis`, never `window` / `self` / `global`.**
-- **New analytics events go in the `AnalyticsEventType` enum before being fired, with a real fire site.**
-
-### Shipped
-
-- **⚠️⚠️ ITEM 1 WAS BUILT, THEN REVERTED AT SIGNOFF. IT IS NOT IN THIS RELEASE.** A cold falsification pass replayed **1,158 affected production strings** through both the pre-fix and post-fix renderer and scored reader-visible raw LaTeX: **385 WORSE, 3 BETTER.** `startsCurrencyAmount` decided money-vs-maths from **the single character immediately after the digits**, and that character cannot discriminate — the dominant legitimate maths shape puts a space or an operator exactly where the predicate looked for a currency boundary. `$1.5 \times 10^4$` matched `1.5`, saw a space, was classified as money, its opener was skipped, **and a string that rendered CORRECTLY before printed raw after.** Scientific notation, arithmetic steps (`$0.4 + 0.5 = 0.9$`) and ratios (`$4:5$`) all broke — **concentrated in explanations and working solutions, the exact surface this release is named for.** Verified independently before reverting: the five cited production strings return `KATEX=0` with the fix and `KATEX=1` without it.
-- **⚠️ THE GUARD TESTED THE CLAUSE, NOT THE POPULATION — the transferable lesson, and the reason four green mutations proved nothing.** The regression guard was `$3x^2$`, which survives **only because `x` is a letter**. Nothing tested `$3 \times 4$`. Every mutation killed, every test green, 2,383 passing — against a change that made 385 production strings worse. **A mutation test proves a guard discriminates for the case it encodes; it says nothing about whether the case is representative.**
-- **What replaced it:** the original defect is carried as a **skipped** test in `quiz-question-text.test.tsx` with the full mechanism and the fix constraint, plus **three new guards built from the regression itself** — scientific notation, an arithmetic step and a ratio, all real production strings. Any future attempt must decide on the **whole candidate span**, not the next character, and must be measured against the 1,158-string corpus first.
-- **Item 2 — `SummaryMarkdown` repairs bare maths before `remark-math` tokenises (frontend).** `remark-math` tokenises **delimited** maths only, so an undelimited `\frac` in a summary printed literally on every surface using the component. **36 production summaries** carry a backslash and no delimiter.
-- **Item 3 — the shared Study Pack page renders maths at all (frontend).** `app/shared/study-packs/[id]/page.tsx` rendered summary, keyConcepts and fullNotes as raw `{value}` inside `whitespace-pre-wrap`. Summary now uses `SummaryMarkdown` — the component every sibling surface already used — and the other two use `renderMathText`. **⚠️ Traffic remains what the kickoff said: ONE linked-learner relationship, SIX share events in 90 days, `share_token` 0 across 7,573 packs.** Fixed as the same defect class, not as urgent work.
-- **A new test file where none existed, and two mistakes in writing it are commented in place.** `app/shared/study-packs/[id]/page.test.tsx` had no equivalent to copy. **⚠️ The one that cost the most: a `useRouter` mock returning a FRESH OBJECT per call changes `router`'s identity every render, re-creating the `loadStudyPack` callback and re-firing its effect endlessly — the page sits in `loading` and the container holds only the BackLink, which looks exactly like "the content never rendered".** Also recorded: waiting on `screen` lets a stale render from a previous test satisfy the wait, and a negative assertion needs a positive settle signal or it passes on the blank loading frame.
-- **Verification: 216 suites / 2,383 frontend tests green, `tsc --noEmit` clean, `npm run lint` 0 errors. Four mutations, each killed by a named test** — the naive currency rule (killed by *"still treats a properly-delimited number as math"*), dropping the letter/backslash check (*"still renders math that begins with a digit"*), removing `SummaryMarkdown`'s normalise call, and reverting all three shared-page fields to raw `{value}`.
-
-### Checkpoint gate — no NEW checkpoint owed, and the reasoning is recorded rather than the step skipped
-
-**Nothing in this release shipped ahead of its own evidence.** All three items fix a defect measured against production before any code was written: 44 quiz strings carrying both money and a formula, 36 summaries with a backslash and no delimiter, and a shared page rendering raw `{value}`. Item 3's traffic was measured and scoped honestly (one linked-learner relationship, six share events in 90 days) rather than inflated to justify inclusion.
-
-**⚠️ AND A CHECKPOINT WOULD AGAIN HAVE BEEN DECORATIVE.** The gate requires instrumentation shipped in the same release and verified emitting. **This release added ZERO analytics events** — there is no metric for "a formula rendered as raw source", and adding one would mean instrumenting a render path to count its own failures. `v0.134.0`'s row is the standing example of a checkpoint whose instrumentation claim was wrong; writing one here to look thorough would repeat it.
-
-**One checkpoint WAS added by this release, and it belongs to the incident rather than the feature:** `[CHECKPOINT — due 2026-09-17]` on the 2026-09-10 pool exhaustion. **⚠️ It declares itself a RECURRENCE WATCH, not a measurement** — `http_latency` returns an empty series, `httpPath` filtering returns empty, and log label `type` offers only `app`/`build`, so the metric that would name the cause does not exist. It is a tripwire and says so.
-
-### ⚠️ Three checkpoints came due on 2026-09-11 and are NOT closed by this release
-
-Named here so that closing this release does not carry them silently into the next kickoff, where step 9 would find them already overdue:
-
-- **`v0.114.0`** — *was the startup line ACTUALLY READ from the production log?* **⚠️ This one needs a Render LOG read, not a database read, and the log tool requires a workspace confirmation only the owner can give — so it cannot be closed from inside a release at all.**
-- **`v0.101.0` Slice 1** — Review Sets first-class + independent Notes + learner-facing "AI" language.
-- **Learning Connections** — the ratified five-phase direction.
-
-
-- **⚠️⚠️ THE SURFACE COUNT THAT SELECTED THE VERIFICATION TIER IS WHY THE TIER MISSED THE REGRESSION.** The kickoff recorded *"three surfaces ⇒ one scoped cold agent"* and pointed that agent at three files. But item 1 changed `findMathSpanFrom`, which is reached by **27 files** — every quiz mode (quick review, challenge, adaptive, long exam, interview practice, memorization, flashcards), the public library page, the public share quiz, onboarding and demo. **A 385-string regression sat outside the scope the release's own count had drawn.** The agent found it only because it was told to falsify the CLAIM rather than review the FILES. **When a change lands in a shared helper, count the call sites, not the files edited.**
-- **⚠️ `SummaryMarkdown` normalises the whole markdown string, and markdown has literal-text regions it does not know about.** A fenced or inline code block containing a backslash command would be rewritten — `` `x^2 + y^2` `` becomes `$x^{2}$ + $y^{2}$`. **Latent, not live: 0 of 7,583 summaries and 0 of 91 companion rows contain a backtick with no `$`.** Tables, links, escaped characters, Windows paths and literal `\n` all survive correctly. Recorded because the component documents its *other* limitation carefully and was silent on this one.
-- **⚠️ A visible behaviour change on the shared Study Pack page that the Key Features list does not mention:** the summary moved from `whitespace-pre-wrap` to markdown, so **single newlines now collapse**. **5,361 of 7,583** summaries contain one. This is convergence with every sibling surface rather than a regression — every other surface already rendered summaries as markdown — but it is a real visible change on that route.
-- **Both curriculum Python scripts shipped with changed behaviour and nothing executing them.** `build_review_set_workbook.py` gained a required-column guard and `build_strategist_inputs_workbook.py` gained a `q4b` sheet and an optional README notes block. **There are no Python tests in this repo at all.** Verified by running the builder by hand against all four plan files (three build and reproduce their committed workbooks cell-for-cell; civil-engineering is refused) — but that is a manual check, not a guard, and it will not re-run.
-- **Two soft spots in the new builder guard, neither reachable from the documented path:** a zero-row TSV raises `IndexError` on `rows[0]` instead of a message, and a cell containing only `","` passes the non-empty check while contributing no program.
-- **`page.test.tsx`'s `@/lib/route-guards` mock is an allow-list** replacing four real exports with one. Harmless today because the page imports only `requireVerifiedOnboardedUser` — fragile if it ever imports another. The sibling `@/lib/api` mock deliberately uses `requireActual` for exactly this reason.
-### Known limitations
-
-- **⚠️ A FOURTH SURFACE HAS THE SAME DEFECT AND IS DELIBERATELY NOT FIXED HERE.** `app/study/study-pack-results.tsx:114` renders `keyConcepts` as raw `{concept}`, exactly as the shared page did. It is a one-line change, but the verification tier for this release was set at kickoff on **three** surfaces, and widening it after the fact is how a release quietly outgrows its own tier. Named so it is a known candidate rather than a future rediscovery.
-- **⚠️ `SummaryMarkdown`'s repair covers the 36 measured summaries and no more.** `normalizeBareMath` returns early on **any** delimiter anywhere in the string it is handed, and a summary is one long multi-paragraph string — so a summary already containing a single `$` is left entirely alone, bare expressions elsewhere in it included. Splitting per paragraph to widen this would change what `remark-gfm` sees and was judged not worth the blast radius.
-- **The allowlist gaps are still open and still out of scope**: `\to`, `\text{m/s}` and `90^\circ` render raw, the last because `readScriptValue` rejects a backslash as a script value. A separate finding, deliberately not bundled.

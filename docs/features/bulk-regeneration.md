@@ -72,6 +72,14 @@ carries the reasoning; this file carries the behaviour.
   rather than leaving a receipt with holes in it. Unlike that receipt, reading it is **not** consume-once.
 - **`finished` is derived** from "no item is still pending", never a stored end-of-batch flag — a driver
   killed mid-batch writes no end marker.
+- **A 404 on the receipt poll is terminal, not transient** (`bulk-regenerate-modal.tsx`, `v0.147.0`). The
+  modal seeds `batchId` from `sessionStorage` with no TTL awareness, so a batch whose receipt expired past
+  the 24h TTL (or was never valid) still gets polled. Every other poll failure is swallowed and retried
+  next tick, but a 404 stops the poll, clears the stored id, and returns to the preflight (start) view
+  showing the server's own message — otherwise the curator is wedged on that view with no way back short
+  of DevTools or closing the tab. A "Start a new batch" escape hatch (`handleStartNewBatch`) does the same
+  reset independent of the poll noticing anything, covering every other reason the receipt might stay
+  unreachable.
 
 ## Known limitations
 
