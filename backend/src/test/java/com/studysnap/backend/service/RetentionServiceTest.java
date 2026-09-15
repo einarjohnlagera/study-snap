@@ -49,6 +49,7 @@ import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class RetentionServiceTest {
+    private static final String WEDNESDAY = "WEDNESDAY";
 
     @Mock
     private UserRepository userRepository;
@@ -270,17 +271,29 @@ class RetentionServiceTest {
         assertThat(candidates.getFirst().weakConcepts()).containsExactly("DNA replication");
     }
 
+    // v0.148.0: isEligibleReviewDay no longer treats null/empty review_days as "eligible every day" --
+    // a null/empty value now maps to ONE deterministic weekday via Math.floorMod(userId.hashCode(), 7)
+    // (0=MONDAY .. 6=SUNDAY), matched against "today" in Asia/Manila. Tests below that are NOT about
+    // this day-assignment/cooldown mechanism give the test user an explicit `reviewDays` matching
+    // `now`'s Manila weekday instead of relying on that hash -- this keeps them decoupled from a hash
+    // function's implementation detail. Tests that ARE about the null-reviewDays path keep `reviewDays`
+    // null and pick a fixed UUID whose hash lands on the day the test needs; the arithmetic for the
+    // UUIDs used below (fromString("00000000-0000-0000-0000-00000000000N") has hashCode() == N for
+    // small N, since UUID.hashCode() XORs the high/low 32 bits of each 64-bit half and both halves are
+    // zero here except the low 32 bits of leastSigBits): N=1 -> floorMod(1,7)=1 -> TUESDAY;
+    // N=2 -> 2 -> WEDNESDAY; N=6 -> 6 -> SUNDAY; N=8 -> floorMod(8,7)=1 -> TUESDAY (same bucket as N=1).
     @Test
     void findDueConceptsDigestUsers_sumsAcrossMultipleStudyPacksAndOmitsPacksWithNoDueConcepts() {
-        OffsetDateTime now = OffsetDateTime.parse("2026-03-25T00:00:00Z");
+        OffsetDateTime now = OffsetDateTime.parse("2026-03-25T00:00:00Z"); // Wednesday in Asia/Manila
         UserEntity user = verifiedUser();
+        user.setReviewDays(new String[]{WEDNESDAY});
 
         when(userRepository.findByStatusAndEmailVerifiedAtIsNotNullAndDueConceptsDigestRemindersEnabledTrue(UserStatus.ACTIVE))
                 .thenReturn(List.of(user));
         when(emailLogRepository.existsByUserIdAndEmailTypeAndSentAtAfter(
                 user.getId(),
                 RetentionEmailType.DUE_CONCEPTS_DIGEST,
-                now.minusDays(7)
+                now.minusDays(1)
         )).thenReturn(false);
 
         UUID firstPackId = UUID.fromString("00000000-0000-0000-0000-000000000301");
@@ -308,10 +321,12 @@ class RetentionServiceTest {
     }
 
     @Test
-    void findDueConceptsDigestUsers_nullAndEmptyReviewDaysKeepExistingScheduleEligibility() {
-        OffsetDateTime now = OffsetDateTime.parse("2026-03-25T00:00:00Z");
-        UserEntity nullScheduleUser = verifiedUser(UUID.randomUUID(), "null@example.com");
-        UserEntity emptyScheduleUser = verifiedUser(UUID.randomUUID(), "empty@example.com");
+    void findDueConceptsDigestUsers_nullAndEmptyReviewDaysUseDeterministicHashAssignedDay() {
+        OffsetDateTime now = OffsetDateTime.parse("2026-03-24T00:00:00Z"); // Tuesday in Asia/Manila
+        UserEntity nullScheduleUser = verifiedUser(
+                UUID.fromString("00000000-0000-0000-0000-000000000001"), "null@example.com"); // hash bucket TUESDAY
+        UserEntity emptyScheduleUser = verifiedUser(
+                UUID.fromString("00000000-0000-0000-0000-000000000008"), "empty@example.com"); // hash bucket TUESDAY
         emptyScheduleUser.setReviewDays(new String[0]);
         when(userRepository.findByStatusAndEmailVerifiedAtIsNotNullAndDueConceptsDigestRemindersEnabledTrue(UserStatus.ACTIVE))
                 .thenReturn(List.of(nullScheduleUser, emptyScheduleUser));
@@ -328,11 +343,28 @@ class RetentionServiceTest {
                 .containsExactly(nullScheduleUser.getId(), emptyScheduleUser.getId());
     }
 
+    // The negative case proving the day gate isn't a no-op for null-reviewDays users: this user's hash
+    // bucket is TUESDAY (same UUID as the positive case above), but `now` falls on a Manila Wednesday,
+    // so the digest must not select them even though they'd otherwise qualify.
+    @Test
+    void findDueConceptsDigestUsers_nullReviewDaysUserIneligibleOnNonAssignedDay() {
+        OffsetDateTime now = OffsetDateTime.parse("2026-03-25T00:00:00Z"); // Wednesday in Asia/Manila
+        UserEntity nullScheduleUser = verifiedUser(
+                UUID.fromString("00000000-0000-0000-0000-000000000001"), "null@example.com"); // hash bucket TUESDAY
+        when(userRepository.findByStatusAndEmailVerifiedAtIsNotNullAndDueConceptsDigestRemindersEnabledTrue(UserStatus.ACTIVE))
+                .thenReturn(List.of(nullScheduleUser));
+
+        List<RetentionService.DueConceptsDigestReminder> candidates = retentionService.findDueConceptsDigestUsers(now);
+
+        assertThat(candidates).isEmpty();
+        verify(studyPackRepository, never()).findByOwnerUserIdOrderByCreatedAtDescIdDesc(any(), any());
+    }
+
     @Test
     void findDueConceptsDigestUsers_matchesReviewDayInAsiaManila() {
         OffsetDateTime now = OffsetDateTime.parse("2026-03-24T18:00:00Z");
         UserEntity chosenDayUser = verifiedUser(UUID.randomUUID(), "chosen@example.com");
-        chosenDayUser.setReviewDays(new String[]{"WEDNESDAY"});
+        chosenDayUser.setReviewDays(new String[]{WEDNESDAY});
         UserEntity unchosenDayUser = verifiedUser(UUID.randomUUID(), "unchosen@example.com");
         unchosenDayUser.setReviewDays(new String[]{"TUESDAY"});
         when(userRepository.findByStatusAndEmailVerifiedAtIsNotNullAndDueConceptsDigestRemindersEnabledTrue(UserStatus.ACTIVE))
@@ -353,18 +385,19 @@ class RetentionServiceTest {
     }
 
     @Test
-    void findDueConceptsDigestUsers_usesOneDayCooldownForCommittedAndSevenDaysForUncommittedLearners() {
-        OffsetDateTime now = OffsetDateTime.parse("2026-03-24T18:00:00Z");
+    void findDueConceptsDigestUsers_usesOneDayCooldownForCommittedAndSixDaysForUncommittedLearners() {
+        OffsetDateTime now = OffsetDateTime.parse("2026-03-24T18:00:00Z"); // Wednesday in Asia/Manila
         UserEntity committed = verifiedUser(UUID.randomUUID(), "committed@example.com");
-        committed.setReviewDays(new String[]{"WEDNESDAY"});
-        UserEntity uncommitted = verifiedUser(UUID.randomUUID(), "uncommitted@example.com");
+        committed.setReviewDays(new String[]{WEDNESDAY});
+        UserEntity uncommitted = verifiedUser(
+                UUID.fromString("00000000-0000-0000-0000-000000000002"), "uncommitted@example.com"); // hash bucket WEDNESDAY
         when(userRepository.findByStatusAndEmailVerifiedAtIsNotNullAndDueConceptsDigestRemindersEnabledTrue(UserStatus.ACTIVE))
                 .thenReturn(List.of(committed, uncommitted));
         when(emailLogRepository.existsByUserIdAndEmailTypeAndSentAtAfter(
                 committed.getId(), RetentionEmailType.DUE_CONCEPTS_DIGEST, now.minusDays(1)
         )).thenReturn(false);
         when(emailLogRepository.existsByUserIdAndEmailTypeAndSentAtAfter(
-                uncommitted.getId(), RetentionEmailType.DUE_CONCEPTS_DIGEST, now.minusDays(7)
+                uncommitted.getId(), RetentionEmailType.DUE_CONCEPTS_DIGEST, now.minusDays(6)
         )).thenReturn(false);
         UUID packId = UUID.randomUUID();
         StudyPackEntity studyPack = studyPackWithConcepts(packId, "Cell Biology", List.of("Mitosis"));
@@ -380,13 +413,14 @@ class RetentionServiceTest {
         verify(emailLogRepository).existsByUserIdAndEmailTypeAndSentAtAfter(
                 committed.getId(), RetentionEmailType.DUE_CONCEPTS_DIGEST, now.minusDays(1));
         verify(emailLogRepository).existsByUserIdAndEmailTypeAndSentAtAfter(
-                uncommitted.getId(), RetentionEmailType.DUE_CONCEPTS_DIGEST, now.minusDays(7));
+                uncommitted.getId(), RetentionEmailType.DUE_CONCEPTS_DIGEST, now.minusDays(6));
     }
 
     @Test
     void findDueConceptsDigestUsers_linksMostDueNoteToQuickReview() {
-        OffsetDateTime now = OffsetDateTime.parse("2026-03-25T00:00:00Z");
+        OffsetDateTime now = OffsetDateTime.parse("2026-03-25T00:00:00Z"); // Wednesday in Asia/Manila
         UserEntity user = verifiedUser();
+        user.setReviewDays(new String[]{WEDNESDAY});
         when(userRepository.findByStatusAndEmailVerifiedAtIsNotNullAndDueConceptsDigestRemindersEnabledTrue(UserStatus.ACTIVE))
                 .thenReturn(List.of(user));
         UUID smallerPackId = UUID.randomUUID();
@@ -412,8 +446,9 @@ class RetentionServiceTest {
 
     @Test
     void findDueConceptsDigestUsers_fallsBackToDashboardWhenTargetNoteCannotBeResolved() {
-        OffsetDateTime now = OffsetDateTime.parse("2026-03-25T00:00:00Z");
+        OffsetDateTime now = OffsetDateTime.parse("2026-03-25T00:00:00Z"); // Wednesday in Asia/Manila
         UserEntity user = verifiedUser();
+        user.setReviewDays(new String[]{WEDNESDAY});
         when(userRepository.findByStatusAndEmailVerifiedAtIsNotNullAndDueConceptsDigestRemindersEnabledTrue(UserStatus.ACTIVE))
                 .thenReturn(List.of(user));
         UUID packId = UUID.randomUUID();
@@ -433,15 +468,16 @@ class RetentionServiceTest {
 
     @Test
     void findDueConceptsDigestUsers_excludesUserWithZeroDueConcepts() {
-        OffsetDateTime now = OffsetDateTime.parse("2026-03-25T00:00:00Z");
+        OffsetDateTime now = OffsetDateTime.parse("2026-03-25T00:00:00Z"); // Wednesday in Asia/Manila
         UserEntity user = verifiedUser();
+        user.setReviewDays(new String[]{WEDNESDAY});
 
         when(userRepository.findByStatusAndEmailVerifiedAtIsNotNullAndDueConceptsDigestRemindersEnabledTrue(UserStatus.ACTIVE))
                 .thenReturn(List.of(user));
         when(emailLogRepository.existsByUserIdAndEmailTypeAndSentAtAfter(
                 user.getId(),
                 RetentionEmailType.DUE_CONCEPTS_DIGEST,
-                now.minusDays(7)
+                now.minusDays(1)
         )).thenReturn(false);
 
         UUID packId = UUID.fromString("00000000-0000-0000-0000-000000000301");
@@ -474,15 +510,16 @@ class RetentionServiceTest {
 
     @Test
     void findDueConceptsDigestUsers_respectsCooldown() {
-        OffsetDateTime now = OffsetDateTime.parse("2026-03-25T00:00:00Z");
+        OffsetDateTime now = OffsetDateTime.parse("2026-03-25T00:00:00Z"); // Wednesday in Asia/Manila
         UserEntity user = verifiedUser();
+        user.setReviewDays(new String[]{WEDNESDAY});
 
         when(userRepository.findByStatusAndEmailVerifiedAtIsNotNullAndDueConceptsDigestRemindersEnabledTrue(UserStatus.ACTIVE))
                 .thenReturn(List.of(user));
         when(emailLogRepository.existsByUserIdAndEmailTypeAndSentAtAfter(
                 user.getId(),
                 RetentionEmailType.DUE_CONCEPTS_DIGEST,
-                now.minusDays(7)
+                now.minusDays(1)
         )).thenReturn(true);
 
         List<RetentionService.DueConceptsDigestReminder> candidates = retentionService.findDueConceptsDigestUsers(now);
@@ -795,15 +832,16 @@ class RetentionServiceTest {
 
     @Test
     void sendDueConceptsDigestEmails_stillSendsToAnUncommittedLearner() {
-        OffsetDateTime now = OffsetDateTime.parse("2026-03-29T10:00:00Z");
-        UserEntity user = verifiedUser();
+        OffsetDateTime now = OffsetDateTime.parse("2026-03-29T10:00:00Z"); // Sunday in Asia/Manila
+        UserEntity user = verifiedUser(
+                UUID.fromString("00000000-0000-0000-0000-000000000006"), "[email protected]"); // hash bucket SUNDAY
 
         when(userRepository.findByStatusAndEmailVerifiedAtIsNotNullAndDueConceptsDigestRemindersEnabledTrue(UserStatus.ACTIVE))
                 .thenReturn(List.of(user));
         when(emailLogRepository.existsByUserIdAndEmailTypeAndSentAtAfter(
                 user.getId(),
                 RetentionEmailType.DUE_CONCEPTS_DIGEST,
-                now.minusDays(7)
+                now.minusDays(6)
         )).thenReturn(false);
 
         UUID packId = UUID.fromString("00000000-0000-0000-0000-000000000301");
@@ -833,15 +871,16 @@ class RetentionServiceTest {
 
     @Test
     void sendDueConceptsDigestEmails_doesNotSendWhenSkippedByCooldown() {
-        OffsetDateTime now = OffsetDateTime.parse("2026-03-29T10:00:00Z");
-        UserEntity user = verifiedUser();
+        OffsetDateTime now = OffsetDateTime.parse("2026-03-29T10:00:00Z"); // Sunday in Asia/Manila
+        UserEntity user = verifiedUser(
+                UUID.fromString("00000000-0000-0000-0000-000000000006"), "[email protected]"); // hash bucket SUNDAY
 
         when(userRepository.findByStatusAndEmailVerifiedAtIsNotNullAndDueConceptsDigestRemindersEnabledTrue(UserStatus.ACTIVE))
                 .thenReturn(List.of(user));
         when(emailLogRepository.existsByUserIdAndEmailTypeAndSentAtAfter(
                 user.getId(),
                 RetentionEmailType.DUE_CONCEPTS_DIGEST,
-                now.minusDays(7)
+                now.minusDays(6)
         )).thenReturn(true);
 
         int sent = retentionService.sendDueConceptsDigestEmails(now);

@@ -63,16 +63,33 @@ needs computation guidance, and a reminder email that quietly always arrives on 
   - **Known limitation, stated rather than silently accepted:** a user whose last digest landed close to
     their newly-assigned day may still see one earlier-than-usual digest in the first week after deploy
     (a bounded, one-time transition effect, not an ongoing issue).
-  - **Tests owed:** `RetentionEmailScheduler`'s and `RetentionEmailSchedulerTest`'s existing "7-day
-    cooldown" assertions both become false and must be updated to describe the new day-gate + 6-day
-    cooldown behavior.
+  - **Uses `dispatchDay.getValue() - 1`, not `.ordinal()`**, to compare against the hash bucket — same
+    result, but pinned to `DayOfWeek`'s documented numbering rather than enum ordinal position.
+  - **`StudySnapProperties.Retention.dueConceptsDigestCooldownDays` (default 7) is removed**, not left
+    orphaned — it had no `application.yaml` key and, after this fix, no remaining reader; the uncommitted
+    cooldown is now the compile-time constant `UNCOMMITTED_DUE_CONCEPTS_DIGEST_COOLDOWN_DAYS = 6`, a
+    deliberate choice (it has no legitimate reason to vary per deployment) rather than an oversight.
+  - **Feature docs updated to match**, not just `RELEASES.md`: `docs/features/retention-emails.md` (the
+    null/empty `review_days` cadence description and the cooldown table), `docs/features/quiz.md` (its
+    "null/empty review days preserve the pre-`v0.72.0` cadence" line was the exact claim this fix makes
+    false), and `docs/features/email-preferences.md` (the settings-page cooldown description). Frontend
+    review-days copy (`app/settings/page.tsx`, `review-commitment-prompt.tsx`) was swept and found already
+    accurate — neither promises "every day" or "whenever due," so neither needed a change.
+  - **Tests owed:** `RetentionServiceTest`'s null/empty-`review_days` tests are rewritten for the new
+    behavior (was: "always eligible"; now: eligible only on a deterministic hash-assigned day, with a new
+    negative-case test proving the day-gate actually excludes a mismatched day) rather than merely
+    adjusted, since the old assertion is no longer true. `RetentionEmailScheduler`'s and
+    `RetentionEmailSchedulerTest`'s existing "7-day cooldown" comments/assertions are updated to describe
+    the new day-gate + 6-day cooldown behavior.
 
 Anti-drift (both items): no database migration, no new endpoint, no persisted state change for either
 fix — both are pure logic changes computed at read/generation time. Routing: Claude Code implements
-directly (isolated bug fixes, 1 file each, clear root cause). **Verification tier: one `advisor()` call**
-on the diff for each item — no auth/quota/money/production-data semantics change for either, and both
-were already pressure-tested pre-implementation by a cold Opus agent during scoping (falsification-framed
-against the specific claims above), which is why a heavier post-implementation tier isn't warranted.
+directly (isolated bug fixes with a clear root cause each — Item 1 touches 1 production file, Item 2
+touches 3: `RetentionService.java`, `RetentionEmailScheduler.java`, and the `StudySnapProperties.java`
+config-field removal). **Verification tier: one `advisor()` call** on the diff for each item — no
+auth/quota/money/production-data semantics change for either, and both were already pressure-tested
+pre-implementation by a cold Opus agent during scoping (falsification-framed against the specific claims
+above), which is why a heavier post-implementation tier isn't warranted.
 
 ### Shipped
 

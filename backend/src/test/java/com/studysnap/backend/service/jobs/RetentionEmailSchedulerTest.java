@@ -20,7 +20,9 @@ class RetentionEmailSchedulerTest {
         // The defect this pins: the digest used to ride runWeekly (cron "0 0 18 * * SUN"), so the
         // review-day filter could only ever match ONE weekday. Any learner whose chosen days omitted it
         // was silently dropped forever. Dispatch must be daily for "remind me on these days" to be true;
-        // dueConceptsDigestCooldownDays still caps frequency at one per week.
+        // RetentionService.isEligibleReviewDay + dueConceptsDigestCooldownDays still cap frequency at
+        // roughly one per week per learner (1-day cooldown gated by their chosen days when set, 6-day
+        // cooldown gated by a deterministic hash-assigned day otherwise -- see v0.148.0).
         when(retentionService.sendDailyEmails()).thenReturn(dailySummary());
         when(retentionService.sendDueConceptsDigestEmails()).thenReturn(3);
         RetentionEmailScheduler scheduler = new RetentionEmailScheduler(retentionService);

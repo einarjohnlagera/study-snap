@@ -486,7 +486,6 @@ public class StudySnapProperties {
         private int unfinishedNoteDays = 2;
         private int unfinishedNoteCooldownDays = 3;
         private int weeklyCooldownDays = 7;
-        private int dueConceptsDigestCooldownDays = 7;
         private int knowledgeImpactDigestCooldownDays = 30;
         private int weakConceptThresholdPercent = 60;
     }
