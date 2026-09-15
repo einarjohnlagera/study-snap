@@ -15,6 +15,22 @@ changelog layer. `ROADMAP.md` keeps a one-line-per-version index at each origina
 
 ---
 
+**Kicked off 2026-09-11, signed off 2026-09-12.** `v0.143.0 — No Way Out` is **Released** — both
+planned items shipped as scoped, PRs #1381 and #1382, merged into `releases/v0.143.0` at
+`f715dada`/`77b6c226`. (1) `long-exam/page.tsx`'s `useExamFocusMode` now reads
+`phase === "running" && !submitting`, matching Challenge Quiz's `v0.131.0` guard. (2)
+`ExamQuestionPoolService.refreshPool` is now called unconditionally on every Study Pack
+regeneration — both the combined and default `STUDY_PACK`-only scopes — closing leg (1) of the
+two-part "derived artifacts" Backlog row; leg (2), the Challenge question bank, stays open.
+**⚠️ THIS KICKOFF'S SCAN CORRECTED FOUR STALE BACKLOG ROWS BEFORE SETTLING ON THIS SCOPE**, and
+item 2's own scope was widened again before its Codex prompt was written — see `RELEASES.md`'s
+"How this scope was reached". **A scoped cold falsification pass on item 2 found and fixed a real
+deadlock risk** (a lock-order inversion between `study_packs` and `exam_question_pool`, verified
+empirically against real Postgres) **and confirmed a fourth path
+(`AdminStudyPackTransactionHelper`) still bypasses the fix**, tracked as its own Backlog row, not
+fixed here. Full detail in `RELEASES.md` and `docs/releases/v0.143.0.md`.
+
+
 **Kicked off 2026-09-11, signed off 2026-09-11.** `v0.142.0 — Awareness Before Action` is
 **Released** (PRs #1378, #1379; A5 and the notification card redesign merged directly on the
 release branch). It polishes two already-shipped surfaces the owner is now actively announcing to

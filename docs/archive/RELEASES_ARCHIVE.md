@@ -1,6 +1,6 @@
 # RELEASES_ARCHIVE.md — NoteLib
 
-Archived sections of `RELEASES.md`. **Contents are NOT one contiguous range:** `v0.41.0`–`v0.120.0`, plus `v0.126.0` (moved at the `v0.132.0` kickoff), `v0.127.0` (moved at the `v0.133.0` kickoff) `v0.128.0` (moved at the `v0.134.0` kickoff) `v0.129.0` (moved at the `v0.135.0` kickoff) `v0.130.0` (moved at the `v0.136.0` kickoff) `v0.131.0` (moved at the `v0.137.0` kickoff) `v0.132.0` (moved at the `v0.138.0` kickoff) `v0.133.0` (moved at the `v0.139.0` kickoff), `v0.134.0` (moved at the `v0.140.0` kickoff), `v0.135.0` (moved at the `v0.141.0` kickoff), `v0.136.0` (moved at the `v0.142.0` kickoff), `v0.137.0` (moved at the `v0.143.0` kickoff), `v0.138.0` (moved at the `v0.144.0` kickoff), `v0.139.0` (moved at the `v0.145.0` kickoff), `v0.140.0` (moved at the `v0.146.0` kickoff), `v0.141.0` (moved at the `v0.147.0` kickoff) and `v0.142.0` (moved at the `v0.148.0` kickoff) as the live file crossed its *current + last five* cap. Each version's own `## vX.Y.Z` heading is the index — search for it. `v0.40.1` and earlier moved here
+Archived sections of `RELEASES.md`. **Contents are NOT one contiguous range:** `v0.41.0`–`v0.120.0`, plus `v0.126.0` (moved at the `v0.132.0` kickoff), `v0.127.0` (moved at the `v0.133.0` kickoff) `v0.128.0` (moved at the `v0.134.0` kickoff) `v0.129.0` (moved at the `v0.135.0` kickoff) `v0.130.0` (moved at the `v0.136.0` kickoff) `v0.131.0` (moved at the `v0.137.0` kickoff) `v0.132.0` (moved at the `v0.138.0` kickoff) `v0.133.0` (moved at the `v0.139.0` kickoff), `v0.134.0` (moved at the `v0.140.0` kickoff), `v0.135.0` (moved at the `v0.141.0` kickoff), `v0.136.0` (moved at the `v0.142.0` kickoff), `v0.137.0` (moved at the `v0.143.0` kickoff), `v0.138.0` (moved at the `v0.144.0` kickoff), `v0.139.0` (moved at the `v0.145.0` kickoff), `v0.140.0` (moved at the `v0.146.0` kickoff), `v0.141.0` (moved at the `v0.147.0` kickoff), `v0.142.0` (moved at the `v0.148.0` kickoff) and `v0.143.0` (moved at the `v0.149.0` kickoff) as the live file crossed its *current + last five* cap. Each version's own `## vX.Y.Z` heading is the index — search for it. `v0.40.1` and earlier moved here
 2026-07-10; **`v0.41.0` through `v0.120.0` moved here 2026-09-07** in the `v0.126.0` pass, which
 resumed this convention after it had lapsed for 85 releases — `RELEASES.md` had reached 116
 sections against its documented design of *current + last few versions*. Both passes are MOVES,
@@ -18756,3 +18756,146 @@ Full backend suite (2,361 tests, incl. the Postgres/Flyway native-query integrat
 frontend collections + notification suites green with 6 and 16 mutation-verified new/changed tests
 respectively; `tsc --noEmit` and `eslint` clean on every touched frontend file.
 
+
+## v0.143.0 - No Way Out
+
+**Status: Released** (kicked off 2026-09-11, signed off 2026-09-12, base branch
+`releases/v0.143.0`, cut from `main` after `v0.142.0` merged as #1380 and tagged, deployed and
+verified — Vercel and Render both confirmed live on `61153cc6`. PRs #1381 and #1382 merged into
+the release branch at `f715dada` and `77b6c226`.)
+
+Theme: two live defects found by re-verifying Backlog Index candidates against current code
+rather than trusting their rows — a focus-mode trap that leaves a learner with no exit if Long
+Exam submission hangs, and an exam question pool that silently keeps serving questions from a
+Note's pre-regeneration content.
+
+### How this scope was reached
+
+Four Backlog Index candidates were checked before these two survived: **"Official Review Set
+publication boundary" P3** claimed un-parked/unbuilt but is fully shipped
+(`ReviewSetUpdateNotificationService.java`, commit `83074463`, `v0.135.0`); **Adaptive Practice's
+recommendation engine** is population-blocked — `[CHECKPOINT — due 2026-10-05]`'s own kill
+criterion says single digits means re-date, and a fresh read found 3 eligible users, unchanged in
+a month, and 0 users with a cross-pack actionable weak concept; **Learning Connections supporter
+onboarding** has a real, shipped-nowhere definition (`v0.97.0`, `learning-connections-phase-plan.md:443-522`)
+but sits 8 days from `[CHECKPOINT — due 2026-09-19]`, which 6 consecutive releases have protected
+from exactly this class of promotion — owner chose to defer it to `v0.144.0` rather than risk
+contaminating the count; **"Support Another Learner" Phase 1** claimed a `[DECISION]+[EVIDENCE]`-blocked
+axis-error gate but is fully shipped (`requireTeacherOrAdmin` removed in commit `cbc7d13c`,
+`v0.89.0`) — this row also duplicates "Learning Connections" under a different name for the same
+shipped arc.
+
+**All three stale rows corrected in this kickoff commit, along with a fourth found in the same
+pass** (Onboarding Intent Router's C8/C9 residuals — both already fixed in commit `826ca155`,
+2026-08-12, row never updated). Full detail in `ROADMAP.md`'s Backlog Index scan note.
+
+**Item 2's own scope was widened again before its Codex prompt was written.** Tracing the fix
+surfaced that gating the pool invalidation on `regeneratingNoteContent` — the kickoff's own framing
+— would have missed the *default* regeneration path: `POST /notes/{id}/regenerate` resolves an
+absent/blank scope to `NoteRegenerationScope.STUDY_PACK`, which reaches the same worker method with
+that flag `false`, even though the Study Pack's content is replaced in place either way. The prompt
+(`docs/codex-prompts/v0.143.0-exam-pool-invalidation.md`, gitignored) calls the invalidation
+unconditionally instead, and adds a `generationStatusAt`-stamp guard against a
+concurrent-regeneration race the unconditional call would otherwise make more likely to trigger.
+Delivered through Codex on 2026-09-12. **A related, separate, already-shipped defect surfaced during
+the same trace and was flagged rather than folded in**: `deactivateShareLinksForNote` (the `v0.110.2` precedent
+item 2 reuses) has the identical gate gap on the same default regeneration scope — recorded as its
+own Backlog Index row in `ROADMAP.md`, not code-verified against production, and not fixed here.
+
+### Planned Scope
+
+- **Item 1 — Long Exam's focus-mode trap (frontend, isolated bug).** `long-exam/page.tsx:255`
+  calls `useExamFocusMode(phase === "running")` with no `!submitting` guard, while its Leave
+  button is `leaveDisabled={submitting}` (`:966`). If a completion request hangs, the learner has
+  no visible exit — focus mode hides the header and the one exit control is disabled. Challenge
+  Quiz already fixed this exact trap in `v0.131.0`: `challenge-quiz/page.tsx:1516` reads
+  `useExamFocusMode(phase === "running" && !submitting)`, with a comment explaining why the guard
+  is load-bearing. Long Exam was left out of that release's diff. Fix: apply the same guard.
+  Inline-sized, ships first, its own PR.
+- **Item 2 — exam question pools are not invalidated when a Note+Study Pack regeneration
+  replaces content (backend).** `ExamQuestionPoolService.initiatePoolForMode` (`:220-227`)
+  early-returns when a pool already exists and is READY/PENDING/GENERATING. Regeneration keeps
+  the same `studyPackId` (the documented in-place versioning rule — quiz/session history stays
+  linked), so the `initiatePool` call after regeneration (`StudyPackService.java:933`) is a
+  silent no-op: Long Exam and Board Exam keep serving questions drawn from replaced content. The
+  fix pattern already exists three lines above the omission, in the same method:
+  `deactivateShareLinksForNote` (`:908`) does the analogous thing for shared quiz links, citing
+  `v0.110.2`'s precedent explicitly in its own comment. Touches a `@Transactional` regeneration
+  path carrying two quota meters — not copy-fix-sized, owes its own verification tier (below).
+
+**Explicitly NOT in scope:** the Challenge Quiz question bank was flagged in the same Backlog row
+as carrying the same staleness gap, but this kickoff traced only as far as confirming
+`queueOfficialChallengeQuizTemplateSeed` is an official-template path, not the per-user bank —
+where the per-user bank is actually populated is unknown. Scoping a third invalidation seam on a
+structural analogy, without having traced it, is exactly the failure mode this kickoff's own scan
+spent the night correcting. Leave it as an open question for whoever verifies it next, not a
+planned item.
+
+### Checkpoint reads closed at this kickoff
+
+- **`[CHECKPOINT — due 2026-09-11]` `v0.114.0` — CLOSED, kill criterion (i) confirmed.** Read-only
+  Render application log query, `ConnectionLifetimeStartupLogger` at boot, 2026-09-04 through
+  2026-09-07 (8+ instances sampled): every single line reports
+  `hibernate.connection.handling_mode=DELAYED_ACQUISITION_AND_HOLD` with `open-in-view=ON`,
+  matching the test measurement exactly. `v0.112.0` §7 holds in the environment that matters.
+- **`v0.62.0` Knowledge Impact conditional-rate checkpoint — RE-DATED, not closed.** The row's own
+  premise (*"the new event has fired ZERO times because `v0.136.0` is not deployed"*) is now
+  stale — `v0.136.0` deployed days ago. Fresh read: 1 distinct viewer, 3 `KNOWLEDGE_IMPACT_DASHBOARD_VIEWED`
+  events, all 2026-09-09, none more than 2 days old. The conditional rate this row measures (did a
+  viewer publish again within N days) is genuinely not yet measurable — N days have not elapsed —
+  not a null read. Re-dated rather than read as a pass or fail.
+- **⚠️ Tool-reliability finding, not a product one:** a read-only Render Postgres query without any
+  `GROUP BY` returned an array for a scalar `user_id` column, and the identical array recurred
+  verbatim across two unrelated queries against two different tables. Caught before it reached
+  this file — re-ran with `count(DISTINCT user_id)` instead of raw ids. Treat any non-scalar
+  result from this tool as suspect until re-verified with an aggregate query.
+
+### Verification tier
+
+**One scoped cold agent, falsification-framed**, for item 2 only — it changes what questions a
+learner is served and touches a `@Transactional` path with two quota meters, the class of change
+CLAUDE.md's verification-tier gate reserves for more than a single `advisor()` call. Item 1 is a
+single-expression fix with a direct precedent in the same codebase; a normal test plus `advisor()`
+on the diff is enough.
+
+### Routing
+
+**CLAUDE CODE inline** for item 1 (one file, one expression, direct precedent). **CODEX** for item
+2 (backend service + regeneration path + tests) — write the prompt after item 1 ships.
+
+### Shipped
+
+- **Item 1 — Long Exam focus-mode trap fixed.** `useExamFocusMode` in `long-exam/page.tsx` now
+  reads `phase === "running" && !submitting`, matching Challenge Quiz's `v0.131.0` guard.
+  Regression test added and mutation-verified against pre-fix code, both in isolation and in the
+  full suite. Checked the sibling `interview-practice/page.tsx`, which has the same bare
+  `phase === "running"` expression — confirmed clean, its Leave Practice button carries no
+  `disabled` state to trap behind. PR #1381 (`fix/v0.143.0-long-exam-focus-trap`), not yet merged.
+- **Item 2 — regenerated Study Packs now invalidate their exam question pools.** Both the combined
+  and default `STUDY_PACK`-only regeneration scopes reset and re-dispatch Long Exam and Board Exam
+  pools inside the content-write transaction. Pool generation now uses `generationStatusAt` as an
+  optimistic stamp so an older in-flight task cannot publish stale questions over a newer attempt.
+  If that newer attempt fails after superseding an older successful result, the pool remains
+  `FAILED` and self-heals through the existing refresh-on-use path. **⚠️ The stamp guard is applied
+  to the `READY` write only, deliberately not to the `catch` block's `FAILED` write** — a superseded
+  task that later throws (rather than completing) can still flip a good, newer `READY` pool back to
+  `FAILED`, costing one wasted regeneration cycle on the pool's next use. Accepted, not fixed: the
+  pool's `questions` are untouched (only the status field is stomped), and `sampleQuestions` already
+  refreshes any `FAILED` pool on next use.
+- **A scoped cold falsification pass on item 2 found and fixed a real deadlock risk before merge.**
+  The unconditional invalidation call locked `exam_question_pool` (via `refreshPool`) BEFORE the
+  regeneration's own pending `study_packs` update actually flushed — Hibernate's auto-flush is
+  query-space aware and does not flush an unrelated table's pending write before a JPQL query
+  against a disjoint one. Every other caller that touches both tables locks `study_packs` first,
+  then `exam_question_pool` (`LongExamService.startSession` → `sampleQuestions`); this inverted
+  that order, opening a genuine deadlock window against a concurrent exam start. **Verified
+  empirically**, not just reasoned through: a scratch `StatementInspector`-backed test against a
+  real Postgres instance reproduced the inversion (`select … for update` on the pool preceding the
+  `update study_packs`), and confirmed an explicit `studyPackRepository.flush()` before the
+  invalidation calls restores the correct order. Fixed by adding that flush call.
+- **Flagged, not fixed: a fourth path replaces Study Pack content in place with no invalidation.**
+  `AdminStudyPackTransactionHelper.regenerateOnePack` (admin-only) overwrites `summary` — a direct
+  exam-pool generation input — outside `generateStudyPackFromExistingNoteAsync` entirely, so this
+  release's fix does not reach it. Traced with `file:line` evidence, not a structural analogy;
+  recorded as its own `ROADMAP.md` Backlog Index row rather than folded into this PR, matching how
+  the `deactivateShareLinksForNote` finding was handled at kickoff.
