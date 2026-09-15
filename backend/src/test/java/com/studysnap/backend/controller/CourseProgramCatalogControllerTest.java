@@ -1,13 +1,30 @@
 package com.studysnap.backend.controller;
 
+import com.studysnap.backend.dto.CourseProgramCatalogItemResponse;
 import com.studysnap.backend.dto.CreateCourseProgramCatalogRequest;
 import com.studysnap.backend.dto.CreateProgramFamilyRequest;
 import com.studysnap.backend.dto.ProgramFamilyResponse;
+import com.studysnap.backend.dto.UpdateCourseProgramCatalogRequest;
+import com.studysnap.backend.entity.UserRole;
+import com.studysnap.backend.exception.CourseProgramNotFoundException;
+import com.studysnap.backend.exception.GlobalExceptionHandler;
+import com.studysnap.backend.exception.UnknownProgramFamilyException;
+import com.studysnap.backend.security.AuthenticatedUser;
 import com.studysnap.backend.service.CourseProgramCatalogService;
+import jakarta.servlet.Filter;
 import org.junit.jupiter.api.Test;
+import org.springframework.aop.framework.ProxyFactory;
 import org.springframework.http.MediaType;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.authorization.method.AuthorizationManagerBeforeMethodInterceptor;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.web.access.AccessDeniedHandlerImpl;
+import org.springframework.security.web.access.ExceptionTranslationFilter;
+import org.springframework.security.web.authentication.Http403ForbiddenEntryPoint;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.util.unit.DataSize;
 
 import java.lang.reflect.Method;
 import java.util.List;
@@ -20,6 +37,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -37,6 +55,89 @@ class CourseProgramCatalogControllerTest {
         assertThat(create.getAnnotation(PreAuthorize.class).value()).isEqualTo("hasRole('ADMIN')");
         assertThat(similar.getAnnotation(PreAuthorize.class).value()).isEqualTo("hasRole('ADMIN')");
         assertThat(new CourseProgramCatalogController(mock(CourseProgramCatalogService.class))).isNotNull();
+    }
+
+    @Test
+    void updateEndpointIsAdminOnly() throws NoSuchMethodException {
+        Method update = CourseProgramCatalogController.class.getMethod(
+                "update",
+                String.class,
+                UpdateCourseProgramCatalogRequest.class
+        );
+
+        assertThat(update.getAnnotation(PreAuthorize.class).value()).isEqualTo("hasRole('ADMIN')");
+    }
+
+    @Test
+    void updateBindsARealJsonPatchAndReturnsTheFreshCatalogItem() throws Exception {
+        UUID programId = UUID.randomUUID();
+        UUID familyId = UUID.randomUUID();
+        CourseProgramCatalogItemResponse updated = new CourseProgramCatalogItemResponse(
+                programId,
+                "Nursing",
+                familyId,
+                "Health Sciences",
+                true
+        );
+        when(service.updateProgramFamily(any(), any())).thenReturn(updated);
+
+        mockMvc().perform(patch("/course-program-catalog/{id}", programId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"programFamilyId\":\"" + familyId + "\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(programId.toString()))
+                .andExpect(jsonPath("$.name").value("Nursing"))
+                .andExpect(jsonPath("$.programFamilyId").value(familyId.toString()))
+                .andExpect(jsonPath("$.programFamilyName").value("Health Sciences"))
+                .andExpect(jsonPath("$.isActive").value(true));
+
+        verify(service).updateProgramFamily(
+                programId,
+                new UpdateCourseProgramCatalogRequest(familyId)
+        );
+    }
+
+    @Test
+    void updateMapsMalformedAndMissingProgramsToTheSameNotFoundResponse() throws Exception {
+        UUID missingProgramId = UUID.randomUUID();
+        when(service.updateProgramFamily(org.mockito.ArgumentMatchers.eq(missingProgramId), any()))
+                .thenThrow(new CourseProgramNotFoundException());
+
+        mockMvc().perform(patch("/course-program-catalog/not-a-uuid")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"programFamilyId\":null}"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.error.code").value("COURSE_PROGRAM_NOT_FOUND"));
+        mockMvc().perform(patch("/course-program-catalog/{id}", missingProgramId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"programFamilyId\":null}"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.error.code").value("COURSE_PROGRAM_NOT_FOUND"));
+    }
+
+    @Test
+    void updateMapsAnUnknownFamilyToBadRequest() throws Exception {
+        UUID programId = UUID.randomUUID();
+        when(service.updateProgramFamily(org.mockito.ArgumentMatchers.eq(programId), any()))
+                .thenThrow(new UnknownProgramFamilyException());
+
+        mockMvc().perform(patch("/course-program-catalog/{id}", programId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"programFamilyId\":\"" + UUID.randomUUID() + "\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.code").value("UNKNOWN_PROGRAM_FAMILY"));
+    }
+
+    @Test
+    void updateRejectsARealNonAdminRequestWithForbidden() throws Exception {
+        AuthenticatedUser user = new AuthenticatedUser(UUID.randomUUID(), UserRole.USER, true, 1);
+
+        securedMockMvc(user).perform(patch("/course-program-catalog/{id}", UUID.randomUUID())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"programFamilyId\":null}"))
+                .andExpect(status().isForbidden());
+
+        verify(service, never()).updateProgramFamily(any(), any());
     }
 
     @Test
@@ -105,6 +206,39 @@ class CourseProgramCatalogControllerTest {
     }
 
     private MockMvc mockMvc() {
-        return standaloneSetup(new CourseProgramCatalogController(service)).build();
+        return standaloneSetup(new CourseProgramCatalogController(service))
+                .setControllerAdvice(new GlobalExceptionHandler(DataSize.ofMegabytes(10)))
+                .build();
+    }
+
+    private MockMvc securedMockMvc(AuthenticatedUser routeUser) {
+        ProxyFactory proxyFactory = new ProxyFactory(new CourseProgramCatalogController(service));
+        proxyFactory.setProxyTargetClass(true);
+        proxyFactory.addAdvisor(AuthorizationManagerBeforeMethodInterceptor.preAuthorize());
+        CourseProgramCatalogController securedController =
+                (CourseProgramCatalogController) proxyFactory.getProxy();
+
+        UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
+                routeUser,
+                null,
+                List.of(new SimpleGrantedAuthority("ROLE_" + routeUser.role().name()))
+        );
+        Filter authenticationFilter = (request, response, chain) -> {
+            var context = SecurityContextHolder.createEmptyContext();
+            context.setAuthentication(authentication);
+            SecurityContextHolder.setContext(context);
+            try {
+                chain.doFilter(request, response);
+            } finally {
+                SecurityContextHolder.clearContext();
+            }
+        };
+        ExceptionTranslationFilter exceptionTranslationFilter =
+                new ExceptionTranslationFilter(new Http403ForbiddenEntryPoint());
+        exceptionTranslationFilter.setAccessDeniedHandler(new AccessDeniedHandlerImpl());
+
+        return standaloneSetup(securedController)
+                .addFilters(authenticationFilter, exceptionTranslationFilter)
+                .build();
     }
 }

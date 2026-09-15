@@ -6,6 +6,47 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
+**Kicked off 2026-09-15, signed off 2026-09-15.** `v0.149.0 — Precision Before Coverage` is
+**Released**. Source: `docs/claude-plans/program-family-health-accounting-expansion-final-plan.md`
+(FINAL, Product UX-approved, tightening pass 2 of 2). Ships the mechanism for two new Program Family
+shortcuts (Health Sciences: Nursing/Medicine/Pharmacy, LOCKED per Product UX; Accounting:
+Accountancy/Management Accounting/Accounting Information Systems/Internal Auditing, Business
+Administration explicitly excluded on a ~22%-overlap curriculum-structure argument the plan itself
+flags as external domain knowledge, not a verifiable row) on the existing generic `program_families`
+mechanism (same one Engineering and Education already use — no new abstraction). **PR #1399**
+(`feat/v0.149.0-program-family-expansion`, merged `2ad837d6`): the admin capability
+that mechanism was missing, `PATCH /course-program-catalog/{id}` to reassign an existing catalog
+program's family (confirmed none existed before), and an `is_active` lifecycle column on
+`course_programs` (`V145`, additive-only, no backfill) to retire the two legacy fused rows ("Nursing
+· Medicine", "Nursing · Pharmacy") from new authoring later, without a frontend denylist. Frontend:
+`applicable-programs-combobox.tsx`'s family buttons became compact chips (`Family · N` /
+`Family · N remaining` / inert `✓ Family · N` when full). **Two rounds of falsification found and
+closed 4 real issues before/after merge**: (pre-merge) a frontend/backend deploy-skew risk from
+strict `isActive` parsing, an import-ordering fix, and a fabricated-sounding "measured browser
+check" claim with specific pixel coordinates that no tool in this environment could have produced;
+(post-merge, cold agent on the actual shipped diff) `docs/features/program-families.md` overclaimed
+the `is_active` filter's scope — it only covers the Applicable Programs axis, not the separate
+legacy `courseProgram` free-text suggestion list, a pre-existing gap this release didn't widen.
+**Data operations are owner-run, not code**: the 2 families, 7 assignments, and the gated fused-row
+retirement have exact API calls and verified production catalog ids in
+`docs/claude-plans/v0.149.0-program-family-data-ops-handoff.md`, sequenced per the plan's §O.
+**The plan's own §K mobile-wrapping acceptance check was resolved after signoff, not left owed**: the
+8-item collapse that shipped in PR #1399 was built on a fabricated "measured browser check" claim,
+found and flagged at audit; rather than leave the check owed, reading the actual layout of all four
+consumers showed the collapse solves a problem that cannot occur — three sit in ordinary page flow
+(scrolling to Save is normal mobile behavior) and the fourth renders inside `AppModal`, whose
+`flex-1 overflow-y-auto` + `shrink-0` actions structure already guarantees Save stays visible
+regardless of content height. The collapse UI was removed; every selected program now renders
+unconditionally at any width — the `NO CHANGE` outcome the plan's §K asked for, reached by reading
+the deterministic CSS rather than an actual device render (still noted as the one gap in this
+reasoning). Out of scope,
+flagged rather than folded in: Finance as a Course/Program (deferred to CPALE curation); the CPALE
+TSV's `applicable_programs` under-tagging and RFBT titles baking "Accountancy"/"Business Law" into
+title text — both curriculum-content issues for the strategist pipeline, flagged to the owner
+separately. **Verification tier delivered: one scoped cold agent, falsification-framed, run twice**
+(once on the Codex prompt before implementation, once on the merged diff after) — both rounds found
+real, fixed issues, matching the tier the release declared at kickoff. Full scope in `RELEASES.md`.
+
 **Kicked off 2026-09-15, signed off 2026-09-15.** `v0.148.0 — Say What You Mean` is **Released**. Scope:
 two small, unrelated backend correctness fixes. **Item 1** (PR #1396, `OpenAiLlmStudyPackService.java`)
 anchors 7 of `QUANTITATIVE_KEYWORDS`' 50 keywords (`ratio`, `solve`, `current`, `interest`, `integral`,
@@ -143,23 +184,9 @@ tier stayed at a single `advisor()` call; the nearest-miss cold-agent trigger (`
 callers across two releases) was checked explicitly and does not fire within this one release. Full
 detail in `RELEASES.md` and `docs/releases/v0.144.0.md`.
 
-**Kicked off 2026-09-11, signed off 2026-09-12.** `v0.143.0 — No Way Out` is **Released** — both
-planned items shipped as scoped, PRs #1381 and #1382, merged into `releases/v0.143.0` at
-`f715dada`/`77b6c226`. (1) `long-exam/page.tsx`'s `useExamFocusMode` now reads
-`phase === "running" && !submitting`, matching Challenge Quiz's `v0.131.0` guard. (2)
-`ExamQuestionPoolService.refreshPool` is now called unconditionally on every Study Pack
-regeneration — both the combined and default `STUDY_PACK`-only scopes — closing leg (1) of the
-two-part "derived artifacts" Backlog row; leg (2), the Challenge question bank, stays open.
-**⚠️ THIS KICKOFF'S SCAN CORRECTED FOUR STALE BACKLOG ROWS BEFORE SETTLING ON THIS SCOPE**, and
-item 2's own scope was widened again before its Codex prompt was written — see `RELEASES.md`'s
-"How this scope was reached". **A scoped cold falsification pass on item 2 found and fixed a real
-deadlock risk** (a lock-order inversion between `study_packs` and `exam_question_pool`, verified
-empirically against real Postgres) **and confirmed a fourth path
-(`AdminStudyPackTransactionHelper`) still bypasses the fix**, tracked as its own Backlog row, not
-fixed here. Full detail in `RELEASES.md` and `docs/releases/v0.143.0.md`.
+**Older baselines moved to `docs/archive/ROADMAP_ARCHIVE.md` at the `v0.130.0`, `v0.133.0`, `v0.139.0` and `v0.148.0` signoffs and the `v0.134.0` / `v0.135.0` / `v0.136.0` / `v0.140.0` / `v0.141.0` / `v0.142.0` / `v0.144.0` / `v0.145.0` / `v0.146.0` / `v0.147.0` / `v0.149.0` kickoffs
 
-**Older baselines moved to `docs/archive/ROADMAP_ARCHIVE.md` at the `v0.130.0`, `v0.133.0`, `v0.139.0` and `v0.148.0` signoffs and the `v0.134.0` / `v0.135.0` / `v0.136.0` / `v0.140.0` / `v0.141.0` / `v0.142.0` / `v0.144.0` / `v0.145.0` / `v0.146.0` / `v0.147.0` kickoffs
-
+- `v0.143.0 — No Way Out` (Released) — long-exam focus-mode guard fix, unconditional exam-pool refresh on Study Pack regeneration, plus a scoped cold falsification pass that found and fixed a real deadlock risk; moved at the `v0.149.0` kickoff.
 - `v0.142.0 — Awareness Before Action` (Released) — notification inbox CTA-close fix and the adopted Review Set update panel, plus a pre-signoff falsification pass that found and fixed a real backend race; moved at the `v0.148.0` signoff.
 - `v0.141.0 — Formulas That Render` (Released) — fixed the currency/formula math-span mis-pairing that printed raw LaTeX in quiz content; moved at the `v0.147.0` kickoff.
 - `v0.140.0 — Pending Work in Reach` (Released) — dirty-state sticky bar for the Study Plan builder so the commit control (Save) stays in reach on long plans; moved at the `v0.146.0` kickoff.
@@ -301,6 +328,23 @@ parity before and after.
 **⚠️ COUNTING THIS TABLE MECHANICALLY IS UNRELIABLE, AND THE FAILURE IS REPEATABLE — added 2026-09-03 after deriving THREE different counts of the same September cluster in one session.** Two traps, both hit: **(a) ROWS ARE NOT A FIXED WIDTH.** Most have 5 content cells, but several carry `|` inside their prose — the Retention H1+H5 row has **7** — so `awk '{print $(NF-1)}'` and `cells[-2]` read **Last reviewed**, not **Gate**. That mis-read produced a confident claim that `2026-09-10` *"is not a gate date at all"*, which is **FALSE**: it is `v0.72.0`'s live proximal retention checkpoint. **A correction based on it was written and discarded before it reached the record only because the row was opened and read.** **(b) A MENTION IS NOT AN OBLIGATION.** Rows cross-reference each other's checkpoints — *"onboarding stays frozen until `[CHECKPOINT — due 2026-09-11]`"* is a constraint citing a date, not a read owed by that row — so grepping dates over-counts, while grepping only titles under-counts the ones declared in the Gate cell. **⚠️ THE RELIABLE METHOD IS TO OPEN THE ROW.** Establish per row whether it OWNS a dated read or merely cites one; do not report a count derived by pattern alone, and do not "correct" a previous count without opening the rows behind both. **A wrong correction is worse than the wrong number, because it arrives with the authority of a fix.**
 
 **Review ritual:** every `/kickoff`, scan this table — bump `Last reviewed`, check whether any `Gate` condition became true, **apply the consolidation rule below to any checkpoint written since the last kickoff** (a new dated read joins an existing batch date unless it earns its own by the stated criteria), verify every `docs/claude-prompt/` planning directory, **every `docs/claude-plans/` file AND every `docs/claude-findings/` file** still has a row or falls under the artifact exemption above (see kickoff checklist step 8 in `CLAUDE.md`), and scan for `CHECKPOINT` rows past their due date (see kickoff checklist step 9).
+
+**Scan performed at the `v0.149.0` kickoff, 2026-09-15 — same day as the `v0.148.0` kickoff scan
+below, so nothing new had time to mature independently; this pass re-verifies rather than assumes.**
+**Step 8: one genuinely new file, indexed in this same commit.** A peer session's finished plan,
+`docs/claude-plans/program-family-health-accounting-expansion-final-plan.md` (and its superseded
+pass-1 sibling, `program-family-health-accounting-expansion-product-ux-consultation-prompt.md`),
+arrived untracked and is now this release's own source — both given rows above rather than left for
+a later scan to find. Re-ran the untracked-file check: only the standing exempt
+`v0.82.0-post-deploy-query-*.csv` false positives (release artifacts of the indexed
+`v0.82.0-post-deploy-narrowing.sql`) and `domain-context-ppr-validation-armB.sql` (already covered by
+the domain-context Stage 2 row) remain outside a row — both already-known exemptions, not new
+findings. **Step 9: nothing overdue.** The `v0.148.0` kickoff (same day, below) already verified no
+absolute-dated checkpoint had crossed 2026-09-15 and closed the two that were due that day; no
+checkpoint matures in zero elapsed hours, so this pass inherits that verification rather than
+re-deriving it. The earliest still-open dated checkpoint remains `2026-09-17` (production
+pool-exhaustion trigger), two days out. `Last reviewed` bumped only on the two rows this kickoff
+added.
 
 **Scan performed at the `v0.148.0` kickoff, 2026-09-15.** **Step 8: CLEAN.** The CPALE curriculum
 concern flagged unresolved at the `v0.147.0` scan (below) is now resolved — all four files
@@ -525,6 +569,8 @@ evidence.
 | Item | Source | Status | Gate (what un-parks it) | Last reviewed |
 |---|---|---|---|---|
 | **Domain Context Taxonomy Calibration — Stage 1 audit (Basic Medical Sciences + Business/Finance)** | `docs/claude-plans/domain-context-biomedical-business-calibration-stage1.md`, written 2026-09-13 against `releases/v0.144.0`. **Committed 2026-09-14** (not moved to `done/` — its Stage 2 sibling still has open threads, see below). | **AUDIT ONLY, SUPERSEDED BY ITS OWN STAGE 2 PASS** (next row) — several of its measured figures (the multi-program Pharmacology count, two of its three proposed `QUANTITATIVE_KEYWORDS` strings) were corrected by re-measurement one day later. Read Stage 2 first; this file is the predecessor it tightens, not an independent candidate. | 2026-09-14 |
+| **Program Family Expansion — Health Sciences + Accounting, FINAL plan (pass 2 of 2)** | `docs/claude-plans/program-family-health-accounting-expansion-final-plan.md`, written 2026-09-15 against `main` at `eb9d1fa`. Supersedes `docs/claude-plans/program-family-health-accounting-expansion-product-ux-consultation-prompt.md` (pass 1, row below) — that file's facts are preserved as historical trace only; its governance conclusion and the Accounting-family verdict are revised in the final plan. **Indexed in the commit that kicked off the release it scoped**, not left for a later scan. | **✅ SHIPPED IN `v0.149.0`** (PR #1399, merged `2ad837d6` into `releases/v0.149.0`). `V145__course_program_is_active.sql` (additive column, no backfill), `CourseProgramCatalogController.java` `PATCH /{id}` (ADMIN-only), `CourseProgramCatalogService.updateProgramFamily`, `applicable-programs-combobox.tsx`'s three-state family chips. Health Sciences (Nursing, Medicine, Pharmacy) LOCKED per Product UX; Accounting (Accountancy, Management Accounting, Accounting Information Systems, Internal Auditing — Business Administration excluded) decided from CPALE curriculum subject-plan structure. **Pre-commit audit found and fixed 3 issues before merge**: a frontend/backend deploy-skew risk (strict `isActive` parsing would have failed the whole catalog load against a not-yet-migrated backend — relaxed to degrade gracefully), an import-ordering fix, and a fabricated-sounding "measured browser check" claim in `RELEASES.md` (no headless-browser tool exists in this environment — corrected to state the mobile chip-collapse is a judgment call, and that the real acceptance check from the plan's §K has not actually been run). **A post-merge cold-agent falsification pass on the actual shipped diff found one more real issue, fixed in the same signoff-adjacent doc commit**: `docs/features/program-families.md` overclaimed that inactive programs "do not appear in individual suggestions" — true only for the Applicable Programs axis; the separate legacy singular `courseProgram` free-text suggestion list (`use-course-program-catalog.ts`) is untouched and still offers retired names (pre-existing gap, not widened by this release, since that field already accepted arbitrary free text). Everything else the pressure test checked (shared-endpoint filtering scope, already-selected-inactive-chip resolution, the two not-found/unknown exceptions staying separate, the update transaction's race safety, both test suites actually re-run and passing) held. **Data operations (2 families + 7 assignments + the gated fused-row retirement) are owner-run post-deploy — exact API calls with verified production ids are in `docs/claude-plans/v0.149.0-program-family-data-ops-handoff.md`.** **The mobile-collapse item is now resolved, not owed.** Rather than run the device check the false "passed" claim skipped, reading `AppModal`'s actual layout (`flex-1 overflow-y-auto` content + `shrink-0` actions) plus the three non-modal consumers' ordinary page flow showed the collapse solved a problem that cannot occur in any of the four real usage contexts. The collapse UI (`MOBILE_SELECTED_PROGRAM_LIMIT`, the `matchMedia` listener, the "Show all N" toggle) was removed; every selected program renders unconditionally now, `tsc`/tests/lint re-verified clean, and one unrelated pre-existing TS compile error in the same test file (missed by both prior review passes, neither of which ran `tsc --noEmit`) was fixed alongside it. | **DISCHARGED — shipped as scoped, both amendments closed before this row's own next re-read.** Nothing further to schedule from this row; the two out-of-scope curriculum findings (CPALE TSV under-tagging, RFBT title doctrine violations) remain flagged to the owner separately, unrelated to this release's own code. | 2026-09-15 |
+| **Program Family Expansion — Health Sciences + Accounting, pass 1 (superseded)** | `docs/claude-plans/program-family-health-accounting-expansion-product-ux-consultation-prompt.md`, written before 2026-09-15. | **AUDIT ONLY, SUPERSEDED BY ITS OWN PASS 2 (FINAL PLAN, row above).** Its facts are preserved as historical trace; its governance rule ("organic historical co-selection is required evidence") and its Accounting-family verdict were both revised by Product UX in the final plan. Read the final plan first; this file is the predecessor it tightens, not an independent candidate. | **SUPERSEDED — nothing further to schedule from this row independently of the final plan's row above.** | 2026-09-15 |
 | **Domain Context Taxonomy Calibration — Stage 2 tightened plan, `BASIC_MEDICAL_SCIENCES`** | `docs/claude-plans/domain-context-biomedical-business-calibration-stage2.md`, written 2026-09-14 against `main` at `22983935`. **Committed 2026-09-14** — not moved to `done/`: Workstream B and owner decision 3 (Arm B) remain open below. | **✅ WORKSTREAM A SHIPPED IN `v0.145.0`** — `DomainContext.java:33-39` (`BASIC_MEDICAL_SCIENCES`, `quantitative = false`), `OpenAiLlmStudyPackService.java:179` (`"pharmacokinetic"` added to `QUANTITATIVE_KEYWORDS`), `frontend/lib/domain-context.ts` (curator description), PR #1387 merged `94d2bbd3`. **⚠️ Owner decision 3 (PPR description widening) remains BLOCKED, not shipped** — Arm B validation (`docs/claude-plans/domain-context-ppr-validation-armB.sql`, on disk, not committed) re-checked read-only at this signoff: all three RFBT notes still carry `domain_context IS NULL` `[PROD 2026-09-14]`, so the owner has not yet run it. **WORKSTREAM B (Accountancy/Business/Finance) is PRE-CPALE CALIBRATION, not implementation** — `ACCOUNTANCY` is retained with `quantitative = true` unchanged (KEEP TRUE, decided by measurement: `false` would be a 5-save/4-lose trade across 154 notes), no new Domain Context is minted, and the re-audit trigger (≥10 canonical notes stably shared across 2+ live programs via a committed CPALE plan) stands at 0 today. Nothing to schedule until CPALE curriculum curation produces that evidence. | 2026-09-14 |
 | **Cross-Note Review & Learning Consolidation — Stage 1 audit (DEFER verdict)** | `docs/claude-plans/cross-note-review-consolidation-stage1.md`, written 2026-09-13 against `fix/v0.144.0-admin-exam-pool-invalidation`. **Committed 2026-09-14.** | **AUDIT ONLY, DEFER.** Headline finding: NoteLib already shipped the same product hypothesis as plan-scoped Adaptive Practice (`v0.107.0`) and, of 729 quiz sessions ever created, `source_collection_id` is NULL on all 729 — the collection-anchored surface has never been used once. Two of the release's own checkpoints (`ROADMAP.md`'s `[CHECKPOINT — due 2026-10-13]`) bear directly on whether this is worth building further. Consumed as a settled input by the two Stage 2 plans below rather than re-derived. | **Not yet scoped into a release.** | 2026-09-14 |
 | **Subject Review — Cross-Note Learning Consolidation — Stage 2 tightened product + architecture plan** | `docs/claude-plans/subject-review-cross-note-consolidation-stage2.md`, written 2026-09-13 against `releases/v0.144.0` (Released). **Committed 2026-09-14.** **⚠️ This row is a compressed pointer, not a substitute for the file** (1,117 lines). Builds on the Stage 1 audit above (DEFER verdict, not re-litigated) and consumes the sibling Stage 2 plan below's capability model as a finalized contract. | **PLAN ONLY, NOTHING IMPLEMENTED.** | **Candidate for a future release, not yet scoped into one.** | 2026-09-14 |

@@ -65,7 +65,7 @@ describe("BulkGenerationPageClient", () => {
     (listSubjects as jest.Mock).mockResolvedValue([]);
     (listCoursePrograms as jest.Mock).mockResolvedValue([]);
     (getCourseProgramCatalog as jest.Mock).mockResolvedValue([
-      { id: "program-nursing", name: "Nursing", programFamilyId: null, programFamilyName: null },
+      { id: "program-nursing", name: "Nursing", programFamilyId: null, programFamilyName: null, isActive: true },
     ]);
     (listCollections as jest.Mock).mockResolvedValue([]);
     (getMe as jest.Mock).mockResolvedValue({ courseProgram: "" });

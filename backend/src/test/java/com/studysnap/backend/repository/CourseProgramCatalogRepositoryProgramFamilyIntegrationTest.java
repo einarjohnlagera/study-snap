@@ -1,6 +1,7 @@
 package com.studysnap.backend.repository;
 
 import com.studysnap.backend.dto.ProgramFamilyResponse;
+import com.studysnap.backend.dto.CourseProgramCatalogItemResponse;
 import org.junit.jupiter.api.Test;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -52,6 +53,7 @@ class CourseProgramCatalogRepositoryProgramFamilyIntegrationTest {
             statement.execute("create table users (id uuid primary key, course_program varchar(120))");
             applyMigration(statement, "V106__course_program_catalog.sql");
             applyMigration(statement, "V142__education_program_family.sql");
+            applyMigration(statement, "V145__course_program_is_active.sql");
 
             SingleConnectionDataSource dataSource = new SingleConnectionDataSource(connection, true);
             CourseProgramCatalogRepository repository =
@@ -94,6 +96,48 @@ class CourseProgramCatalogRepositoryProgramFamilyIntegrationTest {
             //    code unless uk_program_families_name actually rejects the duplicate.
             assertThatThrownBy(() -> repository.insertProgramFamily(EDUCATION))
                     .isInstanceOf(DataIntegrityViolationException.class);
+
+            // 5. FIND_BY_ID executes the same joined mapper used by the catalog list, including the
+            // lifecycle column. A missing WHERE predicate would make the second assertion fail.
+            UUID programId = repository.findAll().stream()
+                    .filter(program -> program.name().equals("Civil Engineering"))
+                    .map(CourseProgramCatalogItemResponse::id)
+                    .findFirst()
+                    .orElseThrow();
+            assertThat(repository.findById(programId))
+                    .isPresent()
+                    .get()
+                    .satisfies(program -> assertThat(program.isActive()).isTrue());
+            assertThat(repository.findById(UUID.randomUUID())).isEmpty();
+
+            // The shared catalog list deliberately includes retired rows. Persist a real false value
+            // so this fails if FIND_ALL starts filtering or mapCatalogItem hard-codes the default.
+            statement.executeUpdate("update course_programs set is_active = false where id = '" + programId + "'");
+            assertThat(repository.findAll())
+                    .filteredOn(program -> program.id().equals(programId))
+                    .singleElement()
+                    .satisfies(program -> assertThat(program.isActive()).isFalse());
+            assertThat(repository.findById(programId))
+                    .isPresent()
+                    .get()
+                    .satisfies(program -> assertThat(program.isActive()).isFalse());
+
+            // 6. UPDATE_PROGRAM_FAMILY persists both assignment and clearing. Read through FIND_BY_ID
+            // so a Java-only return value cannot make a missing UPDATE look successful.
+            repository.updateProgramFamily(programId, educationId);
+            repository.updateProgramFamily(programId, educationId);
+            assertThat(repository.findById(programId))
+                    .isPresent()
+                    .get()
+                    .satisfies(program -> {
+                        assertThat(program.programFamilyId()).isEqualTo(educationId);
+                        assertThat(program.programFamilyName()).isEqualTo(EDUCATION);
+                    });
+            repository.updateProgramFamily(programId, null);
+            assertThat(repository.findById(programId))
+                    .isPresent()
+                    .get()
+                    .satisfies(program -> assertThat(program.programFamilyId()).isNull());
         }
     }
 

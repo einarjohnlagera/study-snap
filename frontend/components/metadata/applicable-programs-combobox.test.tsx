@@ -19,14 +19,14 @@ jest.mock("@/lib/api", () => ({
 }));
 
 const catalog = [
-  { id: "program-a", name: "Civil Engineering", programFamilyId: "family-engineering", programFamilyName: "Engineering" },
-  { id: "program-b", name: "Mechanical Engineering", programFamilyId: "family-engineering", programFamilyName: "Engineering" },
+  { id: "program-a", name: "Civil Engineering", programFamilyId: "family-engineering", programFamilyName: "Engineering", isActive: true },
+  { id: "program-b", name: "Mechanical Engineering", programFamilyId: "family-engineering", programFamilyName: "Engineering", isActive: true },
 ];
 
 const familyCatalog = [
   ...catalog,
-  { id: "program-c", name: "Electrical Engineering", programFamilyId: "family-engineering", programFamilyName: "Engineering" },
-  { id: "program-nursing", name: "Nursing", programFamilyId: null, programFamilyName: null },
+  { id: "program-c", name: "Electrical Engineering", programFamilyId: "family-engineering", programFamilyName: "Engineering", isActive: true },
+  { id: "program-nursing", name: "Nursing", programFamilyId: null, programFamilyName: null, isActive: true },
 ];
 
 /**
@@ -40,12 +40,12 @@ const familyCatalog = [
  * everything, so it proves nothing about family SCOPING. That is what this catalog is for.
  */
 const twoFamilyCatalog = [
-  { id: "program-a", name: "Civil Engineering", programFamilyId: "family-engineering", programFamilyName: "Engineering" },
-  { id: "program-b", name: "Mechanical Engineering", programFamilyId: "family-engineering", programFamilyName: "Engineering" },
-  { id: "program-elem", name: "Elementary Education", programFamilyId: "family-education", programFamilyName: "Education" },
-  { id: "program-sec", name: "Secondary Education", programFamilyId: "family-education", programFamilyName: "Education" },
-  { id: "program-ece", name: "Early Childhood Education", programFamilyId: "family-education", programFamilyName: "Education" },
-  { id: "program-nursing", name: "Nursing", programFamilyId: null, programFamilyName: null },
+  { id: "program-a", name: "Civil Engineering", programFamilyId: "family-engineering", programFamilyName: "Engineering", isActive: true },
+  { id: "program-b", name: "Mechanical Engineering", programFamilyId: "family-engineering", programFamilyName: "Engineering", isActive: true },
+  { id: "program-elem", name: "Elementary Education", programFamilyId: "family-education", programFamilyName: "Education", isActive: true },
+  { id: "program-sec", name: "Secondary Education", programFamilyId: "family-education", programFamilyName: "Education", isActive: true },
+  { id: "program-ece", name: "Early Childhood Education", programFamilyId: "family-education", programFamilyName: "Education", isActive: true },
+  { id: "program-nursing", name: "Nursing", programFamilyId: null, programFamilyName: null, isActive: true },
 ];
 
 describe("ApplicableProgramsCombobox", () => {
@@ -94,7 +94,8 @@ describe("ApplicableProgramsCombobox", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Add all 2 Engineering programs" }));
+    expect(screen.getByRole("button", { name: "Engineering · 2 remaining" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Engineering · 2 remaining" }));
     expect(onChange).toHaveBeenCalledWith([
       "program-nursing",
       "program-a",
@@ -113,7 +114,7 @@ describe("ApplicableProgramsCombobox", () => {
     expect(screen.getByRole("button", { name: "Remove Civil Engineering" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Remove Mechanical Engineering" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Remove Electrical Engineering" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /Add all .* Engineering/ })).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Engineering — all 3 programs added")).toHaveTextContent("✓ Engineering · 3");
 
     fireEvent.click(screen.getByRole("button", { name: "Remove Mechanical Engineering" }));
     expect(onChange).toHaveBeenLastCalledWith(["program-nursing", "program-a", "program-c"]);
@@ -135,7 +136,7 @@ describe("ApplicableProgramsCombobox", () => {
         onChange={twoMemberExpansion}
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: "Add all 2 Engineering programs" }));
+    fireEvent.click(screen.getByRole("button", { name: "Engineering · 2" }));
     expect(twoMemberExpansion).toHaveBeenCalledWith(["program-a", "program-b"]);
     unmount();
 
@@ -150,7 +151,7 @@ describe("ApplicableProgramsCombobox", () => {
         onChange={threeMemberExpansion}
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: "Add all 3 Engineering programs" }));
+    fireEvent.click(screen.getByRole("button", { name: "Engineering · 3" }));
     expect(threeMemberExpansion).toHaveBeenCalledWith(["program-a", "program-b", "program-c"]);
   });
 
@@ -166,10 +167,10 @@ describe("ApplicableProgramsCombobox", () => {
     );
 
     // Both families are offered, each counting only its own unselected members.
-    expect(screen.getByRole("button", { name: "Add all 2 Engineering programs" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Add all 3 Education programs" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Engineering · 2" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Education · 3" })).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Add all 3 Education programs" }));
+    fireEvent.click(screen.getByRole("button", { name: "Education · 3" }));
 
     // ⚠️ THE ASSERTION IS THE ABSENCE AS MUCH AS THE PRESENCE: a component that expanded every family
     // would pass a presence-only check while quietly selecting Engineering too.
@@ -188,26 +189,148 @@ describe("ApplicableProgramsCombobox", () => {
     );
 
     // Engineering has one member left; Education has two. Both counts are family-scoped.
-    expect(screen.getByRole("button", { name: "Add all 1 Engineering program" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Engineering · 1 remaining" })).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Add all 1 Engineering program" }));
+    fireEvent.click(screen.getByRole("button", { name: "Engineering · 1 remaining" }));
 
     // The Education pick and the family-less pick survive, and nothing is duplicated.
     expect(onChange).toHaveBeenCalledWith(["program-a", "program-elem", "program-nursing", "program-b"]);
   });
 
-  it("drops a family's affordance once that family is fully selected, leaving the other's", () => {
+  it("keeps a full family visible and inert while leaving the other family actionable", () => {
+    const onChange = jest.fn();
     render(
       <ApplicableProgramsCombobox
         id="applicable-programs-exhausted"
         catalog={twoFamilyCatalog}
         selectedIds={["program-elem", "program-sec", "program-ece"]}
+        onChange={onChange}
+      />,
+    );
+
+    const fullFamily = screen.getByLabelText("Education — all 3 programs added");
+    expect(fullFamily).toHaveTextContent("✓ Education · 3");
+    expect(fullFamily).not.toHaveAttribute("aria-pressed");
+    fireEvent.click(fullFamily);
+    expect(onChange).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "Engineering · 2" })).toBeInTheDocument();
+  });
+
+  it("reverts a full family to its partial state after a member is removed", () => {
+    const onChange = jest.fn();
+    const { rerender } = render(
+      <ApplicableProgramsCombobox
+        id="applicable-programs-reopen-family"
+        catalog={familyCatalog}
+        selectedIds={["program-a", "program-b", "program-c"]}
+        onChange={onChange}
+      />,
+    );
+
+    expect(screen.getByLabelText("Engineering — all 3 programs added")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Remove Mechanical Engineering" }));
+    expect(onChange).toHaveBeenCalledWith(["program-a", "program-c"]);
+
+    rerender(
+      <ApplicableProgramsCombobox
+        id="applicable-programs-reopen-family"
+        catalog={familyCatalog}
+        selectedIds={["program-a", "program-c"]}
+        onChange={onChange}
+      />,
+    );
+    expect(screen.getByRole("button", { name: "Engineering · 1 remaining" })).toBeInTheDocument();
+  });
+
+  it("excludes inactive programs from individual suggestions and family expansion", () => {
+    const onChange = jest.fn();
+    const catalogWithInactiveMember = [
+      catalog[0],
+      { ...catalog[1], isActive: false },
+    ];
+    render(
+      <ApplicableProgramsCombobox
+        id="applicable-programs-inactive"
+        catalog={catalogWithInactiveMember}
+        selectedIds={[]}
+        onChange={onChange}
+      />,
+    );
+
+    fireEvent.click(screen.getByLabelText("Toggle course program suggestions"));
+    expect(screen.getByRole("option", { name: "Civil Engineering" })).toBeInTheDocument();
+    expect(screen.queryByRole("option", { name: "Mechanical Engineering" })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Engineering · 1" }));
+    expect(onChange).toHaveBeenCalledWith(["program-a"]);
+  });
+
+  it("keeps an already-selected inactive program visible and removable", () => {
+    const onChange = jest.fn();
+    render(
+      <ApplicableProgramsCombobox
+        id="applicable-programs-selected-inactive"
+        catalog={[{ ...catalog[1], isActive: false }]}
+        selectedIds={["program-b"]}
+        onChange={onChange}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Remove Mechanical Engineering" }));
+    expect(onChange).toHaveBeenCalledWith([]);
+    expect(screen.queryByLabelText("Program family shortcuts")).not.toBeInTheDocument();
+  });
+
+  it("treats a stale catalog item without isActive as active", () => {
+    const staleCatalog = [{
+      id: "program-stale",
+      name: "Pharmacy",
+      programFamilyId: null,
+      programFamilyName: null,
+    }];
+    render(
+      <ApplicableProgramsCombobox
+        id="applicable-programs-stale-cache"
+        catalog={staleCatalog as unknown as typeof catalog}
+        selectedIds={[]}
         onChange={jest.fn()}
       />,
     );
 
-    expect(screen.queryByRole("button", { name: /Education program/ })).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Add all 2 Engineering programs" })).toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText("Toggle course program suggestions"));
+    expect(screen.getByRole("option", { name: "Pharmacy" })).toBeInTheDocument();
+  });
+
+  // v0.149.0: a mobile-only collapse (initially rendered 8 of N chips, behind a "Show all" toggle) was
+  // built and shipped on an unverified "measured browser check" claim, then removed at audit -- read
+  // through the actual layout, all four consumers either sit in normal page flow (scrolling to a Save
+  // button below a tall chip row is ordinary, expected mobile behavior, not a bug) or inside `AppModal`,
+  // whose own `flex-1 overflow-y-auto` content region plus `shrink-0` actions row already guarantees the
+  // actions stay visible regardless of how much content renders above them. There is no viewport where
+  // this component needs to hide a chip to keep Save reachable, so it renders every selected program
+  // unconditionally, at any width. This test is the "no collapse" companion to the acceptance check
+  // the plan itself asked for, not a screenshot -- it can't observe wrapping, but proves the component
+  // itself imposes no artificial limit.
+  it("renders every selected program regardless of viewport width, with no artificial limit", () => {
+    const largeCatalog = Array.from({ length: 18 }, (_, index) => ({
+      id: `engineering-${index}`,
+      name: `Engineering Program ${index + 1}`,
+      programFamilyId: "family-engineering",
+      programFamilyName: "Engineering",
+      isActive: true,
+    }));
+
+    render(
+      <ApplicableProgramsCombobox
+        id="applicable-programs-mobile-overflow"
+        catalog={largeCatalog}
+        selectedIds={largeCatalog.map((program) => program.id)}
+        onChange={jest.fn()}
+      />,
+    );
+
+    expect(screen.getAllByRole("button", { name: /^Remove Engineering Program/ })).toHaveLength(18);
+    expect(screen.queryByRole("button", { name: /^Show all/ })).not.toBeInTheDocument();
   });
 
   it("keeps programs without a family individually selectable and renders no family affordance", () => {
@@ -215,7 +338,7 @@ describe("ApplicableProgramsCombobox", () => {
     render(
       <ApplicableProgramsCombobox
         id="applicable-programs-no-families"
-        catalog={[{ id: "program-nursing", name: "Nursing", programFamilyId: null, programFamilyName: null }]}
+        catalog={[{ id: "program-nursing", name: "Nursing", programFamilyId: null, programFamilyName: null, isActive: true }]}
         selectedIds={[]}
         onChange={onChange}
       />,
@@ -299,9 +422,20 @@ describe("ApplicableProgramsCombobox", () => {
     expect(screen.getByRole("button", { name: /Add “Civil Engineer” to the catalog/ })).toBeInTheDocument();
   });
 
+  it("does not offer an inactive near match as a selection candidate", async () => {
+    (findSimilarCoursePrograms as jest.Mock).mockResolvedValue([{ ...catalog[0], isActive: false }]);
+    render(<ApplicableProgramsCombobox id="inactive-near-match" catalog={catalog} selectedIds={[]} onChange={jest.fn()} canCreateCatalogProgram />);
+
+    fireEvent.focus(screen.getByLabelText("Add a course or program"));
+    fireEvent.change(screen.getByLabelText("Add a course or program"), { target: { value: "Civil Engineer" } });
+
+    await waitFor(() => expect(findSimilarCoursePrograms).toHaveBeenCalled());
+    expect(screen.queryByRole("button", { name: "Select Civil Engineering" })).not.toBeInTheDocument();
+  });
+
   it("creates and selects a catalog program without losing existing selections", async () => {
     const onChange = jest.fn();
-    const created = { id: "program-new", name: "Chemical Engineering", programFamilyId: "family-engineering", programFamilyName: "Engineering" };
+    const created = { id: "program-new", name: "Chemical Engineering", programFamilyId: "family-engineering", programFamilyName: "Engineering", isActive: true };
     (createCourseProgram as jest.Mock).mockResolvedValue(created);
     render(<ApplicableProgramsCombobox id="create-program" catalog={catalog} selectedIds={["program-a"]} onChange={onChange} canCreateCatalogProgram />);
 

@@ -1,5 +1,181 @@
 # RELEASES.md - NoteLib
 
+## v0.149.0 - Precision Before Coverage
+
+**Status: Released**
+
+Theme: two new Program Family shortcuts for curators (Health Sciences, Accounting), built on the
+existing generic family mechanism, plus the admin capability and legacy-catalog cleanup needed to
+maintain families going forward without another release.
+
+Source: `docs/claude-plans/program-family-health-accounting-expansion-final-plan.md` (FINAL, Product
+UX-approved, tightening pass 2 of 2; untracked on disk, indexed in `ROADMAP.md`'s Backlog Index).
+Supersedes `docs/claude-plans/program-family-health-accounting-expansion-product-ux-consultation-prompt.md`
+(pass 1) — that file's facts are preserved as historical trace only; do not re-read it for anything
+load-bearing.
+
+### Planned Scope
+
+- **`is_active` lifecycle column on `course_programs` (backend, migration).** `course_programs` has no
+  lifecycle field today (`id, name, program_family_id, exam_goal_slug, created_at` only — confirmed
+  against current migrations at kickoff). Adds `is_active BOOLEAN NOT NULL DEFAULT TRUE`, reusing the
+  existing `discount_vouchers`/`quiz_share_links` convention rather than inventing a new one (confirmed:
+  both already carry `is_active BOOLEAN NOT NULL DEFAULT TRUE`). This migration adds the column ONLY.
+  **⚠️ ANTI-DRIFT: do NOT bundle the 2-row backfill (below) into this same migration** — see the
+  deployment-ordering item.
+- **Legacy fused catalog rows deprecated from new authoring, not deleted (backend, follow-up
+  step).** "Nursing · Medicine" (20 notes) and "Nursing · Pharmacy" (1 note) get `is_active = false`,
+  targeted by name (not id, since ids are runtime-generated). **A SEPARATE step from the column-add
+  migration, deployed only after Health Sciences family population is confirmed live in production** —
+  bundling them would strand curators between losing the fused shortcut and gaining its replacement.
+  Existing Notes referencing these rows are never touched; `course_programs` rows are never deleted.
+- **`PATCH /course-program-catalog/{id}` — new ADMIN-only endpoint (backend).** No endpoint exists today
+  to reassign an *existing* catalog program's family (confirmed: `CourseProgramCatalogController` is
+  GET-only at kickoff). `UpdateCourseProgramCatalogRequest(UUID programFamilyId)` — nullable;
+  `null` clears membership, a valid id sets/changes it. `@PreAuthorize("hasRole('ADMIN')")`, mirroring
+  `NoteCollectionController`'s existing `PATCH /{id}` convention. Real `MockMvc` request test with
+  `Content-Type: application/json` required (not a bare service-method call — this repo's own `v0.119.0`
+  lesson), plus ADMIN-only guard, assign/change/clear, unknown-program, unknown-family cases.
+- **List-endpoint filtering (backend).** The authoring combobox's pickable list excludes `is_active =
+  false` rows; a Note that already references an inactive row must still resolve and render it as a
+  normal chip (fetch selected-by-id regardless of `is_active`, filter only the *pickable* list). **⚠️
+  Confirm which endpoint the admin catalog management screen uses and keep that one unfiltered** —
+  filtering the wrong list would hide an inactive row from the one screen meant to manage it.
+- **Family-chip UX redesign (frontend, `applicable-programs-combobox.tsx`).** Replaces full-sentence
+  "Add all N programs" buttons with compact states: none selected `Family · N`; partial
+  `Family · N remaining` (click adds only the missing ones); full `✓ Family · N` — **LOCKED, inert,
+  non-interactive**, status text or a disabled element rather than a clickable toggle (`aria-pressed`
+  would misrepresent state, since the Note never persists "family selected" — only individual programs
+  do); removing a member after full immediately reverts to partial. **⚠️ ANTI-DRIFT: do NOT touch
+  `availableProgramFamilies`/`handleFamilyExpansion`** — already family-count-agnostic, confirmed
+  unchanged at kickoff. 18+ selected-program mobile wrapping gets an explicit acceptance check at
+  implementation time (render Engineering's 18 at desktop + 375px mobile width; pass/fail criteria in
+  the plan's §K) rather than a pre-guessed threshold fix.
+- **Health Sciences program family (data + existing mechanism, no new schema).** Nursing, Medicine,
+  Pharmacy — **LOCKED per Product UX, not reopened this release**. Evidence: 18 notes carrying a genuine
+  3-way tag accumulated across five weeks, plus 21 more notes across the two fused rows above — two
+  independent curator actions converging on the same trio. Physical Therapy and Radiologic Technology
+  excluded (no comparable co-selection evidence).
+- **Accounting program family (data + existing mechanism, no new schema).** Accountancy, Management
+  Accounting, Accounting Information Systems, Internal Auditing (4 members) — decided from the CPALE
+  curriculum's own subject-plan structure (Management Services and Auditing sections are, by curriculum
+  design, shared core coursework for these four program types), not from the 35-note bulk-tagging action
+  (which proves curators need cross-program bulk assignment as a workflow, not that all 10 originally
+  bulk-tagged programs belong in one family). **Business Administration explicitly EXCLUDED** — its
+  genuine overlap is concentrated in RFBT + finance-flavored Management Services content, ~22% of the
+  CPALE plan, which fails the family's own precision bar (a program that needs manual removal on ~78%
+  of uses isn't a good default). Entrepreneurship, Economics, Senior High–ABM, Real Estate Management,
+  CMA, CFA all excluded for the release too (thin or no signal, or — for CMA/CFA — an unresolved
+  credential-vs-program taxonomy question, not evidence against inclusion). **⚠️ Flagged for the owner,
+  not blocking kickoff: the Business Administration exclusion rests on external domain knowledge about
+  how Philippine accounting-track programs share curricula, not a row-level fact the database can
+  confirm — worth a sanity check before this family ships.**
+- **`docs/features/program-families.md` updated (docs).** Documents both new families, the `is_active`
+  mechanism, and the reverse Domain-Context guard already noted in the pass-1 audit.
+- **One low-risk copy unification (frontend).** `bulk-generation-page-client.tsx`'s Domain Context
+  helper text ("Required when this note applies to more than one program") is looser than the other two
+  surfaces' phrasing ("Needed before you can generate a Study Pack for a note in more than one program")
+  — unified to match. **No fix for a suspected Domain Context UI phrasing bug from the pass-1 audit** —
+  it was not reproduced this pass; do not implement a fix for a defect that isn't there.
+
+**Explicitly out of scope, not folded in:**
+- Finance as a Course/Program is deferred to CPALE curation itself — the plan's own trigger (the first
+  canonical Finance-applicable note) looks likely to fire soon (16 of 359 planned CPALE notes are
+  textbook Finance/Financial-Management topics) but has not fired yet. Finance Domain Context: still NO.
+- The CPALE curriculum TSV's `applicable_programs` column is uniformly under-tagged (`Accountancy` on
+  all 359 rows, zero cross-program exceptions), and several RFBT titles bake "Accountancy"/"Business Law"
+  into the title text itself (a Note Title doctrine violation). Both are real findings surfaced while
+  reading the plan, both are curriculum-content issues belonging to the curriculum strategist pipeline,
+  and neither is fixed by this release — flagged to the owner separately.
+- Legacy-Note normalization for the 21 notes already carrying a fused-row tag: deferred/follow-up, not
+  this release.
+- Program Family overlap (one nullable FK, single family per program) stays unsupported — a known,
+  recorded limitation, no schema change here.
+
+Anti-drift (whole release): Program Family stays authoring convenience only — never persisted on Note
+generation payloads, never a discovery axis, never sent to generation, never changes Domain Context or
+Authored Depth, never inferred from Review Set, never retroactively synced onto existing Notes (nothing
+stores which family a Note's programs came from, so this is structurally impossible, not just a rule —
+a focused repository test should confirm `note_course_program` rows are never written with a
+family-derived value). Family selection stays purely additive. **Data operations — assigning the 7
+catalog rows to their new families via the new endpoint, and the later `is_active` backfill — are
+owner-run post-deploy, sequenced per the plan's §O, not part of this release's code diff.**
+
+**Routing: Codex** — this touches a backend migration, a new endpoint, and a frontend redesign together,
+per `CLAUDE.md`'s task-routing table. Implementation slices per the plan's §Q: (1) backend catalog
+lifecycle + family-reassignment API, (2) frontend family-chip redesign, (3) docs update — one Codex
+prompt or two, decided at prompt-writing time. **Verification tier: at minimum one scoped cold agent,
+falsification-framed** — re-decide once the actual diff exists. Three triggers already fire at kickoff:
+this adds an ADMIN-only mutation endpoint with no prior tests to anchor against; the new lifecycle
+column is consumed by two different list paths where filtering the wrong one hides inactive rows from
+the admin screen meant to manage them; and the Business Administration exclusion is the plan's own
+flagged external-domain-knowledge conclusion, not a verifiable row. Full scope, evidence, and the
+plan's complete decision block are in
+`docs/claude-plans/program-family-health-accounting-expansion-final-plan.md`.
+
+### Shipped
+
+- Added `course_programs.is_active` through additive migration V145, defaulting every existing and future
+  catalog row to active. The migration contains no fused-row retirement backfill; that remains a gated,
+  owner-run follow-up after Health Sciences is populated.
+- Added the ADMIN-only `PATCH /course-program-catalog/{id}` endpoint for assigning, changing, and clearing
+  an existing program's family. Missing or malformed program ids share `404 COURSE_PROGRAM_NOT_FOUND`;
+  an unknown submitted family remains `400 UNKNOWN_PROGRAM_FAMILY`.
+- Kept the shared catalog list unfiltered for both admin management and authoring fetches. The authoring
+  combobox alone excludes inactive programs from new individual selection and family expansion while
+  preserving inactive programs that an existing Note already selected.
+- Reworked family shortcuts into visible none, partial, and full states (`Family · N`, `Family · N
+  remaining`, `✓ Family · N`), with the full state accessible and inert, and aligned Bulk Generate's
+  Domain Context helper copy with the other authoring surfaces.
+- **⚠️ CORRECTED AT AUDIT — the original text here claimed a browser check "passed at 1440×900" and
+  measured specific pixel/coordinate values (a 502px chip row, Save visible at y=550–590) at 375×812.
+  No headless-browser or screenshot tool exists in this repo or in the Codex/Claude environments that
+  built and reviewed this release, so those coordinates could not have come from an actual render —
+  the plan's own §K explicitly warned against exactly this failure mode ("do not invent a threshold
+  without looking").** What actually shipped: a mobile-only collapse to 8 visible chips past that
+  count, with an accessible "Show all N selected programs" toggle exposing every remove action,
+  built as a judgment call (18 unwrapped chips plus their own labels is a lot of vertical space on a
+  375px-wide screen) rather than a verified measurement. The acceptance check in the plan's §K has
+  **not actually been run** — flagged here rather than left standing as a false "passed" claim; a
+  real device/viewport check before this ships to production would confirm or correct this.
+- **Post-merge cold-agent falsification pass on the actual shipped diff** (PR #1399, commit `2ad837d6`)
+  re-ran both full test suites directly (not trusted from the PR's own report — genuine pass, 31 backend
+  + 26 frontend tests targeted at this change) and checked 8 specific claims against real code. One more
+  real finding: `docs/features/program-families.md` overclaimed that inactive programs "do not appear in
+  individual suggestions" — true only for the Applicable Programs axis (`applicable-programs-combobox.tsx`);
+  the separate, legacy singular `courseProgram` free-text suggestion list (`use-course-program-catalog.ts`
+  → `course-program-combobox.tsx`, used on onboarding/profile/both note surfaces) is untouched and still
+  offers a retired program's name — a pre-existing gap this release did not widen (that field already
+  accepted arbitrary free text), not fixed here, corrected in the doc to state its actual scope. Also
+  added one "Known limitations" line (a fully-selected family's inert chip count can shrink silently if a
+  member is later retired — unreachable today, noted for the future) and a fifth doc file,
+  `docs/claude-plans/v0.149.0-program-family-data-ops-handoff.md`, giving the owner the exact API calls
+  and verified production catalog ids for the two families and 7 assignments, sequenced per plan §O.
+  Everything else the pass checked held: the shared-endpoint filtering scope, already-selected-inactive
+  chips resolving correctly end to end, `CourseProgramNotFoundException`/`UnknownCourseProgramException`
+  staying genuinely separate (4 untouched pre-existing call sites), and the update endpoint's two-read
+  transaction being race-safe by construction (Postgres row-lock + MVCC, not luck).
+- **The mobile-collapse UI (above) was removed, not left as an owed check.** Reading the actual layout
+  of all four consumers (`note-editor-form.tsx`, `private-note-detail-page-client.tsx`'s inline panel,
+  `bulk-generation-page-client.tsx`, and `admin-applicable-programs-section.tsx` via `AppModal`) found
+  it solves a problem that cannot occur in any of them: three sit in ordinary page flow, where scrolling
+  to a Save button below a tall chip row is normal mobile behavior; the fourth renders inside
+  `AppModal`, whose `flex-1 overflow-y-auto` content region plus `shrink-0` actions row (`app-modal.tsx`)
+  already guarantees the actions stay visible regardless of content height — a deterministic CSS
+  property, not a guess, though still not the same as an actual device render. `MOBILE_SELECTED_PROGRAM_LIMIT`,
+  the `matchMedia` viewport listener, and the "Show all N" toggle were removed; every selected program
+  now renders unconditionally at any width, which is the `NO CHANGE — CURRENT WRAPPING ACCEPTABLE`
+  outcome the plan's own §K asked for if the check passed, arrived at by reading the layout architecture
+  rather than by measuring a screenshot. `tsc --noEmit`, the full frontend suite, and lint all re-verified
+  clean after the removal — this pass also fixed one unrelated, pre-existing TypeScript compile error in
+  the same test file (a fixture cast that needed to go through `unknown` first) that had shipped in PR
+  #1399 uncaught, since neither the pre-merge audit nor the post-merge cold agent had run `tsc --noEmit`.
+- Added migration, repository, service, real-request controller, and component coverage for lifecycle
+  defaults, joined row mapping, family reassignment and clearing, endpoint errors and authorization,
+  inactive candidates, and all family-chip states.
+
+---
+
 ## v0.148.0 - Say What You Mean
 
 **Status: Released**
@@ -512,146 +688,3 @@ unscoped infrastructure work this release does not take on.
   PR #1385), but that is two releases touching a shared method, not two PRs *within* this release —
   the trigger as written did not fire. No auth/privacy boundary moved, no money/quota/production-data
   semantics changed, and no defect was introduced by this session and then fixed.
-
-## v0.143.0 - No Way Out
-
-**Status: Released** (kicked off 2026-09-11, signed off 2026-09-12, base branch
-`releases/v0.143.0`, cut from `main` after `v0.142.0` merged as #1380 and tagged, deployed and
-verified — Vercel and Render both confirmed live on `61153cc6`. PRs #1381 and #1382 merged into
-the release branch at `f715dada` and `77b6c226`.)
-
-Theme: two live defects found by re-verifying Backlog Index candidates against current code
-rather than trusting their rows — a focus-mode trap that leaves a learner with no exit if Long
-Exam submission hangs, and an exam question pool that silently keeps serving questions from a
-Note's pre-regeneration content.
-
-### How this scope was reached
-
-Four Backlog Index candidates were checked before these two survived: **"Official Review Set
-publication boundary" P3** claimed un-parked/unbuilt but is fully shipped
-(`ReviewSetUpdateNotificationService.java`, commit `83074463`, `v0.135.0`); **Adaptive Practice's
-recommendation engine** is population-blocked — `[CHECKPOINT — due 2026-10-05]`'s own kill
-criterion says single digits means re-date, and a fresh read found 3 eligible users, unchanged in
-a month, and 0 users with a cross-pack actionable weak concept; **Learning Connections supporter
-onboarding** has a real, shipped-nowhere definition (`v0.97.0`, `learning-connections-phase-plan.md:443-522`)
-but sits 8 days from `[CHECKPOINT — due 2026-09-19]`, which 6 consecutive releases have protected
-from exactly this class of promotion — owner chose to defer it to `v0.144.0` rather than risk
-contaminating the count; **"Support Another Learner" Phase 1** claimed a `[DECISION]+[EVIDENCE]`-blocked
-axis-error gate but is fully shipped (`requireTeacherOrAdmin` removed in commit `cbc7d13c`,
-`v0.89.0`) — this row also duplicates "Learning Connections" under a different name for the same
-shipped arc.
-
-**All three stale rows corrected in this kickoff commit, along with a fourth found in the same
-pass** (Onboarding Intent Router's C8/C9 residuals — both already fixed in commit `826ca155`,
-2026-08-12, row never updated). Full detail in `ROADMAP.md`'s Backlog Index scan note.
-
-**Item 2's own scope was widened again before its Codex prompt was written.** Tracing the fix
-surfaced that gating the pool invalidation on `regeneratingNoteContent` — the kickoff's own framing
-— would have missed the *default* regeneration path: `POST /notes/{id}/regenerate` resolves an
-absent/blank scope to `NoteRegenerationScope.STUDY_PACK`, which reaches the same worker method with
-that flag `false`, even though the Study Pack's content is replaced in place either way. The prompt
-(`docs/codex-prompts/v0.143.0-exam-pool-invalidation.md`, gitignored) calls the invalidation
-unconditionally instead, and adds a `generationStatusAt`-stamp guard against a
-concurrent-regeneration race the unconditional call would otherwise make more likely to trigger.
-Delivered through Codex on 2026-09-12. **A related, separate, already-shipped defect surfaced during
-the same trace and was flagged rather than folded in**: `deactivateShareLinksForNote` (the `v0.110.2` precedent
-item 2 reuses) has the identical gate gap on the same default regeneration scope — recorded as its
-own Backlog Index row in `ROADMAP.md`, not code-verified against production, and not fixed here.
-
-### Planned Scope
-
-- **Item 1 — Long Exam's focus-mode trap (frontend, isolated bug).** `long-exam/page.tsx:255`
-  calls `useExamFocusMode(phase === "running")` with no `!submitting` guard, while its Leave
-  button is `leaveDisabled={submitting}` (`:966`). If a completion request hangs, the learner has
-  no visible exit — focus mode hides the header and the one exit control is disabled. Challenge
-  Quiz already fixed this exact trap in `v0.131.0`: `challenge-quiz/page.tsx:1516` reads
-  `useExamFocusMode(phase === "running" && !submitting)`, with a comment explaining why the guard
-  is load-bearing. Long Exam was left out of that release's diff. Fix: apply the same guard.
-  Inline-sized, ships first, its own PR.
-- **Item 2 — exam question pools are not invalidated when a Note+Study Pack regeneration
-  replaces content (backend).** `ExamQuestionPoolService.initiatePoolForMode` (`:220-227`)
-  early-returns when a pool already exists and is READY/PENDING/GENERATING. Regeneration keeps
-  the same `studyPackId` (the documented in-place versioning rule — quiz/session history stays
-  linked), so the `initiatePool` call after regeneration (`StudyPackService.java:933`) is a
-  silent no-op: Long Exam and Board Exam keep serving questions drawn from replaced content. The
-  fix pattern already exists three lines above the omission, in the same method:
-  `deactivateShareLinksForNote` (`:908`) does the analogous thing for shared quiz links, citing
-  `v0.110.2`'s precedent explicitly in its own comment. Touches a `@Transactional` regeneration
-  path carrying two quota meters — not copy-fix-sized, owes its own verification tier (below).
-
-**Explicitly NOT in scope:** the Challenge Quiz question bank was flagged in the same Backlog row
-as carrying the same staleness gap, but this kickoff traced only as far as confirming
-`queueOfficialChallengeQuizTemplateSeed` is an official-template path, not the per-user bank —
-where the per-user bank is actually populated is unknown. Scoping a third invalidation seam on a
-structural analogy, without having traced it, is exactly the failure mode this kickoff's own scan
-spent the night correcting. Leave it as an open question for whoever verifies it next, not a
-planned item.
-
-### Checkpoint reads closed at this kickoff
-
-- **`[CHECKPOINT — due 2026-09-11]` `v0.114.0` — CLOSED, kill criterion (i) confirmed.** Read-only
-  Render application log query, `ConnectionLifetimeStartupLogger` at boot, 2026-09-04 through
-  2026-09-07 (8+ instances sampled): every single line reports
-  `hibernate.connection.handling_mode=DELAYED_ACQUISITION_AND_HOLD` with `open-in-view=ON`,
-  matching the test measurement exactly. `v0.112.0` §7 holds in the environment that matters.
-- **`v0.62.0` Knowledge Impact conditional-rate checkpoint — RE-DATED, not closed.** The row's own
-  premise (*"the new event has fired ZERO times because `v0.136.0` is not deployed"*) is now
-  stale — `v0.136.0` deployed days ago. Fresh read: 1 distinct viewer, 3 `KNOWLEDGE_IMPACT_DASHBOARD_VIEWED`
-  events, all 2026-09-09, none more than 2 days old. The conditional rate this row measures (did a
-  viewer publish again within N days) is genuinely not yet measurable — N days have not elapsed —
-  not a null read. Re-dated rather than read as a pass or fail.
-- **⚠️ Tool-reliability finding, not a product one:** a read-only Render Postgres query without any
-  `GROUP BY` returned an array for a scalar `user_id` column, and the identical array recurred
-  verbatim across two unrelated queries against two different tables. Caught before it reached
-  this file — re-ran with `count(DISTINCT user_id)` instead of raw ids. Treat any non-scalar
-  result from this tool as suspect until re-verified with an aggregate query.
-
-### Verification tier
-
-**One scoped cold agent, falsification-framed**, for item 2 only — it changes what questions a
-learner is served and touches a `@Transactional` path with two quota meters, the class of change
-CLAUDE.md's verification-tier gate reserves for more than a single `advisor()` call. Item 1 is a
-single-expression fix with a direct precedent in the same codebase; a normal test plus `advisor()`
-on the diff is enough.
-
-### Routing
-
-**CLAUDE CODE inline** for item 1 (one file, one expression, direct precedent). **CODEX** for item
-2 (backend service + regeneration path + tests) — write the prompt after item 1 ships.
-
-### Shipped
-
-- **Item 1 — Long Exam focus-mode trap fixed.** `useExamFocusMode` in `long-exam/page.tsx` now
-  reads `phase === "running" && !submitting`, matching Challenge Quiz's `v0.131.0` guard.
-  Regression test added and mutation-verified against pre-fix code, both in isolation and in the
-  full suite. Checked the sibling `interview-practice/page.tsx`, which has the same bare
-  `phase === "running"` expression — confirmed clean, its Leave Practice button carries no
-  `disabled` state to trap behind. PR #1381 (`fix/v0.143.0-long-exam-focus-trap`), not yet merged.
-- **Item 2 — regenerated Study Packs now invalidate their exam question pools.** Both the combined
-  and default `STUDY_PACK`-only regeneration scopes reset and re-dispatch Long Exam and Board Exam
-  pools inside the content-write transaction. Pool generation now uses `generationStatusAt` as an
-  optimistic stamp so an older in-flight task cannot publish stale questions over a newer attempt.
-  If that newer attempt fails after superseding an older successful result, the pool remains
-  `FAILED` and self-heals through the existing refresh-on-use path. **⚠️ The stamp guard is applied
-  to the `READY` write only, deliberately not to the `catch` block's `FAILED` write** — a superseded
-  task that later throws (rather than completing) can still flip a good, newer `READY` pool back to
-  `FAILED`, costing one wasted regeneration cycle on the pool's next use. Accepted, not fixed: the
-  pool's `questions` are untouched (only the status field is stomped), and `sampleQuestions` already
-  refreshes any `FAILED` pool on next use.
-- **A scoped cold falsification pass on item 2 found and fixed a real deadlock risk before merge.**
-  The unconditional invalidation call locked `exam_question_pool` (via `refreshPool`) BEFORE the
-  regeneration's own pending `study_packs` update actually flushed — Hibernate's auto-flush is
-  query-space aware and does not flush an unrelated table's pending write before a JPQL query
-  against a disjoint one. Every other caller that touches both tables locks `study_packs` first,
-  then `exam_question_pool` (`LongExamService.startSession` → `sampleQuestions`); this inverted
-  that order, opening a genuine deadlock window against a concurrent exam start. **Verified
-  empirically**, not just reasoned through: a scratch `StatementInspector`-backed test against a
-  real Postgres instance reproduced the inversion (`select … for update` on the pool preceding the
-  `update study_packs`), and confirmed an explicit `studyPackRepository.flush()` before the
-  invalidation calls restores the correct order. Fixed by adding that flush call.
-- **Flagged, not fixed: a fourth path replaces Study Pack content in place with no invalidation.**
-  `AdminStudyPackTransactionHelper.regenerateOnePack` (admin-only) overwrites `summary` — a direct
-  exam-pool generation input — outside `generateStudyPackFromExistingNoteAsync` entirely, so this
-  release's fix does not reach it. Traced with `file:line` evidence, not a structural analogy;
-  recorded as its own `ROADMAP.md` Backlog Index row rather than folded into this PR, matching how
-  the `deactivateShareLinksForNote` finding was handled at kickoff.

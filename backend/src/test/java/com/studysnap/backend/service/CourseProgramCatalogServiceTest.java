@@ -1,6 +1,8 @@
 package com.studysnap.backend.service;
 
 import com.studysnap.backend.dto.CourseProgramCatalogItemResponse;
+import com.studysnap.backend.dto.UpdateCourseProgramCatalogRequest;
+import com.studysnap.backend.exception.CourseProgramNotFoundException;
 import com.studysnap.backend.exception.InvalidProgramFamilyNameException;
 import com.studysnap.backend.exception.ProgramFamilyNameConflictException;
 import com.studysnap.backend.dto.CreateProgramFamilyRequest;
@@ -195,14 +197,106 @@ class CourseProgramCatalogServiceTest {
     }
 
     @Test
+    void assignsAnUnassignedProgramToAFamily() {
+        UUID programId = UUID.randomUUID();
+        UUID familyId = UUID.randomUUID();
+        CourseProgramCatalogItemResponse before = item(programId, CHEMICAL_ENGINEERING, null, null);
+        CourseProgramCatalogItemResponse after = item(programId, CHEMICAL_ENGINEERING, familyId, ENGINEERING);
+        when(repository.findById(programId)).thenReturn(Optional.of(before), Optional.of(after));
+        when(repository.findProgramFamilyName(familyId)).thenReturn(Optional.of(ENGINEERING));
+
+        CourseProgramCatalogItemResponse result = service.updateProgramFamily(
+                programId,
+                new UpdateCourseProgramCatalogRequest(familyId)
+        );
+
+        assertThat(result).isEqualTo(after);
+        verify(repository).updateProgramFamily(programId, familyId);
+    }
+
+    @Test
+    void changesAnAssignedProgramToADifferentFamily() {
+        UUID programId = UUID.randomUUID();
+        UUID oldFamilyId = UUID.randomUUID();
+        UUID newFamilyId = UUID.randomUUID();
+        CourseProgramCatalogItemResponse before = item(programId, CHEMICAL_ENGINEERING, oldFamilyId, ENGINEERING);
+        CourseProgramCatalogItemResponse after = item(programId, CHEMICAL_ENGINEERING, newFamilyId, "Health Sciences");
+        when(repository.findById(programId)).thenReturn(Optional.of(before), Optional.of(after));
+        when(repository.findProgramFamilyName(newFamilyId)).thenReturn(Optional.of("Health Sciences"));
+
+        CourseProgramCatalogItemResponse result = service.updateProgramFamily(
+                programId,
+                new UpdateCourseProgramCatalogRequest(newFamilyId)
+        );
+
+        assertThat(result).isEqualTo(after);
+        verify(repository).updateProgramFamily(programId, newFamilyId);
+    }
+
+    @Test
+    void clearsAProgramsFamilyMembership() {
+        UUID programId = UUID.randomUUID();
+        UUID familyId = UUID.randomUUID();
+        CourseProgramCatalogItemResponse before = item(programId, CHEMICAL_ENGINEERING, familyId, ENGINEERING);
+        CourseProgramCatalogItemResponse after = item(programId, CHEMICAL_ENGINEERING, null, null);
+        when(repository.findById(programId)).thenReturn(Optional.of(before), Optional.of(after));
+
+        CourseProgramCatalogItemResponse result = service.updateProgramFamily(
+                programId,
+                new UpdateCourseProgramCatalogRequest(null)
+        );
+
+        assertThat(result).isEqualTo(after);
+        verify(repository).updateProgramFamily(programId, null);
+        verify(repository, never()).findProgramFamilyName(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void rejectsAnUnknownProgramBeforeValidatingOrWriting() {
+        UUID programId = UUID.randomUUID();
+        UUID familyId = UUID.randomUUID();
+        when(repository.findById(programId)).thenReturn(Optional.empty());
+        UpdateCourseProgramCatalogRequest request = new UpdateCourseProgramCatalogRequest(familyId);
+
+        assertThatThrownBy(() -> service.updateProgramFamily(programId, request))
+                .isInstanceOf(CourseProgramNotFoundException.class);
+
+        verify(repository, never()).findProgramFamilyName(familyId);
+        verify(repository, never()).updateProgramFamily(programId, familyId);
+    }
+
+    @Test
+    void rejectsAnUnknownFamilyBeforeWriting() {
+        UUID programId = UUID.randomUUID();
+        UUID familyId = UUID.randomUUID();
+        when(repository.findById(programId))
+                .thenReturn(Optional.of(item(programId, CHEMICAL_ENGINEERING, null, null)));
+        when(repository.findProgramFamilyName(familyId)).thenReturn(Optional.empty());
+        UpdateCourseProgramCatalogRequest request = new UpdateCourseProgramCatalogRequest(familyId);
+
+        assertThatThrownBy(() -> service.updateProgramFamily(programId, request))
+                .isInstanceOf(UnknownProgramFamilyException.class);
+
+        verify(repository, never()).updateProgramFamily(programId, familyId);
+    }
+
+    @Test
     void keepsReadsReadOnlyAndOverridesCreateWithWritableTransaction() throws NoSuchMethodException {
         Transactional classTransaction = CourseProgramCatalogService.class.getAnnotation(Transactional.class);
         Method createMethod = CourseProgramCatalogService.class.getMethod("create", CreateCourseProgramCatalogRequest.class);
         Transactional createTransaction = createMethod.getAnnotation(Transactional.class);
+        Method updateMethod = CourseProgramCatalogService.class.getMethod(
+                "updateProgramFamily",
+                UUID.class,
+                UpdateCourseProgramCatalogRequest.class
+        );
+        Transactional updateTransaction = updateMethod.getAnnotation(Transactional.class);
 
         assertThat(classTransaction.readOnly()).isTrue();
         assertThat(createTransaction).isNotNull();
         assertThat(createTransaction.readOnly()).isFalse();
+        assertThat(updateTransaction).isNotNull();
+        assertThat(updateTransaction.readOnly()).isFalse();
     }
 
     /**
@@ -226,6 +320,6 @@ class CourseProgramCatalogServiceTest {
     }
 
     private CourseProgramCatalogItemResponse item(UUID id, String name, UUID familyId, String familyName) {
-        return new CourseProgramCatalogItemResponse(id, name, familyId, familyName);
+        return new CourseProgramCatalogItemResponse(id, name, familyId, familyName, true);
     }
 }

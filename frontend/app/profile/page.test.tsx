@@ -100,8 +100,8 @@ describe("Profile page", () => {
     (updateExamDate as jest.Mock).mockReset();
     (getMe as jest.Mock).mockResolvedValue(profileResponse);
     (getCourseProgramCatalog as jest.Mock).mockResolvedValue([
-      { id: "program-pharmacy", name: "Pharmacy", programFamilyId: null, programFamilyName: null },
-      { id: "program-nursing", name: "Nursing", programFamilyId: null, programFamilyName: null },
+      { id: "program-pharmacy", name: "Pharmacy", programFamilyId: null, programFamilyName: null, isActive: true },
+      { id: "program-nursing", name: "Nursing", programFamilyId: null, programFamilyName: null, isActive: true },
     ]);
     (trackAnalyticsEvent as jest.Mock).mockResolvedValue(undefined);
     (getSignInMethods as jest.Mock).mockResolvedValue({

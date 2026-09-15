@@ -81,14 +81,16 @@ export function ApplicableProgramsCombobox({
     [mergedCatalog, selectedIdSet],
   );
   const availablePrograms = useMemo(
-    () => mergedCatalog.filter((program) => !selectedIdSet.has(program.id)),
+    () => mergedCatalog.filter((program) => (
+      !selectedIdSet.has(program.id) && program.isActive !== false
+    )),
     [mergedCatalog, selectedIdSet],
   );
   const availableProgramFamilies = useMemo(() => {
     const families = new Map<string, Omit<AvailableProgramFamily, "unselectedCount">>();
 
     mergedCatalog.forEach((program) => {
-      if (!program.programFamilyId || !program.programFamilyName) {
+      if (!program.programFamilyId || !program.programFamilyName || program.isActive === false) {
         return;
       }
       const family = families.get(program.programFamilyId);
@@ -107,8 +109,7 @@ export function ApplicableProgramsCombobox({
       .map((family) => ({
         ...family,
         unselectedCount: family.memberIds.filter((id) => !selectedIdSet.has(id)).length,
-      }))
-      .filter((family) => family.unselectedCount > 0);
+      }));
   }, [mergedCatalog, selectedIdSet]);
   const controlDisabled = disabled || loading || Boolean(error);
   const normalizedDraft = selectionDraft.trim().replaceAll(/\s+/g, " ").toLowerCase();
@@ -137,7 +138,7 @@ export function ApplicableProgramsCombobox({
     const timeoutId = globalThis.setTimeout(() => {
       void findSimilarCoursePrograms(selectionDraft.trim())
         .then((matches) => {
-          if (active) setNearMatches(matches);
+          if (active) setNearMatches(matches.filter((program) => program.isActive !== false));
         })
         .catch(() => {
           if (active) setNearMatches([]);
@@ -163,7 +164,7 @@ export function ApplicableProgramsCombobox({
   };
 
   const selectProgram = (program: CourseProgramCatalogItem) => {
-    if (!selectedIdSet.has(program.id)) {
+    if (!selectedIdSet.has(program.id) && program.isActive !== false) {
       onChange([...selectedIds, program.id]);
     }
     setSelectionDraft("");
@@ -194,9 +195,10 @@ export function ApplicableProgramsCombobox({
           program.name.trim().replaceAll(/\s+/g, " ").toLowerCase() === normalizedDraft
           || program.name === creationError.details
         )) ?? nearMatches.find((program) => program.name === creationError.details);
-        setDuplicateExisting(existing ?? null);
-        setCreateError(existing
-          ? `“${existing.name}” already exists. Select the existing program instead.`
+        const selectableExisting = existing?.isActive === false ? null : existing;
+        setDuplicateExisting(selectableExisting ?? null);
+        setCreateError(selectableExisting
+          ? `“${selectableExisting.name}” already exists. Select the existing program instead.`
           : creationError.message);
       } else {
         setCreateError(creationError instanceof Error
@@ -279,17 +281,33 @@ export function ApplicableProgramsCombobox({
       ) : null}
       {!controlDisabled && availableProgramFamilies.length > 0 ? (
         <div className="flex flex-wrap gap-2" aria-label="Program family shortcuts">
-          {availableProgramFamilies.map((family) => (
-            <Button
-              key={family.id}
-              type="button"
-              size="sm"
-              variant="outline"
-              onClick={() => handleFamilyExpansion(family.memberIds)}
-            >
-              Add all {family.unselectedCount} {family.name} {family.unselectedCount === 1 ? "program" : "programs"}
-            </Button>
-          ))}
+          {availableProgramFamilies.map((family) => {
+            if (family.unselectedCount === 0) {
+              return (
+                <span
+                  key={family.id}
+                  aria-label={`${family.name} — all ${family.memberIds.length} programs added`}
+                  className="inline-flex h-9 items-center rounded-md border border-border bg-muted px-3 text-sm text-foreground/70"
+                >
+                  ✓ {family.name} · {family.memberIds.length}
+                </span>
+              );
+            }
+            const noneSelected = family.unselectedCount === family.memberIds.length;
+            return (
+              <Button
+                key={family.id}
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => handleFamilyExpansion(family.memberIds)}
+              >
+                {family.name} · {noneSelected
+                  ? family.memberIds.length
+                  : `${family.unselectedCount} remaining`}
+              </Button>
+            );
+          })}
         </div>
       ) : null}
       {!error && !loading ? (

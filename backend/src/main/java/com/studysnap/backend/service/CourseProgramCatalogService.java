@@ -1,6 +1,8 @@
 package com.studysnap.backend.service;
 
 import com.studysnap.backend.dto.CourseProgramCatalogItemResponse;
+import com.studysnap.backend.dto.UpdateCourseProgramCatalogRequest;
+import com.studysnap.backend.exception.CourseProgramNotFoundException;
 import com.studysnap.backend.exception.InvalidProgramFamilyNameException;
 import com.studysnap.backend.exception.ProgramFamilyNameConflictException;
 import com.studysnap.backend.dto.CreateProgramFamilyRequest;
@@ -21,6 +23,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.util.UUID;
 
 @Service
 @Transactional(readOnly = true)
@@ -79,6 +82,24 @@ public class CourseProgramCatalogService {
             return List.of();
         }
         return courseProgramCatalogRepository.findSimilar(normalizedName);
+    }
+
+    @Transactional
+    public CourseProgramCatalogItemResponse updateProgramFamily(
+            UUID programId,
+            UpdateCourseProgramCatalogRequest request
+    ) {
+        courseProgramCatalogRepository.findById(programId)
+                .orElseThrow(CourseProgramNotFoundException::new);
+
+        if (request.programFamilyId() != null) {
+            courseProgramCatalogRepository.findProgramFamilyName(request.programFamilyId())
+                    .orElseThrow(UnknownProgramFamilyException::new);
+        }
+
+        courseProgramCatalogRepository.updateProgramFamily(programId, request.programFamilyId());
+        return courseProgramCatalogRepository.findById(programId)
+                .orElseThrow(CourseProgramNotFoundException::new);
     }
 
     @Transactional
