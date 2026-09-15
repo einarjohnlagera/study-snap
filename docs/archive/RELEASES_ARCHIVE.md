@@ -1,6 +1,6 @@
 # RELEASES_ARCHIVE.md — NoteLib
 
-Archived sections of `RELEASES.md`. **Contents are NOT one contiguous range:** `v0.41.0`–`v0.120.0`, plus `v0.126.0` (moved at the `v0.132.0` kickoff), `v0.127.0` (moved at the `v0.133.0` kickoff) `v0.128.0` (moved at the `v0.134.0` kickoff) `v0.129.0` (moved at the `v0.135.0` kickoff) `v0.130.0` (moved at the `v0.136.0` kickoff) `v0.131.0` (moved at the `v0.137.0` kickoff) `v0.132.0` (moved at the `v0.138.0` kickoff) `v0.133.0` (moved at the `v0.139.0` kickoff), `v0.134.0` (moved at the `v0.140.0` kickoff), `v0.135.0` (moved at the `v0.141.0` kickoff), `v0.136.0` (moved at the `v0.142.0` kickoff), `v0.137.0` (moved at the `v0.143.0` kickoff), `v0.138.0` (moved at the `v0.144.0` kickoff), `v0.139.0` (moved at the `v0.145.0` kickoff), `v0.140.0` (moved at the `v0.146.0` kickoff) and `v0.141.0` (moved at the `v0.147.0` kickoff) as the live file crossed its *current + last five* cap. Each version's own `## vX.Y.Z` heading is the index — search for it. `v0.40.1` and earlier moved here
+Archived sections of `RELEASES.md`. **Contents are NOT one contiguous range:** `v0.41.0`–`v0.120.0`, plus `v0.126.0` (moved at the `v0.132.0` kickoff), `v0.127.0` (moved at the `v0.133.0` kickoff) `v0.128.0` (moved at the `v0.134.0` kickoff) `v0.129.0` (moved at the `v0.135.0` kickoff) `v0.130.0` (moved at the `v0.136.0` kickoff) `v0.131.0` (moved at the `v0.137.0` kickoff) `v0.132.0` (moved at the `v0.138.0` kickoff) `v0.133.0` (moved at the `v0.139.0` kickoff), `v0.134.0` (moved at the `v0.140.0` kickoff), `v0.135.0` (moved at the `v0.141.0` kickoff), `v0.136.0` (moved at the `v0.142.0` kickoff), `v0.137.0` (moved at the `v0.143.0` kickoff), `v0.138.0` (moved at the `v0.144.0` kickoff), `v0.139.0` (moved at the `v0.145.0` kickoff), `v0.140.0` (moved at the `v0.146.0` kickoff), `v0.141.0` (moved at the `v0.147.0` kickoff) and `v0.142.0` (moved at the `v0.148.0` kickoff) as the live file crossed its *current + last five* cap. Each version's own `## vX.Y.Z` heading is the index — search for it. `v0.40.1` and earlier moved here
 2026-07-10; **`v0.41.0` through `v0.120.0` moved here 2026-09-07** in the `v0.126.0` pass, which
 resumed this convention after it had lapsed for 85 releases — `RELEASES.md` had reached 116
 sections against its documented design of *current + last few versions*. Both passes are MOVES,
@@ -18582,4 +18582,177 @@ Named here so that closing this release does not carry them silently into the ne
 - **⚠️ A FOURTH SURFACE HAS THE SAME DEFECT AND IS DELIBERATELY NOT FIXED HERE.** `app/study/study-pack-results.tsx:114` renders `keyConcepts` as raw `{concept}`, exactly as the shared page did. It is a one-line change, but the verification tier for this release was set at kickoff on **three** surfaces, and widening it after the fact is how a release quietly outgrows its own tier. Named so it is a known candidate rather than a future rediscovery.
 - **⚠️ `SummaryMarkdown`'s repair covers the 36 measured summaries and no more.** `normalizeBareMath` returns early on **any** delimiter anywhere in the string it is handed, and a summary is one long multi-paragraph string — so a summary already containing a single `$` is left entirely alone, bare expressions elsewhere in it included. Splitting per paragraph to widen this would change what `remark-gfm` sees and was judged not worth the blast radius.
 - **The allowlist gaps are still open and still out of scope**: `\to`, `\text{m/s}` and `90^\circ` render raw, the last because `readScriptValue` rejects a backslash as a script value. A separate finding, deliberately not bundled.
+
+
+---
+
+## v0.142.0 - Awareness Before Action
+
+**Status: Released** (kicked off 2026-09-11, signed off 2026-09-11, base branch
+`releases/v0.142.0`, PRs #1378, #1379; A5 and the notification card redesign merged directly on
+the release branch without a separate GitHub PR)
+
+Theme: the notification inbox and the adopted-Review-Set update panel both went live for the first
+time in `v0.134.0`–`v0.141.0` and have never been polished against real production shape. This
+release fixes a bug that sits on 100% of today's live notification population, redesigns the card
+for read/unread and one-tap activation, and replaces the update panel's uncapped raw diff with a
+meaning-partitioned summary plus a progressive-disclosure detail surface.
+
+Source: `docs/claude-plans/v0.142.0-adoption-and-notifications-plan.md`, written from a tightened
+product spec the owner returned after a second GPT opinion. Verified against code and against a
+2026-09-11 read-only production read.
+
+### Planned Scope
+
+- **A5 — the notification panel does not close on CTA activation (frontend, isolated bug).** The
+  CTA `<Link>` at `notification-inbox.tsx:163-169` marks the notification read and never calls
+  `setIsOpen(false)`. **⚠️ This fires on 100% of today's live notification population** — all 42
+  production notifications share one type (`REVIEW_SET_UPDATE`), all carry a CTA, and the CTA is
+  the only route in. Ship first; cheapest item in the release.
+- **Workstream 1 — notification card (frontend).** Unread today is font-weight only
+  (`font-medium` vs `font-semibold`, `:157`) with no background distinction — genuinely missing,
+  though the owner's stated reason (no borders) is not: borders exist
+  (`border-b border-border last:border-b-0`, `:154`) and are simply invisible with one notification
+  on screen. Card body becomes the single tap target (mark read + close + navigate); CTA-less
+  notifications mark read on tap with no separate button; dismiss stays a distinct control outside
+  the tap area; add a relative timestamp (`createdAt` is already in the DTO, no backend work
+  needed). Reconcile, not delete, the 5 of 20 existing tests that use the old **Mark read** button
+  as their entry point.
+- **Workstream 2 — Review Set update panel (frontend + one backend field).** Replace the two
+  uncapped raw-diff lists with meaning-based partitioning (additions / unavailable / other
+  curriculum changes — `SKIPPED_NOT_PUBLIC` currently sits, wrongly, under a heading that says "no
+  action taken"), aggregate the three per-note fan-out types (`REORDERED`, `RETIRED`, `MOVED`) into
+  counts, replace the raw wall with a compact summary plus a **Review update** detail surface, and
+  rename **Apply additions** → **Add N new topics** (production copy check returned zero
+  collisions — see Verified findings below). The topic count must come from counting `ADDED_NOTE`
+  alone, not `additionsAvailable()` (`NoteCollectionService.java:3523-3529`), which also counts
+  `ADDED_SUBJECT_PLAN` and would overstate the promised count.
+- **Section grouping (owner decision, defaulted for kickoff): ship Option A — Subject Plan
+  grouping only, no Section level.** `ReviewSetUpdateChange` carries no Section field and a
+  Section is a string label on `NoteCollectionItemEntity.label`, not an entity — adding
+  `sourceSectionLabel` is a real, small, zero-extra-query DTO addition (the variable is already in
+  scope at the `ADDED_NOTE` construction site), but it makes this a backend release and raises the
+  verification tier. Defaulting to A keeps the release frontend-only; B is a stated fast-follow if
+  the owner wants the extra hierarchy level. **Revisit if the owner objects.**
+
+### Verified findings this scope rests on (read-only, 2026-09-11)
+
+- Production notifications: **1 distinct type** (`REVIEW_SET_UPDATE`), **42/42 with a CTA**,
+  **41/42 unread**, **0 ever dismissed**, all created in one batch the day before this kickoff.
+  The unread ratio means the card's unread treatment is what nearly every viewer sees, not an edge
+  case.
+- The rename-collision check returned **zero rows** — no notification title, body, or CTA label in
+  production references "Apply additions", "upstream", or "addition".
+- `docs/features/collections.md:932` and `frontend/app/collections/[id]/page.test.tsx:736,758` both
+  reference "Apply additions" by exact string and must be swept in the same PR as the rename.
+
+Anti-drift: do NOT let notification activation apply a Review Set update — activation navigates and
+marks read only, the update itself stays an explicit, separate action; do NOT title-based-group the
+detail surface — Subject Plan grouping uses stored `sourcePlanId`/`subjectTitle` identity, never a
+note title; do NOT overwrite learner content, reset progress, or make adopted Review Sets
+live-synced; do NOT change `additionsAvailable()` — it correctly gates whether the Apply action
+renders at all and must stay a boolean threshold, not a display count; do NOT add pagination, a new
+diff engine, or new notification infrastructure — the existing payload already carries what the
+grouping/aggregation work needs under Option A; do NOT sweep `AGENTS.md`'s preamble or the Backlog
+Index as a side effect of this release (both are explicitly held per
+`docs/claude-plans/context-doc-token-reduction-plan.md`, items 4/6/7 — item 6 ran once this
+kickoff, six rows, and is not repeated here).
+
+Verification tier decided at kickoff: **one scoped cold agent minimum, falsification-framed** — two
+PRs touch the same shared classification surface (the update panel's partitioning function feeds
+both the compact summary and the detail surface), and this release changes what a user-facing claim
+means (which "Changed upstream — no action taken" currently misstates for `SKIPPED_NOT_PUBLIC`) —
+three releases running have been bitten by that surface-sweep gap. **Escalates to the full
+three-agent test if Option B (Section grouping) is taken instead of A**, since that adds a backend
+DTO change touching adopted-learner-content semantics.
+
+Routing: **CODEX** for both workstreams — each exceeds the ≤50 LOC / 1–3 file inline threshold (A5
+alone is inline-sized, and should be shipped as its own small PR ahead of the rest). Full scope,
+verified findings, and the rejected alternatives are in
+`docs/claude-plans/v0.142.0-adoption-and-notifications-plan.md`.
+
+### Shipped
+
+- **The adopted Review Set update panel now summarizes meaning instead of exposing raw diff rows.**
+  Changes are partitioned into new topics, unavailable topics, and other curriculum changes;
+  repeated reorder, retire, and move rows collapse to counts with full details available in the
+  new **Review update** modal, grouped by Subject Plan. The main card stays compact, its headline
+  reflects changes in any category, and learner-facing copy no longer says “upstream.” The action
+  is now **Add N new topics**, with N derived only from `ADDED_NOTE` rows so Subject Plan summary
+  rows cannot double-count it; the success toast reports the actual topic count and retains “Your
+  existing work was kept.”
+- **Notification rows are now coherent, single-target cards.** Unread rows have a theme-safe
+  background tint, dot, and slightly stronger title; every row shows a relative timestamp. The
+  title/body region is now the one primary control: a safe destination renders as a native link
+  that marks read, closes the desktop dropdown or mobile sheet, and navigates, while a CTA-less or
+  rejected destination renders as a mark-read-only button. The standalone **Mark read** button and
+  duplicate CTA link are gone; dismiss remains an independently focusable sibling and does not
+  mark read or navigate. All 21 existing tests were retained and reconciled, with seven focused
+  interaction and visual guards added; all 16 changed tests failed against the pre-change row.
+- **A5 — the notification panel now closes when a CTA is activated**, on both the desktop dropdown
+  and the mobile sheet (both render the same `rows` block, so one fix — an added `setIsOpen(false)`
+  alongside the existing `markRead` call — covers both). Of the three existing close-path tests in
+  the suite (outside click, Escape, bell toggle), none covered the close path a learner actually
+  takes; two tests were added (desktop and mobile), each verified to fail against the pre-fix code
+  and pass against the fix. Workstream 1 subsequently moved this behavior from the deleted CTA
+  link to the card body's native link and re-pointed both tests without dropping the coverage.
+- **Fixed a race in `applySourceUpdate` found by this release's pre-signoff falsification pass:**
+  when a second concurrent (or retried) apply request landed a placement or Subject Plan first,
+  that item's `additionsResolvedByConcurrentPass` correctly discounted the backend's own
+  `additionsAvailable` remaining-count, but the same item's `ReviewSetUpdateChange.applied` flag
+  was never set — `appliedKeys` only recorded the branch where *this* pass created the item. The
+  new frontend panel derives its own topic count from `!applied` changes, so the two disagreed:
+  the button could read e.g. "Add 3 new topics" while the backend's own count said only 1 remained.
+  `appliedKeys` now records the item on either branch, since it genuinely exists either way — only
+  `additionsResolvedByConcurrentPass`/`additionsAvailable` distinguish which pass gets credit.
+  `NoteCollectionServiceTest#sourceUpdate_concurrentApplyLandingFirstMakesTheSecondPassANoOpRatherThanADuplicateInsert`
+  gained two assertions on `applied`/`additionsAvailable`, both mutation-verified to fail against
+  the pre-fix code. **Scope note:** this makes v0.142.0 touch the backend; `applied`'s semantics
+  changed only for the already-narrow concurrent-resolution case. Deploy-ordering: benign either
+  way — an old frontend reading `applied` for its "Added"/"Would be added" label now reads a
+  concurrently-resolved item as "Added" (more accurate, not less); a frontend built against this
+  fix talking to a backend one deploy behind reproduces the exact bug this bullet describes, not a
+  new failure mode. No stored data is affected; `appliedPlanIds`/snapshot re-baselining (governed
+  by the "Applying acknowledges only what it applied" invariant, `docs/features/collections.md`)
+  is untouched — that invariant constrains which plans get their source snapshot re-baselined, not
+  this flag, and this fix never touches a RENAMED/REORDERED/RETIRED/MOVED change.
+
+### Pre-signoff falsification pass
+
+One scoped cold agent (Sonnet, no inherited context), handed 13 specific claims from the
+implementing session across A5, Workstream 1, and Workstream 2, and asked to disprove each against
+the actual code rather than trust any summary. **11 confirmed, 2 broken** — both fixed above before
+signoff: `docs/features/collections.md:952` still said "upstream" (trivial), and the
+`appliedKeys`/concurrent-pass race (the backend fix above). Full claim list and per-claim evidence
+are in this session's transcript; nothing else survived the falsification attempt.
+
+### Backlog-row closure gate
+
+**No pre-existing Backlog Index row proposed this release's scope.** All four planned items (A5,
+Workstream 1, Workstream 2, the Section-grouping decision) were scoped fresh at this kickoff from a
+same-day owner conversation and a tightened spec written directly into
+`docs/claude-plans/v0.142.0-adoption-and-notifications-plan.md` — searched the Backlog Index for
+"notification card"/"notification inbox", "Review Set update"/"update panel", "Apply additions",
+and "additionsAvailable"/double-count language; none predate this kickoff. This is a legitimate
+"not found," not a miss: not every release originates from an aged Backlog row. The plan file stays
+exempt as a release artifact (per the Backlog Index's stated exemption), traceable through this
+section rather than a separate row.
+
+### Checkpoint gate
+
+**Nothing in this release shipped ahead of its own evidence.** A5 fixed a defect verified against
+100% of production's live notification population; the rename's collision risk was cleared by a
+read-only production check returning zero rows; the concurrency fix is a deterministic code
+correction, mutation-verified, not a hypothesis awaiting outcome data. No new checkpoint owed.
+
+**⚠️ Three checkpoints from `v0.141.0`'s section (one release above, signed off the same day) are
+still standing and NOT closed by this release either:** `v0.114.0`, `v0.101.0` Slice 1, and
+Learning Connections. None are this release's to close — `v0.114.0` needs a Render application log
+read, and the other two are unrelated to notifications or Review Sets.
+
+### Verification
+
+Full backend suite (2,361 tests, incl. the Postgres/Flyway native-query integration test) green;
+frontend collections + notification suites green with 6 and 16 mutation-verified new/changed tests
+respectively; `tsc --noEmit` and `eslint` clean on every touched frontend file.
 

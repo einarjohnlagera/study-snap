@@ -1,5 +1,130 @@
 # RELEASES.md - NoteLib
 
+## v0.148.0 - Say What You Mean
+
+**Status: Released**
+
+Theme: two small, unrelated correctness fixes — a keyword scan that quietly misjudges what content
+needs computation guidance, and a reminder email that quietly always arrives on the same day.
+
+### Planned Scope
+
+- **`QUANTITATIVE_KEYWORDS` substring-anchoring fix (backend).** `isQuantitativeContext`
+  (`OpenAiLlmStudyPackService.java:1649`) uses plain `String.contains` for all 50 keywords, so several
+  match as embedded substrings of unrelated words: `ratio` ⊂ `corporation`/`operations`/`administration`,
+  `solve` ⊂ `resolve`, `current` ⊂ `currently`, `interest` ⊂ `interested`. Measured read-only against
+  production: ~4,890 notes are currently "quantitative via keywords only." Sampled the flip set:
+  genuinely non-computational content (pedagogy, architectural theory, Philippine history, nursing
+  practice narratives). **Two amendments found during pre-commit `advisor()` review, both closed in the
+  same diff before shipping:**
+  - **Nursing/Accountancy regression** (also independently found by the earlier cold-agent falsification
+    pass): anchoring alone would have declassified `domain_context IS NULL` Nursing/Accountancy content
+    that reaches `quantitative=true` today only via this same accidental substring match. Re-measured
+    with `course_program` joined into the haystack (the original estimate omitted it): of the flip set,
+    466 notes are rescued by two new unanchored `QUANTITATIVE_KEYWORDS` entries, `nursing` and
+    `accountancy` (both safe standalone words, no substring hazard) — higher coverage than the original
+    ~370-note estimate, not lower. `pharmacokinetic` (added `v0.145.0`) stays deliberately unanchored —
+    its match depends on unanchored substring matching, and the code comment explaining this was
+    rewritten so a future session doesn't "fix" it into breaking.
+  - **Inflection gap:** a bare `\bkeyword\b` doesn't match a keyword's own plural/verb forms —
+    `\bratio\b` fails on "financial ratios," `\bsolve\b` fails on "solving." Of the flip set, 28% (291 of
+    1,045 remaining after the nursing/accountancy rescue) triggered ONLY on one of these inflected forms
+    — genuinely quantitative content the anchoring fix would otherwise have wrongly declassified. Each of
+    the 7 anchored patterns now also accepts its plain plural/verb inflections (`ratio(s)?`,
+    `solv(e|es|ed|ing)`, `current(s)?`, `interest(s)?`, `integral(s)?`, `balance(s)?`) without reopening
+    any substring hazard the anchoring closed — e.g. `interest(s)?` still excludes `interested`/
+    `interesting` since the boundary is enforced after the optional `s`, not mid-word.
+  - **Final measured flip count, with course_program in the haystack and both amendments applied: 754
+    notes** (down from the original, narrower estimate of ~1,520-1,586 — the original haystack omitted
+    course_program and the original anchoring omitted inflections, both of which this diff corrects
+    before shipping, not after).
+  - **Which 7 keywords get anchored:** `ratio`, `solve`, `current`, `interest`, `integral`, `balance`,
+    `units`. The other 44 (including the 2 new ones and `pharmacokinetic`) keep plain `contains`.
+  - **Anti-drift:** no resolver rewrite — same haystack construction, same
+    `domainContext().isQuantitative()` short-circuit, same overall function shape; anchoring is a second,
+    additive matching branch for a fixed subset of keywords, not a semantic overhaul of the scan.
+  - **Test owed:** `OpenAiLlmStudyPackServiceTest` gains cases proving the anchored path isn't a no-op (a
+    haystack containing only `corporation` → not quantitative; one containing `current ratio` → still
+    quantitative), that the plural/verb inflections match on their own, and that the nursing/accountancy
+    rescue works via `courseProgram` (the field production actually uses, not just `subject`) — plus
+    confirms the existing `pharmacokinetic` test still passes as the canary.
+  - `docs/features/study-pack-generation.md` updated to describe the anchoring split and the
+    `nursing`/`accountancy` false-negative repair, matching how it already documents `pharmacokinetic`.
+
+- **Due-concepts-digest day-of-week clustering fix (backend).** `RetentionService.isEligibleReviewDay`
+  returns `true` unconditionally for the 143 users with `review_days IS NULL`, so they're checked every
+  day the digest job runs and gated only by a flat 7-day cooldown — which locks them onto whichever
+  weekday they first landed on, forever. Measured read-only against production (Asia/Manila, the job's
+  actual `EMAIL_BUDGET_ZONE`): Mon 107, Tue 101, Wed 98 vs. Thu 9, Fri 8, Sun 2 over 28 days — a real,
+  confirmed 3-day cluster. **Amendment from a cold-agent falsification pass, correcting two claims from
+  this release's own scoping:** (1) the originally-claimed "3.5x peak reduction" was a unit error
+  (compared users-per-bucket to sends-per-week); the real, reproduced improvement is **1.5x** peak-day
+  reduction (26.8 → 18.0 sends/week on the worst day) — a burstiness improvement, not a dramatic fix. (2)
+  This is **not** a live email-cap breach fix — `dispatchDueConceptsDigestEmails` never consumes the
+  `EMAIL_DAILY_LIMIT` budget (confirmed unbudgeted), and `sendDailyEmails()` (the budgeted path) runs
+  before it in the daily job, so same-day collision with the 100/day cap cannot occur the way the
+  original finding implied. Framed correctly here as: smooths an already-unbounded channel's shape for
+  143 users, not a breach fix.
+  - **Fix:** for null-`review_days` users, `isEligibleReviewDay` gets a deterministic default day —
+    `Math.floorMod(user.getId().hashCode(), 7)` compared against today's `DayOfWeek` — instead of "any
+    day." `dueConceptsDigestCooldownDays`'s null-branch changes from the global 7-day config to
+    **6 days** (not the committed-user value of 1, per the falsification pass's transition-week
+    counterexample below). Purely computed at read time from the existing `id` column — no new column,
+    no migration, no backfill, no write to `review_days`.
+  - **Anti-drift, from the falsification pass:** cooldown must be **6**, not 1 — with the day-gate
+    providing weekly cadence, 6 days never blocks an on-rhythm send, and it makes a sub-7-day
+    double-send during the transition week impossible (a cooldown of 1 was shown to produce two digests
+    2 days apart for a concrete example user). Must use `Math.floorMod`, not `%` — `UUID.hashCode()` can
+    be negative.
+  - **Known limitation, stated rather than silently accepted:** a user whose last digest landed close to
+    their newly-assigned day may still see one earlier-than-usual digest in the first week after deploy
+    (a bounded, one-time transition effect, not an ongoing issue).
+  - **Uses `dispatchDay.getValue() - 1`, not `.ordinal()`**, to compare against the hash bucket — same
+    result, but pinned to `DayOfWeek`'s documented numbering rather than enum ordinal position.
+  - **`StudySnapProperties.Retention.dueConceptsDigestCooldownDays` (default 7) is removed**, not left
+    orphaned — it had no `application.yaml` key and, after this fix, no remaining reader; the uncommitted
+    cooldown is now the compile-time constant `UNCOMMITTED_DUE_CONCEPTS_DIGEST_COOLDOWN_DAYS = 6`, a
+    deliberate choice (it has no legitimate reason to vary per deployment) rather than an oversight.
+  - **Feature docs updated to match**, not just `RELEASES.md`: `docs/features/retention-emails.md` (the
+    null/empty `review_days` cadence description and the cooldown table), `docs/features/quiz.md` (its
+    "null/empty review days preserve the pre-`v0.72.0` cadence" line was the exact claim this fix makes
+    false), and `docs/features/email-preferences.md` (the settings-page cooldown description). Frontend
+    review-days copy (`app/settings/page.tsx`, `review-commitment-prompt.tsx`) was swept and found already
+    accurate — neither promises "every day" or "whenever due," so neither needed a change.
+  - **Tests owed:** `RetentionServiceTest`'s null/empty-`review_days` tests are rewritten for the new
+    behavior (was: "always eligible"; now: eligible only on a deterministic hash-assigned day, with a new
+    negative-case test proving the day-gate actually excludes a mismatched day) rather than merely
+    adjusted, since the old assertion is no longer true. `RetentionEmailScheduler`'s and
+    `RetentionEmailSchedulerTest`'s existing "7-day cooldown" comments/assertions are updated to describe
+    the new day-gate + 6-day cooldown behavior.
+
+Anti-drift (both items): no database migration, no new endpoint, no persisted state change for either
+fix — both are pure logic changes computed at read/generation time. Routing: Claude Code implements
+directly (isolated bug fixes with a clear root cause each — Item 1 touches 1 production file, Item 2
+touches 3: `RetentionService.java`, `RetentionEmailScheduler.java`, and the `StudySnapProperties.java`
+config-field removal). **Verification tier: one `advisor()` call** on the diff for each item — no
+auth/quota/money/production-data semantics change for either, and both were already pressure-tested
+pre-implementation by a cold Opus agent during scoping (falsification-framed against the specific claims
+above), which is why a heavier post-implementation tier isn't warranted.
+
+### Shipped
+
+- **`QUANTITATIVE_KEYWORDS` substring-anchoring fix** — PR #1396, merged `5657d8fd` into
+  `releases/v0.148.0`. `OpenAiLlmStudyPackService.java:193-199,1693-1697` (word-boundary anchoring for
+  7 keywords, each with plural/verb inflections), `:176-184` (`nursing`/`accountancy` added unanchored).
+  `OpenAiLlmStudyPackServiceTest` gained 5 guard tests. `docs/features/study-pack-generation.md` and
+  `docs/gpt-contexts/REVIEW_SET_SHAPING_CONTEXT.md` updated. Full backend suite green.
+- **Due-concepts-digest day-of-week clustering fix** — PR #1397, merged `36b08fd3` into
+  `releases/v0.148.0`. `RetentionService.java:414` (`isEligibleReviewDay`), `:58,422`
+  (`UNCOMMITTED_DUE_CONCEPTS_DIGEST_COOLDOWN_DAYS = 6`), `RetentionEmailScheduler.java` comment update,
+  `StudySnapProperties.java` (`dueConceptsDigestCooldownDays` removed, now unused). `RetentionServiceTest`
+  rewritten for the new null/empty-`review_days` behavior including a negative-case guard.
+  `docs/features/retention-emails.md`, `quiz.md`, `email-preferences.md` updated; frontend review-days
+  copy swept and found already accurate. `[CHECKPOINT — due 2026-10-06]` added to `ROADMAP.md`'s Backlog
+  Index — the projected 1.5x peak-day reduction is a simulation, not yet observed post-deploy.
+
+---
+
 ## v0.147.0 - The Escape Hatch
 
 **Status: Released**
@@ -530,174 +655,3 @@ on the diff is enough.
   release's fix does not reach it. Traced with `file:line` evidence, not a structural analogy;
   recorded as its own `ROADMAP.md` Backlog Index row rather than folded into this PR, matching how
   the `deactivateShareLinksForNote` finding was handled at kickoff.
-
-## v0.142.0 - Awareness Before Action
-
-**Status: Released** (kicked off 2026-09-11, signed off 2026-09-11, base branch
-`releases/v0.142.0`, PRs #1378, #1379; A5 and the notification card redesign merged directly on
-the release branch without a separate GitHub PR)
-
-Theme: the notification inbox and the adopted-Review-Set update panel both went live for the first
-time in `v0.134.0`–`v0.141.0` and have never been polished against real production shape. This
-release fixes a bug that sits on 100% of today's live notification population, redesigns the card
-for read/unread and one-tap activation, and replaces the update panel's uncapped raw diff with a
-meaning-partitioned summary plus a progressive-disclosure detail surface.
-
-Source: `docs/claude-plans/v0.142.0-adoption-and-notifications-plan.md`, written from a tightened
-product spec the owner returned after a second GPT opinion. Verified against code and against a
-2026-09-11 read-only production read.
-
-### Planned Scope
-
-- **A5 — the notification panel does not close on CTA activation (frontend, isolated bug).** The
-  CTA `<Link>` at `notification-inbox.tsx:163-169` marks the notification read and never calls
-  `setIsOpen(false)`. **⚠️ This fires on 100% of today's live notification population** — all 42
-  production notifications share one type (`REVIEW_SET_UPDATE`), all carry a CTA, and the CTA is
-  the only route in. Ship first; cheapest item in the release.
-- **Workstream 1 — notification card (frontend).** Unread today is font-weight only
-  (`font-medium` vs `font-semibold`, `:157`) with no background distinction — genuinely missing,
-  though the owner's stated reason (no borders) is not: borders exist
-  (`border-b border-border last:border-b-0`, `:154`) and are simply invisible with one notification
-  on screen. Card body becomes the single tap target (mark read + close + navigate); CTA-less
-  notifications mark read on tap with no separate button; dismiss stays a distinct control outside
-  the tap area; add a relative timestamp (`createdAt` is already in the DTO, no backend work
-  needed). Reconcile, not delete, the 5 of 20 existing tests that use the old **Mark read** button
-  as their entry point.
-- **Workstream 2 — Review Set update panel (frontend + one backend field).** Replace the two
-  uncapped raw-diff lists with meaning-based partitioning (additions / unavailable / other
-  curriculum changes — `SKIPPED_NOT_PUBLIC` currently sits, wrongly, under a heading that says "no
-  action taken"), aggregate the three per-note fan-out types (`REORDERED`, `RETIRED`, `MOVED`) into
-  counts, replace the raw wall with a compact summary plus a **Review update** detail surface, and
-  rename **Apply additions** → **Add N new topics** (production copy check returned zero
-  collisions — see Verified findings below). The topic count must come from counting `ADDED_NOTE`
-  alone, not `additionsAvailable()` (`NoteCollectionService.java:3523-3529`), which also counts
-  `ADDED_SUBJECT_PLAN` and would overstate the promised count.
-- **Section grouping (owner decision, defaulted for kickoff): ship Option A — Subject Plan
-  grouping only, no Section level.** `ReviewSetUpdateChange` carries no Section field and a
-  Section is a string label on `NoteCollectionItemEntity.label`, not an entity — adding
-  `sourceSectionLabel` is a real, small, zero-extra-query DTO addition (the variable is already in
-  scope at the `ADDED_NOTE` construction site), but it makes this a backend release and raises the
-  verification tier. Defaulting to A keeps the release frontend-only; B is a stated fast-follow if
-  the owner wants the extra hierarchy level. **Revisit if the owner objects.**
-
-### Verified findings this scope rests on (read-only, 2026-09-11)
-
-- Production notifications: **1 distinct type** (`REVIEW_SET_UPDATE`), **42/42 with a CTA**,
-  **41/42 unread**, **0 ever dismissed**, all created in one batch the day before this kickoff.
-  The unread ratio means the card's unread treatment is what nearly every viewer sees, not an edge
-  case.
-- The rename-collision check returned **zero rows** — no notification title, body, or CTA label in
-  production references "Apply additions", "upstream", or "addition".
-- `docs/features/collections.md:932` and `frontend/app/collections/[id]/page.test.tsx:736,758` both
-  reference "Apply additions" by exact string and must be swept in the same PR as the rename.
-
-Anti-drift: do NOT let notification activation apply a Review Set update — activation navigates and
-marks read only, the update itself stays an explicit, separate action; do NOT title-based-group the
-detail surface — Subject Plan grouping uses stored `sourcePlanId`/`subjectTitle` identity, never a
-note title; do NOT overwrite learner content, reset progress, or make adopted Review Sets
-live-synced; do NOT change `additionsAvailable()` — it correctly gates whether the Apply action
-renders at all and must stay a boolean threshold, not a display count; do NOT add pagination, a new
-diff engine, or new notification infrastructure — the existing payload already carries what the
-grouping/aggregation work needs under Option A; do NOT sweep `AGENTS.md`'s preamble or the Backlog
-Index as a side effect of this release (both are explicitly held per
-`docs/claude-plans/context-doc-token-reduction-plan.md`, items 4/6/7 — item 6 ran once this
-kickoff, six rows, and is not repeated here).
-
-Verification tier decided at kickoff: **one scoped cold agent minimum, falsification-framed** — two
-PRs touch the same shared classification surface (the update panel's partitioning function feeds
-both the compact summary and the detail surface), and this release changes what a user-facing claim
-means (which "Changed upstream — no action taken" currently misstates for `SKIPPED_NOT_PUBLIC`) —
-three releases running have been bitten by that surface-sweep gap. **Escalates to the full
-three-agent test if Option B (Section grouping) is taken instead of A**, since that adds a backend
-DTO change touching adopted-learner-content semantics.
-
-Routing: **CODEX** for both workstreams — each exceeds the ≤50 LOC / 1–3 file inline threshold (A5
-alone is inline-sized, and should be shipped as its own small PR ahead of the rest). Full scope,
-verified findings, and the rejected alternatives are in
-`docs/claude-plans/v0.142.0-adoption-and-notifications-plan.md`.
-
-### Shipped
-
-- **The adopted Review Set update panel now summarizes meaning instead of exposing raw diff rows.**
-  Changes are partitioned into new topics, unavailable topics, and other curriculum changes;
-  repeated reorder, retire, and move rows collapse to counts with full details available in the
-  new **Review update** modal, grouped by Subject Plan. The main card stays compact, its headline
-  reflects changes in any category, and learner-facing copy no longer says “upstream.” The action
-  is now **Add N new topics**, with N derived only from `ADDED_NOTE` rows so Subject Plan summary
-  rows cannot double-count it; the success toast reports the actual topic count and retains “Your
-  existing work was kept.”
-- **Notification rows are now coherent, single-target cards.** Unread rows have a theme-safe
-  background tint, dot, and slightly stronger title; every row shows a relative timestamp. The
-  title/body region is now the one primary control: a safe destination renders as a native link
-  that marks read, closes the desktop dropdown or mobile sheet, and navigates, while a CTA-less or
-  rejected destination renders as a mark-read-only button. The standalone **Mark read** button and
-  duplicate CTA link are gone; dismiss remains an independently focusable sibling and does not
-  mark read or navigate. All 21 existing tests were retained and reconciled, with seven focused
-  interaction and visual guards added; all 16 changed tests failed against the pre-change row.
-- **A5 — the notification panel now closes when a CTA is activated**, on both the desktop dropdown
-  and the mobile sheet (both render the same `rows` block, so one fix — an added `setIsOpen(false)`
-  alongside the existing `markRead` call — covers both). Of the three existing close-path tests in
-  the suite (outside click, Escape, bell toggle), none covered the close path a learner actually
-  takes; two tests were added (desktop and mobile), each verified to fail against the pre-fix code
-  and pass against the fix. Workstream 1 subsequently moved this behavior from the deleted CTA
-  link to the card body's native link and re-pointed both tests without dropping the coverage.
-- **Fixed a race in `applySourceUpdate` found by this release's pre-signoff falsification pass:**
-  when a second concurrent (or retried) apply request landed a placement or Subject Plan first,
-  that item's `additionsResolvedByConcurrentPass` correctly discounted the backend's own
-  `additionsAvailable` remaining-count, but the same item's `ReviewSetUpdateChange.applied` flag
-  was never set — `appliedKeys` only recorded the branch where *this* pass created the item. The
-  new frontend panel derives its own topic count from `!applied` changes, so the two disagreed:
-  the button could read e.g. "Add 3 new topics" while the backend's own count said only 1 remained.
-  `appliedKeys` now records the item on either branch, since it genuinely exists either way — only
-  `additionsResolvedByConcurrentPass`/`additionsAvailable` distinguish which pass gets credit.
-  `NoteCollectionServiceTest#sourceUpdate_concurrentApplyLandingFirstMakesTheSecondPassANoOpRatherThanADuplicateInsert`
-  gained two assertions on `applied`/`additionsAvailable`, both mutation-verified to fail against
-  the pre-fix code. **Scope note:** this makes v0.142.0 touch the backend; `applied`'s semantics
-  changed only for the already-narrow concurrent-resolution case. Deploy-ordering: benign either
-  way — an old frontend reading `applied` for its "Added"/"Would be added" label now reads a
-  concurrently-resolved item as "Added" (more accurate, not less); a frontend built against this
-  fix talking to a backend one deploy behind reproduces the exact bug this bullet describes, not a
-  new failure mode. No stored data is affected; `appliedPlanIds`/snapshot re-baselining (governed
-  by the "Applying acknowledges only what it applied" invariant, `docs/features/collections.md`)
-  is untouched — that invariant constrains which plans get their source snapshot re-baselined, not
-  this flag, and this fix never touches a RENAMED/REORDERED/RETIRED/MOVED change.
-
-### Pre-signoff falsification pass
-
-One scoped cold agent (Sonnet, no inherited context), handed 13 specific claims from the
-implementing session across A5, Workstream 1, and Workstream 2, and asked to disprove each against
-the actual code rather than trust any summary. **11 confirmed, 2 broken** — both fixed above before
-signoff: `docs/features/collections.md:952` still said "upstream" (trivial), and the
-`appliedKeys`/concurrent-pass race (the backend fix above). Full claim list and per-claim evidence
-are in this session's transcript; nothing else survived the falsification attempt.
-
-### Backlog-row closure gate
-
-**No pre-existing Backlog Index row proposed this release's scope.** All four planned items (A5,
-Workstream 1, Workstream 2, the Section-grouping decision) were scoped fresh at this kickoff from a
-same-day owner conversation and a tightened spec written directly into
-`docs/claude-plans/v0.142.0-adoption-and-notifications-plan.md` — searched the Backlog Index for
-"notification card"/"notification inbox", "Review Set update"/"update panel", "Apply additions",
-and "additionsAvailable"/double-count language; none predate this kickoff. This is a legitimate
-"not found," not a miss: not every release originates from an aged Backlog row. The plan file stays
-exempt as a release artifact (per the Backlog Index's stated exemption), traceable through this
-section rather than a separate row.
-
-### Checkpoint gate
-
-**Nothing in this release shipped ahead of its own evidence.** A5 fixed a defect verified against
-100% of production's live notification population; the rename's collision risk was cleared by a
-read-only production check returning zero rows; the concurrency fix is a deterministic code
-correction, mutation-verified, not a hypothesis awaiting outcome data. No new checkpoint owed.
-
-**⚠️ Three checkpoints from `v0.141.0`'s section (one release above, signed off the same day) are
-still standing and NOT closed by this release either:** `v0.114.0`, `v0.101.0` Slice 1, and
-Learning Connections. None are this release's to close — `v0.114.0` needs a Render application log
-read, and the other two are unrelated to notifications or Review Sets.
-
-### Verification
-
-Full backend suite (2,361 tests, incl. the Postgres/Flyway native-query integration test) green;
-frontend collections + notification suites green with 6 and 16 mutation-verified new/changed tests
-respectively; `tsc --noEmit` and `eslint` clean on every touched frontend file.
-

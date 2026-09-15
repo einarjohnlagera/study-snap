@@ -49,6 +49,13 @@ import java.util.UUID;
 @Slf4j
 public class RetentionService {
     private static final int COMMITTED_DUE_CONCEPTS_DIGEST_COOLDOWN_DAYS = 1;
+    // v0.148.0: null-review_days users now get a deterministic hash-assigned dispatch day
+    // (isEligibleReviewDay) instead of "any day, gated only by cooldown" -- that made a flat 7-day
+    // cooldown redundant with the day gate for these users, but 1 day (the committed-user value) is
+    // NOT safe here: a user whose last send fell 2-3 days before their newly-assigned day would get a
+    // second digest within the same week during the first transition. 6 days is the shortest cooldown
+    // that never blocks an on-rhythm weekly send while eliminating that sub-7-day double-send window.
+    private static final int UNCOMMITTED_DUE_CONCEPTS_DIGEST_COOLDOWN_DAYS = 6;
     private static final int SESSION_LOOKBACK_LIMIT = 10;
     private static final String SESSION_STATE_FOCUS_CONCEPTS = "focusConcepts";
     private static final String FOCUS_SOURCE_STUDY_PACK_ID_KEY = "sourceStudyPackId";
@@ -404,7 +411,7 @@ public class RetentionService {
     private boolean isEligibleReviewDay(UserEntity user, DayOfWeek dispatchDay) {
         String[] reviewDays = user.getReviewDays();
         if (reviewDays == null || reviewDays.length == 0) {
-            return true;
+            return Math.floorMod(user.getId().hashCode(), 7) == dispatchDay.getValue() - 1;
         }
         return Arrays.stream(reviewDays).anyMatch(dispatchDay.name()::equals);
     }
@@ -412,7 +419,7 @@ public class RetentionService {
     private int dueConceptsDigestCooldownDays(UserEntity user) {
         String[] reviewDays = user.getReviewDays();
         return reviewDays == null || reviewDays.length == 0
-                ? properties.getRetention().getDueConceptsDigestCooldownDays()
+                ? UNCOMMITTED_DUE_CONCEPTS_DIGEST_COOLDOWN_DAYS
                 : COMMITTED_DUE_CONCEPTS_DIGEST_COOLDOWN_DAYS;
     }
 

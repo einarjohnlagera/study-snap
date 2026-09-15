@@ -23,9 +23,10 @@ Current reminders include:
 - `DUE_CONCEPTS_DIGEST`
   - trigger: weekly run finds due concepts across the user's owned Study Packs through `ConceptHealthService`
   - includes the total due-concept count and up to three Study Pack titles with the most due concepts. **As of `v0.72.0` the CTA deep-links to `/notes/{noteId}/quick-review?source=due-concepts-digest`** for the owned note with the most due concepts — one tap to the first question — falling back to the dashboard only when no owned note resolves. It previously linked to Dashboard Today Focus, which left a decision in the way.
-  - **Dispatches daily and selects committed learners by their chosen review weekdays** (`users.review_days`, matched in `Asia/Manila`). A null or empty value keeps the existing every-day eligibility and seven-day cooldown, never "never send." A learner with chosen days has a one-day cooldown, so they may receive a digest on each selected day when concepts are actually due. **This digest moved off the weekly Sunday job in `v0.72.0`**: on a weekly dispatch only one weekday could ever match, so any learner choosing other days was silently dropped.
+  - **Dispatches daily and selects committed learners by their chosen review weekdays** (`users.review_days`, matched in `Asia/Manila`). A learner with chosen days has a one-day cooldown, so they may receive a digest on each selected day when concepts are actually due. **This digest moved off the weekly Sunday job in `v0.72.0`**: on a weekly dispatch only one weekday could ever match, so any learner choosing other days was silently dropped.
+  - **A null or empty `review_days` no longer means "eligible every day."** `v0.148.0`: a null/empty value is assigned one deterministic weekday, `Math.floorMod(userId.hashCode(), 7)`, computed at read time from the existing `id` column (no new column, no migration). Before this fix every such learner was checked every day the job ran and gated only by a flat cooldown, which clustered sends onto whichever weekday they first happened to land on (measured: 107/101/98 sends on the top 3 weekdays vs. 9/8/2 on the bottom 3, over 28 days) — this now spreads them the same way a chosen-review-day learner is spread.
   - gated by `dueConceptsDigestRemindersEnabled` (default on for new signups; existing users retain their previously persisted preference)
-  - cooldown: `7` days without chosen review days; `1` day with chosen review days
+  - cooldown: `1` day with chosen review days; `6` days without chosen review days (`v0.148.0`, down from `7` — the flat 7-day cooldown combined with a brand-new hash-assigned day can otherwise produce two sends inside one week during the first cycle after a learner's day changes; this value is a compile-time constant, not a config property, since it has no legitimate reason to vary per deployment)
 - `RE_ENGAGEMENT_2025`
   - trigger: admin-started re-engagement campaign for inactive verified users
   - gated by `marketingEmailsEnabled` (default off until the user opts in)
@@ -50,8 +51,10 @@ either saved outcome resolves the prompt.
 Every learner with the digest preference enabled already gets a weekly nudge when concepts are due.
 Choosing weekdays upgrades that schedule: the learner becomes eligible only on those days and the
 cooldown drops to one day, allowing a nudge on each chosen day that has due concepts. A null or empty
-selection retains the existing daily eligibility and seven-day cooldown, so nobody loses the digest
-by leaving the prompt unanswered. Learners can later edit the same weekdays and the digest preference
+selection no longer means daily eligibility (`v0.148.0`, see above): the learner still gets a weekly
+nudge, on a deterministic weekday assigned from their `id`, with a six-day cooldown — nobody loses the
+digest by leaving the prompt unanswered, they just aren't checked every day to send it. Learners can
+later edit the same weekdays and the digest preference
 under Settings → Email Preferences. **⚠️ THAT SURFACE'S COPY MUST STATE BOTH CADENCES — weekly by default, and one per chosen day once days are picked.** It was left reading *"a weekly reminder"* after `v0.139.0` changed the cadence, and was caught only by that release's pre-signoff pressure test, **on a file that appeared nowhere in the release diff**. When this cadence changes again, sweep by SURFACE, not by diff. See
 [`email-preferences.md`](email-preferences.md).
 
