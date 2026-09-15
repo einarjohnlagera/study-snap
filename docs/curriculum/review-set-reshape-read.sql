@@ -41,14 +41,23 @@
 --   reads them; every query uses the placeholders above.
 --     ALE  root = b0db3648-c520-40a5-8e0b-f8ebfcdef102   programs = 'Architecture', 'Architectural Engineering'
 --     LET  root = d84dcf18-f4aa-409c-91e9-36c02d6c7580   programs = 'Education', 'Special Needs Education – Generalist'
---     PNLE root = 682e0abc-9aa6-46b2-9b4a-2b238cbf2084   programs = 'Nursing'
---     CE   root = b292e737-bb40-4146-9e2e-38f539b82433   programs = 'Civil Engineering'
+--     PNLE   root = 682e0abc-9aa6-46b2-9b4a-2b238cbf2084   programs = 'Nursing'
+--     CE     root = b292e737-bb40-4146-9e2e-38f539b82433   programs = 'Civil Engineering'
+--     CPALE  root = 7322c62e-8794-4229-8e7f-a902bcd6070f   programs = 'Accountancy'
 --
 -- ⚠️ CHOOSE THE BENCHMARK BY WHAT THE TARGET *IS*, NOT BY WHICH SET IS BIGGEST. 'civil' is the
 -- deepest set, but Civil Engineering is deliberately BROADER than its licensure exam, so for a
 -- licensure reviewer it models the wrong shape. For PNLE the benchmark was 'LET' — the freshest
 -- PRC-aligned rebuild (6 plans / 42 sections / 321 notes). Supply exactly ONE benchmark: two
 -- incompatible templates invite the strategist to average them.
+--
+-- ⚠️ A REBUILT SET CAN BECOME THE NEXT BENCHMARK, NOT JUST A TEMPLATE THAT NEVER CHANGES. By the
+-- time CPALE was built (four months after PNLE's own rebuild), PNLE had been authored out to 9
+-- plans / 73 sections / 163 notes — no longer a template, a realized comprehensive licensure set.
+-- CPALE used PNLE, not LET, because a set that has actually been AUTHORED shows real section
+-- granularity a fresh rebuild does not. Re-check Q0's notes_in_tree for every existing set before
+-- picking a benchmark; the best structural model may be the most recently completed rebuild, not
+-- the one this file names as an example.
 --
 -- ⚠️ THIS FILE MUST STAY PROGRAM-AGNOSTIC. It shipped once half-templated — three queries kept a
 -- hardcoded root id while others used the placeholder — so a find-and-replace for a DIFFERENT set
