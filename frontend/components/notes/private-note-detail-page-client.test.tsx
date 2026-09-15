@@ -205,8 +205,8 @@ describe("PrivateNoteDetailPageClient", () => {
     (listSubjects as jest.Mock).mockResolvedValue(["Biology", "Chemistry"]);
     (listCoursePrograms as jest.Mock).mockResolvedValue(["Nursing", "Senior High – STEM"]);
     (getCourseProgramCatalog as jest.Mock).mockResolvedValue([
-      { id: "program-nursing", name: "Nursing", programFamilyId: null, programFamilyName: null },
-      { id: "program-pharmacy", name: "Pharmacy", programFamilyId: null, programFamilyName: null },
+      { id: "program-nursing", name: "Nursing", programFamilyId: null, programFamilyName: null, isActive: true },
+      { id: "program-pharmacy", name: "Pharmacy", programFamilyId: null, programFamilyName: null, isActive: true },
     ]);
     (getNoteApplicablePrograms as jest.Mock).mockResolvedValue({
       programs: [{ id: "program-nursing", name: "Nursing" }],
@@ -468,10 +468,10 @@ describe("PrivateNoteDetailPageClient", () => {
   it("for generated notes, Edit enables inline metadata editing instead of routing", async () => {
     (getAuthUser as jest.Mock).mockReturnValue({ planType: "PRO", emailVerifiedAt: "2026-03-21T09:00:00Z", profileType: "TEACHER" });
     (getCourseProgramCatalog as jest.Mock).mockResolvedValue([
-      { id: "program-nursing", name: "Nursing", programFamilyId: null, programFamilyName: null },
-      { id: "program-civil", name: "Civil Engineering", programFamilyId: "family-engineering", programFamilyName: "Engineering" },
-      { id: "program-electrical", name: "Electrical Engineering", programFamilyId: "family-engineering", programFamilyName: "Engineering" },
-      { id: "program-mechanical", name: "Mechanical Engineering", programFamilyId: "family-engineering", programFamilyName: "Engineering" },
+      { id: "program-nursing", name: "Nursing", programFamilyId: null, programFamilyName: null, isActive: true },
+      { id: "program-civil", name: "Civil Engineering", programFamilyId: "family-engineering", programFamilyName: "Engineering", isActive: true },
+      { id: "program-electrical", name: "Electrical Engineering", programFamilyId: "family-engineering", programFamilyName: "Engineering", isActive: true },
+      { id: "program-mechanical", name: "Mechanical Engineering", programFamilyId: "family-engineering", programFamilyName: "Engineering", isActive: true },
     ]);
     (getNote as jest.Mock).mockResolvedValue({
       ...baseNote,
@@ -497,7 +497,7 @@ describe("PrivateNoteDetailPageClient", () => {
     ).toBeInTheDocument();
     expect(screen.queryByLabelText("Who is this note for?")).not.toBeInTheDocument();
     expect(await screen.findByLabelText("Add a course or program")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Add all 3 Engineering programs" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Engineering · 3" })).toBeInTheDocument();
     expect(screen.getByRole("option", { name: "Automatic — use note context" })).toBeInTheDocument();
     expect(screen.getByRole("option", { name: "Automatic — based on the reader" })).toBeInTheDocument();
     expect(screen.getByText(/They determine where this note applies and is discoverable/)).toBeInTheDocument();

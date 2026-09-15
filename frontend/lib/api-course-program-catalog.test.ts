@@ -13,6 +13,24 @@ describe("course program catalog API", () => {
       name: "Chemical Engineering",
       programFamilyId: "family-engineering",
       programFamilyName: "Engineering",
+      isActive: true,
+    };
+    globalThis.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: jest.fn().mockResolvedValue(payload),
+    } as unknown as Response);
+
+    await expect(createCourseProgram({ name: payload.name, programFamilyId: payload.programFamilyId }))
+      .resolves.toEqual(payload);
+  });
+
+  it("treats a missing isActive field as active, for a backend not yet deployed with the column", async () => {
+    const payload = {
+      id: "program-legacy",
+      name: "Chemical Engineering",
+      programFamilyId: "family-engineering",
+      programFamilyName: "Engineering",
     };
     globalThis.fetch = jest.fn().mockResolvedValue({
       ok: true,
@@ -41,6 +59,7 @@ describe("course program catalog API", () => {
       name: "Civil Engineering",
       programFamilyId: null,
       programFamilyName: null,
+      isActive: true,
     }];
     globalThis.fetch = jest.fn().mockResolvedValue({
       ok: true,

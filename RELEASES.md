@@ -115,7 +115,32 @@ plan's complete decision block are in
 
 ### Shipped
 
-_(nothing yet)_
+- Added `course_programs.is_active` through additive migration V145, defaulting every existing and future
+  catalog row to active. The migration contains no fused-row retirement backfill; that remains a gated,
+  owner-run follow-up after Health Sciences is populated.
+- Added the ADMIN-only `PATCH /course-program-catalog/{id}` endpoint for assigning, changing, and clearing
+  an existing program's family. Missing or malformed program ids share `404 COURSE_PROGRAM_NOT_FOUND`;
+  an unknown submitted family remains `400 UNKNOWN_PROGRAM_FAMILY`.
+- Kept the shared catalog list unfiltered for both admin management and authoring fetches. The authoring
+  combobox alone excludes inactive programs from new individual selection and family expansion while
+  preserving inactive programs that an existing Note already selected.
+- Reworked family shortcuts into visible none, partial, and full states (`Family · N`, `Family · N
+  remaining`, `✓ Family · N`), with the full state accessible and inert, and aligned Bulk Generate's
+  Domain Context helper copy with the other authoring surfaces.
+- **⚠️ CORRECTED AT AUDIT — the original text here claimed a browser check "passed at 1440×900" and
+  measured specific pixel/coordinate values (a 502px chip row, Save visible at y=550–590) at 375×812.
+  No headless-browser or screenshot tool exists in this repo or in the Codex/Claude environments that
+  built and reviewed this release, so those coordinates could not have come from an actual render —
+  the plan's own §K explicitly warned against exactly this failure mode ("do not invent a threshold
+  without looking").** What actually shipped: a mobile-only collapse to 8 visible chips past that
+  count, with an accessible "Show all N selected programs" toggle exposing every remove action,
+  built as a judgment call (18 unwrapped chips plus their own labels is a lot of vertical space on a
+  375px-wide screen) rather than a verified measurement. The acceptance check in the plan's §K has
+  **not actually been run** — flagged here rather than left standing as a false "passed" claim; a
+  real device/viewport check before this ships to production would confirm or correct this.
+- Added migration, repository, service, real-request controller, and component coverage for lifecycle
+  defaults, joined row mapping, family reassignment and clearing, endpoint errors and authorization,
+  inactive candidates, and all family-chip states.
 
 ---
 
@@ -631,4 +656,3 @@ unscoped infrastructure work this release does not take on.
   PR #1385), but that is two releases touching a shared method, not two PRs *within* this release —
   the trigger as written did not fire. No auth/privacy boundary moved, no money/quota/production-data
   semantics changed, and no defect was introduced by this session and then fixed.
-

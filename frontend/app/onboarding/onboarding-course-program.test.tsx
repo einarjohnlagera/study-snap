@@ -138,6 +138,7 @@ describe("onboarding Course / Program step", () => {
         name,
         programFamilyId: null,
         programFamilyName: null,
+        isActive: true,
       })),
     );
     seedDraftOnCourseProgramStep();
