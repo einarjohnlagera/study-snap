@@ -13,27 +13,43 @@ needs computation guidance, and a reminder email that quietly always arrives on 
   (`OpenAiLlmStudyPackService.java:1649`) uses plain `String.contains` for all 50 keywords, so several
   match as embedded substrings of unrelated words: `ratio` ⊂ `corporation`/`operations`/`administration`,
   `solve` ⊂ `resolve`, `current` ⊂ `currently`, `interest` ⊂ `interested`. Measured read-only against
-  production: ~4,890 notes are currently "quantitative via keywords only," and anchoring just these
-  false-positive-prone keywords with word boundaries flips ~1,520-1,586 of them (~31%) to
-  non-quantitative on a future regeneration — never retroactively, since the flag is computed fresh at
-  generation time and never persisted. Sampled the flip set: genuinely non-computational content
-  (pedagogy, architectural theory, Philippine history, nursing practice narratives). **Amendment from a
-  cold-agent falsification pass:** ~25% of the flip set (scaled ~370 notes) is Nursing/Accountancy
-  content with `domain_context` left `NULL`, currently classified quantitative *only* by this same
-  accidental substring match — since `NURSING` and `ACCOUNTANCY` are both declared `quantitative=true`
-  domains, this content genuinely should keep computation guidance. Fix ships `nursing` and
-  `accountancy` as two new unanchored keywords in the same diff to close that regression (both are safe
-  standalone words, no substring hazard). `pharmacokinetic` (added `v0.145.0`) stays deliberately
-  unanchored — its match depends on unanchored substring matching, and the code comment explaining this
-  gets rewritten so a future session doesn't "fix" it into breaking.
+  production: ~4,890 notes are currently "quantitative via keywords only." Sampled the flip set:
+  genuinely non-computational content (pedagogy, architectural theory, Philippine history, nursing
+  practice narratives). **Two amendments found during pre-commit `advisor()` review, both closed in the
+  same diff before shipping:**
+  - **Nursing/Accountancy regression** (also independently found by the earlier cold-agent falsification
+    pass): anchoring alone would have declassified `domain_context IS NULL` Nursing/Accountancy content
+    that reaches `quantitative=true` today only via this same accidental substring match. Re-measured
+    with `course_program` joined into the haystack (the original estimate omitted it): of the flip set,
+    466 notes are rescued by two new unanchored `QUANTITATIVE_KEYWORDS` entries, `nursing` and
+    `accountancy` (both safe standalone words, no substring hazard) — higher coverage than the original
+    ~370-note estimate, not lower. `pharmacokinetic` (added `v0.145.0`) stays deliberately unanchored —
+    its match depends on unanchored substring matching, and the code comment explaining this was
+    rewritten so a future session doesn't "fix" it into breaking.
+  - **Inflection gap:** a bare `\bkeyword\b` doesn't match a keyword's own plural/verb forms —
+    `\bratio\b` fails on "financial ratios," `\bsolve\b` fails on "solving." Of the flip set, 28% (291 of
+    1,045 remaining after the nursing/accountancy rescue) triggered ONLY on one of these inflected forms
+    — genuinely quantitative content the anchoring fix would otherwise have wrongly declassified. Each of
+    the 7 anchored patterns now also accepts its plain plural/verb inflections (`ratio(s)?`,
+    `solv(e|es|ed|ing)`, `current(s)?`, `interest(s)?`, `integral(s)?`, `balance(s)?`) without reopening
+    any substring hazard the anchoring closed — e.g. `interest(s)?` still excludes `interested`/
+    `interesting` since the boundary is enforced after the optional `s`, not mid-word.
+  - **Final measured flip count, with course_program in the haystack and both amendments applied: 754
+    notes** (down from the original, narrower estimate of ~1,520-1,586 — the original haystack omitted
+    course_program and the original anchoring omitted inflections, both of which this diff corrects
+    before shipping, not after).
   - **Which 7 keywords get anchored:** `ratio`, `solve`, `current`, `interest`, `integral`, `balance`,
-    `units`. The other 43 (including the 2 new ones and `pharmacokinetic`) keep plain `contains`.
+    `units`. The other 44 (including the 2 new ones and `pharmacokinetic`) keep plain `contains`.
   - **Anti-drift:** no resolver rewrite — same haystack construction, same
     `domainContext().isQuantitative()` short-circuit, same overall function shape; anchoring is a second,
     additive matching branch for a fixed subset of keywords, not a semantic overhaul of the scan.
-  - **Test owed:** `OpenAiLlmStudyPackServiceTest` gains a case proving the anchored path isn't a no-op —
-    a haystack containing only `corporation` → not quantitative; one containing `current ratio` → still
-    quantitative — plus confirms the existing `pharmacokinetic` test still passes as the canary.
+  - **Test owed:** `OpenAiLlmStudyPackServiceTest` gains cases proving the anchored path isn't a no-op (a
+    haystack containing only `corporation` → not quantitative; one containing `current ratio` → still
+    quantitative), that the plural/verb inflections match on their own, and that the nursing/accountancy
+    rescue works via `courseProgram` (the field production actually uses, not just `subject`) — plus
+    confirms the existing `pharmacokinetic` test still passes as the canary.
+  - `docs/features/study-pack-generation.md` updated to describe the anchoring split and the
+    `nursing`/`accountancy` false-negative repair, matching how it already documents `pharmacokinetic`.
 
 - **Due-concepts-digest day-of-week clustering fix (backend).** `RetentionService.isEligibleReviewDay`
   returns `true` unconditionally for the 143 users with `review_days IS NULL`, so they're checked every

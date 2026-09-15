@@ -55,6 +55,7 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
+import java.util.regex.Pattern;
 
 @Service
 @ConditionalOnProperty(prefix = "studysnap.llm.api", name = "provider", havingValue = "openai", matchIfMissing = true)
@@ -167,19 +168,36 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
     );
     // v0.145.0: added "pharmacokinetic" (owner decision 2, measured against production rather than
     // assumed -- see the Stage 2 domain-context plan §A5). It reaches its target ONLY because
-    // matching is unanchored below (contains("pharmacokinetic") matches the subject
-    // "Pharmacokinetics"). If the substring-matching defect is ever fixed with word boundaries,
-    // this entry silently stops working and must become a "pharmacokinetic(s)?" pattern.
+    // matching here is unanchored (contains("pharmacokinetic") matches the subject
+    // "Pharmacokinetics"). v0.148.0 split 7 proven-false-positive-prone keywords out into
+    // QUANTITATIVE_KEYWORDS_ANCHORED below (word-boundary matched) but deliberately left
+    // "pharmacokinetic" here, unanchored -- do NOT move it to the anchored list or add word
+    // boundaries to this scan generally; that would silently break this entry.
     private static final List<String> QUANTITATIVE_KEYWORDS = List.of(
-            "accounting", "algebra", "algorithm", "algorithms", "amortization", "analysis", "anatomy",
-            "balance", "calculus", "cash flow", "chemistry", "circuit", "circuits", "computation",
-            "compute", "current", "derivative", "derivatives", "differential", "electric", "electrical",
-            "engineering", "equation", "equations", "finance", "formula", "formulas", "geometry",
-            "interest", "integral", "kinematics", "laws of motion", "math", "mathematics", "mechanics",
-            "numerical", "ohm", "pharmacokinetic", "physics", "probability", "ratio", "resistance",
-            "solve", "statistics", "stoichiometry", "thermodynamics", "unit conversion", "units",
-            "variance", "voltage"
+            "accountancy", "accounting", "algebra", "algorithm", "algorithms", "amortization",
+            "analysis", "anatomy", "calculus", "cash flow", "chemistry", "circuit", "circuits",
+            "computation", "compute", "derivative", "derivatives", "differential", "electric",
+            "electrical", "engineering", "equation", "equations", "finance", "formula", "formulas",
+            "geometry", "kinematics", "laws of motion", "math", "mathematics", "mechanics", "numerical",
+            "nursing", "ohm", "pharmacokinetic", "physics", "probability", "resistance", "statistics",
+            "stoichiometry", "thermodynamics", "unit conversion", "variance", "voltage"
     );
+
+    // v0.148.0: these 7 keywords matched as embedded substrings of unrelated words under plain
+    // `contains` -- "ratio" inside "corporation"/"operations"/"administration", "solve" inside
+    // "resolve", "current" inside "currently", "interest" inside "interested" -- proved against
+    // production content (Stage 2 domain-context plan §A1.4, §A12). Word-boundary anchoring removes
+    // those false positives. Each pattern also covers the keyword's plain plural/verb inflections
+    // ("ratios", "balances", "solve"/"solves"/"solved"/"solving") -- a bare `\bkeyword\b` does NOT
+    // match "financial ratios" or "the equation solves for x", and a production sample confirmed a
+    // material share (~28% of the notes this fix would otherwise reclassify) trip only on one of
+    // these inflected forms. The inflection group never re-admits the substring bugs above: e.g.
+    // "interest(s)?" still fails to match "interested"/"interesting" since the boundary is enforced
+    // after the optional "s", not mid-word. Precompiled: this runs on every generation call.
+    private static final List<Pattern> QUANTITATIVE_KEYWORDS_ANCHORED = List.of(
+            "ratio(s)?", "solv(?:e|es|ed|ing)", "current(s)?", "interest(s)?",
+            "integral(s)?", "balance(s)?", "units"
+    ).stream().map(keyword -> Pattern.compile("\\b" + keyword + "\\b")).toList();
 
     private final StudySnapProperties properties;
     private final ObjectMapper objectMapper;
@@ -1674,6 +1692,11 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
         String normalized = haystack.toString().toLowerCase();
         for (String keyword : QUANTITATIVE_KEYWORDS) {
             if (normalized.contains(keyword)) {
+                return true;
+            }
+        }
+        for (Pattern anchoredKeyword : QUANTITATIVE_KEYWORDS_ANCHORED) {
+            if (anchoredKeyword.matcher(normalized).find()) {
                 return true;
             }
         }
