@@ -3,7 +3,23 @@
 > **This is the core brief. Paste it as your first message in a new GPT chat session.**
 > Then paste any module below that matches the conversation — see "Which modules to paste".
 > Update this file whenever a new version ships or the roadmap shifts significantly.
-> Last updated: v0.147.0 - 2026-09-14 (Released). **`v0.147.0` fixed the Bulk Regenerate modal
+> Last updated: v0.148.0 - 2026-09-15 (Released). **`v0.148.0` shipped two small, unrelated backend
+correctness fixes.** (1) `isQuantitativeContext`'s keyword scan word-boundary-anchored 7 of
+`QUANTITATIVE_KEYWORDS`' 50 entries (`ratio`, `solve`, `current`, `interest`, `integral`, `balance`,
+`units`) that matched as embedded substrings of unrelated words (`ratio` ⊂ `corporation`, `current` ⊂
+`currently`) — measured at 754 notes flipping to non-quantitative on their next regeneration, never
+retroactively. The same diff added `"nursing"` and `"accountancy"` as two new unanchored keywords,
+closing both a regression the anchoring would have introduced AND (a side effect worth knowing) the
+Nursing/Accountancy legs of the `v0.85.0`-era "coverage tracks the program's name, not its content"
+defect described in `REVIEW_SET_SHAPING_CONTEXT.md` — Architecture's leg of that same defect remains
+open. (2) `RetentionService.isEligibleReviewDay` stopped treating a null/empty `review_days` user as
+"eligible every day": each such learner now gets one deterministic weekday
+(`Math.floorMod(userId.hashCode(), 7)`), fixing a measured weekday-clustering effect (Mon/Tue/Wed
+107/101/98 sends vs. Thu/Fri/Sun 9/8/2 over 28 days) for 143 users; cooldown for that group changed
+from 7 days to a 6-day compile-time constant. Both fixes: no migration, no new endpoint, no persisted
+state change — pure logic computed at read/generation time. `[CHECKPOINT — due 2026-10-06]` in
+`ROADMAP.md`'s Backlog Index reads whether the projected 1.5x peak-day reduction actually materialized
+post-deploy. **Previously — v0.147.0 - 2026-09-14 (Released).** **`v0.147.0` fixed the Bulk Regenerate modal
 permanently wedging when its batch id expired or was unknown: an expired receipt 404s, but the poll
 swallowed that failure and kept polling forever with no way back to the start screen short of clearing
 browser storage. The poll now treats a 404 as terminal (stop, clear the stuck id, show the server's own

@@ -15,6 +15,57 @@ changelog layer. `ROADMAP.md` keeps a one-line-per-version index at each origina
 
 ---
 
+**Kicked off 2026-09-11, signed off 2026-09-11.** `v0.142.0 — Awareness Before Action` is
+**Released** (PRs #1378, #1379; A5 and the notification card redesign merged directly on the
+release branch). It polishes two already-shipped surfaces the owner is now actively announcing to
+users: the in-app notification inbox and the adopted Review Set update panel. Source:
+`docs/claude-plans/v0.142.0-adoption-and-notifications-plan.md`. **All four planned items shipped
+as scoped — Option A (Subject Plan grouping only) was taken, not Option B, so the release stayed
+frontend-only as designed until a pre-signoff falsification pass found a real backend race
+(below), fixed inline and documented as a scope note in `RELEASES.md`.**
+**⚠️ THE FIRST ITEM (A5) IS A LIVE BUG ON 100% OF TODAY'S NOTIFICATION POPULATION, VERIFIED READ-ONLY
+2026-09-11: all 42 production notifications share one type (`REVIEW_SET_UPDATE`), all 42 carry a
+CTA, and the CTA `<Link>` at `notification-inbox.tsx:163-169` marks read but never closes the
+panel — every notification in production is one tap from this exact defect, and 41 of 42 are
+still unread.** **⚠️ THE OWNER'S STATED REASON FOR THE CARD REDESIGN WAS WRONG, THE REDESIGN ITSELF
+IS NOT: borders between notifications already exist (`border-b border-border`, `:154`) and are
+merely invisible with one notification on screen; what is genuinely missing is a background
+distinction for unread beyond `font-medium` vs `font-semibold` (`:157`).** **SCOPE:** (1) fix A5
+first, inline-sized, ship as its own small PR; (2) redesign the notification card — single tap
+target, no separate CTA link or Mark-read button, dismiss stays a distinct control, a relative
+timestamp (free — `createdAt` is already in `NotificationResponse`); (3) replace the Review Set
+update panel's two uncapped raw-diff lists with meaning-based partitioning (`SKIPPED_NOT_PUBLIC`
+currently sits under a heading that says "no action taken", which is false — it is the branch that
+decides what will be skipped), aggregate the three per-note fan-out types (`REORDERED`, `RETIRED`,
+`MOVED`) into counts, and move from an uncapped inline wall to a compact summary plus a
+progressive-disclosure "Review update" detail surface; (4) rename **Apply additions** → **Add N
+new topics**, counting `ADDED_NOTE` alone — NOT `additionsAvailable()`
+(`NoteCollectionService.java:3523-3529`), which also counts `ADDED_SUBJECT_PLAN` and would
+overstate the promised count. **⚠️ SECTION GROUPING IS AN OWNER DECISION DEFAULTED AT KICKOFF:
+ships as Option A — Subject Plan grouping only, no Section level — to keep this release
+frontend-only.** A Section is a string label on `NoteCollectionItemEntity.label`, not an entity,
+and the update payload carries no Section field today; adding one (`sourceSectionLabel`, populated
+from a variable already in scope at the `ADDED_NOTE` construction site — no extra query) is a real
+but deferred fast-follow (Option B) that would make this a backend release and raise the
+verification tier. **Revisit if the owner wants the extra hierarchy level; nothing forecloses it.**
+**⚠️ THE RENAME'S ONE COLLISION RISK IS CLEARED: a read-only production check for "Apply additions" /
+"upstream" / "addition" across all notification titles, bodies and CTA labels returned ZERO ROWS.**
+Two in-repo references still need sweeping in the same PR: `docs/features/collections.md:932` and
+`frontend/app/collections/[id]/page.test.tsx:736,758`. **⚠️ ANTI-DRIFT: do NOT let notification
+activation apply an update — navigation and mark-read only, the update stays a separate explicit
+action; do NOT title-infer the Subject Plan grouping — use stored `sourcePlanId`/`subjectTitle`
+identity; do NOT change `additionsAvailable()`'s boolean-gate semantics; do NOT add pagination, a
+new diff engine, or new notification infrastructure — Option A needs none of it; do NOT sweep
+`AGENTS.md`'s preamble or the Backlog Index further as a side effect (item 6 of
+`docs/claude-plans/context-doc-token-reduction-plan.md` ran ONCE at this kickoff, six rows moved —
+see the Backlog Index note above — items 4/6/7 stay otherwise held).** Verification tier: **one
+scoped cold agent minimum, falsification-framed** — two PRs land on the same shared classification
+surface, and this release changes what a user-facing claim means (the "no action taken" heading),
+the exact class that has cost three releases running when swept only by diff. **Escalates to the
+full three-agent test if Option B ships instead of A.** **Routing: CODEX** for both workstreams;
+A5 is inline-sized and should ship first, as its own PR. Full scope, the verified production reads,
+and every rejected alternative are in the plan file above.
+
 **Kicked off 2026-09-10, signed off 2026-09-11.** `v0.141.0 — Formulas That Render` is **Released** on `releases/v0.141.0` (PRs #1374, #1375, #1376), cut from `main` after `v0.140.0` merged as #1373 and tagged. **⚠️ THE HEADLINE IS A LIVE LEARNER-FACING DEFECT, DIAGNOSED BY A COLD PRESSURE TEST AND VERIFIED TWICE AGAINST PRODUCTION:** in a quiz question that mentions money AND a formula, the currency `$` OPENS a math span that closes on the formula's `$`, so KaTeX is handed the whole sentence, fails, and the fallback re-emits the source — **the reader sees raw LaTeX with backslashes visible.** `isInlineDollarOpen` (`quiz-working-solution.tsx:62`) opens on any `$` not followed by whitespace, so `$50,000` qualifies. **22 questions + 49 explanations affected.** **⚠️ A FIX AIMED AT `normalizeBareMath` WOULD BE A NO-OP — this session proposed exactly that and was wrong.** The repair is wired correctly at every call site and reaches nothing, because **339/339** backslash-bearing questions and **498/498** explanations already carry a delimiter, so it early-returns. **SCOPE:** (1) the currency/formula mis-pairing; (2) `SummaryMarkdown` never normalises bare math (36 summaries carry a backslash and NO delimiter); (3) `app/shared/study-packs/[id]/page.tsx:69,75,81` render summary, keyConcepts and fullNotes as raw `{value}` with no math rendering at all. **⚠️ ITEM 3 IS SCOPED HONESTLY AND MUST NOT BE OVERSOLD: that route has 1 linked-learner relationship and 6 share events in 90 days, and `share_token` is 0 across all 7,573 packs.** Three surfaces, so signoff owes **one scoped cold agent**. Moved at the `v0.147.0` kickoff.
 
 **Kicked off 2026-09-10, signed off 2026-09-10.** `v0.140.0 — Pending Work in Reach` is **Released** on `releases/v0.140.0` (PRs #1370, #1371, #1372), cut from `main` after `v0.139.0` merged and tagged. Source: `docs/claude-plans/authoring-and-quiz-legibility-fix-plan.md` §§5-7 and **§10** — owner-reported 2026-09-05 from real use. **⚠️ A LEGIBILITY FIX, NOT A DATA-LOSS DEFECT:** navigation protection already exists (`study-plan-builder-page-client.tsx:1663-1671`, verified at kickoff), so work is not silently lost; the failure is a curator dragging on a long plan, scrolling away from the header holding Save, and redoing the arrangement. **Trigger verified live — a 79-note plan, two at 77, one at 76, five more at 59+; 12 authors created 1,768 notes in the 14 days to 2026-09-10.** Scope: the dirty-state sticky bar; `[DECISION]` copy wording owed from the owner (both obvious wordings are wrong in opposite directions, §10 Finding B); §7 narrowed on evidence (its premise is false, §10 Finding C); and three Backlog rows corrected whose work had already shipped. **⚠️ The kickoff scan found the third consecutive release in which every stale row overstated open work — and nothing updates a row when the thing it describes SHIPS, which is a missing signoff step rather than general rot.** Moved at the `v0.146.0` kickoff.

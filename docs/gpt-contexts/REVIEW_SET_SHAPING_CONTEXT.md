@@ -1,6 +1,6 @@
 # Review Set shaping — module
 
-> Last updated: v0.133.0 - 2026-09-08 (Released). **⚠️ THE LET CATALOG CHANGED — THIS DIRECTLY CHANGES YOUR INPUT.** `V142` seeds the `Education` program family with EIGHT members, ALL tagged `exam_goal_slug = 'let'`: `Education`, `Special Needs Education`, `Elementary Education`, `Secondary Education`, `Early Childhood Education`, `Technical-Vocational Teacher Education`, `Physical Education`, `Teacher Certification`. Before this, exactly ONE carried the LET slug. **So Q4 (the ready-to-add pool) and Q6 (the exact catalog program names) of `docs/curriculum/review-set-reshape-read.sql` return MORE ROWS than they did before `v0.133.0` — re-run the read; do not reuse a pre-`v0.133.0` result set.** **⚠️ `Special Needs Education – Generalist` NO LONGER EXISTS UNDER THAT NAME** — it was renamed to `Special Needs Education` keeping its `id`, so use the new name in any TSV you emit. **⚠️ `Teacher Certification` is the canonical name for the non-education-graduate LET route — do NOT emit `Professional Education`, which already exists both as a `DomainContext` value and as a Subject, and do NOT emit credential abbreviations (BEEd, BSEd, BPEd, CPE) as program names.** --- PRIOR (v0.132.0): - 2026-09-08 (Released). Rule 5 (the publication boundary) and the
+> Last updated: v0.148.0 - 2026-09-15 (Released). **`v0.148.0` closed the Nursing and Accountancy legs of the "unset note loses computation guidance" defect below** — `"nursing"` and `"accountancy"` are now literal `QUANTITATIVE_KEYWORDS` entries, so an unset Nursing or Accountancy note's program name now matches the keyword scan directly on its next regeneration (not retroactively). The Architecture leg (73 notes) is untouched and still open. See the corrected "MEASURED 2026-09-05" section below for the full before/after. --- PRIOR (v0.133.0): - 2026-09-08 (Released). **⚠️ THE LET CATALOG CHANGED — THIS DIRECTLY CHANGES YOUR INPUT.** `V142` seeds the `Education` program family with EIGHT members, ALL tagged `exam_goal_slug = 'let'`: `Education`, `Special Needs Education`, `Elementary Education`, `Secondary Education`, `Early Childhood Education`, `Technical-Vocational Teacher Education`, `Physical Education`, `Teacher Certification`. Before this, exactly ONE carried the LET slug. **So Q4 (the ready-to-add pool) and Q6 (the exact catalog program names) of `docs/curriculum/review-set-reshape-read.sql` return MORE ROWS than they did before `v0.133.0` — re-run the read; do not reuse a pre-`v0.133.0` result set.** **⚠️ `Special Needs Education – Generalist` NO LONGER EXISTS UNDER THAT NAME** — it was renamed to `Special Needs Education` keeping its `id`, so use the new name in any TSV you emit. **⚠️ `Teacher Certification` is the canonical name for the non-education-graduate LET route — do NOT emit `Professional Education`, which already exists both as a `DomainContext` value and as a Subject, and do NOT emit credential abbreviations (BEEd, BSEd, BPEd, CPE) as program names.** --- PRIOR (v0.132.0): - 2026-09-08 (Released). Rule 5 (the publication boundary) and the
 > adopter-update note below it are new in this release.
 
 **Paste with `GPT_CONTEXT.md` when the task is designing or rebuilding a Review Set** (a board-exam
@@ -89,18 +89,29 @@ NOT a neutral act, and the cost has already been paid at scale.**
 - **Classification is driven by the GENERATION GATE, not by curator judgement.** Every note with 2+
   programs is classified because the server forces it; **699 of 809 single-program notes are NOT** —
   they silently fall through to the program *name* as the authoring domain.
-- **~239 curator notes already generate with NO computation guidance** — **Nursing 106, Architecture
-  73, Accountancy 60** — because their program name contains no quantitative keyword and they are
-  unset. **This is permanent per note: Study Packs never auto-regenerate.**
+- **As measured 2026-09-05, 239 curator notes generated with NO computation guidance** — **Nursing 106,
+  Architecture 73, Accountancy 60** — because their program name contained no quantitative keyword and
+  they were unset. **⚠️ `v0.148.0` closed the Nursing and Accountancy legs of this specifically**:
+  `"nursing"` and `"accountancy"` are now literal `QUANTITATIVE_KEYWORDS` entries (added to fix an
+  unrelated regression in that release's own keyword-anchoring work), so an unset Nursing or Accountancy
+  note's program name now matches the keyword scan directly. **This is still not retroactive** — Study
+  Packs never auto-regenerate, so the 166 notes measured here keep their existing content until each is
+  individually regenerated. **Architecture's 73 remain open**: no `architecture`/`architectural` keyword
+  was added, so an unset Architecture note is still exactly the gap this section describes.
 - **Civil Engineering is the control: 62/62 pass for free**, purely because `engineering` is a keyword.
   That is the whole defect in one comparison — coverage tracks the program's NAME, not its content.
-- **⚠️ `Accountancy` is the trap case.** `ACCOUNTANCY` declares `quantitative = true`, but that flag is
-  **never reached on an unset note**, and the keyword scan does not rescue it either: the keyword is
-  `accounting`, and **`accountancy` does not contain `accounting`.** An unset Accountancy note on a
-  computational subject — taxation, budgeting, receivables, PPE — loses its computation guidance
-  outright.
-- **So for Nursing, Accountancy and Architecture subjects, `(unset)` is the WORST option**, not the
-  safe one. Classify them.
+- **⚠️ `Accountancy` was the trap case — now fixed at the keyword level, not the flag level.**
+  `ACCOUNTANCY` declares `quantitative = true`, but that flag is still **never reached on an unset
+  note** (unchanged: the declared-domain short-circuit only fires on a *classified* note). Before
+  `v0.148.0` the keyword scan did not rescue it either — the keyword was `accounting`, and `accountancy`
+  does not contain `accounting`. **As of `v0.148.0`, `accountancy` is its own keyword**, so an unset
+  Accountancy note's program name now matches directly; the residual reason to classify rather than
+  leave `(unset)` is the still-unreached `quantitative = true` declaration itself, which also drives the
+  Domain Context sheet's aggregation and other declared-domain behavior, not just this one flag.
+- **So for Architecture subjects, `(unset)` is still the WORST option**, not the safe one — classify
+  them. Nursing and Accountancy notes now regenerate with computation guidance from the keyword scan
+  alone, but remain worth classifying for every OTHER reason a declared Domain Context matters (curation
+  intent, Domain Context sheet aggregation, the two hard Domain Context rules above).
 
 **⚠️ The honest-unset rule still stands and is not weakened by any of the above** — a forced wrong value
 is worse than an honest gap. What changes is that you must now say *out loud* what an unset costs on a

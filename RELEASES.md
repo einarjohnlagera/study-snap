@@ -2,7 +2,7 @@
 
 ## v0.148.0 - Say What You Mean
 
-**Status: In Progress**
+**Status: Released**
 
 Theme: two small, unrelated correctness fixes — a keyword scan that quietly misjudges what content
 needs computation guidance, and a reminder email that quietly always arrives on the same day.
@@ -109,7 +109,19 @@ above), which is why a heavier post-implementation tier isn't warranted.
 
 ### Shipped
 
-_(nothing yet)_
+- **`QUANTITATIVE_KEYWORDS` substring-anchoring fix** — PR #1396, merged `5657d8fd` into
+  `releases/v0.148.0`. `OpenAiLlmStudyPackService.java:193-199,1693-1697` (word-boundary anchoring for
+  7 keywords, each with plural/verb inflections), `:176-184` (`nursing`/`accountancy` added unanchored).
+  `OpenAiLlmStudyPackServiceTest` gained 5 guard tests. `docs/features/study-pack-generation.md` and
+  `docs/gpt-contexts/REVIEW_SET_SHAPING_CONTEXT.md` updated. Full backend suite green.
+- **Due-concepts-digest day-of-week clustering fix** — PR #1397, merged `36b08fd3` into
+  `releases/v0.148.0`. `RetentionService.java:414` (`isEligibleReviewDay`), `:58,422`
+  (`UNCOMMITTED_DUE_CONCEPTS_DIGEST_COOLDOWN_DAYS = 6`), `RetentionEmailScheduler.java` comment update,
+  `StudySnapProperties.java` (`dueConceptsDigestCooldownDays` removed, now unused). `RetentionServiceTest`
+  rewritten for the new null/empty-`review_days` behavior including a negative-case guard.
+  `docs/features/retention-emails.md`, `quiz.md`, `email-preferences.md` updated; frontend review-days
+  copy swept and found already accurate. `[CHECKPOINT — due 2026-10-06]` added to `ROADMAP.md`'s Backlog
+  Index — the projected 1.5x peak-day reduction is a simulation, not yet observed post-deploy.
 
 ---
 
