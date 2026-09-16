@@ -2,7 +2,7 @@
 
 ## v0.151.0 - No Backdoor Left, Round Two
 
-**Status: In Progress**
+**Status: Released**
 
 Theme: close the same gate gap `v0.143.0`/`v0.144.0` already closed for the exam question pool, this
 time for shared quiz links.
@@ -46,21 +46,54 @@ Anti-drift: no other regeneration-path behavior changes; the two `refreshPool` c
 note-generation-unit meter stays genuinely scope-specific (STUDY_PACK-only still spends zero) —
 unrelated to this fix and not touched by it.
 
-Verification tier: **one `advisor()` call on the diff**, not the cold agent floated mid-implementation —
-the actual diff turned out to be a two-line gate removal (plus its stale Javadoc) covered end-to-end by
-a real-Postgres integration test: `studyPackOnlyScopeSpendsNoNoteGenerationUnitsButStillDeactivatesShareLinks`
-and its `NOTE_AND_STUDY_PACK` sibling `combinedScopeCountsAndRecordsExactlyTheShareLinksItTurnsOff`
-between them assert the preflight count, the actual link deactivation, and the per-item receipt flag,
-for both scopes, in one method each — the same four claims a cold agent would otherwise be asked to
-re-derive by reading the same two files. `GeneratedQuizService.deactivateShareLinksForNote`'s existing
-null/empty-guard (read, not re-tested) makes a first-ever-generation no-op safe by construction, and is
-exercised incidentally by every other bulk-regeneration test that seeds no quiz. One added cost, not
-worth a test: `notesWithLiveShareLink` now runs its lookup on every `STUDY_PACK`-only item instead of
-short-circuiting immediately, one extra empty query per note with no existing quiz.
+Verification tier: **one `advisor()` call on the diff plus one scoped cold agent at signoff, falsification-framed.**
+`advisor()` judged the diff itself (a two-line gate removal plus its stale Javadoc, covered end-to-end
+by a real-Postgres integration test) adequate for a single `advisor()` call. At signoff the owner asked
+for a cold agent if a pressure test was warranted — one of this repo's own triggers had in fact fired:
+the implementing session's own first-pass delivery (fixing `StudyPackService` alone) was itself an
+incomplete blind spot the full build caught mid-session, and a second one (the frontend modal) was
+caught the same way after that — a measured blind-spot signal. The cold agent (`model: sonnet`, fresh
+context) was handed 7 specific claims to disprove across the backend, the bulk driver, and the frontend
+modal. 5 REFUTED outright (meter untouched, first-ever-generation no-op, frontend warning correctness,
+single-note/bulk-list consistency, double-deactivation safety). 2 surfaced real but narrow, **pre-existing**
+gaps in the bulk-regeneration design, not introduced by this diff — see "Known limitations" below.
+
+`GeneratedQuizService.deactivateShareLinksForNote`'s existing null/empty-guard (read, not re-tested)
+makes a first-ever-generation no-op safe by construction, and is exercised incidentally by every other
+bulk-regeneration test that seeds no quiz. One added cost, not worth a test: `notesWithLiveShareLink`
+now runs its lookup on every `STUDY_PACK`-only item instead of short-circuiting immediately, one extra
+empty query per note with no existing quiz.
+
+### Known limitations (found by the signoff cold agent, pre-existing, not introduced by this fix)
+
+- **Readiness-window race can make the preflight's `sharedQuizzesToDeactivate` count OVERSTATE what a
+  batch actually deactivates — the safe direction, not a correctness hole.** The preflight counts a note
+  as READY-with-a-live-link at preflight time; `NoteBulkRegenerationService.processItem` re-evaluates
+  readiness per-note at dispatch time and returns `BLOCKED`/`NOT_ELIGIBLE` before `hasLiveShareLink` is
+  even read if the note's readiness changed in between (e.g. its Domain Context was cleared by a
+  concurrent edit). That note is never dispatched, so its content (and its shared quiz) is never
+  replaced, and correctly not deactivated — the preflight simply counted a consequence that then didn't
+  happen, same as it would for the regeneration itself. This is the existing "preflight is a snapshot,
+  not authoritative" behavior `docs/features/bulk-regeneration.md` already documents, applying uniformly
+  to the share-link count too; not specific to this fix and not fixed here.
+- **Narrow TOCTOU on the per-item receipt's `shareLinkDeactivated` flag.** `NoteBulkRegenerationService`
+  captures `hadLiveShareLink` synchronously before `dispatchItem`, then reuses that boolean for the
+  receipt once the async worker finishes seconds-to-minutes later. If a share link is newly created on
+  that note's quiz in that window, the (unconditional) deactivation call still deactivates it, but the
+  receipt records `false` — a stale prediction rather than a fresh read. Narrow (requires a share link
+  created mid-item-processing) and not a regression from this diff; flagged as found, not fixed.
 
 ### Shipped
 
-_(nothing yet)_
+- **Shared quiz links now deactivate on either regeneration scope** (backend, bulk-consequence path,
+  and the confirmation dialog). PR #1406, commit `aea7c12f`, merged to `releases/v0.151.0` as
+  `f9013f5c`. `StudyPackService.java:919` calls `deactivateShareLinksForNote` unconditionally;
+  `NoteRegenerationConsequenceService.notesWithLiveShareLink` dropped the identical scope gate backing
+  the bulk preflight count and per-item receipt; `bulk-regenerate-modal.tsx` dropped the matching
+  `combined &&` gate on its warning copy. `docs/features/bulk-regeneration.md` and
+  `docs/features/study-pack-generation.md` corrected to match. Backend 2403/2403, frontend 2450/2451
+  (1 pre-existing unrelated skip), `tsc --noEmit` clean. `ROADMAP.md` Backlog Index row updated with
+  file:line evidence.
 
 ## v0.150.0 - Membership, Not a Slot
 
