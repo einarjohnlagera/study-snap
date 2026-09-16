@@ -1,5 +1,75 @@
 # RELEASES.md - NoteLib
 
+## v0.150.0 - Membership, Not a Slot
+
+**Status: In Progress**
+
+Theme: Program Family membership becomes many-to-many — a Course/Program can belong to zero, one, or
+several families — closing a production bug where two admin-created families (Health Sciences,
+Accounting) were structurally invisible to every Note-authoring surface, and where an existing
+program's family could not be changed at all except by a database migration.
+
+Source: `docs/claude-plans/program-family-many-to-many-final-plan.md` (FINAL, Opus architecture audit,
+independently verified by the Feature Planner session 2026-09-15; owner-approved 2026-09-16). Supersedes
+`docs/claude-plans/program-family-health-accounting-expansion-final-plan.md` (pass 2) on the schema
+question only — that file's Health Sciences/Accounting membership decisions carry forward unchanged;
+its single-FK schema, API and migration sections do not. Codex prompt:
+`docs/codex-prompts/v0.150.0-program-family-many-to-many.md` (gitignored, not committed).
+
+### Planned Scope
+
+- **ADR-001 amendment (docs-only, Slice 0).** Constraint 2 (`ADR-001:92`) currently forbids "any preset
+  table beyond `course_programs.program_family_id`" — a literal blocker for a membership table. Owner
+  approved storage-neutral replacement text (plan §A) that keeps the constraint's substance (unconditional,
+  membership-driven expansion) while permitting many-to-many storage.
+- **`course_program_family` migration (backend).** New join table copying every existing single-FK
+  membership (Engineering 18, Education 8 = 26 rows), with a relationship-level (not count-only) parity
+  assertion that aborts the migration on any mismatch. `course_programs.program_family_id` is retained,
+  unread by application code after cutover — no dual-write.
+- **Catalog API becomes additive (backend).** `GET /course-program-catalog` gains `programFamilies: []`;
+  deprecated `programFamilyId`/`programFamilyName` stay populated (alphabetical-first) for one release of
+  frontend-deploy tolerance. `PATCH /course-program-catalog/{id}` becomes an authoritative
+  `programFamilyIds` replacement — a free breaking change, since it has zero existing frontend clients.
+- **Note-authoring bug fix (frontend).** The "Add Course/Program" family picker currently derives its
+  options by scanning catalog rows that already carry a family, so a brand-new empty family is invisible
+  to it — exactly what happened to Health Sciences and Accounting in production. Fixed by fetching the
+  canonical `/course-program-catalog/families` endpoint instead, same one Admin already uses.
+- **Admin Edit action (frontend, new).** Admins can edit an existing Course/Program's family memberships
+  through a multi-select modal — this did not exist at all before this release, despite `v0.149.0`'s
+  release notes claiming it did (see Corrections below).
+- **Populate all four empty families (owner-run, post-deploy).** Health Sciences, Accounting, and the
+  two owner-approved additions Computing & Technology and Built Environment & Design (17 memberships
+  total) — via the Admin UI as the primary path, which doubles as this release's own production
+  acceptance test.
+
+### Corrections to the v0.149.0 record
+
+Verified against current code and production, not inferred, per the many-to-many plan's audit:
+
+- **`v0.149.0`'s release notes claim "Admins can now move an existing Course/Program catalog entry into
+  a different family." They cannot, through any UI.** The `PATCH /course-program-catalog/{id}` endpoint
+  shipped and is well-tested, but no frontend client ever called it — `admin-course-program-catalog-section.tsx`
+  has no Edit action and `frontend/lib/api.ts` has no `updateCourseProgram` function.
+- **`v0.149.0`'s release notes claim "A catalog program can now be marked inactive." No application code
+  ever writes `is_active`.** New rows get `true` only from the column's DB-level `DEFAULT` (`V145`) — the
+  `INSERT` statement's own column list does not include `is_active` — and there is no `UPDATE`, endpoint,
+  or admin control to change it after creation. Production confirms 0 rows with `is_active = false`. This
+  also means the Known Limitation recorded as "documented for the next post-deploy pass" (the two legacy
+  fused rows' deprecation) was never actually reachable by any owner action — it needed a code change that
+  was never scoped, not a data operation that was merely pending. Tracked as its own Backlog Index item;
+  out of scope for this release (plan §P item 4).
+
+Anti-drift: Program Family stays an authoring convenience only — never Note-persisted, never a discovery
+axis, never Domain Context, never Authored Depth, never sent to generation. Exam Goal editing is dropped
+from this release entirely (not even read-only display). `is_active`, the two legacy fused catalog rows,
+family deletion, program deletion, and family-side membership editing (Family → Programs) are all
+explicitly out of scope. No react-query/TanStack/websocket/polling is introduced — this frontend has no
+query cache today and this release adds none.
+
+### Shipped
+
+_(nothing yet)_
+
 ## v0.149.0 - Precision Before Coverage
 
 **Status: Released**
@@ -611,80 +681,3 @@ save rather than erroring. Run `scripts/check-deploys.sh` after the release PR m
   `assertGenerationReady` is value-agnostic, so it could not fail differently from existing
   coverage. See the Planned Scope note above.
 
-## v0.144.0 - No Backdoor Left
-
-**Status: Released** (kicked off 2026-09-13, signed off 2026-09-13, base branch `releases/v0.144.0`,
-cut from `main` after `v0.143.0` merged as #1383 and tagged — Vercel and Render both confirmed live
-on `c899d418`. PR #1385 merged into the release branch at `e61ee2ce`.)
-
-Theme: close the fourth and last known path that lets an exam question pool keep serving
-questions from a Study Pack's replaced content — the two admin-only repair endpoints `v0.143.0`'s
-own falsification pass found and flagged but did not fix.
-
-### How this scope was reached
-
-`v0.143.0`'s signoff recorded two open Backlog rows rather than folding more work into that
-release, both explicitly gated "needs verification before it needs a release": shared quiz links
-not deactivated on a `STUDY_PACK`-only regeneration, and `AdminStudyPackTransactionHelper`'s two
-repair endpoints bypassing exam-pool invalidation entirely.
-
-Two read-only production queries were run against each gate
-(`docs/backlog-rows-475-476-production-read`, PR #1384, merged into this release branch). The
-share-link row is **verified NOT currently live** — production carries exactly one active share
-link, and its quiz was not updated after it was shared — so it stays open but deprioritized. The
-admin-repair row's call volume turned out to be **permanently unanswerable**: no admin-action
-audit trail exists anywhere in the schema, and the one plausible proxy — a `"|"` "enriched
-summary" marker `regenerateOnePack` itself gates on — is a content-shape artifact of ordinary LLM
-summary generation (pipe-delimited comparison tables, `developer.txt:50`), not a
-repair-provenance signal, confirmed by reading the prompt directly rather than assuming.
-
-**Fixing the admin-repair path anyway, on precedent rather than exposure evidence.** The gap is
-confirmed in code, the fix is one file and two call sites, and it is the exact pattern `v0.143.0`
-already built, tested, and mutation-verified for the learner-facing path. Waiting on a volume
-number the data cannot produce is not a reason to leave a confirmed code defect open when the fix
-is this cheap.
-
-**⚠️ `v0.143.0`'s own record named `v0.144.0` for something else.** Its "How this scope was
-reached" section says the owner deferred Learning Connections supporter onboarding
-*"to `v0.144.0`"*, gated on `[CHECKPOINT — due 2026-09-19]` — six days out from this kickoff. That
-was informal shorthand for "whichever release comes next," not a commitment to this specific
-number; the owner chose this admin fix instead. Supporter onboarding remains gated on
-`2026-09-19` for whatever release follows this one, and this release does not touch it.
-
-### Planned Scope
-
-- **Admin summary/quiz repair paths invalidate the exam pool (backend, 1 file).**
-  `AdminStudyPackTransactionHelper.regenerateOnePack` (`:66-67`) and `repairMalformedQuiz`
-  (`:121-123`) each replace `summary`/`quiz` in place with no exam-pool invalidation. Fix: call
-  `examQuestionPoolService.refreshPool` for both `MODE_LONG_EXAM` and `MODE_BOARD_EXAM` after each
-  save, inside the same `@Transactional` method, with the same `studyPackRepository.flush()`
-  ordering `v0.143.0`'s falsification pass proved necessary to avoid the lock-order inversion it
-  found there. Isolated bug fix, clear root cause, direct precedent — Claude Code implements
-  inline, no Codex prompt.
-
-**Explicitly NOT in scope:** the Challenge Quiz question bank (leg 2 of the same "derived
-artifacts" defect class) — still unscoped, needs its own tracing pass before it needs a release.
-The shared-quiz-link row — verified not currently live, left open at low priority, not folded in.
-Adding an admin-action audit log — would answer future volume questions but is separate,
-unscoped infrastructure work this release does not take on.
-
-### Shipped
-
-- **Admin summary/quiz repair paths now invalidate the exam pool.** `AdminStudyPackTransactionHelper.regenerateOnePack`
-  (`POST /admin/study-packs/regenerate-summaries`) and `repairMalformedQuiz` (`POST
-  /admin/study-packs/repair-malformed-quizzes`) each call `examQuestionPoolService.refreshPool` for both
-  `MODE_LONG_EXAM` and `MODE_BOARD_EXAM` immediately after saving, with the same `studyPackRepository.flush()`
-  before the pool call that `v0.143.0`'s falsification pass found necessary to avoid inverting the
-  `study_packs` → `exam_question_pool` lock order. New `AdminStudyPackTransactionHelperTest` coverage
-  (2 tests, `InOrder`-asserted save → flush → refresh-long-exam → refresh-board-exam) plus `never()`
-  assertions on `examQuestionPoolService` added to all 6 pre-existing skip/failure tests, confirming the
-  invalidation only fires on an actual content replacement. Both new/extended tests mutation-verified —
-  confirmed to fail against the pre-fix code. Full backend suite: 2368/2368 passing.
-  `docs/features/study-pack-generation.md` corrected — it previously named this as the one known
-  unfixed gap.
-- **Verification tier: single `advisor()` call, no cold agent** — checked against the nearest-miss
-  trigger explicitly rather than leaving it unstated: `ExamQuestionPoolService.refreshPool` now has
-  callers added by both `v0.143.0` (`StudyPackService`, PR #1382) and `v0.144.0` (this admin helper,
-  PR #1385), but that is two releases touching a shared method, not two PRs *within* this release —
-  the trigger as written did not fire. No auth/privacy boundary moved, no money/quota/production-data
-  semantics changed, and no defect was introduced by this session and then fixed.

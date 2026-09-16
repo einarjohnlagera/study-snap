@@ -1,6 +1,6 @@
 # RELEASES_ARCHIVE.md — NoteLib
 
-Archived sections of `RELEASES.md`. **Contents are NOT one contiguous range:** `v0.41.0`–`v0.120.0`, plus `v0.126.0` (moved at the `v0.132.0` kickoff), `v0.127.0` (moved at the `v0.133.0` kickoff) `v0.128.0` (moved at the `v0.134.0` kickoff) `v0.129.0` (moved at the `v0.135.0` kickoff) `v0.130.0` (moved at the `v0.136.0` kickoff) `v0.131.0` (moved at the `v0.137.0` kickoff) `v0.132.0` (moved at the `v0.138.0` kickoff) `v0.133.0` (moved at the `v0.139.0` kickoff), `v0.134.0` (moved at the `v0.140.0` kickoff), `v0.135.0` (moved at the `v0.141.0` kickoff), `v0.136.0` (moved at the `v0.142.0` kickoff), `v0.137.0` (moved at the `v0.143.0` kickoff), `v0.138.0` (moved at the `v0.144.0` kickoff), `v0.139.0` (moved at the `v0.145.0` kickoff), `v0.140.0` (moved at the `v0.146.0` kickoff), `v0.141.0` (moved at the `v0.147.0` kickoff), `v0.142.0` (moved at the `v0.148.0` kickoff) and `v0.143.0` (moved at the `v0.149.0` kickoff) as the live file crossed its *current + last five* cap. Each version's own `## vX.Y.Z` heading is the index — search for it. `v0.40.1` and earlier moved here
+Archived sections of `RELEASES.md`. **Contents are NOT one contiguous range:** `v0.41.0`–`v0.120.0`, plus `v0.126.0` (moved at the `v0.132.0` kickoff), `v0.127.0` (moved at the `v0.133.0` kickoff) `v0.128.0` (moved at the `v0.134.0` kickoff) `v0.129.0` (moved at the `v0.135.0` kickoff) `v0.130.0` (moved at the `v0.136.0` kickoff) `v0.131.0` (moved at the `v0.137.0` kickoff) `v0.132.0` (moved at the `v0.138.0` kickoff) `v0.133.0` (moved at the `v0.139.0` kickoff), `v0.134.0` (moved at the `v0.140.0` kickoff), `v0.135.0` (moved at the `v0.141.0` kickoff), `v0.136.0` (moved at the `v0.142.0` kickoff), `v0.137.0` (moved at the `v0.143.0` kickoff), `v0.138.0` (moved at the `v0.144.0` kickoff), `v0.139.0` (moved at the `v0.145.0` kickoff), `v0.140.0` (moved at the `v0.146.0` kickoff), `v0.141.0` (moved at the `v0.147.0` kickoff), `v0.142.0` (moved at the `v0.148.0` kickoff), `v0.143.0` (moved at the `v0.149.0` kickoff) and `v0.144.0` (moved at the `v0.150.0` kickoff) as the live file crossed its *current + last five* cap. Each version's own `## vX.Y.Z` heading is the index — search for it. `v0.40.1` and earlier moved here
 2026-07-10; **`v0.41.0` through `v0.120.0` moved here 2026-09-07** in the `v0.126.0` pass, which
 resumed this convention after it had lapsed for 85 releases — `RELEASES.md` had reached 116
 sections against its documented design of *current + last few versions*. Both passes are MOVES,
@@ -18899,3 +18899,80 @@ on the diff is enough.
   release's fix does not reach it. Traced with `file:line` evidence, not a structural analogy;
   recorded as its own `ROADMAP.md` Backlog Index row rather than folded into this PR, matching how
   the `deactivateShareLinksForNote` finding was handled at kickoff.
+## v0.144.0 - No Backdoor Left
+
+**Status: Released** (kicked off 2026-09-13, signed off 2026-09-13, base branch `releases/v0.144.0`,
+cut from `main` after `v0.143.0` merged as #1383 and tagged — Vercel and Render both confirmed live
+on `c899d418`. PR #1385 merged into the release branch at `e61ee2ce`.)
+
+Theme: close the fourth and last known path that lets an exam question pool keep serving
+questions from a Study Pack's replaced content — the two admin-only repair endpoints `v0.143.0`'s
+own falsification pass found and flagged but did not fix.
+
+### How this scope was reached
+
+`v0.143.0`'s signoff recorded two open Backlog rows rather than folding more work into that
+release, both explicitly gated "needs verification before it needs a release": shared quiz links
+not deactivated on a `STUDY_PACK`-only regeneration, and `AdminStudyPackTransactionHelper`'s two
+repair endpoints bypassing exam-pool invalidation entirely.
+
+Two read-only production queries were run against each gate
+(`docs/backlog-rows-475-476-production-read`, PR #1384, merged into this release branch). The
+share-link row is **verified NOT currently live** — production carries exactly one active share
+link, and its quiz was not updated after it was shared — so it stays open but deprioritized. The
+admin-repair row's call volume turned out to be **permanently unanswerable**: no admin-action
+audit trail exists anywhere in the schema, and the one plausible proxy — a `"|"` "enriched
+summary" marker `regenerateOnePack` itself gates on — is a content-shape artifact of ordinary LLM
+summary generation (pipe-delimited comparison tables, `developer.txt:50`), not a
+repair-provenance signal, confirmed by reading the prompt directly rather than assuming.
+
+**Fixing the admin-repair path anyway, on precedent rather than exposure evidence.** The gap is
+confirmed in code, the fix is one file and two call sites, and it is the exact pattern `v0.143.0`
+already built, tested, and mutation-verified for the learner-facing path. Waiting on a volume
+number the data cannot produce is not a reason to leave a confirmed code defect open when the fix
+is this cheap.
+
+**⚠️ `v0.143.0`'s own record named `v0.144.0` for something else.** Its "How this scope was
+reached" section says the owner deferred Learning Connections supporter onboarding
+*"to `v0.144.0`"*, gated on `[CHECKPOINT — due 2026-09-19]` — six days out from this kickoff. That
+was informal shorthand for "whichever release comes next," not a commitment to this specific
+number; the owner chose this admin fix instead. Supporter onboarding remains gated on
+`2026-09-19` for whatever release follows this one, and this release does not touch it.
+
+### Planned Scope
+
+- **Admin summary/quiz repair paths invalidate the exam pool (backend, 1 file).**
+  `AdminStudyPackTransactionHelper.regenerateOnePack` (`:66-67`) and `repairMalformedQuiz`
+  (`:121-123`) each replace `summary`/`quiz` in place with no exam-pool invalidation. Fix: call
+  `examQuestionPoolService.refreshPool` for both `MODE_LONG_EXAM` and `MODE_BOARD_EXAM` after each
+  save, inside the same `@Transactional` method, with the same `studyPackRepository.flush()`
+  ordering `v0.143.0`'s falsification pass proved necessary to avoid the lock-order inversion it
+  found there. Isolated bug fix, clear root cause, direct precedent — Claude Code implements
+  inline, no Codex prompt.
+
+**Explicitly NOT in scope:** the Challenge Quiz question bank (leg 2 of the same "derived
+artifacts" defect class) — still unscoped, needs its own tracing pass before it needs a release.
+The shared-quiz-link row — verified not currently live, left open at low priority, not folded in.
+Adding an admin-action audit log — would answer future volume questions but is separate,
+unscoped infrastructure work this release does not take on.
+
+### Shipped
+
+- **Admin summary/quiz repair paths now invalidate the exam pool.** `AdminStudyPackTransactionHelper.regenerateOnePack`
+  (`POST /admin/study-packs/regenerate-summaries`) and `repairMalformedQuiz` (`POST
+  /admin/study-packs/repair-malformed-quizzes`) each call `examQuestionPoolService.refreshPool` for both
+  `MODE_LONG_EXAM` and `MODE_BOARD_EXAM` immediately after saving, with the same `studyPackRepository.flush()`
+  before the pool call that `v0.143.0`'s falsification pass found necessary to avoid inverting the
+  `study_packs` → `exam_question_pool` lock order. New `AdminStudyPackTransactionHelperTest` coverage
+  (2 tests, `InOrder`-asserted save → flush → refresh-long-exam → refresh-board-exam) plus `never()`
+  assertions on `examQuestionPoolService` added to all 6 pre-existing skip/failure tests, confirming the
+  invalidation only fires on an actual content replacement. Both new/extended tests mutation-verified —
+  confirmed to fail against the pre-fix code. Full backend suite: 2368/2368 passing.
+  `docs/features/study-pack-generation.md` corrected — it previously named this as the one known
+  unfixed gap.
+- **Verification tier: single `advisor()` call, no cold agent** — checked against the nearest-miss
+  trigger explicitly rather than leaving it unstated: `ExamQuestionPoolService.refreshPool` now has
+  callers added by both `v0.143.0` (`StudyPackService`, PR #1382) and `v0.144.0` (this admin helper,
+  PR #1385), but that is two releases touching a shared method, not two PRs *within* this release —
+  the trigger as written did not fire. No auth/privacy boundary moved, no money/quota/production-data
+  semantics changed, and no defect was introduced by this session and then fixed.
