@@ -547,6 +547,12 @@ describe("ApplicableProgramsCombobox", () => {
     await waitFor(() => expect(createCourseProgram).toHaveBeenCalledWith(expect.objectContaining({
       programFamilyIds: ["family-engineering", "family-built"],
     })));
+    // Exclusive assertions, not just toHaveBeenCalledWith: a regression that ALSO unions in the other
+    // family members via handleFamilyExpansion would still satisfy a non-exclusive "was called with
+    // ["program-new"] at some point" check if it fired an extra call. Proven by mutation: adding a
+    // handleFamilyExpansion(otherMembers) call right after selectProgram in handleCreate left the old
+    // assertion green. toHaveBeenCalledTimes(1) plus the payload check closes that gap.
+    expect(onChange).toHaveBeenCalledTimes(1);
     expect(onChange).toHaveBeenCalledWith(["program-new"]);
   });
 
