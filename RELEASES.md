@@ -2,7 +2,7 @@
 
 ## v0.150.0 - Membership, Not a Slot
 
-**Status: In Progress**
+**Status: Released**
 
 Theme: Program Family membership becomes many-to-many — a Course/Program can belong to zero, one, or
 several families — closing a production bug where two admin-created families (Health Sciences,
@@ -76,6 +76,17 @@ query cache today and this release adds none.
   Single Note and Bulk Note surfaces, while expansion chips still appear only for families with members.
   The Admin catalog now displays zero/one/many family chips and provides the working Edit UI path that
   `v0.149.0` had overclaimed.
+- **Pre-signoff falsification pass (one scoped cold agent, per plan §Q) confirmed 8 of 9 pre-declared
+  claims cleanly and found one real test-quality gap, fixed before signoff.** Confirmed: migration
+  relationship-parity (proven against a real PostgreSQL container, not just the H2 harness), no
+  dual-write to the legacy scalar column, no family id ever reaching Note persistence, unchanged
+  `@PreAuthorize` annotations, overlapping-family deduplication, honest documentation of what the H2
+  migration test does and doesn't execute, tolerant JSON parsing across the deploy window, and
+  `is_active` genuinely untouched. **Found and fixed:** the single highest-value new test — creating a
+  program in two families must select only that program on the Note — used non-exclusive
+  `toHaveBeenCalledWith`; a mutation (adding a `handleFamilyExpansion` call the boundary forbids) proved
+  the old assertion would still pass. Strengthened to `toHaveBeenCalledTimes(1)`, re-verified the same
+  mutation now fails and the real implementation still passes all 28 tests in the file.
 
 ## v0.149.0 - Precision Before Coverage
 

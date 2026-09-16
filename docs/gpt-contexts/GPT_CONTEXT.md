@@ -3,17 +3,38 @@
 > **This is the core brief. Paste it as your first message in a new GPT chat session.**
 > Then paste any module below that matches the conversation — see "Which modules to paste".
 > Update this file whenever a new version ships or the roadmap shifts significantly.
-> Last updated: v0.149.0 - 2026-09-15 (Released). **`v0.149.0` shipped the admin mechanism for two new
-Program Family shortcuts** — `PATCH /course-program-catalog/{id}` (reassign an existing catalog
-program's family; no such endpoint existed before) and an `is_active` lifecycle column on
-`course_programs` to retire a catalog program from new authoring without deleting it. Health Sciences
-(Nursing, Medicine, Pharmacy) and Accounting (Accountancy, Management Accounting, Accounting
+> Last updated: v0.150.0 - 2026-09-16 (Released). **`v0.150.0` made Program Family membership
+many-to-many** — a Course/Program may now belong to zero, one, or several families, via a new
+`course_program_family` join table replacing the old nullable `course_programs.program_family_id`
+single FK. This closed a real production bug: the Note-authoring "Add Course/Program" family picker
+derived its options by scanning catalog rows that already carried a family, so a brand-new EMPTY
+family (Health Sciences, Accounting, plus two more the owner had since created — Computing &
+Technology, Built Environment & Design) contributed nothing and was invisible there, even though the
+canonical Admin family list showed it correctly. Fixed by having the picker fetch the same
+`/course-program-catalog/families` endpoint Admin already used, lazily on modal open. **This also
+corrected two false claims from `v0.149.0`'s own release notes**, found during this release's audit:
+admins could NOT actually reassign a program's family through any UI (the `PATCH` endpoint had zero
+frontend consumers) — `v0.150.0` adds a real Admin Edit action that closes this; and `is_active` never
+gained any write path at all — new rows get `true` only from the column's own `DEFAULT`, and nothing
+mutates it after creation. That second gap is NOT fixed by `v0.150.0` (deliberately out of scope,
+tracked as its own Backlog Index row). Populating all four families (17 memberships, including two
+deliberate overlap cases proving the new architecture — Computer Engineering →
+Engineering + Computing & Technology, Architectural Engineering → Engineering + Built Environment &
+Design) is an owner-run post-deploy step via the Admin UI, which doubles as this release's own
+production acceptance test. A cold falsification agent verified 8 of 9 pre-declared claims cleanly
+(migration relationship-parity via a real `RAISE EXCEPTION` proven against a live PostgreSQL
+container, no dual-write to the legacy column, no family id ever reaching Note persistence, unchanged
+auth, overlap deduplication); it also found and this release closed one real test-quality gap (the
+single most important new test used a non-exclusive assertion that a mutation proved would pass even
+under a regression). **Previously — v0.149.0 - 2026-09-15 (Released).** **`v0.149.0` shipped the admin
+mechanism for two new Program Family shortcuts** — `PATCH /course-program-catalog/{id}` (reassign an
+existing catalog program's family; no such endpoint existed before) and an `is_active` lifecycle
+column on `course_programs` to retire a catalog program from new authoring without deleting it.
+**⚠️ Its own headline claims were partially wrong — see the `v0.150.0` correction above.** Health
+Sciences (Nursing, Medicine, Pharmacy) and Accounting (Accountancy, Management Accounting, Accounting
 Information Systems, Internal Auditing — Business Administration explicitly excluded) are the two new
-families this unlocks, decided from CPALE curriculum structure rather than the 35-note bulk-tagging
-action that prompted the release. **Populating them is an owner-run post-deploy step, not part of this
-release's code** — as of this stamp only `Engineering` (18 members) and `Education` (8 members) are
-actually populated in production; see `docs/claude-plans/v0.149.0-program-family-data-ops-handoff.md`
-for the exact handoff. Two falsification passes (pre-implementation on the Codex prompt,
+families this unlocked, decided from CPALE curriculum structure rather than the 35-note bulk-tagging
+action that prompted the release. Two falsification passes (pre-implementation on the Codex prompt,
 post-merge on the actual diff) found and closed 4 real issues, including a frontend/backend
 deploy-skew risk and a feature-doc line that overclaimed the `is_active` filter's scope. **The
 8-item mobile collapse this shipped with was removed after signoff, not left as an owed check**:
