@@ -1825,6 +1825,7 @@ export type NoteResponse = {
 export type CourseProgramCatalogItem = {
   id: string;
   name: string;
+  programFamilies: ProgramFamily[];
   programFamilyId: string | null;
   programFamilyName: string | null;
   isActive: boolean;
@@ -1838,6 +1839,7 @@ export type ProgramFamily = {
 export type CreateCourseProgramRequest = {
   name: string;
   programFamilyId?: string | null;
+  programFamilyIds?: string[];
   examGoalSlug?: "ale" | "pnle" | "let" | "cpale" | null;
 };
 
@@ -5854,7 +5856,10 @@ export async function getCourseProgramCatalog(): Promise<CourseProgramCatalogIte
     },
     true,
   );
-  return parseApiResponse<CourseProgramCatalogItem[]>(response, "Could not load the course program catalog.");
+  const message = "Could not load the course program catalog.";
+  const payload = await parseApiResponse<unknown>(response, message);
+  if (!Array.isArray(payload)) throw new Error(message);
+  return payload.map((item) => parseCourseProgramCatalogItem(item, message));
 }
 
 function parseCourseProgramCatalogItem(payload: unknown, fallbackMessage: string): CourseProgramCatalogItem {
@@ -5865,10 +5870,12 @@ function parseCourseProgramCatalogItem(payload: unknown, fallbackMessage: string
     || typeof payload.id !== "string"
     || !("name" in payload)
     || typeof payload.name !== "string"
-    || !("programFamilyId" in payload)
-    || (payload.programFamilyId !== null && typeof payload.programFamilyId !== "string")
-    || !("programFamilyName" in payload)
-    || (payload.programFamilyName !== null && typeof payload.programFamilyName !== "string")
+    || ("programFamilyId" in payload && payload.programFamilyId !== null && typeof payload.programFamilyId !== "string")
+    || ("programFamilyName" in payload && payload.programFamilyName !== null && typeof payload.programFamilyName !== "string")
+    || ("programFamilies" in payload && (!Array.isArray(payload.programFamilies)
+      || payload.programFamilies.some((family) => typeof family !== "object" || family === null
+        || !("id" in family) || typeof family.id !== "string"
+        || !("name" in family) || typeof family.name !== "string")))
     || ("isActive" in payload && typeof payload.isActive !== "boolean")
   ) {
     throw new Error(fallbackMessage);
@@ -5878,13 +5885,26 @@ function parseCourseProgramCatalogItem(payload: unknown, fallbackMessage: string
   // run the is_active migration and so never sends the field at all. Every consumer of this field
   // already treats it as active via `!== false` / `=== false` checks, so a missing field degrades to
   // "active" (the correct default) instead of failing the whole catalog load.
-  return payload as CourseProgramCatalogItem;
+  const legacyFamilyId = "programFamilyId" in payload && typeof payload.programFamilyId === "string"
+    ? payload.programFamilyId : null;
+  const legacyFamilyName = "programFamilyName" in payload && typeof payload.programFamilyName === "string"
+    ? payload.programFamilyName : null;
+  const programFamilies = "programFamilies" in payload
+    ? payload.programFamilies as ProgramFamily[]
+    : legacyFamilyId && legacyFamilyName ? [{ id: legacyFamilyId, name: legacyFamilyName }] : [];
+  return {
+    id: payload.id,
+    name: payload.name,
+    programFamilies,
+    programFamilyId: legacyFamilyId,
+    programFamilyName: legacyFamilyName,
+    isActive: !("isActive" in payload) || payload.isActive !== false,
+  };
 }
 
 /**
- * ⚠️ Families are READ from their own endpoint rather than derived from the catalog. The authoring
- * combobox derives them (correctly — it only cares about families that have members), but the admin
- * surface must also show a family created moments ago that has none yet.
+ * Membership pickers read this endpoint so a family created moments ago remains selectable before it
+ * has members. Expansion shortcuts derive their member lists from catalog membership arrays.
  */
 export async function listProgramFamilies(): Promise<ProgramFamily[]> {
   const response = await fetchWithAuth(
@@ -5921,6 +5941,26 @@ export async function createCourseProgram(request: CreateCourseProgramRequest): 
   );
   const payload = await parseApiResponse<unknown>(response, fallbackMessage);
   return parseCourseProgramCatalogItem(payload, fallbackMessage);
+}
+
+export async function updateCourseProgram(
+  id: string,
+  request: { programFamilyIds: string[] },
+): Promise<CourseProgramCatalogItem> {
+  const fallbackMessage = "Could not update the Course / Program.";
+  const response = await fetchWithAuth(
+    `/course-program-catalog/${id}`,
+    {
+      method: "PATCH",
+      headers: buildAuthHeaders("application/json"),
+      body: JSON.stringify(request),
+    },
+    true,
+  );
+  return parseCourseProgramCatalogItem(
+    await parseApiResponse<unknown>(response, fallbackMessage),
+    fallbackMessage,
+  );
 }
 
 export async function findSimilarCoursePrograms(name: string): Promise<CourseProgramCatalogItem[]> {

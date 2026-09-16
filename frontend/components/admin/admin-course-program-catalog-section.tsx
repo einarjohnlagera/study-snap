@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { AppModal } from "@/components/ui/app-modal";
 import {
   ApiRequestError,
   createCourseProgram,
@@ -10,6 +11,7 @@ import {
   findSimilarCoursePrograms,
   getCourseProgramCatalog,
   listProgramFamilies,
+  updateCourseProgram,
   type CourseProgramCatalogItem,
   type ProgramFamily,
 } from "@/lib/api";
@@ -27,25 +29,34 @@ export function AdminCourseProgramCatalogSection() {
   const [nearMatches, setNearMatches] = useState<CourseProgramCatalogItem[]>([]);
   const [checkingNearMatches, setCheckingNearMatches] = useState(false);
 
-  // ⚠️ FAMILIES ARE FETCHED, NOT DERIVED FROM THE CATALOG. Deriving them is right for the authoring
-  // combobox, which only cares about families that have members — but a family created here starts
-  // EMPTY, so a derived list would drop it on the next refresh and the curator could never assign
-  // anything to it. That is the load-on-refresh gap this endpoint exists to close.
+  // Membership pickers use the families endpoint so an empty family remains assignable. Expansion
+  // shortcuts separately derive their member lists from the catalog's programFamilies arrays.
   const [families, setFamilies] = useState<ProgramFamily[]>([]);
   const [familyName, setFamilyName] = useState("");
   const [creatingFamily, setCreatingFamily] = useState(false);
   const [familyError, setFamilyError] = useState<string | null>(null);
+  const [editingProgram, setEditingProgram] = useState<CourseProgramCatalogItem | null>(null);
+  const [editFamilyIds, setEditFamilyIds] = useState<string[]>([]);
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
 
   const load = async () => {
     setLoading(true);
     setLoadError(null);
     try {
-      const [loadedCatalog, loadedFamilies] = await Promise.all([
+      const [catalogResult, familiesResult] = await Promise.allSettled([
         getCourseProgramCatalog(),
         listProgramFamilies(),
       ]);
-      setCatalog(loadedCatalog);
-      setFamilies(loadedFamilies);
+      if (catalogResult.status === "rejected") throw catalogResult.reason;
+      setCatalog(catalogResult.value);
+      if (familiesResult.status === "fulfilled") {
+        setFamilies(familiesResult.value);
+        setFamilyError(null);
+      } else {
+        setFamilies([]);
+        setFamilyError("Program Families could not be loaded.");
+      }
     } catch (error) {
       setLoadError(error instanceof Error ? error.message : "Could not load the course program catalog.");
     } finally {
@@ -130,6 +141,41 @@ export function AdminCourseProgramCatalogSection() {
     }
   };
 
+  const openEdit = (program: CourseProgramCatalogItem) => {
+    setEditingProgram(program);
+    setEditFamilyIds((program.programFamilies ?? (
+      program.programFamilyId && program.programFamilyName
+        ? [{ id: program.programFamilyId, name: program.programFamilyName }]
+        : []
+    )).map((family) => family.id));
+    setEditError(null);
+  };
+
+  const saveEdit = async () => {
+    if (!editingProgram || savingEdit) return;
+    setSavingEdit(true);
+    setEditError(null);
+    try {
+      const updated = await updateCourseProgram(editingProgram.id, { programFamilyIds: editFamilyIds });
+      setCatalog((current) => current.map((program) => program.id === updated.id ? updated : program));
+      setEditingProgram(null);
+    } catch (error) {
+      setEditError(error instanceof Error ? error.message : "Could not update the Course / Program.");
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
+  const familyChips = (program: CourseProgramCatalogItem) => (
+    (program.programFamilies ?? []).length === 0 ? <span className="text-foreground/60">—</span> : (
+      <div className="flex flex-wrap gap-1.5">
+        {(program.programFamilies ?? []).map((family) => (
+          <span key={family.id} className="rounded-full border border-border bg-muted/30 px-2 py-1 text-xs">{family.name}</span>
+        ))}
+      </div>
+    )
+  );
+
   return (
     <section className="space-y-3">
       <div>
@@ -208,14 +254,49 @@ export function AdminCourseProgramCatalogSection() {
         {loading ? <p className="p-5 text-sm text-foreground/65">Loading catalog...</p> : loadError ? (
           <div className="space-y-3 p-5 text-sm text-red-600"><p>{loadError}</p><Button type="button" size="sm" variant="outline" onClick={() => void load()}>Retry</Button></div>
         ) : (
-          <div className="overflow-x-auto">
+          <>
+          <div className="hidden overflow-x-auto sm:block">
             <table className="min-w-full text-sm">
-              <thead className="bg-muted/40 text-left text-foreground/60"><tr><th className="px-4 py-3 font-medium">Course / Program</th><th className="px-4 py-3 font-medium">Family</th></tr></thead>
-              <tbody>{catalog.map((program) => <tr key={program.id} className="border-t border-border/60"><td className="px-4 py-3">{program.name}</td><td className="px-4 py-3 text-foreground/70">{program.programFamilyName ?? "—"}</td></tr>)}</tbody>
+              <thead className="bg-muted/40 text-left text-foreground/60"><tr><th className="px-4 py-3 font-medium">Course / Program</th><th className="px-4 py-3 font-medium">Program Families</th><th className="px-4 py-3 font-medium">Actions</th></tr></thead>
+              <tbody>{catalog.map((program) => <tr key={program.id} className="border-t border-border/60"><td className="px-4 py-3">{program.name}</td><td className="px-4 py-3 text-foreground/70">{familyChips(program)}</td><td className="px-4 py-3"><Button type="button" size="sm" variant="outline" onClick={() => openEdit(program)}>Edit</Button></td></tr>)}</tbody>
             </table>
           </div>
+          <div className="divide-y divide-border/60 sm:hidden">
+            {catalog.map((program) => (
+              <article key={program.id} className="space-y-3 p-4">
+                <h3 className="font-medium">{program.name}</h3>
+                {familyChips(program)}
+                <Button type="button" variant="outline" className="w-full" onClick={() => openEdit(program)}>Edit</Button>
+              </article>
+            ))}
+          </div>
+          </>
         )}
       </Card>
+      <AppModal
+        isOpen={editingProgram !== null}
+        onClose={() => { if (!savingEdit) setEditingProgram(null); }}
+        title="Edit Program Families"
+        actions={<div className="flex flex-col gap-2 sm:flex-row sm:justify-end"><Button type="button" variant="outline" disabled={savingEdit} onClick={() => setEditingProgram(null)}>Cancel</Button><Button type="button" loading={savingEdit} loadingText="Saving..." onClick={() => void saveEdit()}>Save changes</Button></div>}
+      >
+        <div className="space-y-4">
+          <div><p className="text-xs text-foreground/60">Course / Program</p><p className="font-medium">{editingProgram?.name}</p></div>
+          <div className="space-y-2">
+            <label htmlFor="edit-program-families" className="text-sm font-medium">Program Families</label>
+            <select id="edit-program-families" multiple value={editFamilyIds}
+              onChange={(event) => setEditFamilyIds(Array.from(event.target.selectedOptions, (option) => option.value))}
+              disabled={savingEdit} className="min-h-28 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm">
+              {families.map((family) => <option key={family.id} value={family.id}>{family.name}</option>)}
+            </select>
+            <div className="flex flex-wrap gap-2" aria-label="Selected Program Families">
+              {families.filter((family) => editFamilyIds.includes(family.id)).map((family) => (
+                <span key={family.id} className="inline-flex items-center gap-1 rounded-full border border-border px-2.5 py-1 text-xs">{family.name}<button type="button" aria-label={`Remove ${family.name}`} onClick={() => setEditFamilyIds((current) => current.filter((id) => id !== family.id))}>×</button></span>
+              ))}
+            </div>
+          </div>
+          {editError ? <p role="alert" className="text-sm text-red-600 dark:text-red-400">{editError}</p> : null}
+        </div>
+      </AppModal>
     </section>
   );
 }
