@@ -4725,3 +4725,38 @@ verified the sibling row (shared quiz links, `STUDY_PACK`-only regeneration) as 
 tier stayed at a single `advisor()` call; the nearest-miss cold-agent trigger (`refreshPool` gaining
 callers across two releases) was checked explicitly and does not fire within this one release. Full
 detail in `RELEASES.md` and `docs/releases/v0.144.0.md`.
+
+---
+
+**Kicked off 2026-09-14, signed off 2026-09-14.** `v0.145.0 — Knowledge, Not Role` is **Released** —
+its Workstream A item shipped as scoped, PR #1387, merged into `releases/v0.145.0` at `94d2bbd3`.
+Source: `docs/claude-plans/domain-context-biomedical-business-calibration-stage2.md`,
+a Stage 2 tightening of `docs/claude-plans/domain-context-biomedical-business-calibration-stage1.md`
+(both untracked on disk, indexed above in the Backlog Index rather than committed). **Scope was
+Workstream A only** — adding `DomainContext.BASIC_MEDICAL_SCIENCES` (`quantitative = false`) and
+widening `QUANTITATIVE_KEYWORDS` by exactly one string, `"pharmacokinetic"`, closing a Quick-Review
+computation-guidance gap the plan measured rather than a regression (that framing was checked and
+found to affect zero notes — see the plan's §A5.5). Six production notes were already being
+mis-instructed under `NURSING` (`Antibiotics: Mechanism of Action and Resistance` and five
+sibling Pharmacology notes) and are the confirmed clause-(a) evidence; classifying them is curator
+follow-up, not this release. **Workstream B (Accountancy/Business/Finance) shipped nothing** — the
+plan's own verdict is pre-CPALE calibration, not implementation; `ACCOUNTANCY` keeps
+`quantitative = true` unchanged, decided by measurement (would be a 5-save/4-lose trade across the
+154 Accountancy-program notes, all currently `domain_context IS NULL`). **The PPR description
+rewrite (owner decision 3) is BLOCKED, not dropped**: it is gated on a two-arm validation that
+requires setting `domain_context` on a real production Note — a production WRITE — which is the
+owner's to run, never Claude's, under `CLAUDE.md`'s read-only rule (a plan being approved is not
+approval to execute the write it names). The exact statement, expected result and verification
+query are handed to the owner directly in `docs/claude-plans/domain-context-ppr-validation-armB.sql`
+(on disk, deliberately not committed — a production `UPDATE` statement should not sit in git where
+it could be mistaken for a sanctioned runbook). **Re-checked read-only at signoff (2026-09-14): all
+three RFBT notes still carry `domain_context IS NULL` — the owner has not yet run it.** If the
+owner runs it and it passes, item 3 ships as a follow-up PR into a later release, otherwise
+`BASIC_MEDICAL_SCIENCES` ships without it — the two are independent array entries, bundled for
+convenience only. No migration, no backfill, no resolver rewrite, no catalog change: `notes.domain_context`
+is `VARCHAR` with no CHECK constraint, so the new value is purely additive. Verification tier: one
+`advisor()` call — no new endpoint, so no `MockMvc` test is owed, and `api.ts`'s change is a
+TypeScript union member only, so no `api-*.test.ts` request-shape test is owed either (say both
+explicitly at signoff rather than skipping silently). Deploy ordering: ship frontend and backend
+together — frontend-first silently drops a curator's save via `fromString`'s null return. Full scope
+in `RELEASES.md`.
