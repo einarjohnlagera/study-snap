@@ -416,12 +416,21 @@ invalidation path at all, remains the one open leg of the original limitation.
 
 ### Live quiz share links
 
-A successful `NOTE_AND_STUDY_PACK` commit **deactivates** every active `quiz_share_links` row for the
-note's `generated_quizzes` row, reusing `GeneratedQuizService`'s single implementation. **All active
-rows, never just the newest** — `createShareLink` mints a new row over an inactive one and
-`findActiveLink` accepts any active token. **Deactivate, never delete**: deleting would force the owner
-to mint a new link and spend share-link quota because of our fix. No generated quiz, or no active links,
-is a clean no-op.
+A successful commit **deactivates** every active `quiz_share_links` row for the note's
+`generated_quizzes` row, reusing `GeneratedQuizService`'s single implementation. **All active rows,
+never just the newest** — `createShareLink` mints a new row over an inactive one and `findActiveLink`
+accepts any active token. **Deactivate, never delete**: deleting would force the owner to mint a new
+link and spend share-link quota because of our fix. No generated quiz, or no active links, is a clean
+no-op.
+
+**⚠️ This happens on `STUDY_PACK`-only regeneration too, corrected `v0.151.0`.** This doc previously
+said the deactivation was `NOTE_AND_STUDY_PACK`-only, which was a real bug rather than a documented
+boundary: `saveStudyPack` mutates the existing quiz row in place regardless of scope (see "Two LLM
+calls, then one commit" above — `saveStudyPack` runs unconditionally, only the note-content write and
+the note-generation meter are combined-only), so a Study-Pack-only regeneration replaced a shared
+quiz's content without deactivating its live links, leaving a recipient gradable against material the
+note no longer has. `NoteRegenerationConsequenceService.notesWithLiveShareLink` (bulk regeneration's
+preflight/receipt path) carried the identical, now-removed, scope gate.
 
 ### Scope selector (the learner-facing half)
 

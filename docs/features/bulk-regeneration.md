@@ -65,8 +65,11 @@ carries the reasoning; this file carries the behaviour.
 - **No "review recommended" preflight state.** A Note with a NULL Domain Context and one joined program is
   fully generation-ready, so the state would require judging metadata quality. Deterministic signals only —
   no score, no classifier.
-- **Shared-quiz deactivation is `NOTE_AND_STUDY_PACK` only.** Study-Pack-only regeneration does not replace
-  the Note content a shared quiz was built from.
+- **Shared-quiz deactivation happens on either scope** (corrected `v0.151.0` — previously read
+  `NOTE_AND_STUDY_PACK` only, which was a real bug, not a documented boundary: `saveStudyPack` replaces
+  a Note's shared quiz in place regardless of scope, so a Study-Pack-only batch left a recipient graded
+  against replaced material. The preflight count, the confirmation-dialog copy, and the per-item receipt
+  flag all reflect this for both scopes now.
 - **The receipt is not audit history.** Same 24 h TTL and hourly :45 sweep as `bulk_generation_result`, and
   the same `AccountPurgeService` deletion. It expires on the **batch** clock, so a batch expires atomically
   rather than leaving a receipt with holes in it. Unlike that receipt, reading it is **not** consume-once.

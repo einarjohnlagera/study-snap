@@ -4530,16 +4530,20 @@ class NativeQueryPostgresIntegrationTest {
     }
 
     /**
-     * The Study-Pack-only scope spends NO note-generation units and deactivates NO share links, matching
-     * the single-Note primitive exactly.
+     * The Study-Pack-only scope spends NO note-generation units, but it DOES deactivate a live share
+     * link: {@code saveStudyPack} replaces the quiz in place for either scope, so a recipient must not
+     * keep being graded against questions drawn from a Study Pack the note owner has since replaced.
      *
-     * <p>⚠️ Without this, a scope-blind unit count would 422 a Study-Pack-only batch on a note-generation
-     * allowance it never touches, and the preflight would promise the curator a share-link consequence
-     * that never happens.
+     * <p>⚠️ v0.151.0 flipped the share-link half of this test. It previously asserted the link stayed
+     * live, matching a scope gate in both {@code StudyPackService} and
+     * {@code NoteRegenerationConsequenceService} that turned out to be a real defect, not a documented
+     * boundary: a curator running a Study-Pack-only regeneration left a live link pointing at
+     * quiz content the note no longer has, exactly the failure v0.110.2 shipped to close. The
+     * note-generation-unit assertion is unaffected — that meter is genuinely scope-specific.
      */
     @Test
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
-    void studyPackOnlyScopeSpendsNoNoteGenerationUnitsAndDeactivatesNoShareLinks() {
+    void studyPackOnlyScopeSpendsNoNoteGenerationUnitsButStillDeactivatesShareLinks() {
         UUID owner = seedCuratorUser("bulk-regen-scope");
         UUID noteId = seedRegenerationNote(owner, "Surveying", "Original body.");
         seedStudyPack(owner, noteId, "Old pack");
@@ -4556,8 +4560,8 @@ class NativeQueryPostgresIntegrationTest {
                 .as("Study-Pack-only regeneration asserts and charges only the Study Pack meter")
                 .isZero();
         assertThat(preflight.sharedQuizzesToDeactivate())
-                .as("and it does not replace the Note content the shared quiz was built from")
-                .isZero();
+                .as("it still replaces the Study Pack the shared quiz was built from")
+                .isEqualTo(1);
 
         UUID batchId = harness.run(owner, List.of(noteId), NoteRegenerationScope.STUDY_PACK, true);
 
@@ -4570,7 +4574,12 @@ class NativeQueryPostgresIntegrationTest {
                 .isZero();
         assertThat(persistedUsage(owner, "study_pack_generations")).isEqualTo(1);
         assertThat(readShareLinkActive(liveLink))
-                .as("and the live share link stays live")
+                .as("and the live share link is deactivated even though the Note body was untouched")
+                .isFalse();
+        assertThat(jdbcTemplate.queryForObject(
+                "select share_link_deactivated from note_bulk_regeneration_item"
+                        + " where batch_id = ? and note_id = ?", Boolean.class, batchId, noteId))
+                .as("the receipt records that this item deactivated a share link")
                 .isTrue();
     }
 

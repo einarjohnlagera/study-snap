@@ -312,7 +312,7 @@ export function BulkRegenerateModal({
             </p>
           ) : null}
 
-          {combined && preflight.sharedQuizzesToDeactivate > 0 ? (
+          {preflight.sharedQuizzesToDeactivate > 0 ? (
             <p className="flex items-start gap-2 text-xs text-foreground/70">
               <Link2Off aria-hidden className="mt-0.5 h-3.5 w-3.5 shrink-0" />
               <span>

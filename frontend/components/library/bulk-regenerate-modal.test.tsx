@@ -68,16 +68,18 @@ beforeEach(() => {
 });
 
 describe("BulkRegenerateModal", () => {
-  it("opens on the non-destructive scope and only warns about replacement once the combined scope is chosen", async () => {
+  it("warns about a shared-quiz deactivation on either scope, but public notes only on the combined scope", async () => {
     render(<BulkRegenerateModal isOpen noteIds={NOTE_IDS} onClose={jest.fn()} />);
 
     const studyPackCard = await screen.findByRole("radio", { name: /Rewrites the summary/i });
     expect(studyPackCard).toHaveAttribute("aria-checked", "true");
 
-    // The public-note and shared-quiz consequences belong to the combined scope only: Study-Pack-only
-    // regeneration does not replace the note text a shared quiz was built from.
+    // v0.151.0: saveStudyPack replaces a shared quiz's content on EITHER scope, so the warning must
+    // show on the default Study-Pack-only scope too -- suppressing it here is the exact confirmation-
+    // dialog inaccuracy that release fixed on the backend. The public-note warning stays combined-only:
+    // Study-Pack-only regeneration genuinely does not replace the note text itself.
     expect(screen.queryByText(/public note/i)).not.toBeInTheDocument();
-    expect(screen.queryByText(/shared quiz/i)).not.toBeInTheDocument();
+    expect(await screen.findByText(/1 active shared quiz will be/i)).toBeInTheDocument();
 
     await act(async () => {
       fireEvent.click(screen.getByRole("radio", { name: /Rewrites each note itself/i }));
