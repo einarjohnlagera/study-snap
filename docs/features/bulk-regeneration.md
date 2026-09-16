@@ -56,7 +56,19 @@ carries the reasoning; this file carries the behaviour.
   quota and replacing good content.
 - **Per-Note guards re-run at each item's start.** The preflight verdict is a snapshot and is not
   authoritative; a Note that went `GENERATING` in between takes `BLOCKED` with a reason, never skipped and
-  never counted as regenerated.
+  never counted as regenerated — and the same applies to every preflight consequence count,
+  `sharedQuizzesToDeactivate` included: a Note that flips to `BLOCKED` is never dispatched, so its
+  content (and its shared quiz) is never replaced and its link is correctly not deactivated, but the
+  preflight already counted it. The count can only ever OVERSTATE what a batch deactivates, never
+  understate it — the safe direction, since nobody ends up graded against material that was never
+  replaced.
+- **⚠️ Known limitation, found by the `v0.151.0` signoff cold agent: the per-item receipt's
+  `shareLinkDeactivated` flag is a stale prediction, not a fresh read.** `NoteBulkRegenerationService`
+  captures `hasLiveShareLink` once, synchronously, before dispatching the item; the async worker that
+  actually deactivates a link can run seconds to minutes later. A share link created on that Note's quiz
+  inside that window is still deactivated (the deactivation call itself is unconditional), but the
+  receipt records `false` — narrow (requires a link created mid-item-processing) and not a regression
+  from `v0.151.0`.
 - **The driver has its own executor** (`bulkRegenerationTaskExecutor`, 2/2/8). It must never run on
   `studyPackGenerationTaskExecutor`, which stays **2/2/100** — raising that is a `v0.112.0` Phase 3 decision.
   `setWaitForTasksToCompleteOnShutdown` is deliberately unset: it runs the entire queue uninterrupted.
@@ -65,8 +77,11 @@ carries the reasoning; this file carries the behaviour.
 - **No "review recommended" preflight state.** A Note with a NULL Domain Context and one joined program is
   fully generation-ready, so the state would require judging metadata quality. Deterministic signals only —
   no score, no classifier.
-- **Shared-quiz deactivation is `NOTE_AND_STUDY_PACK` only.** Study-Pack-only regeneration does not replace
-  the Note content a shared quiz was built from.
+- **Shared-quiz deactivation happens on either scope** (corrected `v0.151.0` — previously read
+  `NOTE_AND_STUDY_PACK` only, which was a real bug, not a documented boundary: `saveStudyPack` replaces
+  a Note's shared quiz in place regardless of scope, so a Study-Pack-only batch left a recipient graded
+  against replaced material. The preflight count, the confirmation-dialog copy, and the per-item receipt
+  flag all reflect this for both scopes now.
 - **The receipt is not audit history.** Same 24 h TTL and hourly :45 sweep as `bulk_generation_result`, and
   the same `AccountPurgeService` deletion. It expires on the **batch** clock, so a batch expires atomically
   rather than leaving a receipt with holes in it. Unlike that receipt, reading it is **not** consume-once.

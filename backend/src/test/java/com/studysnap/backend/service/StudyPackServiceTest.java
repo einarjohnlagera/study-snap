@@ -1070,7 +1070,7 @@ class StudyPackServiceTest {
     }
 
     @Test
-    void startAsyncGenerationFromNote_existingStudyPackRefreshesBothExamPoolsForStudyPackOnlyScope() {
+    void startAsyncGenerationFromNote_existingStudyPackRefreshesExamPoolsAndDeactivatesShareLinksForStudyPackOnlyScope() {
         UUID userId = UUID.randomUUID();
         UUID noteId = UUID.randomUUID();
         UUID studyPackId = UUID.randomUUID();
@@ -1100,7 +1100,10 @@ class StudyPackServiceTest {
                 studyPackId, ExamQuestionPoolService.MODE_LONG_EXAM);
         verify(examQuestionPoolService).refreshPool(
                 studyPackId, ExamQuestionPoolService.MODE_BOARD_EXAM);
-        verify(generatedQuizService, never()).deactivateShareLinksForNote(any(), any());
+        // v0.151.0: a STUDY_PACK-only regeneration replaces the quiz content exactly like the combined
+        // scope does, so a shared quiz's live links must be deactivated here too -- this line used to
+        // assert never() and pinned the bug (v0.110.2's protection was silently scope-gated away).
+        verify(generatedQuizService).deactivateShareLinksForNote(noteId, userId);
     }
 
     @Test

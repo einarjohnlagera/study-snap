@@ -1,5 +1,100 @@
 # RELEASES.md - NoteLib
 
+## v0.151.0 - No Backdoor Left, Round Two
+
+**Status: Released**
+
+Theme: close the same gate gap `v0.143.0`/`v0.144.0` already closed for the exam question pool, this
+time for shared quiz links.
+
+Source: `docs/product/ROADMAP.md` Backlog Index row, found 2026-09-11 while tracing `v0.143.0` item 2's
+scope, verified not-currently-live at kickoff (re-run 2026-09-16, unchanged since 2026-09-12: exactly
+1 active `quiz_share_links` row, its `generated_quizzes.generated_at` predates the link's own
+`created_at`, so it is not exposed to a post-share content change).
+
+### Planned Scope
+
+- **Shared quiz links are not deactivated on a `STUDY_PACK`-only regeneration (backend, 2 files).**
+  `StudyPackService.java:928` calls `generatedQuizService.deactivateShareLinksForNote(noteId,
+  ownerUserId)` only inside `if (regeneratingNoteContent)` — the combined Note+Study-Pack
+  regeneration path. `POST /notes/{id}/regenerate` defaults to `NoteRegenerationScope.STUDY_PACK`
+  (an absent/blank scope resolves to it), which reaches the same shared worker method with
+  `regeneratingNoteContent = false`, so the deactivation never fires on that path even though
+  `saveStudyPack` replaces the quiz content either way. Fix: drop the call out of the `if` gate, same
+  as `v0.143.0` already did one line above it for `examQuestionPoolService.refreshPool`.
+  **⚠️ SCOPE GREW MID-IMPLEMENTATION, found by the full backend build, not by the original scoping:**
+  `NoteRegenerationConsequenceService.notesWithLiveShareLink` (the bulk-regeneration path's
+  consequence-counting method, backing both the preflight modal's `sharedQuizzesToDeactivate` count
+  and `NoteBulkRegenerationService`'s per-item `hadLiveShareLink` receipt flag, captured *before*
+  dispatch from the same method) carried the identical scope gate, deliberately mirrored to match the
+  single-Note primitive's then-current (buggy) behavior. Fixing only `StudyPackService` would have made
+  the bulk path actively **worse**: the preflight would promise zero deactivations for a
+  `STUDY_PACK`-only batch, the run would deactivate some anyway, and the receipt — reading the same
+  gated method — would falsely confirm nothing happened. Fixed together: the gate condition in
+  `notesWithLiveShareLink` was removed (scope no longer distinguishes any share-link consequence, since
+  `saveStudyPack` replaces the quiz for either scope); its stale Javadoc, which justified the gate as
+  intentional, was removed. **The confirmation dialog inherited the same assumption**:
+  `bulk-regenerate-modal.tsx` gated its shared-quiz warning behind `combined &&`, so even a fixed
+  backend would have shown a curator zero warning on the default `STUDY_PACK`-only scope; that gate is
+  dropped too, and its component test (which had asserted the warning's *absence* on `STUDY_PACK` as
+  correct) is corrected along with it. Two feature docs stated the old scope restriction explicitly and
+  are corrected: `docs/features/bulk-regeneration.md` and `docs/features/study-pack-generation.md`.
+  Isolated bug fix, clear root cause once traced — Claude Code implements inline, no Codex prompt.
+
+Anti-drift: no other regeneration-path behavior changes; the two `refreshPool` calls immediately above
+`StudyPackService`'s deactivation call are already unconditional and stay untouched; the
+note-generation-unit meter stays genuinely scope-specific (STUDY_PACK-only still spends zero) —
+unrelated to this fix and not touched by it.
+
+Verification tier: **one `advisor()` call on the diff plus one scoped cold agent at signoff, falsification-framed.**
+`advisor()` judged the diff itself (a two-line gate removal plus its stale Javadoc, covered end-to-end
+by a real-Postgres integration test) adequate for a single `advisor()` call. At signoff the owner asked
+for a cold agent if a pressure test was warranted — one of this repo's own triggers had in fact fired:
+the implementing session's own first-pass delivery (fixing `StudyPackService` alone) was itself an
+incomplete blind spot the full build caught mid-session, and a second one (the frontend modal) was
+caught the same way after that — a measured blind-spot signal. The cold agent (`model: sonnet`, fresh
+context) was handed 7 specific claims to disprove across the backend, the bulk driver, and the frontend
+modal. 5 REFUTED outright (meter untouched, first-ever-generation no-op, frontend warning correctness,
+single-note/bulk-list consistency, double-deactivation safety). 2 surfaced real but narrow, **pre-existing**
+gaps in the bulk-regeneration design, not introduced by this diff — see "Known limitations" below.
+
+`GeneratedQuizService.deactivateShareLinksForNote`'s existing null/empty-guard (read, not re-tested)
+makes a first-ever-generation no-op safe by construction, and is exercised incidentally by every other
+bulk-regeneration test that seeds no quiz. One added cost, not worth a test: `notesWithLiveShareLink`
+now runs its lookup on every `STUDY_PACK`-only item instead of short-circuiting immediately, one extra
+empty query per note with no existing quiz.
+
+### Known limitations (found by the signoff cold agent, pre-existing, not introduced by this fix)
+
+- **Readiness-window race can make the preflight's `sharedQuizzesToDeactivate` count OVERSTATE what a
+  batch actually deactivates — the safe direction, not a correctness hole.** The preflight counts a note
+  as READY-with-a-live-link at preflight time; `NoteBulkRegenerationService.processItem` re-evaluates
+  readiness per-note at dispatch time and returns `BLOCKED`/`NOT_ELIGIBLE` before `hasLiveShareLink` is
+  even read if the note's readiness changed in between (e.g. its Domain Context was cleared by a
+  concurrent edit). That note is never dispatched, so its content (and its shared quiz) is never
+  replaced, and correctly not deactivated — the preflight simply counted a consequence that then didn't
+  happen, same as it would for the regeneration itself. This is the existing "preflight is a snapshot,
+  not authoritative" behavior `docs/features/bulk-regeneration.md` already documents, applying uniformly
+  to the share-link count too; not specific to this fix and not fixed here.
+- **Narrow TOCTOU on the per-item receipt's `shareLinkDeactivated` flag.** `NoteBulkRegenerationService`
+  captures `hadLiveShareLink` synchronously before `dispatchItem`, then reuses that boolean for the
+  receipt once the async worker finishes seconds-to-minutes later. If a share link is newly created on
+  that note's quiz in that window, the (unconditional) deactivation call still deactivates it, but the
+  receipt records `false` — a stale prediction rather than a fresh read. Narrow (requires a share link
+  created mid-item-processing) and not a regression from this diff; flagged as found, not fixed.
+
+### Shipped
+
+- **Shared quiz links now deactivate on either regeneration scope** (backend, bulk-consequence path,
+  and the confirmation dialog). PR #1406, commit `aea7c12f`, merged to `releases/v0.151.0` as
+  `f9013f5c`. `StudyPackService.java:919` calls `deactivateShareLinksForNote` unconditionally;
+  `NoteRegenerationConsequenceService.notesWithLiveShareLink` dropped the identical scope gate backing
+  the bulk preflight count and per-item receipt; `bulk-regenerate-modal.tsx` dropped the matching
+  `combined &&` gate on its warning copy. `docs/features/bulk-regeneration.md` and
+  `docs/features/study-pack-generation.md` corrected to match. Backend 2403/2403, frontend 2450/2451
+  (1 pre-existing unrelated skip), `tsc --noEmit` clean. `ROADMAP.md` Backlog Index row updated with
+  file:line evidence.
+
 ## v0.150.0 - Membership, Not a Slot
 
 **Status: Released**
@@ -516,185 +611,3 @@ premium-exam predicate) — do not deploy frontend before backend this release.
 
 ---
 
-## v0.145.0 - Knowledge, Not Role
-
-**Status: Released** (kicked off 2026-09-14, signed off 2026-09-14, base branch `releases/v0.145.0`,
-cut from `main` after `v0.144.0` merged as #1386 and tagged — Vercel and Render both confirmed live
-on `22983935`. PR #1387 merged into the release branch at `94d2bbd3`.)
-
-Theme: teach the LLM authoring pipeline that a professional role belongs to *who reads* a note,
-not to the biomedical mechanism itself — closing a live mis-instruction on six production notes
-that are currently generated under `Domain: Nursing` with no nursing content at all.
-
-### How this scope was reached
-
-Source: `docs/claude-plans/domain-context-biomedical-business-calibration-stage2.md`, a Stage 2
-tightening of `docs/claude-plans/domain-context-biomedical-business-calibration-stage1.md` (both
-untracked on disk at the owner's instruction; indexed in `ROADMAP.md`'s Backlog Index rather than
-committed). Both `[PROD]` figures the plan's ADR-001 correction depends on were independently
-re-verified at this kickoff via read-only `SELECT` (`course_programs` = 51, `NURSING` = 46,
-`ACCOUNTANCY` = 0, `PROFESSIONAL_EDUCATION` = 232, total notes = 7,617, `NULL` context = 5,671) —
-all matched the plan's one-day-stale figures exactly, so nothing had moved further.
-
-**Workstream A — `BASIC_MEDICAL_SCIENCES` — is this release's entire code scope.** Six canonical,
-multi-program Pharmacology notes (`Antibiotics: Mechanism of Action and Resistance`,
-`Antibiotic Classes in Pharmacology`, `Pharmacological Management of Hypertension`,
-`Pharmacological Management of Diabetes`, `Pharmacology of Insulin`,
-`Respiratory and Gastrointestinal Pharmacology`) are mechanism-framed content, correctly clearing
-`ADR-001:397` clause (a)'s ~10-note floor once the ~9 firmly-planned PNLE rows are counted, but are
-currently forced onto `NURSING` because no coarser value exists — and are actively mis-instructed
-today, generating under a `DOMAIN_CONSTRAINT` that names a professional role their content never
-uses. The boundary test the plan validated against all 18 multi-program Pharmacology notes'
-real summaries: *does a professional role appear in the knowledge itself, or only in who is
-reading it?* — 6 mechanism-framed, 11 role-framed (stay `NURSING`), 1 unclassified pending a
-curator reading its summary (not this release's work).
-
-**Workstream B — Accountancy/Business/Finance — ships nothing in this release.** The plan's own
-verdict is pre-CPALE calibration, not implementation. `ACCOUNTANCY` keeps `quantitative = true`
-unchanged: the plan measured that `false` would be a 5-save/4-lose trade across the 154
-Accountancy-program notes (all `domain_context IS NULL` today, zero currently classified
-`ACCOUNTANCY`) — a coin flip, not the protective change its advocates wanted, because the
-asymmetry argument that correctly justified `false` for Basic Medical Sciences (a precise,
-discipline-specific repair keyword exists) does not transfer to accounting, where the
-discriminating words are generic English (`tax`, `cost`, `income`, `return`) and would be
-catastrophic under the codebase's unanchored `String.contains` matching. No new Domain Context is
-minted for Business/Finance; the re-audit trigger (≥10 canonical notes stably shared across 2+
-live programs, arriving via a committed CPALE curriculum plan) stands at 0 today.
-
-**Owner decision 2 (widen `QUANTITATIVE_KEYWORDS`) ships, but not as a regression fix.** Of the
-three strings Stage 1 proposed, two are measurably wrong: `"half-life"` matches zero notes
-anywhere in the corpus, and `"clearance"` is a live false positive (77 corpus-wide matches, mostly
-building/construction clearance, including 2 new false positives at the full keyword tier — one on
-`PROFESSIONAL_PRACTICE_AND_REGULATION`, a value whose `quantitative = false` is a documented,
-tested decision). Only `"pharmacokinetic"` survives measurement: +17 net-new matches at the Quick
-Review tier (2 canonical notes, 15 learner copies of one already-`NURSING(true)` note). **This is
-not a regression mitigation** — the plan measured that the regression Stage 1's condition was
-meant to prevent affects zero notes (all three `NURSING`-today candidates already trip existing
-keywords at both tiers). It closes a pre-existing Quick Review computation-guidance gap. Recording
-it as regression prevention would be the `v0.116.0` / `v0.117.0` failure mode — a shipped item with
-a named consequence that does not exist — so it is written up here as what it actually is.
-
-**Owner decision 3 (widen the PPR description to cover Business Law / RFBT) is BLOCKED, not
-dropped.** It is gated on a two-arm comparison (`ADR-001:291`'s tie-break) that requires *setting*
-`domain_context` on three real production notes — a production WRITE, which is the owner's to run
-under `CLAUDE.md`'s read-only rule, never Claude's, regardless of the plan itself being approved.
-The exact `UPDATE`/verify/revert statements, the three notes' UUIDs (independently confirmed by a
-read-only query at this kickoff), and the pass/fail condition were written to
-`docs/claude-plans/domain-context-ppr-validation-armB.sql` and handed to the owner directly —
-**deliberately not committed**, since a production `UPDATE` statement sitting in `docs/claude-plans/`
-would read as a sanctioned runbook to a future session, the same shape as the read-only scripts
-this repo *does* commit and instruct sessions to run. If the owner runs it and Arm B passes
-(preserves statutory citations and legal terminology, does not import engineering-contract
-framing), item 3 ships as a follow-up PR into this release branch; if it fails or is not run,
-`BASIC_MEDICAL_SCIENCES` ships without it — the two are independent array entries in
-`DomainContext.java`, bundled by owner convenience only, never coupled technically.
-
-Anti-drift: no database migration (`notes.domain_context` is `VARCHAR` with zero CHECK
-constraints; `@Enumerated(EnumType.STRING)` persists the name), no backfill of existing notes (the
-six mechanism-framed notes are curator follow-up, outside this release), no
-`isQuantitativeContext` resolver rewrite (only one keyword-array element changes), no program
-catalog or Program Family change, and no Workstream B implementation of any kind. The
-`QUANTITATIVE_KEYWORDS` unanchored-substring-matching defect (`ratio` ⊂ `corporation`, `solve` ⊂
-`resolve`, `interest` ⊂ `interested`, etc. — proved against production) is reported in
-`ROADMAP.md`'s Backlog Index and explicitly out of scope for this release; note that fixing it with
-word boundaries would silently
-break the `"pharmacokinetic"` entry this release adds, which depends on unanchored matching to
-reach the subject "Pharmacokinetics".
-
-Verification tier: **one `advisor()` call.** No new endpoint, so no `MockMvc` real-request test is
-owed — said here rather than skipped silently. `frontend/lib/api.ts` is touched but the change is
-a TypeScript union member only, emitting no JavaScript, so no `api-*.test.ts` request-shape test is
-owed either. The diff does change behaviour (a new quantitative fall-through path, and — if item 3
-ships — a PPR routing change), so the tests the plan's §A9 names must land in the same diff as
-that behaviour, per the unexercised-change rule.
-
-Deploy ordering: ship frontend and backend together. Backend-first is harmless (an unused enum
-value); frontend-first is not — the new dropdown option would appear before an old backend can
-persist it, and `DomainContext.fromString`'s `null`-on-unknown return silently drops a curator's
-save rather than erroring. Run `scripts/check-deploys.sh` after the release PR merges.
-
-### Planned Scope
-
-- **Add `DomainContext.BASIC_MEDICAL_SCIENCES` (backend + frontend).** Append (never insert) the
-  enum value with `quantitative = false`; append the matching `DOMAIN_CONTEXT_OPTIONS` entry with
-  the plan's §A3 curator-facing description, which routes adjacent material to `Nursing` and to
-  `Professional Practice & Regulation` in the same prose; add the TypeScript union member.
-- **Widen `QUANTITATIVE_KEYWORDS` by exactly one string.** Add `"pharmacokinetic"` with a comment
-  recording the coupling to the unanchored-matching defect (Backlog Index).
-- **Tests, same diff:** `DomainContextTest` (label + `@CsvSource` row + method rename to
-  `...Twelve...` + `fromString` round-trip), `domain-context.test.ts` (length 12 + new-value
-  routing assertions), `OpenAiLlmStudyPackServiceTest` (the keyword's own guard: a
-  Pharmacokinetics-subject context becomes quantitative via the keyword path at the Quick Review
-  tier, plus a negative assertion that the label reaches the prompt and a distinctive
-  multi-program `courseProgram` string never does), `StudyPackGenerationContextResolverTest` (new
-  value resolves to its label, not the enum constant name). **The plan's §A9 item 10
-  (multi-program guard: new value + 3 programs does not throw) was deliberately NOT added as a
-  separate test** — `StudyPackGenerationContextResolver.assertGenerationReady` only checks
-  `domainContext == null && programCount > 1`; it never switches on which value is set, so a
-  BASIC_MEDICAL_SCIENCES-specific case could not fail differently from the existing generic
-  coverage (`assertGenerationReady_allowsRetryAfterDomainContextIsSet`,
-  `assertGenerationReady_rejectsMultipleProgramsWithoutDomainContext`). Recorded here rather than
-  silently omitted. **§A9 item 6 (a PPR routing assertion in `domain-context.test.ts`) travels
-  with item 3** — it is only meaningful once the PPR description itself changes, so it ships in
-  the same follow-up PR if Arm B passes, not in this diff.
-- **`docs/architecture/ADR-001-canonical-knowledge-architecture.md`** — revision-log entry
-  recording the owner decision (name, enum, `quantitative = false`, the keyword condition as
-  actually shipped, clause-(a) evidence), plus correcting two stale lines the plan's own
-  re-verification found: *"three unused values"* → two are now in use (`PROFESSIONAL_EDUCATION`
-  232, `NURSING` 46) `[PROD 2026-09-14]`; *"41 programs"* → 51 `[PROD 2026-09-14]`, ratio
-  `12:51 = 0.235`.
-- **`[BLOCKED — owner validation required]` PPR description widening (frontend).** Handed off via
-  `docs/claude-plans/domain-context-ppr-validation-armB.sql` (on disk, deliberately **not**
-  committed — see "How this scope was reached" above); ships as a follow-up PR only if Arm B
-  passes.
-- **`docs/features/domain-context.md`** — **NOT built, by decision rather than oversight.**
-  `docs/features/study-pack-generation.md` already documents the mechanism in depth (fallback
-  chain, the declared-`quantitative`-flag design, the keyword scan); a second dedicated doc
-  covering the same ground risks the two silently diverging, which is a worse failure mode than
-  the gap the plan named. Instead, swept every doc that enumerates the taxonomy by name so none
-  goes stale invisibly: `study-pack-generation.md` and `challenge-quiz.md` (the duplicated
-  `quantitative = false` value lists), `docs/features/notes.md` (the twelve-value list and count),
-  and `docs/gpt-contexts/REVIEW_SET_SHAPING_CONTEXT.md` (the curriculum-shaping pipeline's closed
-  vocabulary — the one place this would have gone stale with no diff to notice, since it is never
-  touched by code changes).
-
-### Shipped
-
-- **`DomainContext.BASIC_MEDICAL_SCIENCES`** (`quantitative = false`), appended after
-  `PLANNING_AND_SITE_DEVELOPMENT` — `DomainContext.java:33-39`. Curator-facing description added
-  to `DOMAIN_CONTEXT_OPTIONS` — `frontend/lib/domain-context.ts`. TypeScript union member added —
-  `frontend/lib/api.ts`.
-- **`QUANTITATIVE_KEYWORDS` widened by exactly one string, `"pharmacokinetic"`** —
-  `OpenAiLlmStudyPackService.java:179`, with a comment recording the coupling to the
-  unanchored-substring defect tracked in `ROADMAP.md`'s Backlog Index.
-- **Tests, same diff:** `DomainContextTest` (label + `@CsvSource` row + method rename + `fromString`
-  round-trip), `domain-context.test.ts` (length 12 + new-value routing assertions),
-  `OpenAiLlmStudyPackServiceTest` (keyword guard at the Quick Review tier + a negative assertion
-  that the label reaches the prompt, never a multi-program `courseProgram` string),
-  `StudyPackGenerationContextResolverTest` (new value resolves to its label, not the enum constant
-  name). Backend full suite 2373/2373, frontend 216 suites / 2402 tests, `tsc --noEmit` clean.
-- **`ADR-001-canonical-knowledge-architecture.md`** — revision-log entry (clause b) recording the
-  owner decision, plus two stale-line corrections found by re-verifying production during this
-  edit: *"three unused values"* → two now in use (`PROFESSIONAL_EDUCATION` 232, `NURSING` 46); *"41
-  programs"* → 51, ratio `12:51 = 0.235`.
-- **Doc sweep** — every place that enumerates the Domain Context taxonomy by name, whether or not it
-  was in the code diff: `docs/features/study-pack-generation.md`, `docs/features/challenge-quiz.md`
-  (the duplicated `quantitative = false` value lists), `docs/features/notes.md` (the twelve-value
-  list and count), `docs/gpt-contexts/REVIEW_SET_SHAPING_CONTEXT.md` (the curriculum-shaping
-  pipeline's own closed vocabulary — never touched by a code diff and the one place this would have
-  gone stale invisibly), `docs/gpt-contexts/GPT_CONTEXT.md` and
-  `docs/gpt-contexts/NOTES_AND_COLLECTIONS_CONTEXT.md` (both re-stamped at this signoff; the core
-  brief's own "don't propose a 12th value" line was corrected, since a 12th had just shipped).
-- **PR #1387**, merged into `releases/v0.145.0` at `94d2bbd3`.
-
-### Not shipped
-
-- **`[BLOCKED]` PPR description widening (owner decision 3).** Re-checked read-only at this
-  signoff: all three RFBT notes named in `docs/claude-plans/domain-context-ppr-validation-armB.sql`
-  still carry `domain_context IS NULL` `[PROD 2026-09-14]`, so the owner has not yet run the
-  two-arm validation. Ships as a follow-up PR into a later release if and when Arm B passes; the
-  two are independent `DomainContext.java` array entries, bundled by convenience only.
-- **`docs/features/domain-context.md`.** Not built, by decision — see the Planned Scope note above.
-- **§A9 test item 10** (a multi-program-guard test naming the new value specifically) — not added;
-  `assertGenerationReady` is value-agnostic, so it could not fail differently from existing
-  coverage. See the Planned Scope note above.

@@ -34,11 +34,6 @@ public class NoteRegenerationConsequenceService {
     private final GeneratedQuizRepository generatedQuizRepository;
     private final QuizShareLinkRepository quizShareLinkRepository;
 
-    /**
-     * ⚠️ Scope-gated to match the single-Note primitive exactly: only combined regeneration replaces
-     * the Note content a shared quiz was built from, so Study-Pack-only regeneration deactivates
-     * nothing and must not be described as if it did.
-     */
     public int countSharedQuizzesToDeactivate(
             UUID ownerUserId,
             List<UUID> noteIds,
@@ -58,13 +53,19 @@ public class NoteRegenerationConsequenceService {
                 .count();
     }
 
+    // ⚠️ scope is intentionally unused now: v0.151.0 made StudyPackService.saveStudyPack deactivate a
+    // Note's shared quiz's live links for EITHER scope (it always replaces the quiz in place), so this
+    // count and the single-Note check below must match for both scopes too, or the preflight modal
+    // and the batch receipt (NoteBulkRegenerationService captures hadLiveShareLink from this same
+    // method before dispatch) contradict what the run actually does. Kept in the signature rather than
+    // removed from three call sites for a behaviour that may yet diverge again by scope.
     @Transactional(readOnly = true)
     public Set<UUID> notesWithLiveShareLink(
             UUID ownerUserId,
             List<UUID> noteIds,
             NoteRegenerationScope scope
     ) {
-        if (scope != NoteRegenerationScope.NOTE_AND_STUDY_PACK || noteIds == null || noteIds.isEmpty()) {
+        if (noteIds == null || noteIds.isEmpty()) {
             return Set.of();
         }
         List<GeneratedQuizEntity> quizzes =

@@ -910,6 +910,13 @@ public class StudyPackService {
                         savedEntity.getId(), ExamQuestionPoolService.MODE_LONG_EXAM);
                 examQuestionPoolService.refreshPool(
                         savedEntity.getId(), ExamQuestionPoolService.MODE_BOARD_EXAM);
+                // Both regeneration scopes replace this Study Pack's quiz in place too (saveStudyPack
+                // does this regardless of scope), so a shared quiz's live links must be deactivated
+                // either way -- v0.151.0 moved this out of the regeneratingNoteContent gate below after
+                // finding a STUDY_PACK-only regeneration (the default scope) left a recipient able to
+                // keep being graded against questions drawn from content the note no longer has,
+                // exactly the failure v0.110.2 shipped to close.
+                generatedQuizService.deactivateShareLinksForNote(noteId, ownerUserId);
                 if (regeneratingNoteContent) {
                     if (recordUsage) {
                         // The second meter. saveStudyPack above charged the Study Pack one; both land in
@@ -922,10 +929,6 @@ public class StudyPackService {
                         noteGenerationUsageProtectionService.recordUsage(
                                 ownerUserId, OffsetDateTime.now(ZoneOffset.UTC));
                     }
-                    // The note's shared quiz was built from the content we just replaced. Deactivate its
-                    // live links rather than letting a recipient be graded against questions drawn from
-                    // material that no longer exists (v0.110.2's rule, reusing its implementation).
-                    generatedQuizService.deactivateShareLinksForNote(noteId, ownerUserId);
                 }
                 if (preservedSubject != null) {
                     applyBulkGeneratedMetadataToNote(sourceNote, generated, preservedSubject);

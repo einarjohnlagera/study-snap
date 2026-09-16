@@ -3,7 +3,7 @@
 > **This is the core brief. Paste it as your first message in a new GPT chat session.**
 > Then paste any module below that matches the conversation — see "Which modules to paste".
 > Update this file whenever a new version ships or the roadmap shifts significantly.
-> Last updated: v0.150.0 - 2026-09-16 (Released). **`v0.150.0` made Program Family membership
+> Last updated: v0.151.0 - 2026-09-16 (Released). **`v0.151.0` closed the same `v0.110.2` share-link gate gap `v0.143.0` closed for the exam question pool, this time for shared quiz links, on both the single-Note and bulk regeneration paths plus the bulk confirmation dialog.** A `STUDY_PACK`-only regeneration (the default scope) now deactivates a note's live shared-quiz links just like the combined scope always did — see `QUIZ_AND_PRACTICE_CONTEXT.md` and `NOTES_AND_COLLECTIONS_CONTEXT.md` for detail. Previously v0.150.0 - 2026-09-16 (Released). **`v0.150.0` made Program Family membership
 many-to-many** — a Course/Program may now belong to zero, one, or several families, via a new
 `course_program_family` join table replacing the old nullable `course_programs.program_family_id`
 single FK. This closed a real production bug: the Note-authoring "Add Course/Program" family picker
