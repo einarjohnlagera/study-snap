@@ -14,18 +14,49 @@ scope, verified not-currently-live at kickoff (re-run 2026-09-16, unchanged sinc
 
 ### Planned Scope
 
-- **Shared quiz links are not deactivated on a `STUDY_PACK`-only regeneration (backend, 1 file).**
+- **Shared quiz links are not deactivated on a `STUDY_PACK`-only regeneration (backend, 2 files).**
   `StudyPackService.java:928` calls `generatedQuizService.deactivateShareLinksForNote(noteId,
   ownerUserId)` only inside `if (regeneratingNoteContent)` — the combined Note+Study-Pack
   regeneration path. `POST /notes/{id}/regenerate` defaults to `NoteRegenerationScope.STUDY_PACK`
   (an absent/blank scope resolves to it), which reaches the same shared worker method with
   `regeneratingNoteContent = false`, so the deactivation never fires on that path even though
   `saveStudyPack` replaces the quiz content either way. Fix: drop the call out of the `if` gate, same
-  as `v0.143.0` already did one line above it for `examQuestionPoolService.refreshPool`. Isolated bug
-  fix, clear root cause, direct precedent — Claude Code implements inline, no Codex prompt.
+  as `v0.143.0` already did one line above it for `examQuestionPoolService.refreshPool`.
+  **⚠️ SCOPE GREW MID-IMPLEMENTATION, found by the full backend build, not by the original scoping:**
+  `NoteRegenerationConsequenceService.notesWithLiveShareLink` (the bulk-regeneration path's
+  consequence-counting method, backing both the preflight modal's `sharedQuizzesToDeactivate` count
+  and `NoteBulkRegenerationService`'s per-item `hadLiveShareLink` receipt flag, captured *before*
+  dispatch from the same method) carried the identical scope gate, deliberately mirrored to match the
+  single-Note primitive's then-current (buggy) behavior. Fixing only `StudyPackService` would have made
+  the bulk path actively **worse**: the preflight would promise zero deactivations for a
+  `STUDY_PACK`-only batch, the run would deactivate some anyway, and the receipt — reading the same
+  gated method — would falsely confirm nothing happened. Fixed together: the gate condition in
+  `notesWithLiveShareLink` was removed (scope no longer distinguishes any share-link consequence, since
+  `saveStudyPack` replaces the quiz for either scope); its stale Javadoc, which justified the gate as
+  intentional, was removed. **The confirmation dialog inherited the same assumption**:
+  `bulk-regenerate-modal.tsx` gated its shared-quiz warning behind `combined &&`, so even a fixed
+  backend would have shown a curator zero warning on the default `STUDY_PACK`-only scope; that gate is
+  dropped too, and its component test (which had asserted the warning's *absence* on `STUDY_PACK` as
+  correct) is corrected along with it. Two feature docs stated the old scope restriction explicitly and
+  are corrected: `docs/features/bulk-regeneration.md` and `docs/features/study-pack-generation.md`.
+  Isolated bug fix, clear root cause once traced — Claude Code implements inline, no Codex prompt.
 
 Anti-drift: no other regeneration-path behavior changes; the two `refreshPool` calls immediately above
-this line are already unconditional and stay untouched.
+`StudyPackService`'s deactivation call are already unconditional and stay untouched; the
+note-generation-unit meter stays genuinely scope-specific (STUDY_PACK-only still spends zero) —
+unrelated to this fix and not touched by it.
+
+Verification tier: **one `advisor()` call on the diff**, not the cold agent floated mid-implementation —
+the actual diff turned out to be a two-line gate removal (plus its stale Javadoc) covered end-to-end by
+a real-Postgres integration test: `studyPackOnlyScopeSpendsNoNoteGenerationUnitsButStillDeactivatesShareLinks`
+and its `NOTE_AND_STUDY_PACK` sibling `combinedScopeCountsAndRecordsExactlyTheShareLinksItTurnsOff`
+between them assert the preflight count, the actual link deactivation, and the per-item receipt flag,
+for both scopes, in one method each — the same four claims a cold agent would otherwise be asked to
+re-derive by reading the same two files. `GeneratedQuizService.deactivateShareLinksForNote`'s existing
+null/empty-guard (read, not re-tested) makes a first-ever-generation no-op safe by construction, and is
+exercised incidentally by every other bulk-regeneration test that seeds no quiz. One added cost, not
+worth a test: `notesWithLiveShareLink` now runs its lookup on every `STUDY_PACK`-only item instead of
+short-circuiting immediately, one extra empty query per note with no existing quiz.
 
 ### Shipped
 
