@@ -7,6 +7,8 @@ import org.springframework.core.io.ClassPathResource;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.SingleConnectionDataSource;
+import org.springframework.jdbc.datasource.DataSourceTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
@@ -54,6 +56,39 @@ class CourseProgramCatalogRepositoryProgramFamilyIntegrationTest {
             applyMigration(statement, "V106__course_program_catalog.sql");
             applyMigration(statement, "V142__education_program_family.sql");
             applyMigration(statement, "V145__course_program_is_active.sql");
+            applyMigration(statement, "V146__course_program_family_membership.sql");
+
+            // H2 cannot execute V146's PL/pgSQL DO block. This independently executes the same
+            // discriminating NOT EXISTS predicate and proves its relationship-parity SQL, not that
+            // DO $$ ... RAISE EXCEPTION itself executes. Flyway/PostgreSQL supplies that deploy guard.
+            String parityQuery = """
+                    SELECT count(*) FROM course_programs
+                    WHERE course_programs.program_family_id IS NOT NULL
+                      AND NOT EXISTS (
+                          SELECT 1 FROM course_program_family
+                          WHERE course_program_family.course_program_id = course_programs.id
+                            AND course_program_family.program_family_id = course_programs.program_family_id
+                      )
+                    """;
+            assertThat(count(statement, parityQuery)).isZero();
+            assertThat(count(statement, """
+                    select count(*) from course_program_family
+                    join program_families on program_families.id = course_program_family.program_family_id
+                    where program_families.name = 'Education'
+                    """)).isEqualTo(8);
+            UUID corruptedProgramId = UUID.fromString("20000000-0000-0000-0000-000000000001");
+            UUID engineeringId = UUID.fromString("10000000-0000-0000-0000-000000000001");
+            statement.executeUpdate("update course_program_family set program_family_id = '" + engineeringId
+                    + "' where course_program_id = '" + corruptedProgramId + "'");
+            assertThat(count(statement, parityQuery)).isEqualTo(1);
+            statement.executeUpdate("update course_program_family set program_family_id = '" + UUID.fromString("10000000-0000-0000-0000-000000000002")
+                    + "' where course_program_id = '" + corruptedProgramId + "'");
+
+            assertThatThrownBy(() -> statement.executeUpdate("""
+                    insert into course_program_family (id, course_program_id, program_family_id)
+                    values (random_uuid(), '20000000-0000-0000-0000-000000000001',
+                            '10000000-0000-0000-0000-000000000002')
+                    """)).isInstanceOf(Exception.class);
 
             SingleConnectionDataSource dataSource = new SingleConnectionDataSource(connection, true);
             CourseProgramCatalogRepository repository =
@@ -110,6 +145,16 @@ class CourseProgramCatalogRepositoryProgramFamilyIntegrationTest {
                     .satisfies(program -> assertThat(program.isActive()).isTrue());
             assertThat(repository.findById(UUID.randomUUID())).isEmpty();
 
+            // The service's @Transactional create path uses these two repository operations. Prove
+            // the database boundary removes the program when the membership FK write fails.
+            UUID invalidFamilyId = UUID.randomUUID();
+            assertThatThrownBy(() -> new TransactionTemplate(new DataSourceTransactionManager(dataSource))
+                    .executeWithoutResult(status -> {
+                        UUID inserted = repository.insert("Rollback Program", null);
+                        repository.insertProgramFamilies(inserted, List.of(invalidFamilyId));
+                    })).isInstanceOf(DataIntegrityViolationException.class);
+            assertThat(repository.findByNormalizedName("rollback program")).isEmpty();
+
             // The shared catalog list deliberately includes retired rows. Persist a real false value
             // so this fails if FIND_ALL starts filtering or mapCatalogItem hard-codes the default.
             statement.executeUpdate("update course_programs set is_active = false where id = '" + programId + "'");
@@ -122,18 +167,17 @@ class CourseProgramCatalogRepositoryProgramFamilyIntegrationTest {
                     .get()
                     .satisfies(program -> assertThat(program.isActive()).isFalse());
 
-            // 6. UPDATE_PROGRAM_FAMILY persists both assignment and clearing. Read through FIND_BY_ID
-            // so a Java-only return value cannot make a missing UPDATE look successful.
-            repository.updateProgramFamily(programId, educationId);
-            repository.updateProgramFamily(programId, educationId);
+            // 6. Authoritative replacement persists multiple memberships and clearing.
+            repository.replaceProgramFamilies(programId, List.of(educationId, engineeringId));
             assertThat(repository.findById(programId))
                     .isPresent()
                     .get()
                     .satisfies(program -> {
+                        assertThat(program.programFamilies()).extracting(ProgramFamilyResponse::name)
+                                .containsExactly(EDUCATION, ENGINEERING);
                         assertThat(program.programFamilyId()).isEqualTo(educationId);
-                        assertThat(program.programFamilyName()).isEqualTo(EDUCATION);
                     });
-            repository.updateProgramFamily(programId, null);
+            repository.replaceProgramFamilies(programId, List.of());
             assertThat(repository.findById(programId))
                     .isPresent()
                     .get()
@@ -144,6 +188,13 @@ class CourseProgramCatalogRepositoryProgramFamilyIntegrationTest {
     private void applyMigration(Statement statement, String file) throws Exception {
         String migration = new ClassPathResource("db/migration/" + file)
                 .getContentAsString(StandardCharsets.UTF_8);
+        if (file.startsWith("V146__")) {
+            // H2 2.4 accepts gen_random_uuid() in PostgreSQL mode but not INSERT ... ON CONFLICT.
+            // Keep the shipped PostgreSQL migration unchanged; only this clean, local test copy drops
+            // the idempotency clause that H2 cannot parse.
+            migration = migration.replace(
+                    "ON CONFLICT (course_program_id, program_family_id) DO NOTHING;", ";");
+        }
         statement.execute(stripInformationalPlPgSqlBlock(migration));
     }
 
@@ -160,6 +211,13 @@ class CourseProgramCatalogRepositoryProgramFamilyIntegrationTest {
         try (var rs = statement.executeQuery(sql)) {
             rs.next();
             return rs.getString(1);
+        }
+    }
+
+    private int count(Statement statement, String sql) throws Exception {
+        try (var rs = statement.executeQuery(sql)) {
+            rs.next();
+            return rs.getInt(1);
         }
     }
 }

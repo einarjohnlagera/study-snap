@@ -104,7 +104,8 @@ class CourseProgramCatalogServiceTest {
     void createsProgramWithNameOnly() {
         CourseProgramCatalogItemResponse created = item(UUID.randomUUID(), CHEMICAL_ENGINEERING, null, null);
         when(repository.findByNormalizedName("chemical engineering")).thenReturn(Optional.empty());
-        when(repository.insert(CHEMICAL_ENGINEERING, null, null, null)).thenReturn(created);
+        when(repository.insert(CHEMICAL_ENGINEERING, null)).thenReturn(created.id());
+        when(repository.findById(created.id())).thenReturn(Optional.of(created));
 
         CourseProgramCatalogItemResponse result = service.create(
                 new CreateCourseProgramCatalogRequest(" Chemical   Engineering ", null, null)
@@ -118,14 +119,15 @@ class CourseProgramCatalogServiceTest {
         String normalizedName = "K – 12";
         CourseProgramCatalogItemResponse created = item(UUID.randomUUID(), normalizedName, null, null);
         when(repository.findByNormalizedName("k – 12")).thenReturn(Optional.empty());
-        when(repository.insert(normalizedName, null, null, null)).thenReturn(created);
+        when(repository.insert(normalizedName, null)).thenReturn(created.id());
+        when(repository.findById(created.id())).thenReturn(Optional.of(created));
 
         CourseProgramCatalogItemResponse result = service.create(
                 new CreateCourseProgramCatalogRequest(" K-12 ", null, null)
         );
 
         assertThat(result.name()).isEqualTo(normalizedName);
-        verify(repository).insert(normalizedName, null, null, null);
+        verify(repository).insert(normalizedName, null);
     }
 
     @Test
@@ -134,13 +136,37 @@ class CourseProgramCatalogServiceTest {
         CourseProgramCatalogItemResponse created = item(UUID.randomUUID(), CHEMICAL_ENGINEERING, familyId, ENGINEERING);
         when(repository.findByNormalizedName("chemical engineering")).thenReturn(Optional.empty());
         when(repository.findProgramFamilyName(familyId)).thenReturn(Optional.of(ENGINEERING));
-        when(repository.insert(CHEMICAL_ENGINEERING, familyId, ENGINEERING, null)).thenReturn(created);
+        when(repository.insert(CHEMICAL_ENGINEERING, null)).thenReturn(created.id());
+        when(repository.findById(created.id())).thenReturn(Optional.of(created));
 
         CourseProgramCatalogItemResponse result = service.create(
                 new CreateCourseProgramCatalogRequest(CHEMICAL_ENGINEERING, familyId, null)
         );
 
         assertThat(result.programFamilyName()).isEqualTo(ENGINEERING);
+        verify(repository).insertProgramFamilies(created.id(), List.of(familyId));
+    }
+
+    @Test
+    void createsProgramWithMultipleFamiliesAndDeduplicatesIds() {
+        UUID firstFamilyId = UUID.randomUUID();
+        UUID secondFamilyId = UUID.randomUUID();
+        UUID programId = UUID.randomUUID();
+        CourseProgramCatalogItemResponse created = new CourseProgramCatalogItemResponse(
+                programId, CHEMICAL_ENGINEERING,
+                List.of(new ProgramFamilyResponse(firstFamilyId, ENGINEERING),
+                        new ProgramFamilyResponse(secondFamilyId, "Computing & Technology")),
+                secondFamilyId, "Computing & Technology", true);
+        when(repository.findByNormalizedName("chemical engineering")).thenReturn(Optional.empty());
+        when(repository.findProgramFamilyName(firstFamilyId)).thenReturn(Optional.of(ENGINEERING));
+        when(repository.findProgramFamilyName(secondFamilyId)).thenReturn(Optional.of("Computing & Technology"));
+        when(repository.insert(CHEMICAL_ENGINEERING, null)).thenReturn(programId);
+        when(repository.findById(programId)).thenReturn(Optional.of(created));
+
+        service.create(new CreateCourseProgramCatalogRequest(
+                CHEMICAL_ENGINEERING, null, List.of(firstFamilyId, secondFamilyId, firstFamilyId), null));
+
+        verify(repository).insertProgramFamilies(programId, List.of(firstFamilyId, secondFamilyId));
     }
 
     @Test
@@ -162,7 +188,7 @@ class CourseProgramCatalogServiceTest {
 
         assertThatThrownBy(() -> service.create(request))
                 .isInstanceOf(CourseProgramCatalogNameConflictException.class);
-        verify(repository, never()).insert("civil engineering", null, null, null);
+        verify(repository, never()).insert("civil engineering", null);
     }
 
     @Test
@@ -183,7 +209,7 @@ class CourseProgramCatalogServiceTest {
 
         assertThatThrownBy(() -> service.create(request))
                 .isInstanceOf(InvalidExamGoalSlugException.class);
-        verify(repository, never()).insert(CHEMICAL_ENGINEERING, null, null, "invalid");
+        verify(repository, never()).insert(CHEMICAL_ENGINEERING, "invalid");
     }
 
     @Test
@@ -205,13 +231,13 @@ class CourseProgramCatalogServiceTest {
         when(repository.findById(programId)).thenReturn(Optional.of(before), Optional.of(after));
         when(repository.findProgramFamilyName(familyId)).thenReturn(Optional.of(ENGINEERING));
 
-        CourseProgramCatalogItemResponse result = service.updateProgramFamily(
+        CourseProgramCatalogItemResponse result = service.updateProgramFamilies(
                 programId,
-                new UpdateCourseProgramCatalogRequest(familyId)
+                new UpdateCourseProgramCatalogRequest(List.of(familyId))
         );
 
         assertThat(result).isEqualTo(after);
-        verify(repository).updateProgramFamily(programId, familyId);
+        verify(repository).replaceProgramFamilies(programId, List.of(familyId));
     }
 
     @Test
@@ -224,13 +250,13 @@ class CourseProgramCatalogServiceTest {
         when(repository.findById(programId)).thenReturn(Optional.of(before), Optional.of(after));
         when(repository.findProgramFamilyName(newFamilyId)).thenReturn(Optional.of("Health Sciences"));
 
-        CourseProgramCatalogItemResponse result = service.updateProgramFamily(
+        CourseProgramCatalogItemResponse result = service.updateProgramFamilies(
                 programId,
-                new UpdateCourseProgramCatalogRequest(newFamilyId)
+                new UpdateCourseProgramCatalogRequest(List.of(newFamilyId))
         );
 
         assertThat(result).isEqualTo(after);
-        verify(repository).updateProgramFamily(programId, newFamilyId);
+        verify(repository).replaceProgramFamilies(programId, List.of(newFamilyId));
     }
 
     @Test
@@ -241,13 +267,13 @@ class CourseProgramCatalogServiceTest {
         CourseProgramCatalogItemResponse after = item(programId, CHEMICAL_ENGINEERING, null, null);
         when(repository.findById(programId)).thenReturn(Optional.of(before), Optional.of(after));
 
-        CourseProgramCatalogItemResponse result = service.updateProgramFamily(
+        CourseProgramCatalogItemResponse result = service.updateProgramFamilies(
                 programId,
-                new UpdateCourseProgramCatalogRequest(null)
+                new UpdateCourseProgramCatalogRequest(List.of())
         );
 
         assertThat(result).isEqualTo(after);
-        verify(repository).updateProgramFamily(programId, null);
+        verify(repository).replaceProgramFamilies(programId, List.of());
         verify(repository, never()).findProgramFamilyName(org.mockito.ArgumentMatchers.any());
     }
 
@@ -256,13 +282,13 @@ class CourseProgramCatalogServiceTest {
         UUID programId = UUID.randomUUID();
         UUID familyId = UUID.randomUUID();
         when(repository.findById(programId)).thenReturn(Optional.empty());
-        UpdateCourseProgramCatalogRequest request = new UpdateCourseProgramCatalogRequest(familyId);
+        UpdateCourseProgramCatalogRequest request = new UpdateCourseProgramCatalogRequest(List.of(familyId));
 
-        assertThatThrownBy(() -> service.updateProgramFamily(programId, request))
+        assertThatThrownBy(() -> service.updateProgramFamilies(programId, request))
                 .isInstanceOf(CourseProgramNotFoundException.class);
 
         verify(repository, never()).findProgramFamilyName(familyId);
-        verify(repository, never()).updateProgramFamily(programId, familyId);
+        verify(repository, never()).replaceProgramFamilies(programId, List.of(familyId));
     }
 
     @Test
@@ -272,12 +298,12 @@ class CourseProgramCatalogServiceTest {
         when(repository.findById(programId))
                 .thenReturn(Optional.of(item(programId, CHEMICAL_ENGINEERING, null, null)));
         when(repository.findProgramFamilyName(familyId)).thenReturn(Optional.empty());
-        UpdateCourseProgramCatalogRequest request = new UpdateCourseProgramCatalogRequest(familyId);
+        UpdateCourseProgramCatalogRequest request = new UpdateCourseProgramCatalogRequest(List.of(familyId));
 
-        assertThatThrownBy(() -> service.updateProgramFamily(programId, request))
+        assertThatThrownBy(() -> service.updateProgramFamilies(programId, request))
                 .isInstanceOf(UnknownProgramFamilyException.class);
 
-        verify(repository, never()).updateProgramFamily(programId, familyId);
+        verify(repository, never()).replaceProgramFamilies(programId, List.of(familyId));
     }
 
     @Test
@@ -286,7 +312,7 @@ class CourseProgramCatalogServiceTest {
         Method createMethod = CourseProgramCatalogService.class.getMethod("create", CreateCourseProgramCatalogRequest.class);
         Transactional createTransaction = createMethod.getAnnotation(Transactional.class);
         Method updateMethod = CourseProgramCatalogService.class.getMethod(
-                "updateProgramFamily",
+                "updateProgramFamilies",
                 UUID.class,
                 UpdateCourseProgramCatalogRequest.class
         );

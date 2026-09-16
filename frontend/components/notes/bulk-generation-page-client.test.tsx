@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { BulkGenerationPageClient } from "./bulk-generation-page-client";
-import { bulkGenerateNotes, getCourseProgramCatalog, getMe, getMyPlan, listCollections, listCoursePrograms, listSubjects } from "@/lib/api";
+import { bulkGenerateNotes, findSimilarCoursePrograms, getCourseProgramCatalog, getMe, getMyPlan, listCollections, listCoursePrograms, listProgramFamilies, listSubjects } from "@/lib/api";
 import { getAuthUser } from "@/lib/auth";
 import {
   consumeBulkQueuedFlash,
@@ -36,6 +36,9 @@ jest.mock("@/lib/api", () => ({
   listCollections: jest.fn(),
   listSubjects: jest.fn(),
   listCoursePrograms: jest.fn(),
+  listProgramFamilies: jest.fn(),
+  findSimilarCoursePrograms: jest.fn(),
+  createCourseProgram: jest.fn(),
   getMe: jest.fn(),
   getMyPlan: jest.fn(),
   trackAnalyticsEvent: jest.fn(),
@@ -64,6 +67,8 @@ describe("BulkGenerationPageClient", () => {
     (bulkGenerateNotes as jest.Mock).mockReset();
     (listSubjects as jest.Mock).mockResolvedValue([]);
     (listCoursePrograms as jest.Mock).mockResolvedValue([]);
+    (listProgramFamilies as jest.Mock).mockResolvedValue([{ id: "family-empty", name: "Health Sciences" }]);
+    (findSimilarCoursePrograms as jest.Mock).mockResolvedValue([]);
     (getCourseProgramCatalog as jest.Mock).mockResolvedValue([
       { id: "program-nursing", name: "Nursing", programFamilyId: null, programFamilyName: null, isActive: true },
     ]);
@@ -97,6 +102,17 @@ describe("BulkGenerationPageClient", () => {
     // never existed in any state, so this assertion passed vacuously both before and after
     // the v0.68.0 "topic note" rename.
     expect(screen.queryByText(/topic notes? left this cycle/i)).not.toBeInTheDocument();
+  });
+
+  it("shows a zero-member family in the shared Add Course / Program modal", async () => {
+    render(<BulkGenerationPageClient />);
+    await waitFor(() => expect(getCourseProgramCatalog).toHaveBeenCalled());
+    const input = screen.getByLabelText("Add a course or program");
+    fireEvent.change(input, { target: { value: "Public Health" } });
+    fireEvent.click(await screen.findByRole("button", { name: /Add “Public Health” to the catalog/ }));
+    const picker = screen.getByLabelText("Program Families (optional)");
+    expect(await screen.findByRole("option", { name: "Health Sciences" })).toBeInTheDocument();
+    expect(picker).toContainElement(screen.getByRole("option", { name: "Health Sciences" }));
   });
 
   it("keeps the compact grid profile-aware for teacher and non-teacher views", async () => {

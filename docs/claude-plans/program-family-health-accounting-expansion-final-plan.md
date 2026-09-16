@@ -1,7 +1,10 @@
 # Program Family Expansion (Health Sciences + Accounting) — FINAL Implementation Plan
 
-**Status: FINAL — tightening pass 2 of 2 complete. Ready for Codex prompt(s). Do not implement from this
-document directly — write the Codex prompt(s) identified in §Q first. 2026-09-15.**
+**Status: SUPERSEDED on the schema question by `program-family-many-to-many-final-plan.md` — Product
+UX reversed the single-FK architecture decision (§0.3/§H below) after discovering concrete Program
+Family overlap use cases. This file's Health Sciences and Accounting membership decisions (§C, §E)
+carry forward unchanged into the new plan; its schema (§E), API (§H), migration (§I/§M), and UI blast
+radius (§L) do not — read the many-to-many plan instead. Kept for historical trace. 2026-09-15.**
 
 This supersedes `program-family-health-accounting-expansion-product-ux-consultation-prompt.md` (pass 1).
 That document's facts are preserved (§A); its governance conclusion and the Accounting-family verdict are

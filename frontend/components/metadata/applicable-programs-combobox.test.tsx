@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { ApplicableProgramsCombobox } from "./applicable-programs-combobox";
-import { createCourseProgram, findSimilarCoursePrograms } from "@/lib/api";
+import { createCourseProgram, findSimilarCoursePrograms, listProgramFamilies } from "@/lib/api";
 
 jest.mock("@/lib/api", () => ({
   ApiRequestError: class ApiRequestError extends Error {
@@ -16,6 +16,7 @@ jest.mock("@/lib/api", () => ({
   },
   createCourseProgram: jest.fn(),
   findSimilarCoursePrograms: jest.fn(),
+  listProgramFamilies: jest.fn(),
 }));
 
 const catalog = [
@@ -52,7 +53,12 @@ describe("ApplicableProgramsCombobox", () => {
   beforeEach(() => {
     (createCourseProgram as jest.Mock).mockReset();
     (findSimilarCoursePrograms as jest.Mock).mockReset();
+    (listProgramFamilies as jest.Mock).mockReset();
     (findSimilarCoursePrograms as jest.Mock).mockResolvedValue([]);
+    (listProgramFamilies as jest.Mock).mockResolvedValue([
+      { id: "family-engineering", name: "Engineering" },
+      { id: "family-health", name: "Health Sciences" },
+    ]);
   });
   it("selects only catalog rows and removes selected programs", () => {
     const onChange = jest.fn();
@@ -118,6 +124,36 @@ describe("ApplicableProgramsCombobox", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Remove Mechanical Engineering" }));
     expect(onChange).toHaveBeenLastCalledWith(["program-nursing", "program-a", "program-c"]);
+  });
+
+  it("keeps the full 18-member Engineering expansion", () => {
+    const engineeringCatalog = Array.from({ length: 18 }, (_, index) => ({
+      id: `engineering-${index + 1}`,
+      name: `Engineering Program ${index + 1}`,
+      programFamilies: [{ id: "family-engineering", name: "Engineering" }],
+      programFamilyId: "family-engineering",
+      programFamilyName: "Engineering",
+      isActive: true,
+    }));
+    const onChange = jest.fn();
+    render(<ApplicableProgramsCombobox id="engineering-18" catalog={engineeringCatalog} selectedIds={[]} onChange={onChange} />);
+    fireEvent.click(screen.getByRole("button", { name: "Engineering · 18" }));
+    expect(onChange).toHaveBeenCalledWith(engineeringCatalog.map((program) => program.id));
+  });
+
+  it("keeps the full 8-member Education expansion", () => {
+    const educationCatalog = Array.from({ length: 8 }, (_, index) => ({
+      id: `education-${index + 1}`,
+      name: `Education Program ${index + 1}`,
+      programFamilies: [{ id: "family-education", name: "Education" }],
+      programFamilyId: "family-education",
+      programFamilyName: "Education",
+      isActive: true,
+    }));
+    const onChange = jest.fn();
+    render(<ApplicableProgramsCombobox id="education-8" catalog={educationCatalog} selectedIds={[]} onChange={onChange} />);
+    fireEvent.click(screen.getByRole("button", { name: "Education · 8" }));
+    expect(onChange).toHaveBeenCalledWith(educationCatalog.map((program) => program.id));
   });
 
   // ADR-001 ruling 4: expansion is NEVER subject-conditioned. The structural guard is that this
@@ -195,6 +231,23 @@ describe("ApplicableProgramsCombobox", () => {
 
     // The Education pick and the family-less pick survive, and nothing is duplicated.
     expect(onChange).toHaveBeenCalledWith(["program-a", "program-elem", "program-nursing", "program-b"]);
+  });
+
+  it("deduplicates a program shared by two expanded families", () => {
+    const onChange = jest.fn();
+    const overlapping = [
+      { id: "shared", name: "Computer Engineering", programFamilies: [
+        { id: "family-engineering", name: "Engineering" },
+        { id: "family-computing", name: "Computing & Technology" },
+      ], programFamilyId: "family-computing", programFamilyName: "Computing & Technology", isActive: true },
+      { id: "civil", name: "Civil Engineering", programFamilies: [{ id: "family-engineering", name: "Engineering" }], programFamilyId: "family-engineering", programFamilyName: "Engineering", isActive: true },
+    ];
+    const { rerender } = render(<ApplicableProgramsCombobox id="overlap" catalog={overlapping} selectedIds={[]} onChange={onChange} />);
+    fireEvent.click(screen.getByRole("button", { name: "Computing & Technology · 1" }));
+    expect(onChange).toHaveBeenLastCalledWith(["shared"]);
+    rerender(<ApplicableProgramsCombobox id="overlap" catalog={overlapping} selectedIds={["shared"]} onChange={onChange} />);
+    fireEvent.click(screen.getByRole("button", { name: "Engineering · 1 remaining" }));
+    expect(onChange).toHaveBeenLastCalledWith(["shared", "civil"]);
   });
 
   it("keeps a full family visible and inert while leaving the other family actionable", () => {
@@ -442,15 +495,76 @@ describe("ApplicableProgramsCombobox", () => {
     fireEvent.focus(screen.getByLabelText("Add a course or program"));
     fireEvent.change(screen.getByLabelText("Add a course or program"), { target: { value: created.name } });
     fireEvent.click(await screen.findByRole("button", { name: /Add “Chemical Engineering” to the catalog/ }));
-    fireEvent.change(screen.getByLabelText("Program Family (optional)"), { target: { value: "family-engineering" } });
+    const familyPicker = screen.getByLabelText("Program Families (optional)") as HTMLSelectElement;
+    await within(familyPicker).findByRole("option", { name: "Engineering" });
+    familyPicker.options[0].selected = true;
+    fireEvent.change(familyPicker);
     fireEvent.click(screen.getByRole("button", { name: "Add and select" }));
 
     await waitFor(() => expect(onChange).toHaveBeenCalledWith(["program-a", "program-new"]));
     expect(createCourseProgram).toHaveBeenCalledWith({
       name: "Chemical Engineering",
-      programFamilyId: "family-engineering",
+      programFamilyIds: ["family-engineering"],
       examGoalSlug: null,
     });
+  });
+
+  it("loads an empty family lazily for creation without showing an expansion chip", async () => {
+    render(<ApplicableProgramsCombobox id="empty-family" catalog={catalog} selectedIds={[]} onChange={jest.fn()} canCreateCatalogProgram />);
+    expect(listProgramFamilies).not.toHaveBeenCalled();
+    expect(screen.queryByRole("button", { name: /Health Sciences/ })).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Add a course or program"), { target: { value: "Public Health" } });
+    fireEvent.click(await screen.findByRole("button", { name: /Add “Public Health” to the catalog/ }));
+    const picker = screen.getByLabelText("Program Families (optional)");
+    expect(await within(picker).findByRole("option", { name: "Health Sciences" })).toBeInTheDocument();
+    expect(listProgramFamilies).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("button", { name: /Health Sciences ·/ })).not.toBeInTheDocument();
+  });
+
+  it("selects only the new program when it is created in two populated families", async () => {
+    const onChange = jest.fn();
+    const created = {
+      id: "program-new", name: "Architectural Engineering", isActive: true,
+      programFamilies: [
+        { id: "family-engineering", name: "Engineering" },
+        { id: "family-built", name: "Built Environment & Design" },
+      ],
+      programFamilyId: "family-built", programFamilyName: "Built Environment & Design",
+    };
+    (listProgramFamilies as jest.Mock).mockResolvedValue([
+      { id: "family-engineering", name: "Engineering" },
+      { id: "family-built", name: "Built Environment & Design" },
+    ]);
+    (createCourseProgram as jest.Mock).mockResolvedValue(created);
+    render(<ApplicableProgramsCombobox id="overlap-create" catalog={catalog} selectedIds={[]} onChange={onChange} canCreateCatalogProgram />);
+    fireEvent.change(screen.getByLabelText("Add a course or program"), { target: { value: created.name } });
+    fireEvent.click(await screen.findByRole("button", { name: /Add “Architectural Engineering” to the catalog/ }));
+    const picker = screen.getByLabelText("Program Families (optional)") as HTMLSelectElement;
+    await within(picker).findByRole("option", { name: "Built Environment & Design" });
+    Array.from(picker.options).forEach((option) => { option.selected = true; });
+    fireEvent.change(picker);
+    fireEvent.click(screen.getByRole("button", { name: "Add and select" }));
+    await waitFor(() => expect(createCourseProgram).toHaveBeenCalledWith(expect.objectContaining({
+      programFamilyIds: ["family-engineering", "family-built"],
+    })));
+    // Exclusive assertions, not just toHaveBeenCalledWith: a regression that ALSO unions in the other
+    // family members via handleFamilyExpansion would still satisfy a non-exclusive "was called with
+    // ["program-new"] at some point" check if it fired an extra call. Proven by mutation: adding a
+    // handleFamilyExpansion(otherMembers) call right after selectProgram in handleCreate left the old
+    // assertion green. toHaveBeenCalledTimes(1) plus the payload check closes that gap.
+    expect(onChange).toHaveBeenCalledTimes(1);
+    expect(onChange).toHaveBeenCalledWith(["program-new"]);
+  });
+
+  it("still creates with zero families when the family endpoint fails", async () => {
+    (listProgramFamilies as jest.Mock).mockRejectedValue(new Error("Forbidden"));
+    (createCourseProgram as jest.Mock).mockResolvedValue({ id: "program-new", name: "Public Health", programFamilies: [], programFamilyId: null, programFamilyName: null, isActive: true });
+    render(<ApplicableProgramsCombobox id="failed-families" catalog={catalog} selectedIds={[]} onChange={jest.fn()} canCreateCatalogProgram />);
+    fireEvent.change(screen.getByLabelText("Add a course or program"), { target: { value: "Public Health" } });
+    fireEvent.click(await screen.findByRole("button", { name: /Add “Public Health” to the catalog/ }));
+    expect(await screen.findByText("Program Families could not be loaded.")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Add and select" }));
+    await waitFor(() => expect(createCourseProgram).toHaveBeenCalledWith(expect.objectContaining({ programFamilyIds: [] })));
   });
 
   it("keeps typed text and current selections after a failed create", async () => {

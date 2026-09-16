@@ -21,6 +21,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.LinkedHashSet;
 import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
@@ -50,8 +51,8 @@ public class CourseProgramCatalogService {
      * reason. A third would have been a third migration.
      *
      * <p>⚠️ A FAMILY IS CREATED EMPTY AND THAT IS CORRECT. Membership is set on the program, through
-     * the existing {@code programFamilyId} on create. Do not add member selection here -- the family is
-     * a name plus a nullable FK, and the authoring expansion derives membership from the catalog.
+     * the program's membership set on create. Do not add member selection here -- the authoring
+     * expansion derives membership from the catalog join.
      */
     @Transactional
     public ProgramFamilyResponse createProgramFamily(CreateProgramFamilyRequest request) {
@@ -85,19 +86,15 @@ public class CourseProgramCatalogService {
     }
 
     @Transactional
-    public CourseProgramCatalogItemResponse updateProgramFamily(
+    public CourseProgramCatalogItemResponse updateProgramFamilies(
             UUID programId,
             UpdateCourseProgramCatalogRequest request
     ) {
         courseProgramCatalogRepository.findById(programId)
                 .orElseThrow(CourseProgramNotFoundException::new);
 
-        if (request.programFamilyId() != null) {
-            courseProgramCatalogRepository.findProgramFamilyName(request.programFamilyId())
-                    .orElseThrow(UnknownProgramFamilyException::new);
-        }
-
-        courseProgramCatalogRepository.updateProgramFamily(programId, request.programFamilyId());
+        List<UUID> familyIds = validateAndDeduplicateFamilyIds(request.programFamilyIds());
+        courseProgramCatalogRepository.replaceProgramFamilies(programId, familyIds);
         return courseProgramCatalogRepository.findById(programId)
                 .orElseThrow(CourseProgramNotFoundException::new);
     }
@@ -114,15 +111,14 @@ public class CourseProgramCatalogService {
                     throw new CourseProgramCatalogNameConflictException(existing.name());
                 });
 
-        String familyName = null;
-        if (request.programFamilyId() != null) {
-            familyName = courseProgramCatalogRepository.findProgramFamilyName(request.programFamilyId())
-                    .orElseThrow(UnknownProgramFamilyException::new);
-        }
+        List<UUID> familyIds = validateAndDeduplicateFamilyIds(request.effectiveProgramFamilyIds());
 
         String examGoalSlug = normalizeExamGoalSlug(request.examGoalSlug());
         try {
-            return courseProgramCatalogRepository.insert(name, request.programFamilyId(), familyName, examGoalSlug);
+            UUID id = courseProgramCatalogRepository.insert(name, examGoalSlug);
+            courseProgramCatalogRepository.insertProgramFamilies(id, familyIds);
+            return courseProgramCatalogRepository.findById(id)
+                    .orElseThrow(CourseProgramCatalogWriteConflictException::new);
         } catch (DataIntegrityViolationException ignored) {
             CourseProgramCatalogItemResponse existing = courseProgramCatalogRepository.findByNormalizedName(normalizedName)
                     .orElse(null);
@@ -131,6 +127,13 @@ public class CourseProgramCatalogService {
             }
             throw new CourseProgramCatalogWriteConflictException();
         }
+    }
+
+    private List<UUID> validateAndDeduplicateFamilyIds(List<UUID> requestedIds) {
+        LinkedHashSet<UUID> familyIds = new LinkedHashSet<>(requestedIds == null ? List.of() : requestedIds);
+        familyIds.forEach(id -> courseProgramCatalogRepository.findProgramFamilyName(id)
+                .orElseThrow(UnknownProgramFamilyException::new));
+        return List.copyOf(familyIds);
     }
 
     private String normalizeName(String name) {
