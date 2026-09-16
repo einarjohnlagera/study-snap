@@ -68,7 +68,14 @@ query cache today and this release adds none.
 
 ### Shipped
 
-_(nothing yet)_
+- **Program Family membership is many-to-many end to end.** `V146` adds and relationship-validates the
+  canonical `course_program_family` join while retaining the legacy scalar FK as an unread compatibility
+  artifact. Catalog create and Admin Edit now write complete membership sets atomically; catalog responses
+  expose ordered `programFamilies` while retaining deprecated scalar aliases. The Note-authoring Add
+  Course/Program modal reads the canonical families endpoint lazily, so empty families are selectable on
+  Single Note and Bulk Note surfaces, while expansion chips still appear only for families with members.
+  The Admin catalog now displays zero/one/many family chips and provides the working Edit UI path that
+  `v0.149.0` had overclaimed.
 
 ## v0.149.0 - Precision Before Coverage
 
@@ -680,4 +687,3 @@ save rather than erroring. Run `scripts/check-deploys.sh` after the release PR m
 - **§A9 test item 10** (a multi-program-guard test naming the new value specifically) — not added;
   `assertGenerationReady` is value-agnostic, so it could not fail differently from existing
   coverage. See the Planned Scope note above.
-

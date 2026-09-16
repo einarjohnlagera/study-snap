@@ -57,7 +57,7 @@ public class CourseProgramCatalogController {
             @RequestBody UpdateCourseProgramCatalogRequest request
     ) {
         UUID programId = UuidParsingUtils.parseUuidOrThrow(id, CourseProgramNotFoundException::new);
-        return courseProgramCatalogService.updateProgramFamily(programId, request);
+        return courseProgramCatalogService.updateProgramFamilies(programId, request);
     }
 
     // ⚠️ A families READ is required, not optional: a newly created family has no members yet, and the

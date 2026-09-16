@@ -8,12 +8,14 @@ import {
   ApiRequestError,
   createCourseProgram,
   findSimilarCoursePrograms,
+  listProgramFamilies,
   type CourseProgramCatalogItem,
+  type ProgramFamily,
 } from "@/lib/api";
 
 type ApplicableProgramsComboboxProps = {
   id: string;
-  catalog: CourseProgramCatalogItem[];
+  catalog: CatalogProgram[];
   selectedIds: string[];
   onChange: (selectedIds: string[]) => void;
   loading?: boolean;
@@ -28,6 +30,12 @@ type ApplicableProgramsComboboxProps = {
    */
   profileCourseProgram?: string | null;
   onCatalogProgramCreated?: (program: CourseProgramCatalogItem) => void;
+};
+
+// The API parser always supplies programFamilies. Keeping the scalar fallback at this component seam
+// lets an independently deployed old backend remain usable during the rollout window.
+type CatalogProgram = Omit<CourseProgramCatalogItem, "programFamilies"> & {
+  programFamilies?: CourseProgramCatalogItem["programFamilies"];
 };
 
 type AvailableProgramFamily = {
@@ -66,11 +74,13 @@ export function ApplicableProgramsCombobox({
     const inCatalog = catalog.some((item) => item.name.trim().toLowerCase() === trimmed.toLowerCase());
     return inCatalog ? null : trimmed;
   }, [catalog, profileCourseProgram]);
-  const [programFamilyId, setProgramFamilyId] = useState("");
+  const [programFamilyIds, setProgramFamilyIds] = useState<string[]>([]);
+  const [programFamilies, setProgramFamilies] = useState<ProgramFamily[] | null>(null);
+  const [programFamiliesError, setProgramFamiliesError] = useState(false);
   const [examGoalSlug, setExamGoalSlug] = useState("");
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
-  const [duplicateExisting, setDuplicateExisting] = useState<CourseProgramCatalogItem | null>(null);
+  const [duplicateExisting, setDuplicateExisting] = useState<CatalogProgram | null>(null);
   const mergedCatalog = useMemo(() => {
     const existingIds = new Set(catalog.map((program) => program.id));
     return [...catalog, ...createdPrograms.filter((program) => !existingIds.has(program.id))];
@@ -90,18 +100,23 @@ export function ApplicableProgramsCombobox({
     const families = new Map<string, Omit<AvailableProgramFamily, "unselectedCount">>();
 
     mergedCatalog.forEach((program) => {
-      if (!program.programFamilyId || !program.programFamilyName || program.isActive === false) {
-        return;
-      }
-      const family = families.get(program.programFamilyId);
-      if (family) {
-        family.memberIds.push(program.id);
-        return;
-      }
-      families.set(program.programFamilyId, {
-        id: program.programFamilyId,
-        name: program.programFamilyName,
-        memberIds: [program.id],
+      if (program.isActive === false) return;
+      const memberships = program.programFamilies ?? (
+        program.programFamilyId && program.programFamilyName
+          ? [{ id: program.programFamilyId, name: program.programFamilyName }]
+          : []
+      );
+      memberships.forEach((membership) => {
+        const family = families.get(membership.id);
+        if (family) {
+          family.memberIds.push(program.id);
+          return;
+        }
+        families.set(membership.id, {
+          id: membership.id,
+          name: membership.name,
+          memberIds: [program.id],
+        });
       });
     });
 
@@ -116,17 +131,6 @@ export function ApplicableProgramsCombobox({
   const exactCatalogMatch = mergedCatalog.find(
     (program) => program.name.trim().replaceAll(/\s+/g, " ").toLowerCase() === normalizedDraft,
   );
-  const programFamilies = useMemo(() => {
-    const families = new Map<string, string>();
-    mergedCatalog.forEach((program) => {
-      if (program.programFamilyId && program.programFamilyName) {
-        families.set(program.programFamilyId, program.programFamilyName);
-      }
-    });
-    return Array.from(families, ([familyId, familyName]) => ({ id: familyId, name: familyName }))
-      .sort((left, right) => left.name.localeCompare(right.name));
-  }, [mergedCatalog]);
-
   useEffect(() => {
     if (!canCreateCatalogProgram || normalizedDraft.length === 0 || exactCatalogMatch) {
       setNearMatches([]);
@@ -163,7 +167,7 @@ export function ApplicableProgramsCombobox({
     setSelectionDraft("");
   };
 
-  const selectProgram = (program: CourseProgramCatalogItem) => {
+  const selectProgram = (program: CatalogProgram) => {
     if (!selectedIdSet.has(program.id) && program.isActive !== false) {
       onChange([...selectedIds, program.id]);
     }
@@ -180,13 +184,13 @@ export function ApplicableProgramsCombobox({
     try {
       const createdProgram = await createCourseProgram({
         name: selectionDraft,
-        programFamilyId: programFamilyId || null,
+        programFamilyIds,
         examGoalSlug: examGoalSlug ? examGoalSlug as "ale" | "pnle" | "let" | "cpale" : null,
       });
       setCreatedPrograms((current) => [...current, createdProgram]);
       onCatalogProgramCreated?.(createdProgram);
       selectProgram(createdProgram);
-      setProgramFamilyId("");
+      setProgramFamilyIds([]);
       setExamGoalSlug("");
     } catch (creationError) {
       if (creationError instanceof ApiRequestError
@@ -263,6 +267,16 @@ export function ApplicableProgramsCombobox({
             <Button type="button" size="sm" variant="outline" onClick={() => {
               setCreateError(null);
               setCreateModalOpen(true);
+              if (programFamilies === null) {
+                setProgramFamiliesError(false);
+                setProgramFamilies([]);
+                void listProgramFamilies()
+                  .then(setProgramFamilies)
+                  .catch(() => {
+                    setProgramFamilies([]);
+                    setProgramFamiliesError(true);
+                  });
+              }
             }}>
               {`Add “${selectionDraft.trim()}” to the catalog`}
             </Button>
@@ -364,18 +378,28 @@ export function ApplicableProgramsCombobox({
       >
         <div className="space-y-4">
           <div className="space-y-2">
-            <label htmlFor={`${id}-new-program-family`} className="text-sm font-medium text-foreground">Program Family (optional)</label>
+            <label htmlFor={`${id}-new-program-family`} className="text-sm font-medium text-foreground">Program Families (optional)</label>
             <select
               id={`${id}-new-program-family`}
-              value={programFamilyId}
-              onChange={(event) => setProgramFamilyId(event.target.value)}
+              multiple
+              value={programFamilyIds}
+              onChange={(event) => setProgramFamilyIds(Array.from(event.target.selectedOptions, (option) => option.value))}
               disabled={creating}
-              className="h-11 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground"
+              className="min-h-24 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground"
             >
-              <option value="">No family</option>
-              {programFamilies.map((family) => <option key={family.id} value={family.id}>{family.name}</option>)}
+              {(programFamilies ?? []).map((family) => <option key={family.id} value={family.id}>{family.name}</option>)}
             </select>
-            <p className="text-xs text-foreground/60">Family membership makes this program part of that family’s authoring expansion.</p>
+            <div className="flex flex-wrap gap-2" aria-label="Selected Program Families">
+              {(programFamilies ?? []).filter((family) => programFamilyIds.includes(family.id)).map((family) => (
+                <span key={family.id} className="inline-flex items-center gap-1 rounded-full border border-border bg-background px-2.5 py-1 text-xs text-foreground/80">
+                  {family.name}
+                  <button type="button" aria-label={`Remove ${family.name}`} disabled={creating}
+                    onClick={() => setProgramFamilyIds((current) => current.filter((familyId) => familyId !== family.id))}>×</button>
+                </span>
+              ))}
+            </div>
+            {programFamiliesError ? <p className="text-xs text-foreground/60">Program Families could not be loaded.</p> : null}
+            <p className="text-xs text-foreground/60">Group this program with related programs for faster selection when curating notes.</p>
           </div>
           <div className="space-y-2">
             <label htmlFor={`${id}-new-program-exam-goal`} className="text-sm font-medium text-foreground">Exam goal (optional)</label>

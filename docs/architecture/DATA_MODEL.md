@@ -90,7 +90,8 @@ Course / Program storage rule:
 Program catalog fields:
 
 - `program_families`: `id`, unique `name`, `created_at`.
-- `course_programs`: `id`, unique `name`, nullable `program_family_id`, nullable `exam_goal_slug`, `created_at`.
+- `course_programs`: `id`, unique `name`, nullable legacy `program_family_id`, nullable `exam_goal_slug`, `created_at`. The legacy family FK is retained for rollback compatibility but application code no longer reads or writes it.
+- `course_program_family` (`V146`): `id`, `course_program_id`, `program_family_id`, `created_at`. Unique on `(course_program_id, program_family_id)` with cascading FKs and indexes on both FK columns. This join is the canonical zero-or-more Program Family membership source.
 - `note_course_program` (`V107`): `id`, `note_id`, `course_program_id`, `created_at`. Unique on `(note_id, course_program_id)`; FK to `notes` is `ON DELETE CASCADE`, FK to `course_programs` is not. Indexed on both FK columns.
 - **`V107`'s 1:1 backfill inserted one row per note whose string matched the catalog exactly** (plus the `Bsed` -> `Education` alias) — for *every* note, learner-authored included. **`V108` deletes the learner-authored subset**, because a learner's personal free-text program must not be mechanically materialized into a catalog Applicable Program row: doing so silently turns a private label into a discovery fact the learner never asserted and cannot edit. `V108`'s predicate is the exact inverse of `V107`'s insert, restricted to non-curator owners. **Do not "restore" those rows.**
 - **Read semantics are join-first with a legacy-string fallback**: `EXISTS(join rows) OR (no join rows AND legacy string matches)`. Identical to pre-`v0.71.0` behavior at one row per note, and correct once a note carries several. `notes.course_program` therefore stays load-bearing on read paths; retiring the fallback is a separate, unscheduled decision.

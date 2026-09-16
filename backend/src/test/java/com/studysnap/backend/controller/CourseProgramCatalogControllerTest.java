@@ -79,11 +79,11 @@ class CourseProgramCatalogControllerTest {
                 "Health Sciences",
                 true
         );
-        when(service.updateProgramFamily(any(), any())).thenReturn(updated);
+        when(service.updateProgramFamilies(any(), any())).thenReturn(updated);
 
         mockMvc().perform(patch("/course-program-catalog/{id}", programId)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"programFamilyId\":\"" + familyId + "\"}"))
+                        .content("{\"programFamilyIds\":[\"" + familyId + "\"]}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(programId.toString()))
                 .andExpect(jsonPath("$.name").value("Nursing"))
@@ -91,26 +91,43 @@ class CourseProgramCatalogControllerTest {
                 .andExpect(jsonPath("$.programFamilyName").value("Health Sciences"))
                 .andExpect(jsonPath("$.isActive").value(true));
 
-        verify(service).updateProgramFamily(
+        verify(service).updateProgramFamilies(
                 programId,
-                new UpdateCourseProgramCatalogRequest(familyId)
+                new UpdateCourseProgramCatalogRequest(List.of(familyId))
         );
+    }
+
+    @Test
+    void updateBindsAnEmptyListAsAuthoritativeClear() throws Exception {
+        UUID programId = UUID.randomUUID();
+        CourseProgramCatalogItemResponse updated = new CourseProgramCatalogItemResponse(
+                programId, "Nursing", null, null, true);
+        when(service.updateProgramFamilies(any(), any())).thenReturn(updated);
+
+        mockMvc().perform(patch("/course-program-catalog/{id}", programId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"programFamilyIds\":[]}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.programFamilies").isEmpty())
+                .andExpect(jsonPath("$.programFamilyId").doesNotExist());
+
+        verify(service).updateProgramFamilies(programId, new UpdateCourseProgramCatalogRequest(List.of()));
     }
 
     @Test
     void updateMapsMalformedAndMissingProgramsToTheSameNotFoundResponse() throws Exception {
         UUID missingProgramId = UUID.randomUUID();
-        when(service.updateProgramFamily(org.mockito.ArgumentMatchers.eq(missingProgramId), any()))
+        when(service.updateProgramFamilies(org.mockito.ArgumentMatchers.eq(missingProgramId), any()))
                 .thenThrow(new CourseProgramNotFoundException());
 
         mockMvc().perform(patch("/course-program-catalog/not-a-uuid")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"programFamilyId\":null}"))
+                        .content("{\"programFamilyIds\":[]}"))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.error.code").value("COURSE_PROGRAM_NOT_FOUND"));
         mockMvc().perform(patch("/course-program-catalog/{id}", missingProgramId)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"programFamilyId\":null}"))
+                        .content("{\"programFamilyIds\":[]}"))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.error.code").value("COURSE_PROGRAM_NOT_FOUND"));
     }
@@ -118,12 +135,12 @@ class CourseProgramCatalogControllerTest {
     @Test
     void updateMapsAnUnknownFamilyToBadRequest() throws Exception {
         UUID programId = UUID.randomUUID();
-        when(service.updateProgramFamily(org.mockito.ArgumentMatchers.eq(programId), any()))
+        when(service.updateProgramFamilies(org.mockito.ArgumentMatchers.eq(programId), any()))
                 .thenThrow(new UnknownProgramFamilyException());
 
         mockMvc().perform(patch("/course-program-catalog/{id}", programId)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"programFamilyId\":\"" + UUID.randomUUID() + "\"}"))
+                        .content("{\"programFamilyIds\":[\"" + UUID.randomUUID() + "\"]}"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.error.code").value("UNKNOWN_PROGRAM_FAMILY"));
     }
@@ -134,10 +151,10 @@ class CourseProgramCatalogControllerTest {
 
         securedMockMvc(user).perform(patch("/course-program-catalog/{id}", UUID.randomUUID())
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"programFamilyId\":null}"))
+                        .content("{\"programFamilyIds\":[]}"))
                 .andExpect(status().isForbidden());
 
-        verify(service, never()).updateProgramFamily(any(), any());
+        verify(service, never()).updateProgramFamilies(any(), any());
     }
 
     @Test
