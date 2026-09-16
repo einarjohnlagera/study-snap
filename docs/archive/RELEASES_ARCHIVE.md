@@ -1,6 +1,6 @@
 # RELEASES_ARCHIVE.md — NoteLib
 
-Archived sections of `RELEASES.md`. **Contents are NOT one contiguous range:** `v0.41.0`–`v0.120.0`, plus `v0.126.0` (moved at the `v0.132.0` kickoff), `v0.127.0` (moved at the `v0.133.0` kickoff) `v0.128.0` (moved at the `v0.134.0` kickoff) `v0.129.0` (moved at the `v0.135.0` kickoff) `v0.130.0` (moved at the `v0.136.0` kickoff) `v0.131.0` (moved at the `v0.137.0` kickoff) `v0.132.0` (moved at the `v0.138.0` kickoff) `v0.133.0` (moved at the `v0.139.0` kickoff), `v0.134.0` (moved at the `v0.140.0` kickoff), `v0.135.0` (moved at the `v0.141.0` kickoff), `v0.136.0` (moved at the `v0.142.0` kickoff), `v0.137.0` (moved at the `v0.143.0` kickoff), `v0.138.0` (moved at the `v0.144.0` kickoff), `v0.139.0` (moved at the `v0.145.0` kickoff), `v0.140.0` (moved at the `v0.146.0` kickoff), `v0.141.0` (moved at the `v0.147.0` kickoff), `v0.142.0` (moved at the `v0.148.0` kickoff), `v0.143.0` (moved at the `v0.149.0` kickoff), `v0.144.0` (moved at the `v0.150.0` kickoff) and `v0.145.0` (moved at the `v0.151.0` kickoff) as the live file crossed its *current + last five* cap. Each version's own `## vX.Y.Z` heading is the index — search for it. `v0.40.1` and earlier moved here
+Archived sections of `RELEASES.md`. **Contents are NOT one contiguous range:** `v0.41.0`–`v0.120.0`, plus `v0.126.0` (moved at the `v0.132.0` kickoff), `v0.127.0` (moved at the `v0.133.0` kickoff) `v0.128.0` (moved at the `v0.134.0` kickoff) `v0.129.0` (moved at the `v0.135.0` kickoff) `v0.130.0` (moved at the `v0.136.0` kickoff) `v0.131.0` (moved at the `v0.137.0` kickoff) `v0.132.0` (moved at the `v0.138.0` kickoff) `v0.133.0` (moved at the `v0.139.0` kickoff), `v0.134.0` (moved at the `v0.140.0` kickoff), `v0.135.0` (moved at the `v0.141.0` kickoff), `v0.136.0` (moved at the `v0.142.0` kickoff), `v0.137.0` (moved at the `v0.143.0` kickoff), `v0.138.0` (moved at the `v0.144.0` kickoff), `v0.139.0` (moved at the `v0.145.0` kickoff), `v0.140.0` (moved at the `v0.146.0` kickoff), `v0.141.0` (moved at the `v0.147.0` kickoff), `v0.142.0` (moved at the `v0.148.0` kickoff), `v0.143.0` (moved at the `v0.149.0` kickoff), `v0.144.0` (moved at the `v0.150.0` kickoff), `v0.145.0` (moved at the `v0.151.0` kickoff) and `v0.146.0` (moved at the `v0.152.0` kickoff) as the live file crossed its *current + last five* cap. Each version's own `## vX.Y.Z` heading is the index — search for it. `v0.40.1` and earlier moved here
 2026-07-10; **`v0.41.0` through `v0.120.0` moved here 2026-09-07** in the `v0.126.0` pass, which
 resumed this convention after it had lapsed for 85 releases — `RELEASES.md` had reached 116
 sections against its documented design of *current + last few versions*. Both passes are MOVES,
@@ -19161,3 +19161,84 @@ save rather than erroring. Run `scripts/check-deploys.sh` after the release PR m
 - **§A9 test item 10** (a multi-program-guard test naming the new value specifically) — not added;
   `assertGenerationReady` is value-agnostic, so it could not fail differently from existing
   coverage. See the Planned Scope note above.
+
+## v0.146.0 - Knowledge, Not Lost
+
+**Status: Released** (kicked off 2026-09-14, signed off 2026-09-14, base branch `releases/v0.146.0`,
+cut from `main` after `v0.145.0` merged as #1388 and tagged — Vercel and Render both confirmed live on
+`1be308b7`. PR #1389 (implementation) and PR #1390 (pre-signoff findings) merged into the release branch.)
+
+Theme: an intact Study Pack stays usable for every learning action even when the note's most recent
+generation attempt is still running or has failed — fixing the only generation-failure pattern that has
+ever occurred in production (7 of 7 historical failures were regenerations on notes that already had a
+complete, valid Study Pack).
+
+**Production facts, re-verified read-only at kickoff, 2026-09-14 (not carried over from the Stage 2
+plan's 2026-09-13 read):** all 7 historical `generation_failed_at IS NOT NULL` notes are `GENERATED` with
+a `DONE` pack today — fully recovered, so the defect has 7/7 historical occurrences but zero current live
+instance. Zero `study_packs` rows have an empty/null `quiz` (the Quick Review guard, D1/D5, is a latent
+fix). Zero notes are currently `GENERATING` (the stranded-generation recovery endpoint, §I, currently
+serves a population of zero). None of this changes the design — all three gaps are real and worth closing
+— but the release note is honest that it is closing gaps with no current live instance, not an active
+incident.
+
+### Planned Scope
+
+- **Artifact-first learning availability (backend + frontend).** Derives `studyPackDone` (and, on
+  `NoteCollectionItemResponse`, `hasKeyConcepts`) from the Study Pack's own `quiz`/`keyConcepts`/`status`
+  fields via a new `StudyPackArtifactFacts` utility, and repoints every
+  learning-action gate (Quick Review, Challenge Quiz, Adaptive Practice, Flashcards, Memorization,
+  Long/Board Exam eligibility, Review Set premium-exam launch, public note pages) at that fact instead of
+  Note lifecycle (`NoteStatus`/the `studyPackStatus` string). Fixes the live defect where a `FAILED` or
+  `GENERATING` note hides an intact, complete Study Pack across nearly every surface. Reconciles the
+  frontend's Long/Board Exam entry gates with the backend's already-correct `StudyPackStatus.DONE` rule.
+  Adds a missing Quick Review backend guard (empty-quiz packs can no longer start a 0-question session).
+  Gives the Flashcards/Memorization guard components a real recovery action instead of dead-end copy. Adds
+  a narrow, owner-callable manual recovery endpoint for notes stranded indefinitely in `GENERATING` with no
+  `generation_enqueued_at` timestamp (the sweeper itself is not redesigned).
+  Source: `docs/claude-plans/note-visibility-learning-status-stage1.md` (Stage 1 audit) +
+  `docs/claude-plans/artifact-first-learning-availability-stage2.md` (Stage 2 implementation plan, final
+  decision block approved by the owner at this kickoff). Both untracked on disk, indexed in `ROADMAP.md`'s
+  Backlog Index.
+
+Anti-drift: no database migration, no new persisted state (every fact is derived at response-build time
+from data already stored) — every new/changed DTO field is additive. No change to `PRIVATE`/`PUBLIC`
+visibility, no new Library filter, no sixth exam mode, no `ConceptHealth`/mastery/readiness semantics
+change, no quota/pricing change, no automatic generation or regeneration, no Cross-Note Review design, and
+no re-opening of `v0.143.0`'s exam-pool invalidation work or its two adjacent seams
+(`deactivateShareLinksForNote`, Challenge Quiz question bank). Backend entitlement enforcement
+(`FeatureGateService`) is untouched everywhere. Deploy ordering: backend first (additive DTO fields), then
+frontend (which makes `studyPackDone` load-bearing for the Long Exam entry gate and the Review Set
+premium-exam predicate) — do not deploy frontend before backend this release.
+
+### Shipped
+
+- **Learning actions now follow the Study Pack artifacts they consume.** Quick Review, Challenge Quiz,
+  Adaptive Practice, Flashcards, Memorization, Long/Board Exam entry, Review Set premium-exam launch,
+  collection planning, and public note rendering no longer hide an intact pack merely because its Note is
+  `GENERATING` or `FAILED`. Lifecycle status remains visible for retry and progress messaging.
+- **Artifact facts are additive and derived at response time.** `StudyPackArtifactFacts` owns quiz,
+  key-concept, and `StudyPackStatus.DONE` checks; note, collection-item, list-item, and public-detail DTOs
+  now expose the precise facts their clients need. The private Library's ready predicate now matches the
+  backend exam-source rule by checking for a `DONE` Study Pack.
+- **Empty Quick Reviews fail before persistence.** Starting Quick Review with no quiz questions returns
+  `400 QUICK_REVIEW_NOT_AVAILABLE`; resuming an existing in-progress session remains allowed.
+- **Stranded first-generation work has an owner-only recovery path.**
+  `POST /notes/{id}/recover-stranded-generation` reuses the configured note generation bound and the
+  existing failure transition, performs no generation or quota charge, and returns
+  `409 GENERATION_RECOVERY_NOT_ELIGIBLE` for early, repeated, or otherwise ineligible calls. Note Detail
+  exposes the action after the bound and refetches the recovered note so its Retry action is reachable.
+- **Flashcards and Memorization have working Generate/Retry actions.** Their guards call the existing
+  generation API and refetch the Note; existing key concepts remain usable during and after a failed
+  regeneration.
+- **Pre-signoff falsification review (cold agent, no inherited context), PR #1390.** Confirmed
+  `studyPackDone` derivation, per-mode entry-gate correctness, and deploy-ordering fail-safety across the
+  merged diff. Found and fixed two gaps the implementing session's own pre-commit audit missed: a stale
+  `docs/features/collections.md` claim describing a `hasQuizQuestions` field that was added by Codex then
+  correctly reverted before commit (it would have widened a shared "lean projection" used by
+  Dashboard/Progress/Adaptive Practice to pull the full `quiz` JSONB column, violating an existing
+  performance guard test, and had zero real consumers) but never removed from the doc; and a missing
+  regression test for this release's own headline Library scenario — a `FAILED` note whose prior Study
+  Pack is still `DONE` now has a dedicated case in `NoteServiceLibraryPaginationIntegrationTest`.
+
+---

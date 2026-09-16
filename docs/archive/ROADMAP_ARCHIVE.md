@@ -15,6 +15,38 @@ changelog layer. `ROADMAP.md` keeps a one-line-per-version index at each origina
 
 ---
 
+**Kicked off 2026-09-14, signed off 2026-09-14.** `v0.146.0 — Knowledge, Not Lost` is **Released** —
+its one planned item shipped as scoped, PR #1389 (implementation) and PR #1390 (pre-signoff findings),
+both merged into `releases/v0.146.0`. Scope: artifact-first
+learning availability — an intact Study Pack stays usable for every learning action (Quick Review,
+Challenge Quiz, Adaptive Practice, Flashcards, Memorization, Long/Board Exam eligibility, Review Set
+premium-exam launch, public note pages) even while the note's most recent generation attempt is still
+running or has failed, fixing the only generation-failure pattern that has ever occurred in production
+(7 of 7 historical failures were regenerations on notes that already had a complete, valid Study Pack).
+**Re-verified read-only at this kickoff, 2026-09-14** (the Stage 2 plan's own read was 2026-09-13): all 7
+are `GENERATED`/`DONE` today (fully recovered, zero current live instance of the defect); zero
+`study_packs` rows have an empty `quiz` (Quick Review guard is a latent fix); zero notes are currently
+`GENERATING` (the stranded-generation recovery endpoint currently serves a population of zero). Design
+unchanged by any of this — see `RELEASES.md` for the full framing.
+Source: `docs/claude-plans/note-visibility-learning-status-stage1.md` (Stage 1 audit, 2026-09-13) and
+`docs/claude-plans/artifact-first-learning-availability-stage2.md` (Stage 2 implementation plan,
+2026-09-13, final decision block approved by the owner at this kickoff — both untracked on disk,
+indexed above in the Backlog Index rather than committed). New additive fact `studyPackDone` (plus
+`hasKeyConcepts` on `NoteCollectionItemResponse` only — a `hasQuizQuestions` field on the same DTO was
+implemented then reverted before commit, see `RELEASES.md`) derived from the Study Pack's
+own `quiz`/`keyConcepts`/`status` fields, never from Note lifecycle. No database migration, no new
+persisted state. **Routing: Codex** — implemented via a Long-mode prompt, audited before commit (a SQL
+syntax bug, a performance-guard violation, and a UX regression found and fixed pre-merge).
+**Verification tier: one scoped cold agent, falsification-framed, run post-merge as a pre-signoff
+gate** — confirmed `studyPackDone` derivation, per-mode entry-gate correctness, and deploy-ordering
+fail-safety; also caught a stale doc and a missing regression test, both fixed in PR #1390.
+**Deploy ordering: backend first** (additive DTOs), **frontend second** (makes `studyPackDone`
+load-bearing for the Long Exam entry gate and the Review Set premium-exam predicate) — both platforms
+deploy from the same merge to `main`, so this is a fail-safe property of the diff (an old frontend
+against a new backend degrades gracefully; the reverse does not) rather than a manually-sequenced
+rollout. Full scope in `RELEASES.md`.
+
+
 **Kicked off 2026-09-11, signed off 2026-09-12.** `v0.143.0 — No Way Out` is **Released** — both
 planned items shipped as scoped, PRs #1381 and #1382, merged into `releases/v0.143.0` at
 `f715dada`/`77b6c226`. (1) `long-exam/page.tsx`'s `useExamFocusMode` now reads
