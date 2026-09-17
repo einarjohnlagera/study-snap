@@ -1,5 +1,96 @@
 # RELEASES.md - NoteLib
 
+## v0.152.0 - The Missing Half of v0.150.0
+
+**Status: Released** (signed off 2026-09-17)
+
+Theme: give the many-to-many Program Family architecture (v0.150.0) the curator UX it needed to
+actually get finished — family-first Admin management, one canonical catalog-create modal, and an
+additive backfill of the approved initial membership matrix.
+
+Source: `docs/claude-plans/program-family-catalog-management-ux-overhaul-plan.md` (FINAL, owner-approved,
+subagent audit + owner-tightening pass; untracked on disk, indexed in `ROADMAP.md`'s Backlog Index at
+this kickoff) and its companion Codex prompt `docs/codex-prompts/v0.152.0-program-family-catalog-management.md`
+(Long mode, Slices 1-3 only). **Why now, from production data, not a redesign impulse:** Engineering
+(18/18) and Education (8/8) were fully populated the day `v0.150.0` shipped; three weeks and one release
+later, Health Sciences and Computing & Technology are still at zero members, Accounting 2/5, Built
+Environment & Design 1/8. The many-to-many data model did not fail — the one-program-at-a-time admin
+workflow (open a program, pick its one family from a `<select multiple>`, repeat) made finishing the
+backfill through it tedious enough that it didn't get finished. This release is the missing curator UX,
+not a data-model change.
+
+### Planned Scope
+
+- **Slice 1 — Backend catalog contracts + data (backend).** `POST /course-program-catalog/families`
+  gains optional `programIds` (atomic create-with-members, mirroring the existing program-side
+  `create()` shape); new `PATCH /course-program-catalog/families/{id}` (rename + family-side membership
+  replace, one transaction); the family duplicate-name predicate is weakened relative to the program
+  one (`lower(trim(name))` vs. `regexp_replace`-whitespace-collapsing) and gets aligned; rename adds
+  `id <> ?` self-exclusion so renaming a family to a case/whitespace variant of its own name doesn't
+  reject itself as a conflict with itself. New migration `V147__program_family_initial_membership.sql`
+  — purely additive, exact-name inner joins over a locked 50-pair matrix, `ON CONFLICT DO NOTHING`, no
+  `RAISE`, no fuzzy matching, does **not** write the vestigial `course_programs.program_family_id`.
+  Production: 29 existing pairs untouched, 21 new rows inserted (Health Sciences 5, Accounting 3,
+  Computing & Technology 6, Built Environment & Design 7), `course_program_family` goes 29→50.
+- **Slice 2 — Shared catalog selection + creation UX (frontend).** New `CatalogMultiSelect`
+  (`components/ui/catalog-multi-select.tsx`) — a searchable, client-side-filtered checkbox picker with
+  a `selectedSummary: "count" | "chips"` density prop, replacing both remaining raw `<select multiple>`
+  instances in the codebase. New `CourseProgramCreateModal` extraction, mounted from both Admin and the
+  three authorized Note-authoring surfaces, collapsing today's two divergent create forms (Admin's
+  weaker single-family form vs. the note-authoring modal's already-multi-family one) into one component,
+  one contract, one validation path.
+- **Slice 3 — Family-first Admin IA (frontend).** `/admin/course-programs` gains a two-tab switch
+  (`?view=families|programs`, URL-reflected), Program Families as the default/primary tab (a table:
+  name, member count, Edit — zero-member families included, not `is_active`-filtered), Course / Programs
+  demoted to the inverse-convenience secondary tab. Removes the permanently-visible inline "New Program
+  Family" box and inline create grid in favor of header `+` buttons opening modals.
+- **Slice 4 — Verification + production acceptance + docs (Claude Code, not sent to Codex).** One
+  scoped cold agent, falsification-framed, on the shared catalog create/membership path (7 claims, see
+  below). Post-deploy production acceptance is an anti-join of the same 50-pair matrix against
+  `course_program_family` (expect 0 missing pairs) — the primary proof, not a family-count check, since
+  a count can be right for the wrong reason. `docs/features/program-families.md` rewritten to correct
+  its now-false "a family is created empty" and "membership is set on program creation or edited later
+  from the Admin catalog row" claims.
+
+Anti-drift, owner-locked: **no ADR-001 amendment** (its amended clause 2 is already storage-neutral and
+ratifies many-to-many; nothing here changes what expansion means, only who can edit membership from
+which side). **Program Family name is display data, Program Family ID is identity** — V147's exact-name
+matching is a scoped migration-only exception (runtime-generated UUIDs, no portable literal) and must
+not be copied into any application code. No family deletion, no program deletion, no `is_active` write
+path, no `Business & Finance` family, no general Popover/Command primitive — the new control is a
+catalog picker for small in-memory lists, not a platform layer. The legacy fused rows (`Nursing ·
+Medicine`, `Nursing · Pharmacy`) stay in the catalog, unassigned, not folded into Health Sciences.
+`course_programs.program_family_id` stays vestigial — not written, not dropped. No Program Family
+reaches a prompt, is persisted on a Note, or triggers a live update to existing Notes — that boundary is
+untouched by a management view, a rename, or a backfill.
+
+**Routing: Codex** (new endpoint + migration + service logic, multi-system frontend+backend, ~17
+must-change files — three independent task-routing triggers). Prompt already written (Long mode, Slices
+1-3 only; slice 4 is this session's own work after the diff returns). **Verification tier: one scoped
+cold agent, falsification-framed** — elected now rather than deferred to signoff, because all three
+implementation slices touch the shared catalog create/membership path (CLAUDE.md's "two or more PRs
+touched the same shared method" trigger). Seven claims to disprove: (1) family-side replace cannot evict
+a program from another family; (2) rename preserves id, every membership, and every note's
+applicability; (3) V147 is additive, idempotent, and cannot fail a fresh-database Flyway run; (4) V147
+does not write `course_programs.program_family_id`; (5) no ordinary user can create a shared catalog
+entry through any path; (6) creating a program with two families adds only that program to the note;
+(7) the new multi-select's checkbox `checked` state is real, not `AddNotesModal`'s list-membership hack.
+Full scope, all owner-tightened decisions, and the production membership audit are in the plan file.
+
+### Shipped
+
+- **Backend catalog contracts and initial membership data.** Program Families can be created with initial members and renamed or full-set edited by UUID through an ADMIN-only endpoint. Family-name duplicate matching now collapses internal whitespace and excludes the renamed row itself. `V147` additively declares the locked 50-pair matrix with exact-name joins and `ON CONFLICT DO NOTHING`; it neither deletes memberships nor writes the vestigial scalar family column.
+- **One shared catalog selection and program-creation flow.** `CatalogMultiSelect` replaces both raw multi-selects with searchable native-checkbox editing in count and chip modes. `CourseProgramCreateModal` now serves Admin and authorized Note-authoring surfaces, supports several families, preserves Exam Goal behavior, and selects only the newly created program on the current Note.
+- **Family-first Admin catalog management.** `/admin/course-programs` now opens on a URL-reflected Program Families tab for counts, create, rename, and family-side membership replacement. The retained Course / Programs tab provides the inverse per-program workflow and opens `+ New program` in the shared modal.
+- **Cold agent falsification pass: all seven pre-declared claims CONFIRMED.** Five of the seven are backed by real-database (Testcontainers PostgreSQL) or real-HTTP-request (MockMvc with a live `@PreAuthorize` interceptor) tests, not mocked assertions. The pass surfaced one previously-unflagged, out-of-scope-of-the-seven-claims defect: the Admin rename modal always re-sent the family's full membership set even when only the name changed, using a stale snapshot that could silently overwrite a concurrent admin's membership edit on the same family (never crossed family boundaries, never touched note applicability, never corrupted data — a lost-update window, not a correctness break). Fixed in the same release rather than carried as a Known limitation, since the feature had not yet deployed: `AdminProgramFamiliesSection`'s save path now omits `programIds` entirely unless the picker was actually touched (`draft.membershipDirty`), so an ordinary rename is a true no-op on membership. Two tests added distinguishing the rename-only and rename-plus-membership-edit cases.
+- **Feature-doc sweep, signoff gate.** Corrected two `docs/features/notes.md` claims stale since `v0.150.0`'s many-to-many migration (family expansion described as reading the vestigial scalar `program_family_id` column instead of the `programFamilies` join; catalog creation described as single-family-only instead of the list `CreateCourseProgramRequest.programFamilyIds` has supported since before this release). `docs/features/program-families.md`'s membership-replace description was missing half its own contract — added the omitted-vs-explicit-empty distinction the #1409 fix depends on.
+
+### Known limitations
+
+- **The production-acceptance anti-join (this release's own Slice 4 proof) has not run yet.** `V147` had not merged to `main` as of this signoff — it is only on `releases/v0.152.0` — so it has not executed against production. Run the anti-join once `main` deploys; expect 0 missing pairs. See the Backlog Index row in `ROADMAP.md` for the up-to-date insert-count estimate (production kept moving during implementation: 29 pairs at kickoff, 32 by signoff, via ordinary Admin-UI curator work — not a discrepancy, the migration is additive/idempotent regardless of which number is right when it finally runs).
+- **A rename that also edits membership still computes its full replacement set from an in-modal snapshot.** The #1409 fix closed the lost-update window for a rename-only save (which now omits `programIds` entirely), but an admin who *does* touch the membership picker still sends a full set read at modal-open time — a genuine concurrent edit during that window is still last-write-wins. Inherent to full-set replace; fixing it is optimistic concurrency, a different feature, not scoped here.
+- **`course_programs.is_active` still has no write path anywhere in the codebase.** Unchanged by this release, deliberately — see the "Course / Program catalog lifecycle management" Backlog Index row. This release's own Admin family/program editors already use the unfiltered catalog specifically so an eventual inactive row stays manageable, but nothing can set `is_active = false` today.
+
 ## v0.151.0 - No Backdoor Left, Round Two
 
 **Status: Released**
@@ -529,85 +620,3 @@ clear root cause), verification tier is one `advisor()` call.
   the same reset independent of the poll. `docs/features/bulk-regeneration.md` updated.
 
 ---
-
-## v0.146.0 - Knowledge, Not Lost
-
-**Status: Released** (kicked off 2026-09-14, signed off 2026-09-14, base branch `releases/v0.146.0`,
-cut from `main` after `v0.145.0` merged as #1388 and tagged — Vercel and Render both confirmed live on
-`1be308b7`. PR #1389 (implementation) and PR #1390 (pre-signoff findings) merged into the release branch.)
-
-Theme: an intact Study Pack stays usable for every learning action even when the note's most recent
-generation attempt is still running or has failed — fixing the only generation-failure pattern that has
-ever occurred in production (7 of 7 historical failures were regenerations on notes that already had a
-complete, valid Study Pack).
-
-**Production facts, re-verified read-only at kickoff, 2026-09-14 (not carried over from the Stage 2
-plan's 2026-09-13 read):** all 7 historical `generation_failed_at IS NOT NULL` notes are `GENERATED` with
-a `DONE` pack today — fully recovered, so the defect has 7/7 historical occurrences but zero current live
-instance. Zero `study_packs` rows have an empty/null `quiz` (the Quick Review guard, D1/D5, is a latent
-fix). Zero notes are currently `GENERATING` (the stranded-generation recovery endpoint, §I, currently
-serves a population of zero). None of this changes the design — all three gaps are real and worth closing
-— but the release note is honest that it is closing gaps with no current live instance, not an active
-incident.
-
-### Planned Scope
-
-- **Artifact-first learning availability (backend + frontend).** Derives `studyPackDone` (and, on
-  `NoteCollectionItemResponse`, `hasKeyConcepts`) from the Study Pack's own `quiz`/`keyConcepts`/`status`
-  fields via a new `StudyPackArtifactFacts` utility, and repoints every
-  learning-action gate (Quick Review, Challenge Quiz, Adaptive Practice, Flashcards, Memorization,
-  Long/Board Exam eligibility, Review Set premium-exam launch, public note pages) at that fact instead of
-  Note lifecycle (`NoteStatus`/the `studyPackStatus` string). Fixes the live defect where a `FAILED` or
-  `GENERATING` note hides an intact, complete Study Pack across nearly every surface. Reconciles the
-  frontend's Long/Board Exam entry gates with the backend's already-correct `StudyPackStatus.DONE` rule.
-  Adds a missing Quick Review backend guard (empty-quiz packs can no longer start a 0-question session).
-  Gives the Flashcards/Memorization guard components a real recovery action instead of dead-end copy. Adds
-  a narrow, owner-callable manual recovery endpoint for notes stranded indefinitely in `GENERATING` with no
-  `generation_enqueued_at` timestamp (the sweeper itself is not redesigned).
-  Source: `docs/claude-plans/note-visibility-learning-status-stage1.md` (Stage 1 audit) +
-  `docs/claude-plans/artifact-first-learning-availability-stage2.md` (Stage 2 implementation plan, final
-  decision block approved by the owner at this kickoff). Both untracked on disk, indexed in `ROADMAP.md`'s
-  Backlog Index.
-
-Anti-drift: no database migration, no new persisted state (every fact is derived at response-build time
-from data already stored) — every new/changed DTO field is additive. No change to `PRIVATE`/`PUBLIC`
-visibility, no new Library filter, no sixth exam mode, no `ConceptHealth`/mastery/readiness semantics
-change, no quota/pricing change, no automatic generation or regeneration, no Cross-Note Review design, and
-no re-opening of `v0.143.0`'s exam-pool invalidation work or its two adjacent seams
-(`deactivateShareLinksForNote`, Challenge Quiz question bank). Backend entitlement enforcement
-(`FeatureGateService`) is untouched everywhere. Deploy ordering: backend first (additive DTO fields), then
-frontend (which makes `studyPackDone` load-bearing for the Long Exam entry gate and the Review Set
-premium-exam predicate) — do not deploy frontend before backend this release.
-
-### Shipped
-
-- **Learning actions now follow the Study Pack artifacts they consume.** Quick Review, Challenge Quiz,
-  Adaptive Practice, Flashcards, Memorization, Long/Board Exam entry, Review Set premium-exam launch,
-  collection planning, and public note rendering no longer hide an intact pack merely because its Note is
-  `GENERATING` or `FAILED`. Lifecycle status remains visible for retry and progress messaging.
-- **Artifact facts are additive and derived at response time.** `StudyPackArtifactFacts` owns quiz,
-  key-concept, and `StudyPackStatus.DONE` checks; note, collection-item, list-item, and public-detail DTOs
-  now expose the precise facts their clients need. The private Library's ready predicate now matches the
-  backend exam-source rule by checking for a `DONE` Study Pack.
-- **Empty Quick Reviews fail before persistence.** Starting Quick Review with no quiz questions returns
-  `400 QUICK_REVIEW_NOT_AVAILABLE`; resuming an existing in-progress session remains allowed.
-- **Stranded first-generation work has an owner-only recovery path.**
-  `POST /notes/{id}/recover-stranded-generation` reuses the configured note generation bound and the
-  existing failure transition, performs no generation or quota charge, and returns
-  `409 GENERATION_RECOVERY_NOT_ELIGIBLE` for early, repeated, or otherwise ineligible calls. Note Detail
-  exposes the action after the bound and refetches the recovered note so its Retry action is reachable.
-- **Flashcards and Memorization have working Generate/Retry actions.** Their guards call the existing
-  generation API and refetch the Note; existing key concepts remain usable during and after a failed
-  regeneration.
-- **Pre-signoff falsification review (cold agent, no inherited context), PR #1390.** Confirmed
-  `studyPackDone` derivation, per-mode entry-gate correctness, and deploy-ordering fail-safety across the
-  merged diff. Found and fixed two gaps the implementing session's own pre-commit audit missed: a stale
-  `docs/features/collections.md` claim describing a `hasQuizQuestions` field that was added by Codex then
-  correctly reverted before commit (it would have widened a shared "lean projection" used by
-  Dashboard/Progress/Adaptive Practice to pull the full `quiz` JSONB column, violating an existing
-  performance guard test, and had zero real consumers) but never removed from the doc; and a missing
-  regression test for this release's own headline Library scenario — a `FAILED` note whose prior Study
-  Pack is still `DONE` now has a dedicated case in `NoteServiceLibraryPaginationIntegrationTest`.
-
----
-

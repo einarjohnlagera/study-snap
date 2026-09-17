@@ -5,6 +5,7 @@ import com.studysnap.backend.dto.CreateCourseProgramCatalogRequest;
 import com.studysnap.backend.dto.CreateProgramFamilyRequest;
 import com.studysnap.backend.dto.ProgramFamilyResponse;
 import com.studysnap.backend.dto.UpdateCourseProgramCatalogRequest;
+import com.studysnap.backend.dto.UpdateProgramFamilyRequest;
 import com.studysnap.backend.entity.UserRole;
 import com.studysnap.backend.exception.CourseProgramNotFoundException;
 import com.studysnap.backend.exception.GlobalExceptionHandler;
@@ -161,9 +162,12 @@ class CourseProgramCatalogControllerTest {
     void programFamilyEndpointsAreAdminOnly() throws NoSuchMethodException {
         Method create = CourseProgramCatalogController.class.getMethod("createProgramFamily", CreateProgramFamilyRequest.class);
         Method list = CourseProgramCatalogController.class.getMethod("listProgramFamilies");
+        Method update = CourseProgramCatalogController.class.getMethod(
+                "updateProgramFamily", String.class, UpdateProgramFamilyRequest.class);
 
         assertThat(create.getAnnotation(PreAuthorize.class).value()).isEqualTo("hasRole('ADMIN')");
         assertThat(list.getAnnotation(PreAuthorize.class).value()).isEqualTo("hasRole('ADMIN')");
+        assertThat(update.getAnnotation(PreAuthorize.class).value()).isEqualTo("hasRole('ADMIN')");
     }
 
     /**
@@ -189,6 +193,66 @@ class CourseProgramCatalogControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(familyId.toString()))
                 .andExpect(jsonPath("$.name").value("Health Sciences"));
+    }
+
+    @Test
+    void createProgramFamilyBindsInitialProgramIdsFromARealRequest() throws Exception {
+        UUID familyId = UUID.randomUUID();
+        UUID programId = UUID.randomUUID();
+        when(service.createProgramFamily(any())).thenReturn(new ProgramFamilyResponse(familyId, "Health Sciences"));
+
+        mockMvc().perform(post("/course-program-catalog/families")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"Health Sciences\",\"programIds\":[\"" + programId + "\"]}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(familyId.toString()));
+
+        verify(service).createProgramFamily(new CreateProgramFamilyRequest("Health Sciences", List.of(programId)));
+    }
+
+    @Test
+    void updateProgramFamilyBindsNameAndMembersFromARealRequest() throws Exception {
+        UUID familyId = UUID.randomUUID();
+        UUID programId = UUID.randomUUID();
+        when(service.updateProgramFamily(any(), any()))
+                .thenReturn(new ProgramFamilyResponse(familyId, "Built Environment"));
+
+        mockMvc().perform(patch("/course-program-catalog/families/{id}", familyId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"Built Environment\",\"programIds\":[\"" + programId + "\"]}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(familyId.toString()))
+                .andExpect(jsonPath("$.name").value("Built Environment"));
+
+        verify(service).updateProgramFamily(
+                familyId, new UpdateProgramFamilyRequest("Built Environment", List.of(programId)));
+    }
+
+    @Test
+    void updateProgramFamilyWithOmittedProgramIdsLeavesThemNull() throws Exception {
+        UUID familyId = UUID.randomUUID();
+        when(service.updateProgramFamily(any(), any()))
+                .thenReturn(new ProgramFamilyResponse(familyId, "Health sciences"));
+
+        mockMvc().perform(patch("/course-program-catalog/families/{id}", familyId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"Health sciences\"}"))
+                .andExpect(status().isOk());
+
+        verify(service).updateProgramFamily(
+                familyId, new UpdateProgramFamilyRequest("Health sciences", null));
+    }
+
+    @Test
+    void updateProgramFamilyRejectsARealNonAdminRequest() throws Exception {
+        AuthenticatedUser user = new AuthenticatedUser(UUID.randomUUID(), UserRole.USER, true, 1);
+
+        securedMockMvc(user).perform(patch("/course-program-catalog/families/{id}", UUID.randomUUID())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"Health Sciences\"}"))
+                .andExpect(status().isForbidden());
+
+        verify(service, never()).updateProgramFamily(any(), any());
     }
 
     /**

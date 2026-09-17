@@ -1,12 +1,16 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import AdminCourseProgramsPage from "./page";
 
 const routerMock = {
   replace: jest.fn(),
+  push: jest.fn(),
 };
+let currentSearch = "";
 
 jest.mock("next/navigation", () => ({
   useRouter: () => routerMock,
+  usePathname: () => "/admin/course-programs",
+  useSearchParams: () => new URLSearchParams(currentSearch),
 }));
 
 jest.mock("@/lib/route-guards", () => ({
@@ -15,6 +19,10 @@ jest.mock("@/lib/route-guards", () => ({
 
 jest.mock("@/components/admin/admin-course-program-catalog-section", () => ({
   AdminCourseProgramCatalogSection: () => <div>Course Program Catalog Section</div>,
+}));
+
+jest.mock("@/components/admin/admin-program-families-section", () => ({
+  AdminProgramFamiliesSection: () => <div>Program Families Section</div>,
 }));
 
 jest.mock("@/components/admin/admin-applicable-programs-section", () => ({
@@ -28,18 +36,31 @@ const { requireAdminUser } = jest.requireMock("@/lib/route-guards") as {
 describe("AdminCourseProgramsPage", () => {
   beforeEach(() => {
     routerMock.replace.mockReset();
+    routerMock.push.mockReset();
+    currentSearch = "";
     requireAdminUser.mockReset();
   });
 
-  it("renders both curation sections for an admin, with a route back to Admin", () => {
+  it("loads the Program Families view by default, with a route back to Admin", () => {
     requireAdminUser.mockReturnValue(true);
 
     render(<AdminCourseProgramsPage />);
 
-    expect(screen.getByRole("heading", { name: "Course / Programs" })).toBeInTheDocument();
-    expect(screen.getByText("Course Program Catalog Section")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Course / Program Catalog" })).toBeInTheDocument();
+    expect(screen.getByText("Program Families Section")).toBeInTheDocument();
+    expect(screen.queryByText("Course Program Catalog Section")).not.toBeInTheDocument();
     expect(screen.getByText("Note Applicable Programs Section")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "← Admin" })).toHaveAttribute("href", "/admin");
+  });
+
+  it("round-trips the programs view through the query parameter", () => {
+    currentSearch = "view=programs";
+    render(<AdminCourseProgramsPage />);
+
+    expect(screen.getByRole("tab", { name: "Course / Programs" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByText("Course Program Catalog Section")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("tab", { name: "Program Families" }));
+    expect(routerMock.push).toHaveBeenCalledWith("/admin/course-programs?view=families");
   });
 
   it("runs the admin guard on mount, which is what redirects a non-admin away", () => {

@@ -1,13 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { CourseProgramCombobox } from "@/components/metadata/course-program-combobox";
-import { AppModal } from "@/components/ui/app-modal";
+import { CourseProgramCreateModal } from "@/components/metadata/course-program-create-modal";
 import { Button } from "@/components/ui/button";
 import {
-  ApiRequestError,
-  createCourseProgram,
-  findSimilarCoursePrograms,
   listProgramFamilies,
   type CourseProgramCatalogItem,
   type ProgramFamily,
@@ -60,8 +57,6 @@ export function ApplicableProgramsCombobox({
 }: Readonly<ApplicableProgramsComboboxProps>) {
   const [selectionDraft, setSelectionDraft] = useState("");
   const [createdPrograms, setCreatedPrograms] = useState<CourseProgramCatalogItem[]>([]);
-  const [nearMatches, setNearMatches] = useState<CourseProgramCatalogItem[]>([]);
-  const [checkingNearMatches, setCheckingNearMatches] = useState(false);
   const [createModalOpen, setCreateModalOpen] = useState(false);
 
   // Only names the programme when it is genuinely absent from the catalog. A profile programme that IS
@@ -74,13 +69,8 @@ export function ApplicableProgramsCombobox({
     const inCatalog = catalog.some((item) => item.name.trim().toLowerCase() === trimmed.toLowerCase());
     return inCatalog ? null : trimmed;
   }, [catalog, profileCourseProgram]);
-  const [programFamilyIds, setProgramFamilyIds] = useState<string[]>([]);
   const [programFamilies, setProgramFamilies] = useState<ProgramFamily[] | null>(null);
   const [programFamiliesError, setProgramFamiliesError] = useState(false);
-  const [examGoalSlug, setExamGoalSlug] = useState("");
-  const [creating, setCreating] = useState(false);
-  const [createError, setCreateError] = useState<string | null>(null);
-  const [duplicateExisting, setDuplicateExisting] = useState<CatalogProgram | null>(null);
   const mergedCatalog = useMemo(() => {
     const existingIds = new Set(catalog.map((program) => program.id));
     return [...catalog, ...createdPrograms.filter((program) => !existingIds.has(program.id))];
@@ -131,32 +121,6 @@ export function ApplicableProgramsCombobox({
   const exactCatalogMatch = mergedCatalog.find(
     (program) => program.name.trim().replaceAll(/\s+/g, " ").toLowerCase() === normalizedDraft,
   );
-  useEffect(() => {
-    if (!canCreateCatalogProgram || normalizedDraft.length === 0 || exactCatalogMatch) {
-      setNearMatches([]);
-      setCheckingNearMatches(false);
-      return;
-    }
-    let active = true;
-    setCheckingNearMatches(true);
-    const timeoutId = globalThis.setTimeout(() => {
-      void findSimilarCoursePrograms(selectionDraft.trim())
-        .then((matches) => {
-          if (active) setNearMatches(matches.filter((program) => program.isActive !== false));
-        })
-        .catch(() => {
-          if (active) setNearMatches([]);
-        })
-        .finally(() => {
-          if (active) setCheckingNearMatches(false);
-        });
-    }, 250);
-    return () => {
-      active = false;
-      globalThis.clearTimeout(timeoutId);
-    };
-  }, [canCreateCatalogProgram, exactCatalogMatch, normalizedDraft, selectionDraft]);
-
   const handleSelect = (programName: string) => {
     setSelectionDraft(programName);
     const selectedProgram = availablePrograms.find((program) => program.name === programName);
@@ -172,46 +136,7 @@ export function ApplicableProgramsCombobox({
       onChange([...selectedIds, program.id]);
     }
     setSelectionDraft("");
-    setNearMatches([]);
     setCreateModalOpen(false);
-  };
-
-  const handleCreate = async () => {
-    if (creating) return;
-    setCreating(true);
-    setCreateError(null);
-    setDuplicateExisting(null);
-    try {
-      const createdProgram = await createCourseProgram({
-        name: selectionDraft,
-        programFamilyIds,
-        examGoalSlug: examGoalSlug ? examGoalSlug as "ale" | "pnle" | "let" | "cpale" : null,
-      });
-      setCreatedPrograms((current) => [...current, createdProgram]);
-      onCatalogProgramCreated?.(createdProgram);
-      selectProgram(createdProgram);
-      setProgramFamilyIds([]);
-      setExamGoalSlug("");
-    } catch (creationError) {
-      if (creationError instanceof ApiRequestError
-        && creationError.code === "COURSE_PROGRAM_CATALOG_NAME_CONFLICT") {
-        const existing = mergedCatalog.find((program) => (
-          program.name.trim().replaceAll(/\s+/g, " ").toLowerCase() === normalizedDraft
-          || program.name === creationError.details
-        )) ?? nearMatches.find((program) => program.name === creationError.details);
-        const selectableExisting = existing?.isActive === false ? null : existing;
-        setDuplicateExisting(selectableExisting ?? null);
-        setCreateError(selectableExisting
-          ? `“${selectableExisting.name}” already exists. Select the existing program instead.`
-          : creationError.message);
-      } else {
-        setCreateError(creationError instanceof Error
-          ? creationError.message
-          : "Could not add the Course / Program to the catalog.");
-      }
-    } finally {
-      setCreating(false);
-    }
   };
 
   // ADR-001 ruling 4, binding: family expansion is UNCONDITIONAL. It must never depend on the note's
@@ -250,22 +175,7 @@ export function ApplicableProgramsCombobox({
       />
       {canCreateCatalogProgram && normalizedDraft.length > 0 && !exactCatalogMatch && !controlDisabled ? (
         <div className="space-y-2 rounded-lg border border-border bg-muted/20 p-3 text-sm">
-          {checkingNearMatches ? <p className="text-xs text-foreground/60">Checking for similar programs...</p> : null}
-          {!checkingNearMatches && nearMatches.length > 0 ? (
-            <div className="space-y-2">
-              <p className="text-xs font-medium text-foreground/70">Similar catalog programs</p>
-              <div className="flex flex-wrap gap-2">
-                {nearMatches.map((program) => (
-                  <Button key={program.id} type="button" size="sm" variant="outline" onClick={() => selectProgram(program)}>
-                    Select {program.name}
-                  </Button>
-                ))}
-              </div>
-            </div>
-          ) : null}
-          {!checkingNearMatches ? (
-            <Button type="button" size="sm" variant="outline" onClick={() => {
-              setCreateError(null);
+          <Button type="button" size="sm" variant="outline" onClick={() => {
               setCreateModalOpen(true);
               if (programFamilies === null) {
                 setProgramFamiliesError(false);
@@ -278,10 +188,14 @@ export function ApplicableProgramsCombobox({
                   });
               }
             }}>
-              {`Add “${selectionDraft.trim()}” to the catalog`}
-            </Button>
-          ) : null}
+            {`Add “${selectionDraft.trim()}” to the catalog`}
+          </Button>
         </div>
+      ) : null}
+      {!canCreateCatalogProgram && normalizedDraft.length > 0 && !exactCatalogMatch && !controlDisabled ? (
+        <p className="text-xs text-foreground/60">
+          Can&apos;t find your program? You can still continue without selecting one.
+        </p>
       ) : null}
       {error ? (
         <div className="flex flex-wrap items-center gap-2 text-xs text-red-600 dark:text-red-400">
@@ -362,66 +276,22 @@ export function ApplicableProgramsCombobox({
         Choose the programs this note genuinely applies to — they decide who finds it, never how it is
         written. Use a program family to quickly add related programs.
       </p>
-      <AppModal
+      <CourseProgramCreateModal
         isOpen={createModalOpen}
-        onClose={() => {
-          if (!creating) setCreateModalOpen(false);
-        }}
+        onClose={() => setCreateModalOpen(false)}
+        initialName={selectionDraft.trim()}
+        families={programFamilies ?? []}
+        familiesError={programFamiliesError ? "Program Families could not be loaded." : null}
+        knownPrograms={mergedCatalog as CourseProgramCatalogItem[]}
         title="Add Course / Program"
-        description={`Confirm adding “${selectionDraft.trim()}” to the shared catalog.`}
-        actions={(
-          <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
-            <Button type="button" variant="outline" disabled={creating} onClick={() => setCreateModalOpen(false)}>Cancel</Button>
-            <Button type="button" loading={creating} loadingText="Adding..." onClick={() => void handleCreate()}>Add and select</Button>
-          </div>
-        )}
-      >
-        <div className="space-y-4">
-          <div className="space-y-2">
-            <label htmlFor={`${id}-new-program-family`} className="text-sm font-medium text-foreground">Program Families (optional)</label>
-            <select
-              id={`${id}-new-program-family`}
-              multiple
-              value={programFamilyIds}
-              onChange={(event) => setProgramFamilyIds(Array.from(event.target.selectedOptions, (option) => option.value))}
-              disabled={creating}
-              className="min-h-24 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground"
-            >
-              {(programFamilies ?? []).map((family) => <option key={family.id} value={family.id}>{family.name}</option>)}
-            </select>
-            <div className="flex flex-wrap gap-2" aria-label="Selected Program Families">
-              {(programFamilies ?? []).filter((family) => programFamilyIds.includes(family.id)).map((family) => (
-                <span key={family.id} className="inline-flex items-center gap-1 rounded-full border border-border bg-background px-2.5 py-1 text-xs text-foreground/80">
-                  {family.name}
-                  <button type="button" aria-label={`Remove ${family.name}`} disabled={creating}
-                    onClick={() => setProgramFamilyIds((current) => current.filter((familyId) => familyId !== family.id))}>×</button>
-                </span>
-              ))}
-            </div>
-            {programFamiliesError ? <p className="text-xs text-foreground/60">Program Families could not be loaded.</p> : null}
-            <p className="text-xs text-foreground/60">Group this program with related programs for faster selection when curating notes.</p>
-          </div>
-          <div className="space-y-2">
-            <label htmlFor={`${id}-new-program-exam-goal`} className="text-sm font-medium text-foreground">Exam goal (optional)</label>
-            <select
-              id={`${id}-new-program-exam-goal`}
-              value={examGoalSlug}
-              onChange={(event) => setExamGoalSlug(event.target.value)}
-              disabled={creating}
-              className="h-11 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground"
-            >
-              <option value="">No exam goal</option>
-              <option value="ale">ALE</option><option value="pnle">PNLE</option><option value="let">LET</option><option value="cpale">CPALE</option>
-            </select>
-          </div>
-          {createError ? <p role="alert" className="text-sm text-red-600 dark:text-red-400">{createError}</p> : null}
-          {duplicateExisting ? (
-            <Button type="button" size="sm" variant="outline" onClick={() => selectProgram(duplicateExisting)}>
-              Select {duplicateExisting.name}
-            </Button>
-          ) : null}
-        </div>
-      </AppModal>
+        submitLabel="Add and select"
+        onCreated={(createdProgram) => {
+          setCreatedPrograms((current) => [...current, createdProgram]);
+          onCatalogProgramCreated?.(createdProgram);
+          selectProgram(createdProgram);
+        }}
+        onSelectExisting={selectProgram}
+      />
     </div>
   );
 }
