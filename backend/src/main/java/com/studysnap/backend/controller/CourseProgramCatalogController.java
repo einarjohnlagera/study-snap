@@ -5,6 +5,8 @@ import com.studysnap.backend.dto.CreateCourseProgramCatalogRequest;
 import com.studysnap.backend.dto.CreateProgramFamilyRequest;
 import com.studysnap.backend.dto.ProgramFamilyResponse;
 import com.studysnap.backend.dto.UpdateCourseProgramCatalogRequest;
+import com.studysnap.backend.dto.UpdateProgramFamilyRequest;
+import com.studysnap.backend.exception.UnknownProgramFamilyException;
 import com.studysnap.backend.exception.CourseProgramNotFoundException;
 import com.studysnap.backend.service.CourseProgramCatalogService;
 import com.studysnap.backend.util.UuidParsingUtils;
@@ -73,5 +75,15 @@ public class CourseProgramCatalogController {
     @PreAuthorize("hasRole('ADMIN')")
     public ProgramFamilyResponse createProgramFamily(@Valid @RequestBody CreateProgramFamilyRequest request) {
         return courseProgramCatalogService.createProgramFamily(request);
+    }
+
+    @PatchMapping("/families/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ProgramFamilyResponse updateProgramFamily(
+            @PathVariable String id,
+            @Valid @RequestBody UpdateProgramFamilyRequest request
+    ) {
+        UUID familyId = UuidParsingUtils.parseUuidOrThrow(id, UnknownProgramFamilyException::new);
+        return courseProgramCatalogService.updateProgramFamily(familyId, request);
     }
 }

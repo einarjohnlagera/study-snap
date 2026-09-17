@@ -5915,17 +5915,33 @@ export async function listProgramFamilies(): Promise<ProgramFamily[]> {
   return parseApiResponse<ProgramFamily[]>(response, "Could not load Program Families.");
 }
 
-export async function createProgramFamily(name: string): Promise<ProgramFamily> {
+export async function createProgramFamily(name: string, programIds: string[] = []): Promise<ProgramFamily> {
   const response = await fetchWithAuth(
     "/course-program-catalog/families",
     {
       method: "POST",
       headers: buildAuthHeaders("application/json"),
-      body: JSON.stringify({ name }),
+      body: JSON.stringify({ name, programIds }),
     },
     true,
   );
   return parseApiResponse<ProgramFamily>(response, "Could not add the Program Family.");
+}
+
+export async function updateProgramFamily(
+  id: string,
+  request: { name?: string | null; programIds?: string[] | null },
+): Promise<ProgramFamily> {
+  const response = await fetchWithAuth(
+    `/course-program-catalog/families/${id}`,
+    {
+      method: "PATCH",
+      headers: buildAuthHeaders("application/json"),
+      body: JSON.stringify(request),
+    },
+    true,
+  );
+  return parseApiResponse<ProgramFamily>(response, "Could not update the Program Family.");
 }
 
 export async function createCourseProgram(request: CreateCourseProgramRequest): Promise<CourseProgramCatalogItem> {

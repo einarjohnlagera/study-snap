@@ -2,6 +2,7 @@ package com.studysnap.backend.service;
 
 import com.studysnap.backend.dto.CourseProgramCatalogItemResponse;
 import com.studysnap.backend.dto.UpdateCourseProgramCatalogRequest;
+import com.studysnap.backend.dto.UpdateProgramFamilyRequest;
 import com.studysnap.backend.exception.CourseProgramNotFoundException;
 import com.studysnap.backend.exception.InvalidProgramFamilyNameException;
 import com.studysnap.backend.exception.ProgramFamilyNameConflictException;
@@ -24,6 +25,7 @@ import java.lang.reflect.Method;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -53,6 +55,125 @@ class CourseProgramCatalogServiceTest {
 
         assertThat(result.id()).isEqualTo(familyId);
         assertThat(result.name()).isEqualTo("Health Sciences");
+    }
+
+    @Test
+    void createsAProgramFamilyWithInitialMembers() {
+        UUID familyId = UUID.randomUUID();
+        UUID nursingId = UUID.randomUUID();
+        UUID medicineId = UUID.randomUUID();
+        when(repository.findProgramFamilyByNormalizedName("health sciences")).thenReturn(Optional.empty());
+        when(repository.insertProgramFamily("Health Sciences"))
+                .thenReturn(new ProgramFamilyResponse(familyId, "Health Sciences"));
+        when(repository.findById(nursingId)).thenReturn(Optional.of(item(nursingId, "Nursing", null, null)));
+        when(repository.findById(medicineId)).thenReturn(Optional.of(item(medicineId, "Medicine", null, null)));
+
+        service.createProgramFamily(new CreateProgramFamilyRequest(
+                "Health Sciences", List.of(nursingId, medicineId, nursingId)));
+
+        verify(repository).replaceProgramMemberships(familyId, List.of(nursingId, medicineId));
+    }
+
+    @Test
+    void createFamilyWithUnknownProgramDoesNotWriteMemberships() {
+        UUID familyId = UUID.randomUUID();
+        UUID unknownProgramId = UUID.randomUUID();
+        when(repository.findProgramFamilyByNormalizedName("health sciences")).thenReturn(Optional.empty());
+        when(repository.insertProgramFamily("Health Sciences"))
+                .thenReturn(new ProgramFamilyResponse(familyId, "Health Sciences"));
+        when(repository.findById(unknownProgramId)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.createProgramFamily(
+                new CreateProgramFamilyRequest("Health Sciences", List.of(unknownProgramId))))
+                .isInstanceOf(CourseProgramNotFoundException.class);
+
+        verify(repository, never()).replaceProgramMemberships(any(), any());
+    }
+
+    @Test
+    void replacingFamilyMembershipUsesTheFamilyScopedWrite() {
+        UUID familyId = UUID.randomUUID();
+        UUID nursingId = UUID.randomUUID();
+        UUID computerEngineeringId = UUID.randomUUID();
+        when(repository.findProgramFamilyById(familyId))
+                .thenReturn(Optional.of(new ProgramFamilyResponse(familyId, "Health Sciences")));
+        when(repository.findById(nursingId)).thenReturn(Optional.of(item(nursingId, "Nursing", null, null)));
+        when(repository.findById(computerEngineeringId))
+                .thenReturn(Optional.of(item(computerEngineeringId, "Computer Engineering", null, null)));
+
+        service.updateProgramFamily(familyId,
+                new UpdateProgramFamilyRequest(null, List.of(nursingId, computerEngineeringId)));
+
+        verify(repository).replaceProgramMemberships(familyId, List.of(nursingId, computerEngineeringId));
+        verify(repository, never()).replaceProgramFamilies(any(), any());
+    }
+
+    @Test
+    void clearingFamilyMembershipUsesAnExplicitEmptySet() {
+        UUID familyId = UUID.randomUUID();
+        when(repository.findProgramFamilyById(familyId))
+                .thenReturn(Optional.of(new ProgramFamilyResponse(familyId, "Health Sciences")));
+
+        service.updateProgramFamily(familyId, new UpdateProgramFamilyRequest(null, List.of()));
+
+        verify(repository).replaceProgramMemberships(familyId, List.of());
+    }
+
+    @Test
+    void omittedProgramIdsLeaveFamilyMembershipUntouched() {
+        UUID familyId = UUID.randomUUID();
+        when(repository.findProgramFamilyById(familyId))
+                .thenReturn(Optional.of(new ProgramFamilyResponse(familyId, "Health Sciences")));
+
+        service.updateProgramFamily(familyId, new UpdateProgramFamilyRequest("Health sciences", null));
+
+        verify(repository, never()).replaceProgramMemberships(any(), any());
+    }
+
+    @Test
+    void renamingToTheSameNameIsANoOp() {
+        UUID familyId = UUID.randomUUID();
+        when(repository.findProgramFamilyById(familyId))
+                .thenReturn(Optional.of(new ProgramFamilyResponse(familyId, "Health Sciences")));
+        when(repository.findOtherProgramFamilyByNormalizedName("health sciences", familyId))
+                .thenReturn(Optional.empty());
+
+        ProgramFamilyResponse result = service.updateProgramFamily(
+                familyId, new UpdateProgramFamilyRequest("Health Sciences", null));
+
+        assertThat(result).isEqualTo(new ProgramFamilyResponse(familyId, "Health Sciences"));
+        verify(repository, never()).updateProgramFamilyName(any(), any());
+    }
+
+    @Test
+    void renameToACaseVariantOfItsOwnNameIsNotAConflict() {
+        UUID familyId = UUID.randomUUID();
+        when(repository.findProgramFamilyById(familyId))
+                .thenReturn(Optional.of(new ProgramFamilyResponse(familyId, "Health Sciences")));
+        when(repository.findOtherProgramFamilyByNormalizedName("health sciences", familyId))
+                .thenReturn(Optional.empty());
+
+        ProgramFamilyResponse result = service.updateProgramFamily(
+                familyId, new UpdateProgramFamilyRequest("Health sciences", null));
+
+        assertThat(result.id()).isEqualTo(familyId);
+        assertThat(result.name()).isEqualTo("Health sciences");
+        verify(repository).updateProgramFamilyName(familyId, "Health sciences");
+    }
+
+    @Test
+    void renameToAnExistingFamilyNameIsRejected() {
+        UUID familyId = UUID.randomUUID();
+        when(repository.findProgramFamilyById(familyId))
+                .thenReturn(Optional.of(new ProgramFamilyResponse(familyId, "Health Sciences")));
+        when(repository.findOtherProgramFamilyByNormalizedName("engineering", familyId))
+                .thenReturn(Optional.of(new ProgramFamilyResponse(UUID.randomUUID(), "Engineering")));
+
+        assertThatThrownBy(() -> service.updateProgramFamily(
+                familyId, new UpdateProgramFamilyRequest(" Engineering ", null)))
+                .isInstanceOf(ProgramFamilyNameConflictException.class);
+
+        verify(repository, never()).updateProgramFamilyName(any(), any());
     }
 
     /**

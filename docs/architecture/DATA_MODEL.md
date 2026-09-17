@@ -89,8 +89,8 @@ Course / Program storage rule:
 
 Program catalog fields:
 
-- `program_families`: `id`, unique `name`, `created_at`.
-- `course_programs`: `id`, unique `name`, nullable legacy `program_family_id`, nullable `exam_goal_slug`, `created_at`. The legacy family FK is retained for rollback compatibility but application code no longer reads or writes it.
+- `program_families`: `id`, mutable `name`, `created_at`. `uk_program_families_name` is a raw-value unique constraint; the service separately rejects normalized case/whitespace collisions and excludes the current UUID when renaming.
+- `course_programs`: `id`, unique `name`, nullable legacy `program_family_id`, nullable `exam_goal_slug`, `created_at`. The legacy family FK is vestigial and can disagree with the join table; application code does not read or write it, and `V147` does not backfill it.
 - `course_program_family` (`V146`): `id`, `course_program_id`, `program_family_id`, `created_at`. Unique on `(course_program_id, program_family_id)` with cascading FKs and indexes on both FK columns. This join is the canonical zero-or-more Program Family membership source.
 - `note_course_program` (`V107`): `id`, `note_id`, `course_program_id`, `created_at`. Unique on `(note_id, course_program_id)`; FK to `notes` is `ON DELETE CASCADE`, FK to `course_programs` is not. Indexed on both FK columns.
 - **`V107`'s 1:1 backfill inserted one row per note whose string matched the catalog exactly** (plus the `Bsed` -> `Education` alias) — for *every* note, learner-authored included. **`V108` deletes the learner-authored subset**, because a learner's personal free-text program must not be mechanically materialized into a catalog Applicable Program row: doing so silently turns a private label into a discovery fact the learner never asserted and cannot edit. `V108`'s predicate is the exact inverse of `V107`'s insert, restricted to non-curator owners. **Do not "restore" those rows.**

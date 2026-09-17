@@ -455,6 +455,7 @@ describe("ApplicableProgramsCombobox", () => {
     fireEvent.focus(screen.getByLabelText("Add a course or program"));
     fireEvent.change(screen.getByLabelText("Add a course or program"), { target: { value: "Chemical Engineering" } });
     expect(screen.queryByRole("button", { name: /Add “Chemical Engineering” to the catalog/ })).not.toBeInTheDocument();
+    expect(screen.getByText("Can't find your program? You can still continue without selecting one.")).toBeInTheDocument();
 
     rerender(
       <ApplicableProgramsCombobox id="can-create" catalog={catalog} selectedIds={[]} onChange={jest.fn()} canCreateCatalogProgram />,
@@ -464,15 +465,15 @@ describe("ApplicableProgramsCombobox", () => {
     expect(await screen.findByRole("button", { name: /Add “Chemical Engineering” to the catalog/ })).toBeInTheDocument();
   });
 
-  it("renders near matches before the explicit create action", async () => {
+  it("renders near matches inside the canonical create modal", async () => {
     (findSimilarCoursePrograms as jest.Mock).mockResolvedValue([catalog[0]]);
     render(<ApplicableProgramsCombobox id="near-match" catalog={catalog} selectedIds={[]} onChange={jest.fn()} canCreateCatalogProgram />);
 
     fireEvent.focus(screen.getByLabelText("Add a course or program"));
     fireEvent.change(screen.getByLabelText("Add a course or program"), { target: { value: "Civil Engineer" } });
 
+    fireEvent.click(screen.getByRole("button", { name: /Add “Civil Engineer” to the catalog/ }));
     expect(await screen.findByRole("button", { name: "Select Civil Engineering" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Add “Civil Engineer” to the catalog/ })).toBeInTheDocument();
   });
 
   it("does not offer an inactive near match as a selection candidate", async () => {
@@ -481,7 +482,7 @@ describe("ApplicableProgramsCombobox", () => {
 
     fireEvent.focus(screen.getByLabelText("Add a course or program"));
     fireEvent.change(screen.getByLabelText("Add a course or program"), { target: { value: "Civil Engineer" } });
-
+    fireEvent.click(screen.getByRole("button", { name: /Add “Civil Engineer” to the catalog/ }));
     await waitFor(() => expect(findSimilarCoursePrograms).toHaveBeenCalled());
     expect(screen.queryByRole("button", { name: "Select Civil Engineering" })).not.toBeInTheDocument();
   });
@@ -495,10 +496,9 @@ describe("ApplicableProgramsCombobox", () => {
     fireEvent.focus(screen.getByLabelText("Add a course or program"));
     fireEvent.change(screen.getByLabelText("Add a course or program"), { target: { value: created.name } });
     fireEvent.click(await screen.findByRole("button", { name: /Add “Chemical Engineering” to the catalog/ }));
-    const familyPicker = screen.getByLabelText("Program Families (optional)") as HTMLSelectElement;
-    await within(familyPicker).findByRole("option", { name: "Engineering" });
-    familyPicker.options[0].selected = true;
-    fireEvent.change(familyPicker);
+    const dialog = screen.getByRole("dialog", { name: "Add Course / Program" });
+    const familyCheckbox = await within(dialog).findByRole("checkbox", { name: "Engineering" });
+    fireEvent.click(familyCheckbox);
     fireEvent.click(screen.getByRole("button", { name: "Add and select" }));
 
     await waitFor(() => expect(onChange).toHaveBeenCalledWith(["program-a", "program-new"]));
@@ -515,8 +515,8 @@ describe("ApplicableProgramsCombobox", () => {
     expect(screen.queryByRole("button", { name: /Health Sciences/ })).not.toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("Add a course or program"), { target: { value: "Public Health" } });
     fireEvent.click(await screen.findByRole("button", { name: /Add “Public Health” to the catalog/ }));
-    const picker = screen.getByLabelText("Program Families (optional)");
-    expect(await within(picker).findByRole("option", { name: "Health Sciences" })).toBeInTheDocument();
+    const dialog = screen.getByRole("dialog", { name: "Add Course / Program" });
+    expect(await within(dialog).findByRole("checkbox", { name: "Health Sciences" })).toBeInTheDocument();
     expect(listProgramFamilies).toHaveBeenCalledTimes(1);
     expect(screen.queryByRole("button", { name: /Health Sciences ·/ })).not.toBeInTheDocument();
   });
@@ -539,10 +539,9 @@ describe("ApplicableProgramsCombobox", () => {
     render(<ApplicableProgramsCombobox id="overlap-create" catalog={catalog} selectedIds={[]} onChange={onChange} canCreateCatalogProgram />);
     fireEvent.change(screen.getByLabelText("Add a course or program"), { target: { value: created.name } });
     fireEvent.click(await screen.findByRole("button", { name: /Add “Architectural Engineering” to the catalog/ }));
-    const picker = screen.getByLabelText("Program Families (optional)") as HTMLSelectElement;
-    await within(picker).findByRole("option", { name: "Built Environment & Design" });
-    Array.from(picker.options).forEach((option) => { option.selected = true; });
-    fireEvent.change(picker);
+    const dialog = screen.getByRole("dialog", { name: "Add Course / Program" });
+    fireEvent.click(await within(dialog).findByRole("checkbox", { name: "Engineering" }));
+    fireEvent.click(within(dialog).getByRole("checkbox", { name: "Built Environment & Design" }));
     fireEvent.click(screen.getByRole("button", { name: "Add and select" }));
     await waitFor(() => expect(createCourseProgram).toHaveBeenCalledWith(expect.objectContaining({
       programFamilyIds: ["family-engineering", "family-built"],
@@ -594,12 +593,13 @@ describe("ApplicableProgramsCombobox", () => {
 
     fireEvent.focus(screen.getByLabelText("Add a course or program"));
     fireEvent.change(screen.getByLabelText("Add a course or program"), { target: { value: "Civil Engineer" } });
-    await screen.findByRole("button", { name: "Select Civil Engineering" });
     fireEvent.click(screen.getByRole("button", { name: /Add “Civil Engineer” to the catalog/ }));
+    await screen.findByRole("button", { name: "Select Civil Engineering" });
     fireEvent.click(screen.getByRole("button", { name: "Add and select" }));
 
     const dialog = await screen.findByRole("dialog", { name: "Add Course / Program" });
-    fireEvent.click(within(dialog).getByRole("button", { name: "Select Civil Engineering" }));
+    const selectButtons = within(dialog).getAllByRole("button", { name: "Select Civil Engineering" });
+    fireEvent.click(selectButtons[selectButtons.length - 1]);
     expect(onChange).toHaveBeenCalledWith(["program-b", "program-a"]);
   });
 

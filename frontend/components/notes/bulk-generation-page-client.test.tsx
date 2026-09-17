@@ -110,9 +110,7 @@ describe("BulkGenerationPageClient", () => {
     const input = screen.getByLabelText("Add a course or program");
     fireEvent.change(input, { target: { value: "Public Health" } });
     fireEvent.click(await screen.findByRole("button", { name: /Add “Public Health” to the catalog/ }));
-    const picker = screen.getByLabelText("Program Families (optional)");
-    expect(await screen.findByRole("option", { name: "Health Sciences" })).toBeInTheDocument();
-    expect(picker).toContainElement(screen.getByRole("option", { name: "Health Sciences" }));
+    expect(await screen.findByRole("checkbox", { name: "Health Sciences" })).toBeInTheDocument();
   });
 
   it("keeps the compact grid profile-aware for teacher and non-teacher views", async () => {
@@ -125,6 +123,8 @@ describe("BulkGenerationPageClient", () => {
     expect(screen.getByLabelText(/^Domain Context/)).toBeInTheDocument();
     expect(screen.getByLabelText(/^Authored Depth/)).toBeInTheDocument();
     expect(screen.getByRole("switch", { name: /public/i })).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Add a course or program"), { target: { value: "Public Health" } });
+    expect(screen.queryByRole("button", { name: /to the catalog/ })).not.toBeInTheDocument();
 
     unmount();
     (getAuthUser as jest.Mock).mockReturnValue({ id: "student-1", role: "USER", profileType: "STUDENT" });

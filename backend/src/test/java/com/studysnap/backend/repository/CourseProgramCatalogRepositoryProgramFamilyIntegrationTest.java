@@ -2,6 +2,10 @@ package com.studysnap.backend.repository;
 
 import com.studysnap.backend.dto.ProgramFamilyResponse;
 import com.studysnap.backend.dto.CourseProgramCatalogItemResponse;
+import com.studysnap.backend.dto.CreateProgramFamilyRequest;
+import com.studysnap.backend.dto.UpdateProgramFamilyRequest;
+import com.studysnap.backend.exception.CourseProgramNotFoundException;
+import com.studysnap.backend.service.CourseProgramCatalogService;
 import org.junit.jupiter.api.Test;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -132,6 +136,15 @@ class CourseProgramCatalogRepositoryProgramFamilyIntegrationTest {
             assertThatThrownBy(() -> repository.insertProgramFamily(EDUCATION))
                     .isInstanceOf(DataIntegrityViolationException.class);
 
+            // The Java lookup key collapses internal whitespace. The SQL predicate must do the same,
+            // or a doubled-space stored name escapes the duplicate check that calls this finder.
+            ProgramFamilyResponse doubledSpace = repository.insertProgramFamily("Allied  Health");
+            assertThat(repository.findProgramFamilyByNormalizedName("allied health"))
+                    .isPresent()
+                    .get()
+                    .extracting(ProgramFamilyResponse::id)
+                    .isEqualTo(doubledSpace.id());
+
             // 5. FIND_BY_ID executes the same joined mapper used by the catalog list, including the
             // lifecycle column. A missing WHERE predicate would make the second assertion fail.
             UUID programId = repository.findAll().stream()
@@ -182,6 +195,49 @@ class CourseProgramCatalogRepositoryProgramFamilyIntegrationTest {
                     .isPresent()
                     .get()
                     .satisfies(program -> assertThat(program.programFamilyId()).isNull());
+
+            // 7. Family-side replacement deletes by family id. Civil already belongs to Engineering;
+            // adding it to Education must retain that first membership.
+            repository.replaceProgramMemberships(educationId, List.of(programId));
+            assertThat(repository.findById(programId)).isPresent().get().satisfies(program ->
+                    assertThat(program.programFamilies()).extracting(ProgramFamilyResponse::name)
+                            .containsExactly(EDUCATION));
+            repository.replaceProgramMemberships(engineeringId, List.of(programId));
+            repository.replaceProgramMemberships(educationId, List.of(programId));
+            assertThat(repository.findById(programId)).isPresent().get().satisfies(program ->
+                    assertThat(program.programFamilies()).extracting(ProgramFamilyResponse::name)
+                            .containsExactly(EDUCATION, ENGINEERING));
+            repository.replaceProgramMemberships(educationId, List.of());
+            assertThat(repository.findById(programId)).isPresent().get().satisfies(program ->
+                    assertThat(program.programFamilies()).extracting(ProgramFamilyResponse::name)
+                            .containsExactly(ENGINEERING));
+
+            // 8. Create-with-members rolls the family row back when a program id is unknown.
+            CourseProgramCatalogService service = new CourseProgramCatalogService(repository);
+            assertThatThrownBy(() -> new TransactionTemplate(new DataSourceTransactionManager(dataSource))
+                    .executeWithoutResult(status -> service.createProgramFamily(
+                            new CreateProgramFamilyRequest("Rollback Family", List.of(UUID.randomUUID())))))
+                    .isInstanceOf(CourseProgramNotFoundException.class);
+            assertThat(repository.findProgramFamilyByNormalizedName("rollback family")).isEmpty();
+
+            // 9. Rename preserves UUID and memberships and cannot touch note applicability: Notes
+            // persist program ids only, with no family identifier or name.
+            statement.execute("create table note_course_program (id uuid primary key, note_id uuid not null, course_program_id uuid not null)");
+            UUID noteId = UUID.randomUUID();
+            statement.executeUpdate("insert into notes (id, course_program) values ('" + noteId + "', null)");
+            UUID applicabilityId = UUID.randomUUID();
+            statement.executeUpdate("insert into note_course_program (id, note_id, course_program_id) values ('"
+                    + applicabilityId + "', '" + noteId + "', '" + programId + "')");
+            ProgramFamilyResponse renamed = service.updateProgramFamily(engineeringId,
+                    new UpdateProgramFamilyRequest("Engineering Sciences", null));
+            assertThat(renamed.id()).isEqualTo(engineeringId);
+            assertThat(repository.findProgramFamilyById(engineeringId)).get()
+                    .extracting(ProgramFamilyResponse::name).isEqualTo("Engineering Sciences");
+            assertThat(repository.findById(programId)).get().satisfies(program ->
+                    assertThat(program.programFamilies()).extracting(ProgramFamilyResponse::name)
+                            .containsExactly("Engineering Sciences"));
+            assertThat(single(statement, "select id from note_course_program where note_id = '" + noteId + "'"))
+                    .isEqualTo(applicabilityId.toString());
         }
     }
 
