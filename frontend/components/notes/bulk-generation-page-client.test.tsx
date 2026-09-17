@@ -104,6 +104,31 @@ describe("BulkGenerationPageClient", () => {
     expect(screen.queryByText(/topic notes? left this cycle/i)).not.toBeInTheDocument();
   });
 
+  it("warns that public notes with no Authored Depth won't appear under that filter", async () => {
+    render(<BulkGenerationPageClient />);
+    await waitFor(() => expect(getMe).toHaveBeenCalled());
+
+    expect(screen.queryByText(/will not appear under any Authored Depth filter/)).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("switch", { name: /public/i }));
+
+    expect(
+      screen.getByText(/No Authored Depth is set above, so these notes will not appear under any Authored Depth filter/),
+    ).toBeInTheDocument();
+  });
+
+  it("clears the missing-depth warning once an Authored Depth is selected", async () => {
+    render(<BulkGenerationPageClient />);
+    await waitFor(() => expect(getMe).toHaveBeenCalled());
+
+    fireEvent.click(screen.getByRole("switch", { name: /public/i }));
+    expect(screen.getByText(/will not appear under any Authored Depth filter/)).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText(/^Authored Depth/), { target: { value: "COLLEGE" } });
+
+    expect(screen.queryByText(/will not appear under any Authored Depth filter/)).not.toBeInTheDocument();
+  });
+
   it("shows a zero-member family in the shared Add Course / Program modal", async () => {
     render(<BulkGenerationPageClient />);
     await waitFor(() => expect(getCourseProgramCatalog).toHaveBeenCalled());
