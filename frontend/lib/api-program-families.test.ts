@@ -1,4 +1,4 @@
-import { createProgramFamily, listProgramFamilies } from "./api";
+import { createProgramFamily, listProgramFamilies, updateProgramFamily } from "./api";
 
 /**
  * ⚠️ THE ONE TEST THAT EXECUTES THE PROGRAM-FAMILY ENDPOINTS' OWN REQUEST SHAPE.
@@ -44,15 +44,36 @@ describe("Program Family API", () => {
     const created = { id: "family-health", name: "Health Sciences" };
     stubOk(created);
 
-    await expect(createProgramFamily("Health Sciences")).resolves.toEqual(created);
+    await expect(createProgramFamily("Health Sciences", ["program-nursing"])).resolves.toEqual(created);
 
     const [url, init] = (globalThis.fetch as jest.Mock).mock.calls[0] as [string, RequestInit];
     expect(url).toBe("http://localhost:8080/api/course-program-catalog/families");
     expect(init.method).toBe("POST");
     // ⚠️ The v0.119.0 assertion. Without this header Spring answers 415 before the controller runs.
     expect(new Headers(init.headers).get("Content-Type")).toBe("application/json");
-    // The backend binds a record with a single `name` field; the shape must match it exactly.
-    expect(JSON.parse(init.body as string)).toEqual({ name: "Health Sciences" });
+    expect(JSON.parse(init.body as string)).toEqual({
+      name: "Health Sciences",
+      programIds: ["program-nursing"],
+    });
+  });
+
+  it("updates a family by durable id with one PATCH body", async () => {
+    const updated = { id: "family-health", name: "Health Sciences" };
+    stubOk(updated);
+
+    await expect(updateProgramFamily("family-health", {
+      name: "Health Sciences",
+      programIds: ["program-nursing", "program-medicine"],
+    })).resolves.toEqual(updated);
+
+    const [url, init] = (globalThis.fetch as jest.Mock).mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("http://localhost:8080/api/course-program-catalog/families/family-health");
+    expect(init.method).toBe("PATCH");
+    expect(new Headers(init.headers).get("Content-Type")).toBe("application/json");
+    expect(JSON.parse(init.body as string)).toEqual({
+      name: "Health Sciences",
+      programIds: ["program-nursing", "program-medicine"],
+    });
   });
 
   it("surfaces a readable duplicate failure rather than resolving silently", async () => {

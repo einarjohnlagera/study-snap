@@ -497,6 +497,8 @@ describe("PrivateNoteDetailPageClient", () => {
     ).toBeInTheDocument();
     expect(screen.queryByLabelText("Who is this note for?")).not.toBeInTheDocument();
     expect(await screen.findByLabelText("Add a course or program")).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Add a course or program"), { target: { value: "Public Health" } });
+    expect(screen.queryByRole("button", { name: /to the catalog/ })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Engineering · 3" })).toBeInTheDocument();
     expect(screen.getByRole("option", { name: "Automatic — use note context" })).toBeInTheDocument();
     expect(screen.getByRole("option", { name: "Automatic — based on the reader" })).toBeInTheDocument();

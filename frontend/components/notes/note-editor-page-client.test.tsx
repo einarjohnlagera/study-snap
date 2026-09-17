@@ -1077,6 +1077,8 @@ describe("NoteEditorPageClient", () => {
 
     expect(await screen.findByRole("button", { name: "Remove Nursing" })).toBeInTheDocument();
     expect(screen.queryByText("No course programs selected.")).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Add a course or program"), { target: { value: "Public Health" } });
+    expect(screen.queryByRole("button", { name: /to the catalog/ })).not.toBeInTheDocument();
   });
 
   // C5. The sticky bar read `resolvedCourseProgram` -- the LEARNER free-text axis. For a curator that is

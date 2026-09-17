@@ -2,6 +2,7 @@ package com.studysnap.backend.service;
 
 import com.studysnap.backend.dto.CourseProgramCatalogItemResponse;
 import com.studysnap.backend.dto.UpdateCourseProgramCatalogRequest;
+import com.studysnap.backend.dto.UpdateProgramFamilyRequest;
 import com.studysnap.backend.exception.CourseProgramNotFoundException;
 import com.studysnap.backend.exception.InvalidProgramFamilyNameException;
 import com.studysnap.backend.exception.ProgramFamilyNameConflictException;
@@ -50,23 +51,21 @@ public class CourseProgramCatalogService {
      * migration -- {@code V106} seeded Engineering and {@code V142} seeded Education for exactly that
      * reason. A third would have been a third migration.
      *
-     * <p>⚠️ A FAMILY IS CREATED EMPTY AND THAT IS CORRECT. Membership is set on the program, through
-     * the program's membership set on create. Do not add member selection here -- the authoring
-     * expansion derives membership from the catalog join.
+     * <p>Membership may be set at creation time because it belongs to the many-to-many relation,
+     * rather than to either catalog entity. The family row and its initial membership set are written
+     * atomically.
      */
     @Transactional
     public ProgramFamilyResponse createProgramFamily(CreateProgramFamilyRequest request) {
-        String name = CourseProgramNormalizationUtils.normalizeForStorage(request.name());
-        if (name.length() > 120) {
-            throw new InvalidProgramFamilyNameException();
-        }
+        String name = normalizeProgramFamilyName(request.name());
         String normalizedName = normalizeName(name);
         courseProgramCatalogRepository.findProgramFamilyByNormalizedName(normalizedName)
                 .ifPresent(existing -> {
                     throw new ProgramFamilyNameConflictException(existing.name());
                 });
+        ProgramFamilyResponse family;
         try {
-            return courseProgramCatalogRepository.insertProgramFamily(name);
+            family = courseProgramCatalogRepository.insertProgramFamily(name);
         } catch (DataIntegrityViolationException ignored) {
             // uk_program_families_name lost a race with a concurrent create. Resolve to the winner
             // rather than surfacing a constraint violation, matching the course-program create path.
@@ -75,6 +74,43 @@ public class CourseProgramCatalogService {
                     .orElseThrow(CourseProgramCatalogWriteConflictException::new);
             throw new ProgramFamilyNameConflictException(existing.name());
         }
+        List<UUID> programIds = validateAndDeduplicateProgramIds(request.programIds());
+        if (!programIds.isEmpty()) {
+            courseProgramCatalogRepository.replaceProgramMemberships(family.id(), programIds);
+        }
+        return family;
+    }
+
+    @Transactional
+    public ProgramFamilyResponse updateProgramFamily(UUID familyId, UpdateProgramFamilyRequest request) {
+        ProgramFamilyResponse current = courseProgramCatalogRepository.findProgramFamilyById(familyId)
+                .orElseThrow(UnknownProgramFamilyException::new);
+
+        String updatedName = current.name();
+        if (request.name() != null) {
+            updatedName = normalizeProgramFamilyName(request.name());
+            String normalizedName = normalizeName(updatedName);
+            courseProgramCatalogRepository.findOtherProgramFamilyByNormalizedName(normalizedName, familyId)
+                    .ifPresent(existing -> {
+                        throw new ProgramFamilyNameConflictException(existing.name());
+                    });
+            if (!updatedName.equals(current.name())) {
+                try {
+                    courseProgramCatalogRepository.updateProgramFamilyName(familyId, updatedName);
+                } catch (DataIntegrityViolationException ignored) {
+                    ProgramFamilyResponse existing = courseProgramCatalogRepository
+                            .findOtherProgramFamilyByNormalizedName(normalizedName, familyId)
+                            .orElseThrow(CourseProgramCatalogWriteConflictException::new);
+                    throw new ProgramFamilyNameConflictException(existing.name());
+                }
+            }
+        }
+
+        if (request.programIds() != null) {
+            List<UUID> programIds = validateAndDeduplicateProgramIds(request.programIds());
+            courseProgramCatalogRepository.replaceProgramMemberships(familyId, programIds);
+        }
+        return new ProgramFamilyResponse(familyId, updatedName);
     }
 
     public List<CourseProgramCatalogItemResponse> findSimilar(String name) {
@@ -134,6 +170,21 @@ public class CourseProgramCatalogService {
         familyIds.forEach(id -> courseProgramCatalogRepository.findProgramFamilyName(id)
                 .orElseThrow(UnknownProgramFamilyException::new));
         return List.copyOf(familyIds);
+    }
+
+    private List<UUID> validateAndDeduplicateProgramIds(List<UUID> requestedIds) {
+        LinkedHashSet<UUID> programIds = new LinkedHashSet<>(requestedIds == null ? List.of() : requestedIds);
+        programIds.forEach(id -> courseProgramCatalogRepository.findById(id)
+                .orElseThrow(CourseProgramNotFoundException::new));
+        return List.copyOf(programIds);
+    }
+
+    private String normalizeProgramFamilyName(String requestedName) {
+        String name = CourseProgramNormalizationUtils.normalizeForStorage(requestedName);
+        if (name.isBlank() || name.length() > 120) {
+            throw new InvalidProgramFamilyNameException();
+        }
+        return name;
     }
 
     private String normalizeName(String name) {

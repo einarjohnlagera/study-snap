@@ -1,0 +1,60 @@
+-- Additive initial Program Family memberships. Exact-name resolution is intentionally limited to
+-- this migration because runtime-created catalog rows do not have portable UUIDs across environments.
+-- Missing catalog rows are skipped so a fresh database can apply the migration successfully.
+INSERT INTO course_program_family (id, course_program_id, program_family_id)
+SELECT gen_random_uuid(), cp.id, pf.id
+FROM (VALUES
+    ('Engineering'::varchar, 'Civil Engineering'::varchar),
+    ('Engineering', 'Electrical Engineering'),
+    ('Engineering', 'Mechanical Engineering'),
+    ('Engineering', 'Electronics Engineering'),
+    ('Engineering', 'Computer Engineering'),
+    ('Engineering', 'Industrial Engineering'),
+    ('Engineering', 'Chemical Engineering'),
+    ('Engineering', 'Agricultural and Biosystems Engineering'),
+    ('Engineering', 'Geodetic Engineering'),
+    ('Engineering', 'Mining Engineering'),
+    ('Engineering', 'Sanitary Engineering'),
+    ('Engineering', 'Marine Engineering'),
+    ('Engineering', 'Geotechnical Engineer'),
+    ('Engineering', 'Architectural Engineering'),
+    ('Engineering', 'Geological Engineering'),
+    ('Engineering', 'Aeronautical Engineering'),
+    ('Engineering', 'Environmental Engineering'),
+    ('Engineering', 'Construction Engineering and Management'),
+    ('Education', 'Education'),
+    ('Education', 'Special Needs Education'),
+    ('Education', 'Elementary Education'),
+    ('Education', 'Secondary Education'),
+    ('Education', 'Early Childhood Education'),
+    ('Education', 'Technical-Vocational Teacher Education'),
+    ('Education', 'Physical Education'),
+    ('Education', 'Teacher Certification'),
+    ('Health Sciences', 'Nursing'),
+    ('Health Sciences', 'Medicine'),
+    ('Health Sciences', 'Pharmacy'),
+    ('Health Sciences', 'Physical Therapy'),
+    ('Health Sciences', 'Radiologic Technology'),
+    ('Accounting', 'Accountancy'),
+    ('Accounting', 'Management Accounting'),
+    ('Accounting', 'Accounting Information Systems'),
+    ('Accounting', 'Internal Auditing'),
+    ('Accounting', 'Certified Management Accountant'),
+    ('Computing & Technology', 'Information Technology'),
+    ('Computing & Technology', 'Computer Science'),
+    ('Computing & Technology', 'Software Engineering'),
+    ('Computing & Technology', 'Computer Engineering'),
+    ('Computing & Technology', 'Electronics Engineering'),
+    ('Computing & Technology', 'Accounting Information Systems'),
+    ('Built Environment & Design', 'Architecture'),
+    ('Built Environment & Design', 'Interior Design'),
+    ('Built Environment & Design', 'Landscape Architecture'),
+    ('Built Environment & Design', 'Urban and Regional Planning'),
+    ('Built Environment & Design', 'Environmental Planning'),
+    ('Built Environment & Design', 'Architectural Engineering'),
+    ('Built Environment & Design', 'Geodetic Engineering'),
+    ('Built Environment & Design', 'Construction Engineering and Management')
+) AS approved (family_name, program_name)
+JOIN program_families pf ON pf.name = approved.family_name
+JOIN course_programs cp ON cp.name = approved.program_name
+ON CONFLICT (course_program_id, program_family_id) DO NOTHING;

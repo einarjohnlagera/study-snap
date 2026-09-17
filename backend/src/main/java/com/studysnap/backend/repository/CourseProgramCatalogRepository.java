@@ -53,9 +53,13 @@ public class CourseProgramCatalogRepository {
     private static final String INSERT = "INSERT INTO course_programs (id, name, exam_goal_slug) VALUES (?, ?, ?)";
     private static final String INSERT_MEMBERSHIP = "INSERT INTO course_program_family (id, course_program_id, program_family_id) VALUES (?, ?, ?)";
     private static final String DELETE_MEMBERSHIPS = "DELETE FROM course_program_family WHERE course_program_id = ?";
+    private static final String DELETE_FAMILY_MEMBERSHIPS = "DELETE FROM course_program_family WHERE program_family_id = ?";
     private static final String FIND_ALL_PROGRAM_FAMILIES = "SELECT id, name FROM program_families ORDER BY name";
-    private static final String FIND_PROGRAM_FAMILY_BY_NORMALIZED_NAME = "SELECT id, name FROM program_families WHERE lower(trim(name)) = ?";
+    private static final String FIND_PROGRAM_FAMILY_BY_ID = "SELECT id, name FROM program_families WHERE id = ?";
+    private static final String FIND_PROGRAM_FAMILY_BY_NORMALIZED_NAME = "SELECT id, name FROM program_families WHERE lower(regexp_replace(trim(name), '\\s+', ' ', 'g')) = ?";
+    private static final String FIND_OTHER_PROGRAM_FAMILY_BY_NORMALIZED_NAME = FIND_PROGRAM_FAMILY_BY_NORMALIZED_NAME + " AND id <> ?";
     private static final String INSERT_PROGRAM_FAMILY = "INSERT INTO program_families (id, name) VALUES (?, ?)";
+    private static final String UPDATE_PROGRAM_FAMILY_NAME = "UPDATE program_families SET name = ? WHERE id = ?";
     private static final String FIND_ID_BY_NAME = "SELECT id FROM course_programs WHERE name = ?";
     private static final String FIND_NAMES_BY_EXAM_GOAL_SLUG = "SELECT name FROM course_programs WHERE exam_goal_slug = ? ORDER BY name";
 
@@ -70,8 +74,14 @@ public class CourseProgramCatalogRepository {
         return jdbcTemplate.query(FIND_PROGRAM_FAMILY_NAME, (rs, row) -> rs.getString("name"), id).stream().findFirst();
     }
     public List<ProgramFamilyResponse> findAllProgramFamilies() { return jdbcTemplate.query(FIND_ALL_PROGRAM_FAMILIES, this::mapProgramFamily); }
+    public Optional<ProgramFamilyResponse> findProgramFamilyById(UUID id) {
+        return jdbcTemplate.query(FIND_PROGRAM_FAMILY_BY_ID, this::mapProgramFamily, id).stream().findFirst();
+    }
     public Optional<ProgramFamilyResponse> findProgramFamilyByNormalizedName(String name) {
         return jdbcTemplate.query(FIND_PROGRAM_FAMILY_BY_NORMALIZED_NAME, this::mapProgramFamily, name).stream().findFirst();
+    }
+    public Optional<ProgramFamilyResponse> findOtherProgramFamilyByNormalizedName(String name, UUID excludedId) {
+        return jdbcTemplate.query(FIND_OTHER_PROGRAM_FAMILY_BY_NORMALIZED_NAME, this::mapProgramFamily, name, excludedId).stream().findFirst();
     }
     public ProgramFamilyResponse insertProgramFamily(String name) {
         UUID id = UUID.randomUUID();
@@ -89,6 +99,15 @@ public class CourseProgramCatalogRepository {
     public void replaceProgramFamilies(UUID programId, Collection<UUID> familyIds) {
         jdbcTemplate.update(DELETE_MEMBERSHIPS, programId);
         insertProgramFamilies(programId, familyIds);
+    }
+    public void replaceProgramMemberships(UUID familyId, Collection<UUID> programIds) {
+        jdbcTemplate.update(DELETE_FAMILY_MEMBERSHIPS, familyId);
+        for (UUID programId : programIds) {
+            jdbcTemplate.update(INSERT_MEMBERSHIP, UUID.randomUUID(), programId, familyId);
+        }
+    }
+    public void updateProgramFamilyName(UUID id, String name) {
+        jdbcTemplate.update(UPDATE_PROGRAM_FAMILY_NAME, name, id);
     }
     public Optional<UUID> resolveIdForLegacyName(String value) {
         if (value == null) return Optional.empty();
