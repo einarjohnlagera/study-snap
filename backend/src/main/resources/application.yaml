@@ -73,7 +73,18 @@ server:
       # Render Starter is 0.5 CPU / 512 MB. The Spring Boot default of 200 worker
       # threads is pointless at 0.5 CPU and a native-memory hog (~1 MB stack each)
       # that starves the heap. Cap it so the JVM fits the container.
-      max: ${SERVER_TOMCAT_THREADS_MAX:25}
+      # ⚠️ MUST STAY <= spring.datasource.hikari.maximum-pool-size (20, below). This
+      # value was 25 until v0.153.0 Leg B: under spring.jpa.open-in-view (ON), a
+      # connection is held for the whole request, so ~21 concurrent requests alone
+      # exhausted the pool regardless of query speed — independent of whatever else
+      # was holding connections in the four 2026-09 pool-exhaustion incidents.
+      # TomcatThreadPoolHikariAlignmentTest pins this relationship.
+      # ⚠️ THIS DEFAULT DOES NOT BIND IN PRODUCTION TODAY: Render sets
+      # SERVER_TOMCAT_THREADS_MAX=25 explicitly (confirmed on the dashboard,
+      # 2026-09-17), which overrides this default. Lowering it here is necessary
+      # but not sufficient — the owner must also change the Render env var to
+      # <= 20 for this to take effect where it actually matters.
+      max: ${SERVER_TOMCAT_THREADS_MAX:20}
       min-spare: ${SERVER_TOMCAT_THREADS_MIN_SPARE:5}
 
 logging:
