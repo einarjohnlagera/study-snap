@@ -85,7 +85,7 @@ Admin v1 tables should include:
 
 - a two-tab catalog shell whose default `Program Families` tab is the primary bulk-membership workflow; it lists every family, including empty families, with member counts and one modal for rename plus full membership replacement
 - a secondary `Course / Programs` tab retaining the inverse per-program membership editor; `+ New program` opens the same modal used by authorized Note authoring, with optional multiple families and the unchanged Exam Goal choices
-- a paginated notes table showing legacy Course / Program and explicit Applicable Programs, with a catalog-backed edit action that changes no other note metadata; its shared control can add every member of a Program Family in one action, after which the admin can trim the explicit set before saving
+- a paginated notes table showing legacy Course / Program, Authored Depth, and explicit Applicable Programs; a missing-depth-only filter helps the requesting curator find their own metadata cleanup queue, while the only edit action remains the catalog-backed Applicable Programs control, which changes no other note metadata and can add every member of a Program Family before the admin trims the explicit set
 
 - Catalog growth is demand-driven: add a program when a canonical note is legitimately applicable to it. Do not pre-seed a vocabulary.
 - Family rename preserves its UUID and memberships. Family/program deletion and catalog activation controls remain out of scope.

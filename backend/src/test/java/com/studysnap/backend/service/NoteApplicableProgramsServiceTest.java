@@ -4,6 +4,7 @@ import com.studysnap.backend.dto.ApplicableProgramResponse;
 import com.studysnap.backend.dto.AdminNoteApplicableProgramsPageResponse;
 import com.studysnap.backend.dto.NoteApplicableProgramsResponse;
 import com.studysnap.backend.entity.DomainContext;
+import com.studysnap.backend.entity.LearnerLevel;
 import com.studysnap.backend.entity.NoteEntity;
 import com.studysnap.backend.entity.ProfileType;
 import com.studysnap.backend.entity.UserEntity;
@@ -399,6 +400,7 @@ class NoteApplicableProgramsServiceTest {
         NoteEntity note = note(UUID.randomUUID(), adminId);
         note.setTitle("Algebra");
         note.setCourseProgram("Civil Engineering");
+        note.setLearnerLevel(LearnerLevel.COLLEGE);
         user(adminId, UserRole.ADMIN, ProfileType.STUDENT);
         ApplicableProgramResponse program = new ApplicableProgramResponse(UUID.randomUUID(), "Civil Engineering");
         when(noteRepository.findByOwnerUserId(eq(adminId), any(Pageable.class)))
@@ -406,13 +408,14 @@ class NoteApplicableProgramsServiceTest {
         when(noteCourseProgramRepository.findByNoteIds(List.of(note.getId())))
                 .thenReturn(Map.of(note.getId(), List.of(program)));
 
-        AdminNoteApplicableProgramsPageResponse result = service.getAdminPage(1, 1, adminId);
+        AdminNoteApplicableProgramsPageResponse result = service.getAdminPage(1, 1, false, adminId);
 
         assertThat(result.page()).isEqualTo(1);
         assertThat(result.size()).isEqualTo(1);
         assertThat(result.totalElements()).isEqualTo(2);
         assertThat(result.items()).singleElement().satisfies(item -> {
             assertThat(item.noteId()).isEqualTo(note.getId());
+            assertThat(item.learnerLevel()).isEqualTo(LearnerLevel.COLLEGE);
             assertThat(item.applicablePrograms()).containsExactly(program);
         });
         verify(noteRepository).findByOwnerUserId(eq(adminId), argThat(pageable ->
@@ -430,11 +433,40 @@ class NoteApplicableProgramsServiceTest {
         when(noteRepository.findByOwnerUserId(eq(adminId), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(), org.springframework.data.domain.PageRequest.of(0, 25), 0));
 
-        AdminNoteApplicableProgramsPageResponse result = service.getAdminPage(0, 25, adminId);
+        AdminNoteApplicableProgramsPageResponse result = service.getAdminPage(0, 25, false, adminId);
 
         assertThat(result.items()).isEmpty();
         assertThat(result.totalElements()).isZero();
         verify(noteCourseProgramRepository).findByNoteIds(List.of());
+    }
+
+    @Test
+    void adminPageUsesTheOwnerScopedNullDepthQueryWhenTheFilterIsEnabled() {
+        UUID adminId = UUID.randomUUID();
+        NoteEntity missingDepth = note(UUID.randomUUID(), adminId);
+        missingDepth.setTitle("Algebra Foundations");
+        when(noteRepository.findByOwnerUserIdAndLearnerLevelIsNull(eq(adminId), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(
+                        List.of(missingDepth),
+                        org.springframework.data.domain.PageRequest.of(0, 25),
+                        1
+                ));
+        when(noteCourseProgramRepository.findByNoteIds(List.of(missingDepth.getId())))
+                .thenReturn(Map.of());
+
+        AdminNoteApplicableProgramsPageResponse result = service.getAdminPage(0, 25, true, adminId);
+
+        assertThat(result.items()).singleElement().satisfies(item -> {
+            assertThat(item.noteId()).isEqualTo(missingDepth.getId());
+            assertThat(item.learnerLevel()).isNull();
+        });
+        verify(noteRepository).findByOwnerUserIdAndLearnerLevelIsNull(eq(adminId), argThat(pageable ->
+                pageable.getPageNumber() == 0
+                        && pageable.getPageSize() == 25
+                        && pageable.getSort().getOrderFor("updatedAt") != null
+                        && pageable.getSort().getOrderFor("updatedAt").isDescending()
+        ));
+        verify(noteRepository, never()).findByOwnerUserId(eq(adminId), any(Pageable.class));
     }
 
     private void authorize(NoteEntity note, UserEntity requester) {
