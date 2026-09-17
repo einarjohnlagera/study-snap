@@ -3421,7 +3421,15 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
             </Button>
           </div>
         )}
-      />
+      >
+        {!note?.learnerLevel ? (
+          <p className="text-sm text-amber-700 dark:text-amber-300">
+            This note has no Authored Depth set, so it will not appear under any Authored Depth filter
+            in the Public Library. You can still publish it — set Authored Depth later from this
+            note&apos;s metadata editor if you want it to be reachable by that filter.
+          </p>
+        ) : null}
+      </AppModal>
 
       <AppModal
         isOpen={showUnpublishForSharingConfirm}
@@ -3514,7 +3522,15 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
             </Button>
           </div>
         )}
-      />
+      >
+        {!note?.learnerLevel ? (
+          <p className="text-sm text-amber-700 dark:text-amber-300">
+            This note has no Authored Depth set, so once published it will not appear under any Authored
+            Depth filter in the Public Library. You can still publish it — set Authored Depth later from
+            this note&apos;s metadata editor if you want it to be reachable by that filter.
+          </p>
+        ) : null}
+      </AppModal>
 
       <AppModal
         isOpen={showShareLinkModal}
