@@ -25,10 +25,25 @@ spot; Leg B (backend config) — lower `server.tomcat.threads.max` (25) to at or
 holding connections; A1 (owner action, not code) — check whether Render's own per-request logging can
 be enabled for this service. **Explicit non-fixes, carried forward:** do not raise the pool further, do
 not touch `open-in-view`, do not add PgBouncer, do not chase the unconfirmed "synchronous external call"
-lead without new evidence. **Routing: Codex** (Leg A2, backend service+filter+config) and **Claude Code
-inline** (Leg B, one YAML line). **Verification tier: Leg A2 — one scoped cold agent, falsification-framed**
-(four-incident production-reliability history); **Leg B — one `advisor()` call.** Full scope in
-`RELEASES.md`.
+lead without new evidence.
+
+**⚠️ FOLDED IN MID-CYCLE, 2026-09-17, owner call:** a second, unrelated fix, from the Authored Depth
+Backlog Index row below (`v0.83.0 — will curators actually classify…`, re-audited the same day this
+release was already open). **Scope:** F1 (frontend) — a non-blocking publication-time warning when a
+curator publishes (or bulk-publishes) a note with no Authored Depth; F2 (multi-system) — a missing-depth
+count/filter added to the existing curator-scoped Admin Applicable Programs surface. Both are
+prevention only, shipping *before* the 80(+9)-note manual cleanup that follows in a later checkpoint.
+**Explicit non-fixes:** no Course/Program→Depth inference, no learner-facing "Unclassified" chip, no
+hard publication requirement yet (deferred — it would silently break `NoteBulkGenerationService`'s
+swallowed-exception publish path), no bulk depth editor. Full audit:
+`docs/claude-plans/authored-depth-legacy-backfill-audit-and-plan.md`. **The two halves of this release
+share no code and no files** — kept as one release only to avoid opening a second branch mid-cycle.
+
+**Routing: Codex** (Leg A2, backend service+filter+config; and F2, backend DTO+filter+frontend section)
+and **Claude Code inline** (Leg B, one YAML line; and F1, two existing components, copy + one
+conditional each). **Verification tier: Leg A2 — one scoped cold agent, falsification-framed**
+(four-incident production-reliability history); **Leg B, F1, F2 — one `advisor()` call each.** No full
+pressure test for either half. Full scope in `RELEASES.md`.
 
 **Kicked off 2026-09-16, signed off 2026-09-17.** `v0.152.0 — The Missing Half of v0.150.0` is
 **Released** on `releases/v0.152.0` (PR #1408 Slices 1-3, PR #1409 a cold-agent-found fix). Gives the

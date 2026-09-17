@@ -6,7 +6,21 @@
 
 Theme: stop re-investigating the same unidentified production outage a fifth time, and ship the one
 thing that would actually answer it — the diagnostic instrumentation this recurring failure has been
-missing across all four occurrences so far.
+missing across all four occurrences so far. **Folded in 2026-09-17, mid-cycle, while this release was
+still open: a second, unrelated fix (F1/F2 below) for a separate production-reliability gap found while
+auditing an overdue product checkpoint** — a metadata field (Authored Depth) whose backlog was
+discovered to be 3.5× larger than believed and actively growing. The two problems share no code, no
+files, and no root cause; they are bundled here only because `v0.153.0` was still open when the second
+one was scoped, per an explicit owner call to avoid opening a second release branch mid-cycle.
+**⚠️ Verification-tier consequence of folding a second, unrelated item into an open release, stated per
+CLAUDE.md's own rule:** this release is now four items (Leg A2, Leg B, F1, F2) across two unrelated
+problem domains instead of two. Per-item tiers stay as declared for each (Leg A2 keeps its cold-agent
+falsification pass; Leg B, F1 and F2 each get one `advisor()` call) — no item's own tier moves — but a
+whole-release `advisor()` summary at signoff must now explicitly check the two halves don't interact
+(they touch disjoint files: `backend/.../hikari`/`ThreadLocal` filter/`application.yaml` for the pool
+work vs. `NoteBulkGenerationService`/`private-note-detail-page-client.tsx`/`bulk-generation-page-client.tsx`/
+admin Applicable Programs for the depth work), and the per-PR `/audit-diff` stays scoped to whichever
+half a given PR actually touches rather than being asked to reason about both at once.
 
 Source: `docs/claude-plans/2026-09-17-pool-exhaustion-instrumentation-fix-plan.md` (Prod Investigator
 session, written on request from a peer session relaying the owner's report that prod goes down almost
@@ -52,6 +66,23 @@ directly under its own orchestration.
   dashboard whether per-request logging (path, status, duration) can be enabled for this service, and if
   so, enable it. Deploy/env/plan-tier actions are owner-only per standing rule; not part of this
   release's diff.
+- **F1 — publication-time Authored Depth warning (frontend only).** Per
+  `docs/claude-plans/authored-depth-legacy-backfill-audit-and-plan.md` (§F), a fresh audit found that a
+  curator-owned public note with no Authored Depth is not merely unfilterable — it generates a less
+  precisely calibrated Study Pack (no curriculum floor, ambiguous subject guidance). 282 such notes
+  exist today, 173 created in the 30 days since `v0.83.0` shipped the Public Library `?level=` filter,
+  entirely via the bulk-generate `makePublic` path, which never inspects depth. Add a non-blocking
+  warning line — *"this note will not appear under any Authored Depth filter"* — to the existing *Make
+  public* confirmation dialog (`private-note-detail-page-client.tsx`) and to the Bulk Generate form when
+  `makePublic` is checked with no depth selected (`bulk-generation-page-client.tsx`). Publication still
+  proceeds either way; this is copy plus one conditional in each of two existing components, no API
+  change, no migration.
+- **F2 — admin missing-depth count (multi-system).** Add a *missing Authored Depth* filter/count to the
+  existing curator-scoped `/admin/course-programs` Applicable Programs surface
+  (`AdminNoteApplicableProgramsController` / `admin-applicable-programs-section.tsx`), which today lists
+  a curator's own notes but does not even carry `learnerLevel` in its response DTO. No new dashboard, no
+  new route, no notification system — one column and one filter on a page that already exists for
+  exactly this class of metadata repair.
 
 Anti-drift, carried forward from the plan and the source finding, do NOT re-propose: raising
 `maximum-pool-size` further (duration-bound holds, not throughput-bound — a bigger pool buys time
@@ -61,29 +92,58 @@ connections-held-too-long); chasing the "synchronous external call" lead from th
 new evidence (opened, not confirmed — Leg A2 is what would actually confirm or kill it on the next
 occurrence). Leg A2 and Leg B are independent — neither blocks the other.
 
+**Anti-drift for F1/F2, locked by the owner's decision and confirmed against current code by the audit
+— do NOT re-propose:** inferring Authored Depth from Course/Program (different semantic axis;
+`ADR-001:62,68,485`); adding a learner-facing "Unclassified" depth chip (describes curator metadata
+quality, not a learner's desired level; current behavior — NULL-depth notes fully visible unfiltered,
+excluded only by an explicit depth chip — already matches the requirement and needs no change); a hard
+publication-time requirement as the first move (`NoteBulkGenerationService.java:336-346` swallows a
+publish exception into `log.warn`, so a hard throw there would make a `makePublic` batch silently fail N
+notes with a success receipt — F3, a hard requirement, is explicitly deferred pending a 30-day post-F1
+inflow re-read); a bulk Authored Depth editor (no bulk write path exists for `learnerLevel` today — only
+single-note create/update/copy touch it — and 80-plus one-time dropdown edits cost less than the
+endpoint a bulk tool would need); retiring Public Library depth-based discovery (zero instrumentation
+exists on that surface, so this checkpoint has no learner-demand evidence either way). Full audit:
+`docs/claude-plans/authored-depth-legacy-backfill-audit-and-plan.md`.
+
 Pre-declared guards (do not accept a diff without these — a detector that doesn't provably fire under
 load, or that false-positives under ordinary load, is the same silent-no-op class this repo has shipped
 twice before): (1) a test that actually saturates a small test Hikari pool and asserts the saturation
 log line fires and names the blocking path, not just that the detector compiles; (2) a test asserting
 the detector does **not** fire under ordinary, non-saturated concurrent load; (3) for Leg B, confirm the
 application context still starts and a burst of ~20 concurrent requests queues at the Tomcat acceptor
-rather than erroring, after lowering `threads.max`.
+rather than erroring, after lowering `threads.max`; (4) for F1, a test that actually renders each dialog
+with the branch condition met (no depth + `makePublic`/publish) and asserts the warning copy appears —
+not just that the component compiles; (5) for F2, if it adds any endpoint, one real `MockMvc` request
+test with `.contentType(MediaType.APPLICATION_JSON)` per CLAUDE.md's non-negotiable rule for every new
+endpoint.
 
 **Routing: Codex** for Leg A2 (backend service + filter + config, anti-drift care against scope-creeping
-into a general APM layer). **Routing: Claude Code inline** for Leg B (one YAML line, existing pattern,
-clear regression guard). **Verification tier: Leg A2 — one scoped cold agent, falsification-framed**
-(recurring four-incident production-reliability history; no auth/cross-user/money-semantics trigger
-fires on its own, but the incident history is reason enough per the plan's own recommendation) —
-hand it the plan plus finding §11 and ask it to disprove that the detector actually fires under load and
-doesn't false-positive under normal traffic. **Leg B — one `advisor()` call** on the diff is enough for
-a one-line config change with a clear regression guard.
+into a general APM layer) and for **F2** (backend DTO + service filter + frontend section, multi-system,
+via `docs/skills/codex-prompt-generator.md` — scope locked to one column + one filter on the existing
+admin surface, no new dashboard/route/notification system). **Routing: Claude Code inline** for Leg B
+(one YAML line, existing pattern, clear regression guard) and for **F1** (two existing components,
+copy + one conditional each, well under ~50 LOC, no new infrastructure). **Verification tier: Leg A2 —
+one scoped cold agent, falsification-framed** (recurring four-incident production-reliability history;
+no auth/cross-user/money-semantics trigger fires on its own, but the incident history is reason enough
+per the plan's own recommendation) — hand it the plan plus finding §11 and ask it to disprove that the
+detector actually fires under load and doesn't false-positive under normal traffic. **Leg B, F1 and
+F2 — one `advisor()` call each** on their diffs; none moves an authorization boundary, changes
+money/quota/production-data semantics, or shares a method with another PR in this release. **No full
+three-agent pressure test for either half** — neither meets any of that tier's triggers, and defaulting
+to the heaviest option regardless is itself the error CLAUDE.md names.
 
-**Backlog Index obligation, this release's own signoff:** update the `[CHECKPOINT — due 2026-09-17]`
-row — its kill criterion fired, scope changes from "identify the trigger" to "ship the instrumentation
-that would identify it," not resolved until Leg A2 has shipped and fired at least once (in the guard
-test per above — a fifth production occurrence is not something to wait for). If Leg A2 ever does
-capture a real trigger on a future occurrence, that is a new, separate findings file, not a retrofit
-into the "trigger unresolved" title.
+**Backlog Index obligations, this release's own signoff:** (1) update the
+`[CHECKPOINT — due 2026-09-17]` pool-exhaustion row — its kill criterion fired, scope changes from
+"identify the trigger" to "ship the instrumentation that would identify it," not resolved until Leg A2
+has shipped and fired at least once (in the guard test per above — a fifth production occurrence is not
+something to wait for). If Leg A2 ever does capture a real trigger on a future occurrence, that is a
+new, separate findings file, not a retrofit into the "trigger unresolved" title. (2) The Authored Depth
+row (`ROADMAP.md`, `v0.83.0 — will curators actually classify…`) needs a new
+`[CHECKPOINT — due <F1 deploy + 14 days>]` added for the manual cleanup's completion re-read (kill
+criterion, stated now: if the checkpoint query still returns more than 10 unclassified notes at that
+read, escalate to tooling per the audit's §H re-evaluation, not a third extension) — the exact date
+depends on when F1 actually deploys, so it cannot be written until then.
 
 ### Shipped
 
