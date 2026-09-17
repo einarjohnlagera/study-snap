@@ -68,7 +68,7 @@ export function AdminProgramFamiliesSection() {
       const saved = draft.family
         ? await updateProgramFamily(draft.family.id, {
           name: draft.name,
-          programIds: catalogError && !draft.membershipDirty ? null : draft.programIds,
+          programIds: draft.membershipDirty ? draft.programIds : null,
         })
         : await createProgramFamily(draft.name, draft.programIds);
       setFamilies((current) => [...current.filter((family) => family.id !== saved.id), saved]
