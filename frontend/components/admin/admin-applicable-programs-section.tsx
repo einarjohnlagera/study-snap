@@ -5,6 +5,7 @@ import { ApplicableProgramsCombobox } from "@/components/metadata/applicable-pro
 import { AppModal } from "@/components/ui/app-modal";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import { ToastMessage } from "@/components/ui/toast-message";
 import {
   getAdminNoteApplicablePrograms,
@@ -14,11 +15,13 @@ import {
   type AdminNoteApplicableProgramsPage,
   type CourseProgramCatalogItem,
 } from "@/lib/api";
+import { formatLearnerLevel } from "@/lib/learning-profile";
 
 const PAGE_SIZE = 25;
 
 export function AdminApplicableProgramsSection() {
   const [pageIndex, setPageIndex] = useState(0);
+  const [missingDepthOnly, setMissingDepthOnly] = useState(false);
   const [data, setData] = useState<AdminNoteApplicableProgramsPage | null>(null);
   const [catalog, setCatalog] = useState<CourseProgramCatalogItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -33,7 +36,7 @@ export function AdminApplicableProgramsSection() {
     setError(null);
     try {
       const [nextData, nextCatalog] = await Promise.all([
-        getAdminNoteApplicablePrograms(pageIndex, PAGE_SIZE),
+        getAdminNoteApplicablePrograms(pageIndex, PAGE_SIZE, missingDepthOnly),
         getCourseProgramCatalog(),
       ]);
       setData(nextData);
@@ -43,7 +46,7 @@ export function AdminApplicableProgramsSection() {
     } finally {
       setLoading(false);
     }
-  }, [pageIndex]);
+  }, [missingDepthOnly, pageIndex]);
 
   useEffect(() => {
     void load();
@@ -98,6 +101,11 @@ export function AdminApplicableProgramsSection() {
 
   const hasNextPage = data ? (data.page + 1) * data.size < data.totalElements : false;
 
+  const updateMissingDepthFilter = (checked: boolean) => {
+    setPageIndex(0);
+    setMissingDepthOnly(checked);
+  };
+
   return (
     <section className="space-y-3">
       {saveFailure ? <ToastMessage message={saveFailure} tone="error" /> : null}
@@ -108,6 +116,17 @@ export function AdminApplicableProgramsSection() {
           leaves its generation context untouched — but for a note relying on Automatic, the single joined
           program IS the writing domain, so changing programs here changes it.
         </p>
+      </div>
+      <div className="flex items-center gap-2">
+        <Checkbox
+          id="admin-missing-authored-depth"
+          checked={missingDepthOnly}
+          onChange={updateMissingDepthFilter}
+          ariaLabel="Show only notes missing Authored Depth"
+        />
+        <label htmlFor="admin-missing-authored-depth" className="text-sm text-foreground/75">
+          Show only notes missing Authored Depth
+        </label>
       </div>
       <Card className="overflow-hidden">
         {loading ? (
@@ -127,6 +146,7 @@ export function AdminApplicableProgramsSection() {
                   <tr>
                     <th className="px-4 py-3 font-medium">Note</th>
                     <th className="px-4 py-3 font-medium">Legacy Course / Program</th>
+                    <th className="px-4 py-3 font-medium">Authored Depth</th>
                     <th className="px-4 py-3 font-medium">Applicable Programs</th>
                     <th className="px-4 py-3 font-medium">Action</th>
                   </tr>
@@ -136,6 +156,9 @@ export function AdminApplicableProgramsSection() {
                     <tr key={item.noteId} className="border-t border-border/60 align-top">
                       <td className="px-4 py-3 text-foreground/80">{item.title ?? "Untitled note"}</td>
                       <td className="px-4 py-3 text-foreground/70">{item.courseProgram ?? "—"}</td>
+                      <td className="px-4 py-3 text-foreground/70">
+                        {formatLearnerLevel(item.learnerLevel) ?? "— Missing —"}
+                      </td>
                       <td className="px-4 py-3 text-foreground/70">
                         {item.applicablePrograms.length > 0
                           ? item.applicablePrograms.map((program) => program.name).join(", ")
@@ -152,7 +175,9 @@ export function AdminApplicableProgramsSection() {
               </table>
             </div>
             {data.items.length === 0 ? (
-              <p className="border-t border-border/60 p-5 text-sm text-foreground/65">No owned notes found.</p>
+              <p className="border-t border-border/60 p-5 text-sm text-foreground/65">
+                {missingDepthOnly ? "No notes missing Authored Depth." : "No owned notes found."}
+              </p>
             ) : null}
             <div className="flex items-center justify-between border-t border-border/60 px-4 py-3">
               <p className="text-xs text-foreground/60">

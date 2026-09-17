@@ -147,7 +147,7 @@ depends on when F1 actually deploys, so it cannot be written until then.
 
 ### Shipped
 
-_(nothing yet)_
+- **Curator-owned Authored Depth cleanup queue (F2).** The existing Admin Applicable Programs table now displays each owned note's Authored Depth and can filter to notes where it is missing. The filter preserves the page's requester-owner scope, visibility-agnostic population, pagination, and `updatedAt DESC` order; depth remains editable only from the existing per-note editor.
 
 ## v0.152.0 - The Missing Half of v0.150.0
 

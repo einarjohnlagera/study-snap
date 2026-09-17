@@ -74,6 +74,7 @@ public interface NoteRepository extends JpaRepository<NoteEntity, UUID>, NoteLib
      */
     Optional<NoteEntity> findFirstByOwnerUserIdAndCopiedFromNoteId(UUID ownerUserId, UUID copiedFromNoteId);
     Page<NoteEntity> findByOwnerUserId(UUID ownerUserId, Pageable pageable);
+    Page<NoteEntity> findByOwnerUserIdAndLearnerLevelIsNull(UUID ownerUserId, Pageable pageable);
     List<NoteEntity> findByOwnerUserIdOrderByUpdatedAtDesc(UUID ownerUserId);
     long countByOwnerUserId(UUID ownerUserId);
 
