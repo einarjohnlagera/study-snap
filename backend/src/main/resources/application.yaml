@@ -128,6 +128,8 @@ management:
 
 studysnap:
   app-name: NoteLib
+  pool-saturation:
+    poll-interval-ms: ${STUDYSNAP_POOL_SATURATION_POLL_INTERVAL_MS:2000}
   settings:
     max-notes-chars: ${MAX_NOTES_CHARS_FREE:12000}
     max-image-bytes: ${MAX_IMAGE_BYTES:5000000}
