@@ -1,5 +1,94 @@
 # RELEASES.md - NoteLib
 
+## v0.153.0 - The Missing Telemetry
+
+**Status: In Progress**
+
+Theme: stop re-investigating the same unidentified production outage a fifth time, and ship the one
+thing that would actually answer it — the diagnostic instrumentation this recurring failure has been
+missing across all four occurrences so far.
+
+Source: `docs/claude-plans/2026-09-17-pool-exhaustion-instrumentation-fix-plan.md` (Prod Investigator
+session, written on request from a peer session relaying the owner's report that prod goes down almost
+daily), built on `docs/claude-findings/2026-09-10-prod-pool-exhaustion-trigger-unresolved.md` (§11 adds
+today's occurrence). **The `[CHECKPOINT — due 2026-09-17]` in `ROADMAP.md`'s Backlog Index fired at
+kickoff:** today's incident (05:56:29–05:58:46 UTC, ~90s impact, already recovered) is a **fourth**
+confirmed occurrence of the identical signature (2026-09-04, 2026-09-05, 2026-09-10, now 2026-09-17) —
+HikariCP pool exhaustion (`active=20/20`) causes `DataSourceHealthIndicator` to starve on the same pool,
+so the platform restarts an instance whose only problem was that it was busy. Every discriminating check
+from the prior three investigations repeats identically: no connection leak (no hold ≥60s), no OOM, no
+recent deploy, the database itself near-idle, nothing scheduled. Per the checkpoint's own stated kill
+criterion, this release does **not** attempt a fifth root-cause hunt — three priors plus a cold-agent
+falsification pass already narrowed the mechanism as far as existing telemetry allows (a non-DB,
+non-CPU blocking wait under 60 seconds, under OSIV). **The owner asked directly whether this could be a
+docker-compose / app-config issue: ruled out.** `docker-compose.yml` is local-dev-only (hardcoded
+`localhost` values) and is never part of the deploy path — Render builds and runs `backend/Dockerfile`
+directly under its own orchestration.
+
+### Planned Scope
+
+- **Leg A2 — Hikari-saturation-triggered diagnostic logging (backend).** When the pool is saturated
+  (`activeConnections >= maximumPoolSize` with threads waiting, sustained), log which request paths are
+  actually holding connections at that moment — captured via a `ThreadLocal` registry set in a servlet
+  filter at request entry (alongside where `RequestIdFilter` already runs), polled against
+  `HikariPoolMXBean` on a short interval. **This is the one thing that would have answered every one of
+  the four incidents on the spot**, instead of leaving "narrowed, not identified" as the outcome each
+  time. Scope is exactly detect-saturation-and-log-in-flight-paths — explicitly not a general APM
+  integration.
+- **Leg B — close the structural Tomcat/Hikari mismatch (backend, config).** `server.tomcat.threads.max`
+  (currently 25, `application.yaml`) exceeds `spring.datasource.hikari.maximum-pool-size` (20), so under
+  `spring.jpa.open-in-view: true` roughly 21 concurrent requests alone can exhaust the pool regardless of
+  query speed. Lower `threads.max` to at or below 20, not raise the pool (raising it is an explicit
+  non-fix — already tried once, 10→20 after 2026-09-04, and the identical failure recurred three more
+  times at 20 since). This does not identify or fix whatever is actually holding connections for tens of
+  seconds; it closes a different, independently-real exposure. **⚠️ Both values are
+  `${ENV_VAR:default}` — `${SERVER_TOMCAT_THREADS_MAX:25}` and `${DB_POOL_MAX_SIZE:20}` — and Render
+  environment variables cannot be read with any tool available to Claude (the only such tool is a write,
+  which is the owner's). Before this ships, the owner must confirm on the Render dashboard's Environment
+  tab whether either variable is set explicitly.** If `SERVER_TOMCAT_THREADS_MAX` is overridden, editing
+  the YAML default is a silent no-op in production — the fix is then an owner-run env-var change, not a
+  code diff, and the release notes must say which one actually happened.
+- **A1 — Render platform request logging (owner action, not a code change).** Confirm in the Render
+  dashboard whether per-request logging (path, status, duration) can be enabled for this service, and if
+  so, enable it. Deploy/env/plan-tier actions are owner-only per standing rule; not part of this
+  release's diff.
+
+Anti-drift, carried forward from the plan and the source finding, do NOT re-propose: raising
+`maximum-pool-size` further (duration-bound holds, not throughput-bound — a bigger pool buys time
+proportional to nothing); touching `spring.jpa.open-in-view` (real blast radius, needs a staging run
+first, this incident does not change that calculus); adding PgBouncer (addresses too-many-clients, not
+connections-held-too-long); chasing the "synchronous external call" lead from the finding's §11 without
+new evidence (opened, not confirmed — Leg A2 is what would actually confirm or kill it on the next
+occurrence). Leg A2 and Leg B are independent — neither blocks the other.
+
+Pre-declared guards (do not accept a diff without these — a detector that doesn't provably fire under
+load, or that false-positives under ordinary load, is the same silent-no-op class this repo has shipped
+twice before): (1) a test that actually saturates a small test Hikari pool and asserts the saturation
+log line fires and names the blocking path, not just that the detector compiles; (2) a test asserting
+the detector does **not** fire under ordinary, non-saturated concurrent load; (3) for Leg B, confirm the
+application context still starts and a burst of ~20 concurrent requests queues at the Tomcat acceptor
+rather than erroring, after lowering `threads.max`.
+
+**Routing: Codex** for Leg A2 (backend service + filter + config, anti-drift care against scope-creeping
+into a general APM layer). **Routing: Claude Code inline** for Leg B (one YAML line, existing pattern,
+clear regression guard). **Verification tier: Leg A2 — one scoped cold agent, falsification-framed**
+(recurring four-incident production-reliability history; no auth/cross-user/money-semantics trigger
+fires on its own, but the incident history is reason enough per the plan's own recommendation) —
+hand it the plan plus finding §11 and ask it to disprove that the detector actually fires under load and
+doesn't false-positive under normal traffic. **Leg B — one `advisor()` call** on the diff is enough for
+a one-line config change with a clear regression guard.
+
+**Backlog Index obligation, this release's own signoff:** update the `[CHECKPOINT — due 2026-09-17]`
+row — its kill criterion fired, scope changes from "identify the trigger" to "ship the instrumentation
+that would identify it," not resolved until Leg A2 has shipped and fired at least once (in the guard
+test per above — a fifth production occurrence is not something to wait for). If Leg A2 ever does
+capture a real trigger on a future occurrence, that is a new, separate findings file, not a retrofit
+into the "trigger unresolved" title.
+
+### Shipped
+
+_(nothing yet)_
+
 ## v0.152.0 - The Missing Half of v0.150.0
 
 **Status: Released** (signed off 2026-09-17)
@@ -572,51 +661,5 @@ above), which is why a heavier post-implementation tier isn't warranted.
   `docs/features/retention-emails.md`, `quiz.md`, `email-preferences.md` updated; frontend review-days
   copy swept and found already accurate. `[CHECKPOINT — due 2026-10-06]` added to `ROADMAP.md`'s Backlog
   Index — the projected 1.5x peak-day reduction is a simulation, not yet observed post-deploy.
-
----
-
-## v0.147.0 - The Escape Hatch
-
-**Status: Released**
-
-Theme: a curator whose Bulk Regenerate batch expires can no longer see it start again — a permanent
-dead end from a single 404 that this release turns into a real return-to-start path.
-
-### Planned Scope
-
-- **Bulk Regenerate stuck-batch fix (frontend).** `bulk-regenerate-modal.tsx` seeds `batchId` from
-  `sessionStorage` with no TTL awareness. Receipts expire 24h after creation
-  (`NoteBulkRegenerationReceiptService.RECEIPT_TTL_HOURS`); an expired or unknown batch id 404s at
-  `NoteBulkRegenerationReceiptService:55` (deliberately indistinguishable from "not yours"). The poll's
-  `catch {}` swallows every failure including that 404, and the stop condition requires a `200`
-  (`finished`/`stale`), so the poll runs forever at its 3s cadence while the stored `batchId` keeps the
-  preflight (start) view permanently hidden behind the progress view. **Leg A** discriminates the 404 as
-  terminal — stop polling, clear the stored id, return to preflight, surface the backend's own message
-  ("That regeneration batch is no longer available.") rather than inventing new copy. **Leg B** adds an
-  explicit "start a new batch" / dismiss action that clears the stored id independent of the poll, so a
-  curator is never dependent on the poll noticing anything to escape a stuck view. Source:
-  `docs/claude-findings/2026-09-12-bulk-regeneration-modal-wedged-stale-batch-id.md` (finding) and
-  `docs/claude-plans/2026-09-12-bulk-regeneration-404-terminal-state-fix-plan.md` (fix plan), both
-  untracked on disk, indexed in `ROADMAP.md`'s Backlog Index.
-
-Anti-drift: do NOT extend the 24h receipt TTL (deliberate retention choice — a longer TTL only moves the
-threshold and leaves the wedge intact past it). Do NOT remove `sessionStorage` persistence (deliberate —
-it lets a curator navigate away and return to a running batch). Do NOT make the poll's `catch` rethrow
-everything — a transient non-404 failure must still be swallowed and retried, only a 404 is terminal. Do
-NOT change the 404 contract's indistinguishable unknown/not-yours/expired semantics, and do NOT add a
-distinguishable "expired" status — that would leak batch existence to a non-owner. Do NOT touch
-`queueBatch`'s write-before-return ordering (`NoteBulkRegenerationService.java:238-243`) — it is what
-makes "no rows" a reliable diagnostic elsewhere. Do NOT fold in the unrelated `INVALID_REFRESH_TOKEN` 401
-finding — unproven relation, would change the verification tier. A1 alone (discriminate on 404 status),
-not A1+A2 (a retry-count bound) — the bound would address a different, unconfirmed failure mode. No
-backend change, no migration, no new endpoint — routing is Claude Code inline (frontend only, one file,
-clear root cause), verification tier is one `advisor()` call.
-
-### Shipped
-
-- **Bulk Regenerate stuck-batch fix (frontend).** `frontend/components/library/bulk-regenerate-modal.tsx`
-  — Leg A discriminates a 404 on the receipt poll as terminal (stops polling, clears the stored batch id,
-  returns to preflight with the server's own message); Leg B adds a "Start a new batch" action that does
-  the same reset independent of the poll. `docs/features/bulk-regeneration.md` updated.
 
 ---

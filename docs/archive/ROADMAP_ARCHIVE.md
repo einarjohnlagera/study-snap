@@ -15,6 +15,23 @@ changelog layer. `ROADMAP.md` keeps a one-line-per-version index at each origina
 
 ---
 
+**Kicked off 2026-09-14, signed off 2026-09-14.** `v0.147.0 — The Escape Hatch` is **Released**. Scope: fix the Bulk
+Regenerate modal permanently wedging on a stale/expired batch id — `bulk-regenerate-modal.tsx` seeds
+`batchId` from `sessionStorage` with no TTL awareness, an expired batch 404s
+(`NoteBulkRegenerationReceiptService`'s 24h TTL), the poll's `catch {}` swallows that 404 and keeps
+polling forever since its stop condition requires a `200`, and the stored id keeps the preflight (start)
+view permanently hidden. Owner has a workaround (clear `sessionStorage` / reopen tab) so this is not an
+emergency, but it recurs on every future expired batch. **Leg A** discriminates the 404 as terminal
+(stop polling, clear the stored id, return to preflight with the backend's own message). **Leg B** adds
+an explicit "start a new batch" action independent of the poll. Source:
+`docs/claude-findings/2026-09-12-bulk-regeneration-modal-wedged-stale-batch-id.md` (finding) and
+`docs/claude-plans/2026-09-12-bulk-regeneration-404-terminal-state-fix-plan.md` (fix plan), both
+untracked on disk, indexed above in the Backlog Index. Recommended as the next open release twice
+before (at the `v0.145.0` and `v0.146.0` kickoffs) and finally taken up here. **Routing: Claude Code
+inline** (frontend only, one file, clear root cause). **Verification tier: one `advisor()` call** — no
+auth/quota/money/production-data semantics change, no migration, no new endpoint. No database migration,
+no backend change. Full scope in `RELEASES.md`.
+
 **Kicked off 2026-09-14, signed off 2026-09-14.** `v0.146.0 — Knowledge, Not Lost` is **Released** —
 its one planned item shipped as scoped, PR #1389 (implementation) and PR #1390 (pre-signoff findings),
 both merged into `releases/v0.146.0`. Scope: artifact-first

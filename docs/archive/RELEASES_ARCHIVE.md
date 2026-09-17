@@ -1,6 +1,6 @@
 # RELEASES_ARCHIVE.md — NoteLib
 
-Archived sections of `RELEASES.md`. **Contents are NOT one contiguous range:** `v0.41.0`–`v0.120.0`, plus `v0.126.0` (moved at the `v0.132.0` kickoff), `v0.127.0` (moved at the `v0.133.0` kickoff) `v0.128.0` (moved at the `v0.134.0` kickoff) `v0.129.0` (moved at the `v0.135.0` kickoff) `v0.130.0` (moved at the `v0.136.0` kickoff) `v0.131.0` (moved at the `v0.137.0` kickoff) `v0.132.0` (moved at the `v0.138.0` kickoff) `v0.133.0` (moved at the `v0.139.0` kickoff), `v0.134.0` (moved at the `v0.140.0` kickoff), `v0.135.0` (moved at the `v0.141.0` kickoff), `v0.136.0` (moved at the `v0.142.0` kickoff), `v0.137.0` (moved at the `v0.143.0` kickoff), `v0.138.0` (moved at the `v0.144.0` kickoff), `v0.139.0` (moved at the `v0.145.0` kickoff), `v0.140.0` (moved at the `v0.146.0` kickoff), `v0.141.0` (moved at the `v0.147.0` kickoff), `v0.142.0` (moved at the `v0.148.0` kickoff), `v0.143.0` (moved at the `v0.149.0` kickoff), `v0.144.0` (moved at the `v0.150.0` kickoff), `v0.145.0` (moved at the `v0.151.0` kickoff) and `v0.146.0` (moved at the `v0.152.0` kickoff) as the live file crossed its *current + last five* cap. Each version's own `## vX.Y.Z` heading is the index — search for it. `v0.40.1` and earlier moved here
+Archived sections of `RELEASES.md`. **Contents are NOT one contiguous range:** `v0.41.0`–`v0.120.0`, plus `v0.126.0` (moved at the `v0.132.0` kickoff), `v0.127.0` (moved at the `v0.133.0` kickoff) `v0.128.0` (moved at the `v0.134.0` kickoff) `v0.129.0` (moved at the `v0.135.0` kickoff) `v0.130.0` (moved at the `v0.136.0` kickoff) `v0.131.0` (moved at the `v0.137.0` kickoff) `v0.132.0` (moved at the `v0.138.0` kickoff) `v0.133.0` (moved at the `v0.139.0` kickoff), `v0.134.0` (moved at the `v0.140.0` kickoff), `v0.135.0` (moved at the `v0.141.0` kickoff), `v0.136.0` (moved at the `v0.142.0` kickoff), `v0.137.0` (moved at the `v0.143.0` kickoff), `v0.138.0` (moved at the `v0.144.0` kickoff), `v0.139.0` (moved at the `v0.145.0` kickoff), `v0.140.0` (moved at the `v0.146.0` kickoff), `v0.141.0` (moved at the `v0.147.0` kickoff), `v0.142.0` (moved at the `v0.148.0` kickoff), `v0.143.0` (moved at the `v0.149.0` kickoff), `v0.144.0` (moved at the `v0.150.0` kickoff), `v0.145.0` (moved at the `v0.151.0` kickoff), `v0.146.0` (moved at the `v0.152.0` kickoff) and `v0.147.0` (moved at the `v0.153.0` kickoff) as the live file crossed its *current + last five* cap. Each version's own `## vX.Y.Z` heading is the index — search for it. `v0.40.1` and earlier moved here
 2026-07-10; **`v0.41.0` through `v0.120.0` moved here 2026-09-07** in the `v0.126.0` pass, which
 resumed this convention after it had lapsed for 85 releases — `RELEASES.md` had reached 116
 sections against its documented design of *current + last few versions*. Both passes are MOVES,
@@ -19240,5 +19240,51 @@ premium-exam predicate) — do not deploy frontend before backend this release.
   performance guard test, and had zero real consumers) but never removed from the doc; and a missing
   regression test for this release's own headline Library scenario — a `FAILED` note whose prior Study
   Pack is still `DONE` now has a dedicated case in `NoteServiceLibraryPaginationIntegrationTest`.
+
+---
+
+## v0.147.0 - The Escape Hatch
+
+**Status: Released**
+
+Theme: a curator whose Bulk Regenerate batch expires can no longer see it start again — a permanent
+dead end from a single 404 that this release turns into a real return-to-start path.
+
+### Planned Scope
+
+- **Bulk Regenerate stuck-batch fix (frontend).** `bulk-regenerate-modal.tsx` seeds `batchId` from
+  `sessionStorage` with no TTL awareness. Receipts expire 24h after creation
+  (`NoteBulkRegenerationReceiptService.RECEIPT_TTL_HOURS`); an expired or unknown batch id 404s at
+  `NoteBulkRegenerationReceiptService:55` (deliberately indistinguishable from "not yours"). The poll's
+  `catch {}` swallows every failure including that 404, and the stop condition requires a `200`
+  (`finished`/`stale`), so the poll runs forever at its 3s cadence while the stored `batchId` keeps the
+  preflight (start) view permanently hidden behind the progress view. **Leg A** discriminates the 404 as
+  terminal — stop polling, clear the stored id, return to preflight, surface the backend's own message
+  ("That regeneration batch is no longer available.") rather than inventing new copy. **Leg B** adds an
+  explicit "start a new batch" / dismiss action that clears the stored id independent of the poll, so a
+  curator is never dependent on the poll noticing anything to escape a stuck view. Source:
+  `docs/claude-findings/2026-09-12-bulk-regeneration-modal-wedged-stale-batch-id.md` (finding) and
+  `docs/claude-plans/2026-09-12-bulk-regeneration-404-terminal-state-fix-plan.md` (fix plan), both
+  untracked on disk, indexed in `ROADMAP.md`'s Backlog Index.
+
+Anti-drift: do NOT extend the 24h receipt TTL (deliberate retention choice — a longer TTL only moves the
+threshold and leaves the wedge intact past it). Do NOT remove `sessionStorage` persistence (deliberate —
+it lets a curator navigate away and return to a running batch). Do NOT make the poll's `catch` rethrow
+everything — a transient non-404 failure must still be swallowed and retried, only a 404 is terminal. Do
+NOT change the 404 contract's indistinguishable unknown/not-yours/expired semantics, and do NOT add a
+distinguishable "expired" status — that would leak batch existence to a non-owner. Do NOT touch
+`queueBatch`'s write-before-return ordering (`NoteBulkRegenerationService.java:238-243`) — it is what
+makes "no rows" a reliable diagnostic elsewhere. Do NOT fold in the unrelated `INVALID_REFRESH_TOKEN` 401
+finding — unproven relation, would change the verification tier. A1 alone (discriminate on 404 status),
+not A1+A2 (a retry-count bound) — the bound would address a different, unconfirmed failure mode. No
+backend change, no migration, no new endpoint — routing is Claude Code inline (frontend only, one file,
+clear root cause), verification tier is one `advisor()` call.
+
+### Shipped
+
+- **Bulk Regenerate stuck-batch fix (frontend).** `frontend/components/library/bulk-regenerate-modal.tsx`
+  — Leg A discriminates a 404 on the receipt poll as terminal (stops polling, clears the stored batch id,
+  returns to preflight with the server's own message); Leg B adds a "Start a new batch" action that does
+  the same reset independent of the poll. `docs/features/bulk-regeneration.md` updated.
 
 ---
