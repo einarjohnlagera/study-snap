@@ -43,9 +43,9 @@ directly under its own orchestration.
 
 - **Leg A2 — Hikari-saturation-triggered diagnostic logging (backend).** When the pool is saturated
   (`activeConnections >= maximumPoolSize` with threads waiting, sustained), log which request paths are
-  actually holding connections at that moment — captured via a `ThreadLocal` registry set in a servlet
-  filter at request entry (alongside where `RequestIdFilter` already runs), polled against
-  `HikariPoolMXBean` on a short interval. **This is the one thing that would have answered every one of
+  in flight at that moment — captured via a cross-thread `ConcurrentHashMap<Thread, InFlightRequest>`
+  registry set in a servlet filter at request entry (alongside where `RequestIdFilter` already runs),
+  polled against `HikariPoolMXBean` on a short interval. **This is the one thing that would have answered every one of
   the four incidents on the spot**, instead of leaving "narrowed, not identified" as the outcome each
   time. Scope is exactly detect-saturation-and-log-in-flight-paths — explicitly not a general APM
   integration.
@@ -147,6 +147,7 @@ depends on when F1 actually deploys, so it cannot be written until then.
 
 ### Shipped
 
+- **Hikari saturation request-path diagnostics (Leg A2).** A servlet filter now keeps a cleanup-safe, thread-keyed snapshot of request paths currently in flight. A fixed-delay detector reads the live Hikari MXBean every two seconds and, after two consecutive samples with `activeConnections >= maximumPoolSize` and waiters present, logs the pool counts and every request in flight at saturation. It emits once per saturation episode, rearms after recovery, and disables safely for a non-Hikari datasource. Real-pool guards exhaust a two-connection Hikari pool and prove the warning names the tracked path, while false-positive and throwing-filter guards prove a single blip, ordinary load, and request failures do not leave misleading telemetry.
 - **Curator-owned Authored Depth cleanup queue (F2).** The existing Admin Applicable Programs table now displays each owned note's Authored Depth and can filter to notes where it is missing. The filter preserves the page's requester-owner scope, visibility-agnostic population, pagination, and `updatedAt DESC` order; depth remains editable only from the existing per-note editor.
 
 ## v0.152.0 - The Missing Half of v0.150.0
