@@ -13,6 +13,7 @@ import com.studysnap.backend.repository.CourseProgramCatalogRepository;
 import com.studysnap.backend.repository.UserRepository;
 import com.studysnap.backend.service.model.StudyPackGenerationContext;
 import com.studysnap.backend.util.CourseProgramNormalizationUtils;
+import com.studysnap.backend.util.SubjectNormalizationUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -119,6 +120,7 @@ public class NoteGenerationService {
             UserEntity user
     ) {
         DomainContext domainContext = NoteAuthoringMetadataParser.parseDomainContextOrThrow(request.domainContext());
+        String subject = SubjectNormalizationUtils.normalizeForStorage(request.subject());
         if (CuratorAuthoringPredicate.isCurator(user)) {
             Set<UUID> courseProgramIds = validateCuratedProgramIds(request.courseProgramIds());
             if (courseProgramIds.size() > 1 && domainContext == null) {
@@ -128,7 +130,7 @@ public class NoteGenerationService {
                     user.getId(),
                     List.copyOf(courseProgramIds),
                     null,
-                    null,
+                    subject,
                     domainContext,
                     null
             );
@@ -143,7 +145,7 @@ public class NoteGenerationService {
                 user.getId(),
                 List.of(),
                 courseProgramText,
-                null,
+                subject,
                 domainContext,
                 null
         );
