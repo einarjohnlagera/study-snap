@@ -818,7 +818,9 @@ describe("NoteEditorPageClient", () => {
     fireEvent.click(screen.getByRole("button", { name: "Create a Note" }));
 
     await waitFor(() => {
-      expect(generateNoteFromTopic).toHaveBeenCalledWith("Newton's Laws of Motion", "Nursing");
+      expect(generateNoteFromTopic).toHaveBeenCalledWith(
+        "Newton's Laws of Motion", "Nursing", undefined, undefined, undefined,
+      );
       expect(screen.getByLabelText("Content")).toHaveValue("Generated topic note content");
     });
     fireEvent.click(screen.getByRole("button", { name: "Add details" }));
@@ -854,7 +856,50 @@ describe("NoteEditorPageClient", () => {
     fireEvent.click(screen.getByRole("button", { name: "Create a Note" }));
 
     await waitFor(() => {
-      expect(generateNoteFromTopic).toHaveBeenCalledWith("Bridge Load Distribution", "Civil Engineering");
+      expect(generateNoteFromTopic).toHaveBeenCalledWith(
+        "Bridge Load Distribution", "Civil Engineering", undefined, undefined, undefined,
+      );
+    });
+  });
+
+  it("passes the normalized draft subject to topic generation", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ emailVerifiedAt: "2026-03-21T09:00:00Z" });
+
+    render(<NoteEditorPageClient />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Add details" }));
+    const subjectInput = await screen.findByLabelText("Subject (optional)");
+    fireEvent.change(subjectInput, { target: { value: "  Pharmacology  " } });
+    fireEvent.click(screen.getByText("Create from topic"));
+    fireEvent.change(screen.getByLabelText("Topic"), { target: { value: "Dosage Calculations" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create a Note" }));
+
+    await waitFor(() => {
+      expect(generateNoteFromTopic).toHaveBeenCalledWith(
+        "Dosage Calculations", "Nursing", undefined, undefined, "Pharmacology",
+      );
+    });
+  });
+
+  it("uses the latest changed Subject even when it's typed after the Topic", async () => {
+    // ⚠️ Regression guard: the generate-from-topic callback's dependency array must include
+    // draft.subject. Without it, typing Subject AFTER Topic (a common order — Topic is the primary
+    // field) would not recreate the memoized callback, silently dropping the subject from generation.
+    (getAuthUser as jest.Mock).mockReturnValue({ emailVerifiedAt: "2026-03-21T09:00:00Z" });
+
+    render(<NoteEditorPageClient />);
+
+    fireEvent.click(await screen.findByText("Create from topic"));
+    fireEvent.change(screen.getByLabelText("Topic"), { target: { value: "Dosage Calculations" } });
+    fireEvent.click(await screen.findByRole("button", { name: "Add details" }));
+    const subjectInput = await screen.findByLabelText("Subject (optional)");
+    fireEvent.change(subjectInput, { target: { value: "  Pharmacology  " } });
+    fireEvent.click(screen.getByRole("button", { name: "Create a Note" }));
+
+    await waitFor(() => {
+      expect(generateNoteFromTopic).toHaveBeenCalledWith(
+        "Dosage Calculations", "Nursing", undefined, undefined, "Pharmacology",
+      );
     });
   });
 
@@ -880,7 +925,9 @@ describe("NoteEditorPageClient", () => {
     fireEvent.click(screen.getByRole("button", { name: "Create a Note" }));
 
     await waitFor(() => {
-      expect(generateNoteFromTopic).toHaveBeenCalledWith("Torque and Rotation", "Mechanical Engineering");
+      expect(generateNoteFromTopic).toHaveBeenCalledWith(
+        "Torque and Rotation", "Mechanical Engineering", undefined, undefined, undefined,
+      );
     });
   });
 
@@ -911,8 +958,12 @@ describe("NoteEditorPageClient", () => {
     fireEvent.click(screen.getByRole("button", { name: "Create Again" }));
 
     await waitFor(() => {
-      expect(generateNoteFromTopic).toHaveBeenNthCalledWith(1, "Bridge Load Distribution", "Civil Engineering");
-      expect(generateNoteFromTopic).toHaveBeenNthCalledWith(2, "Bridge Load Distribution", "Civil Engineering");
+      expect(generateNoteFromTopic).toHaveBeenNthCalledWith(
+        1, "Bridge Load Distribution", "Civil Engineering", undefined, undefined, undefined,
+      );
+      expect(generateNoteFromTopic).toHaveBeenNthCalledWith(
+        2, "Bridge Load Distribution", "Civil Engineering", undefined, undefined, undefined,
+      );
     });
   });
 
@@ -935,7 +986,9 @@ describe("NoteEditorPageClient", () => {
     fireEvent.click(screen.getByRole("button", { name: "Create a Note" }));
 
     await waitFor(() => {
-      expect(generateNoteFromTopic).toHaveBeenCalledWith("Binary Search Trees", "Software Engineering");
+      expect(generateNoteFromTopic).toHaveBeenCalledWith(
+        "Binary Search Trees", "Software Engineering", undefined, undefined, undefined,
+      );
     });
   });
 
@@ -1322,6 +1375,7 @@ describe("NoteEditorPageClient", () => {
       undefined,
       "ENGINEERING_MATHEMATICS",
       ["program-nursing"],
+      undefined,
     );
   });
 

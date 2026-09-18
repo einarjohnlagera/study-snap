@@ -399,6 +399,37 @@ class CourseProgramCatalogServiceTest {
     }
 
     @Test
+    void leavesIsActiveUntouchedWhenTheFieldIsOmitted() {
+        UUID programId = UUID.randomUUID();
+        CourseProgramCatalogItemResponse inactive = new CourseProgramCatalogItemResponse(
+                programId, CHEMICAL_ENGINEERING, List.of(), null, null, false);
+        when(repository.findById(programId)).thenReturn(Optional.of(inactive), Optional.of(inactive));
+
+        CourseProgramCatalogItemResponse result = service.updateProgramFamilies(
+                programId, new UpdateCourseProgramCatalogRequest(List.of(), null));
+
+        assertThat(result.isActive()).isFalse();
+        verify(repository, never()).updateIsActive(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyBoolean());
+    }
+
+    @Test
+    void appliesIsActiveWithoutChangingMembershipsWhenOnlyTheFlagIsPresent() {
+        UUID programId = UUID.randomUUID();
+        CourseProgramCatalogItemResponse active = item(programId, CHEMICAL_ENGINEERING, null, null);
+        CourseProgramCatalogItemResponse inactive = new CourseProgramCatalogItemResponse(
+                programId, CHEMICAL_ENGINEERING, List.of(), null, null, false);
+        when(repository.findById(programId)).thenReturn(Optional.of(active), Optional.of(inactive));
+
+        CourseProgramCatalogItemResponse result = service.updateProgramFamilies(
+                programId, new UpdateCourseProgramCatalogRequest(null, false));
+
+        assertThat(result.isActive()).isFalse();
+        verify(repository).updateIsActive(programId, false);
+        verify(repository, never()).replaceProgramFamilies(
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
     void rejectsAnUnknownProgramBeforeValidatingOrWriting() {
         UUID programId = UUID.randomUUID();
         UUID familyId = UUID.randomUUID();

@@ -71,6 +71,54 @@ describe("AdminCourseProgramCatalogSection", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: "Remove Engineering" }));
     fireEvent.click(within(dialog).getByRole("button", { name: "Save changes" }));
     await waitFor(() => expect(updateCourseProgram).toHaveBeenCalledWith(
-      "program-a", { programFamilyIds: [] }));
+      "program-a", { programFamilyIds: [], isActive: true }));
+  });
+
+  it("initializes the Active toggle from the program and saves its changed value", async () => {
+    (updateCourseProgram as jest.Mock).mockResolvedValue({ ...civil, isActive: false });
+    render(<AdminCourseProgramCatalogSection />);
+    await screen.findAllByText("Civil Engineering");
+    fireEvent.click(screen.getAllByRole("button", { name: "Edit" })[0]);
+    const dialog = screen.getByRole("dialog", { name: "Edit Program Families" });
+    const active = within(dialog).getByRole("checkbox", { name: "Active" });
+    expect(active).toHaveAttribute("aria-checked", "true");
+
+    fireEvent.click(active);
+    expect(active).toHaveAttribute("aria-checked", "false");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save changes" }));
+
+    // ⚠️ Regression guard for the v0.152.0-class lost-update defect: an Active-only save must NOT
+    // re-send programFamilyIds — the picker was never touched, so a concurrent admin's membership
+    // edit made between load and save must survive this PATCH.
+    await waitFor(() => expect(updateCourseProgram).toHaveBeenCalledWith("program-a", {
+      isActive: false,
+    }));
+  });
+
+  it("does not overwrite a concurrent admin's membership edit on an Active-only save", async () => {
+    // Loaded snapshot says Engineering; a concurrent admin has since moved this program to Health
+    // Sciences server-side. Toggling only Active must not carry the stale snapshot back over that edit.
+    (updateCourseProgram as jest.Mock).mockResolvedValue({ ...civil, isActive: false,
+      programFamilies: [{ id: "family-health", name: "Health Sciences" }] });
+    render(<AdminCourseProgramCatalogSection />);
+    await screen.findAllByText("Civil Engineering");
+    fireEvent.click(screen.getAllByRole("button", { name: "Edit" })[0]);
+    const dialog = screen.getByRole("dialog", { name: "Edit Program Families" });
+    fireEvent.click(within(dialog).getByRole("checkbox", { name: "Active" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save changes" }));
+
+    await waitFor(() => expect(updateCourseProgram).toHaveBeenCalledTimes(1));
+    const [, request] = (updateCourseProgram as jest.Mock).mock.calls[0];
+    expect(request).not.toHaveProperty("programFamilyIds");
+  });
+
+  it("marks an inactive program in both desktop and mobile catalog layouts", async () => {
+    (getCourseProgramCatalog as jest.Mock).mockResolvedValue([{ ...civil, isActive: false }]);
+    render(<AdminCourseProgramCatalogSection />);
+
+    expect(await screen.findAllByText("Inactive")).toHaveLength(2);
+    fireEvent.click(screen.getAllByRole("button", { name: "Edit" })[0]);
+    expect(within(screen.getByRole("dialog", { name: "Edit Program Families" }))
+      .getByRole("checkbox", { name: "Active" })).toHaveAttribute("aria-checked", "false");
   });
 });

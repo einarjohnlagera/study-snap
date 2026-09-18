@@ -267,6 +267,7 @@ Create mode:
 - `Create a Note` creates a structured first draft from a topic with clear sections (`Overview`, `Core Concepts`, `Key Details`, optional `Examples`) and should avoid meta filler or instructional language.
 - `Create a Note` must build its request from the current Create Note form state at submit time. The selected draft Course / Program is authoritative for the first generated note; the profile Course / Program is fallback only when the draft field is blank.
 - `Create a Note` sends a selected Teacher/Admin Domain Context into topic-content generation; when blank, the resolved Course / Program remains the Domain fallback. Note Learner Level is persisted when the draft is saved and then controls Study Pack generation; the topic-generation DTO deliberately has no second level source.
+- **`Create a Note` also sends the draft's Subject field into topic-content generation (`v0.154.0`).** It narrows within the resolved Domain Context per ADR-001 rather than competing with or overriding it; a blank Subject sends nothing and generation proceeds exactly as before. `GenerateNoteFromTopicRequest` carries it as an optional, 64-character-bounded field; `NoteGenerationService` normalizes it once and passes it through to both the curator and learner `StudyPackGenerationContextResolver` branches.
 - topic note generation is plan-gated separately from Study Pack generation and OCR.
 
 Bulk import behavior:

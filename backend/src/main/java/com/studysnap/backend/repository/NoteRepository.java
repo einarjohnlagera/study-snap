@@ -61,6 +61,30 @@ public interface NoteRepository extends JpaRepository<NoteEntity, UUID>, NoteLib
             Pageable pageable
     );
 
+    /**
+     * Rows in this state can only be a data anomaly today: every current write path that sets
+     * {@code status = GENERATING} also sets {@code generationEnqueuedAt} atomically in the same
+     * method, so {@link #findStaleGenerationIds} can never select them ({@code generationEnqueuedAt
+     * < :cutoff} is never true against a NULL column). {@code updatedAt} is the same fallback clock
+     * {@code POST /notes/{id}/recover-stranded-generation} already uses for a self-service recovery
+     * of this exact row class (see {@code NoteController.recoverStrandedGeneration}) — this sweep
+     * applies the identical bound so a row still gets recovered even if nobody clicks that action,
+     * without weakening the age check a future non-atomic writer would still need.
+     */
+    @Query("""
+            select n.id
+            from NoteEntity n
+            where n.status = :status
+              and n.generationEnqueuedAt is null
+              and n.updatedAt < :cutoff
+            order by n.updatedAt asc
+            """)
+    List<UUID> findGeneratingIdsWithNullEnqueuedAt(
+            @Param("status") NoteStatus status,
+            @Param("cutoff") OffsetDateTime cutoff,
+            Pageable pageable
+    );
+
     long countByStatusAndGenerationEnqueuedAtIsNull(NoteStatus status);
     Optional<NoteEntity> findByOwnerUserIdAndCopiedFromNoteIdAndCopiedFromPublicTrue(UUID ownerUserId, UUID copiedFromNoteId);
 

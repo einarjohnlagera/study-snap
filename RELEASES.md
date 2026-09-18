@@ -1,5 +1,161 @@
 # RELEASES.md - NoteLib
 
+## v0.154.0 - Closing the Loop
+
+**Status: Released** (signed off 2026-09-18)
+
+Theme: close out three independently-verified, gate-true Backlog Index items — none gated on an owner
+action or a production read, none sharing a file or a shared method with any other, each anchored to
+current code before being scoped rather than trusted from its row's prose.
+
+**⚠️ CORRECTED AT KICKOFF, BEFORE ANY CODE WAS WRITTEN: a fourth item, "health-check-on-Hikari-pool
+decoupling," was scoped in by mistake and dropped.** The liveness/readiness split it proposed to build
+already shipped in `v0.119.1` PR #1297 (`management.health.group.liveness.include: livenessState`,
+excluding `db`, in `application.yaml`) — the pre-scoping check only grepped for a custom
+`HealthIndicator` Java class and missed that the real fix is declarative YAML config, not a class. The
+only piece still open is the Backlog Index's own existing row for it: an **owner action**, repointing
+Render's `healthCheckPath` from `/api/actuator/health` to `/api/actuator/health/liveness` in the
+dashboard — confirmed still unpointed via a live read-only Render API call at this kickoff
+(2026-09-18). Not re-added to this release's code scope; it stays an owner action, same class as A1.
+
+### Planned Scope
+
+- **`course_programs.is_active` write path (backend + Admin frontend).** Confirmed dead column:
+  `CourseProgramCatalogRepository.java` reads `is_active` in several places but no code anywhere in
+  `backend/src/main/java` ever writes it; `CourseProgramCatalogService`/`Controller` have zero
+  references. Adds the missing write path so Admin can actually deactivate a catalog program — the
+  prerequisite for retiring the two legacy fused rows (`Nursing · Medicine`, `Nursing · Pharmacy`).
+- **Recovery for `generation_enqueued_at IS NULL` notes stranded in `GENERATING` (backend).**
+  `GenerationRecoveryService.java:107` explicitly skips this row class and logs "leaving them
+  untouched"; every other stale `GENERATING` row is swept back within ~2h10m
+  (`noteBoundMinutes` default 120 plus sweep cadence), but the automated sweep never touches a row
+  missing this timestamp. **⚠️ Framing corrected at kickoff:** a live read-only production query
+  (2026-09-18) found **zero** notes currently `GENERATING`, let alone with a null clock — this is a
+  **latent structural gap in the automated sweep**, not an active stuck-note population, and (found
+  mid-implementation, not at kickoff) **not a user-visible dead end either**: `NoteController`'s
+  `POST /notes/{id}/recover-stranded-generation` already gives the note owner a tested, self-service
+  recovery path for exactly this row class, using `updatedAt` as a fallback clock bounded by the same
+  `noteBoundMinutes`. This item makes that same rule fire automatically as well as on request, rather
+  than inventing new recovery logic or fixing a previously-unrecoverable state. Every current write path
+  that sets `NoteStatus.GENERATING` (`StudyPackService.java:224-225`, `:326-327`) also sets
+  `generationEnqueuedAt` atomically in the same method, and `V118__generation_recovery_clocks.sql`
+  already one-time-backfilled any pre-existing null rows at its own deploy, so this is prospective,
+  defense-in-depth coverage for a future non-atomic writer — not a fix for a live incident.
+- **Topic-note generation passes `subject` into the LLM context (backend + frontend).**
+  `GenerateNoteFromTopicRequest.java` carries `topic`, `courseProgramIds`/`courseProgramText` and
+  `domainContext`, but no `subject` — `NoteGenerationService` builds context with `subject = null`, so a
+  note authored under a specific subject via "Create from topic" never tells the model that. Degrades
+  quality rather than failing requests. Must preserve ADR-001's hierarchy: Domain Context is the sole
+  authoritative domain constraint, Subject only narrows within it.
+
+Anti-drift: no bulk `is_active` editor or catalog deletion, and no `course_programs.program_family_id`
+write path revival; the `GENERATING`-recovery fix extends the existing sweep's row selection, it does
+not change `noteBoundMinutes` or the sweep cadence; the topic-note `subject` change does not let Subject
+override or compete with Domain Context per ADR-001, and does not touch `courseProgramText`/
+`domainContext` resolution.
+
+**Routing:** Claude Code inline for the `GENERATING`-recovery fix (isolated root cause, 1-3 files);
+Codex for the `is_active` write path and the topic-note `subject` context gap (new endpoint/DTO +
+multi-surface frontend each). **Verification tier:** each item's own tier as scoped (direct verification
+for the inline item, normal `/audit-diff` for the two Codex items). **⚠️ Escalated at signoff, past the
+whole-release `advisor()` summary originally scoped here:** all three items independently tripped
+CLAUDE.md's "delivery introduced a defect the same session then fixed" trigger (item 1's lost-update
+defect, item 2's unbounded-recovery regression, item 3's stale-closure bug — each caught and fixed before
+its own commit). A repeated same-session-defect pattern across every item in a release is a stronger
+blind-spot signal than the rule anticipates from a single occurrence, so this release ran one scoped cold
+agent, falsification-framed against the specific claims made in all three fixes, instead of the single
+`advisor()` summary. **Result: nothing disproven** — all four falsifiable claims per item held under
+direct code inspection (the lost-update fix, the recovery bound, the dependency-array fix, and their
+respective transactional/normalization/negative-case guarantees), and no cross-item coupling was found.
+**⚠️ One imprecision corrected, not a defect:** this section's original "no shared files or methods"
+phrasing was wrong on the first half — `frontend/lib/api.ts` is touched by both item 1
+(`updateCourseProgram`) and item 3 (`generateNoteFromTopic`), at non-overlapping functions with no logic
+interaction. "No shared methods" is what actually holds and is what the no-full-pressure-test gate
+depends on.
+
+Carried forward from `v0.153.0`'s signoff, not this release's problem to solve: A1 (owner action —
+enabling Render's own per-request logging) still not enabled as of `v0.153.0` signoff; the Leg A2
+saturation detector's registry has no coverage of non-request threads (Known Limitation, not re-scoped
+here). Also carried forward, from this release's own kickoff correction above: the Render
+`healthCheckPath` repoint (owner action).
+
+### Shipped
+
+- **Admin write path for `course_programs.is_active`.** The existing catalog PATCH accepts an optional
+  nullable `isActive` field and writes it transactionally through
+  `CourseProgramCatalogService.java:132-140` / `CourseProgramCatalogRepository.java:63,113-115`;
+  omission leaves the lifecycle flag unchanged, and an `isActive`-only PATCH also leaves family
+  memberships untouched. The Course / Programs view initializes an Active checkbox from the edited
+  row and marks inactive rows in both rendered layouts (`admin-course-program-catalog-section.tsx`).
+  **⚠️ Pre-commit `advisor()` review found and fixed a real lost-update defect in the Codex delivery,
+  the same class `v0.152.0`'s cold agent found on the sibling family-rename modal:** the save path
+  originally re-sent `programFamilyIds` from its load-time snapshot on every save, including an
+  Active-only toggle — so an admin flipping Active while a concurrent admin had just changed that
+  program's family memberships would silently overwrite the concurrent edit. Fixed by mirroring
+  `AdminProgramFamiliesSection`'s `membershipDirty` pattern: `programFamilyIds` is now omitted from
+  the request entirely unless `CatalogMultiSelect` was actually touched this edit. Two guard tests
+  added confirming an Active-only save carries no `programFamilyIds` key. The shared catalog read
+  stays unfiltered, and the existing Applicable Programs active-only behavior is unchanged.
+  **⚠️ Deploy-ordering statement, per CLAUDE.md's rule for a form whose omission-meaning changed:**
+  this PATCH's frontend and backend must deploy together, and the safe direction is
+  **backend-first**. If Render deploys the new `isActive`-aware backend before Vercel deploys the new
+  frontend, the old frontend's existing family-save calls are unaffected (it always sent
+  `programFamilyIds` and never sends `isActive`, both still handled). If Vercel deploys the new
+  frontend first, the Active checkbox reaches users before the backend accepts `isActive` — Jackson
+  silently drops the unknown field, the PATCH still 200s, and the toggle appears to save but has no
+  effect until the backend catches up. Not a data-loss risk either order, but backend-first avoids a
+  silently-inert control window. Coverage includes real JSON PATCH binding plus a follow-up catalog
+  GET, service omission/application cases, the JDBC `UPDATE` executed and read back on Testcontainers
+  PostgreSQL, request-body included/omitted cases in `api-course-program-catalog.test.ts`, and
+  modal/desktop/mobile component cases including the two lost-update guard tests. Backend 2435/2435;
+  frontend 2468/2469 with one pre-existing skipped test; frontend lint 0 errors (20 pre-existing
+  warnings, all pre-existing and unrelated to this change).
+- **Recovery for `generation_enqueued_at IS NULL` notes stranded in `GENERATING`.**
+  `NoteRepository.findGeneratingIdsWithNullEnqueuedAt` (new, bounded on `updatedAt < cutoff`, same
+  `noteBoundMinutes`) feeds a new `GenerationRecoveryRowWriter.recoverNoteWithMissingEnqueuedAt(UUID,
+  OffsetDateTime)`, which applies the identical `updatedAt`-fallback rule
+  `NoteController.recoverStrandedGeneration` already used for self-service recovery of this row class —
+  now enforced by the scheduled sweep too. `GenerationRecoveryService.recoverStaleNotes` runs this
+  alongside the existing timed-clock sweep and combines both results; the original
+  `countByStatusAndGenerationEnqueuedAtIsNull` warning log is kept (uncapped by batch size) so the
+  anomaly signal survives exactly as before — this item makes the row recover as well as get warned
+  about, it does not remove the warning. **⚠️ First implementation was a live regression risk, caught by
+  `advisor()` before commit:** it recovered every null-clock row unconditionally, with no age bound —
+  unlike the self-service endpoint's `updatedAt` check, so a future non-atomic writer's in-flight
+  generation would have been killed by the very next 10-minute sweep. Corrected to require
+  `updatedAt.isBefore(cutoff)`, matching the endpoint's own rule; the fixture-driven test that first
+  covered this (`note(null)` with no `updatedAt`) was itself rebuilt to a realistic row plus an added
+  negative case (`updatedAt` 5 minutes old → left alone) that would have failed the original code.
+  `docs/features/study-pack-generation.md` corrected to describe the sweep and the endpoint as two
+  entry points to the same rule, not "left untouched" plus a separate manual-only path. Backend
+  2434/2434 (full suite, including the real-PostgreSQL native-query harness).
+- **Topic-note generation now carries the editor's Subject into generation context.**
+  `GenerateNoteFromTopicRequest.java:11-35` accepts the optional, 64-character-bounded field while
+  keeping the existing three- and four-argument Java constructors source-compatible (both are live:
+  the three-arg form is still used by `StudyPackService.java:332`, the four-arg form by
+  `NoteBulkGenerationService.java:311`); `NoteGenerationService.java:118-152` normalizes it once with
+  `SubjectNormalizationUtils` and passes it through both the unchanged curator and learner resolver
+  branches. The positional frontend API appends `subject` and omits blank values
+  (`frontend/lib/api.ts:3603-3631`), while every note-editor call variant supplies the already-collected
+  draft value (`note-editor-page-client.tsx:1143-1180`). Onboarding's separate two-argument call is
+  unchanged. **⚠️ Pre-commit `npm run lint` found a real stale-closure bug in the Codex delivery:** the
+  `useCallback` wrapping the generate-from-topic handler read `draft.subject` (via `resolvedSubject`) but
+  omitted it from its dependency array, so typing Subject *after* Topic — a plausible order — would
+  silently generate with the stale (often empty) subject captured at the callback's last recreation.
+  Codex's own new test happened to type Subject before Topic, which recreates the callback via the
+  already-listed `normalizedGenerateTopic` dependency and masked the gap. Fixed by adding `draft.subject`
+  to the dependency array; a new regression test
+  (`"uses the latest changed Subject even when it's typed after the Topic"`) exercises the reversed,
+  bug-exposing order and was mutation-verified — confirmed failing against the pre-fix code, passing
+  after. **No deploy-ordering statement needed:** `subject` is purely additive to an existing endpoint (no
+  form's meaning changed, no field became required), and either deploy-skew direction only degrades
+  generation quality rather than breaking a request. Coverage includes resolver-call and final context
+  assertions for both branches, real `MockMvc` JSON binding plus over-length rejection before generation,
+  the real frontend request body with present/blank subjects, and component calls with a selected,
+  absent, or Subject-typed-after-Topic draft. Backend 2442/2442 (full suite, including the
+  real-PostgreSQL native-query harness); frontend 2472/2473 with one pre-existing skipped test; frontend
+  lint 0 errors (20 pre-existing warnings, back to baseline after the fix — 21 before it).
+
 ## v0.153.0 - The Missing Telemetry
 
 **Status: Released** (signed off 2026-09-18)
@@ -610,130 +766,3 @@ plan's complete decision block are in
 - Added migration, repository, service, real-request controller, and component coverage for lifecycle
   defaults, joined row mapping, family reassignment and clearing, endpoint errors and authorization,
   inactive candidates, and all family-chip states.
-
----
-
-## v0.148.0 - Say What You Mean
-
-**Status: Released**
-
-Theme: two small, unrelated correctness fixes — a keyword scan that quietly misjudges what content
-needs computation guidance, and a reminder email that quietly always arrives on the same day.
-
-### Planned Scope
-
-- **`QUANTITATIVE_KEYWORDS` substring-anchoring fix (backend).** `isQuantitativeContext`
-  (`OpenAiLlmStudyPackService.java:1649`) uses plain `String.contains` for all 50 keywords, so several
-  match as embedded substrings of unrelated words: `ratio` ⊂ `corporation`/`operations`/`administration`,
-  `solve` ⊂ `resolve`, `current` ⊂ `currently`, `interest` ⊂ `interested`. Measured read-only against
-  production: ~4,890 notes are currently "quantitative via keywords only." Sampled the flip set:
-  genuinely non-computational content (pedagogy, architectural theory, Philippine history, nursing
-  practice narratives). **Two amendments found during pre-commit `advisor()` review, both closed in the
-  same diff before shipping:**
-  - **Nursing/Accountancy regression** (also independently found by the earlier cold-agent falsification
-    pass): anchoring alone would have declassified `domain_context IS NULL` Nursing/Accountancy content
-    that reaches `quantitative=true` today only via this same accidental substring match. Re-measured
-    with `course_program` joined into the haystack (the original estimate omitted it): of the flip set,
-    466 notes are rescued by two new unanchored `QUANTITATIVE_KEYWORDS` entries, `nursing` and
-    `accountancy` (both safe standalone words, no substring hazard) — higher coverage than the original
-    ~370-note estimate, not lower. `pharmacokinetic` (added `v0.145.0`) stays deliberately unanchored —
-    its match depends on unanchored substring matching, and the code comment explaining this was
-    rewritten so a future session doesn't "fix" it into breaking.
-  - **Inflection gap:** a bare `\bkeyword\b` doesn't match a keyword's own plural/verb forms —
-    `\bratio\b` fails on "financial ratios," `\bsolve\b` fails on "solving." Of the flip set, 28% (291 of
-    1,045 remaining after the nursing/accountancy rescue) triggered ONLY on one of these inflected forms
-    — genuinely quantitative content the anchoring fix would otherwise have wrongly declassified. Each of
-    the 7 anchored patterns now also accepts its plain plural/verb inflections (`ratio(s)?`,
-    `solv(e|es|ed|ing)`, `current(s)?`, `interest(s)?`, `integral(s)?`, `balance(s)?`) without reopening
-    any substring hazard the anchoring closed — e.g. `interest(s)?` still excludes `interested`/
-    `interesting` since the boundary is enforced after the optional `s`, not mid-word.
-  - **Final measured flip count, with course_program in the haystack and both amendments applied: 754
-    notes** (down from the original, narrower estimate of ~1,520-1,586 — the original haystack omitted
-    course_program and the original anchoring omitted inflections, both of which this diff corrects
-    before shipping, not after).
-  - **Which 7 keywords get anchored:** `ratio`, `solve`, `current`, `interest`, `integral`, `balance`,
-    `units`. The other 44 (including the 2 new ones and `pharmacokinetic`) keep plain `contains`.
-  - **Anti-drift:** no resolver rewrite — same haystack construction, same
-    `domainContext().isQuantitative()` short-circuit, same overall function shape; anchoring is a second,
-    additive matching branch for a fixed subset of keywords, not a semantic overhaul of the scan.
-  - **Test owed:** `OpenAiLlmStudyPackServiceTest` gains cases proving the anchored path isn't a no-op (a
-    haystack containing only `corporation` → not quantitative; one containing `current ratio` → still
-    quantitative), that the plural/verb inflections match on their own, and that the nursing/accountancy
-    rescue works via `courseProgram` (the field production actually uses, not just `subject`) — plus
-    confirms the existing `pharmacokinetic` test still passes as the canary.
-  - `docs/features/study-pack-generation.md` updated to describe the anchoring split and the
-    `nursing`/`accountancy` false-negative repair, matching how it already documents `pharmacokinetic`.
-
-- **Due-concepts-digest day-of-week clustering fix (backend).** `RetentionService.isEligibleReviewDay`
-  returns `true` unconditionally for the 143 users with `review_days IS NULL`, so they're checked every
-  day the digest job runs and gated only by a flat 7-day cooldown — which locks them onto whichever
-  weekday they first landed on, forever. Measured read-only against production (Asia/Manila, the job's
-  actual `EMAIL_BUDGET_ZONE`): Mon 107, Tue 101, Wed 98 vs. Thu 9, Fri 8, Sun 2 over 28 days — a real,
-  confirmed 3-day cluster. **Amendment from a cold-agent falsification pass, correcting two claims from
-  this release's own scoping:** (1) the originally-claimed "3.5x peak reduction" was a unit error
-  (compared users-per-bucket to sends-per-week); the real, reproduced improvement is **1.5x** peak-day
-  reduction (26.8 → 18.0 sends/week on the worst day) — a burstiness improvement, not a dramatic fix. (2)
-  This is **not** a live email-cap breach fix — `dispatchDueConceptsDigestEmails` never consumes the
-  `EMAIL_DAILY_LIMIT` budget (confirmed unbudgeted), and `sendDailyEmails()` (the budgeted path) runs
-  before it in the daily job, so same-day collision with the 100/day cap cannot occur the way the
-  original finding implied. Framed correctly here as: smooths an already-unbounded channel's shape for
-  143 users, not a breach fix.
-  - **Fix:** for null-`review_days` users, `isEligibleReviewDay` gets a deterministic default day —
-    `Math.floorMod(user.getId().hashCode(), 7)` compared against today's `DayOfWeek` — instead of "any
-    day." `dueConceptsDigestCooldownDays`'s null-branch changes from the global 7-day config to
-    **6 days** (not the committed-user value of 1, per the falsification pass's transition-week
-    counterexample below). Purely computed at read time from the existing `id` column — no new column,
-    no migration, no backfill, no write to `review_days`.
-  - **Anti-drift, from the falsification pass:** cooldown must be **6**, not 1 — with the day-gate
-    providing weekly cadence, 6 days never blocks an on-rhythm send, and it makes a sub-7-day
-    double-send during the transition week impossible (a cooldown of 1 was shown to produce two digests
-    2 days apart for a concrete example user). Must use `Math.floorMod`, not `%` — `UUID.hashCode()` can
-    be negative.
-  - **Known limitation, stated rather than silently accepted:** a user whose last digest landed close to
-    their newly-assigned day may still see one earlier-than-usual digest in the first week after deploy
-    (a bounded, one-time transition effect, not an ongoing issue).
-  - **Uses `dispatchDay.getValue() - 1`, not `.ordinal()`**, to compare against the hash bucket — same
-    result, but pinned to `DayOfWeek`'s documented numbering rather than enum ordinal position.
-  - **`StudySnapProperties.Retention.dueConceptsDigestCooldownDays` (default 7) is removed**, not left
-    orphaned — it had no `application.yaml` key and, after this fix, no remaining reader; the uncommitted
-    cooldown is now the compile-time constant `UNCOMMITTED_DUE_CONCEPTS_DIGEST_COOLDOWN_DAYS = 6`, a
-    deliberate choice (it has no legitimate reason to vary per deployment) rather than an oversight.
-  - **Feature docs updated to match**, not just `RELEASES.md`: `docs/features/retention-emails.md` (the
-    null/empty `review_days` cadence description and the cooldown table), `docs/features/quiz.md` (its
-    "null/empty review days preserve the pre-`v0.72.0` cadence" line was the exact claim this fix makes
-    false), and `docs/features/email-preferences.md` (the settings-page cooldown description). Frontend
-    review-days copy (`app/settings/page.tsx`, `review-commitment-prompt.tsx`) was swept and found already
-    accurate — neither promises "every day" or "whenever due," so neither needed a change.
-  - **Tests owed:** `RetentionServiceTest`'s null/empty-`review_days` tests are rewritten for the new
-    behavior (was: "always eligible"; now: eligible only on a deterministic hash-assigned day, with a new
-    negative-case test proving the day-gate actually excludes a mismatched day) rather than merely
-    adjusted, since the old assertion is no longer true. `RetentionEmailScheduler`'s and
-    `RetentionEmailSchedulerTest`'s existing "7-day cooldown" comments/assertions are updated to describe
-    the new day-gate + 6-day cooldown behavior.
-
-Anti-drift (both items): no database migration, no new endpoint, no persisted state change for either
-fix — both are pure logic changes computed at read/generation time. Routing: Claude Code implements
-directly (isolated bug fixes with a clear root cause each — Item 1 touches 1 production file, Item 2
-touches 3: `RetentionService.java`, `RetentionEmailScheduler.java`, and the `StudySnapProperties.java`
-config-field removal). **Verification tier: one `advisor()` call** on the diff for each item — no
-auth/quota/money/production-data semantics change for either, and both were already pressure-tested
-pre-implementation by a cold Opus agent during scoping (falsification-framed against the specific claims
-above), which is why a heavier post-implementation tier isn't warranted.
-
-### Shipped
-
-- **`QUANTITATIVE_KEYWORDS` substring-anchoring fix** — PR #1396, merged `5657d8fd` into
-  `releases/v0.148.0`. `OpenAiLlmStudyPackService.java:193-199,1693-1697` (word-boundary anchoring for
-  7 keywords, each with plural/verb inflections), `:176-184` (`nursing`/`accountancy` added unanchored).
-  `OpenAiLlmStudyPackServiceTest` gained 5 guard tests. `docs/features/study-pack-generation.md` and
-  `docs/gpt-contexts/REVIEW_SET_SHAPING_CONTEXT.md` updated. Full backend suite green.
-- **Due-concepts-digest day-of-week clustering fix** — PR #1397, merged `36b08fd3` into
-  `releases/v0.148.0`. `RetentionService.java:414` (`isEligibleReviewDay`), `:58,422`
-  (`UNCOMMITTED_DUE_CONCEPTS_DIGEST_COOLDOWN_DAYS = 6`), `RetentionEmailScheduler.java` comment update,
-  `StudySnapProperties.java` (`dueConceptsDigestCooldownDays` removed, now unused). `RetentionServiceTest`
-  rewritten for the new null/empty-`review_days` behavior including a negative-case guard.
-  `docs/features/retention-emails.md`, `quiz.md`, `email-preferences.md` updated; frontend review-days
-  copy swept and found already accurate. `[CHECKPOINT — due 2026-10-06]` added to `ROADMAP.md`'s Backlog
-  Index — the projected 1.5x peak-day reduction is a simulation, not yet observed post-deploy.
-
----

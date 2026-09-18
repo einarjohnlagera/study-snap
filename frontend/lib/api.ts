@@ -3605,6 +3605,7 @@ export async function generateNoteFromTopic(
   courseProgram?: string,
   domainContext?: DomainContext,
   courseProgramIds?: string[],
+  subject?: string,
 ): Promise<GenerateNoteFromTopicResponse> {
   const body: Record<string, string | string[]> = { topic };
   if (courseProgram && courseProgram.trim().length > 0) {
@@ -3615,6 +3616,9 @@ export async function generateNoteFromTopic(
   }
   if (domainContext) {
     body.domainContext = domainContext;
+  }
+  if (subject && subject.trim().length > 0) {
+    body.subject = subject.trim();
   }
   const response = await fetchWithAuth(
     "/notes/generate",
@@ -5966,7 +5970,7 @@ export async function createCourseProgram(request: CreateCourseProgramRequest): 
 
 export async function updateCourseProgram(
   id: string,
-  request: { programFamilyIds: string[] },
+  request: { programFamilyIds?: string[]; isActive?: boolean },
 ): Promise<CourseProgramCatalogItem> {
   const fallbackMessage = "Could not update the Course / Program.";
   const response = await fetchWithAuth(
