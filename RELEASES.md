@@ -4,21 +4,22 @@
 
 **Status: In Progress**
 
-Theme: close out four independently-verified, gate-true Backlog Index items instead of one — none
-gated on an owner action or a production read, none sharing a file or a shared method with any other,
-each anchored to current code before being scoped rather than trusted from its row's prose.
+Theme: close out three independently-verified, gate-true Backlog Index items — none gated on an owner
+action or a production read, none sharing a file or a shared method with any other, each anchored to
+current code before being scoped rather than trusted from its row's prose.
+
+**⚠️ CORRECTED AT KICKOFF, BEFORE ANY CODE WAS WRITTEN: a fourth item, "health-check-on-Hikari-pool
+decoupling," was scoped in by mistake and dropped.** The liveness/readiness split it proposed to build
+already shipped in `v0.119.1` PR #1297 (`management.health.group.liveness.include: livenessState`,
+excluding `db`, in `application.yaml`) — the pre-scoping check only grepped for a custom
+`HealthIndicator` Java class and missed that the real fix is declarative YAML config, not a class. The
+only piece still open is the Backlog Index's own existing row for it: an **owner action**, repointing
+Render's `healthCheckPath` from `/api/actuator/health` to `/api/actuator/health/liveness` in the
+dashboard — confirmed still unpointed via a live read-only Render API call at this kickoff
+(2026-09-18). Not re-added to this release's code scope; it stays an owner action, same class as A1.
 
 ### Planned Scope
 
-- **Health-check-on-Hikari-pool decoupling (backend).** Direct continuation of `v0.153.0`'s Leg A2 —
-  that release's own Backlog Index row explicitly flagged this as the one thing not folded in:
-  `DataSourceHealthIndicator` is Spring Boot's default autoconfigured health check and shares the same
-  Hikari pool it monitors, so pool saturation starves the health check itself and the platform restarts
-  an instance whose only problem was that it was busy — the actual mechanism behind all four
-  `v0.153.0`-era occurrences. Confirmed no custom `HealthIndicator` exists in
-  `backend/src/main/java` before scoping. Shape: a liveness path that doesn't compete for a pool
-  connection (a dedicated 1-connection validation datasource, or excluding `db` from
-  `management.health` in favor of Leg A2's own saturation signal), not a general APM integration.
 - **`course_programs.is_active` write path (backend + Admin frontend).** Confirmed dead column:
   `CourseProgramCatalogRepository.java` reads `is_active` in several places but no code anywhere in
   `backend/src/main/java` ever writes it; `CourseProgramCatalogService`/`Controller` have zero
@@ -27,9 +28,16 @@ each anchored to current code before being scoped rather than trusted from its r
 - **Recovery for `generation_enqueued_at IS NULL` notes stranded in `GENERATING` (backend).**
   `GenerationRecoveryService.java:107` explicitly skips this row class and logs "leaving them
   untouched"; every other stale `GENERATING` row is swept back within ~2h10m
-  (`noteBoundMinutes` default 120 plus sweep cadence), but a row missing this timestamp never recovers
-  — a genuine, user-visible stuck note. Root cause already diagnosed at kickoff; this release closes it
-  rather than re-diagnosing it.
+  (`noteBoundMinutes` default 120 plus sweep cadence), but a row missing this timestamp never recovers.
+  **⚠️ Framing corrected at kickoff:** a live read-only production query (2026-09-18) found **zero**
+  notes currently `GENERATING`, let alone with a null clock — this is a **latent structural gap**, not
+  an active stuck-note population. Every current write path that sets `NoteStatus.GENERATING`
+  (`StudyPackService.java:224-225`, `:326-327`) also sets `generationEnqueuedAt` atomically in the same
+  method, and `V118__generation_recovery_clocks.sql` already one-time-backfilled any pre-existing null
+  rows at its own deploy — so nothing in today's code can currently produce a new null-clock row. The
+  gap is real (any row that ever does end up in this state is invisible to the sweep forever) but it is
+  prophylactic, not a fix for a live incident. Root cause already diagnosed at kickoff; this release
+  closes the gap rather than re-diagnosing it.
 - **Topic-note generation passes `subject` into the LLM context (backend + frontend).**
   `GenerateNoteFromTopicRequest.java` carries `topic`, `courseProgramIds`/`courseProgramText` and
   `domainContext`, but no `subject` — `NoteGenerationService` builds context with `subject = null`, so a
@@ -37,24 +45,24 @@ each anchored to current code before being scoped rather than trusted from its r
   quality rather than failing requests. Must preserve ADR-001's hierarchy: Domain Context is the sole
   authoritative domain constraint, Subject only narrows within it.
 
-Anti-drift: no APM/general observability layer for the health-check item — scoped narrowly to
-decoupling liveness from the Hikari pool; no bulk `is_active` editor or catalog deletion, and no
-`course_programs.program_family_id` write path revival; the `GENERATING`-recovery fix extends the
-existing sweep's row selection, it does not change `noteBoundMinutes` or the sweep cadence; the
-topic-note `subject` change does not let Subject override or compete with Domain Context per ADR-001,
-and does not touch `courseProgramText`/`domainContext` resolution.
+Anti-drift: no bulk `is_active` editor or catalog deletion, and no `course_programs.program_family_id`
+write path revival; the `GENERATING`-recovery fix extends the existing sweep's row selection, it does
+not change `noteBoundMinutes` or the sweep cadence; the topic-note `subject` change does not let Subject
+override or compete with Domain Context per ADR-001, and does not touch `courseProgramText`/
+`domainContext` resolution.
 
-**Routing:** Claude Code inline for the health-check decoupling and the `GENERATING`-recovery fix
-(isolated root cause, 1-3 files each); Codex for the `is_active` write path and the topic-note
-`subject` context gap (new endpoint/DTO + multi-surface frontend each). **Verification tier:** each
-item's own tier as scoped (direct verification for the two inline items, normal `/audit-diff` for the
-two Codex items), plus one whole-release `advisor()` summary at signoff — no shared files or methods
-between any of the four items, so no full pressure test is triggered by CLAUDE.md's own gate.
+**Routing:** Claude Code inline for the `GENERATING`-recovery fix (isolated root cause, 1-3 files);
+Codex for the `is_active` write path and the topic-note `subject` context gap (new endpoint/DTO +
+multi-surface frontend each). **Verification tier:** each item's own tier as scoped (direct verification
+for the inline item, normal `/audit-diff` for the two Codex items), plus one whole-release `advisor()`
+summary at signoff — no shared files or methods between any of the three items, so no full pressure
+test is triggered by CLAUDE.md's own gate.
 
 Carried forward from `v0.153.0`'s signoff, not this release's problem to solve: A1 (owner action —
 enabling Render's own per-request logging) still not enabled as of `v0.153.0` signoff; the Leg A2
 saturation detector's registry has no coverage of non-request threads (Known Limitation, not re-scoped
-here).
+here). Also carried forward, from this release's own kickoff correction above: the Render
+`healthCheckPath` repoint (owner action).
 
 ### Shipped
 
