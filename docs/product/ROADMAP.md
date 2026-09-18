@@ -28,10 +28,15 @@ stranded in `GENERATING` (backend)** — `GenerationRecoveryService.java:107` ex
 class and logs "leaving them untouched"; every other stale `GENERATING` row is swept back within
 ~2h10m (`noteBoundMinutes` default 120 plus sweep cadence), but this class never recovers. **⚠️ Framing
 corrected at kickoff:** a live read-only production query (2026-09-18) found zero notes currently
-`GENERATING` — this is a latent structural gap (every current write path sets both fields atomically,
-and `V118` already one-time-backfilled pre-existing null rows at its own deploy), not an active
-stuck-note population. Still worth closing — any row that ever lands in this state is invisible to the
-sweep forever — just not a live incident. **(3) Topic-note generation passes `subject` into the LLM
+`GENERATING` — this is a latent structural gap in the automated sweep (every current write path sets
+both fields atomically, and `V118` already one-time-backfilled pre-existing null rows at its own
+deploy), not an active stuck-note population. **⚠️ Framing corrected AGAIN mid-implementation:** not a
+user-visible dead end either — `POST /notes/{id}/recover-stranded-generation` already gave the note
+owner a tested self-service recovery path for this exact row class via an `updatedAt` fallback bound;
+this item makes that same rule fire automatically too. Shipped with that bound after `advisor()` caught
+the first implementation applying no age check at all — a live regression risk for a future non-atomic
+writer, whose in-flight generation the unbounded version would have killed on the very next sweep.
+**(3) Topic-note generation passes `subject` into the LLM
 context (backend + frontend)** — `GenerateNoteFromTopicRequest.java` carries `topic`,
 `courseProgramIds`/`courseProgramText` and `domainContext` but no `subject`, so `NoteGenerationService`
 builds context with `subject = null`; degrades quality rather than failing requests. Must preserve

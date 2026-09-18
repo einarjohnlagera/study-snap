@@ -28,16 +28,19 @@ dashboard — confirmed still unpointed via a live read-only Render API call at 
 - **Recovery for `generation_enqueued_at IS NULL` notes stranded in `GENERATING` (backend).**
   `GenerationRecoveryService.java:107` explicitly skips this row class and logs "leaving them
   untouched"; every other stale `GENERATING` row is swept back within ~2h10m
-  (`noteBoundMinutes` default 120 plus sweep cadence), but a row missing this timestamp never recovers.
-  **⚠️ Framing corrected at kickoff:** a live read-only production query (2026-09-18) found **zero**
-  notes currently `GENERATING`, let alone with a null clock — this is a **latent structural gap**, not
-  an active stuck-note population. Every current write path that sets `NoteStatus.GENERATING`
-  (`StudyPackService.java:224-225`, `:326-327`) also sets `generationEnqueuedAt` atomically in the same
-  method, and `V118__generation_recovery_clocks.sql` already one-time-backfilled any pre-existing null
-  rows at its own deploy — so nothing in today's code can currently produce a new null-clock row. The
-  gap is real (any row that ever does end up in this state is invisible to the sweep forever) but it is
-  prophylactic, not a fix for a live incident. Root cause already diagnosed at kickoff; this release
-  closes the gap rather than re-diagnosing it.
+  (`noteBoundMinutes` default 120 plus sweep cadence), but the automated sweep never touches a row
+  missing this timestamp. **⚠️ Framing corrected at kickoff:** a live read-only production query
+  (2026-09-18) found **zero** notes currently `GENERATING`, let alone with a null clock — this is a
+  **latent structural gap in the automated sweep**, not an active stuck-note population, and (found
+  mid-implementation, not at kickoff) **not a user-visible dead end either**: `NoteController`'s
+  `POST /notes/{id}/recover-stranded-generation` already gives the note owner a tested, self-service
+  recovery path for exactly this row class, using `updatedAt` as a fallback clock bounded by the same
+  `noteBoundMinutes`. This item makes that same rule fire automatically as well as on request, rather
+  than inventing new recovery logic or fixing a previously-unrecoverable state. Every current write path
+  that sets `NoteStatus.GENERATING` (`StudyPackService.java:224-225`, `:326-327`) also sets
+  `generationEnqueuedAt` atomically in the same method, and `V118__generation_recovery_clocks.sql`
+  already one-time-backfilled any pre-existing null rows at its own deploy, so this is prospective,
+  defense-in-depth coverage for a future non-atomic writer — not a fix for a live incident.
 - **Topic-note generation passes `subject` into the LLM context (backend + frontend).**
   `GenerateNoteFromTopicRequest.java` carries `topic`, `courseProgramIds`/`courseProgramText` and
   `domainContext`, but no `subject` — `NoteGenerationService` builds context with `subject = null`, so a
@@ -95,6 +98,25 @@ here). Also carried forward, from this release's own kickoff correction above: t
   modal/desktop/mobile component cases including the two lost-update guard tests. Backend 2435/2435;
   frontend 2468/2469 with one pre-existing skipped test; frontend lint 0 errors (20 pre-existing
   warnings, all pre-existing and unrelated to this change).
+- **Recovery for `generation_enqueued_at IS NULL` notes stranded in `GENERATING`.**
+  `NoteRepository.findGeneratingIdsWithNullEnqueuedAt` (new, bounded on `updatedAt < cutoff`, same
+  `noteBoundMinutes`) feeds a new `GenerationRecoveryRowWriter.recoverNoteWithMissingEnqueuedAt(UUID,
+  OffsetDateTime)`, which applies the identical `updatedAt`-fallback rule
+  `NoteController.recoverStrandedGeneration` already used for self-service recovery of this row class —
+  now enforced by the scheduled sweep too. `GenerationRecoveryService.recoverStaleNotes` runs this
+  alongside the existing timed-clock sweep and combines both results; the original
+  `countByStatusAndGenerationEnqueuedAtIsNull` warning log is kept (uncapped by batch size) so the
+  anomaly signal survives exactly as before — this item makes the row recover as well as get warned
+  about, it does not remove the warning. **⚠️ First implementation was a live regression risk, caught by
+  `advisor()` before commit:** it recovered every null-clock row unconditionally, with no age bound —
+  unlike the self-service endpoint's `updatedAt` check, so a future non-atomic writer's in-flight
+  generation would have been killed by the very next 10-minute sweep. Corrected to require
+  `updatedAt.isBefore(cutoff)`, matching the endpoint's own rule; the fixture-driven test that first
+  covered this (`note(null)` with no `updatedAt`) was itself rebuilt to a realistic row plus an added
+  negative case (`updatedAt` 5 minutes old → left alone) that would have failed the original code.
+  `docs/features/study-pack-generation.md` corrected to describe the sweep and the endpoint as two
+  entry points to the same rule, not "left untouched" plus a separate manual-only path. Backend
+  2434/2434 (full suite, including the real-PostgreSQL native-query harness).
 
 ## v0.153.0 - The Missing Telemetry
 

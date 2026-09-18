@@ -101,23 +101,47 @@ public class GenerationRecoveryService {
     }
 
     public SurfaceRecoveryResult recoverStaleNotes() {
-        long missingStampCount = noteRepository.countByStatusAndGenerationEnqueuedAtIsNull(NoteStatus.GENERATING);
-        if (missingStampCount > 0) {
-            log.warn(
-                    "generation.recovery.note found {} GENERATING rows without generation_enqueued_at; leaving them untouched",
-                    missingStampCount
-            );
-        }
-
         OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
         OffsetDateTime cutoff = now.minusMinutes(properties.getGeneration().getNoteBoundMinutes());
+
+        long missingClockCount = noteRepository.countByStatusAndGenerationEnqueuedAtIsNull(NoteStatus.GENERATING);
+        if (missingClockCount > 0) {
+            log.warn(
+                    "generation.recovery.note found {} GENERATING rows without generation_enqueued_at; "
+                            + "recovering the eligible ones via the updatedAt fallback bound, since "
+                            + "every current write path sets generation_enqueued_at atomically with "
+                            + "the status",
+                    missingClockCount
+            );
+        }
+        List<UUID> missingClockIds = noteRepository.findGeneratingIdsWithNullEnqueuedAt(
+                NoteStatus.GENERATING,
+                cutoff,
+                PageRequest.of(0, normalizedBatchSize())
+        );
+        SurfaceRecoveryResult missingClockResult = sweep(
+                missingClockIds,
+                noteId -> rowWriter.recoverNoteWithMissingEnqueuedAt(noteId, cutoff),
+                now,
+                "note-missing-clock"
+        );
+
         List<UUID> candidateIds = noteRepository.findStaleGenerationIds(
                 NoteStatus.GENERATING,
                 cutoff,
                 PageRequest.of(0, normalizedBatchSize())
         );
+        SurfaceRecoveryResult timedResult =
+                sweep(candidateIds, noteId -> rowWriter.recoverNote(noteId, cutoff), now, "note");
 
-        return sweep(candidateIds, noteId -> rowWriter.recoverNote(noteId, cutoff), now, "note");
+        return combine(missingClockResult, timedResult);
+    }
+
+    private static SurfaceRecoveryResult combine(SurfaceRecoveryResult first, SurfaceRecoveryResult second) {
+        Duration maxAge = first.maxRecoveredAge().compareTo(second.maxRecoveredAge()) >= 0
+                ? first.maxRecoveredAge()
+                : second.maxRecoveredAge();
+        return new SurfaceRecoveryResult(first.recoveredCount() + second.recoveredCount(), maxAge);
     }
 
     private SurfaceRecoveryResult sweep(

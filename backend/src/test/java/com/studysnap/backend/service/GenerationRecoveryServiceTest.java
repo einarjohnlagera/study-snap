@@ -77,7 +77,10 @@ class GenerationRecoveryServiceTest {
                 rowWriter,
                 properties
         );
-        lenient().when(noteRepository.countByStatusAndGenerationEnqueuedAtIsNull(NoteStatus.GENERATING)).thenReturn(0L);
+        lenient().when(noteRepository.countByStatusAndGenerationEnqueuedAtIsNull(NoteStatus.GENERATING))
+                .thenReturn(0L);
+        lenient().when(noteRepository.findGeneratingIdsWithNullEnqueuedAt(eq(NoteStatus.GENERATING), any(), any()))
+                .thenReturn(List.of());
         lenient().doAnswer(invocation -> {
             NoteEntity note = invocation.getArgument(0);
             note.setStatus(NoteStatus.FAILED);
@@ -333,18 +336,76 @@ class GenerationRecoveryServiceTest {
     }
 
     @Test
-    void recoverStaleNotes_nullStampIsLeftAloneAndWarned(CapturedOutput output) {
-        NoteEntity note = note(null);
+    void recoverStaleNotes_nullStampPastBoundIsRecoveredUsingUpdatedAtAndWarned(CapturedOutput output) {
+        NoteEntity note = noteWithMissingClock(OffsetDateTime.now().minusHours(3));
         when(noteRepository.countByStatusAndGenerationEnqueuedAtIsNull(NoteStatus.GENERATING)).thenReturn(1L);
-        when(noteRepository.findStaleGenerationIds(any(), any(), any())).thenReturn(List.of(note.getId()));
+        when(noteRepository.findGeneratingIdsWithNullEnqueuedAt(eq(NoteStatus.GENERATING), any(), any()))
+                .thenReturn(List.of(note.getId()));
+        // The timed sweep's own candidate query must never select a null-clock row — NULL never
+        // satisfies "< cutoff" in real SQL, but a lenient mock would let a wiring mistake slip past.
+        when(noteRepository.findStaleGenerationIds(any(), any(), any())).thenReturn(List.of());
+        when(noteRepository.findByIdForUpdate(note.getId())).thenReturn(Optional.of(note));
+        OffsetDateTime sweepStartedAt = OffsetDateTime.now();
+
+        GenerationRecoveryService.SurfaceRecoveryResult result = service.recoverStaleNotes();
+
+        assertThat(result.recoveredCount()).isEqualTo(1);
+        assertThat(result.maxRecoveredAge().toMinutes()).isGreaterThanOrEqualTo(179);
+        assertThat(note.getStatus()).isEqualTo(NoteStatus.FAILED);
+        assertThat(output).contains(
+                "found 1 GENERATING rows without generation_enqueued_at; recovering the eligible ones");
+        verify(studyPackService).markNoteGenerationFailed(note);
+    }
+
+    @Test
+    void recoverStaleNotes_nullStampWithinBoundIsLeftAlone() {
+        // ⚠️ THIS IS THE CASE recoverNote's own row writer must never mis-recover: a row that just
+        // started GENERATING with no clock yet (or a future non-atomic writer) must survive the next
+        // sweep, exactly as the self-service endpoint's own bound protects it.
+        NoteEntity note = noteWithMissingClock(OffsetDateTime.now().minusMinutes(5));
+        when(noteRepository.findGeneratingIdsWithNullEnqueuedAt(eq(NoteStatus.GENERATING), any(), any()))
+                .thenReturn(List.of(note.getId()));
+        when(noteRepository.findStaleGenerationIds(any(), any(), any())).thenReturn(List.of());
         when(noteRepository.findByIdForUpdate(note.getId())).thenReturn(Optional.of(note));
 
         GenerationRecoveryService.SurfaceRecoveryResult result = service.recoverStaleNotes();
 
         assertThat(result.recoveredCount()).isZero();
         assertThat(note.getStatus()).isEqualTo(NoteStatus.GENERATING);
-        assertThat(output).contains("without generation_enqueued_at; leaving them untouched");
         verify(studyPackService, never()).markNoteGenerationFailed(any(NoteEntity.class));
+    }
+
+    @Test
+    void recoverStaleNotes_nullStampRecoveryIsIdempotent() {
+        NoteEntity note = noteWithMissingClock(OffsetDateTime.now().minusHours(3));
+        when(noteRepository.findGeneratingIdsWithNullEnqueuedAt(eq(NoteStatus.GENERATING), any(), any()))
+                .thenReturn(List.of(note.getId()), List.of(note.getId()));
+        when(noteRepository.findStaleGenerationIds(any(), any(), any())).thenReturn(List.of());
+        when(noteRepository.findByIdForUpdate(note.getId())).thenReturn(Optional.of(note));
+
+        GenerationRecoveryService.SurfaceRecoveryResult first = service.recoverStaleNotes();
+        GenerationRecoveryService.SurfaceRecoveryResult second = service.recoverStaleNotes();
+
+        assertThat(first.recoveredCount()).isEqualTo(1);
+        // Second pass finds the same id again (a real sweep would not re-select a FAILED row, but this
+        // proves the row-level filter is what protects a double refund/side-effect, not the candidate
+        // query alone) — the FAILED status guard on the writer must reject it.
+        assertThat(second.recoveredCount()).isZero();
+        verify(studyPackService, times(1)).markNoteGenerationFailed(note);
+    }
+
+    @Test
+    void recoverStaleNotes_timedSweepStillRunsWhenNoNullClockRowsExist() {
+        NoteEntity note = note(OffsetDateTime.now().minusHours(3));
+        when(noteRepository.findGeneratingIdsWithNullEnqueuedAt(eq(NoteStatus.GENERATING), any(), any()))
+                .thenReturn(List.of());
+        when(noteRepository.findStaleGenerationIds(any(), any(), any())).thenReturn(List.of(note.getId()));
+        when(noteRepository.findByIdForUpdate(note.getId())).thenReturn(Optional.of(note));
+
+        GenerationRecoveryService.SurfaceRecoveryResult result = service.recoverStaleNotes();
+
+        assertThat(result.recoveredCount()).isEqualTo(1);
+        assertThat(note.getStatus()).isEqualTo(NoteStatus.FAILED);
     }
 
     @Test
@@ -423,6 +484,9 @@ class GenerationRecoveryServiceTest {
         assertThat(GenerationRecoveryRowWriter.class
                 .getMethod("recoverNote", UUID.class, OffsetDateTime.class)
                 .isAnnotationPresent(Transactional.class)).isTrue();
+        assertThat(GenerationRecoveryRowWriter.class
+                .getMethod("recoverNoteWithMissingEnqueuedAt", UUID.class, OffsetDateTime.class)
+                .isAnnotationPresent(Transactional.class)).isTrue();
     }
 
     private void stubPoolCandidate(ExamQuestionPoolEntity pool) {
@@ -454,6 +518,12 @@ class GenerationRecoveryServiceTest {
         note.setId(UUID.randomUUID());
         note.setStatus(NoteStatus.GENERATING);
         note.setGenerationEnqueuedAt(generationEnqueuedAt);
+        return note;
+    }
+
+    private NoteEntity noteWithMissingClock(OffsetDateTime updatedAt) {
+        NoteEntity note = note(null);
+        note.setUpdatedAt(updatedAt);
         return note;
     }
 }
