@@ -230,3 +230,7 @@ Private note share rule:
 - `Make Public & Share` sets the note to public, then opens the share modal
 
 Do not use toast-only or inline-text-only share flows for any shareable content type.
+
+## Publication-time Authored Depth Warning (v0.153.0)
+
+There are two real surfaces on this page that publish an individual note (`performVisibilityUpdate("PUBLIC")`): the visibility chip's `Make this note public?` confirmation, and this same "note is private" share modal's `Make Public & Share` button. Both show an identical non-blocking amber warning when the note has no Authored Depth (`learnerLevel`) set: publishing will still proceed, but the note will not surface under any Authored Depth filter in the Public Library until a depth is set. The warning disappears immediately if the curator sets Authored Depth via the inline metadata editor before publishing, since saving metadata refreshes the same `note` state both dialogs read from — no page reload needed.
