@@ -129,8 +129,13 @@ public class CourseProgramCatalogService {
         courseProgramCatalogRepository.findById(programId)
                 .orElseThrow(CourseProgramNotFoundException::new);
 
-        List<UUID> familyIds = validateAndDeduplicateFamilyIds(request.programFamilyIds());
-        courseProgramCatalogRepository.replaceProgramFamilies(programId, familyIds);
+        if (request.programFamilyIds() != null) {
+            List<UUID> familyIds = validateAndDeduplicateFamilyIds(request.programFamilyIds());
+            courseProgramCatalogRepository.replaceProgramFamilies(programId, familyIds);
+        }
+        if (request.isActive() != null) {
+            courseProgramCatalogRepository.updateIsActive(programId, request.isActive());
+        }
         return courseProgramCatalogRepository.findById(programId)
                 .orElseThrow(CourseProgramNotFoundException::new);
     }

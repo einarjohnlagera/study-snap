@@ -66,7 +66,35 @@ here). Also carried forward, from this release's own kickoff correction above: t
 
 ### Shipped
 
-_(nothing yet)_
+- **Admin write path for `course_programs.is_active`.** The existing catalog PATCH accepts an optional
+  nullable `isActive` field and writes it transactionally through
+  `CourseProgramCatalogService.java:132-140` / `CourseProgramCatalogRepository.java:63,113-115`;
+  omission leaves the lifecycle flag unchanged, and an `isActive`-only PATCH also leaves family
+  memberships untouched. The Course / Programs view initializes an Active checkbox from the edited
+  row and marks inactive rows in both rendered layouts (`admin-course-program-catalog-section.tsx`).
+  **⚠️ Pre-commit `advisor()` review found and fixed a real lost-update defect in the Codex delivery,
+  the same class `v0.152.0`'s cold agent found on the sibling family-rename modal:** the save path
+  originally re-sent `programFamilyIds` from its load-time snapshot on every save, including an
+  Active-only toggle — so an admin flipping Active while a concurrent admin had just changed that
+  program's family memberships would silently overwrite the concurrent edit. Fixed by mirroring
+  `AdminProgramFamiliesSection`'s `membershipDirty` pattern: `programFamilyIds` is now omitted from
+  the request entirely unless `CatalogMultiSelect` was actually touched this edit. Two guard tests
+  added confirming an Active-only save carries no `programFamilyIds` key. The shared catalog read
+  stays unfiltered, and the existing Applicable Programs active-only behavior is unchanged.
+  **⚠️ Deploy-ordering statement, per CLAUDE.md's rule for a form whose omission-meaning changed:**
+  this PATCH's frontend and backend must deploy together, and the safe direction is
+  **backend-first**. If Render deploys the new `isActive`-aware backend before Vercel deploys the new
+  frontend, the old frontend's existing family-save calls are unaffected (it always sent
+  `programFamilyIds` and never sends `isActive`, both still handled). If Vercel deploys the new
+  frontend first, the Active checkbox reaches users before the backend accepts `isActive` — Jackson
+  silently drops the unknown field, the PATCH still 200s, and the toggle appears to save but has no
+  effect until the backend catches up. Not a data-loss risk either order, but backend-first avoids a
+  silently-inert control window. Coverage includes real JSON PATCH binding plus a follow-up catalog
+  GET, service omission/application cases, the JDBC `UPDATE` executed and read back on Testcontainers
+  PostgreSQL, request-body included/omitted cases in `api-course-program-catalog.test.ts`, and
+  modal/desktop/mobile component cases including the two lost-update guard tests. Backend 2435/2435;
+  frontend 2468/2469 with one pre-existing skipped test; frontend lint 0 errors (20 pre-existing
+  warnings, all pre-existing and unrelated to this change).
 
 ## v0.153.0 - The Missing Telemetry
 

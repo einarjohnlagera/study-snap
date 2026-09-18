@@ -88,7 +88,7 @@ Admin v1 tables should include:
 - a paginated notes table showing legacy Course / Program, Authored Depth, and explicit Applicable Programs; a missing-depth-only filter helps the requesting curator find their own metadata cleanup queue, while the only edit action remains the catalog-backed Applicable Programs control, which changes no other note metadata and can add every member of a Program Family before the admin trims the explicit set
 
 - Catalog growth is demand-driven: add a program when a canonical note is legitimately applicable to it. Do not pre-seed a vocabulary.
-- Family rename preserves its UUID and memberships. Family/program deletion and catalog activation controls remain out of scope.
+- Family rename preserves its UUID and memberships. Family/program deletion remains out of scope. **Catalog activation is now in scope (`v0.154.0`):** the `Course / Programs` tab's Edit modal carries an Active toggle that writes `course_programs.is_active` via `PATCH /course-program-catalog/{id}`; an inactive program is marked in the catalog table/list, excluded from new selection on the Applicable Programs axis, and stays resolvable as an existing chip where already selected. Toggling Active alone does not touch family memberships.
 - Names are trimmed and compared case- and whitespace-insensitively. Duplicate conflicts identify the existing program instead of surfacing a database error.
 - Family assignment is functional metadata, not decoration: assigning `Engineering` makes the program available to the shared picker’s unconditional Engineering-family expansion.
 - The same create flow is available inline in Applicable Programs pickers to Admins, with near matches and an explicit confirmation. It never enables free-text applicability.
