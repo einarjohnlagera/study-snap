@@ -6,6 +6,7 @@ import { AppModal } from "@/components/ui/app-modal";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { CatalogMultiSelect } from "@/components/ui/catalog-multi-select";
+import { Checkbox } from "@/components/ui/checkbox";
 import { getCourseProgramCatalog, listProgramFamilies, updateCourseProgram,
   type CourseProgramCatalogItem, type ProgramFamily } from "@/lib/api";
 
@@ -18,6 +19,8 @@ export function AdminCourseProgramCatalogSection() {
   const [createOpen, setCreateOpen] = useState(false);
   const [editingProgram, setEditingProgram] = useState<CourseProgramCatalogItem | null>(null);
   const [editFamilyIds, setEditFamilyIds] = useState<string[]>([]);
+  const [editFamilyIdsDirty, setEditFamilyIdsDirty] = useState(false);
+  const [editIsActive, setEditIsActive] = useState(true);
   const [savingEdit, setSavingEdit] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
 
@@ -45,6 +48,8 @@ export function AdminCourseProgramCatalogSection() {
   const openEdit = (program: CourseProgramCatalogItem) => {
     setEditingProgram(program);
     setEditFamilyIds(program.programFamilies.map((family) => family.id));
+    setEditFamilyIdsDirty(false);
+    setEditIsActive(program.isActive !== false);
     setEditError(null);
   };
 
@@ -53,7 +58,13 @@ export function AdminCourseProgramCatalogSection() {
     setSavingEdit(true);
     setEditError(null);
     try {
-      const updated = await updateCourseProgram(editingProgram.id, { programFamilyIds: editFamilyIds });
+      // ⚠️ Re-sending an untouched membership snapshot would silently overwrite a concurrent admin's
+      // edit — the exact defect `v0.152.0`'s cold agent found on the sibling family-rename modal.
+      // Omit programFamilyIds entirely unless the picker was actually touched, matching that fix.
+      const updated = await updateCourseProgram(editingProgram.id, {
+        ...(editFamilyIdsDirty ? { programFamilyIds: editFamilyIds } : {}),
+        isActive: editIsActive,
+      });
       setCatalog((current) => current.map((program) => program.id === updated.id ? updated : program));
       setEditingProgram(null);
     } catch (error) {
@@ -81,10 +92,10 @@ export function AdminCourseProgramCatalogSection() {
         ) : <>
           <div className="hidden overflow-x-auto sm:block"><table className="min-w-full text-sm">
             <thead className="bg-muted/40 text-left text-foreground/60"><tr><th className="px-4 py-3 font-medium">Course / Program</th><th className="px-4 py-3 font-medium">Program Families</th><th className="px-4 py-3 font-medium">Actions</th></tr></thead>
-            <tbody>{catalog.map((program) => <tr key={program.id} className="border-t border-border/60"><td className="px-4 py-3">{program.name}</td><td className="px-4 py-3 text-foreground/70">{familyChips(program)}</td><td className="px-4 py-3"><Button type="button" size="sm" variant="outline" onClick={() => openEdit(program)}>Edit</Button></td></tr>)}</tbody>
+            <tbody>{catalog.map((program) => <tr key={program.id} className="border-t border-border/60"><td className="px-4 py-3"><div className="flex flex-wrap items-center gap-2"><span>{program.name}</span>{program.isActive === false ? <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-foreground/60">Inactive</span> : null}</div></td><td className="px-4 py-3 text-foreground/70">{familyChips(program)}</td><td className="px-4 py-3"><Button type="button" size="sm" variant="outline" onClick={() => openEdit(program)}>Edit</Button></td></tr>)}</tbody>
           </table></div>
           <div className="divide-y divide-border/60 sm:hidden">{catalog.map((program) => (
-            <article key={program.id} className="space-y-3 p-4"><h3 className="font-medium">{program.name}</h3>{familyChips(program)}<Button type="button" variant="outline" className="w-full" onClick={() => openEdit(program)}>Edit</Button></article>
+            <article key={program.id} className="space-y-3 p-4"><div className="flex flex-wrap items-center gap-2"><h3 className="font-medium">{program.name}</h3>{program.isActive === false ? <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-foreground/60">Inactive</span> : null}</div>{familyChips(program)}<Button type="button" variant="outline" className="w-full" onClick={() => openEdit(program)}>Edit</Button></article>
           ))}</div>
         </>}
       </Card>
@@ -98,9 +109,15 @@ export function AdminCourseProgramCatalogSection() {
         actions={<div className="flex flex-col gap-2 sm:flex-row sm:justify-end"><Button type="button" variant="outline" disabled={savingEdit} onClick={() => setEditingProgram(null)}>Cancel</Button><Button type="button" loading={savingEdit} loadingText="Saving..." onClick={() => void saveEdit()}>Save changes</Button></div>}>
         <div className="space-y-4">
           <div><p className="text-xs text-foreground/60">Course / Program</p><p className="font-medium">{editingProgram?.name}</p></div>
+          <div className="flex items-center gap-2">
+            <Checkbox id="edit-program-active" checked={editIsActive} onChange={setEditIsActive}
+              ariaLabel="Active" disabled={savingEdit} />
+            <label htmlFor="edit-program-active" className="text-sm">Active</label>
+          </div>
           <CatalogMultiSelect id="edit-program-families" label="Program Families" items={families}
-            selectedIds={editFamilyIds} onChange={setEditFamilyIds} selectedSummary="chips"
-            disabled={savingEdit} searchPlaceholder="Search or select families…" />
+            selectedIds={editFamilyIds}
+            onChange={(familyIds) => { setEditFamilyIds(familyIds); setEditFamilyIdsDirty(true); }}
+            selectedSummary="chips" disabled={savingEdit} searchPlaceholder="Search or select families…" />
           {familiesError ? <p className="text-xs text-foreground/60">{familiesError}</p> : null}
           {editError ? <p role="alert" className="text-sm text-red-600 dark:text-red-400">{editError}</p> : null}
         </div>

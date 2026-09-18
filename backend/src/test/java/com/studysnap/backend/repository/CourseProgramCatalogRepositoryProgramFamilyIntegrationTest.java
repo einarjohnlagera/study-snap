@@ -13,6 +13,9 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.SingleConnectionDataSource;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
+import org.testcontainers.containers.PostgreSQLContainer;
+import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
@@ -44,10 +47,32 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * resolution, but never that {@code SELECT id, name} actually feeds {@code getObject("id", ...)}.
  * A renamed column or a swapped constructor argument is caught here and nowhere else.
  */
+@Testcontainers
 class CourseProgramCatalogRepositoryProgramFamilyIntegrationTest {
+
+    @Container
+    private static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:18-alpine");
 
     private static final String EDUCATION = "Education";
     private static final String ENGINEERING = "Engineering";
+
+    @Test
+    void updateIsActiveRunsAgainstPostgresAndPersistsFalse() throws Exception {
+        UUID programId = UUID.randomUUID();
+        try (Connection connection = DriverManager.getConnection(
+                POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
+             Statement statement = connection.createStatement()) {
+            statement.execute("create table course_programs (id uuid primary key, is_active boolean not null default true)");
+            statement.executeUpdate("insert into course_programs (id) values ('" + programId + "')");
+            JdbcTemplate jdbcTemplate = new JdbcTemplate(new SingleConnectionDataSource(connection, true));
+            CourseProgramCatalogRepository repository = new CourseProgramCatalogRepository(jdbcTemplate);
+
+            repository.updateIsActive(programId, false);
+
+            assertThat(jdbcTemplate.queryForObject(
+                    "select is_active from course_programs where id = ?", Boolean.class, programId)).isFalse();
+        }
+    }
 
     @Test
     void theProgramFamilyStatementsRunAgainstARealDatabaseAndRoundTrip() throws Exception {

@@ -5966,7 +5966,7 @@ export async function createCourseProgram(request: CreateCourseProgramRequest): 
 
 export async function updateCourseProgram(
   id: string,
-  request: { programFamilyIds: string[] },
+  request: { programFamilyIds?: string[]; isActive?: boolean },
 ): Promise<CourseProgramCatalogItem> {
   const fallbackMessage = "Could not update the Course / Program.";
   const response = await fetchWithAuth(

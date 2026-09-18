@@ -10,6 +10,7 @@ import com.studysnap.backend.entity.UserRole;
 import com.studysnap.backend.exception.CourseProgramNotFoundException;
 import com.studysnap.backend.exception.GlobalExceptionHandler;
 import com.studysnap.backend.exception.UnknownProgramFamilyException;
+import com.studysnap.backend.repository.CourseProgramCatalogRepository;
 import com.studysnap.backend.security.AuthenticatedUser;
 import com.studysnap.backend.service.CourseProgramCatalogService;
 import jakarta.servlet.Filter;
@@ -25,9 +26,14 @@ import org.springframework.security.web.access.AccessDeniedHandlerImpl;
 import org.springframework.security.web.access.ExceptionTranslationFilter;
 import org.springframework.security.web.authentication.Http403ForbiddenEntryPoint;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.datasource.SingleConnectionDataSource;
 import org.springframework.util.unit.DataSize;
 
 import java.lang.reflect.Method;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.Statement;
 import java.util.List;
 import java.util.UUID;
 
@@ -113,6 +119,38 @@ class CourseProgramCatalogControllerTest {
                 .andExpect(jsonPath("$.programFamilyId").doesNotExist());
 
         verify(service).updateProgramFamilies(programId, new UpdateCourseProgramCatalogRequest(List.of()));
+    }
+
+    @Test
+    void updateBindsIsActiveFromARealJsonPatchAndReturnsTheInactiveItem() throws Exception {
+        UUID programId = UUID.randomUUID();
+        String url = "jdbc:h2:mem:course-program-controller-" + UUID.randomUUID()
+                + ";MODE=PostgreSQL;DB_CLOSE_DELAY=-1";
+        try (Connection connection = DriverManager.getConnection(url);
+             Statement statement = connection.createStatement()) {
+            statement.execute("create table course_programs (id uuid primary key, name varchar(120) not null, is_active boolean not null default true)");
+            statement.execute("create table program_families (id uuid primary key, name varchar(120) not null)");
+            statement.execute("create table course_program_family (course_program_id uuid not null, program_family_id uuid not null)");
+            statement.executeUpdate("insert into course_programs (id, name) values ('" + programId + "', 'Nursing')");
+            CourseProgramCatalogRepository repository = new CourseProgramCatalogRepository(
+                    new JdbcTemplate(new SingleConnectionDataSource(connection, true)));
+            CourseProgramCatalogController controller = new CourseProgramCatalogController(
+                    new CourseProgramCatalogService(repository));
+            MockMvc databaseBackedMockMvc = standaloneSetup(controller)
+                    .setControllerAdvice(new GlobalExceptionHandler(DataSize.ofMegabytes(10)))
+                    .build();
+
+            databaseBackedMockMvc.perform(patch("/course-program-catalog/{id}", programId)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"isActive\":false}"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.isActive").value(false));
+
+            databaseBackedMockMvc.perform(get("/course-program-catalog"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$[0].id").value(programId.toString()))
+                    .andExpect(jsonPath("$[0].isActive").value(false));
+        }
     }
 
     @Test

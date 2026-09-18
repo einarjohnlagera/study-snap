@@ -60,6 +60,7 @@ public class CourseProgramCatalogRepository {
     private static final String FIND_OTHER_PROGRAM_FAMILY_BY_NORMALIZED_NAME = FIND_PROGRAM_FAMILY_BY_NORMALIZED_NAME + " AND id <> ?";
     private static final String INSERT_PROGRAM_FAMILY = "INSERT INTO program_families (id, name) VALUES (?, ?)";
     private static final String UPDATE_PROGRAM_FAMILY_NAME = "UPDATE program_families SET name = ? WHERE id = ?";
+    private static final String UPDATE_IS_ACTIVE = "UPDATE course_programs SET is_active = ? WHERE id = ?";
     private static final String FIND_ID_BY_NAME = "SELECT id FROM course_programs WHERE name = ?";
     private static final String FIND_NAMES_BY_EXAM_GOAL_SLUG = "SELECT name FROM course_programs WHERE exam_goal_slug = ? ORDER BY name";
 
@@ -108,6 +109,9 @@ public class CourseProgramCatalogRepository {
     }
     public void updateProgramFamilyName(UUID id, String name) {
         jdbcTemplate.update(UPDATE_PROGRAM_FAMILY_NAME, name, id);
+    }
+    public void updateIsActive(UUID id, boolean isActive) {
+        jdbcTemplate.update(UPDATE_IS_ACTIVE, isActive, id);
     }
     public Optional<UUID> resolveIdForLegacyName(String value) {
         if (value == null) return Optional.empty();

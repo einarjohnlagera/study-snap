@@ -87,7 +87,24 @@ describe("course program catalog API", () => {
       .resolves.toEqual(payload);
     const [, init] = (globalThis.fetch as jest.Mock).mock.calls[0];
     expect(init.method).toBe("PATCH");
+    expect(init.headers).toMatchObject({ "Content-Type": "application/json" });
     expect(JSON.parse(init.body)).toEqual({ programFamilyIds: ["family-computing", "family-engineering"] });
+  });
+
+  it("includes isActive in the PATCH body when supplied", async () => {
+    const payload = {
+      id: "program-retired", name: "Legacy Program", isActive: false,
+      programFamilies: [], programFamilyId: null, programFamilyName: null,
+    };
+    globalThis.fetch = jest.fn().mockResolvedValue({
+      ok: true, status: 200, json: jest.fn().mockResolvedValue(payload),
+    } as unknown as Response);
+
+    await expect(updateCourseProgram(payload.id, { programFamilyIds: [], isActive: false }))
+      .resolves.toEqual(payload);
+
+    const [, init] = (globalThis.fetch as jest.Mock).mock.calls[0];
+    expect(JSON.parse(init.body)).toEqual({ programFamilyIds: [], isActive: false });
   });
 
   it("parses an old catalog list payload that omits programFamilies", async () => {
