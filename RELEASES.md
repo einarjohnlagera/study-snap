@@ -2,7 +2,7 @@
 
 ## v0.153.0 - The Missing Telemetry
 
-**Status: In Progress**
+**Status: Released** (signed off 2026-09-18)
 
 Theme: stop re-investigating the same unidentified production outage a fifth time, and ship the one
 thing that would actually answer it — the diagnostic instrumentation this recurring failure has been
@@ -161,6 +161,7 @@ depends on when F1 actually deploys, so it cannot be written until then.
 - **`PoolSaturationDetector.poll()` shares Spring's default single-threaded scheduler with 16 other `@Scheduled` jobs, several DB-bound** (`GenerationRecoveryJob` every 10 min, `BulkGenerationResultCleanupJob` and `NotificationCleanupJob` hourly, plus the rate-limit purges). During saturation, any of those blocking on a connection up to `connection-timeout: 5000` stalls the 2-second poll for that duration — a latent detection-latency risk, count corrected from the original "several other low-frequency jobs" to the actual 16. `spring.task.scheduling.pool.size: 2` would remove it; not changed here to keep this leg's diff minimal.
 - **`sanitize()` on the logged request path strips only `\n`/`\r`, with no length bound or control-character stripping beyond that.** Low severity, since it fires only during genuine saturation on a codebase with no existing log-injection-hardening convention to hold it against. Unchanged from the original finding.
 - **`InFlightRequestTrackingFilterTest` drives the filter directly (`filter.doFilter(...)`) rather than asserting it is actually registered in the chain or at what position.** Passes by construction regardless of registration — the same shape as the `v0.119.0` `Content-Type` defect class CLAUDE.md names. The `@Order` fix above was verified by booting the real Spring context during the falsification pass, not by this unit test; no regression guard exists for the ordering itself. Flagged, not fixed — would need a `@SpringBootTest` asserting filter registration order, judged not worth the cost for a one-line annotation.
+- **A1 (owner action, Render per-request logging) — checked at signoff, confirmed NOT enabled, still open.** The owner reported having heard it was on by default; verified otherwise via a read-only `list_log_label_values` query against the production service's logs (`type` label returns only `["app", "build"]` across the prior ~28 hours — no `request` type exists at all), plus a direct spot-check of a live hour showing only Spring Boot application/job log lines, no per-request path/status/duration entries. Enabling it (a paid add-on or plan-tier feature on Render, not a code change) remains the owner's own action, not done as of this signoff.
 
 ## v0.152.0 - The Missing Half of v0.150.0
 
