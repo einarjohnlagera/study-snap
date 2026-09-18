@@ -13,6 +13,8 @@ Claims are **VERIFIED** (a log line, a metric, a query result, or code opened) o
 
 **⚠️ The mechanism is settled. The trigger is NARROWED but still not identified — §6.**
 
+**⚠️⚠️ THIS HAS NOW RECURRED A FOURTH TIME — 2026-09-17, same signature, still unidentified. See §11.**
+
 ---
 
 ## 0. ⚠️ What the first draft got wrong
@@ -231,3 +233,74 @@ exhaustion in 26 hours, which strengthens the burst reading.
   would have prevented the **restart** — though not the errors — in all three incidents.
 - §5's still-unbounded anonymous reads and §8's ramp-window exposure each deserve their own Backlog
   row. Neither caused this incident.
+
+## 11. ⚠️ RECURRENCE — 2026-09-17, fourth occurrence, identical signature
+
+**Reported** by the owner: "the prod went down just now." Confirmed. **07 releases have shipped since
+this file was written** (`v0.140.0` → `v0.148.0`, `v0.149.0`, `v0.150.0`, `v0.151.0` — current
+backend at incident time). None of them shipped the telemetry recommendation from §7. This is the
+**fourth** occurrence of this exact shape (2026-09-04, 2026-09-05, 2026-09-10, now 2026-09-17), and
+the trigger is **still not identified** for the same reason: the same gap.
+
+### Timeline (UTC) — all VERIFIED
+
+| Time | Event |
+|---|---|
+| 2026-09-16 13:54–13:56 | Last deploy (`v0.151.0`) — **16 hours before the incident, not a deploy event** |
+| 05:56:29 | First pool timeout, thread `o-10000-exec-98`: `total=20, active=20, idle=0, waiting=4` |
+| 05:56:29 → 05:57:13+ | Sustained exhaustion, `waiting=4–5` throughout (log page truncated at 05:57:13; more warnings followed — not re-fetched, pattern already established) |
+| 05:58:06.156 | `Commencing graceful shutdown` — **SIGTERM, shutdown hook ran** |
+| 05:58:06.210 | `Graceful shutdown complete` — **54 ms**, i.e. no requests were in flight by then (contrast §1's 32 s on 09-10, where they were) |
+| 05:58:07.449 | `HikariPool-1 - Shutdown completed` |
+| 05:58:09.087 | `==> Instance srv-…-5hddm restarted` — **same instance id** |
+| 05:58:12.241 | `Starting BackendApplication v0.151.0` — **same version** |
+| 05:58:46.132 | `Started BackendApplication in 35.269 seconds` |
+
+**Impact:** instance_count reads 0 for the 05:58–05:59 buckets; 15 × 500, 11 × 499, 2 × 502 in the
+05:58 bucket against 78 × 200. Shorter than 09-10's window — total user-visible impact roughly
+90 seconds.
+
+### Every discriminating check from §3, §4 and §6 repeats identically — VERIFIED again
+
+- **OOM ruled out**: graceful shutdown ran; memory peaked 722 MB of the 2 GB limit (36%).
+- **Deploy ruled out**: last deploy 16 h earlier, `status: live`, same version and instance id on restart.
+- **No leak fired**: a 20-minute window (05:40–06:00) search on `["eak"]` — the same substring that
+  positively controlled against 2026-09-05 in §4 — returns **zero rows**. No hold ≥ 60 s.
+- **Database ruled out as the constraint**: DB CPU baseline 0.008, peaking only to **0.063** during
+  the exhaustion window itself (05:56–05:58) — the same low ceiling as 09-10's app-CPU finding, this
+  time confirmed on the **database** side directly. `active_connections` sat at 20 throughout — same
+  §3 caveat applies: this is `minimum-idle` defaulting to `maximum-pool-size`, not a saturation signal.
+- **No application activity logged**: `["action="]` over the full 05:40–06:00 window returns **zero
+  rows** — no generation, no bulk regeneration, no adoption. Same as 09-10.
+
+**⚠️ Not re-collected this time, and flagged rather than silently skipped:** app-side CPU during the
+exhaustion minutes (§6's decisive discriminator against "many short holds" and "response
+serialization"), and the `analytics_events` anonymous-traffic check (§6's `PUBLIC_NOTE_VIEWED` burst).
+Both would need a fresh pull to confirm they repeat; this entry reports what was checked, not what
+was assumed to still hold. One line **is** already consistent with §6's surviving explanation: the
+`analytics-1` thread itself timed out at 05:57:06 trying to persist a `PUBLIC_NOTE_VIEWED` event
+(`analytics_event_persist_failed`) — the identical failure-mode fingerprint as 09-10's Exhibit,
+though on n=1 this is suggestive, not confirmatory.
+
+**A genuinely new avenue was opened and explicitly NOT completed**, so it is not confused with a
+finding: a search for synchronous external HTTP calls callable from a request thread (candidates: a
+transactional email dispatch, a payment-provider call) that could hold an OSIV connection for tens of
+seconds while using near-zero CPU on both app and DB — exactly §6's surviving shape. A broad grep
+(`RestTemplate`/`WebClient`/`.execute(`) returned too many false positives (local executor dispatch,
+not external HTTP) to be useful, and a targeted follow-up on the email service found no direct
+callers under the searched name. **This is an unverified lead, not a mechanism** — flagged so the next
+pass does not have to reconsider whether it was already tried.
+
+### ⚠️ The obligation this recurrence actually raises
+
+**Four incidents. Zero of the seven releases in between shipped §7's recommendation** (Render request
+logging, or a saturation-triggered dump of in-flight request paths). Every other §10 non-fix
+(don't raise the pool, don't touch `open-in-view`, don't add PgBouncer) has correctly held — this is
+not a case of the wrong fixes being tried. It is the **one right fix never being scheduled.** This is
+the same shape `CLAUDE.md` names directly: *"convert every recurring finding into an automated guard,
+because a guard is the only check that costs nothing to re-run"* — except here the guard itself
+(the telemetry) has not shipped four occurrences in, and each occurrence currently costs a fresh,
+unproductive investigation that re-derives the same "narrowed, not identified" conclusion.
+**Recommend this becomes an explicit, scoped release item rather than a recurring incident-response
+cost** — the fix is enabling a platform feature and/or a few lines of Hikari-saturation logging, not
+a redesign, and it is now cheaper than the fifth investigation will be.

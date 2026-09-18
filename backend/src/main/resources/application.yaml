@@ -73,7 +73,29 @@ server:
       # Render Starter is 0.5 CPU / 512 MB. The Spring Boot default of 200 worker
       # threads is pointless at 0.5 CPU and a native-memory hog (~1 MB stack each)
       # that starves the heap. Cap it so the JVM fits the container.
-      max: ${SERVER_TOMCAT_THREADS_MAX:25}
+      # ⚠️ MUST STAY STRICTLY BELOW spring.datasource.hikari.maximum-pool-size (20,
+      # below) — not just at or below it. This value was 25 until v0.153.0 Leg B
+      # first lowered it to 20 (closing only the OVERFLOW case: a 21st-through-25th
+      # admitted request exhausting the pool by itself), then to 18 in the same
+      # release once it was clear equality with the pool size did not close the
+      # actual incident mechanism: under spring.jpa.open-in-view (ON), a connection
+      # is held for the whole request, so 20 fully-concurrent requests ALONE — with
+      # zero connections reserved — can still exhaust the pool and starve
+      # DataSourceHealthIndicator, reproducing the exact active=20/20 signature
+      # behind all four 2026-09 pool-exhaustion incidents. Reserving 2 connections
+      # of headroom below the pool size means the health check and this app's own
+      # DB-bound @Scheduled jobs are never competing with Tomcat for the last slot.
+      # This is a meaningful reduction in the odds of recurrence, not an absolute
+      # guarantee: two background executors and 16 @Scheduled jobs also draw on
+      # this same pool without being bounded by this value (see RELEASES.md's
+      # v0.153.0 Known limitations). TomcatThreadPoolHikariAlignmentTest pins this
+      # relationship as a strict inequality.
+      # ⚠️ THIS DEFAULT DOES NOT BIND IN PRODUCTION TODAY: Render sets
+      # SERVER_TOMCAT_THREADS_MAX=25 explicitly (confirmed on the dashboard,
+      # 2026-09-17), which overrides this default. Lowering it here is necessary
+      # but not sufficient — the owner must also change or remove the Render env
+      # var for this to take effect where it actually matters.
+      max: ${SERVER_TOMCAT_THREADS_MAX:18}
       min-spare: ${SERVER_TOMCAT_THREADS_MIN_SPARE:5}
 
 logging:
@@ -128,6 +150,8 @@ management:
 
 studysnap:
   app-name: NoteLib
+  pool-saturation:
+    poll-interval-ms: ${STUDYSNAP_POOL_SATURATION_POLL_INTERVAL_MS:2000}
   settings:
     max-notes-chars: ${MAX_NOTES_CHARS_FREE:12000}
     max-image-bytes: ${MAX_IMAGE_BYTES:5000000}

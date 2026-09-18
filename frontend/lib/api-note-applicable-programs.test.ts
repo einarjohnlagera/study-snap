@@ -1,4 +1,8 @@
-import { getNoteApplicablePrograms } from "./api";
+import {
+  getAdminNoteApplicablePrograms,
+  getNoteApplicablePrograms,
+  type AdminNoteApplicableProgramsPage,
+} from "./api";
 
 describe("getNoteApplicablePrograms", () => {
   const originalFetch = globalThis.fetch;
@@ -68,5 +72,50 @@ describe("getNoteApplicablePrograms", () => {
 
     await expect(getNoteApplicablePrograms("note-1"))
       .rejects.toThrow("Could not load Course / Program(s).");
+  });
+});
+
+describe("getAdminNoteApplicablePrograms", () => {
+  const originalFetch = globalThis.fetch;
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  it("sends the missing-depth filter and preserves learnerLevel values in the response", async () => {
+    const payload: AdminNoteApplicableProgramsPage = {
+      items: [
+        {
+          noteId: "note-college",
+          title: "College Algebra",
+          courseProgram: "Civil Engineering",
+          domainContext: "ENGINEERING_SCIENCES",
+          learnerLevel: "COLLEGE",
+          applicablePrograms: [],
+        },
+        {
+          noteId: "note-missing",
+          title: "Algebra Foundations",
+          courseProgram: null,
+          domainContext: null,
+          learnerLevel: null,
+          applicablePrograms: [],
+        },
+      ],
+      page: 0,
+      size: 25,
+      totalElements: 2,
+    };
+    globalThis.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: jest.fn().mockResolvedValue(payload),
+    } as unknown as Response);
+
+    await expect(getAdminNoteApplicablePrograms(0, 25, true)).resolves.toEqual(payload);
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      "http://localhost:8080/api/admin/notes/applicable-programs?page=0&size=25&missingDepthOnly=true",
+      expect.objectContaining({ method: "GET" }),
+    );
   });
 });

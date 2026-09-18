@@ -1359,6 +1359,48 @@ describe("PrivateNoteDetailPageClient", () => {
     expect(screen.queryByText("Loading session review...")).not.toBeInTheDocument();
   });
 
+  it("warns in the private-share modal when the note has no Authored Depth", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ planType: "PRO", emailVerifiedAt: "2026-03-21T09:00:00Z" });
+    (getNote as jest.Mock).mockResolvedValue({
+      ...baseNote,
+      studyPackStatus: "DRAFT",
+      visibility: "PRIVATE",
+      learnerLevel: null,
+    });
+
+    render(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    await screen.findByText("Test Note");
+    fireEvent.click(screen.getByRole("button", { name: "Open note actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Share" }));
+
+    expect(screen.getByText("This note is private")).toBeInTheDocument();
+    expect(
+      screen.getByText(/will not appear under any Authored Depth filter/),
+    ).toBeInTheDocument();
+  });
+
+  it("does not warn in the private-share modal when the note already has an Authored Depth", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ planType: "PRO", emailVerifiedAt: "2026-03-21T09:00:00Z" });
+    (getNote as jest.Mock).mockResolvedValue({
+      ...baseNote,
+      studyPackStatus: "DRAFT",
+      visibility: "PRIVATE",
+      learnerLevel: "COLLEGE",
+    });
+
+    render(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    await screen.findByText("Test Note");
+    fireEvent.click(screen.getByRole("button", { name: "Open note actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Share" }));
+
+    expect(screen.getByText("This note is private")).toBeInTheDocument();
+    expect(
+      screen.queryByText(/will not appear under any Authored Depth filter/),
+    ).not.toBeInTheDocument();
+  });
+
   it("shows private-share modal and then opens share-link modal after making note public", async () => {
     (getAuthUser as jest.Mock).mockReturnValue({ planType: "PRO", emailVerifiedAt: "2026-03-21T09:00:00Z" });
     (getNote as jest.Mock).mockResolvedValue({ ...baseNote, studyPackStatus: "DRAFT", visibility: "PRIVATE" });
@@ -1465,6 +1507,36 @@ describe("PrivateNoteDetailPageClient", () => {
 
     await waitFor(() => expect(updateNoteVisibility).toHaveBeenCalledWith("note-1", "PUBLIC"));
     expect(replaceNoteShares).not.toHaveBeenCalled();
+  });
+
+  it("warns in the Make Public dialog when the note has no Authored Depth", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ planType: "PRO", emailVerifiedAt: "2026-03-21T09:00:00Z" });
+    (getNote as jest.Mock).mockResolvedValue({ ...baseNote, visibility: "PRIVATE", learnerLevel: null });
+    (getNoteShares as jest.Mock).mockResolvedValue([]);
+
+    render(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Private" }));
+    fireEvent.click(screen.getByRole("button", { name: /Public/ }));
+
+    expect(
+      screen.getByText(/will not appear under any Authored Depth filter/),
+    ).toBeInTheDocument();
+  });
+
+  it("does not warn in the Make Public dialog when the note already has an Authored Depth", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ planType: "PRO", emailVerifiedAt: "2026-03-21T09:00:00Z" });
+    (getNote as jest.Mock).mockResolvedValue({ ...baseNote, visibility: "PRIVATE", learnerLevel: "COLLEGE" });
+    (getNoteShares as jest.Mock).mockResolvedValue([]);
+
+    render(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Private" }));
+    fireEvent.click(screen.getByRole("button", { name: /Public/ }));
+
+    expect(
+      screen.queryByText(/will not appear under any Authored Depth filter/),
+    ).not.toBeInTheDocument();
   });
 
   it("supports Make a Copy and Delete from the note actions menu", async () => {

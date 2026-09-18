@@ -1859,6 +1859,7 @@ export type AdminNoteApplicableProgramsItem = {
   title: string | null;
   courseProgram: string | null;
   domainContext: DomainContext | null;
+  learnerLevel: LearnerLevel | null;
   applicablePrograms: ApplicableProgram[];
 };
 
@@ -2995,9 +2996,13 @@ export async function getAdminOrganicLandings(): Promise<AdminOrganicLandingsRes
 export async function getAdminNoteApplicablePrograms(
   page = 0,
   size = 25,
+  missingDepthOnly?: boolean,
 ): Promise<AdminNoteApplicableProgramsPage> {
+  const missingDepthQuery = typeof missingDepthOnly === "boolean"
+    ? `&missingDepthOnly=${encodeURIComponent(String(missingDepthOnly))}`
+    : "";
   const response = await fetchWithAuth(
-    `/admin/notes/applicable-programs?page=${encodeURIComponent(String(page))}&size=${encodeURIComponent(String(size))}`,
+    `/admin/notes/applicable-programs?page=${encodeURIComponent(String(page))}&size=${encodeURIComponent(String(size))}${missingDepthQuery}`,
     {
       method: "GET",
       headers: buildAuthHeaders(),

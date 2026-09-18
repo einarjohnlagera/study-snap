@@ -687,6 +687,13 @@ export function BulkGenerationPageClient() {
             <p className="text-xs text-foreground/60">
               Make each created note public as soon as it is queued.
             </p>
+            {makePublic && !learnerLevel ? (
+              <p className="text-xs text-amber-700 dark:text-amber-300">
+                No Authored Depth is set above, so these notes will not appear under any Authored Depth
+                filter in the Public Library. They will still publish — set Authored Depth on a note
+                later if you want it reachable by that filter.
+              </p>
+            ) : null}
           </div>
 
           <section className="space-y-3" aria-labelledby="bulk-topics-heading">

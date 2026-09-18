@@ -29,8 +29,9 @@ public class AdminNoteApplicableProgramsController {
     public AdminNoteApplicableProgramsPageResponse list(
             @RequestParam(defaultValue = DEFAULT_PAGE) @Min(0) int page,
             @RequestParam(defaultValue = DEFAULT_SIZE) @Min(1) @Max(100) int size,
+            @RequestParam(defaultValue = "false") boolean missingDepthOnly,
             @AuthenticationPrincipal AuthenticatedUser user
     ) {
-        return noteApplicableProgramsService.getAdminPage(page, size, user.userId());
+        return noteApplicableProgramsService.getAdminPage(page, size, missingDepthOnly, user.userId());
     }
 }

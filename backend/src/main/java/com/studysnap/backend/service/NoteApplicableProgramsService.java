@@ -78,12 +78,20 @@ public class NoteApplicableProgramsService {
     }
 
     @Transactional(readOnly = true)
-    public AdminNoteApplicableProgramsPageResponse getAdminPage(int page, int size, UUID requesterUserId) {
-        Page<NoteEntity> notes = noteRepository.findByOwnerUserId(requesterUserId, PageRequest.of(
+    public AdminNoteApplicableProgramsPageResponse getAdminPage(
+            int page,
+            int size,
+            boolean missingDepthOnly,
+            UUID requesterUserId
+    ) {
+        PageRequest pageRequest = PageRequest.of(
                 page,
                 size,
                 Sort.by(Sort.Direction.DESC, UPDATED_AT_PROPERTY)
-        ));
+        );
+        Page<NoteEntity> notes = missingDepthOnly
+                ? noteRepository.findByOwnerUserIdAndLearnerLevelIsNull(requesterUserId, pageRequest)
+                : noteRepository.findByOwnerUserId(requesterUserId, pageRequest);
         List<UUID> noteIds = notes.getContent().stream().map(NoteEntity::getId).toList();
         Map<UUID, List<ApplicableProgramResponse>> programsByNoteId =
                 noteCourseProgramRepository.findByNoteIds(noteIds);
@@ -97,6 +105,7 @@ public class NoteApplicableProgramsService {
                     note.getTitle(),
                     note.getCourseProgram(),
                     note.getDomainContext() == null ? null : note.getDomainContext().name(),
+                    note.getLearnerLevel(),
                     programsByNoteId.getOrDefault(note.getId(), List.of())
             ));
         }
