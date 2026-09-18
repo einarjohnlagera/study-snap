@@ -166,6 +166,25 @@ public class GenerationRecoveryRowWriter {
                 .filter(staleSince -> staleSince != null);
     }
 
+    /**
+     * Recovers a GENERATING note with no {@code generationEnqueuedAt}, using {@code updatedAt} as the
+     * fallback clock — the same one {@code NoteController.recoverStrandedGeneration} already uses for
+     * a self-service recovery of this exact row class. The bound matters: a future write path that
+     * sets {@code GENERATING} without stamping {@code generationEnqueuedAt} would otherwise have its
+     * in-flight generation killed by the very next sweep.
+     */
+    @Transactional
+    public Optional<OffsetDateTime> recoverNoteWithMissingEnqueuedAt(UUID noteId, OffsetDateTime cutoff) {
+        return noteRepository.findByIdForUpdate(noteId)
+                .filter(note -> isRecoverableNoteWithMissingEnqueuedAt(note, cutoff))
+                .map(note -> {
+                    OffsetDateTime staleSince = note.getUpdatedAt();
+                    studyPackService.markNoteGenerationFailed(note);
+                    return note.getStatus() == NoteStatus.FAILED ? staleSince : null;
+                })
+                .filter(staleSince -> staleSince != null);
+    }
+
     private boolean isRecoverablePool(
             ExamQuestionPoolEntity pool,
             OffsetDateTime pendingCutoff,
@@ -208,5 +227,12 @@ public class GenerationRecoveryRowWriter {
         return note.getStatus() == NoteStatus.GENERATING
                 && note.getGenerationEnqueuedAt() != null
                 && note.getGenerationEnqueuedAt().isBefore(cutoff);
+    }
+
+    private boolean isRecoverableNoteWithMissingEnqueuedAt(NoteEntity note, OffsetDateTime cutoff) {
+        return note.getStatus() == NoteStatus.GENERATING
+                && note.getGenerationEnqueuedAt() == null
+                && note.getUpdatedAt() != null
+                && note.getUpdatedAt().isBefore(cutoff);
     }
 }
