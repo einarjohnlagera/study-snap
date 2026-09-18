@@ -2,7 +2,7 @@
 
 ## v0.154.0 - Closing the Loop
 
-**Status: In Progress**
+**Status: Released** (signed off 2026-09-18)
 
 Theme: close out three independently-verified, gate-true Backlog Index items — none gated on an owner
 action or a production read, none sharing a file or a shared method with any other, each anchored to
@@ -57,9 +57,21 @@ override or compete with Domain Context per ADR-001, and does not touch `courseP
 **Routing:** Claude Code inline for the `GENERATING`-recovery fix (isolated root cause, 1-3 files);
 Codex for the `is_active` write path and the topic-note `subject` context gap (new endpoint/DTO +
 multi-surface frontend each). **Verification tier:** each item's own tier as scoped (direct verification
-for the inline item, normal `/audit-diff` for the two Codex items), plus one whole-release `advisor()`
-summary at signoff — no shared files or methods between any of the three items, so no full pressure
-test is triggered by CLAUDE.md's own gate.
+for the inline item, normal `/audit-diff` for the two Codex items). **⚠️ Escalated at signoff, past the
+whole-release `advisor()` summary originally scoped here:** all three items independently tripped
+CLAUDE.md's "delivery introduced a defect the same session then fixed" trigger (item 1's lost-update
+defect, item 2's unbounded-recovery regression, item 3's stale-closure bug — each caught and fixed before
+its own commit). A repeated same-session-defect pattern across every item in a release is a stronger
+blind-spot signal than the rule anticipates from a single occurrence, so this release ran one scoped cold
+agent, falsification-framed against the specific claims made in all three fixes, instead of the single
+`advisor()` summary. **Result: nothing disproven** — all four falsifiable claims per item held under
+direct code inspection (the lost-update fix, the recovery bound, the dependency-array fix, and their
+respective transactional/normalization/negative-case guarantees), and no cross-item coupling was found.
+**⚠️ One imprecision corrected, not a defect:** this section's original "no shared files or methods"
+phrasing was wrong on the first half — `frontend/lib/api.ts` is touched by both item 1
+(`updateCourseProgram`) and item 3 (`generateNoteFromTopic`), at non-overlapping functions with no logic
+interaction. "No shared methods" is what actually holds and is what the no-full-pressure-test gate
+depends on.
 
 Carried forward from `v0.153.0`'s signoff, not this release's problem to solve: A1 (owner action —
 enabling Render's own per-request logging) still not enabled as of `v0.153.0` signoff; the Leg A2
