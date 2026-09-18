@@ -117,6 +117,32 @@ here). Also carried forward, from this release's own kickoff correction above: t
   `docs/features/study-pack-generation.md` corrected to describe the sweep and the endpoint as two
   entry points to the same rule, not "left untouched" plus a separate manual-only path. Backend
   2434/2434 (full suite, including the real-PostgreSQL native-query harness).
+- **Topic-note generation now carries the editor's Subject into generation context.**
+  `GenerateNoteFromTopicRequest.java:11-35` accepts the optional, 64-character-bounded field while
+  keeping the existing three- and four-argument Java constructors source-compatible (both are live:
+  the three-arg form is still used by `StudyPackService.java:332`, the four-arg form by
+  `NoteBulkGenerationService.java:311`); `NoteGenerationService.java:118-152` normalizes it once with
+  `SubjectNormalizationUtils` and passes it through both the unchanged curator and learner resolver
+  branches. The positional frontend API appends `subject` and omits blank values
+  (`frontend/lib/api.ts:3603-3631`), while every note-editor call variant supplies the already-collected
+  draft value (`note-editor-page-client.tsx:1143-1180`). Onboarding's separate two-argument call is
+  unchanged. **⚠️ Pre-commit `npm run lint` found a real stale-closure bug in the Codex delivery:** the
+  `useCallback` wrapping the generate-from-topic handler read `draft.subject` (via `resolvedSubject`) but
+  omitted it from its dependency array, so typing Subject *after* Topic — a plausible order — would
+  silently generate with the stale (often empty) subject captured at the callback's last recreation.
+  Codex's own new test happened to type Subject before Topic, which recreates the callback via the
+  already-listed `normalizedGenerateTopic` dependency and masked the gap. Fixed by adding `draft.subject`
+  to the dependency array; a new regression test
+  (`"uses the latest changed Subject even when it's typed after the Topic"`) exercises the reversed,
+  bug-exposing order and was mutation-verified — confirmed failing against the pre-fix code, passing
+  after. **No deploy-ordering statement needed:** `subject` is purely additive to an existing endpoint (no
+  form's meaning changed, no field became required), and either deploy-skew direction only degrades
+  generation quality rather than breaking a request. Coverage includes resolver-call and final context
+  assertions for both branches, real `MockMvc` JSON binding plus over-length rejection before generation,
+  the real frontend request body with present/blank subjects, and component calls with a selected,
+  absent, or Subject-typed-after-Topic draft. Backend 2442/2442 (full suite, including the
+  real-PostgreSQL native-query harness); frontend 2472/2473 with one pre-existing skipped test; frontend
+  lint 0 errors (20 pre-existing warnings, back to baseline after the fix — 21 before it).
 
 ## v0.153.0 - The Missing Telemetry
 

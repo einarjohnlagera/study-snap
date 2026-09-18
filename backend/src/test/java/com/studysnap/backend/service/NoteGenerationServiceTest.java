@@ -34,6 +34,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -66,10 +67,17 @@ class NoteGenerationServiceTest {
     @Mock
     private OnboardingGuardService onboardingGuardService;
 
+    private StudyPackGenerationContextResolver generationContextResolver;
     private NoteGenerationService noteGenerationService;
 
     @BeforeEach
     void setUp() {
+        generationContextResolver = spy(new StudyPackGenerationContextResolver(
+                userRepository,
+                noteRepository,
+                noteCourseProgramRepository,
+                courseProgramCatalogRepository
+        ));
         noteGenerationService = new NoteGenerationService(
                 userRepository,
                 subscriptionService,
@@ -77,12 +85,7 @@ class NoteGenerationServiceTest {
                 llmStudyPackService,
                 contentModerationService,
                 onboardingGuardService,
-                new StudyPackGenerationContextResolver(
-                        userRepository,
-                        noteRepository,
-                        noteCourseProgramRepository,
-                        courseProgramCatalogRepository
-                ),
+                generationContextResolver,
                 courseProgramCatalogRepository
         );
     }
@@ -163,6 +166,93 @@ class NoteGenerationServiceTest {
         );
         assertThat(contextCaptor.getValue().domainContext())
                 .isEqualTo(DomainContext.ENGINEERING_MATHEMATICS);
+    }
+
+    @Test
+    void generateFromTopic_normalizesSubjectIntoNonCuratorGenerationContext() {
+        UUID userId = UUID.randomUUID();
+        UserEntity user = new UserEntity();
+        user.setId(userId);
+        user.setLearnerLevel(LearnerLevel.COLLEGE);
+        user.setCourseProgram("Nursing");
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.FREE);
+        when(llmStudyPackService.generateNoteFromTopic(
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(StudyPackGenerationContext.class)
+        )).thenReturn("Generated note content");
+
+        noteGenerationService.generateFromTopic(
+                new GenerateNoteFromTopicRequest(
+                        "Dosage Calculations", List.of(), null, null, "  Nursing—Pharmacology  "
+                ),
+                userId
+        );
+
+        ArgumentCaptor<String> subjectCaptor = ArgumentCaptor.forClass(String.class);
+        verify(generationContextResolver).resolveForBulkGeneration(
+                org.mockito.ArgumentMatchers.eq(userId),
+                org.mockito.ArgumentMatchers.eq(List.of()),
+                org.mockito.ArgumentMatchers.eq("Nursing"),
+                subjectCaptor.capture(),
+                org.mockito.ArgumentMatchers.isNull(),
+                org.mockito.ArgumentMatchers.isNull()
+        );
+        assertThat(subjectCaptor.getValue()).isEqualTo("Nursing – Pharmacology");
+
+        ArgumentCaptor<StudyPackGenerationContext> contextCaptor =
+                ArgumentCaptor.forClass(StudyPackGenerationContext.class);
+        verify(llmStudyPackService).generateNoteFromTopic(
+                org.mockito.ArgumentMatchers.eq("Dosage Calculations"), contextCaptor.capture()
+        );
+        assertThat(contextCaptor.getValue().subject()).isEqualTo("Nursing – Pharmacology");
+    }
+
+    @Test
+    void generateFromTopic_normalizesSubjectIntoCuratorGenerationContext() {
+        UUID userId = UUID.randomUUID();
+        UUID programId = UUID.randomUUID();
+        UserEntity curator = new UserEntity();
+        curator.setId(userId);
+        curator.setRole(UserRole.ADMIN);
+        curator.setOnboardingCompletedAt(OffsetDateTime.now());
+        when(userRepository.findById(userId)).thenReturn(Optional.of(curator));
+        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.FREE);
+        when(courseProgramCatalogRepository.findExistingIds(java.util.Set.of(programId)))
+                .thenReturn(List.of(programId));
+        when(llmStudyPackService.generateNoteFromTopic(
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(StudyPackGenerationContext.class)
+        )).thenReturn("Generated note content");
+
+        noteGenerationService.generateFromTopic(
+                new GenerateNoteFromTopicRequest(
+                        "Structural Loads",
+                        List.of(programId),
+                        null,
+                        "engineering_sciences",
+                        "  Structural   Engineering  "
+                ),
+                userId
+        );
+
+        ArgumentCaptor<String> subjectCaptor = ArgumentCaptor.forClass(String.class);
+        verify(generationContextResolver).resolveForBulkGeneration(
+                org.mockito.ArgumentMatchers.eq(userId),
+                org.mockito.ArgumentMatchers.eq(List.of(programId)),
+                org.mockito.ArgumentMatchers.isNull(),
+                subjectCaptor.capture(),
+                org.mockito.ArgumentMatchers.eq(DomainContext.ENGINEERING_SCIENCES),
+                org.mockito.ArgumentMatchers.isNull()
+        );
+        assertThat(subjectCaptor.getValue()).isEqualTo("Structural Engineering");
+
+        ArgumentCaptor<StudyPackGenerationContext> contextCaptor =
+                ArgumentCaptor.forClass(StudyPackGenerationContext.class);
+        verify(llmStudyPackService).generateNoteFromTopic(
+                org.mockito.ArgumentMatchers.eq("Structural Loads"), contextCaptor.capture()
+        );
+        assertThat(contextCaptor.getValue().subject()).isEqualTo("Structural Engineering");
     }
 
     @Test

@@ -788,6 +788,53 @@ class NoteControllerTest {
     }
 
     @Test
+    void generateNoteFromTopic_bindsSubjectFromARealRequest() throws Exception {
+        UUID userId = UUID.randomUUID();
+        AuthenticatedUser user = new AuthenticatedUser(userId, UserRole.USER, true, 1);
+        when(noteGenerationService.generateFromTopic(any(GenerateNoteFromTopicRequest.class), eq(userId)))
+                .thenReturn(new GenerateNoteFromTopicResponse("Generated note content"));
+
+        buildMockMvc(user).perform(post("/notes/generate")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "topic": "Dosage Calculations",
+                                  "courseProgramText": "Nursing",
+                                  "subject": "Pharmacology"
+                                }
+                                """))
+                .andExpect(status().isOk());
+
+        ArgumentCaptor<GenerateNoteFromTopicRequest> requestCaptor =
+                ArgumentCaptor.forClass(GenerateNoteFromTopicRequest.class);
+        verify(noteGenerationService).generateFromTopic(requestCaptor.capture(), eq(userId));
+        assertThat(requestCaptor.getValue().subject()).isEqualTo("Pharmacology");
+    }
+
+    @Test
+    void generateNoteFromTopic_rejectsOverLengthSubjectBeforeGeneration() throws Exception {
+        UUID userId = UUID.randomUUID();
+        AuthenticatedUser user = new AuthenticatedUser(userId, UserRole.USER, true, 1);
+
+        buildMockMvc(user).perform(post("/notes/generate")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "topic": "Dosage Calculations",
+                                  "courseProgramText": "Nursing",
+                                  "subject": "%s"
+                                }
+                                """.formatted("x".repeat(65))))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.code").value("VALIDATION_ERROR"))
+                .andExpect(jsonPath("$.error.message").value("Subject must be 64 characters or less."));
+
+        verify(noteGenerationService, never()).generateFromTopic(
+                any(GenerateNoteFromTopicRequest.class), any(UUID.class)
+        );
+    }
+
+    @Test
     void listPublic_ignoresLegacyAudienceQueryAndReturnsUnfilteredResults() throws Exception {
         AuthenticatedUser routeUser = new AuthenticatedUser(UUID.randomUUID(), UserRole.USER, true, 1);
         MockMvc mockMvc = buildMockMvc(routeUser);

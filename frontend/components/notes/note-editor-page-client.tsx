@@ -1142,6 +1142,7 @@ export function NoteEditorPageClient({
     setFormError(null);
     try {
       const resolvedCourseProgram = resolveGenerateFromTopicCourseProgram(draft.courseProgram, profileCourseProgram);
+      const resolvedSubject = normalizeOptional(draft.subject) ?? undefined;
       let response;
       const selectedProgramIds = showCuratorMetadataFields ? applicableProgramIds : undefined;
       if (draft.domainContext) {
@@ -1150,6 +1151,7 @@ export function NoteEditorPageClient({
           showCuratorMetadataFields ? undefined : resolvedCourseProgram,
           draft.domainContext,
           selectedProgramIds,
+          resolvedSubject,
         );
       } else if (showCuratorMetadataFields && selectedProgramIds?.length) {
         response = await generateNoteFromTopic(
@@ -1157,11 +1159,24 @@ export function NoteEditorPageClient({
           undefined,
           undefined,
           selectedProgramIds,
+          resolvedSubject,
         );
       } else if (resolvedCourseProgram) {
-        response = await generateNoteFromTopic(normalizedTopic, resolvedCourseProgram);
+        response = await generateNoteFromTopic(
+          normalizedTopic,
+          resolvedCourseProgram,
+          undefined,
+          undefined,
+          resolvedSubject,
+        );
       } else {
-        response = await generateNoteFromTopic(normalizedTopic);
+        response = await generateNoteFromTopic(
+          normalizedTopic,
+          undefined,
+          undefined,
+          undefined,
+          resolvedSubject,
+        );
       }
       setDraft((previous) => ({
         ...previous,
@@ -1207,6 +1222,7 @@ export function NoteEditorPageClient({
     currentPlan,
     draft.courseProgram,
     draft.domainContext,
+    draft.subject,
     applicableProgramIds,
     showCuratorMetadataFields,
     openLockedFeaturePaywall,
