@@ -1,6 +1,6 @@
 # RELEASES_ARCHIVE.md — NoteLib
 
-Archived sections of `RELEASES.md`. **Contents are NOT one contiguous range:** `v0.41.0`–`v0.120.0`, plus `v0.126.0` (moved at the `v0.132.0` kickoff), `v0.127.0` (moved at the `v0.133.0` kickoff) `v0.128.0` (moved at the `v0.134.0` kickoff) `v0.129.0` (moved at the `v0.135.0` kickoff) `v0.130.0` (moved at the `v0.136.0` kickoff) `v0.131.0` (moved at the `v0.137.0` kickoff) `v0.132.0` (moved at the `v0.138.0` kickoff) `v0.133.0` (moved at the `v0.139.0` kickoff), `v0.134.0` (moved at the `v0.140.0` kickoff), `v0.135.0` (moved at the `v0.141.0` kickoff), `v0.136.0` (moved at the `v0.142.0` kickoff), `v0.137.0` (moved at the `v0.143.0` kickoff), `v0.138.0` (moved at the `v0.144.0` kickoff), `v0.139.0` (moved at the `v0.145.0` kickoff), `v0.140.0` (moved at the `v0.146.0` kickoff), `v0.141.0` (moved at the `v0.147.0` kickoff), `v0.142.0` (moved at the `v0.148.0` kickoff), `v0.143.0` (moved at the `v0.149.0` kickoff), `v0.144.0` (moved at the `v0.150.0` kickoff), `v0.145.0` (moved at the `v0.151.0` kickoff), `v0.146.0` (moved at the `v0.152.0` kickoff) and `v0.147.0` (moved at the `v0.153.0` kickoff) as the live file crossed its *current + last five* cap. Each version's own `## vX.Y.Z` heading is the index — search for it. `v0.40.1` and earlier moved here
+Archived sections of `RELEASES.md`. **Contents are NOT one contiguous range:** `v0.41.0`–`v0.120.0`, plus `v0.126.0` (moved at the `v0.132.0` kickoff), `v0.127.0` (moved at the `v0.133.0` kickoff) `v0.128.0` (moved at the `v0.134.0` kickoff) `v0.129.0` (moved at the `v0.135.0` kickoff) `v0.130.0` (moved at the `v0.136.0` kickoff) `v0.131.0` (moved at the `v0.137.0` kickoff) `v0.132.0` (moved at the `v0.138.0` kickoff) `v0.133.0` (moved at the `v0.139.0` kickoff), `v0.134.0` (moved at the `v0.140.0` kickoff), `v0.135.0` (moved at the `v0.141.0` kickoff), `v0.136.0` (moved at the `v0.142.0` kickoff), `v0.137.0` (moved at the `v0.143.0` kickoff), `v0.138.0` (moved at the `v0.144.0` kickoff), `v0.139.0` (moved at the `v0.145.0` kickoff), `v0.140.0` (moved at the `v0.146.0` kickoff), `v0.141.0` (moved at the `v0.147.0` kickoff), `v0.142.0` (moved at the `v0.148.0` kickoff), `v0.143.0` (moved at the `v0.149.0` kickoff), `v0.144.0` (moved at the `v0.150.0` kickoff), `v0.145.0` (moved at the `v0.151.0` kickoff), `v0.146.0` (moved at the `v0.152.0` kickoff), `v0.147.0` (moved at the `v0.153.0` kickoff) and `v0.148.0` (moved at the `v0.154.0` kickoff) as the live file crossed its *current + last five* cap. Each version's own `## vX.Y.Z` heading is the index — search for it. `v0.40.1` and earlier moved here
 2026-07-10; **`v0.41.0` through `v0.120.0` moved here 2026-09-07** in the `v0.126.0` pass, which
 resumed this convention after it had lapsed for 85 releases — `RELEASES.md` had reached 116
 sections against its documented design of *current + last few versions*. Both passes are MOVES,
@@ -17,6 +17,129 @@ See `RELEASES.md` for the current + most-recent versions, and its "Archived rele
 index for a one-line-per-version pointer back into this file.
 
 ---
+
+## v0.148.0 - Say What You Mean
+
+**Status: Released**
+
+Theme: two small, unrelated correctness fixes — a keyword scan that quietly misjudges what content
+needs computation guidance, and a reminder email that quietly always arrives on the same day.
+
+### Planned Scope
+
+- **`QUANTITATIVE_KEYWORDS` substring-anchoring fix (backend).** `isQuantitativeContext`
+  (`OpenAiLlmStudyPackService.java:1649`) uses plain `String.contains` for all 50 keywords, so several
+  match as embedded substrings of unrelated words: `ratio` ⊂ `corporation`/`operations`/`administration`,
+  `solve` ⊂ `resolve`, `current` ⊂ `currently`, `interest` ⊂ `interested`. Measured read-only against
+  production: ~4,890 notes are currently "quantitative via keywords only." Sampled the flip set:
+  genuinely non-computational content (pedagogy, architectural theory, Philippine history, nursing
+  practice narratives). **Two amendments found during pre-commit `advisor()` review, both closed in the
+  same diff before shipping:**
+  - **Nursing/Accountancy regression** (also independently found by the earlier cold-agent falsification
+    pass): anchoring alone would have declassified `domain_context IS NULL` Nursing/Accountancy content
+    that reaches `quantitative=true` today only via this same accidental substring match. Re-measured
+    with `course_program` joined into the haystack (the original estimate omitted it): of the flip set,
+    466 notes are rescued by two new unanchored `QUANTITATIVE_KEYWORDS` entries, `nursing` and
+    `accountancy` (both safe standalone words, no substring hazard) — higher coverage than the original
+    ~370-note estimate, not lower. `pharmacokinetic` (added `v0.145.0`) stays deliberately unanchored —
+    its match depends on unanchored substring matching, and the code comment explaining this was
+    rewritten so a future session doesn't "fix" it into breaking.
+  - **Inflection gap:** a bare `\bkeyword\b` doesn't match a keyword's own plural/verb forms —
+    `\bratio\b` fails on "financial ratios," `\bsolve\b` fails on "solving." Of the flip set, 28% (291 of
+    1,045 remaining after the nursing/accountancy rescue) triggered ONLY on one of these inflected forms
+    — genuinely quantitative content the anchoring fix would otherwise have wrongly declassified. Each of
+    the 7 anchored patterns now also accepts its plain plural/verb inflections (`ratio(s)?`,
+    `solv(e|es|ed|ing)`, `current(s)?`, `interest(s)?`, `integral(s)?`, `balance(s)?`) without reopening
+    any substring hazard the anchoring closed — e.g. `interest(s)?` still excludes `interested`/
+    `interesting` since the boundary is enforced after the optional `s`, not mid-word.
+  - **Final measured flip count, with course_program in the haystack and both amendments applied: 754
+    notes** (down from the original, narrower estimate of ~1,520-1,586 — the original haystack omitted
+    course_program and the original anchoring omitted inflections, both of which this diff corrects
+    before shipping, not after).
+  - **Which 7 keywords get anchored:** `ratio`, `solve`, `current`, `interest`, `integral`, `balance`,
+    `units`. The other 44 (including the 2 new ones and `pharmacokinetic`) keep plain `contains`.
+  - **Anti-drift:** no resolver rewrite — same haystack construction, same
+    `domainContext().isQuantitative()` short-circuit, same overall function shape; anchoring is a second,
+    additive matching branch for a fixed subset of keywords, not a semantic overhaul of the scan.
+  - **Test owed:** `OpenAiLlmStudyPackServiceTest` gains cases proving the anchored path isn't a no-op (a
+    haystack containing only `corporation` → not quantitative; one containing `current ratio` → still
+    quantitative), that the plural/verb inflections match on their own, and that the nursing/accountancy
+    rescue works via `courseProgram` (the field production actually uses, not just `subject`) — plus
+    confirms the existing `pharmacokinetic` test still passes as the canary.
+  - `docs/features/study-pack-generation.md` updated to describe the anchoring split and the
+    `nursing`/`accountancy` false-negative repair, matching how it already documents `pharmacokinetic`.
+
+- **Due-concepts-digest day-of-week clustering fix (backend).** `RetentionService.isEligibleReviewDay`
+  returns `true` unconditionally for the 143 users with `review_days IS NULL`, so they're checked every
+  day the digest job runs and gated only by a flat 7-day cooldown — which locks them onto whichever
+  weekday they first landed on, forever. Measured read-only against production (Asia/Manila, the job's
+  actual `EMAIL_BUDGET_ZONE`): Mon 107, Tue 101, Wed 98 vs. Thu 9, Fri 8, Sun 2 over 28 days — a real,
+  confirmed 3-day cluster. **Amendment from a cold-agent falsification pass, correcting two claims from
+  this release's own scoping:** (1) the originally-claimed "3.5x peak reduction" was a unit error
+  (compared users-per-bucket to sends-per-week); the real, reproduced improvement is **1.5x** peak-day
+  reduction (26.8 → 18.0 sends/week on the worst day) — a burstiness improvement, not a dramatic fix. (2)
+  This is **not** a live email-cap breach fix — `dispatchDueConceptsDigestEmails` never consumes the
+  `EMAIL_DAILY_LIMIT` budget (confirmed unbudgeted), and `sendDailyEmails()` (the budgeted path) runs
+  before it in the daily job, so same-day collision with the 100/day cap cannot occur the way the
+  original finding implied. Framed correctly here as: smooths an already-unbounded channel's shape for
+  143 users, not a breach fix.
+  - **Fix:** for null-`review_days` users, `isEligibleReviewDay` gets a deterministic default day —
+    `Math.floorMod(user.getId().hashCode(), 7)` compared against today's `DayOfWeek` — instead of "any
+    day." `dueConceptsDigestCooldownDays`'s null-branch changes from the global 7-day config to
+    **6 days** (not the committed-user value of 1, per the falsification pass's transition-week
+    counterexample below). Purely computed at read time from the existing `id` column — no new column,
+    no migration, no backfill, no write to `review_days`.
+  - **Anti-drift, from the falsification pass:** cooldown must be **6**, not 1 — with the day-gate
+    providing weekly cadence, 6 days never blocks an on-rhythm send, and it makes a sub-7-day
+    double-send during the transition week impossible (a cooldown of 1 was shown to produce two digests
+    2 days apart for a concrete example user). Must use `Math.floorMod`, not `%` — `UUID.hashCode()` can
+    be negative.
+  - **Known limitation, stated rather than silently accepted:** a user whose last digest landed close to
+    their newly-assigned day may still see one earlier-than-usual digest in the first week after deploy
+    (a bounded, one-time transition effect, not an ongoing issue).
+  - **Uses `dispatchDay.getValue() - 1`, not `.ordinal()`**, to compare against the hash bucket — same
+    result, but pinned to `DayOfWeek`'s documented numbering rather than enum ordinal position.
+  - **`StudySnapProperties.Retention.dueConceptsDigestCooldownDays` (default 7) is removed**, not left
+    orphaned — it had no `application.yaml` key and, after this fix, no remaining reader; the uncommitted
+    cooldown is now the compile-time constant `UNCOMMITTED_DUE_CONCEPTS_DIGEST_COOLDOWN_DAYS = 6`, a
+    deliberate choice (it has no legitimate reason to vary per deployment) rather than an oversight.
+  - **Feature docs updated to match**, not just `RELEASES.md`: `docs/features/retention-emails.md` (the
+    null/empty `review_days` cadence description and the cooldown table), `docs/features/quiz.md` (its
+    "null/empty review days preserve the pre-`v0.72.0` cadence" line was the exact claim this fix makes
+    false), and `docs/features/email-preferences.md` (the settings-page cooldown description). Frontend
+    review-days copy (`app/settings/page.tsx`, `review-commitment-prompt.tsx`) was swept and found already
+    accurate — neither promises "every day" or "whenever due," so neither needed a change.
+  - **Tests owed:** `RetentionServiceTest`'s null/empty-`review_days` tests are rewritten for the new
+    behavior (was: "always eligible"; now: eligible only on a deterministic hash-assigned day, with a new
+    negative-case test proving the day-gate actually excludes a mismatched day) rather than merely
+    adjusted, since the old assertion is no longer true. `RetentionEmailScheduler`'s and
+    `RetentionEmailSchedulerTest`'s existing "7-day cooldown" comments/assertions are updated to describe
+    the new day-gate + 6-day cooldown behavior.
+
+Anti-drift (both items): no database migration, no new endpoint, no persisted state change for either
+fix — both are pure logic changes computed at read/generation time. Routing: Claude Code implements
+directly (isolated bug fixes with a clear root cause each — Item 1 touches 1 production file, Item 2
+touches 3: `RetentionService.java`, `RetentionEmailScheduler.java`, and the `StudySnapProperties.java`
+config-field removal). **Verification tier: one `advisor()` call** on the diff for each item — no
+auth/quota/money/production-data semantics change for either, and both were already pressure-tested
+pre-implementation by a cold Opus agent during scoping (falsification-framed against the specific claims
+above), which is why a heavier post-implementation tier isn't warranted.
+
+### Shipped
+
+- **`QUANTITATIVE_KEYWORDS` substring-anchoring fix** — PR #1396, merged `5657d8fd` into
+  `releases/v0.148.0`. `OpenAiLlmStudyPackService.java:193-199,1693-1697` (word-boundary anchoring for
+  7 keywords, each with plural/verb inflections), `:176-184` (`nursing`/`accountancy` added unanchored).
+  `OpenAiLlmStudyPackServiceTest` gained 5 guard tests. `docs/features/study-pack-generation.md` and
+  `docs/gpt-contexts/REVIEW_SET_SHAPING_CONTEXT.md` updated. Full backend suite green.
+- **Due-concepts-digest day-of-week clustering fix** — PR #1397, merged `36b08fd3` into
+  `releases/v0.148.0`. `RetentionService.java:414` (`isEligibleReviewDay`), `:58,422`
+  (`UNCOMMITTED_DUE_CONCEPTS_DIGEST_COOLDOWN_DAYS = 6`), `RetentionEmailScheduler.java` comment update,
+  `StudySnapProperties.java` (`dueConceptsDigestCooldownDays` removed, now unused). `RetentionServiceTest`
+  rewritten for the new null/empty-`review_days` behavior including a negative-case guard.
+  `docs/features/retention-emails.md`, `quiz.md`, `email-preferences.md` updated; frontend review-days
+  copy swept and found already accurate. `[CHECKPOINT — due 2026-10-06]` added to `ROADMAP.md`'s Backlog
+  Index — the projected 1.5x peak-day reduction is a simulation, not yet observed post-deploy.
 
 ## v0.135.0 - Update Signal
 

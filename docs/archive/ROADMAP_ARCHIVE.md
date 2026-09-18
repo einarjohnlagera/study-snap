@@ -15,6 +15,43 @@ changelog layer. `ROADMAP.md` keeps a one-line-per-version index at each origina
 
 ---
 
+**Kicked off 2026-09-15, signed off 2026-09-15.** `v0.148.0 — Say What You Mean` is **Released**. Scope:
+two small, unrelated backend correctness fixes. **Item 1** (PR #1396, `OpenAiLlmStudyPackService.java`)
+anchors 7 of `QUANTITATIVE_KEYWORDS`' 50 keywords (`ratio`, `solve`, `current`, `interest`, `integral`,
+`balance`, `units`) to word boundaries — including each keyword's plain plural/verb inflections — in
+`isQuantitativeContext`, closing substring false positives (`ratio` ⊂ `corporation`, `current` ⊂
+`currently`, etc.). Adds `nursing` and `accountancy` as two new unanchored keywords in the same diff,
+closing a regression found during scoping AND during pre-commit `advisor()` review: notes with
+`domain_context IS NULL` in those two fields were classified quantitative only by the same accidental
+substring match, and both domains are declared `quantitative=true`. **Final measured flip count, with
+`course_program` joined into the haystack and inflections included: 754 notes** (down from the
+scoping-time estimate of ~1,520-1,586, which used a narrower haystack and pre-inflection patterns) —
+never retroactive, since the flag is never persisted. `pharmacokinetic` stays deliberately unanchored.
+This fix also closed the Nursing/Accountancy legs of `v0.85.0`'s "coverage tracks the program's name"
+defect (`REVIEW_SET_SHAPING_CONTEXT.md`); Architecture's leg remains open. **Item 2** (PR #1397,
+`RetentionService.java:414`) gives the 143 users with `review_days IS NULL` a deterministic default
+dispatch day (`Math.floorMod(user.getId().hashCode(), 7) == dispatchDay.getValue() - 1`) in
+`isEligibleReviewDay`, instead of "any day" — closing a measured 3-day clustering (Manila time: Mon
+107, Tue 101, Wed 98 vs. Thu/Fri/Sun single digits over 28 days) that locks unset-preference users onto
+whichever weekday they first landed on. Cooldown for that branch changes to a compile-time constant, 6
+days (not 1 — a cold-agent pass found cooldown 1 produces a same-week double-send during the
+transition; not the removed 7-day `StudySnapProperties` config, which had no `application.yaml` key and
+is deleted rather than left orphaned). **Corrected during scoping, not left standing:** the originally
+estimated "3.5x peak reduction" was a units error; the real, reproduced figure is a **projected** 1.5x
+(26.8 → 18.0 sends/week on the worst day) — a burstiness improvement, not a breach fix, since the
+digest channel was confirmed to never actually consume the `EMAIL_DAILY_LIMIT` budget in the first
+place. **`[CHECKPOINT — due 2026-10-06]` in the Backlog Index** reads whether that projection actually
+held post-deploy. Both items: no migration, no new endpoint, no persisted state change, and both had
+their touched feature docs (`study-pack-generation.md`, `retention-emails.md`, `quiz.md`,
+`email-preferences.md`) and one GPT-context module each (`REVIEW_SET_SHAPING_CONTEXT.md`,
+`GPT_CONTEXT.md`) re-read and corrected against final code at signoff, not just at their own PR.
+**Routing: Claude Code inline** (isolated bug fixes — Item 1 touches 1 production file, Item 2 touches
+3). **Verification tier: one `advisor()` call per item** — both were pressure-tested pre-implementation
+by a cold Opus agent, falsification-framed against the specific scoping claims, and the diff-time
+`advisor()` calls found and closed two more amendments (the inflection gap, and the `getValue()`/orphaned-
+config cleanups) before commit — no heavier post-implementation tier was warranted. Full scope in
+`RELEASES.md`.
+
 **Kicked off 2026-09-14, signed off 2026-09-14.** `v0.147.0 — The Escape Hatch` is **Released**. Scope: fix the Bulk
 Regenerate modal permanently wedging on a stale/expired batch id — `bulk-regenerate-modal.tsx` seeds
 `batchId` from `sessionStorage` with no TTL awareness, an expired batch 404s

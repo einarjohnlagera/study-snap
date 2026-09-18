@@ -1,5 +1,65 @@
 # RELEASES.md - NoteLib
 
+## v0.154.0 - Closing the Loop
+
+**Status: In Progress**
+
+Theme: close out four independently-verified, gate-true Backlog Index items instead of one — none
+gated on an owner action or a production read, none sharing a file or a shared method with any other,
+each anchored to current code before being scoped rather than trusted from its row's prose.
+
+### Planned Scope
+
+- **Health-check-on-Hikari-pool decoupling (backend).** Direct continuation of `v0.153.0`'s Leg A2 —
+  that release's own Backlog Index row explicitly flagged this as the one thing not folded in:
+  `DataSourceHealthIndicator` is Spring Boot's default autoconfigured health check and shares the same
+  Hikari pool it monitors, so pool saturation starves the health check itself and the platform restarts
+  an instance whose only problem was that it was busy — the actual mechanism behind all four
+  `v0.153.0`-era occurrences. Confirmed no custom `HealthIndicator` exists in
+  `backend/src/main/java` before scoping. Shape: a liveness path that doesn't compete for a pool
+  connection (a dedicated 1-connection validation datasource, or excluding `db` from
+  `management.health` in favor of Leg A2's own saturation signal), not a general APM integration.
+- **`course_programs.is_active` write path (backend + Admin frontend).** Confirmed dead column:
+  `CourseProgramCatalogRepository.java` reads `is_active` in several places but no code anywhere in
+  `backend/src/main/java` ever writes it; `CourseProgramCatalogService`/`Controller` have zero
+  references. Adds the missing write path so Admin can actually deactivate a catalog program — the
+  prerequisite for retiring the two legacy fused rows (`Nursing · Medicine`, `Nursing · Pharmacy`).
+- **Recovery for `generation_enqueued_at IS NULL` notes stranded in `GENERATING` (backend).**
+  `GenerationRecoveryService.java:107` explicitly skips this row class and logs "leaving them
+  untouched"; every other stale `GENERATING` row is swept back within ~2h10m
+  (`noteBoundMinutes` default 120 plus sweep cadence), but a row missing this timestamp never recovers
+  — a genuine, user-visible stuck note. Root cause already diagnosed at kickoff; this release closes it
+  rather than re-diagnosing it.
+- **Topic-note generation passes `subject` into the LLM context (backend + frontend).**
+  `GenerateNoteFromTopicRequest.java` carries `topic`, `courseProgramIds`/`courseProgramText` and
+  `domainContext`, but no `subject` — `NoteGenerationService` builds context with `subject = null`, so a
+  note authored under a specific subject via "Create from topic" never tells the model that. Degrades
+  quality rather than failing requests. Must preserve ADR-001's hierarchy: Domain Context is the sole
+  authoritative domain constraint, Subject only narrows within it.
+
+Anti-drift: no APM/general observability layer for the health-check item — scoped narrowly to
+decoupling liveness from the Hikari pool; no bulk `is_active` editor or catalog deletion, and no
+`course_programs.program_family_id` write path revival; the `GENERATING`-recovery fix extends the
+existing sweep's row selection, it does not change `noteBoundMinutes` or the sweep cadence; the
+topic-note `subject` change does not let Subject override or compete with Domain Context per ADR-001,
+and does not touch `courseProgramText`/`domainContext` resolution.
+
+**Routing:** Claude Code inline for the health-check decoupling and the `GENERATING`-recovery fix
+(isolated root cause, 1-3 files each); Codex for the `is_active` write path and the topic-note
+`subject` context gap (new endpoint/DTO + multi-surface frontend each). **Verification tier:** each
+item's own tier as scoped (direct verification for the two inline items, normal `/audit-diff` for the
+two Codex items), plus one whole-release `advisor()` summary at signoff — no shared files or methods
+between any of the four items, so no full pressure test is triggered by CLAUDE.md's own gate.
+
+Carried forward from `v0.153.0`'s signoff, not this release's problem to solve: A1 (owner action —
+enabling Render's own per-request logging) still not enabled as of `v0.153.0` signoff; the Leg A2
+saturation detector's registry has no coverage of non-request threads (Known Limitation, not re-scoped
+here).
+
+### Shipped
+
+_(nothing yet)_
+
 ## v0.153.0 - The Missing Telemetry
 
 **Status: Released** (signed off 2026-09-18)
@@ -610,130 +670,3 @@ plan's complete decision block are in
 - Added migration, repository, service, real-request controller, and component coverage for lifecycle
   defaults, joined row mapping, family reassignment and clearing, endpoint errors and authorization,
   inactive candidates, and all family-chip states.
-
----
-
-## v0.148.0 - Say What You Mean
-
-**Status: Released**
-
-Theme: two small, unrelated correctness fixes — a keyword scan that quietly misjudges what content
-needs computation guidance, and a reminder email that quietly always arrives on the same day.
-
-### Planned Scope
-
-- **`QUANTITATIVE_KEYWORDS` substring-anchoring fix (backend).** `isQuantitativeContext`
-  (`OpenAiLlmStudyPackService.java:1649`) uses plain `String.contains` for all 50 keywords, so several
-  match as embedded substrings of unrelated words: `ratio` ⊂ `corporation`/`operations`/`administration`,
-  `solve` ⊂ `resolve`, `current` ⊂ `currently`, `interest` ⊂ `interested`. Measured read-only against
-  production: ~4,890 notes are currently "quantitative via keywords only." Sampled the flip set:
-  genuinely non-computational content (pedagogy, architectural theory, Philippine history, nursing
-  practice narratives). **Two amendments found during pre-commit `advisor()` review, both closed in the
-  same diff before shipping:**
-  - **Nursing/Accountancy regression** (also independently found by the earlier cold-agent falsification
-    pass): anchoring alone would have declassified `domain_context IS NULL` Nursing/Accountancy content
-    that reaches `quantitative=true` today only via this same accidental substring match. Re-measured
-    with `course_program` joined into the haystack (the original estimate omitted it): of the flip set,
-    466 notes are rescued by two new unanchored `QUANTITATIVE_KEYWORDS` entries, `nursing` and
-    `accountancy` (both safe standalone words, no substring hazard) — higher coverage than the original
-    ~370-note estimate, not lower. `pharmacokinetic` (added `v0.145.0`) stays deliberately unanchored —
-    its match depends on unanchored substring matching, and the code comment explaining this was
-    rewritten so a future session doesn't "fix" it into breaking.
-  - **Inflection gap:** a bare `\bkeyword\b` doesn't match a keyword's own plural/verb forms —
-    `\bratio\b` fails on "financial ratios," `\bsolve\b` fails on "solving." Of the flip set, 28% (291 of
-    1,045 remaining after the nursing/accountancy rescue) triggered ONLY on one of these inflected forms
-    — genuinely quantitative content the anchoring fix would otherwise have wrongly declassified. Each of
-    the 7 anchored patterns now also accepts its plain plural/verb inflections (`ratio(s)?`,
-    `solv(e|es|ed|ing)`, `current(s)?`, `interest(s)?`, `integral(s)?`, `balance(s)?`) without reopening
-    any substring hazard the anchoring closed — e.g. `interest(s)?` still excludes `interested`/
-    `interesting` since the boundary is enforced after the optional `s`, not mid-word.
-  - **Final measured flip count, with course_program in the haystack and both amendments applied: 754
-    notes** (down from the original, narrower estimate of ~1,520-1,586 — the original haystack omitted
-    course_program and the original anchoring omitted inflections, both of which this diff corrects
-    before shipping, not after).
-  - **Which 7 keywords get anchored:** `ratio`, `solve`, `current`, `interest`, `integral`, `balance`,
-    `units`. The other 44 (including the 2 new ones and `pharmacokinetic`) keep plain `contains`.
-  - **Anti-drift:** no resolver rewrite — same haystack construction, same
-    `domainContext().isQuantitative()` short-circuit, same overall function shape; anchoring is a second,
-    additive matching branch for a fixed subset of keywords, not a semantic overhaul of the scan.
-  - **Test owed:** `OpenAiLlmStudyPackServiceTest` gains cases proving the anchored path isn't a no-op (a
-    haystack containing only `corporation` → not quantitative; one containing `current ratio` → still
-    quantitative), that the plural/verb inflections match on their own, and that the nursing/accountancy
-    rescue works via `courseProgram` (the field production actually uses, not just `subject`) — plus
-    confirms the existing `pharmacokinetic` test still passes as the canary.
-  - `docs/features/study-pack-generation.md` updated to describe the anchoring split and the
-    `nursing`/`accountancy` false-negative repair, matching how it already documents `pharmacokinetic`.
-
-- **Due-concepts-digest day-of-week clustering fix (backend).** `RetentionService.isEligibleReviewDay`
-  returns `true` unconditionally for the 143 users with `review_days IS NULL`, so they're checked every
-  day the digest job runs and gated only by a flat 7-day cooldown — which locks them onto whichever
-  weekday they first landed on, forever. Measured read-only against production (Asia/Manila, the job's
-  actual `EMAIL_BUDGET_ZONE`): Mon 107, Tue 101, Wed 98 vs. Thu 9, Fri 8, Sun 2 over 28 days — a real,
-  confirmed 3-day cluster. **Amendment from a cold-agent falsification pass, correcting two claims from
-  this release's own scoping:** (1) the originally-claimed "3.5x peak reduction" was a unit error
-  (compared users-per-bucket to sends-per-week); the real, reproduced improvement is **1.5x** peak-day
-  reduction (26.8 → 18.0 sends/week on the worst day) — a burstiness improvement, not a dramatic fix. (2)
-  This is **not** a live email-cap breach fix — `dispatchDueConceptsDigestEmails` never consumes the
-  `EMAIL_DAILY_LIMIT` budget (confirmed unbudgeted), and `sendDailyEmails()` (the budgeted path) runs
-  before it in the daily job, so same-day collision with the 100/day cap cannot occur the way the
-  original finding implied. Framed correctly here as: smooths an already-unbounded channel's shape for
-  143 users, not a breach fix.
-  - **Fix:** for null-`review_days` users, `isEligibleReviewDay` gets a deterministic default day —
-    `Math.floorMod(user.getId().hashCode(), 7)` compared against today's `DayOfWeek` — instead of "any
-    day." `dueConceptsDigestCooldownDays`'s null-branch changes from the global 7-day config to
-    **6 days** (not the committed-user value of 1, per the falsification pass's transition-week
-    counterexample below). Purely computed at read time from the existing `id` column — no new column,
-    no migration, no backfill, no write to `review_days`.
-  - **Anti-drift, from the falsification pass:** cooldown must be **6**, not 1 — with the day-gate
-    providing weekly cadence, 6 days never blocks an on-rhythm send, and it makes a sub-7-day
-    double-send during the transition week impossible (a cooldown of 1 was shown to produce two digests
-    2 days apart for a concrete example user). Must use `Math.floorMod`, not `%` — `UUID.hashCode()` can
-    be negative.
-  - **Known limitation, stated rather than silently accepted:** a user whose last digest landed close to
-    their newly-assigned day may still see one earlier-than-usual digest in the first week after deploy
-    (a bounded, one-time transition effect, not an ongoing issue).
-  - **Uses `dispatchDay.getValue() - 1`, not `.ordinal()`**, to compare against the hash bucket — same
-    result, but pinned to `DayOfWeek`'s documented numbering rather than enum ordinal position.
-  - **`StudySnapProperties.Retention.dueConceptsDigestCooldownDays` (default 7) is removed**, not left
-    orphaned — it had no `application.yaml` key and, after this fix, no remaining reader; the uncommitted
-    cooldown is now the compile-time constant `UNCOMMITTED_DUE_CONCEPTS_DIGEST_COOLDOWN_DAYS = 6`, a
-    deliberate choice (it has no legitimate reason to vary per deployment) rather than an oversight.
-  - **Feature docs updated to match**, not just `RELEASES.md`: `docs/features/retention-emails.md` (the
-    null/empty `review_days` cadence description and the cooldown table), `docs/features/quiz.md` (its
-    "null/empty review days preserve the pre-`v0.72.0` cadence" line was the exact claim this fix makes
-    false), and `docs/features/email-preferences.md` (the settings-page cooldown description). Frontend
-    review-days copy (`app/settings/page.tsx`, `review-commitment-prompt.tsx`) was swept and found already
-    accurate — neither promises "every day" or "whenever due," so neither needed a change.
-  - **Tests owed:** `RetentionServiceTest`'s null/empty-`review_days` tests are rewritten for the new
-    behavior (was: "always eligible"; now: eligible only on a deterministic hash-assigned day, with a new
-    negative-case test proving the day-gate actually excludes a mismatched day) rather than merely
-    adjusted, since the old assertion is no longer true. `RetentionEmailScheduler`'s and
-    `RetentionEmailSchedulerTest`'s existing "7-day cooldown" comments/assertions are updated to describe
-    the new day-gate + 6-day cooldown behavior.
-
-Anti-drift (both items): no database migration, no new endpoint, no persisted state change for either
-fix — both are pure logic changes computed at read/generation time. Routing: Claude Code implements
-directly (isolated bug fixes with a clear root cause each — Item 1 touches 1 production file, Item 2
-touches 3: `RetentionService.java`, `RetentionEmailScheduler.java`, and the `StudySnapProperties.java`
-config-field removal). **Verification tier: one `advisor()` call** on the diff for each item — no
-auth/quota/money/production-data semantics change for either, and both were already pressure-tested
-pre-implementation by a cold Opus agent during scoping (falsification-framed against the specific claims
-above), which is why a heavier post-implementation tier isn't warranted.
-
-### Shipped
-
-- **`QUANTITATIVE_KEYWORDS` substring-anchoring fix** — PR #1396, merged `5657d8fd` into
-  `releases/v0.148.0`. `OpenAiLlmStudyPackService.java:193-199,1693-1697` (word-boundary anchoring for
-  7 keywords, each with plural/verb inflections), `:176-184` (`nursing`/`accountancy` added unanchored).
-  `OpenAiLlmStudyPackServiceTest` gained 5 guard tests. `docs/features/study-pack-generation.md` and
-  `docs/gpt-contexts/REVIEW_SET_SHAPING_CONTEXT.md` updated. Full backend suite green.
-- **Due-concepts-digest day-of-week clustering fix** — PR #1397, merged `36b08fd3` into
-  `releases/v0.148.0`. `RetentionService.java:414` (`isEligibleReviewDay`), `:58,422`
-  (`UNCOMMITTED_DUE_CONCEPTS_DIGEST_COOLDOWN_DAYS = 6`), `RetentionEmailScheduler.java` comment update,
-  `StudySnapProperties.java` (`dueConceptsDigestCooldownDays` removed, now unused). `RetentionServiceTest`
-  rewritten for the new null/empty-`review_days` behavior including a negative-case guard.
-  `docs/features/retention-emails.md`, `quiz.md`, `email-preferences.md` updated; frontend review-days
-  copy swept and found already accurate. `[CHECKPOINT — due 2026-10-06]` added to `ROADMAP.md`'s Backlog
-  Index — the projected 1.5x peak-day reduction is a simulation, not yet observed post-deploy.
-
----
