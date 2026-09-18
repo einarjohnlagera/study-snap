@@ -21,8 +21,18 @@ import static org.assertj.core.api.Assertions.assertThat;
  * {@code spring.datasource.hikari.maximum-pool-size} is what let ~21 concurrent requests alone
  * exhaust the connection pool under {@code spring.jpa.open-in-view: true} (a connection is held for
  * the whole request, not just its transaction), independent of whatever else was holding connections
- * across the 2026-09-04/05/10/17 outages. `threads.max` was lowered from 25 to 20 in `v0.153.0` Leg B
- * to close this specific structural exposure.
+ * across the 2026-09-04/05/10/17 outages. `threads.max` was lowered from 25 to 20, then to 18, in
+ * `v0.153.0` Leg B.
+ *
+ * <p>⚠️ EQUALITY (20 == 20) WAS TRIED FIRST AND FOUND INSUFFICIENT. At equality, 20 fully-concurrent,
+ * connection-holding requests alone can still consume every Hikari connection under open-in-view,
+ * leaving zero for {@code DataSourceHealthIndicator} — the exact starvation signature (active=20/20)
+ * behind 2026-09-04/05/10/17. This test now asserts a STRICT inequality ({@code isLessThan}), and the
+ * shipped default reserves 2 connections of headroom (18 vs. 20) so the health check and this app's
+ * own DB-bound {@code @Scheduled} jobs are never competing with Tomcat threads for the last slot. This
+ * meaningfully reduces the odds of recurrence; it is NOT an absolute guarantee, since two background
+ * executors and 16 {@code @Scheduled} jobs also draw on this same pool without being bounded by
+ * {@code threads.max} — see `RELEASES.md`'s `v0.153.0` Known limitations.
  *
  * <p>⚠️ A LITERAL PAIR OF NUMBERS WOULD ROT. {@link DataSourcePoolContractTest} already pins Hikari's
  * {@code maximum-pool-size} at 20 for its own reasons (the deploy-overlap ceiling). If a future editor
@@ -52,19 +62,19 @@ class TomcatThreadPoolHikariAlignmentTest {
     private static final String HIKARI_MAX_POOL_SIZE = "spring.datasource.hikari.maximum-pool-size";
 
     @Test
-    void tomcatThreadsMaxStaysAtOrBelowTheHikariConnectionPoolSize() throws IOException {
+    void tomcatThreadsMaxStaysStrictlyBelowTheHikariConnectionPoolSize() throws IOException {
         Map<String, String> declared = scalarKeysDeclaredIn(PRODUCTION_PROFILE);
 
         int tomcatThreadsMax = Integer.parseInt(declared.get(TOMCAT_THREADS_MAX));
         int hikariMaxPoolSize = Integer.parseInt(declared.get(HIKARI_MAX_POOL_SIZE));
 
         assertThat(tomcatThreadsMax)
-                .as("server.tomcat.threads.max (%d) must not exceed "
-                        + "spring.datasource.hikari.maximum-pool-size (%d) — under open-in-view, "
-                        + "concurrent requests alone (independent of query speed) can exhaust the pool "
-                        + "the moment Tomcat admits more concurrent requests than Hikari can serve",
+                .as("server.tomcat.threads.max (%d) must stay strictly below "
+                        + "spring.datasource.hikari.maximum-pool-size (%d) — under open-in-view, Tomcat "
+                        + "threads ALONE consuming every connection (independent of query speed) starves "
+                        + "DataSourceHealthIndicator of a connection unless at least one is reserved",
                         tomcatThreadsMax, hikariMaxPoolSize)
-                .isLessThanOrEqualTo(hikariMaxPoolSize);
+                .isLessThan(hikariMaxPoolSize);
     }
 
     @Test

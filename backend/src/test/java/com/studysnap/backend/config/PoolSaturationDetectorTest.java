@@ -2,6 +2,7 @@ package com.studysnap.backend.config;
 
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
+import com.zaxxer.hikari.HikariPoolMXBean;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.boot.test.system.CapturedOutput;
@@ -10,12 +11,14 @@ import org.springframework.boot.test.system.OutputCaptureExtension;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.time.Duration;
+import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.function.BooleanSupplier;
+import java.util.stream.IntStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
@@ -80,6 +83,85 @@ class PoolSaturationDetectorTest {
 
             assertThat(output).doesNotContain(PoolSaturationDetector.SATURATION_LOG_MARKER);
         }
+    }
+
+    @Test
+    void doesNotLogUnderOrdinaryConcurrentLoad(CapturedOutput output) throws Exception {
+        InFlightRequestRegistry registry = new InFlightRequestRegistry();
+        try (HikariDataSource dataSource = dataSource(3)) {
+            PoolSaturationDetector detector = new PoolSaturationDetector(dataSource, registry);
+            ExecutorService executor = Executors.newFixedThreadPool(2);
+            try {
+                List<Runnable> tasks = IntStream.range(0, 2)
+                        .<Runnable>mapToObj(i -> () -> simulateOrdinaryRequest(dataSource, registry, detector, i))
+                        .toList();
+                List<Future<?>> futures = tasks.stream().map(executor::submit).toList();
+                for (Future<?> future : futures) {
+                    future.get(5, TimeUnit.SECONDS);
+                }
+            } finally {
+                executor.shutdown();
+            }
+
+            assertThat(output).doesNotContain(PoolSaturationDetector.SATURATION_LOG_MARKER);
+        }
+    }
+
+    private static void simulateOrdinaryRequest(
+            HikariDataSource dataSource,
+            InFlightRequestRegistry registry,
+            PoolSaturationDetector detector,
+            int index
+    ) {
+        registry.registerCurrentThread("/api/notes/concurrent-" + index);
+        try (Connection connection = dataSource.getConnection()) {
+            detector.checkAndLogIfSaturated();
+            detector.checkAndLogIfSaturated();
+            detector.checkAndLogIfSaturated();
+        } catch (SQLException exception) {
+            throw new RuntimeException(exception);
+        } finally {
+            registry.removeCurrentThread();
+        }
+    }
+
+    @Test
+    void rearmsAfterRecovery(CapturedOutput output) {
+        HikariDataSource dataSource = mock(HikariDataSource.class);
+        HikariPoolMXBean pool = mock(HikariPoolMXBean.class);
+        when(dataSource.getHikariPoolMXBean()).thenReturn(pool);
+        when(dataSource.getMaximumPoolSize()).thenReturn(2);
+        InFlightRequestRegistry registry = new InFlightRequestRegistry();
+        PoolSaturationDetector detector = new PoolSaturationDetector(dataSource, registry);
+
+        registry.registerCurrentThread("/api/first-episode");
+        when(pool.getActiveConnections()).thenReturn(2);
+        when(pool.getThreadsAwaitingConnection()).thenReturn(1);
+        detector.checkAndLogIfSaturated();
+        detector.checkAndLogIfSaturated();
+        detector.checkAndLogIfSaturated();
+        assertThat(saturationLogLineCount(output)).as("episode 1 logs exactly once").isEqualTo(1);
+
+        when(pool.getActiveConnections()).thenReturn(0);
+        when(pool.getThreadsAwaitingConnection()).thenReturn(0);
+        detector.checkAndLogIfSaturated();
+        registry.removeCurrentThread();
+
+        registry.registerCurrentThread("/api/second-episode");
+        when(pool.getActiveConnections()).thenReturn(2);
+        when(pool.getThreadsAwaitingConnection()).thenReturn(1);
+        detector.checkAndLogIfSaturated();
+        assertThat(saturationLogLineCount(output)).as("one saturated poll into episode 2, not yet").isEqualTo(1);
+        detector.checkAndLogIfSaturated();
+        assertThat(saturationLogLineCount(output)).as("episode 2 re-arms and logs again").isEqualTo(2);
+        assertThat(output).contains("/api/second-episode");
+        registry.removeCurrentThread();
+    }
+
+    private static long saturationLogLineCount(CapturedOutput output) {
+        return output.toString().lines()
+                .filter(line -> line.contains(PoolSaturationDetector.SATURATION_LOG_MARKER))
+                .count();
     }
 
     @Test

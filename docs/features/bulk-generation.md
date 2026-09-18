@@ -58,6 +58,8 @@ The form tracks which of these produced the current value, because the profile p
 
 The collections request is optional enhancement data. A load failure renders an inline error and retry action while leaving the rest of the form usable and submittable without a Review Set. Domain Context and Authored Depth both have explicit blank fallback options. The grid collapses (`empty:hidden`) when no metadata fields are visible for non-teachers, so Subject sits directly above Public. `Public` is a full-width row below the grid with its label and toggle adjacent (not stretched across the card). The Topics list remains full-width below Public.
 
+**(v0.153.0)** When `Public` is on and no Authored Depth is selected, a non-blocking amber warning appears below the toggle stating the generated notes will not appear under any Authored Depth filter in the Public Library. It disappears immediately if the curator then selects a depth, and it never blocks submission — batches still generate as PUBLIC either way.
+
 ## Submission
 
 The submit button is a static `Generate`. The topic count is already shown authoritatively by the Topics counter (`X / cap`) above the fields, so the button does not duplicate it. Topic inputs use a 16px font on mobile (`text-base sm:text-sm`) to avoid iOS Safari's focus-zoom while typing.
