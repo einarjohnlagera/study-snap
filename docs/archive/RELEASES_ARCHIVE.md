@@ -1,6 +1,6 @@
 # RELEASES_ARCHIVE.md — NoteLib
 
-Archived sections of `RELEASES.md`. **Contents are NOT one contiguous range:** `v0.41.0`–`v0.120.0`, plus `v0.126.0` (moved at the `v0.132.0` kickoff), `v0.127.0` (moved at the `v0.133.0` kickoff) `v0.128.0` (moved at the `v0.134.0` kickoff) `v0.129.0` (moved at the `v0.135.0` kickoff) `v0.130.0` (moved at the `v0.136.0` kickoff) `v0.131.0` (moved at the `v0.137.0` kickoff) `v0.132.0` (moved at the `v0.138.0` kickoff) `v0.133.0` (moved at the `v0.139.0` kickoff), `v0.134.0` (moved at the `v0.140.0` kickoff), `v0.135.0` (moved at the `v0.141.0` kickoff), `v0.136.0` (moved at the `v0.142.0` kickoff), `v0.137.0` (moved at the `v0.143.0` kickoff), `v0.138.0` (moved at the `v0.144.0` kickoff), `v0.139.0` (moved at the `v0.145.0` kickoff), `v0.140.0` (moved at the `v0.146.0` kickoff), `v0.141.0` (moved at the `v0.147.0` kickoff), `v0.142.0` (moved at the `v0.148.0` kickoff), `v0.143.0` (moved at the `v0.149.0` kickoff), `v0.144.0` (moved at the `v0.150.0` kickoff), `v0.145.0` (moved at the `v0.151.0` kickoff), `v0.146.0` (moved at the `v0.152.0` kickoff), `v0.147.0` (moved at the `v0.153.0` kickoff) and `v0.148.0` (moved at the `v0.154.0` kickoff) as the live file crossed its *current + last five* cap. Each version's own `## vX.Y.Z` heading is the index — search for it. `v0.40.1` and earlier moved here
+Archived sections of `RELEASES.md`. **Contents are NOT one contiguous range:** `v0.41.0`–`v0.120.0`, plus `v0.126.0` (moved at the `v0.132.0` kickoff), `v0.127.0` (moved at the `v0.133.0` kickoff) `v0.128.0` (moved at the `v0.134.0` kickoff) `v0.129.0` (moved at the `v0.135.0` kickoff) `v0.130.0` (moved at the `v0.136.0` kickoff) `v0.131.0` (moved at the `v0.137.0` kickoff) `v0.132.0` (moved at the `v0.138.0` kickoff) `v0.133.0` (moved at the `v0.139.0` kickoff), `v0.134.0` (moved at the `v0.140.0` kickoff), `v0.135.0` (moved at the `v0.141.0` kickoff), `v0.136.0` (moved at the `v0.142.0` kickoff), `v0.137.0` (moved at the `v0.143.0` kickoff), `v0.138.0` (moved at the `v0.144.0` kickoff), `v0.139.0` (moved at the `v0.145.0` kickoff), `v0.140.0` (moved at the `v0.146.0` kickoff), `v0.141.0` (moved at the `v0.147.0` kickoff), `v0.142.0` (moved at the `v0.148.0` kickoff), `v0.143.0` (moved at the `v0.149.0` kickoff), `v0.144.0` (moved at the `v0.150.0` kickoff), `v0.145.0` (moved at the `v0.151.0` kickoff), `v0.146.0` (moved at the `v0.152.0` kickoff), `v0.147.0` (moved at the `v0.153.0` kickoff), `v0.148.0` (moved at the `v0.154.0` kickoff) and `v0.149.0` (moved at the `v0.155.0` kickoff) as the live file crossed its *current + last five* cap. Each version's own `## vX.Y.Z` heading is the index — search for it. `v0.40.1` and earlier moved here
 2026-07-10; **`v0.41.0` through `v0.120.0` moved here 2026-09-07** in the `v0.126.0` pass, which
 resumed this convention after it had lapsed for 85 releases — `RELEASES.md` had reached 116
 sections against its documented design of *current + last few versions*. Both passes are MOVES,
@@ -15,6 +15,182 @@ versions also live in `docs/releases/vX.Y.Z.md` — those drop implementation de
 
 See `RELEASES.md` for the current + most-recent versions, and its "Archived releases"
 index for a one-line-per-version pointer back into this file.
+
+---
+
+## v0.149.0 - Precision Before Coverage
+
+**Status: Released**
+
+Theme: two new Program Family shortcuts for curators (Health Sciences, Accounting), built on the
+existing generic family mechanism, plus the admin capability and legacy-catalog cleanup needed to
+maintain families going forward without another release.
+
+Source: `docs/claude-plans/program-family-health-accounting-expansion-final-plan.md` (FINAL, Product
+UX-approved, tightening pass 2 of 2; untracked on disk, indexed in `ROADMAP.md`'s Backlog Index).
+Supersedes `docs/claude-plans/program-family-health-accounting-expansion-product-ux-consultation-prompt.md`
+(pass 1) — that file's facts are preserved as historical trace only; do not re-read it for anything
+load-bearing.
+
+### Planned Scope
+
+- **`is_active` lifecycle column on `course_programs` (backend, migration).** `course_programs` has no
+  lifecycle field today (`id, name, program_family_id, exam_goal_slug, created_at` only — confirmed
+  against current migrations at kickoff). Adds `is_active BOOLEAN NOT NULL DEFAULT TRUE`, reusing the
+  existing `discount_vouchers`/`quiz_share_links` convention rather than inventing a new one (confirmed:
+  both already carry `is_active BOOLEAN NOT NULL DEFAULT TRUE`). This migration adds the column ONLY.
+  **⚠️ ANTI-DRIFT: do NOT bundle the 2-row backfill (below) into this same migration** — see the
+  deployment-ordering item.
+- **Legacy fused catalog rows deprecated from new authoring, not deleted (backend, follow-up
+  step).** "Nursing · Medicine" (20 notes) and "Nursing · Pharmacy" (1 note) get `is_active = false`,
+  targeted by name (not id, since ids are runtime-generated). **A SEPARATE step from the column-add
+  migration, deployed only after Health Sciences family population is confirmed live in production** —
+  bundling them would strand curators between losing the fused shortcut and gaining its replacement.
+  Existing Notes referencing these rows are never touched; `course_programs` rows are never deleted.
+- **`PATCH /course-program-catalog/{id}` — new ADMIN-only endpoint (backend).** No endpoint exists today
+  to reassign an *existing* catalog program's family (confirmed: `CourseProgramCatalogController` is
+  GET-only at kickoff). `UpdateCourseProgramCatalogRequest(UUID programFamilyId)` — nullable;
+  `null` clears membership, a valid id sets/changes it. `@PreAuthorize("hasRole('ADMIN')")`, mirroring
+  `NoteCollectionController`'s existing `PATCH /{id}` convention. Real `MockMvc` request test with
+  `Content-Type: application/json` required (not a bare service-method call — this repo's own `v0.119.0`
+  lesson), plus ADMIN-only guard, assign/change/clear, unknown-program, unknown-family cases.
+- **List-endpoint filtering (backend).** The authoring combobox's pickable list excludes `is_active =
+  false` rows; a Note that already references an inactive row must still resolve and render it as a
+  normal chip (fetch selected-by-id regardless of `is_active`, filter only the *pickable* list). **⚠️
+  Confirm which endpoint the admin catalog management screen uses and keep that one unfiltered** —
+  filtering the wrong list would hide an inactive row from the one screen meant to manage it.
+- **Family-chip UX redesign (frontend, `applicable-programs-combobox.tsx`).** Replaces full-sentence
+  "Add all N programs" buttons with compact states: none selected `Family · N`; partial
+  `Family · N remaining` (click adds only the missing ones); full `✓ Family · N` — **LOCKED, inert,
+  non-interactive**, status text or a disabled element rather than a clickable toggle (`aria-pressed`
+  would misrepresent state, since the Note never persists "family selected" — only individual programs
+  do); removing a member after full immediately reverts to partial. **⚠️ ANTI-DRIFT: do NOT touch
+  `availableProgramFamilies`/`handleFamilyExpansion`** — already family-count-agnostic, confirmed
+  unchanged at kickoff. 18+ selected-program mobile wrapping gets an explicit acceptance check at
+  implementation time (render Engineering's 18 at desktop + 375px mobile width; pass/fail criteria in
+  the plan's §K) rather than a pre-guessed threshold fix.
+- **Health Sciences program family (data + existing mechanism, no new schema).** Nursing, Medicine,
+  Pharmacy — **LOCKED per Product UX, not reopened this release**. Evidence: 18 notes carrying a genuine
+  3-way tag accumulated across five weeks, plus 21 more notes across the two fused rows above — two
+  independent curator actions converging on the same trio. Physical Therapy and Radiologic Technology
+  excluded (no comparable co-selection evidence).
+- **Accounting program family (data + existing mechanism, no new schema).** Accountancy, Management
+  Accounting, Accounting Information Systems, Internal Auditing (4 members) — decided from the CPALE
+  curriculum's own subject-plan structure (Management Services and Auditing sections are, by curriculum
+  design, shared core coursework for these four program types), not from the 35-note bulk-tagging action
+  (which proves curators need cross-program bulk assignment as a workflow, not that all 10 originally
+  bulk-tagged programs belong in one family). **Business Administration explicitly EXCLUDED** — its
+  genuine overlap is concentrated in RFBT + finance-flavored Management Services content, ~22% of the
+  CPALE plan, which fails the family's own precision bar (a program that needs manual removal on ~78%
+  of uses isn't a good default). Entrepreneurship, Economics, Senior High–ABM, Real Estate Management,
+  CMA, CFA all excluded for the release too (thin or no signal, or — for CMA/CFA — an unresolved
+  credential-vs-program taxonomy question, not evidence against inclusion). **⚠️ Flagged for the owner,
+  not blocking kickoff: the Business Administration exclusion rests on external domain knowledge about
+  how Philippine accounting-track programs share curricula, not a row-level fact the database can
+  confirm — worth a sanity check before this family ships.**
+- **`docs/features/program-families.md` updated (docs).** Documents both new families, the `is_active`
+  mechanism, and the reverse Domain-Context guard already noted in the pass-1 audit.
+- **One low-risk copy unification (frontend).** `bulk-generation-page-client.tsx`'s Domain Context
+  helper text ("Required when this note applies to more than one program") is looser than the other two
+  surfaces' phrasing ("Needed before you can generate a Study Pack for a note in more than one program")
+  — unified to match. **No fix for a suspected Domain Context UI phrasing bug from the pass-1 audit** —
+  it was not reproduced this pass; do not implement a fix for a defect that isn't there.
+
+**Explicitly out of scope, not folded in:**
+- Finance as a Course/Program is deferred to CPALE curation itself — the plan's own trigger (the first
+  canonical Finance-applicable note) looks likely to fire soon (16 of 359 planned CPALE notes are
+  textbook Finance/Financial-Management topics) but has not fired yet. Finance Domain Context: still NO.
+- The CPALE curriculum TSV's `applicable_programs` column is uniformly under-tagged (`Accountancy` on
+  all 359 rows, zero cross-program exceptions), and several RFBT titles bake "Accountancy"/"Business Law"
+  into the title text itself (a Note Title doctrine violation). Both are real findings surfaced while
+  reading the plan, both are curriculum-content issues belonging to the curriculum strategist pipeline,
+  and neither is fixed by this release — flagged to the owner separately.
+- Legacy-Note normalization for the 21 notes already carrying a fused-row tag: deferred/follow-up, not
+  this release.
+- Program Family overlap (one nullable FK, single family per program) stays unsupported — a known,
+  recorded limitation, no schema change here.
+
+Anti-drift (whole release): Program Family stays authoring convenience only — never persisted on Note
+generation payloads, never a discovery axis, never sent to generation, never changes Domain Context or
+Authored Depth, never inferred from Review Set, never retroactively synced onto existing Notes (nothing
+stores which family a Note's programs came from, so this is structurally impossible, not just a rule —
+a focused repository test should confirm `note_course_program` rows are never written with a
+family-derived value). Family selection stays purely additive. **Data operations — assigning the 7
+catalog rows to their new families via the new endpoint, and the later `is_active` backfill — are
+owner-run post-deploy, sequenced per the plan's §O, not part of this release's code diff.**
+
+**Routing: Codex** — this touches a backend migration, a new endpoint, and a frontend redesign together,
+per `CLAUDE.md`'s task-routing table. Implementation slices per the plan's §Q: (1) backend catalog
+lifecycle + family-reassignment API, (2) frontend family-chip redesign, (3) docs update — one Codex
+prompt or two, decided at prompt-writing time. **Verification tier: at minimum one scoped cold agent,
+falsification-framed** — re-decide once the actual diff exists. Three triggers already fire at kickoff:
+this adds an ADMIN-only mutation endpoint with no prior tests to anchor against; the new lifecycle
+column is consumed by two different list paths where filtering the wrong one hides inactive rows from
+the admin screen meant to manage them; and the Business Administration exclusion is the plan's own
+flagged external-domain-knowledge conclusion, not a verifiable row. Full scope, evidence, and the
+plan's complete decision block are in
+`docs/claude-plans/program-family-health-accounting-expansion-final-plan.md`.
+
+### Shipped
+
+- Added `course_programs.is_active` through additive migration V145, defaulting every existing and future
+  catalog row to active. The migration contains no fused-row retirement backfill; that remains a gated,
+  owner-run follow-up after Health Sciences is populated.
+- Added the ADMIN-only `PATCH /course-program-catalog/{id}` endpoint for assigning, changing, and clearing
+  an existing program's family. Missing or malformed program ids share `404 COURSE_PROGRAM_NOT_FOUND`;
+  an unknown submitted family remains `400 UNKNOWN_PROGRAM_FAMILY`.
+- Kept the shared catalog list unfiltered for both admin management and authoring fetches. The authoring
+  combobox alone excludes inactive programs from new individual selection and family expansion while
+  preserving inactive programs that an existing Note already selected.
+- Reworked family shortcuts into visible none, partial, and full states (`Family · N`, `Family · N
+  remaining`, `✓ Family · N`), with the full state accessible and inert, and aligned Bulk Generate's
+  Domain Context helper copy with the other authoring surfaces.
+- **⚠️ CORRECTED AT AUDIT — the original text here claimed a browser check "passed at 1440×900" and
+  measured specific pixel/coordinate values (a 502px chip row, Save visible at y=550–590) at 375×812.
+  No headless-browser or screenshot tool exists in this repo or in the Codex/Claude environments that
+  built and reviewed this release, so those coordinates could not have come from an actual render —
+  the plan's own §K explicitly warned against exactly this failure mode ("do not invent a threshold
+  without looking").** What actually shipped: a mobile-only collapse to 8 visible chips past that
+  count, with an accessible "Show all N selected programs" toggle exposing every remove action,
+  built as a judgment call (18 unwrapped chips plus their own labels is a lot of vertical space on a
+  375px-wide screen) rather than a verified measurement. The acceptance check in the plan's §K has
+  **not actually been run** — flagged here rather than left standing as a false "passed" claim; a
+  real device/viewport check before this ships to production would confirm or correct this.
+- **Post-merge cold-agent falsification pass on the actual shipped diff** (PR #1399, commit `2ad837d6`)
+  re-ran both full test suites directly (not trusted from the PR's own report — genuine pass, 31 backend
+  + 26 frontend tests targeted at this change) and checked 8 specific claims against real code. One more
+  real finding: `docs/features/program-families.md` overclaimed that inactive programs "do not appear in
+  individual suggestions" — true only for the Applicable Programs axis (`applicable-programs-combobox.tsx`);
+  the separate, legacy singular `courseProgram` free-text suggestion list (`use-course-program-catalog.ts`
+  → `course-program-combobox.tsx`, used on onboarding/profile/both note surfaces) is untouched and still
+  offers a retired program's name — a pre-existing gap this release did not widen (that field already
+  accepted arbitrary free text), not fixed here, corrected in the doc to state its actual scope. Also
+  added one "Known limitations" line (a fully-selected family's inert chip count can shrink silently if a
+  member is later retired — unreachable today, noted for the future) and a fifth doc file,
+  `docs/claude-plans/v0.149.0-program-family-data-ops-handoff.md`, giving the owner the exact API calls
+  and verified production catalog ids for the two families and 7 assignments, sequenced per plan §O.
+  Everything else the pass checked held: the shared-endpoint filtering scope, already-selected-inactive
+  chips resolving correctly end to end, `CourseProgramNotFoundException`/`UnknownCourseProgramException`
+  staying genuinely separate (4 untouched pre-existing call sites), and the update endpoint's two-read
+  transaction being race-safe by construction (Postgres row-lock + MVCC, not luck).
+- **The mobile-collapse UI (above) was removed, not left as an owed check.** Reading the actual layout
+  of all four consumers (`note-editor-form.tsx`, `private-note-detail-page-client.tsx`'s inline panel,
+  `bulk-generation-page-client.tsx`, and `admin-applicable-programs-section.tsx` via `AppModal`) found
+  it solves a problem that cannot occur in any of them: three sit in ordinary page flow, where scrolling
+  to a Save button below a tall chip row is normal mobile behavior; the fourth renders inside
+  `AppModal`, whose `flex-1 overflow-y-auto` content region plus `shrink-0` actions row (`app-modal.tsx`)
+  already guarantees the actions stay visible regardless of content height — a deterministic CSS
+  property, not a guess, though still not the same as an actual device render. `MOBILE_SELECTED_PROGRAM_LIMIT`,
+  the `matchMedia` viewport listener, and the "Show all N" toggle were removed; every selected program
+  now renders unconditionally at any width, which is the `NO CHANGE — CURRENT WRAPPING ACCEPTABLE`
+  outcome the plan's own §K asked for if the check passed, arrived at by reading the layout architecture
+  rather than by measuring a screenshot. `tsc --noEmit`, the full frontend suite, and lint all re-verified
+  clean after the removal — this pass also fixed one unrelated, pre-existing TypeScript compile error in
+  the same test file (a fixture cast that needed to go through `unknown` first) that had shipped in PR
+  #1399 uncaught, since neither the pre-merge audit nor the post-merge cold agent had run `tsc --noEmit`.
+- Added migration, repository, service, real-request controller, and component coverage for lifecycle
+  defaults, joined row mapping, family reassignment and clearing, endpoint errors and authorization,
+  inactive candidates, and all family-chip states.
 
 ---
 

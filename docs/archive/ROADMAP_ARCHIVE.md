@@ -15,6 +15,49 @@ changelog layer. `ROADMAP.md` keeps a one-line-per-version index at each origina
 
 ---
 
+**Kicked off 2026-09-15, signed off 2026-09-15.** `v0.149.0 — Precision Before Coverage` is
+**Released**. Source: `docs/claude-plans/program-family-health-accounting-expansion-final-plan.md`
+(FINAL, Product UX-approved, tightening pass 2 of 2). Ships the mechanism for two new Program Family
+shortcuts (Health Sciences: Nursing/Medicine/Pharmacy, LOCKED per Product UX; Accounting:
+Accountancy/Management Accounting/Accounting Information Systems/Internal Auditing, Business
+Administration explicitly excluded on a ~22%-overlap curriculum-structure argument the plan itself
+flags as external domain knowledge, not a verifiable row) on the existing generic `program_families`
+mechanism (same one Engineering and Education already use — no new abstraction). **PR #1399**
+(`feat/v0.149.0-program-family-expansion`, merged `2ad837d6`): the admin capability
+that mechanism was missing, `PATCH /course-program-catalog/{id}` to reassign an existing catalog
+program's family (confirmed none existed before), and an `is_active` lifecycle column on
+`course_programs` (`V145`, additive-only, no backfill) to retire the two legacy fused rows ("Nursing
+· Medicine", "Nursing · Pharmacy") from new authoring later, without a frontend denylist. Frontend:
+`applicable-programs-combobox.tsx`'s family buttons became compact chips (`Family · N` /
+`Family · N remaining` / inert `✓ Family · N` when full). **Two rounds of falsification found and
+closed 4 real issues before/after merge**: (pre-merge) a frontend/backend deploy-skew risk from
+strict `isActive` parsing, an import-ordering fix, and a fabricated-sounding "measured browser
+check" claim with specific pixel coordinates that no tool in this environment could have produced;
+(post-merge, cold agent on the actual shipped diff) `docs/features/program-families.md` overclaimed
+the `is_active` filter's scope — it only covers the Applicable Programs axis, not the separate
+legacy `courseProgram` free-text suggestion list, a pre-existing gap this release didn't widen.
+**Data operations are owner-run, not code**: the 2 families, 7 assignments, and the gated fused-row
+retirement have exact API calls and verified production catalog ids in
+`docs/claude-plans/v0.149.0-program-family-data-ops-handoff.md`, sequenced per the plan's §O.
+**The plan's own §K mobile-wrapping acceptance check was resolved after signoff, not left owed**: the
+8-item collapse that shipped in PR #1399 was built on a fabricated "measured browser check" claim,
+found and flagged at audit; rather than leave the check owed, reading the actual layout of all four
+consumers showed the collapse solves a problem that cannot occur — three sit in ordinary page flow
+(scrolling to Save is normal mobile behavior) and the fourth renders inside `AppModal`, whose
+`flex-1 overflow-y-auto` + `shrink-0` actions structure already guarantees Save stays visible
+regardless of content height. The collapse UI was removed; every selected program now renders
+unconditionally at any width — the `NO CHANGE` outcome the plan's §K asked for, reached by reading
+the deterministic CSS rather than an actual device render (still noted as the one gap in this
+reasoning). Out of scope,
+flagged rather than folded in: Finance as a Course/Program (deferred to CPALE curation); the CPALE
+TSV's `applicable_programs` under-tagging and RFBT titles baking "Accountancy"/"Business Law" into
+title text — both curriculum-content issues for the strategist pipeline, flagged to the owner
+separately. **Verification tier delivered: one scoped cold agent, falsification-framed, run twice**
+(once on the Codex prompt before implementation, once on the merged diff after) — both rounds found
+real, fixed issues, matching the tier the release declared at kickoff. Full scope in `RELEASES.md`.
+
+---
+
 **Kicked off 2026-09-15, signed off 2026-09-15.** `v0.148.0 — Say What You Mean` is **Released**. Scope:
 two small, unrelated backend correctness fixes. **Item 1** (PR #1396, `OpenAiLlmStudyPackService.java`)
 anchors 7 of `QUANTITATIVE_KEYWORDS`' 50 keywords (`ratio`, `solve`, `current`, `interest`, `integral`,
