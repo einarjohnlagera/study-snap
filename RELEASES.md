@@ -5,15 +5,22 @@
 **Status: In Progress**
 
 Theme: make the existing announcement `ctaLabel` visible as a real call-to-action in the notification
-inbox, clamp long announcement bodies, close the touch-target/hit-area gaps, and give the Admin author
-a character counter — all render-only, no migration, no API/DTO change.
+inbox, then ship Campaign Feedback — a bounded, single-instrument in-app research campaign that asks
+every learner one structured question from that same linked-notification pattern and persists
+categorized responses, closing on a configured date.
 
 Source: `docs/claude-plans/actionable-announcements-campaign-feedback-stage1-plan.md` (Stage 1 audit +
-plan for "Actionable Announcements + Campaign Feedback", Release A / Slice 1). Release B (Campaign
-Feedback, backend + new table, provisional `v0.157.0`) is explicitly out of scope for this release —
-its Codex prompt exists but is gated on an owner-supplied campaign close date and ships separately.
+plan for "Actionable Announcements + Campaign Feedback"). **⚠️ Originally scoped as two releases
+(Release A frontend-only, Release B backend+frontend as a separate `v0.157.0`) — owner decision
+2026-09-22 folded them into this one release instead.** Release A shipped first (PR #1423, merged into
+this branch) and is documented below exactly as it shipped; Release B's Codex prompt
+(`docs/codex-prompts/v0.157.0-campaign-feedback.md`, untracked, gitignored per convention) had its one
+open input — the campaign's `closes-at` timestamp — resolved by the owner 2026-09-22
+(`2026-10-06T00:00:00Z`, ~2 weeks after this release deploys) and is now dispatched.
 
 ### Planned Scope
+
+**Release A — notification inbox / Admin polish (shipped, see below).**
 
 - **CTA affordance in the notification inbox (frontend).**
   `frontend/components/notifications/notification-inbox.tsx` — render the already-stored,
@@ -34,15 +41,52 @@ its Codex prompt exists but is gated on an owner-supplied campaign close date an
   rule, and the stored-vs-displayed body split (full body stored/delivered, inbox displays a clamped
   view; no "Read more", no announcement detail page).
 
-Anti-drift: frontend-only — no migration, no API/DTO change, no admin lifecycle change. Does not make
-`ANNOUNCEMENT` badge-eligible (would resurrect the `v0.134.0` immortal-row defect) and does not touch
-badge-decrement logic. Does not build Release B (Campaign Feedback route, table, or endpoints).
+Release A anti-drift: frontend-only — no migration, no API/DTO change, no admin lifecycle change. Does
+not make `ANNOUNCEMENT` badge-eligible (would resurrect the `v0.134.0` immortal-row defect) and does
+not touch badge-decrement logic.
 
-Routing: Claude Code inline (frontend-only, ~2 source + 2 test files, no new infrastructure — too small
-to justify a Codex prompt). Verification tier: one `advisor()` call on the diff — no permission, money,
-or quota surface touched.
+Release A routing: Claude Code inline (frontend-only, ~2 source + 2 test files, no new infrastructure —
+too small to justify a Codex prompt). Verification tier: one `advisor()` call on the diff — no
+permission, money, or quota surface touched.
+
+**Release B — Campaign Feedback (backend + frontend).**
+
+- **Data model (backend).** New `campaign_feedback_responses` table (`V148`), one row per
+  `(user_id, campaign_id)` via a unique constraint. `CAMPAIGN_ID` is a named `String` constant
+  (`"STUDY_FRICTION_2026_09"`), deliberately **not** a Java enum or a campaign registry/table — this is
+  one fixed instrument, not a framework. `PrimaryBlocker`, `QuizIssue`, and `PlanIssue` **do** get real
+  enums (genuine 5–9-option closed sets, unlike `CampaignId`).
+- **Endpoints (backend).** `GET /feedback/campaign` (status: `submitted` / `campaignOpen`, no path
+  param — there is exactly one instrument) and `POST /feedback/campaign`. **Locked precedence:** the
+  unique-constraint duplicate check runs before the `closes-at` check, so a learner who already
+  responded and submits again after close sees their own already-submitted state (200), never a
+  "closed" rejection (409) — the close boundary only gates a genuinely new response.
+- **Close boundary (backend).** A configured property, not a DB column:
+  `notelib.campaign.study-friction-2026-09.closes-at`, bound as `String` and parsed to `Instant`
+  explicitly (`@Value` has no `Instant` converter in this codebase). No default — a missing or
+  malformed value fails application startup (fail-closed). **Owner-set value: `2026-10-06T00:00:00Z`**
+  (~2 weeks after this release deploys, set 2026-09-22).
+- **Frontend.** `/feedback` route (auth-gated), one adaptive selection screen (9 primary options,
+  conditional multi/single-select follow-ups, always-visible optional free text), three terminal states
+  in place on the same route (thank-you, already-responded, closed) — no wizard, no second route, no
+  announcement detail page.
+- **Account deletion.** `AccountPurgeService` gains a `CampaignFeedbackResponseRepository` purge call,
+  mirroring the existing `feedback` purge — `notifications.md:370-373` records this exact step shipping
+  missing for a different table in `v0.130.0`; do not repeat that omission.
+
+Release B anti-drift: no campaign table/entity/registry, no dynamic form schema, no `CampaignId` enum.
+Does not touch `notification-inbox.tsx` rendering, `AnnouncementEntity`, or the Admin announcements
+page (that is Release A, already shipped). Does not relax `developer.txt:105` or touch anything gated
+by `ADR-002` (unrelated H5/H6 threads from the `v0.155.0` incident). The permanent free-text Send
+Feedback channel is untouched.
+
+Release B routing: **Codex** (`docs/codex-prompts/v0.157.0-campaign-feedback.md`, Long mode) — new
+endpoint, migration, and service logic, per this repo's own routing rule. Verification: `/audit-diff`
+on the delivered diff before commit, per the standing rule for Codex-delivered work.
 
 ### Shipped
+
+**Release A (PR #1423, merged):**
 
 - **CTA affordance, clamp, hit-area and touch-target fixes in the notification inbox (frontend).**
   `notification-inbox.tsx` now renders `ctaLabel` as a non-interactive `<span>` inside the body
