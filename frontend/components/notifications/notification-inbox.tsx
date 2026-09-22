@@ -186,7 +186,11 @@ export function NotificationInbox({
         // next/link renders an absolute URL as a live external anchor. Anything that is not a
         // same-origin relative path renders as NO link rather than as a link somewhere else.
         const ctaPath = toSafeRelativePath(notification.ctaPath);
+        // ⚠️ A stored ctaLabel is untrusted at render time same as ctaPath (:186) — a label with no safe
+        // path renders nothing, never a dangling CTA affordance with no destination.
+        const ctaLabel = ctaPath && notification.ctaLabel ? notification.ctaLabel.trim() : "";
         const titleId = `notification-title-${notification.id}`;
+        const ctaId = `notification-cta-${notification.id}`;
         const body = (
           <>
             <span className="flex items-center gap-2">
@@ -204,23 +208,40 @@ export function NotificationInbox({
                 {notification.title}
               </span>
             </span>
-            {notification.body ? <span className="mt-1 block text-sm text-muted-foreground">{notification.body}</span> : null}
+            {notification.body ? (
+              // ⚠️ NO `block` HERE. Tailwind emits `.block { display: block }` AFTER `.line-clamp-3`
+              // in the compiled stylesheet (confirmed by compiling this project's CSS), so `block`
+              // would win the cascade and silently overwrite line-clamp's `display: -webkit-box`,
+              // making the clamp a no-op. `-webkit-box` is already block-level; nothing else changes.
+              <span className="mt-1 line-clamp-3 text-sm text-muted-foreground">{notification.body}</span>
+            ) : null}
+            {ctaLabel ? (
+              <span
+                id={ctaId}
+                className="mt-2 inline-flex items-center gap-1 text-sm font-medium text-blue-600 dark:text-blue-400"
+              >
+                {ctaLabel} <span aria-hidden="true">→</span>
+              </span>
+            ) : null}
             <span className="mt-1 block text-xs text-muted-foreground">{formatRelativeTime(notification.createdAt)}</span>
           </>
         );
-        const bodyClassName = "block min-w-0 flex-1 rounded-md text-left transition-colors hover:bg-highlight focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 focus-visible:ring-offset-background";
+        // ⚠️ Card padding lives on the interactive elements, not the <article> — the full card width
+        // (minus the dismiss button) must be tappable, not just the article's interior.
+        const bodyClassName = "block min-w-0 flex-1 rounded-md py-3 pl-4 pr-2 text-left transition-colors hover:bg-highlight focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 focus-visible:ring-offset-background";
+        const bodyLabelledBy = ctaLabel ? `${titleId} ${ctaId}` : titleId;
 
         return (
           <article
             key={notification.id}
-            className={`border-b border-border px-4 py-3 last:border-b-0 ${notification.readAt ? "bg-background" : "bg-muted/40"}`}
+            className={`border-b border-border last:border-b-0 ${notification.readAt ? "bg-background" : "bg-muted/40"}`}
             data-unread={!notification.readAt}
           >
-            <div className="flex items-start gap-3">
+            <div className="flex items-start">
               {ctaPath ? (
                 <Link
                   href={ctaPath}
-                  aria-labelledby={titleId}
+                  aria-labelledby={bodyLabelledBy}
                   className={bodyClassName}
                   onClick={() => {
                     void markRead(notification);
@@ -232,7 +253,7 @@ export function NotificationInbox({
               ) : (
                 <button
                   type="button"
-                  aria-labelledby={titleId}
+                  aria-labelledby={bodyLabelledBy}
                   className={bodyClassName}
                   onClick={() => void markRead(notification)}
                 >
@@ -241,7 +262,7 @@ export function NotificationInbox({
               )}
               <button
                 type="button"
-                className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+                className="my-1 mr-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
                 aria-label={`Dismiss ${notification.title}`}
                 onClick={() => void dismiss(notification)}
               >

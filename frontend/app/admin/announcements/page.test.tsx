@@ -87,3 +87,51 @@ describe("AdminAnnouncementsPage publish feedback", () => {
       .toBeInTheDocument();
   });
 });
+
+describe("AdminAnnouncementsPage body character counter", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    (listAnnouncements as jest.Mock).mockResolvedValue([]);
+  });
+
+  function bodyTextarea() {
+    // ⚠️ The label wraps the textarea AND its helper/counter text, so the implicit accessible name
+    // includes all of it — match on the leading "Body", not an exact string.
+    return screen.getByRole("textbox", { name: /^Body/ });
+  }
+
+  // ⚠️ The count/limit/soft-target are separate JSX expressions inside one <span>, so the text is
+  // split across sibling text nodes — a plain string matcher can't find it. Match by textContent.
+  function bodyCounter(expected: string) {
+    return screen.getByText((_, element) => element?.tagName === "SPAN" && element.textContent === expected);
+  }
+
+  it("shows a neutral count under the ~160-char soft target", async () => {
+    render(<AdminAnnouncementsPage />);
+    await screen.findByRole("heading", { name: "New announcement" });
+
+    fireEvent.change(bodyTextarea(), { target: { value: "Short body." } });
+
+    const counter = bodyCounter("11 / 1000 (~160 recommended)");
+    expect(counter).not.toHaveClass("text-amber-600");
+    expect(counter).not.toHaveClass("text-red-600");
+  });
+
+  it("warns, but does not block, once the body passes the ~160-char soft target", async () => {
+    render(<AdminAnnouncementsPage />);
+    await screen.findByRole("heading", { name: "New announcement" });
+
+    fireEvent.change(bodyTextarea(), { target: { value: "x".repeat(200) } });
+
+    const counter = bodyCounter("200 / 1000 (~160 recommended)");
+    expect(counter).toHaveClass("text-amber-600");
+    expect(bodyTextarea()).toHaveValue("x".repeat(200));
+  });
+
+  it("cannot exceed the 1000-char hard limit — the column and API validator are unchanged", async () => {
+    render(<AdminAnnouncementsPage />);
+    await screen.findByRole("heading", { name: "New announcement" });
+
+    expect(bodyTextarea()).toHaveAttribute("maxLength", "1000");
+  });
+});

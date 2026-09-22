@@ -44,7 +44,31 @@ or quota surface touched.
 
 ### Shipped
 
-_(nothing yet)_
+- **CTA affordance, clamp, hit-area and touch-target fixes in the notification inbox (frontend).**
+  `notification-inbox.tsx` now renders `ctaLabel` as a non-interactive `<span>` inside the body
+  `<Link>`/`<button>`, extends `aria-labelledby` to `${titleId} ${ctaId}` when a CTA is present, clamps
+  the body to 3 lines, and gives the dismiss button a 44px touch target with row padding moved onto the
+  interactive elements. **⚠️ Caught during `advisor()` review before commit: the body span was initially
+  `line-clamp-3 block` — Tailwind emits `.block { display: block }` AFTER `.line-clamp-3` in this
+  project's compiled CSS (confirmed by compiling it), so `block` would have silently overridden the
+  clamp's `display: -webkit-box` and shipped the clamp as a no-op.** Fixed by dropping `block`
+  (`-webkit-box` is already block-level). Visually verified in headless Chrome against this project's
+  actual compiled Tailwind output — the clamp, CTA span, and dismiss touch-target all render correctly
+  — since jsdom does no layout/cascade and the test suite's class-presence assertions could not have
+  caught the `block` conflict on their own.
+- **Admin body character counter and Link label helper text (frontend).**
+  `app/admin/announcements/page.tsx` — live counter with a ~160-char soft target (neutral below it,
+  amber above; the 1000-char hard column/validator/`maxLength` are unchanged), plus helper text on the
+  Link label field.
+- **Tests.** `notification-inbox.test.tsx`: 28 pre-existing tests updated for the new accessible name
+  (the default fixture carries a `ctaLabel`, so several `getByRole("link", { name: … })` queries needed
+  the CTA label appended) plus new coverage for CTA render/absent, the anti-nesting guard, the clamp,
+  and the dismiss touch target — 31 tests, all passing. `announcements/page.test.tsx`: 3 new counter
+  tests. Full frontend suite: 220/220 suites, 2478/2479 tests passing (1 pre-existing skip), `tsc
+  --noEmit` clean, `next lint` clean (no new warnings).
+- **Docs.** `docs/features/notifications.md` updated with the CTA affordance contract, the
+  span-not-link/anti-nesting rule, the WCAG 2.5.3 `aria-labelledby` requirement, the clamp's `min-w-0`
+  dependency, and the Admin authoring-guidance section.
 
 ## v0.155.0 - Say What You Checked
 

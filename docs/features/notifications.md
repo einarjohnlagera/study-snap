@@ -119,11 +119,47 @@ avatar menu, the theme toggle, the export menu). There is deliberately **no `Clo
 existed only because closing was otherwise impossible.
 
 **⚠️ The notification body is the primary activation target.** When `cta_path` passes
-`toSafeRelativePath`, the body is a real link whose accessible name is the notification title;
-activating it marks the row read, closes the panel, and navigates. With no safe destination, the
-body is a button that marks the row read and leaves the panel open. There is no separate CTA link
-or **Mark read** button. The dismiss button remains a sibling outside the body's hit area, so it
-can hide an unread row without also reading or opening it.
+`toSafeRelativePath`, the body is a real link; activating it marks the row read, closes the panel,
+and navigates. With no safe destination, the body is a button that marks the row read and leaves the
+panel open. There is no separate CTA link or **Mark read** button — the CTA affordance below is a
+non-interactive label inside this same body, never a second clickable element. The dismiss button
+remains a sibling outside the body's hit area, so it can hide an unread row without also reading or
+opening it. Its own touch target is `h-11 w-11` (44px), the WCAG 2.5.5 minimum.
+
+### CTA affordance — a visible label, still ONE interactive element (`v0.156.0`)
+
+`ctaLabel` is admin-authored, copied onto every notification row at fan-out, and returned in
+`NotificationResponse` — **for one release cycle (through `v0.155.0`) it was stored and transmitted but
+never rendered.** `v0.156.0` renders it, and the one trap this had to avoid is nesting: the body is
+already an `<a>`/`<button>`, so the CTA cannot be a second `<a>`/`<Link>`/`<button>` — that is invalid
+HTML (nested interactive content) and a second, competing activation target. It renders as a
+non-interactive `<span>` **inside** the existing body element:
+
+```
+{notification.ctaLabel} <span aria-hidden="true">→</span>
+```
+
+**Rendered only when BOTH `ctaPath` is safe AND `ctaLabel` is non-blank.** `ctaLabel`/`ctaPath` are
+both-or-neither at the write side (`AnnouncementService`), but the client still treats a stored
+`ctaLabel` as untrusted at render time — same principle as `toSafeRelativePath` on `ctaPath` — so a
+label with no safe destination renders nothing rather than a dangling affordance.
+
+**Accessible name (WCAG 2.5.3 Label in Name):** once the CTA label is visible inside the link, the
+link's `aria-labelledby` must include it, or the accessible name ("Someone wants to connect") no
+longer contains the visible text ("Someone wants to connect Review"). The link references
+`${titleId} ${ctaId}` when a CTA is present, `titleId` alone otherwise. A test that queries the link
+by role+name must include the CTA label in the query once a fixture sets one.
+
+**Body clamp:** the body span carries `line-clamp-3`. This needs `min-w-0` on the flex child to
+actually clamp — the body element already carries `min-w-0 flex-1` for the flex layout, and that is
+now load-bearing for the clamp too, not just for truncation. **The full body is still stored and
+delivered; only the inbox DISPLAY is clamped.** There is no "Read more" affordance and no announcement
+detail page — an announcement's only surfaces are the inbox row (clamped) and the Admin list (full
+text).
+
+**Hit area:** row padding lives on the body element and the dismiss button, not on the `<article>`, so
+the tappable body region extends to the full card width minus the dismiss button — not just the
+article's interior.
 
 The same body interaction renders in the desktop dropdown and mobile `AppModal` sheet through the
 shared `rows` block. The desktop and mobile close-path tests both activate that body and assert the
@@ -310,6 +346,21 @@ no reference to `FeatureGateService`, and a test asserts it.
   leg.
 - **An audience resolving to zero users publishes successfully and delivers nothing.** That is a
   legitimate outcome, not an error.
+
+### Authoring guidance, not a new limit (`v0.156.0`)
+
+The body field (`Body`, 1000-char column and `@Size(max = 1000)` validator, both unchanged) shows a
+live character counter with a **~160-character soft target** — roughly what fits the inbox row's
+`line-clamp-3` at `text-sm` in the `w-96` desktop panel. Below the target the counter is neutral; past
+it, amber. **This is guidance, not a hard limit** — the column, the validator, and the textarea's
+`maxLength` stay at 1000. Do not tighten any of them to match the soft target; that would be a breaking
+API change for zero benefit (there is nothing forcing it, and it would only churn the one hard cap that
+exists for a genuinely long announcement).
+
+The **Link label** field gets helper text clarifying it is the visible CTA text a learner sees and taps
+in their inbox, and that it only renders when a link path is also set. The field names ("Link
+label"/"Link path") are unchanged — renaming them would only churn tests for a field with zero
+production usage.
 
 ### CTA validation is a security control
 
