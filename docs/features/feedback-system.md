@@ -88,6 +88,39 @@ Admin Dashboard should show a read-only `Recent Feedback` table with:
 - a per-row `View` action that opens the full message, clickable page URL, user email, full submission timestamp, and read-only status without issuing another request
 - when `hasImage` is true, the detail modal lazily requests `GET /api/admin/feedback/{feedbackId}/image` on open and renders the screenshot; absent/404 images render no image section
 
+## Campaign Feedback
+
+Campaign Feedback is one bounded research instrument, separate from the permanent Send Feedback
+channel. It asks `What gets in the way when you study with NoteLib?` at `/feedback` and stores
+structured primary blockers plus optional quiz, plan, missing-feature, content-subject, and free-text
+detail. The existing modal and `POST /api/feedback` remain unchanged as the user-initiated,
+always-available channel.
+
+The instrument identity is the server-side string constant `STUDY_FRICTION_2026_09`; clients neither
+choose nor send a campaign id. `GET /api/feedback/campaign` returns independent `submitted` and
+`campaignOpen` values. `POST /api/feedback/campaign` accepts any authenticated USER or ADMIN while the
+instrument is open; notification audience membership is editorial reach, not eligibility.
+
+One response per `(user_id, campaign_id)` is guaranteed by the database unique index. The service
+uses `saveAndFlush` inside a programmatic transaction and treats a concurrent unique-index loss as a
+successful no-op. No rate limiter was added because the unique index provides the stronger bound: a
+user can persist at most one response, including across retries or multiple tabs.
+
+The close boundary is `notelib.campaign.study-friction-2026-09.closes-at`, parsed as a full ISO-8601
+`Instant` at startup without a default. A missing or malformed value fails startup. Both call sites
+enforce the boundary: the status read reports `campaignOpen: false`, and submission rejects a genuinely
+new late response with 409. Submission first checks the user's existing response, so already-responded
+wins over closed and remains an idempotent 200 after the close date.
+
+**⚠️ The window starts burning at deploy, independent of whether the linked announcement has actually
+been published.** The default value is set in `application.yaml`, overridable via the `CAMPAIGN_CLOSES_AT`
+Render env var so the owner can move the window without a code deploy — e.g. if the announcement
+publish (a separate, manual Admin → What's New step — see the release's own notes) happens later than
+planned, or if real response volume argues for extending the window.
+
+Campaign responses have no screenshot path, behavioral snapshot, admin UI, scheduler, or campaign
+management model. Account purge explicitly removes them in addition to the foreign key cascade.
+
 ## Email Notification
 
 - feedback submission should attempt a best-effort support notification email, sent immediately and unconditionally when the text feedback is saved — never deferred on whether a screenshot attachment is expected or in flight, so a network failure on the independent, optional image upload can never silently suppress the notification for an already-saved submission
