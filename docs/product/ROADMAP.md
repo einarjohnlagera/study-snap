@@ -6,7 +6,7 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-**Kicked off 2026-09-21.** `v0.155.0 — Say What You Checked` is **In Progress** on
+**Kicked off 2026-09-21, signed off 2026-09-22.** `v0.155.0 — Say What You Checked` is **Released** on
 `releases/v0.155.0`, cut from `main` after `v0.154.0` merged as #1420 and tagged. Fixes a real quiz-
 grading correctness defect a learner caught and reported, and ships the validator that would have
 rejected it at generation time. Source: `docs/claude-findings/2026-09-19-quick-review-percentage-

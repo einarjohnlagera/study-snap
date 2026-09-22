@@ -2,7 +2,7 @@
 
 ## v0.155.0 - Say What You Checked
 
-**Status: In Progress**
+**Status: Released** (signed off 2026-09-22)
 
 Theme: fix a real quiz-grading correctness defect a learner caught and reported, and ship the
 validator that would have rejected it at generation time.
