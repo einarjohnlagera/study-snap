@@ -19,6 +19,14 @@ import {
   type UpsertAnnouncementRequest,
 } from "@/lib/api";
 import { requireAdminUser } from "@/lib/route-guards";
+import { cn } from "@/lib/utils";
+
+const ANNOUNCEMENT_BODY_MAX_LENGTH = 1000;
+// ⚠️ Soft guidance, not a hard limit — the inbox clamps the body to 3 lines (line-clamp-3), and ~160
+// characters is roughly what fits in that clamp at text-sm in the w-96 desktop panel. The column and
+// the @Size(max = 1000) validator stay untouched; this only nudges authoring toward what actually
+// displays.
+const ANNOUNCEMENT_BODY_SOFT_TARGET = 160;
 
 const AUDIENCES: { value: AnnouncementAudience; label: string; valueOptions: string[] }[] = [
   { value: "EVERYONE", label: "Everyone", valueOptions: [] },
@@ -262,11 +270,30 @@ export default function AdminAnnouncementsPage() {
             <span className="text-sm font-medium text-foreground">Body</span>
             <textarea
               rows={3}
-              maxLength={1000}
+              maxLength={ANNOUNCEMENT_BODY_MAX_LENGTH}
               value={form.body}
               onChange={(event) => setForm((current) => ({ ...current, body: event.target.value }))}
               className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
             />
+            <div className="flex items-start justify-between gap-3">
+              <span className="text-xs text-foreground/55">
+                Shown in the inbox row — the inbox clamps long bodies to 3 lines, so a short, scannable
+                invitation reads best.
+              </span>
+              <span
+                className={cn(
+                  "shrink-0 text-xs tabular-nums",
+                  form.body.length >= ANNOUNCEMENT_BODY_MAX_LENGTH
+                    ? "text-red-600 dark:text-red-300"
+                    : form.body.length > ANNOUNCEMENT_BODY_SOFT_TARGET
+                      ? "text-amber-600 dark:text-amber-400"
+                      : "text-foreground/50",
+                )}
+                aria-live="polite"
+              >
+                {form.body.length} / {ANNOUNCEMENT_BODY_MAX_LENGTH} (~{ANNOUNCEMENT_BODY_SOFT_TARGET} recommended)
+              </span>
+            </div>
           </label>
 
           <label className="space-y-1">
@@ -278,6 +305,10 @@ export default function AdminAnnouncementsPage() {
               onChange={(event) => setForm((current) => ({ ...current, ctaLabel: event.target.value }))}
               className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
             />
+            <span className="block text-xs text-foreground/55">
+              The visible action text learners see and tap in their inbox (e.g. &ldquo;Share
+              feedback&rdquo;). Shown only when a link path is also set.
+            </span>
           </label>
 
           <label className="space-y-1">

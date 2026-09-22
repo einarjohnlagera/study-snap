@@ -978,6 +978,47 @@ export type SubmitFeedbackRequest = {
   message: string;
 };
 
+export type CampaignPrimaryBlocker =
+  | "HARD_TO_KNOW_WHAT_TO_STUDY"
+  | "TOO_MANY_STEPS"
+  | "QUIZ_QUALITY"
+  | "WANT_MORE_PRACTICE"
+  | "CANT_FIND_CONTENT"
+  | "MISSING_FEATURE"
+  | "PRICING"
+  | "SOMETHING_ELSE"
+  | "NOTHING_MAJOR";
+
+export type CampaignQuizIssue =
+  | "ANSWERS_SEEM_INCORRECT"
+  | "TOO_EASY"
+  | "TOO_DIFFICULT"
+  | "NOT_RELEVANT"
+  | "TOO_REPETITIVE"
+  | "EXPLANATIONS_NOT_HELPFUL"
+  | "SOMETHING_ELSE";
+
+export type CampaignPlanIssue =
+  | "CANT_AFFORD"
+  | "NOT_ENOUGH_VALUE"
+  | "HAPPY_WITH_FREE"
+  | "DONT_UNDERSTAND_UPGRADE"
+  | "SOMETHING_ELSE";
+
+export type CampaignFeedbackStatusResponse = {
+  submitted: boolean;
+  campaignOpen: boolean;
+};
+
+export type SubmitCampaignFeedbackRequest = {
+  primaryBlockers: CampaignPrimaryBlocker[];
+  quizIssues: CampaignQuizIssue[];
+  planIssue: CampaignPlanIssue | null;
+  missingFeatureText: string | null;
+  contentSubjectText: string | null;
+  freeText: string | null;
+};
+
 export type FirstTouchAttribution = {
   utmSource?: string;
   utmMedium?: string;
@@ -3236,6 +3277,30 @@ export async function submitFeedback(
     ...payload,
     feedbackId: response.headers.get("X-Feedback-Id"),
   };
+}
+
+export async function getCampaignFeedbackStatus(): Promise<CampaignFeedbackStatusResponse> {
+  const response = await fetchWithAuth(
+    "/feedback/campaign",
+    { method: "GET", headers: buildAuthHeaders() },
+    true,
+  );
+  return parseApiResponse<CampaignFeedbackStatusResponse>(response, "Could not load campaign feedback status.");
+}
+
+export async function submitCampaignFeedback(request: SubmitCampaignFeedbackRequest): Promise<void> {
+  const response = await fetchWithAuth(
+    "/feedback/campaign",
+    {
+      method: "POST",
+      headers: buildAuthHeaders("application/json"),
+      body: JSON.stringify(request),
+    },
+    true,
+  );
+  if (!response.ok) {
+    await throwApiRequestError(response, "Could not send feedback. Please try again.");
+  }
 }
 
 export async function uploadFeedbackImage(feedbackId: string, image: File): Promise<void> {

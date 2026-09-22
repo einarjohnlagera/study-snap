@@ -296,6 +296,31 @@ Storage notes:
 - Screenshot bytes belong only in `feedback_image`; they must not be added to `FeedbackEntity` or the `feedback` table.
 - Admin list reads project only screenshot existence. Image bytes are loaded only for one feedback detail request.
 
+## Campaign Feedback Responses
+
+`campaign_feedback_responses` stores the single fixed Campaign Feedback research instrument separately
+from free-text `feedback` rows.
+
+Relevant fields:
+
+- `id`
+- `user_id` (foreign key to `users`, cascade delete)
+- `campaign_id` (`STUDY_FRICTION_2026_09`)
+- `primary_blockers` (`TEXT[]`, non-null and empty for a valid free-text-only response)
+- `quiz_issues` (`TEXT[]`)
+- `plan_issue`
+- `missing_feature_text`
+- `content_subject_text`
+- `free_text`
+- `created_at`
+
+A unique index on `(user_id, campaign_id)` is the one-response guarantee and the idempotency arbiter
+for concurrent submissions. A second index on `(campaign_id, created_at DESC)` supports campaign reads.
+The campaign close is configuration owned and is not stored as row status or lifecycle data.
+
+`notifications`, `announcements`, and the base `feedback` table itself are not yet documented in this
+file. That is a pre-existing documentation gap; this section does not attempt to backfill those models.
+
 ## Subscriptions
 
 Purpose:

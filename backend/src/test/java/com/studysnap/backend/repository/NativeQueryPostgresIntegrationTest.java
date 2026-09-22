@@ -1,6 +1,7 @@
 package com.studysnap.backend.repository;
 
 import com.studysnap.backend.entity.CombinedQuizEntity;
+import com.studysnap.backend.entity.CampaignFeedbackResponseEntity;
 import com.studysnap.backend.entity.LearnerLevel;
 import com.studysnap.backend.entity.LinkedLearnerGrantScope;
 import com.studysnap.backend.entity.LinkedLearnerInvitationLinkEntity;
@@ -77,6 +78,7 @@ import com.studysnap.backend.model.NoteListItemView;
 import com.studysnap.backend.model.NoteLibrarySort;
 import com.studysnap.backend.model.PublicLibrarySort;
 import com.studysnap.backend.model.PublicLibrarySource;
+import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ConditionEvaluationResult;
 import org.junit.jupiter.api.extension.ExecutionCondition;
@@ -166,6 +168,67 @@ class NativeQueryPostgresIntegrationTest {
             "classpath*:com/studysnap/backend/repository/**/*.class";
 
     @Test
+    void campaignFeedbackIndexesAreCreatedByFlyway() {
+        List<String> indexNames = jdbcTemplate.queryForList(
+                "select indexname from pg_indexes where schemaname = 'public' and tablename = 'campaign_feedback_responses'",
+                String.class
+        );
+
+        assertThat(indexNames).contains(
+                "idx_campaign_feedback_user_campaign",
+                "idx_campaign_feedback_campaign_created"
+        );
+    }
+
+    @Test
+    void campaignFeedbackArraysRoundTripAgainstPostgres() {
+        UUID userId = seedUser("campaign-feedback");
+        CampaignFeedbackResponseEntity response = new CampaignFeedbackResponseEntity();
+        response.setId(UUID.randomUUID());
+        response.setUserId(userId);
+        response.setCampaignId("STUDY_FRICTION_2026_09");
+        response.setPrimaryBlockers(new String[]{"QUIZ_QUALITY", "PRICING"});
+        response.setQuizIssues(new String[]{"ANSWERS_SEEM_INCORRECT"});
+        response.setPlanIssue("HAPPY_WITH_FREE");
+        response.setCreatedAt(OffsetDateTime.parse("2026-09-22T00:00:00Z"));
+
+        campaignFeedbackResponseRepository.saveAndFlush(response);
+        entityManager.clear();
+
+        CampaignFeedbackResponseEntity reloaded = campaignFeedbackResponseRepository
+                .findById(response.getId())
+                .orElseThrow();
+        assertThat(reloaded.getPrimaryBlockers()).containsExactly("QUIZ_QUALITY", "PRICING");
+        assertThat(reloaded.getQuizIssues()).containsExactly("ANSWERS_SEEM_INCORRECT");
+        assertThat(reloaded.getPlanIssue()).isEqualTo("HAPPY_WITH_FREE");
+    }
+
+    // ⚠️ CampaignFeedbackServiceTest only mocks DataIntegrityViolationException — it proves the service
+    // CATCHES that type, not that the real unique index THROWS it. This proves the other half: a second
+    // real insert for the same (user_id, campaign_id) against actual Postgres hits
+    // idx_campaign_feedback_user_campaign and fails with exactly the exception type the service catches.
+    @Test
+    void campaignFeedbackDuplicateUserCampaignViolatesTheUniqueIndex() {
+        UUID userId = seedUser("campaign-feedback-dup");
+        campaignFeedbackResponseRepository.saveAndFlush(campaignFeedbackResponse(userId));
+        entityManager.clear();
+
+        assertThatThrownBy(() ->
+                campaignFeedbackResponseRepository.saveAndFlush(campaignFeedbackResponse(userId))
+        ).isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
+    }
+
+    private CampaignFeedbackResponseEntity campaignFeedbackResponse(UUID userId) {
+        CampaignFeedbackResponseEntity entity = new CampaignFeedbackResponseEntity();
+        entity.setId(UUID.randomUUID());
+        entity.setUserId(userId);
+        entity.setCampaignId("STUDY_FRICTION_2026_09");
+        entity.setPrimaryBlockers(new String[]{"TOO_MANY_STEPS"});
+        entity.setCreatedAt(OffsetDateTime.now());
+        return entity;
+    }
+
+    @Test
     void notificationInboxPartialIndexIsCreatedByFlyway() {
         String indexDefinition = jdbcTemplate.queryForObject(
                 "select indexdef from pg_indexes where schemaname = 'public' and indexname = ?",
@@ -184,6 +247,10 @@ class NativeQueryPostgresIntegrationTest {
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
+    @Autowired
+    private EntityManager entityManager;
+    @Autowired
+    private CampaignFeedbackResponseRepository campaignFeedbackResponseRepository;
     @Autowired
     private QuickReviewSessionRepository quickReviewSessionRepository;
 

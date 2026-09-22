@@ -15,6 +15,47 @@ changelog layer. `ROADMAP.md` keeps a one-line-per-version index at each origina
 
 ---
 
+**Kicked off 2026-09-16, signed off 2026-09-16.** `v0.150.0 — Membership, Not a Slot` is **Released**
+on `releases/v0.150.0` (PRs #1403, #1404). Program Family membership is now many-to-many — a
+Course/Program may belong to zero, one, or several families — closing a real production bug: the
+Note-authoring "Add Course/Program" family picker derived its options by scanning catalog rows that
+already carried a family, so a brand-new, empty family (Health Sciences, Accounting) contributed zero
+entries and was structurally invisible there, even though the canonical Admin family list showed it.
+Source: `docs/claude-plans/program-family-many-to-many-final-plan.md` (FINAL, Opus architecture audit,
+independently verified by a peer "Feature Planner" session 2026-09-15; owner-approved 2026-09-16).
+Supersedes `docs/claude-plans/program-family-health-accounting-expansion-final-plan.md` (pass 2) on
+the schema question only — that file's Health Sciences/Accounting membership decisions carry forward
+unchanged; its single-FK schema, API and migration sections are superseded and marked as such.
+**Prerequisite cleared at kickoff:** `ADR-001` constraint 2 (`:92`) literally forbade "any preset table
+beyond `course_programs.program_family_id`" — owner-ratified storage-neutral replacement text lands
+first, on `releases/v0.150.0` directly, keeping the constraint's substance (unconditional,
+membership-driven expansion) while permitting many-to-many storage. **Two corrections to the
+`v0.149.0` record**, found during this plan's audit and carried in `RELEASES.md`: that release's
+notes claimed admins could reassign a program's family through the UI (they could not — the `PATCH`
+endpoint shipped with zero frontend consumers, closed by this release's new Admin Edit action) and
+that a catalog program could be marked inactive (no application code ever writes `is_active`; still
+true after this release — deliberately out of scope, tracked as its own Backlog Index row). **Routing:
+Codex** (migration + new endpoint + multi-surface frontend together), audited before merge against the
+plan's locked constraints (no dual-write, plain `LEFT JOIN` not `json_agg`, additive DTO, the §15
+create-modal boundary, zero Exam Goal work) — full backend build and full frontend suite both green.
+**Verification tier delivered: one scoped cold agent, falsification-framed**, per the evidentiary
+trigger (`v0.149.0` shipped two half-features in this exact code area, undetected by its own two
+falsification passes, and this release moves the only copy of a real relationship). **8 of 9
+pre-declared claims confirmed cleanly**, including the migration's `RAISE EXCEPTION` parity guard
+proven to genuinely execute against a real PostgreSQL container (not just the H2 test harness, which
+cannot run PL/pgSQL and says so honestly in its own comments). **One real gap found and fixed before
+signoff, PR #1404:** the release's single highest-value test — creating a program in two families must
+select only that program on the Note, never the other family members — used non-exclusive
+`toHaveBeenCalledWith`; the agent proved by mutation (adding the exact call the boundary forbids) that
+the old assertion would still pass. Strengthened to also assert exactly one call; the same mutation now
+fails and all 28 tests in the file pass against the real implementation. **Post-deploy, owner-run:**
+populate all four empty families (Health Sciences, Accounting, plus two the owner created since
+`v0.149.0` — Computing & Technology, Built Environment & Design; 17 memberships total) via the Admin
+UI, per plan §M — this doubles as the release's own production acceptance test. Full scope in
+`RELEASES.md`.
+
+---
+
 **Kicked off 2026-09-15, signed off 2026-09-15.** `v0.149.0 — Precision Before Coverage` is
 **Released**. Source: `docs/claude-plans/program-family-health-accounting-expansion-final-plan.md`
 (FINAL, Product UX-approved, tightening pass 2 of 2). Ships the mechanism for two new Program Family

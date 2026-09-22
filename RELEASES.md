@@ -1,5 +1,152 @@
 # RELEASES.md - NoteLib
 
+## v0.156.0 - Say What You Meant to Show
+
+**Status: Released** (signed off 2026-09-22)
+
+Theme: make the existing announcement `ctaLabel` visible as a real call-to-action in the notification
+inbox, then ship Campaign Feedback — a bounded, single-instrument in-app research campaign that asks
+every learner one structured question from that same linked-notification pattern and persists
+categorized responses, closing on a configured date.
+
+Source: `docs/claude-plans/actionable-announcements-campaign-feedback-stage1-plan.md` (Stage 1 audit +
+plan for "Actionable Announcements + Campaign Feedback"). **⚠️ Originally scoped as two releases
+(Release A frontend-only, Release B backend+frontend as a separate `v0.157.0`) — owner decision
+2026-09-22 folded them into this one release instead.** Release A shipped first (PR #1423, merged into
+this branch) and is documented below exactly as it shipped; Release B's Codex prompt
+(`docs/codex-prompts/v0.157.0-campaign-feedback.md`, untracked, gitignored per convention) had its one
+open input — the campaign's `closes-at` timestamp — resolved by the owner 2026-09-22
+(`2026-10-06T00:00:00Z`, ~2 weeks after this release deploys) and is now dispatched.
+
+### Planned Scope
+
+**Release A — notification inbox / Admin polish (shipped, see below).**
+
+- **CTA affordance in the notification inbox (frontend).**
+  `frontend/components/notifications/notification-inbox.tsx` — render the already-stored,
+  already-transmitted, never-rendered `notification.ctaLabel` as a non-interactive `<span>` inside the
+  existing body `<Link>` (never a nested link/button — the one trap in this change). Extend
+  `aria-labelledby` to include the CTA span id (WCAG 2.5.3 Label in Name). Add `line-clamp-3` to the
+  body. Bump the dismiss button to a 44px (`min-h-11 min-w-11`) touch target. Move row padding onto the
+  `<Link>`/dismiss button so the full card width is tappable.
+- **Admin authoring guidance (frontend).**
+  `frontend/app/admin/announcements/page.tsx` — live body character counter with a ~160-char soft-target
+  helper (following the existing counter pattern in `send-feedback-widget.tsx`), plus helper text on the
+  Link label field clarifying it is the visible CTA text learners see and tap. Field names ("Link
+  label"/"Link path") are unchanged — zero production usage, renaming would only churn tests.
+- **Tests.** `notification-inbox.test.tsx` (28 existing tests stay green + new coverage for CTA
+  render/absent cases, the anti-nesting guard — exactly one interactive element in the row body —
+  accessible-name, and the clamp) and `announcements/page.test.tsx` (counter).
+- **Docs.** `docs/features/notifications.md` — document the CTA affordance contract, the span-not-link
+  rule, and the stored-vs-displayed body split (full body stored/delivered, inbox displays a clamped
+  view; no "Read more", no announcement detail page).
+
+Release A anti-drift: frontend-only — no migration, no API/DTO change, no admin lifecycle change. Does
+not make `ANNOUNCEMENT` badge-eligible (would resurrect the `v0.134.0` immortal-row defect) and does
+not touch badge-decrement logic.
+
+Release A routing: Claude Code inline (frontend-only, ~2 source + 2 test files, no new infrastructure —
+too small to justify a Codex prompt). Verification tier: one `advisor()` call on the diff — no
+permission, money, or quota surface touched.
+
+**Release B — Campaign Feedback (backend + frontend).**
+
+- **Data model (backend).** New `campaign_feedback_responses` table (`V148`), one row per
+  `(user_id, campaign_id)` via a unique constraint. `CAMPAIGN_ID` is a named `String` constant
+  (`"STUDY_FRICTION_2026_09"`), deliberately **not** a Java enum or a campaign registry/table — this is
+  one fixed instrument, not a framework. `PrimaryBlocker`, `QuizIssue`, and `PlanIssue` **do** get real
+  enums (genuine 5–9-option closed sets, unlike `CampaignId`).
+- **Endpoints (backend).** `GET /feedback/campaign` (status: `submitted` / `campaignOpen`, no path
+  param — there is exactly one instrument) and `POST /feedback/campaign`. **Locked precedence:** the
+  unique-constraint duplicate check runs before the `closes-at` check, so a learner who already
+  responded and submits again after close sees their own already-submitted state (200), never a
+  "closed" rejection (409) — the close boundary only gates a genuinely new response.
+- **Close boundary (backend).** A configured property, not a DB column:
+  `notelib.campaign.study-friction-2026-09.closes-at`, bound as `String` and parsed to `Instant`
+  explicitly (`@Value` has no `Instant` converter in this codebase). No default — a missing or
+  malformed value fails application startup (fail-closed). **Owner-set value: `2026-10-06T00:00:00Z`**
+  (~2 weeks after this release deploys, set 2026-09-22).
+- **Frontend.** `/feedback` route (auth-gated), one adaptive selection screen (9 primary options,
+  conditional multi/single-select follow-ups, always-visible optional free text), three terminal states
+  in place on the same route (thank-you, already-responded, closed) — no wizard, no second route, no
+  announcement detail page.
+- **Account deletion.** `AccountPurgeService` gains a `CampaignFeedbackResponseRepository` purge call,
+  mirroring the existing `feedback` purge — `notifications.md:370-373` records this exact step shipping
+  missing for a different table in `v0.130.0`; do not repeat that omission.
+
+Release B anti-drift: no campaign table/entity/registry, no dynamic form schema, no `CampaignId` enum.
+Does not touch `notification-inbox.tsx` rendering, `AnnouncementEntity`, or the Admin announcements
+page (that is Release A, already shipped). Does not relax `developer.txt:105` or touch anything gated
+by `ADR-002` (unrelated H5/H6 threads from the `v0.155.0` incident). The permanent free-text Send
+Feedback channel is untouched.
+
+Release B routing: **Codex** (`docs/codex-prompts/v0.157.0-campaign-feedback.md`, Long mode) — new
+endpoint, migration, and service logic, per this repo's own routing rule. Verification: `/audit-diff`
+on the delivered diff before commit, per the standing rule for Codex-delivered work.
+
+### Shipped
+
+**Release B — Campaign Feedback:**
+
+- Added the fixed `STUDY_FRICTION_2026_09` research instrument: `V148` stores one structured response
+  per user, `GET /feedback/campaign` reports independent submitted/open state, and
+  `POST /feedback/campaign` validates and persists the response through a unique-index-backed,
+  concurrency-safe transaction. The backend closes new submissions at `2026-10-06T00:00:00Z`
+  (overridable via the `CAMPAIGN_CLOSES_AT` Render env var, added post-`advisor()`-review so the window
+  can move without a deploy) while preserving 200 idempotency for learners who already responded,
+  including after close.
+- Added the protected `/feedback` page with the nine-option primary question, four conditional
+  follow-ups, optional free text, accessible checkbox/radio controls, loading/form/thank-you/
+  already-responded/closed states, and fail-soft status loading. Campaign rows are explicitly removed
+  by account purge.
+- **Additive-only — no existing endpoint changed or removed**, including the permanent
+  `POST /feedback` Send Feedback channel. This does NOT mean deploy order is unconstrained: deploy both
+  backend and frontend, confirm both actually landed (`scripts/check-deploys.sh` — a merge is not a
+  deploy), **THEN** publish the announcement below. A frontend-first window would 404 `GET
+  /feedback/campaign` into the page's own fail-soft-to-form path (cosmetic — no wrong state reaches the
+  learner) but a genuinely new submission in that window 404s into a generic error rather than a
+  handled one.
+- **⚠️ OWNER ACTION REQUIRED POST-DEPLOY, NOT CODE: the campaign has no in-app entry point until this
+  is done.** `/feedback` is deliberately linked from nowhere (§1's lock keeps it separate from the
+  permanent Send Feedback channel) — its only door is an announcement authored and published in
+  Admin → What's New, using the plan's §F copy exactly:
+  Title `Help us improve NoteLib` · Body `What gets in the way when you study? Tell us what we should
+  improve — it takes about a minute.` · Link label `Share feedback` · Link path `/feedback` · Audience
+  `EVERYONE`. **The `closes-at` clock starts at deploy regardless of whether this is done** — `zero`
+  `announcements` rows have ever existed in production, so there is no existing muscle memory for this
+  step. Publish it promptly after confirming the deploy landed.
+- **`[CHECKPOINT — due 2026-10-08]` added to `ROADMAP.md`'s Backlog Index** — this campaign was
+  approved on a measured 1.8% click-through floor with no impression denominator (plan §A3); the read
+  is owed regardless of how the numbers land.
+
+**Release A (PR #1423, merged):**
+
+- **CTA affordance, clamp, hit-area and touch-target fixes in the notification inbox (frontend).**
+  `notification-inbox.tsx` now renders `ctaLabel` as a non-interactive `<span>` inside the body
+  `<Link>`/`<button>`, extends `aria-labelledby` to `${titleId} ${ctaId}` when a CTA is present, clamps
+  the body to 3 lines, and gives the dismiss button a 44px touch target with row padding moved onto the
+  interactive elements. **⚠️ Caught during `advisor()` review before commit: the body span was initially
+  `line-clamp-3 block` — Tailwind emits `.block { display: block }` AFTER `.line-clamp-3` in this
+  project's compiled CSS, so `block` would have silently overridden the clamp's `display: -webkit-box`
+  and shipped the clamp as a no-op.** Confirmed by compiling this project's actual Tailwind output
+  (`tailwindcss@4.2.1`) — `.line-clamp-3` at output index 4610, `.block` at 4741 — and independently
+  re-confirmed the same way during the pre-signoff falsification pass. Fixed by dropping `block`
+  (`-webkit-box` is already block-level); jsdom does no layout/cascade, so the test suite's
+  class-presence assertions could not have caught this on their own.
+- **Admin body character counter and Link label helper text (frontend).**
+  `app/admin/announcements/page.tsx` — live counter with a ~160-char soft target (neutral below it,
+  amber above; the 1000-char hard column/validator/`maxLength` are unchanged), plus helper text on the
+  Link label field.
+- **Tests.** `notification-inbox.test.tsx`: 28 pre-existing tests updated for the new accessible name
+  (the default fixture carries a `ctaLabel`, so several `getByRole("link", { name: … })` queries needed
+  the CTA label appended) plus new coverage for CTA render/absent, the anti-nesting guard, the clamp,
+  and the dismiss touch target — 31 tests, all passing. `announcements/page.test.tsx`: 3 new counter
+  tests. Full frontend suite: 220/220 suites, 2478/2479 tests passing (1 pre-existing skip), `tsc
+  --noEmit` clean, `next lint` clean (no new warnings).
+- **Docs.** `docs/features/notifications.md` updated with the CTA affordance contract, the
+  span-not-link/anti-nesting rule, the WCAG 2.5.3 `aria-labelledby` requirement, the clamp's `min-w-0`
+  dependency, and the Admin authoring-guidance section.
+
 ## v0.155.0 - Say What You Checked
 
 **Status: Released** (signed off 2026-09-22)
@@ -668,91 +815,3 @@ empty query per note with no existing quiz.
   `docs/features/study-pack-generation.md` corrected to match. Backend 2403/2403, frontend 2450/2451
   (1 pre-existing unrelated skip), `tsc --noEmit` clean. `ROADMAP.md` Backlog Index row updated with
   file:line evidence.
-
-## v0.150.0 - Membership, Not a Slot
-
-**Status: Released**
-
-Theme: Program Family membership becomes many-to-many — a Course/Program can belong to zero, one, or
-several families — closing a production bug where two admin-created families (Health Sciences,
-Accounting) were structurally invisible to every Note-authoring surface, and where an existing
-program's family could not be changed at all except by a database migration.
-
-Source: `docs/claude-plans/program-family-many-to-many-final-plan.md` (FINAL, Opus architecture audit,
-independently verified by the Feature Planner session 2026-09-15; owner-approved 2026-09-16). Supersedes
-`docs/claude-plans/program-family-health-accounting-expansion-final-plan.md` (pass 2) on the schema
-question only — that file's Health Sciences/Accounting membership decisions carry forward unchanged;
-its single-FK schema, API and migration sections do not. Codex prompt:
-`docs/codex-prompts/v0.150.0-program-family-many-to-many.md` (gitignored, not committed).
-
-### Planned Scope
-
-- **ADR-001 amendment (docs-only, Slice 0).** Constraint 2 (`ADR-001:92`) currently forbids "any preset
-  table beyond `course_programs.program_family_id`" — a literal blocker for a membership table. Owner
-  approved storage-neutral replacement text (plan §A) that keeps the constraint's substance (unconditional,
-  membership-driven expansion) while permitting many-to-many storage.
-- **`course_program_family` migration (backend).** New join table copying every existing single-FK
-  membership (Engineering 18, Education 8 = 26 rows), with a relationship-level (not count-only) parity
-  assertion that aborts the migration on any mismatch. `course_programs.program_family_id` is retained,
-  unread by application code after cutover — no dual-write.
-- **Catalog API becomes additive (backend).** `GET /course-program-catalog` gains `programFamilies: []`;
-  deprecated `programFamilyId`/`programFamilyName` stay populated (alphabetical-first) for one release of
-  frontend-deploy tolerance. `PATCH /course-program-catalog/{id}` becomes an authoritative
-  `programFamilyIds` replacement — a free breaking change, since it has zero existing frontend clients.
-- **Note-authoring bug fix (frontend).** The "Add Course/Program" family picker currently derives its
-  options by scanning catalog rows that already carry a family, so a brand-new empty family is invisible
-  to it — exactly what happened to Health Sciences and Accounting in production. Fixed by fetching the
-  canonical `/course-program-catalog/families` endpoint instead, same one Admin already uses.
-- **Admin Edit action (frontend, new).** Admins can edit an existing Course/Program's family memberships
-  through a multi-select modal — this did not exist at all before this release, despite `v0.149.0`'s
-  release notes claiming it did (see Corrections below).
-- **Populate all four empty families (owner-run, post-deploy).** Health Sciences, Accounting, and the
-  two owner-approved additions Computing & Technology and Built Environment & Design (17 memberships
-  total) — via the Admin UI as the primary path, which doubles as this release's own production
-  acceptance test.
-
-### Corrections to the v0.149.0 record
-
-Verified against current code and production, not inferred, per the many-to-many plan's audit:
-
-- **`v0.149.0`'s release notes claim "Admins can now move an existing Course/Program catalog entry into
-  a different family." They cannot, through any UI.** The `PATCH /course-program-catalog/{id}` endpoint
-  shipped and is well-tested, but no frontend client ever called it — `admin-course-program-catalog-section.tsx`
-  has no Edit action and `frontend/lib/api.ts` has no `updateCourseProgram` function.
-- **`v0.149.0`'s release notes claim "A catalog program can now be marked inactive." No application code
-  ever writes `is_active`.** New rows get `true` only from the column's DB-level `DEFAULT` (`V145`) — the
-  `INSERT` statement's own column list does not include `is_active` — and there is no `UPDATE`, endpoint,
-  or admin control to change it after creation. Production confirms 0 rows with `is_active = false`. This
-  also means the Known Limitation recorded as "documented for the next post-deploy pass" (the two legacy
-  fused rows' deprecation) was never actually reachable by any owner action — it needed a code change that
-  was never scoped, not a data operation that was merely pending. Tracked as its own Backlog Index item;
-  out of scope for this release (plan §P item 4).
-
-Anti-drift: Program Family stays an authoring convenience only — never Note-persisted, never a discovery
-axis, never Domain Context, never Authored Depth, never sent to generation. Exam Goal editing is dropped
-from this release entirely (not even read-only display). `is_active`, the two legacy fused catalog rows,
-family deletion, program deletion, and family-side membership editing (Family → Programs) are all
-explicitly out of scope. No react-query/TanStack/websocket/polling is introduced — this frontend has no
-query cache today and this release adds none.
-
-### Shipped
-
-- **Program Family membership is many-to-many end to end.** `V146` adds and relationship-validates the
-  canonical `course_program_family` join while retaining the legacy scalar FK as an unread compatibility
-  artifact. Catalog create and Admin Edit now write complete membership sets atomically; catalog responses
-  expose ordered `programFamilies` while retaining deprecated scalar aliases. The Note-authoring Add
-  Course/Program modal reads the canonical families endpoint lazily, so empty families are selectable on
-  Single Note and Bulk Note surfaces, while expansion chips still appear only for families with members.
-  The Admin catalog now displays zero/one/many family chips and provides the working Edit UI path that
-  `v0.149.0` had overclaimed.
-- **Pre-signoff falsification pass (one scoped cold agent, per plan §Q) confirmed 8 of 9 pre-declared
-  claims cleanly and found one real test-quality gap, fixed before signoff.** Confirmed: migration
-  relationship-parity (proven against a real PostgreSQL container, not just the H2 harness), no
-  dual-write to the legacy scalar column, no family id ever reaching Note persistence, unchanged
-  `@PreAuthorize` annotations, overlapping-family deduplication, honest documentation of what the H2
-  migration test does and doesn't execute, tolerant JSON parsing across the deploy window, and
-  `is_active` genuinely untouched. **Found and fixed:** the single highest-value new test — creating a
-  program in two families must select only that program on the Note — used non-exclusive
-  `toHaveBeenCalledWith`; a mutation (adding a `handleFamilyExpansion` call the boundary forbids) proved
-  the old assertion would still pass. Strengthened to `toHaveBeenCalledTimes(1)`, re-verified the same
-  mutation now fails and the real implementation still passes all 28 tests in the file.

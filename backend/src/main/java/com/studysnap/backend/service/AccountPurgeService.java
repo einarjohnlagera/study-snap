@@ -12,6 +12,7 @@ import com.studysnap.backend.entity.VoucherRedemptionEntity;
 import com.studysnap.backend.exception.DeletedUserSentinelNotFoundException;
 import com.studysnap.backend.repository.ActivityEventRepository;
 import com.studysnap.backend.repository.BulkGenerationResultRepository;
+import com.studysnap.backend.repository.CampaignFeedbackResponseRepository;
 import com.studysnap.backend.repository.ConceptHealthRepository;
 import com.studysnap.backend.repository.EmailLogRepository;
 import com.studysnap.backend.repository.EmailVerificationTokenRepository;
@@ -83,6 +84,7 @@ public class AccountPurgeService {
     private final PasswordResetTokenRepository passwordResetTokenRepository;
     private final EmailLogRepository emailLogRepository;
     private final FeedbackRepository feedbackRepository;
+    private final CampaignFeedbackResponseRepository campaignFeedbackResponseRepository;
     private final NotificationRepository notificationRepository;
     private final PremiumWaitlistRepository premiumWaitlistRepository;
     private final PaymentTransactionRepository paymentTransactionRepository;
@@ -200,6 +202,7 @@ public class AccountPurgeService {
         passwordResetTokenRepository.deleteByUserId(userId);
         emailLogRepository.deleteByUserId(userId);
         feedbackRepository.deleteByUserId(userId);
+        campaignFeedbackResponseRepository.deleteByUserId(userId);
         premiumWaitlistRepository.deleteByUserId(userId);
     }
 

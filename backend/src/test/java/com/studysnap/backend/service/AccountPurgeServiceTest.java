@@ -16,6 +16,7 @@ import com.studysnap.backend.entity.UserStatus;
 import com.studysnap.backend.entity.VoucherRedemptionEntity;
 import com.studysnap.backend.repository.ActivityEventRepository;
 import com.studysnap.backend.repository.BulkGenerationResultRepository;
+import com.studysnap.backend.repository.CampaignFeedbackResponseRepository;
 import com.studysnap.backend.repository.ConceptHealthRepository;
 import com.studysnap.backend.repository.MemorizationCardRepository;
 import com.studysnap.backend.repository.EmailLogRepository;
@@ -113,6 +114,8 @@ class AccountPurgeServiceTest {
     @Mock
     private FeedbackRepository feedbackRepository;
     @Mock
+    private CampaignFeedbackResponseRepository campaignFeedbackResponseRepository;
+    @Mock
     private NotificationRepository notificationRepository;
     @Mock
     private PremiumWaitlistRepository premiumWaitlistRepository;
@@ -158,6 +161,7 @@ class AccountPurgeServiceTest {
                 passwordResetTokenRepository,
                 emailLogRepository,
                 feedbackRepository,
+                campaignFeedbackResponseRepository,
                 notificationRepository,
                 premiumWaitlistRepository,
                 paymentTransactionRepository,
@@ -223,6 +227,7 @@ class AccountPurgeServiceTest {
         verify(passwordResetTokenRepository).deleteByUserId(userId);
         verify(emailLogRepository).deleteByUserId(userId);
         verify(feedbackRepository).deleteByUserId(userId);
+        verify(campaignFeedbackResponseRepository).deleteByUserId(userId);
         // ⚠️ ERASURE, NOT RETENTION. The cleanup job deliberately keeps unread actionable notifications
         // forever, so nothing else in the system can ever take these rows — a v0.130.0 pressure test found
         // a purged account leaving its notification history behind permanently.
