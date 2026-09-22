@@ -13,6 +13,11 @@ server:
   servlet:
     context-path: /api
 
+notelib:
+  campaign:
+    study-friction-2026-09:
+      closes-at: "2099-01-01T00:00:00Z"
+
 # ⚠️ EVERY scheduled job is DISABLED IN TESTS as of v0.98.0. Three carried HARDCODED crons until
 # then and needed code changes; five others were already placeholder-driven and simply were not
 # listed here — including account.purge-cron, which DELETES DATA. The claim that every job was

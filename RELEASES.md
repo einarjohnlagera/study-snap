@@ -86,6 +86,39 @@ on the delivered diff before commit, per the standing rule for Codex-delivered w
 
 ### Shipped
 
+**Release B — Campaign Feedback:**
+
+- Added the fixed `STUDY_FRICTION_2026_09` research instrument: `V148` stores one structured response
+  per user, `GET /feedback/campaign` reports independent submitted/open state, and
+  `POST /feedback/campaign` validates and persists the response through a unique-index-backed,
+  concurrency-safe transaction. The backend closes new submissions at `2026-10-06T00:00:00Z`
+  (overridable via the `CAMPAIGN_CLOSES_AT` Render env var, added post-`advisor()`-review so the window
+  can move without a deploy) while preserving 200 idempotency for learners who already responded,
+  including after close.
+- Added the protected `/feedback` page with the nine-option primary question, four conditional
+  follow-ups, optional free text, accessible checkbox/radio controls, loading/form/thank-you/
+  already-responded/closed states, and fail-soft status loading. Campaign rows are explicitly removed
+  by account purge.
+- **Additive-only — no existing endpoint changed or removed**, including the permanent
+  `POST /feedback` Send Feedback channel. This does NOT mean deploy order is unconstrained: deploy both
+  backend and frontend, confirm both actually landed (`scripts/check-deploys.sh` — a merge is not a
+  deploy), **THEN** publish the announcement below. A frontend-first window would 404 `GET
+  /feedback/campaign` into the page's own fail-soft-to-form path (cosmetic — no wrong state reaches the
+  learner) but a genuinely new submission in that window 404s into a generic error rather than a
+  handled one.
+- **⚠️ OWNER ACTION REQUIRED POST-DEPLOY, NOT CODE: the campaign has no in-app entry point until this
+  is done.** `/feedback` is deliberately linked from nowhere (§1's lock keeps it separate from the
+  permanent Send Feedback channel) — its only door is an announcement authored and published in
+  Admin → What's New, using the plan's §F copy exactly:
+  Title `Help us improve NoteLib` · Body `What gets in the way when you study? Tell us what we should
+  improve — it takes about a minute.` · Link label `Share feedback` · Link path `/feedback` · Audience
+  `EVERYONE`. **The `closes-at` clock starts at deploy regardless of whether this is done** — `zero`
+  `announcements` rows have ever existed in production, so there is no existing muscle memory for this
+  step. Publish it promptly after confirming the deploy landed.
+- **`[CHECKPOINT — due 2026-10-08]` added to `ROADMAP.md`'s Backlog Index** — this campaign was
+  approved on a measured 1.8% click-through floor with no impression denominator (plan §A3); the read
+  is owed regardless of how the numbers land.
+
 **Release A (PR #1423, merged):**
 
 - **CTA affordance, clamp, hit-area and touch-target fixes in the notification inbox (frontend).**
