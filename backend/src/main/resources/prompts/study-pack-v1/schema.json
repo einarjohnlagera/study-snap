@@ -68,7 +68,8 @@
             }
           },
           "answer": {
-            "type": ["string", "null"]
+            "type": ["string", "null"],
+            "enum": ["A", "B", "C", "D", null]
           },
           "explanation": {
             "type": "string",

@@ -2,13 +2,13 @@ package com.studysnap.backend.util;
 
 import lombok.experimental.UtilityClass;
 
-import java.util.ArrayList;
-import java.util.Collections;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
-import java.util.Random;
 import java.util.Set;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 @UtilityClass
@@ -19,6 +19,7 @@ public class QuizValidationUtils {
     private static final String MULTI_SELECT_FORMAT = "MULTI_SELECT";
     private static final String IDENTIFICATION_FORMAT = "IDENTIFICATION";
     private static final String ENUMERATION_FORMAT = "ENUMERATION";
+    private static final String MCQ_FORMAT = "MCQ";
     private static final String TRUE_CHOICE = "true";
     private static final String FALSE_CHOICE = "false";
     private static final int MIN_MULTI_SELECT_CORRECT_INDICES = 2;
@@ -28,6 +29,10 @@ public class QuizValidationUtils {
     private static final Pattern STATEMENT_ONE_PATTERN = Pattern.compile("statement\\s*1");
     private static final Pattern STATEMENT_TWO_PATTERN = Pattern.compile("statement\\s*2");
     private static final Pattern ALL_EXCEPT_PATTERN = Pattern.compile("all of the following.{0,40}except");
+    private static final Pattern DIGIT_PATTERN = Pattern.compile("\\d");
+    private static final Pattern LATEX_TEXT_WRAPPER_PATTERN = Pattern.compile("\\\\text\\s*\\{([^{}]*)}");
+    private static final Pattern NUMBER_PATTERN = Pattern.compile("[-+]?\\d+(?:\\.\\d+)?");
+    private static final Pattern WHITESPACE_PATTERN = Pattern.compile("\\s+");
     /**
      * An IDENTIFICATION answer is graded by exact normalized string equality, so it must be a term, name or
      * label a learner can type unambiguously in words. A stem asking for the *notation itself* — an
@@ -175,11 +180,105 @@ public class QuizValidationUtils {
                 && normalizedChoices.contains(FALSE_CHOICE);
     }
 
-    public List<String> randomizeChoices(List<String> choices, String question) {
-        List<String> shuffled = new ArrayList<>(choices);
-        long seed = StringNormalizationUtils.normalizeForDuplicateCheck(question).hashCode();
-        Collections.shuffle(shuffled, new Random(seed));
-        return shuffled;
+    /**
+     * Detects the narrow answer/explanation contradiction measured in the v0.155.0 incident audit.
+     * A false result means only that this check found no contradiction; it is not semantic verification.
+     */
+    public boolean isAnswerExplanationInternallyInconsistent(
+            List<String> choices,
+            Integer correctIndex,
+            String questionFormat,
+            String explanation,
+            String workingSolution
+    ) {
+        if (questionFormat != null && !MCQ_FORMAT.equals(questionFormat)) {
+            return false;
+        }
+        if (choices == null || choices.isEmpty() || correctIndex == null
+                || correctIndex < 0 || correctIndex >= choices.size()
+                || choices.stream().anyMatch(choice -> !isNumericUnitLiteral(choice))) {
+            return false;
+        }
+
+        String evidence = normalizeConsistencyText(
+                (explanation == null ? "" : explanation) + " "
+                        + (workingSolution == null ? "" : workingSolution)
+        );
+        if (choiceOccursInEvidence(choices.get(correctIndex), evidence)) {
+            return false;
+        }
+        for (int index = 0; index < choices.size(); index++) {
+            if (index != correctIndex && choiceOccursInEvidence(choices.get(index), evidence)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean isNumericUnitLiteral(String choice) {
+        return choice != null && choice.length() <= 20 && DIGIT_PATTERN.matcher(choice).find();
+    }
+
+    private boolean choiceOccursInEvidence(String choice, String normalizedEvidence) {
+        String normalizedChoice = normalizeConsistencyText(choice);
+        if (normalizedChoice.isEmpty()) {
+            return false;
+        }
+        Pattern exactChoice = Pattern.compile(
+                "(?<![\\d.])" + Pattern.quote(normalizedChoice) + "(?!\\d|\\.\\d)"
+        );
+        if (exactChoice.matcher(normalizedEvidence).find()) {
+            return true;
+        }
+        return roundedChoiceOccursInEvidence(normalizedChoice, normalizedEvidence);
+    }
+
+    private boolean roundedChoiceOccursInEvidence(String normalizedChoice, String normalizedEvidence) {
+        Matcher choiceNumberMatcher = NUMBER_PATTERN.matcher(normalizedChoice);
+        if (!choiceNumberMatcher.find()) {
+            return false;
+        }
+        String choiceNumberText = choiceNumberMatcher.group();
+        int choiceNumberStart = choiceNumberMatcher.start();
+        int choiceNumberEnd = choiceNumberMatcher.end();
+        if (choiceNumberMatcher.find()) {
+            return false;
+        }
+
+        String prefix = normalizedChoice.substring(0, choiceNumberStart);
+        String suffix = normalizedChoice.substring(choiceNumberEnd);
+        Pattern roundedCandidatePattern = Pattern.compile(
+                "(?<![\\d.])" + Pattern.quote(prefix)
+                        + "([-+]?\\d+(?:\\.\\d+)?)"
+                        + Pattern.quote(suffix) + "(?!\\d|\\.\\d)"
+        );
+        BigDecimal choiceNumber = new BigDecimal(choiceNumberText);
+        int choicePrecision = Math.max(0, choiceNumber.scale());
+        Matcher candidateMatcher = roundedCandidatePattern.matcher(normalizedEvidence);
+        while (candidateMatcher.find()) {
+            BigDecimal candidate = new BigDecimal(candidateMatcher.group(1));
+            if (candidate.setScale(choicePrecision, RoundingMode.HALF_UP).compareTo(choiceNumber) == 0) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private String normalizeConsistencyText(String value) {
+        String normalized = value.toLowerCase(Locale.ROOT);
+        Matcher textWrapperMatcher = LATEX_TEXT_WRAPPER_PATTERN.matcher(normalized);
+        while (textWrapperMatcher.find()) {
+            normalized = textWrapperMatcher.replaceAll("$1");
+            textWrapperMatcher = LATEX_TEXT_WRAPPER_PATTERN.matcher(normalized);
+        }
+        normalized = normalized
+                .replace("\\(", "")
+                .replace("\\)", "")
+                .replace("\\%", "%")
+                .replace('$', ' ')
+                .replace(",", "")
+                .replace('~', ' ');
+        return WHITESPACE_PATTERN.matcher(normalized).replaceAll(" ").trim();
     }
 
     public String buildFallbackExplanation(String concept) {

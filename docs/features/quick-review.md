@@ -15,6 +15,7 @@ It should feel:
 
 - available on Free, Plus, and Pro
 - uses the base Study Pack quiz instead of a separate LLM-generated session
+- its Study Pack questions pass through the shared numeric-answer/explanation internal-consistency gate; a rejected question is retried once and then omitted if the replacement is still inconsistent
 
 ## Core flow
 
