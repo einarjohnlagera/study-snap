@@ -1,5 +1,51 @@
 # RELEASES.md - NoteLib
 
+## v0.156.0 - Say What You Meant to Show
+
+**Status: In Progress**
+
+Theme: make the existing announcement `ctaLabel` visible as a real call-to-action in the notification
+inbox, clamp long announcement bodies, close the touch-target/hit-area gaps, and give the Admin author
+a character counter — all render-only, no migration, no API/DTO change.
+
+Source: `docs/claude-plans/actionable-announcements-campaign-feedback-stage1-plan.md` (Stage 1 audit +
+plan for "Actionable Announcements + Campaign Feedback", Release A / Slice 1). Release B (Campaign
+Feedback, backend + new table, provisional `v0.157.0`) is explicitly out of scope for this release —
+its Codex prompt exists but is gated on an owner-supplied campaign close date and ships separately.
+
+### Planned Scope
+
+- **CTA affordance in the notification inbox (frontend).**
+  `frontend/components/notifications/notification-inbox.tsx` — render the already-stored,
+  already-transmitted, never-rendered `notification.ctaLabel` as a non-interactive `<span>` inside the
+  existing body `<Link>` (never a nested link/button — the one trap in this change). Extend
+  `aria-labelledby` to include the CTA span id (WCAG 2.5.3 Label in Name). Add `line-clamp-3` to the
+  body. Bump the dismiss button to a 44px (`min-h-11 min-w-11`) touch target. Move row padding onto the
+  `<Link>`/dismiss button so the full card width is tappable.
+- **Admin authoring guidance (frontend).**
+  `frontend/app/admin/announcements/page.tsx` — live body character counter with a ~160-char soft-target
+  helper (following the existing counter pattern in `send-feedback-widget.tsx`), plus helper text on the
+  Link label field clarifying it is the visible CTA text learners see and tap. Field names ("Link
+  label"/"Link path") are unchanged — zero production usage, renaming would only churn tests.
+- **Tests.** `notification-inbox.test.tsx` (28 existing tests stay green + new coverage for CTA
+  render/absent cases, the anti-nesting guard — exactly one interactive element in the row body —
+  accessible-name, and the clamp) and `announcements/page.test.tsx` (counter).
+- **Docs.** `docs/features/notifications.md` — document the CTA affordance contract, the span-not-link
+  rule, and the stored-vs-displayed body split (full body stored/delivered, inbox displays a clamped
+  view; no "Read more", no announcement detail page).
+
+Anti-drift: frontend-only — no migration, no API/DTO change, no admin lifecycle change. Does not make
+`ANNOUNCEMENT` badge-eligible (would resurrect the `v0.134.0` immortal-row defect) and does not touch
+badge-decrement logic. Does not build Release B (Campaign Feedback route, table, or endpoints).
+
+Routing: Claude Code inline (frontend-only, ~2 source + 2 test files, no new infrastructure — too small
+to justify a Codex prompt). Verification tier: one `advisor()` call on the diff — no permission, money,
+or quota surface touched.
+
+### Shipped
+
+_(nothing yet)_
+
 ## v0.155.0 - Say What You Checked
 
 **Status: Released** (signed off 2026-09-22)

@@ -6,6 +6,24 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
+**Kicked off 2026-09-22.** `v0.156.0 — Say What You Meant to Show` is **In Progress** on
+`releases/v0.156.0`, cut from `main` after `v0.155.0` merged as #1422 and tagged. Frontend-only: makes
+the announcement `ctaLabel` field — already authored in Admin, already stored, already transmitted to
+the client, never rendered — visible as a real call-to-action in the notification inbox. Source:
+`docs/claude-plans/actionable-announcements-campaign-feedback-stage1-plan.md`, a Stage 1 audit + plan
+(Opus-drafted, independently re-verified, tightened through two rounds of owner decisions 2026-09-22).
+This is Release A / Slice 1 of a two-release split — **Release B (Campaign Feedback: new
+`/feedback` route, `campaign_feedback_responses` table, new endpoints, provisional `v0.157.0`) is
+explicitly out of scope here** and stays queued until its one open owner input (the campaign's
+`closesAt` date) is resolved. **Scope:** CTA span rendering inside the existing body `<Link>` (never a
+nested link/button), `aria-labelledby` extension for WCAG 2.5.3, `line-clamp-3` on the body, 44px
+dismiss touch target, full-card hit area, plus an Admin body character counter with a ~160-char soft
+target. No migration, no API/DTO change. Does **not** make `ANNOUNCEMENT` badge-eligible (would
+resurrect the `v0.134.0` immortal-row defect). Zero `announcements` rows exist in production, so this
+ships with no live-data risk. **Routing: Claude Code inline** (frontend-only, ~2 source + 2 test files
+— too small for a Codex prompt). **Verification tier: one `advisor()` call on the diff** — no
+permission/money/quota surface touched. Full scope in `RELEASES.md`.
+
 **Kicked off 2026-09-21, signed off 2026-09-22.** `v0.155.0 — Say What You Checked` is **Released** on
 `releases/v0.155.0`, cut from `main` after `v0.154.0` merged as #1420 and tagged. Fixes a real quiz-
 grading correctness defect a learner caught and reported, and ships the validator that would have
