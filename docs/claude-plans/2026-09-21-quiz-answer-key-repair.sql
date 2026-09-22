@@ -11,12 +11,21 @@
 -- a pre-check count below doesn't match, STOP and re-investigate rather than
 -- forcing the UPDATE through.
 --
+-- ⚠️ CORRECTED 2026-09-22, discovered while the owner was running this file:
+-- Section B's original "15 array elements, one pool contains 2 near-identical
+-- duplicate defects" claim was FALSE. A live re-read of pool 2437d442 found
+-- the "second duplicate" is a DIFFERENT question (different wording, DIFFERENT
+-- choices array) that is already correctly keyed — not a duplicate of the
+-- genuine defect. Real count: 14 pool rows, 14 array elements, not 15. The
+-- B.1 UPDATE statement itself was always safe regardless of this comment
+-- error, because it matches on the defective question's specific choices
+-- array (which the correct question does not share) plus correctIndex — see
+-- the corrected note in Section B below.
+--
 -- FOUR INDEPENDENT SECTIONS. Run them separately; each is self-contained and
 -- safe to skip without affecting the others:
 --   A. study_packs        — 12 rows  (6 confirmed defects × public+copy pack)
---   B. exam_question_pool — 14 pool rows, fixing 15 array elements (one pool
---                            contains 2 near-identical duplicate defects —
---                            see the note in that section)
+--   B. exam_question_pool — 14 pool rows, fixing 14 array elements
 --   C. challenge_quiz_question_bank — 10 rows, all on the owner's own
 --                            admin/test account, zero learner exposure
 --   D. RETROACTIVE HISTORY CORRECTION — 2 rows. Owner-approved explicitly
@@ -242,13 +251,18 @@ AND (
 
 
 -- ============================================================================
--- SECTION B — exam_question_pool.questions  (14 pool rows, fixing 15 array
--- elements — pool 2437d442 contains TWO near-identical duplicate defective
--- questions with identical choices/keyed-index, discovered during this
--- file's preparation, not in the original incident doc's count. Both are
--- fixed by the single B.1 statement below since it matches on
--- choices+correctIndex, not question text.)
--- Expected rows affected: 14 pool rows updated; 15 array elements corrected.
+-- SECTION B — exam_question_pool.questions  (14 pool rows, fixing 14 array
+-- elements.
+-- ⚠️ CORRECTED 2026-09-22: this section originally claimed pool 2437d442
+-- contained TWO near-identical duplicate defective questions with identical
+-- choices/keyed-index. Live re-verification found this false — the pool
+-- actually holds two DIFFERENTLY-worded, DIFFERENT-choices questions on a
+-- similar topic; only one (B.1's target) is defective, the other is already
+-- correctly keyed. The B.1 UPDATE below was always safe under this
+-- correction, since it matches the defective question's specific choices
+-- array plus correctIndex — a condition the correctly-keyed question never
+-- satisfies, so it was never at risk of being touched.
+-- Expected rows affected: 14 pool rows updated; 14 array elements corrected.
 -- Zero learner exposure on all 14 pools — served_question_keys is empty on
 -- every one (verified during the extended review, §T of the incident doc).
 -- ============================================================================
@@ -282,13 +296,17 @@ AND elem->'choices' IN (
   '["+200 kJ", "-200 kJ", "+100 kJ", "-100 kJ"]'::jsonb,
   '["$45,000", "$65,000", "$55,000", "$35,000"]'::jsonb
 );
--- Expect exactly 15 rows (2437d442 contributes 2).
+-- Expect exactly 14 rows (corrected 2026-09-22 — see the header note above;
+-- pool 2437d442 contributes only 1, not 2).
 
 -- B.1 — Net cash, indirect method (NI $120,000, dep $30k, AR+$10k, AP-$5k).
 --       120,000+30,000-10,000-5,000 = 135,000. keyed idx2 → correct idx0.
---       NOTE: this pool contains two near-duplicate worded versions of this
---       exact question with identical choices/key — this ONE statement
---       fixes BOTH (matched on choices+correctIndex, not question wording).
+--       NOTE, CORRECTED 2026-09-22: this pool ALSO contains a differently-
+--       worded question on the same topic with a DIFFERENT choices array
+--       (["$115,000","$125,000","$135,000","$155,000"]), already correctly
+--       keyed to $135,000. It is NOT a duplicate of this defect and this
+--       statement cannot touch it — the WHERE/CASE match on this exact
+--       choices array plus correctIndex=2, which that question does not have.
 UPDATE exam_question_pool SET questions = (
   SELECT jsonb_agg(
     CASE WHEN elem->'choices' = '["$135,000", "$145,000", "$125,000", "$140,000"]'::jsonb

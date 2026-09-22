@@ -15,10 +15,12 @@ increase-correctness-incident.md` (full incident audit), owner decisions locked 
 value — a stored MCQ's `correctIndex` pointed at a wrong choice while `explanation`/`workingSolution`
 both derived and stated the right one. Confirmed generation-pipeline defect, not parsing, persistence,
 shuffling, assembly, evaluation, or rendering (all four downstream layers traced and confirmed
-correct). Deterministic corpus scan across 115,333 production questions found **31 confirmed
-defects**, each independently hand-verified from the question's own stated inputs; realized learner
-exposure is exactly one person, two sessions. **Scope:** an owner-run repair SQL (39 idempotent
-statements, independent of code) plus a Codex-routed backend fix — H4 (the internal-consistency
+correct). Deterministic corpus scan across 115,333 production questions found **30 confirmed
+defects** (corrected 2026-09-22 from an originally-claimed 31 — one "duplicate defect" in pool
+`2437d442` turned out, on live re-read, to be a different, already-correctly-keyed question with a
+different choices array), each independently hand-verified from the question's own stated inputs;
+realized learner exposure is exactly one person, two sessions. **Scope:** an owner-run repair SQL (38
+idempotent statements, independent of code) plus a Codex-routed backend fix — H4 (the internal-consistency
 validator, the actual fix: reject/retry/omit, never fail the whole pack), H1 (schema tightening), H2/H3
 (two dead-code removals), H3b (a MATCHING block-integrity check with measured 8% yield). **Explicitly
 deferred:** H5 (prompt relaxation, owner-approved but shipping separately so a post-ship rejection-rate

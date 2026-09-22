@@ -20,24 +20,35 @@ corpus scan (zero LLM calls, re-run twice) across 115,333 production questions i
 **31 confirmed defects**, each independently hand-verified by re-deriving the correct answer from the
 question's own stated inputs, not trusted from its own suspect explanation. Realized learner exposure is
 exactly one person, two sessions — every other instance sits in never-served exam pools or the owner's
-own test account.
+own test account. **⚠️ CORRECTED 2026-09-22, discovered by the owner mid-repair, not caught at kickoff:**
+this count included a false "duplicate defect" in pool `2437d442` — a live re-read found the pool's
+second, similarly-worded question has a genuinely different choices array and was already correctly
+keyed, not a duplicate of the confirmed defect. **True count: 30 confirmed defects, not 31.** See the
+repair-SQL bullet below for the corrected per-store breakdown.
 
 ### Planned Scope
 
 - **Repair SQL, owner-run, independent of code (data).**
-  `docs/claude-plans/2026-09-21-quiz-answer-key-repair.sql` — 39 idempotent statements across four
-  sections: A (12 `study_packs` rows), B (14 `exam_question_pool` rows / 15 array-element fixes, one
-  pool carries a genuine duplicate defect), C (10 `challenge_quiz_question_bank` rows, zero real
-  learner exposure), D (retroactive correction of session `1e78a11d-…` and its `concept_health` row —
-  kept deliberately separate per the owner's explicit "do not silently rewrite history" condition; A–C
-  run independently of D). Every statement's `WHERE` clause re-asserts the current wrong value, so
-  re-running the file is a safe no-op. **Claude does not execute this file** — production write-only,
-  owner's to run per this repo's read-only rule.
+  `docs/claude-plans/2026-09-21-quiz-answer-key-repair.sql` — 38 idempotent statements across four
+  sections: A (12 `study_packs` rows), B (14 `exam_question_pool` rows, 14 array-element fixes), C (10
+  `challenge_quiz_question_bank` rows, zero real learner exposure), D (retroactive correction of session
+  `1e78a11d-…` and its `concept_health` row — kept deliberately separate per the owner's explicit "do not
+  silently rewrite history" condition; A–C run independently of D). Every statement's `WHERE` clause
+  re-asserts the current wrong value, so re-running the file is a safe no-op. **Claude does not execute
+  this file** — production write-only, owner's to run per this repo's read-only rule. **⚠️ CORRECTED
+  2026-09-22:** Section B originally claimed 15 array-element fixes across those 14 rows (one pool
+  supposedly carrying a genuine duplicate defect). The owner's own pre-check for that section returned 14
+  rows, not the expected 15; investigating found the "duplicate" was a different, already-correctly-keyed
+  question with a different choices array. Corrected to 14 rows / 14 fixes (38 total statements, not 39);
+  the actual `UPDATE` statement was always safely scoped regardless of the comment error, since it
+  matches on the defective question's specific choices array, which the correct question never shares.
 - **H4 — internal-consistency validator at the shared generation boundary (backend, the actual fix).**
   For an MCQ whose choices are all numeric/unit literals, rejects the generated question if the keyed
   choice's text does not appear in `explanation + workingSolution` while some other choice's text does
   — narrow, deterministic, mirrors the exact detector measured against production this incident (1.3%
-  flag rate on 5,443 numeric-literal-answer questions, 31/31 confirmed genuine on manual re-derivation).
+  flag rate on 5,443 numeric-literal-answer questions, 30/30 confirmed genuine on manual re-derivation —
+  corrected 2026-09-22 from an originally-claimed 31st that turned out to be a different, already-correct
+  question, not a genuine defect).
   **Locked retry chain (owner decision, §Q.1 item 2): retry the rejected question once; if still
   invalid, omit it (pack generates with N−1) — never fail the whole pack.** Runs on the shared
   generation boundary every quiz mode consumes, not once per mode.
