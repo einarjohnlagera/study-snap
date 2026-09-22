@@ -27,8 +27,11 @@ deferred:** H5 (prompt relaxation, owner-approved but shipping separately so a p
 change stays attributable) and H6 (replacing the letter contract with answer-text identity,
 owner-approved in concept but gated on `docs/architecture/ADR-002-quiz-answer-identity-by-text.md`,
 currently PROPOSED not Accepted). **Verification tier: one scoped cold agent, falsification-framed** —
-trigger: a generated-content semantics change reachable from every quiz mode. Full scope in
-`RELEASES.md`.
+trigger: a generated-content semantics change reachable from every quiz mode. **Both halves now
+complete:** the Codex-routed backend fix merged (PR #1421), and the owner ran the full repair SQL
+2026-09-22 with every post-check clean — see `RELEASES.md`'s Shipped section for the documentation
+correction the owner's own pre-check surfaced mid-repair (31 confirmed defects corrected to 30). Full
+scope in `RELEASES.md`.
 
 **Kicked off 2026-09-18, signed off 2026-09-18.** `v0.154.0 — Closing the Loop` is **Released** on
 `releases/v0.154.0`, cut from `main` after `v0.153.0` merged as #1416 and tagged. Closes out three

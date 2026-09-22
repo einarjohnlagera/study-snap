@@ -141,6 +141,19 @@ session makes, same pattern as this repo's established precedent.
   case whenever a block was properly grouped; only the ungrouped-singleton escape was a genuine gap this
   diff closes. The test is a correct regression lock, but only the singleton fix is new behavior — the
   incident's reported size-6 violation was already covered by code that predates this release.
+- **Data repair executed by the owner, 2026-09-22.**
+  `docs/claude-plans/2026-09-21-quiz-answer-key-repair.sql` run in full — Sections A (12 `study_packs`
+  rows), B (14 `exam_question_pool` rows), C (10 `challenge_quiz_question_bank` rows), and D (the
+  retroactive session/`concept_health` correction) — every per-section post-check returned clean.
+  **While running Section B, the owner's own pre-check surfaced a real documentation defect**: the
+  plan claimed 15 array-element fixes across those 14 rows (one pool supposedly carrying a genuine
+  duplicate defect); the pre-check returned 14. A live read-only query against the pool in question
+  found the "duplicate" was a different, already-correctly-keyed question with a different choices
+  array — not a duplicate at all. Corrected across all six places the wrong count was recorded (the
+  repair SQL's own comments, the incident finding doc, `ADR-002`, `RELEASES.md`, `ROADMAP.md`,
+  `CLAUDE.md`) plus two misleading labels in the plan file's own final-summary query that the
+  correction pass initially missed. The `UPDATE` statements themselves were always safely scoped
+  regardless of the documentation error — verified by the clean post-checks above.
 
 ### Known Limitations
 
