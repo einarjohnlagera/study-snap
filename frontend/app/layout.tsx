@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import localFont from "next/font/local";
+import { Analytics } from "@vercel/analytics/next";
 import "./globals.css";
 import { ThemePreferenceSync } from "@/components/theme-preference-sync";
 import { ThemeProvider } from "@/components/theme-provider";
@@ -95,6 +96,7 @@ export default function RootLayout({
           </Suspense>
           <AddToHomeScreenNudge />
         </ThemeProvider>
+        <Analytics />
       </body>
     </html>
   );
