@@ -1,6 +1,6 @@
 # RELEASES_ARCHIVE.md — NoteLib
 
-Archived sections of `RELEASES.md`. **Contents are NOT one contiguous range:** `v0.41.0`–`v0.120.0`, plus `v0.126.0` (moved at the `v0.132.0` kickoff), `v0.127.0` (moved at the `v0.133.0` kickoff) `v0.128.0` (moved at the `v0.134.0` kickoff) `v0.129.0` (moved at the `v0.135.0` kickoff) `v0.130.0` (moved at the `v0.136.0` kickoff) `v0.131.0` (moved at the `v0.137.0` kickoff) `v0.132.0` (moved at the `v0.138.0` kickoff) `v0.133.0` (moved at the `v0.139.0` kickoff), `v0.134.0` (moved at the `v0.140.0` kickoff), `v0.135.0` (moved at the `v0.141.0` kickoff), `v0.136.0` (moved at the `v0.142.0` kickoff), `v0.137.0` (moved at the `v0.143.0` kickoff), `v0.138.0` (moved at the `v0.144.0` kickoff), `v0.139.0` (moved at the `v0.145.0` kickoff), `v0.140.0` (moved at the `v0.146.0` kickoff), `v0.141.0` (moved at the `v0.147.0` kickoff), `v0.142.0` (moved at the `v0.148.0` kickoff), `v0.143.0` (moved at the `v0.149.0` kickoff), `v0.144.0` (moved at the `v0.150.0` kickoff), `v0.145.0` (moved at the `v0.151.0` kickoff), `v0.146.0` (moved at the `v0.152.0` kickoff), `v0.147.0` (moved at the `v0.153.0` kickoff), `v0.148.0` (moved at the `v0.154.0` kickoff) and `v0.149.0` (moved at the `v0.155.0` kickoff) as the live file crossed its *current + last five* cap. Each version's own `## vX.Y.Z` heading is the index — search for it. `v0.40.1` and earlier moved here
+Archived sections of `RELEASES.md`. **Contents are NOT one contiguous range:** `v0.41.0`–`v0.120.0`, plus `v0.126.0` (moved at the `v0.132.0` kickoff), `v0.127.0` (moved at the `v0.133.0` kickoff) `v0.128.0` (moved at the `v0.134.0` kickoff) `v0.129.0` (moved at the `v0.135.0` kickoff) `v0.130.0` (moved at the `v0.136.0` kickoff) `v0.131.0` (moved at the `v0.137.0` kickoff) `v0.132.0` (moved at the `v0.138.0` kickoff) `v0.133.0` (moved at the `v0.139.0` kickoff), `v0.134.0` (moved at the `v0.140.0` kickoff), `v0.135.0` (moved at the `v0.141.0` kickoff), `v0.136.0` (moved at the `v0.142.0` kickoff), `v0.137.0` (moved at the `v0.143.0` kickoff), `v0.138.0` (moved at the `v0.144.0` kickoff), `v0.139.0` (moved at the `v0.145.0` kickoff), `v0.140.0` (moved at the `v0.146.0` kickoff), `v0.141.0` (moved at the `v0.147.0` kickoff), `v0.142.0` (moved at the `v0.148.0` kickoff), `v0.143.0` (moved at the `v0.149.0` kickoff), `v0.144.0` (moved at the `v0.150.0` kickoff), `v0.145.0` (moved at the `v0.151.0` kickoff), `v0.146.0` (moved at the `v0.152.0` kickoff), `v0.147.0` (moved at the `v0.153.0` kickoff), `v0.148.0` (moved at the `v0.154.0` kickoff), `v0.149.0` (moved at the `v0.155.0` kickoff) and `v0.150.0` (moved at the `v0.156.0` signoff — the first time this archive check ran at signoff rather than kickoff, since v0.156.0 folded two releases' worth of scope into one and crossed the cap without an intervening kickoff) as the live file crossed its *current + last five* cap. Each version's own `## vX.Y.Z` heading is the index — search for it. `v0.40.1` and earlier moved here
 2026-07-10; **`v0.41.0` through `v0.120.0` moved here 2026-09-07** in the `v0.126.0` pass, which
 resumed this convention after it had lapsed for 85 releases — `RELEASES.md` had reached 116
 sections against its documented design of *current + last few versions*. Both passes are MOVES,
@@ -15,6 +15,96 @@ versions also live in `docs/releases/vX.Y.Z.md` — those drop implementation de
 
 See `RELEASES.md` for the current + most-recent versions, and its "Archived releases"
 index for a one-line-per-version pointer back into this file.
+
+---
+
+## v0.150.0 - Membership, Not a Slot
+
+**Status: Released**
+
+Theme: Program Family membership becomes many-to-many — a Course/Program can belong to zero, one, or
+several families — closing a production bug where two admin-created families (Health Sciences,
+Accounting) were structurally invisible to every Note-authoring surface, and where an existing
+program's family could not be changed at all except by a database migration.
+
+Source: `docs/claude-plans/program-family-many-to-many-final-plan.md` (FINAL, Opus architecture audit,
+independently verified by the Feature Planner session 2026-09-15; owner-approved 2026-09-16). Supersedes
+`docs/claude-plans/program-family-health-accounting-expansion-final-plan.md` (pass 2) on the schema
+question only — that file's Health Sciences/Accounting membership decisions carry forward unchanged;
+its single-FK schema, API and migration sections do not. Codex prompt:
+`docs/codex-prompts/v0.150.0-program-family-many-to-many.md` (gitignored, not committed).
+
+### Planned Scope
+
+- **ADR-001 amendment (docs-only, Slice 0).** Constraint 2 (`ADR-001:92`) currently forbids "any preset
+  table beyond `course_programs.program_family_id`" — a literal blocker for a membership table. Owner
+  approved storage-neutral replacement text (plan §A) that keeps the constraint's substance (unconditional,
+  membership-driven expansion) while permitting many-to-many storage.
+- **`course_program_family` migration (backend).** New join table copying every existing single-FK
+  membership (Engineering 18, Education 8 = 26 rows), with a relationship-level (not count-only) parity
+  assertion that aborts the migration on any mismatch. `course_programs.program_family_id` is retained,
+  unread by application code after cutover — no dual-write.
+- **Catalog API becomes additive (backend).** `GET /course-program-catalog` gains `programFamilies: []`;
+  deprecated `programFamilyId`/`programFamilyName` stay populated (alphabetical-first) for one release of
+  frontend-deploy tolerance. `PATCH /course-program-catalog/{id}` becomes an authoritative
+  `programFamilyIds` replacement — a free breaking change, since it has zero existing frontend clients.
+- **Note-authoring bug fix (frontend).** The "Add Course/Program" family picker currently derives its
+  options by scanning catalog rows that already carry a family, so a brand-new empty family is invisible
+  to it — exactly what happened to Health Sciences and Accounting in production. Fixed by fetching the
+  canonical `/course-program-catalog/families` endpoint instead, same one Admin already uses.
+- **Admin Edit action (frontend, new).** Admins can edit an existing Course/Program's family memberships
+  through a multi-select modal — this did not exist at all before this release, despite `v0.149.0`'s
+  release notes claiming it did (see Corrections below).
+- **Populate all four empty families (owner-run, post-deploy).** Health Sciences, Accounting, and the
+  two owner-approved additions Computing & Technology and Built Environment & Design (17 memberships
+  total) — via the Admin UI as the primary path, which doubles as this release's own production
+  acceptance test.
+
+### Corrections to the v0.149.0 record
+
+Verified against current code and production, not inferred, per the many-to-many plan's audit:
+
+- **`v0.149.0`'s release notes claim "Admins can now move an existing Course/Program catalog entry into
+  a different family." They cannot, through any UI.** The `PATCH /course-program-catalog/{id}` endpoint
+  shipped and is well-tested, but no frontend client ever called it — `admin-course-program-catalog-section.tsx`
+  has no Edit action and `frontend/lib/api.ts` has no `updateCourseProgram` function.
+- **`v0.149.0`'s release notes claim "A catalog program can now be marked inactive." No application code
+  ever writes `is_active`.** New rows get `true` only from the column's DB-level `DEFAULT` (`V145`) — the
+  `INSERT` statement's own column list does not include `is_active` — and there is no `UPDATE`, endpoint,
+  or admin control to change it after creation. Production confirms 0 rows with `is_active = false`. This
+  also means the Known Limitation recorded as "documented for the next post-deploy pass" (the two legacy
+  fused rows' deprecation) was never actually reachable by any owner action — it needed a code change that
+  was never scoped, not a data operation that was merely pending. Tracked as its own Backlog Index item;
+  out of scope for this release (plan §P item 4).
+
+Anti-drift: Program Family stays an authoring convenience only — never Note-persisted, never a discovery
+axis, never Domain Context, never Authored Depth, never sent to generation. Exam Goal editing is dropped
+from this release entirely (not even read-only display). `is_active`, the two legacy fused catalog rows,
+family deletion, program deletion, and family-side membership editing (Family → Programs) are all
+explicitly out of scope. No react-query/TanStack/websocket/polling is introduced — this frontend has no
+query cache today and this release adds none.
+
+### Shipped
+
+- **Program Family membership is many-to-many end to end.** `V146` adds and relationship-validates the
+  canonical `course_program_family` join while retaining the legacy scalar FK as an unread compatibility
+  artifact. Catalog create and Admin Edit now write complete membership sets atomically; catalog responses
+  expose ordered `programFamilies` while retaining deprecated scalar aliases. The Note-authoring Add
+  Course/Program modal reads the canonical families endpoint lazily, so empty families are selectable on
+  Single Note and Bulk Note surfaces, while expansion chips still appear only for families with members.
+  The Admin catalog now displays zero/one/many family chips and provides the working Edit UI path that
+  `v0.149.0` had overclaimed.
+- **Pre-signoff falsification pass (one scoped cold agent, per plan §Q) confirmed 8 of 9 pre-declared
+  claims cleanly and found one real test-quality gap, fixed before signoff.** Confirmed: migration
+  relationship-parity (proven against a real PostgreSQL container, not just the H2 harness), no
+  dual-write to the legacy scalar column, no family id ever reaching Note persistence, unchanged
+  `@PreAuthorize` annotations, overlapping-family deduplication, honest documentation of what the H2
+  migration test does and doesn't execute, tolerant JSON parsing across the deploy window, and
+  `is_active` genuinely untouched. **Found and fixed:** the single highest-value new test — creating a
+  program in two families must select only that program on the Note — used non-exclusive
+  `toHaveBeenCalledWith`; a mutation (adding a `handleFamilyExpansion` call the boundary forbids) proved
+  the old assertion would still pass. Strengthened to `toHaveBeenCalledTimes(1)`, re-verified the same
+  mutation now fails and the real implementation still passes all 28 tests in the file.
 
 ---
 
