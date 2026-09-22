@@ -104,7 +104,9 @@ describe("NotificationInbox", () => {
     fireEvent.click(screen.getByLabelText("Open notifications"));
 
     expect(await screen.findByText("Board Exam Mode is here")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Board Exam Mode is here" })).toHaveAttribute("href", "/dashboard?tab=exams");
+    // ⚠️ WCAG 2.5.3 Label in Name — once the CTA label is visible inside the link, the accessible name
+    // must contain it, not just the title.
+    expect(screen.getByRole("link", { name: "Board Exam Mode is here Try it" })).toHaveAttribute("href", "/dashboard?tab=exams");
     // ⚠️ Guard 8, from the render side: an unread announcement with zero actionable leaves NO badge
     // element — not a "0".
     expect(screen.queryByLabelText(/unread notifications/)).not.toBeInTheDocument();
@@ -129,6 +131,9 @@ describe("NotificationInbox", () => {
     expect(await screen.findByText("Suspicious")).toBeInTheDocument();
     expect(screen.queryByRole("link")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Suspicious" })).toBeInTheDocument();
+    // ⚠️ A stored ctaLabel is untrusted the same as ctaPath — no safe path means no CTA affordance at
+    // all, not a dangling label with nowhere to go.
+    expect(screen.queryByText("Click here")).not.toBeInTheDocument();
   });
 
   it("distinguishes a failed load from an empty inbox", async () => {
@@ -183,7 +188,7 @@ describe("NotificationInbox", () => {
     fireEvent.click(screen.getByLabelText("Open notifications"));
     await screen.findByText("Someone wants to connect");
 
-    const cardBody = screen.getByRole("link", { name: "Someone wants to connect" });
+    const cardBody = screen.getByRole("link", { name: "Someone wants to connect Review" });
     expect(cardBody).toHaveAttribute("href", "/linked-learners");
     clickLinkWithoutLeavingTestPage(cardBody);
 
@@ -207,7 +212,7 @@ describe("NotificationInbox", () => {
     fireEvent.click(screen.getByLabelText("Open notifications"));
     await screen.findByText("Someone wants to connect");
 
-    const cardBody = screen.getByRole("link", { name: "Someone wants to connect" });
+    const cardBody = screen.getByRole("link", { name: "Someone wants to connect Review" });
     expect(cardBody).toHaveAttribute("href", "/linked-learners");
     clickLinkWithoutLeavingTestPage(cardBody);
 
@@ -374,22 +379,63 @@ describe("NotificationInbox", () => {
     renderInbox(1);
     fireEvent.click(screen.getByLabelText("Open notifications"));
 
-    const cardBody = await screen.findByRole("link", { name: "Someone wants to connect" });
+    const cardBody = await screen.findByRole("link", { name: "Someone wants to connect Review" });
     expect(cardBody.closest("article")).toHaveClass("bg-muted/40");
     expect(screen.getByTestId("unread-indicator-n-1")).toBeInTheDocument();
   });
 
-  it("uses the destination card body as the only CTA and marks read before closing", async () => {
+  it("renders the CTA label as a non-interactive affordance inside the destination link, and marks read before closing", async () => {
+    // ⚠️ The CTA label used to be deliberately unrendered (dead data end to end). This release makes it
+    // visible — but it must land INSIDE the existing body <Link>, never as its own <a>/<button>, or it
+    // is nested interactive content: invalid HTML and a second, competing activation target.
     renderInbox(1);
     fireEvent.click(screen.getByLabelText("Open notifications"));
 
-    const cardBody = await screen.findByRole("link", { name: "Someone wants to connect" });
+    const cardBody = await screen.findByRole("link", { name: "Someone wants to connect Review" });
     expect(cardBody).toHaveAttribute("href", "/linked-learners");
-    expect(screen.queryByText("Review")).not.toBeInTheDocument();
+    expect(screen.getByText("Review")).toBeInTheDocument();
+    expect(cardBody).toContainElement(screen.getByText("Review"));
+    // ⚠️ Anti-nesting guard: exactly one interactive element in the row body — the CTA label is text,
+    // not a second link or button.
+    expect(screen.getAllByRole("link")).toHaveLength(1);
+    expect(screen.queryByRole("button", { name: /Review/ })).not.toBeInTheDocument();
     clickLinkWithoutLeavingTestPage(cardBody);
 
     await waitFor(() => expect(markNotificationRead).toHaveBeenCalledWith("n-1"));
     expect(screen.queryByText("Someone wants to connect")).not.toBeInTheDocument();
+  });
+
+  it("renders no CTA affordance at all when a notification has no ctaLabel", async () => {
+    (listNotifications as jest.Mock).mockResolvedValue([ctaLessActionable]);
+    renderInbox(1);
+    fireEvent.click(screen.getByLabelText("Open notifications"));
+
+    const cardBody = await screen.findByRole("button", { name: "Someone wants to connect" });
+    expect(cardBody).toBeInTheDocument();
+    expect(screen.queryByText("→")).not.toBeInTheDocument();
+  });
+
+  it("clamps the body to 3 lines and gives it a load-bearing min-w-0 so the clamp actually applies", async () => {
+    (listNotifications as jest.Mock).mockResolvedValue([{ ...actionable, body: "A very long announcement body that should be visually clamped in the inbox row." }]);
+    renderInbox(1);
+    fireEvent.click(screen.getByLabelText("Open notifications"));
+
+    const body = await screen.findByText(/A very long announcement body/);
+    expect(body).toHaveClass("line-clamp-3");
+    // ⚠️ jsdom does no layout/cascade, so this class-presence check cannot prove the clamp actually
+    // renders — it only pins the negative that would silently defeat it: Tailwind emits `.block` AFTER
+    // `.line-clamp-3` in this project's compiled CSS (confirmed by compiling it), so pairing them would
+    // let `display: block` win over line-clamp's `display: -webkit-box` and make the clamp inert.
+    expect(body).not.toHaveClass("block");
+    expect(screen.getByRole("link", { name: /Someone wants to connect/ })).toHaveClass("min-w-0");
+  });
+
+  it("gives the dismiss button a 44px touch target", async () => {
+    renderInbox(1);
+    fireEvent.click(screen.getByLabelText("Open notifications"));
+
+    const dismissButton = await screen.findByLabelText("Dismiss Someone wants to connect");
+    expect(dismissButton).toHaveClass("h-11", "w-11");
   });
 
   it("marks a CTA-less notification read from its card body without navigation", async () => {
@@ -409,7 +455,7 @@ describe("NotificationInbox", () => {
   it("keeps dismiss separate from reading and navigation", async () => {
     renderInbox(1);
     fireEvent.click(screen.getByLabelText("Open notifications"));
-    const cardBody = await screen.findByRole("link", { name: "Someone wants to connect" });
+    const cardBody = await screen.findByRole("link", { name: "Someone wants to connect Review" });
     const dismissButton = screen.getByRole("button", { name: "Dismiss Someone wants to connect" });
     expect(cardBody).not.toContainElement(dismissButton);
 
@@ -428,7 +474,7 @@ describe("NotificationInbox", () => {
     renderInbox(0);
     fireEvent.click(screen.getByLabelText("Open notifications"));
 
-    const cardBody = await screen.findByRole("link", { name: "Someone wants to connect" });
+    const cardBody = await screen.findByRole("link", { name: "Someone wants to connect Review" });
     expect(cardBody).toHaveAttribute("href", "/linked-learners");
     expect(cardBody.closest("article")).toHaveClass("bg-background");
     expect(screen.queryByTestId("unread-indicator-n-1")).not.toBeInTheDocument();
@@ -442,7 +488,7 @@ describe("NotificationInbox", () => {
     renderInbox(1);
     fireEvent.click(screen.getByLabelText("Open notifications"));
 
-    const cardBody = await screen.findByRole("link", { name: "Someone wants to connect" });
+    const cardBody = await screen.findByRole("link", { name: "Someone wants to connect Review" });
     expect(cardBody.tagName).toBe("A");
     expect(cardBody).toHaveAttribute("href", "/linked-learners");
     expect(cardBody).toHaveProperty("tabIndex", 0);
