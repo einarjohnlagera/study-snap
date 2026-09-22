@@ -4,6 +4,11 @@
 
 Quiz sessions persist progress separately from generated Study Pack content so users can leave and resume review safely.
 
+Long Exam and Board Exam generation both use the shared numeric-answer/explanation internal-consistency
+gate before a generated `QuizItem` enters a session or pool. An inconsistent eligible MCQ is retried
+once as a single question and omitted if the replacement is still inconsistent. Session response counts
+come from the resulting quiz array, so a permitted omission is represented by the actual question count.
+
 ## Session Modes
 
 Shared session storage supports:

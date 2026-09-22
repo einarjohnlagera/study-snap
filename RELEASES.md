@@ -89,7 +89,56 @@ session makes, same pattern as this repo's established precedent.
 
 ### Shipped
 
-_(nothing yet)_
+- **H4 — generated MCQ answer/explanation consistency gate.**
+  `QuizValidationUtils.java:187` implements the deliberately narrow numeric/unit-literal matcher with
+  LaTeX-wrapper cleanup, choice-precision rounding and numeric-token boundaries; the shared conversion
+  seam in `OpenAiLlmStudyPackService.java:2417` now retries one rejected question and omits a still-invalid
+  replacement without failing the rest of the pack. `OpenAiLlmStudyPackServiceTest.java:959-1065` proves
+  the exact reported defect, retry/omit behavior, and reach from Quick Review, Adaptive Practice,
+  Challenge Quiz, Long Exam, Board Exam and Teacher Generate Quiz; `QuizValidationUtilsTest.java:199-262`
+  covers the normalization and substring-collision cases. Short generated results now retain their
+  actual count through `ChallengeQuizService`, `QuickReviewAdaptivePracticeService` and
+  `GeneratedQuizService` instead of being converted back into whole-generation failures.
+  **⚠️ Pre-commit audit mutation-verified the two safety-critical pieces of this delivery, not just
+  read them:** reverting the boundary-aware match (`QuizValidationUtils.java:227-230`) to a plain
+  `contains()` check killed `answerExplanationConsistency_usesNumericBoundariesForOverlappingChoices` —
+  confirming the substring-collision guard the incident doc called out as "a REAL hazard" is genuinely
+  load-bearing, not decorative. Restored and re-verified green. **Quota-accounting confirmed
+  independently** (the Codex delivery's own output did not state this explicitly, per the prompt's
+  OUTPUT item 4 requirement): `recordUsage`/`incrementUsage` calls happen once per top-level generation
+  request in `StudyPackService.java`/`NoteGenerationService.java`, never per individual quiz question —
+  a question-level retry or omission inside `buildQuizItemOrRetry` is invisible to quota accounting by
+  construction, not merely by observed behavior.
+- **H1 — structured-output answer enum.**
+  `prompts/study-pack-v1/schema.json:70` constrains `answer` to `A`/`B`/`C`/`D`/`null`, matching the
+  existing Java parser contract; `OpenAiLlmStudyPackServiceTest.java:948` pins the deployed schema resource.
+- **H2 — hazardous dead choice randomizer removed.**
+  Deleted `QuizValidationUtils.randomizeChoices`, which shuffled choices without remapping the answer,
+  and its two self-only tests after confirming `backend/src` had no production caller.
+- **H3 — orphaned quiz-question Java mapping removed.**
+  Deleted `QuizQuestionEntity.java` and `QuizQuestionRepository.java` after confirming neither class was
+  referenced outside those two files. The zero-row `quiz_questions` table remains unchanged; dropping it
+  is a separate owner-run DDL follow-up, and this release includes no migration for it.
+- **H3b — MATCHING block integrity enforced on every generated path.**
+  `OpenAiLlmStudyPackService.java:575` now routes ungrouped MATCHING items through the existing 2–4-item,
+  identical-choices normalizer instead of letting them escape as singletons. Tests at
+  `OpenAiLlmStudyPackServiceTest.java:1132-1169` cover the previously escaping singleton and an oversized,
+  non-identical-choice block; both demote to MCQ. **⚠️ Pre-commit audit correction, not a defect:**
+  mutation-testing the new ungrouped-routing branch found the oversized/non-identical-choices test
+  (`generateLongExam_demotesOversizedMatchingBlockWithDifferingChoices`) still passes with that branch
+  removed — the pre-existing `resolveInvalidMatchingGroupReason` size/choice check already caught that
+  case whenever a block was properly grouped; only the ungrouped-singleton escape was a genuine gap this
+  diff closes. The test is a correct regression lock, but only the singleton fix is new behavior — the
+  incident's reported size-6 violation was already covered by code that predates this release.
+
+### Known Limitations
+
+- H4 has near-zero recall for prose-answer MCQs while current prompts avoid restating the answer value.
+  H5 remains a separately approved prompt change so this release first establishes an attributable
+  production rejection-rate baseline. Passing H4 means only internally consistent, never semantically
+  verified; H6 and the separate single-best-answer Question Quality audit remain deferred. All three
+  (H5, H6, the Question Quality audit) now have their own Backlog Index rows in `ROADMAP.md`, added at
+  this commit since the Codex delivery's own output explicitly deferred that question to this session.
 
 ## v0.154.0 - Closing the Loop
 

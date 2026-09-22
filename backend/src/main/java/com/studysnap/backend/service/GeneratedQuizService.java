@@ -134,7 +134,11 @@ public class GeneratedQuizService {
                     generatedQuestions,
                     QuizDeduplicationUtils.toNormalizedQuestionSetFromStrings(disallowedQuestions)
             );
-            if (uniqueQuestions.size() != questionCount) {
+            // The shared LLM boundary may deliberately omit an answer/explanation-inconsistent
+            // question after its one replacement also fails. Preserve duplicate detection while
+            // allowing that explicit N-1 result to reach persistence with its actual count.
+            if (uniqueQuestions.size() != generatedQuestions.size()
+                    || uniqueQuestions.size() > questionCount) {
                 throw new GeneratedQuizGenerationFailedException();
             }
 

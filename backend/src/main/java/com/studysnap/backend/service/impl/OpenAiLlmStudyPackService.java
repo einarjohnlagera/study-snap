@@ -286,14 +286,15 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
             StudyPackGenerationContext context
     ) {
         String model = requireConfiguredModel();
+        ArrayNode inputMessages = buildInputMessages(normalizedNotesText, context);
         JsonSchemaResponse<PromptStudyPack> response = executeJsonSchemaOperation(
                 model,
-                buildInputMessages(normalizedNotesText, context),
+                inputMessages,
                 studyPackOperation(),
                 promptResources.responseSchema(),
                 PromptStudyPack.class
         );
-        return toGeneratedStudyPackContent(response.payload(), response.responseJson(), model);
+        return toGeneratedStudyPackContent(response.payload(), response.responseJson(), model, inputMessages);
     }
 
     private ArrayNode buildInputMessages(String normalizedNotesText, StudyPackGenerationContext context) {
@@ -449,13 +450,14 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
     private GeneratedStudyPackContent toGeneratedStudyPackContent(
             PromptStudyPack promptStudyPack,
             JsonNode responseJson,
-            String fallbackModel
+            String fallbackModel,
+            ArrayNode inputMessages
     ) {
         validatePromptStudyPack(promptStudyPack);
         String normalizedSubject = normalizeGeneratedSubject(promptStudyPack.subject());
         List<String> normalizedKeyConcepts = normalizeAndValidateKeyConcepts(promptStudyPack.keyConcepts());
         List<String> normalizedTags = normalizeAndValidateTags(promptStudyPack.tags(), promptStudyPack.title());
-        List<QuizItem> quizItems = buildStudyPackQuizItems(promptStudyPack.quiz());
+        List<QuizItem> quizItems = buildStudyPackQuizItems(promptStudyPack.quiz(), fallbackModel, inputMessages);
 
         UsageMetadata usageMetadata = extractUsageMetadata(responseJson, fallbackModel);
         return new GeneratedStudyPackContent(
@@ -482,7 +484,11 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
         }
     }
 
-    private List<QuizItem> buildStudyPackQuizItems(List<PromptQuizItem> promptQuizItems) {
+    private List<QuizItem> buildStudyPackQuizItems(
+            List<PromptQuizItem> promptQuizItems,
+            String model,
+            ArrayNode inputMessages
+    ) {
         List<QuizItem> quizItems = new ArrayList<>();
         Set<String> normalizedQuestions = new HashSet<>();
         Set<String> normalizedConcepts = new HashSet<>();
@@ -499,23 +505,43 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
                 log.warn("Duplicate quiz concept detected and allowed: concept={}", normalizedConcept);
             }
 
+            String normalizedExplanation = normalizeAndValidateExplanation(
+                    item.explanation(),
+                    "The study pack service returned an invalid quiz explanation. Please try again."
+            );
             int answerIndex = resolveAnswerIndex(item.answer(), item.choices().size(), "The study pack service returned an invalid quiz answer. Please try again.");
-            quizItems.add(new QuizItem(
-                    item.question(),
-                    item.choices(),
-                    MULTI_SELECT_FORMAT.equals(item.questionFormat()) ? null : answerIndex,
-                    normalizedConcept,
-                    normalizeAndValidateExplanation(item.explanation(), "The study pack service returned an invalid quiz explanation. Please try again."),
-                    null,
-                    item.questionFormat(),
-                    item.questionType(),
-                    item.workingSolution(),
-                    item.correctIndices(),
-                    item.questionGroup(),
-                    null,
-                    item.acceptableAnswers(),
-                    item.acceptableAnswerGroups()
-            ));
+            QuizItem quizItem = buildQuizItemOrRetry(
+                    new QuizItemDraft(
+                            item.question(),
+                            item.choices(),
+                            normalizedConcept,
+                            normalizedExplanation,
+                            item.questionFormat(),
+                            item.questionType(),
+                            item.workingSolution(),
+                            item.correctIndices(),
+                            item.questionGroup(),
+                            null,
+                            item.acceptableAnswers(),
+                            item.acceptableAnswerGroups()
+                    ),
+                    answerIndex,
+                    new ConsistencyRetryContext(
+                            model,
+                            inputMessages,
+                            "note_lib_study_pack_quiz",
+                            "Study pack quiz generation",
+                            List.of(normalizedConcept),
+                            List.of(),
+                            true,
+                            false,
+                            false
+                    ),
+                    true
+            );
+            if (quizItem != null) {
+                quizItems.add(quizItem);
+            }
         }
         return normalizeMatchingGroups(quizItems, "study_pack_quiz");
     }
@@ -552,9 +578,14 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
         }
         Map<String, List<Integer>> groupedIndexes = new LinkedHashMap<>();
         for (int index = 0; index < quizItems.size(); index++) {
-            String questionGroup = quizItems.get(index).questionGroup();
+            QuizItem item = quizItems.get(index);
+            String questionGroup = item.questionGroup();
             if (questionGroup != null && !questionGroup.isBlank()) {
                 groupedIndexes.computeIfAbsent(questionGroup, ignored -> new ArrayList<>()).add(index);
+            } else if (MATCHING_FORMAT.equals(item.questionFormat())) {
+                // A MATCHING item without a group previously escaped the block-size check entirely.
+                // Give it an isolated synthetic group so the existing singleton demotion handles it.
+                groupedIndexes.put("__ungrouped_matching_" + index, List.of(index));
             }
         }
         if (groupedIndexes.isEmpty()) {
@@ -2332,27 +2363,162 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
                     ? null
                     : conceptFallbackPool.get(conceptIndex % conceptFallbackPool.size());
             conceptIndex += 1;
-            quizItems.add(new QuizItem(
-                    item.question().trim(),
-                    item.choices() == null ? List.of() : item.choices().stream().map(String::trim).toList(),
-                    MULTI_SELECT_FORMAT.equals(item.questionFormat()) ? null : answerIndex,
-                    normalizeAndValidateConceptOrFallback(item.concept(), conceptFallback),
-                    normalizeAndValidateExplanation(item.explanation(), operationLabel + " returned an invalid explanation. Please try again."),
-                    null,
-                    item.questionFormat(),
-                    item.questionType(),
-                    item.workingSolution(),
-                    item.correctIndices(),
-                    item.questionGroup(),
-                    normalizeKeyConceptOrNull(item.keyConcept(), normalizedKeyConceptEnum),
-                    item.acceptableAnswers(),
-                    item.acceptableAnswerGroups()
-            ));
+            QuizItem quizItem = buildQuizItemOrRetry(
+                    toQuizItemDraft(item, conceptFallback, normalizedKeyConceptEnum, operationLabel),
+                    answerIndex,
+                    new ConsistencyRetryContext(
+                            model,
+                            inputMessages,
+                            schemaName,
+                            operationLabel,
+                            conceptFallbackPool,
+                            normalizedKeyConceptEnum,
+                            allowTrueFalse,
+                            CHALLENGE_QUIZ_SCHEMA_NAME.equals(schemaName) || LONG_EXAM_SCHEMA_NAME.equals(schemaName),
+                            CHALLENGE_QUIZ_SCHEMA_NAME.equals(schemaName)
+                    ),
+                    true
+            );
+            if (quizItem != null) {
+                quizItems.add(quizItem);
+            }
         }
         return new GeneratedQuizResponse(
                 normalizeMatchingGroups(quizItems, operationLabel),
                 response.responseJson()
         );
+    }
+
+    private QuizItemDraft toQuizItemDraft(
+            PromptGeneratedQuizItem item,
+            String conceptFallback,
+            List<String> normalizedKeyConceptEnum,
+            String operationLabel
+    ) {
+        return new QuizItemDraft(
+                item.question().trim(),
+                item.choices() == null ? List.of() : item.choices().stream().map(String::trim).toList(),
+                normalizeAndValidateConceptOrFallback(item.concept(), conceptFallback),
+                normalizeAndValidateExplanation(
+                        item.explanation(),
+                        operationLabel + " returned an invalid explanation. Please try again."
+                ),
+                item.questionFormat(),
+                item.questionType(),
+                item.workingSolution(),
+                item.correctIndices(),
+                item.questionGroup(),
+                normalizeKeyConceptOrNull(item.keyConcept(), normalizedKeyConceptEnum),
+                item.acceptableAnswers(),
+                item.acceptableAnswerGroups()
+        );
+    }
+
+    private QuizItem buildQuizItemOrRetry(
+            QuizItemDraft item,
+            Integer answerIndex,
+            ConsistencyRetryContext retryContext,
+            boolean allowRetry
+    ) {
+        if (QuizValidationUtils.isAnswerExplanationInternallyInconsistent(
+                item.choices(),
+                answerIndex,
+                item.questionFormat(),
+                item.explanation(),
+                item.workingSolution()
+        )) {
+            log.warn(
+                    "action=quiz_answer_explanation_consistency outcome={} operation={} questionHash={}",
+                    allowRetry ? "retrying" : "omitted",
+                    retryContext.operationLabel(),
+                    StringNormalizationUtils.normalizeForDuplicateCheck(item.question()).hashCode()
+            );
+            return allowRetry ? retryInternallyInconsistentQuestion(item.question(), retryContext) : null;
+        }
+        return new QuizItem(
+                item.question(),
+                item.choices(),
+                MULTI_SELECT_FORMAT.equals(item.questionFormat()) ? null : answerIndex,
+                item.concept(),
+                item.explanation(),
+                null,
+                item.questionFormat(),
+                item.questionType(),
+                item.workingSolution(),
+                item.correctIndices(),
+                item.questionGroup(),
+                item.keyConcept(),
+                item.acceptableAnswers(),
+                item.acceptableAnswerGroups()
+        );
+    }
+
+    private QuizItem retryInternallyInconsistentQuestion(
+            String rejectedQuestion,
+            ConsistencyRetryContext context
+    ) {
+        ArrayNode retryMessages = context.inputMessages().deepCopy();
+        retryMessages.add(buildTextMessage(
+                "developer",
+                "Correction retry: return exactly one replacement quiz question under the response schema. "
+                        + "The prior question was rejected because its keyed numeric answer contradicted its own explanation. "
+                        + "Generate a different internally consistent question from the same source material."
+        ));
+        retryMessages.add(buildTextMessage("user", "Rejected question: " + rejectedQuestion));
+        try {
+            JsonSchemaResponse<PromptGeneratedQuiz> retryResponse = executeJsonSchemaOperation(
+                    context.model(),
+                    retryMessages,
+                    quizOperation(context.schemaName() + "_consistency_retry", context.operationLabel() + " consistency retry"),
+                    buildGeneratedQuizSchema(
+                            1,
+                            context.allowTrueFalse(),
+                            context.keyConceptEnum(),
+                            context.allowIdentification(),
+                            context.allowEnumeration()
+                    ),
+                    PromptGeneratedQuiz.class
+            );
+            if (retryResponse.payload().questions() == null || retryResponse.payload().questions().size() != 1) {
+                log.warn(
+                        "action=quiz_answer_explanation_consistency outcome=omitted operation={} reason=invalid_retry_count",
+                        context.operationLabel()
+                );
+                return null;
+            }
+            PromptGeneratedQuizItem replacement = retryResponse.payload().questions().getFirst();
+            validateGeneratedQuizItem(replacement, context.operationLabel());
+            boolean freeText = IDENTIFICATION_FORMAT.equals(replacement.questionFormat())
+                    || ENUMERATION_FORMAT.equals(replacement.questionFormat());
+            Integer replacementAnswerIndex = freeText
+                    ? null
+                    : resolveAnswerIndex(
+                            replacement.answer(),
+                            replacement.choices().size(),
+                            context.operationLabel() + " consistency retry returned an invalid answer mapping."
+                    );
+            String fallback = context.conceptFallbackPool().isEmpty()
+                    ? null
+                    : context.conceptFallbackPool().getFirst();
+            return buildQuizItemOrRetry(
+                    toQuizItemDraft(
+                            replacement,
+                            fallback,
+                            context.keyConceptEnum(),
+                            context.operationLabel()
+                    ),
+                    replacementAnswerIndex,
+                    context,
+                    false
+            );
+        } catch (AppException ex) {
+            log.warn(
+                    "action=quiz_answer_explanation_consistency outcome=omitted operation={} reason={}",
+                    context.operationLabel(),
+                    ex.getCode()
+            );
+            return null;
+        }
     }
 
     private void validateGeneratedQuizItem(PromptGeneratedQuizItem item, String operationLabel) {
@@ -2895,6 +3061,35 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
             String keyConcept,
             List<String> acceptableAnswers,
             List<List<String>> acceptableAnswerGroups
+    ) {
+    }
+
+    private record QuizItemDraft(
+            String question,
+            List<String> choices,
+            String concept,
+            String explanation,
+            String questionFormat,
+            String questionType,
+            String workingSolution,
+            List<Integer> correctIndices,
+            String questionGroup,
+            String keyConcept,
+            List<String> acceptableAnswers,
+            List<List<String>> acceptableAnswerGroups
+    ) {
+    }
+
+    private record ConsistencyRetryContext(
+            String model,
+            ArrayNode inputMessages,
+            String schemaName,
+            String operationLabel,
+            List<String> conceptFallbackPool,
+            List<String> keyConceptEnum,
+            boolean allowTrueFalse,
+            boolean allowIdentification,
+            boolean allowEnumeration
     ) {
     }
 

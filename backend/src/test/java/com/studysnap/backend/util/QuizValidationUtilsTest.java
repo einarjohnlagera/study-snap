@@ -196,27 +196,69 @@ class QuizValidationUtilsTest {
     }
 
     @Test
-    void randomizeChoices_isDeterministicPerQuestionSeed() {
-        List<String> original = List.of("A", "B", "C", "D");
+    void answerExplanationConsistency_rejectsReportedIncidentAndAcceptsCorrectKey() {
+        List<String> choices = List.of("15%", "30%", "25%", "10%");
+        String explanation = "The increase is (15 / 50) × 100% = 30%.";
 
-        List<String> first = QuizValidationUtils.randomizeChoices(original, "What is ATP?");
-        List<String> second = QuizValidationUtils.randomizeChoices(original, "What is ATP?");
-        List<String> third = QuizValidationUtils.randomizeChoices(original, "What is DNA?");
-
-        assertThat(first).containsExactlyInAnyOrderElementsOf(original);
-        assertThat(second).containsExactlyInAnyOrderElementsOf(original);
-        assertThat(third).containsExactlyInAnyOrderElementsOf(original);
-        assertThat(first).containsExactlyElementsOf(second);
+        assertThat(QuizValidationUtils.isAnswerExplanationInternallyInconsistent(
+                choices, 2, "MCQ", explanation, null)).isTrue();
+        assertThat(QuizValidationUtils.isAnswerExplanationInternallyInconsistent(
+                choices, 1, "MCQ", explanation, null)).isFalse();
     }
 
     @Test
-    void randomizeChoices_doesNotMutateOriginalList() {
-        List<String> original = new java.util.ArrayList<>(List.of("A", "B", "C", "D"));
+    void answerExplanationConsistency_toleratesLatexDelimiterMismatch() {
+        assertThat(QuizValidationUtils.isAnswerExplanationInternallyInconsistent(
+                List.of("15\\%", "30\\%", "25\\%", "10\\%"), 1, "MCQ",
+                "The result is $30\\%$.", null)).isFalse();
+    }
 
-        List<String> shuffled = QuizValidationUtils.randomizeChoices(original, "What is ATP?");
+    @Test
+    void answerExplanationConsistency_toleratesTextWrapperAndTildeSpacing() {
+        assertThat(QuizValidationUtils.isAnswerExplanationInternallyInconsistent(
+                List.of("5 mL", "10 \\text{ mL}", "15 mL", "20 mL"), 1, "MCQ",
+                "The dose is 10 mL.", null)).isFalse();
+        assertThat(QuizValidationUtils.isAnswerExplanationInternallyInconsistent(
+                List.of("1732 N", "3464~N", "5196 N", "6928 N"), 1, "MCQ",
+                "The force is 3464 N.", null)).isFalse();
+    }
 
-        assertThat(original).containsExactly("A", "B", "C", "D");
-        assertThat(shuffled).containsExactlyInAnyOrder("A", "B", "C", "D");
+    @Test
+    void answerExplanationConsistency_toleratesChoicePrecisionRounding() {
+        assertThat(QuizValidationUtils.isAnswerExplanationInternallyInconsistent(
+                List.of("₱10,000", "₱12,000", "₱13,393", "₱15,000"), 2, "MCQ",
+                "The computed amount is ₱13,392.86.", null)).isFalse();
+    }
+
+    @Test
+    void answerExplanationConsistency_usesNumericBoundariesForOverlappingChoices() {
+        List<String> choices = List.of("5%", "25%", "35%", "45%");
+
+        assertThat(QuizValidationUtils.isAnswerExplanationInternallyInconsistent(
+                choices, 1, "MCQ", "The result is 25%.", null)).isFalse();
+        assertThat(QuizValidationUtils.isAnswerExplanationInternallyInconsistent(
+                choices, 0, "MCQ", "The result is 25%.", null)).isTrue();
+    }
+
+    @Test
+    void answerExplanationConsistency_acceptsKeyWhenExplanationAlsoMentionsDistractor() {
+        assertThat(QuizValidationUtils.isAnswerExplanationInternallyInconsistent(
+                List.of("23%", "30%", "15%", "50%"), 1, "MCQ",
+                "A common error is 15/65 ≈ 23%, but the correct base gives 30%.", null)).isFalse();
+    }
+
+    @Test
+    void answerExplanationConsistency_skipsProseChoicesAndNonMcqFormats() {
+        assertThat(QuizValidationUtils.isAnswerExplanationInternallyInconsistent(
+                List.of("Faster", "Slower", "Unchanged", "Unknown"), 0, "MCQ",
+                "The explanation names Slower.", null)).isFalse();
+
+        for (String format : List.of(
+                "TRUE_FALSE", "MULTI_SELECT", "MATCHING", "IDENTIFICATION", "ENUMERATION")) {
+            assertThat(QuizValidationUtils.isAnswerExplanationInternallyInconsistent(
+                    List.of("10%", "20%", "30%", "40%"), 0, format,
+                    "The result is 20%.", null)).as(format).isFalse();
+        }
     }
 
     @Test
