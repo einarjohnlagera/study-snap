@@ -681,7 +681,15 @@ SELECT
        '400c9315-d1e8-4b7d-a930-e045433ce3be','70409a24-2d94-4fde-b943-dc860131f51f',
        '5e2e1633-5be0-4fb2-b1de-0dab91f3719a','9756f274-43f9-4994-9dc3-5abe66679f72',
        '6a2d6712-f25a-4f9d-a3bd-b8f41f598bc8','9b96153b-f65e-4cd1-b389-bc249725d950',
-       '771a06a8-4bdc-4b03-99e6-1c7dbe087c28','ccabeefc-90a0-481f-8dfc-2677ab33410e')) AS section_a_elements_present_expect_12,
+       '771a06a8-4bdc-4b03-99e6-1c7dbe087c28','ccabeefc-90a0-481f-8dfc-2677ab33410e')
+     AND e->'choices' IN (
+       '["15%", "30%", "25%", "10%"]'::jsonb,
+       '["0.833 m³/s", "8.33 m³/s", "83.3 m³/s", "0.0833 m³/s"]'::jsonb,
+       '["500 units", "333 units", "667 units", "250 units"]'::jsonb,
+       '["216 kPa", "144 kPa", "194.4 kPa", "259.2 kPa"]'::jsonb,
+       '["50 m", "75 m", "100 m", "86.6 m"]'::jsonb,
+       '["9.18 m", "18.36 m", "4.59 m", "2.29 m"]'::jsonb
+     )) AS section_a_defective_elements_present_expect_12,
   (SELECT count(*) FROM exam_question_pool eqp, jsonb_array_elements(eqp.questions) e
      WHERE eqp.id::text IN ('2437d442-5b95-4383-ad92-790fc58c4557','2b01c6df-116b-448c-8792-82c3a7cfe97c',
        '2f82877b-e70f-424b-9723-6ba71d60c1f8','385d69db-76a3-4620-8510-5bee4b5f6ca7',
@@ -698,15 +706,23 @@ SELECT
        '["$680.58", "$735.03", "$867.30", "$500.00"]'::jsonb,'["$485,000", "$400,000", "$515,000", "$415,000"]'::jsonb,
        '["10 A", "17.32 A", "30 A", "51.96 A"]'::jsonb,'["$31,000", "$27,000", "$35,000", "$33,000"]'::jsonb,
        '["+200 kJ", "-200 kJ", "+100 kJ", "-100 kJ"]'::jsonb,'["$45,000", "$65,000", "$55,000", "$35,000"]'::jsonb
-     )) AS section_b_elements_present_expect_15,
+     )) AS section_b_defective_elements_present_expect_14,
   (SELECT count(*) FROM challenge_quiz_question_bank
      WHERE id::text IN ('1bb93537-b34f-4278-83d2-5ef528dccbf3','50b57537-732b-4ecc-bb48-c25e042d2a1a',
        '58f2c1f9-d943-4a1a-b5af-d80347821fda','5915864d-7cc3-4251-8dd8-314d5102f0c1',
        '72e0ea1a-da18-4c47-b45e-5784261e5bf6','818814ac-70d9-448c-9b10-f11a9315b9e5',
        '87e6db69-c7f3-41b7-89d0-5153e181bf44','aa684263-c426-405c-bbe4-b48d09855168',
        'e1c1110e-2e1b-42ce-96cc-3b2cf46faf4a','e73e4b66-ec30-4b7a-8613-1de343599d9d')) AS section_c_rows_present_expect_10;
--- These three counts should read 12 / 15 / 10 both BEFORE and AFTER running
--- the repair (the rows don't disappear, only their correctIndex values
--- change) — this query alone does not prove the repair worked; use the
--- per-section post-checks above for that. This is only a final row-presence
+-- ⚠️ CORRECTED 2026-09-22: this query was previously inconsistent and
+-- misleading. Section A's subquery had no `choices` filter (so it counted
+-- ALL quiz elements across the 12 packs — 60, since each pack holds 5
+-- questions — not "12 defective elements" as its old label implied); it now
+-- carries the same choices filter as A.0's own pre-check, so it genuinely
+-- counts the 12 target elements. Section B's label said "expect_15", stale
+-- from the same duplicate-defect correction documented at the top of this
+-- file; corrected to 14. These three counts should now read 12 / 14 / 10
+-- both BEFORE and AFTER running the repair (the rows don't disappear, only
+-- their correctIndex values change) — this query alone does not prove the
+-- repair worked; use the per-section post-checks above for that. This is
+-- only a final row-presence
 -- sanity check that nothing was accidentally deleted.
