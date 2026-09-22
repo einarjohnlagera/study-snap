@@ -471,7 +471,9 @@ public class ChallengeQuizService {
                 }
                 accumulateLlmUsage(session, generatedContent);
             }
-            if (challengeQuiz.size() != quizCount) {
+            // The shared LLM boundary may omit an internally inconsistent question after its one
+            // replacement also fails. Preserve the upper bound while allowing the resulting N-1 quiz.
+            if (challengeQuiz.size() > quizCount) {
                 throw new ChallengeQuizGenerationFailedException();
             }
             challengeQuiz = stampUnstampedQuestionsWithPrimarySource(challengeQuiz, studyPackId);

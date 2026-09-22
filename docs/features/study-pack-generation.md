@@ -112,7 +112,7 @@ Include a balanced mix of:
 - application questions
 
 Detailed expectations:
-- generate exactly 5 questions for the current Quick Review-oriented Study Pack flow
+- request 5 questions for the current Quick Review-oriented Study Pack flow; a rejected question may make the persisted pack shorter under the consistency rule below
 - each question must test a different concept from the notes
 - recall questions test facts, terms, and definitions
 - understanding questions test conceptual understanding (not rote memorization)
@@ -127,6 +127,25 @@ Detailed expectations:
 - if OCR text was edited by the user, the edited text becomes the authoritative input
 - distractors should be plausible same-topic alternatives, not obvious throwaway options
 - avoid "all of the above", "none of the above", trick questions, and duplicate concepts
+
+### Generated-question integrity boundary
+
+All real-LLM quiz modes share an internal-consistency check before a `QuizItem` is constructed. For an
+MCQ whose choices are all short numeric/unit literals (every choice contains a digit and is at most 20
+characters), the keyed choice must occur in `explanation + workingSolution` when another choice occurs
+there. Matching is boundary-aware, tolerates the documented LaTeX wrappers and display precision
+rounding, and does not apply to prose-choice MCQs or to TRUE_FALSE, MULTI_SELECT, MATCHING,
+IDENTIFICATION, or ENUMERATION.
+
+An inconsistent question is regenerated once as a single replacement. If that replacement is still
+invalid, the question is omitted and the rest of the pack remains usable; the whole pack is not failed
+for that question. Logs name the answer/explanation consistency gate and record retry or omission.
+**Passing this check is not semantic verification:** it proves only that the stored key agrees with the
+generated explanation, not that either one is factually correct or that the question has one defensible
+best answer.
+
+MATCHING blocks are also normalized at this boundary. A block must contain 2–4 items with the same
+ordered `choices` array; a malformed, oversized, singleton, or ungrouped block is demoted to MCQ.
 
 ## Metadata generation rules
 

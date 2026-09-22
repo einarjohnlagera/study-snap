@@ -1,5 +1,169 @@
 # RELEASES.md - NoteLib
 
+## v0.155.0 - Say What You Checked
+
+**Status: Released** (signed off 2026-09-22)
+
+Theme: fix a real quiz-grading correctness defect a learner caught and reported, and ship the
+validator that would have rejected it at generation time.
+
+Source: `docs/claude-findings/2026-09-19-quick-review-percentage-increase-correctness-incident.md`
+(full incident audit, §A–T), owner decisions locked 2026-09-21 (§Q.1).
+
+**What happened:** a learner answered a Quick Review question correctly, was graded wrong, re-ran the
+quiz picking the answer they knew was wrong to confirm the bug, then reported it. Root cause: the LLM
+emitted the wrong answer *letter* while its own explanation derived the correct value — a stored MCQ's
+`correctIndex` pointed at `"25%"` while its `explanation`/`workingSolution` both derived and stated
+`30%`. This is a generation-inconsistency defect, not parsing, persistence, shuffling, assembly,
+evaluation, or rendering — all four downstream layers were traced and confirmed correct. A deterministic
+corpus scan (zero LLM calls, re-run twice) across 115,333 production questions in four stores found
+**31 confirmed defects**, each independently hand-verified by re-deriving the correct answer from the
+question's own stated inputs, not trusted from its own suspect explanation. Realized learner exposure is
+exactly one person, two sessions — every other instance sits in never-served exam pools or the owner's
+own test account. **⚠️ CORRECTED 2026-09-22, discovered by the owner mid-repair, not caught at kickoff:**
+this count included a false "duplicate defect" in pool `2437d442` — a live re-read found the pool's
+second, similarly-worded question has a genuinely different choices array and was already correctly
+keyed, not a duplicate of the confirmed defect. **True count: 30 confirmed defects, not 31.** See the
+repair-SQL bullet below for the corrected per-store breakdown.
+
+### Planned Scope
+
+- **Repair SQL, owner-run, independent of code (data).**
+  `docs/claude-plans/2026-09-21-quiz-answer-key-repair.sql` — 38 idempotent statements across four
+  sections: A (12 `study_packs` rows), B (14 `exam_question_pool` rows, 14 array-element fixes), C (10
+  `challenge_quiz_question_bank` rows, zero real learner exposure), D (retroactive correction of session
+  `1e78a11d-…` and its `concept_health` row — kept deliberately separate per the owner's explicit "do not
+  silently rewrite history" condition; A–C run independently of D). Every statement's `WHERE` clause
+  re-asserts the current wrong value, so re-running the file is a safe no-op. **Claude does not execute
+  this file** — production write-only, owner's to run per this repo's read-only rule. **⚠️ CORRECTED
+  2026-09-22:** Section B originally claimed 15 array-element fixes across those 14 rows (one pool
+  supposedly carrying a genuine duplicate defect). The owner's own pre-check for that section returned 14
+  rows, not the expected 15; investigating found the "duplicate" was a different, already-correctly-keyed
+  question with a different choices array. Corrected to 14 rows / 14 fixes (38 total statements, not 39);
+  the actual `UPDATE` statement was always safely scoped regardless of the comment error, since it
+  matches on the defective question's specific choices array, which the correct question never shares.
+- **H4 — internal-consistency validator at the shared generation boundary (backend, the actual fix).**
+  For an MCQ whose choices are all numeric/unit literals, rejects the generated question if the keyed
+  choice's text does not appear in `explanation + workingSolution` while some other choice's text does
+  — narrow, deterministic, mirrors the exact detector measured against production this incident (1.3%
+  flag rate on 5,443 numeric-literal-answer questions, 30/30 confirmed genuine on manual re-derivation —
+  corrected 2026-09-22 from an originally-claimed 31st that turned out to be a different, already-correct
+  question, not a genuine defect).
+  **Locked retry chain (owner decision, §Q.1 item 2): retry the rejected question once; if still
+  invalid, omit it (pack generates with N−1) — never fail the whole pack.** Runs on the shared
+  generation boundary every quiz mode consumes, not once per mode.
+- **H1 — schema tightening (backend).** Constrains the LLM structured-output `answer` field to the
+  `A`/`B`/`C`/`D`/`null` enum, closing an existing schema/Java-side divergence. Free, no behavior change
+  on well-formed generations.
+- **H2 — dead-code removal (backend).** Deletes `QuizValidationUtils.randomizeChoices` — reorders
+  choices without remapping `correctIndex`, a real answer-identity-corruption hazard if ever wired into
+  a live path, currently called only by its own test.
+- **H3 — dead-code removal, Java only, no migration (backend).** Deletes `QuizQuestionEntity` /
+  `QuizQuestionRepository` and their tests — zero references anywhere outside themselves, the
+  `quiz_questions` table holds 0 production rows. Table drop itself is out of scope for this task (a
+  DDL change, owner-execution protocol); the Codex delivery states explicitly whether it left a
+  follow-up note or prepared a separate non-migration drop-table SQL artifact.
+- **H3b — MATCHING block-integrity check at generation (backend).** Measured non-zero yield (4 of 50
+  production MATCHING blocks, 8%, violate block-size or identical-choices rules already stated in the
+  prompt as CRITICAL but not enforced on every construction path). Enforced at generation; a violation
+  demotes to MCQ, mirroring the existing partial `normalizeMatchingGroups` behavior.
+
+**Explicitly out of scope, not folded in:**
+- **H5** (relax `developer.txt:105` so explanations must state the answer's value, still forbidding
+  letter references) — approved by the owner (§Q.1 item 3) but ships as its own later prompt, once this
+  validator's rejection-rate baseline exists in production; bundling it would make a post-ship
+  rejection-rate change unattributable to either change alone.
+- **H6** (replace the A/B/C/D letter contract with verbatim answer-text identity) — approved in concept
+  by the owner (§Q.1 item 4) but gated on `docs/architecture/ADR-002-quiz-answer-identity-by-text.md`,
+  currently **PROPOSED, not Accepted**. Not implemented until ratified.
+- Structural answer-key validation (index-in-range, exactly-one-correct, duplicate choices,
+  MULTI_SELECT key agreement) — the incident's own corpus scan found zero violations of any of these
+  across all 115,333 production questions; explicitly not the fix, not built.
+- The historical-sanitation `DETERMINISTIC_SCAN` and semantic (is-the-explanation-actually-right)
+  verification — both out of scope, per the incident doc's three-tier discipline (STRUCTURAL /
+  INTERNAL-CONSISTENCY / SEMANTIC, strictly separate; this release ships INTERNAL-CONSISTENCY only).
+
+Anti-drift: H4 evaluates MCQ-with-numeric-choices only — TRUE_FALSE, MULTI_SELECT, MATCHING,
+IDENTIFICATION, ENUMERATION, and prose-choice MCQ pass through unchanged; a question passing H4 is
+never to be represented as "verified correct" anywhere in logs/docs/UI, only as internally consistent.
+No file under `docs/architecture/ADR-001-*.md`, `docs/architecture/ADR-002-*.md`,
+`developer.txt:105` (or any sibling file's equivalent line), `StudyPackGenerationContextResolver`, or
+any Note-persistence path is touched by this release. `QuizItem.java`'s canonical constructor and
+`resolveCorrectIndex` precedence ladder are unmodified — this release only decides whether a `QuizItem`
+gets constructed, not how it resolves once constructed.
+
+**Routing: Codex** (`docs/codex-prompts/v0.155.0-quiz-answer-key-integrity-validator.md`, Long mode) —
+touches shared backend generation infrastructure across every quiz mode, per `CLAUDE.md`'s task-routing
+table. **Verification tier: one scoped cold agent, falsification-framed** — trigger: a generated-content
+semantics change reachable from every quiz mode. Framed against the specific claims the implementing
+session makes, same pattern as this repo's established precedent.
+
+### Shipped
+
+- **H4 — generated MCQ answer/explanation consistency gate.**
+  `QuizValidationUtils.java:187` implements the deliberately narrow numeric/unit-literal matcher with
+  LaTeX-wrapper cleanup, choice-precision rounding and numeric-token boundaries; the shared conversion
+  seam in `OpenAiLlmStudyPackService.java:2417` now retries one rejected question and omits a still-invalid
+  replacement without failing the rest of the pack. `OpenAiLlmStudyPackServiceTest.java:959-1065` proves
+  the exact reported defect, retry/omit behavior, and reach from Quick Review, Adaptive Practice,
+  Challenge Quiz, Long Exam, Board Exam and Teacher Generate Quiz; `QuizValidationUtilsTest.java:199-262`
+  covers the normalization and substring-collision cases. Short generated results now retain their
+  actual count through `ChallengeQuizService`, `QuickReviewAdaptivePracticeService` and
+  `GeneratedQuizService` instead of being converted back into whole-generation failures.
+  **⚠️ Pre-commit audit mutation-verified the two safety-critical pieces of this delivery, not just
+  read them:** reverting the boundary-aware match (`QuizValidationUtils.java:227-230`) to a plain
+  `contains()` check killed `answerExplanationConsistency_usesNumericBoundariesForOverlappingChoices` —
+  confirming the substring-collision guard the incident doc called out as "a REAL hazard" is genuinely
+  load-bearing, not decorative. Restored and re-verified green. **Quota-accounting confirmed
+  independently** (the Codex delivery's own output did not state this explicitly, per the prompt's
+  OUTPUT item 4 requirement): `recordUsage`/`incrementUsage` calls happen once per top-level generation
+  request in `StudyPackService.java`/`NoteGenerationService.java`, never per individual quiz question —
+  a question-level retry or omission inside `buildQuizItemOrRetry` is invisible to quota accounting by
+  construction, not merely by observed behavior.
+- **H1 — structured-output answer enum.**
+  `prompts/study-pack-v1/schema.json:70` constrains `answer` to `A`/`B`/`C`/`D`/`null`, matching the
+  existing Java parser contract; `OpenAiLlmStudyPackServiceTest.java:948` pins the deployed schema resource.
+- **H2 — hazardous dead choice randomizer removed.**
+  Deleted `QuizValidationUtils.randomizeChoices`, which shuffled choices without remapping the answer,
+  and its two self-only tests after confirming `backend/src` had no production caller.
+- **H3 — orphaned quiz-question Java mapping removed.**
+  Deleted `QuizQuestionEntity.java` and `QuizQuestionRepository.java` after confirming neither class was
+  referenced outside those two files. The zero-row `quiz_questions` table remains unchanged; dropping it
+  is a separate owner-run DDL follow-up, and this release includes no migration for it.
+- **H3b — MATCHING block integrity enforced on every generated path.**
+  `OpenAiLlmStudyPackService.java:575` now routes ungrouped MATCHING items through the existing 2–4-item,
+  identical-choices normalizer instead of letting them escape as singletons. Tests at
+  `OpenAiLlmStudyPackServiceTest.java:1132-1169` cover the previously escaping singleton and an oversized,
+  non-identical-choice block; both demote to MCQ. **⚠️ Pre-commit audit correction, not a defect:**
+  mutation-testing the new ungrouped-routing branch found the oversized/non-identical-choices test
+  (`generateLongExam_demotesOversizedMatchingBlockWithDifferingChoices`) still passes with that branch
+  removed — the pre-existing `resolveInvalidMatchingGroupReason` size/choice check already caught that
+  case whenever a block was properly grouped; only the ungrouped-singleton escape was a genuine gap this
+  diff closes. The test is a correct regression lock, but only the singleton fix is new behavior — the
+  incident's reported size-6 violation was already covered by code that predates this release.
+- **Data repair executed by the owner, 2026-09-22.**
+  `docs/claude-plans/2026-09-21-quiz-answer-key-repair.sql` run in full — Sections A (12 `study_packs`
+  rows), B (14 `exam_question_pool` rows), C (10 `challenge_quiz_question_bank` rows), and D (the
+  retroactive session/`concept_health` correction) — every per-section post-check returned clean.
+  **While running Section B, the owner's own pre-check surfaced a real documentation defect**: the
+  plan claimed 15 array-element fixes across those 14 rows (one pool supposedly carrying a genuine
+  duplicate defect); the pre-check returned 14. A live read-only query against the pool in question
+  found the "duplicate" was a different, already-correctly-keyed question with a different choices
+  array — not a duplicate at all. Corrected across all six places the wrong count was recorded (the
+  repair SQL's own comments, the incident finding doc, `ADR-002`, `RELEASES.md`, `ROADMAP.md`,
+  `CLAUDE.md`) plus two misleading labels in the plan file's own final-summary query that the
+  correction pass initially missed. The `UPDATE` statements themselves were always safely scoped
+  regardless of the documentation error — verified by the clean post-checks above.
+
+### Known Limitations
+
+- H4 has near-zero recall for prose-answer MCQs while current prompts avoid restating the answer value.
+  H5 remains a separately approved prompt change so this release first establishes an attributable
+  production rejection-rate baseline. Passing H4 means only internally consistent, never semantically
+  verified; H6 and the separate single-best-answer Question Quality audit remain deferred. All three
+  (H5, H6, the Question Quality audit) now have their own Backlog Index rows in `ROADMAP.md`, added at
+  this commit since the Codex delivery's own output explicitly deferred that question to this session.
+
 ## v0.154.0 - Closing the Loop
 
 **Status: Released** (signed off 2026-09-18)
@@ -592,177 +756,3 @@ query cache today and this release adds none.
   `toHaveBeenCalledWith`; a mutation (adding a `handleFamilyExpansion` call the boundary forbids) proved
   the old assertion would still pass. Strengthened to `toHaveBeenCalledTimes(1)`, re-verified the same
   mutation now fails and the real implementation still passes all 28 tests in the file.
-
-## v0.149.0 - Precision Before Coverage
-
-**Status: Released**
-
-Theme: two new Program Family shortcuts for curators (Health Sciences, Accounting), built on the
-existing generic family mechanism, plus the admin capability and legacy-catalog cleanup needed to
-maintain families going forward without another release.
-
-Source: `docs/claude-plans/program-family-health-accounting-expansion-final-plan.md` (FINAL, Product
-UX-approved, tightening pass 2 of 2; untracked on disk, indexed in `ROADMAP.md`'s Backlog Index).
-Supersedes `docs/claude-plans/program-family-health-accounting-expansion-product-ux-consultation-prompt.md`
-(pass 1) — that file's facts are preserved as historical trace only; do not re-read it for anything
-load-bearing.
-
-### Planned Scope
-
-- **`is_active` lifecycle column on `course_programs` (backend, migration).** `course_programs` has no
-  lifecycle field today (`id, name, program_family_id, exam_goal_slug, created_at` only — confirmed
-  against current migrations at kickoff). Adds `is_active BOOLEAN NOT NULL DEFAULT TRUE`, reusing the
-  existing `discount_vouchers`/`quiz_share_links` convention rather than inventing a new one (confirmed:
-  both already carry `is_active BOOLEAN NOT NULL DEFAULT TRUE`). This migration adds the column ONLY.
-  **⚠️ ANTI-DRIFT: do NOT bundle the 2-row backfill (below) into this same migration** — see the
-  deployment-ordering item.
-- **Legacy fused catalog rows deprecated from new authoring, not deleted (backend, follow-up
-  step).** "Nursing · Medicine" (20 notes) and "Nursing · Pharmacy" (1 note) get `is_active = false`,
-  targeted by name (not id, since ids are runtime-generated). **A SEPARATE step from the column-add
-  migration, deployed only after Health Sciences family population is confirmed live in production** —
-  bundling them would strand curators between losing the fused shortcut and gaining its replacement.
-  Existing Notes referencing these rows are never touched; `course_programs` rows are never deleted.
-- **`PATCH /course-program-catalog/{id}` — new ADMIN-only endpoint (backend).** No endpoint exists today
-  to reassign an *existing* catalog program's family (confirmed: `CourseProgramCatalogController` is
-  GET-only at kickoff). `UpdateCourseProgramCatalogRequest(UUID programFamilyId)` — nullable;
-  `null` clears membership, a valid id sets/changes it. `@PreAuthorize("hasRole('ADMIN')")`, mirroring
-  `NoteCollectionController`'s existing `PATCH /{id}` convention. Real `MockMvc` request test with
-  `Content-Type: application/json` required (not a bare service-method call — this repo's own `v0.119.0`
-  lesson), plus ADMIN-only guard, assign/change/clear, unknown-program, unknown-family cases.
-- **List-endpoint filtering (backend).** The authoring combobox's pickable list excludes `is_active =
-  false` rows; a Note that already references an inactive row must still resolve and render it as a
-  normal chip (fetch selected-by-id regardless of `is_active`, filter only the *pickable* list). **⚠️
-  Confirm which endpoint the admin catalog management screen uses and keep that one unfiltered** —
-  filtering the wrong list would hide an inactive row from the one screen meant to manage it.
-- **Family-chip UX redesign (frontend, `applicable-programs-combobox.tsx`).** Replaces full-sentence
-  "Add all N programs" buttons with compact states: none selected `Family · N`; partial
-  `Family · N remaining` (click adds only the missing ones); full `✓ Family · N` — **LOCKED, inert,
-  non-interactive**, status text or a disabled element rather than a clickable toggle (`aria-pressed`
-  would misrepresent state, since the Note never persists "family selected" — only individual programs
-  do); removing a member after full immediately reverts to partial. **⚠️ ANTI-DRIFT: do NOT touch
-  `availableProgramFamilies`/`handleFamilyExpansion`** — already family-count-agnostic, confirmed
-  unchanged at kickoff. 18+ selected-program mobile wrapping gets an explicit acceptance check at
-  implementation time (render Engineering's 18 at desktop + 375px mobile width; pass/fail criteria in
-  the plan's §K) rather than a pre-guessed threshold fix.
-- **Health Sciences program family (data + existing mechanism, no new schema).** Nursing, Medicine,
-  Pharmacy — **LOCKED per Product UX, not reopened this release**. Evidence: 18 notes carrying a genuine
-  3-way tag accumulated across five weeks, plus 21 more notes across the two fused rows above — two
-  independent curator actions converging on the same trio. Physical Therapy and Radiologic Technology
-  excluded (no comparable co-selection evidence).
-- **Accounting program family (data + existing mechanism, no new schema).** Accountancy, Management
-  Accounting, Accounting Information Systems, Internal Auditing (4 members) — decided from the CPALE
-  curriculum's own subject-plan structure (Management Services and Auditing sections are, by curriculum
-  design, shared core coursework for these four program types), not from the 35-note bulk-tagging action
-  (which proves curators need cross-program bulk assignment as a workflow, not that all 10 originally
-  bulk-tagged programs belong in one family). **Business Administration explicitly EXCLUDED** — its
-  genuine overlap is concentrated in RFBT + finance-flavored Management Services content, ~22% of the
-  CPALE plan, which fails the family's own precision bar (a program that needs manual removal on ~78%
-  of uses isn't a good default). Entrepreneurship, Economics, Senior High–ABM, Real Estate Management,
-  CMA, CFA all excluded for the release too (thin or no signal, or — for CMA/CFA — an unresolved
-  credential-vs-program taxonomy question, not evidence against inclusion). **⚠️ Flagged for the owner,
-  not blocking kickoff: the Business Administration exclusion rests on external domain knowledge about
-  how Philippine accounting-track programs share curricula, not a row-level fact the database can
-  confirm — worth a sanity check before this family ships.**
-- **`docs/features/program-families.md` updated (docs).** Documents both new families, the `is_active`
-  mechanism, and the reverse Domain-Context guard already noted in the pass-1 audit.
-- **One low-risk copy unification (frontend).** `bulk-generation-page-client.tsx`'s Domain Context
-  helper text ("Required when this note applies to more than one program") is looser than the other two
-  surfaces' phrasing ("Needed before you can generate a Study Pack for a note in more than one program")
-  — unified to match. **No fix for a suspected Domain Context UI phrasing bug from the pass-1 audit** —
-  it was not reproduced this pass; do not implement a fix for a defect that isn't there.
-
-**Explicitly out of scope, not folded in:**
-- Finance as a Course/Program is deferred to CPALE curation itself — the plan's own trigger (the first
-  canonical Finance-applicable note) looks likely to fire soon (16 of 359 planned CPALE notes are
-  textbook Finance/Financial-Management topics) but has not fired yet. Finance Domain Context: still NO.
-- The CPALE curriculum TSV's `applicable_programs` column is uniformly under-tagged (`Accountancy` on
-  all 359 rows, zero cross-program exceptions), and several RFBT titles bake "Accountancy"/"Business Law"
-  into the title text itself (a Note Title doctrine violation). Both are real findings surfaced while
-  reading the plan, both are curriculum-content issues belonging to the curriculum strategist pipeline,
-  and neither is fixed by this release — flagged to the owner separately.
-- Legacy-Note normalization for the 21 notes already carrying a fused-row tag: deferred/follow-up, not
-  this release.
-- Program Family overlap (one nullable FK, single family per program) stays unsupported — a known,
-  recorded limitation, no schema change here.
-
-Anti-drift (whole release): Program Family stays authoring convenience only — never persisted on Note
-generation payloads, never a discovery axis, never sent to generation, never changes Domain Context or
-Authored Depth, never inferred from Review Set, never retroactively synced onto existing Notes (nothing
-stores which family a Note's programs came from, so this is structurally impossible, not just a rule —
-a focused repository test should confirm `note_course_program` rows are never written with a
-family-derived value). Family selection stays purely additive. **Data operations — assigning the 7
-catalog rows to their new families via the new endpoint, and the later `is_active` backfill — are
-owner-run post-deploy, sequenced per the plan's §O, not part of this release's code diff.**
-
-**Routing: Codex** — this touches a backend migration, a new endpoint, and a frontend redesign together,
-per `CLAUDE.md`'s task-routing table. Implementation slices per the plan's §Q: (1) backend catalog
-lifecycle + family-reassignment API, (2) frontend family-chip redesign, (3) docs update — one Codex
-prompt or two, decided at prompt-writing time. **Verification tier: at minimum one scoped cold agent,
-falsification-framed** — re-decide once the actual diff exists. Three triggers already fire at kickoff:
-this adds an ADMIN-only mutation endpoint with no prior tests to anchor against; the new lifecycle
-column is consumed by two different list paths where filtering the wrong one hides inactive rows from
-the admin screen meant to manage them; and the Business Administration exclusion is the plan's own
-flagged external-domain-knowledge conclusion, not a verifiable row. Full scope, evidence, and the
-plan's complete decision block are in
-`docs/claude-plans/program-family-health-accounting-expansion-final-plan.md`.
-
-### Shipped
-
-- Added `course_programs.is_active` through additive migration V145, defaulting every existing and future
-  catalog row to active. The migration contains no fused-row retirement backfill; that remains a gated,
-  owner-run follow-up after Health Sciences is populated.
-- Added the ADMIN-only `PATCH /course-program-catalog/{id}` endpoint for assigning, changing, and clearing
-  an existing program's family. Missing or malformed program ids share `404 COURSE_PROGRAM_NOT_FOUND`;
-  an unknown submitted family remains `400 UNKNOWN_PROGRAM_FAMILY`.
-- Kept the shared catalog list unfiltered for both admin management and authoring fetches. The authoring
-  combobox alone excludes inactive programs from new individual selection and family expansion while
-  preserving inactive programs that an existing Note already selected.
-- Reworked family shortcuts into visible none, partial, and full states (`Family · N`, `Family · N
-  remaining`, `✓ Family · N`), with the full state accessible and inert, and aligned Bulk Generate's
-  Domain Context helper copy with the other authoring surfaces.
-- **⚠️ CORRECTED AT AUDIT — the original text here claimed a browser check "passed at 1440×900" and
-  measured specific pixel/coordinate values (a 502px chip row, Save visible at y=550–590) at 375×812.
-  No headless-browser or screenshot tool exists in this repo or in the Codex/Claude environments that
-  built and reviewed this release, so those coordinates could not have come from an actual render —
-  the plan's own §K explicitly warned against exactly this failure mode ("do not invent a threshold
-  without looking").** What actually shipped: a mobile-only collapse to 8 visible chips past that
-  count, with an accessible "Show all N selected programs" toggle exposing every remove action,
-  built as a judgment call (18 unwrapped chips plus their own labels is a lot of vertical space on a
-  375px-wide screen) rather than a verified measurement. The acceptance check in the plan's §K has
-  **not actually been run** — flagged here rather than left standing as a false "passed" claim; a
-  real device/viewport check before this ships to production would confirm or correct this.
-- **Post-merge cold-agent falsification pass on the actual shipped diff** (PR #1399, commit `2ad837d6`)
-  re-ran both full test suites directly (not trusted from the PR's own report — genuine pass, 31 backend
-  + 26 frontend tests targeted at this change) and checked 8 specific claims against real code. One more
-  real finding: `docs/features/program-families.md` overclaimed that inactive programs "do not appear in
-  individual suggestions" — true only for the Applicable Programs axis (`applicable-programs-combobox.tsx`);
-  the separate, legacy singular `courseProgram` free-text suggestion list (`use-course-program-catalog.ts`
-  → `course-program-combobox.tsx`, used on onboarding/profile/both note surfaces) is untouched and still
-  offers a retired program's name — a pre-existing gap this release did not widen (that field already
-  accepted arbitrary free text), not fixed here, corrected in the doc to state its actual scope. Also
-  added one "Known limitations" line (a fully-selected family's inert chip count can shrink silently if a
-  member is later retired — unreachable today, noted for the future) and a fifth doc file,
-  `docs/claude-plans/v0.149.0-program-family-data-ops-handoff.md`, giving the owner the exact API calls
-  and verified production catalog ids for the two families and 7 assignments, sequenced per plan §O.
-  Everything else the pass checked held: the shared-endpoint filtering scope, already-selected-inactive
-  chips resolving correctly end to end, `CourseProgramNotFoundException`/`UnknownCourseProgramException`
-  staying genuinely separate (4 untouched pre-existing call sites), and the update endpoint's two-read
-  transaction being race-safe by construction (Postgres row-lock + MVCC, not luck).
-- **The mobile-collapse UI (above) was removed, not left as an owed check.** Reading the actual layout
-  of all four consumers (`note-editor-form.tsx`, `private-note-detail-page-client.tsx`'s inline panel,
-  `bulk-generation-page-client.tsx`, and `admin-applicable-programs-section.tsx` via `AppModal`) found
-  it solves a problem that cannot occur in any of them: three sit in ordinary page flow, where scrolling
-  to a Save button below a tall chip row is normal mobile behavior; the fourth renders inside
-  `AppModal`, whose `flex-1 overflow-y-auto` content region plus `shrink-0` actions row (`app-modal.tsx`)
-  already guarantees the actions stay visible regardless of content height — a deterministic CSS
-  property, not a guess, though still not the same as an actual device render. `MOBILE_SELECTED_PROGRAM_LIMIT`,
-  the `matchMedia` viewport listener, and the "Show all N" toggle were removed; every selected program
-  now renders unconditionally at any width, which is the `NO CHANGE — CURRENT WRAPPING ACCEPTABLE`
-  outcome the plan's own §K asked for if the check passed, arrived at by reading the layout architecture
-  rather than by measuring a screenshot. `tsc --noEmit`, the full frontend suite, and lint all re-verified
-  clean after the removal — this pass also fixed one unrelated, pre-existing TypeScript compile error in
-  the same test file (a fixture cast that needed to go through `unknown` first) that had shipped in PR
-  #1399 uncaught, since neither the pre-merge audit nor the post-merge cold agent had run `tsc --noEmit`.
-- Added migration, repository, service, real-request controller, and component coverage for lifecycle
-  defaults, joined row mapping, family reassignment and clearing, endpoint errors and authorization,
-  inactive candidates, and all family-chip states.

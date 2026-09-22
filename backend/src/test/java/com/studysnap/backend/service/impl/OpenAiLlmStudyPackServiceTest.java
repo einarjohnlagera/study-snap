@@ -945,6 +945,125 @@ class OpenAiLlmStudyPackServiceTest {
     }
 
     @Test
+    void studyPackSchema_constrainsAnswerToLetterEnumOrNull() throws Exception {
+        JsonNode schema = objectMapper.readTree(
+                new ClassPathResource("prompts/study-pack-v1/schema.json").getInputStream()
+        );
+
+        JsonNode answerSchema = schema.path("properties").path("quiz").path("items")
+                .path("properties").path("answer");
+        assertThat(answerSchema.path("enum").toString()).isEqualTo("[\"A\",\"B\",\"C\",\"D\",null]");
+    }
+
+    @Test
+    void generateStudyPack_retriesInternallyInconsistentQuickReviewQuestion() throws JsonProcessingException {
+        stubResponsesCall();
+        ObjectNode payload = buildValidStudyPackPayload();
+        ((ArrayNode) payload.get("quiz")).set(0, inconsistentPromptQuizItem("Rejected quick review question"));
+        when(responseSpec.body(String.class)).thenReturn(
+                studyPackResponseJson(payload),
+                generatedQuizResponseJson(consistentReplacementPayload("Quick review replacement"))
+        );
+
+        GeneratedStudyPackContent content = service.generateStudyPack(
+                "Percentage notes",
+                new StudyPackGenerationContext(LearnerLevel.COLLEGE, "Mathematics", "Percentages", List.of())
+        );
+
+        assertThat(content.quiz()).hasSize(5);
+        assertThat(content.quiz().getFirst().question()).isEqualTo("Quick review replacement");
+        verify(responseSpec, times(2)).body(String.class);
+    }
+
+    @Test
+    void generateStudyPack_omitsEveryQuestionWhoseConsistencyRetryAlsoFails() throws JsonProcessingException {
+        stubResponsesCall();
+        ObjectNode payload = buildValidStudyPackPayload();
+        ArrayNode quiz = (ArrayNode) payload.get("quiz");
+        for (int index = 0; index < quiz.size(); index++) {
+            quiz.set(index, inconsistentPromptQuizItem("Rejected quick review question " + index));
+        }
+        String invalidRetry = generatedQuizResponseJson(inconsistentGeneratedQuizPayload("Invalid retry", 1));
+        when(responseSpec.body(String.class)).thenReturn(
+                studyPackResponseJson(payload),
+                invalidRetry,
+                invalidRetry,
+                invalidRetry,
+                invalidRetry,
+                invalidRetry
+        );
+
+        GeneratedStudyPackContent content = service.generateStudyPack(
+                "Percentage notes",
+                new StudyPackGenerationContext(LearnerLevel.COLLEGE, "Mathematics", "Percentages", List.of())
+        );
+
+        assertThat(content.quiz()).isEmpty();
+        verify(responseSpec, times(6)).body(String.class);
+    }
+
+    @Test
+    void generateAdaptivePracticeQuiz_reachesSharedConsistencyGate() throws JsonProcessingException {
+        stubResponsesCall();
+        stubInconsistentQuestionThenReplacement("Adaptive replacement");
+
+        List<QuizItem> result = service.generateAdaptivePracticeQuiz(
+                "Percentages", "Summary", List.of("Percent change"), List.of("Percent change"),
+                List.of(), 1, generationContext()
+        );
+
+        assertThat(result).extracting(QuizItem::question).containsExactly("Adaptive replacement");
+    }
+
+    @Test
+    void generateChallengeQuiz_reachesSharedConsistencyGate() throws JsonProcessingException {
+        stubResponsesCall();
+        stubInconsistentQuestionThenReplacement("Challenge replacement");
+
+        GeneratedChallengeQuizContent result = service.generateChallengeQuiz(
+                "Percentages", "Summary", List.of("Percent change"), List.of(), 1, "medium", generationContext()
+        );
+
+        assertThat(result.quizItems()).extracting(QuizItem::question).containsExactly("Challenge replacement");
+    }
+
+    @Test
+    void generateLongExam_reachesSharedConsistencyGate() throws JsonProcessingException {
+        stubResponsesCall();
+        stubInconsistentQuestionThenReplacement("Long exam replacement");
+
+        List<QuizItem> result = service.generateLongExam(
+                "Percentages", "Summary", List.of("Percent change"), List.of(), 1, "medium", generationContext()
+        );
+
+        assertThat(result).extracting(QuizItem::question).containsExactly("Long exam replacement");
+    }
+
+    @Test
+    void generateBoardExamQuiz_reachesSharedConsistencyGate() throws JsonProcessingException {
+        stubResponsesCall();
+        stubInconsistentQuestionThenReplacement("Board exam replacement");
+
+        List<QuizItem> result = service.generateBoardExamQuiz(
+                "Percentages", "Summary", List.of("Percent change"), List.of(), 1, "medium", generationContext()
+        );
+
+        assertThat(result).extracting(QuizItem::question).containsExactly("Board exam replacement");
+    }
+
+    @Test
+    void generateTeacherQuiz_reachesSharedConsistencyGate() throws JsonProcessingException {
+        stubResponsesCall();
+        stubInconsistentQuestionThenReplacement("Teacher replacement");
+
+        List<QuizItem> result = service.generateTeacherQuiz(
+                "Percentages", "Notes", List.of(), 1, generationContext()
+        );
+
+        assertThat(result).extracting(QuizItem::question).containsExactly("Teacher replacement");
+    }
+
+    @Test
     void generateStudyPack_acceptsSnakeCaseKeyConceptsAlias() throws JsonProcessingException {
         stubResponsesCall();
         ObjectNode payload = buildValidStudyPackPayload();
@@ -1007,6 +1126,47 @@ class OpenAiLlmStudyPackServiceTest {
         assertThat(content.quiz().get(0).questionFormat()).isEqualTo("MCQ");
         assertThat(content.quiz().get(0).questionGroup()).isNull();
         assertThat(content.quiz().get(1).questionGroup()).isNull();
+    }
+
+    @Test
+    void generateStudyPack_demotesMatchingSingletonWithoutGroup() throws JsonProcessingException {
+        stubResponsesCall();
+        ObjectNode payload = buildValidStudyPackPayload();
+        ObjectNode singleton = (ObjectNode) ((ArrayNode) payload.get("quiz")).get(0);
+        singleton.put("questionFormat", "MATCHING");
+        singleton.putNull("questionGroup");
+        when(responseSpec.body(String.class)).thenReturn(studyPackResponseJson(payload));
+
+        GeneratedStudyPackContent content = service.generateStudyPack(
+                "Cell respiration notes",
+                new StudyPackGenerationContext(LearnerLevel.COLLEGE, "Biology", "Biology", List.of())
+        );
+
+        assertThat(content.quiz().getFirst().questionFormat()).isEqualTo("MCQ");
+        assertThat(content.quiz().getFirst().questionGroup()).isNull();
+    }
+
+    @Test
+    void generateLongExam_demotesOversizedMatchingBlockWithDifferingChoices() throws JsonProcessingException {
+        stubResponsesCall();
+        ObjectNode payload = buildGeneratedQuizPayload("Matching", 6);
+        ArrayNode questions = (ArrayNode) payload.get("questions");
+        List<String> sharedChoices = List.of("Choice 1", "Choice 2", "Choice 3", "Choice 4");
+        for (int index = 0; index < questions.size(); index++) {
+            setMatchingItem((ObjectNode) questions.get(index), sharedChoices, "A", "oversized-group");
+        }
+        ((ObjectNode) questions.get(5)).withArray("choices")
+                .set(0, objectMapper.getNodeFactory().textNode("Different 1"));
+        when(responseSpec.body(String.class)).thenReturn(generatedQuizResponseJson(payload));
+
+        List<QuizItem> result = service.generateLongExam(
+                "Matching", "Summary", List.of("Concept"), List.of(), 6, "medium", generationContext()
+        );
+
+        assertThat(result).allSatisfy(item -> {
+            assertThat(item.questionFormat()).isEqualTo("MCQ");
+            assertThat(item.questionGroup()).isNull();
+        });
     }
 
     @Test
@@ -2846,6 +3006,58 @@ class OpenAiLlmStudyPackServiceTest {
             ));
         }
         return payload;
+    }
+
+    private void stubInconsistentQuestionThenReplacement(String replacementQuestion) throws JsonProcessingException {
+        when(responseSpec.body(String.class)).thenReturn(
+                generatedQuizResponseJson(inconsistentGeneratedQuizPayload("Rejected", 1)),
+                generatedQuizResponseJson(consistentReplacementPayload(replacementQuestion))
+        );
+    }
+
+    private ObjectNode inconsistentGeneratedQuizPayload(String prefix, int count) {
+        ObjectNode payload = objectMapper.createObjectNode();
+        ArrayNode questions = payload.putArray("questions");
+        for (int index = 0; index < count; index++) {
+            questions.add(generatedQuizItem(
+                    prefix + " question " + index,
+                    List.of("15%", "30%", "25%", "10%"),
+                    "C",
+                    "The increase is (15 / 50) × 100% = 30%.",
+                    "Percent change " + index
+            ));
+        }
+        return payload;
+    }
+
+    private ObjectNode consistentReplacementPayload(String question) {
+        ObjectNode payload = objectMapper.createObjectNode();
+        payload.putArray("questions").add(generatedQuizItem(
+                question,
+                List.of("15%", "30%", "25%", "10%"),
+                "B",
+                "The increase is (15 / 50) × 100% = 30%.",
+                "Percent change"
+        ));
+        return payload;
+    }
+
+    private ObjectNode inconsistentPromptQuizItem(String question) {
+        return promptQuizItem(
+                question,
+                List.of("15%", "30%", "25%", "10%"),
+                "C",
+                "Percent " + Math.abs(question.hashCode())
+        ).put("explanation", "The increase is (15 / 50) × 100% = 30%.");
+    }
+
+    private StudyPackGenerationContext generationContext() {
+        return new StudyPackGenerationContext(
+                LearnerLevel.COLLEGE,
+                "Mathematics",
+                "Percentages",
+                List.of("percent change")
+        );
     }
 
     private ObjectNode promptQuizItem(String question, List<String> choices, String answer, String concept) {

@@ -64,6 +64,7 @@ If the user cannot access it:
 ## Generation behavior
 
 - Adaptive Practice is LLM-generated
+- generated questions use the shared numeric-answer/explanation internal-consistency gate before construction; an inconsistent question is retried once and omitted if its replacement is still inconsistent
 - page load may recover `GENERATING`, `IN_PROGRESS`, or `FAILED` state
 - page load must not automatically trigger a new generation request
 - new generation starts only from the visible CTA

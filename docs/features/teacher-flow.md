@@ -1,5 +1,10 @@
 # teacher-flow.md - NoteLib Feature Context
 
+Teacher Generate Quiz uses the shared generated-question boundary. Eligible numeric/unit-literal MCQs
+must have a keyed answer that agrees with `explanation + workingSolution`; an inconsistent question is
+retried once and omitted if its replacement is still inconsistent. This is an internal-consistency
+check, not semantic verification of the question.
+
 ## Goal
 
 Teacher Flow is the quiz-authoring path for teachers.

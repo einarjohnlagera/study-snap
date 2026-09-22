@@ -251,7 +251,9 @@ public class QuickReviewAdaptivePracticeService {
                 generatedQuiz,
                 QuizDeduplicationUtils.toNormalizedQuestionSetFromStrings(disallowedQuestions)
             );
-            if (adaptiveQuiz.size() != questionCount) {
+            // A consistency-rejected question may be omitted after one failed replacement. A
+            // deduplication loss is still an invalid response; an intentional short LLM result is not.
+            if (adaptiveQuiz.size() != generatedQuiz.size() || adaptiveQuiz.size() > questionCount) {
                 throw new AppException(
                     ADAPTIVE_GENERATION_FAILED_CODE,
                     ADAPTIVE_GENERATION_FAILED_DETAIL,
@@ -461,7 +463,7 @@ public class QuickReviewAdaptivePracticeService {
         session = quickReviewSessionRepository.save(session);
         try {
             List<QuizItem> quiz = generateCollectionQuiz(userId, sampled, focusEntries, questionCount);
-            if (quiz.size() != questionCount) {
+            if (quiz.size() > questionCount) {
                 throw new AppException(ADAPTIVE_GENERATION_FAILED_CODE, ADAPTIVE_GENERATION_FAILED_DETAIL,
                         HttpStatus.BAD_GATEWAY);
             }

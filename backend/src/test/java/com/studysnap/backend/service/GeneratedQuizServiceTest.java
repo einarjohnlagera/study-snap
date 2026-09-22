@@ -273,6 +273,31 @@ class GeneratedQuizServiceTest {
     }
 
     @Test
+    void generate_persistsActualCountWhenConsistencyGateOmitsOneQuestion() {
+        UUID userId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        NoteEntity note = buildNote(noteId, userId);
+        when(noteRepository.findByIdAndOwnerUserId(noteId, userId)).thenReturn(Optional.of(note));
+        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.PLUS);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(buildUser(userId, UserRole.USER, ProfileType.STUDENT)));
+        when(userUsageService.getMonthlyUsage(eq(userId), any(OffsetDateTime.class))).thenReturn(
+                new UserUsageService.MonthlyUsage(OffsetDateTime.now().minusDays(1), OffsetDateTime.now().plusDays(29), 0, 0, 0, 0, 0, 0)
+        );
+        when(generationContextResolver.resolve(userId, note)).thenReturn(
+                new StudyPackGenerationContext(null, "Biology", "Biology", List.of("cells"))
+        );
+        when(quizGenerationService.generateTeacherQuiz(any(), any(), any(), eq(10), any(StudyPackGenerationContext.class)))
+                .thenReturn(buildQuestions(9));
+        when(generatedQuizRepository.save(any(GeneratedQuizEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(noteRepository.save(any(NoteEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        GeneratedQuizResponse response = generatedQuizService.generate(noteId.toString(), userId, null);
+
+        assertThat(response.questions()).hasSize(9);
+        verify(userUsageService).incrementChallengeQuizGeneration(eq(userId), any(OffsetDateTime.class));
+    }
+
+    @Test
     void generate_stillServesANonTeacherWhoRequestsTheDefaultCountExplicitly() {
         UUID userId = UUID.randomUUID();
         UUID noteId = UUID.randomUUID();

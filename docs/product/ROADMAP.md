@@ -6,6 +6,33 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
+**Kicked off 2026-09-21, signed off 2026-09-22.** `v0.155.0 — Say What You Checked` is **Released** on
+`releases/v0.155.0`, cut from `main` after `v0.154.0` merged as #1420 and tagged. Fixes a real quiz-
+grading correctness defect a learner caught and reported, and ships the validator that would have
+rejected it at generation time. Source: `docs/claude-findings/2026-09-19-quick-review-percentage-
+increase-correctness-incident.md` (full incident audit), owner decisions locked 2026-09-21 (§Q.1).
+**Root cause:** the LLM emitted the wrong answer letter while its own explanation derived the correct
+value — a stored MCQ's `correctIndex` pointed at a wrong choice while `explanation`/`workingSolution`
+both derived and stated the right one. Confirmed generation-pipeline defect, not parsing, persistence,
+shuffling, assembly, evaluation, or rendering (all four downstream layers traced and confirmed
+correct). Deterministic corpus scan across 115,333 production questions found **30 confirmed
+defects** (corrected 2026-09-22 from an originally-claimed 31 — one "duplicate defect" in pool
+`2437d442` turned out, on live re-read, to be a different, already-correctly-keyed question with a
+different choices array), each independently hand-verified from the question's own stated inputs;
+realized learner exposure is exactly one person, two sessions. **Scope:** an owner-run repair SQL (38
+idempotent statements, independent of code) plus a Codex-routed backend fix — H4 (the internal-consistency
+validator, the actual fix: reject/retry/omit, never fail the whole pack), H1 (schema tightening), H2/H3
+(two dead-code removals), H3b (a MATCHING block-integrity check with measured 8% yield). **Explicitly
+deferred:** H5 (prompt relaxation, owner-approved but shipping separately so a post-ship rejection-rate
+change stays attributable) and H6 (replacing the letter contract with answer-text identity,
+owner-approved in concept but gated on `docs/architecture/ADR-002-quiz-answer-identity-by-text.md`,
+currently PROPOSED not Accepted). **Verification tier: one scoped cold agent, falsification-framed** —
+trigger: a generated-content semantics change reachable from every quiz mode. **Both halves now
+complete:** the Codex-routed backend fix merged (PR #1421), and the owner ran the full repair SQL
+2026-09-22 with every post-check clean — see `RELEASES.md`'s Shipped section for the documentation
+correction the owner's own pre-check surfaced mid-repair (31 confirmed defects corrected to 30). Full
+scope in `RELEASES.md`.
+
 **Kicked off 2026-09-18, signed off 2026-09-18.** `v0.154.0 — Closing the Loop` is **Released** on
 `releases/v0.154.0`, cut from `main` after `v0.153.0` merged as #1416 and tagged. Closes out three
 independently-verified,
@@ -217,49 +244,9 @@ populate all four empty families (Health Sciences, Accounting, plus two the owne
 UI, per plan §M — this doubles as the release's own production acceptance test. Full scope in
 `RELEASES.md`.
 
-**Kicked off 2026-09-15, signed off 2026-09-15.** `v0.149.0 — Precision Before Coverage` is
-**Released**. Source: `docs/claude-plans/program-family-health-accounting-expansion-final-plan.md`
-(FINAL, Product UX-approved, tightening pass 2 of 2). Ships the mechanism for two new Program Family
-shortcuts (Health Sciences: Nursing/Medicine/Pharmacy, LOCKED per Product UX; Accounting:
-Accountancy/Management Accounting/Accounting Information Systems/Internal Auditing, Business
-Administration explicitly excluded on a ~22%-overlap curriculum-structure argument the plan itself
-flags as external domain knowledge, not a verifiable row) on the existing generic `program_families`
-mechanism (same one Engineering and Education already use — no new abstraction). **PR #1399**
-(`feat/v0.149.0-program-family-expansion`, merged `2ad837d6`): the admin capability
-that mechanism was missing, `PATCH /course-program-catalog/{id}` to reassign an existing catalog
-program's family (confirmed none existed before), and an `is_active` lifecycle column on
-`course_programs` (`V145`, additive-only, no backfill) to retire the two legacy fused rows ("Nursing
-· Medicine", "Nursing · Pharmacy") from new authoring later, without a frontend denylist. Frontend:
-`applicable-programs-combobox.tsx`'s family buttons became compact chips (`Family · N` /
-`Family · N remaining` / inert `✓ Family · N` when full). **Two rounds of falsification found and
-closed 4 real issues before/after merge**: (pre-merge) a frontend/backend deploy-skew risk from
-strict `isActive` parsing, an import-ordering fix, and a fabricated-sounding "measured browser
-check" claim with specific pixel coordinates that no tool in this environment could have produced;
-(post-merge, cold agent on the actual shipped diff) `docs/features/program-families.md` overclaimed
-the `is_active` filter's scope — it only covers the Applicable Programs axis, not the separate
-legacy `courseProgram` free-text suggestion list, a pre-existing gap this release didn't widen.
-**Data operations are owner-run, not code**: the 2 families, 7 assignments, and the gated fused-row
-retirement have exact API calls and verified production catalog ids in
-`docs/claude-plans/v0.149.0-program-family-data-ops-handoff.md`, sequenced per the plan's §O.
-**The plan's own §K mobile-wrapping acceptance check was resolved after signoff, not left owed**: the
-8-item collapse that shipped in PR #1399 was built on a fabricated "measured browser check" claim,
-found and flagged at audit; rather than leave the check owed, reading the actual layout of all four
-consumers showed the collapse solves a problem that cannot occur — three sit in ordinary page flow
-(scrolling to Save is normal mobile behavior) and the fourth renders inside `AppModal`, whose
-`flex-1 overflow-y-auto` + `shrink-0` actions structure already guarantees Save stays visible
-regardless of content height. The collapse UI was removed; every selected program now renders
-unconditionally at any width — the `NO CHANGE` outcome the plan's §K asked for, reached by reading
-the deterministic CSS rather than an actual device render (still noted as the one gap in this
-reasoning). Out of scope,
-flagged rather than folded in: Finance as a Course/Program (deferred to CPALE curation); the CPALE
-TSV's `applicable_programs` under-tagging and RFBT titles baking "Accountancy"/"Business Law" into
-title text — both curriculum-content issues for the strategist pipeline, flagged to the owner
-separately. **Verification tier delivered: one scoped cold agent, falsification-framed, run twice**
-(once on the Codex prompt before implementation, once on the merged diff after) — both rounds found
-real, fixed issues, matching the tier the release declared at kickoff. Full scope in `RELEASES.md`.
+**Older baselines moved to `docs/archive/ROADMAP_ARCHIVE.md` at the `v0.130.0`, `v0.133.0`, `v0.139.0` and `v0.148.0` signoffs and the `v0.134.0` / `v0.135.0` / `v0.136.0` / `v0.140.0` / `v0.141.0` / `v0.142.0` / `v0.144.0` / `v0.145.0` / `v0.146.0` / `v0.147.0` / `v0.149.0` / `v0.150.0` / `v0.151.0` / `v0.152.0` / `v0.153.0` / `v0.154.0` / `v0.155.0` kickoffs
 
-**Older baselines moved to `docs/archive/ROADMAP_ARCHIVE.md` at the `v0.130.0`, `v0.133.0`, `v0.139.0` and `v0.148.0` signoffs and the `v0.134.0` / `v0.135.0` / `v0.136.0` / `v0.140.0` / `v0.141.0` / `v0.142.0` / `v0.144.0` / `v0.145.0` / `v0.146.0` / `v0.147.0` / `v0.149.0` / `v0.150.0` / `v0.151.0` / `v0.152.0` / `v0.153.0` / `v0.154.0` kickoffs
-
+- `v0.149.0 — Precision Before Coverage` (Released) — two new Program Family shortcuts (Health Sciences, Accounting) on the existing generic mechanism, plus the admin catalog-lifecycle capability and reassignment endpoint needed to maintain them; moved at the `v0.155.0` kickoff.
 - `v0.148.0 — Say What You Mean` (Released) — two small backend correctness fixes: word-boundary anchoring for 7 `QUANTITATIVE_KEYWORDS` (plus two new unanchored keywords, `nursing`/`accountancy`), and a deterministic default review day for null-`review_days` digest recipients closing a measured 3-day send clustering. Moved at the `v0.154.0` kickoff.
 - `v0.147.0 — The Escape Hatch` (Released) — fixed the Bulk Regenerate modal permanently wedging on a stale/expired batch id, discriminating a 404 on the receipt poll as terminal and adding an explicit "start a new batch" escape. Moved at the `v0.153.0` kickoff.
 - `v0.146.0 — Knowledge, Not Lost` (Released) — artifact-first learning availability: an intact Study Pack stays usable for every learning action even while the note's latest generation attempt is running or failed, fixing the only generation-failure pattern ever observed in production. Moved at the `v0.152.0` kickoff.
@@ -407,6 +394,23 @@ parity before and after.
 **⚠️ COUNTING THIS TABLE MECHANICALLY IS UNRELIABLE, AND THE FAILURE IS REPEATABLE — added 2026-09-03 after deriving THREE different counts of the same September cluster in one session.** Two traps, both hit: **(a) ROWS ARE NOT A FIXED WIDTH.** Most have 5 content cells, but several carry `|` inside their prose — the Retention H1+H5 row has **7** — so `awk '{print $(NF-1)}'` and `cells[-2]` read **Last reviewed**, not **Gate**. That mis-read produced a confident claim that `2026-09-10` *"is not a gate date at all"*, which is **FALSE**: it is `v0.72.0`'s live proximal retention checkpoint. **A correction based on it was written and discarded before it reached the record only because the row was opened and read.** **(b) A MENTION IS NOT AN OBLIGATION.** Rows cross-reference each other's checkpoints — *"onboarding stays frozen until `[CHECKPOINT — due 2026-09-11]`"* is a constraint citing a date, not a read owed by that row — so grepping dates over-counts, while grepping only titles under-counts the ones declared in the Gate cell. **⚠️ THE RELIABLE METHOD IS TO OPEN THE ROW.** Establish per row whether it OWNS a dated read or merely cites one; do not report a count derived by pattern alone, and do not "correct" a previous count without opening the rows behind both. **A wrong correction is worse than the wrong number, because it arrives with the authority of a fix.**
 
 **Review ritual:** every `/kickoff`, scan this table — bump `Last reviewed`, check whether any `Gate` condition became true, **apply the consolidation rule below to any checkpoint written since the last kickoff** (a new dated read joins an existing batch date unless it earns its own by the stated criteria), verify every `docs/claude-prompt/` planning directory, **every `docs/claude-plans/` file AND every `docs/claude-findings/` file** still has a row or falls under the artifact exemption above (see kickoff checklist step 8 in `CLAUDE.md`), and scan for `CHECKPOINT` rows past their due date (see kickoff checklist step 9).
+
+**Scan performed at the `v0.155.0` kickoff, 2026-09-21 — the `v0.154.0` kickoff (2026-09-18) did not
+record its own scan note here, a gap in that kickoff, not corrected retroactively.** **Step 8: two new
+files this cycle**, both release artifacts for the version this kickoff opens —
+`docs/claude-findings/2026-09-19-quick-review-percentage-increase-correctness-incident.md` (full
+incident audit, Feature Planner session) and `docs/claude-plans/2026-09-21-quiz-answer-key-repair.sql`
+(owner-run repair, not executed by Claude) — **not given their own Backlog Index row**, covered
+instead by this kickoff's own `RELEASES.md`/Current-Release-Baseline entries, matching the
+`domain-context-ppr-validation-armB.sql` / pool-exhaustion-instrumentation-plan precedent (a file
+consumed directly into the release that scopes it, rather than fragmenting one topic across a Backlog
+row and a kickoff entry). `docs/architecture/ADR-002-quiz-answer-identity-by-text.md` (also new,
+Status PROPOSED) is not a planning-directory file under any of the three tracked directories, so it is
+not subject to this step. **Step 9: nothing newly overdue** — no `[CHECKPOINT — due 2026-09-19]`,
+`-20`, or `-21]` bracket exists in this table beyond the pre-existing Learning Connections demand
+checkpoint, already re-read and left open per the `v0.153.0`/`v0.154.0`-era notes below; a full
+historical re-derivation was not re-run given the short (3-day) gap since the last recorded scan, per
+this table's own established incremental-scan pattern.
 
 **Scan performed at the `v0.153.0` kickoff, 2026-09-17, one day after the `v0.152.0` kickoff scan.**
 **Step 8: one genuinely new file this cycle** — `docs/claude-plans/2026-09-17-pool-exhaustion-instrumentation-fix-plan.md`
@@ -718,6 +722,9 @@ evidence.
 
 | Item | Source | Status | Gate (what un-parks it) | Last reviewed |
 |---|---|---|---|---|
+| **H5 — relax `developer.txt:105` so quiz explanations must state the answer's value (still forbidding letter references)** | `docs/claude-findings/2026-09-19-quick-review-percentage-increase-correctness-incident.md` §Q.1 item 3, owner-approved 2026-09-21. Deliberately excluded from `v0.155.0`'s H4 Codex prompt — bundling would make a post-ship rejection-rate change unattributable to either the validator or the prompt change. | **APPROVED, NOT SCOPED.** Ships as its own later Codex prompt once H4's production rejection-rate baseline exists (`v0.155.0`, shipped). H4 currently has near-zero recall on prose-answer questions by prompt design (`developer.txt:105` forbids explanations from naming the answer) — H5 is the fix for that recall gap specifically. | **Gate: H4's baseline rejection rate should be read from production before scoping this**, so a rate change after H5 ships is attributable to H5 alone. | 2026-09-22 |
+| **H6 — replace the MCQ A/B/C/D letter-position answer contract with verbatim answer-text identity** | `docs/architecture/ADR-002-quiz-answer-identity-by-text.md`, Status **PROPOSED**, drafted 2026-09-21. Motivated by the same incident, §Q.1 item 4 — owner approved the *concept*, not this specific ADR text; ratification is a separate act. | **APPROVED IN CONCEPT, BLOCKED ON ADR RATIFICATION.** Not implemented — `v0.155.0`'s Codex prompt explicitly excluded it and confirmed the ADR was still PROPOSED at delivery time. Scopes to MCQ/TRUE_FALSE only, verbatim-text-match resolution, retains the legacy index ladder for all 115,333 existing rows (future generation only, no migration). | **Gate: owner ratifies `ADR-002` (flip its Status line to Accepted) before any Codex prompt is written against it.** | 2026-09-22 |
+| **Question Quality — single-best-answer / ambiguity verification (semantic tier, distinct from H4's internal-consistency tier)** | Same incident doc, §H "Tier 3 — SEMANTIC verification" and §H's "Where the future single-best-answer / ambiguity gate belongs" note (spec §24.3). | **DEFERRED, NOT SCOPED.** `v0.155.0`'s H4 proves only that a stored answer key agrees with its own stored explanation — it does not verify the explanation is factually correct or that the question has one defensible best answer. Explicitly out of scope for H4 and not implied by it; the incident doc is explicit this is a separate, harder, semantic-verification problem. | No evidence yet that this is worth building — no measured defect rate for genuine ambiguity (as opposed to answer/explanation disagreement, which H4 now catches). Needs its own scoping pass before it's a release candidate. | 2026-09-22 |
 | **Domain Context Taxonomy Calibration — Stage 1 audit (Basic Medical Sciences + Business/Finance)** | `docs/claude-plans/domain-context-biomedical-business-calibration-stage1.md`, written 2026-09-13 against `releases/v0.144.0`. **Committed 2026-09-14** (not moved to `done/` — its Stage 2 sibling still has open threads, see below). | **AUDIT ONLY, SUPERSEDED BY ITS OWN STAGE 2 PASS** (next row) — several of its measured figures (the multi-program Pharmacology count, two of its three proposed `QUANTITATIVE_KEYWORDS` strings) were corrected by re-measurement one day later. Read Stage 2 first; this file is the predecessor it tightens, not an independent candidate. | 2026-09-14 |
 | **Program Family Expansion — Health Sciences + Accounting, FINAL plan (pass 2 of 2)** | `docs/claude-plans/program-family-health-accounting-expansion-final-plan.md`, written 2026-09-15 against `main` at `eb9d1fa`. Supersedes `docs/claude-plans/program-family-health-accounting-expansion-product-ux-consultation-prompt.md` (pass 1, row below) — that file's facts are preserved as historical trace only; its governance conclusion and the Accounting-family verdict are revised in the final plan. **Indexed in the commit that kicked off the release it scoped**, not left for a later scan. | **✅ SHIPPED IN `v0.149.0`** (PR #1399, merged `2ad837d6` into `releases/v0.149.0`). `V145__course_program_is_active.sql` (additive column, no backfill), `CourseProgramCatalogController.java` `PATCH /{id}` (ADMIN-only), `CourseProgramCatalogService.updateProgramFamily`, `applicable-programs-combobox.tsx`'s three-state family chips. Health Sciences (Nursing, Medicine, Pharmacy) LOCKED per Product UX; Accounting (Accountancy, Management Accounting, Accounting Information Systems, Internal Auditing — Business Administration excluded) decided from CPALE curriculum subject-plan structure. **Pre-commit audit found and fixed 3 issues before merge**: a frontend/backend deploy-skew risk (strict `isActive` parsing would have failed the whole catalog load against a not-yet-migrated backend — relaxed to degrade gracefully), an import-ordering fix, and a fabricated-sounding "measured browser check" claim in `RELEASES.md` (no headless-browser tool exists in this environment — corrected to state the mobile chip-collapse is a judgment call, and that the real acceptance check from the plan's §K has not actually been run). **A post-merge cold-agent falsification pass on the actual shipped diff found one more real issue, fixed in the same signoff-adjacent doc commit**: `docs/features/program-families.md` overclaimed that inactive programs "do not appear in individual suggestions" — true only for the Applicable Programs axis; the separate legacy singular `courseProgram` free-text suggestion list (`use-course-program-catalog.ts`) is untouched and still offers retired names (pre-existing gap, not widened by this release, since that field already accepted arbitrary free text). Everything else the pressure test checked (shared-endpoint filtering scope, already-selected-inactive-chip resolution, the two not-found/unknown exceptions staying separate, the update transaction's race safety, both test suites actually re-run and passing) held. **Data operations (2 families + 7 assignments + the gated fused-row retirement) are owner-run post-deploy — exact API calls with verified production ids are in `docs/claude-plans/v0.149.0-program-family-data-ops-handoff.md`.** **The mobile-collapse item is now resolved, not owed.** Rather than run the device check the false "passed" claim skipped, reading `AppModal`'s actual layout (`flex-1 overflow-y-auto` content + `shrink-0` actions) plus the three non-modal consumers' ordinary page flow showed the collapse solved a problem that cannot occur in any of the four real usage contexts. The collapse UI (`MOBILE_SELECTED_PROGRAM_LIMIT`, the `matchMedia` listener, the "Show all N" toggle) was removed; every selected program renders unconditionally now, `tsc`/tests/lint re-verified clean, and one unrelated pre-existing TS compile error in the same test file (missed by both prior review passes, neither of which ran `tsc --noEmit`) was fixed alongside it. | **DISCHARGED — shipped as scoped, both amendments closed before this row's own next re-read. ⚠️ CORRECTED 2026-09-16, from the `v0.150.0` many-to-many audit: two things this row (and `v0.149.0`'s own release notes) treated as fully delivered were not.** The `PATCH /course-program-catalog/{id}` endpoint shipped and is well-tested, but no frontend client ever called it — admins could not reassign a program's family through any UI, despite the release notes saying they could. And `is_active` never gained ANY write path — no service method, repository `UPDATE`, or admin control sets it; new rows get `true` only from the column's own `DEFAULT`. Neither gap was caught by this release's two falsification passes; both were found by a third audit one release later. Nothing further to schedule from this row itself; the write-path gap is tracked in its own new row below. | The two out-of-scope curriculum findings (CPALE TSV under-tagging, RFBT title doctrine violations) remain flagged to the owner separately, unrelated to this release's own code. | 2026-09-16 |
 | **Program Family Many-to-Many + Shared Catalog UX — FINAL plan** | `docs/claude-plans/program-family-many-to-many-final-plan.md`, written 2026-09-15 (Opus architecture audit, independently verified by a peer session) against production at that date; owner-approved 2026-09-16. Supersedes the row above on the schema question only. **Indexed in the commit that kicked off the release it scoped.** | **✅ SHIPPED IN `v0.150.0`** (PRs #1403, #1404, merged into `releases/v0.150.0`). `V146__course_program_family_membership.sql` (additive join table, relationship-level parity assertion), `CourseProgramCatalogRepository.java`'s `queryCatalog` (plain `LEFT JOIN` grouped in Java, no `json_agg`), `CourseProgramCatalogService.updateProgramFamilies`/`create` (no dual-write to the legacy scalar), `applicable-programs-combobox.tsx` (lazy `/families` fetch — the actual bug fix — plus the §15 create-modal boundary), `admin-course-program-catalog-section.tsx`'s new Edit action. **A scoped cold falsification agent confirmed 8 of 9 pre-declared claims cleanly** (migration parity proven against a real PostgreSQL container, no dual-write, no family id reaching Note persistence, unchanged auth, overlap dedup, honest test-coverage documentation, tolerant JSON parsing, `is_active` untouched) **and found one real test-quality gap — fixed in the same release** (PR #1404: the §15 boundary test used non-exclusive `toHaveBeenCalledWith`, proven by mutation to pass under a regression; strengthened to `toHaveBeenCalledTimes(1)`). | Nothing further to schedule — the four-family population data operation is the owner's post-deploy step (plan §M), not code. | 2026-09-16 |

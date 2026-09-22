@@ -340,6 +340,35 @@ class QuickReviewAdaptivePracticeServiceTest {
     }
 
     @Test
+    void generateAdaptiveQuiz_usesActualCountWhenConsistencyGateOmitsOneQuestion() {
+        UUID userId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        StudyPackEntity studyPack = buildStudyPack(studyPackId, noteId, userId);
+        studyPack.setKeyConcepts(List.of("Old Concept"));
+        QuickReviewSessionEntity latestQuickReview = buildCompletedSourceSession(
+                userId, studyPackId, noteId, List.of()
+        );
+        stubAdaptiveGeneration(
+                userId,
+                studyPackId,
+                studyPack,
+                latestQuickReview,
+                buildGeneratedQuiz("Old Concept", 4)
+        );
+        when(conceptHealthService.getDueConcepts(eq(userId), eq(studyPackId), eq(List.of("Old Concept")), any(OffsetDateTime.class)))
+                .thenReturn(List.of("Old Concept"));
+
+        QuickReviewAdaptiveQuizResponse response = adaptivePracticeService.generateAdaptiveQuiz(
+                studyPackId.toString(), userId
+        );
+
+        assertThat(response.status()).isEqualTo(QuickReviewSessionStatus.IN_PROGRESS);
+        assertThat(response.quiz()).hasSize(4);
+        verify(userUsageService).incrementAdaptiveQuizGeneration(eq(userId), any(OffsetDateTime.class));
+    }
+
+    @Test
     void generateAdaptiveQuiz_recordsKnownEntryInStartedAnalytics() {
         Map<String, Object> metadata = generateAndCaptureAnalyticsMetadata(DASHBOARD_TODAY_FOCUS_ENTRY);
 

@@ -91,6 +91,7 @@ Study Plan / Review Set detail resolves on both profile and plan: Free and Plus 
 ## Generation and session behavior
 
 - Challenge Quiz is LLM-generated
+- Challenge Quiz questions use the shared numeric-answer/explanation internal-consistency gate before construction; an inconsistent question is retried once and omitted if its replacement is still inconsistent
 - start flow must be idempotent
 - an existing `GENERATING` or non-expired `IN_PROGRESS` session is reused instead of creating duplicates; expired in-progress Challenge Quiz and Board Exam sessions are auto-forfeited before a new start can proceed, and expired Challenge Quiz cleanup releases its bank claims
 - when the mode-selection entry (`?entry=mode-selection`) finds a live in-progress Challenge Quiz or Board Exam session, it offers **Resume** or **Start Fresh** rather than silently discarding progress; expired sessions return to a clean prestart and are never resumed into an immediate timeout. The note detail Challenge Quiz card and collection/Review Set premium-exam launch both add this entry marker, so their explicit "start" intent gets the same choice. This prompt is forced onto the mode-selection step even for profiles (Teacher) whose initial step otherwise skips it, so a live session is never silently re-entered without the choice (v0.60.1, collection launch aligned in v0.60.2). Direct/bookmarked URLs, page refresh, and Dashboard's Continue widget still auto-resume a live non-expired session with no prompt by design — that is deliberate "continue where you left off" behavior.
