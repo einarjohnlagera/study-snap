@@ -7,6 +7,7 @@ import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -47,6 +48,17 @@ class RetentionEmailSchedulerTest {
         InOrder order = inOrder(retentionService);
         order.verify(retentionService).sendDueConceptsDigestEmails();
         order.verify(retentionService).sendDailyEmails();
+    }
+
+    @Test
+    void runDaily_digestFailureDoesNotCancelInactivityAndWeakConceptForTheDay() {
+        when(retentionService.sendDueConceptsDigestEmails()).thenThrow(new IllegalStateException("boom"));
+        when(retentionService.sendDailyEmails()).thenReturn(dailySummary());
+        RetentionEmailScheduler scheduler = new RetentionEmailScheduler(retentionService);
+
+        assertThatCode(scheduler::runDaily).doesNotThrowAnyException();
+
+        verify(retentionService).sendDailyEmails();
     }
 
     @Test

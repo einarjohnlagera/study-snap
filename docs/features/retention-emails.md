@@ -80,7 +80,7 @@ Sent emails are tracked in `email_log`:
 - `user_id`
 - `email_type`
 - `sent_at`
-- `clicked_at` (nullable; the first verified `email.clicked` event correlated through the CTA's `e` parameter)
+- `clicked_at` (nullable; the first `email.clicked` event PROCESSED for that row, correlated through the CTA's `e` parameter — under concurrent or out-of-order webhook deliveries that is the first processed, not necessarily the earliest)
 
 The log prevents same-type reminders from being sent again before cooldown expires.
 
@@ -88,23 +88,31 @@ The log prevents same-type reminders from being sent again before cooldown expir
 Opens deliberately have no `email_log` foreign key: NoteLib does not persist Resend message ids, and
 open tracking is directional only. Click webhooks read the original URL from `data.click.link` and the
 click time from `data.click.timestamp`; open aggregation uses the webhook's top-level `created_at`.
+**The open counter is not retention-specific:** Resend sends `email.opened` for every message on the account,
+so verification, password-reset and retention opens all land in the same UTC-day count. Treat it as a
+directional whole-account signal only. A click whose timestamp is not ISO-8601 is logged and skipped, never
+thrown (Resend retries any 5xx).
 
 ## Scheduler
 
 `RetentionEmailScheduler` runs:
 
-- daily for inactivity, weak concept reminders, and the due-concepts digest
+- daily for the due-concepts digest, weak concept reminders, and inactivity — in that order (order is
+  budget priority, see Email Delivery); a failure in the digest is logged and does not cancel the rest
 - weekly for the weekly study summary
+- monthly for the knowledge-impact digest
 
 Default cron:
 
-- `0 45 2 * * *`
-- `0 0 18 * * SUN`
+- `0 45 2 * * *` (Asia/Manila)
+- `0 0 18 * * SUN` (Asia/Manila)
+- `0 0 9 1 * *` (NOT zone-pinned: host zone, unlike the other two — tracked in the ROADMAP Backlog Index)
 
 Configured under:
 
 - `studysnap.retention.daily-cron`
 - `studysnap.retention.weekly-cron`
+- `studysnap.retention.knowledge-impact-digest-monthly-cron`
 
 ## Email Delivery
 

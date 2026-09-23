@@ -148,6 +148,45 @@ class ResendWebhookServiceTest {
     }
 
     @Test
+    void handleWebhook_clickedWithNonIsoTimestampIsLoggedAndSkippedNotThrown(CapturedOutput output) {
+        UUID emailLogId = UUID.fromString("0d5a3c58-4c0e-4a5b-9d61-3f0b2f4b9a10");
+        String payload = """
+                {"type":"email.clicked","data":{"click":{
+                  "link":"https://www.notelib.app/dashboard?source=inactivity&e=%s",
+                  "timestamp":"1732424457"
+                }}}
+                """.formatted(emailLogId).trim();
+
+        assertThatCode(() -> handle(payload)).doesNotThrowAnyException();
+
+        assertThat(output).contains("email.resend.webhook.click malformedPayload");
+        verify(emailLogRepository, never()).findById(any(UUID.class));
+        verify(emailLogRepository, never()).save(any(EmailLogEntity.class));
+    }
+
+    @Test
+    void handleWebhook_secondClickKeepsTheFirstRecordedClickTime() {
+        UUID emailLogId = UUID.fromString("5f2c1c9e-2f0e-4f6b-8f0a-7b1d2c3e4a55");
+        EmailLogEntity emailLog = new EmailLogEntity();
+        emailLog.setId(emailLogId);
+        emailLog.setEmailType(RetentionEmailType.INACTIVITY);
+        OffsetDateTime first = OffsetDateTime.parse("2026-09-23T02:00:00Z");
+        emailLog.setClickedAt(first);
+        when(emailLogRepository.findById(emailLogId)).thenReturn(Optional.of(emailLog));
+        String payload = """
+                {"type":"email.clicked","data":{"click":{
+                  "link":"https://www.notelib.app/dashboard?source=inactivity&e=%s",
+                  "timestamp":"2026-09-24T09:00:00Z"
+                }}}
+                """.formatted(emailLogId).trim();
+
+        handle(payload);
+
+        assertThat(emailLog.getClickedAt()).isEqualTo(first);
+        verify(emailLogRepository, never()).save(any(EmailLogEntity.class));
+    }
+
+    @Test
     void handleWebhook_openedIncrementsOnlyTheAggregateDay() {
         String payload = """
                 {"type":"email.opened","created_at":"2026-09-23T23:41:12.126Z","data":{

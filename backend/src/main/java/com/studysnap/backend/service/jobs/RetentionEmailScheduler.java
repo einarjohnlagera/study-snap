@@ -30,16 +30,24 @@ public class RetentionEmailScheduler {
     public void runDaily() {
         // Order IS priority: all retention types draw on one daily budget, and INACTIVITY alone saturates it
         // (60/day observed), so the engaged-learner digest must claim its share before INACTIVITY runs.
-        RetentionService.RetentionDispatchResult dueConceptsDigest = retentionService.sendDueConceptsDigestEmails();
+        // Running it first must not let its failure cancel INACTIVITY and WEAK_CONCEPT for the day.
+        RetentionService.RetentionDispatchResult dueConceptsDigest = null;
+        try {
+            dueConceptsDigest = retentionService.sendDueConceptsDigestEmails();
+        } catch (RuntimeException ex) {
+            log.error("retention.email.scheduler.daily dueConceptsDigest failed; continuing with the rest", ex);
+        }
         RetentionService.DailyRetentionDispatchSummary summary = retentionService.sendDailyEmails();
-        log.info(
-                "retention.email.scheduler.daily dueConceptsDigest={} budget={} sentToday={} attempted={} skippedForBudget={}",
-                dueConceptsDigest.sent(),
-                dueConceptsDigest.budget(),
-                dueConceptsDigest.sentToday(),
-                dueConceptsDigest.attempted(),
-                dueConceptsDigest.skippedForBudget()
-        );
+        if (dueConceptsDigest != null) {
+            log.info(
+                    "retention.email.scheduler.daily dueConceptsDigest={} budget={} sentToday={} attempted={} skippedForBudget={}",
+                    dueConceptsDigest.sent(),
+                    dueConceptsDigest.budget(),
+                    dueConceptsDigest.sentToday(),
+                    dueConceptsDigest.attempted(),
+                    dueConceptsDigest.skippedForBudget()
+            );
+        }
         log.info(
                 "retention.email.scheduler.daily sent inactivity={} weakConcept={} inactivityBudget={} inactivitySentToday={} inactivityAttempted={} inactivitySkippedForBudget={} weakConceptBudget={} weakConceptSentToday={} weakConceptAttempted={} weakConceptSkippedForBudget={}",
                 summary.inactivitySent(),

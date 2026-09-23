@@ -5,6 +5,8 @@ import org.springframework.core.task.AsyncTaskExecutor;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
@@ -165,6 +167,54 @@ class AppConfigTest {
             assertThat(registry.snapshot()).isEmpty();
         } finally {
             executor.shutdown();
+        }
+    }
+
+    @Test
+    void everyDbTouchingExecutorIsDecoratedAndTheLlmFanOutExecutorIsNot() throws Exception {
+        InFlightRequestRegistry registry = new InFlightRequestRegistry();
+        InFlightThreadRegisteringTaskDecorator decorator = taskDecorator(registry);
+        AppConfig config = new AppConfig();
+        Map<String, ThreadPoolTaskExecutor> decorated = Map.of(
+                "study-pack-generation-", asThreadPool(config.studyPackGenerationTaskExecutor(decorator)),
+                "bulk-regeneration-", asThreadPool(config.bulkRegenerationTaskExecutor(decorator)),
+                "notification-fan-out-", (ThreadPoolTaskExecutor) config.notificationFanOutExecutor(decorator),
+                "analytics-", (ThreadPoolTaskExecutor) config.analyticsTaskExecutor(decorator)
+        );
+        ThreadPoolTaskExecutor llmParallel = asThreadPool(config.llmParallelTaskExecutor());
+
+        try {
+            for (Map.Entry<String, ThreadPoolTaskExecutor> entry : decorated.entrySet()) {
+                assertThat(pathsWhileRunning(entry.getValue(), registry))
+                        .as(entry.getKey())
+                        .singleElement()
+                        .asString()
+                        .startsWith(entry.getKey());
+            }
+            // Holds no DB connection, so registering it would only add registry churn.
+            assertThat(pathsWhileRunning(llmParallel, registry)).isEmpty();
+        } finally {
+            decorated.values().forEach(ThreadPoolTaskExecutor::shutdown);
+            llmParallel.shutdown();
+        }
+    }
+
+    private static List<String> pathsWhileRunning(ThreadPoolTaskExecutor executor, InFlightRequestRegistry registry)
+            throws Exception {
+        CountDownLatch started = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        Future<?> task = executor.submit(() -> {
+            started.countDown();
+            awaitUnchecked(release);
+        });
+        try {
+            assertThat(started.await(2, TimeUnit.SECONDS)).isTrue();
+            return registry.snapshot().values().stream()
+                    .map(InFlightRequestRegistry.InFlightRequest::path)
+                    .toList();
+        } finally {
+            release.countDown();
+            task.get(2, TimeUnit.SECONDS);
         }
     }
 
