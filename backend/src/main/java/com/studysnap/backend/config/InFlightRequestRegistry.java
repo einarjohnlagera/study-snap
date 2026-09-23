@@ -7,11 +7,11 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * A cross-thread view of requests currently executing inside the servlet filter chain.
+ * A cross-thread view of HTTP requests, executor work, and scheduled jobs currently running.
  *
  * <p>A {@link ThreadLocal} cannot serve this purpose: the saturation poller runs on a scheduler
- * thread and must be able to inspect the request threads. Entries are keyed by the actual worker
- * thread and are removed by {@link InFlightRequestTrackingFilter} in a {@code finally} block.
+ * thread and must be able to inspect other worker threads. Entries are keyed by the actual worker
+ * thread and are removed by their registering filter or task decorator in a {@code finally} block.
  */
 @Component
 public class InFlightRequestRegistry {
