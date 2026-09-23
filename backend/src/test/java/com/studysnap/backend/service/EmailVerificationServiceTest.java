@@ -30,6 +30,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
@@ -103,7 +104,10 @@ class EmailVerificationServiceTest {
         verify(emailLogRepository).save(logCaptor.capture());
         assertThat(logCaptor.getValue().getEmailType()).isEqualTo(RetentionEmailType.EMAIL_VERIFICATION);
         assertThat(logCaptor.getValue().getUserId()).isEqualTo(user.getId());
-        verify(emailLogRepository, never()).countBySentAtGreaterThanEqual(any(OffsetDateTime.class));
+        verify(emailLogRepository, never()).countBySentAtGreaterThanEqualAndEmailTypeIn(
+                any(OffsetDateTime.class),
+                anyCollection()
+        );
     }
 
     @Test

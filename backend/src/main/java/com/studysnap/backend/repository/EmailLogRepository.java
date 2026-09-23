@@ -5,6 +5,7 @@ import com.studysnap.backend.entity.RetentionEmailType;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.time.OffsetDateTime;
+import java.util.Collection;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -19,7 +20,10 @@ public interface EmailLogRepository extends JpaRepository<EmailLogEntity, UUID> 
 
     Optional<EmailLogEntity> findTopByEmailTypeOrderBySentAtDesc(RetentionEmailType emailType);
 
-    long countBySentAtGreaterThanEqual(OffsetDateTime sentAt);
+    long countBySentAtGreaterThanEqualAndEmailTypeIn(
+            OffsetDateTime sentAt,
+            Collection<RetentionEmailType> emailTypes
+    );
 
     void deleteByUserId(UUID userId);
 }

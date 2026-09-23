@@ -121,6 +121,7 @@ import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicReference;
@@ -202,6 +203,89 @@ class NativeQueryPostgresIntegrationTest {
                 .isEqualTo(2);
         assertThat(emailLogRepository.findById(emailLog.getId()).orElseThrow().getClickedAt())
                 .isEqualTo(OffsetDateTime.parse("2026-09-23T02:00:00Z"));
+    }
+
+    @Test
+    void retentionBudgetCountIncludesAllFiveTypesAndSeesPriorWritesInTheSameTransaction() {
+        OffsetDateTime startOfDay = OffsetDateTime.parse("2026-09-23T00:00:00+08:00");
+        Set<RetentionEmailType> budgetedTypes = budgetedRetentionEmailTypes();
+        emailLogRepository.saveAll(budgetedTypes.stream()
+                .map(type -> emailLog(type, startOfDay.plusHours(1)))
+                .toList());
+
+        assertThat(emailLogRepository.countBySentAtGreaterThanEqualAndEmailTypeIn(
+                startOfDay,
+                budgetedTypes
+        )).isEqualTo(5);
+    }
+
+    @Test
+    void retentionBudgetCountExcludesTransactionalTypes() {
+        OffsetDateTime startOfDay = OffsetDateTime.parse("2026-09-23T00:00:00+08:00");
+        Set<RetentionEmailType> budgetedTypes = budgetedRetentionEmailTypes();
+        emailLogRepository.saveAllAndFlush(List.of(
+                emailLog(RetentionEmailType.INACTIVITY, startOfDay.plusHours(1)),
+                emailLog(RetentionEmailType.EMAIL_VERIFICATION, startOfDay.plusHours(1)),
+                emailLog(RetentionEmailType.PASSWORD_RESET, startOfDay.plusHours(1)),
+                emailLog(RetentionEmailType.SUBSCRIPTION_EXPIRY_7_DAY, startOfDay.plusHours(1)),
+                emailLog(RetentionEmailType.SUBSCRIPTION_EXPIRY_1_DAY, startOfDay.plusHours(1)),
+                emailLog(RetentionEmailType.SUBSCRIPTION_EXPIRED, startOfDay.plusHours(1))
+        ));
+
+        assertThat(emailLogRepository.countBySentAtGreaterThanEqualAndEmailTypeIn(
+                startOfDay,
+                budgetedTypes
+        )).isEqualTo(1);
+    }
+
+    @Test
+    void retentionBudgetCountExcludesAdminReengagementCampaign() {
+        OffsetDateTime startOfDay = OffsetDateTime.parse("2026-09-23T00:00:00+08:00");
+        Set<RetentionEmailType> budgetedTypes = budgetedRetentionEmailTypes();
+        emailLogRepository.saveAllAndFlush(List.of(
+                emailLog(RetentionEmailType.INACTIVITY, startOfDay.plusHours(1)),
+                emailLog(RetentionEmailType.RE_ENGAGEMENT_2025, startOfDay.plusHours(1))
+        ));
+
+        assertThat(emailLogRepository.countBySentAtGreaterThanEqualAndEmailTypeIn(
+                startOfDay,
+                budgetedTypes
+        )).isEqualTo(1);
+    }
+
+    @Test
+    void retentionBudgetCountExcludesUnfinishedNoteAndWelcome() {
+        OffsetDateTime startOfDay = OffsetDateTime.parse("2026-09-23T00:00:00+08:00");
+        Set<RetentionEmailType> budgetedTypes = budgetedRetentionEmailTypes();
+        emailLogRepository.saveAllAndFlush(List.of(
+                emailLog(RetentionEmailType.INACTIVITY, startOfDay.plusHours(1)),
+                emailLog(RetentionEmailType.UNFINISHED_NOTE, startOfDay.plusHours(1)),
+                emailLog(RetentionEmailType.WELCOME, startOfDay.plusHours(1))
+        ));
+
+        assertThat(emailLogRepository.countBySentAtGreaterThanEqualAndEmailTypeIn(
+                startOfDay,
+                budgetedTypes
+        )).isEqualTo(1);
+    }
+
+    private Set<RetentionEmailType> budgetedRetentionEmailTypes() {
+        return Set.of(
+                RetentionEmailType.INACTIVITY,
+                RetentionEmailType.WEAK_CONCEPT,
+                RetentionEmailType.WEEKLY_SUMMARY,
+                RetentionEmailType.DUE_CONCEPTS_DIGEST,
+                RetentionEmailType.KNOWLEDGE_IMPACT_DIGEST
+        );
+    }
+
+    private EmailLogEntity emailLog(RetentionEmailType type, OffsetDateTime sentAt) {
+        EmailLogEntity emailLog = new EmailLogEntity();
+        emailLog.setId(UUID.randomUUID());
+        emailLog.setUserId(UUID.randomUUID());
+        emailLog.setEmailType(type);
+        emailLog.setSentAt(sentAt);
+        return emailLog;
     }
 
     @Test

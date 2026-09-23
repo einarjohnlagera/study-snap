@@ -110,17 +110,24 @@ Configured under:
 
 Retention emails use the existing `EmailService` / Resend integration and template rendering system.
 
-Daily inactivity reminders are budgeted against the shared Resend daily pool so they cannot starve transactional mail:
+One shared budget governs the five dispatched retention types: `INACTIVITY`, `WEAK_CONCEPT`,
+`WEEKLY_SUMMARY`, `DUE_CONCEPTS_DIGEST`, and `KNOWLEDGE_IMPACT_DIGEST`. Each dispatch path recomputes
+the available budget immediately before bounding its own candidates. The count includes only those
+five types; transactional mail and the admin-triggered `RE_ENGAGEMENT_2025` campaign are excluded
+entirely. `transactional-reserve` remains a separate safety margin below the nominal daily limit.
 
 - `studysnap.email.daily-limit` defaults to `100`
 - `studysnap.email.transactional-reserve` defaults to `40`
 - `studysnap.email.reengagement-enabled` defaults to `true` and can disable inactivity dispatch without touching transactional sends
+- candidates skipped for budget are not written to `email_log`, so cooldown does not prevent a later eligible run
 
-The inactivity run computes `sentToday` from `email_log.sent_at >= start of the app day`, then sends at most:
+Each retention dispatch computes `sentToday` from matching `email_log` rows at or after the start of
+the app day, then sends at most:
 
 `max(0, dailyLimit - transactionalReserve - sentToday)`
 
-Candidates skipped by this budget are not written to `email_log`; they remain eligible for a later daily run if cooldown and activity gating still allow it. Verification, password reset, billing, and other transactional paths send immediately and are never gated by this re-engagement budget.
+Verification, password reset, billing, and other transactional paths send immediately and are never
+gated by this retention budget. The `reengagement-enabled` switch remains specific to `INACTIVITY`.
 
 New signups default `inactivityRemindersEnabled` and `dueConceptsDigestRemindersEnabled` to `true`. `weakConceptRemindersEnabled`, `weeklySummaryRemindersEnabled`, and `marketingEmailsEnabled` remain default-off.
 
