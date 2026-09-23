@@ -139,7 +139,7 @@ public class ResendWebhookService {
                 return Optional.empty();
             }
             return Optional.of(new ClickCorrelation(emailLogId, emailType, OffsetDateTime.parse(timestamp)));
-        } catch (IllegalArgumentException | NullPointerException exception) {
+        } catch (IllegalArgumentException | NullPointerException | DateTimeParseException exception) {
             return Optional.empty();
         }
     }

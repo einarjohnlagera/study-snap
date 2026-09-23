@@ -33,7 +33,7 @@ narrowing to the ones the retention scheduler could plausibly govern (excluding 
 transactional types — `EMAIL_VERIFICATION`, `PASSWORD_RESET`, `SUBSCRIPTION_EXPIRY_7_DAY`,
 `SUBSCRIPTION_EXPIRY_1_DAY`, `SUBSCRIPTION_EXPIRED` — and the admin campaign type,
 `RE_ENGAGEMENT_2025`, none of which this plan's doctrine addresses) leaves **six**, not five. **A
-seventh value, `WELCOME`, is worth flagging rather than silently dropping**: it matched none of the
+seventh value, `WELCOME`, is worth flagging rather than silently dropping** (**CORRECTED by the v0.157.0 cold pressure test: `WELCOME` DOES have a writer, `EmailVerificationService.sendWelcomeEmail`, so the "same signature as `UNFINISHED_NOTE`" reading below is wrong; it is transactional and correctly outside the budget count**): it matched none of the
 writer searches in §A's grep either, the same signature as `UNFINISHED_NOTE`'s dead-code finding below
 — not confirmed dead here (out of this plan's scope to chase down), but a candidate for the same
 question, not silently assumed to be fine because it's excluded as "transactional."
@@ -414,7 +414,9 @@ pattern `.claude/commands/signoff.md` already prescribes for small denominators)
    reported as *underpowered — counts and interval only, no conclusion*, and gets a **re-date, not a
    verdict**.
 
-At the recent rates, `INACTIVITY` reaches 2,000 sends in ~35 days and 30 clicks sooner if CTR is 3% or
+At the recent rates (57/day, **before** the dispatch-order fix; INACTIVITY's share is now about 38-47/day
+because the digest and `WEAK_CONCEPT` claim budget first, so 2,000 sends takes roughly 43-53 days and sits
+close to the 60-day backstop), `INACTIVITY` reaches 2,000 sends in ~35 days and 30 clicks sooner if CTR is 3% or
 higher; `DUE_CONCEPTS_DIGEST` reaches 2,000 sends only after ~150 days, so it unlocks via 30 clicks or hits
 the 60-day backstop underpowered — plan for that outcome rather than being surprised by it.
 
