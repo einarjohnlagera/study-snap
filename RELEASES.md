@@ -6,8 +6,8 @@
 
 Theme: bring in five already-open, independently-produced PRs — traffic analytics, two production
 incident findings, refreshed GPT product-context docs, and a resolved retention-communication channel
-doctrine — onto one release branch instead of merging each straight to `main`, so none of them trigger
-a deploy until the owner is ready.
+doctrine — onto one release branch instead of merging each straight to `main`, then implement the
+scoped pool-observability follow-up without triggering a deploy until the owner is ready.
 
 ### Planned Scope
 
@@ -16,10 +16,11 @@ a deploy until the owner is ready.
   and one `<Analytics />` component to the root layout. Confirmed earlier this cycle: 50,000
   events/month included, no charge risk on overage (collection just pauses). Independently re-verify
   its own build/lint/test claims before signoff rather than trusting the PR body as-is.
-- **Pool observability scoping (docs only).** PR #1427 — starts the `threads.max` checkpoint clock
-  (owner confirmed removing Render's `SERVER_TOMCAT_THREADS_MAX` override) and scopes, but does not
-  implement, closing the saturation detector's two known gaps (non-request-thread registry coverage,
-  scheduler contention) via a design verified against this project's actual Spring 7.0.5 jar.
+- **Pool observability scoping and implementation.** PR #1427 started the `threads.max` checkpoint
+  clock (owner confirmed removing Render's `SERVER_TOMCAT_THREADS_MAX` override) and scoped closing
+  the saturation detector's two known gaps (non-request-thread registry coverage and scheduler
+  contention) via a design verified against this project's actual Spring 7.0.5 jar. The implementation
+  is recorded under Shipped below.
 - **2026-09-22 production restart finding (docs only).** PR #1428 — a same-day incident where the
   known four-occurrence pool-exhaustion signature is explicitly absent; trigger left genuinely
   unidentified rather than rounded up to a guess.
@@ -32,13 +33,28 @@ a deploy until the owner is ready.
   so no in-app notification is recommended for them independent of further evidence. Explicitly not
   implemented — gated on two named owner decisions before Stage 1b/2/3 proceed.
 
-Anti-drift: this release does not implement anything the four docs-only PRs scope — they remain plans
-and findings, not diffs, until their own gated owner decisions clear. The only code change is the
-Vercel Analytics PR, already written and already tested before this kickoff.
+Anti-drift: the three other docs-only PRs remain plans and findings, not diffs, until their own gated
+owner decisions clear. Pool observability is the sole implemented follow-up to that original set.
 
 ### Shipped
 
-_(nothing yet)_
+- **Pool saturation diagnostics now cover DB-bound background work.** A shared task decorator registers
+  the four DB-touching executors and all `@Scheduled` jobs in `InFlightRequestRegistry`, using executor
+  thread names or Spring's exact `ClassName.methodName` scheduled-task description; the detector's own
+  `poll()` is explicitly excluded (test-proven mid-cycle, not just after). The custom scheduler subclasses
+  `ThreadPoolTaskScheduler` rather than using plain `setTaskDecorator()` — verified against the actual
+  resolved jar (bytecode) that `ThreadPoolTaskScheduler` hands the configured `TaskDecorator` a
+  `RunnableScheduledFuture` wrapper, not the user's task, which would have silently discarded every
+  scheduled job's description; the subclass pre-decorates the real task before Spring wraps it, and the
+  decorator no-ops on a `RunnableScheduledFuture` it's handed directly to avoid double-instrumenting.
+  Two `scheduled-task-` threads mean a DB-bound job cannot monopolize the detector's only polling thread.
+  `runDaily`/`runWeekly` (`RetentionEmailScheduler`) are runtime-verified still anchored to `Asia/Manila`
+  after the scheduler swap (real `CronTrigger.nextExecution()` assertions, not inspection). **`runMonthly`
+  was NOT part of that verification and has no zone pinning at all — a pre-existing gap, not introduced
+  here, out of scope for this change and tracked as its own Backlog Index row** (see
+  `docs/product/ROADMAP.md`). Diagnostic registration
+  and cleanup fail open, and cleanup is unconditional when work throws. Source and design rationale:
+  `docs/claude-plans/2026-09-22-pool-observability-non-request-thread-coverage-plan.md`.
 
 ## v0.156.0 - Say What You Meant to Show
 
@@ -760,4 +776,3 @@ Full scope, all owner-tightened decisions, and the production membership audit a
 - **RESOLVED 2026-09-17 (during the `v0.153.0` cycle).** The production-acceptance anti-join (this release's own Slice 4 proof) ran against production (read-only) once `main` had deployed on `2547da67`: **0 missing pairs** across the full 50-pair matrix — `V147` did exactly what this release claimed. Extras report: 7 pairs present in production but outside the approved matrix (6 Accounting — `Business Administration`, `Chartered Financial Analyst`, `Economics`, `Entrepreneurship`, `Finance`, `Financial Management`; 1 Engineering — `Manufacturing Engineering`), consistent with ordinary post-deploy curator work, not a defect. Count sanity check reconciles exactly (57 = 50 + 7). Closes the `[CHECKPOINT — due 2026-09-24]` row in `ROADMAP.md`'s Backlog Index.
 - **A rename that also edits membership still computes its full replacement set from an in-modal snapshot.** The #1409 fix closed the lost-update window for a rename-only save (which now omits `programIds` entirely), but an admin who *does* touch the membership picker still sends a full set read at modal-open time — a genuine concurrent edit during that window is still last-write-wins. Inherent to full-set replace; fixing it is optimistic concurrency, a different feature, not scoped here.
 - **`course_programs.is_active` still has no write path anywhere in the codebase.** Unchanged by this release, deliberately — see the "Course / Program catalog lifecycle management" Backlog Index row. This release's own Admin family/program editors already use the unfiltered catalog specifically so an eventual inactive row stays manageable, but nothing can set `is_active = false` today.
-
