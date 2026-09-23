@@ -576,6 +576,10 @@ class RetentionServiceTest {
         verify(emailLogRepository).save(logCaptor.capture());
         assertThat(logCaptor.getValue().getEmailType()).isEqualTo(RetentionEmailType.INACTIVITY);
         assertThat(logCaptor.getValue().getUserId()).isEqualTo(user.getId());
+        assertThat(paramsCaptor.getValue()).containsEntry(
+                "resumeUrl",
+                "https://www.notelib.app/dashboard?source=inactivity&e=" + logCaptor.getValue().getId()
+        );
     }
 
     @Test
@@ -867,6 +871,10 @@ class RetentionServiceTest {
         ArgumentCaptor<EmailLogEntity> logCaptor = ArgumentCaptor.forClass(EmailLogEntity.class);
         verify(emailLogRepository).save(logCaptor.capture());
         assertThat(logCaptor.getValue().getEmailType()).isEqualTo(RetentionEmailType.DUE_CONCEPTS_DIGEST);
+        assertThat(paramsCaptor.getValue()).containsEntry(
+                "dashboardUrl",
+                "https://www.notelib.app/dashboard?source=due-concepts-digest&e=" + logCaptor.getValue().getId()
+        );
     }
 
     @Test
@@ -1003,6 +1011,62 @@ class RetentionServiceTest {
         verify(emailLogRepository).save(logCaptor.capture());
         assertThat(logCaptor.getValue().getUserId()).isEqualTo(secondCreator.getId());
         assertThat(logCaptor.getValue().getEmailType()).isEqualTo(RetentionEmailType.KNOWLEDGE_IMPACT_DIGEST);
+    }
+
+    @Test
+    void clickCorrelationAddsOnlyAnInertTypeMarkerAndEmailLogIdForEveryDispatchedRetentionType() {
+        UUID emailLogId = UUID.fromString("38a11a0f-6fa5-4a56-8fd1-b5041aab2525");
+
+        assertThat(RetentionService.withClickCorrelation(
+                Map.of("resumeUrl", "https://www.notelib.app/dashboard"),
+                RetentionEmailType.INACTIVITY,
+                emailLogId
+        )).containsEntry(
+                "resumeUrl",
+                "https://www.notelib.app/dashboard?source=inactivity&e=" + emailLogId
+        );
+        assertThat(RetentionService.withClickCorrelation(
+                Map.of("adaptivePracticeUrl", "https://www.notelib.app/notes/42/adaptive-practice"),
+                RetentionEmailType.WEAK_CONCEPT,
+                emailLogId
+        )).containsEntry(
+                "adaptivePracticeUrl",
+                "https://www.notelib.app/notes/42/adaptive-practice?source=weak-concept&e=" + emailLogId
+        );
+        assertThat(RetentionService.withClickCorrelation(
+                Map.of("dashboardUrl", "https://www.notelib.app/dashboard"),
+                RetentionEmailType.WEEKLY_SUMMARY,
+                emailLogId
+        )).containsEntry(
+                "dashboardUrl",
+                "https://www.notelib.app/dashboard?source=weekly-summary&e=" + emailLogId
+        );
+        assertThat(RetentionService.withClickCorrelation(
+                Map.of(
+                        "dashboardUrl",
+                        "https://www.notelib.app/notes/42/quick-review?source=due-concepts-digest"
+                ),
+                RetentionEmailType.DUE_CONCEPTS_DIGEST,
+                emailLogId
+        )).containsEntry(
+                "dashboardUrl",
+                "https://www.notelib.app/notes/42/quick-review?source=due-concepts-digest&e=" + emailLogId
+        );
+        assertThat(RetentionService.withClickCorrelation(
+                Map.of("impactUrl", "https://www.notelib.app/impact"),
+                RetentionEmailType.KNOWLEDGE_IMPACT_DIGEST,
+                emailLogId
+        )).containsEntry(
+                "impactUrl",
+                "https://www.notelib.app/impact?source=knowledge-impact-digest&e=" + emailLogId
+        );
+
+        Map<String, String> unfinished = Map.of("resumeUrl", "https://www.notelib.app/dashboard");
+        assertThat(RetentionService.withClickCorrelation(
+                unfinished,
+                RetentionEmailType.UNFINISHED_NOTE,
+                emailLogId
+        )).isEqualTo(unfinished);
     }
 
     private StudyPackEntity studyPackWithConcepts(UUID id, String title, List<String> keyConcepts) {
