@@ -331,6 +331,13 @@ to retention types, transactional mail is no longer counted at all, so the reser
 reservation and becomes a safety margin against transactional volume the budget no longer sees directly.
 That is still worth keeping as-is; it is not now-redundant plumbing to "clean up."
 
+**CORRECTED 2026-09-23, before deploy: the rejection of (b) above rested on an ABSENCE of evidence, and
+production then supplied the evidence.** `INACTIVITY` sends exactly 60/day (the 100 − 40 cap) on most days
+while `DUE_CONCEPTS_DIGEST` sent 0–22/day unbudgeted, so with `INACTIVITY` dispatched first the newly
+budgeted digest would have been starved to ~0. Send order is priority whether or not it is designed as
+such; it is now designed: digest, then `WEAK_CONCEPT`, then `INACTIVITY`. An explicit per-type allocation
+(b) is still not built; revisit it if a third type ever needs guaranteed share.
+
 **Stated consequence, not just a mechanism change:** narrowing the count (c) *raises* the effective
 retention budget — today's count is inflated by transactional volume, so retention mail is being
 throttled earlier than the stated 100/day intends. Extending enforcement to four previously-unbudgeted

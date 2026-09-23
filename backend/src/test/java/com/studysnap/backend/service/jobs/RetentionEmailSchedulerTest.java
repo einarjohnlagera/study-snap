@@ -3,9 +3,11 @@ package com.studysnap.backend.service.jobs;
 import com.studysnap.backend.service.RetentionService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -30,6 +32,21 @@ class RetentionEmailSchedulerTest {
         scheduler.runDaily();
 
         verify(retentionService).sendDueConceptsDigestEmails();
+    }
+
+    @Test
+    void runDaily_dispatchesTheDigestBeforeInactivityBecauseOrderIsBudgetPriority() {
+        // INACTIVITY alone saturates the shared daily budget (60/day observed in production), so whichever
+        // type runs after it is starved. The engaged-learner digest must run first.
+        when(retentionService.sendDailyEmails()).thenReturn(dailySummary());
+        when(retentionService.sendDueConceptsDigestEmails()).thenReturn(dispatchResult(3));
+        RetentionEmailScheduler scheduler = new RetentionEmailScheduler(retentionService);
+
+        scheduler.runDaily();
+
+        InOrder order = inOrder(retentionService);
+        order.verify(retentionService).sendDueConceptsDigestEmails();
+        order.verify(retentionService).sendDailyEmails();
     }
 
     @Test
