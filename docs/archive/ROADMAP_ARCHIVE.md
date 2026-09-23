@@ -15,6 +15,34 @@ changelog layer. `ROADMAP.md` keeps a one-line-per-version index at each origina
 
 ---
 
+**Kicked off 2026-09-16, signed off 2026-09-16.** `v0.151.0 — No Backdoor Left, Round Two` is
+**Released** on `releases/v0.151.0` (PR #1406). Closed the same gate gap `v0.143.0`/`v0.144.0` already
+closed for the exam question pool, this time for shared quiz links: `StudyPackService.java` called
+`generatedQuizService.deactivateShareLinksForNote` only inside `if (regeneratingNoteContent)`, but
+`POST /notes/{id}/regenerate` defaults to `NoteRegenerationScope.STUDY_PACK`, which reaches the same
+shared worker method with that flag `false` — so a `STUDY_PACK`-only regeneration replaced the quiz
+content (`saveStudyPack` does this regardless of scope) without deactivating any live share link
+pointing at it. Found 2026-09-11 while tracing `v0.143.0`'s own scope; verified not currently live at
+kickoff (exactly 1 active `quiz_share_links` row, not exposed). Fix: dropped the deactivation call out
+of the `if` gate, same one-line shape `v0.143.0` already used one line above it for
+`examQuestionPoolService.refreshPool`. **Scope grew mid-implementation**, found by the full backend
+build rather than the original scoping: the identical scope gate also lived in
+`NoteRegenerationConsequenceService.notesWithLiveShareLink` (the bulk-regeneration path's
+preflight-count and per-item-receipt method) and in `bulk-regenerate-modal.tsx`'s confirmation-dialog
+warning copy — both fixed together, since leaving either one gated would have made the bulk path's
+disclosure actively false rather than merely incomplete. `docs/features/bulk-regeneration.md` and
+`docs/features/study-pack-generation.md` corrected to match. **Verification tier delivered: one
+`advisor()` call on the diff, plus one scoped cold agent at signoff** (owner-requested; this repo's own
+"delivery introduced a defect the same session then fixed" trigger had also fired — the implementing
+session's own first-pass fix was itself incomplete, twice). The cold agent refuted 5 of 7 claims and
+found 2 real but narrow, pre-existing bulk-regeneration races (not introduced by this diff), recorded as
+Known Limitations in `RELEASES.md` rather than fixed. Backend 2403/2403, frontend 2450/2451 (1
+pre-existing unrelated skip). No checkpoint owed — this was a code-level defect with a directly verified
+root cause and full test coverage, not a claim shipped ahead of its evidence. Full scope in
+`RELEASES.md`.
+
+---
+
 **Kicked off 2026-09-16, signed off 2026-09-16.** `v0.150.0 — Membership, Not a Slot` is **Released**
 on `releases/v0.150.0` (PRs #1403, #1404). Program Family membership is now many-to-many — a
 Course/Program may belong to zero, one, or several families — closing a real production bug: the
