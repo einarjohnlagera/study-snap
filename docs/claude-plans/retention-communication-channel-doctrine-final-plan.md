@@ -308,13 +308,37 @@ finding makes it newly relevant — narrow the count itself to retention email t
 `SubscriptionExpiryEmailService`.** As it stands, a spike in password resets or subscription-expiry
 mail eats into the same 100/day budget `INACTIVITY` is enforced against, with only
 `transactionalReserve` standing between the two classes of mail — which is presumably what that reserve
-exists for. **(c) may be the cheapest correct fix of the three**, and a Codex prompt scoped only from
-(a)/(b) would never surface it. **This plan does not pick between (a), (b) and (c)** — that's a product
-call about which retention emails matter most under contention and whether transactional mail should
-share the pool at all, not something this audit should decide by default. **Do not solve this by moving
-messages to in-app to reduce Resend volume** — channel choice follows communication purpose (§B), not
-cost avoidance; if the budget needs raising instead of enforcing, that's a legitimate alternative fix, also
-out of scope for this document to pick.
+exists for.
+
+**DECIDED 2026-09-23 — (c) then (a), together, not a three-way pick.** (a) and (b) were framed above as
+alternatives to (c); they are not. (c) is the correction that makes (a) safe, not a competitor to it.
+The load-bearing fact: transactional mail (`EmailVerificationService`, `PasswordResetService`,
+`SubscriptionExpiryEmailService`) already sends unconditionally today, and should — a user resetting
+their password must never be throttled by a marketing-email budget. That mail was never meant to be a
+budget participant; it has only ever been polluting the count `INACTIVITY` checks against. So the fix
+is: (c) first — narrow `countEmailsSentToday()` to `WHERE email_type IN (...)` the five active
+retention types (`INACTIVITY`, `WEAK_CONCEPT`, `WEEKLY_SUMMARY`, `DUE_CONCEPTS_DIGEST`,
+`KNOWLEDGE_IMPACT_DIGEST`) — named as an explicit list, not an exclusion rule, since the enum has 13
+values and §A already found two more (`UNFINISHED_NOTE`, `WELCOME`) whose classification is unresolved;
+an exclusion rule would silently absorb any future addition without a decision. Then (a) — every one of
+those five dispatch paths consults `resolveReengagementBudget()` before sending, not just `INACTIVITY`'s.
+**(b) is rejected**, not deferred: there is no evidence in this audit that any retention type needs
+priority over another under contention, and building an allocation scheme without that evidence is
+exactly the kind of speculative infrastructure this repo's own conventions reject.
+
+`transactionalReserve` **keeps its current value and meaning, unchanged** — once the count is narrowed
+to retention types, transactional mail is no longer counted at all, so the reserve stops being a literal
+reservation and becomes a safety margin against transactional volume the budget no longer sees directly.
+That is still worth keeping as-is; it is not now-redundant plumbing to "clean up."
+
+**Stated consequence, not just a mechanism change:** narrowing the count (c) *raises* the effective
+retention budget — today's count is inflated by transactional volume, so retention mail is being
+throttled earlier than the stated 100/day intends. Extending enforcement to four previously-unbudgeted
+types (a) pulls the other way. Net daily retention-email volume can move in either direction; the
+release note for this must say so rather than implying this is purely a tightening. **Do not solve this
+by moving messages to in-app to reduce Resend volume** — channel choice follows communication purpose
+(§B), not cost avoidance; if the budget needs raising instead of enforcing, that's a legitimate
+alternative fix, also out of scope for this document to pick.
 
 ---
 
@@ -339,12 +363,12 @@ cadence, not speculatively.
 - Routing: Codex (new webhook handling, a schema addition for open/click persistence, per-type template
   edits) — this is genuine backend work, not a doc change.
 
-**Stage 1b — Email budget governance. Blocked on owner decision #1 below, otherwise independent of 1a.**
-- Fix the budget so it governs coherently — either every active retention dispatch path consults it
-  (option a), or an explicit per-type/priority allocation replaces the current implicit
-  first-job-wins behavior (option b) (§G).
-- Can ship before, after, or alongside Stage 1a once the (a)/(b) decision is made — the two slices don't
-  depend on each other's code, only on separate owner input.
+**Stage 1b — Email budget governance. Decided 2026-09-23 (§G) — scope-ready, no longer blocked.**
+- Narrow `countEmailsSentToday()` to the five active retention types (option c), then make every one of
+  those five dispatch paths consult `resolveReengagementBudget()` before sending (option a).
+  `transactionalReserve` stays unchanged. Option b rejected — no evidence any type needs priority over
+  another (§G).
+- Can ship before, after, or alongside Stage 1a — the two slices don't depend on each other's code.
 - Routing: Codex (touches the shared dispatch path `RetentionService` already owns).
 
 **Stage 2 — Collect evidence. No code; a waiting/reading period.**
@@ -406,9 +430,9 @@ tables. See §D.
 **Primary success signal:** Click-through leading to a measured return and a subsequent learning
 action — not raw open rate, and not raw send volume.
 
-**Email budget change:** YES, real and separate from the channel decision — extend budget enforcement
-beyond `INACTIVITY` alone, or define an explicit allocation; owner decision on (a) vs. (b) needed before
-Stage 1 ships that half.
+**Email budget change:** YES, real and separate from the channel decision — DECIDED 2026-09-23: narrow
+the budget count to retention email types only (c), then extend enforcement to all five active retention
+dispatch paths (a). See §G.
 
 **Preference changes:** None. Existing four toggles keep their current, email-scoped meaning exactly as
 worded today.
@@ -419,20 +443,17 @@ worded today.
 proposes an `IN_APP` or `MULTI_CHANNEL` intent.
 
 **Implementation stages:** Stage 1a (instrumentation, Codex-routed, scope-ready now) + Stage 1b (budget
-fix, Codex-routed, blocked on decision #1 below — independent of 1a, may ship before/after/alongside it)
-→ Stage 2 (evidence collection, no code, sample-size-bound not calendar-bound) → Stage 3 (revisit with
-data).
+fix, Codex-routed, DECIDED 2026-09-23 — scope-ready, independent of 1a, may ship before/after/alongside
+it) → Stage 2 (evidence collection, no code, sample-size-bound not calendar-bound) → Stage 3 (revisit
+with data).
 
 **OWNER DECISIONS STILL REQUIRED:**
-1. **§G — budget governance shape (blocks Stage 1b only, not Stage 1a):** extend the existing budget
-   check to all five active retention dispatch paths (option a); define an explicit per-type/priority
-   allocation within the shared pool (option b); or narrow the count to retention types only, letting
-   `transactionalReserve` keep doing its job for password-reset/verification/subscription mail (option
-   c — possibly the cheapest correct fix, surfaced by this pass's finding that the budget count is
-   currently unscoped across every `email_log` writer, not just retention).
+1. ~~§G — budget governance shape~~ **DECIDED 2026-09-23: (c) then (a), together — see §G.** Stage 1b
+   is unblocked.
 2. **§D's sample-size bound for Stage 2:** what minimum per-type sample (or calendar floor as a
    backstop) should gate reading the results, so Stage 3 isn't scoped on an underpowered read? Not
    decided here — flag as the exact kind of small-denominator question this repo's own checkpoint
    discipline requires stating before the read, not after.
 
-**DO NOT IMPLEMENT YET.**
+**Stage 1a and Stage 1b are both scope-ready. Stage 2/3 remain not-implemented pending Stage 1
+evidence.**
