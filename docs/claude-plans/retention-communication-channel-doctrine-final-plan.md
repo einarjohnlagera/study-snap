@@ -372,11 +372,63 @@ cadence, not speculatively.
 - Routing: Codex (touches the shared dispatch path `RetentionService` already owns).
 
 **Stage 2 — Collect evidence. No code; a waiting/reading period.**
-- Let Stage 1a's instrumentation run long enough to produce a real open/click/return sample per email
-  type. No fixed duration recommended here — tie it to a minimum sample size per type (e.g. enough
-  `INACTIVITY` sends to read a stable click-through rate) rather than a calendar guess, and state that
-  bound explicitly when Stage 1a ships, the same discipline this repo's other checkpoints already use
-  for small-denominator reads. Independent of whether Stage 1b has shipped yet.
+- Let Stage 1a's instrumentation run until the bound below is met. Independent of whether Stage 1b has
+  shipped yet.
+
+**Stage 2 sample-size bound — CONFIRMED by the owner 2026-09-23, derived from a read-only production read.** Basis: `email_log` and `users` on `notelib-db-prod`, read 2026-09-23. **The rates used are
+the RECENT ones (14/28-day), not the 90-day totals** — `DUE_CONCEPTS_DIGEST` only started 2026-07-19 and
+changed cadence in `v0.148.0`, so its 90-day figure (773) overstates its current rate; do not reach for it
+as a denominator.
+
+*Only two of the five types have a measurable audience.*
+
+| Type | Opted-in (active, verified) | Sends, last 90d | Recent rate | Distinct recipients (28d) |
+|---|---|---|---|---|
+| `INACTIVITY` | 395 of 398 | 4,387 | ~57/day (1,586 in 28d) | 231 |
+| `DUE_CONCEPTS_DIGEST` | 152 | 773 | ~11–13/day (156 in 14d, 377 in 28d) | 120 |
+| `WEAK_CONCEPT` | **2** | **0** | — | — |
+| `WEEKLY_SUMMARY` | **1** | **0** | — | — |
+| `KNOWLEDGE_IMPACT_DIGEST` | **0** | **0** | — | — |
+
+**The three bottom rows are an EMPTY denominator, not a small one** — no bound can be reached by waiting,
+so none is assigned. They are gated on opt-in growth, not elapsed time. Their Stage 3 outcome is "no data,
+the doctrine's structural reasoning stands", never "email was measured ineffective".
+
+*Bound for `INACTIVITY` and `DUE_CONCEPTS_DIGEST`, each read independently.* The unit that matters is
+recorded CLICKS, not sends — Stage 3 asks whether clicking correlates with return, so the clicked set is
+the sample that must be large enough. CTR is unknown until Stage 1a emits, so the bound is two-tier (the
+pattern `.claude/commands/signoff.md` already prescribes for small denominators):
+
+1. **Read unlocks when ALL hold:** at least **14 days** since Stage 1a deployed (two full weekly cycles —
+   the digest's send day depends on each learner's review days), at least **100 distinct recipients**, and
+   EITHER at least **30 recorded clicks** OR at least **2,000 sends** (the "precisely low" case: 2,000
+   sends with under 30 clicks bounds CTR under ~1.5%, which is decision-grade for "not driving return").
+2. **Backstop: 60 days after Stage 1a deploys, read regardless.** A type that has not met the floor is
+   reported as *underpowered — counts and interval only, no conclusion*, and gets a **re-date, not a
+   verdict**.
+
+At the recent rates, `INACTIVITY` reaches 2,000 sends in ~35 days and 30 clicks sooner if CTR is 3% or
+higher; `DUE_CONCEPTS_DIGEST` reaches 2,000 sends only after ~150 days, so it unlocks via 30 clicks or hits
+the 60-day backstop underpowered — plan for that outcome rather than being surprised by it.
+
+*Dating:* the clock starts at **deploy, not merge** — `V149` is on `releases/v0.157.0`, nothing is on
+`main`. The `[CHECKPOINT — due YYYY-MM-DD]` row is written in the `v0.157.0` signoff commit with a real
+date, per the signoff gate.
+
+*Kill criterion, stated before the read:* if `INACTIVITY` meets its floor with click-through **under 1%**,
+treat the email as not reaching learners and reopen that intent's row in §C. Owner-confirmed 2026-09-23.
+
+*Prerequisite that can silently zero the whole stage (NOT verified by this read — no Resend access):*
+`email.clicked`/`email.opened` only arrive if click and open tracking are enabled on the sending domain in
+Resend AND the existing `/webhooks/resend` subscription includes those two event types. Owner action
+before the clock starts. **Verify emitting at deploy + 3 days** with a read-only
+`SELECT count(*) FROM email_log WHERE clicked_at IS NOT NULL` and a look at `email_open_daily_counts`;
+with ~170 sends in that window, zero of both means tracking or the subscription is off — fix it and
+restart the clock rather than reading an empty result as "nobody clicks".
+
+*Stage 3 interpretation caveat, not part of the bound:* 231 distinct `INACTIVITY` recipients against 1,586
+sends in 28 days is ~7 mails per learner per month, so per-send CTR mixes fresh decisions with repeat
+fatigue. Report per-distinct-recipient "ever clicked" alongside per-send CTR.
 
 **Stage 3 — Revisit intents against doctrine + measured data.**
 - Re-open §C's table with real numbers. The two intents already resolved to "no in-app version, ever"
@@ -444,16 +496,16 @@ proposes an `IN_APP` or `MULTI_CHANNEL` intent.
 
 **Implementation stages:** Stage 1a (instrumentation, Codex-routed, scope-ready now) + Stage 1b (budget
 fix, Codex-routed, DECIDED 2026-09-23 — scope-ready, independent of 1a, may ship before/after/alongside
-it) → Stage 2 (evidence collection, no code, sample-size-bound not calendar-bound) → Stage 3 (revisit
+it) → Stage 2 (evidence collection, no code, two-tier sample-size bound with a 60-day backstop) → Stage 3 (revisit
 with data).
 
 **OWNER DECISIONS STILL REQUIRED:**
 1. ~~§G — budget governance shape~~ **DECIDED 2026-09-23: (c) then (a), together — see §G.** Stage 1b
    is unblocked.
-2. **§D's sample-size bound for Stage 2:** what minimum per-type sample (or calendar floor as a
-   backstop) should gate reading the results, so Stage 3 isn't scoped on an underpowered read? Not
-   decided here — flag as the exact kind of small-denominator question this repo's own checkpoint
-   discipline requires stating before the read, not after.
+2. ~~§D's sample-size bound for Stage 2~~ **DECIDED 2026-09-23, owner-confirmed.** See the
+   Stage 2 section in §I: two measurable types only, 14-day / 100-recipient / (30 clicks or 2,000 sends)
+   floor, 60-day backstop, kill criterion `INACTIVITY` CTR under 1%. Still owed by the owner (unverified, no Resend access here): enable
+   click + open tracking in Resend and subscribe the webhook to `email.clicked`/`email.opened`.
 
 **Stage 1a and Stage 1b are both scope-ready. Stage 2/3 remain not-implemented pending Stage 1
 evidence.**
