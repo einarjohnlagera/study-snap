@@ -4,6 +4,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.core.task.AsyncTaskExecutor;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
+import org.springframework.scheduling.support.PeriodicTrigger;
+import org.springframework.scheduling.support.ScheduledMethodRunnable;
 
 import java.util.List;
 import java.util.Map;
@@ -68,6 +70,54 @@ class AppConfigTest {
         } finally {
             scheduler.shutdown();
         }
+    }
+
+    @Test
+    void taskSchedulerBeanRegistersScheduledJobsThroughEveryScheduleFlavour() throws Exception {
+        // Guards the bean swap: a plain ThreadPoolTaskScheduler (the plan's original design) or a bean
+        // without the decorator would silently register nothing, and every other test builds its own scheduler.
+        InFlightRequestRegistry registry = new InFlightRequestRegistry();
+        ThreadPoolTaskScheduler scheduler =
+                (ThreadPoolTaskScheduler) new AppConfig().taskScheduler(taskDecorator(registry));
+        BlockingJob instantJob = new BlockingJob();
+        BlockingJob triggerJob = new BlockingJob();
+        BlockingJob fixedDelayJob = new BlockingJob();
+
+        try {
+            assertRegisteredWhileRunning(
+                    registry, instantJob, scheduler.schedule(scheduled(instantJob), java.time.Instant.now())
+            );
+            // The cron path: every cron @Scheduled job goes through schedule(Runnable, Trigger).
+            assertRegisteredWhileRunning(
+                    registry, triggerJob,
+                    scheduler.schedule(scheduled(triggerJob), new PeriodicTrigger(java.time.Duration.ofMinutes(10)))
+            );
+            assertRegisteredWhileRunning(
+                    registry, fixedDelayJob,
+                    scheduler.scheduleWithFixedDelay(scheduled(fixedDelayJob), java.time.Duration.ofMinutes(10))
+            );
+        } finally {
+            instantJob.release.countDown();
+            triggerJob.release.countDown();
+            fixedDelayJob.release.countDown();
+            scheduler.shutdown();
+        }
+    }
+
+    private static Runnable scheduled(BlockingJob job) throws NoSuchMethodException {
+        return new ScheduledMethodRunnable(job, "run");
+    }
+
+    private static void assertRegisteredWhileRunning(
+            InFlightRequestRegistry registry, BlockingJob job, java.util.concurrent.ScheduledFuture<?> future
+    ) throws Exception {
+        assertThat(job.started.await(2, TimeUnit.SECONDS)).isTrue();
+        assertThat(registry.snapshot().values())
+                .extracting(InFlightRequestRegistry.InFlightRequest::path)
+                .contains(BlockingJob.class.getName() + ".run");
+        job.release.countDown();
+        future.cancel(false);
+        awaitRegistryEmpty(registry);
     }
 
     @Test
@@ -139,7 +189,7 @@ class AppConfigTest {
 
             release.countDown();
             task.get(2, TimeUnit.SECONDS);
-            assertThat(registry.snapshot()).isEmpty();
+            awaitRegistryEmpty(registry);
         } finally {
             release.countDown();
             executor.shutdown();
@@ -164,7 +214,7 @@ class AppConfigTest {
             org.assertj.core.api.Assertions.assertThatThrownBy(() -> task.get(2, TimeUnit.SECONDS))
                     .isInstanceOf(ExecutionException.class)
                     .hasCauseInstanceOf(IllegalStateException.class);
-            assertThat(registry.snapshot()).isEmpty();
+            awaitRegistryEmpty(registry);
         } finally {
             executor.shutdown();
         }
@@ -215,6 +265,27 @@ class AppConfigTest {
         } finally {
             release.countDown();
             task.get(2, TimeUnit.SECONDS);
+            awaitRegistryEmpty(registry);
+        }
+    }
+
+    // The decorator removes the entry in a finally that wraps the FutureTask, so it can run just AFTER
+    // Future.get() returns; asserting emptiness immediately would be a race.
+    private static void awaitRegistryEmpty(InFlightRequestRegistry registry) throws InterruptedException {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(2);
+        while (!registry.snapshot().isEmpty() && System.nanoTime() < deadline) {
+            Thread.sleep(10);
+        }
+        assertThat(registry.snapshot()).isEmpty();
+    }
+
+    public static final class BlockingJob {
+        private final CountDownLatch started = new CountDownLatch(1);
+        private final CountDownLatch release = new CountDownLatch(1);
+
+        public void run() throws InterruptedException {
+            started.countDown();
+            release.await();
         }
     }
 
