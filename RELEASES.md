@@ -28,17 +28,28 @@ until the owner is ready.
 - **GPT context docs refreshed to v0.156.0 (docs only).** PR #1429 — `GPT_CONTEXT.md` and
   `SURFACES_AND_FEATURES_CONTEXT.md` brought current for the notification-CTA and Campaign Feedback
   work; other modules left flagged, not silently touched.
-- **Retention communication channel doctrine and Stage 1a instrumentation.** PR #1430 resolved "should retention
+- **Retention communication channel doctrine and Stages 1a–1b.** PR #1430 resolved "should retention
   email move to in-app notification" with a channel-role doctrine rather than a binary answer. Key
   finding: two of the four retention email intents already have live Dashboard current-state surfaces,
   so no in-app notification is recommended for them independent of further evidence. Stage 1a's
-  click/open instrumentation is recorded under Shipped below; Stage 1b and the evidence-dependent
-  Stages 2–3 remain separate.
+  click/open instrumentation and Stage 1b's budget governance are recorded under Shipped below; the
+  evidence-dependent Stages 2–3 remain separate.
 
 Anti-drift: the other docs-only PRs remain plans and findings, not diffs, until their own gates clear.
-Pool observability and retention Stage 1a are the implemented follow-ups to that original set.
+Pool observability and retention Stages 1a–1b are the implemented follow-ups to that original set.
 
 ### Shipped
+
+- **The retention budget now governs all five scheduled retention email types against a retention-only
+  count.** `INACTIVITY`, `WEAK_CONCEPT`, `WEEKLY_SUMMARY`, `DUE_CONCEPTS_DIGEST`, and
+  `KNOWLEDGE_IMPACT_DIGEST` each recompute the available budget before bounding candidates; the orphaned
+  public `sendInactiveUserEmails()` entry point now shares the same budgeted inactivity path. The count
+  explicitly excludes transactional mail, dead/unclassified enum values, and the separately capped
+  admin-triggered `RE_ENGAGEMENT_2025` campaign, removing that campaign's accidental cross-talk with
+  automated retention dispatch. Narrowing the count can raise the effective budget while extending
+  enforcement to four types can lower actual sends, so net daily retention volume can move in either
+  direction; this is a scope-correctness fix rather than a deliberate tightening or loosening.
+  `transactionalReserve` remains unchanged as a safety margin.
 
 - **Retention email clicks now correlate to the exact send without Resend message-id plumbing.** The
   five dispatched retention types reserve their UUID `email_log.id` before rendering and add inert
@@ -47,7 +58,8 @@ Pool observability and retention Stage 1a are the implemented follow-ups to that
   `data.click.timestamp`, then set that row's nullable `clicked_at`; unknown, purged, mismatched or
   malformed correlations are acknowledged and skipped. `email.opened` uses top-level `created_at` to
   increment `email_open_daily_counts` by UTC day with no per-send correlation. `EmailService`, Resend
-  message ids, `UNFINISHED_NOTE`, and Stage 1b's budget enforcement remain unchanged. Source doctrine:
+  message ids, and `UNFINISHED_NOTE` remain unchanged; Stage 1b's budget governance is described above.
+  Source doctrine:
   `docs/claude-plans/retention-communication-channel-doctrine-final-plan.md` §D/§I.
 
 - **Pool saturation diagnostics now cover DB-bound background work.** A shared task decorator registers

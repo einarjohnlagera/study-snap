@@ -24,7 +24,7 @@ class RetentionEmailSchedulerTest {
         // roughly one per week per learner (1-day cooldown gated by their chosen days when set, 6-day
         // cooldown gated by a deterministic hash-assigned day otherwise -- see v0.148.0).
         when(retentionService.sendDailyEmails()).thenReturn(dailySummary());
-        when(retentionService.sendDueConceptsDigestEmails()).thenReturn(3);
+        when(retentionService.sendDueConceptsDigestEmails()).thenReturn(dispatchResult(3));
         RetentionEmailScheduler scheduler = new RetentionEmailScheduler(retentionService);
 
         scheduler.runDaily();
@@ -44,7 +44,7 @@ class RetentionEmailSchedulerTest {
 
     @Test
     void runMonthly_dispatchesKnowledgeImpactDigestEmails() {
-        when(retentionService.sendKnowledgeImpactDigestEmails()).thenReturn(2);
+        when(retentionService.sendKnowledgeImpactDigestEmails()).thenReturn(dispatchResult(2));
         RetentionEmailScheduler scheduler = new RetentionEmailScheduler(retentionService);
 
         scheduler.runMonthly();
@@ -53,10 +53,14 @@ class RetentionEmailSchedulerTest {
     }
 
     private RetentionService.DailyRetentionDispatchSummary dailySummary() {
-        return new RetentionService.DailyRetentionDispatchSummary(0, 0, 0, 0, 0, 0);
+        return new RetentionService.DailyRetentionDispatchSummary(0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
     }
 
     private RetentionService.WeeklyRetentionDispatchSummary weeklySummary() {
-        return new RetentionService.WeeklyRetentionDispatchSummary(0);
+        return new RetentionService.WeeklyRetentionDispatchSummary(0, 0, 0, 0, 0);
+    }
+
+    private RetentionService.RetentionDispatchResult dispatchResult(int sent) {
+        return new RetentionService.RetentionDispatchResult(10, 50, sent, sent, 0);
     }
 }

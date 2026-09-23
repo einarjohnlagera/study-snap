@@ -29,28 +29,53 @@ public class RetentionEmailScheduler {
     @Scheduled(cron = "${studysnap.retention.daily-cron:0 45 2 * * *}", zone = DISPATCH_ZONE)
     public void runDaily() {
         RetentionService.DailyRetentionDispatchSummary summary = retentionService.sendDailyEmails();
-        int dueConceptsDigestSent = retentionService.sendDueConceptsDigestEmails();
-        log.info("retention.email.scheduler.daily dueConceptsDigest={}", dueConceptsDigestSent);
+        RetentionService.RetentionDispatchResult dueConceptsDigest = retentionService.sendDueConceptsDigestEmails();
         log.info(
-                "retention.email.scheduler.daily sent inactivity={} weakConcept={} inactivityBudget={} sentToday={} inactivityAttempted={} inactivitySkippedForBudget={}",
+                "retention.email.scheduler.daily dueConceptsDigest={} budget={} sentToday={} attempted={} skippedForBudget={}",
+                dueConceptsDigest.sent(),
+                dueConceptsDigest.budget(),
+                dueConceptsDigest.sentToday(),
+                dueConceptsDigest.attempted(),
+                dueConceptsDigest.skippedForBudget()
+        );
+        log.info(
+                "retention.email.scheduler.daily sent inactivity={} weakConcept={} inactivityBudget={} inactivitySentToday={} inactivityAttempted={} inactivitySkippedForBudget={} weakConceptBudget={} weakConceptSentToday={} weakConceptAttempted={} weakConceptSkippedForBudget={}",
                 summary.inactivitySent(),
                 summary.weakConceptSent(),
                 summary.inactivityBudget(),
                 summary.sentToday(),
                 summary.inactivityAttempted(),
-                summary.inactivitySkippedForBudget()
+                summary.inactivitySkippedForBudget(),
+                summary.weakConceptBudget(),
+                summary.weakConceptSentToday(),
+                summary.weakConceptAttempted(),
+                summary.weakConceptSkippedForBudget()
         );
     }
 
     @Scheduled(cron = "${studysnap.retention.weekly-cron:0 0 18 * * SUN}", zone = DISPATCH_ZONE)
     public void runWeekly() {
         RetentionService.WeeklyRetentionDispatchSummary summary = retentionService.sendWeeklySummaryEmails();
-        log.info("retention.email.scheduler.weekly sent weeklySummary={}", summary.weeklySummarySent());
+        log.info(
+                "retention.email.scheduler.weekly sent weeklySummary={} budget={} sentToday={} attempted={} skippedForBudget={}",
+                summary.weeklySummarySent(),
+                summary.budget(),
+                summary.sentToday(),
+                summary.attempted(),
+                summary.skippedForBudget()
+        );
     }
 
     @Scheduled(cron = "${studysnap.retention.knowledge-impact-digest-monthly-cron:0 0 9 1 * *}")
     public void runMonthly() {
-        int knowledgeImpactDigestSent = retentionService.sendKnowledgeImpactDigestEmails();
-        log.info("retention.email.scheduler.monthly sent knowledgeImpactDigest={}", knowledgeImpactDigestSent);
+        RetentionService.RetentionDispatchResult result = retentionService.sendKnowledgeImpactDigestEmails();
+        log.info(
+                "retention.email.scheduler.monthly sent knowledgeImpactDigest={} budget={} sentToday={} attempted={} skippedForBudget={}",
+                result.sent(),
+                result.budget(),
+                result.sentToday(),
+                result.attempted(),
+                result.skippedForBudget()
+        );
     }
 }
