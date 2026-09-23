@@ -218,24 +218,50 @@ without building a general analytics platform. Proposed chain, weakest signal to
    window after a measured return. Achievable by joining existing activity tables
    (`quick_review_sessions`, `study_packs`, etc.) against the return window from step 4 — no new schema.
 
-**Smallest useful instrumentation, in order:**
-1. Handle `email.opened` and `email.clicked` in `ResendWebhookService` (mirroring the existing
-   bounce/complaint/suppression handling shape), persisting to `email_log` or a small companion table —
-   **do not build a general event-tracking system**, just enough columns to answer steps 2–3 above.
-2. Confirm/enable open and click tracking in the Resend dashboard for this sending domain (owner action,
-   not code — Resend account configuration, not something this session can read or set).
-3. Make each retention email's CTA link identifiable by type. **`DUE_CONCEPTS_DIGEST` already does this**
-   (`?source=due-concepts-digest`, shipped `v0.72.0`, per `docs/features/retention-emails.md`) — the
-   remaining work is `INACTIVITY`, `WEAK_CONCEPT`, `WEEKLY_SUMMARY`, and `KNOWLEDGE_IMPACT_DIGEST` (if
-   its dormancy doesn't end first), each needing its own template edited to carry an equivalent
-   identifiable param. A query param or distinct path segment is enough per type — no new
-   infrastructure — but this is template-by-template work, not a single shared change, and a Codex
-   prompt should scope it as N small edits, not one.
-4. Once a few weeks of data exist, run the `last_login_at`/activity join described in steps 4–5 as a
-   one-off read-only query, not a new scheduled report.
+**⚠️ CORRECTED — "no new infrastructure" below was wrong, found while drafting Stage 1a's Codex prompt
+(2026-09-23).** `EmailService.sendEmail()` returns a bare `boolean` and discards Resend's response body
+entirely; `email_log` has no column for Resend's own message id. **There is currently no way to
+correlate a later open/click webhook event back to a specific `email_log` row** — Resend's webhook
+payload identifies the email by Resend's own id, which this codebase never captures at send time.
+Closing that gap for BOTH signals would mean changing `EmailService`'s return shape and touching every
+caller (`EmailVerificationService`, `PasswordResetService`, `SubscriptionExpiryEmailService`,
+`RetentionService`'s several dispatch paths, `ReEngagementCampaignService`) — a real, cross-cutting
+change, not the "no new infrastructure" this section originally claimed.
 
-**Explicitly not proposed:** a general analytics/attribution platform, a new event-sourcing system, or
-per-send unique tracking pixels beyond what Resend already provides.
+**Resolution: scope per-row correlation to clicks only, for now.** Step 3 below already adds a
+per-type identifiable CTA link; widening that one step to also carry the `email_log` row's own id
+(`?source=due-concepts-digest&e=<email_log id>`) gives exact per-send click correlation from the
+`email.clicked` webhook's own URL — zero `EmailService` changes, zero callers touched, zero new
+columns. **Opens do not get per-row correlation in Stage 1a** — handle the `email.opened` webhook and
+log an aggregate count, but do not claim it is attributable to a specific send. This matches what §A
+already concluded about opens being the weaker, prefetch-inflated signal, so the interface-wide change
+is not worth spending on the signal already documented as directional-only. **The `EmailService`
+message-id plumbing is a named, deferred sub-item** — the prerequisite for per-row open correlation, if
+Stage 2's click data ever makes that worth building.
+
+**Smallest useful instrumentation, in order:**
+1. Handle `email.clicked` in `ResendWebhookService` (mirroring the existing bounce/complaint/suppression
+   handling shape). Correlate to a specific `email_log` row via the `e=<id>` URL parameter on the
+   clicked link — **do not guess Resend's exact payload field name for the URL** (verify against
+   Resend's own webhook documentation, not assumed). Persist to `email_log` or a small companion table —
+   still no general event-tracking system, just enough to answer step 3 below.
+2. Handle `email.opened` too, but only as an aggregate count (e.g. a counter, or unattributed rows in a
+   companion table) — explicitly not correlated to a specific `email_log` row in this stage.
+3. Confirm/enable open and click tracking in the Resend dashboard for this sending domain (owner action,
+   not code — Resend account configuration, not something this session can read or set).
+4. Make each retention email's CTA link identifiable by type **and carry the sending row's own id**.
+   **`DUE_CONCEPTS_DIGEST` already has the type param** (`?source=due-concepts-digest`, shipped
+   `v0.72.0`, per `docs/features/retention-emails.md`) — every active type needs the row-id parameter
+   added, and the three without a type param yet (`INACTIVITY`, `WEAK_CONCEPT`, `WEEKLY_SUMMARY`) need
+   both. **The correlation token must be inert** — a read-only analytics marker, never something that
+   grants access or identifies more than which send it was; it appears in a URL that's necessarily
+   readable by anyone who receives the email. Template-by-template work, not a single shared change.
+5. Once a few weeks of click data exist, run the `last_login_at`/activity join described in steps 4–5 as
+   a one-off read-only query, not a new scheduled report.
+
+**Explicitly not proposed:** a general analytics/attribution platform, a new event-sourcing system,
+per-send unique tracking pixels beyond what Resend already provides, or the `EmailService` message-id
+plumbing needed for per-row open correlation (named above as a deferred sub-item, not built now).
 
 ---
 
