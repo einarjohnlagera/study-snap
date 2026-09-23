@@ -25,6 +25,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.util.UriComponentsBuilder;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -68,6 +69,22 @@ public class RetentionService {
     private static final String DEFAULT_STUDY_PACK_TITLE = "your study pack";
     private static final String KNOWLEDGE_IMPACT_DIGEST_TEMPLATE = "knowledge-impact-digest";
     private static final String IMPACT_PATH = "/impact";
+    private static final String EMAIL_LOG_ID_QUERY_PARAMETER = "e";
+    private static final String SOURCE_QUERY_PARAMETER = "source";
+    private static final Map<RetentionEmailType, String> CTA_PARAMETER_BY_EMAIL_TYPE = Map.of(
+            RetentionEmailType.INACTIVITY, "resumeUrl",
+            RetentionEmailType.WEAK_CONCEPT, "adaptivePracticeUrl",
+            RetentionEmailType.WEEKLY_SUMMARY, DASHBOARD_URL_PARAMETER,
+            RetentionEmailType.DUE_CONCEPTS_DIGEST, DASHBOARD_URL_PARAMETER,
+            RetentionEmailType.KNOWLEDGE_IMPACT_DIGEST, "impactUrl"
+    );
+    private static final Map<RetentionEmailType, String> SOURCE_BY_EMAIL_TYPE = Map.of(
+            RetentionEmailType.INACTIVITY, "inactivity",
+            RetentionEmailType.WEAK_CONCEPT, "weak-concept",
+            RetentionEmailType.WEEKLY_SUMMARY, "weekly-summary",
+            RetentionEmailType.DUE_CONCEPTS_DIGEST, "due-concepts-digest",
+            RetentionEmailType.KNOWLEDGE_IMPACT_DIGEST, "knowledge-impact-digest"
+    );
     private static final ZoneId EMAIL_BUDGET_ZONE = ZoneId.of("Asia/Manila");
     private static final List<QuickReviewSessionMode> WEEKLY_SUMMARY_QUIZ_MODES = List.of(
             QuickReviewSessionMode.QUICK_REVIEW,
@@ -612,12 +629,13 @@ public class RetentionService {
             OffsetDateTime now
     ) {
         try {
+            UUID emailLogId = UUID.randomUUID();
             EmailUnsubscribeLinkService.OptionalEmailUnsubscribeContext unsubscribeContext = buildUnsubscribeContext(
                     userId,
                     emailType,
                     unsubscribeCategory
             );
-            Map<String, String> templateParameters = new java.util.LinkedHashMap<>(parameters);
+            Map<String, String> templateParameters = withClickCorrelation(parameters, emailType, emailLogId);
             templateParameters.put("unsubscribeUrl", unsubscribeContext.unsubscribeUrl());
             templateParameters.put("unsubscribeFooterHtml", unsubscribeContext.htmlFooter());
             templateParameters.put("unsubscribeFooterText", unsubscribeContext.textFooter());
@@ -632,7 +650,7 @@ public class RetentionService {
             if (!sent) {
                 return false;
             }
-            logEmailSent(userId, emailType, now);
+            logEmailSent(emailLogId, userId, emailType, now);
             return true;
         } catch (RuntimeException ex) {
             log.warn("retention.email.send failed userId={} emailType={} message={}", userId, emailType, ex.getMessage());
@@ -658,9 +676,34 @@ public class RetentionService {
         }
     }
 
-    private void logEmailSent(UUID userId, RetentionEmailType emailType, OffsetDateTime now) {
+    static Map<String, String> withClickCorrelation(
+            Map<String, String> parameters,
+            RetentionEmailType emailType,
+            UUID emailLogId
+    ) {
+        Map<String, String> tracked = new LinkedHashMap<>(parameters);
+        String ctaParameter = CTA_PARAMETER_BY_EMAIL_TYPE.get(emailType);
+        String source = SOURCE_BY_EMAIL_TYPE.get(emailType);
+        if (ctaParameter == null || source == null || !tracked.containsKey(ctaParameter)) {
+            return tracked;
+        }
+        String trackedUrl = UriComponentsBuilder.fromUriString(tracked.get(ctaParameter))
+                .replaceQueryParam(SOURCE_QUERY_PARAMETER, source)
+                .replaceQueryParam(EMAIL_LOG_ID_QUERY_PARAMETER, emailLogId)
+                .build()
+                .toUriString();
+        tracked.put(ctaParameter, trackedUrl);
+        return tracked;
+    }
+
+    private void logEmailSent(
+            UUID emailLogId,
+            UUID userId,
+            RetentionEmailType emailType,
+            OffsetDateTime now
+    ) {
         EmailLogEntity entity = new EmailLogEntity();
-        entity.setId(UUID.randomUUID());
+        entity.setId(emailLogId);
         entity.setUserId(userId);
         entity.setEmailType(emailType);
         entity.setSentAt(now);

@@ -2,6 +2,7 @@ package com.studysnap.backend.repository;
 
 import com.studysnap.backend.entity.CombinedQuizEntity;
 import com.studysnap.backend.entity.CampaignFeedbackResponseEntity;
+import com.studysnap.backend.entity.EmailLogEntity;
 import com.studysnap.backend.entity.LearnerLevel;
 import com.studysnap.backend.entity.LinkedLearnerGrantScope;
 import com.studysnap.backend.entity.LinkedLearnerInvitationLinkEntity;
@@ -13,6 +14,7 @@ import com.studysnap.backend.entity.PlanType;
 import com.studysnap.backend.entity.NoteEntity;
 import com.studysnap.backend.entity.NoteStatus;
 import com.studysnap.backend.entity.NoteRegenerationScope;
+import com.studysnap.backend.entity.RetentionEmailType;
 import com.studysnap.backend.dto.BulkRegenerateNotesRequest;
 import com.studysnap.backend.dto.NoteRegenerationPreflightRequest;
 import com.studysnap.backend.dto.NoteRegenerationPreflightResponse;
@@ -110,6 +112,7 @@ import java.io.IOException;
 import java.math.BigDecimal;
 import java.lang.reflect.Method;
 import java.net.URI;
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.time.Year;
@@ -163,7 +166,7 @@ class NativeQueryPostgresIntegrationTest {
      * v0.93.0 pressure test: at 25 against an actual 31, the reflective scan could silently degrade by
      * six queries and stay green, which is the same false comfort the harness exists to remove.
      */
-    private static final int EXPECTED_NATIVE_QUERIES = 44;
+    private static final int EXPECTED_NATIVE_QUERIES = 45;
     private static final String REPOSITORY_CLASSES =
             "classpath*:com/studysnap/backend/repository/**/*.class";
 
@@ -178,6 +181,27 @@ class NativeQueryPostgresIntegrationTest {
                 "idx_campaign_feedback_user_campaign",
                 "idx_campaign_feedback_campaign_created"
         );
+    }
+
+    @Test
+    void retentionEngagementMigrationAndOpenCounterWorkAgainstPostgres() {
+        LocalDate eventDate = LocalDate.parse("2026-09-23");
+        emailOpenDailyCountRepository.increment(eventDate);
+        emailOpenDailyCountRepository.increment(eventDate);
+
+        EmailLogEntity emailLog = new EmailLogEntity();
+        emailLog.setId(UUID.randomUUID());
+        emailLog.setUserId(UUID.randomUUID());
+        emailLog.setEmailType(RetentionEmailType.INACTIVITY);
+        emailLog.setSentAt(OffsetDateTime.parse("2026-09-23T01:00:00Z"));
+        emailLog.setClickedAt(OffsetDateTime.parse("2026-09-23T02:00:00Z"));
+        emailLogRepository.saveAndFlush(emailLog);
+        entityManager.clear();
+
+        assertThat(emailOpenDailyCountRepository.findById(eventDate).orElseThrow().getOpenCount())
+                .isEqualTo(2);
+        assertThat(emailLogRepository.findById(emailLog.getId()).orElseThrow().getClickedAt())
+                .isEqualTo(OffsetDateTime.parse("2026-09-23T02:00:00Z"));
     }
 
     @Test
@@ -251,6 +275,10 @@ class NativeQueryPostgresIntegrationTest {
     private EntityManager entityManager;
     @Autowired
     private CampaignFeedbackResponseRepository campaignFeedbackResponseRepository;
+    @Autowired
+    private EmailLogRepository emailLogRepository;
+    @Autowired
+    private EmailOpenDailyCountRepository emailOpenDailyCountRepository;
     @Autowired
     private QuickReviewSessionRepository quickReviewSessionRepository;
 

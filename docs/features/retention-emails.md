@@ -11,15 +11,18 @@ Current reminders include:
   - activity includes Study Pack creation, Quick Review, Challenge Quiz, and Adaptive Practice
   - gated by `inactivityRemindersEnabled`
   - cooldown: `3` days
+  - CTA carries `source=inactivity&e=<email_log.id>` for inert per-send click correlation
 - `WEAK_CONCEPT`
   - trigger: latest completed Challenge Quiz has weak concepts (`< 60%` accuracy metadata) and the user has not practiced those concepts for `3` days
   - gated by `weakConceptRemindersEnabled`
   - cooldown: `5` days
+  - CTA carries `source=weak-concept&e=<email_log.id>` for inert per-send click correlation
 - `WEEKLY_SUMMARY`
   - trigger: weekly summary run every Sunday at `6:00 PM`
   - includes study packs created, quizzes taken, adaptive sessions, and average quiz score for the last `7` days
   - gated by `weeklySummaryRemindersEnabled` (default off until the user opts in)
   - cooldown: `7` days
+  - CTA carries `source=weekly-summary&e=<email_log.id>` for inert per-send click correlation
 - `DUE_CONCEPTS_DIGEST`
   - trigger: weekly run finds due concepts across the user's owned Study Packs through `ConceptHealthService`
   - includes the total due-concept count and up to three Study Pack titles with the most due concepts. **As of `v0.72.0` the CTA deep-links to `/notes/{noteId}/quick-review?source=due-concepts-digest`** for the owned note with the most due concepts — one tap to the first question — falling back to the dashboard only when no owned note resolves. It previously linked to Dashboard Today Focus, which left a decision in the way.
@@ -27,6 +30,12 @@ Current reminders include:
   - **A null or empty `review_days` no longer means "eligible every day."** `v0.148.0`: a null/empty value is assigned one deterministic weekday, `Math.floorMod(userId.hashCode(), 7)`, computed at read time from the existing `id` column (no new column, no migration). Before this fix every such learner was checked every day the job ran and gated only by a flat cooldown, which clustered sends onto whichever weekday they first happened to land on (measured: 107/101/98 sends on the top 3 weekdays vs. 9/8/2 on the bottom 3, over 28 days) — this now spreads them the same way a chosen-review-day learner is spread.
   - gated by `dueConceptsDigestRemindersEnabled` (default on for new signups; existing users retain their previously persisted preference)
   - cooldown: `1` day with chosen review days; `6` days without chosen review days (`v0.148.0`, down from `7` — the flat 7-day cooldown combined with a brand-new hash-assigned day can otherwise produce two sends inside one week during the first cycle after a learner's day changes; this value is a compile-time constant, not a config property, since it has no legitimate reason to vary per deployment)
+  - CTA retains `source=due-concepts-digest` and adds `e=<email_log.id>` for inert per-send click correlation
+- `KNOWLEDGE_IMPACT_DIGEST`
+  - trigger: monthly impact digest for opted-in creators who helped a new learner in the previous `30` days
+  - gated by `knowledgeImpactDigestRemindersEnabled` (default off; zero opted-in users at the Stage 1a sizing read)
+  - cooldown: `30` days
+  - CTA carries `source=knowledge-impact-digest&e=<email_log.id>` for inert per-send click correlation
 - `RE_ENGAGEMENT_2025`
   - trigger: admin-started re-engagement campaign for inactive verified users
   - gated by `marketingEmailsEnabled` (default off until the user opts in)
@@ -71,8 +80,14 @@ Sent emails are tracked in `email_log`:
 - `user_id`
 - `email_type`
 - `sent_at`
+- `clicked_at` (nullable; the first verified `email.clicked` event correlated through the CTA's `e` parameter)
 
 The log prevents same-type reminders from being sent again before cooldown expires.
+
+`email_open_daily_counts` stores aggregate Resend open events by UTC `event_date` and `open_count`.
+Opens deliberately have no `email_log` foreign key: NoteLib does not persist Resend message ids, and
+open tracking is directional only. Click webhooks read the original URL from `data.click.link` and the
+click time from `data.click.timestamp`; open aggregation uses the webhook's top-level `created_at`.
 
 ## Scheduler
 

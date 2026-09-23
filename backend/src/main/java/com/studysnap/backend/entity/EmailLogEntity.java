@@ -31,4 +31,7 @@ public class EmailLogEntity {
 
     @Column(name = "sent_at", nullable = false)
     private OffsetDateTime sentAt;
+
+    @Column(name = "clicked_at")
+    private OffsetDateTime clickedAt;
 }

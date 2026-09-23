@@ -7,7 +7,8 @@
 Theme: bring in five already-open, independently-produced PRs — traffic analytics, two production
 incident findings, refreshed GPT product-context docs, and a resolved retention-communication channel
 doctrine — onto one release branch instead of merging each straight to `main`, then implement the
-scoped pool-observability follow-up without triggering a deploy until the owner is ready.
+scoped pool-observability and retention-email instrumentation follow-ups without triggering a deploy
+until the owner is ready.
 
 ### Planned Scope
 
@@ -27,16 +28,27 @@ scoped pool-observability follow-up without triggering a deploy until the owner 
 - **GPT context docs refreshed to v0.156.0 (docs only).** PR #1429 — `GPT_CONTEXT.md` and
   `SURFACES_AND_FEATURES_CONTEXT.md` brought current for the notification-CTA and Campaign Feedback
   work; other modules left flagged, not silently touched.
-- **Retention communication channel doctrine (docs only).** PR #1430 — resolves "should retention
+- **Retention communication channel doctrine and Stage 1a instrumentation.** PR #1430 resolved "should retention
   email move to in-app notification" with a channel-role doctrine rather than a binary answer. Key
   finding: two of the four retention email intents already have live Dashboard current-state surfaces,
-  so no in-app notification is recommended for them independent of further evidence. Explicitly not
-  implemented — gated on two named owner decisions before Stage 1b/2/3 proceed.
+  so no in-app notification is recommended for them independent of further evidence. Stage 1a's
+  click/open instrumentation is recorded under Shipped below; Stage 1b and the evidence-dependent
+  Stages 2–3 remain separate.
 
-Anti-drift: the three other docs-only PRs remain plans and findings, not diffs, until their own gated
-owner decisions clear. Pool observability is the sole implemented follow-up to that original set.
+Anti-drift: the other docs-only PRs remain plans and findings, not diffs, until their own gates clear.
+Pool observability and retention Stage 1a are the implemented follow-ups to that original set.
 
 ### Shipped
+
+- **Retention email clicks now correlate to the exact send without Resend message-id plumbing.** The
+  five dispatched retention types reserve their UUID `email_log.id` before rendering and add inert
+  `source` and `e` query parameters to the CTA, while persisting the row only after a successful send.
+  Verified `email.clicked` webhooks read Resend's documented `data.click.link` and
+  `data.click.timestamp`, then set that row's nullable `clicked_at`; unknown, purged, mismatched or
+  malformed correlations are acknowledged and skipped. `email.opened` uses top-level `created_at` to
+  increment `email_open_daily_counts` by UTC day with no per-send correlation. `EmailService`, Resend
+  message ids, `UNFINISHED_NOTE`, and Stage 1b's budget enforcement remain unchanged. Source doctrine:
+  `docs/claude-plans/retention-communication-channel-doctrine-final-plan.md` §D/§I.
 
 - **Pool saturation diagnostics now cover DB-bound background work.** A shared task decorator registers
   the four DB-touching executors and all `@Scheduled` jobs in `InFlightRequestRegistry`, using executor
