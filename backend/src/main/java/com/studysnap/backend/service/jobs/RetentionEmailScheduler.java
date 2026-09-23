@@ -28,8 +28,10 @@ public class RetentionEmailScheduler {
     // assignment shifting during the first week post-deploy without producing two sends inside 7 days).
     @Scheduled(cron = "${studysnap.retention.daily-cron:0 45 2 * * *}", zone = DISPATCH_ZONE)
     public void runDaily() {
-        RetentionService.DailyRetentionDispatchSummary summary = retentionService.sendDailyEmails();
+        // Order IS priority: all retention types draw on one daily budget, and INACTIVITY alone saturates it
+        // (60/day observed), so the engaged-learner digest must claim its share before INACTIVITY runs.
         RetentionService.RetentionDispatchResult dueConceptsDigest = retentionService.sendDueConceptsDigestEmails();
+        RetentionService.DailyRetentionDispatchSummary summary = retentionService.sendDailyEmails();
         log.info(
                 "retention.email.scheduler.daily dueConceptsDigest={} budget={} sentToday={} attempted={} skippedForBudget={}",
                 dueConceptsDigest.sent(),

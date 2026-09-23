@@ -240,8 +240,9 @@ public class RetentionService {
     }
 
     DailyRetentionDispatchSummary sendDailyEmails(OffsetDateTime now) {
-        RetentionDispatchResult inactivityDispatchResult = dispatchBudgetedInactivityEmails(now);
+        // Weak-concept (engaged learner) claims budget before INACTIVITY, which saturates the shared cap.
         RetentionDispatchResult weakConceptDispatchResult = dispatchBudgetedWeakConceptEmails(now);
+        RetentionDispatchResult inactivityDispatchResult = dispatchBudgetedInactivityEmails(now);
         return new DailyRetentionDispatchSummary(
                 inactivityDispatchResult.sent(),
                 weakConceptDispatchResult.sent(),

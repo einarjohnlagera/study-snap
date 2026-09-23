@@ -46,10 +46,14 @@ Pool observability and retention Stages 1a–1b are the implemented follow-ups t
   public `sendInactiveUserEmails()` entry point now shares the same budgeted inactivity path. The count
   explicitly excludes transactional mail, dead/unclassified enum values, and the separately capped
   admin-triggered `RE_ENGAGEMENT_2025` campaign, removing that campaign's accidental cross-talk with
-  automated retention dispatch. Narrowing the count can raise the effective budget while extending
-  enforcement to four types can lower actual sends, so net daily retention volume can move in either
-  direction; this is a scope-correctness fix rather than a deliberate tightening or loosening.
-  `transactionalReserve` remains unchanged as a safety margin.
+  automated retention dispatch. **Send order is now the priority mechanism, and that was found only by
+  reading production before signoff:** `INACTIVITY` sat at exactly 60/day (the 100-limit minus 40-reserve
+  ceiling) on 10 of the last 14 days while `DUE_CONCEPTS_DIGEST` sent 0–22/day unbudgeted. Extending the
+  budget to the digest with `INACTIVITY` first would have starved the digest to ~0 on most days, so
+  `runDaily` now dispatches the digest, then `WEAK_CONCEPT`, then `INACTIVITY`. Total daily sends stay at
+  the cap; `INACTIVITY` yields roughly the digest's volume (about 60 down to 40–47/day). Two guards fail
+  if the order regresses. `transactionalReserve` (40) is unchanged, though real transactional volume is
+  0–1/day, so lowering `EMAIL_TRANSACTIONAL_RESERVE` is an available owner lever, not done here.
 
 - **Retention email clicks now correlate to the exact send without Resend message-id plumbing.** The
   five dispatched retention types reserve their UUID `email_log.id` before rendering and add inert

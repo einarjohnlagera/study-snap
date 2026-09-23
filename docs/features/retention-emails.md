@@ -116,6 +116,11 @@ the available budget immediately before bounding its own candidates. The count i
 five types; transactional mail and the admin-triggered `RE_ENGAGEMENT_2025` campaign are excluded
 entirely. `transactional-reserve` remains a separate safety margin below the nominal daily limit.
 
+**Dispatch order is budget priority.** `INACTIVITY` alone saturates the shared budget (60/day observed
+against a 100 limit and 40 reserve), so whatever runs after it is starved. `runDaily` therefore
+dispatches `DUE_CONCEPTS_DIGEST` first, then `WEAK_CONCEPT`, then `INACTIVITY` — engaged-learner types
+claim budget before the dormant-user nudge takes the remainder. Do not reorder without re-reading this.
+
 - `studysnap.email.daily-limit` defaults to `100`
 - `studysnap.email.transactional-reserve` defaults to `40`
 - `studysnap.email.reengagement-enabled` defaults to `true` and can disable inactivity dispatch without touching transactional sends

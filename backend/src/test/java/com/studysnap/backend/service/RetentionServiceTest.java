@@ -801,6 +801,43 @@ class RetentionServiceTest {
     }
 
     @Test
+    void sendDailyEmails_weakConceptClaimsBudgetBeforeInactivitySaturatesIt() {
+        OffsetDateTime now = OffsetDateTime.parse("2026-03-25T10:00:00Z");
+        UserEntity weakUser = verifiedUser();
+        UserEntity inactiveUser = verifiedUser(
+                UUID.fromString("00000000-0000-0000-0000-000000000021"),
+                "inactive@example.com"
+        );
+        // One unit of budget left: 59 sent so far, then 60 once the first-run type has sent its email.
+        when(emailLogRepository.countBySentAtGreaterThanEqualAndEmailTypeIn(
+                any(OffsetDateTime.class), anyCollection()
+        )).thenReturn(59L, 60L);
+        stubWeakConceptCandidate(weakUser, now);
+        when(emailTemplateService.render(eq("retention-weak-concept-reminder"), any()))
+                .thenReturn(new EmailTemplateService.RenderedEmailTemplate("Subject", "<p>Body</p>", "Body"));
+        when(userRepository.findByStatusAndEmailVerifiedAtIsNotNullAndInactivityRemindersEnabledTrue(UserStatus.ACTIVE))
+                .thenReturn(List.of(inactiveUser));
+        when(activityEventRepository.existsByUserIdAndActivityTypeIn(eq(inactiveUser.getId()), anyCollection()))
+                .thenReturn(true);
+        when(activityEventRepository.existsByUserIdAndActivityTypeInAndCreatedAtGreaterThanEqual(
+                eq(inactiveUser.getId()), anyCollection(), any(OffsetDateTime.class)
+        )).thenReturn(false);
+        when(emailLogRepository.existsByUserIdAndEmailTypeAndSentAtAfter(
+                eq(inactiveUser.getId()), eq(RetentionEmailType.INACTIVITY), any(OffsetDateTime.class)
+        )).thenReturn(false);
+
+        RetentionService.DailyRetentionDispatchSummary summary = retentionService.sendDailyEmails(now);
+
+        assertThat(summary.weakConceptSent()).isEqualTo(1);
+        assertThat(summary.inactivitySent()).isZero();
+        assertThat(summary.inactivityBudget()).isZero();
+        assertThat(summary.inactivitySkippedForBudget()).isEqualTo(1);
+        ArgumentCaptor<EmailLogEntity> logCaptor = ArgumentCaptor.forClass(EmailLogEntity.class);
+        verify(emailLogRepository).save(logCaptor.capture());
+        assertThat(logCaptor.getValue().getEmailType()).isEqualTo(RetentionEmailType.WEAK_CONCEPT);
+    }
+
+    @Test
     void reengagementKillSwitchStillDisablesOnlyInactivity() {
         StudySnapProperties properties = new StudySnapProperties();
         properties.getEmail().setAppBaseUrl("https://www.notelib.app");
