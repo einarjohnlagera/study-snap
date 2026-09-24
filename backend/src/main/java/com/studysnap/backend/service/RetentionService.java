@@ -25,6 +25,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.util.UriComponentsBuilder;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -68,6 +69,29 @@ public class RetentionService {
     private static final String DEFAULT_STUDY_PACK_TITLE = "your study pack";
     private static final String KNOWLEDGE_IMPACT_DIGEST_TEMPLATE = "knowledge-impact-digest";
     private static final String IMPACT_PATH = "/impact";
+    private static final String EMAIL_LOG_ID_QUERY_PARAMETER = "e";
+    private static final String SOURCE_QUERY_PARAMETER = "source";
+    private static final Map<RetentionEmailType, String> CTA_PARAMETER_BY_EMAIL_TYPE = Map.of(
+            RetentionEmailType.INACTIVITY, "resumeUrl",
+            RetentionEmailType.WEAK_CONCEPT, "adaptivePracticeUrl",
+            RetentionEmailType.WEEKLY_SUMMARY, DASHBOARD_URL_PARAMETER,
+            RetentionEmailType.DUE_CONCEPTS_DIGEST, DASHBOARD_URL_PARAMETER,
+            RetentionEmailType.KNOWLEDGE_IMPACT_DIGEST, "impactUrl"
+    );
+    private static final Map<RetentionEmailType, String> SOURCE_BY_EMAIL_TYPE = Map.of(
+            RetentionEmailType.INACTIVITY, "inactivity",
+            RetentionEmailType.WEAK_CONCEPT, "weak-concept",
+            RetentionEmailType.WEEKLY_SUMMARY, "weekly-summary",
+            RetentionEmailType.DUE_CONCEPTS_DIGEST, "due-concepts-digest",
+            RetentionEmailType.KNOWLEDGE_IMPACT_DIGEST, "knowledge-impact-digest"
+    );
+    private static final Set<RetentionEmailType> BUDGETED_RETENTION_EMAIL_TYPES = Set.of(
+            RetentionEmailType.INACTIVITY,
+            RetentionEmailType.WEAK_CONCEPT,
+            RetentionEmailType.WEEKLY_SUMMARY,
+            RetentionEmailType.DUE_CONCEPTS_DIGEST,
+            RetentionEmailType.KNOWLEDGE_IMPACT_DIGEST
+    );
     private static final ZoneId EMAIL_BUDGET_ZONE = ZoneId.of("Asia/Manila");
     private static final List<QuickReviewSessionMode> WEEKLY_SUMMARY_QUIZ_MODES = List.of(
             QuickReviewSessionMode.QUICK_REVIEW,
@@ -123,12 +147,12 @@ public class RetentionService {
 
     @Transactional
     public int sendInactiveUserEmails() {
-        return dispatchInactivityEmails(findInactiveUsers(), OffsetDateTime.now(ZoneOffset.UTC));
+        return dispatchBudgetedInactivityEmails(OffsetDateTime.now(ZoneOffset.UTC)).sent();
     }
 
     @Transactional
     public int sendWeakConceptEmails() {
-        return dispatchWeakConceptEmails(findUsersWithWeakConcepts(), OffsetDateTime.now(ZoneOffset.UTC));
+        return dispatchBudgetedWeakConceptEmails(OffsetDateTime.now(ZoneOffset.UTC)).sent();
     }
 
     @Transactional
@@ -137,12 +161,12 @@ public class RetentionService {
     }
 
     @Transactional
-    public int sendDueConceptsDigestEmails() {
+    public RetentionDispatchResult sendDueConceptsDigestEmails() {
         return sendDueConceptsDigestEmails(OffsetDateTime.now(ZoneOffset.UTC));
     }
 
     @Transactional
-    public int sendKnowledgeImpactDigestEmails() {
+    public RetentionDispatchResult sendKnowledgeImpactDigestEmails() {
         return sendKnowledgeImpactDigestEmails(OffsetDateTime.now(ZoneOffset.UTC));
     }
 
@@ -216,29 +240,40 @@ public class RetentionService {
     }
 
     DailyRetentionDispatchSummary sendDailyEmails(OffsetDateTime now) {
-        InactivityDispatchResult inactivityDispatchResult = dispatchBudgetedInactivityEmails(now);
-        int weakConceptSent = dispatchWeakConceptEmails(findUsersWithWeakConcepts(now), now);
+        // Weak-concept (engaged learner) claims budget before INACTIVITY, which saturates the shared cap.
+        RetentionDispatchResult weakConceptDispatchResult = dispatchBudgetedWeakConceptEmails(now);
+        RetentionDispatchResult inactivityDispatchResult = dispatchBudgetedInactivityEmails(now);
         return new DailyRetentionDispatchSummary(
                 inactivityDispatchResult.sent(),
-                weakConceptSent,
+                weakConceptDispatchResult.sent(),
                 inactivityDispatchResult.budget(),
                 inactivityDispatchResult.sentToday(),
                 inactivityDispatchResult.attempted(),
-                inactivityDispatchResult.skippedForBudget()
+                inactivityDispatchResult.skippedForBudget(),
+                weakConceptDispatchResult.budget(),
+                weakConceptDispatchResult.sentToday(),
+                weakConceptDispatchResult.attempted(),
+                weakConceptDispatchResult.skippedForBudget()
         );
     }
 
     WeeklyRetentionDispatchSummary sendWeeklySummaryEmails(OffsetDateTime now) {
-        int weeklySummarySent = dispatchWeeklySummaryEmails(findWeeklySummaryUsers(now), now);
-        return new WeeklyRetentionDispatchSummary(weeklySummarySent);
+        RetentionDispatchResult result = dispatchBudgetedWeeklySummaryEmails(now);
+        return new WeeklyRetentionDispatchSummary(
+                result.sent(),
+                result.budget(),
+                result.sentToday(),
+                result.attempted(),
+                result.skippedForBudget()
+        );
     }
 
-    int sendDueConceptsDigestEmails(OffsetDateTime now) {
-        return dispatchDueConceptsDigestEmails(findDueConceptsDigestUsers(now), now);
+    RetentionDispatchResult sendDueConceptsDigestEmails(OffsetDateTime now) {
+        return dispatchBudgetedDueConceptsDigestEmails(now);
     }
 
-    int sendKnowledgeImpactDigestEmails(OffsetDateTime now) {
-        return dispatchKnowledgeImpactDigestEmails(findKnowledgeImpactDigestUsers(now), now);
+    RetentionDispatchResult sendKnowledgeImpactDigestEmails(OffsetDateTime now) {
+        return dispatchBudgetedKnowledgeImpactDigestEmails(now);
     }
 
     private Optional<WeakConceptReminder> findWeakConceptReminderForUser(UserEntity user, OffsetDateTime now) {
@@ -470,27 +505,23 @@ public class RetentionService {
         return sent;
     }
 
-    private InactivityDispatchResult dispatchBudgetedInactivityEmails(OffsetDateTime now) {
+    private RetentionDispatchResult dispatchBudgetedInactivityEmails(OffsetDateTime now) {
         if (!properties.getEmail().isReengagementEnabled()) {
             log.info("retention.email.inactivity disabled");
-            return new InactivityDispatchResult(0, countEmailsSentToday(now), 0, 0, 0);
+            return new RetentionDispatchResult(0, countEmailsSentToday(now), 0, 0, 0);
         }
 
         long sentToday = countEmailsSentToday(now);
         int budget = resolveReengagementBudget(sentToday);
         List<InactiveUserReminder> candidates = findInactiveUsers(now);
-        int attempted = Math.min(candidates.size(), budget);
-        int skippedForBudget = Math.max(0, candidates.size() - attempted);
-        int sent = dispatchInactivityEmails(candidates.stream().limit(attempted).toList(), now);
-        log.info(
-                "retention.email.inactivity.dispatch budget={} sentToday={} attempted={} sent={} skippedForBudget={}",
+        return dispatchWithinBudget(
+                "inactivity",
+                candidates,
                 budget,
                 sentToday,
-                attempted,
-                sent,
-                skippedForBudget
+                now,
+                this::dispatchInactivityEmails
         );
-        return new InactivityDispatchResult(budget, sentToday, attempted, sent, skippedForBudget);
     }
 
     private long countEmailsSentToday(OffsetDateTime now) {
@@ -498,7 +529,10 @@ public class RetentionService {
                 .toLocalDate()
                 .atStartOfDay(EMAIL_BUDGET_ZONE)
                 .toOffsetDateTime();
-        return emailLogRepository.countBySentAtGreaterThanEqual(startOfDay);
+        return emailLogRepository.countBySentAtGreaterThanEqualAndEmailTypeIn(
+                startOfDay,
+                BUDGETED_RETENTION_EMAIL_TYPES
+        );
     }
 
     private int resolveReengagementBudget(long sentToday) {
@@ -530,6 +564,19 @@ public class RetentionService {
         return sent;
     }
 
+    private RetentionDispatchResult dispatchBudgetedWeakConceptEmails(OffsetDateTime now) {
+        long sentToday = countEmailsSentToday(now);
+        int budget = resolveReengagementBudget(sentToday);
+        return dispatchWithinBudget(
+                "weak-concept",
+                findUsersWithWeakConcepts(now),
+                budget,
+                sentToday,
+                now,
+                this::dispatchWeakConceptEmails
+        );
+    }
+
     private int dispatchWeeklySummaryEmails(List<WeeklySummaryReminder> candidates, OffsetDateTime now) {
         int sent = 0;
         for (WeeklySummaryReminder candidate : candidates) {
@@ -555,6 +602,19 @@ public class RetentionService {
         return sent;
     }
 
+    private RetentionDispatchResult dispatchBudgetedWeeklySummaryEmails(OffsetDateTime now) {
+        long sentToday = countEmailsSentToday(now);
+        int budget = resolveReengagementBudget(sentToday);
+        return dispatchWithinBudget(
+                "weekly-summary",
+                findWeeklySummaryUsers(now),
+                budget,
+                sentToday,
+                now,
+                this::dispatchWeeklySummaryEmails
+        );
+    }
+
     private int dispatchDueConceptsDigestEmails(List<DueConceptsDigestReminder> candidates, OffsetDateTime now) {
         int sent = 0;
         for (DueConceptsDigestReminder candidate : candidates) {
@@ -574,6 +634,19 @@ public class RetentionService {
             }
         }
         return sent;
+    }
+
+    private RetentionDispatchResult dispatchBudgetedDueConceptsDigestEmails(OffsetDateTime now) {
+        long sentToday = countEmailsSentToday(now);
+        int budget = resolveReengagementBudget(sentToday);
+        return dispatchWithinBudget(
+                "due-concepts-digest",
+                findDueConceptsDigestUsers(now),
+                budget,
+                sentToday,
+                now,
+                this::dispatchDueConceptsDigestEmails
+        );
     }
 
     private int dispatchKnowledgeImpactDigestEmails(
@@ -602,6 +675,42 @@ public class RetentionService {
         return sent;
     }
 
+    private RetentionDispatchResult dispatchBudgetedKnowledgeImpactDigestEmails(OffsetDateTime now) {
+        long sentToday = countEmailsSentToday(now);
+        int budget = resolveReengagementBudget(sentToday);
+        return dispatchWithinBudget(
+                "knowledge-impact-digest",
+                findKnowledgeImpactDigestUsers(now),
+                budget,
+                sentToday,
+                now,
+                this::dispatchKnowledgeImpactDigestEmails
+        );
+    }
+
+    private <T> RetentionDispatchResult dispatchWithinBudget(
+            String emailType,
+            List<T> candidates,
+            int budget,
+            long sentToday,
+            OffsetDateTime now,
+            BudgetedDispatcher<T> dispatcher
+    ) {
+        int attempted = Math.min(candidates.size(), budget);
+        int skippedForBudget = Math.max(0, candidates.size() - attempted);
+        int sent = dispatcher.dispatch(candidates.stream().limit(attempted).toList(), now);
+        log.info(
+                "retention.email.{}.dispatch budget={} sentToday={} attempted={} sent={} skippedForBudget={}",
+                emailType,
+                budget,
+                sentToday,
+                attempted,
+                sent,
+                skippedForBudget
+        );
+        return new RetentionDispatchResult(budget, sentToday, attempted, sent, skippedForBudget);
+    }
+
     private boolean sendRetentionEmail(
             UUID userId,
             String email,
@@ -612,12 +721,13 @@ public class RetentionService {
             OffsetDateTime now
     ) {
         try {
+            UUID emailLogId = UUID.randomUUID();
             EmailUnsubscribeLinkService.OptionalEmailUnsubscribeContext unsubscribeContext = buildUnsubscribeContext(
                     userId,
                     emailType,
                     unsubscribeCategory
             );
-            Map<String, String> templateParameters = new java.util.LinkedHashMap<>(parameters);
+            Map<String, String> templateParameters = withClickCorrelation(parameters, emailType, emailLogId);
             templateParameters.put("unsubscribeUrl", unsubscribeContext.unsubscribeUrl());
             templateParameters.put("unsubscribeFooterHtml", unsubscribeContext.htmlFooter());
             templateParameters.put("unsubscribeFooterText", unsubscribeContext.textFooter());
@@ -632,7 +742,7 @@ public class RetentionService {
             if (!sent) {
                 return false;
             }
-            logEmailSent(userId, emailType, now);
+            logEmailSent(emailLogId, userId, emailType, now);
             return true;
         } catch (RuntimeException ex) {
             log.warn("retention.email.send failed userId={} emailType={} message={}", userId, emailType, ex.getMessage());
@@ -658,9 +768,34 @@ public class RetentionService {
         }
     }
 
-    private void logEmailSent(UUID userId, RetentionEmailType emailType, OffsetDateTime now) {
+    static Map<String, String> withClickCorrelation(
+            Map<String, String> parameters,
+            RetentionEmailType emailType,
+            UUID emailLogId
+    ) {
+        Map<String, String> tracked = new LinkedHashMap<>(parameters);
+        String ctaParameter = CTA_PARAMETER_BY_EMAIL_TYPE.get(emailType);
+        String source = SOURCE_BY_EMAIL_TYPE.get(emailType);
+        if (ctaParameter == null || source == null || !tracked.containsKey(ctaParameter)) {
+            return tracked;
+        }
+        String trackedUrl = UriComponentsBuilder.fromUriString(tracked.get(ctaParameter))
+                .replaceQueryParam(SOURCE_QUERY_PARAMETER, source)
+                .replaceQueryParam(EMAIL_LOG_ID_QUERY_PARAMETER, emailLogId)
+                .build()
+                .toUriString();
+        tracked.put(ctaParameter, trackedUrl);
+        return tracked;
+    }
+
+    private void logEmailSent(
+            UUID emailLogId,
+            UUID userId,
+            RetentionEmailType emailType,
+            OffsetDateTime now
+    ) {
         EmailLogEntity entity = new EmailLogEntity();
-        entity.setId(UUID.randomUUID());
+        entity.setId(emailLogId);
         entity.setUserId(userId);
         entity.setEmailType(emailType);
         entity.setSentAt(now);
@@ -829,11 +964,15 @@ public class RetentionService {
             int inactivityBudget,
             long sentToday,
             int inactivityAttempted,
-            int inactivitySkippedForBudget
+            int inactivitySkippedForBudget,
+            int weakConceptBudget,
+            long weakConceptSentToday,
+            int weakConceptAttempted,
+            int weakConceptSkippedForBudget
     ) {
     }
 
-    private record InactivityDispatchResult(
+    public record RetentionDispatchResult(
             int budget,
             long sentToday,
             int attempted,
@@ -843,8 +982,17 @@ public class RetentionService {
     }
 
     public record WeeklyRetentionDispatchSummary(
-            int weeklySummarySent
+            int weeklySummarySent,
+            int budget,
+            long sentToday,
+            int attempted,
+            int skippedForBudget
     ) {
+    }
+
+    @FunctionalInterface
+    private interface BudgetedDispatcher<T> {
+        int dispatch(List<T> candidates, OffsetDateTime now);
     }
 
     /**

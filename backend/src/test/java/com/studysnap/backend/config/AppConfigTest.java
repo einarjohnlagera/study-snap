@@ -3,8 +3,15 @@ package com.studysnap.backend.config;
 import org.junit.jupiter.api.Test;
 import org.springframework.core.task.AsyncTaskExecutor;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
+import org.springframework.scheduling.support.PeriodicTrigger;
+import org.springframework.scheduling.support.ScheduledMethodRunnable;
 
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -27,7 +34,9 @@ class AppConfigTest {
     @Test
     void generationExecutorsKeepMainDispatchAndLlmFanOutSeparate() {
         AppConfig config = new AppConfig();
-        ThreadPoolTaskExecutor studyPackExecutor = asThreadPool(config.studyPackGenerationTaskExecutor());
+        ThreadPoolTaskExecutor studyPackExecutor = asThreadPool(
+                config.studyPackGenerationTaskExecutor(taskDecorator(new InFlightRequestRegistry()))
+        );
         ThreadPoolTaskExecutor llmParallelExecutor = asThreadPool(config.llmParallelTaskExecutor());
 
         try {
@@ -50,13 +59,79 @@ class AppConfigTest {
     }
 
     @Test
+    void customSchedulerUsesTwoDistinctlyNamedThreads() {
+        ThreadPoolTaskScheduler scheduler = (ThreadPoolTaskScheduler) new AppConfig().taskScheduler(
+                taskDecorator(new InFlightRequestRegistry())
+        );
+
+        try {
+            assertThat(scheduler.getScheduledThreadPoolExecutor().getCorePoolSize()).isEqualTo(2);
+            assertThat(scheduler.getThreadNamePrefix()).isEqualTo("scheduled-task-");
+        } finally {
+            scheduler.shutdown();
+        }
+    }
+
+    @Test
+    void taskSchedulerBeanRegistersScheduledJobsThroughAllSixScheduleMethods() throws Exception {
+        // Guards the bean swap: a plain ThreadPoolTaskScheduler (the plan's original design) or a bean
+        // without the decorator would silently register nothing, and every other test builds its own scheduler.
+        InFlightRequestRegistry registry = new InFlightRequestRegistry();
+        ThreadPoolTaskScheduler scheduler =
+                (ThreadPoolTaskScheduler) new AppConfig().taskScheduler(taskDecorator(registry));
+        java.time.Duration period = java.time.Duration.ofMinutes(10);
+        java.time.Instant now = java.time.Instant.now();
+        List<BlockingJob> jobs = List.of(
+                new BlockingJob(), new BlockingJob(), new BlockingJob(),
+                new BlockingJob(), new BlockingJob(), new BlockingJob()
+        );
+
+        try {
+            // schedule(Runnable, Trigger) is the path every cron @Scheduled job takes.
+            assertRegisteredWhileRunning(registry, jobs.get(0),
+                    scheduler.schedule(scheduled(jobs.get(0)), new PeriodicTrigger(period)));
+            assertRegisteredWhileRunning(registry, jobs.get(1),
+                    scheduler.schedule(scheduled(jobs.get(1)), now));
+            assertRegisteredWhileRunning(registry, jobs.get(2),
+                    scheduler.scheduleAtFixedRate(scheduled(jobs.get(2)), period));
+            assertRegisteredWhileRunning(registry, jobs.get(3),
+                    scheduler.scheduleAtFixedRate(scheduled(jobs.get(3)), now, period));
+            assertRegisteredWhileRunning(registry, jobs.get(4),
+                    scheduler.scheduleWithFixedDelay(scheduled(jobs.get(4)), period));
+            assertRegisteredWhileRunning(registry, jobs.get(5),
+                    scheduler.scheduleWithFixedDelay(scheduled(jobs.get(5)), now, period));
+        } finally {
+            jobs.forEach(job -> job.release.countDown());
+            scheduler.shutdown();
+        }
+    }
+
+    private static Runnable scheduled(BlockingJob job) throws NoSuchMethodException {
+        return new ScheduledMethodRunnable(job, "run");
+    }
+
+    private static void assertRegisteredWhileRunning(
+            InFlightRequestRegistry registry, BlockingJob job, java.util.concurrent.ScheduledFuture<?> future
+    ) throws Exception {
+        assertThat(job.started.await(2, TimeUnit.SECONDS)).isTrue();
+        assertThat(registry.snapshot().values())
+                .extracting(InFlightRequestRegistry.InFlightRequest::path)
+                .contains(BlockingJob.class.getName() + ".run");
+        job.release.countDown();
+        future.cancel(false);
+        awaitRegistryEmpty(registry);
+    }
+
+    @Test
     void analyticsExecutorDrainsItsQueueOnShutdownInsteadOfDiscardingIt() throws Exception {
         // `main` auto-deploys on merge, so without drain-on-shutdown every release silently discarded
         // whatever analytics work was still queued. Asserted behaviourally because
         // waitForTasksToCompleteOnShutdown / awaitTerminationSeconds expose no getters — and because a
         // property assertion would not prove the queue actually flushes.
         ThreadPoolTaskExecutor analyticsExecutor =
-                (ThreadPoolTaskExecutor) new AppConfig().analyticsTaskExecutor();
+                (ThreadPoolTaskExecutor) new AppConfig().analyticsTaskExecutor(
+                        taskDecorator(new InFlightRequestRegistry())
+                );
         CountDownLatch firstTaskStarted = new CountDownLatch(1);
         AtomicInteger completed = new AtomicInteger();
 
@@ -77,7 +152,9 @@ class AppConfigTest {
     @Test
     void notificationFanOutExecutorKeepsItsConnectionPoolBoundAndObservableRejectionPolicy() {
         ThreadPoolTaskExecutor executor =
-                (ThreadPoolTaskExecutor) new AppConfig().notificationFanOutExecutor();
+                (ThreadPoolTaskExecutor) new AppConfig().notificationFanOutExecutor(
+                        taskDecorator(new InFlightRequestRegistry())
+                );
 
         try {
             assertThat(executor.getCorePoolSize()).isEqualTo(1);
@@ -90,12 +167,150 @@ class AppConfigTest {
         }
     }
 
+    @Test
+    void decoratedGenerationTaskIsVisibleWhileRunningAndRemovedAfterCompletion() throws Exception {
+        InFlightRequestRegistry registry = new InFlightRequestRegistry();
+        ThreadPoolTaskExecutor executor = asThreadPool(
+                new AppConfig().studyPackGenerationTaskExecutor(taskDecorator(registry))
+        );
+        CountDownLatch started = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+
+        try {
+            Future<?> task = executor.submit(() -> {
+                started.countDown();
+                awaitUnchecked(release);
+            });
+
+            assertThat(started.await(2, TimeUnit.SECONDS)).isTrue();
+            assertThat(registry.snapshot().values())
+                    .singleElement()
+                    .extracting(InFlightRequestRegistry.InFlightRequest::path)
+                    .asString()
+                    .startsWith("study-pack-generation-");
+
+            release.countDown();
+            task.get(2, TimeUnit.SECONDS);
+            awaitRegistryEmpty(registry);
+        } finally {
+            release.countDown();
+            executor.shutdown();
+        }
+    }
+
+    @Test
+    void decoratedGenerationTaskIsRemovedWhenItThrows() throws Exception {
+        InFlightRequestRegistry registry = new InFlightRequestRegistry();
+        ThreadPoolTaskExecutor executor = asThreadPool(
+                new AppConfig().studyPackGenerationTaskExecutor(taskDecorator(registry))
+        );
+        CountDownLatch running = new CountDownLatch(1);
+
+        try {
+            Future<?> task = executor.submit(() -> {
+                running.countDown();
+                throw new IllegalStateException("generation failed");
+            });
+
+            assertThat(running.await(2, TimeUnit.SECONDS)).isTrue();
+            org.assertj.core.api.Assertions.assertThatThrownBy(() -> task.get(2, TimeUnit.SECONDS))
+                    .isInstanceOf(ExecutionException.class)
+                    .hasCauseInstanceOf(IllegalStateException.class);
+            awaitRegistryEmpty(registry);
+        } finally {
+            executor.shutdown();
+        }
+    }
+
+    @Test
+    void everyDbTouchingExecutorIsDecoratedAndTheLlmFanOutExecutorIsNot() throws Exception {
+        InFlightRequestRegistry registry = new InFlightRequestRegistry();
+        InFlightThreadRegisteringTaskDecorator decorator = taskDecorator(registry);
+        AppConfig config = new AppConfig();
+        Map<String, ThreadPoolTaskExecutor> decorated = Map.of(
+                "study-pack-generation-", asThreadPool(config.studyPackGenerationTaskExecutor(decorator)),
+                "bulk-regeneration-", asThreadPool(config.bulkRegenerationTaskExecutor(decorator)),
+                "notification-fan-out-", (ThreadPoolTaskExecutor) config.notificationFanOutExecutor(decorator),
+                "analytics-", (ThreadPoolTaskExecutor) config.analyticsTaskExecutor(decorator)
+        );
+        ThreadPoolTaskExecutor llmParallel = asThreadPool(config.llmParallelTaskExecutor());
+
+        try {
+            for (Map.Entry<String, ThreadPoolTaskExecutor> entry : decorated.entrySet()) {
+                assertThat(pathsWhileRunning(entry.getValue(), registry))
+                        .as(entry.getKey())
+                        .singleElement()
+                        .asString()
+                        .startsWith(entry.getKey());
+            }
+            // Holds no DB connection, so registering it would only add registry churn.
+            assertThat(pathsWhileRunning(llmParallel, registry)).isEmpty();
+        } finally {
+            decorated.values().forEach(ThreadPoolTaskExecutor::shutdown);
+            llmParallel.shutdown();
+        }
+    }
+
+    private static List<String> pathsWhileRunning(ThreadPoolTaskExecutor executor, InFlightRequestRegistry registry)
+            throws Exception {
+        CountDownLatch started = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        Future<?> task = executor.submit(() -> {
+            started.countDown();
+            awaitUnchecked(release);
+        });
+        try {
+            assertThat(started.await(2, TimeUnit.SECONDS)).isTrue();
+            return registry.snapshot().values().stream()
+                    .map(InFlightRequestRegistry.InFlightRequest::path)
+                    .toList();
+        } finally {
+            release.countDown();
+            task.get(2, TimeUnit.SECONDS);
+            awaitRegistryEmpty(registry);
+        }
+    }
+
+    // The decorator removes the entry in a finally that wraps the FutureTask, so it can run just AFTER
+    // Future.get() returns; asserting emptiness immediately would be a race.
+    private static void awaitRegistryEmpty(InFlightRequestRegistry registry) throws InterruptedException {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(2);
+        while (!registry.snapshot().isEmpty() && System.nanoTime() < deadline) {
+            Thread.sleep(10);
+        }
+        assertThat(registry.snapshot()).isEmpty();
+    }
+
+    public static final class BlockingJob {
+        private final CountDownLatch started = new CountDownLatch(1);
+        private final CountDownLatch release = new CountDownLatch(1);
+
+        public void run() throws InterruptedException {
+            started.countDown();
+            release.await();
+        }
+    }
+
     private static void sleepQuietly() {
         try {
             Thread.sleep(150);
         } catch (InterruptedException ex) {
             Thread.currentThread().interrupt();
         }
+    }
+
+    private static void awaitUnchecked(CountDownLatch latch) {
+        try {
+            latch.await();
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    private static InFlightThreadRegisteringTaskDecorator taskDecorator(
+            InFlightRequestRegistry registry
+    ) {
+        return new InFlightThreadRegisteringTaskDecorator(registry);
     }
 
     private ThreadPoolTaskExecutor asThreadPool(AsyncTaskExecutor taskExecutor) {

@@ -1,6 +1,6 @@
 # RELEASES_ARCHIVE.md — NoteLib
 
-Archived sections of `RELEASES.md`. **Contents are NOT one contiguous range:** `v0.41.0`–`v0.120.0`, plus `v0.126.0` (moved at the `v0.132.0` kickoff), `v0.127.0` (moved at the `v0.133.0` kickoff) `v0.128.0` (moved at the `v0.134.0` kickoff) `v0.129.0` (moved at the `v0.135.0` kickoff) `v0.130.0` (moved at the `v0.136.0` kickoff) `v0.131.0` (moved at the `v0.137.0` kickoff) `v0.132.0` (moved at the `v0.138.0` kickoff) `v0.133.0` (moved at the `v0.139.0` kickoff), `v0.134.0` (moved at the `v0.140.0` kickoff), `v0.135.0` (moved at the `v0.141.0` kickoff), `v0.136.0` (moved at the `v0.142.0` kickoff), `v0.137.0` (moved at the `v0.143.0` kickoff), `v0.138.0` (moved at the `v0.144.0` kickoff), `v0.139.0` (moved at the `v0.145.0` kickoff), `v0.140.0` (moved at the `v0.146.0` kickoff), `v0.141.0` (moved at the `v0.147.0` kickoff), `v0.142.0` (moved at the `v0.148.0` kickoff), `v0.143.0` (moved at the `v0.149.0` kickoff), `v0.144.0` (moved at the `v0.150.0` kickoff), `v0.145.0` (moved at the `v0.151.0` kickoff), `v0.146.0` (moved at the `v0.152.0` kickoff), `v0.147.0` (moved at the `v0.153.0` kickoff), `v0.148.0` (moved at the `v0.154.0` kickoff), `v0.149.0` (moved at the `v0.155.0` kickoff) and `v0.150.0` (moved at the `v0.156.0` signoff — the first time this archive check ran at signoff rather than kickoff, since v0.156.0 folded two releases' worth of scope into one and crossed the cap without an intervening kickoff) as the live file crossed its *current + last five* cap. Each version's own `## vX.Y.Z` heading is the index — search for it. `v0.40.1` and earlier moved here
+Archived sections of `RELEASES.md`. **Contents are NOT one contiguous range:** `v0.41.0`–`v0.120.0`, plus `v0.126.0` (moved at the `v0.132.0` kickoff), `v0.127.0` (moved at the `v0.133.0` kickoff) `v0.128.0` (moved at the `v0.134.0` kickoff) `v0.129.0` (moved at the `v0.135.0` kickoff) `v0.130.0` (moved at the `v0.136.0` kickoff) `v0.131.0` (moved at the `v0.137.0` kickoff) `v0.132.0` (moved at the `v0.138.0` kickoff) `v0.133.0` (moved at the `v0.139.0` kickoff), `v0.134.0` (moved at the `v0.140.0` kickoff), `v0.135.0` (moved at the `v0.141.0` kickoff), `v0.136.0` (moved at the `v0.142.0` kickoff), `v0.137.0` (moved at the `v0.143.0` kickoff), `v0.138.0` (moved at the `v0.144.0` kickoff), `v0.139.0` (moved at the `v0.145.0` kickoff), `v0.140.0` (moved at the `v0.146.0` kickoff), `v0.141.0` (moved at the `v0.147.0` kickoff), `v0.142.0` (moved at the `v0.148.0` kickoff), `v0.143.0` (moved at the `v0.149.0` kickoff), `v0.144.0` (moved at the `v0.150.0` kickoff), `v0.145.0` (moved at the `v0.151.0` kickoff), `v0.146.0` (moved at the `v0.152.0` kickoff), `v0.147.0` (moved at the `v0.153.0` kickoff), `v0.148.0` (moved at the `v0.154.0` kickoff), `v0.149.0` (moved at the `v0.155.0` kickoff), `v0.150.0` (moved at the `v0.156.0` signoff — the first time this archive check ran at signoff rather than kickoff, since v0.156.0 folded two releases' worth of scope into one and crossed the cap without an intervening kickoff) and `v0.151.0` (moved at the `v0.157.0` kickoff) as the live file crossed its *current + last five* cap. Each version's own `## vX.Y.Z` heading is the index — search for it. `v0.40.1` and earlier moved here
 2026-07-10; **`v0.41.0` through `v0.120.0` moved here 2026-09-07** in the `v0.126.0` pass, which
 resumed this convention after it had lapsed for 85 releases — `RELEASES.md` had reached 116
 sections against its documented design of *current + last few versions*. Both passes are MOVES,
@@ -15,6 +15,103 @@ versions also live in `docs/releases/vX.Y.Z.md` — those drop implementation de
 
 See `RELEASES.md` for the current + most-recent versions, and its "Archived releases"
 index for a one-line-per-version pointer back into this file.
+
+---
+
+## v0.151.0 - No Backdoor Left, Round Two
+
+**Status: Released**
+
+Theme: close the same gate gap `v0.143.0`/`v0.144.0` already closed for the exam question pool, this
+time for shared quiz links.
+
+Source: `docs/product/ROADMAP.md` Backlog Index row, found 2026-09-11 while tracing `v0.143.0` item 2's
+scope, verified not-currently-live at kickoff (re-run 2026-09-16, unchanged since 2026-09-12: exactly
+1 active `quiz_share_links` row, its `generated_quizzes.generated_at` predates the link's own
+`created_at`, so it is not exposed to a post-share content change).
+
+### Planned Scope
+
+- **Shared quiz links are not deactivated on a `STUDY_PACK`-only regeneration (backend, 2 files).**
+  `StudyPackService.java:928` calls `generatedQuizService.deactivateShareLinksForNote(noteId,
+  ownerUserId)` only inside `if (regeneratingNoteContent)` — the combined Note+Study-Pack
+  regeneration path. `POST /notes/{id}/regenerate` defaults to `NoteRegenerationScope.STUDY_PACK`
+  (an absent/blank scope resolves to it), which reaches the same shared worker method with
+  `regeneratingNoteContent = false`, so the deactivation never fires on that path even though
+  `saveStudyPack` replaces the quiz content either way. Fix: drop the call out of the `if` gate, same
+  as `v0.143.0` already did one line above it for `examQuestionPoolService.refreshPool`.
+  **⚠️ SCOPE GREW MID-IMPLEMENTATION, found by the full backend build, not by the original scoping:**
+  `NoteRegenerationConsequenceService.notesWithLiveShareLink` (the bulk-regeneration path's
+  consequence-counting method, backing both the preflight modal's `sharedQuizzesToDeactivate` count
+  and `NoteBulkRegenerationService`'s per-item `hadLiveShareLink` receipt flag, captured *before*
+  dispatch from the same method) carried the identical scope gate, deliberately mirrored to match the
+  single-Note primitive's then-current (buggy) behavior. Fixing only `StudyPackService` would have made
+  the bulk path actively **worse**: the preflight would promise zero deactivations for a
+  `STUDY_PACK`-only batch, the run would deactivate some anyway, and the receipt — reading the same
+  gated method — would falsely confirm nothing happened. Fixed together: the gate condition in
+  `notesWithLiveShareLink` was removed (scope no longer distinguishes any share-link consequence, since
+  `saveStudyPack` replaces the quiz for either scope); its stale Javadoc, which justified the gate as
+  intentional, was removed. **The confirmation dialog inherited the same assumption**:
+  `bulk-regenerate-modal.tsx` gated its shared-quiz warning behind `combined &&`, so even a fixed
+  backend would have shown a curator zero warning on the default `STUDY_PACK`-only scope; that gate is
+  dropped too, and its component test (which had asserted the warning's *absence* on `STUDY_PACK` as
+  correct) is corrected along with it. Two feature docs stated the old scope restriction explicitly and
+  are corrected: `docs/features/bulk-regeneration.md` and `docs/features/study-pack-generation.md`.
+  Isolated bug fix, clear root cause once traced — Claude Code implements inline, no Codex prompt.
+
+Anti-drift: no other regeneration-path behavior changes; the two `refreshPool` calls immediately above
+`StudyPackService`'s deactivation call are already unconditional and stay untouched; the
+note-generation-unit meter stays genuinely scope-specific (STUDY_PACK-only still spends zero) —
+unrelated to this fix and not touched by it.
+
+Verification tier: **one `advisor()` call on the diff plus one scoped cold agent at signoff, falsification-framed.**
+`advisor()` judged the diff itself (a two-line gate removal plus its stale Javadoc, covered end-to-end
+by a real-Postgres integration test) adequate for a single `advisor()` call. At signoff the owner asked
+for a cold agent if a pressure test was warranted — one of this repo's own triggers had in fact fired:
+the implementing session's own first-pass delivery (fixing `StudyPackService` alone) was itself an
+incomplete blind spot the full build caught mid-session, and a second one (the frontend modal) was
+caught the same way after that — a measured blind-spot signal. The cold agent (`model: sonnet`, fresh
+context) was handed 7 specific claims to disprove across the backend, the bulk driver, and the frontend
+modal. 5 REFUTED outright (meter untouched, first-ever-generation no-op, frontend warning correctness,
+single-note/bulk-list consistency, double-deactivation safety). 2 surfaced real but narrow, **pre-existing**
+gaps in the bulk-regeneration design, not introduced by this diff — see "Known limitations" below.
+
+`GeneratedQuizService.deactivateShareLinksForNote`'s existing null/empty-guard (read, not re-tested)
+makes a first-ever-generation no-op safe by construction, and is exercised incidentally by every other
+bulk-regeneration test that seeds no quiz. One added cost, not worth a test: `notesWithLiveShareLink`
+now runs its lookup on every `STUDY_PACK`-only item instead of short-circuiting immediately, one extra
+empty query per note with no existing quiz.
+
+### Known limitations (found by the signoff cold agent, pre-existing, not introduced by this fix)
+
+- **Readiness-window race can make the preflight's `sharedQuizzesToDeactivate` count OVERSTATE what a
+  batch actually deactivates — the safe direction, not a correctness hole.** The preflight counts a note
+  as READY-with-a-live-link at preflight time; `NoteBulkRegenerationService.processItem` re-evaluates
+  readiness per-note at dispatch time and returns `BLOCKED`/`NOT_ELIGIBLE` before `hasLiveShareLink` is
+  even read if the note's readiness changed in between (e.g. its Domain Context was cleared by a
+  concurrent edit). That note is never dispatched, so its content (and its shared quiz) is never
+  replaced, and correctly not deactivated — the preflight simply counted a consequence that then didn't
+  happen, same as it would for the regeneration itself. This is the existing "preflight is a snapshot,
+  not authoritative" behavior `docs/features/bulk-regeneration.md` already documents, applying uniformly
+  to the share-link count too; not specific to this fix and not fixed here.
+- **Narrow TOCTOU on the per-item receipt's `shareLinkDeactivated` flag.** `NoteBulkRegenerationService`
+  captures `hadLiveShareLink` synchronously before `dispatchItem`, then reuses that boolean for the
+  receipt once the async worker finishes seconds-to-minutes later. If a share link is newly created on
+  that note's quiz in that window, the (unconditional) deactivation call still deactivates it, but the
+  receipt records `false` — a stale prediction rather than a fresh read. Narrow (requires a share link
+  created mid-item-processing) and not a regression from this diff; flagged as found, not fixed.
+
+### Shipped
+
+- **Shared quiz links now deactivate on either regeneration scope** (backend, bulk-consequence path,
+  and the confirmation dialog). PR #1406, commit `aea7c12f`, merged to `releases/v0.151.0` as
+  `f9013f5c`. `StudyPackService.java:919` calls `deactivateShareLinksForNote` unconditionally;
+  `NoteRegenerationConsequenceService.notesWithLiveShareLink` dropped the identical scope gate backing
+  the bulk preflight count and per-item receipt; `bulk-regenerate-modal.tsx` dropped the matching
+  `combined &&` gate on its warning copy. `docs/features/bulk-regeneration.md` and
+  `docs/features/study-pack-generation.md` corrected to match. Backend 2403/2403, frontend 2450/2451
+  (1 pre-existing unrelated skip), `tsc --noEmit` clean. `ROADMAP.md` Backlog Index row updated with
+  file:line evidence.
 
 ---
 

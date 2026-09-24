@@ -3,7 +3,11 @@ package com.studysnap.backend.service;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.studysnap.backend.config.StudySnapProperties;
+import com.studysnap.backend.entity.EmailLogEntity;
+import com.studysnap.backend.entity.RetentionEmailType;
 import com.studysnap.backend.exception.InvalidResendWebhookSignatureException;
+import com.studysnap.backend.repository.EmailLogRepository;
+import com.studysnap.backend.repository.EmailOpenDailyCountRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -16,7 +20,13 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.Instant;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeParseException;
 import java.util.Base64;
+import java.util.Map;
+import java.util.Optional;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -28,14 +38,31 @@ public class ResendWebhookService {
     private static final String EVENT_BOUNCED = "email.bounced";
     private static final String EVENT_COMPLAINED = "email.complained";
     private static final String EVENT_SUPPRESSED = "email.suppressed";
+    private static final String EVENT_CLICKED = "email.clicked";
+    private static final String EVENT_OPENED = "email.opened";
     private static final String FIELD_TYPE = "type";
+    private static final String FIELD_CREATED_AT = "created_at";
     private static final String FIELD_DATA = "data";
     private static final String FIELD_TO = "to";
+    private static final String FIELD_CLICK = "click";
+    private static final String FIELD_LINK = "link";
+    private static final String FIELD_TIMESTAMP = "timestamp";
+    private static final String EMAIL_LOG_ID_PARAMETER = "e";
+    private static final String SOURCE_PARAMETER = "source";
     private static final long SIGNATURE_TOLERANCE_SECONDS = 300L;
+    private static final Map<String, RetentionEmailType> RETENTION_TYPE_BY_SOURCE = Map.of(
+            "inactivity", RetentionEmailType.INACTIVITY,
+            "weak-concept", RetentionEmailType.WEAK_CONCEPT,
+            "weekly-summary", RetentionEmailType.WEEKLY_SUMMARY,
+            "due-concepts-digest", RetentionEmailType.DUE_CONCEPTS_DIGEST,
+            "knowledge-impact-digest", RetentionEmailType.KNOWLEDGE_IMPACT_DIGEST
+    );
 
     private final StudySnapProperties properties;
     private final ObjectMapper objectMapper;
     private final SuppressedEmailService suppressedEmailService;
+    private final EmailLogRepository emailLogRepository;
+    private final EmailOpenDailyCountRepository emailOpenDailyCountRepository;
 
     @Transactional
     public void handleWebhook(String payload, String svixId, String svixTimestamp, String svixSignature) {
@@ -43,6 +70,14 @@ public class ResendWebhookService {
 
         JsonNode event = parsePayload(payload);
         String eventType = readText(event, FIELD_TYPE);
+        if (EVENT_CLICKED.equals(eventType)) {
+            handleClicked(event);
+            return;
+        }
+        if (EVENT_OPENED.equals(eventType)) {
+            handleOpened(event);
+            return;
+        }
         if (!isSuppressionEvent(eventType)) {
             return;
         }
@@ -56,6 +91,74 @@ public class ResendWebhookService {
             String address = recipient.asText(null);
             suppressedEmailService.suppress(address, eventType);
         }
+    }
+
+    private void handleClicked(JsonNode event) {
+        JsonNode click = event.path(FIELD_DATA).path(FIELD_CLICK);
+        String link = readText(click, FIELD_LINK);
+        String timestamp = readText(click, FIELD_TIMESTAMP);
+        Optional<ClickCorrelation> correlation = parseClickCorrelation(link, timestamp);
+        if (correlation.isEmpty()) {
+            log.warn("email.resend.webhook.click malformedPayload");
+            return;
+        }
+
+        ClickCorrelation clickCorrelation = correlation.get();
+        Optional<EmailLogEntity> emailLog = emailLogRepository.findById(clickCorrelation.emailLogId());
+        if (emailLog.isEmpty() || emailLog.get().getEmailType() != clickCorrelation.emailType()) {
+            log.warn("email.resend.webhook.click unknownCorrelation");
+            return;
+        }
+        EmailLogEntity entity = emailLog.get();
+        if (entity.getClickedAt() == null) {
+            entity.setClickedAt(clickCorrelation.clickedAt());
+            emailLogRepository.save(entity);
+        }
+    }
+
+    private void handleOpened(JsonNode event) {
+        String createdAt = readText(event, FIELD_CREATED_AT);
+        try {
+            OffsetDateTime eventTime = OffsetDateTime.parse(createdAt);
+            emailOpenDailyCountRepository.increment(eventTime.withOffsetSameInstant(ZoneOffset.UTC).toLocalDate());
+        } catch (DateTimeParseException | NullPointerException exception) {
+            log.warn("email.resend.webhook.open malformedPayload");
+        }
+    }
+
+    private Optional<ClickCorrelation> parseClickCorrelation(String link, String timestamp) {
+        if (!StringUtils.hasText(link) || !StringUtils.hasText(timestamp)) {
+            return Optional.empty();
+        }
+        try {
+            java.net.URI uri = java.net.URI.create(link);
+            Map<String, String> parameters = parseQuery(uri.getRawQuery());
+            UUID emailLogId = UUID.fromString(parameters.get(EMAIL_LOG_ID_PARAMETER));
+            RetentionEmailType emailType = RETENTION_TYPE_BY_SOURCE.get(parameters.get(SOURCE_PARAMETER));
+            if (emailType == null) {
+                return Optional.empty();
+            }
+            return Optional.of(new ClickCorrelation(emailLogId, emailType, OffsetDateTime.parse(timestamp)));
+        } catch (IllegalArgumentException | NullPointerException | DateTimeParseException exception) {
+            return Optional.empty();
+        }
+    }
+
+    private Map<String, String> parseQuery(String rawQuery) {
+        if (!StringUtils.hasText(rawQuery)) {
+            return Map.of();
+        }
+        Map<String, String> parameters = new java.util.HashMap<>();
+        for (String pair : rawQuery.split("&")) {
+            String[] parts = pair.split("=", 2);
+            if (parts.length == 2) {
+                parameters.put(
+                        java.net.URLDecoder.decode(parts[0], StandardCharsets.UTF_8),
+                        java.net.URLDecoder.decode(parts[1], StandardCharsets.UTF_8)
+                );
+            }
+        }
+        return parameters;
     }
 
     private void verifySignature(String payload, String svixId, String svixTimestamp, String svixSignature) {
@@ -135,5 +238,8 @@ public class ResendWebhookService {
         }
         String raw = value.asText();
         return StringUtils.hasText(raw) ? raw.trim() : null;
+    }
+
+    private record ClickCorrelation(UUID emailLogId, RetentionEmailType emailType, OffsetDateTime clickedAt) {
     }
 }

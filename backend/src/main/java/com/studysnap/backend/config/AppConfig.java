@@ -7,6 +7,7 @@ import org.springframework.core.task.TaskExecutor;
 import org.springframework.core.task.AsyncTaskExecutor;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.scheduling.TaskScheduler;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionOperations;
@@ -29,6 +30,23 @@ public class AppConfig {
         return new BCryptPasswordEncoder();
     }
 
+    @Bean
+    public InFlightThreadRegisteringTaskDecorator inFlightThreadRegisteringTaskDecorator(
+            InFlightRequestRegistry registry
+    ) {
+        return new InFlightThreadRegisteringTaskDecorator(registry);
+    }
+
+    @Bean
+    public TaskScheduler taskScheduler(InFlightThreadRegisteringTaskDecorator taskDecorator) {
+        InFlightThreadRegisteringTaskScheduler scheduler =
+                new InFlightThreadRegisteringTaskScheduler(taskDecorator);
+        scheduler.setPoolSize(2);
+        scheduler.setThreadNamePrefix("scheduled-task-");
+        scheduler.initialize();
+        return scheduler;
+    }
+
     /**
      * Analytics writes are queued off-request, so anything still queued at shutdown is lost unless the
      * executor is told to drain. `main` auto-deploys on merge, which means every release silently
@@ -37,9 +55,10 @@ public class AppConfig {
      *
      * <p>The await is bounded: draining is best-effort, and a deploy is never blocked longer than
      * {@link #ANALYTICS_SHUTDOWN_AWAIT_SECONDS}. Analytics must not hold a release hostage.
+     * The shared task decorator makes any connection held here visible to pool diagnostics.
      */
     @Bean
-    public TaskExecutor analyticsTaskExecutor() {
+    public TaskExecutor analyticsTaskExecutor(InFlightThreadRegisteringTaskDecorator taskDecorator) {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
         executor.setThreadNamePrefix("analytics-");
         executor.setCorePoolSize(1);
@@ -47,6 +66,7 @@ public class AppConfig {
         executor.setQueueCapacity(ANALYTICS_QUEUE_CAPACITY);
         executor.setWaitForTasksToCompleteOnShutdown(true);
         executor.setAwaitTerminationSeconds(ANALYTICS_SHUTDOWN_AWAIT_SECONDS);
+        executor.setTaskDecorator(taskDecorator);
         executor.initialize();
         return executor;
     }
@@ -60,9 +80,10 @@ public class AppConfig {
      * <p>The queue is bounded and uses an explicit abort policy so dispatch can detect saturation,
      * increment its rejection meter, and tell the admin to press Publish again. Accepted work drains
      * during the bounded shutdown window so a routine deploy does not silently discard it.
+     * The shared task decorator makes any connection held here visible to pool diagnostics.
      */
     @Bean
-    public TaskExecutor notificationFanOutExecutor() {
+    public TaskExecutor notificationFanOutExecutor(InFlightThreadRegisteringTaskDecorator taskDecorator) {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
         executor.setThreadNamePrefix("notification-fan-out-");
         executor.setCorePoolSize(1);
@@ -71,6 +92,7 @@ public class AppConfig {
         executor.setRejectedExecutionHandler(new ThreadPoolExecutor.AbortPolicy());
         executor.setWaitForTasksToCompleteOnShutdown(true);
         executor.setAwaitTerminationSeconds(NOTIFICATION_FAN_OUT_SHUTDOWN_AWAIT_SECONDS);
+        executor.setTaskDecorator(taskDecorator);
         executor.initialize();
         return executor;
     }
@@ -97,14 +119,18 @@ public class AppConfig {
      * <p>⚠️ Max equals core deliberately. A {@link ThreadPoolTaskExecutor} only grows past its core
      * size once the queue is FULL, so with a 100-deep queue a larger max is nearly unreachable anyway
      * — stating 2 makes the real concurrency bound visible instead of implied.
+     * The shared task decorator makes any connection held here visible to pool diagnostics.
      */
     @Bean
-    public AsyncTaskExecutor studyPackGenerationTaskExecutor() {
+    public AsyncTaskExecutor studyPackGenerationTaskExecutor(
+            InFlightThreadRegisteringTaskDecorator taskDecorator
+    ) {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
         executor.setThreadNamePrefix("study-pack-generation-");
         executor.setCorePoolSize(2);
         executor.setMaxPoolSize(2);
         executor.setQueueCapacity(100);
+        executor.setTaskDecorator(taskDecorator);
         executor.initialize();
         return executor;
     }
@@ -112,7 +138,8 @@ public class AppConfig {
     /**
      * ⚠️ THE BULK REGENERATION DRIVER GETS ITS OWN POOL, AND THAT IS THE WHOLE FIX FOR A MEASURED
      * STARVATION. Bulk *generation* dispatches its batch loop onto
-     * {@link #studyPackGenerationTaskExecutor()}, so the loop permanently occupies 1 of only 2 threads
+     * {@link #studyPackGenerationTaskExecutor(InFlightThreadRegisteringTaskDecorator)}, so the loop
+     * permanently occupies 1 of only 2 threads
      * for the batch's entire duration while every item it produces queues onto that same pool. Bulk
      * regeneration must not repeat it: the driver thread here waits on each item, so it would hold a
      * generation thread for minutes at a time doing nothing but waiting.
@@ -127,16 +154,21 @@ public class AppConfig {
      * The batch is not drained; items already resolved survive in {@code note_bulk_regeneration_item}
      * and unresolved ones are read honestly.
      *
-     * <p>⚠️ This does NOT touch {@link #studyPackGenerationTaskExecutor()}'s 2/2/100 bound, which stays
-     * a v0.112.0 Phase 3 decision gated on its own checkpoint.
+     * <p>⚠️ This does NOT touch
+     * {@link #studyPackGenerationTaskExecutor(InFlightThreadRegisteringTaskDecorator)}'s 2/2/100
+     * bound, which stays a v0.112.0 Phase 3 decision gated on its own checkpoint.
+     * The shared task decorator makes any connection held here visible to pool diagnostics.
      */
     @Bean
-    public AsyncTaskExecutor bulkRegenerationTaskExecutor() {
+    public AsyncTaskExecutor bulkRegenerationTaskExecutor(
+            InFlightThreadRegisteringTaskDecorator taskDecorator
+    ) {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
         executor.setThreadNamePrefix("bulk-regeneration-");
         executor.setCorePoolSize(2);
         executor.setMaxPoolSize(2);
         executor.setQueueCapacity(8);
+        executor.setTaskDecorator(taskDecorator);
         executor.initialize();
         return executor;
     }
