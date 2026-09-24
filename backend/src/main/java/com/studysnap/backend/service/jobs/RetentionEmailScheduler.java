@@ -76,7 +76,7 @@ public class RetentionEmailScheduler {
         );
     }
 
-    @Scheduled(cron = "${studysnap.retention.knowledge-impact-digest-monthly-cron:0 0 9 1 * *}")
+    @Scheduled(cron = "${studysnap.retention.knowledge-impact-digest-monthly-cron:0 0 9 1 * *}", zone = DISPATCH_ZONE)
     public void runMonthly() {
         RetentionService.RetentionDispatchResult result = retentionService.sendKnowledgeImpactDigestEmails();
         log.info(
