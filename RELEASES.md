@@ -24,7 +24,7 @@ implementation.**
   near 40-47. (b) `[CHECKPOINT — due 2026-09-27]`: click/open tracking is emitting. (c) Re-date the retention
   checkpoint rows if the real deploy date matters. Owner prerequisite: Resend click and open tracking and the
   `email.clicked`/`email.opened` webhook events.
-- **`RetentionEmailScheduler.runMonthly()` zone pin (backend, one line plus a test).** Pin it to `Asia/Manila`
+- **`RetentionEmailScheduler.runMonthly()` zone pin (backend, one line plus a test) — DONE on `fix/v0.158.0-run-monthly-zone-pin`, awaiting PR.** Pin it to `Asia/Manila`
   like `runDaily`/`runWeekly`; the Backlog Index row has the detail. Routing: Claude-direct on its own branch and
   PR into this release branch (isolated, one file).
 

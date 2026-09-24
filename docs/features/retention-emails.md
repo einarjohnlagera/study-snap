@@ -106,7 +106,7 @@ Default cron:
 
 - `0 45 2 * * *` (Asia/Manila)
 - `0 0 18 * * SUN` (Asia/Manila)
-- `0 0 9 1 * *` (NOT zone-pinned: host zone, unlike the other two — tracked in the ROADMAP Backlog Index)
+- `0 0 9 1 * *` (Asia/Manila; pinned in `v0.158.0`; it previously ran on the host zone)
 
 Configured under:
 
