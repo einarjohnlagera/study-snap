@@ -73,33 +73,35 @@ class AppConfigTest {
     }
 
     @Test
-    void taskSchedulerBeanRegistersScheduledJobsThroughEveryScheduleFlavour() throws Exception {
+    void taskSchedulerBeanRegistersScheduledJobsThroughAllSixScheduleMethods() throws Exception {
         // Guards the bean swap: a plain ThreadPoolTaskScheduler (the plan's original design) or a bean
         // without the decorator would silently register nothing, and every other test builds its own scheduler.
         InFlightRequestRegistry registry = new InFlightRequestRegistry();
         ThreadPoolTaskScheduler scheduler =
                 (ThreadPoolTaskScheduler) new AppConfig().taskScheduler(taskDecorator(registry));
-        BlockingJob instantJob = new BlockingJob();
-        BlockingJob triggerJob = new BlockingJob();
-        BlockingJob fixedDelayJob = new BlockingJob();
+        java.time.Duration period = java.time.Duration.ofMinutes(10);
+        java.time.Instant now = java.time.Instant.now();
+        List<BlockingJob> jobs = List.of(
+                new BlockingJob(), new BlockingJob(), new BlockingJob(),
+                new BlockingJob(), new BlockingJob(), new BlockingJob()
+        );
 
         try {
-            assertRegisteredWhileRunning(
-                    registry, instantJob, scheduler.schedule(scheduled(instantJob), java.time.Instant.now())
-            );
-            // The cron path: every cron @Scheduled job goes through schedule(Runnable, Trigger).
-            assertRegisteredWhileRunning(
-                    registry, triggerJob,
-                    scheduler.schedule(scheduled(triggerJob), new PeriodicTrigger(java.time.Duration.ofMinutes(10)))
-            );
-            assertRegisteredWhileRunning(
-                    registry, fixedDelayJob,
-                    scheduler.scheduleWithFixedDelay(scheduled(fixedDelayJob), java.time.Duration.ofMinutes(10))
-            );
+            // schedule(Runnable, Trigger) is the path every cron @Scheduled job takes.
+            assertRegisteredWhileRunning(registry, jobs.get(0),
+                    scheduler.schedule(scheduled(jobs.get(0)), new PeriodicTrigger(period)));
+            assertRegisteredWhileRunning(registry, jobs.get(1),
+                    scheduler.schedule(scheduled(jobs.get(1)), now));
+            assertRegisteredWhileRunning(registry, jobs.get(2),
+                    scheduler.scheduleAtFixedRate(scheduled(jobs.get(2)), period));
+            assertRegisteredWhileRunning(registry, jobs.get(3),
+                    scheduler.scheduleAtFixedRate(scheduled(jobs.get(3)), now, period));
+            assertRegisteredWhileRunning(registry, jobs.get(4),
+                    scheduler.scheduleWithFixedDelay(scheduled(jobs.get(4)), period));
+            assertRegisteredWhileRunning(registry, jobs.get(5),
+                    scheduler.scheduleWithFixedDelay(scheduled(jobs.get(5)), now, period));
         } finally {
-            instantJob.release.countDown();
-            triggerJob.release.countDown();
-            fixedDelayJob.release.countDown();
+            jobs.forEach(job -> job.release.countDown());
             scheduler.shutdown();
         }
     }
