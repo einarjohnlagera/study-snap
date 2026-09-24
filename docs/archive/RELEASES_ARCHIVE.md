@@ -1,6 +1,6 @@
 # RELEASES_ARCHIVE.md — NoteLib
 
-Archived sections of `RELEASES.md`. **Contents are NOT one contiguous range:** `v0.41.0`–`v0.120.0`, plus `v0.126.0` (moved at the `v0.132.0` kickoff), `v0.127.0` (moved at the `v0.133.0` kickoff) `v0.128.0` (moved at the `v0.134.0` kickoff) `v0.129.0` (moved at the `v0.135.0` kickoff) `v0.130.0` (moved at the `v0.136.0` kickoff) `v0.131.0` (moved at the `v0.137.0` kickoff) `v0.132.0` (moved at the `v0.138.0` kickoff) `v0.133.0` (moved at the `v0.139.0` kickoff), `v0.134.0` (moved at the `v0.140.0` kickoff), `v0.135.0` (moved at the `v0.141.0` kickoff), `v0.136.0` (moved at the `v0.142.0` kickoff), `v0.137.0` (moved at the `v0.143.0` kickoff), `v0.138.0` (moved at the `v0.144.0` kickoff), `v0.139.0` (moved at the `v0.145.0` kickoff), `v0.140.0` (moved at the `v0.146.0` kickoff), `v0.141.0` (moved at the `v0.147.0` kickoff), `v0.142.0` (moved at the `v0.148.0` kickoff), `v0.143.0` (moved at the `v0.149.0` kickoff), `v0.144.0` (moved at the `v0.150.0` kickoff), `v0.145.0` (moved at the `v0.151.0` kickoff), `v0.146.0` (moved at the `v0.152.0` kickoff), `v0.147.0` (moved at the `v0.153.0` kickoff), `v0.148.0` (moved at the `v0.154.0` kickoff), `v0.149.0` (moved at the `v0.155.0` kickoff), `v0.150.0` (moved at the `v0.156.0` signoff — the first time this archive check ran at signoff rather than kickoff, since v0.156.0 folded two releases' worth of scope into one and crossed the cap without an intervening kickoff) and `v0.151.0` (moved at the `v0.157.0` kickoff) as the live file crossed its *current + last five* cap. Each version's own `## vX.Y.Z` heading is the index — search for it. `v0.40.1` and earlier moved here
+Archived sections of `RELEASES.md`. **Contents are NOT one contiguous range:** `v0.41.0`–`v0.120.0`, plus `v0.126.0` (moved at the `v0.132.0` kickoff), `v0.127.0` (moved at the `v0.133.0` kickoff) `v0.128.0` (moved at the `v0.134.0` kickoff) `v0.129.0` (moved at the `v0.135.0` kickoff) `v0.130.0` (moved at the `v0.136.0` kickoff) `v0.131.0` (moved at the `v0.137.0` kickoff) `v0.132.0` (moved at the `v0.138.0` kickoff) `v0.133.0` (moved at the `v0.139.0` kickoff), `v0.134.0` (moved at the `v0.140.0` kickoff), `v0.135.0` (moved at the `v0.141.0` kickoff), `v0.136.0` (moved at the `v0.142.0` kickoff), `v0.137.0` (moved at the `v0.143.0` kickoff), `v0.138.0` (moved at the `v0.144.0` kickoff), `v0.139.0` (moved at the `v0.145.0` kickoff), `v0.140.0` (moved at the `v0.146.0` kickoff), `v0.141.0` (moved at the `v0.147.0` kickoff), `v0.142.0` (moved at the `v0.148.0` kickoff), `v0.143.0` (moved at the `v0.149.0` kickoff), `v0.144.0` (moved at the `v0.150.0` kickoff), `v0.145.0` (moved at the `v0.151.0` kickoff), `v0.146.0` (moved at the `v0.152.0` kickoff), `v0.147.0` (moved at the `v0.153.0` kickoff), `v0.148.0` (moved at the `v0.154.0` kickoff), `v0.149.0` (moved at the `v0.155.0` kickoff), `v0.150.0` (moved at the `v0.156.0` signoff — the first time this archive check ran at signoff rather than kickoff, since v0.156.0 folded two releases' worth of scope into one and crossed the cap without an intervening kickoff) and `v0.151.0` (moved at the `v0.157.0` kickoff) and `v0.152.0` (moved at the `v0.158.0` kickoff) as the live file crossed its *current + last five* cap. Each version's own `## vX.Y.Z` heading is the index — search for it. `v0.40.1` and earlier moved here
 2026-07-10; **`v0.41.0` through `v0.120.0` moved here 2026-09-07** in the `v0.126.0` pass, which
 resumed this convention after it had lapsed for 85 releases — `RELEASES.md` had reached 116
 sections against its documented design of *current + last few versions*. Both passes are MOVES,
@@ -17,6 +17,97 @@ See `RELEASES.md` for the current + most-recent versions, and its "Archived rele
 index for a one-line-per-version pointer back into this file.
 
 ---
+
+## v0.152.0 - The Missing Half of v0.150.0
+
+**Status: Released** (signed off 2026-09-17)
+
+Theme: give the many-to-many Program Family architecture (v0.150.0) the curator UX it needed to
+actually get finished — family-first Admin management, one canonical catalog-create modal, and an
+additive backfill of the approved initial membership matrix.
+
+Source: `docs/claude-plans/program-family-catalog-management-ux-overhaul-plan.md` (FINAL, owner-approved,
+subagent audit + owner-tightening pass; untracked on disk, indexed in `ROADMAP.md`'s Backlog Index at
+this kickoff) and its companion Codex prompt `docs/codex-prompts/v0.152.0-program-family-catalog-management.md`
+(Long mode, Slices 1-3 only). **Why now, from production data, not a redesign impulse:** Engineering
+(18/18) and Education (8/8) were fully populated the day `v0.150.0` shipped; three weeks and one release
+later, Health Sciences and Computing & Technology are still at zero members, Accounting 2/5, Built
+Environment & Design 1/8. The many-to-many data model did not fail — the one-program-at-a-time admin
+workflow (open a program, pick its one family from a `<select multiple>`, repeat) made finishing the
+backfill through it tedious enough that it didn't get finished. This release is the missing curator UX,
+not a data-model change.
+
+### Planned Scope
+
+- **Slice 1 — Backend catalog contracts + data (backend).** `POST /course-program-catalog/families`
+  gains optional `programIds` (atomic create-with-members, mirroring the existing program-side
+  `create()` shape); new `PATCH /course-program-catalog/families/{id}` (rename + family-side membership
+  replace, one transaction); the family duplicate-name predicate is weakened relative to the program
+  one (`lower(trim(name))` vs. `regexp_replace`-whitespace-collapsing) and gets aligned; rename adds
+  `id <> ?` self-exclusion so renaming a family to a case/whitespace variant of its own name doesn't
+  reject itself as a conflict with itself. New migration `V147__program_family_initial_membership.sql`
+  — purely additive, exact-name inner joins over a locked 50-pair matrix, `ON CONFLICT DO NOTHING`, no
+  `RAISE`, no fuzzy matching, does **not** write the vestigial `course_programs.program_family_id`.
+  Production: 29 existing pairs untouched, 21 new rows inserted (Health Sciences 5, Accounting 3,
+  Computing & Technology 6, Built Environment & Design 7), `course_program_family` goes 29→50.
+- **Slice 2 — Shared catalog selection + creation UX (frontend).** New `CatalogMultiSelect`
+  (`components/ui/catalog-multi-select.tsx`) — a searchable, client-side-filtered checkbox picker with
+  a `selectedSummary: "count" | "chips"` density prop, replacing both remaining raw `<select multiple>`
+  instances in the codebase. New `CourseProgramCreateModal` extraction, mounted from both Admin and the
+  three authorized Note-authoring surfaces, collapsing today's two divergent create forms (Admin's
+  weaker single-family form vs. the note-authoring modal's already-multi-family one) into one component,
+  one contract, one validation path.
+- **Slice 3 — Family-first Admin IA (frontend).** `/admin/course-programs` gains a two-tab switch
+  (`?view=families|programs`, URL-reflected), Program Families as the default/primary tab (a table:
+  name, member count, Edit — zero-member families included, not `is_active`-filtered), Course / Programs
+  demoted to the inverse-convenience secondary tab. Removes the permanently-visible inline "New Program
+  Family" box and inline create grid in favor of header `+` buttons opening modals.
+- **Slice 4 — Verification + production acceptance + docs (Claude Code, not sent to Codex).** One
+  scoped cold agent, falsification-framed, on the shared catalog create/membership path (7 claims, see
+  below). Post-deploy production acceptance is an anti-join of the same 50-pair matrix against
+  `course_program_family` (expect 0 missing pairs) — the primary proof, not a family-count check, since
+  a count can be right for the wrong reason. `docs/features/program-families.md` rewritten to correct
+  its now-false "a family is created empty" and "membership is set on program creation or edited later
+  from the Admin catalog row" claims.
+
+Anti-drift, owner-locked: **no ADR-001 amendment** (its amended clause 2 is already storage-neutral and
+ratifies many-to-many; nothing here changes what expansion means, only who can edit membership from
+which side). **Program Family name is display data, Program Family ID is identity** — V147's exact-name
+matching is a scoped migration-only exception (runtime-generated UUIDs, no portable literal) and must
+not be copied into any application code. No family deletion, no program deletion, no `is_active` write
+path, no `Business & Finance` family, no general Popover/Command primitive — the new control is a
+catalog picker for small in-memory lists, not a platform layer. The legacy fused rows (`Nursing ·
+Medicine`, `Nursing · Pharmacy`) stay in the catalog, unassigned, not folded into Health Sciences.
+`course_programs.program_family_id` stays vestigial — not written, not dropped. No Program Family
+reaches a prompt, is persisted on a Note, or triggers a live update to existing Notes — that boundary is
+untouched by a management view, a rename, or a backfill.
+
+**Routing: Codex** (new endpoint + migration + service logic, multi-system frontend+backend, ~17
+must-change files — three independent task-routing triggers). Prompt already written (Long mode, Slices
+1-3 only; slice 4 is this session's own work after the diff returns). **Verification tier: one scoped
+cold agent, falsification-framed** — elected now rather than deferred to signoff, because all three
+implementation slices touch the shared catalog create/membership path (CLAUDE.md's "two or more PRs
+touched the same shared method" trigger). Seven claims to disprove: (1) family-side replace cannot evict
+a program from another family; (2) rename preserves id, every membership, and every note's
+applicability; (3) V147 is additive, idempotent, and cannot fail a fresh-database Flyway run; (4) V147
+does not write `course_programs.program_family_id`; (5) no ordinary user can create a shared catalog
+entry through any path; (6) creating a program with two families adds only that program to the note;
+(7) the new multi-select's checkbox `checked` state is real, not `AddNotesModal`'s list-membership hack.
+Full scope, all owner-tightened decisions, and the production membership audit are in the plan file.
+
+### Shipped
+
+- **Backend catalog contracts and initial membership data.** Program Families can be created with initial members and renamed or full-set edited by UUID through an ADMIN-only endpoint. Family-name duplicate matching now collapses internal whitespace and excludes the renamed row itself. `V147` additively declares the locked 50-pair matrix with exact-name joins and `ON CONFLICT DO NOTHING`; it neither deletes memberships nor writes the vestigial scalar family column.
+- **One shared catalog selection and program-creation flow.** `CatalogMultiSelect` replaces both raw multi-selects with searchable native-checkbox editing in count and chip modes. `CourseProgramCreateModal` now serves Admin and authorized Note-authoring surfaces, supports several families, preserves Exam Goal behavior, and selects only the newly created program on the current Note.
+- **Family-first Admin catalog management.** `/admin/course-programs` now opens on a URL-reflected Program Families tab for counts, create, rename, and family-side membership replacement. The retained Course / Programs tab provides the inverse per-program workflow and opens `+ New program` in the shared modal.
+- **Cold agent falsification pass: all seven pre-declared claims CONFIRMED.** Five of the seven are backed by real-database (Testcontainers PostgreSQL) or real-HTTP-request (MockMvc with a live `@PreAuthorize` interceptor) tests, not mocked assertions. The pass surfaced one previously-unflagged, out-of-scope-of-the-seven-claims defect: the Admin rename modal always re-sent the family's full membership set even when only the name changed, using a stale snapshot that could silently overwrite a concurrent admin's membership edit on the same family (never crossed family boundaries, never touched note applicability, never corrupted data — a lost-update window, not a correctness break). Fixed in the same release rather than carried as a Known limitation, since the feature had not yet deployed: `AdminProgramFamiliesSection`'s save path now omits `programIds` entirely unless the picker was actually touched (`draft.membershipDirty`), so an ordinary rename is a true no-op on membership. Two tests added distinguishing the rename-only and rename-plus-membership-edit cases.
+- **Feature-doc sweep, signoff gate.** Corrected two `docs/features/notes.md` claims stale since `v0.150.0`'s many-to-many migration (family expansion described as reading the vestigial scalar `program_family_id` column instead of the `programFamilies` join; catalog creation described as single-family-only instead of the list `CreateCourseProgramRequest.programFamilyIds` has supported since before this release). `docs/features/program-families.md`'s membership-replace description was missing half its own contract — added the omitted-vs-explicit-empty distinction the #1409 fix depends on.
+
+### Known limitations
+
+- **RESOLVED 2026-09-17 (during the `v0.153.0` cycle).** The production-acceptance anti-join (this release's own Slice 4 proof) ran against production (read-only) once `main` had deployed on `2547da67`: **0 missing pairs** across the full 50-pair matrix — `V147` did exactly what this release claimed. Extras report: 7 pairs present in production but outside the approved matrix (6 Accounting — `Business Administration`, `Chartered Financial Analyst`, `Economics`, `Entrepreneurship`, `Finance`, `Financial Management`; 1 Engineering — `Manufacturing Engineering`), consistent with ordinary post-deploy curator work, not a defect. Count sanity check reconciles exactly (57 = 50 + 7). Closes the `[CHECKPOINT — due 2026-09-24]` row in `ROADMAP.md`'s Backlog Index.
+- **A rename that also edits membership still computes its full replacement set from an in-modal snapshot.** The #1409 fix closed the lost-update window for a rename-only save (which now omits `programIds` entirely), but an admin who *does* touch the membership picker still sends a full set read at modal-open time — a genuine concurrent edit during that window is still last-write-wins. Inherent to full-set replace; fixing it is optimistic concurrency, a different feature, not scoped here.
+- **`course_programs.is_active` still has no write path anywhere in the codebase.** Unchanged by this release, deliberately — see the "Course / Program catalog lifecycle management" Backlog Index row. This release's own Admin family/program editors already use the unfiltered catalog specifically so an eventual inactive row stays manageable, but nothing can set `is_active = false` today.
 
 ## v0.151.0 - No Backdoor Left, Round Two
 
