@@ -129,6 +129,16 @@ against a 100 limit and 40 reserve), so whatever runs after it is starved. `runD
 dispatches `DUE_CONCEPTS_DIGEST` first, then `WEAK_CONCEPT`, then `INACTIVITY` — engaged-learner types
 claim budget before the dormant-user nudge takes the remainder. Do not reorder without re-reading this.
 
+**Known limitation: the weekly and monthly types are starved while `INACTIVITY` saturates the cap.**
+`WEEKLY_SUMMARY` (Sunday 18:00 Manila) and `KNOWLEDGE_IMPACT_DIGEST` (1st, 09:00 host time, 17:00 Manila)
+run after the 02:45 daily dispatch has used the day's budget, so they start with budget 0; skipped candidates
+stay eligible but only for the next week or month, where the same thing happens. Immaterial while almost no
+one has opted in (1 and 0 learners at `v0.157.0`), but adding opt-ins will not unlock them. Fixing it needs an
+explicit cap on `INACTIVITY`'s share (a product decision, tracked in the ROADMAP Backlog Index). Lowering
+`transactional-reserve` does not help: `INACTIVITY` has more eligible learners than budget and absorbs any
+extra room. The admin `RE_ENGAGEMENT_2025` campaign is outside this budget, so a campaign batch plus the
+retention sends can exceed the provider's daily limit.
+
 - `studysnap.email.daily-limit` defaults to `100`
 - `studysnap.email.transactional-reserve` defaults to `40`
 - `studysnap.email.reengagement-enabled` defaults to `true` and can disable inactivity dispatch without touching transactional sends

@@ -382,7 +382,7 @@ cadence, not speculatively.
 - Let Stage 1a's instrumentation run until the bound below is met. Independent of whether Stage 1b has
   shipped yet.
 
-**Stage 2 sample-size bound — CONFIRMED by the owner 2026-09-23, derived from a read-only production read.** Basis: `email_log` and `users` on `notelib-db-prod`, read 2026-09-23. **The rates used are
+**Stage 2 sample-size bound — CONFIRMED by the owner 2026-09-23, derived from a read-only production read.** Basis: `email_log` and `users` on `notelib-db-prod`, read 2026-09-23 (the exact queries and their results are in `docs/claude-plans/2026-09-23-retention-volume-read.sql`). **The rates used are
 the RECENT ones (14/28-day), not the 90-day totals** — `DUE_CONCEPTS_DIGEST` only started 2026-07-19 and
 changed cadence in `v0.148.0`, so its 90-day figure (773) overstates its current rate; do not reach for it
 as a denominator.

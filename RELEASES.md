@@ -2,7 +2,7 @@
 
 ## v0.157.0 - Watching More Closely
 
-**Status: In Progress**
+**Status: Released** (signed off 2026-09-24; undeployed until the release PR merges to `main`)
 
 Theme: bring in five already-open, independently-produced PRs — traffic analytics, two production
 incident findings, refreshed GPT product-context docs, and a resolved retention-communication channel
@@ -40,6 +40,35 @@ Pool observability and retention Stages 1a–1b are the implemented follow-ups t
 
 ### Shipped
 
+- **Vercel Web Analytics.** `@vercel/analytics` 2.0.1 and one `<Analytics />` in the root layout
+  (`frontend/app/layout.tsx:99`). Not taken from the PR body: `npm ci` accepts the lockfile, whose diff adds that
+  package and also refreshes the stale root `version` field (0.96.0 to 0.156.0; no other dependency changed),
+  `tsc --noEmit` is clean, lint has 0 errors, the production build succeeds and frontend Jest passes 2,489
+  tests (1 skipped). The free-plan limit (50,000 events/month, collection pauses rather than charging) was
+  checked against Vercel's published limits earlier this cycle and is not repository-verifiable.
+
+- **Stage 2 evidence bound for the retention instrumentation (docs).** From a read-only production read (queries and results in
+  `docs/claude-plans/2026-09-23-retention-volume-read.sql`): only `INACTIVITY` and `DUE_CONCEPTS_DIGEST` have a measurable audience (`WEAK_CONCEPT` 2 opted in,
+  `WEEKLY_SUMMARY` 1, `KNOWLEDGE_IMPACT_DIGEST` 0 — zero sends in 90 days each). Two-tier bound on clicks: 14
+  days, 100 recipients, and 30 clicks or 2,000 sends; 60-day backstop reads an unmet type as underpowered (a
+  re-date, not a verdict); kill criterion `INACTIVITY` click-through under 1%. Plan §I. The dated checkpoint
+  rows are in `ROADMAP.md`.
+
+- **Cold pressure test and its remediation.** Four cold reviews (Opus on retention, Sonnet and then Opus on
+  pool observability, and Codex across the whole release) tried to falsify the release against its plan; each
+  finding was verified in code before fixing, and several were rejected or downgraded with reasons below.
+  Verification at signoff: backend `clean install` BUILD SUCCESS with 2,511 tests including the real-Postgres
+  suite, frontend Jest 2,489. Fixed
+  (PR #1437): a non-ISO click timestamp escaped the catch and would 500 (`DateTimeParseException` is not an
+  `IllegalArgumentException`); the digest-first order coupled a digest failure to the day's `INACTIVITY` sends,
+  so the digest call is now isolated; three of four executors' decoration was unguarded by any test. Doc
+  corrections: `WELCOME` does have a writer, `clicked_at` is first-processed, the open counter is
+  whole-account. Two of these were defects in this release's own earlier work.
+
+- **Docs-only inputs, shipped as documents:** the pool-observability plan (#1427), the 2026-09-22 restart
+  finding (#1428, trigger still unidentified), GPT context refreshed to `v0.156.0` (#1429), and the retention
+  channel doctrine (#1430).
+
 - **The retention budget now governs all five scheduled retention email types against a retention-only
   count.** `INACTIVITY`, `WEAK_CONCEPT`, `WEEKLY_SUMMARY`, `DUE_CONCEPTS_DIGEST`, and
   `KNOWLEDGE_IMPACT_DIGEST` each recompute the available budget before bounding candidates; the orphaned
@@ -50,12 +79,14 @@ Pool observability and retention Stages 1a–1b are the implemented follow-ups t
   reading production before signoff:** `INACTIVITY` sat at exactly 60/day (the 100-limit minus 40-reserve
   ceiling) on 10 of the last 14 days while `DUE_CONCEPTS_DIGEST` sent 0–22/day unbudgeted. Extending the
   budget to the digest with `INACTIVITY` first would have starved the digest to ~0 on most days, so
-  `runDaily` now dispatches the digest, then `WEAK_CONCEPT`, then `INACTIVITY`. Total daily sends stay at
-  the cap; `INACTIVITY` yields roughly the digest's volume (about 60 down to 40–47/day). Two guards fail
-  if the order regresses. `transactionalReserve` (40) is unchanged, though real transactional volume is
-  0–1/day, so lowering `EMAIL_TRANSACTIONAL_RESERVE` is an available owner lever, not done here.
+  `runDaily` now dispatches the digest, then `WEAK_CONCEPT`, then `INACTIVITY` (`RetentionEmailScheduler.java:30`).
+  Daily sends stay at the cap and `INACTIVITY` yields roughly the digest's volume (about 60 down to 40–47/day);
+  **the later-running weekly and monthly types do not get the same protection — see Known limitations.** Two
+  guards fail if the order regresses. `transactionalReserve` (40) is unchanged, though real transactional
+  volume is 0–1/day; lowering `EMAIL_TRANSACTIONAL_RESERVE` would NOT help, because `INACTIVITY` has more
+  eligible learners than budget and would absorb the extra room.
 
-- **Retention email clicks now correlate to the exact send without Resend message-id plumbing.** The
+- **Retention email clicks now correlate to a send record without Resend message-id plumbing.** The
   five dispatched retention types reserve their UUID `email_log.id` before rendering and add inert
   `source` and `e` query parameters to the CTA, while persisting the row only after a successful send.
   Verified `email.clicked` webhooks read Resend's documented `data.click.link` and
@@ -67,7 +98,7 @@ Pool observability and retention Stages 1a–1b are the implemented follow-ups t
   `docs/claude-plans/retention-communication-channel-doctrine-final-plan.md` §D/§I.
 
 - **Pool saturation diagnostics now cover DB-bound background work.** A shared task decorator registers
-  the four DB-touching executors and all `@Scheduled` jobs in `InFlightRequestRegistry`, using executor
+  the four DB-touching executors and every `@Scheduled` job (all route through the six guarded scheduling methods, which one test exercises) in `InFlightRequestRegistry`, using executor
   thread names or Spring's exact `ClassName.methodName` scheduled-task description; the detector's own
   `poll()` is explicitly excluded (test-proven mid-cycle, not just after). The custom scheduler subclasses
   `ThreadPoolTaskScheduler` rather than using plain `setTaskDecorator()` — verified against the actual
@@ -75,7 +106,7 @@ Pool observability and retention Stages 1a–1b are the implemented follow-ups t
   `RunnableScheduledFuture` wrapper, not the user's task, which would have silently discarded every
   scheduled job's description; the subclass pre-decorates the real task before Spring wraps it, and the
   decorator no-ops on a `RunnableScheduledFuture` it's handed directly to avoid double-instrumenting.
-  Two `scheduled-task-` threads mean a DB-bound job cannot monopolize the detector's only polling thread.
+  Two `scheduled-task-` threads mean ONE slow DB-bound job can no longer starve the detector's polling; two DB-bound jobs firing at the same instant (for example 02:45Z) still can, for up to Hikari's connection timeout.
   `runDaily`/`runWeekly` (`RetentionEmailScheduler`) are runtime-verified still anchored to `Asia/Manila`
   after the scheduler swap (real `CronTrigger.nextExecution()` assertions, not inspection). **`runMonthly`
   was NOT part of that verification and has no zone pinning at all — a pre-existing gap, not introduced
@@ -83,6 +114,67 @@ Pool observability and retention Stages 1a–1b are the implemented follow-ups t
   `docs/product/ROADMAP.md`). Diagnostic registration
   and cleanup fail open, and cleanup is unconditional when work throws. Source and design rationale:
   `docs/claude-plans/2026-09-22-pool-observability-non-request-thread-coverage-plan.md`.
+
+### Known limitations
+
+- **`WEEKLY_SUMMARY` and `KNOWLEDGE_IMPACT_DIGEST` are budget-starved, permanently, while `INACTIVITY` saturates
+  the cap.** They run Sunday 18:00 Manila and on the 1st at 09:00 host time (17:00 Manila), after the 02:45 run
+  has used the day's budget, so they start with budget 0 and "eligible later" only reaches the next week or
+  month. Immaterial today (1 and 0 opted-in learners; no sends in 90 days) but more opt-ins would NOT unlock
+  them. Owner chose to document rather than cap `INACTIVITY`'s share now; a Backlog row gates the fix on
+  opt-in growth. `sendWeeklySummaryEmails_independentlyRespectsExhaustedBudget` asserts the starvation as
+  correct behaviour.
+- **The admin `RE_ENGAGEMENT_2025` campaign no longer counts toward the budget.** A campaign batch of up to
+  100 plus ~60 retention sends can exceed Resend's 100/day on the same day.
+- **`clicked_at` is the first click PROCESSED, not necessarily the earliest.** The webhook IS now exercised over
+  real HTTP (`ResendWebhookHttpTest`: signed click, non-ISO timestamp, signed open, unsigned request), but the
+  real check that Resend delivers these events is still the deploy + 3 day smoke read.
+- **The click marker is a capability, not a binding.** `e=<uuid>` is an unguessable v4 id, so a learner cannot
+  guess another learner's, but anyone who HOLDS one (for example from a forwarded email) can flag that one send
+  as clicked; the handler checks the email type, not the recipient. Impact is one analytics flag. It is
+  inert in the sense that no frontend code reads `e` (checked by search, not by a test).
+- **A send whose row fails to persist leaves an orphan marker.** If Resend accepts the email and the
+  `email_log` save or the surrounding commit then fails, the delivered link carries an `e` with no row (the
+  click is logged and skipped) and no cooldown row exists. The same window existed before this release.
+- **Budget and cooldown checks are not atomic.** Count, check and send have no lock, so two overlapping
+  instances or a duplicate cron fire could overspend the budget or double-send. Pre-existing, not introduced
+  here; the service runs one instance (checked in Render), so overlap is limited to deploy hand-over.
+- **A database failure in the click or open handler returns a 5xx on purpose,** so Resend retries a transient
+  outage instead of losing the event; only malformed payloads are acknowledged and skipped.
+- **The scheduler bean calls `initialize()` and Spring calls it again,** abandoning one executor that never
+  started a thread. Harmless; the existing executors follow the same pattern.
+- **The open counter is whole-account** (verification and password-reset opens are included) and keyed by UTC
+  day; directional only.
+- **Instrumentation is unverified emitting until deploy.** It needs Resend click and open tracking on the
+  sending domain and the webhook subscribed to `email.clicked`/`email.opened`; `RESEND_WEBHOOK_SECRET` is staged
+  in Render.
+- **`InFlightRequestRegistry` is keyed by `Thread`,** so an inner decorated task's removal would wipe an outer
+  entry on the same thread. No reachable trigger was found (latent).
+- **A registry entry means "running", not "holding a connection".** A generation thread in the middle of an LLM
+  call appears in a saturation log line exactly as one holding a connection does; read the log with that in mind.
+- **The decorator is a Spring bean, and the scheduler subclass is what makes it work.** Spring Boot applies a
+  lone `TaskDecorator` bean to its own executor and scheduler builders, and on Boot's default scheduler it would
+  silently register nothing (it receives the internal future, not the job). The bean-level test in
+  `AppConfigTest` fails if the custom scheduler is removed or replaced.
+- **`runMonthly` has no zone pin** (pre-existing; Backlog row).
+
+### Deploy notes
+
+- `V149` runs on deploy: a nullable `ADD COLUMN` on `email_log` plus a new table; additive.
+- No API form is removed, renamed or made required, so there is no frontend/backend deploy-ordering constraint.
+- **Behaviour change to expect:** `INACTIVITY` drops from about 60 to 40–47 a day. Confirm with
+  `retention.email.*.dispatch` log lines after the first daily run.
+- Owner check at deploy + 3 days: `SELECT count(*) FROM email_log WHERE clicked_at IS NOT NULL` and
+  `email_open_daily_counts`; zero of both means tracking or the webhook subscription is off.
+
+### Signoff scope record
+
+- Vercel Web Analytics: shipped (`layout.tsx:99`). Pool observability: shipped, and CHANGED from the plan —
+  plain `setTaskDecorator` on the scheduler would have lost every job's description, so a subclass was needed
+  (`InFlightThreadRegisteringTaskScheduler`; `AppConfig.java:41-44`). Restart finding, GPT context refresh,
+  retention doctrine: shipped as documents. Retention Stages 1a and 1b: shipped
+  (`ResendWebhookService.java:96,119`; `RetentionService.java:88,691,724,771`; `V149`). Stage 2/3: not started
+  by design. Nothing in Planned Scope is unbuilt.
 
 ## v0.156.0 - Say What You Meant to Show
 
