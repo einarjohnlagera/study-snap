@@ -2,7 +2,7 @@
 
 ## v0.158.0 - Reading the Evidence
 
-**Status: In Progress**
+**Status: Released** (signed off 2026-09-25; the release PR to `main` will be merged and tagged by the owner, so nothing here is deployed until then)
 
 Theme: discharge the evidence reads this project already owes (three overdue checkpoint reads and the first
 readings of the retention instrumentation) before any new feature scope is chosen, plus one ready one-line fix.
@@ -43,6 +43,31 @@ Anti-drift: no retention Stage 3 (it waits on the three retention `[CHECKPOINT]`
 share (gated on opt-in growth); do not reorder retention dispatch (`docs/features/retention-emails.md`); nothing
 here is feature scope. Choose feature scope explicitly.
 
+### Scope disposition (signoff, 2026-09-25)
+
+- **Three overdue checkpoint reads: SHIPPED as reads**, results above and on each Backlog row. Publication
+  boundary not fired (re-dated to 2026-09-28); Learning Connections kill criterion does not fire; `connection-timeout`
+  inconclusive, owner decision.
+- **Retention readings (a) first daily run: SHIPPED**, as designed. **(b) `[CHECKPOINT — due 2026-09-27]`: NOT DONE,
+  by the owner's call** — it is read on or after 2026-09-27 and stays an open Backlog row. **(c) re-date the retention
+  rows: NOT NEEDED**, the real deploy was 2026-09-24 as assumed.
+- **`runMonthly()` zone pin: SHIPPED** (#1442, `RetentionEmailScheduler.java:79`, guard `ScheduledJobCronContractTest`).
+- **Added mid-release, owner-requested:** the `INACTIVITY` effectiveness evidence item and indexing the notifications
+  Stage 1 plan; both have Backlog rows and are undecided.
+
+### Checkpoint gate
+
+Nothing in this release shipped ahead of its own evidence, so no new `[CHECKPOINT]` row is owed. The open
+checkpoints are all carried from earlier releases and are re-stated on their rows.
+
+### Known limitations
+
+- The `connection-timeout` read is inconclusive (10-day pre-window, traffic growth, `v0.116.0`/`v0.123.0`
+  confounds, log sample was the newest 30 lines only).
+- The `INACTIVITY` return-rate read has no control group and measures any analytics event.
+- Verification tier: one small code change with no authorization, money or production-data semantics, so a single
+  `advisor()` pass rather than a pressure test.
+
 ### Shipped
 
 - **`RetentionEmailScheduler.runMonthly()` zone pin** merged as PR #1442 (`540b866b`); full backend build green.
@@ -70,7 +95,7 @@ here is feature scope. Choose feature scope explicitly.
     46 `INACTIVITY` = 60, the full shared budget). The pre-deploy baseline was the 2026-09-23T18:45Z run on
     `v0.156.0` code: `inactivity budget=60 sent=60`, `dueConceptsDigest=23`, no per-type dispatch lines. The digest
     due-count differs day to day (14 vs 23), so the two are not a like-for-like "14 of 23". `email_log.clicked_at` is
-    still 0 (click tracking not enabled yet); `email_open_daily_counts` had 6 (09-23) and 3 (09-24) before this run.
+    still 0 (click tracking not enabled yet); `email_open_daily_counts` had 6 (09-23) and 3 (09-24) before this run. The open date is Resend's own event `created_at` in UTC (`ResendWebhookService.java:123`), so opens dated 09-23 that arrived after the 02:39Z deploy are late delivery, not a dating bug.
     `[CHECKPOINT — due 2026-09-27]` remains open. 75 eligible learners were skipped for budget; see the
     `INACTIVITY` effectiveness item above for whether that matters.
   - **Cross-note review re-check:** `quick_review_sessions` 906 total, `source_collection_id` NULL on all 906

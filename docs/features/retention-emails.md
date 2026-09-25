@@ -130,7 +130,7 @@ dispatches `DUE_CONCEPTS_DIGEST` first, then `WEAK_CONCEPT`, then `INACTIVITY` â
 claim budget before the dormant-user nudge takes the remainder. Do not reorder without re-reading this.
 
 **Known limitation: the weekly and monthly types are starved while `INACTIVITY` saturates the cap.**
-`WEEKLY_SUMMARY` (Sunday 18:00 Manila) and `KNOWLEDGE_IMPACT_DIGEST` (1st, 09:00 host time, 17:00 Manila)
+`WEEKLY_SUMMARY` (Sunday 18:00 Manila) and `KNOWLEDGE_IMPACT_DIGEST` (1st, 09:00 Manila)
 run after the 02:45 daily dispatch has used the day's budget, so they start with budget 0; skipped candidates
 stay eligible but only for the next week or month, where the same thing happens. Immaterial while almost no
 one has opted in (1 and 0 learners at `v0.157.0`), but adding opt-ins will not unlock them. Fixing it needs an
