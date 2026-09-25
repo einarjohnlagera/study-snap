@@ -6,7 +6,16 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-**Kicked off 2026-09-24, signed off 2026-09-25.** `v0.158.0 — Reading the Evidence` is **Released** on `releases/v0.158.0` (nothing is deployed until the release PR to `main` merges; that merge and the tag are the owner's), cut from
+**Kicked off 2026-09-25.** `v0.159.0 — Nothing Lost in the Batch` is **In Progress** on `releases/v0.159.0`, cut
+from `main` after `v0.158.0` merged as #1443 and tagged. **Owner scope pick, 2026-09-25: Notifications Release A
+and the `connection-timeout` follow-up.** Release A is bulk-only async-completion notifications
+(`docs/claude-plans/learning-relevant-notifications-stage1-plan.md`, backend only, no migration, Codex-routed) and is
+**BLOCKED on one owner decision: the badge/retention flag split in `NotificationCategory`.** The follow-up is a
+proper read-only 500-cause read plus the owner's verdict on the 5 s timeout. A doc correction rides along
+(`CLAUDE.md` misnames the async generation entry point). Anti-drift, verification tier and the still-open
+decisions are in `RELEASES.md`.
+
+**Kicked off 2026-09-24, signed off 2026-09-25.** `v0.158.0 — Reading the Evidence` is **Released** on `releases/v0.158.0` (merged as #1443 and tagged 2026-09-25; deployed and verified: Render live 06:30Z, Vercel production 06:33Z), cut from
 `main` after `v0.157.0` merged as #1440 and tagged (deployed 2026-09-24: Render live 02:40Z, `V149` applied 02:39Z,
 Vercel production 02:43Z). It discharged evidence this project already owes: three checkpoint reads that are past due
 (`connection-timeout` 5xx, due 2026-09-18; Learning Connections demand, due 2026-09-19; publication boundary, due
@@ -152,55 +161,9 @@ A2 saturation detector's registry has no coverage of non-request threads (Known 
 re-scoped here). Also carried forward, from this release's own kickoff correction above: the Render
 `healthCheckPath` repoint (owner action). Full scope in `RELEASES.md`.
 
-**Kicked off 2026-09-17, signed off 2026-09-18.** `v0.153.0 — The Missing Telemetry` is **Released**
-on `releases/v0.153.0` (PRs #1411 F2, #1412 Leg A2, #1413 Leg B, #1414 F1, #1415 pre-signoff pressure-test
-follow-ups), cut from `main` after `v0.152.0` merged as #1410 and tagged — Vercel and Render both confirmed live on
-`2547da67`. Stops re-investigating a recurring production outage for a fifth time and ships the
-instrumentation that would actually answer it. Source:
-`docs/claude-plans/2026-09-17-pool-exhaustion-instrumentation-fix-plan.md` (Prod Investigator session),
-built on `docs/claude-findings/2026-09-10-prod-pool-exhaustion-trigger-unresolved.md`. **The
-`[CHECKPOINT — due 2026-09-17]` fired at kickoff — today's incident (05:56:29–05:58:46 UTC) is a
-confirmed fourth occurrence of the identical pool-exhaustion → health-check-starvation → restart
-signature** (2026-09-04, 2026-09-05, 2026-09-10, now today); mechanism settled (HikariCP `active=20/20`
-starves `DataSourceHealthIndicator` on the same pool), trigger still not identified, and per the
-checkpoint's own kill criterion this release does not attempt a fifth root-cause hunt. **Owner's own
-question answered: docker-compose ruled out** — it is local-dev-only and never touches the deploy path;
-Render builds `backend/Dockerfile` directly. **Scope:** Leg A2 (backend) — Hikari-saturation-triggered
-logging of in-flight request paths, the one thing that would have answered all four incidents on the
-spot; Leg B (backend config) — lower `server.tomcat.threads.max` (25) to at or below
-`hikari.maximum-pool-size` (20), closing a structural exposure independent of whatever is actually
-holding connections; A1 (owner action, not code) — check whether Render's own per-request logging can
-be enabled for this service. **Explicit non-fixes, carried forward:** do not raise the pool further, do
-not touch `open-in-view`, do not add PgBouncer, do not chase the unconfirmed "synchronous external call"
-lead without new evidence.
+**Older baselines moved to `docs/archive/ROADMAP_ARCHIVE.md` at the `v0.130.0`, `v0.133.0`, `v0.139.0`, `v0.148.0` and `v0.156.0` signoffs and the `v0.134.0` / `v0.135.0` / `v0.136.0` / `v0.140.0` / `v0.141.0` / `v0.142.0` / `v0.144.0` / `v0.145.0` / `v0.146.0` / `v0.147.0` / `v0.149.0` / `v0.150.0` / `v0.151.0` / `v0.152.0` / `v0.153.0` / `v0.154.0` / `v0.155.0` / `v0.157.0` / `v0.158.0` / `v0.159.0` kickoffs. **⚠️ `v0.156.0` is the first entry in the signoffs half of this list** — every prior move happened at kickoff (CLAUDE.md step 7a); this one ran at signoff instead (this checklist's own duplicated step) because `v0.156.0` folded two releases' worth of scope into one and crossed the cap without an intervening kickoff.
 
-**⚠️ FOLDED IN MID-CYCLE, 2026-09-17, owner call:** a second, unrelated fix, from the Authored Depth
-Backlog Index row below (`v0.83.0 — will curators actually classify…`, re-audited the same day this
-release was already open). **Scope:** F1 (frontend) — a non-blocking publication-time warning when a
-curator publishes (or bulk-publishes) a note with no Authored Depth; F2 (multi-system) — a missing-depth
-count/filter added to the existing curator-scoped Admin Applicable Programs surface. Both are
-prevention only, shipping *before* the 80(+9)-note manual cleanup that follows in a later checkpoint.
-**Explicit non-fixes:** no Course/Program→Depth inference, no learner-facing "Unclassified" chip, no
-hard publication requirement yet (deferred — it would silently break `NoteBulkGenerationService`'s
-swallowed-exception publish path), no bulk depth editor. Full audit:
-`docs/claude-plans/authored-depth-legacy-backfill-audit-and-plan.md`. **The two halves of this release
-share no code and no files** — kept as one release only to avoid opening a second branch mid-cycle.
-
-**Routing: Codex** (Leg A2, backend service+filter+config; and F2, backend DTO+filter+frontend section)
-and **Claude Code inline** (Leg B, one YAML line; and F1, two existing components, copy + one
-conditional each). **Verification tier: Leg A2 — one scoped cold agent, falsification-framed**
-(four-incident production-reliability history); **Leg B, F1, F2 — one `advisor()` call each.** No full
-pressure test for either half. Full scope in `RELEASES.md`.
-
-**⚠️ SIGNOFF NOTE, 2026-09-18: the owner requested one additional Opus falsification pass across the
-whole release before signoff**, escalating past the per-item tiers above. All 19 claims held; it
-surfaced written claims (not code defects) that outran what the tests proved, fixed in follow-up PR
-#1415 — see `RELEASES.md`'s Known limitations for detail. **A1 (owner action) checked at signoff and
-confirmed NOT enabled** (verified via a read-only Render logs query, not from a stated assumption) —
-still open, owner's action.
-
-**Older baselines moved to `docs/archive/ROADMAP_ARCHIVE.md` at the `v0.130.0`, `v0.133.0`, `v0.139.0`, `v0.148.0` and `v0.156.0` signoffs and the `v0.134.0` / `v0.135.0` / `v0.136.0` / `v0.140.0` / `v0.141.0` / `v0.142.0` / `v0.144.0` / `v0.145.0` / `v0.146.0` / `v0.147.0` / `v0.149.0` / `v0.150.0` / `v0.151.0` / `v0.152.0` / `v0.153.0` / `v0.154.0` / `v0.155.0` / `v0.157.0` / `v0.158.0` kickoffs. **⚠️ `v0.156.0` is the first entry in the signoffs half of this list** — every prior move happened at kickoff (CLAUDE.md step 7a); this one ran at signoff instead (this checklist's own duplicated step) because `v0.156.0` folded two releases' worth of scope into one and crossed the cap without an intervening kickoff.
-
+- `v0.153.0 — The Missing Telemetry` (Released) — stopped re-investigating a recurring pool-exhaustion outage a fifth time and shipped the instrumentation that would answer it; moved at the `v0.159.0` kickoff.
 - `v0.152.0 — The Missing Half of v0.150.0` (Released) — gave the many-to-many Program Family architecture the curator UX it needed: family-first Admin management, one canonical `CourseProgramCreateModal`, and an additive backfill of the approved initial membership matrix; moved at the `v0.158.0` kickoff.
 - `v0.151.0 — No Backdoor Left, Round Two` (Released) — closed the same share-link deactivation gate gap `v0.143.0`/`v0.144.0` closed for the exam question pool, this time for shared quiz links, across both the single-Note and bulk regeneration paths; moved at the `v0.157.0` kickoff.
 - `v0.150.0 — Membership, Not a Slot` (Released) — Program Family membership became many-to-many (a Course/Program may belong to zero, one, or several families), closing a real production bug where a brand-new empty family was structurally invisible to the Note-authoring family picker; moved at the `v0.156.0` signoff.

@@ -15,6 +15,53 @@ changelog layer. `ROADMAP.md` keeps a one-line-per-version index at each origina
 
 ---
 
+**Kicked off 2026-09-17, signed off 2026-09-18.** `v0.153.0 — The Missing Telemetry` is **Released**
+on `releases/v0.153.0` (PRs #1411 F2, #1412 Leg A2, #1413 Leg B, #1414 F1, #1415 pre-signoff pressure-test
+follow-ups), cut from `main` after `v0.152.0` merged as #1410 and tagged — Vercel and Render both confirmed live on
+`2547da67`. Stops re-investigating a recurring production outage for a fifth time and ships the
+instrumentation that would actually answer it. Source:
+`docs/claude-plans/2026-09-17-pool-exhaustion-instrumentation-fix-plan.md` (Prod Investigator session),
+built on `docs/claude-findings/2026-09-10-prod-pool-exhaustion-trigger-unresolved.md`. **The
+`[CHECKPOINT — due 2026-09-17]` fired at kickoff — today's incident (05:56:29–05:58:46 UTC) is a
+confirmed fourth occurrence of the identical pool-exhaustion → health-check-starvation → restart
+signature** (2026-09-04, 2026-09-05, 2026-09-10, now today); mechanism settled (HikariCP `active=20/20`
+starves `DataSourceHealthIndicator` on the same pool), trigger still not identified, and per the
+checkpoint's own kill criterion this release does not attempt a fifth root-cause hunt. **Owner's own
+question answered: docker-compose ruled out** — it is local-dev-only and never touches the deploy path;
+Render builds `backend/Dockerfile` directly. **Scope:** Leg A2 (backend) — Hikari-saturation-triggered
+logging of in-flight request paths, the one thing that would have answered all four incidents on the
+spot; Leg B (backend config) — lower `server.tomcat.threads.max` (25) to at or below
+`hikari.maximum-pool-size` (20), closing a structural exposure independent of whatever is actually
+holding connections; A1 (owner action, not code) — check whether Render's own per-request logging can
+be enabled for this service. **Explicit non-fixes, carried forward:** do not raise the pool further, do
+not touch `open-in-view`, do not add PgBouncer, do not chase the unconfirmed "synchronous external call"
+lead without new evidence.
+
+**⚠️ FOLDED IN MID-CYCLE, 2026-09-17, owner call:** a second, unrelated fix, from the Authored Depth
+Backlog Index row below (`v0.83.0 — will curators actually classify…`, re-audited the same day this
+release was already open). **Scope:** F1 (frontend) — a non-blocking publication-time warning when a
+curator publishes (or bulk-publishes) a note with no Authored Depth; F2 (multi-system) — a missing-depth
+count/filter added to the existing curator-scoped Admin Applicable Programs surface. Both are
+prevention only, shipping *before* the 80(+9)-note manual cleanup that follows in a later checkpoint.
+**Explicit non-fixes:** no Course/Program→Depth inference, no learner-facing "Unclassified" chip, no
+hard publication requirement yet (deferred — it would silently break `NoteBulkGenerationService`'s
+swallowed-exception publish path), no bulk depth editor. Full audit:
+`docs/claude-plans/authored-depth-legacy-backfill-audit-and-plan.md`. **The two halves of this release
+share no code and no files** — kept as one release only to avoid opening a second branch mid-cycle.
+
+**Routing: Codex** (Leg A2, backend service+filter+config; and F2, backend DTO+filter+frontend section)
+and **Claude Code inline** (Leg B, one YAML line; and F1, two existing components, copy + one
+conditional each). **Verification tier: Leg A2 — one scoped cold agent, falsification-framed**
+(four-incident production-reliability history); **Leg B, F1, F2 — one `advisor()` call each.** No full
+pressure test for either half. Full scope in `RELEASES.md`.
+
+**⚠️ SIGNOFF NOTE, 2026-09-18: the owner requested one additional Opus falsification pass across the
+whole release before signoff**, escalating past the per-item tiers above. All 19 claims held; it
+surfaced written claims (not code defects) that outran what the tests proved, fixed in follow-up PR
+#1415 — see `RELEASES.md`'s Known limitations for detail. **A1 (owner action) checked at signoff and
+confirmed NOT enabled** (verified via a read-only Render logs query, not from a stated assumption) —
+still open, owner's action.
+
 **Kicked off 2026-09-16, signed off 2026-09-17.** `v0.152.0 — The Missing Half of v0.150.0` is
 **Released** on `releases/v0.152.0` (PR #1408 Slices 1-3, PR #1409 a cold-agent-found fix). Gives the
 many-to-many Program Family architecture (`v0.150.0`) the curator UX it needed to actually get

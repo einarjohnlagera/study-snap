@@ -18,6 +18,169 @@ index for a one-line-per-version pointer back into this file.
 
 ---
 
+## v0.153.0 - The Missing Telemetry
+
+**Status: Released** (signed off 2026-09-18)
+
+Theme: stop re-investigating the same unidentified production outage a fifth time, and ship the one
+thing that would actually answer it — the diagnostic instrumentation this recurring failure has been
+missing across all four occurrences so far. **Folded in 2026-09-17, mid-cycle, while this release was
+still open: a second, unrelated fix (F1/F2 below) for a separate production-reliability gap found while
+auditing an overdue product checkpoint** — a metadata field (Authored Depth) whose backlog was
+discovered to be 3.5× larger than believed and actively growing. The two problems share no code, no
+files, and no root cause; they are bundled here only because `v0.153.0` was still open when the second
+one was scoped, per an explicit owner call to avoid opening a second release branch mid-cycle.
+**⚠️ Verification-tier consequence of folding a second, unrelated item into an open release, stated per
+CLAUDE.md's own rule:** this release is now four items (Leg A2, Leg B, F1, F2) across two unrelated
+problem domains instead of two. Per-item tiers stay as declared for each (Leg A2 keeps its cold-agent
+falsification pass; Leg B, F1 and F2 each get one `advisor()` call) — no item's own tier moves — but a
+whole-release `advisor()` summary at signoff must now explicitly check the two halves don't interact
+(they touch disjoint files: `backend/.../hikari`/`ThreadLocal` filter/`application.yaml` for the pool
+work vs. `NoteBulkGenerationService`/`private-note-detail-page-client.tsx`/`bulk-generation-page-client.tsx`/
+admin Applicable Programs for the depth work), and the per-PR `/audit-diff` stays scoped to whichever
+half a given PR actually touches rather than being asked to reason about both at once.
+
+Source: `docs/claude-plans/2026-09-17-pool-exhaustion-instrumentation-fix-plan.md` (Prod Investigator
+session, written on request from a peer session relaying the owner's report that prod goes down almost
+daily), built on `docs/claude-findings/2026-09-10-prod-pool-exhaustion-trigger-unresolved.md` (§11 adds
+today's occurrence). **The `[CHECKPOINT — due 2026-09-17]` in `ROADMAP.md`'s Backlog Index fired at
+kickoff:** today's incident (05:56:29–05:58:46 UTC, ~90s impact, already recovered) is a **fourth**
+confirmed occurrence of the identical signature (2026-09-04, 2026-09-05, 2026-09-10, now 2026-09-17) —
+HikariCP pool exhaustion (`active=20/20`) causes `DataSourceHealthIndicator` to starve on the same pool,
+so the platform restarts an instance whose only problem was that it was busy. Every discriminating check
+from the prior three investigations repeats identically: no connection leak (no hold ≥60s), no OOM, no
+recent deploy, the database itself near-idle, nothing scheduled. Per the checkpoint's own stated kill
+criterion, this release does **not** attempt a fifth root-cause hunt — three priors plus a cold-agent
+falsification pass already narrowed the mechanism as far as existing telemetry allows (a non-DB,
+non-CPU blocking wait under 60 seconds, under OSIV). **The owner asked directly whether this could be a
+docker-compose / app-config issue: ruled out.** `docker-compose.yml` is local-dev-only (hardcoded
+`localhost` values) and is never part of the deploy path — Render builds and runs `backend/Dockerfile`
+directly under its own orchestration.
+
+### Planned Scope
+
+- **Leg A2 — Hikari-saturation-triggered diagnostic logging (backend).** When the pool is saturated
+  (`activeConnections >= maximumPoolSize` with threads waiting, sustained), log which request paths are
+  in flight at that moment — captured via a cross-thread `ConcurrentHashMap<Thread, InFlightRequest>`
+  registry set in a servlet filter at request entry (alongside where `RequestIdFilter` already runs),
+  polled against `HikariPoolMXBean` on a short interval. **This is the one thing that would have answered every one of
+  the four incidents on the spot**, instead of leaving "narrowed, not identified" as the outcome each
+  time. Scope is exactly detect-saturation-and-log-in-flight-paths — explicitly not a general APM
+  integration.
+- **Leg B — close the structural Tomcat/Hikari mismatch (backend, config).** `server.tomcat.threads.max`
+  (currently 25, `application.yaml`) exceeds `spring.datasource.hikari.maximum-pool-size` (20), so under
+  `spring.jpa.open-in-view: true` roughly 21 concurrent requests alone can exhaust the pool regardless of
+  query speed. Lower `threads.max` to at or below 20, not raise the pool (raising it is an explicit
+  non-fix — already tried once, 10→20 after 2026-09-04, and the identical failure recurred three more
+  times at 20 since). This does not identify or fix whatever is actually holding connections for tens of
+  seconds; it closes a different, independently-real exposure. **⚠️ Both values are
+  `${ENV_VAR:default}` — `${SERVER_TOMCAT_THREADS_MAX:25}` and `${DB_POOL_MAX_SIZE:20}` — and Render
+  environment variables cannot be read with any tool available to Claude (the only such tool is a write,
+  which is the owner's). Before this ships, the owner must confirm on the Render dashboard's Environment
+  tab whether either variable is set explicitly.** If `SERVER_TOMCAT_THREADS_MAX` is overridden, editing
+  the YAML default is a silent no-op in production — the fix is then an owner-run env-var change, not a
+  code diff, and the release notes must say which one actually happened.
+- **A1 — Render platform request logging (owner action, not a code change).** Confirm in the Render
+  dashboard whether per-request logging (path, status, duration) can be enabled for this service, and if
+  so, enable it. Deploy/env/plan-tier actions are owner-only per standing rule; not part of this
+  release's diff.
+- **F1 — publication-time Authored Depth warning (frontend only).** Per
+  `docs/claude-plans/authored-depth-legacy-backfill-audit-and-plan.md` (§F), a fresh audit found that a
+  curator-owned public note with no Authored Depth is not merely unfilterable — it generates a less
+  precisely calibrated Study Pack (no curriculum floor, ambiguous subject guidance). 282 such notes
+  exist today, 173 created in the 30 days since `v0.83.0` shipped the Public Library `?level=` filter,
+  entirely via the bulk-generate `makePublic` path, which never inspects depth. Add a non-blocking
+  warning line — *"this note will not appear under any Authored Depth filter"* — to the existing *Make
+  public* confirmation dialog (`private-note-detail-page-client.tsx`) and to the Bulk Generate form when
+  `makePublic` is checked with no depth selected (`bulk-generation-page-client.tsx`). Publication still
+  proceeds either way; this is copy plus one conditional in each of two existing components, no API
+  change, no migration.
+- **F2 — admin missing-depth count (multi-system).** Add a *missing Authored Depth* filter/count to the
+  existing curator-scoped `/admin/course-programs` Applicable Programs surface
+  (`AdminNoteApplicableProgramsController` / `admin-applicable-programs-section.tsx`), which today lists
+  a curator's own notes but does not even carry `learnerLevel` in its response DTO. No new dashboard, no
+  new route, no notification system — one column and one filter on a page that already exists for
+  exactly this class of metadata repair.
+
+Anti-drift, carried forward from the plan and the source finding, do NOT re-propose: raising
+`maximum-pool-size` further (duration-bound holds, not throughput-bound — a bigger pool buys time
+proportional to nothing); touching `spring.jpa.open-in-view` (real blast radius, needs a staging run
+first, this incident does not change that calculus); adding PgBouncer (addresses too-many-clients, not
+connections-held-too-long); chasing the "synchronous external call" lead from the finding's §11 without
+new evidence (opened, not confirmed — Leg A2 is what would actually confirm or kill it on the next
+occurrence). Leg A2 and Leg B are independent — neither blocks the other.
+
+**Anti-drift for F1/F2, locked by the owner's decision and confirmed against current code by the audit
+— do NOT re-propose:** inferring Authored Depth from Course/Program (different semantic axis;
+`ADR-001:62,68,485`); adding a learner-facing "Unclassified" depth chip (describes curator metadata
+quality, not a learner's desired level; current behavior — NULL-depth notes fully visible unfiltered,
+excluded only by an explicit depth chip — already matches the requirement and needs no change); a hard
+publication-time requirement as the first move (`NoteBulkGenerationService.java:336-346` swallows a
+publish exception into `log.warn`, so a hard throw there would make a `makePublic` batch silently fail N
+notes with a success receipt — F3, a hard requirement, is explicitly deferred pending a 30-day post-F1
+inflow re-read); a bulk Authored Depth editor (no bulk write path exists for `learnerLevel` today — only
+single-note create/update/copy touch it — and 80-plus one-time dropdown edits cost less than the
+endpoint a bulk tool would need); retiring Public Library depth-based discovery (zero instrumentation
+exists on that surface, so this checkpoint has no learner-demand evidence either way). Full audit:
+`docs/claude-plans/authored-depth-legacy-backfill-audit-and-plan.md`.
+
+Pre-declared guards (do not accept a diff without these — a detector that doesn't provably fire under
+load, or that false-positives under ordinary load, is the same silent-no-op class this repo has shipped
+twice before): (1) a test that actually saturates a small test Hikari pool and asserts the saturation
+log line fires and names the blocking path, not just that the detector compiles; (2) a test asserting
+the detector does **not** fire under ordinary, non-saturated concurrent load; (3) for Leg B, confirm the
+application context still starts and a burst of ~20 concurrent requests queues at the Tomcat acceptor
+rather than erroring, after lowering `threads.max`; (4) for F1, a test that actually renders each dialog
+with the branch condition met (no depth + `makePublic`/publish) and asserts the warning copy appears —
+not just that the component compiles; (5) for F2, if it adds any endpoint, one real `MockMvc` request
+test with `.contentType(MediaType.APPLICATION_JSON)` per CLAUDE.md's non-negotiable rule for every new
+endpoint.
+
+**Routing: Codex** for Leg A2 (backend service + filter + config, anti-drift care against scope-creeping
+into a general APM layer) and for **F2** (backend DTO + service filter + frontend section, multi-system,
+via `docs/skills/codex-prompt-generator.md` — scope locked to one column + one filter on the existing
+admin surface, no new dashboard/route/notification system). **Routing: Claude Code inline** for Leg B
+(one YAML line, existing pattern, clear regression guard) and for **F1** (two existing components,
+copy + one conditional each, well under ~50 LOC, no new infrastructure). **Verification tier: Leg A2 —
+one scoped cold agent, falsification-framed** (recurring four-incident production-reliability history;
+no auth/cross-user/money-semantics trigger fires on its own, but the incident history is reason enough
+per the plan's own recommendation) — hand it the plan plus finding §11 and ask it to disprove that the
+detector actually fires under load and doesn't false-positive under normal traffic. **Leg B, F1 and
+F2 — one `advisor()` call each** on their diffs; none moves an authorization boundary, changes
+money/quota/production-data semantics, or shares a method with another PR in this release. **No full
+three-agent pressure test for either half** — neither meets any of that tier's triggers, and defaulting
+to the heaviest option regardless is itself the error CLAUDE.md names.
+
+**Backlog Index obligations, this release's own signoff:** (1) update the
+`[CHECKPOINT — due 2026-09-17]` pool-exhaustion row — its kill criterion fired, scope changes from
+"identify the trigger" to "ship the instrumentation that would identify it," not resolved until Leg A2
+has shipped and fired at least once (in the guard test per above — a fifth production occurrence is not
+something to wait for). If Leg A2 ever does capture a real trigger on a future occurrence, that is a
+new, separate findings file, not a retrofit into the "trigger unresolved" title. (2) The Authored Depth
+row (`ROADMAP.md`, `v0.83.0 — will curators actually classify…`) needs a new
+`[CHECKPOINT — due <F1 deploy + 14 days>]` added for the manual cleanup's completion re-read (kill
+criterion, stated now: if the checkpoint query still returns more than 10 unclassified notes at that
+read, escalate to tooling per the audit's §H re-evaluation, not a third extension) — the exact date
+depends on when F1 actually deploys, so it cannot be written until then.
+
+### Shipped
+
+- **Hikari saturation request-path diagnostics (Leg A2).** A servlet filter now keeps a cleanup-safe, thread-keyed snapshot of request paths currently in flight. A fixed-delay detector reads the live Hikari MXBean every two seconds and, after two consecutive samples with `activeConnections >= maximumPoolSize` and waiters present, logs the pool counts and every request in flight at saturation. It emits once per saturation episode, rearms after recovery, and disables safely for a non-Hikari datasource. Real-pool guards exhaust a two-connection Hikari pool and prove the warning names the tracked path, while false-positive and throwing-filter guards prove a single blip, ordinary load, and request failures do not leave misleading telemetry. `InFlightRequestTrackingFilter` is now pinned `@Order(HIGHEST_PRECEDENCE + 1)`, ahead of the Spring Security chain, so a connection held inside `JwtAuthenticationFilter`'s per-request user lookup is visible to the snapshot rather than silently excluded (found by the release-wide Opus falsification pass below; the original filter order was Spring's default `LOWEST_PRECEDENCE`, which placed it after security).
+- **Curator-owned Authored Depth cleanup queue (F2).** The existing Admin Applicable Programs table now displays each owned note's Authored Depth and can filter to notes where it is missing. The filter preserves the page's requester-owner scope, visibility-agnostic population, pagination, and `updatedAt DESC` order; depth remains editable only from the existing per-note editor.
+- **⚠️ Leg B — code half only. NOT effective in production yet.** `server.tomcat.threads.max`'s YAML default lowered 25→20→**18** (see the correction below for why 20 wasn't the final value), and `TomcatThreadPoolHikariAlignmentTest` pins `threads.max < hikari.maximum-pool-size` — a **strict** inequality, algebraically (re-read from both files every run, not a hardcoded pair of numbers) — so the two settings can't silently drift apart again. **The owner confirmed on the Render dashboard (2026-09-17) that `SERVER_TOMCAT_THREADS_MAX=25` is set explicitly there — this overrides the YAML default entirely, so production is still running at 25 today and this fix does nothing until the owner changes or removes that variable.** Recommendation: **delete** the Render env var rather than set it to a number, since deleting it also removes the shadowing that made this a live question — but it's the owner's call. The pre-declared guard "confirm a burst of ~20 concurrent requests queues at the Tomcat acceptor rather than erroring" is intentionally NOT covered by a bespoke test: that behavior is standard Apache Tomcat NIO-connector queueing, not code this repo owns, and building the codebase's first full-embedded-server concurrency test to re-prove a 20-year-old servlet-container feature would exceed this leg's own declared `advisor()`-only verification tier. Stated here explicitly rather than silently assumed.
+- **⚠️ Correction (Opus falsification pass) + final value decision: 20 was tried first and found insufficient; shipped at 18.** At the originally-shipped equality (20 == 20), this closed only the OVERFLOW exposure (a 21st–25th admitted request exhausting the pool by itself) — it did NOT close the STARVATION mechanism actually behind all four outages. `spring.jpa.open-in-view` is unset, so Boot's default (`true`) applies and a connection is held for a request's whole lifecycle; 20 fully-concurrent requests alone could still consume every connection and leave zero for `DataSourceHealthIndicator`, reproducing the exact `active=20/20` signature. The test's own docstring previously overclaimed "close this specific structural exposure" without that qualification — corrected. **Owner decision after reviewing the tradeoff explicitly (queueing at the Tomcat acceptor under a 2-thread-narrower ceiling vs. reserved health-check/scheduled-job headroom): lower to 18**, reserving 2 connections of headroom. This meaningfully reduces the odds of recurrence; it is **not** an absolute guarantee, since the registry/pool-coverage Known Limitation below (2 executors + 16 `@Scheduled` jobs drawing on the same pool, unbounded by `threads.max`) means a health check can still theoretically lose a race against those. `TomcatThreadPoolHikariAlignmentTest` and `application.yaml`'s comment both updated to the strict-inequality framing.
+- **Publication-time Authored Depth warning (F1).** A non-blocking warning now appears in both real publish surfaces that reach `performVisibilityUpdate("PUBLIC")` for an individual note — the "Make this note public?" confirmation and the "This note is private" → "Publish & Share Link" dialog (`private-note-detail-page-client.tsx`) — plus the Bulk Generate form's Public toggle when no Authored Depth is selected (`bulk-generation-page-client.tsx`). Publication always proceeds either way; the warning only tells the curator the note will not surface under any Authored Depth filter until one is set. Scope grew by one dialog beyond the original two named surfaces: the private-share modal's own "Publish & Share Link" button calls the identical publish path and was silently missing the warning otherwise. Guarded by real-render tests asserting the warning appears exactly when depth is unset and disappears once it is set, across all three surfaces.
+- **Pre-signoff Opus falsification pass, all four shipped items, all 19 pre-declared claims CONFIRMED.** Escalated past the pre-declared per-item tiers (Leg A2's own scoped Sonnet cold agent; one `advisor()` call each for Leg B/F1/F2) at the owner's explicit request given the production-reliability stakes — one `model: opus` cold agent, no inherited context, falsification-framed across the whole release rather than three separate agents. Verified empirically throughout: a genuinely exhausted real Hikari pool, a mutated YAML value that correctly failed the alignment test, a full Spring context boot, and real `MockMvc` requests — not read-only inspection. No code defect found; every claim about detection reliability, false-positive avoidance, cleanup-on-throw, fail-safe behavior, publish-path correctness, and query scoping/visibility/serialization held. It did surface written claims that outran what the code/tests actually proved, all fixed in this same release rather than carried forward silently: the `@Order` fix and Leg B docstring correction above, plus two new tests (`rearmsAfterRecovery`, `doesNotLogUnderOrdinaryConcurrentLoad` — the latter closing this release's own pre-declared "does not false-positive under concurrent load" guard, which the original suite tested single-threaded only) added to `PoolSaturationDetectorTest`. See Known limitations for the one gap left open rather than fixed: the saturation detector's registry has no coverage of non-request threads.
+
+### Known limitations
+
+- **RESOLVED (Opus falsification pass, this cycle).** `InFlightRequestTrackingFilter` previously had no explicit `@Order` and ran after Spring Security (measured: `LOWEST_PRECEDENCE` vs. security's `-100`), so a connection held inside `JwtAuthenticationFilter`'s DB lookup was invisible to the snapshot — a present gap, not the hypothetical one originally recorded here ("correct today ... would silently break if a future filter changed that assumption" was itself inaccurate). Fixed: `@Order(Ordered.HIGHEST_PRECEDENCE + 1)`, mirroring `RequestIdFilter`.
+- **The saturation registry has no coverage of non-request threads — the larger of the two remaining gaps, not fixed here.** `llmParallelTaskExecutor` / `studyPackGenerationTaskExecutor` (used by `LongExamService`, `ExamQuestionPoolService`, `AdminStudyPackService`, `OfficialChallengeQuizTemplateService`) and 16 `@Scheduled` jobs never pass through the servlet filter that populates the registry. A connection held by a generation task across a slow OpenAI call — precisely the unconfirmed "synchronous external call" lead this release's source finding carries — produces `requests in flight at saturation=[]`, which is ambiguous between "nothing was in flight" and "the holder was never eligible for the registry." Not fixed in this release: closing it means deciding whether non-request threads should register themselves too, a larger design question than this release's scope. Read the empty-list case with this caveat during incident five.
+- **`PoolSaturationDetector.poll()` shares Spring's default single-threaded scheduler with 16 other `@Scheduled` jobs, several DB-bound** (`GenerationRecoveryJob` every 10 min, `BulkGenerationResultCleanupJob` and `NotificationCleanupJob` hourly, plus the rate-limit purges). During saturation, any of those blocking on a connection up to `connection-timeout: 5000` stalls the 2-second poll for that duration — a latent detection-latency risk, count corrected from the original "several other low-frequency jobs" to the actual 16. `spring.task.scheduling.pool.size: 2` would remove it; not changed here to keep this leg's diff minimal.
+- **`sanitize()` on the logged request path strips only `\n`/`\r`, with no length bound or control-character stripping beyond that.** Low severity, since it fires only during genuine saturation on a codebase with no existing log-injection-hardening convention to hold it against. Unchanged from the original finding.
+- **`InFlightRequestTrackingFilterTest` drives the filter directly (`filter.doFilter(...)`) rather than asserting it is actually registered in the chain or at what position.** Passes by construction regardless of registration — the same shape as the `v0.119.0` `Content-Type` defect class CLAUDE.md names. The `@Order` fix above was verified by booting the real Spring context during the falsification pass, not by this unit test; no regression guard exists for the ordering itself. Flagged, not fixed — would need a `@SpringBootTest` asserting filter registration order, judged not worth the cost for a one-line annotation.
+- **A1 (owner action, Render per-request logging) — checked at signoff, confirmed NOT enabled, still open.** The owner reported having heard it was on by default; verified otherwise via a read-only `list_log_label_values` query against the production service's logs (`type` label returns only `["app", "build"]` across the prior ~28 hours — no `request` type exists at all), plus a direct spot-check of a live hour showing only Spring Boot application/job log lines, no per-request path/status/duration entries. Enabling it (a paid add-on or plan-tier feature on Render, not a code change) remains the owner's own action, not done as of this signoff.
+
 ## v0.152.0 - The Missing Half of v0.150.0
 
 **Status: Released** (signed off 2026-09-17)
