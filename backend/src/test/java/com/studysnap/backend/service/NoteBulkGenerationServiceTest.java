@@ -95,6 +95,8 @@ class NoteBulkGenerationServiceTest {
     private MePlanService mePlanService;
     @Mock
     private NoteCollectionService noteCollectionService;
+    @Mock
+    private BulkOperationNotificationService bulkOperationNotificationService;
 
     private NoteBulkGenerationService service;
     private StudyPackGenerationTaskDispatcher taskDispatcher;
@@ -120,6 +122,7 @@ class NoteBulkGenerationServiceTest {
                 failureReasonNormalizer,
                 mePlanService,
                 noteCollectionService,
+                bulkOperationNotificationService,
                 50,
                 0
         );
@@ -219,13 +222,16 @@ class NoteBulkGenerationServiceTest {
         when(noteService.create(any(UpsertNoteRequest.class), eq(userId)))
                 .thenReturn(noteResponse(firstNoteId.toString()), noteResponse(thirdNoteId.toString()));
 
-        service.queueBatch(request, userId, false);
+        BulkGenerateNotesResponse response = service.queueBatch(request, userId, false);
 
         verify(noteCollectionService).addGeneratedItems(
                 collectionId,
                 userId,
                 List.of(firstNoteId, thirdNoteId),
                 null
+        );
+        verify(bulkOperationNotificationService).bulkGenerationIncomplete(
+                userId, response.resultId(), List.of("Failed Topic"), List.of()
         );
     }
 
@@ -369,6 +375,7 @@ class NoteBulkGenerationServiceTest {
                 eq(List.of()),
                 eq(List.of())
         );
+        verify(bulkOperationNotificationService, never()).bulkGenerationIncomplete(any(), any(), any(), any());
     }
 
     @Test
@@ -456,6 +463,51 @@ class NoteBulkGenerationServiceTest {
                 eq(List.of()),
                 eq(List.of())
         );
+        verify(bulkOperationNotificationService, never()).bulkGenerationIncomplete(any(), any(), any(), any());
+    }
+
+    @Test
+    void queueBatch_allQuotaBlockedDeliversTheQuotaOnlyForm() {
+        UUID userId = UUID.randomUUID();
+        mockUser(userId, UserRole.USER, ProfileType.STUDENT, LearnerLevel.COLLEGE, COURSE_PROGRAM);
+        when(mePlanService.getNoteGenerationsRemaining(userId)).thenReturn(1);
+        StudyPackGenerationContext context = context(LearnerLevel.COLLEGE, COURSE_PROGRAM);
+        when(generationContextResolver.resolveForBulkGeneration(userId, COURSE_PROGRAM, SUBJECT, null, null))
+                .thenReturn(context);
+        when(noteGenerationService.generateFromTopic(any(), eq(userId), eq(context)))
+                .thenThrow(new MonthlyNoteGenerationLimitReachedException());
+
+        BulkGenerateNotesResponse response = service.queueBatch(
+                request(List.of("Quota Topic"), COURSE_PROGRAM, false), userId, true);
+
+        verify(bulkOperationNotificationService).bulkGenerationIncomplete(
+                userId, response.resultId(), List.of(), List.of("Quota Topic")
+        );
+    }
+
+    @Test
+    void queueBatch_notificationFailureDoesNotChangeTheRecordedResult() {
+        UUID userId = UUID.randomUUID();
+        mockUser(userId, UserRole.ADMIN, ProfileType.STUDENT, LearnerLevel.COLLEGE, COURSE_PROGRAM);
+        StudyPackGenerationContext context = context(LearnerLevel.COLLEGE, COURSE_PROGRAM);
+        when(generationContextResolver.resolveForBulkGeneration(
+                userId, List.of(CATALOG_PROGRAM_ID), null, SUBJECT, null, null
+        )).thenReturn(context);
+        when(llmStudyPackService.generateNoteFromTopic("Failed Topic", context))
+                .thenThrow(new IllegalStateException("generation failed"));
+        doThrow(new IllegalStateException("notification failed"))
+                .when(bulkOperationNotificationService)
+                .bulkGenerationIncomplete(any(), any(), any(), any());
+
+        BulkGenerateNotesResponse response = service.queueBatch(
+                request(List.of("Failed Topic"), COURSE_PROGRAM, false), userId, false);
+
+        verify(bulkGenerationResultService).recordResult(
+                eq(response.resultId()), eq(userId), eq(SUBJECT), eq(COURSE_PROGRAM), eq(null), eq(null),
+                eq(NoteTargetProfileType.STUDENT.name()), any(), eq(false), eq(1), eq(0),
+                eq(List.of("Failed Topic")), any(), eq(List.of())
+        );
+        assertThat(savedReceipt().getFailedTopics()).containsExactly("Failed Topic");
     }
 
     @Test
@@ -647,6 +699,9 @@ class NoteBulkGenerationServiceTest {
                 eq(List.of("Rejected Topic")),
                 any(),
                 eq(List.of())
+        );
+        verify(bulkOperationNotificationService).bulkGenerationIncomplete(
+                userId, response.resultId(), List.of("Rejected Topic"), List.of()
         );
     }
 
@@ -866,6 +921,7 @@ class NoteBulkGenerationServiceTest {
                 eq(List.of()),
                 eq(List.of())
         );
+        verify(bulkOperationNotificationService, never()).bulkGenerationIncomplete(any(), any(), any(), any());
     }
 
     @Test
@@ -898,6 +954,9 @@ class NoteBulkGenerationServiceTest {
                 eq(List.of("Topic One", "Topic Two")),
                 any(),
                 eq(List.of())
+        );
+        verify(bulkOperationNotificationService).bulkGenerationIncomplete(
+                userId, response.resultId(), List.of("Topic One", "Topic Two"), List.of()
         );
     }
 

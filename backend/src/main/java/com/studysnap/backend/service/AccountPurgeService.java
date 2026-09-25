@@ -183,7 +183,7 @@ public class AccountPurgeService {
         userLibraryFilterRepository.deleteByUserId(userId);
         userUsageRepository.deleteByUserId(userId);
         studyPackDraftRepository.deleteByOwnerUserId(userId);
-        // ⚠️ Retention deliberately RETAINS unread actionable notifications forever, so this row set is
+        // ⚠️ Retention deliberately RETAINS unread LEARNING_SYSTEM notifications forever, so this row set is
         // not reachable by the cleanup job and a purge is the only thing that can take it.
         notificationRepository.deleteByRecipientUserId(userId);
 

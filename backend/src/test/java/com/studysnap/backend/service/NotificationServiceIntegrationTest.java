@@ -15,6 +15,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.UUID;
+import java.util.stream.IntStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -135,13 +136,16 @@ class NotificationServiceIntegrationTest {
     }
 
     @Test
-    void retentionDeletesUnreadNonActionableAndReadRowsButKeepsUnreadActionableRowsPastTheWindow() {
+    void retentionExpiresUnreadAnnouncementsAndAsyncResultsButKeepsUnreadLearningSystemRows() {
         UUID recipientId = UUID.randomUUID();
         UUID unreadId = UUID.fromString(notificationService.deliver(
                 delivery(recipientId, UUID.randomUUID(), NotificationType.REVIEW_SET_UPDATE)
         ).id().toString());
         UUID unreadAnnouncementId = UUID.fromString(notificationService.deliver(
                 delivery(recipientId, UUID.randomUUID(), NotificationType.ANNOUNCEMENT)
+        ).id().toString());
+        UUID unreadAsyncResultId = UUID.fromString(notificationService.deliver(
+                delivery(recipientId, UUID.randomUUID(), NotificationType.BULK_GENERATION_INCOMPLETE)
         ).id().toString());
         UUID readId = UUID.fromString(notificationService.deliver(
                 delivery(recipientId, UUID.randomUUID(), NotificationType.REVIEW_SET_UPDATE)
@@ -150,10 +154,48 @@ class NotificationServiceIntegrationTest {
         OffsetDateTime old = OffsetDateTime.now(ZoneOffset.UTC).minusDays(91);
         jdbcTemplate.update("update notifications set created_at = ?", old);
 
-        assertThat(notificationService.deleteExpired(OffsetDateTime.now(ZoneOffset.UTC), 90)).isEqualTo(2);
+        assertThat(notificationService.deleteExpired(OffsetDateTime.now(ZoneOffset.UTC), 90)).isEqualTo(3);
         assertThat(notificationRepository.findById(unreadId)).isPresent();
         assertThat(notificationRepository.findById(unreadAnnouncementId)).isEmpty();
+        assertThat(notificationRepository.findById(unreadAsyncResultId)).isEmpty();
         assertThat(notificationRepository.findById(readId)).isEmpty();
+    }
+
+    @Test
+    void unreadBulkGenerationResultCountsUntilItIsReadOrDismissed() {
+        UUID recipientId = UUID.randomUUID();
+        var readResult = notificationService.deliver(
+                delivery(recipientId, UUID.randomUUID(), NotificationType.BULK_GENERATION_INCOMPLETE));
+        var dismissedResult = notificationService.deliver(
+                delivery(recipientId, UUID.randomUUID(), NotificationType.BULK_GENERATION_INCOMPLETE));
+
+        assertThat(notificationService.countActionableUnread(recipientId)).isEqualTo(2);
+        notificationService.markRead(recipientId, readResult.id());
+        assertThat(notificationService.countActionableUnread(recipientId)).isEqualTo(1);
+        notificationService.dismiss(recipientId, dismissedResult.id());
+        assertThat(notificationService.countActionableUnread(recipientId)).isZero();
+    }
+
+    @Test
+    void worstCaseBulkFailurePersistsWithinBodyLimitWithoutADedupConflict() {
+        SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
+        NotificationService meteredService = new NotificationService(notificationRepository, meterRegistry);
+        BulkOperationNotificationService producer = new BulkOperationNotificationService(meteredService);
+        UUID recipientId = UUID.randomUUID();
+        UUID resultId = UUID.randomUUID();
+        var topics = IntStream.range(0, 50)
+                .mapToObj(index -> String.format("%03d", index) + "x".repeat(157))
+                .toList();
+
+        producer.bulkGenerationIncomplete(recipientId, resultId, topics, java.util.List.of());
+
+        NotificationEntity persisted = notificationRepository.findByRecipientUserIdAndDedupKey(
+                recipientId,
+                "BULK_GENERATION_INCOMPLETE:" + resultId
+        ).orElseThrow();
+        assertThat(persisted.getBody()).hasSizeLessThanOrEqualTo(1000);
+        assertThat(persisted.getBody()).endsWith(" and 45 more");
+        assertThat(meterRegistry.counter("notification.dedup_conflict").count()).isZero();
     }
 
     @Test

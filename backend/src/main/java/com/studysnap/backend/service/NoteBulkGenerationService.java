@@ -67,6 +67,7 @@ public class NoteBulkGenerationService {
     private final BulkGenerationFailureReasonNormalizer failureReasonNormalizer;
     private final MePlanService mePlanService;
     private final NoteCollectionService noteCollectionService;
+    private final BulkOperationNotificationService bulkOperationNotificationService;
     private final int maxTopics;
     private final int throttleDelayMs;
 
@@ -86,6 +87,7 @@ public class NoteBulkGenerationService {
             BulkGenerationFailureReasonNormalizer failureReasonNormalizer,
             MePlanService mePlanService,
             NoteCollectionService noteCollectionService,
+            BulkOperationNotificationService bulkOperationNotificationService,
             @Value("${note.bulk-generation.max-topics:50}") int maxTopics,
             @Value("${note.bulk-generation.throttle-delay-ms:500}") int throttleDelayMs
     ) {
@@ -103,6 +105,7 @@ public class NoteBulkGenerationService {
         this.failureReasonNormalizer = failureReasonNormalizer;
         this.mePlanService = mePlanService;
         this.noteCollectionService = noteCollectionService;
+        this.bulkOperationNotificationService = bulkOperationNotificationService;
         this.maxTopics = Math.clamp(maxTopics, MIN_MAX_TOPICS, Integer.MAX_VALUE);
         this.throttleDelayMs = Math.clamp(throttleDelayMs, MIN_THROTTLE_DELAY_MS, MAX_THROTTLE_DELAY_MS);
     }
@@ -137,6 +140,7 @@ public class NoteBulkGenerationService {
                 bulkGenerationResultService,
                 new BulkGenerationFailureReasonNormalizer(),
                 mePlanService,
+                null,
                 null,
                 maxTopics,
                 throttleDelayMs
@@ -271,6 +275,25 @@ public class NoteBulkGenerationService {
                         ownerUserId,
                         exception
                 );
+            }
+            if (!failedTopics.isEmpty() || !quotaBlockedTopics.isEmpty()) {
+                try {
+                    bulkOperationNotificationService.bulkGenerationIncomplete(
+                            ownerUserId,
+                            resultId,
+                            failedTopics,
+                            quotaBlockedTopics
+                    );
+                } catch (RuntimeException exception) {
+                    // The producer owns log-and-swallow, and this guard keeps the completed batch intact
+                    // even if a test double or future implementation violates that contract.
+                    log.warn(
+                            "action=bulk_generate_notification outcome=failed resultId={} ownerUserId={}",
+                            resultId,
+                            ownerUserId,
+                            exception
+                    );
+                }
             }
             log.info(
                     "action=bulk_generate_batch outcome=completed accepted={} created={} failed={} quotaBlocked={} ownerUserId={}",

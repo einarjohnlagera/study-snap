@@ -55,7 +55,18 @@ the same session then fixes.
 
 ### Shipped
 
-_(nothing yet)_
+- **Bulk-operation in-app results.** Notifications now keep badge eligibility and unread expiry as
+  independent category policies. Failed or capacity-blocked bulk generation records its topic strings in
+  one bounded notification and stays silent on success; normally completed bulk regeneration sends one
+  completion notification, while an interrupted run sends none. Unit, call-path, badge/retention, and
+  real-database length guards exercise these claims.
+  Copy is fixed and exact (`docs/features/notifications.md`); bodies are bounded to an 850-character topic
+  budget in code, and the regeneration retry mints its own batch id so it notifies too. The pre-commit audit
+  found and fixed a contradiction in `notifications.md` (it still said every unread actionable row is retained
+  forever, which is false for `ASYNC_RESULT`) and a test gap (nothing pinned the dedup id of either trigger).
+  13 of 13 planted mutants were killed, each by a named test (retention filter reverted, `ASYNC_RESULT` flags,
+  truncation budget, both dedup ids, producer swallow, both call sites removed, generation notify-on-success,
+  call-site catch narrowed, and regeneration notify on the interrupted path).
 
 ## v0.158.0 - Reading the Evidence
 
