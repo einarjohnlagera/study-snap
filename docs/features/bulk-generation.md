@@ -119,7 +119,10 @@ notification when `failedTopics` or `quotaBlockedTopics` is non-empty. The body 
 because the consume-once receipt is deleted on read and swept after 24 hours, while a topic that failed
 before note creation has no Note row. A completely successful run is silent. No completion copy claims
 that Study Packs are ready: `createdCount` counts created notes and can advance even when Study Pack
-dispatch fails. Delivery failure is logged and cannot alter the receipt or created notes.
+dispatch fails. Delivery failure is logged and cannot alter the receipt or created notes. When the run is
+interrupted or fails before its loop, the outer catch marks every accepted topic failed in the RECEIPT (a known,
+older behaviour); the notification instead lists only the accepted topics that were not created, so it never
+names a note that exists.
 
 This notification is bulk-only. Single-note generation keeps the learner on Note Detail, which polls the
 result every three seconds. The bulk flow sends the learner away, creating the durable-awareness need.

@@ -77,10 +77,13 @@ capacity. The fixed copy is:
 | --- | --- | --- |
 | Failed only | `1 topic couldn't be generated` / `{n} topics couldn't be generated` | `Couldn't be generated: {topics}` |
 | Monthly capacity only | `1 topic needs more monthly capacity` / `{n} topics need more monthly capacity` | `Not created because your monthly limit was reached: {topics}` |
-| Both | `Some topics couldn't be generated` | `Couldn't be generated: {failed}. Not created because your monthly limit was reached: {quotaBlocked}.` |
+| Both | `Some topics couldn't be generated` | `Couldn't be generated: {failed}. Not created because your monthly limit was reached: {quotaBlocked}.` plus ` Plus {N} more not listed.` when topics were omitted |
 
-Topic text has an 850-character budget shared by both groups. Whole topics are omitted and the body adds
-`and N more`; a single oversized topic is shortened with an ellipsis. This bound is enforced before
+Topic text has an 850-character budget shared by both groups, and each group is guaranteed its first topic
+before the budget fills. Whole topics are omitted and, for a single group, the body adds `and N more`; in the
+mixed case the omitted count can belong to either group, so it goes after both sentences as
+`Plus N more not listed.` and is never attached to the quota-blocked list. When a run is interrupted or fails
+before its loop, the failed list is the accepted topics that were NOT created, never a note that already exists; a single oversized topic is shortened with an ellipsis. This bound is enforced before
 delivery because `body` is `VARCHAR(1000)` and an overflow would otherwise resemble a dedup conflict.
 
 `BULK_REGENERATION_COMPLETE` is delivered once only after the loop completes normally:
@@ -89,8 +92,8 @@ delivery because `body` is `VARCHAR(1000)` and an overflow would otherwise resem
 | --- | --- | --- |
 | One updated | `Your Study Pack has been updated` | `Open your Library to see it.` |
 | All of several updated | `{r} Study Packs have been updated` | `Open your Library to see them.` |
-| Some updated | `1 Study Pack has been updated` / `{r} Study Packs have been updated` | `Some Study Packs weren't updated. Your existing Study Packs are unchanged and still work.` |
-| None updated | `We couldn't update your Study Packs` | `Your existing Study Packs are unchanged and still work.` |
+| Some updated | `1 Study Pack has been updated` / `{r} Study Packs have been updated` | `Some Study Packs weren't updated. Your existing Study Packs still work.` |
+| None updated | `We couldn't update your Study Packs` | `Your existing Study Packs still work.` |
 
 Both use `Open Library` and `/library`. The resulting keys are
 `BULK_GENERATION_INCOMPLETE:{resultId}` and `BULK_REGENERATION_COMPLETE:{batchId}`; producers pass only

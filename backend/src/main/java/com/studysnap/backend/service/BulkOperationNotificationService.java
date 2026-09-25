@@ -55,12 +55,12 @@ public class BulkOperationNotificationService {
                         : regenerated + " Study Packs have been updated";
                 copy = new GenerationCopy(
                         title,
-                        "Some Study Packs weren't updated. Your existing Study Packs are unchanged and still work."
+                        "Some Study Packs weren't updated. Your existing Study Packs still work."
                 );
             } else {
                 copy = new GenerationCopy(
                         "We couldn't update your Study Packs",
-                        "Your existing Study Packs are unchanged and still work."
+                        "Your existing Study Packs still work."
                 );
             }
             deliver(recipientUserId, batchId, NotificationType.BULK_REGENERATION_COMPLETE, copy.title(), copy.body());
@@ -104,8 +104,16 @@ public class BulkOperationNotificationService {
                 "Some topics couldn't be generated",
                 "Couldn't be generated: " + truncated.failedText()
                         + ". Not created because your monthly limit was reached: " + truncated.quotaBlockedText()
-                        + truncated.suffix() + "."
+                        + "." + mixedSuffix(truncated.omitted())
         );
+    }
+
+    /**
+     * In the mixed case the omitted topics can belong to either group, so the count goes after both sentences
+     * rather than after the quota list, where it would read as "N more quota-blocked topics".
+     */
+    private static String mixedSuffix(int omitted) {
+        return omitted == 0 ? "" : " Plus " + omitted + " more not listed.";
     }
 
     private TruncatedTopics truncate(List<TopicEntry> topics) {
@@ -138,7 +146,8 @@ public class BulkOperationNotificationService {
         return new TruncatedTopics(
                 String.join(", ", failed),
                 String.join(", ", quotaBlocked),
-                omitted == 0 ? "" : " and " + omitted + " more"
+                omitted == 0 ? "" : " and " + omitted + " more",
+                omitted
         );
     }
 
@@ -169,7 +178,7 @@ public class BulkOperationNotificationService {
 
     private record TopicEntry(String topic, TopicGroup group) { }
 
-    private record TruncatedTopics(String failedText, String quotaBlockedText, String suffix) { }
+    private record TruncatedTopics(String failedText, String quotaBlockedText, String suffix, int omitted) { }
 
     private record GenerationCopy(String title, String body) { }
 }

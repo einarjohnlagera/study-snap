@@ -236,6 +236,40 @@ class NoteBulkGenerationServiceTest {
     }
 
     @Test
+    void queueBatch_interruptedAfterACreatedNoteNotifiesOnlyAboutTopicsThatWereNotCreated() {
+        UUID userId = UUID.randomUUID();
+        UUID firstNoteId = UUID.randomUUID();
+        mockUser(userId, UserRole.ADMIN, ProfileType.STUDENT, LearnerLevel.COLLEGE, COURSE_PROGRAM);
+        StudyPackGenerationContext context = context(LearnerLevel.COLLEGE, COURSE_PROGRAM);
+        when(generationContextResolver.resolveForBulkGeneration(
+                userId, List.of(CATALOG_PROGRAM_ID), null, SUBJECT, null, null
+        )).thenReturn(context);
+        when(llmStudyPackService.generateNoteFromTopic(anyString(), eq(context))).thenReturn("First content");
+        when(noteService.create(any(UpsertNoteRequest.class), eq(userId)))
+                .thenReturn(noteResponse(firstNoteId.toString()));
+        NoteBulkGenerationService throttledService = new NoteBulkGenerationService(
+                noteGenerationService, noteService, studyPackService, llmStudyPackService,
+                contentModerationService, generationContextResolver, taskDispatcher, userRepository,
+                courseProgramCatalogRepository, onboardingGuardService, bulkGenerationResultService,
+                failureReasonNormalizer, mePlanService, noteCollectionService,
+                bulkOperationNotificationService, 50, 10
+        );
+        // The delay between items sits outside the per-item try, so an interrupt escapes to the outer catch,
+        // which marks EVERY accepted topic failed, including the one that was just created.
+        Thread.currentThread().interrupt();
+        try {
+            BulkGenerateNotesResponse response = throttledService.queueBatch(
+                    request(List.of("Topic One", "Topic Two", "Topic Three"), COURSE_PROGRAM, false), userId, false);
+
+            verify(bulkOperationNotificationService).bulkGenerationIncomplete(
+                    userId, response.resultId(), List.of("Topic Two", "Topic Three"), List.of()
+            );
+        } finally {
+            Thread.interrupted();
+        }
+    }
+
+    @Test
     void queueBatch_threadsNormalizedSectionToCollectionMembership() {
         UUID userId = UUID.randomUUID();
         UUID collectionId = UUID.randomUUID();
