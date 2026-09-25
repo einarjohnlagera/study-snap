@@ -54,6 +54,7 @@ Fields:
 - optional `sourcePlanId` on adopted personal plans
 - optional `parentCollectionId` for the v0.33.1 two-level Goal -> Subject hierarchy
 - optional `siblingPosition`, used only to order child Subject plans under the same Goal
+- optional `termLabel` (`term_label VARCHAR(60)`) and `termOrder` (`term_order SMALLINT`), **`v0.160.0` (In Progress; not yet shipped, this section describes the agreed contract)**: an Academic Term *placement* on a child Subject Plan; see "Academic Term placement" below and `ADR-003`
 - ordered `items`
 - `createdAt`
 - `updatedAt`
@@ -757,6 +758,24 @@ Behavior:
 - bumps `updatedAt`
 - returns full detail
 
+### Academic Term placement (v0.160.0, In Progress)
+
+Governed by `docs/architecture/ADR-003-curriculum-placement-and-hierarchy-depth.md`. Update this section to shipped-state wording at signoff; until then it is the agreed contract, not verified behavior.
+
+**What it is.** Two nullable columns on `note_collections`, `term_label VARCHAR(60)` and `term_order SMALLINT`, meaningful only on a child Subject Plan. It is a *placement*, not a level: the hierarchy stays at exactly two persisted levels (root Year/Goal, child Subject Plan), Term is not a collection, entity, catalog or enum, and it never touches the Note (ADR-001 axes untouched; `applicable_programs` is never overloaded to carry it).
+
+**Write path.** `PATCH /collections/{id}` (Update Metadata) gains two OPTIONAL fields, `termLabel` and `termOrder`, with the same PATCH semantics as the other fields (omit / `null` preserves). Both directions are additive (optional on request, nullable on response), so frontend and backend may deploy in either order. The Year builder exposes a per-Subject term control that is a combobox over terms already used in that Year, never raw freetext.
+
+**Copy sites.** The term is copied at BOTH child-copy builders in `NoteCollectionService`: `persistAdoptedPlan` (serves `adopt()` and, per child, `adoptGoal()`) and `createSubjectAddition` (the Official-update additive-merge path that adds a Subject to an already-adopted Year). It is NOT copied by `persistAdoptedGoal`, the root copy, because a root has no term placement.
+
+**Rendering (Year page).** Group children by `term_label`, order groups by `min(term_order)`, keep the existing sibling order within a group.
+
+- all children NULL: exactly today's flat grid of full-size cards, no term UI (protects the live Review Sets)
+- all placed: term-labelled groups
+- mixed: labelled groups first, then one trailing group headed `Term not specified` (a defensive render of a curator-quality defect, not a supported authoring state)
+
+**Compact Subject cards** (title, note count, one progress signal) are gated on the SAME condition as term grouping (any non-null child `term_label`) and never on a child count. **Official update stays additive-only.** There is no Degree entity, page or progress in this release, and Degree progress is permanently rejected (ADR-003 decision F).
+
 ### Publish / Unpublish Study Plan
 
 `POST /collections/{id}/visibility`
@@ -1177,6 +1196,7 @@ Do not add these under the collection CRUD spine unless explicitly scoped later:
 - live-link or shared-progress adopted plans
 - plan browse directory
 - lesson-plan document parsing
+- a third persisted collection level, a Term/Semester entity, catalog or enum, a Degree entity or landing page, Degree progress of any kind, whole-Degree adoption, or learner curriculum customization (ADR-003)
 
 ## Builder drag behaviour
 
