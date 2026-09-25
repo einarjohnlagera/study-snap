@@ -62,10 +62,17 @@ here is feature scope. Choose feature scope explicitly.
     (pool collapsed to 7 then 2), which looks like the DB dropping rather than load. Only the newest 30 log lines were
     read, so this is not a count. `v0.116.0` and `v0.123.0` confound it. The row's "material and sustained" has no
     number, so the kill criterion was not applied.
-  - **Retention readings so far:** the 02:45 Manila run on 09-24 (18:45Z 09-23) ran on `v0.156.0` code, before the
-    02:40Z deploy: `inactivity budget=60 attempted=60 sent=60`, `dueConceptsDigest=23`, `weakConcept=0`. The first
-    `v0.157.0` run is 18:45Z 2026-09-24. `email_log.clicked_at` is 0; `email_open_daily_counts` has 6 (09-23) and 3
-    (09-24), so open tracking delivers and clicks are not enabled yet.
+  - **First `v0.157.0` retention run, read 2026-09-25 (fired 2026-09-24T18:45Z = 02:45 Manila): AS DESIGNED.** Dispatch
+    order was digest (18:45:06.497), then weak-concept (18:45:06.530), then `INACTIVITY` (18:45:23.422), about 17 s
+    total, no errors, one instance. Digest `budget=60 attempted=14 sent=14 skippedForBudget=0`; weak-concept
+    `budget=46 attempted=0`; `INACTIVITY` `budget=46 sentToday=14 attempted=46 sent=46 skippedForBudget=75`, so it
+    landed inside the expected 40-47 band instead of the old pin at 60. `email_log` agrees (14 `DUE_CONCEPTS_DIGEST` +
+    46 `INACTIVITY` = 60, the full shared budget). The pre-deploy baseline was the 2026-09-23T18:45Z run on
+    `v0.156.0` code: `inactivity budget=60 sent=60`, `dueConceptsDigest=23`, no per-type dispatch lines. The digest
+    due-count differs day to day (14 vs 23), so the two are not a like-for-like "14 of 23". `email_log.clicked_at` is
+    still 0 (click tracking not enabled yet); `email_open_daily_counts` had 6 (09-23) and 3 (09-24) before this run.
+    `[CHECKPOINT — due 2026-09-27]` remains open. 75 eligible learners were skipped for budget; see the
+    `INACTIVITY` effectiveness item above for whether that matters.
   - **Cross-note review re-check:** `quick_review_sessions` 906 total, `source_collection_id` NULL on all 906
     (179 since the Stage 1 audit); DEFER stands, gate is `[CHECKPOINT — due 2026-10-13]`.
 
