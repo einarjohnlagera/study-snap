@@ -17,6 +17,15 @@ carries the reasoning; this file carries the behaviour.
 
 ## Behaviour
 
+- **Completion notification.** A run that reaches the normal end of `processBatch` delivers exactly one
+  `BULK_REGENERATION_COMPLETE` notification linking to `/library`. Its copy reports only requested and
+  regenerated counts already owned by the driver; blocked, failed, timed-out, and never-run items are
+  simply not updated. The copy states that existing Study Packs remain unchanged and working.
+- **Interrupted runs do not notify.** `BatchInterruptedException` returns before delivery. There is no
+  terminal `finally`: the receipt reports such a run as stale, and calling it complete would be false.
+- **Bulk-only rationale.** This operation sends the learner away from the result. Single-note generation
+  keeps the learner on a detail page that polls every three seconds, so it needs no duplicate signal.
+
 - **Who.** Curators only: ADMIN by role, or TEACHER by profile, past onboarding — `CuratorAuthoringPredicate`.
   **The endpoints' `@PreAuthorize` cannot express this** (`hasAnyRole('USER','ADMIN')` is satisfied by every
   authenticated account), so `BulkRegenerationAccessGuard` enforces it on **both** the batch and the

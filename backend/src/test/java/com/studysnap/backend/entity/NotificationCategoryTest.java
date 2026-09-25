@@ -3,6 +3,7 @@ package com.studysnap.backend.entity;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -14,10 +15,17 @@ class NotificationCategoryTest {
         var retentionExpirable = NotificationCategory.retentionExpirableCategories();
 
         for (NotificationCategory category : NotificationCategory.values()) {
-            assertThat(badgeEligible.contains(category) ^ retentionExpirable.contains(category))
-                    .as("category %s belongs to exactly one policy set", category)
-                    .isTrue();
+            assertThat(badgeEligible.contains(category)).isEqualTo(category.isBadgeEligible());
+            assertThat(retentionExpirable.contains(category)).isEqualTo(category.isRetentionExpirable());
         }
+        assertThat(Arrays.stream(NotificationCategory.values()).collect(Collectors.toMap(
+                category -> category,
+                category -> Map.entry(category.isBadgeEligible(), category.isRetentionExpirable())
+        ))).containsExactlyInAnyOrderEntriesOf(Map.of(
+                NotificationCategory.ANNOUNCEMENT, Map.entry(false, true),
+                NotificationCategory.LEARNING_SYSTEM, Map.entry(true, false),
+                NotificationCategory.ASYNC_RESULT, Map.entry(true, true)
+        ));
     }
 
     /**
@@ -51,20 +59,23 @@ class NotificationCategoryTest {
     }
 
     @Test
-    void retentionExpirableTypesAreTheComplementOfActionableTypes() {
+    void retentionExpirableTypesDeriveIndependentlyFromTheirCategories() {
         var actionable = NotificationType.actionableTypes();
         var expirable = NotificationType.retentionExpirableTypes();
 
         for (NotificationType type : NotificationType.values()) {
-            assertThat(actionable.contains(type) ^ expirable.contains(type))
-                    .as("type %s belongs to exactly one retention policy set", type)
-                    .isTrue();
+            assertThat(actionable.contains(type)).isEqualTo(type.category().isBadgeEligible());
+            assertThat(expirable.contains(type)).isEqualTo(type.category().isRetentionExpirable());
         }
     }
 
     @Test
     void reviewSetUpdatesAreActionableAndAnnouncementsRemainNonActionable() {
-        assertThat(NotificationType.actionableTypes()).containsExactly(NotificationType.REVIEW_SET_UPDATE);
+        assertThat(NotificationType.actionableTypes()).containsExactlyInAnyOrder(
+                NotificationType.REVIEW_SET_UPDATE,
+                NotificationType.BULK_GENERATION_INCOMPLETE,
+                NotificationType.BULK_REGENERATION_COMPLETE
+        );
         assertThat(NotificationType.ANNOUNCEMENT.isActionable()).isFalse();
     }
 }

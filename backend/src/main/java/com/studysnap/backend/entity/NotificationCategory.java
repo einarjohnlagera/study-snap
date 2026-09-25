@@ -11,19 +11,26 @@ import java.util.stream.Collectors;
  * only when a notification type with a real producer maps to it.
  */
 public enum NotificationCategory {
-    ANNOUNCEMENT(false),
-    LEARNING_SYSTEM(true);
+    ANNOUNCEMENT(false, true),
+    LEARNING_SYSTEM(true, false),
+    ASYNC_RESULT(true, true);
 
     private final boolean badgeEligible;
-    // true: counts toward the numeric badge and is retained while unread.
-    // false: never badges and remains retention-expirable while unread.
+    private final boolean retentionExpirable;
+    // Badge eligibility and unread-retention expiry are independent policies. An async result needs
+    // the learner's attention now without occupying the inbox forever when it is never opened.
 
-    NotificationCategory(boolean badgeEligible) {
+    NotificationCategory(boolean badgeEligible, boolean retentionExpirable) {
         this.badgeEligible = badgeEligible;
+        this.retentionExpirable = retentionExpirable;
     }
 
     public boolean isBadgeEligible() {
         return badgeEligible;
+    }
+
+    public boolean isRetentionExpirable() {
+        return retentionExpirable;
     }
 
     public static Set<NotificationCategory> badgeEligibleCategories() {
@@ -34,7 +41,7 @@ public enum NotificationCategory {
 
     public static Set<NotificationCategory> retentionExpirableCategories() {
         return Arrays.stream(values())
-                .filter(category -> !category.isBadgeEligible())
+                .filter(NotificationCategory::isRetentionExpirable)
                 .collect(Collectors.toUnmodifiableSet());
     }
 }

@@ -37,16 +37,17 @@ successful no-op, never an error surfaced to the caller.**
 
 ## Categories, types, and the badge
 
-**`NotificationCategory` carries the badge policy; `NotificationType` is producer identity and
-delegates to its category** (`v0.134.0`). One `badgeEligible` flag on the category yields two derived,
-complementary sets — `badgeEligibleCategories()` and `retentionExpirableCategories()` — and
-`actionableTypes()` derives from the first. **⚠️ A test asserts the two sets PARTITION the categories:
-two hand-maintained lists is how they drift.**
+**`NotificationCategory` carries two independent policies; `NotificationType` is producer identity and
+delegates to its category.** `badgeEligible` controls the numeric bell badge, while
+`retentionExpirable` controls whether an unread row can age out. They are independent because a requested
+async result needs attention now but becomes stale: it badges and still expires. Both derived sets filter
+their own flag, and tests pin every exact pair rather than assuming the sets are complements.
 
 The shipped mappings are exactly:
 
-- `ANNOUNCEMENT` → `ANNOUNCEMENT(false)` — visible in the inbox, never badge-eligible.
-- `REVIEW_SET_UPDATE` → `LEARNING_SYSTEM(true)` — visible in the inbox and badge-eligible while unread.
+- `ANNOUNCEMENT` → `ANNOUNCEMENT(false, true)` — visible, non-badging, retention-expirable.
+- `REVIEW_SET_UPDATE` → `LEARNING_SYSTEM(true, false)` — badge-eligible and retained while unread.
+- `BULK_GENERATION_INCOMPLETE` and `BULK_REGENERATION_COMPLETE` → `ASYNC_RESULT(true, true)` — badge-eligible and retention-expirable.
 
 **`ACTION_REQUIRED` is gone.** It was a transitional producerless placeholder and was removed in
 `v0.135.0` while production still had zero notification rows, rather than preserving a category with no
@@ -60,6 +61,42 @@ on would otherwise leave a permanent count on the bell, which trains people to i
 the actionable half the badge exists for.
 
 **⚠️ Never render a literal `0`** — at zero there is no badge element at all, not an empty circle.
+
+## Bulk-operation result producer
+
+Bulk operations deliberately send the learner back to the Library, so their results can finish out of
+view. Single-note generation does not notify: it redirects to Note Detail, which polls every three
+seconds while the learner is already looking at the result. Bulk generation is also silent on complete
+success. Its `createdCount` counts notes, not ready Study Packs, so a readiness notification would be
+false after a swallowed Study Pack dispatch failure.
+
+`BULK_GENERATION_INCOMPLETE` is delivered once when at least one topic failed or was blocked by monthly
+capacity. The fixed copy is:
+
+| Case | Title | Body |
+| --- | --- | --- |
+| Failed only | `1 topic couldn't be generated` / `{n} topics couldn't be generated` | `Couldn't be generated: {topics}` |
+| Monthly capacity only | `1 topic needs more monthly capacity` / `{n} topics need more monthly capacity` | `Not created because your monthly limit was reached: {topics}` |
+| Both | `Some topics couldn't be generated` | `Couldn't be generated: {failed}. Not created because your monthly limit was reached: {quotaBlocked}.` |
+
+Topic text has an 850-character budget shared by both groups. Whole topics are omitted and the body adds
+`and N more`; a single oversized topic is shortened with an ellipsis. This bound is enforced before
+delivery because `body` is `VARCHAR(1000)` and an overflow would otherwise resemble a dedup conflict.
+
+`BULK_REGENERATION_COMPLETE` is delivered once only after the loop completes normally:
+
+| Outcome | Title | Body |
+| --- | --- | --- |
+| One updated | `Your Study Pack has been updated` | `Open your Library to see it.` |
+| All of several updated | `{r} Study Packs have been updated` | `Open your Library to see them.` |
+| Some updated | `1 Study Pack has been updated` / `{r} Study Packs have been updated` | `Some Study Packs weren't updated. Your existing Study Packs are unchanged and still work.` |
+| None updated | `We couldn't update your Study Packs` | `Your existing Study Packs are unchanged and still work.` |
+
+Both use `Open Library` and `/library`. The resulting keys are
+`BULK_GENERATION_INCOMPLETE:{resultId}` and `BULK_REGENERATION_COMPLETE:{batchId}`; producers pass only
+the bare id because `NotificationService` prefixes the type. The unique recipient/key index remains the
+sole idempotency mechanism. Delivery failures are logged and swallowed so they cannot change completed
+notes or receipts.
 
 **⚠️ THE BADGE QUERY AND THE INBOX QUERY MUST CARRY THE SAME VISIBILITY PREDICATE.** `countActionableUnread`
 shipped in `v0.130.0` filtering on `read_at` alone while `findVisibleInbox` also filters `dismissed_at`,
@@ -390,20 +427,24 @@ delivery, with no campaign entity to build on. Do not refactor, merge or delete 
 
 A `@Scheduled` job modelled on `BulkGenerationResultCleanupJob` deletes, past a config-backed window
 (default 90 days), any notification that is **read, dismissed, or of a retention-expirable type**.
+An unread `ASYNC_RESULT` therefore badges until it is handled but lives for at most 90 days. An unread
+`LEARNING_SYSTEM` row remains retained; separating the flags must not make Review Set updates expire.
 
-**⚠️ Unread AND UNDISMISSED ACTIONABLE notifications are RETAINED regardless of age** — such a row is the
-learner's only pointer to a pending request. **⚠️ The ACTIONABLE qualifier is load-bearing and was added
+**⚠️ Unread AND UNDISMISSED `LEARNING_SYSTEM` notifications are RETAINED regardless of age** — such a row is the
+learner's only pointer to a pending request. **⚠️ The RETENTION-EXPIRABLE qualifier is load-bearing and was added
 in `v0.134.0`.** Before it, the predicate was `read_at IS NOT NULL OR dismissed_at IS NOT NULL` alone,
 which made **every** unread row immortal: a single `EVERYONE` announcement to 396 users left 396
 permanent rows, forever, because most people never open the bell. The predicate now also expires unread
-rows whose category is **not** badge-eligible — announcements today — while an unread **actionable** row
-is still kept indefinitely. **⚠️ The two behaviours are complements derived from one flag, and the
-retention test asserts BOTH directions**; asserting only the deletion half would pass with the retention
-half broken.
+rows whose category is **retention-expirable** — announcements, and (from `v0.159.0`) `ASYNC_RESULT` — while an
+unread `LEARNING_SYSTEM` row is still kept indefinitely. **⚠️ Since `v0.159.0` the two flags are INDEPENDENT, not
+complements: `ASYNC_RESULT` is both badge-eligible and retention-expirable, so "actionable" no longer implies
+"retained".** The retention test asserts every direction (unread `REVIEW_SET_UPDATE` kept, unread
+`ASYNC_RESULT` and unread `ANNOUNCEMENT` expired, read rows expired); asserting only the deletion half would pass
+with the retention half broken.
 
 **⚠️ ONE CONSEQUENCE OF THE ACTIONABLE/RETAINED SPLIT, NAMED BY THE `v0.135.0` COLD AGENT SO IT IS NOT
 DISCOVERED AS A BUG LATER: a `REVIEW_SET_UPDATE` that is UNREAD AND UNDISMISSED NEVER EXPIRES.** It is
-badge-eligible, so retention keeps it indefinitely, and episode suppression keys on `dismissed_at IS
+in a category that is not retention-expirable (`LEARNING_SYSTEM`), so retention keeps it indefinitely, and episode suppression keys on `dismissed_at IS
 NULL` — so a learner who never opens their inbox holds exactly one such row and a badge stuck at 1,
 permanently, until they dismiss or read it. **That is intended** (a pending signal must not vanish, and
 one stuck badge is far better than the alternative the release exists to prevent — a learner silently

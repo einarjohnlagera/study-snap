@@ -117,6 +117,7 @@ public class NoteBulkRegenerationService {
     private final NoteBulkRegenerationTaskDispatcher taskDispatcher;
     private final AnalyticsService analyticsService;
     private final BulkRegenerationAccessGuard accessGuard;
+    private final BulkOperationNotificationService bulkOperationNotificationService;
     private final int maxNotes;
     private final int throttleDelayMs;
     private final int pollIntervalMs;
@@ -134,6 +135,7 @@ public class NoteBulkRegenerationService {
             NoteBulkRegenerationTaskDispatcher taskDispatcher,
             BulkRegenerationAccessGuard accessGuard,
             AnalyticsService analyticsService,
+            BulkOperationNotificationService bulkOperationNotificationService,
             // ⚠️ ITS OWN CONFIG KEY, deliberately not note.bulk-generation.max-topics, so tuning the
             // regeneration cap never moves the bulk GENERATION cap. Both default to 50.
             @Value("${note.bulk-regeneration.max-notes:50}") int maxNotes,
@@ -154,6 +156,7 @@ public class NoteBulkRegenerationService {
         this.taskDispatcher = taskDispatcher;
         this.accessGuard = accessGuard;
         this.analyticsService = analyticsService;
+        this.bulkOperationNotificationService = bulkOperationNotificationService;
         this.maxNotes = Math.clamp(maxNotes, MIN_MAX_NOTES, Integer.MAX_VALUE);
         this.throttleDelayMs = Math.clamp(throttleDelayMs, MIN_THROTTLE_DELAY_MS, MAX_THROTTLE_DELAY_MS);
         this.pollIntervalMs = Math.clamp(pollIntervalMs, MIN_POLL_INTERVAL_MS, MAX_POLL_INTERVAL_MS);
@@ -440,6 +443,14 @@ public class NoteBulkRegenerationService {
                 "action=bulk_regenerate_batch outcome=completed batchId={} requested={} regenerated={}"
                         + " blocked={} failed={} ownerUserId={}",
                 batchId, noteIds.size(), regenerated, blocked, failed, ownerUserId
+        );
+        // Deliberately only on normal completion. An interrupted run remains stale in its receipt, so
+        // putting this in a finally block would tell the learner the operation finished when it did not.
+        bulkOperationNotificationService.bulkRegenerationComplete(
+                ownerUserId,
+                batchId,
+                noteIds.size(),
+                regenerated
         );
     }
 

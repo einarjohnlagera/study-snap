@@ -6,7 +6,9 @@ import java.util.stream.Collectors;
 
 public enum NotificationType {
     ANNOUNCEMENT(NotificationCategory.ANNOUNCEMENT),
-    REVIEW_SET_UPDATE(NotificationCategory.LEARNING_SYSTEM);
+    REVIEW_SET_UPDATE(NotificationCategory.LEARNING_SYSTEM),
+    BULK_GENERATION_INCOMPLETE(NotificationCategory.ASYNC_RESULT),
+    BULK_REGENERATION_COMPLETE(NotificationCategory.ASYNC_RESULT);
 
     private final NotificationCategory category;
 
