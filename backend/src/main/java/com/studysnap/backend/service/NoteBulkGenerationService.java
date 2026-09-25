@@ -190,6 +190,12 @@ public class NoteBulkGenerationService {
         List<BulkGenerationFailureReason> failedTopicReasons = new ArrayList<>();
         List<String> quotaBlockedTopics = new ArrayList<>();
         List<String> createdNoteIds = new ArrayList<>();
+        Set<Integer> createdIndices = new LinkedHashSet<>();
+        // Null unless the outer catch fires. That catch overwrites the lists above so that EVERY accepted
+        // topic reads as failed, including notes already created, which is wrong for a learner-facing
+        // notification that can outlive the receipt by 90 days. The notification therefore reads this
+        // uncreated-topics view instead; the receipt keeps its existing behaviour.
+        List<String> notificationFailedTopics = null;
         String resultCourseProgram = null;
 
         try {
@@ -216,6 +222,7 @@ public class NoteBulkGenerationService {
                     String createdNoteId = processItem(batch, item, ownerUserId, enforceLimits, context);
                     createdNoteIds.add(createdNoteId);
                     createdCount.incrementAndGet();
+                    createdIndices.add(index);
                 } catch (RuntimeException exception) {
                     if (exception instanceof MonthlyNoteGenerationLimitReachedException) {
                         quotaBlockedTopics.add(item.topic());
@@ -241,6 +248,13 @@ public class NoteBulkGenerationService {
                     .map(item -> normalizeFailureReason(item.topic(), exception))
                     .toList());
             quotaBlockedTopics.clear();
+            List<String> uncreatedTopics = new ArrayList<>();
+            for (int index = 0; index < batch.items().size(); index++) {
+                if (!createdIndices.contains(index)) {
+                    uncreatedTopics.add(batch.items().get(index).topic());
+                }
+            }
+            notificationFailedTopics = uncreatedTopics;
             log.warn(
                     "action=bulk_generate_batch outcome=failed_before_loop accepted={} subject={} ownerUserId={}",
                     batch.items().size(),
@@ -276,12 +290,13 @@ public class NoteBulkGenerationService {
                         exception
                 );
             }
-            if (!failedTopics.isEmpty() || !quotaBlockedTopics.isEmpty()) {
+            List<String> notifiedFailedTopics = notificationFailedTopics == null ? failedTopics : notificationFailedTopics;
+            if (!notifiedFailedTopics.isEmpty() || !quotaBlockedTopics.isEmpty()) {
                 try {
                     bulkOperationNotificationService.bulkGenerationIncomplete(
                             ownerUserId,
                             resultId,
-                            failedTopics,
+                            notifiedFailedTopics,
                             quotaBlockedTopics
                     );
                 } catch (RuntimeException exception) {

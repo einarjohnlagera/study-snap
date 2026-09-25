@@ -66,17 +66,17 @@ class BulkOperationNotificationServiceTest {
         assertRegeneration(
                 3, 1,
                 "1 Study Pack has been updated",
-                "Some Study Packs weren't updated. Your existing Study Packs are unchanged and still work."
+                "Some Study Packs weren't updated. Your existing Study Packs still work."
         );
         assertRegeneration(
                 4, 2,
                 "2 Study Packs have been updated",
-                "Some Study Packs weren't updated. Your existing Study Packs are unchanged and still work."
+                "Some Study Packs weren't updated. Your existing Study Packs still work."
         );
         assertRegeneration(
                 3, 0,
                 "We couldn't update your Study Packs",
-                "Your existing Study Packs are unchanged and still work."
+                "Your existing Study Packs still work."
         );
     }
 
@@ -92,6 +92,46 @@ class BulkOperationNotificationServiceTest {
         assertThat(delivery.body()).endsWith(" and 1 more");
         assertThat(delivery.body()).doesNotContain(topic + "6");
         assertThat(delivery.body().length()).isLessThanOrEqualTo(1000);
+    }
+
+    @Test
+    void generationBudgetCountsTheSeparatorsBetweenTopics() {
+        // 50 topics of 16 characters are 800 characters of topic text, which would fit an 850 budget if the
+        // ", " separators were ignored. Counting them, only 47 fit (47 * 16 + 46 * 2 = 844).
+        List<String> topics = java.util.stream.IntStream.range(0, 50)
+                .mapToObj(index -> String.format("%02d", index) + "y".repeat(14))
+                .toList();
+
+        service.bulkGenerationIncomplete(UUID.randomUUID(), UUID.randomUUID(), topics, List.of());
+
+        String body = capturedDelivery().body();
+        assertThat(body).endsWith(" and 3 more");
+        String topicText = body.substring("Couldn't be generated: ".length(), body.length() - " and 3 more".length());
+        assertThat(topicText.length()).isLessThanOrEqualTo(850);
+    }
+
+    @Test
+    void mixedTruncationKeepsBothGroupsAndAttributesTheOmittedCountToNeitherOfThem() {
+        String longFailedTopic = "f".repeat(160);
+        List<String> failed = new java.util.ArrayList<>();
+        for (int index = 0; index < 49; index++) {
+            failed.add(String.format("%03d", index) + longFailedTopic.substring(3));
+        }
+
+        // 50 characters is more than the 42 the budget has left AFTER five 160-character failed topics, so the
+        // quota topic is only listed because the first topic of each group is reserved before the budget fills.
+        String quotaTopic = "q".repeat(50);
+
+        service.bulkGenerationIncomplete(UUID.randomUUID(), UUID.randomUUID(), failed, List.of(quotaTopic));
+
+        String body = capturedDelivery().body();
+        assertThat(body)
+                .as("the quota-blocked group must survive a long failed list")
+                .contains("Not created because your monthly limit was reached: " + quotaTopic + ".");
+        assertThat(body)
+                .as("omitted topics are all failed ones, so the count must not read as quota-blocked")
+                .endsWith(". Plus 45 more not listed.");
+        assertThat(body.length()).isLessThanOrEqualTo(1000);
     }
 
     @Test

@@ -72,6 +72,41 @@ class NoteBulkRegenerationServiceTest {
     }
 
     @Test
+    void processBatch_reportsTheRegeneratedCountAndNotTheRequestedOneWhenOnlySomeNotesWereUpdated() {
+        UUID batchId = UUID.randomUUID();
+        UUID ownerUserId = UUID.randomUUID();
+        UUID updatedNoteId = UUID.randomUUID();
+        UUID skippedNoteId = UUID.randomUUID();
+        NoteEntity generated = new NoteEntity();
+        generated.setStatus(NoteStatus.GENERATED);
+        when(itemRepository.findByBatchIdAndNoteId(batchId, updatedNoteId)).thenReturn(Optional.empty());
+        when(itemRepository.findByBatchIdAndNoteId(batchId, skippedNoteId)).thenReturn(Optional.empty());
+        when(readinessService.evaluate(updatedNoteId, ownerUserId, NoteRegenerationScope.STUDY_PACK))
+                .thenReturn(new NoteRegenerationReadinessService.Verdict(
+                        NoteRegenerationReadinessService.NoteRegenerationReadiness.READY, null, null));
+        when(readinessService.evaluate(skippedNoteId, ownerUserId, NoteRegenerationScope.STUDY_PACK))
+                .thenReturn(new NoteRegenerationReadinessService.Verdict(
+                        NoteRegenerationReadinessService.NoteRegenerationReadiness.NOT_ELIGIBLE,
+                        "NOTE_NOT_FOUND",
+                        "Missing"));
+        when(consequenceService.hasLiveShareLink(
+                ownerUserId, updatedNoteId, NoteRegenerationScope.STUDY_PACK)).thenReturn(false);
+        when(noteRepository.findByIdAndOwnerUserId(updatedNoteId, ownerUserId)).thenReturn(Optional.of(generated));
+        NoteBulkRegenerationService service = service(0);
+
+        service.processBatch(
+                batchId,
+                List.of(updatedNoteId, skippedNoteId),
+                ownerUserId,
+                NoteRegenerationScope.STUDY_PACK,
+                false,
+                OffsetDateTime.now(ZoneOffset.UTC)
+        );
+
+        verify(notificationService).bulkRegenerationComplete(ownerUserId, batchId, 2, 1);
+    }
+
+    @Test
     void processBatch_interruptionSendsNoNotification() {
         UUID batchId = UUID.randomUUID();
         UUID ownerUserId = UUID.randomUUID();
