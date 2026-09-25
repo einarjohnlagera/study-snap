@@ -133,8 +133,8 @@ public interface NotificationRepository extends JpaRepository<NotificationEntity
 
     /**
      * ⚠️ ACCOUNT ERASURE, NOT RETENTION. {@link #deleteExpiredBefore} deliberately keeps unread
-     * actionable rows forever; a purge must take them anyway, because after a purge there is no learner
-     * left to act on them. Called from {@code AccountPurgeService.deletePersonalRows}.
+     * {@code LEARNING_SYSTEM} rows forever; a purge must take them anyway, because after a purge there
+     * is no learner left to act on them. Called from {@code AccountPurgeService.deletePersonalRows}.
      */
     int deleteByRecipientUserId(UUID recipientUserId);
 }

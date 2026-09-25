@@ -72,6 +72,22 @@ class FanOutTransactionBoundaryTest {
     }
 
     @Test
+    void bulkOperationProducerIsNotTransactional() throws NoSuchMethodException {
+        Method generation = BulkOperationNotificationService.class.getDeclaredMethod(
+                "bulkGenerationIncomplete", UUID.class, UUID.class, List.class, List.class
+        );
+        Method regeneration = BulkOperationNotificationService.class.getDeclaredMethod(
+                "bulkRegenerationComplete", UUID.class, UUID.class, int.class, int.class
+        );
+
+        assertThat(generation.isAnnotationPresent(Transactional.class)).isFalse();
+        assertThat(regeneration.isAnnotationPresent(Transactional.class)).isFalse();
+        assertThat(BulkOperationNotificationService.class.isAnnotationPresent(Transactional.class))
+                .as("bulk notification delivery must remain outside an ambient transaction")
+                .isFalse();
+    }
+
+    @Test
     void reviewSetUpdateFanOutIsNotTransactional() throws NoSuchMethodException {
         Method fanOut = ReviewSetUpdateNotificationService.class.getDeclaredMethod(
                 "fanOut", ReviewSetUpdatePublishedEvent.class

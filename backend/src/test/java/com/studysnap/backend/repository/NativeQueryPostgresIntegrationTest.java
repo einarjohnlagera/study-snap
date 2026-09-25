@@ -20,6 +20,7 @@ import com.studysnap.backend.dto.NoteRegenerationPreflightRequest;
 import com.studysnap.backend.dto.NoteRegenerationPreflightResponse;
 import com.studysnap.backend.exception.BulkNoteRegenerationQuotaExceededException;
 import com.studysnap.backend.service.BulkGenerationFailureReasonNormalizer;
+import com.studysnap.backend.service.BulkOperationNotificationService;
 import com.studysnap.backend.service.MePlanService;
 import com.studysnap.backend.exception.BulkRegenerationNotPermittedException;
 import com.studysnap.backend.exception.InvalidBulkRegenerationRequestException;
@@ -5060,6 +5061,7 @@ class NativeQueryPostgresIntegrationTest {
                     }),
                     new BulkRegenerationAccessGuard(userRepository),
                     analyticsService,
+                    mock(BulkOperationNotificationService.class),
                     50,
                     throttleDelayMs,
                     10,

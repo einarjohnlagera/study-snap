@@ -112,6 +112,21 @@ One topic failure is caught and logged without aborting later topics. Notes appe
 
 ## Terminal Result Receipt
 
+### Durable failure notification
+
+After the receipt write attempt, the worker delivers exactly one `BULK_GENERATION_INCOMPLETE`
+notification when `failedTopics` or `quotaBlockedTopics` is non-empty. The body copies the topic strings
+because the consume-once receipt is deleted on read and swept after 24 hours, while a topic that failed
+before note creation has no Note row. A completely successful run is silent. No completion copy claims
+that Study Packs are ready: `createdCount` counts created notes and can advance even when Study Pack
+dispatch fails. Delivery failure is logged and cannot alter the receipt or created notes. When the run is
+interrupted or fails before its loop, the outer catch marks every accepted topic failed in the RECEIPT (a known,
+older behaviour); the notification instead lists only the accepted topics that were not created, so it never
+names a note that exists.
+
+This notification is bulk-only. Single-note generation keeps the learner on Note Detail, which polls the
+result every three seconds. The bulk flow sends the learner away, creating the durable-awareness need.
+
 v0.29.1 adds one bounded exception to the original no-progress-infrastructure rule: `bulk_generation_result`, a terminal outcome receipt. The service generates the receipt id before queuing and returns it as `resultId` in `BulkGenerateNotesResponse`. At batch completion, `NoteBulkGenerationService.processBatch` writes exactly one receipt with owner id, batch context (`subject`, `courseProgram`, nullable `domainContext`, nullable `learnerLevel`, storage-only `targetProfileType`, `makePublic`), `requestedCount`, `createdCount`, `failedTopics`, nullable `failedTopicReasons`, and `quotaBlockedTopics`. Each reason entry carries the topic, a code, and curator-safe copy: an `AppException` contributes its own code and user-facing message, while any other runtime exception contributes `UNEXPECTED_ERROR`, fixed generic copy, and only the exception's simple class name. Raw messages, stack traces, and arbitrary exception strings are never stored for non-`AppException` failures. Quota-blocked topics carry no reason entry because their separate banner copy already explains the failure. `failedTopics` remains the same plain string list and is still the retry contract. `BulkGenerationResultService.toResponse` deliberately omits the storage-only value. The receipt is written even when there are zero failures and even when a whole-batch setup failure means all accepted topics failed before note creation. Receipts created before failure attribution keep `failedTopicReasons` null and remain readable until normal cleanup.
 
 `GET /notes/bulk-generate/results/{id}` is authenticated-user gated and owner-scoped. It returns the receipt only to the owner, deletes it in the same read-once flow, and returns 404 when the id is unknown, already read, or owned by someone else. A scheduled cleanup removes unread receipts older than 24 hours.
