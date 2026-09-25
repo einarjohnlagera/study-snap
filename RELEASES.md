@@ -1,8 +1,74 @@
 # RELEASES.md - NoteLib
 
+## v0.160.0 - Study Plans by Semester
+
+**Status: In Progress**
+
+Theme: let a curator place each Subject Plan in an academic term, so a Year reads as a semester-by-semester study
+plan, without adding a level to the collection hierarchy and without touching any Note.
+
+### Planned Scope
+
+**Scope picked and release shape confirmed by the owner, 2026-09-26: Degree Study Journeys, Phase A0 and Phase A.**
+Source: `docs/claude-plans/degree-study-journeys-stage1-architecture-audit.md` (decision-complete feature plan;
+**§21 is the implementor handoff, §18 the phases and decisions A-F, §22 confirms no owner decisions remain**).
+The learner-facing promise is **"BS Computer Science - 1st Year Study Plan"**, never a complete Degree Study Journey.
+
+- **Phase A0 (documentation first, Claude-direct):** `docs/architecture/ADR-003-curriculum-placement-and-hierarchy-depth.md`
+  (decisions A-F exactly as enumerated in plan §18; ADR-002 is taken by the quiz-answer-identity proposal), plus the
+  `docs/features/collections.md` update. No application behaviour.
+- **Phase A (implementation, Codex in slices: backend, then frontend, then pipeline):**
+  1. Two nullable columns on `note_collections`, `term_label VARCHAR(60)` and `term_order SMALLINT`; one additive
+     migration, no backfill, no index.
+  2. Persistence, DTO, service and **adoption preservation** of the term.
+  3. Curator term assignment in the Year builder: a combobox over terms already used in that Year, never raw freetext.
+  4. Year-page conditional term grouping (all-NULL flat / all-placed grouped / mixed with a trailing `Term not specified`).
+  5. Compact Subject cards on the Year page (title, note count, ONE progress signal), gated on the SAME condition as
+     term grouping (any non-null `term_label`), no count threshold.
+  6. `academic_term` in the curriculum pipeline: extend `review-set-workbook-spec.md` and `build_review_set_workbook.py`
+     and regenerate; never hand-add the column to a generated workbook.
+  7. The regression and invariant tests in plan §21.5.
+- **Endpoint form (decided here, plan §21.9):** extend the existing collection update with two OPTIONAL fields. That is
+  additive in both directions (optional on request, nullable on response), so frontend and backend may deploy in either
+  order, and **the release notes must say so explicitly.** If a new endpoint is added instead, that stops being true and
+  the release owes a deploy-ordering statement and a real-request `MockMvc` test with `.contentType(MediaType.APPLICATION_JSON)`.
+- **Phase B (collapsed-by-default Sections, and so on) is NOT in this release**; it has no dependency on Phase A and rides
+  in a later one. **Phase C (a Degree entity and landing page) is out.**
+- **⚠️ A gap in the plan, found and verified in code at kickoff (and since corrected in the plan, §7.1a), that the
+  implementation MUST close:** the plan's adoption invariant named only the adoption path, but a child Subject Plan copy
+  is built field by field in TWO places. `persistAdoptedPlan` (`NoteCollectionService.java:1956-2017`) serves BOTH `adopt()`
+  and `adoptGoal()`, because `adoptGoal` creates each child by calling `adopt()` and then re-parents it. The SECOND is the
+  Official-update addition, `createSubjectAddition` (`:2476-2515`, `CreatedSubjectAddition`), which copies title,
+  description, course program, learner level, estimated hours and the source-sync fields and, without the term, lands a
+  Subject added to an already-adopted Year with a NULL term next to siblings that have terms. That manufactures the mixed
+  state the plan calls a curator-quality defect and shows a `Term not specified` group with no curator involved. The term
+  must be carried at BOTH, each with its own test that fails when it is dropped. **`persistAdoptedGoal` (`:2019-2057`,
+  the root copy) must NOT get the term**: a root has no parent and therefore no term placement, so adding it there would be
+  a silent dead column, not a fix.
+
+Anti-drift (plan §21.2 and §21.4, binding): with every child term NULL the existing Review Set and Goal rendering is
+UNCHANGED, with no term headers, no `Term not specified` group, and FULL-SIZE cards, protecting five live Review Sets
+(PNLE, CPALE, ALE, LET, Civil Engineering); density is gated on the same condition as grouping and never on a count;
+Official update stays additive-only forever; NO Degree progress in any phase (a permanent product rule); academic
+placement never touches the Note and `applicable_programs` is never overloaded to carry a term (ADR-001); the hierarchy
+stays at exactly two persisted levels; no Degree landing page and no `journey_key`/`journey_order` fallback, no Degree
+entity, no whole-Degree adoption, no learner curriculum customization, no term entity/catalog/enum, no collection
+`type`/`kind` enum, no change to `ConceptHealth`. Subject Plans are NOT reusable across Degree Journeys; only canonical
+Notes are. **Verification:** `advisor()` BEFORE the Codex prompt is written and on each diff; a diff that changes
+behaviour must touch a test that runs it; mutation-check every new test and name the killer; the all-NULL regression must
+assert full-size cards; frontend `tsc --noEmit`, lint and tests plus the full backend build with Docker; and, because the
+release touches the adoption engine and five live Review Sets, ONE scoped Opus cold agent framed as falsification of
+invariants 1, 2 (every copy site), 3 and 4 before signoff. Seven items is a large release; say what that does to the
+verification tier if more is folded in. **Owner-side, not this release's work:** the Note Strategist keeps authoring
+Subject to Section to Note; Year and term placement stays in a separate editorial file until the pipeline extension ships.
+
+### Shipped
+
+_(nothing yet)_
+
 ## v0.159.0 - Nothing Lost in the Batch
 
-**Status: Released** (signed off 2026-09-25; Release A merged as #1444; the release PR to `main` is the owner's to merge and tag, so nothing here is deployed until then)
+**Status: Released** (signed off 2026-09-25; Release A merged as #1444; release PR merged as #1446 and tagged; deployed and verified: Render live 15:24Z, Vercel production 15:28Z)
 
 Theme: stop batch operations losing their result. A bulk generation that fails topics leaves no trace once its
 consume-once receipt is read or swept, and a bulk regeneration finishes with no signal at all. Also close the one
@@ -706,159 +772,3 @@ session makes, same pattern as this repo's established precedent.
   verified; H6 and the separate single-best-answer Question Quality audit remain deferred. All three
   (H5, H6, the Question Quality audit) now have their own Backlog Index rows in `ROADMAP.md`, added at
   this commit since the Codex delivery's own output explicitly deferred that question to this session.
-
-## v0.154.0 - Closing the Loop
-
-**Status: Released** (signed off 2026-09-18)
-
-Theme: close out three independently-verified, gate-true Backlog Index items — none gated on an owner
-action or a production read, none sharing a file or a shared method with any other, each anchored to
-current code before being scoped rather than trusted from its row's prose.
-
-**⚠️ CORRECTED AT KICKOFF, BEFORE ANY CODE WAS WRITTEN: a fourth item, "health-check-on-Hikari-pool
-decoupling," was scoped in by mistake and dropped.** The liveness/readiness split it proposed to build
-already shipped in `v0.119.1` PR #1297 (`management.health.group.liveness.include: livenessState`,
-excluding `db`, in `application.yaml`) — the pre-scoping check only grepped for a custom
-`HealthIndicator` Java class and missed that the real fix is declarative YAML config, not a class. The
-only piece still open is the Backlog Index's own existing row for it: an **owner action**, repointing
-Render's `healthCheckPath` from `/api/actuator/health` to `/api/actuator/health/liveness` in the
-dashboard — confirmed still unpointed via a live read-only Render API call at this kickoff
-(2026-09-18). Not re-added to this release's code scope; it stays an owner action, same class as A1.
-
-### Planned Scope
-
-- **`course_programs.is_active` write path (backend + Admin frontend).** Confirmed dead column:
-  `CourseProgramCatalogRepository.java` reads `is_active` in several places but no code anywhere in
-  `backend/src/main/java` ever writes it; `CourseProgramCatalogService`/`Controller` have zero
-  references. Adds the missing write path so Admin can actually deactivate a catalog program — the
-  prerequisite for retiring the two legacy fused rows (`Nursing · Medicine`, `Nursing · Pharmacy`).
-- **Recovery for `generation_enqueued_at IS NULL` notes stranded in `GENERATING` (backend).**
-  `GenerationRecoveryService.java:107` explicitly skips this row class and logs "leaving them
-  untouched"; every other stale `GENERATING` row is swept back within ~2h10m
-  (`noteBoundMinutes` default 120 plus sweep cadence), but the automated sweep never touches a row
-  missing this timestamp. **⚠️ Framing corrected at kickoff:** a live read-only production query
-  (2026-09-18) found **zero** notes currently `GENERATING`, let alone with a null clock — this is a
-  **latent structural gap in the automated sweep**, not an active stuck-note population, and (found
-  mid-implementation, not at kickoff) **not a user-visible dead end either**: `NoteController`'s
-  `POST /notes/{id}/recover-stranded-generation` already gives the note owner a tested, self-service
-  recovery path for exactly this row class, using `updatedAt` as a fallback clock bounded by the same
-  `noteBoundMinutes`. This item makes that same rule fire automatically as well as on request, rather
-  than inventing new recovery logic or fixing a previously-unrecoverable state. Every current write path
-  that sets `NoteStatus.GENERATING` (`StudyPackService.java:224-225`, `:326-327`) also sets
-  `generationEnqueuedAt` atomically in the same method, and `V118__generation_recovery_clocks.sql`
-  already one-time-backfilled any pre-existing null rows at its own deploy, so this is prospective,
-  defense-in-depth coverage for a future non-atomic writer — not a fix for a live incident.
-- **Topic-note generation passes `subject` into the LLM context (backend + frontend).**
-  `GenerateNoteFromTopicRequest.java` carries `topic`, `courseProgramIds`/`courseProgramText` and
-  `domainContext`, but no `subject` — `NoteGenerationService` builds context with `subject = null`, so a
-  note authored under a specific subject via "Create from topic" never tells the model that. Degrades
-  quality rather than failing requests. Must preserve ADR-001's hierarchy: Domain Context is the sole
-  authoritative domain constraint, Subject only narrows within it.
-
-Anti-drift: no bulk `is_active` editor or catalog deletion, and no `course_programs.program_family_id`
-write path revival; the `GENERATING`-recovery fix extends the existing sweep's row selection, it does
-not change `noteBoundMinutes` or the sweep cadence; the topic-note `subject` change does not let Subject
-override or compete with Domain Context per ADR-001, and does not touch `courseProgramText`/
-`domainContext` resolution.
-
-**Routing:** Claude Code inline for the `GENERATING`-recovery fix (isolated root cause, 1-3 files);
-Codex for the `is_active` write path and the topic-note `subject` context gap (new endpoint/DTO +
-multi-surface frontend each). **Verification tier:** each item's own tier as scoped (direct verification
-for the inline item, normal `/audit-diff` for the two Codex items). **⚠️ Escalated at signoff, past the
-whole-release `advisor()` summary originally scoped here:** all three items independently tripped
-CLAUDE.md's "delivery introduced a defect the same session then fixed" trigger (item 1's lost-update
-defect, item 2's unbounded-recovery regression, item 3's stale-closure bug — each caught and fixed before
-its own commit). A repeated same-session-defect pattern across every item in a release is a stronger
-blind-spot signal than the rule anticipates from a single occurrence, so this release ran one scoped cold
-agent, falsification-framed against the specific claims made in all three fixes, instead of the single
-`advisor()` summary. **Result: nothing disproven** — all four falsifiable claims per item held under
-direct code inspection (the lost-update fix, the recovery bound, the dependency-array fix, and their
-respective transactional/normalization/negative-case guarantees), and no cross-item coupling was found.
-**⚠️ One imprecision corrected, not a defect:** this section's original "no shared files or methods"
-phrasing was wrong on the first half — `frontend/lib/api.ts` is touched by both item 1
-(`updateCourseProgram`) and item 3 (`generateNoteFromTopic`), at non-overlapping functions with no logic
-interaction. "No shared methods" is what actually holds and is what the no-full-pressure-test gate
-depends on.
-
-Carried forward from `v0.153.0`'s signoff, not this release's problem to solve: A1 (owner action —
-enabling Render's own per-request logging) still not enabled as of `v0.153.0` signoff; the Leg A2
-saturation detector's registry has no coverage of non-request threads (Known Limitation, not re-scoped
-here). Also carried forward, from this release's own kickoff correction above: the Render
-`healthCheckPath` repoint (owner action).
-
-### Shipped
-
-- **Admin write path for `course_programs.is_active`.** The existing catalog PATCH accepts an optional
-  nullable `isActive` field and writes it transactionally through
-  `CourseProgramCatalogService.java:132-140` / `CourseProgramCatalogRepository.java:63,113-115`;
-  omission leaves the lifecycle flag unchanged, and an `isActive`-only PATCH also leaves family
-  memberships untouched. The Course / Programs view initializes an Active checkbox from the edited
-  row and marks inactive rows in both rendered layouts (`admin-course-program-catalog-section.tsx`).
-  **⚠️ Pre-commit `advisor()` review found and fixed a real lost-update defect in the Codex delivery,
-  the same class `v0.152.0`'s cold agent found on the sibling family-rename modal:** the save path
-  originally re-sent `programFamilyIds` from its load-time snapshot on every save, including an
-  Active-only toggle — so an admin flipping Active while a concurrent admin had just changed that
-  program's family memberships would silently overwrite the concurrent edit. Fixed by mirroring
-  `AdminProgramFamiliesSection`'s `membershipDirty` pattern: `programFamilyIds` is now omitted from
-  the request entirely unless `CatalogMultiSelect` was actually touched this edit. Two guard tests
-  added confirming an Active-only save carries no `programFamilyIds` key. The shared catalog read
-  stays unfiltered, and the existing Applicable Programs active-only behavior is unchanged.
-  **⚠️ Deploy-ordering statement, per CLAUDE.md's rule for a form whose omission-meaning changed:**
-  this PATCH's frontend and backend must deploy together, and the safe direction is
-  **backend-first**. If Render deploys the new `isActive`-aware backend before Vercel deploys the new
-  frontend, the old frontend's existing family-save calls are unaffected (it always sent
-  `programFamilyIds` and never sends `isActive`, both still handled). If Vercel deploys the new
-  frontend first, the Active checkbox reaches users before the backend accepts `isActive` — Jackson
-  silently drops the unknown field, the PATCH still 200s, and the toggle appears to save but has no
-  effect until the backend catches up. Not a data-loss risk either order, but backend-first avoids a
-  silently-inert control window. Coverage includes real JSON PATCH binding plus a follow-up catalog
-  GET, service omission/application cases, the JDBC `UPDATE` executed and read back on Testcontainers
-  PostgreSQL, request-body included/omitted cases in `api-course-program-catalog.test.ts`, and
-  modal/desktop/mobile component cases including the two lost-update guard tests. Backend 2435/2435;
-  frontend 2468/2469 with one pre-existing skipped test; frontend lint 0 errors (20 pre-existing
-  warnings, all pre-existing and unrelated to this change).
-- **Recovery for `generation_enqueued_at IS NULL` notes stranded in `GENERATING`.**
-  `NoteRepository.findGeneratingIdsWithNullEnqueuedAt` (new, bounded on `updatedAt < cutoff`, same
-  `noteBoundMinutes`) feeds a new `GenerationRecoveryRowWriter.recoverNoteWithMissingEnqueuedAt(UUID,
-  OffsetDateTime)`, which applies the identical `updatedAt`-fallback rule
-  `NoteController.recoverStrandedGeneration` already used for self-service recovery of this row class —
-  now enforced by the scheduled sweep too. `GenerationRecoveryService.recoverStaleNotes` runs this
-  alongside the existing timed-clock sweep and combines both results; the original
-  `countByStatusAndGenerationEnqueuedAtIsNull` warning log is kept (uncapped by batch size) so the
-  anomaly signal survives exactly as before — this item makes the row recover as well as get warned
-  about, it does not remove the warning. **⚠️ First implementation was a live regression risk, caught by
-  `advisor()` before commit:** it recovered every null-clock row unconditionally, with no age bound —
-  unlike the self-service endpoint's `updatedAt` check, so a future non-atomic writer's in-flight
-  generation would have been killed by the very next 10-minute sweep. Corrected to require
-  `updatedAt.isBefore(cutoff)`, matching the endpoint's own rule; the fixture-driven test that first
-  covered this (`note(null)` with no `updatedAt`) was itself rebuilt to a realistic row plus an added
-  negative case (`updatedAt` 5 minutes old → left alone) that would have failed the original code.
-  `docs/features/study-pack-generation.md` corrected to describe the sweep and the endpoint as two
-  entry points to the same rule, not "left untouched" plus a separate manual-only path. Backend
-  2434/2434 (full suite, including the real-PostgreSQL native-query harness).
-- **Topic-note generation now carries the editor's Subject into generation context.**
-  `GenerateNoteFromTopicRequest.java:11-35` accepts the optional, 64-character-bounded field while
-  keeping the existing three- and four-argument Java constructors source-compatible (both are live:
-  the three-arg form is still used by `StudyPackService.java:332`, the four-arg form by
-  `NoteBulkGenerationService.java:311`); `NoteGenerationService.java:118-152` normalizes it once with
-  `SubjectNormalizationUtils` and passes it through both the unchanged curator and learner resolver
-  branches. The positional frontend API appends `subject` and omits blank values
-  (`frontend/lib/api.ts:3603-3631`), while every note-editor call variant supplies the already-collected
-  draft value (`note-editor-page-client.tsx:1143-1180`). Onboarding's separate two-argument call is
-  unchanged. **⚠️ Pre-commit `npm run lint` found a real stale-closure bug in the Codex delivery:** the
-  `useCallback` wrapping the generate-from-topic handler read `draft.subject` (via `resolvedSubject`) but
-  omitted it from its dependency array, so typing Subject *after* Topic — a plausible order — would
-  silently generate with the stale (often empty) subject captured at the callback's last recreation.
-  Codex's own new test happened to type Subject before Topic, which recreates the callback via the
-  already-listed `normalizedGenerateTopic` dependency and masked the gap. Fixed by adding `draft.subject`
-  to the dependency array; a new regression test
-  (`"uses the latest changed Subject even when it's typed after the Topic"`) exercises the reversed,
-  bug-exposing order and was mutation-verified — confirmed failing against the pre-fix code, passing
-  after. **No deploy-ordering statement needed:** `subject` is purely additive to an existing endpoint (no
-  form's meaning changed, no field became required), and either deploy-skew direction only degrades
-  generation quality rather than breaking a request. Coverage includes resolver-call and final context
-  assertions for both branches, real `MockMvc` JSON binding plus over-length rejection before generation,
-  the real frontend request body with present/blank subjects, and component calls with a selected,
-  absent, or Subject-typed-after-Topic draft. Backend 2442/2442 (full suite, including the
-  real-PostgreSQL native-query harness); frontend 2472/2473 with one pre-existing skipped test; frontend
-  lint 0 errors (20 pre-existing warnings, back to baseline after the fix — 21 before it).
