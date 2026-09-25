@@ -2,7 +2,7 @@
 
 ## v0.159.0 - Nothing Lost in the Batch
 
-**Status: In Progress**
+**Status: Released** (signed off 2026-09-25; Release A merged as #1444; the release PR to `main` is the owner's to merge and tag, so nothing here is deployed until then)
 
 Theme: stop batch operations losing their result. A bulk generation that fails topics leaves no trace once its
 consume-once receipt is read or swept, and a bulk regeneration finishes with no signal at all. Also close the one
@@ -53,6 +53,40 @@ a test that executes them; mutation-check every new test; one `advisor()` on the
 production-data semantics change), escalating to one scoped falsification agent only if delivery introduces a defect
 the same session then fixes.
 
+### Scope disposition (signoff, 2026-09-25)
+
+- **Prerequisite decision (badge/retention flag split): DECIDED and SHIPPED**, option (c).
+- **Notifications Release A: SHIPPED** (#1444). Both triggers; 850-character topic budget; an all-quota-blocked batch
+  delivers the quota form. Anchors: `NoteBulkGenerationService.java:296`, `NoteBulkRegenerationService.java:449`,
+  `NotificationCategory.java:14-16`, `BulkOperationNotificationService.java`.
+- **`connection-timeout` follow-up: PARTLY DONE.** (a) the 500-cause read is DONE, recorded below and on its Backlog
+  row; (b) the owner's VERDICT is NOT made and carries forward on the row; (c) nothing was changed, by design.
+- **`CLAUDE.md` entry-point correction: SHIPPED** in the kickoff commit (`StudyPackService.java:171`).
+- **Not from the scope list, left open by the owner's call:** the `[CHECKPOINT — due 2026-09-27]` click/open read and the
+  2026-09-28 publication-boundary read.
+
+### Checkpoint gate
+
+Release A shipped ahead of its own evidence (one user drove regeneration; bulk generation volume had no direct metric),
+so it owes a checkpoint, added in this signoff commit: `[CHECKPOINT — due deploy + 30 days, backstop 2026-11-10]`
+with a kill criterion, a denominator clause, and the `notifications` table as the instrument. The instrument is the
+table, and the first production row is what proves it emits; both call sites are exercised by mutation-checked tests.
+
+### Known limitations
+
+- The regeneration call site has no try/catch of its own; the producer swallows every delivery failure and a test
+  (mutant M10) guards that, so an escape could only come from a future change to the producer.
+- The notification copy (exact titles and bodies) was drafted by the release and not separately reviewed by the owner.
+- The 500-cause read is a subagent's report, not independently re-run; application logs only go back to
+  2026-09-18 05:40Z, so ~350 of 439 500s (2026-09-04..09-18) cannot be attributed, and its log event count (68) exceeds
+  the metric 500 count (62) by ~5 unexplained.
+- The bulk generation RECEIPT still marks every accepted topic failed after an interruption (the outer catch), including
+  notes already created; only the notification was corrected. Whether the row actually persists during a real shutdown
+  was not verified.
+- Verification: `advisor()` before the Codex prompt and on the diff, mutation checks (21 killed), and one Opus cold
+  agent as a scoped falsification pass. No authorization, money or production-data semantics changed, so no full
+  three-agent test was warranted.
+
 ### Shipped
 
 - **Bulk-operation in-app results.** Notifications now keep badge eligibility and unread expiry as
@@ -64,9 +98,26 @@ the same session then fixes.
   budget in code, and the regeneration retry mints its own batch id so it notifies too. The pre-commit audit
   found and fixed a contradiction in `notifications.md` (it still said every unread actionable row is retained
   forever, which is false for `ASYNC_RESULT`) and a test gap (nothing pinned the dedup id of either trigger).
-  13 of 13 planted mutants were killed, each by a named test (retention filter reverted, `ASYNC_RESULT` flags,
-  truncation budget, both dedup ids, producer swallow, both call sites removed, generation notify-on-success,
-  call-site catch narrowed, and regeneration notify on the interrupted path).
+  13 of 13 planted mutants were killed at first, each by a named test. **⚠️ That figure overstated the guard:** the
+  pressure test below found five mutants the merged suite did not kill (regeneration count arguments, separator
+  budget accounting, mixed-case suffix, one-per-group interleave); all are killed now (21 in total).
+- **Pre-signoff pressure test (one Opus cold agent, isolated worktree, framed as falsification) and its fixes, PR #1445.**
+  It held nine claims and broke three, plus test overstatement and doc defects; each was verified in code before it
+  was fixed. **(1)** An interrupted or failed-before-loop bulk generation notified that EVERY accepted topic failed,
+  including notes already created: the delay between items throws outside the per-item try and the outer catch
+  overwrites the lists. The notification now lists only topics that were NOT created (the receipt keeps the older
+  behaviour, see Known limitations). **(2)** In the mixed failed and quota-blocked case "and N more" attached to the
+  quota list although the omitted topics could all be failed ones; it is now `Plus N more not listed.` after both
+  sentences. **(3)** Regeneration copy claimed Study Packs were "unchanged" although a timed-out item may still succeed;
+  it now says they still work. **(4)** Five mutants survived the merged suite; new tests kill them. **(5)** Doc defects:
+  a self-contradicting ROADMAP row, a checkpoint SQL that omitted dismissals from its own kill criterion, and a
+  rationale that ignored the polling regenerate modal. The full build passed (2,527 tests) and all 21 mutants are killed.
+- **`connection-timeout: 5000` 500-cause read (read-only, no code change).** Application logs are retained only from
+  2026-09-18 05:40Z. In the observable week: ONE real saturation cluster (09-18 14:46-14:48, 34 requests, pool 20/20,
+  peak waiting 6); pool timeouts on 09-18 16:03 and 09-22 06:04 that followed database I/O drops with a collapsed pool;
+  26 database I/O drops in bursts on the first requests after a deploy goes live; 33 client-abort broken pipes not counted
+  as 500s; one 405 logged as a 500; one unknown. The 5 s timeout produced 500s in one incident; most other 500s are
+  deploy-time DB drops it does not cause. The verdict remains the owner's; a deploy-time-burst finding has its own row.
 
 ## v0.158.0 - Reading the Evidence
 
