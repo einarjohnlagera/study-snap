@@ -15,6 +15,51 @@ changelog layer. `ROADMAP.md` keeps a one-line-per-version index at each origina
 
 ---
 
+**Kicked off 2026-09-16, signed off 2026-09-17.** `v0.152.0 — The Missing Half of v0.150.0` is
+**Released** on `releases/v0.152.0` (PR #1408 Slices 1-3, PR #1409 a cold-agent-found fix). Gives the
+many-to-many Program Family architecture (`v0.150.0`) the curator UX it needed to actually get
+finished: family-first Admin management, one canonical `CourseProgramCreateModal`, and an additive
+backfill of the approved initial membership matrix. Source:
+`docs/claude-plans/program-family-catalog-management-ux-overhaul-plan.md` (FINAL, owner-approved,
+subagent audit + owner-tightening pass; untracked on disk, indexed in the Backlog Index at this
+kickoff) and its companion Codex prompt `docs/codex-prompts/v0.152.0-program-family-catalog-management.md`.
+**Why now, from production data:** Engineering (18/18) and Education (8/8) were fully populated the
+day `v0.150.0` shipped; three weeks and one release later, Health Sciences and Computing & Technology
+are still at zero members, Accounting 2/5, Built Environment & Design 1/8 — the many-to-many model did
+not fail, the one-program-at-a-time admin workflow made finishing the backfill through it tedious
+enough that it didn't get finished. **Shipped (4 owner-consolidated slices, dependency order
+1→2→3→4):** (1) backend catalog contracts — `POST /families` gains optional `programIds`, new
+`PATCH /families/{id}` (rename + family-side membership replace), a family duplicate-name predicate
+fix, rename self-exclusion, and `V147__program_family_initial_membership.sql` (additive, exact-name
+inner joins over a locked 50-pair matrix, `ON CONFLICT DO NOTHING`, no `RAISE`, does not write the
+vestigial `course_programs.program_family_id`); (2) shared `CatalogMultiSelect` + `CourseProgramCreateModal`
+extraction, replacing both remaining raw `<select multiple>` instances and collapsing two divergent
+create forms into one; (3) family-first Admin IA — a two-tab `/admin/course-programs`
+(`?view=families|programs`, Program Families default/primary, Course/Programs demoted to
+inverse-convenience); (4) one scoped cold agent (all 7 pre-declared claims CONFIRMED, one adjacent
+lost-update defect found and fixed same-day in PR #1409 before this ever deployed), a feature-doc sweep
+that also corrected two claims stale since `v0.150.0` (`notes.md` described family expansion as reading
+the vestigial scalar `program_family_id` column and catalog creation as single-family-only — both
+false since the many-to-many migration), and the doc sweep for this release's own claims. **⚠️ V147's
+insert count is NOT 29→50 as estimated at kickoff — production is a snapshot, not a fact, and kept
+moving during implementation:** by signoff, curator use of the existing (pre-`v0.152.0`) Admin UI had
+already landed 32 of the 50 approved pairs as of this signoff (2026-09-17, up from 29 at kickoff), so `V147` will additively insert
+however many of the remaining 18 aren't closed by the time it deploys — confirmed by a post-deploy
+anti-join, not asserted in advance; either number is correct because the migration is additive and
+idempotent regardless. **`V147` has not yet run in production as of this signoff** — this branch has
+not yet merged to `main` — so the anti-join is a Known Limitation, tracked as a follow-up, not a signoff
+blocker. **Anti-drift, owner-locked:** no ADR-001 amendment; "Program Family name is display data,
+Program Family ID is identity" (V147's exact-name matching is a scoped migration-only exception, never
+to be copied into application code); no family/program deletion, no `is_active` write path, no new
+Popover/Command primitive; legacy fused rows (`Nursing · Medicine`, `Nursing · Pharmacy`) stay
+unassigned; no Program Family reaches a prompt, is persisted on a Note, or triggers a live update to
+existing Notes. **Routing: Codex** (new endpoint + migration + multi-system frontend/backend + ~17
+must-change files). **Verification tier: one scoped cold agent, falsification-framed**, elected at
+kickoff rather than deferred to signoff — all three implementation slices touch the shared catalog
+create/membership path (CLAUDE.md's "two or more PRs touched the same shared method" trigger). Full
+scope, the production membership audit, and the 7 falsification claims are in `RELEASES.md` and the
+plan file.
+
 **Kicked off 2026-09-16, signed off 2026-09-16.** `v0.151.0 — No Backdoor Left, Round Two` is
 **Released** on `releases/v0.151.0` (PR #1406). Closed the same gate gap `v0.143.0`/`v0.144.0` already
 closed for the exam question pool, this time for shared quiz links: `StudyPackService.java` called

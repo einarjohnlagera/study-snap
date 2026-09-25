@@ -1,8 +1,109 @@
 # RELEASES.md - NoteLib
 
+## v0.158.0 - Reading the Evidence
+
+**Status: Released** (signed off 2026-09-25; the release PR to `main` will be merged and tagged by the owner, so nothing here is deployed until then)
+
+Theme: discharge the evidence reads this project already owes (three overdue checkpoint reads and the first
+readings of the retention instrumentation) before any new feature scope is chosen, plus one ready one-line fix.
+
+### Planned Scope
+
+**PROVISIONAL: this release was kicked off without an owner scope pick. Amend this list before any
+implementation.**
+
+- **Three overdue checkpoint reads (read-only).** Each row's own kill criterion stays authoritative, and a fired
+  criterion becomes its own owner-scoped item rather than being fixed inline.
+  - `[CHECKPOINT — due 2026-09-22]` publication boundary (`docs/claude-plans/v0.132.0-publication-boundary-checkpoint-read.sql`):
+    if it shows stranded curriculum, the response is to build F5, a publication surface in the Builder.
+  - `[CHECKPOINT — due 2026-09-18]` `connection-timeout: 5000`: read Render `http_request_count` by `statusCode`
+    for the 14 days after deploy against the pre-deploy window; if 5xx is material and sustained, revert to the 30 s default.
+  - `[CHECKPOINT — due 2026-09-19]` Learning Connections demand: `linked_learner_relationships` grouped by status.
+- **Retention instrumentation readings (`v0.157.0` follow-through, read-only).** (a) The first daily run after
+  deploy: `retention.email.*.dispatch` logs show digest, then weak-concept, then `INACTIVITY`, with `INACTIVITY`
+  near 40-47. (b) `[CHECKPOINT — due 2026-09-27]`: click/open tracking is emitting. (c) Re-date the retention
+  checkpoint rows if the real deploy date matters. Owner prerequisite: Resend click and open tracking and the
+  `email.clicked`/`email.opened` webhook events.
+- **`RetentionEmailScheduler.runMonthly()` zone pin (backend, one line plus a test) — DONE and MERGED into this branch (PR #1442, `540b866b`); full backend build green, 2,511 tests.** Pin it to `Asia/Manila`
+  like `runDaily`/`runWeekly`; the Backlog Index row has the detail. Routing: Claude-direct on its own branch and
+  PR into this release branch (isolated, one file).
+- **`INACTIVITY` email effectiveness: OWNER DECISION PENDING (evidence read, added 2026-09-24 at the owner's
+  request; no implementation).** A read-only production read found 4,466 `INACTIVITY` sends to 235 users
+  (2026-04-22 to 2026-09-23), 222 of them sent 10 or more, max 44, while only 6 of 408 accounts logged in during
+  the last 7 days. Return rate after a send (any `analytics_events` row within 7 days, sends at least 7 days old):
+  1st send 4.7%, 2nd 2.2%, 3rd-5th 1.3%, 6th-10th 1.0%, 11th+ 0.7%; 20 of 235 emailed users have any recorded event
+  after their first send. **Limits: no control group (some return unprompted, so lift is lower than shown), "return"
+  is any analytics event and may miss a plain login, and `marketing_emails_enabled` is on for 0 users with the
+  consent basis of these sends unchecked.** This is evidence against the rationale for "do not cap `INACTIVITY`'s
+  share (gated on opt-in growth)"; the rule itself is the owner's and is unchanged until the owner decides. Options
+  to scope if wanted: cap sends per user, stop after N unanswered emails, or check the consent basis first. Any
+  change is its own owner-scoped item, not an inline fix.
+
+Anti-drift: no retention Stage 3 (it waits on the three retention `[CHECKPOINT]` rows); do not cap `INACTIVITY`'s
+share (gated on opt-in growth); do not reorder retention dispatch (`docs/features/retention-emails.md`); nothing
+here is feature scope. Choose feature scope explicitly.
+
+### Scope disposition (signoff, 2026-09-25)
+
+- **Three overdue checkpoint reads: SHIPPED as reads**, results above and on each Backlog row. Publication
+  boundary not fired (re-dated to 2026-09-28); Learning Connections kill criterion does not fire; `connection-timeout`
+  inconclusive, owner decision.
+- **Retention readings (a) first daily run: SHIPPED**, as designed. **(b) `[CHECKPOINT — due 2026-09-27]`: NOT DONE,
+  by the owner's call** — it is read on or after 2026-09-27 and stays an open Backlog row. **(c) re-date the retention
+  rows: NOT NEEDED**, the real deploy was 2026-09-24 as assumed.
+- **`runMonthly()` zone pin: SHIPPED** (#1442, `RetentionEmailScheduler.java:79`, guard `ScheduledJobCronContractTest`).
+- **Added mid-release, owner-requested:** the `INACTIVITY` effectiveness evidence item and indexing the notifications
+  Stage 1 plan; both have Backlog rows and are undecided.
+
+### Checkpoint gate
+
+Nothing in this release shipped ahead of its own evidence, so no new `[CHECKPOINT]` row is owed. The open
+checkpoints are all carried from earlier releases and are re-stated on their rows.
+
+### Known limitations
+
+- The `connection-timeout` read is inconclusive (10-day pre-window, traffic growth, `v0.116.0`/`v0.123.0`
+  confounds, log sample was the newest 30 lines only).
+- The `INACTIVITY` return-rate read has no control group and measures any analytics event.
+- Verification tier: one small code change with no authorization, money or production-data semantics, so a single
+  `advisor()` pass rather than a pressure test.
+
+### Shipped
+
+- **`RetentionEmailScheduler.runMonthly()` zone pin** merged as PR #1442 (`540b866b`); full backend build green.
+- **Checkpoint reads, run 2026-09-24 (read-only production and Render reads; results are also on each Backlog row).**
+  - **Publication boundary (due 2026-09-22): NOT FIRED, re-date to 2026-09-28.** One public Review Set, `CPALE
+    Comprehensive Review`, holds 325 unpublished topics and has never been published since `V141` (only the
+    backfill stamp). Its oldest unpublished row is 2026-09-14, 9 days old, under the 14-day threshold; it crosses
+    on 2026-09-28. `LET` (2026-09-10) and `PNLE` (2026-09-14) were really published, so the control is being used.
+  - **Learning Connections demand (due 2026-09-19): kill criterion does NOT fire; re-read at the next release.**
+    1 `ACCEPTED` relationship, unchanged since 2026-09-05; 2 invitations (1 `ACCEPTED`, 1 `PENDING`); no new
+    activity in 19 days. One pair is weak evidence and may be a test pair.
+  - **`connection-timeout: 5000` (due 2026-09-18): INCONCLUSIVE, leaning concerning, owner decision.** 500s went
+    from 25 in the 10 available pre-window days (about 0.07%) to 352 in 09-05..09-18 (about 0.27%), with spikes on
+    09-17 (59) and 09-18 (68); 502s peaked at 329 on 09-17. Assumptions: deploy taken as 2026-09-04; Render keeps
+    only 30 days so the pre-window is 10 days; traffic also grew. Logs: 09-18 14:48 genuine pool saturation
+    (`total=20, active=20, waiting=4`); 09-18 16:03 and 09-22 06:04 pool timeouts following Postgres I/O errors
+    (pool collapsed to 7 then 2), which looks like the DB dropping rather than load. Only the newest 30 log lines were
+    read, so this is not a count. `v0.116.0` and `v0.123.0` confound it. The row's "material and sustained" has no
+    number, so the kill criterion was not applied.
+  - **First `v0.157.0` retention run, read 2026-09-25 (fired 2026-09-24T18:45Z = 02:45 Manila): AS DESIGNED.** Dispatch
+    order was digest (18:45:06.497), then weak-concept (18:45:06.530), then `INACTIVITY` (18:45:23.422), about 17 s
+    total, no errors, one instance. Digest `budget=60 attempted=14 sent=14 skippedForBudget=0`; weak-concept
+    `budget=46 attempted=0`; `INACTIVITY` `budget=46 sentToday=14 attempted=46 sent=46 skippedForBudget=75`, so it
+    landed inside the expected 40-47 band instead of the old pin at 60. `email_log` agrees (14 `DUE_CONCEPTS_DIGEST` +
+    46 `INACTIVITY` = 60, the full shared budget). The pre-deploy baseline was the 2026-09-23T18:45Z run on
+    `v0.156.0` code: `inactivity budget=60 sent=60`, `dueConceptsDigest=23`, no per-type dispatch lines. The digest
+    due-count differs day to day (14 vs 23), so the two are not a like-for-like "14 of 23". `email_log.clicked_at` is
+    still 0 (click tracking not enabled yet); `email_open_daily_counts` had 6 (09-23) and 3 (09-24) before this run. The open date is Resend's own event `created_at` in UTC (`ResendWebhookService.java:123`), so opens dated 09-23 that arrived after the 02:39Z deploy are late delivery, not a dating bug.
+    `[CHECKPOINT — due 2026-09-27]` remains open. 75 eligible learners were skipped for budget; see the
+    `INACTIVITY` effectiveness item above for whether that matters.
+  - **Cross-note review re-check:** `quick_review_sessions` 906 total, `source_collection_id` NULL on all 906
+    (179 since the Stage 1 audit); DEFER stands, gate is `[CHECKPOINT — due 2026-10-13]`.
+
 ## v0.157.0 - Watching More Closely
 
-**Status: Released** (signed off 2026-09-24; undeployed until the release PR merges to `main`)
+**Status: Released** (signed off and deployed 2026-09-24: Render live 02:40Z, `V149` applied 02:39Z, Vercel production 02:43Z)
 
 Theme: bring in five already-open, independently-produced PRs — traffic analytics, two production
 incident findings, refreshed GPT product-context docs, and a resolved retention-communication channel
@@ -113,7 +214,7 @@ Pool observability and retention Stages 1a–1b are the implemented follow-ups t
   here, out of scope for this change and tracked as its own Backlog Index row** (see
   `docs/product/ROADMAP.md`). Diagnostic registration
   and cleanup fail open, and cleanup is unconditional when work throws. Source and design rationale:
-  `docs/claude-plans/2026-09-22-pool-observability-non-request-thread-coverage-plan.md`.
+  `docs/claude-plans/done/2026-09-22-pool-observability-non-request-thread-coverage-plan.md`.
 
 ### Known limitations
 
@@ -805,94 +906,3 @@ depends on when F1 actually deploys, so it cannot be written until then.
 - **`sanitize()` on the logged request path strips only `\n`/`\r`, with no length bound or control-character stripping beyond that.** Low severity, since it fires only during genuine saturation on a codebase with no existing log-injection-hardening convention to hold it against. Unchanged from the original finding.
 - **`InFlightRequestTrackingFilterTest` drives the filter directly (`filter.doFilter(...)`) rather than asserting it is actually registered in the chain or at what position.** Passes by construction regardless of registration — the same shape as the `v0.119.0` `Content-Type` defect class CLAUDE.md names. The `@Order` fix above was verified by booting the real Spring context during the falsification pass, not by this unit test; no regression guard exists for the ordering itself. Flagged, not fixed — would need a `@SpringBootTest` asserting filter registration order, judged not worth the cost for a one-line annotation.
 - **A1 (owner action, Render per-request logging) — checked at signoff, confirmed NOT enabled, still open.** The owner reported having heard it was on by default; verified otherwise via a read-only `list_log_label_values` query against the production service's logs (`type` label returns only `["app", "build"]` across the prior ~28 hours — no `request` type exists at all), plus a direct spot-check of a live hour showing only Spring Boot application/job log lines, no per-request path/status/duration entries. Enabling it (a paid add-on or plan-tier feature on Render, not a code change) remains the owner's own action, not done as of this signoff.
-
-## v0.152.0 - The Missing Half of v0.150.0
-
-**Status: Released** (signed off 2026-09-17)
-
-Theme: give the many-to-many Program Family architecture (v0.150.0) the curator UX it needed to
-actually get finished — family-first Admin management, one canonical catalog-create modal, and an
-additive backfill of the approved initial membership matrix.
-
-Source: `docs/claude-plans/program-family-catalog-management-ux-overhaul-plan.md` (FINAL, owner-approved,
-subagent audit + owner-tightening pass; untracked on disk, indexed in `ROADMAP.md`'s Backlog Index at
-this kickoff) and its companion Codex prompt `docs/codex-prompts/v0.152.0-program-family-catalog-management.md`
-(Long mode, Slices 1-3 only). **Why now, from production data, not a redesign impulse:** Engineering
-(18/18) and Education (8/8) were fully populated the day `v0.150.0` shipped; three weeks and one release
-later, Health Sciences and Computing & Technology are still at zero members, Accounting 2/5, Built
-Environment & Design 1/8. The many-to-many data model did not fail — the one-program-at-a-time admin
-workflow (open a program, pick its one family from a `<select multiple>`, repeat) made finishing the
-backfill through it tedious enough that it didn't get finished. This release is the missing curator UX,
-not a data-model change.
-
-### Planned Scope
-
-- **Slice 1 — Backend catalog contracts + data (backend).** `POST /course-program-catalog/families`
-  gains optional `programIds` (atomic create-with-members, mirroring the existing program-side
-  `create()` shape); new `PATCH /course-program-catalog/families/{id}` (rename + family-side membership
-  replace, one transaction); the family duplicate-name predicate is weakened relative to the program
-  one (`lower(trim(name))` vs. `regexp_replace`-whitespace-collapsing) and gets aligned; rename adds
-  `id <> ?` self-exclusion so renaming a family to a case/whitespace variant of its own name doesn't
-  reject itself as a conflict with itself. New migration `V147__program_family_initial_membership.sql`
-  — purely additive, exact-name inner joins over a locked 50-pair matrix, `ON CONFLICT DO NOTHING`, no
-  `RAISE`, no fuzzy matching, does **not** write the vestigial `course_programs.program_family_id`.
-  Production: 29 existing pairs untouched, 21 new rows inserted (Health Sciences 5, Accounting 3,
-  Computing & Technology 6, Built Environment & Design 7), `course_program_family` goes 29→50.
-- **Slice 2 — Shared catalog selection + creation UX (frontend).** New `CatalogMultiSelect`
-  (`components/ui/catalog-multi-select.tsx`) — a searchable, client-side-filtered checkbox picker with
-  a `selectedSummary: "count" | "chips"` density prop, replacing both remaining raw `<select multiple>`
-  instances in the codebase. New `CourseProgramCreateModal` extraction, mounted from both Admin and the
-  three authorized Note-authoring surfaces, collapsing today's two divergent create forms (Admin's
-  weaker single-family form vs. the note-authoring modal's already-multi-family one) into one component,
-  one contract, one validation path.
-- **Slice 3 — Family-first Admin IA (frontend).** `/admin/course-programs` gains a two-tab switch
-  (`?view=families|programs`, URL-reflected), Program Families as the default/primary tab (a table:
-  name, member count, Edit — zero-member families included, not `is_active`-filtered), Course / Programs
-  demoted to the inverse-convenience secondary tab. Removes the permanently-visible inline "New Program
-  Family" box and inline create grid in favor of header `+` buttons opening modals.
-- **Slice 4 — Verification + production acceptance + docs (Claude Code, not sent to Codex).** One
-  scoped cold agent, falsification-framed, on the shared catalog create/membership path (7 claims, see
-  below). Post-deploy production acceptance is an anti-join of the same 50-pair matrix against
-  `course_program_family` (expect 0 missing pairs) — the primary proof, not a family-count check, since
-  a count can be right for the wrong reason. `docs/features/program-families.md` rewritten to correct
-  its now-false "a family is created empty" and "membership is set on program creation or edited later
-  from the Admin catalog row" claims.
-
-Anti-drift, owner-locked: **no ADR-001 amendment** (its amended clause 2 is already storage-neutral and
-ratifies many-to-many; nothing here changes what expansion means, only who can edit membership from
-which side). **Program Family name is display data, Program Family ID is identity** — V147's exact-name
-matching is a scoped migration-only exception (runtime-generated UUIDs, no portable literal) and must
-not be copied into any application code. No family deletion, no program deletion, no `is_active` write
-path, no `Business & Finance` family, no general Popover/Command primitive — the new control is a
-catalog picker for small in-memory lists, not a platform layer. The legacy fused rows (`Nursing ·
-Medicine`, `Nursing · Pharmacy`) stay in the catalog, unassigned, not folded into Health Sciences.
-`course_programs.program_family_id` stays vestigial — not written, not dropped. No Program Family
-reaches a prompt, is persisted on a Note, or triggers a live update to existing Notes — that boundary is
-untouched by a management view, a rename, or a backfill.
-
-**Routing: Codex** (new endpoint + migration + service logic, multi-system frontend+backend, ~17
-must-change files — three independent task-routing triggers). Prompt already written (Long mode, Slices
-1-3 only; slice 4 is this session's own work after the diff returns). **Verification tier: one scoped
-cold agent, falsification-framed** — elected now rather than deferred to signoff, because all three
-implementation slices touch the shared catalog create/membership path (CLAUDE.md's "two or more PRs
-touched the same shared method" trigger). Seven claims to disprove: (1) family-side replace cannot evict
-a program from another family; (2) rename preserves id, every membership, and every note's
-applicability; (3) V147 is additive, idempotent, and cannot fail a fresh-database Flyway run; (4) V147
-does not write `course_programs.program_family_id`; (5) no ordinary user can create a shared catalog
-entry through any path; (6) creating a program with two families adds only that program to the note;
-(7) the new multi-select's checkbox `checked` state is real, not `AddNotesModal`'s list-membership hack.
-Full scope, all owner-tightened decisions, and the production membership audit are in the plan file.
-
-### Shipped
-
-- **Backend catalog contracts and initial membership data.** Program Families can be created with initial members and renamed or full-set edited by UUID through an ADMIN-only endpoint. Family-name duplicate matching now collapses internal whitespace and excludes the renamed row itself. `V147` additively declares the locked 50-pair matrix with exact-name joins and `ON CONFLICT DO NOTHING`; it neither deletes memberships nor writes the vestigial scalar family column.
-- **One shared catalog selection and program-creation flow.** `CatalogMultiSelect` replaces both raw multi-selects with searchable native-checkbox editing in count and chip modes. `CourseProgramCreateModal` now serves Admin and authorized Note-authoring surfaces, supports several families, preserves Exam Goal behavior, and selects only the newly created program on the current Note.
-- **Family-first Admin catalog management.** `/admin/course-programs` now opens on a URL-reflected Program Families tab for counts, create, rename, and family-side membership replacement. The retained Course / Programs tab provides the inverse per-program workflow and opens `+ New program` in the shared modal.
-- **Cold agent falsification pass: all seven pre-declared claims CONFIRMED.** Five of the seven are backed by real-database (Testcontainers PostgreSQL) or real-HTTP-request (MockMvc with a live `@PreAuthorize` interceptor) tests, not mocked assertions. The pass surfaced one previously-unflagged, out-of-scope-of-the-seven-claims defect: the Admin rename modal always re-sent the family's full membership set even when only the name changed, using a stale snapshot that could silently overwrite a concurrent admin's membership edit on the same family (never crossed family boundaries, never touched note applicability, never corrupted data — a lost-update window, not a correctness break). Fixed in the same release rather than carried as a Known limitation, since the feature had not yet deployed: `AdminProgramFamiliesSection`'s save path now omits `programIds` entirely unless the picker was actually touched (`draft.membershipDirty`), so an ordinary rename is a true no-op on membership. Two tests added distinguishing the rename-only and rename-plus-membership-edit cases.
-- **Feature-doc sweep, signoff gate.** Corrected two `docs/features/notes.md` claims stale since `v0.150.0`'s many-to-many migration (family expansion described as reading the vestigial scalar `program_family_id` column instead of the `programFamilies` join; catalog creation described as single-family-only instead of the list `CreateCourseProgramRequest.programFamilyIds` has supported since before this release). `docs/features/program-families.md`'s membership-replace description was missing half its own contract — added the omitted-vs-explicit-empty distinction the #1409 fix depends on.
-
-### Known limitations
-
-- **RESOLVED 2026-09-17 (during the `v0.153.0` cycle).** The production-acceptance anti-join (this release's own Slice 4 proof) ran against production (read-only) once `main` had deployed on `2547da67`: **0 missing pairs** across the full 50-pair matrix — `V147` did exactly what this release claimed. Extras report: 7 pairs present in production but outside the approved matrix (6 Accounting — `Business Administration`, `Chartered Financial Analyst`, `Economics`, `Entrepreneurship`, `Finance`, `Financial Management`; 1 Engineering — `Manufacturing Engineering`), consistent with ordinary post-deploy curator work, not a defect. Count sanity check reconciles exactly (57 = 50 + 7). Closes the `[CHECKPOINT — due 2026-09-24]` row in `ROADMAP.md`'s Backlog Index.
-- **A rename that also edits membership still computes its full replacement set from an in-modal snapshot.** The #1409 fix closed the lost-update window for a rename-only save (which now omits `programIds` entirely), but an admin who *does* touch the membership picker still sends a full set read at modal-open time — a genuine concurrent edit during that window is still last-write-wins. Inherent to full-set replace; fixing it is optimistic concurrency, a different feature, not scoped here.
-- **`course_programs.is_active` still has no write path anywhere in the codebase.** Unchanged by this release, deliberately — see the "Course / Program catalog lifecycle management" Backlog Index row. This release's own Admin family/program editors already use the unfiltered catalog specifically so an eventual inactive row stays manageable, but nothing can set `is_active = false` today.

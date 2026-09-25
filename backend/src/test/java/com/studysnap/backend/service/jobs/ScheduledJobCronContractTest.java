@@ -89,7 +89,7 @@ class ScheduledJobCronContractTest {
             Map.entry("studysnap.linked-learners.request-expiry-cron", ""),
             Map.entry("studysnap.notifications.cleanup-cron", ""),
             Map.entry("studysnap.retention.daily-cron", "Asia/Manila"),
-            Map.entry("studysnap.retention.knowledge-impact-digest-monthly-cron", ""),
+            Map.entry("studysnap.retention.knowledge-impact-digest-monthly-cron", "Asia/Manila"),
             Map.entry("studysnap.retention.weekly-cron", "Asia/Manila")
     ));
 
