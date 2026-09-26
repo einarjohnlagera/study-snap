@@ -26,6 +26,7 @@ import { useBottomViewportClaim } from "@/components/exam-mode/exam-focus-contex
 import { BackLink } from "@/components/ui/back-link";
 import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
+import { SubjectTermControl } from "@/components/collections/subject-term-control";
 import { SuggestionCombobox } from "@/components/ui/suggestion-combobox";
 import { PageHeader } from "@/components/page-header";
 import { getAuthUser, type AuthUser } from "@/lib/auth";
@@ -34,6 +35,7 @@ import { getCollectionLabels, normalizeSectionValue, UNGROUPED_SECTION_NAME,
 } from "@/lib/collection-labels";
 import { requireAuthenticatedOnboardedUser } from "@/lib/route-guards";
 import { sortCollectionItemsByPosition } from "@/lib/collection-exam";
+import { collectTermOptions, type ResolvedTerm, type TermOption } from "@/lib/collection-terms";
 import { cn } from "@/lib/utils";
 import {
   addCollectionItems,
@@ -59,7 +61,7 @@ import {
 } from "@/lib/api";
 
 type LoadState = "loading" | "ready" | "error" | "not-found";
-type MutationKind = "add-notes" | "add-subject" | "delete-subject" | "move-note" | "rename-section" | "rename-subject" | "reorder-notes" | "reorder-subjects" | "remove-note" | "save-order" | "set-sections" | null;
+type MutationKind = "add-notes" | "add-subject" | "delete-subject" | "move-note" | "rename-section" | "rename-subject" | "reorder-notes" | "reorder-subjects" | "remove-note" | "save-order" | "set-sections" | "set-term" | null;
 type BuilderSubject = GoalCollectionChildResponse & {
   items: NoteCollectionItem[];
 };
@@ -789,9 +791,11 @@ function SortableSubjectBlock({
   disabled,
   labels,
   allSubjects,
+  termOptions,
   activeDrag,
   onToggle,
   onRename,
+  onSetTerm,
   onDelete,
   onAddNotes,
   onMoveSubject,
@@ -806,9 +810,11 @@ function SortableSubjectBlock({
   disabled: boolean;
   labels: ReturnType<typeof getCollectionLabels>;
   allSubjects: BuilderSubject[];
+  termOptions: TermOption[];
   activeDrag: ActiveDrag;
   onToggle: (subjectId: string) => void;
   onRename: (subjectId: string, title: string) => void;
+  onSetTerm: (subjectId: string, term: ResolvedTerm | null) => void;
   onDelete: (subject: BuilderSubject) => void;
   onAddNotes: (subjectId: string) => void;
   onMoveSubject: (subjectId: string, direction: "up" | "down") => void;
@@ -948,6 +954,15 @@ function SortableSubjectBlock({
                 style={{ width: `${clampPercentage(subject.overallReadinessPercentage)}%` }}
               />
             </div>
+            <SubjectTermControl
+              subjectId={subject.collectionId}
+              subjectTitle={subject.title}
+              termLabel={subject.termLabel}
+              termOrder={subject.termOrder}
+              options={termOptions}
+              disabled={disabled || subject.collectionId.startsWith("temporary:")}
+              onCommit={onSetTerm}
+            />
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-2">
@@ -2114,12 +2129,16 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
     }
   };
 
+  const termOptions = useMemo(() => collectTermOptions(subjects), [subjects]);
+
   const handleAddSubject = async (title: string, description: string | null) => {
     const previousSubjects = subjects;
     const temporarySubject: BuilderSubject = {
       collectionId: `temporary:${Date.now()}`,
       title,
       description,
+      termLabel: null,
+      termOrder: null,
       itemCount: 0,
       overallReadinessPercentage: 0,
       masteredConcepts: 0,
@@ -2156,6 +2175,26 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
       await refreshBuilder();
     } catch (error) {
       await recoverAfterFailure(error, `Could not rename this ${labels.subjectSingular}.`, previousSubjects);
+    } finally {
+      setMutationKind(null);
+    }
+  };
+
+  const handleSetSubjectTerm = async (subjectId: string, term: ResolvedTerm | null) => {
+    const previousSubjects = subjects;
+    setMutationKind("set-term");
+    setMutationError(null);
+    setSubjects((current) => current.map((subject) => (
+      subject.collectionId === subjectId
+        ? { ...subject, termLabel: term?.termLabel ?? null, termOrder: term?.termOrder ?? null }
+        : subject
+    )));
+    try {
+      // A blank label with no order clears both columns; a label always travels with its order.
+      await updateCollection(subjectId, term ? { termLabel: term.termLabel, termOrder: term.termOrder } : { termLabel: "" });
+      await refreshBuilder();
+    } catch (error) {
+      await recoverAfterFailure(error, `Could not save this ${labels.subjectSingular}'s term.`, previousSubjects);
     } finally {
       setMutationKind(null);
     }
@@ -2926,6 +2965,7 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
                     disabled={mutationInProgress}
                     labels={labels}
                     allSubjects={subjects}
+                    termOptions={termOptions}
                     activeDrag={activeDrag}
                     onToggle={(subjectId) => setCollapsedSubjectIds((previous) => {
                       const next = new Set(previous);
@@ -2937,6 +2977,7 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
                       return next;
                     })}
                     onRename={(subjectId, title) => void handleRenameSubject(subjectId, title)}
+                    onSetTerm={(subjectId, term) => void handleSetSubjectTerm(subjectId, term)}
                     onDelete={setDeleteSubject}
                     onAddNotes={setAddNotesSubjectId}
                     onMoveSubject={handleMoveSubject}

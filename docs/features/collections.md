@@ -787,7 +787,13 @@ A term edited on an Official source after a learner adopted does not propagate t
 - all placed: term-labelled groups
 - mixed: labelled groups first, then one trailing group headed `Term not specified` (a defensive render of a curator-quality defect, not a supported authoring state)
 
-**Compact Subject cards** (title, note count, one progress signal) are gated on the SAME condition as term grouping (any non-null child `term_label`) and never on a child count. **Official update stays additive-only.** There is no Degree entity, page or progress in this release, and Degree progress is permanently rejected (ADR-003 decision F).
+Term headers are static (not collapsible) and show the term name, its subject count, and an in-progress count only when it is above zero. A Subject is *in progress* when it has concept evidence, some of it practiced, and it is not fully mastered; the count is derived on the client from the child response. There is no term percentage, progress bar or due count. The `Term not specified` label is never a stored value: the builder rejects that name (case and spacing-insensitive) with a visible message rather than saving it, so a mixed Year can never show two groups with that heading. (This is a builder-side guard only; the backend does not reject the string.)
+
+**Compact Subject cards** (title, note count, ONE progress signal: `N% ready` once anything is practiced, otherwise `Not started`; no description, no bar, no mastered/due breakdown) are gated on the SAME condition as term grouping (any non-null child `term_label`) and never on a child count. Grid: 1 column on mobile, 2 on tablet, 3 on desktop.
+
+**Builder term control (frontend).** Each Subject row in the Year builder has a `Term` combobox over the terms already used in that Year, which also accepts a new term. The curator never types an order: choosing an existing term reuses its stored order (a case/spacing variant snaps to the existing label), a new term gets the highest order in use plus one, and clearing the field sends a blank `termLabel` with no order. An option click saves immediately; typing saves once when focus leaves the control; a focus-and-leave with no change writes nothing. Reordering or renaming a term across a Year is not part of this release.
+
+The gate for all of this is `hasTermPlacement` in `frontend/lib/collection-terms.ts` and must stay a check on the children of a Year, never on a bare `termLabel != null` of a root. **Official update stays additive-only.** There is no Degree entity, page or progress in this release, and Degree progress is permanently rejected (ADR-003 decision F).
 
 ### Publish / Unpublish Study Plan
 
