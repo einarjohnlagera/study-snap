@@ -519,9 +519,9 @@ class NoteCollectionServiceProjectionIntegrationTest {
         PlanReadinessResponse chemistryReadiness = noteCollectionService.getReadiness(chemistry.getId(), userId);
         PlanReadinessResponse emptyReadiness = noteCollectionService.getReadiness(empty.getId(), userId);
         List<GoalCollectionChildResponse> expectedChildren = List.of(
-                expectedGoalChild(biology, biologyReadiness),
-                expectedGoalChild(chemistry, chemistryReadiness),
-                expectedGoalChild(empty, emptyReadiness)
+                expectedGoalChild(goal, biology, biologyReadiness),
+                expectedGoalChild(goal, chemistry, chemistryReadiness),
+                expectedGoalChild(goal, empty, emptyReadiness)
         );
         GoalCollectionDetailResponse expectedGoal = expectedGoal(goal, expectedChildren);
 
@@ -599,6 +599,7 @@ class NoteCollectionServiceProjectionIntegrationTest {
     }
 
     private GoalCollectionChildResponse expectedGoalChild(
+            NoteCollectionEntity goal,
             NoteCollectionEntity child,
             PlanReadinessResponse readiness
     ) {
@@ -608,6 +609,7 @@ class NoteCollectionServiceProjectionIntegrationTest {
                 child.getDescription(),
                 child.getTermLabel(),
                 child.getTermOrder(),
+                false, // the goal fixture was never published, so no child term is locked
                 readiness.totalNotes(),
                 readiness.overallReadinessPercentage(),
                 readiness.masteredConcepts(),

@@ -32,6 +32,7 @@ import {
   groupChildrenByTerm,
   hasTermPlacement,
   isSubjectStarted,
+  orderChildrenForDisplay,
 } from "@/lib/collection-terms";
 import {
   canIncludeCollectionItemInPremiumExam,
@@ -1720,7 +1721,7 @@ function TermGroupedSubjects({
         const subjectWord = labels.subjectSingular.toLowerCase();
         const inProgress = countInProgressSubjects(group.children);
         return (
-          <section key={label} aria-labelledby={`year-term-${index}`} className="space-y-3">
+          <section key={group.label === null ? "unplaced" : `term:${group.label}`} aria-labelledby={`year-term-${index}`} className="space-y-3">
             <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
               <h3 id={`year-term-${index}`} className="text-base font-semibold text-foreground">{label}</h3>
               <p className="text-sm text-foreground/60">
@@ -3634,7 +3635,7 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
       };
     }
 
-    const firstChild = isGoalView ? goalDetail?.children[0] : null;
+    const firstChild = isGoalView && goalDetail ? orderChildrenForDisplay(goalDetail.children)[0] : null;
     if (firstChild) {
       return {
         title: firstChild.title,

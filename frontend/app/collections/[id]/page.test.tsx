@@ -590,6 +590,20 @@ describe("CollectionDetailPageClient", () => {
       expect(termHeadings()).toEqual([]);
     });
 
+    it("a stored term literally named Term not specified cannot collide with the unplaced group's React key", async () => {
+      const errorSpy = jest.spyOn(console, "error").mockImplementation(() => undefined);
+      try {
+        await renderYear([
+          goalChild("loose", "Loose Subject"),
+          goalChild("stored", "Stored Subject", { termLabel: "Term not specified", termOrder: 1 }),
+        ]);
+        expect(termHeadings()).toEqual(["Term not specified", "Term not specified"]);
+        expect(errorSpy.mock.calls.flat().join(" ")).not.toContain("same key");
+      } finally {
+        errorSpy.mockRestore();
+      }
+    });
+
     it("placed terms render ordered static headers, counts, and compact cards", async () => {
       await renderYear([
         goalChild("s2", "Algorithms", { termLabel: "Second Semester", termOrder: 2 }),
@@ -610,6 +624,16 @@ describe("CollectionDetailPageClient", () => {
       expect(screen.queryByRole("progressbar", { name: "Programming I readiness" })).not.toBeInTheDocument();
       expect(subjectCard("Programming I")).not.toHaveTextContent("mastered");
       expect(screen.queryByText("Term not specified")).not.toBeInTheDocument();
+    });
+
+    it("Continue points at the FIRST card on screen (term order), not the first child in sibling order", async () => {
+      await renderYear([
+        goalChild("s2", "Algorithms", { termLabel: "Second Semester", termOrder: 2 }),
+        goalChild("s1", "Programming I", { termLabel: "First Semester", termOrder: 1 }),
+      ]);
+
+      expect(termHeadings()).toEqual(["First Semester", "Second Semester"]);
+      expect(screen.getByRole("link", { name: /Continue Studying/ })).toHaveAttribute("href", "/collections/s1");
     });
 
     it("a mixed Year puts unplaced subjects under one trailing Term not specified group", async () => {

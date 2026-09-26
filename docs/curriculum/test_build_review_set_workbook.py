@@ -82,6 +82,11 @@ class ResolveTermsTest(unittest.TestCase):
         with self.assertRaisesRegex(builder.TermValidationError, "61 characters"):
             builder.resolve_terms([row(1, "A", "n1", "x" * 61)], "Year")
 
+    def test_length_counts_utf16_units_like_the_backend_so_emoji_are_not_undercounted(self):
+        builder.resolve_terms([row(1, "A", "n1", "\U0001F600" * 30)], "Year")           # 60 UTF-16 units
+        with self.assertRaisesRegex(builder.TermValidationError, "62 characters"):
+            builder.resolve_terms([row(1, "A", "n1", "\U0001F600" * 31)], "Year")     # 31 code points, 62 units
+
     def test_reserved_term_not_specified_is_refused_in_any_case_and_spacing(self):
         with self.assertRaisesRegex(builder.TermValidationError, "reserved"):
             builder.resolve_terms([row(1, "A", "n1", " TERM  not specified ")], "Year")

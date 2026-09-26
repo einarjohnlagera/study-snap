@@ -3,6 +3,7 @@ import { ArrowRight } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { buttonVariants } from "@/components/ui/button";
 import { getCollectionLabels } from "@/lib/collection-labels";
+import { orderChildrenForDisplay } from "@/lib/collection-terms";
 import type { GoalCollectionDetailResponse, ProfileType } from "@/lib/api";
 
 type CurrentStep = {
@@ -22,7 +23,7 @@ function resolveCurrentStep(goal: GoalCollectionDetailResponse, subjectLabel: st
     };
   }
 
-  const firstUnpracticedSubject = goal.children.find((child) => child.notPracticedConcepts > 0);
+  const firstUnpracticedSubject = orderChildrenForDisplay(goal.children).find((child) => child.notPracticedConcepts > 0);
   if (firstUnpracticedSubject) {
     return {
       title: `Start ${firstUnpracticedSubject.title}`,

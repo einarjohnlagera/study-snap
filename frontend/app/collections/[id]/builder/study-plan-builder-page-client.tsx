@@ -35,7 +35,7 @@ import { getCollectionLabels, normalizeSectionValue, UNGROUPED_SECTION_NAME,
 } from "@/lib/collection-labels";
 import { requireAuthenticatedOnboardedUser } from "@/lib/route-guards";
 import { sortCollectionItemsByPosition } from "@/lib/collection-exam";
-import { collectTermOptions, type ResolvedTerm, type TermOption } from "@/lib/collection-terms";
+import { collectTermOptions, findPartialTermPlacement, type ResolvedTerm, type TermOption } from "@/lib/collection-terms";
 import { cn } from "@/lib/utils";
 import {
   addCollectionItems,
@@ -792,6 +792,7 @@ function SortableSubjectBlock({
   labels,
   allSubjects,
   termOptions,
+  showTermControl,
   activeDrag,
   onToggle,
   onRename,
@@ -811,6 +812,7 @@ function SortableSubjectBlock({
   labels: ReturnType<typeof getCollectionLabels>;
   allSubjects: BuilderSubject[];
   termOptions: TermOption[];
+  showTermControl: boolean;
   activeDrag: ActiveDrag;
   onToggle: (subjectId: string) => void;
   onRename: (subjectId: string, title: string) => void;
@@ -954,15 +956,18 @@ function SortableSubjectBlock({
                 style={{ width: `${clampPercentage(subject.overallReadinessPercentage)}%` }}
               />
             </div>
-            <SubjectTermControl
-              subjectId={subject.collectionId}
-              subjectTitle={subject.title}
-              termLabel={subject.termLabel}
-              termOrder={subject.termOrder}
-              options={termOptions}
-              disabled={disabled || subject.collectionId.startsWith("temporary:")}
-              onCommit={onSetTerm}
-            />
+            {showTermControl ? (
+              <SubjectTermControl
+                subjectId={subject.collectionId}
+                subjectTitle={subject.title}
+                termLabel={subject.termLabel}
+                termOrder={subject.termOrder}
+                options={termOptions}
+                disabled={disabled || subject.collectionId.startsWith("temporary:")}
+                locked={subject.termLocked === true}
+                onCommit={onSetTerm}
+              />
+            ) : null}
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-2">
@@ -2130,6 +2135,12 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
   };
 
   const termOptions = useMemo(() => collectTermOptions(subjects), [subjects]);
+  // Academic Term is source-curriculum placement: an adopted copy (a learner's plan) never edits it.
+  const showTermControl = collection?.sourcePlanId == null;
+  const partialTerms = useMemo(
+    () => (showTermControl ? findPartialTermPlacement(subjects) : null),
+    [showTermControl, subjects],
+  );
 
   const handleAddSubject = async (title: string, description: string | null) => {
     const previousSubjects = subjects;
@@ -2139,6 +2150,7 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
       description,
       termLabel: null,
       termOrder: null,
+      termLocked: false,
       itemCount: 0,
       overallReadinessPercentage: 0,
       masteredConcepts: 0,
@@ -2914,6 +2926,12 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
           <p className="text-xs text-foreground/55">Drag {pluralizeLabel(labels.subjectSingular)} to reorder; drag notes within or across them.</p>
         </div>
 
+        {partialTerms ? (
+          <p role="status" className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
+            {partialTerms.termed} of {partialTerms.total} {pluralizeLabel(labels.subjectSingular).toLowerCase()} have a term. A term must be set on every {labels.subjectSingular.toLowerCase()} or on none; a partially termed {labels.goalSingular.toLowerCase()} cannot be published. Check: {partialTerms.offenders.join(", ")}.
+          </p>
+        ) : null}
+
         {subjects.length > 0 ? (
           <div className="flex items-center justify-end gap-2">
             <Button
@@ -2966,6 +2984,7 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
                     labels={labels}
                     allSubjects={subjects}
                     termOptions={termOptions}
+                    showTermControl={showTermControl}
                     activeDrag={activeDrag}
                     onToggle={(subjectId) => setCollapsedSubjectIds((previous) => {
                       const next = new Set(previous);

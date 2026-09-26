@@ -84,6 +84,19 @@ export function groupChildrenByTerm<T extends TermPlacedChild>(children: readonl
   return groups;
 }
 
+/**
+ * The children in the order the Year page DISPLAYS them: term groups in term order (unplaced last)
+ * when any child is placed, otherwise the incoming sibling order untouched. Anything that means
+ * "the first Subject" or "the next Subject" (Continue, the dashboard hero's current step) must use
+ * this, or it can point at a card that is not the first one on screen.
+ */
+export function orderChildrenForDisplay<T extends TermPlacedChild>(children: readonly T[]): T[] {
+  if (!hasTermPlacement(children)) {
+    return [...children];
+  }
+  return groupChildrenByTerm(children).flatMap((group) => group.children);
+}
+
 /** True once the learner has practiced anything in the Subject; `false` reads as `Not started`. */
 export function isSubjectStarted(child: Pick<TermProgressChild, "totalConcepts" | "notPracticedConcepts">): boolean {
   return child.totalConcepts > 0 && child.notPracticedConcepts < child.totalConcepts;
@@ -99,6 +112,37 @@ export function isSubjectInProgress(child: TermProgressChild): boolean {
 
 export function countInProgressSubjects(children: readonly TermProgressChild[]): number {
   return children.filter(isSubjectInProgress).length;
+}
+
+export type PartialTermPlacement = {
+  termed: number;
+  total: number;
+  /** Titles of the Subjects that break an otherwise all-or-nothing Year (never a locked one when locked Subjects agree). */
+  offenders: string[];
+};
+
+/**
+ * A curated Year must have a term on every Subject Plan or on none. Returns the description of a
+ * partial state, or `null` when the Year is coherent (nothing termed, or everything termed). The
+ * backend refuses to publish a partial Year; this lets the builder say so while the curator is
+ * still assigning terms one at a time. Mirrors `NoteCollectionService.validateTermCoherence`.
+ */
+export function findPartialTermPlacement<T extends TermPlacedChild & { title: string; termLocked?: boolean }>(
+  children: readonly T[],
+): PartialTermPlacement | null {
+  const termed = children.filter((child) => placedLabel(child) !== null).length;
+  if (termed === 0 || termed === children.length) {
+    return null;
+  }
+  // Locked (published) Subjects are the reference when they agree, so the message names Subjects the
+  // curator can actually change; otherwise the majority decides. Mirrors validateTermCoherence.
+  const lockedStates = new Set(children.filter((child) => child.termLocked === true).map((child) => placedLabel(child) !== null));
+  const majorityTermed = lockedStates.size === 1 ? [...lockedStates][0] : termed * 2 >= children.length;
+  return {
+    termed,
+    total: children.length,
+    offenders: children.filter((child) => (placedLabel(child) !== null) !== majorityTermed).map((child) => child.title),
+  };
 }
 
 export type TermOption = {
