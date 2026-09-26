@@ -175,6 +175,8 @@ class NoteCollectionServiceProjectionIntegrationTest {
                 )
                 """);
         jdbcTemplate.execute("alter table note_collections add column if not exists learner_level varchar(50)");
+        jdbcTemplate.execute("alter table note_collections add column if not exists term_label varchar(60)");
+        jdbcTemplate.execute("alter table note_collections add column if not exists term_order smallint");
         jdbcTemplate.execute("alter table note_collections add column if not exists published_at timestamp with time zone");
         jdbcTemplate.execute("alter table note_collections add column if not exists last_update_published_at timestamp with time zone");
         jdbcTemplate.execute("""
@@ -604,6 +606,8 @@ class NoteCollectionServiceProjectionIntegrationTest {
                 child.getId(),
                 child.getTitle(),
                 child.getDescription(),
+                child.getTermLabel(),
+                child.getTermOrder(),
                 readiness.totalNotes(),
                 readiness.overallReadinessPercentage(),
                 readiness.masteredConcepts(),

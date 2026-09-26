@@ -130,6 +130,8 @@ class NoteCollectionServiceTest {
     private static final String UPDATED_COLLECTION_TITLE = "Updated";
     private static final String UPDATED_COLLECTION_DESCRIPTION = "Updated description";
     private static final String UPDATED_COURSE_PROGRAM = "Licensure Examination for Teachers";
+    private static final String FIRST_SEMESTER = "First Semester";
+    private static final String SECOND_SEMESTER = "Second Semester";
     private static final String OLDEST_CONCEPT = "Oldest";
     private static final String OLDER_CONCEPT = "Older";
     private static final String NEVER_SEEN_CONCEPT = "Never Seen";
@@ -951,6 +953,8 @@ class NoteCollectionServiceTest {
         UUID childId = UUID.randomUUID();
         NoteCollectionEntity child = buildCollection(childId, userId, "Professional Education", Instant.now());
         child.setParentCollectionId(parentId);
+        child.setTermLabel(SECOND_SEMESTER);
+        child.setTermOrder(2);
         when(collectionRepository.findByIdAndOwnerUserId(childId, userId)).thenReturn(Optional.of(child));
         when(collectionRepository.save(child)).thenAnswer(invocation -> invocation.getArgument(0));
         when(itemRepository.findByCollectionIdOrderByPositionAsc(childId)).thenReturn(List.of());
@@ -963,7 +967,52 @@ class NoteCollectionServiceTest {
 
         assertThat(child.getParentCollectionId()).isNull();
         assertThat(child.getSiblingPosition()).isNull();
+        assertThat(child.getTermLabel()).isNull();
+        assertThat(child.getTermOrder()).isNull();
         assertThat(result.parentCollectionId()).isNull();
+    }
+
+    @Test
+    void updateParent_clearsTermWhenMovingToADifferentGoal() {
+        UUID userId = UUID.randomUUID();
+        UUID oldParentId = UUID.randomUUID();
+        UUID newParentId = UUID.randomUUID();
+        UUID childId = UUID.randomUUID();
+        NoteCollectionEntity newParent = buildCollection(newParentId, userId, "New Goal", Instant.now());
+        NoteCollectionEntity child = buildCollection(childId, userId, "Professional Education", Instant.now());
+        child.setParentCollectionId(oldParentId);
+        child.setTermLabel(SECOND_SEMESTER);
+        child.setTermOrder(2);
+        stubReparent(userId, newParentId, childId, newParent, child);
+
+        service.updateParent(childId, userId, new SetNoteCollectionParentRequest(newParentId));
+
+        assertThat(child.getParentCollectionId()).isEqualTo(newParentId);
+        assertThat(child.getTermLabel()).isNull();
+        assertThat(child.getTermOrder()).isNull();
+    }
+
+    @Test
+    void updateParent_keepsTermWhenRequestedParentIsUnchanged() {
+        UUID userId = UUID.randomUUID();
+        UUID parentId = UUID.randomUUID();
+        UUID childId = UUID.randomUUID();
+        NoteCollectionEntity parent = buildCollection(parentId, userId, "Current Goal", Instant.now());
+        NoteCollectionEntity child = buildCollection(childId, userId, "Professional Education", Instant.now());
+        child.setParentCollectionId(parentId);
+        child.setTermLabel(SECOND_SEMESTER);
+        child.setTermOrder(2);
+        when(collectionRepository.findByIdAndOwnerUserId(childId, userId)).thenReturn(Optional.of(child));
+        when(collectionRepository.findByIdAndOwnerUserId(parentId, userId)).thenReturn(Optional.of(parent));
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(parentId)).thenReturn(List.of());
+        when(collectionRepository.countByParentCollectionId(childId)).thenReturn(0L);
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(childId)).thenReturn(List.of());
+
+        service.updateParent(childId, userId, new SetNoteCollectionParentRequest(parentId));
+
+        assertThat(child.getTermLabel()).isEqualTo(SECOND_SEMESTER);
+        assertThat(child.getTermOrder()).isEqualTo(2);
+        verify(collectionRepository, never()).save(child);
     }
 
     @Test
@@ -1677,6 +1726,105 @@ class NoteCollectionServiceTest {
         assertThat(result.children()).extracting(GoalCollectionChildResponse::totalConcepts)
                 .containsExactly(2, 2);
         verify(itemRepository, never()).findByCollectionIdOrderByPositionAsc(goalId);
+    }
+
+    @Test
+    void getGoal_exposesChildTermOnTheSuccessfulReadinessPath() {
+        UUID userId = UUID.randomUUID();
+        UUID goalId = UUID.randomUUID();
+        UUID termedChildId = UUID.randomUUID();
+        UUID unplacedChildId = UUID.randomUUID();
+        UUID termedNoteId = UUID.randomUUID();
+        UUID unplacedNoteId = UUID.randomUUID();
+        NoteCollectionEntity goal = buildCollection(goalId, userId, "BSCS First Year", Instant.now());
+        NoteCollectionEntity termedChild = buildCollection(termedChildId, userId, "Discrete Structures", Instant.now());
+        NoteCollectionEntity unplacedChild = buildCollection(unplacedChildId, userId, "Algorithms", Instant.now());
+        termedChild.setParentCollectionId(goalId);
+        termedChild.setTermLabel(SECOND_SEMESTER);
+        termedChild.setTermOrder(2);
+        unplacedChild.setParentCollectionId(goalId);
+        StudyPackEntity termedPack = buildStudyPack(termedNoteId, List.of("Sets"));
+        termedPack.setOwnerUserId(userId);
+        StudyPackEntity unplacedPack = buildStudyPack(unplacedNoteId, List.of("Sorting"));
+        unplacedPack.setOwnerUserId(userId);
+        when(collectionRepository.findByIdAndOwnerUserId(goalId, userId)).thenReturn(Optional.of(goal));
+        when(collectionRepository.findOrderedChildrenByParentCollectionIdAndOwnerUserId(goalId, userId))
+                .thenReturn(List.of(termedChild, unplacedChild));
+        when(itemRepository.countItemsByCollectionIds(List.of(termedChildId, unplacedChildId))).thenReturn(List.of(
+                countProjection(termedChildId, 1),
+                countProjection(unplacedChildId, 1)
+        ));
+        when(itemRepository.findNoteIdsByCollectionIds(List.of(termedChildId, unplacedChildId))).thenReturn(List.of(
+                noteProjection(termedChildId, termedNoteId),
+                noteProjection(unplacedChildId, unplacedNoteId)
+        ));
+        when(studyPackRepository.findProgressViewsByNoteIdIn(List.of(termedNoteId, unplacedNoteId)))
+                .thenReturn(asProjections(termedPack, unplacedPack));
+        when(progressReportService.buildSubjectProgressEntriesByGroup(
+                anyMap(),
+                eq(userId),
+                any(OffsetDateTime.class)
+        )).thenReturn(Map.of(
+                termedChildId, new ProgressReportService.SubjectProgressBatchResult(
+                        List.of(new SubjectProgressEntry("Discrete Structures", 1, 1, 0, 0, 100)),
+                        null
+                ),
+                unplacedChildId, new ProgressReportService.SubjectProgressBatchResult(
+                        List.of(new SubjectProgressEntry("Algorithms", 1, 0, 0, 1, 0)),
+                        null
+                )
+        ));
+        when(itemRepository.countByCollectionId(goalId)).thenReturn(0L);
+
+        GoalCollectionDetailResponse result = service.getGoal(goalId, userId);
+
+        assertThat(result.children()).hasSize(2);
+        GoalCollectionChildResponse termed = result.children().get(0);
+        GoalCollectionChildResponse unplaced = result.children().get(1);
+        assertThat(termed.overallReadinessPercentage()).isEqualTo(100);
+        assertThat(termed.termLabel()).isEqualTo(SECOND_SEMESTER);
+        assertThat(termed.termOrder()).isEqualTo(2);
+        assertThat(unplaced.termLabel()).isNull();
+        assertThat(unplaced.termOrder()).isNull();
+    }
+
+    @Test
+    void getGoal_keepsChildTermThroughProgressFailureAndTargetDateBudgetRebuild() {
+        UUID userId = UUID.randomUUID();
+        UUID goalId = UUID.randomUUID();
+        UUID childId = UUID.randomUUID();
+        NoteCollectionEntity goal = buildCollection(goalId, userId, "BSCS First Year", Instant.now());
+        goal.setTargetCompletionDate(LocalDate.now().plusDays(30));
+        NoteCollectionEntity child = buildCollection(childId, userId, "Discrete Structures", Instant.now());
+        child.setParentCollectionId(goalId);
+        child.setTermLabel(SECOND_SEMESTER);
+        child.setTermOrder(2);
+        when(collectionRepository.findByIdAndOwnerUserId(goalId, userId)).thenReturn(Optional.of(goal));
+        when(collectionRepository.findOrderedChildrenByParentCollectionIdAndOwnerUserId(goalId, userId))
+                .thenReturn(List.of(child));
+        when(itemRepository.countItemsByCollectionIds(List.of(childId)))
+                .thenReturn(List.of(countProjection(childId, 3)));
+        when(itemRepository.findNoteIdsByCollectionIds(List.of(childId))).thenReturn(List.of());
+        when(progressReportService.buildSubjectProgressEntriesByGroup(anyMap(), eq(userId), any(OffsetDateTime.class)))
+                .thenReturn(Map.of(
+                        childId,
+                        new ProgressReportService.SubjectProgressBatchResult(
+                                List.of(),
+                                new IllegalStateException("readiness unavailable")
+                        )
+                ));
+        when(itemRepository.countByCollectionId(goalId)).thenReturn(0L);
+
+        GoalCollectionDetailResponse result = service.getGoal(goalId, userId);
+
+        assertThat(result.targetCompletionDate()).isEqualTo(goal.getTargetCompletionDate());
+        assertThat(result.children()).singleElement().satisfies(response -> {
+            assertThat(response.termLabel()).isEqualTo(SECOND_SEMESTER);
+            assertThat(response.termOrder()).isEqualTo(2);
+            assertThat(response.itemCount()).isEqualTo(3);
+            assertThat(response.overallReadinessPercentage()).isZero();
+            assertThat(response.todaysConceptBudget()).isZero();
+        });
     }
 
     /**
@@ -2946,6 +3094,135 @@ class NoteCollectionServiceTest {
     }
 
     @Test
+    void updateMetadata_setsTrimsClearsAndIdempotentlyClearsAcademicTerm() {
+        UUID userId = UUID.randomUUID();
+        UUID collectionId = UUID.randomUUID();
+        NoteCollectionEntity child = buildCollection(collectionId, userId, COLLECTION_TITLE, Instant.now());
+        child.setParentCollectionId(UUID.randomUUID());
+        when(collectionRepository.findByIdAndOwnerUserId(collectionId, userId)).thenReturn(Optional.of(child));
+        when(collectionRepository.save(child)).thenAnswer(invocation -> invocation.getArgument(0));
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(collectionId)).thenReturn(List.of());
+
+        NoteCollectionDetailResponse setResult = service.updateMetadata(
+                collectionId,
+                userId,
+                termUpdate("  Second Semester  ", 2)
+        );
+
+        assertThat(setResult.termLabel()).isEqualTo(SECOND_SEMESTER);
+        assertThat(setResult.termOrder()).isEqualTo(2);
+        assertThat(child.getTermLabel()).isEqualTo(SECOND_SEMESTER);
+        assertThat(child.getTermOrder()).isEqualTo(2);
+
+        NoteCollectionDetailResponse clearResult = service.updateMetadata(
+                collectionId,
+                userId,
+                termUpdate("", null)
+        );
+        NoteCollectionDetailResponse idempotentClearResult = service.updateMetadata(
+                collectionId,
+                userId,
+                termUpdate("   ", null)
+        );
+        NoteCollectionDetailResponse getResult = service.get(collectionId, userId);
+
+        assertThat(clearResult.termLabel()).isNull();
+        assertThat(clearResult.termOrder()).isNull();
+        assertThat(idempotentClearResult.termLabel()).isNull();
+        assertThat(idempotentClearResult.termOrder()).isNull();
+        assertThat(getResult.termLabel()).isNull();
+        assertThat(getResult.termOrder()).isNull();
+        assertThat(child.getTermLabel()).isNull();
+        assertThat(child.getTermOrder()).isNull();
+    }
+
+    @Test
+    void updateMetadata_rejectsIncompleteAcademicTermsWithoutChangingTheRow() {
+        UUID userId = UUID.randomUUID();
+        UUID collectionId = UUID.randomUUID();
+        NoteCollectionEntity child = buildCollection(collectionId, userId, COLLECTION_TITLE, Instant.now());
+        child.setParentCollectionId(UUID.randomUUID());
+        child.setTermLabel(FIRST_SEMESTER);
+        child.setTermOrder(1);
+        when(collectionRepository.findByIdAndOwnerUserId(collectionId, userId)).thenReturn(Optional.of(child));
+
+        assertTermUpdateRejected(child, userId, termUpdate(SECOND_SEMESTER, null),
+                "Academic term label requires an order.");
+        assertTermUpdateRejected(child, userId, termUpdate(null, 2),
+                "Academic term order requires a non-blank label.");
+        assertTermUpdateRejected(child, userId, termUpdate("  ", 2),
+                "Academic term order requires a non-blank label.");
+
+        verify(collectionRepository, never()).save(child);
+    }
+
+    @Test
+    void updateMetadata_enforcesAcademicTermLabelAndSmallintBoundaries() {
+        UUID userId = UUID.randomUUID();
+        UUID collectionId = UUID.randomUUID();
+        NoteCollectionEntity child = buildCollection(collectionId, userId, COLLECTION_TITLE, Instant.now());
+        child.setParentCollectionId(UUID.randomUUID());
+        when(collectionRepository.findByIdAndOwnerUserId(collectionId, userId)).thenReturn(Optional.of(child));
+        when(collectionRepository.save(child)).thenAnswer(invocation -> invocation.getArgument(0));
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(collectionId)).thenReturn(List.of());
+        String sixtyCharacters = "a".repeat(60);
+
+        NoteCollectionDetailResponse minimumOrder = service.updateMetadata(
+                collectionId, userId, termUpdate(sixtyCharacters, 1));
+        NoteCollectionDetailResponse maximumOrder = service.updateMetadata(
+                collectionId, userId, termUpdate(SECOND_SEMESTER, 32767));
+
+        assertThat(minimumOrder.termLabel()).isEqualTo(sixtyCharacters);
+        assertThat(minimumOrder.termOrder()).isEqualTo(1);
+        assertThat(maximumOrder.termLabel()).isEqualTo(SECOND_SEMESTER);
+        assertThat(maximumOrder.termOrder()).isEqualTo(32767);
+        assertTermUpdateRejected(child, userId, termUpdate("a".repeat(61), 2),
+                "Academic term label must be 60 characters or fewer.");
+        assertTermUpdateRejected(child, userId, termUpdate(SECOND_SEMESTER, 0),
+                "Academic term order must be between 1 and 32767.");
+        assertTermUpdateRejected(child, userId, termUpdate(SECOND_SEMESTER, 32768),
+                "Academic term order must be between 1 and 32767.");
+    }
+
+    @Test
+    void updateMetadata_rejectsAcademicTermOnRootWithoutChangingTheRow() {
+        UUID userId = UUID.randomUUID();
+        UUID collectionId = UUID.randomUUID();
+        NoteCollectionEntity root = buildCollection(collectionId, userId, COLLECTION_TITLE, Instant.now());
+        when(collectionRepository.findByIdAndOwnerUserId(collectionId, userId)).thenReturn(Optional.of(root));
+
+        assertTermUpdateRejected(root, userId, termUpdate(FIRST_SEMESTER, 1),
+                "Only a child Subject Plan can have an academic term.");
+
+        verify(collectionRepository, never()).save(root);
+    }
+
+    @Test
+    void updateMetadata_omittedAcademicTermPreservesPlacementWhileChangingTitle() {
+        UUID userId = UUID.randomUUID();
+        UUID collectionId = UUID.randomUUID();
+        NoteCollectionEntity child = buildCollection(collectionId, userId, COLLECTION_TITLE, Instant.now());
+        child.setParentCollectionId(UUID.randomUUID());
+        child.setTermLabel(SECOND_SEMESTER);
+        child.setTermOrder(2);
+        when(collectionRepository.findByIdAndOwnerUserId(collectionId, userId)).thenReturn(Optional.of(child));
+        when(collectionRepository.save(child)).thenAnswer(invocation -> invocation.getArgument(0));
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(collectionId)).thenReturn(List.of());
+
+        NoteCollectionDetailResponse result = service.updateMetadata(
+                collectionId,
+                userId,
+                new UpdateNoteCollectionRequest(UPDATED_COLLECTION_TITLE, null, null, null, null)
+        );
+
+        assertThat(result.title()).isEqualTo(UPDATED_COLLECTION_TITLE);
+        assertThat(result.termLabel()).isEqualTo(SECOND_SEMESTER);
+        assertThat(result.termOrder()).isEqualTo(2);
+        assertThat(child.getTermLabel()).isEqualTo(SECOND_SEMESTER);
+        assertThat(child.getTermOrder()).isEqualTo(2);
+    }
+
+    @Test
     void clearTargetDate_clearsExistingDate() {
         UUID userId = UUID.randomUUID();
         UUID collectionId = UUID.randomUUID();
@@ -3261,6 +3538,35 @@ class NoteCollectionServiceTest {
      * the defect and the fix, so a pack-less fixture passes either way and proves nothing --
      * {@code readyCount} being 1 below is what proves the pack was found and deliberately withheld.
      */
+    @Test
+    void detailMappersExposeAcademicTermForOwnedAndAnonymousChildReads() {
+        UUID userId = UUID.randomUUID();
+        UUID collectionId = UUID.randomUUID();
+        NoteCollectionEntity child = buildCollection(collectionId, userId, "Discrete Structures", Instant.now());
+        child.setVisibility(CollectionVisibility.PUBLIC);
+        child.setParentCollectionId(UUID.randomUUID());
+        child.setLearnerLevel(LearnerLevel.COLLEGE);
+        child.setTermLabel(SECOND_SEMESTER);
+        child.setTermOrder(2);
+        when(collectionRepository.findByIdAndOwnerUserId(collectionId, userId)).thenReturn(Optional.of(child));
+        when(collectionRepository.findById(collectionId)).thenReturn(Optional.of(child));
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(collectionId)).thenReturn(List.of());
+        when(collectionRepository.findByIdAndVisibility(collectionId, CollectionVisibility.PUBLIC))
+                .thenReturn(Optional.of(child));
+        when(collectionRepository.findByParentCollectionIdIn(List.of(collectionId))).thenReturn(List.of());
+        when(itemRepository.findByCollectionIdInOrderByCollectionIdAscPositionAsc(List.of(collectionId)))
+                .thenReturn(List.of());
+        when(collectionRepository.countAdoptionsByCollectionIds(List.of(collectionId))).thenReturn(List.of());
+
+        NoteCollectionDetailResponse owned = service.get(collectionId, userId);
+        NoteCollectionDetailResponse anonymous = service.getPublic(collectionId);
+
+        assertThat(owned.termLabel()).isEqualTo(SECOND_SEMESTER);
+        assertThat(owned.termOrder()).isEqualTo(2);
+        assertThat(anonymous.termLabel()).isEqualTo(SECOND_SEMESTER);
+        assertThat(anonymous.termOrder()).isEqualTo(2);
+    }
+
     @Test
     void getPublic_withholdsStudyPackIdFromTheAnonymousPayload() {
         UUID collectionId = UUID.randomUUID();
@@ -3722,6 +4028,35 @@ class NoteCollectionServiceTest {
         assertThat(collectionCaptor.getValue().getCompanionStructureSnapshot()).isNotNull();
     }
 
+    @Test
+    void adopt_carriesTermFromParentedSourceChildOntoStandaloneCopy() {
+        UUID userId = UUID.randomUUID();
+        UUID sourcePlanId = UUID.randomUUID();
+        NoteCollectionEntity source = buildCollection(sourcePlanId, UUID.randomUUID(), "Algorithms", Instant.now());
+        source.setVisibility(CollectionVisibility.PUBLIC);
+        source.setParentCollectionId(UUID.randomUUID());
+        source.setSiblingPosition(3);
+        source.setTermLabel(SECOND_SEMESTER);
+        source.setTermOrder(2);
+        when(collectionRepository.findByIdAndVisibility(sourcePlanId, CollectionVisibility.PUBLIC))
+                .thenReturn(Optional.of(source));
+        when(collectionRepository.findByOwnerUserIdAndSourcePlanIdForUpdate(userId, sourcePlanId))
+                .thenReturn(Optional.empty());
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(sourcePlanId)).thenReturn(List.of());
+        when(collectionRepository.saveAndFlush(any(NoteCollectionEntity.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        AdoptStudyPlanResponse result = service.adopt(sourcePlanId, userId);
+
+        assertThat(result.alreadyAdopted()).isFalse();
+        ArgumentCaptor<NoteCollectionEntity> collectionCaptor = ArgumentCaptor.forClass(NoteCollectionEntity.class);
+        verify(collectionRepository).saveAndFlush(collectionCaptor.capture());
+        NoteCollectionEntity copy = collectionCaptor.getValue();
+        assertThat(copy.getParentCollectionId()).isNull();
+        assertThat(copy.getTermLabel()).isEqualTo(SECOND_SEMESTER);
+        assertThat(copy.getTermOrder()).isEqualTo(2);
+    }
+
     /** A new adopter gets the last published curriculum, not an unfinished source addition. */
     @Test
     void adopt_skipsUnpublishedSourceItems() {
@@ -4041,6 +4376,57 @@ class NoteCollectionServiceTest {
 
         assertThat(result.status()).isEqualTo("ALREADY_UP_TO_DATE");
         assertThat(result.changes()).isEmpty();
+    }
+
+    @Test
+    void sourceUpdate_doesNotRewriteExistingAdoptedChildTerm() {
+        UUID learnerId = UUID.randomUUID();
+        UUID curatorId = UUID.randomUUID();
+        UUID sourceGoalId = UUID.randomUUID();
+        UUID sourceChildId = UUID.randomUUID();
+        UUID adoptedGoalId = UUID.randomUUID();
+        UUID adoptedChildId = UUID.randomUUID();
+        Instant now = Instant.now();
+        NoteCollectionEntity sourceGoal = buildCollection(sourceGoalId, curatorId, "Official Year", now);
+        sourceGoal.setVisibility(CollectionVisibility.PUBLIC);
+        NoteCollectionEntity sourceChild = buildCollection(sourceChildId, curatorId, "Algorithms", now);
+        sourceChild.setVisibility(CollectionVisibility.PUBLIC);
+        sourceChild.setParentCollectionId(sourceGoalId);
+        sourceChild.setSiblingPosition(0);
+        sourceChild.setTermLabel(SECOND_SEMESTER);
+        sourceChild.setTermOrder(2);
+        NoteCollectionEntity adoptedGoal = buildCollection(adoptedGoalId, learnerId, "My Year", now);
+        adoptedGoal.setSourcePlanId(sourceGoalId);
+        adoptedGoal.setSourceTitleAtSync(sourceGoal.getTitle());
+        adoptedGoal.setSourceSyncedAt(now);
+        NoteCollectionEntity adoptedChild = buildCollection(adoptedChildId, learnerId, "Algorithms", now);
+        adoptedChild.setParentCollectionId(adoptedGoalId);
+        adoptedChild.setSourcePlanId(sourceChildId);
+        adoptedChild.setSourceTitleAtSync(sourceChild.getTitle());
+        adoptedChild.setSourceParentIdAtSync(sourceGoalId);
+        adoptedChild.setSourcePositionAtSync(0);
+        adoptedChild.setSourceSyncedAt(now);
+        adoptedChild.setTermLabel(FIRST_SEMESTER);
+        adoptedChild.setTermOrder(1);
+        when(collectionRepository.findByIdAndOwnerUserId(adoptedGoalId, learnerId))
+                .thenReturn(Optional.of(adoptedGoal));
+        when(collectionRepository.findByIdAndVisibility(sourceGoalId, CollectionVisibility.PUBLIC))
+                .thenReturn(Optional.of(sourceGoal));
+        when(collectionRepository.findOrderedChildrenByParentCollectionIdAndOwnerUserId(sourceGoalId, curatorId))
+                .thenReturn(List.of(sourceChild));
+        when(collectionRepository.findOrderedChildrenByParentCollectionIdAndOwnerUserId(adoptedGoalId, learnerId))
+                .thenReturn(List.of(adoptedChild));
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(sourceChildId)).thenReturn(List.of());
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(adoptedGoalId)).thenReturn(List.of());
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(adoptedChildId)).thenReturn(List.of());
+        when(itemRemovalRepository.findByAdoptedCollectionIdIn(List.of(adoptedGoalId, adoptedChildId)))
+                .thenReturn(List.of());
+
+        ReviewSetUpdateResponse result = service.applySourceUpdate(adoptedGoalId, learnerId);
+
+        assertThat(result.status()).isEqualTo("ALREADY_UP_TO_DATE");
+        assertThat(adoptedChild.getTermLabel()).isEqualTo(FIRST_SEMESTER);
+        assertThat(adoptedChild.getTermOrder()).isEqualTo(1);
     }
 
     @Test
@@ -4692,6 +5078,8 @@ class NoteCollectionServiceTest {
         sourceSubject.setVisibility(CollectionVisibility.PUBLIC);
         sourceSubject.setParentCollectionId(sourceGoalId);
         sourceSubject.setSiblingPosition(2);
+        sourceSubject.setTermLabel(SECOND_SEMESTER);
+        sourceSubject.setTermOrder(2);
         NoteCollectionEntity adoptedGoal = buildCollection(adoptedGoalId, userId, "My Goal", now);
         adoptedGoal.setSourcePlanId(sourceGoalId);
         adoptedGoal.setSourceTitleAtSync(sourceGoal.getTitle());
@@ -4747,6 +5135,8 @@ class NoteCollectionServiceTest {
         verify(collectionRepository).saveAndFlush(subjectCaptor.capture());
         assertThat(subjectCaptor.getValue().getParentCollectionId()).isEqualTo(adoptedGoalId);
         assertThat(subjectCaptor.getValue().getSourcePlanId()).isEqualTo(sourceSubjectId);
+        assertThat(subjectCaptor.getValue().getTermLabel()).isEqualTo(SECOND_SEMESTER);
+        assertThat(subjectCaptor.getValue().getTermOrder()).isEqualTo(2);
         ArgumentCaptor<NoteCollectionItemEntity> itemCaptor = ArgumentCaptor.forClass(NoteCollectionItemEntity.class);
         verify(itemRepository).saveAndFlush(itemCaptor.capture());
         assertThat(itemCaptor.getValue().getLabel()).isEqualTo(WEEK_ONE_LABEL);
@@ -4883,6 +5273,10 @@ class NoteCollectionServiceTest {
         sourceGoal.setVisibility(CollectionVisibility.PUBLIC);
         sourceGoal.setCourseProgram(UPDATED_COURSE_PROGRAM);
         sourceGoal.setEstimatedStudyHours(3);
+        // A standalone adopt of a parented Subject can legitimately leave dormant term placement on a root copy.
+        // This fails if persistAdoptedGoal starts copying that placement onto a Goal.
+        sourceGoal.setTermLabel("Legacy Root Term");
+        sourceGoal.setTermOrder(7);
         sourceGoal.setCompanion(companionContent());
         sourceGoal.setCompanionStructureSnapshot(new CompanionStructureSnapshot(0, List.of()));
         NoteCollectionEntity firstChild = buildCollection(firstChildId, sourceOwnerId, "General Education", Instant.now());
@@ -4891,6 +5285,10 @@ class NoteCollectionServiceTest {
         secondChild.setVisibility(CollectionVisibility.PUBLIC);
         firstChild.setParentCollectionId(sourceGoalId);
         secondChild.setParentCollectionId(sourceGoalId);
+        firstChild.setTermLabel(FIRST_SEMESTER);
+        firstChild.setTermOrder(1);
+        secondChild.setTermLabel(SECOND_SEMESTER);
+        secondChild.setTermOrder(2);
         NoteEntity firstPublicNote = buildNote(firstSourceNoteId, sourceOwnerId, NOTE_TITLE_ONE);
         NoteEntity secondPublicNote = buildNote(secondSourceNoteId, sourceOwnerId, NOTE_TITLE_TWO);
         firstPublicNote.setVisibility(NoteVisibility.PUBLIC);
@@ -4958,6 +5356,10 @@ class NoteCollectionServiceTest {
         assertThat(personalSecondChild.getParentCollectionId()).isEqualTo(result.goalCollectionId());
         assertThat(personalFirstChild.getSiblingPosition()).isZero();
         assertThat(personalSecondChild.getSiblingPosition()).isEqualTo(1);
+        assertThat(personalFirstChild.getTermLabel()).isEqualTo(FIRST_SEMESTER);
+        assertThat(personalFirstChild.getTermOrder()).isEqualTo(1);
+        assertThat(personalSecondChild.getTermLabel()).isEqualTo(SECOND_SEMESTER);
+        assertThat(personalSecondChild.getTermOrder()).isEqualTo(2);
         assertThat(personalFirstChild.getCompanion()).isNull();
         assertThat(personalFirstChild.getCompanionStructureSnapshot()).isNull();
         assertThat(personalSecondChild.getCompanion()).isNull();
@@ -4973,6 +5375,8 @@ class NoteCollectionServiceTest {
         ArgumentCaptor<NoteCollectionEntity> goalCaptor = ArgumentCaptor.forClass(NoteCollectionEntity.class);
         verify(collectionRepository, times(3)).saveAndFlush(goalCaptor.capture());
         assertThat(goalCaptor.getAllValues().getFirst().getEstimatedStudyHours()).isEqualTo(3);
+        assertThat(goalCaptor.getAllValues().getFirst().getTermLabel()).isNull();
+        assertThat(goalCaptor.getAllValues().getFirst().getTermOrder()).isNull();
         assertThat(goalCaptor.getAllValues().getFirst().getCompanion()).isEqualTo(companionContent());
         // ⚠️ REWRITTEN, NOT DELETED, IN v0.116.0 -- see the note on the adopt() assertions. An adopted
         // Goal is stamped after its children are reparented, so the baseline records child ids.
@@ -5027,6 +5431,8 @@ class NoteCollectionServiceTest {
         NoteCollectionEntity nestedSourceChild = buildCollection(nestedSourceChildId, sourceOwnerId, "Nested", Instant.now());
         standaloneSourceChild.setVisibility(CollectionVisibility.PUBLIC);
         nestedSourceChild.setVisibility(CollectionVisibility.PUBLIC);
+        standaloneSourceChild.setTermLabel(SECOND_SEMESTER);
+        standaloneSourceChild.setTermOrder(2);
         NoteCollectionEntity standalonePersonalChild = buildCollection(UUID.randomUUID(), userId, "Standalone", Instant.now());
         standalonePersonalChild.setSourcePlanId(standaloneSourceChildId);
         standalonePersonalChild.setCompanion(companionContent());
@@ -5062,6 +5468,8 @@ class NoteCollectionServiceTest {
         assertThat(result.skippedSubjectCount()).isEqualTo(1);
         assertThat(standalonePersonalChild.getParentCollectionId()).isEqualTo(result.goalCollectionId());
         assertThat(standalonePersonalChild.getSiblingPosition()).isZero();
+        assertThat(standalonePersonalChild.getTermLabel()).isEqualTo(SECOND_SEMESTER);
+        assertThat(standalonePersonalChild.getTermOrder()).isEqualTo(2);
         assertThat(standalonePersonalChild.getCompanion()).isNull();
         assertThat(standalonePersonalChild.getCompanionStructureSnapshot()).isNull();
         assertThat(nestedPersonalChild.getParentCollectionId()).isEqualTo(otherGoalId);
@@ -5893,6 +6301,28 @@ class NoteCollectionServiceTest {
         // explicitly clear this stamp when they need to prove an unpublished addition is hidden.
         collection.setPublishedAt(updatedAt);
         return collection;
+    }
+
+    private UpdateNoteCollectionRequest termUpdate(String termLabel, Integer termOrder) {
+        return new UpdateNoteCollectionRequest(null, null, null, null, null, null, termLabel, termOrder);
+    }
+
+    private void assertTermUpdateRejected(
+            NoteCollectionEntity collection,
+            UUID userId,
+            UpdateNoteCollectionRequest request,
+            String expectedMessage
+    ) {
+        UUID collectionId = collection.getId();
+        String existingTermLabel = collection.getTermLabel();
+        Integer existingTermOrder = collection.getTermOrder();
+
+        assertThatThrownBy(() -> service.updateMetadata(collectionId, userId, request))
+                .isInstanceOf(InvalidCollectionRequestException.class)
+                .hasMessage(expectedMessage);
+
+        assertThat(collection.getTermLabel()).isEqualTo(existingTermLabel);
+        assertThat(collection.getTermOrder()).isEqualTo(existingTermOrder);
     }
 
     /**

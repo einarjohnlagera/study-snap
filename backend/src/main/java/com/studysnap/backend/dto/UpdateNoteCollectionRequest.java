@@ -8,8 +8,21 @@ public record UpdateNoteCollectionRequest(
         String courseProgram,
         Integer estimatedStudyHours,
         LocalDate targetCompletionDate,
-        String learnerLevel
+        String learnerLevel,
+        String termLabel,
+        Integer termOrder
 ) {
+    public UpdateNoteCollectionRequest(
+            String title,
+            String description,
+            String courseProgram,
+            Integer estimatedStudyHours,
+            LocalDate targetCompletionDate,
+            String learnerLevel
+    ) {
+        this(title, description, courseProgram, estimatedStudyHours, targetCompletionDate, learnerLevel, null, null);
+    }
+
     public UpdateNoteCollectionRequest(
             String title,
             String description,
@@ -17,6 +30,6 @@ public record UpdateNoteCollectionRequest(
             Integer estimatedStudyHours,
             LocalDate targetCompletionDate
     ) {
-        this(title, description, courseProgram, estimatedStudyHours, targetCompletionDate, null);
+        this(title, description, courseProgram, estimatedStudyHours, targetCompletionDate, null, null, null);
     }
 }
