@@ -15,6 +15,33 @@ changelog layer. `ROADMAP.md` keeps a one-line-per-version index at each origina
 
 ---
 
+**Kicked off 2026-09-21, signed off 2026-09-22.** `v0.155.0 — Say What You Checked` is **Released** on
+`releases/v0.155.0`, cut from `main` after `v0.154.0` merged as #1420 and tagged. Fixes a real quiz-
+grading correctness defect a learner caught and reported, and ships the validator that would have
+rejected it at generation time. Source: `docs/claude-findings/2026-09-19-quick-review-percentage-
+increase-correctness-incident.md` (full incident audit), owner decisions locked 2026-09-21 (§Q.1).
+**Root cause:** the LLM emitted the wrong answer letter while its own explanation derived the correct
+value — a stored MCQ's `correctIndex` pointed at a wrong choice while `explanation`/`workingSolution`
+both derived and stated the right one. Confirmed generation-pipeline defect, not parsing, persistence,
+shuffling, assembly, evaluation, or rendering (all four downstream layers traced and confirmed
+correct). Deterministic corpus scan across 115,333 production questions found **30 confirmed
+defects** (corrected 2026-09-22 from an originally-claimed 31 — one "duplicate defect" in pool
+`2437d442` turned out, on live re-read, to be a different, already-correctly-keyed question with a
+different choices array), each independently hand-verified from the question's own stated inputs;
+realized learner exposure is exactly one person, two sessions. **Scope:** an owner-run repair SQL (38
+idempotent statements, independent of code) plus a Codex-routed backend fix — H4 (the internal-consistency
+validator, the actual fix: reject/retry/omit, never fail the whole pack), H1 (schema tightening), H2/H3
+(two dead-code removals), H3b (a MATCHING block-integrity check with measured 8% yield). **Explicitly
+deferred:** H5 (prompt relaxation, owner-approved but shipping separately so a post-ship rejection-rate
+change stays attributable) and H6 (replacing the letter contract with answer-text identity,
+owner-approved in concept but gated on `docs/architecture/ADR-002-quiz-answer-identity-by-text.md`,
+currently PROPOSED not Accepted). **Verification tier: one scoped cold agent, falsification-framed** —
+trigger: a generated-content semantics change reachable from every quiz mode. **Both halves now
+complete:** the Codex-routed backend fix merged (PR #1421), and the owner ran the full repair SQL
+2026-09-22 with every post-check clean — see `RELEASES.md`'s Shipped section for the documentation
+correction the owner's own pre-check surfaced mid-repair (31 confirmed defects corrected to 30). Full
+scope in `RELEASES.md`.
+
 **Kicked off 2026-09-18, signed off 2026-09-18.** `v0.154.0 — Closing the Loop` is **Released** on
 `releases/v0.154.0`, cut from `main` after `v0.153.0` merged as #1416 and tagged. Closes out three
 independently-verified,

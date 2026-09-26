@@ -1,8 +1,77 @@
+## v0.161.0 - Scannable Study Plans
+
+**Status: In Progress**
+
+Theme: make a Study Plan page scannable. A learner opening a plan sees its Sections collapsed until they choose one,
+can open or close them all at once, and is told `Not started` instead of `0% · 0 due` when they have no evidence yet.
+
+### Planned Scope
+
+**Scope picked by the owner, 2026-09-26 (at the `v0.160.0` signoff); kicked off 2026-09-27: Degree Study Journeys Phase B (plan §13, §18 Phase B, §9.6), frontend only, no
+schema.** Source: `docs/claude-plans/degree-study-journeys-stage1-architecture-audit.md`. Independent of Phase A, which shipped
+in `v0.160.0`. **Every claim below was re-read in code at kickoff, not taken from the plan (the plan's line numbers had
+drifted):**
+
+1. **Sections collapsed by default at every breakpoint.** Today the default is seeded once at mount from viewport width
+   (`LARGE_VIEWPORT_MIN_WIDTH = 1024`, `collection-detail-page-client.tsx:136`; seeded at `:3131`; applied at `:3484` and the
+   two `?? defaultSectionExpanded` render sites `:4183`, `:4256`), so a desktop learner sees every Section of a 312-note plan
+   expanded. New rule: collapsed everywhere, with ONE deterministic exception: a plan with exactly one Section expands it.
+   Screen width may decide layout density, never how much curriculum a learner must process.
+2. **An `Expand all` / `Collapse all` toggle on the Study Plan page.** It does not exist there (grep-verified in
+   `collection-detail-page-client.tsx`); the Year builder already has a two-button pair at `study-plan-builder-page-client.tsx:2925`/`:2933`
+   that this must not be confused with. One low-prominence text button in the Section
+   list header that reads `Expand all` normally and `Collapse all` once every Section is open.
+3. **`Not started` at the Section summary row.** The header badge is gated only on `sectionReadiness.total > 0`
+   (`SectionCardHeader`, `:310`), so a Section whose notes exist but are all unpracticed renders `0% · 0 due`. `SectionReadiness`
+   (`:123`) has no not-practiced count, so it grows one (`aggregateSectionReadiness`, `:230`), and the badge shows `Not started`
+   when nothing has been practiced.
+4. **`Not started` at the Year/plan summary.** The compact header in the shared `ReadinessSummary`
+   (`components/readiness/readiness-summary.tsx:171-177`) renders `0% ready · 0/N mastered · 0 due` for untouched content, while
+   the same file already has `isReadinessNotStarted` (`:19`) for per-subject entries. **Verify every consumer of
+   `ReadinessSummary` before changing its compact header, and scope the change to the collection pages if others exist.**
+
+**Already built, so NOT scope (verified):** full-row clickable Section headers, the collapsed summary row with note count and
+3-title peek, multiple Sections open at once, `aria-expanded` on the header. The Subject-card `Not started` shipped with the
+compact card in `v0.160.0`.
+
+**Owner decisions, 2026-09-27:** (a) **Collapsed by default in the READ view; expanded by default on the BUILD surfaces.** The
+Study Plan page's organize mode and the Year builder (`/collections/[id]/builder`, which already starts every Subject expanded,
+`study-plan-builder-page-client.tsx:1392`, and already has its own `Expand all` / `Collapse all` pair at `:2925`/`:2933`) keep
+their expanded default and are otherwise unchanged; the `Expand all` / `Collapse all` toggle is added to the Study Plan page in
+both read view and organize mode. (Cross-section drag is already a no-op, `handleDragEnd` `:3343`, and a note changes Section
+through its row's Section control, so nothing here may auto-expand a Section on drag.) (b) **Routing: Codex.** Written as
+`docs/codex-prompts/v0.161.0-scannable-study-plans.md` (gitignored); the diff is audited with `/audit-diff` before anything is
+committed. (c) **The `Not started` header change is Study Plan pages only for now**; whether it becomes product-wide is to be
+judged after this ships (the Progress page's goal card and the note detail page use the same compact header and are untouched).
+
+**Implementor decision:** item 4 is done through an opt-in prop on the compact `ReadinessSummary` header, set ONLY at the two Study
+Plan page call sites (Goal `collection-detail-page-client.tsx:3889`, leaf `:4121`), so the other compact call sites (the Progress
+page's goal card `app/progress/progress-report-client.tsx:507` and the note detail page
+`components/notes/private-note-detail-page-client.tsx:3301`) render exactly as before.
+
+**Explicitly NOT in this release:** persisting expansion state (decided in plan §13.1; it would restore a deep expansion the
+learner does not remember making); accordion single-open; the artifact-level `getCollectionLabels(profileType, collection?)`
+terminology resolver (plan: only if justified, and nothing here justifies it); any backend, migration or endpoint; any
+Term, Degree or placement-revision work (placement revisions is its own Backlog row); any change to mastery math or
+`ConceptHealth`.
+
+Anti-drift: Sections stay a computed grouping (no entity, no table); no new mastery signal at any level; the Year page term
+grouping and compact cards from `v0.160.0` are untouched; Review Set rendering must not change beyond the default-collapsed
+Sections and the `Not started` wording (five live Review Sets). **Verification:** frontend `tsc --noEmit`, lint and jest;
+tests for the default state at BOTH viewport widths (now identical), the single-Section exception, the toggle's label flip,
+and a render assertion that `0% · 0 due` never appears for zero evidence at Section or plan grain; mutation-check every new
+test and name the killer; a diff that changes behaviour must touch a test that runs it; `advisor()` before the Codex prompt is written, `/audit-diff` on delivery, and `advisor()` on the
+diff. Four items, no backend and no data semantics, so no cold pressure-test agent unless the diff surprises.
+
+### Shipped
+
+_(nothing yet)_
+
 # RELEASES.md - NoteLib
 
 ## v0.160.0 - Study Plans by Semester
 
-**Status: Released** (signed off 2026-09-26; PRs #1447 backend, #1448 frontend, #1449 pipeline, #1450 pressure-test fixes merged into the release branch; release PR to `main` pending the owner's admin merge)
+**Status: Released** (signed off 2026-09-26; PRs #1447 backend, #1448 frontend, #1449 pipeline, #1450 pressure-test fixes merged into the release branch; release PR merged as #1451 and tagged. Deploy state and the two post-deploy `SELECT` results (below) have not been reported to the session that opened `v0.161.0`; record them here when the owner gives them)
 
 Theme: let a curator place each Subject Plan in an academic term, so a Year reads as a semester-by-semester study
 plan, without adding a level to the collection hierarchy and without touching any Note.
@@ -670,167 +739,3 @@ on the delivered diff before commit, per the standing rule for Codex-delivered w
 - **Docs.** `docs/features/notifications.md` updated with the CTA affordance contract, the
   span-not-link/anti-nesting rule, the WCAG 2.5.3 `aria-labelledby` requirement, the clamp's `min-w-0`
   dependency, and the Admin authoring-guidance section.
-
-## v0.155.0 - Say What You Checked
-
-**Status: Released** (signed off 2026-09-22)
-
-Theme: fix a real quiz-grading correctness defect a learner caught and reported, and ship the
-validator that would have rejected it at generation time.
-
-Source: `docs/claude-findings/2026-09-19-quick-review-percentage-increase-correctness-incident.md`
-(full incident audit, §A–T), owner decisions locked 2026-09-21 (§Q.1).
-
-**What happened:** a learner answered a Quick Review question correctly, was graded wrong, re-ran the
-quiz picking the answer they knew was wrong to confirm the bug, then reported it. Root cause: the LLM
-emitted the wrong answer *letter* while its own explanation derived the correct value — a stored MCQ's
-`correctIndex` pointed at `"25%"` while its `explanation`/`workingSolution` both derived and stated
-`30%`. This is a generation-inconsistency defect, not parsing, persistence, shuffling, assembly,
-evaluation, or rendering — all four downstream layers were traced and confirmed correct. A deterministic
-corpus scan (zero LLM calls, re-run twice) across 115,333 production questions in four stores found
-**31 confirmed defects**, each independently hand-verified by re-deriving the correct answer from the
-question's own stated inputs, not trusted from its own suspect explanation. Realized learner exposure is
-exactly one person, two sessions — every other instance sits in never-served exam pools or the owner's
-own test account. **⚠️ CORRECTED 2026-09-22, discovered by the owner mid-repair, not caught at kickoff:**
-this count included a false "duplicate defect" in pool `2437d442` — a live re-read found the pool's
-second, similarly-worded question has a genuinely different choices array and was already correctly
-keyed, not a duplicate of the confirmed defect. **True count: 30 confirmed defects, not 31.** See the
-repair-SQL bullet below for the corrected per-store breakdown.
-
-### Planned Scope
-
-- **Repair SQL, owner-run, independent of code (data).**
-  `docs/claude-plans/2026-09-21-quiz-answer-key-repair.sql` — 38 idempotent statements across four
-  sections: A (12 `study_packs` rows), B (14 `exam_question_pool` rows, 14 array-element fixes), C (10
-  `challenge_quiz_question_bank` rows, zero real learner exposure), D (retroactive correction of session
-  `1e78a11d-…` and its `concept_health` row — kept deliberately separate per the owner's explicit "do not
-  silently rewrite history" condition; A–C run independently of D). Every statement's `WHERE` clause
-  re-asserts the current wrong value, so re-running the file is a safe no-op. **Claude does not execute
-  this file** — production write-only, owner's to run per this repo's read-only rule. **⚠️ CORRECTED
-  2026-09-22:** Section B originally claimed 15 array-element fixes across those 14 rows (one pool
-  supposedly carrying a genuine duplicate defect). The owner's own pre-check for that section returned 14
-  rows, not the expected 15; investigating found the "duplicate" was a different, already-correctly-keyed
-  question with a different choices array. Corrected to 14 rows / 14 fixes (38 total statements, not 39);
-  the actual `UPDATE` statement was always safely scoped regardless of the comment error, since it
-  matches on the defective question's specific choices array, which the correct question never shares.
-- **H4 — internal-consistency validator at the shared generation boundary (backend, the actual fix).**
-  For an MCQ whose choices are all numeric/unit literals, rejects the generated question if the keyed
-  choice's text does not appear in `explanation + workingSolution` while some other choice's text does
-  — narrow, deterministic, mirrors the exact detector measured against production this incident (1.3%
-  flag rate on 5,443 numeric-literal-answer questions, 30/30 confirmed genuine on manual re-derivation —
-  corrected 2026-09-22 from an originally-claimed 31st that turned out to be a different, already-correct
-  question, not a genuine defect).
-  **Locked retry chain (owner decision, §Q.1 item 2): retry the rejected question once; if still
-  invalid, omit it (pack generates with N−1) — never fail the whole pack.** Runs on the shared
-  generation boundary every quiz mode consumes, not once per mode.
-- **H1 — schema tightening (backend).** Constrains the LLM structured-output `answer` field to the
-  `A`/`B`/`C`/`D`/`null` enum, closing an existing schema/Java-side divergence. Free, no behavior change
-  on well-formed generations.
-- **H2 — dead-code removal (backend).** Deletes `QuizValidationUtils.randomizeChoices` — reorders
-  choices without remapping `correctIndex`, a real answer-identity-corruption hazard if ever wired into
-  a live path, currently called only by its own test.
-- **H3 — dead-code removal, Java only, no migration (backend).** Deletes `QuizQuestionEntity` /
-  `QuizQuestionRepository` and their tests — zero references anywhere outside themselves, the
-  `quiz_questions` table holds 0 production rows. Table drop itself is out of scope for this task (a
-  DDL change, owner-execution protocol); the Codex delivery states explicitly whether it left a
-  follow-up note or prepared a separate non-migration drop-table SQL artifact.
-- **H3b — MATCHING block-integrity check at generation (backend).** Measured non-zero yield (4 of 50
-  production MATCHING blocks, 8%, violate block-size or identical-choices rules already stated in the
-  prompt as CRITICAL but not enforced on every construction path). Enforced at generation; a violation
-  demotes to MCQ, mirroring the existing partial `normalizeMatchingGroups` behavior.
-
-**Explicitly out of scope, not folded in:**
-- **H5** (relax `developer.txt:105` so explanations must state the answer's value, still forbidding
-  letter references) — approved by the owner (§Q.1 item 3) but ships as its own later prompt, once this
-  validator's rejection-rate baseline exists in production; bundling it would make a post-ship
-  rejection-rate change unattributable to either change alone.
-- **H6** (replace the A/B/C/D letter contract with verbatim answer-text identity) — approved in concept
-  by the owner (§Q.1 item 4) but gated on `docs/architecture/ADR-002-quiz-answer-identity-by-text.md`,
-  currently **PROPOSED, not Accepted**. Not implemented until ratified.
-- Structural answer-key validation (index-in-range, exactly-one-correct, duplicate choices,
-  MULTI_SELECT key agreement) — the incident's own corpus scan found zero violations of any of these
-  across all 115,333 production questions; explicitly not the fix, not built.
-- The historical-sanitation `DETERMINISTIC_SCAN` and semantic (is-the-explanation-actually-right)
-  verification — both out of scope, per the incident doc's three-tier discipline (STRUCTURAL /
-  INTERNAL-CONSISTENCY / SEMANTIC, strictly separate; this release ships INTERNAL-CONSISTENCY only).
-
-Anti-drift: H4 evaluates MCQ-with-numeric-choices only — TRUE_FALSE, MULTI_SELECT, MATCHING,
-IDENTIFICATION, ENUMERATION, and prose-choice MCQ pass through unchanged; a question passing H4 is
-never to be represented as "verified correct" anywhere in logs/docs/UI, only as internally consistent.
-No file under `docs/architecture/ADR-001-*.md`, `docs/architecture/ADR-002-*.md`,
-`developer.txt:105` (or any sibling file's equivalent line), `StudyPackGenerationContextResolver`, or
-any Note-persistence path is touched by this release. `QuizItem.java`'s canonical constructor and
-`resolveCorrectIndex` precedence ladder are unmodified — this release only decides whether a `QuizItem`
-gets constructed, not how it resolves once constructed.
-
-**Routing: Codex** (`docs/codex-prompts/v0.155.0-quiz-answer-key-integrity-validator.md`, Long mode) —
-touches shared backend generation infrastructure across every quiz mode, per `CLAUDE.md`'s task-routing
-table. **Verification tier: one scoped cold agent, falsification-framed** — trigger: a generated-content
-semantics change reachable from every quiz mode. Framed against the specific claims the implementing
-session makes, same pattern as this repo's established precedent.
-
-### Shipped
-
-- **H4 — generated MCQ answer/explanation consistency gate.**
-  `QuizValidationUtils.java:187` implements the deliberately narrow numeric/unit-literal matcher with
-  LaTeX-wrapper cleanup, choice-precision rounding and numeric-token boundaries; the shared conversion
-  seam in `OpenAiLlmStudyPackService.java:2417` now retries one rejected question and omits a still-invalid
-  replacement without failing the rest of the pack. `OpenAiLlmStudyPackServiceTest.java:959-1065` proves
-  the exact reported defect, retry/omit behavior, and reach from Quick Review, Adaptive Practice,
-  Challenge Quiz, Long Exam, Board Exam and Teacher Generate Quiz; `QuizValidationUtilsTest.java:199-262`
-  covers the normalization and substring-collision cases. Short generated results now retain their
-  actual count through `ChallengeQuizService`, `QuickReviewAdaptivePracticeService` and
-  `GeneratedQuizService` instead of being converted back into whole-generation failures.
-  **⚠️ Pre-commit audit mutation-verified the two safety-critical pieces of this delivery, not just
-  read them:** reverting the boundary-aware match (`QuizValidationUtils.java:227-230`) to a plain
-  `contains()` check killed `answerExplanationConsistency_usesNumericBoundariesForOverlappingChoices` —
-  confirming the substring-collision guard the incident doc called out as "a REAL hazard" is genuinely
-  load-bearing, not decorative. Restored and re-verified green. **Quota-accounting confirmed
-  independently** (the Codex delivery's own output did not state this explicitly, per the prompt's
-  OUTPUT item 4 requirement): `recordUsage`/`incrementUsage` calls happen once per top-level generation
-  request in `StudyPackService.java`/`NoteGenerationService.java`, never per individual quiz question —
-  a question-level retry or omission inside `buildQuizItemOrRetry` is invisible to quota accounting by
-  construction, not merely by observed behavior.
-- **H1 — structured-output answer enum.**
-  `prompts/study-pack-v1/schema.json:70` constrains `answer` to `A`/`B`/`C`/`D`/`null`, matching the
-  existing Java parser contract; `OpenAiLlmStudyPackServiceTest.java:948` pins the deployed schema resource.
-- **H2 — hazardous dead choice randomizer removed.**
-  Deleted `QuizValidationUtils.randomizeChoices`, which shuffled choices without remapping the answer,
-  and its two self-only tests after confirming `backend/src` had no production caller.
-- **H3 — orphaned quiz-question Java mapping removed.**
-  Deleted `QuizQuestionEntity.java` and `QuizQuestionRepository.java` after confirming neither class was
-  referenced outside those two files. The zero-row `quiz_questions` table remains unchanged; dropping it
-  is a separate owner-run DDL follow-up, and this release includes no migration for it.
-- **H3b — MATCHING block integrity enforced on every generated path.**
-  `OpenAiLlmStudyPackService.java:575` now routes ungrouped MATCHING items through the existing 2–4-item,
-  identical-choices normalizer instead of letting them escape as singletons. Tests at
-  `OpenAiLlmStudyPackServiceTest.java:1132-1169` cover the previously escaping singleton and an oversized,
-  non-identical-choice block; both demote to MCQ. **⚠️ Pre-commit audit correction, not a defect:**
-  mutation-testing the new ungrouped-routing branch found the oversized/non-identical-choices test
-  (`generateLongExam_demotesOversizedMatchingBlockWithDifferingChoices`) still passes with that branch
-  removed — the pre-existing `resolveInvalidMatchingGroupReason` size/choice check already caught that
-  case whenever a block was properly grouped; only the ungrouped-singleton escape was a genuine gap this
-  diff closes. The test is a correct regression lock, but only the singleton fix is new behavior — the
-  incident's reported size-6 violation was already covered by code that predates this release.
-- **Data repair executed by the owner, 2026-09-22.**
-  `docs/claude-plans/2026-09-21-quiz-answer-key-repair.sql` run in full — Sections A (12 `study_packs`
-  rows), B (14 `exam_question_pool` rows), C (10 `challenge_quiz_question_bank` rows), and D (the
-  retroactive session/`concept_health` correction) — every per-section post-check returned clean.
-  **While running Section B, the owner's own pre-check surfaced a real documentation defect**: the
-  plan claimed 15 array-element fixes across those 14 rows (one pool supposedly carrying a genuine
-  duplicate defect); the pre-check returned 14. A live read-only query against the pool in question
-  found the "duplicate" was a different, already-correctly-keyed question with a different choices
-  array — not a duplicate at all. Corrected across all six places the wrong count was recorded (the
-  repair SQL's own comments, the incident finding doc, `ADR-002`, `RELEASES.md`, `ROADMAP.md`,
-  `CLAUDE.md`) plus two misleading labels in the plan file's own final-summary query that the
-  correction pass initially missed. The `UPDATE` statements themselves were always safely scoped
-  regardless of the documentation error — verified by the clean post-checks above.
-
-### Known Limitations
-
-- H4 has near-zero recall for prose-answer MCQs while current prompts avoid restating the answer value.
-  H5 remains a separately approved prompt change so this release first establishes an attributable
-  production rejection-rate baseline. Passing H4 means only internally consistent, never semantically
-  verified; H6 and the separate single-best-answer Question Quality audit remain deferred. All three
-  (H5, H6, the Question Quality audit) now have their own Backlog Index rows in `ROADMAP.md`, added at
-  this commit since the Codex delivery's own output explicitly deferred that question to this session.
