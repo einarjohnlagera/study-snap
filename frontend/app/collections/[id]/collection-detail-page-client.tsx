@@ -27,6 +27,13 @@ import { CourseProgramCombobox } from "@/components/metadata/course-program-comb
 import { getAuthUser, type AuthUser } from "@/lib/auth";
 import { getCollectionLabels, getCollectionTerminalAction, UNGROUPED_SECTION_NAME } from "@/lib/collection-labels";
 import {
+  TERM_NOT_SPECIFIED_LABEL,
+  countInProgressSubjects,
+  groupChildrenByTerm,
+  hasTermPlacement,
+  isSubjectStarted,
+} from "@/lib/collection-terms";
+import {
   canIncludeCollectionItemInPremiumExam,
   getCollectionPremiumExamReadyNoteIds,
   getCollectionPrimaryPremiumExamItem,
@@ -66,6 +73,7 @@ import {
   type CompanionMentorTipSurfacingCondition,
   type CompanionMentorTipSurfacingConditionType,
   type CompanionSection,
+  type GoalCollectionChildResponse,
   type GoalCollectionDetailResponse,
   type LearnerLevel,
   type NoteConceptCountsResponse,
@@ -1676,6 +1684,62 @@ function CompanionDisplayCard({
   );
 }
 
+function CompactSubjectCard({ child }: Readonly<{ child: GoalCollectionChildResponse }>) {
+  const noteCount = `${child.itemCount} ${child.itemCount === 1 ? "note" : "notes"}`;
+  const progressSignal = isSubjectStarted(child) ? `${child.overallReadinessPercentage}% ready` : "Not started";
+  return (
+    <Link href={`/collections/${child.collectionId}`} className="group block">
+      <Card className="h-full space-y-1 p-4 transition-colors group-hover:border-blue-300 group-hover:bg-blue-50/50 dark:group-hover:border-blue-800 dark:group-hover:bg-blue-950/20">
+        <CardTitle className="line-clamp-2 text-base">{child.title}</CardTitle>
+        <p className="text-sm text-foreground/60">
+          {noteCount} · <span className={isSubjectStarted(child) ? "font-semibold text-blue-700 dark:text-blue-300" : undefined}>{progressSignal}</span>
+        </p>
+      </Card>
+    </Link>
+  );
+}
+
+/**
+ * Curriculum-sequenced Year: static (non-collapsible) term headers, each with a subject count and an
+ * in-progress count once anything is started, and compact Subject cards. Rendered ONLY when some child
+ * carries a term (`hasTermPlacement`), which is the same single condition that gates the flat
+ * full-size grid above. No term percentage, bar or due count, by design.
+ */
+function TermGroupedSubjects({
+  subjects,
+  labels,
+}: Readonly<{
+  subjects: GoalCollectionChildResponse[];
+  labels: ReturnType<typeof getCollectionLabels>;
+}>) {
+  const groups = groupChildrenByTerm(subjects);
+  return (
+    <div className="space-y-6">
+      {groups.map((group, index) => {
+        const label = group.label ?? TERM_NOT_SPECIFIED_LABEL;
+        const subjectWord = labels.subjectSingular.toLowerCase();
+        const inProgress = countInProgressSubjects(group.children);
+        return (
+          <section key={label} aria-labelledby={`year-term-${index}`} className="space-y-3">
+            <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+              <h3 id={`year-term-${index}`} className="text-base font-semibold text-foreground">{label}</h3>
+              <p className="text-sm text-foreground/60">
+                {group.children.length} {group.children.length === 1 ? subjectWord : `${subjectWord}s`}
+                {inProgress > 0 ? ` · ${inProgress} in progress` : ""}
+              </p>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {group.children.map((child) => (
+                <CompactSubjectCard key={child.collectionId} child={child} />
+              ))}
+            </div>
+          </section>
+        );
+      })}
+    </div>
+  );
+}
+
 function GoalDetailView({
   goal,
   labels,
@@ -1696,6 +1760,8 @@ function GoalDetailView({
             Nest {labels.singular.toLowerCase()}s under this {labels.goalSingular.toLowerCase()} to build the curriculum.
           </p>
         </div>
+      ) : hasTermPlacement(goal.children) ? (
+        <TermGroupedSubjects subjects={goal.children} labels={labels} />
       ) : (
         <div className="grid gap-4 sm:grid-cols-2">
           {goal.children.map((child) => (

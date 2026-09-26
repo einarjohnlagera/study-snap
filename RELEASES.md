@@ -36,6 +36,13 @@ The learner-facing promise is **"BS Computer Science - 1st Year Study Plan"**, n
   PATCH accepts optional `termLabel` / `termOrder`; `persistAdoptedPlan`, `createSubjectAddition`, and the `adoptGoal()`
   re-parent branch carry child placement; and the Goal-child plus owned/public detail DTOs expose it. The PATCH fields
   are optional on request and nullable on response, so frontend and backend may deploy in either order.
+- **Frontend Academic Term slice:** `lib/collection-terms.ts` holds the single `hasTermPlacement` gate that drives BOTH
+  Year-page term grouping and compact Subject cards (no count threshold); the Year page renders ordered static term
+  headers with a subject count and an in-progress count (shown only when above zero), a trailing `Term not specified`
+  group in the mixed case, and compact cards (title, note count, ONE of `N% ready` / `Not started`); with every child
+  term NULL the existing full-size grid is byte-for-byte unchanged. The Year builder gains a per-Subject term combobox
+  over the Year's existing terms (a new label is allowed; the order is assigned, never typed). The PATCH fields it sends
+  are optional on request, so this slice also deploys in either order relative to the backend.
 - **Phase B (collapsed-by-default Sections, and so on) is NOT in this release**; it has no dependency on Phase A and rides
   in a later one. **Phase C (a Degree entity and landing page) is out.**
 - **⚠️ A gap in the plan, found and verified in code at kickoff (and since corrected in the plan, §7.1a), that the

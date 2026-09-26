@@ -527,6 +527,102 @@ describe("CollectionDetailPageClient", () => {
     expect(screen.queryByRole("button", { name: "Read more" })).not.toBeInTheDocument();
   });
 
+  describe("Academic Term placement on the Year page", () => {
+    function goalChild(id: string, title: string, overrides: Record<string, unknown> = {}) {
+      return {
+        collectionId: id,
+        title,
+        description: `${title} description`,
+        termLabel: null,
+        termOrder: null,
+        itemCount: 4,
+        overallReadinessPercentage: 0,
+        masteredConcepts: 0,
+        dueConcepts: 0,
+        notPracticedConcepts: 0,
+        totalConcepts: 0,
+        todaysConceptBudget: null,
+        ...overrides,
+      };
+    }
+
+    function termHeadings(): string[] {
+      return Array.from(document.querySelectorAll("section[aria-labelledby^='year-term-'] > div > h3"))
+        .map((heading) => heading.textContent ?? "");
+    }
+
+    function subjectCard(title: string): HTMLElement {
+      const card = Array.from(document.querySelectorAll("section[aria-labelledby^='year-term-'] a"))
+        .find((link) => link.textContent?.includes(title));
+      if (!card) {
+        throw new Error(`No compact card for ${title}`);
+      }
+      return card as HTMLElement;
+    }
+
+    async function renderYear(children: Record<string, unknown>[]) {
+      (getCollection as jest.Mock).mockResolvedValue(collection({
+        title: "BSCS First Year",
+        childCount: children.length,
+        progress: { totalNotes: 0, notesWithStudyPack: 0, notesPracticed: 0 },
+        items: [],
+      }));
+      (getCollectionGoal as jest.Mock).mockResolvedValue(goalDetail({ title: "BSCS First Year", childCount: children.length, children }));
+      render(<CollectionDetailPageClient collectionId="collection-1" />);
+      expect(await screen.findByRole("heading", { name: "BSCS First Year" })).toBeInTheDocument();
+    }
+
+    it("all-NULL terms render the existing full-size cards with NO term UI (Review Set regression)", async () => {
+      await renderYear([
+        goalChild("child-1", "Professional Education", {
+          overallReadinessPercentage: 50, masteredConcepts: 5, dueConcepts: 2, notPracticedConcepts: 3, totalConcepts: 10,
+        }),
+        goalChild("child-2", "General Education"),
+      ]);
+
+      // Full-size card: description, progress bar and the mastered/due/not-started breakdown.
+      expect(screen.getByText("Professional Education description")).toBeInTheDocument();
+      expect(screen.getByRole("progressbar", { name: "Professional Education readiness" })).toBeInTheDocument();
+      expect(screen.getByRole("progressbar", { name: "General Education readiness" })).toBeInTheDocument();
+      expect(document.body).toHaveTextContent("5/10 mastered");
+      expect(document.body).toHaveTextContent("3 not started");
+      expect(screen.queryByText("Term not specified")).not.toBeInTheDocument();
+      expect(termHeadings()).toEqual([]);
+    });
+
+    it("placed terms render ordered static headers, counts, and compact cards", async () => {
+      await renderYear([
+        goalChild("s2", "Algorithms", { termLabel: "Second Semester", termOrder: 2 }),
+        goalChild("s1a", "Programming I", {
+          termLabel: "First Semester", termOrder: 1,
+          overallReadinessPercentage: 41, masteredConcepts: 4, notPracticedConcepts: 5, totalConcepts: 10, itemCount: 18,
+        }),
+        goalChild("s1b", "Discrete Math", { termLabel: "First Semester", termOrder: 1 }),
+      ]);
+
+      expect(termHeadings()).toEqual(["First Semester", "Second Semester"]);
+      expect(document.body).toHaveTextContent("2 subject plans · 1 in progress");
+      expect(document.body).toHaveTextContent("1 subject plan");
+      // Compact: title, note count and ONE signal; no description, no bar, no breakdown.
+      expect(subjectCard("Programming I")).toHaveTextContent("18 notes · 41% ready");
+      expect(subjectCard("Discrete Math")).toHaveTextContent("4 notes · Not started");
+      expect(screen.queryByText("Programming I description")).not.toBeInTheDocument();
+      expect(screen.queryByRole("progressbar", { name: "Programming I readiness" })).not.toBeInTheDocument();
+      expect(subjectCard("Programming I")).not.toHaveTextContent("mastered");
+      expect(screen.queryByText("Term not specified")).not.toBeInTheDocument();
+    });
+
+    it("a mixed Year puts unplaced subjects under one trailing Term not specified group", async () => {
+      await renderYear([
+        goalChild("loose", "Loose Subject"),
+        goalChild("s1", "Programming I", { termLabel: "First Semester", termOrder: 1 }),
+      ]);
+
+      expect(termHeadings()).toEqual(["First Semester", "Term not specified"]);
+      expect(subjectCard("Loose Subject").closest("section")).toHaveTextContent("Term not specified");
+    });
+  });
+
   it("does not start leaf readiness requests while Goal detail is still pending", async () => {
     let resolveGoal!: (value: ReturnType<typeof goalDetail>) => void;
     const pendingGoal = new Promise<ReturnType<typeof goalDetail>>((resolve) => {
