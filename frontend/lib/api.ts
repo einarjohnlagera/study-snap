@@ -373,6 +373,11 @@ export type GoalCollectionChildResponse = {
   collectionId: string;
   title: string;
   description: string | null;
+  /** Academic Term placement (v0.160.0). Null on every child of a Review Set; see `lib/collection-terms.ts`. */
+  termLabel?: string | null;
+  termOrder?: number | null;
+  /** True once the Subject Plan is published: its term can no longer change. Absent from an old backend. */
+  termLocked?: boolean;
   itemCount: number;
   overallReadinessPercentage: number;
   masteredConcepts: number;
@@ -2152,6 +2157,8 @@ export type NoteCollectionDetail = {
   resolvedLearnerLevel?: LearnerLevel | null;
   estimatedStudyHours: number | null;
   targetCompletionDate: string | null;
+  termLabel?: string | null;
+  termOrder?: number | null;
   companion: CompanionContent | null;
   sourcePlanId: string | null;
   parentCollectionId: string | null;
@@ -5638,6 +5645,9 @@ export async function updateCollection(
     estimatedStudyHours?: number | null;
     targetCompletionDate?: string | null;
     learnerLevel?: LearnerLevel | "" | null;
+    /** Send a blank `termLabel` with no `termOrder` to clear the term; a label needs an order and vice versa. */
+    termLabel?: string | null;
+    termOrder?: number | null;
   },
 ): Promise<NoteCollectionDetail> {
   const response = await fetchWithAuth(

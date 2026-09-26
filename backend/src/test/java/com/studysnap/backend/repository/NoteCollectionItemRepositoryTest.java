@@ -86,6 +86,8 @@ class NoteCollectionItemRepositoryTest {
                     learner_level varchar(50),
                     estimated_study_hours integer,
                     target_completion_date date,
+                    term_label varchar(60),
+                    term_order smallint,
                     companion json,
                     companion_structure_snapshot json,
                     source_plan_id uuid,

@@ -1127,6 +1127,193 @@ describe("StudyPlanBuilderPageClient", () => {
     });
   });
 
+  describe("Academic Term control", () => {
+    function withTerms() {
+      (getCollectionGoal as jest.Mock).mockResolvedValue(goalDetail({
+        children: [
+          { ...goalChild("child-1", "Professional Education Mastery", 50), termLabel: "First Semester", termOrder: 1 },
+          goalChild("child-2", "General Education Mastery", 40),
+        ],
+      }));
+    }
+
+    it("saves an existing term with its stored order when the curator picks it", async () => {
+      withTerms();
+      render(<StudyPlanBuilderPageClient collectionId="goal-1" />);
+
+      const termInput = await screen.findByLabelText("Term for General Education Mastery");
+      fireEvent.focus(termInput);
+      fireEvent.click(await screen.findByRole("option", { name: /First Semester/ }));
+
+      await waitFor(() => {
+        expect(updateCollection).toHaveBeenCalledWith("child-2", { termLabel: "First Semester", termOrder: 1 });
+      });
+    });
+
+    it("gives a typed new term the next order and snaps a variant spelling to the existing term", async () => {
+      withTerms();
+      render(<StudyPlanBuilderPageClient collectionId="goal-1" />);
+
+      const termInput = await screen.findByLabelText("Term for General Education Mastery");
+      fireEvent.focus(termInput);
+      fireEvent.change(termInput, { target: { value: "Second Semester" } });
+      fireEvent.blur(termInput);
+
+      await waitFor(() => {
+        expect(updateCollection).toHaveBeenCalledWith("child-2", { termLabel: "Second Semester", termOrder: 2 });
+      });
+
+      (updateCollection as jest.Mock).mockClear();
+      const otherInput = screen.getByLabelText("Term for Professional Education Mastery");
+      fireEvent.focus(otherInput);
+      fireEvent.change(otherInput, { target: { value: "  first   SEMESTER " } });
+      fireEvent.blur(otherInput);
+
+      // Same term, same order after snapping: nothing to save.
+      expect(updateCollection).not.toHaveBeenCalled();
+    });
+
+    it("clears the term with a blank label and no order", async () => {
+      withTerms();
+      render(<StudyPlanBuilderPageClient collectionId="goal-1" />);
+
+      const termInput = await screen.findByLabelText("Term for Professional Education Mastery");
+      fireEvent.focus(termInput);
+      fireEvent.change(termInput, { target: { value: "" } });
+      fireEvent.blur(termInput);
+
+      await waitFor(() => {
+        expect(updateCollection).toHaveBeenCalledWith("child-1", { termLabel: "" });
+      });
+    });
+
+    it("saves exactly once, with the full term, when a partial entry is followed by an option click", async () => {
+      withTerms();
+      render(<StudyPlanBuilderPageClient collectionId="goal-1" />);
+
+      const termInput = await screen.findByLabelText("Term for General Education Mastery");
+      fireEvent.focus(termInput);
+      fireEvent.change(termInput, { target: { value: "First" } });
+      const option = await screen.findByRole("option", { name: /First Semester/ });
+      // Pointer-down on the dropdown must be default-prevented so the input never blurs (Safari does not
+      // focus buttons on click, which would otherwise commit the partial "First" as a new term).
+      expect(fireEvent.mouseDown(option)).toBe(false);
+      fireEvent.click(option);
+      fireEvent.blur(termInput);
+
+      await waitFor(() => {
+        expect(updateCollection).toHaveBeenCalledTimes(1);
+      });
+      expect(updateCollection).toHaveBeenCalledWith("child-2", { termLabel: "First Semester", termOrder: 1 });
+    });
+
+    it("rejects the reserved Term not specified name visibly and writes nothing", async () => {
+      withTerms();
+      render(<StudyPlanBuilderPageClient collectionId="goal-1" />);
+
+      const termInput = await screen.findByLabelText("Term for General Education Mastery");
+      fireEvent.focus(termInput);
+      fireEvent.change(termInput, { target: { value: " term  NOT specified " } });
+      fireEvent.blur(termInput);
+
+      expect(await screen.findByRole("alert")).toHaveTextContent("is reserved");
+      expect(updateCollection).not.toHaveBeenCalled();
+    });
+
+    it("rolls back to the previous term and shows an error when the save fails", async () => {
+      withTerms();
+      (updateCollection as jest.Mock).mockRejectedValueOnce(new Error("Server said no"));
+      render(<StudyPlanBuilderPageClient collectionId="goal-1" />);
+
+      const termInput = await screen.findByLabelText("Term for General Education Mastery");
+      fireEvent.focus(termInput);
+      fireEvent.change(termInput, { target: { value: "First Semester" } });
+      // A real click elsewhere closes the combobox (mousedown outside) before the blur commits.
+      fireEvent.mouseDown(document.body);
+      fireEvent.blur(termInput);
+
+      await waitFor(() => {
+        expect(updateCollection).toHaveBeenCalledWith("child-2", { termLabel: "First Semester", termOrder: 1 });
+      });
+      expect(await screen.findByText(/Server said no|Could not save this Subject Plan's term/)).toBeInTheDocument();
+      await waitFor(() => {
+        expect(screen.getByLabelText("Term for General Education Mastery")).toHaveValue("");
+      });
+    });
+
+    it("warns while the Year is partially termed and names the Subject that breaks it", async () => {
+      withTerms();
+      render(<StudyPlanBuilderPageClient collectionId="goal-1" />);
+
+      const warning = await screen.findByText(/1 of 2 subject plans have a term\./i);
+      expect(warning).toHaveAttribute("role", "status");
+      expect(warning).toHaveTextContent(/cannot be published\. Check: General Education Mastery\./);
+    });
+
+    it("shows no partial-term warning when every Subject has a term or none does", async () => {
+      (getCollectionGoal as jest.Mock).mockResolvedValue(goalDetail({
+        children: [
+          { ...goalChild("child-1", "Professional Education Mastery", 50), termLabel: "First Semester", termOrder: 1 },
+          { ...goalChild("child-2", "General Education Mastery", 40), termLabel: "Second Semester", termOrder: 2 },
+        ],
+      }));
+      const { unmount } = render(<StudyPlanBuilderPageClient collectionId="goal-1" />);
+      await screen.findByLabelText("Term for General Education Mastery");
+      expect(document.body).not.toHaveTextContent("have a term.");
+      unmount();
+
+      (getCollectionGoal as jest.Mock).mockResolvedValue(goalDetail());
+      render(<StudyPlanBuilderPageClient collectionId="goal-1" />);
+      await screen.findByLabelText("Term for General Education Mastery");
+      expect(document.body).not.toHaveTextContent("have a term.");
+    });
+
+    it("keeps a published Subject's term visible but locked", async () => {
+      (getCollectionGoal as jest.Mock).mockResolvedValue(goalDetail({
+        children: [
+          { ...goalChild("child-1", "Professional Education Mastery", 50), termLabel: "First Semester", termOrder: 1, termLocked: true },
+          { ...goalChild("child-2", "General Education Mastery", 40), termLabel: "First Semester", termOrder: 1, termLocked: false },
+        ],
+      }));
+      render(<StudyPlanBuilderPageClient collectionId="goal-1" />);
+
+      expect(await screen.findByLabelText("Term for Professional Education Mastery")).toBeDisabled();
+      expect(screen.getByLabelText("Term for General Education Mastery")).not.toBeDisabled();
+      expect(document.body).toHaveTextContent("Published: this term is fixed.");
+    });
+
+    it("hides the Term control and the warning entirely on an adopted copy", async () => {
+      withTerms();
+      (getCollection as jest.Mock).mockImplementation((id: string) => {
+        if (id === "goal-1") {
+          return Promise.resolve(collectionDetail("goal-1", "LET Mastery", [], {
+            parentCollectionId: null,
+            childCount: 2,
+            sourcePlanId: "official-source-1",
+          }));
+        }
+        return Promise.resolve(collectionDetail(id, id === "child-1" ? "Professional Education Mastery" : "General Education Mastery"));
+      });
+      render(<StudyPlanBuilderPageClient collectionId="goal-1" />);
+
+      await screen.findByDisplayValue("Professional Education Mastery");
+      expect(screen.queryByLabelText("Term for Professional Education Mastery")).not.toBeInTheDocument();
+      expect(screen.queryByLabelText("Term for General Education Mastery")).not.toBeInTheDocument();
+      expect(document.body).not.toHaveTextContent("have a term.");
+    });
+
+    it("does not write when the curator focuses and leaves without changing anything", async () => {
+      withTerms();
+      render(<StudyPlanBuilderPageClient collectionId="goal-1" />);
+
+      const termInput = await screen.findByLabelText("Term for General Education Mastery");
+      fireEvent.focus(termInput);
+      fireEvent.blur(termInput);
+
+      expect(updateCollection).not.toHaveBeenCalled();
+    });
+  });
+
   it("deletes a subject without deleting notes", async () => {
     render(<StudyPlanBuilderPageClient collectionId="goal-1" />);
 

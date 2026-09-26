@@ -15,6 +15,60 @@ changelog layer. `ROADMAP.md` keeps a one-line-per-version index at each origina
 
 ---
 
+**Kicked off 2026-09-18, signed off 2026-09-18.** `v0.154.0 — Closing the Loop` is **Released** on
+`releases/v0.154.0`, cut from `main` after `v0.153.0` merged as #1416 and tagged. Closes out three
+independently-verified,
+gate-true Backlog Index items — none gated on an owner action or a production read, none sharing a file
+or a shared method with any other, each anchored to current code before being scoped rather than
+trusted from its row's prose. **⚠️ CORRECTED AT KICKOFF, BEFORE ANY CODE WAS WRITTEN:** a fourth item,
+health-check-on-Hikari-pool decoupling, was scoped in by mistake and dropped — the liveness/readiness
+split it proposed already shipped in `v0.119.1` PR #1297 (`management.health.group.liveness.include:
+livenessState`, excluding `db`, in `application.yaml`); the pre-scoping check only grepped for a custom
+`HealthIndicator` Java class and missed the real fix was declarative YAML config. The only piece still
+open is the Backlog Index's own existing row for it: an owner action, repointing Render's
+`healthCheckPath` to `/api/actuator/health/liveness` — confirmed still unpointed via a live read-only
+Render API call at this kickoff. Not re-added to this release's code scope. A replacement 4th item was
+searched for and not found — every other open Backlog row needed its own scoping pass first, so the
+release ships at three verified items rather than a shaky fourth. **(1) `course_programs.is_active`
+write path (backend + Admin frontend)** — confirmed dead column: `CourseProgramCatalogRepository.java`
+reads `is_active` in several places but no code anywhere in `backend/src/main/java` ever writes it.
+Adds the missing write path, the prerequisite for retiring the two legacy fused catalog rows
+(`Nursing · Medicine`, `Nursing · Pharmacy`). **(2) Recovery for `generation_enqueued_at IS NULL` notes
+stranded in `GENERATING` (backend)** — `GenerationRecoveryService.java:107` explicitly skips this row
+class and logs "leaving them untouched"; every other stale `GENERATING` row is swept back within
+~2h10m (`noteBoundMinutes` default 120 plus sweep cadence), but this class never recovers. **⚠️ Framing
+corrected at kickoff:** a live read-only production query (2026-09-18) found zero notes currently
+`GENERATING` — this is a latent structural gap in the automated sweep (every current write path sets
+both fields atomically, and `V118` already one-time-backfilled pre-existing null rows at its own
+deploy), not an active stuck-note population. **⚠️ Framing corrected AGAIN mid-implementation:** not a
+user-visible dead end either — `POST /notes/{id}/recover-stranded-generation` already gave the note
+owner a tested self-service recovery path for this exact row class via an `updatedAt` fallback bound;
+this item makes that same rule fire automatically too. Shipped with that bound after `advisor()` caught
+the first implementation applying no age check at all — a live regression risk for a future non-atomic
+writer, whose in-flight generation the unbounded version would have killed on the very next sweep.
+**(3) Topic-note generation passes `subject` into the LLM
+context (backend + frontend)** — `GenerateNoteFromTopicRequest.java` carries `topic`,
+`courseProgramIds`/`courseProgramText` and `domainContext` but no `subject`, so `NoteGenerationService`
+builds context with `subject = null`; degrades quality rather than failing requests. Must preserve
+ADR-001's hierarchy: Domain Context is the sole authoritative domain constraint, Subject only narrows
+within it. **⚠️ A stale Backlog Index row was found and corrected at this kickoff, not carried forward
+as scope:** "Topic note generation rejects word-dense bullets on an unpublished 28-word limit" claimed
+three unpublished bounds and an unfixed LaTeX `\times`→`imes` corruption; both are already shipped
+(`v0.138.0` published the title bound, `v0.96.0` fixed the LaTeX corruption via
+`repairJsonEatenLatexCommands()`) — row corrected in place. **Routing: Claude Code inline** for item 2
+(isolated root cause, 1-3 files); **Codex** for items 1 and 3 (new endpoint/DTO + multi-surface
+frontend each). **Verification tier:** each item's own tier as scoped (direct verification for the
+inline item, normal `/audit-diff` for the two Codex items). **Escalated at signoff:** all three items
+independently tripped CLAUDE.md's "delivery introduced a defect the same session then fixed" trigger, so
+one scoped cold agent ran a falsification pass instead of the originally-scoped single `advisor()`
+summary — result: nothing disproven, no cross-item coupling found beyond a harmless shared file
+(`frontend/lib/api.ts`, non-overlapping functions); full detail in `RELEASES.md`. Carried forward from
+`v0.153.0`'s signoff, not this release's problem to solve: A1 (owner
+action — enabling Render's own per-request logging) still not enabled as of `v0.153.0` signoff; the Leg
+A2 saturation detector's registry has no coverage of non-request threads (Known Limitation, not
+re-scoped here). Also carried forward, from this release's own kickoff correction above: the Render
+`healthCheckPath` repoint (owner action). Full scope in `RELEASES.md`.
+
 **Kicked off 2026-09-17, signed off 2026-09-18.** `v0.153.0 — The Missing Telemetry` is **Released**
 on `releases/v0.153.0` (PRs #1411 F2, #1412 Leg A2, #1413 Leg B, #1414 F1, #1415 pre-signoff pressure-test
 follow-ups), cut from `main` after `v0.152.0` merged as #1410 and tagged — Vercel and Render both confirmed live on

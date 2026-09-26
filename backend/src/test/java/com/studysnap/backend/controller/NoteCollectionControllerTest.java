@@ -25,6 +25,7 @@ import com.studysnap.backend.dto.UpdateNoteCollectionRequest;
 import com.studysnap.backend.entity.CollectionVisibility;
 import com.studysnap.backend.entity.UserRole;
 import com.studysnap.backend.exception.CollectionNotFoundException;
+import com.studysnap.backend.exception.GlobalExceptionHandler;
 import com.studysnap.backend.exception.InvalidCollectionRequestException;
 import com.studysnap.backend.security.AuthenticatedUser;
 import com.studysnap.backend.service.NoteCollectionService;
@@ -39,6 +40,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.core.MethodParameter;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.util.unit.DataSize;
 import org.springframework.web.bind.support.WebDataBinderFactory;
 import org.springframework.web.context.request.NativeWebRequest;
 import org.springframework.web.method.support.HandlerMethodArgumentResolver;
@@ -58,6 +60,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.springframework.test.web.servlet.setup.MockMvcBuilders.standaloneSetup;
@@ -268,6 +271,43 @@ class NoteCollectionControllerTest {
         NoteCollectionDetailResponse result = controller.updateMetadata(COLLECTION_ID, request, user);
 
         assertThat(result).isEqualTo(response);
+        verify(service).updateMetadata(UUID.fromString(COLLECTION_ID), user.userId(), request);
+    }
+
+    @Test
+    void patchAcademicTerm_acceptsRealJsonRequestAndReturnsExactFieldNames() throws Exception {
+        AuthenticatedUser user = authenticatedUser();
+        UpdateNoteCollectionRequest request = new UpdateNoteCollectionRequest(
+                null, null, null, null, null, null, "First Semester", 1
+        );
+        NoteCollectionDetailResponse response = detailResponse("First Semester", 1);
+        when(service.updateMetadata(UUID.fromString(COLLECTION_ID), user.userId(), request)).thenReturn(response);
+
+        buildMockMvc(user).perform(patch("/collections/" + COLLECTION_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"termLabel\":\"First Semester\",\"termOrder\":1}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.termLabel").value("First Semester"))
+                .andExpect(jsonPath("$.termOrder").value(1));
+
+        verify(service).updateMetadata(UUID.fromString(COLLECTION_ID), user.userId(), request);
+    }
+
+    @Test
+    void patchAcademicTerm_rejectsLabelWithoutOrderThroughRealJsonRequest() throws Exception {
+        AuthenticatedUser user = authenticatedUser();
+        UpdateNoteCollectionRequest request = new UpdateNoteCollectionRequest(
+                null, null, null, null, null, null, "First Semester", null
+        );
+        when(service.updateMetadata(UUID.fromString(COLLECTION_ID), user.userId(), request))
+                .thenThrow(new InvalidCollectionRequestException("Academic term label requires an order."));
+
+        buildMockMvc(user).perform(patch("/collections/" + COLLECTION_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"termLabel\":\"First Semester\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.message").value("Academic term label requires an order."));
+
         verify(service).updateMetadata(UUID.fromString(COLLECTION_ID), user.userId(), request);
     }
 
@@ -595,6 +635,10 @@ class NoteCollectionControllerTest {
     }
 
     private NoteCollectionDetailResponse detailResponse() {
+        return detailResponse(null, null);
+    }
+
+    private NoteCollectionDetailResponse detailResponse(String termLabel, Integer termOrder) {
         Instant now = Instant.parse("2026-04-01T00:00:00Z");
         return new NoteCollectionDetailResponse(
                 UUID.fromString(COLLECTION_ID),
@@ -604,6 +648,10 @@ class NoteCollectionControllerTest {
                 null,
                 null,
                 null,
+                null,
+                null,
+                termLabel,
+                termOrder,
                 null,
                 null,
                 null,
@@ -748,6 +796,7 @@ class NoteCollectionControllerTest {
 
     private MockMvc buildMockMvc(AuthenticatedUser routeUser) {
         return standaloneSetup(new NoteCollectionController(service, adaptivePracticeService))
+                .setControllerAdvice(new GlobalExceptionHandler(DataSize.ofMegabytes(10)))
                 .setCustomArgumentResolvers(new HandlerMethodArgumentResolver() {
                     @Override
                     public boolean supportsParameter(MethodParameter parameter) {

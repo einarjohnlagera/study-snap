@@ -175,6 +175,8 @@ class NoteCollectionServiceProjectionIntegrationTest {
                 )
                 """);
         jdbcTemplate.execute("alter table note_collections add column if not exists learner_level varchar(50)");
+        jdbcTemplate.execute("alter table note_collections add column if not exists term_label varchar(60)");
+        jdbcTemplate.execute("alter table note_collections add column if not exists term_order smallint");
         jdbcTemplate.execute("alter table note_collections add column if not exists published_at timestamp with time zone");
         jdbcTemplate.execute("alter table note_collections add column if not exists last_update_published_at timestamp with time zone");
         jdbcTemplate.execute("""
@@ -517,9 +519,9 @@ class NoteCollectionServiceProjectionIntegrationTest {
         PlanReadinessResponse chemistryReadiness = noteCollectionService.getReadiness(chemistry.getId(), userId);
         PlanReadinessResponse emptyReadiness = noteCollectionService.getReadiness(empty.getId(), userId);
         List<GoalCollectionChildResponse> expectedChildren = List.of(
-                expectedGoalChild(biology, biologyReadiness),
-                expectedGoalChild(chemistry, chemistryReadiness),
-                expectedGoalChild(empty, emptyReadiness)
+                expectedGoalChild(goal, biology, biologyReadiness),
+                expectedGoalChild(goal, chemistry, chemistryReadiness),
+                expectedGoalChild(goal, empty, emptyReadiness)
         );
         GoalCollectionDetailResponse expectedGoal = expectedGoal(goal, expectedChildren);
 
@@ -597,6 +599,7 @@ class NoteCollectionServiceProjectionIntegrationTest {
     }
 
     private GoalCollectionChildResponse expectedGoalChild(
+            NoteCollectionEntity goal,
             NoteCollectionEntity child,
             PlanReadinessResponse readiness
     ) {
@@ -604,6 +607,9 @@ class NoteCollectionServiceProjectionIntegrationTest {
                 child.getId(),
                 child.getTitle(),
                 child.getDescription(),
+                child.getTermLabel(),
+                child.getTermOrder(),
+                false, // the goal fixture was never published, so no child term is locked
                 readiness.totalNotes(),
                 readiness.overallReadinessPercentage(),
                 readiness.masteredConcepts(),

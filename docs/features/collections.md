@@ -54,6 +54,7 @@ Fields:
 - optional `sourcePlanId` on adopted personal plans
 - optional `parentCollectionId` for the v0.33.1 two-level Goal -> Subject hierarchy
 - optional `siblingPosition`, used only to order child Subject plans under the same Goal
+- optional `termLabel` (`term_label VARCHAR(60)`) and `termOrder` (`term_order SMALLINT`), **`v0.160.0`**: an Academic Term *placement* on a child Subject Plan; see "Academic Term placement" below and `ADR-003`
 - ordered `items`
 - `createdAt`
 - `updatedAt`
@@ -757,6 +758,58 @@ Behavior:
 - bumps `updatedAt`
 - returns full detail
 
+### Academic Term placement (v0.160.0)
+
+Governed by `docs/architecture/ADR-003-curriculum-placement-and-hierarchy-depth.md`. Update this section to shipped-state wording at signoff; until then it is the agreed contract, not verified behavior.
+
+**What it is.** Two nullable columns on `note_collections`, `term_label VARCHAR(60)` and `term_order SMALLINT`, meaningful only on a child Subject Plan. It is a *placement*, not a level: the hierarchy stays at exactly two persisted levels (root Year/Goal, child Subject Plan), Term is not a collection, entity, catalog or enum, and it never touches the Note (ADR-001 axes untouched; `applicable_programs` is never overloaded to carry it).
+
+**Write path.** `PATCH /collections/{id}` (Update Metadata) gains two OPTIONAL fields, `termLabel` and `termOrder`, with the same PATCH semantics as the other fields (omit / `null` preserves). Both directions are additive (optional on request, nullable on response), so frontend and backend may deploy in either order. The Year builder exposes a per-Subject term control that is a combobox over terms already used in that Year, never raw freetext.
+
+Term PATCH rules:
+
+- omitted / `null` `termLabel` and omitted / `null` `termOrder`: preserve the existing term
+- non-blank `termLabel` plus `termOrder`: set both; trim the label before validating its maximum length of 60 characters
+- blank `termLabel` plus omitted / `null` `termOrder`: clear both columns; clearing an already-clear child is an idempotent success
+- a blank label with an order, a non-blank label without an order, or an order without a label: reject with `400`
+- `termOrder` must be in `1..32767`; a value in the 32-bit integer range but outside that (0, negative, 32768 and above) is rejected with `400` before persistence. A value beyond the 32-bit integer range, or a non-number, fails JSON coercion before the service runs and currently returns `500` from the catch-all handler; that is the existing behaviour of every `Integer` field on this PATCH, not specific to the term
+- setting a term on a root Year/Goal is rejected with `400`; only a child Subject Plan has term placement
+
+`updateParent` treats parent, sibling position and term as one placement: un-parenting or moving to a different Goal clears both term columns, while setting the same parent again preserves them.
+
+**Copy sites.** The term is carried at all three child adoption/update sites in `NoteCollectionService`: `persistAdoptedPlan` (serves `adopt()` and, per child, `adoptGoal()`), `createSubjectAddition` (the Official-update additive-merge path that adds a Subject to an already-adopted Year), and the `adoptGoal()` re-parent branch for an already-owned standalone Subject copy. The re-parent branch takes the term from that source child when it attaches the standalone copy to the adopted Goal. It is NOT copied by `persistAdoptedGoal`, the root copy, because a root has no term placement. A standalone `adopt()` of a parented Subject also runs `persistAdoptedPlan`, and that copy is a parentless ROOT that carries the source's term dormant; nothing reads a root's term. Deleting a Goal orphans its children (`parent_collection_id` is `ON DELETE SET NULL`), which likewise leaves root rows holding a dormant term.
+
+A term edited on an Official source after a learner adopted does not propagate to that learner's existing children (Official update is additive-only); a Subject added later by an Official update carries the source's term at that time.
+
+**Authoring invariant (OWNER DECISION, 2026-09-26).** Within a curated Study Plan, Academic Term is either unused for all Subject Plans or assigned to all Subject Plans; partial assignment is invalid authoring input. It is enforced in two places: the curriculum authoring pipeline (`build_review_set_workbook.py` refuses a plan file where some but not all Subject Plans carry `academic_term`, naming the Study Plan and the unassigned Subject Plans) and, at run time, at every publication moment (see the publication boundary below). While a Year is still a private draft the builder and the backend accept a partial assignment, because it is the transient state while a curator assigns terms one Subject at a time; the builder warns, and publishing is refused until it is coherent. The `Term not specified` render below is intentional defense in depth for mixed data that reaches runtime, not an authoring state.
+
+**Publication boundary (OWNER DECISION, 2026-09-26): academic term is curriculum placement and obeys the Official publication boundary by being SETTLED BEFORE IT.** Existing-row edits are read live by adoption and by the drift diff, and Official update is additive-only, so a term edited after publication would reach new adopters at once and could never reach existing ones. The rules, all enforced in `NoteCollectionService`:
+
+- **A term can change only while its Subject Plan is unpublished, and only on source curriculum** (`assertTermChangeAllowed`). A Subject Plan is *published* (its term frozen) only when BOTH its own `published_at` is set AND its root's `last_update_published_at` is set (`isTermLocked`). `published_at` alone is not enough: V141 stamped it on every pre-existing row, including private Goals that were never published, and the root's `last_update_published_at` is the exact "has this set ever been published" test. Repeating the same value is a no-op. An adopted copy (`sourcePlanId != null`) can never change a term (learner curriculum customization stays deferred), and the builder does not show the `Term` control on an adopted copy at all. A published row's control is shown disabled with "Published: this term is fixed." (`GoalCollectionChildResponse.termLocked`).
+- **Every publication moment refuses a partially-termed Year** (`validateTermCoherence`): the first publication (`validateGoalPublishable`) and **Publish update** (`publishReviewSetUpdate`, before anything is stamped). Across ALL of a Year's Subject Plans, published and new, a term is set on every one or on none, so a termed Subject cannot join an un-termed published Year and an un-termed Subject cannot join a termed one. The error names the Subjects that break the rule. The builder shows the same state as a warning while a curator assigns terms one at a time.
+- **Consequences, stated plainly:** introducing terms on, or renaming terms in, a Year that is already published is NOT supported in v0.160.0; the freeze makes those cases unreachable rather than merging them. A Subject added to a published Year later can be given a term only if the Year is already fully termed. The five Official Review Sets are published, so their Subject Plans are frozen and cannot be termed; none needs to be. A pre-existing private Goal (a learner's or teacher's own, never published) is NOT frozen. The retroactive case would need placement revisions in the Official update engine (a published snapshot, source-term baselines on learner rows, a new change kind), which contradicts additive-only and is logged as a separate future release in the Backlog Index.
+- **The frozen-term rule is not keyed on visibility**, so a `PUBLIC` to `PRIVATE` to `PUBLIC` flip cannot be used to re-term published rows: the root's stamp persists.
+- **The publish refusal names Subjects the curator can change.** When published (locked) Subjects agree with each other they are the reference and only the unlocked ones that differ are named; otherwise the majority decides.
+- **Moving a published Subject Plan is guarded** (`assertPublishedSubjectMoveKeepsTermsCoherent`): a move clears the term but cannot clear `published_at`, so a published Subject Plan that carries a term, or that joins a Year whose Subject Plans do, is refused with a 400 (it would end up un-termed and permanently locked, and every later Publish update on that Year would be refused). Unpublished Subject Plans, and published ones moving between un-termed Years (every live Review Set), move freely as before.
+- **The re-publication check uses the root's real state.** `validateGoalPublishable` passes whether the root was ever published, so a `PRIVATE` to `PUBLIC` re-flip names only Subjects the curator can change.
+- **`termLocked` covers the freeze rule only, not the adopted-copy rule.** An adopted child is refused by the backend on any term change; the frontend avoids offering it by hiding the control when the Year itself is an adopted copy. A standalone adopted plan nested under a learner's own Goal by direct API would show an enabled control that the backend refuses (the optimistic update rolls back). Documented, not fixed.
+
+**Continue and the dashboard hero use display order.** In a termed Year the "first Subject" for the Year page's Continue action and the dashboard hero's current step is the first card on screen (`orderChildrenForDisplay` in `frontend/lib/collection-terms.ts`), not the first child in sibling order; with no terms it is the sibling order, unchanged.
+
+**Rendering (Year page).** Group children by `term_label`, order groups by `min(term_order)`, keep the existing sibling order within a group.
+
+- all children NULL: exactly today's flat grid of full-size cards, no term UI (protects the live Review Sets)
+- all placed: term-labelled groups
+- mixed: labelled groups first, then one trailing group headed `Term not specified` (a defensive render of a curator-quality defect, not a supported authoring state)
+
+Term headers are static (not collapsible) and show the term name, its subject count, and an in-progress count only when it is above zero. A Subject is *in progress* when it has concept evidence, some of it practiced, and it is not fully mastered; the count is derived on the client from the child response. There is no term percentage, progress bar or due count. The `Term not specified` label is never a stored value: the builder rejects that name (case and spacing-insensitive) with a visible message rather than saving it, so the UI cannot produce two groups with that heading. This is a builder-side guard only: the backend does not reject the string, so a direct API call can still store it, and the Year page then shows two headings with that name (it renders without error; the unplaced group and the stored term are keyed separately).
+
+**Compact Subject cards** (title, note count, ONE progress signal: `N% ready` once anything is practiced, otherwise `Not started`; no description, no bar, no mastered/due breakdown) are gated on the SAME condition as term grouping (any non-null child `term_label`) and never on a child count. Grid: 1 column on mobile, 2 on tablet, 3 on desktop.
+
+**Builder term control (frontend).** Each Subject row in the Year builder has a `Term` combobox over the terms already used in that Year, which also accepts a new term. The curator never types an order: choosing an existing term reuses its stored order (a case/spacing variant snaps to the existing label), a new term gets the highest order in use plus one, and clearing the field sends a blank `termLabel` with no order. An option click saves immediately; typing saves once when focus leaves the control; a focus-and-leave with no change writes nothing. Reordering or renaming a term across a Year is not part of this release.
+
+The gate for all of this is `hasTermPlacement` in `frontend/lib/collection-terms.ts` and must stay a check on the children of a Year, never on a bare `termLabel != null` of a root. **Official update stays additive-only.** There is no Degree entity, page or progress in this release, and Degree progress is permanently rejected (ADR-003 decision F).
+
 ### Publish / Unpublish Study Plan
 
 `POST /collections/{id}/visibility`
@@ -1177,6 +1230,7 @@ Do not add these under the collection CRUD spine unless explicitly scoped later:
 - live-link or shared-progress adopted plans
 - plan browse directory
 - lesson-plan document parsing
+- a third persisted collection level, a Term/Semester entity, catalog or enum, a Degree entity or landing page, Degree progress of any kind, whole-Degree adoption, or learner curriculum customization (ADR-003)
 
 ## Builder drag behaviour
 

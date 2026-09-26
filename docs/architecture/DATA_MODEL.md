@@ -21,6 +21,20 @@ remain independent. Source provenance exists only to compute and offer additive 
 - `source_position_at_sync INTEGER`, nullable and constrained non-negative
 - `source_synced_at TIMESTAMPTZ`
 
+Academic Term is placement metadata on a child Subject Plan in `note_collections`:
+
+- `term_label VARCHAR(60)`, nullable
+- `term_order SMALLINT`, nullable
+
+The pair is nullable and meaningful only when the row is a child. A standalone adoption of a parented source child
+copies the source placement onto its parentless copy; that term is dormant and harmless, because only child reads
+(`GoalCollectionChildResponse`) group by it, but the detail read of a root does still return whatever the row holds, so a
+consumer must gate on the row being a child and never on `termLabel != null`. Deleting a Goal orphans its children (`parent_collection_id` is `ON DELETE SET NULL`), which also leaves root rows holding a
+dormant term. `updateParent` clears the term when the
+row is nested or moved, and `adoptGoal` overwrites it from the source child when it re-parents an already-owned
+standalone copy. The columns do not add a hierarchy level and are never stored on a Note; see
+`ADR-003-curriculum-placement-and-hierarchy-depth.md`.
+
 `note_collection_items` records the source placement facts seen at the last successful sync:
 
 - `source_label_at_sync VARCHAR(120)`

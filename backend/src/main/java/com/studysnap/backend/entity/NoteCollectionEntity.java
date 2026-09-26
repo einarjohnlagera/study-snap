@@ -91,6 +91,12 @@ public class NoteCollectionEntity {
     @Column(name = "sibling_position")
     private Integer siblingPosition;
 
+    @Column(name = "term_label", length = 60)
+    private String termLabel;
+
+    @Column(name = "term_order")
+    private Integer termOrder;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
