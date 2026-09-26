@@ -188,17 +188,38 @@ and hand-transcribing a few hundred rows is where errors enter.
 Emit a single fenced code block of **tab-separated values** with exactly this header:
 
 ```
-plan_no	subject_plan	plan_description	section	note_title	note_subject	domain_context	status
+plan_no	subject_plan	plan_description	section	note_title	note_subject	domain_context	applicable_programs	status
 ```
+
+If, and only if, this Study Plan is a multi-term curriculum (for example a degree Year with semesters),
+append one more column, `academic_term`, as described below. Otherwise omit it; do not emit it blank.
 
 - `plan_no` — 1-based; groups rows into Subject Plans
 - `subject_plan` / `plan_description` — repeat identically on every row of that plan
 - `section` — repeats on every row of that section
 - `note_subject` — the canonical Subject, **not** the section name
 - `domain_context` — an enum value above, or literally `(unset)`
+- `applicable_programs` — **required on EVERY row.** The catalog program name(s) the note is applicable to,
+  comma-separated when a shared note carries more than one (use the exact names from the catalog list you
+  were given). The workbook builder refuses a file without it: it aggregates the column per note subject to
+  show which `(unset)` Domain Contexts are legal (a single program only) and which reused notes now need an
+  explicit one. It is a discovery axis and never carries a term, level or sequence.
 - `status` — exactly one of `Existing` (already in the set) · `Reuse` (exists elsewhere, add it) ·
   `New` (needs authoring) · `Excluded` (deliberately held out — keep these rows, they record a
   decision)
+
+- **One TSV per Study Plan.** Emit one block for one Study Plan (one Year, or one Review Set); never combine
+  several Years or Review Sets in one block. The `academic_term` rule below is checked per file, so a combined
+  block would wrongly hold an unsequenced Year to a sequenced one's rule. A **Subject Plan is a `plan_no`**, and
+  the term belongs to the Subject Plan: if a Year's subjects are emitted as *sections* of a single `plan_no`,
+  no term can be expressed, so give every subject its own `plan_no` when the Year has terms.
+- `academic_term` — **optional; only for a Year/Study Plan with real terms.** The term the Subject Plan is
+  taught in (`First Semester`, `Second Semester`, `Summer`, ...), identical on every row of that plan. It is
+  **all or nothing for the whole Study Plan**: either every Subject Plan has a term or none does, and a file
+  where only some plans carry one is refused. Leave the column out entirely for a set with no terms. Do not
+  invent a term to fill the column, and do not emit a term order: the order is derived from the sequence in
+  which you first emit each term, so emit the plans in teaching order. The label is at most 60 characters and
+  must never be `Term not specified`.
 
 **Row order is authoritative** — plans, sections and notes are rendered in the order you emit them,
 so sequence them the way you want them taught. Do not sort alphabetically.

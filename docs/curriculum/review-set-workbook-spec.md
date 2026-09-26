@@ -39,7 +39,7 @@ python3 -m venv /tmp/xlsxvenv && /tmp/xlsxvenv/bin/pip install openpyxl
 ```
 
 The builder validates its input: it fails on a missing required column and on an unknown `status`
-value, rather than emitting a plausible-looking workbook with a silent gap.
+value, rather than emitting a plausible-looking workbook with a silent gap. It also refuses an invalid `academic_term` column (see below).
 
 ## Step 1 in detail — what to run, and what to hand over
 
@@ -160,6 +160,45 @@ builder refuses it until it gets one. Unlike LET there is nothing to recover fro
 that workbook predates the column entirely — so its values must come from a production read or a
 fresh curation decision.
 
+## `academic_term` is OPTIONAL, and all-or-nothing PER STUDY PLAN (v0.160.0, ADR-003)
+
+A plan file may carry an `academic_term` column, constant per `plan_no`, for a Year whose Subject Plans
+belong to terms (BSCS Year 1 is the first). It is authoring input for a curator, who enters each term in
+the Year builder; it touches no Note and is **never** folded into `applicable_programs` (ADR-001).
+
+**The invariant, validated by the builder:** within one Study Plan, Academic Term is either unused for
+every Subject Plan or assigned to every Subject Plan. **Partial assignment is invalid authoring input** and
+the build is refused with an error naming the Study Plan and each unassigned Subject Plan. One plan file is
+one Study Plan (one root), so the check runs per file and never across unrelated sets. The runtime still
+renders a mixed Year defensively (unplaced Subjects under `Term not specified`); that is defense in depth,
+not an authoring state.
+
+| Plan file state | Result |
+|---|---|
+| no `academic_term` column, or blank on every plan | valid: the workbook is **identical** to what the builder produced before the column existed |
+| a term on every plan | valid: Overview gains an `Academic Term (order)` column and each plan sheet gets a term line in row 3 |
+| a term on some plans only | refused: `Study Plan '<title>': academic_term is assigned to N of M Subject Plans ... Unassigned: plan 2 ('...'); ...` |
+| different terms on rows of one plan, a label over 60 characters, `Term not specified`, or two spellings that differ only in case or spacing | refused, with the plan named |
+
+**One file is one Study Plan, and that is what makes the check per-Study-Plan.** The TSV has no root column
+and the CLI takes one title, so per file equals per root by construction. **Emit one TSV per Study Plan (one
+Year); never combine Years or Review Sets in one block**, or a sequenced Year would be refused for sitting next
+to an unsequenced one, which is the global check the rule rules out. **A term belongs to a Subject Plan, i.e. to
+a `plan_no`**: a Year whose subjects are sections of one `plan_no` cannot carry terms, so a termed Year needs one
+`plan_no` per subject.
+
+**There is no term-order column.** The order is derived from the first-seen order of the labels in the file
+(row order is authoritative), and the Overview prints it, so a reversed sequence is visible before anyone
+enters terms. The Year builder assigns its own order when a curator types a new term (next after the highest
+in use), so the workbook's order is a curation target, not a value that is imported. **Enter terms in the Year builder
+in the workbook's order:** a curator who types "Second Semester" first gets it order 1 and the groups render
+reversed; the only fix is to clear that term and re-enter it.
+
+**Regression guard.** The five live Review Sets (ALE, CPALE, LET, PNLE; Civil Engineering is still refused
+for lacking `applicable_programs`) must regenerate unchanged. `test_build_review_set_workbook.py` asserts the
+no-term workbook has no term UI, and v0.160.0 additionally compared every cell of the old and new builder's
+output for ALE, CPALE, LET and PNLE and found them identical.
+
 ## The policy sidecar
 
 A set may carry `<set>-policy.tsv` (columns: `topic`, `decision`; the first row is the header pair).
@@ -193,6 +232,7 @@ column — rebuild from the TSV and diff, or the check is not a check.**
 |---|---|
 | `review-set-reshape-read.sql` | the read that gathers a strategist's inputs; parameterised by collection id |
 | `build_review_set_workbook.py` | the builder — data-driven, no per-set logic |
+| `test_build_review_set_workbook.py` | unit tests for the `academic_term` rules; run with `/tmp/xlsxvenv/bin/python -m unittest docs/curriculum/test_build_review_set_workbook.py` |
 | `<set>.tsv` | the source rows; regenerable input, diffable, **the thing to edit** |
 | `<set>-policy.tsv` | OPTIONAL per-set Applicable Programs policy (`topic`, `decision`); renders beside the Domain Context table and under the Overview totals |
 | `<set>-target-shape.xlsx` | the generated deliverable |

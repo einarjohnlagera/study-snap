@@ -30,6 +30,20 @@ INPUT COLUMNS (tab-separated, header row required, order irrelevant):
                        when reshaping a set whose notes already exist but have not been matched
                        title-by-title. It is honest; guessing "New" is not.
 
+    academic_term      OPTIONAL. The Academic Term of the Subject Plan (e.g. "First Semester"); must
+                       be constant per plan_no, like subject_plan. Leave the column out, or blank on
+                       EVERY plan, for a Study Plan with no terms (the flat Subject list -- every
+                       existing Review Set). It is all-or-nothing PER STUDY PLAN: a file where only
+                       some plans carry a term is refused, naming the plans that lack one. There is
+                       no term-order column: the order is DERIVED from the first-seen order of the
+                       labels in the file (row order is authoritative) and printed in the workbook so
+                       a reversed sequence is visible before a curator enters the terms in the Year
+                       builder. The curator types the label exactly as printed; the builder snaps
+                       spelling variants to the existing label.
+                       ⚠️ One plan file is ONE Study Plan (one root), so the check is per file.
+                       This column is authoring input for a curator; it does NOT touch any Note and
+                       is never merged into applicable_programs (ADR-001, ADR-003).
+
 OPTIONAL SIDECAR: `<input>-policy.tsv` (columns: topic, decision; first row is the header pair
 printed bold) renders beside the Domain Context table as the set's Applicable Programs policy.
 Use it for decisions that govern the column but are not per-note -- e.g. which program families a
@@ -52,6 +66,12 @@ HDR = PatternFill("solid", fgColor="44546A")
 _T = Side(style="thin", color="D0D0D0")
 BOX = Border(left=_T, right=_T, top=_T, bottom=_T)
 EXCLUDED = "Excluded"
+TERM_LABEL_MAX_LENGTH = 60          # mirrors note_collections.term_label VARCHAR(60)
+TERM_NOT_SPECIFIED_LABEL = "Term not specified"   # the runtime heading for unplaced Subjects; never a stored term
+
+
+class TermValidationError(ValueError):
+    """A curator-facing, actionable refusal of an invalid academic_term column."""
 
 
 def _head(ws, row, labels):
@@ -72,6 +92,66 @@ def _widths(ws, widths):
         ws.column_dimensions[col].width = w
 
 
+def _norm_term(label):
+    return re.sub(r"\s+", " ", label.strip()).lower()
+
+
+def resolve_terms(rows, study_plan_title):
+    """Validate the OPTIONAL academic_term column and derive the term order.
+
+    Returns (plan_terms, term_order): {plan_no: label} and {label: order}. Both are EMPTY when the
+    Study Plan uses no terms, which is the state that must leave the workbook byte-for-byte what it
+    was before the column existed. Raises TermValidationError otherwise.
+
+    Rules (ADR-003 / plan §12.1): within one Study Plan academic_term is either unused for every
+    Subject Plan or assigned to every Subject Plan. Partial assignment is invalid authoring input.
+    The runtime still renders a mixed Year defensively; this is the authoring-side gate.
+    """
+    if not rows or "academic_term" not in rows[0]:
+        return {}, {}
+    by_plan = collections.OrderedDict()          # plan_no -> (title, set of labels seen)
+    for r in rows:
+        entry = by_plan.setdefault(int(r["plan_no"]), (r["subject_plan"], set()))
+        entry[1].add((r.get("academic_term") or "").strip())
+    for pno, (title, labels) in by_plan.items():
+        if len(labels) > 1:
+            shown = ", ".join(repr(x) if x else "(blank)" for x in sorted(labels))
+            raise TermValidationError(
+                f"academic_term must be constant per plan_no, but plan {pno} ({title!r}) has {shown}. "
+                "Use one value on every row of the plan.")
+    plan_terms = {pno: next(iter(labels)) for pno, (_, labels) in by_plan.items()}
+    plan_terms = {pno: lab for pno, lab in plan_terms.items() if lab}
+    if not plan_terms:
+        return {}, {}
+    if len(plan_terms) != len(by_plan):
+        missing = [f"plan {pno} ({title!r})" for pno, (title, _) in by_plan.items() if pno not in plan_terms]
+        raise TermValidationError(
+            f"Study Plan {study_plan_title!r}: academic_term is assigned to {len(plan_terms)} of "
+            f"{len(by_plan)} Subject Plans. Academic Term is either unused for all Subject Plans or "
+            f"assigned to all of them; partial assignment is invalid. Unassigned: {'; '.join(missing)}. "
+            "Fill academic_term for those plans, or clear it on every plan to use the flat Subject list.")
+    seen = {}
+    order = collections.OrderedDict()
+    for pno in by_plan:
+        label = plan_terms[pno]
+        if len(label) > TERM_LABEL_MAX_LENGTH:
+            raise TermValidationError(
+                f"academic_term {label!r} on plan {pno} is {len(label)} characters; the maximum is "
+                f"{TERM_LABEL_MAX_LENGTH}.")
+        if _norm_term(label) == _norm_term(TERM_NOT_SPECIFIED_LABEL):
+            raise TermValidationError(
+                f"academic_term on plan {pno} is {TERM_NOT_SPECIFIED_LABEL!r}, which is reserved for "
+                "Subjects with no term and can never be a stored term.")
+        key = _norm_term(label)
+        if key in seen and seen[key] != label:
+            raise TermValidationError(
+                f"academic_term spellings {seen[key]!r} and {label!r} differ only in case or spacing "
+                "and would be folded into one term by the builder. Use one spelling.")
+        seen[key] = label
+        order.setdefault(label, len(order) + 1)
+    return plan_terms, dict(order)
+
+
 def sheet_name(plan_no, title):
     """Excel caps sheet names at 31 chars and forbids : \\ / ? * [ ]."""
     clean = "".join(ch for ch in title if ch not in ':\\/?*[]').strip()
@@ -80,6 +160,8 @@ def sheet_name(plan_no, title):
 
 
 def build(rows, out, set_title, set_desc, policy=None):
+    plan_terms, term_order = resolve_terms(rows, set_title)
+    has_terms = bool(plan_terms)
     plans = collections.OrderedDict()
     for r in rows:
         plans.setdefault(int(r["plan_no"]), {"title": r["subject_plan"],
@@ -100,7 +182,8 @@ def build(rows, out, set_title, set_desc, policy=None):
                       "New = needs authoring · Excluded = deliberately held out.  "
                       "See the Domain Context sheet for the two hard rules on that column.",
             "A4:H4", 16, italic=True, color="B06000")
-    _head(ov, 6, ["#", "Subject Plan", "Sections", "In set", "Existing", "Reuse", "New", "Unmapped", "Excluded"])
+    _head(ov, 6, ["#", "Subject Plan", "Sections", "In set", "Existing", "Reuse", "New", "Unmapped", "Excluded"]
+          + (["Academic Term (order)"] if has_terms else []))
     r, tot = 7, collections.Counter()
     for pno, p in plans.items():
         st = collections.Counter(n["status"] for ns in p["sections"].values() for n in ns)
@@ -108,6 +191,8 @@ def build(rows, out, set_title, set_desc, policy=None):
         vals = [pno, p["title"], len(p["sections"]),
                 sum(v for k, v in st.items() if k != EXCLUDED),
                 st["Existing"], st["Reuse"], st["New"], st["Unmapped"], st[EXCLUDED]]
+        if has_terms:
+            vals.append(f"{plan_terms[pno]} ({term_order[plan_terms[pno]]})")
         for i, v in enumerate(vals, 1):
             ov.cell(row=r, column=i, value=v).border = BOX
         r += 1
@@ -121,6 +206,8 @@ def build(rows, out, set_title, set_desc, policy=None):
         summary = "  ".join(f"{t}: {d}" for t, d in policy[1:])
         _banner(ov, f"A{r + 1}", summary, f"A{r + 1}:I{r + 1}", 44, italic=True, color="666666")
     _widths(ov, [5, 40, 9, 8, 9, 8, 7, 10, 9]); ov.freeze_panes = "A7"
+    if has_terms:
+        ov.column_dimensions["J"].width = 26
 
     dc = wb.create_sheet("Domain Context")
     dc["A1"] = "Domain Context by Subject"; dc["A1"].font = Font(size=14, bold=True)
@@ -191,6 +278,12 @@ def build(rows, out, set_title, set_desc, policy=None):
         ws = wb.create_sheet(sheet_name(pno, p["title"]))
         ws["A1"] = p["title"]; ws["A1"].font = Font(size=14, bold=True); ws.merge_cells("A1:G1")
         _banner(ws, "A2", p["desc"], "A2:G2", 42)
+        if has_terms:
+            label = plan_terms[pno]
+            ws["A3"] = (f"Academic Term: {label} (order {term_order[label]}, derived from file order; "
+                        "enter terms in the Year builder in this order)")
+            ws["A3"].font = Font(bold=True, color="44546A")
+            ws.merge_cells("A3:G3")
         _head(ws, 4, ["Section", "#", "Note title", "Note subject", "Domain Context", "Status", "Flags",
                       "Applicable Programs"])
         r = 5
@@ -283,7 +376,10 @@ def main():
         with open(policy_path, encoding="utf-8-sig", newline="") as f:
             policy = [tuple(r[:2]) for r in csv.reader(f, delimiter="\t") if r and any(x.strip() for x in r)]
         print(f"policy: {len(policy) - 1} decision(s) from {os.path.basename(policy_path)}")
-    plans, tot, by = build(rows, out, title, desc, policy)
+    try:
+        plans, tot, by = build(rows, out, title, desc, policy)
+    except TermValidationError as err:
+        sys.exit(f"academic_term is invalid: {err}")
     print(f"saved {out}")
     print(f"{len(plans)} plans · {len(rows)} rows · "
           + " · ".join(f"{k}={v}" for k, v in sorted(tot.items())))
