@@ -766,7 +766,20 @@ Governed by `docs/architecture/ADR-003-curriculum-placement-and-hierarchy-depth.
 
 **Write path.** `PATCH /collections/{id}` (Update Metadata) gains two OPTIONAL fields, `termLabel` and `termOrder`, with the same PATCH semantics as the other fields (omit / `null` preserves). Both directions are additive (optional on request, nullable on response), so frontend and backend may deploy in either order. The Year builder exposes a per-Subject term control that is a combobox over terms already used in that Year, never raw freetext.
 
-**Copy sites.** The term is copied at BOTH child-copy builders in `NoteCollectionService`: `persistAdoptedPlan` (serves `adopt()` and, per child, `adoptGoal()`) and `createSubjectAddition` (the Official-update additive-merge path that adds a Subject to an already-adopted Year). It is NOT copied by `persistAdoptedGoal`, the root copy, because a root has no term placement.
+Term PATCH rules:
+
+- omitted / `null` `termLabel` and omitted / `null` `termOrder`: preserve the existing term
+- non-blank `termLabel` plus `termOrder`: set both; trim the label before validating its maximum length of 60 characters
+- blank `termLabel` plus omitted / `null` `termOrder`: clear both columns; clearing an already-clear child is an idempotent success
+- a blank label with an order, a non-blank label without an order, or an order without a label: reject with `400`
+- `termOrder` must be in `1..32767`; values outside the PostgreSQL `SMALLINT` range are rejected with `400` before persistence
+- setting a term on a root Year/Goal is rejected with `400`; only a child Subject Plan has term placement
+
+`updateParent` treats parent, sibling position and term as one placement: un-parenting or moving to a different Goal clears both term columns, while setting the same parent again preserves them.
+
+**Copy sites.** The term is carried at all three child adoption/update sites in `NoteCollectionService`: `persistAdoptedPlan` (serves `adopt()` and, per child, `adoptGoal()`), `createSubjectAddition` (the Official-update additive-merge path that adds a Subject to an already-adopted Year), and the `adoptGoal()` re-parent branch for an already-owned standalone Subject copy. The re-parent branch takes the term from that source child when it attaches the standalone copy to the adopted Goal. It is NOT copied by `persistAdoptedGoal`, the root copy, because a root has no term placement.
+
+A term edited on an Official source after a learner adopted does not propagate to that learner's existing children (Official update is additive-only); a Subject added later by an Official update carries the source's term at that time.
 
 **Rendering (Year page).** Group children by `term_label`, order groups by `min(term_order)`, keep the existing sibling order within a group.
 

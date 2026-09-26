@@ -32,6 +32,10 @@ The learner-facing promise is **"BS Computer Science - 1st Year Study Plan"**, n
   additive in both directions (optional on request, nullable on response), so frontend and backend may deploy in either
   order, and **the release notes must say so explicitly.** If a new endpoint is added instead, that stops being true and
   the release owes a deploy-ordering statement and a real-request `MockMvc` test with `.contentType(MediaType.APPLICATION_JSON)`.
+- **Backend Academic Term slice:** migration `V150` adds nullable `term_label` / `term_order`; the existing collection
+  PATCH accepts optional `termLabel` / `termOrder`; `persistAdoptedPlan`, `createSubjectAddition`, and the `adoptGoal()`
+  re-parent branch carry child placement; and the Goal-child plus owned/public detail DTOs expose it. The PATCH fields
+  are optional on request and nullable on response, so frontend and backend may deploy in either order.
 - **Phase B (collapsed-by-default Sections, and so on) is NOT in this release**; it has no dependency on Phase A and rides
   in a later one. **Phase C (a Degree entity and landing page) is out.**
 - **⚠️ A gap in the plan, found and verified in code at kickoff (and since corrected in the plan, §7.1a), that the

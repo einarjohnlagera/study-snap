@@ -105,6 +105,9 @@ public class NoteCollectionService {
 
     private static final int TITLE_MAX_LENGTH = 150;
     private static final int LABEL_MAX_LENGTH = 120;
+    private static final int TERM_LABEL_MAX_LENGTH = 60;
+    private static final int TERM_ORDER_MIN = 1;
+    private static final int TERM_ORDER_MAX = Short.MAX_VALUE;
     private static final int DUE_CONCEPT_DISPLAY_LIMIT = 3;
     private static final int DEFAULT_STUDY_DAYS_PER_WEEK = 7;
     private static final int MAX_LEARNER_LEVEL_ANCESTOR_DEPTH = 10;
@@ -130,6 +133,11 @@ public class NoteCollectionService {
             "Collection item responses must align positionally with their items.";
     private static final String PRIMARY_REQUIRES_TOP_LEVEL_GOAL_MESSAGE = "Only a top-level Goal can be primary.";
     private static final String TARGET_DATE_REQUIRES_TOP_LEVEL_GOAL_MESSAGE = "Only a top-level Goal can have a target completion date.";
+    private static final String TERM_REQUIRES_CHILD_MESSAGE = "Only a child Subject Plan can have an academic term.";
+    private static final String TERM_LABEL_REQUIRES_ORDER_MESSAGE = "Academic term label requires an order.";
+    private static final String TERM_ORDER_REQUIRES_LABEL_MESSAGE = "Academic term order requires a non-blank label.";
+    private static final String TERM_LABEL_TOO_LONG_MESSAGE = "Academic term label must be 60 characters or fewer.";
+    private static final String TERM_ORDER_OUT_OF_RANGE_MESSAGE = "Academic term order must be between 1 and 32767.";
     private static final String COMPANION_REQUIRES_TOP_LEVEL_GOAL_MESSAGE = "Only a top-level Goal can have a Companion.";
     private static final String COMPANION_SECTION_REQUIRED_MESSAGE = "Select at least one Companion section to generate.";
     private static final String COMPANION_CONTENT_REQUIRED_MESSAGE = "Companion content is required.";
@@ -674,6 +682,8 @@ public class NoteCollectionService {
                 child.collectionId(),
                 child.title(),
                 child.description(),
+                child.termLabel(),
+                child.termOrder(),
                 child.itemCount(),
                 child.overallReadinessPercentage(),
                 child.masteredConcepts(),
@@ -783,6 +793,7 @@ public class NoteCollectionService {
     public NoteCollectionDetailResponse updateMetadata(UUID collectionId, UUID userId, UpdateNoteCollectionRequest request) {
         NoteCollectionEntity collection = getOwnedCollectionOrThrow(collectionId, userId);
         if (request != null) {
+            applyTermPlacementUpdate(collection, request.termLabel(), request.termOrder());
             // PATCH semantics: only overwrite fields the caller actually provided. A null field means
             // "not included in this request" and must be left untouched — otherwise a partial update
             // (e.g. the Goal Builder's title-only rename) silently wipes description, courseProgram, and
@@ -846,6 +857,8 @@ public class NoteCollectionService {
             if (child.getParentCollectionId() != null) {
                 child.setParentCollectionId(null);
                 child.setSiblingPosition(null);
+                child.setTermLabel(null);
+                child.setTermOrder(null);
                 touch(child);
                 child = collectionRepository.save(child);
             }
@@ -862,6 +875,8 @@ public class NoteCollectionService {
         if (!parentId.equals(child.getParentCollectionId())) {
             child.setParentCollectionId(parentId);
             child.setSiblingPosition(collectionRepository.findMaxSiblingPosition(parentId, userId) + 1);
+            child.setTermLabel(null);
+            child.setTermOrder(null);
             // ⚠️ THE LEARNER'S OWN EXAM DATE IS PROMOTED, NOT DISCARDED — the same rule the adoption
             // path already applies (see persistAdoptedGoal's rollup). A learner who set a date on a
             // top-level collection and later nests it under a Goal was having that date silently
@@ -1124,6 +1139,8 @@ public class NoteCollectionService {
             if (child.getParentCollectionId() == null) {
                 child.setParentCollectionId(persistedGoal.collection().getId());
                 child.setSiblingPosition(index);
+                child.setTermLabel(sourceChild.getTermLabel());
+                child.setTermOrder(sourceChild.getTermOrder());
                 // Same invariant as updateParent(): a collection that becomes a child must not
                 // keep carrying targetCompletionDate or Companion, both top-level-Goal-only fields.
                 // ⚠️ THE INVARIANT IS REAL; SILENTLY DESTROYING THE LEARNER'S OWN DATE WAS NOT. The
@@ -1980,6 +1997,8 @@ public class NoteCollectionService {
             // population that adopts Official Review Sets.
             collection.setLearnerLevel(source.getLearnerLevel());
             collection.setEstimatedStudyHours(source.getEstimatedStudyHours());
+            collection.setTermLabel(source.getTermLabel());
+            collection.setTermOrder(source.getTermOrder());
             if (shouldCopyCompanion(source, userId)) {
                 collection.setCompanion(source.getCompanion());
             }
@@ -2495,6 +2514,8 @@ public class NoteCollectionService {
                 child.setCourseProgram(sourcePlan.getCourseProgram());
                 child.setLearnerLevel(sourcePlan.getLearnerLevel());
                 child.setEstimatedStudyHours(sourcePlan.getEstimatedStudyHours());
+                child.setTermLabel(sourcePlan.getTermLabel());
+                child.setTermOrder(sourcePlan.getTermOrder());
                 child.setSourcePlanId(sourcePlan.getId());
                 child.setSourceTitleAtSync(sourcePlan.getTitle());
                 child.setSourceParentIdAtSync(sourcePlan.getParentCollectionId());
@@ -3117,6 +3138,40 @@ public class NoteCollectionService {
         return label;
     }
 
+    private void applyTermPlacementUpdate(
+            NoteCollectionEntity collection,
+            String rawTermLabel,
+            Integer termOrder
+    ) {
+        if (rawTermLabel == null && termOrder == null) {
+            return;
+        }
+
+        String termLabel = normalizeOptionalText(rawTermLabel);
+        if (termLabel == null) {
+            if (termOrder != null) {
+                throw new InvalidCollectionRequestException(TERM_ORDER_REQUIRES_LABEL_MESSAGE);
+            }
+            collection.setTermLabel(null);
+            collection.setTermOrder(null);
+            return;
+        }
+        if (termOrder == null) {
+            throw new InvalidCollectionRequestException(TERM_LABEL_REQUIRES_ORDER_MESSAGE);
+        }
+        if (termLabel.length() > TERM_LABEL_MAX_LENGTH) {
+            throw new InvalidCollectionRequestException(TERM_LABEL_TOO_LONG_MESSAGE);
+        }
+        if (termOrder < TERM_ORDER_MIN || termOrder > TERM_ORDER_MAX) {
+            throw new InvalidCollectionRequestException(TERM_ORDER_OUT_OF_RANGE_MESSAGE);
+        }
+        if (collection.getParentCollectionId() == null) {
+            throw new InvalidCollectionRequestException(TERM_REQUIRES_CHILD_MESSAGE);
+        }
+        collection.setTermLabel(termLabel);
+        collection.setTermOrder(termOrder);
+    }
+
     private String normalizeOptionalText(String value) {
         if (value == null) {
             return null;
@@ -3181,6 +3236,8 @@ public class NoteCollectionService {
                 resolveInheritedLearnerLevel(collection.getId()).map(Enum::name).orElse(null),
                 collection.getEstimatedStudyHours(),
                 collection.getTargetCompletionDate(),
+                collection.getTermLabel(),
+                collection.getTermOrder(),
                 collection.getCompanion(),
                 collection.getSourcePlanId(),
                 collection.getParentCollectionId(),
@@ -3218,6 +3275,8 @@ public class NoteCollectionService {
                 null,
                 collection.getEstimatedStudyHours(),
                 collection.getTargetCompletionDate(),
+                collection.getTermLabel(),
+                collection.getTermOrder(),
                 collection.getCompanion(),
                 collection.getSourcePlanId(),
                 collection.getParentCollectionId(),
@@ -3300,6 +3359,8 @@ public class NoteCollectionService {
                     child.getId(),
                     child.getTitle(),
                     child.getDescription(),
+                    child.getTermLabel(),
+                    child.getTermOrder(),
                     itemCount,
                     masteryPercentage(totals.masteredConcepts(), totals.totalConcepts()),
                     totals.masteredConcepts(),
@@ -3322,6 +3383,8 @@ public class NoteCollectionService {
                 child.getId(),
                 child.getTitle(),
                 child.getDescription(),
+                child.getTermLabel(),
+                child.getTermOrder(),
                 itemCount,
                 0,
                 0,
