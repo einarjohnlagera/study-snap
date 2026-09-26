@@ -54,7 +54,7 @@ Fields:
 - optional `sourcePlanId` on adopted personal plans
 - optional `parentCollectionId` for the v0.33.1 two-level Goal -> Subject hierarchy
 - optional `siblingPosition`, used only to order child Subject plans under the same Goal
-- optional `termLabel` (`term_label VARCHAR(60)`) and `termOrder` (`term_order SMALLINT`), **`v0.160.0` (In Progress; not yet shipped, this section describes the agreed contract)**: an Academic Term *placement* on a child Subject Plan; see "Academic Term placement" below and `ADR-003`
+- optional `termLabel` (`term_label VARCHAR(60)`) and `termOrder` (`term_order SMALLINT`), **`v0.160.0`**: an Academic Term *placement* on a child Subject Plan; see "Academic Term placement" below and `ADR-003`
 - ordered `items`
 - `createdAt`
 - `updatedAt`
@@ -758,7 +758,7 @@ Behavior:
 - bumps `updatedAt`
 - returns full detail
 
-### Academic Term placement (v0.160.0, In Progress)
+### Academic Term placement (v0.160.0)
 
 Governed by `docs/architecture/ADR-003-curriculum-placement-and-hierarchy-depth.md`. Update this section to shipped-state wording at signoff; until then it is the agreed contract, not verified behavior.
 
