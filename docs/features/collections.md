@@ -781,6 +781,8 @@ Term PATCH rules:
 
 A term edited on an Official source after a learner adopted does not propagate to that learner's existing children (Official update is additive-only); a Subject added later by an Official update carries the source's term at that time.
 
+**Authoring invariant (OWNER DECISION, 2026-09-26).** Within a curated Study Plan, Academic Term is either unused for all Subject Plans or assigned to all Subject Plans; partial assignment is invalid authoring input. It is enforced in the curriculum authoring pipeline only (`build_review_set_workbook.py` refuses a plan file where some but not all Subject Plans carry `academic_term`, naming the Study Plan and the unassigned Subject Plans). The Year builder and the backend deliberately accept a partial assignment, because it is the transient state while a curator assigns terms one Subject at a time. The `Term not specified` render below is intentional defense in depth for mixed data that reaches runtime, not an authoring state.
+
 **Rendering (Year page).** Group children by `term_label`, order groups by `min(term_order)`, keep the existing sibling order within a group.
 
 - all children NULL: exactly today's flat grid of full-size cards, no term UI (protects the live Review Sets)

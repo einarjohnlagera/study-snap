@@ -43,6 +43,15 @@ The learner-facing promise is **"BS Computer Science - 1st Year Study Plan"**, n
   term NULL the existing full-size grid is byte-for-byte unchanged. The Year builder gains a per-Subject term combobox
   over the Year's existing terms (a new label is allowed; the order is assigned, never typed). The PATCH fields it sends
   are optional on request, so this slice also deploys in either order relative to the backend.
+- **Pipeline Academic Term slice:** `build_review_set_workbook.py` accepts an OPTIONAL `academic_term` column, constant
+  per plan, validated per Study Plan: unused for all Subject Plans or assigned to all of them, and a partial
+  assignment is refused with an error naming the Study Plan and the unassigned Subject Plans (also refused: mixed
+  values inside one plan, over 60 characters, `Term not specified`, and case/spacing-variant duplicates). The term
+  order is derived from first-seen file order and printed in the workbook. With no terms the output is unchanged:
+  ALE, CPALE, LET and PNLE were rebuilt with the old and new builder and compared on cell values, fonts, fills, borders, merges, column widths, row heights and freeze panes: identical. The new `docs/curriculum/test_build_review_set_workbook.py` runs by hand in the venv and is NOT in CI.
+  `docs/curriculum/review-set-workbook-spec.md` and the strategist module `docs/gpt-contexts/REVIEW_SET_SHAPING_CONTEXT.md`
+  now carry the column, and the strategist module's TSV header was corrected to include `applicable_programs`, which the
+  builder has required since 2026-09-10 (a contract drift, not a behaviour change).
 - **Phase B (collapsed-by-default Sections, and so on) is NOT in this release**; it has no dependency on Phase A and rides
   in a later one. **Phase C (a Degree entity and landing page) is out.**
 - **⚠️ A gap in the plan, found and verified in code at kickoff (and since corrected in the plan, §7.1a), that the

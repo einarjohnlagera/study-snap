@@ -663,6 +663,8 @@ Second Semester
 | **All children placed** | Normal term groups, ordered by `min(term_order)`. |
 | **Mixed placed + unplaced** | Placed term groups first, then a defensive trailing group explicitly labelled **`Term not specified`**. |
 
+> **OWNER DECISION (2026-09-26): partial assignment is invalid authoring input, and the pipeline enforces it.** Within a curated Study Plan, Academic Term is either unused for all Subject Plans or assigned to all of them. The curriculum builder refuses a plan file with some but not all Subject Plans termed, validated per Study Plan (one plan file is one root), with an error naming the Study Plan and the unassigned Subject Plans. The runtime fallback below is unchanged and remains intentional defense in depth. The Year builder and backend accept partial assignment as a transient authoring state.
+
 **On the mixed case — this reverses the original audit recommendation.** The audit proposed leaving unplaced subjects in a trailing group with *no header at all*. That is wrong: in a page that is otherwise clearly grouped, an unheadered run of cards **reads as a rendering defect**, not as an editorial gap. Label it.
 
 - The label is **`Term not specified`**. **Not** "Other", **not** "Ungrouped" — both name a term that does not exist.
