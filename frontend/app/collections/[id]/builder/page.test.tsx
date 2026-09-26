@@ -1241,6 +1241,67 @@ describe("StudyPlanBuilderPageClient", () => {
       });
     });
 
+    it("warns while the Year is partially termed and names the Subject that breaks it", async () => {
+      withTerms();
+      render(<StudyPlanBuilderPageClient collectionId="goal-1" />);
+
+      const warning = await screen.findByText(/1 of 2 subject plans have a term\./i);
+      expect(warning).toHaveAttribute("role", "status");
+      expect(warning).toHaveTextContent(/cannot be published\. Check: General Education Mastery\./);
+    });
+
+    it("shows no partial-term warning when every Subject has a term or none does", async () => {
+      (getCollectionGoal as jest.Mock).mockResolvedValue(goalDetail({
+        children: [
+          { ...goalChild("child-1", "Professional Education Mastery", 50), termLabel: "First Semester", termOrder: 1 },
+          { ...goalChild("child-2", "General Education Mastery", 40), termLabel: "Second Semester", termOrder: 2 },
+        ],
+      }));
+      const { unmount } = render(<StudyPlanBuilderPageClient collectionId="goal-1" />);
+      await screen.findByLabelText("Term for General Education Mastery");
+      expect(document.body).not.toHaveTextContent("have a term.");
+      unmount();
+
+      (getCollectionGoal as jest.Mock).mockResolvedValue(goalDetail());
+      render(<StudyPlanBuilderPageClient collectionId="goal-1" />);
+      await screen.findByLabelText("Term for General Education Mastery");
+      expect(document.body).not.toHaveTextContent("have a term.");
+    });
+
+    it("keeps a published Subject's term visible but locked", async () => {
+      (getCollectionGoal as jest.Mock).mockResolvedValue(goalDetail({
+        children: [
+          { ...goalChild("child-1", "Professional Education Mastery", 50), termLabel: "First Semester", termOrder: 1, termLocked: true },
+          { ...goalChild("child-2", "General Education Mastery", 40), termLabel: "First Semester", termOrder: 1, termLocked: false },
+        ],
+      }));
+      render(<StudyPlanBuilderPageClient collectionId="goal-1" />);
+
+      expect(await screen.findByLabelText("Term for Professional Education Mastery")).toBeDisabled();
+      expect(screen.getByLabelText("Term for General Education Mastery")).not.toBeDisabled();
+      expect(document.body).toHaveTextContent("Published: this term is fixed.");
+    });
+
+    it("hides the Term control and the warning entirely on an adopted copy", async () => {
+      withTerms();
+      (getCollection as jest.Mock).mockImplementation((id: string) => {
+        if (id === "goal-1") {
+          return Promise.resolve(collectionDetail("goal-1", "LET Mastery", [], {
+            parentCollectionId: null,
+            childCount: 2,
+            sourcePlanId: "official-source-1",
+          }));
+        }
+        return Promise.resolve(collectionDetail(id, id === "child-1" ? "Professional Education Mastery" : "General Education Mastery"));
+      });
+      render(<StudyPlanBuilderPageClient collectionId="goal-1" />);
+
+      await screen.findByDisplayValue("Professional Education Mastery");
+      expect(screen.queryByLabelText("Term for Professional Education Mastery")).not.toBeInTheDocument();
+      expect(screen.queryByLabelText("Term for General Education Mastery")).not.toBeInTheDocument();
+      expect(document.body).not.toHaveTextContent("have a term.");
+    });
+
     it("does not write when the curator focuses and leaves without changing anything", async () => {
       withTerms();
       render(<StudyPlanBuilderPageClient collectionId="goal-1" />);

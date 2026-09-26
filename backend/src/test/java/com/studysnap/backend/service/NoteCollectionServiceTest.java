@@ -953,6 +953,7 @@ class NoteCollectionServiceTest {
         UUID childId = UUID.randomUUID();
         NoteCollectionEntity child = buildCollection(childId, userId, "Professional Education", Instant.now());
         child.setParentCollectionId(parentId);
+        child.setPublishedAt(null);
         child.setTermLabel(SECOND_SEMESTER);
         child.setTermOrder(2);
         when(collectionRepository.findByIdAndOwnerUserId(childId, userId)).thenReturn(Optional.of(child));
@@ -981,6 +982,7 @@ class NoteCollectionServiceTest {
         NoteCollectionEntity newParent = buildCollection(newParentId, userId, "New Goal", Instant.now());
         NoteCollectionEntity child = buildCollection(childId, userId, "Professional Education", Instant.now());
         child.setParentCollectionId(oldParentId);
+        child.setPublishedAt(null);
         child.setTermLabel(SECOND_SEMESTER);
         child.setTermOrder(2);
         stubReparent(userId, newParentId, childId, newParent, child);
@@ -993,6 +995,89 @@ class NoteCollectionServiceTest {
     }
 
     @Test
+    void updateParent_refusesToMovePublishedSubjectPlanThatCarriesATermOutOfItsYear() {
+        UUID userId = UUID.randomUUID();
+        UUID oldParentId = UUID.randomUUID();
+        UUID childId = UUID.randomUUID();
+        NoteCollectionEntity child = buildCollection(childId, userId, "Professional Education", Instant.now());
+        child.setParentCollectionId(oldParentId);
+        child.setTermLabel(SECOND_SEMESTER);
+        child.setTermOrder(2);
+        when(collectionRepository.findByIdAndOwnerUserId(childId, userId)).thenReturn(Optional.of(child));
+
+        assertThatThrownBy(() -> service.updateParent(childId, userId, new SetNoteCollectionParentRequest(null)))
+                .isInstanceOf(InvalidCollectionRequestException.class)
+                .hasMessageContaining("cannot be moved into or out of a Year that uses academic terms");
+
+        assertThat(child.getParentCollectionId()).isEqualTo(oldParentId);
+        assertThat(child.getTermLabel()).isEqualTo(SECOND_SEMESTER);
+        verify(collectionRepository, never()).save(child);
+    }
+
+    @Test
+    void updateParent_refusesToMoveAPublishedSubjectPlanIntoAYearWhoseSubjectsCarryTerms() {
+        UUID userId = UUID.randomUUID();
+        UUID newParentId = UUID.randomUUID();
+        UUID childId = UUID.randomUUID();
+        NoteCollectionEntity newParent = buildCollection(newParentId, userId, "Termed Year", Instant.now());
+        NoteCollectionEntity child = buildCollection(childId, userId, "Professional Education", Instant.now());
+        NoteCollectionEntity termedSibling = buildCollection(UUID.randomUUID(), userId, "Algorithms", Instant.now());
+        termedSibling.setParentCollectionId(newParentId);
+        termedSibling.setTermLabel(FIRST_SEMESTER);
+        termedSibling.setTermOrder(1);
+        when(collectionRepository.findByIdAndOwnerUserId(childId, userId)).thenReturn(Optional.of(child));
+        when(collectionRepository.findByIdAndOwnerUserId(newParentId, userId)).thenReturn(Optional.of(newParent));
+        when(collectionRepository.findOrderedChildrenByParentCollectionIdAndOwnerUserId(newParentId, userId))
+                .thenReturn(List.of(termedSibling));
+
+        assertThatThrownBy(() -> service.updateParent(childId, userId, new SetNoteCollectionParentRequest(newParentId)))
+                .isInstanceOf(InvalidCollectionRequestException.class)
+                .hasMessageContaining("cannot be moved into or out of a Year that uses academic terms");
+
+        assertThat(child.getParentCollectionId()).isNull();
+    }
+
+    @Test
+    void updateParent_stillMovesAPublishedUntermedSubjectPlanIntoAnUntermedYear() {
+        UUID userId = UUID.randomUUID();
+        UUID newParentId = UUID.randomUUID();
+        UUID childId = UUID.randomUUID();
+        NoteCollectionEntity newParent = buildCollection(newParentId, userId, "Review Set", Instant.now());
+        NoteCollectionEntity child = buildCollection(childId, userId, "Professional Education", Instant.now());
+        NoteCollectionEntity untermedSibling = buildCollection(UUID.randomUUID(), userId, "Algorithms", Instant.now());
+        untermedSibling.setParentCollectionId(newParentId);
+        assertThat(child.getPublishedAt()).isNotNull();
+        stubReparent(userId, newParentId, childId, newParent, child);
+        when(collectionRepository.findOrderedChildrenByParentCollectionIdAndOwnerUserId(newParentId, userId))
+                .thenReturn(List.of(untermedSibling));
+
+        service.updateParent(childId, userId, new SetNoteCollectionParentRequest(newParentId));
+
+        assertThat(child.getParentCollectionId()).isEqualTo(newParentId);
+    }
+
+    @Test
+    void updateVisibility_onAReFlipNamesTheUnlockedNewSubjectsNotTheFrozenPublishedOne() {
+        UUID userId = UUID.randomUUID();
+        UUID goalId = UUID.randomUUID();
+        NoteCollectionEntity goal = buildCollection(goalId, userId, "BSCS First Year", Instant.now());
+        goal.setLastUpdatePublishedAt(Instant.parse("2026-09-01T00:00:00Z"));
+        List<NoteCollectionEntity> children = publishableChildren(goalId, userId, 3);
+        NoteCollectionEntity frozenTermed = children.get(0);
+        frozenTermed.setTermLabel(FIRST_SEMESTER);
+        frozenTermed.setTermOrder(1);
+        children.get(1).setPublishedAt(null);
+        children.get(2).setPublishedAt(null);
+        stubPublishableGoal(goal, userId, children);
+
+        assertThatThrownBy(() -> service.updateVisibility(goalId, userId, CollectionVisibility.PUBLIC.name()))
+                .isInstanceOf(CollectionNotPublishableException.class)
+                .hasMessageContaining(children.get(1).getTitle())
+                .hasMessageContaining(children.get(2).getTitle())
+                .hasMessageNotContaining(frozenTermed.getTitle());
+    }
+
+    @Test
     void updateParent_keepsTermWhenRequestedParentIsUnchanged() {
         UUID userId = UUID.randomUUID();
         UUID parentId = UUID.randomUUID();
@@ -1000,6 +1085,7 @@ class NoteCollectionServiceTest {
         NoteCollectionEntity parent = buildCollection(parentId, userId, "Current Goal", Instant.now());
         NoteCollectionEntity child = buildCollection(childId, userId, "Professional Education", Instant.now());
         child.setParentCollectionId(parentId);
+        child.setPublishedAt(null);
         child.setTermLabel(SECOND_SEMESTER);
         child.setTermOrder(2);
         when(collectionRepository.findByIdAndOwnerUserId(childId, userId)).thenReturn(Optional.of(child));
@@ -1737,12 +1823,15 @@ class NoteCollectionServiceTest {
         UUID termedNoteId = UUID.randomUUID();
         UUID unplacedNoteId = UUID.randomUUID();
         NoteCollectionEntity goal = buildCollection(goalId, userId, "BSCS First Year", Instant.now());
+        goal.setLastUpdatePublishedAt(Instant.parse("2026-09-01T00:00:00Z"));
         NoteCollectionEntity termedChild = buildCollection(termedChildId, userId, "Discrete Structures", Instant.now());
         NoteCollectionEntity unplacedChild = buildCollection(unplacedChildId, userId, "Algorithms", Instant.now());
         termedChild.setParentCollectionId(goalId);
         termedChild.setTermLabel(SECOND_SEMESTER);
         termedChild.setTermOrder(2);
+        termedChild.setPublishedAt(Instant.parse("2026-09-01T00:00:00Z"));
         unplacedChild.setParentCollectionId(goalId);
+        unplacedChild.setPublishedAt(null);
         StudyPackEntity termedPack = buildStudyPack(termedNoteId, List.of("Sets"));
         termedPack.setOwnerUserId(userId);
         StudyPackEntity unplacedPack = buildStudyPack(unplacedNoteId, List.of("Sorting"));
@@ -1784,6 +1873,8 @@ class NoteCollectionServiceTest {
         assertThat(termed.overallReadinessPercentage()).isEqualTo(100);
         assertThat(termed.termLabel()).isEqualTo(SECOND_SEMESTER);
         assertThat(termed.termOrder()).isEqualTo(2);
+        assertThat(termed.termLocked()).isTrue();
+        assertThat(unplaced.termLocked()).isFalse();
         assertThat(unplaced.termLabel()).isNull();
         assertThat(unplaced.termOrder()).isNull();
     }
@@ -1795,10 +1886,12 @@ class NoteCollectionServiceTest {
         UUID childId = UUID.randomUUID();
         NoteCollectionEntity goal = buildCollection(goalId, userId, "BSCS First Year", Instant.now());
         goal.setTargetCompletionDate(LocalDate.now().plusDays(30));
+        goal.setLastUpdatePublishedAt(Instant.parse("2026-09-01T00:00:00Z"));
         NoteCollectionEntity child = buildCollection(childId, userId, "Discrete Structures", Instant.now());
         child.setParentCollectionId(goalId);
         child.setTermLabel(SECOND_SEMESTER);
         child.setTermOrder(2);
+        child.setPublishedAt(Instant.parse("2026-09-01T00:00:00Z"));
         when(collectionRepository.findByIdAndOwnerUserId(goalId, userId)).thenReturn(Optional.of(goal));
         when(collectionRepository.findOrderedChildrenByParentCollectionIdAndOwnerUserId(goalId, userId))
                 .thenReturn(List.of(child));
@@ -1821,6 +1914,7 @@ class NoteCollectionServiceTest {
         assertThat(result.children()).singleElement().satisfies(response -> {
             assertThat(response.termLabel()).isEqualTo(SECOND_SEMESTER);
             assertThat(response.termOrder()).isEqualTo(2);
+            assertThat(response.termLocked()).isTrue();
             assertThat(response.itemCount()).isEqualTo(3);
             assertThat(response.overallReadinessPercentage()).isZero();
             assertThat(response.todaysConceptBudget()).isZero();
@@ -3098,6 +3192,7 @@ class NoteCollectionServiceTest {
         UUID userId = UUID.randomUUID();
         UUID collectionId = UUID.randomUUID();
         NoteCollectionEntity child = buildCollection(collectionId, userId, COLLECTION_TITLE, Instant.now());
+        child.setPublishedAt(null);
         child.setParentCollectionId(UUID.randomUUID());
         when(collectionRepository.findByIdAndOwnerUserId(collectionId, userId)).thenReturn(Optional.of(child));
         when(collectionRepository.save(child)).thenAnswer(invocation -> invocation.getArgument(0));
@@ -3161,6 +3256,7 @@ class NoteCollectionServiceTest {
         UUID userId = UUID.randomUUID();
         UUID collectionId = UUID.randomUUID();
         NoteCollectionEntity child = buildCollection(collectionId, userId, COLLECTION_TITLE, Instant.now());
+        child.setPublishedAt(null);
         child.setParentCollectionId(UUID.randomUUID());
         when(collectionRepository.findByIdAndOwnerUserId(collectionId, userId)).thenReturn(Optional.of(child));
         when(collectionRepository.save(child)).thenAnswer(invocation -> invocation.getArgument(0));
@@ -3182,6 +3278,288 @@ class NoteCollectionServiceTest {
                 "Academic term order must be between 1 and 32767.");
         assertTermUpdateRejected(child, userId, termUpdate(SECOND_SEMESTER, 32768),
                 "Academic term order must be between 1 and 32767.");
+    }
+
+    @Test
+    void updateMetadata_refusesToChangeOrClearTheTermOfAPublishedSubjectPlan() {
+        UUID userId = UUID.randomUUID();
+        UUID collectionId = UUID.randomUUID();
+        UUID rootId = UUID.randomUUID();
+        NoteCollectionEntity root = buildCollection(rootId, userId, "Official Year", Instant.now());
+        root.setLastUpdatePublishedAt(Instant.parse("2026-09-01T00:00:00Z"));
+        when(collectionRepository.findById(rootId)).thenReturn(Optional.of(root));
+        NoteCollectionEntity child = buildCollection(collectionId, userId, COLLECTION_TITLE, Instant.now());
+        child.setParentCollectionId(rootId);
+        child.setTermLabel(FIRST_SEMESTER);
+        child.setTermOrder(1);
+        child.setPublishedAt(Instant.parse("2026-09-01T00:00:00Z"));
+        when(collectionRepository.findByIdAndOwnerUserId(collectionId, userId)).thenReturn(Optional.of(child));
+
+        assertTermUpdateRejected(child, userId, termUpdate(SECOND_SEMESTER, 2),
+                "This Subject Plan is already published, so its academic term can no longer change. "
+                        + "Settle every term before a Year is first published.");
+        assertTermUpdateRejected(child, userId, termUpdate("", null),
+                "This Subject Plan is already published, so its academic term can no longer change. "
+                        + "Settle every term before a Year is first published.");
+
+        verify(collectionRepository, never()).save(child);
+    }
+
+    @Test
+    void updateMetadata_allowsTermEditsOnAPrivateDraftGoalWhoseRowsV141BackfilledAsPublished() {
+        // V141 stamped published_at on every pre-existing row, including private Goals nobody published.
+        // The ROOT's last_update_published_at is the "ever published" test, so this row stays editable.
+        UUID userId = UUID.randomUUID();
+        UUID collectionId = UUID.randomUUID();
+        UUID rootId = UUID.randomUUID();
+        NoteCollectionEntity root = buildCollection(rootId, userId, "My Draft Goal", Instant.now());
+        when(collectionRepository.findById(rootId)).thenReturn(Optional.of(root));
+        NoteCollectionEntity child = buildCollection(collectionId, userId, COLLECTION_TITLE, Instant.now());
+        child.setParentCollectionId(rootId);
+        assertThat(child.getPublishedAt()).isNotNull();
+        when(collectionRepository.findByIdAndOwnerUserId(collectionId, userId)).thenReturn(Optional.of(child));
+        when(collectionRepository.save(child)).thenAnswer(invocation -> invocation.getArgument(0));
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(collectionId)).thenReturn(List.of());
+
+        NoteCollectionDetailResponse result = service.updateMetadata(collectionId, userId, termUpdate(SECOND_SEMESTER, 2));
+
+        assertThat(result.termLabel()).isEqualTo(SECOND_SEMESTER);
+        assertThat(child.getTermOrder()).isEqualTo(2);
+    }
+
+    @Test
+    void updateMetadata_allowsATermOnAnUnpublishedSubjectAddedUnderAPublishedRoot() {
+        UUID userId = UUID.randomUUID();
+        UUID collectionId = UUID.randomUUID();
+        UUID rootId = UUID.randomUUID();
+        NoteCollectionEntity root = buildCollection(rootId, userId, "Official Year", Instant.now());
+        root.setLastUpdatePublishedAt(Instant.parse("2026-09-01T00:00:00Z"));
+        when(collectionRepository.findById(rootId)).thenReturn(Optional.of(root));
+        NoteCollectionEntity addition = buildCollection(collectionId, userId, COLLECTION_TITLE, Instant.now());
+        addition.setParentCollectionId(rootId);
+        addition.setPublishedAt(null);
+        when(collectionRepository.findByIdAndOwnerUserId(collectionId, userId)).thenReturn(Optional.of(addition));
+        when(collectionRepository.save(addition)).thenAnswer(invocation -> invocation.getArgument(0));
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(collectionId)).thenReturn(List.of());
+
+        NoteCollectionDetailResponse result = service.updateMetadata(collectionId, userId, termUpdate(FIRST_SEMESTER, 1));
+
+        assertThat(result.termLabel()).isEqualTo(FIRST_SEMESTER);
+    }
+
+    @Test
+    void getGoal_doesNotLockATermOnARootThatWasNeverPublishedEvenWhenV141StampedTheRow() {
+        UUID userId = UUID.randomUUID();
+        UUID goalId = UUID.randomUUID();
+        UUID childId = UUID.randomUUID();
+        NoteCollectionEntity goal = buildCollection(goalId, userId, "My Draft Goal", Instant.now());
+        NoteCollectionEntity child = buildCollection(childId, userId, "Discrete Structures", Instant.now());
+        child.setParentCollectionId(goalId);
+        assertThat(child.getPublishedAt()).isNotNull();
+        when(collectionRepository.findByIdAndOwnerUserId(goalId, userId)).thenReturn(Optional.of(goal));
+        when(collectionRepository.findOrderedChildrenByParentCollectionIdAndOwnerUserId(goalId, userId))
+                .thenReturn(List.of(child));
+        when(itemRepository.countItemsByCollectionIds(List.of(childId))).thenReturn(List.of(countProjection(childId, 1)));
+        when(itemRepository.findNoteIdsByCollectionIds(List.of(childId))).thenReturn(List.of());
+        when(progressReportService.buildSubjectProgressEntriesByGroup(anyMap(), eq(userId), any(OffsetDateTime.class)))
+                .thenReturn(Map.of(childId, new ProgressReportService.SubjectProgressBatchResult(List.of(), null)));
+        when(itemRepository.countByCollectionId(goalId)).thenReturn(0L);
+
+        GoalCollectionDetailResponse result = service.getGoal(goalId, userId);
+
+        assertThat(result.children()).singleElement().satisfies(response -> assertThat(response.termLocked()).isFalse());
+    }
+
+    @Test
+    void publishReviewSetUpdate_namesTheUnlockedSubjectWhenAFrozenOneTiesTheMajority() {
+        UUID adminId = UUID.randomUUID();
+        UUID rootId = UUID.randomUUID();
+        UserEntity admin = buildUser(adminId);
+        admin.setRole(UserRole.ADMIN);
+        NoteCollectionEntity root = buildCollection(rootId, adminId, "BSCS First Year", Instant.now());
+        root.setVisibility(CollectionVisibility.PUBLIC);
+        root.setLastUpdatePublishedAt(Instant.parse("2026-09-08T00:00:00Z"));
+        List<NoteCollectionEntity> children = publishableChildren(rootId, adminId, 2);
+        NoteCollectionEntity frozenUntermed = children.get(0);
+        NoteCollectionEntity newTermed = children.get(1);
+        newTermed.setPublishedAt(null);
+        newTermed.setTermLabel(FIRST_SEMESTER);
+        newTermed.setTermOrder(1);
+        when(userRepository.findById(adminId)).thenReturn(Optional.of(admin));
+        when(collectionRepository.findByIdAndOwnerUserIdForUpdate(rootId, adminId)).thenReturn(Optional.of(root));
+        when(collectionRepository.getReviewSetPublicationStatus(rootId)).thenReturn(publicationStatus(true, 1, 0));
+        when(collectionRepository.findOrderedChildrenByParentCollectionIdAndOwnerUserId(rootId, adminId)).thenReturn(children);
+
+        assertThatThrownBy(() -> service.publishReviewSetUpdate(rootId, adminId))
+                .isInstanceOf(CollectionNotPublishableException.class)
+                .hasMessageContaining(newTermed.getTitle())
+                .hasMessageNotContaining(frozenUntermed.getTitle());
+    }
+
+    @Test
+    void updateMetadata_allowsRepeatingTheSameTermOnAPublishedSubjectPlanAsANoOp() {
+        UUID userId = UUID.randomUUID();
+        UUID collectionId = UUID.randomUUID();
+        NoteCollectionEntity child = buildCollection(collectionId, userId, COLLECTION_TITLE, Instant.now());
+        child.setParentCollectionId(UUID.randomUUID());
+        child.setTermLabel(FIRST_SEMESTER);
+        child.setTermOrder(1);
+        child.setPublishedAt(Instant.parse("2026-09-01T00:00:00Z"));
+        when(collectionRepository.findByIdAndOwnerUserId(collectionId, userId)).thenReturn(Optional.of(child));
+        when(collectionRepository.save(child)).thenAnswer(invocation -> invocation.getArgument(0));
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(collectionId)).thenReturn(List.of());
+
+        NoteCollectionDetailResponse result = service.updateMetadata(collectionId, userId, termUpdate(FIRST_SEMESTER, 1));
+
+        assertThat(result.termLabel()).isEqualTo(FIRST_SEMESTER);
+        assertThat(child.getTermOrder()).isEqualTo(1);
+    }
+
+    @Test
+    void updateMetadata_refusesATermChangeOnAnAdoptedCopy() {
+        UUID userId = UUID.randomUUID();
+        UUID collectionId = UUID.randomUUID();
+        NoteCollectionEntity copy = buildCollection(collectionId, userId, COLLECTION_TITLE, Instant.now());
+        copy.setParentCollectionId(UUID.randomUUID());
+        copy.setSourcePlanId(UUID.randomUUID());
+        copy.setTermLabel(FIRST_SEMESTER);
+        copy.setTermOrder(1);
+        when(collectionRepository.findByIdAndOwnerUserId(collectionId, userId)).thenReturn(Optional.of(copy));
+
+        assertTermUpdateRejected(copy, userId, termUpdate(SECOND_SEMESTER, 2),
+                "Academic term placement comes from the source curriculum and cannot be changed on an adopted copy.");
+    }
+
+    @Test
+    void updateVisibility_refusesToPublishAPartiallyTermedYearNamingTheSubjectsThatBreakIt() {
+        UUID userId = UUID.randomUUID();
+        UUID goalId = UUID.randomUUID();
+        NoteCollectionEntity goal = buildCollection(goalId, userId, "BSCS First Year", Instant.now());
+        List<NoteCollectionEntity> children = publishableChildren(goalId, userId, 3);
+        children.get(0).setTermLabel(FIRST_SEMESTER);
+        children.get(0).setTermOrder(1);
+        children.get(1).setTermLabel(FIRST_SEMESTER);
+        children.get(1).setTermOrder(1);
+        stubPublishableGoal(goal, userId, children);
+
+        assertThatThrownBy(() -> service.updateVisibility(goalId, userId, CollectionVisibility.PUBLIC.name()))
+                .isInstanceOf(CollectionNotPublishableException.class)
+                .hasMessageContaining("2 of 3 have one")
+                .hasMessageContaining(children.get(2).getTitle())
+                .hasMessageNotContaining(children.get(0).getTitle());
+        verify(collectionRepository, never()).save(goal);
+    }
+
+    @Test
+    void updateVisibility_publishesAFullyTermedYear() {
+        UUID userId = UUID.randomUUID();
+        UUID goalId = UUID.randomUUID();
+        NoteCollectionEntity goal = buildCollection(goalId, userId, "BSCS First Year", Instant.now());
+        List<NoteCollectionEntity> children = publishableChildren(goalId, userId, 2);
+        children.forEach(child -> {
+            child.setTermLabel(FIRST_SEMESTER);
+            child.setTermOrder(1);
+        });
+        stubPublishableGoal(goal, userId, children);
+        when(collectionRepository.save(goal)).thenAnswer(invocation -> invocation.getArgument(0));
+        when(collectionRepository.saveAll(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(goalId)).thenReturn(List.of());
+
+        NoteCollectionDetailResponse result = service.updateVisibility(goalId, userId, CollectionVisibility.PUBLIC.name());
+
+        assertThat(result.visibility()).isEqualTo(CollectionVisibility.PUBLIC.name());
+    }
+
+    @Test
+    void publishReviewSetUpdate_refusesATermedNewSubjectInAnUntermedPublishedYearAndStampsNothing() {
+        assertPublishUpdateRefusedForTerms(false, true);
+    }
+
+    @Test
+    void publishReviewSetUpdate_refusesAnUntermedNewSubjectInATermedPublishedYearAndStampsNothing() {
+        assertPublishUpdateRefusedForTerms(true, false);
+    }
+
+    @Test
+    void publishReviewSetUpdate_publishesATermedNewSubjectIntoAFullyTermedYear() {
+        UUID adminId = UUID.randomUUID();
+        UUID rootId = UUID.randomUUID();
+        UserEntity admin = buildUser(adminId);
+        admin.setRole(UserRole.ADMIN);
+        NoteCollectionEntity root = buildCollection(rootId, adminId, "BSCS First Year", Instant.now());
+        root.setVisibility(CollectionVisibility.PUBLIC);
+        root.setLastUpdatePublishedAt(Instant.parse("2026-09-08T00:00:00Z"));
+        List<NoteCollectionEntity> children = publishableChildren(rootId, adminId, 2);
+        children.forEach(child -> {
+            child.setTermLabel(FIRST_SEMESTER);
+            child.setTermOrder(1);
+        });
+        when(userRepository.findById(adminId)).thenReturn(Optional.of(admin));
+        when(collectionRepository.findByIdAndOwnerUserIdForUpdate(rootId, adminId)).thenReturn(Optional.of(root));
+        when(collectionRepository.getReviewSetPublicationStatus(rootId)).thenReturn(publicationStatus(true, 1, 0));
+        when(collectionRepository.findOrderedChildrenByParentCollectionIdAndOwnerUserId(rootId, adminId)).thenReturn(children);
+        when(collectionRepository.findLastUpdatePublishedAt(rootId)).thenReturn(Instant.parse("2026-09-09T01:50:47Z"));
+
+        service.publishReviewSetUpdate(rootId, adminId);
+
+        verify(collectionRepository).markReviewSetUpdatePublished(eq(rootId), any());
+    }
+
+    private void assertPublishUpdateRefusedForTerms(boolean publishedSiblingsTermed, boolean newSubjectTermed) {
+        UUID adminId = UUID.randomUUID();
+        UUID rootId = UUID.randomUUID();
+        UserEntity admin = buildUser(adminId);
+        admin.setRole(UserRole.ADMIN);
+        NoteCollectionEntity root = buildCollection(rootId, adminId, "BSCS First Year", Instant.now());
+        root.setVisibility(CollectionVisibility.PUBLIC);
+        root.setLastUpdatePublishedAt(Instant.parse("2026-09-08T00:00:00Z"));
+        List<NoteCollectionEntity> children = publishableChildren(rootId, adminId, 3);
+        children.get(2).setPublishedAt(null);
+        for (int index = 0; index < 3; index++) {
+            boolean isNew = index == 2;
+            if (isNew ? newSubjectTermed : publishedSiblingsTermed) {
+                children.get(index).setTermLabel(FIRST_SEMESTER);
+                children.get(index).setTermOrder(1);
+            }
+        }
+        when(userRepository.findById(adminId)).thenReturn(Optional.of(admin));
+        when(collectionRepository.findByIdAndOwnerUserIdForUpdate(rootId, adminId)).thenReturn(Optional.of(root));
+        when(collectionRepository.getReviewSetPublicationStatus(rootId)).thenReturn(publicationStatus(true, 1, 0));
+        when(collectionRepository.findOrderedChildrenByParentCollectionIdAndOwnerUserId(rootId, adminId)).thenReturn(children);
+
+        assertThatThrownBy(() -> service.publishReviewSetUpdate(rootId, adminId))
+                .isInstanceOf(CollectionNotPublishableException.class)
+                .hasMessageContaining("of 3 have one");
+
+        verify(itemRepository, never()).publishUnpublishedReviewSetItems(eq(rootId), any());
+        verify(collectionRepository, never()).publishUnpublishedReviewSetCollections(eq(rootId), any());
+        verify(collectionRepository, never()).markReviewSetUpdatePublished(eq(rootId), any());
+    }
+
+    private List<NoteCollectionEntity> publishableChildren(UUID goalId, UUID userId, int count) {
+        List<NoteCollectionEntity> children = new ArrayList<>();
+        for (int index = 0; index < count; index++) {
+            NoteCollectionEntity child = buildCollection(UUID.randomUUID(), userId, "Subject " + (index + 1), Instant.now());
+            child.setParentCollectionId(goalId);
+            children.add(child);
+        }
+        return children;
+    }
+
+    private void stubPublishableGoal(NoteCollectionEntity goal, UUID userId, List<NoteCollectionEntity> children) {
+        goal.setCompanion(companionContent());
+        when(collectionRepository.findByIdAndOwnerUserId(goal.getId(), userId)).thenReturn(Optional.of(goal));
+        when(collectionRepository.countByParentCollectionId(goal.getId())).thenReturn((long) children.size());
+        when(collectionRepository.findOrderedChildrenByParentCollectionIdAndOwnerUserId(goal.getId(), userId))
+                .thenReturn(children);
+        for (NoteCollectionEntity child : children) {
+            UUID noteId = UUID.randomUUID();
+            NoteEntity note = buildNote(noteId, userId, NOTE_TITLE_ONE + child.getId());
+            note.setVisibility(NoteVisibility.PUBLIC);
+            when(itemRepository.findByCollectionIdOrderByPositionAsc(child.getId()))
+                    .thenReturn(List.of(buildItem(child.getId(), noteId, 0, null)));
+            when(noteRepository.findAllById(List.of(noteId))).thenReturn(List.of(note));
+        }
     }
 
     @Test

@@ -138,6 +138,18 @@ public class NoteCollectionService {
     private static final String TERM_ORDER_REQUIRES_LABEL_MESSAGE = "Academic term order requires a non-blank label.";
     private static final String TERM_LABEL_TOO_LONG_MESSAGE = "Academic term label must be 60 characters or fewer.";
     private static final String TERM_ORDER_OUT_OF_RANGE_MESSAGE = "Academic term order must be between 1 and 32767.";
+    private static final String TERM_ADOPTED_COPY_MESSAGE =
+            "Academic term placement comes from the source curriculum and cannot be changed on an adopted copy.";
+    private static final String TERM_FROZEN_MESSAGE =
+            "This Subject Plan is already published, so its academic term can no longer change. "
+                    + "Settle every term before a Year is first published.";
+    private static final String TERM_PARTIAL_PUBLISH_MESSAGE =
+            "Academic term must be set on every Subject Plan of a Year or on none, but %d of %d have one. "
+                    + "Unassigned or conflicting: %s.";
+    private static final String TERM_PUBLISHED_MOVE_MESSAGE =
+            "A published Subject Plan cannot be moved into or out of a Year that uses academic terms, "
+                    + "because a move clears its term and it could never be given one again.";
+    private static final int TERM_PUBLISH_NAMES_SHOWN = 5;
     private static final String COMPANION_REQUIRES_TOP_LEVEL_GOAL_MESSAGE = "Only a top-level Goal can have a Companion.";
     private static final String COMPANION_SECTION_REQUIRED_MESSAGE = "Select at least one Companion section to generate.";
     private static final String COMPANION_CONTENT_REQUIRED_MESSAGE = "Companion content is required.";
@@ -425,6 +437,7 @@ public class NoteCollectionService {
         List<GoalCollectionChildResponse> childResponses = children.stream()
                 .map(child -> toGoalChildResponse(
                         child,
+                        collection.getLastUpdatePublishedAt() != null,
                         userId,
                         itemCountsByCollectionId.getOrDefault(child.getId(), 0),
                         progressByChildId.get(child.getId())
@@ -684,6 +697,7 @@ public class NoteCollectionService {
                 child.description(),
                 child.termLabel(),
                 child.termOrder(),
+                child.termLocked(),
                 child.itemCount(),
                 child.overallReadinessPercentage(),
                 child.masteredConcepts(),
@@ -766,6 +780,9 @@ public class NoteCollectionService {
         ReviewSetPublicationStatusProjection before = collectionRepository.getReviewSetPublicationStatus(collectionId);
         Instant lastPublishedAt = sourceRoot.getLastUpdatePublishedAt();
         if (before.getUnpublishedChanges()) {
+            validateTermCoherence(
+                    collectionRepository.findOrderedChildrenByParentCollectionIdAndOwnerUserId(collectionId, userId),
+                    sourceRoot.getLastUpdatePublishedAt() != null);
             Instant now = Instant.now();
             itemRepository.publishUnpublishedReviewSetItems(collectionId, now);
             collectionRepository.publishUnpublishedReviewSetCollections(collectionId, now);
@@ -855,6 +872,7 @@ public class NoteCollectionService {
         UUID parentId = request == null ? null : request.parentId();
         if (parentId == null) {
             if (child.getParentCollectionId() != null) {
+                assertPublishedSubjectMoveKeepsTermsCoherent(child, null, userId);
                 child.setParentCollectionId(null);
                 child.setSiblingPosition(null);
                 child.setTermLabel(null);
@@ -873,6 +891,7 @@ public class NoteCollectionService {
         validateParentCanAcceptChild(parent);
         validateChildCanBeNested(child);
         if (!parentId.equals(child.getParentCollectionId())) {
+            assertPublishedSubjectMoveKeepsTermsCoherent(child, parent, userId);
             child.setParentCollectionId(parentId);
             child.setSiblingPosition(collectionRepository.findMaxSiblingPosition(parentId, userId) + 1);
             child.setTermLabel(null);
@@ -1840,6 +1859,7 @@ public class NoteCollectionService {
         for (NoteCollectionEntity child : children) {
             validateLeafPublishable(child.getId(), EMPTY_GOAL_CHILD_PUBLISH_MESSAGE, PRIVATE_GOAL_NOTE_PUBLISH_MESSAGE);
         }
+        validateTermCoherence(children, collection.getLastUpdatePublishedAt() != null);
     }
 
     private void validateLeafPublishable(
@@ -3152,6 +3172,7 @@ public class NoteCollectionService {
             if (termOrder != null) {
                 throw new InvalidCollectionRequestException(TERM_ORDER_REQUIRES_LABEL_MESSAGE);
             }
+            assertTermChangeAllowed(collection, null, null);
             collection.setTermLabel(null);
             collection.setTermOrder(null);
             return;
@@ -3168,8 +3189,92 @@ public class NoteCollectionService {
         if (collection.getParentCollectionId() == null) {
             throw new InvalidCollectionRequestException(TERM_REQUIRES_CHILD_MESSAGE);
         }
+        assertTermChangeAllowed(collection, termLabel, termOrder);
         collection.setTermLabel(termLabel);
         collection.setTermOrder(termOrder);
+    }
+
+    /**
+     * ⚠️ ACADEMIC TERM OBEYS THE PUBLICATION BOUNDARY BY BEING SETTLED BEFORE IT. Existing-row edits are
+     * read live by adoption and by the drift diff, and Official update is additive-only, so a term edited
+     * after publication would reach new adopters immediately and could never reach existing ones. So a
+     * term may change only while the Subject Plan is still unpublished ({@code published_at} null) and
+     * only on source curriculum. A no-op (same value) is always allowed.
+     */
+    private void assertTermChangeAllowed(NoteCollectionEntity collection, String newLabel, Integer newOrder) {
+        if (Objects.equals(collection.getTermLabel(), newLabel) && Objects.equals(collection.getTermOrder(), newOrder)) {
+            return;
+        }
+        if (collection.getSourcePlanId() != null) {
+            throw new InvalidCollectionRequestException(TERM_ADOPTED_COPY_MESSAGE);
+        }
+        NoteCollectionEntity root = collection.getParentCollectionId() == null
+                ? null
+                : collectionRepository.findById(collection.getParentCollectionId()).orElse(null);
+        if (isTermLocked(collection, root != null && root.getLastUpdatePublishedAt() != null)) {
+            throw new InvalidCollectionRequestException(TERM_FROZEN_MESSAGE);
+        }
+    }
+
+    /**
+     * A move clears the term (parent, position and term are one placement) but cannot clear
+     * {@code published_at}, so a PUBLISHED Subject Plan that carried a term, or that joins a Year whose
+     * Subject Plans do, would end up un-termed and permanently locked in a termed Year, and every later
+     * Publish update on that Year would be refused. Unpublished Subject Plans move freely.
+     */
+    private void assertPublishedSubjectMoveKeepsTermsCoherent(
+            NoteCollectionEntity child,
+            NoteCollectionEntity destination,
+            UUID userId
+    ) {
+        if (child.getPublishedAt() == null) {
+            return;
+        }
+        boolean carriesTerm = normalizeOptionalText(child.getTermLabel()) != null;
+        boolean destinationUsesTerms = destination != null
+                && collectionRepository.findOrderedChildrenByParentCollectionIdAndOwnerUserId(destination.getId(), userId)
+                        .stream()
+                        .anyMatch(sibling -> normalizeOptionalText(sibling.getTermLabel()) != null);
+        if (carriesTerm || destinationUsesTerms) {
+            throw new InvalidCollectionRequestException(TERM_PUBLISHED_MOVE_MESSAGE);
+        }
+    }
+
+    /**
+     * ⚠️ FROZEN MEANS PUBLISHED, AND {@code published_at} ALONE DOES NOT SAY THAT. V141 stamped it on EVERY
+     * pre-existing row, including private Goals nobody ever published (and only admins can publish). The
+     * root's {@code last_update_published_at} is the exact "has this set ever been published" test
+     * (see the comment in {@code updateVisibility}), so a row is locked only when BOTH are set. That also
+     * survives a PUBLIC to PRIVATE to PUBLIC flip, because the root stamp persists.
+     */
+    private static boolean isTermLocked(NoteCollectionEntity child, boolean rootEverPublished) {
+        return rootEverPublished && child.getPublishedAt() != null;
+    }
+
+    /**
+     * Within one Year, academic term is set on every Subject Plan or on none. Enforced at every
+     * publication moment so a partially-termed (or half-introduced) Year can never reach an adopter.
+     */
+    private void validateTermCoherence(List<NoteCollectionEntity> children, boolean rootEverPublished) {
+        long termed = children.stream().filter(child -> normalizeOptionalText(child.getTermLabel()) != null).count();
+        if (termed == 0 || termed == children.size()) {
+            return;
+        }
+        // The error must name Subjects the curator CAN change. Published (locked) Subjects are the
+        // reference when they agree with each other; only otherwise does the majority decide.
+        Set<Boolean> lockedStates = children.stream()
+                .filter(child -> isTermLocked(child, rootEverPublished))
+                .map(child -> normalizeOptionalText(child.getTermLabel()) != null)
+                .collect(Collectors.toSet());
+        boolean majorityTermed = lockedStates.size() == 1 ? lockedStates.iterator().next() : termed * 2 >= children.size();
+        List<String> offenders = children.stream()
+                .filter(child -> (normalizeOptionalText(child.getTermLabel()) != null) != majorityTermed)
+                .map(NoteCollectionEntity::getTitle)
+                .toList();
+        String shown = String.join("; ", offenders.stream().limit(TERM_PUBLISH_NAMES_SHOWN).toList())
+                + (offenders.size() > TERM_PUBLISH_NAMES_SHOWN ? "; and " + (offenders.size() - TERM_PUBLISH_NAMES_SHOWN) + " more" : "");
+        throw new CollectionNotPublishableException(
+                TERM_PARTIAL_PUBLISH_MESSAGE.formatted(termed, children.size(), shown));
     }
 
     private String normalizeOptionalText(String value) {
@@ -3349,6 +3454,7 @@ public class NoteCollectionService {
 
     private GoalCollectionChildResponse toGoalChildResponse(
             NoteCollectionEntity child,
+            boolean rootEverPublished,
             UUID userId,
             int itemCount,
             ProgressReportService.SubjectProgressBatchResult progress
@@ -3361,6 +3467,7 @@ public class NoteCollectionService {
                     child.getDescription(),
                     child.getTermLabel(),
                     child.getTermOrder(),
+                    isTermLocked(child, rootEverPublished),
                     itemCount,
                     masteryPercentage(totals.masteredConcepts(), totals.totalConcepts()),
                     totals.masteredConcepts(),
@@ -3385,6 +3492,7 @@ public class NoteCollectionService {
                 child.getDescription(),
                 child.getTermLabel(),
                 child.getTermOrder(),
+                isTermLocked(child, rootEverPublished),
                 itemCount,
                 0,
                 0,

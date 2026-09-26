@@ -8,6 +8,8 @@ public record GoalCollectionChildResponse(
         String description,
         String termLabel,
         Integer termOrder,
+        /** True once the Subject Plan is published: its term can no longer change (see NoteCollectionService.assertTermChangeAllowed). */
+        boolean termLocked,
         int itemCount,
         int overallReadinessPercentage,
         int masteredConcepts,

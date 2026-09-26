@@ -1,9 +1,11 @@
 import {
   collectTermOptions,
   countInProgressSubjects,
+  findPartialTermPlacement,
   groupChildrenByTerm,
   hasTermPlacement,
   isReservedTermLabel,
+  orderChildrenForDisplay,
   isSubjectInProgress,
   resolveTermEntry,
 } from "./collection-terms";
@@ -142,5 +144,61 @@ describe("isReservedTermLabel", () => {
     expect(isReservedTermLabel("Term not specified")).toBe(true);
     expect(isReservedTermLabel("  TERM   Not Specified ")).toBe(true);
     expect(isReservedTermLabel("Term 1")).toBe(false);
+  });
+});
+
+describe("orderChildrenForDisplay", () => {
+  it("returns the sibling order untouched when nothing is placed (the Review Set case)", () => {
+    const children = [child("b", null, null), child("a", null, null)];
+    expect(orderChildrenForDisplay(children).map((entry) => entry.id)).toEqual(["b", "a"]);
+  });
+
+  it("returns the order the Year page displays: term order, unplaced last", () => {
+    const children = [
+      child("loose", null, null),
+      child("s2", "Second Semester", 2),
+      child("s1", "First Semester", 1),
+    ];
+    expect(orderChildrenForDisplay(children).map((entry) => entry.id)).toEqual(["s1", "s2", "loose"]);
+  });
+});
+
+describe("findPartialTermPlacement", () => {
+  const titled = (id: string, label: string | null, order: number | null) => ({ ...child(id, label, order), title: `T-${id}` });
+
+  it("is null when nothing is termed or everything is", () => {
+    expect(findPartialTermPlacement([])).toBeNull();
+    expect(findPartialTermPlacement([titled("a", null, null), titled("b", null, null)])).toBeNull();
+    expect(findPartialTermPlacement([titled("a", "First Semester", 1), titled("b", "Second Semester", 2)])).toBeNull();
+  });
+
+  it("names the un-termed Subjects when most are termed", () => {
+    expect(findPartialTermPlacement([titled("a", "First Semester", 1), titled("b", "First Semester", 1), titled("c", null, null)]))
+      .toEqual({ termed: 2, total: 3, offenders: ["T-c"] });
+  });
+
+  it("names the lone termed Subject when most are not (the accidental type-then-blur)", () => {
+    expect(findPartialTermPlacement([titled("a", "First Semester", 1), titled("b", null, null), titled("c", null, null)]))
+      .toEqual({ termed: 1, total: 3, offenders: ["T-a"] });
+  });
+});
+
+describe("findPartialTermPlacement with locked (published) Subjects", () => {
+  const locked = (id: string, label: string | null, order: number | null, termLocked: boolean) =>
+    ({ ...child(id, label, order), title: `T-${id}`, termLocked });
+
+  it("names the unlocked new Subject on a tie instead of a frozen one", () => {
+    expect(findPartialTermPlacement([
+      locked("old", null, null, true),
+      locked("new", "First Semester", 1, false),
+    ])).toEqual({ termed: 1, total: 2, offenders: ["T-new"] });
+  });
+
+  it("uses the locked Subjects as the reference even when the majority disagrees", () => {
+    expect(findPartialTermPlacement([
+      locked("old", "First Semester", 1, true),
+      locked("new-a", null, null, false),
+      locked("new-b", null, null, false),
+    ])).toEqual({ termed: 1, total: 3, offenders: ["T-new-a", "T-new-b"] });
   });
 });

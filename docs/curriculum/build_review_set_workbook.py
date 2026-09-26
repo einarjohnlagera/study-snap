@@ -134,9 +134,10 @@ def resolve_terms(rows, study_plan_title):
     order = collections.OrderedDict()
     for pno in by_plan:
         label = plan_terms[pno]
-        if len(label) > TERM_LABEL_MAX_LENGTH:
+        units = len(label.encode("utf-16-le")) // 2   # Java String.length() and the input maxLength count UTF-16 units
+        if units > TERM_LABEL_MAX_LENGTH:
             raise TermValidationError(
-                f"academic_term {label!r} on plan {pno} is {len(label)} characters; the maximum is "
+                f"academic_term {label!r} on plan {pno} is {units} characters; the maximum is "
                 f"{TERM_LABEL_MAX_LENGTH}.")
         if _norm_term(label) == _norm_term(TERM_NOT_SPECIFIED_LABEL):
             raise TermValidationError(

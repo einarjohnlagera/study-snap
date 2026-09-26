@@ -376,6 +376,8 @@ export type GoalCollectionChildResponse = {
   /** Academic Term placement (v0.160.0). Null on every child of a Review Set; see `lib/collection-terms.ts`. */
   termLabel?: string | null;
   termOrder?: number | null;
+  /** True once the Subject Plan is published: its term can no longer change. Absent from an old backend. */
+  termLocked?: boolean;
   itemCount: number;
   overallReadinessPercentage: number;
   masteredConcepts: number;

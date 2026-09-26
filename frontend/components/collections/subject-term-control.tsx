@@ -19,6 +19,8 @@ type SubjectTermControlProps = {
   /** Terms already used in this Year. Picking one reuses its order; a new label gets the next order. */
   options: TermOption[];
   disabled: boolean;
+  /** Published Subject Plans keep their term; the control stays visible but cannot change it. */
+  locked?: boolean;
   /** `null` clears the term. Only called when the resolved placement differs from the current one. */
   onCommit: (subjectId: string, term: ResolvedTerm | null) => void;
 };
@@ -36,6 +38,7 @@ export function SubjectTermControl({
   termOrder,
   options,
   disabled,
+  locked = false,
   onCommit,
 }: Readonly<SubjectTermControlProps>) {
   const currentLabel = termLabel?.trim() ?? "";
@@ -94,7 +97,8 @@ export function SubjectTermControl({
         ariaLabel={`Term for ${subjectTitle}`}
         toggleLabel={`Toggle term suggestions for ${subjectTitle}`}
         placeholder="Choose or add a term"
-        disabled={disabled}
+        disabled={disabled || locked}
+        helperText={locked ? "Published: this term is fixed." : undefined}
         maxLength={TERM_LABEL_MAX_LENGTH}
         onChange={setDraft}
         onOptionSelect={commit}
