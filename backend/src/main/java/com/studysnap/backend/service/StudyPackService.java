@@ -117,6 +117,7 @@ public class StudyPackService {
     private final StudyPackGenerationTaskDispatcher studyPackGenerationTaskDispatcher;
     private final ContentModerationService contentModerationService;
     private final ExamQuestionPoolService examQuestionPoolService;
+    private final ChallengeQuizQuestionBankService challengeQuizQuestionBankService;
     private final OfficialChallengeQuizTemplateService officialChallengeQuizTemplateService;
     private final OnboardingGuardService onboardingGuardService;
     private final StudyPackQuizMasteryService studyPackQuizMasteryService;
@@ -910,6 +911,9 @@ public class StudyPackService {
                         savedEntity.getId(), ExamQuestionPoolService.MODE_LONG_EXAM);
                 examQuestionPoolService.refreshPool(
                         savedEntity.getId(), ExamQuestionPoolService.MODE_BOARD_EXAM);
+                // Summary and key concepts feed Challenge Quiz generation, so rows banked from the
+                // previous content must be removed on the same regeneration boundary.
+                challengeQuizQuestionBankService.invalidateForStudyPack(savedEntity.getId());
                 // Both regeneration scopes replace this Study Pack's quiz in place too (saveStudyPack
                 // does this regardless of scope), so a shared quiz's live links must be deactivated
                 // either way -- v0.151.0 moved this out of the regeneratingNoteContent gate below after

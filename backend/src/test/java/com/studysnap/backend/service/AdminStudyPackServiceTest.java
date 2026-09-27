@@ -7,12 +7,15 @@ import static org.mockito.Mockito.when;
 
 import com.studysnap.backend.dto.AdminRegenerateSummariesResponse;
 import com.studysnap.backend.dto.AdminRepairMalformedQuizzesResponse;
+import com.studysnap.backend.entity.NoteEntity;
 import com.studysnap.backend.entity.StudyPackEntity;
 import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.entity.UserRole;
+import com.studysnap.backend.repository.NoteRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
 import com.studysnap.backend.repository.UserRepository;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -29,11 +32,15 @@ class AdminStudyPackServiceTest {
     @Mock
     private UserRepository userRepository;
     @Mock
+    private NoteRepository noteRepository;
+    @Mock
     private StudyPackRepository studyPackRepository;
     @Mock
     private AdminStudyPackTransactionHelper transactionHelper;
     @Mock
     private RegenerationProgressTracker progressTracker;
+    @Mock
+    private OfficialChallengeQuizTemplateService officialChallengeQuizTemplateService;
 
     private AdminStudyPackService adminStudyPackService;
 
@@ -42,8 +49,10 @@ class AdminStudyPackServiceTest {
         AsyncTaskExecutor directExecutor = Runnable::run;
         adminStudyPackService = new AdminStudyPackService(
             userRepository,
+            noteRepository,
             studyPackRepository,
             transactionHelper,
+            officialChallengeQuizTemplateService,
             progressTracker,
             directExecutor
         );
@@ -81,12 +90,54 @@ class AdminStudyPackServiceTest {
             adminUserIds,
             ENRICHED_SUMMARY_MARKER
         )).thenReturn(List.of(pack));
+        when(transactionHelper.regenerateOnePack(pack)).thenReturn(false);
 
         AdminRegenerateSummariesResponse response = adminStudyPackService.regenerateOfficialSummaries();
 
         assertThat(response.queued()).isEqualTo(1);
         assertThat(response.skipped()).isZero();
         verify(transactionHelper).regenerateOnePack(pack);
+        verify(studyPackRepository, never()).findById(org.mockito.ArgumentMatchers.any());
+        verify(noteRepository, never()).findById(org.mockito.ArgumentMatchers.any());
+        verify(officialChallengeQuizTemplateService, never()).queueSeedIfEligible(
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void regenerateOfficialSummaries_reloadsAndReseedsAfterContentReplacement() {
+        UserEntity admin = buildAdminUser();
+        List<UUID> adminUserIds = List.of(admin.getId());
+        UUID noteId = UUID.randomUUID();
+        StudyPackEntity stalePack = new StudyPackEntity();
+        stalePack.setId(UUID.randomUUID());
+        stalePack.setOwnerUserId(admin.getId());
+        stalePack.setNoteId(noteId);
+        stalePack.setSummary("Plain summary");
+        StudyPackEntity freshPack = new StudyPackEntity();
+        freshPack.setId(stalePack.getId());
+        freshPack.setOwnerUserId(admin.getId());
+        freshPack.setNoteId(noteId);
+        freshPack.setSummary("Regenerated summary");
+        NoteEntity freshNote = new NoteEntity();
+        freshNote.setId(noteId);
+        freshNote.setOwnerUserId(admin.getId());
+        when(userRepository.findByRole(UserRole.ADMIN)).thenReturn(List.of(admin));
+        when(studyPackRepository.countByOwnerUserIdIn(adminUserIds)).thenReturn(1L);
+        when(studyPackRepository.findByOwnerUserIdInAndSummaryNotEnriched(
+                adminUserIds,
+                ENRICHED_SUMMARY_MARKER
+        )).thenReturn(List.of(stalePack));
+        when(transactionHelper.regenerateOnePack(stalePack)).thenReturn(true);
+        when(studyPackRepository.findById(stalePack.getId())).thenReturn(Optional.of(freshPack));
+        when(noteRepository.findById(noteId)).thenReturn(Optional.of(freshNote));
+
+        AdminRegenerateSummariesResponse response = adminStudyPackService.regenerateOfficialSummaries();
+
+        assertThat(response.queued()).isEqualTo(1);
+        assertThat(response.skipped()).isZero();
+        verify(studyPackRepository).findById(stalePack.getId());
+        verify(noteRepository).findById(noteId);
+        verify(officialChallengeQuizTemplateService).queueSeedIfEligible(freshNote, freshPack);
     }
 
     @Test

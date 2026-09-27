@@ -241,6 +241,31 @@ class QuizValidationUtilsTest {
     }
 
     @Test
+    void answerExplanationConsistency_distinguishesNegativeChoiceFromItsPositiveSubstring() {
+        // Found by a scoped Opus falsification pass at the v0.162.0 signoff: "0.40" as a literal substring
+        // is invisible to a leading sign, so it used to match inside "-0.40" and mask a real mismatch.
+        List<String> choices = List.of("0.60", "0.40", "0.20", "-0.40");
+
+        // Keyed 0.40, but the explanation actually states the negated distractor -0.40: this MUST be
+        // caught (the correct value is genuinely absent; a different choice's value is present).
+        assertThat(QuizValidationUtils.isAnswerExplanationInternallyInconsistent(
+                choices, 1, "MCQ", "The computed value is -0.40.", null)).isTrue();
+
+        // Keyed -0.40, explanation states the positive distractor 0.40: same defect from the other
+        // direction, also must be caught.
+        assertThat(QuizValidationUtils.isAnswerExplanationInternallyInconsistent(
+                choices, 3, "MCQ", "The computed value is 0.40.", null)).isTrue();
+
+        // Keyed 0.40, explanation correctly states 0.40 (no sign): must NOT be flagged.
+        assertThat(QuizValidationUtils.isAnswerExplanationInternallyInconsistent(
+                choices, 1, "MCQ", "The computed value is 0.40.", null)).isFalse();
+
+        // Keyed -0.40, explanation correctly states -0.40: must NOT be flagged.
+        assertThat(QuizValidationUtils.isAnswerExplanationInternallyInconsistent(
+                choices, 3, "MCQ", "The computed value is -0.40.", null)).isFalse();
+    }
+
+    @Test
     void answerExplanationConsistency_acceptsKeyWhenExplanationAlsoMentionsDistractor() {
         assertThat(QuizValidationUtils.isAnswerExplanationInternallyInconsistent(
                 List.of("23%", "30%", "15%", "50%"), 1, "MCQ",

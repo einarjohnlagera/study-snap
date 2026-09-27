@@ -63,6 +63,7 @@ class OpenAiLlmStudyPackServiceTest {
     private static final String CURRICULUM_LINE_PREFIX = "Curriculum level:";
     private static final String ENGINEERING_MATHEMATICS_LABEL = "Engineering Mathematics";
     private static final String READER_SCAFFOLDING_PREFIX = "Reader scaffolding:";
+    private static final String CANONICAL_NUMERIC_ANSWER_EXPLANATION_RULE = "if this is a standard single-answer question and every choice is a short numeric or unit value (a number, measurement, or similar literal — not a phrase), explanation must state the correct choice's exact value, written exactly as it appears in choices, and must not paraphrase or round it; otherwise, keep explaining WHY the answer is correct without stating, restating, or listing any choice's text. Either way: never refer to the correct choice by letter (A, B, C, D) or with a phrase like \"which is option C\"; do not restate or discuss any of the other (incorrect) choices' values.";
 
     @Mock
     private RestClient restClient;
@@ -417,6 +418,29 @@ class OpenAiLlmStudyPackServiceTest {
                 "prompts/study-pack-v1/long-exam-system.txt"
         ).getContentAsString(StandardCharsets.UTF_8);
         assertThat(longExamSystem).contains("authoritative curriculum level");
+    }
+
+    @Test
+    void quizExplanationPromptsRequireExactNumericAnswerValueWithoutLetterReferences() throws IOException {
+        for (String resourcePath : List.of(
+                "prompts/study-pack-v1/adaptive-practice-developer.txt",
+                "prompts/study-pack-v1/board-exam-developer.txt",
+                "prompts/study-pack-v1/challenge-quiz-developer.txt",
+                "prompts/study-pack-v1/developer.txt",
+                "prompts/study-pack-v1/long-exam-developer.txt",
+                "prompts/study-pack-v1/teacher-quiz-developer.txt"
+        )) {
+            String template = new ClassPathResource(resourcePath).getContentAsString(StandardCharsets.UTF_8);
+
+            assertThat(template).as(resourcePath).contains(CANONICAL_NUMERIC_ANSWER_EXPLANATION_RULE);
+        }
+
+        String interviewPracticeTemplate = new ClassPathResource(
+                "prompts/study-pack-v1/interview-practice-developer.txt"
+        ).getContentAsString(StandardCharsets.UTF_8);
+        assertThat(interviewPracticeTemplate)
+                .as("prompts/study-pack-v1/interview-practice-developer.txt")
+                .doesNotContain(CANONICAL_NUMERIC_ANSWER_EXPLANATION_RULE);
     }
 
     @Test
