@@ -5698,8 +5698,6 @@ class NoteCollectionServiceTest {
         });
         when(collectionRepository.findByIdAndOwnerUserId(any(UUID.class), eq(userId)))
                 .thenAnswer(invocation -> Optional.ofNullable(savedGoal[0]));
-        when(collectionRepository.findByIdAndVisibility(firstChildId, CollectionVisibility.PUBLIC)).thenReturn(Optional.of(firstChild));
-        when(collectionRepository.findByIdAndVisibility(secondChildId, CollectionVisibility.PUBLIC)).thenReturn(Optional.of(secondChild));
         when(collectionRepository.findByOwnerUserIdAndSourcePlanId(userId, firstChildId))
                 .thenReturn(Optional.empty())
                 .thenReturn(Optional.of(personalFirstChild));
@@ -5824,10 +5822,6 @@ class NoteCollectionServiceTest {
                 .thenReturn(List.of(standaloneSourceChild, nestedSourceChild));
         when(collectionRepository.findByOwnerUserIdAndSourcePlanIdForUpdate(userId, sourceGoalId)).thenReturn(Optional.empty());
         when(collectionRepository.saveAndFlush(any(NoteCollectionEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
-        when(collectionRepository.findByIdAndVisibility(standaloneSourceChildId, CollectionVisibility.PUBLIC))
-                .thenReturn(Optional.of(standaloneSourceChild));
-        when(collectionRepository.findByIdAndVisibility(nestedSourceChildId, CollectionVisibility.PUBLIC))
-                .thenReturn(Optional.of(nestedSourceChild));
         when(collectionRepository.findByOwnerUserIdAndSourcePlanId(userId, standaloneSourceChildId))
                 .thenReturn(Optional.of(standalonePersonalChild))
                 .thenReturn(Optional.of(standalonePersonalChild));
@@ -6033,6 +6027,131 @@ class NoteCollectionServiceTest {
         assertThatThrownBy(() -> service.adoptGoal(sourceGoalId, userId))
                 .isInstanceOf(CollectionNotFoundException.class);
         verify(collectionRepository, never()).saveAndFlush(any(NoteCollectionEntity.class));
+    }
+
+    @Test
+    void adoptGoal_adoptsEveryStampedChildWhateverItsVisibilityInsteadOfFailingAfterPersistingTheGoal() {
+        // ALE has seven published-but-PRIVATE Subject Plans under a PUBLIC root. adoptGoal used to call the
+        // public-route adopt(), which requires PUBLIC and threw AFTER the learner's Goal was persisted.
+        UUID userId = UUID.randomUUID();
+        UUID sourceOwnerId = UUID.randomUUID();
+        UUID sourceGoalId = UUID.randomUUID();
+        UUID privateChildId = UUID.randomUUID();
+        UUID publicChildId = UUID.randomUUID();
+        UUID privateNoteId = UUID.randomUUID();
+        UUID publicNoteId = UUID.randomUUID();
+        UserEntity user = buildUser(userId);
+        NoteCollectionEntity[] savedGoal = new NoteCollectionEntity[1];
+        NoteCollectionEntity sourceGoal = buildCollection(sourceGoalId, sourceOwnerId, "ALE Review", Instant.now());
+        sourceGoal.setVisibility(CollectionVisibility.PUBLIC);
+        NoteCollectionEntity privateChild = buildCollection(privateChildId, sourceOwnerId, "Stamped Private Subject", Instant.now());
+        privateChild.setVisibility(CollectionVisibility.PRIVATE);
+        privateChild.setParentCollectionId(sourceGoalId);
+        privateChild.setSiblingPosition(0);
+        assertThat(privateChild.getPublishedAt()).isNotNull();
+        NoteCollectionEntity publicChild = buildCollection(publicChildId, sourceOwnerId, "Public Subject", Instant.now());
+        publicChild.setVisibility(CollectionVisibility.PUBLIC);
+        publicChild.setParentCollectionId(sourceGoalId);
+        publicChild.setSiblingPosition(1);
+        NoteEntity privateNote = buildNote(privateNoteId, sourceOwnerId, NOTE_TITLE_ONE);
+        privateNote.setVisibility(NoteVisibility.PUBLIC);
+        NoteEntity publicNote = buildNote(publicNoteId, sourceOwnerId, NOTE_TITLE_TWO);
+        publicNote.setVisibility(NoteVisibility.PUBLIC);
+        NoteCollectionEntity personalPrivateChild = buildCollection(UUID.randomUUID(), userId, "Stamped Private Subject", Instant.now());
+        NoteCollectionEntity personalPublicChild = buildCollection(UUID.randomUUID(), userId, "Public Subject", Instant.now());
+
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(collectionRepository.findByIdAndVisibility(sourceGoalId, CollectionVisibility.PUBLIC)).thenReturn(Optional.of(sourceGoal));
+        when(collectionRepository.findByOwnerUserIdAndSourcePlanId(userId, sourceGoalId)).thenReturn(Optional.empty());
+        when(collectionRepository.findOrderedChildrenByParentCollectionIdAndOwnerUserId(sourceGoalId, sourceOwnerId))
+                .thenReturn(List.of(privateChild, publicChild));
+        when(collectionRepository.findByOwnerUserIdAndSourcePlanIdForUpdate(userId, sourceGoalId)).thenReturn(Optional.empty());
+        when(collectionRepository.saveAndFlush(any(NoteCollectionEntity.class))).thenAnswer(invocation -> {
+            NoteCollectionEntity saved = invocation.getArgument(0);
+            if (savedGoal[0] == null) {
+                savedGoal[0] = saved;
+            }
+            return saved;
+        });
+        when(collectionRepository.findByIdAndOwnerUserId(any(UUID.class), eq(userId)))
+                .thenAnswer(invocation -> Optional.ofNullable(savedGoal[0]));
+        when(collectionRepository.findByOwnerUserIdAndSourcePlanId(userId, privateChildId))
+                .thenReturn(Optional.empty())
+                .thenReturn(Optional.of(personalPrivateChild));
+        when(collectionRepository.findByOwnerUserIdAndSourcePlanId(userId, publicChildId))
+                .thenReturn(Optional.empty())
+                .thenReturn(Optional.of(personalPublicChild));
+        when(collectionRepository.findByOwnerUserIdAndSourcePlanIdForUpdate(userId, privateChildId)).thenReturn(Optional.empty());
+        when(collectionRepository.findByOwnerUserIdAndSourcePlanIdForUpdate(userId, publicChildId)).thenReturn(Optional.empty());
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(privateChildId))
+                .thenReturn(List.of(buildItem(privateChildId, privateNoteId, 0, WEEK_ONE_LABEL)));
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(publicChildId))
+                .thenReturn(List.of(buildItem(publicChildId, publicNoteId, 0, WEEK_TWO_LABEL)));
+        when(noteRepository.findByIdAndVisibility(privateNoteId, NoteVisibility.PUBLIC)).thenReturn(Optional.of(privateNote));
+        when(noteRepository.findByIdAndVisibility(publicNoteId, NoteVisibility.PUBLIC)).thenReturn(Optional.of(publicNote));
+        when(noteService.copyNote(privateNoteId.toString(), userId, true)).thenReturn(noteResponse(UUID.randomUUID()));
+        when(noteService.copyNote(publicNoteId.toString(), userId, true)).thenReturn(noteResponse(UUID.randomUUID()));
+        when(itemRepository.saveAll(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(collectionRepository.save(any(NoteCollectionEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        AdoptGoalResponse result = service.adoptGoal(sourceGoalId, userId);
+
+        assertThat(result.adoptedSubjectCount()).isEqualTo(2);
+        assertThat(personalPrivateChild.getParentCollectionId()).isEqualTo(result.goalCollectionId());
+        assertThat(personalPublicChild.getParentCollectionId()).isEqualTo(result.goalCollectionId());
+    }
+
+    @Test
+    void adoptGoal_stillNeverAdoptsAnUnstampedChild() {
+        UUID userId = UUID.randomUUID();
+        UUID sourceOwnerId = UUID.randomUUID();
+        UUID sourceGoalId = UUID.randomUUID();
+        NoteCollectionEntity sourceGoal = buildCollection(sourceGoalId, sourceOwnerId, "ALE Review", Instant.now());
+        sourceGoal.setVisibility(CollectionVisibility.PUBLIC);
+        NoteCollectionEntity unstamped = buildCollection(UUID.randomUUID(), sourceOwnerId, "Unpublished Addition", Instant.now());
+        unstamped.setVisibility(CollectionVisibility.PRIVATE);
+        unstamped.setParentCollectionId(sourceGoalId);
+        unstamped.setPublishedAt(null);
+        when(collectionRepository.findByIdAndVisibility(sourceGoalId, CollectionVisibility.PUBLIC)).thenReturn(Optional.of(sourceGoal));
+        when(collectionRepository.findByOwnerUserIdAndSourcePlanId(userId, sourceGoalId)).thenReturn(Optional.empty());
+        when(collectionRepository.findOrderedChildrenByParentCollectionIdAndOwnerUserId(sourceGoalId, sourceOwnerId))
+                .thenReturn(List.of(unstamped));
+
+        assertThatThrownBy(() -> service.adoptGoal(sourceGoalId, userId))
+                .isInstanceOf(CollectionNotFoundException.class);
+        verify(collectionRepository, never()).saveAndFlush(any(NoteCollectionEntity.class));
+    }
+
+    @Test
+    void adopt_treatsAPublicSubjectPlanThatWasNeverPublishedAsNotFound() {
+        UUID userId = UUID.randomUUID();
+        UUID childId = UUID.randomUUID();
+        NoteCollectionEntity child = buildCollection(childId, UUID.randomUUID(), "Unpublished Addition", Instant.now());
+        child.setVisibility(CollectionVisibility.PUBLIC);
+        child.setParentCollectionId(UUID.randomUUID());
+        child.setPublishedAt(null);
+        child.setTermLabel(FIRST_SEMESTER);
+        child.setTermOrder(1);
+        when(collectionRepository.findByIdAndVisibility(childId, CollectionVisibility.PUBLIC)).thenReturn(Optional.of(child));
+
+        assertThatThrownBy(() -> service.adopt(childId, userId))
+                .isInstanceOf(CollectionNotFoundException.class);
+        verify(collectionRepository, never()).saveAndFlush(any(NoteCollectionEntity.class));
+    }
+
+    @Test
+    void getPublic_treatsAPublicSubjectPlanThatWasNeverPublishedAsNotFound() {
+        UUID childId = UUID.randomUUID();
+        NoteCollectionEntity child = buildCollection(childId, UUID.randomUUID(), "Unpublished Addition", Instant.now());
+        child.setVisibility(CollectionVisibility.PUBLIC);
+        child.setParentCollectionId(UUID.randomUUID());
+        child.setPublishedAt(null);
+        child.setTermLabel(FIRST_SEMESTER);
+        child.setTermOrder(1);
+        when(collectionRepository.findByIdAndVisibility(childId, CollectionVisibility.PUBLIC)).thenReturn(Optional.of(child));
+
+        assertThatThrownBy(() -> service.getPublic(childId))
+                .isInstanceOf(CollectionNotFoundException.class);
     }
 
     @Test
@@ -6718,7 +6837,6 @@ class NoteCollectionServiceTest {
         NoteCollectionEntity child = buildCollection(childId, sourceOwnerId, "General Education", Instant.now());
         child.setVisibility(CollectionVisibility.PUBLIC);
         child.setParentCollectionId(sourceGoalId);
-        when(collectionRepository.findByIdAndVisibility(childId, CollectionVisibility.PUBLIC)).thenReturn(Optional.of(child));
         when(collectionRepository.findByOwnerUserIdAndSourcePlanId(userId, childId)).thenReturn(Optional.empty());
         when(collectionRepository.findByOwnerUserIdAndSourcePlanIdForUpdate(userId, childId)).thenReturn(Optional.empty());
         when(itemRepository.findByCollectionIdOrderByPositionAsc(childId)).thenReturn(List.of());

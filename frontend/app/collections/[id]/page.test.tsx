@@ -320,7 +320,14 @@ describe("collection detail helpers", () => {
   });
 });
 
+const ORIGINAL_INNER_WIDTH = globalThis.window.innerWidth;
+
 describe("CollectionDetailPageClient", () => {
+  afterEach(() => {
+    // Some tests set a viewport width; never let it leak into the next test.
+    Object.defineProperty(globalThis.window, "innerWidth", { configurable: true, value: ORIGINAL_INNER_WIDTH });
+  });
+
   beforeEach(() => {
     pushMock.mockReset();
     replaceMock.mockReset();
@@ -2579,6 +2586,9 @@ describe("CollectionDetailPageClient", () => {
   });
 
   it("shows Not started in an untouched leaf-plan readiness header", async () => {
+    (getCollection as jest.Mock).mockResolvedValue(collection({
+      progress: { totalNotes: 2, notesWithStudyPack: 2, notesPracticed: 0 },
+    }));
     (getPlanReadiness as jest.Mock).mockResolvedValue(planReadiness({
       overallReadinessPercentage: 0,
       masteredConcepts: 0,
@@ -2838,6 +2848,79 @@ describe("CollectionDetailPageClient", () => {
     expect(generalSection).toHaveAttribute("aria-expanded", "false");
     expect(screen.queryByRole("heading", { level: 2, name: "Foundations" })).not.toBeInTheDocument();
     expect(screen.getByRole("heading", { level: 2, name: "Assessment" })).toBeInTheDocument();
+  });
+
+  it("does not say Not started for a Section whose notes were practiced but never answered correctly", async () => {
+    (getCollection as jest.Mock).mockResolvedValue(collection({
+      items: [
+        { ...collection().items[0], noteId: "note-1", title: "Attempted Wrong", label: "Attempted Section", position: 0, lastSessionCompletedAt: "2026-09-20T10:00:00Z" },
+        { ...collection().items[1], noteId: "note-2", title: "Never Opened", label: "Untouched Section", position: 1, lastSessionCompletedAt: null },
+      ],
+      progress: { totalNotes: 2, notesWithStudyPack: 2, notesPracticed: 1 },
+    }));
+    (getNoteConceptCounts as jest.Mock).mockResolvedValue({
+      // Sessions completed, but every concept still counts as "not practiced" (no correct answer yet).
+      "note-1": { totalConceptCount: 4, masteredConceptCount: 0, dueConceptCount: 0, notPracticedConceptCount: 4 },
+      "note-2": { totalConceptCount: 4, masteredConceptCount: 0, dueConceptCount: 0, notPracticedConceptCount: 4 },
+    });
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    const attempted = await screen.findByRole("button", { name: /Attempted Section/ });
+    expect(await within(attempted).findByText("0% · 0 due")).toBeInTheDocument();
+    expect(within(attempted).queryByText("Not started")).not.toBeInTheDocument();
+    expect(within(screen.getByRole("button", { name: /Untouched Section/ })).getByText("Not started")).toBeInTheDocument();
+  });
+
+  it("does not say Not started in a leaf plan header once any note has a completed session", async () => {
+    (getCollection as jest.Mock).mockResolvedValue(collection({
+      progress: { totalNotes: 2, notesWithStudyPack: 2, notesPracticed: 1 },
+    }));
+    (getPlanReadiness as jest.Mock).mockResolvedValue(planReadiness({
+      overallReadinessPercentage: 0,
+      masteredConcepts: 0,
+      dueConcepts: 0,
+      notPracticedConcepts: 8,
+      totalConcepts: 8,
+      subjects: [],
+    }));
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    expect(await screen.findByText("0% ready · 0/8 mastered · 0 due")).toBeInTheDocument();
+    expect(screen.queryByText("Not started · 8 concepts")).not.toBeInTheDocument();
+  });
+
+  it("re-derives Section defaults when the Section count changes and keeps a manual override", async () => {
+    const oneSection = collection({
+      items: [
+        { ...collection().items[0], noteId: "note-1", title: "Foundations", label: "General Education", position: 0 },
+      ],
+    });
+    const twoSections = collection({
+      items: [
+        { ...collection().items[0], noteId: "note-1", title: "Foundations", label: "General Education", position: 0 },
+        { ...collection().items[1], noteId: "note-2", title: "Assessment", label: "Professional Education", position: 1 },
+      ],
+    });
+    (getCollection as jest.Mock).mockResolvedValue(oneSection);
+
+    const { unmount } = render(<CollectionDetailPageClient collectionId="collection-1" />);
+    expect(await screen.findByRole("button", { name: /General Education.*1 note/ })).toHaveAttribute("aria-expanded", "true");
+    unmount();
+
+    // A second Section appears (for example an Official update adds a labelled note): the lone Section's
+    // "exactly one Section is open" default no longer applies, so both start collapsed again.
+    (getCollection as jest.Mock).mockResolvedValue(twoSections);
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+    const general = await screen.findByRole("button", { name: /General Education.*1 note/ });
+    const professional = screen.getByRole("button", { name: /Professional Education.*1 note/ });
+    expect(general).toHaveAttribute("aria-expanded", "false");
+    expect(professional).toHaveAttribute("aria-expanded", "false");
+
+    fireEvent.click(general);
+    expect(general).toHaveAttribute("aria-expanded", "true");
+    expect(professional).toHaveAttribute("aria-expanded", "false");
   });
 
   it.each([1024, 390])("starts multi-section read views collapsed at %ipx", async (viewportWidth) => {
