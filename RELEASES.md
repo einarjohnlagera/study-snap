@@ -50,6 +50,7 @@ during the survey and are NOT part of this release's scope (see "Also found" bel
    to check at all; "must state the value" closes that gap for the numeric subset only. Do not claim a prose-answer
    effect in the release notes. Gated on reading H4's production rejection-rate baseline first, so a post-ship rate
    change is attributable to H5 alone — **which requires H6 to ship separately** (see the correction above).
+   **Shipped:** updated `adaptive-practice-developer.txt`, `board-exam-developer.txt`, `challenge-quiz-developer.txt`, `developer.txt`, `long-exam-developer.txt`, and `teacher-quiz-developer.txt`, pinned by `quizExplanationPromptsRequireExactNumericAnswerValueWithoutLetterReferences`.
    **Measurement, corrected 2026-09-27: the H4 retry/omit COUNT is the wrong metric for H5's effect and must not be
    read as a regression signal.** H5 gives H4 more evidence to check, so the retry count is EXPECTED TO RISE after H5
    ships — a rise is success, not a problem. The Challenge-bank fix (Phase C, same release) also raises generation
