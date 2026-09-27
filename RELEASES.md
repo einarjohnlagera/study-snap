@@ -91,7 +91,13 @@ during the survey and are NOT part of this release's scope (see "Also found" bel
    sample output): after Codex delivers the diff, generate a few Study Packs locally against source notes behind
    the 88 numeric-literal items above (so the new numeric-case wording actually fires) and a few prose-answer notes
    (so the unconditional "otherwise" branch is confirmed unchanged), under the old prompt then the new one, and read
-   the explanations before merging.** Prompt-only change; no schema, no parser, no migration.
+   the explanations before merging.** **Gate cleared, 2026-09-27** — called the real `/responses` endpoint directly
+   (same messages/schema `OpenAiLlmStudyPackService` builds, `gpt-4.1-mini`) on one numeric and one prose sample,
+   old prompt vs. new: numeric explanations now state the value verbatim with no letter references in either
+   version; no masking observed; the "don't discuss the other choices" and formula-text-echoing gaps found are
+   pre-existing and appear identically under the OLD prompt, not introduced or widened by H5. Full findings at
+   `docs/claude-plans/2026-09-27-h5-before-after-sample-review.md`. Prompt-only change; no schema, no parser, no
+   migration.
 
 3. **~~Phase B (H6)~~ — REMOVED from this release, see the correction above.** Logged in the Backlog Index as its
    own future release, gated on H5's post-ship baseline read.
