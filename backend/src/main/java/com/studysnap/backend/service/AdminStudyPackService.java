@@ -2,9 +2,11 @@ package com.studysnap.backend.service;
 
 import com.studysnap.backend.dto.AdminRepairMalformedQuizzesResponse;
 import com.studysnap.backend.dto.AdminRegenerateSummariesResponse;
+import com.studysnap.backend.entity.NoteEntity;
 import com.studysnap.backend.entity.StudyPackEntity;
 import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.entity.UserRole;
+import com.studysnap.backend.repository.NoteRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
 import com.studysnap.backend.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -26,8 +28,10 @@ public class AdminStudyPackService {
     private static final String ENRICHED_SUMMARY_MARKER = "|";
 
     private final UserRepository userRepository;
+    private final NoteRepository noteRepository;
     private final StudyPackRepository studyPackRepository;
     private final AdminStudyPackTransactionHelper transactionHelper;
+    private final OfficialChallengeQuizTemplateService officialChallengeQuizTemplateService;
     private final RegenerationProgressTracker progressTracker;
     @Qualifier("llmParallelTaskExecutor")
     private final AsyncTaskExecutor llmParallelTaskExecutor;
@@ -49,7 +53,19 @@ public class AdminStudyPackService {
         packs.forEach(pack -> {
             try {
                 CompletableFuture.runAsync(
-                        () -> transactionHelper.regenerateOnePack(pack),
+                        () -> {
+                            if (!transactionHelper.regenerateOnePack(pack)) {
+                                return;
+                            }
+                            StudyPackEntity freshPack = studyPackRepository.findById(pack.getId()).orElse(null);
+                            if (freshPack == null || freshPack.getNoteId() == null) {
+                                return;
+                            }
+                            NoteEntity freshNote = noteRepository.findById(freshPack.getNoteId()).orElse(null);
+                            if (freshNote != null) {
+                                officialChallengeQuizTemplateService.queueSeedIfEligible(freshNote, freshPack);
+                            }
+                        },
                         llmParallelTaskExecutor
                 );
             } catch (RejectedExecutionException ex) {

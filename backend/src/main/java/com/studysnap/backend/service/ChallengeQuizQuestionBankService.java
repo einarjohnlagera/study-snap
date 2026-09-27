@@ -33,6 +33,10 @@ public class ChallengeQuizQuestionBankService {
 
     private final ChallengeQuizQuestionBankRepository challengeQuizQuestionBankRepository;
 
+    public void invalidateForStudyPack(UUID studyPackId) {
+        challengeQuizQuestionBankRepository.bulkDeleteAllForStudyPack(studyPackId);
+    }
+
     /**
      * Claims questions under the same transaction as the Challenge session change. A claimed item
      * stays unavailable to other in-progress sessions until the owning session completes or is

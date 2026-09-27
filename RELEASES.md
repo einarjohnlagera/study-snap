@@ -103,6 +103,28 @@ during the survey and are NOT part of this release's scope (see "Also found" bel
    deleted content. Fix: invalidate or refresh the bank on the same regeneration boundary, mirroring the exam-pool
    fix's shape. No migration expected; confirm against `ChallengeQuizQuestionBankService`'s actual write path before
    the Codex prompt is written.
+   **Shipped:** `ChallengeQuizQuestionBankRepository.bulkDeleteAllForStudyPack` and
+   `ChallengeQuizQuestionBankService.invalidateForStudyPack` now delete all bank rows for a regenerated pack in one
+   JPQL statement. Exactly two of the three exam-pool invalidation sites call it after their existing
+   `studyPackRepository.flush()` and Long/Board refreshes: `StudyPackService` regeneration replaces `summary` and
+   `keyConcepts`, and `AdminStudyPackTransactionHelper.regenerateOnePack` replaces `summary`; quiz-only
+   `repairMalformedQuiz` remains untouched because `quiz` is not a Challenge-generation input. The admin helper now
+   reports whether content was actually replaced, and `AdminStudyPackService` then reloads the committed note and
+   pack and calls `OfficialChallengeQuizTemplateService.queueSeedIfEligible`; the learner-facing path already had
+   the equivalent post-commit seed. Production files: `ChallengeQuizQuestionBankRepository.java`,
+   `ChallengeQuizQuestionBankService.java`, `StudyPackService.java`, `AdminStudyPackTransactionHelper.java`, and
+   `AdminStudyPackService.java`. Tests: `NativeQueryPostgresIntegrationTest.java` proves the delete's pack predicate
+   and claimed-row behavior against Flyway PostgreSQL; `StudyPackServiceTest.java` and
+   `AdminStudyPackTransactionHelperTest.java` pin flush → exam refreshes → bank invalidation ordering;
+   `AdminStudyPackServiceTest.java` pins post-commit reload/re-seed and the false-result skip; and
+   `ChallengeQuizQuestionBankServiceTest.java` pins the unannotated transaction-joining service method.
+   **Known bulk-admin limitation:** 890 admin-owned packs matching summary regeneration had bank rows in production
+   on 2026-09-27 (not all are Official-template eligible). Regeneration tasks and re-seeds share the 4-core/8-max,
+   50-queued `llmParallelTaskExecutor`, so most re-seeds in a run of that size will be rejected at submission after
+   roughly the first 58 admitted tasks. A rejected seed is not learner-facing failure: template copy returns empty
+   and Challenge Quiz generates fresh shortfall questions on demand. After a bulk regeneration, the owner must rerun
+   `POST /admin/study-packs/seed-official-challenge-quiz-templates` until `rejected` reaches 0; its existence gate
+   queues only still-missing templates.
 
 5. **Phase D (Question Quality, Claude-direct, documentation/audit ONLY — no code).** Distinct from H4 (which
    verifies a stored answer agrees with its own explanation) and from H5/H6 (representation, not correctness): this
