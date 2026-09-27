@@ -346,9 +346,14 @@ function SectionCardHeader({
   const sectionReadinessPercentage = sectionReadiness && sectionReadiness.total > 0
     ? Math.round((sectionReadiness.mastered / sectionReadiness.total) * 100)
     : 0;
+  // ⚠️ "Not started" MUST NOT CONTRADICT THE NOTE ROWS BELOW IT. The backend counts a concept as
+  // "not practiced" until it has a CORRECT answer, so a learner who finished sessions but never got a
+  // concept right has notPracticed === total. Rows say "Practiced" for any completed session, so a
+  // Section is "Not started" only when the counts say so AND no note in it has a completed session.
+  const sectionHasPracticedNote = section.items.some((item) => item.lastSessionCompletedAt != null);
   const readinessStat = !organizeMode && sectionReadiness && sectionReadiness.total > 0 ? (
     <span className="rounded-full border border-blue-500/20 bg-blue-500/10 px-2 py-0.5 text-xs font-semibold text-blue-700 dark:text-blue-200">
-      {isReadinessNotStarted({
+      {!sectionHasPracticedNote && isReadinessNotStarted({
         masteryPercentage: sectionReadinessPercentage,
         notPracticedConcepts: sectionReadiness.notPracticed,
         totalConcepts: sectionReadiness.total,
@@ -4142,7 +4147,9 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
 
       <ReadinessSummary
         variant="compact"
-        notStartedWhenUntouched
+        // A leaf plan knows how many of its notes have a completed session; never say "Not started"
+        // once any has (the concept counts alone cannot see practice that never got a correct answer).
+        notStartedWhenUntouched={collection.progress.notesPracticed === 0}
         title={`${collection.title} readiness`}
         eyebrow={`${labels.singular} readiness`}
         overallReadinessPercentage={planReadiness?.overallReadinessPercentage ?? 0}
