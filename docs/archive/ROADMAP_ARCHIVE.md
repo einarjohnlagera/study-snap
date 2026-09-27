@@ -15,6 +15,45 @@ changelog layer. `ROADMAP.md` keeps a one-line-per-version index at each origina
 
 ---
 
+**Kicked off 2026-09-22, signed off 2026-09-22.** `v0.156.0 — Say What You Meant to Show` is
+**Released** on `releases/v0.156.0`, cut from `main` after `v0.155.0` merged as #1422 and tagged.
+**Pre-signoff verification: one scoped cold agent (Opus, no inherited context), framed as
+falsification against 12 specific claims made during implementation — all 12 confirmed, no code
+defects found.** Three doc-precision fixes applied from its findings: reworded an overclaimed
+"visually verified in headless Chrome" line to foreground the reproducible compiled-CSS check, added
+a re-date clause to the `[CHECKPOINT — due 2026-10-08]` row for if `CAMPAIGN_CLOSES_AT` is moved, and
+swapped that checkpoint's arbiter query from an owner-typed announcement title match to the
+machine-determined `cta_path` (the title match would have misreported "never published" if the owner
+reworded or typo'd the announcement's title at authoring time). Source:
+`docs/claude-plans/actionable-announcements-campaign-feedback-stage1-plan.md`, a Stage 1 audit + plan
+(Opus-drafted, independently re-verified, tightened through two rounds of owner decisions 2026-09-22).
+**⚠️ Originally scoped as two releases (Release A frontend-only, Release B backend+frontend as a
+separate `v0.157.0`) — owner decision 2026-09-22 folded both into this one release.**
+
+**Release A (frontend-only, SHIPPED — PR #1423, merged into this branch):** makes the announcement
+`ctaLabel` field — already authored in Admin, already stored, already transmitted to the client, never
+rendered — visible as a real call-to-action in the notification inbox. CTA span rendering inside the
+existing body `<Link>` (never a nested link/button), `aria-labelledby` extension for WCAG 2.5.3,
+`line-clamp-3` on the body, 44px dismiss touch target, full-card hit area, plus an Admin body character
+counter with a ~160-char soft target. No migration, no API/DTO change. Does **not** make
+`ANNOUNCEMENT` badge-eligible (would resurrect the `v0.134.0` immortal-row defect). **Routing: Claude
+Code inline. Verification: one `advisor()` call on the diff** — caught a real defect before commit
+(`line-clamp-3` + `block` would have silently no-opped the clamp; confirmed by compiling this
+project's actual Tailwind output, `.line-clamp-3` before `.block` in the cascade, independently
+re-confirmed the same way by the pre-signoff falsification pass).
+
+**Release B (backend + frontend, SHIPPED — PR #1424, merged into this branch):** Campaign Feedback — a bounded,
+single-instrument in-app research campaign (`/feedback` route, `campaign_feedback_responses` table
+`V148`, `GET`/`POST /feedback/campaign`). One fixed instrument, not a campaign framework — `CAMPAIGN_ID`
+is a named `String` constant, not an enum or registry. Close boundary is a configured property
+(`notelib.campaign.study-friction-2026-09.closes-at`, fail-closed on missing/malformed value), **owner-
+set 2026-09-22 to `2026-10-06T00:00:00Z`** (~2 weeks after deploy) — this was the prompt's one open
+input, now resolved. Locked precedence: duplicate-response check before the close-date check, so a
+learner who already responded never sees a "closed" rejection on re-submit. **Routing: Codex**
+(`docs/codex-prompts/v0.157.0-campaign-feedback.md`, Long mode, untracked/gitignored per convention) —
+new endpoint, migration, and service logic. **Verification: `/audit-diff` on delivery**, per the
+standing rule for Codex-delivered work. Full scope in `RELEASES.md`.
+
 **Kicked off 2026-09-21, signed off 2026-09-22.** `v0.155.0 — Say What You Checked` is **Released** on
 `releases/v0.155.0`, cut from `main` after `v0.154.0` merged as #1420 and tagged. Fixes a real quiz-
 grading correctness defect a learner caught and reported, and ships the validator that would have

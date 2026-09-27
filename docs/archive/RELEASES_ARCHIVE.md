@@ -1,6 +1,6 @@
 # RELEASES_ARCHIVE.md — NoteLib
 
-Archived sections of `RELEASES.md`. **Contents are NOT one contiguous range:** `v0.41.0`–`v0.120.0`, plus `v0.126.0` (moved at the `v0.132.0` kickoff), `v0.127.0` (moved at the `v0.133.0` kickoff) `v0.128.0` (moved at the `v0.134.0` kickoff) `v0.129.0` (moved at the `v0.135.0` kickoff) `v0.130.0` (moved at the `v0.136.0` kickoff) `v0.131.0` (moved at the `v0.137.0` kickoff) `v0.132.0` (moved at the `v0.138.0` kickoff) `v0.133.0` (moved at the `v0.139.0` kickoff), `v0.134.0` (moved at the `v0.140.0` kickoff), `v0.135.0` (moved at the `v0.141.0` kickoff), `v0.136.0` (moved at the `v0.142.0` kickoff), `v0.137.0` (moved at the `v0.143.0` kickoff), `v0.138.0` (moved at the `v0.144.0` kickoff), `v0.139.0` (moved at the `v0.145.0` kickoff), `v0.140.0` (moved at the `v0.146.0` kickoff), `v0.141.0` (moved at the `v0.147.0` kickoff), `v0.142.0` (moved at the `v0.148.0` kickoff), `v0.143.0` (moved at the `v0.149.0` kickoff), `v0.144.0` (moved at the `v0.150.0` kickoff), `v0.145.0` (moved at the `v0.151.0` kickoff), `v0.146.0` (moved at the `v0.152.0` kickoff), `v0.147.0` (moved at the `v0.153.0` kickoff), `v0.148.0` (moved at the `v0.154.0` kickoff), `v0.149.0` (moved at the `v0.155.0` kickoff), `v0.150.0` (moved at the `v0.156.0` signoff — the first time this archive check ran at signoff rather than kickoff, since v0.156.0 folded two releases' worth of scope into one and crossed the cap without an intervening kickoff) and `v0.151.0` (moved at the `v0.157.0` kickoff) and `v0.152.0` (moved at the `v0.158.0` kickoff) and `v0.153.0` and `v0.154.0` (moved at the `v0.159.0` and `v0.160.0` kickoffs; earlier passes did not extend this line) and `v0.155.0` (moved at the `v0.161.0` kickoff) as the live file crossed its *current + last five* cap. Each version's own `## vX.Y.Z` heading is the index — search for it. `v0.40.1` and earlier moved here
+Archived sections of `RELEASES.md`. **Contents are NOT one contiguous range:** `v0.41.0`–`v0.120.0`, plus `v0.126.0` (moved at the `v0.132.0` kickoff), `v0.127.0` (moved at the `v0.133.0` kickoff) `v0.128.0` (moved at the `v0.134.0` kickoff) `v0.129.0` (moved at the `v0.135.0` kickoff) `v0.130.0` (moved at the `v0.136.0` kickoff) `v0.131.0` (moved at the `v0.137.0` kickoff) `v0.132.0` (moved at the `v0.138.0` kickoff) `v0.133.0` (moved at the `v0.139.0` kickoff), `v0.134.0` (moved at the `v0.140.0` kickoff), `v0.135.0` (moved at the `v0.141.0` kickoff), `v0.136.0` (moved at the `v0.142.0` kickoff), `v0.137.0` (moved at the `v0.143.0` kickoff), `v0.138.0` (moved at the `v0.144.0` kickoff), `v0.139.0` (moved at the `v0.145.0` kickoff), `v0.140.0` (moved at the `v0.146.0` kickoff), `v0.141.0` (moved at the `v0.147.0` kickoff), `v0.142.0` (moved at the `v0.148.0` kickoff), `v0.143.0` (moved at the `v0.149.0` kickoff), `v0.144.0` (moved at the `v0.150.0` kickoff), `v0.145.0` (moved at the `v0.151.0` kickoff), `v0.146.0` (moved at the `v0.152.0` kickoff), `v0.147.0` (moved at the `v0.153.0` kickoff), `v0.148.0` (moved at the `v0.154.0` kickoff), `v0.149.0` (moved at the `v0.155.0` kickoff), `v0.150.0` (moved at the `v0.156.0` signoff — the first time this archive check ran at signoff rather than kickoff, since v0.156.0 folded two releases' worth of scope into one and crossed the cap without an intervening kickoff) and `v0.151.0` (moved at the `v0.157.0` kickoff) and `v0.152.0` (moved at the `v0.158.0` kickoff) and `v0.153.0` and `v0.154.0` (moved at the `v0.159.0` and `v0.160.0` kickoffs; earlier passes did not extend this line) and `v0.155.0` (moved at the `v0.161.0` kickoff) and `v0.156.0` (moved at the `v0.162.0` kickoff) as the live file crossed its *current + last five* cap. Each version's own `## vX.Y.Z` heading is the index — search for it. `v0.40.1` and earlier moved here
 2026-07-10; **`v0.41.0` through `v0.120.0` moved here 2026-09-07** in the `v0.126.0` pass, which
 resumed this convention after it had lapsed for 85 releases — `RELEASES.md` had reached 116
 sections against its documented design of *current + last few versions*. Both passes are MOVES,
@@ -17,6 +17,153 @@ See `RELEASES.md` for the current + most-recent versions, and its "Archived rele
 index for a one-line-per-version pointer back into this file.
 
 ---
+
+## v0.156.0 - Say What You Meant to Show
+
+**Status: Released** (signed off 2026-09-22)
+
+Theme: make the existing announcement `ctaLabel` visible as a real call-to-action in the notification
+inbox, then ship Campaign Feedback — a bounded, single-instrument in-app research campaign that asks
+every learner one structured question from that same linked-notification pattern and persists
+categorized responses, closing on a configured date.
+
+Source: `docs/claude-plans/actionable-announcements-campaign-feedback-stage1-plan.md` (Stage 1 audit +
+plan for "Actionable Announcements + Campaign Feedback"). **⚠️ Originally scoped as two releases
+(Release A frontend-only, Release B backend+frontend as a separate `v0.157.0`) — owner decision
+2026-09-22 folded them into this one release instead.** Release A shipped first (PR #1423, merged into
+this branch) and is documented below exactly as it shipped; Release B's Codex prompt
+(`docs/codex-prompts/v0.157.0-campaign-feedback.md`, untracked, gitignored per convention) had its one
+open input — the campaign's `closes-at` timestamp — resolved by the owner 2026-09-22
+(`2026-10-06T00:00:00Z`, ~2 weeks after this release deploys) and is now dispatched.
+
+### Planned Scope
+
+**Release A — notification inbox / Admin polish (shipped, see below).**
+
+- **CTA affordance in the notification inbox (frontend).**
+  `frontend/components/notifications/notification-inbox.tsx` — render the already-stored,
+  already-transmitted, never-rendered `notification.ctaLabel` as a non-interactive `<span>` inside the
+  existing body `<Link>` (never a nested link/button — the one trap in this change). Extend
+  `aria-labelledby` to include the CTA span id (WCAG 2.5.3 Label in Name). Add `line-clamp-3` to the
+  body. Bump the dismiss button to a 44px (`min-h-11 min-w-11`) touch target. Move row padding onto the
+  `<Link>`/dismiss button so the full card width is tappable.
+- **Admin authoring guidance (frontend).**
+  `frontend/app/admin/announcements/page.tsx` — live body character counter with a ~160-char soft-target
+  helper (following the existing counter pattern in `send-feedback-widget.tsx`), plus helper text on the
+  Link label field clarifying it is the visible CTA text learners see and tap. Field names ("Link
+  label"/"Link path") are unchanged — zero production usage, renaming would only churn tests.
+- **Tests.** `notification-inbox.test.tsx` (28 existing tests stay green + new coverage for CTA
+  render/absent cases, the anti-nesting guard — exactly one interactive element in the row body —
+  accessible-name, and the clamp) and `announcements/page.test.tsx` (counter).
+- **Docs.** `docs/features/notifications.md` — document the CTA affordance contract, the span-not-link
+  rule, and the stored-vs-displayed body split (full body stored/delivered, inbox displays a clamped
+  view; no "Read more", no announcement detail page).
+
+Release A anti-drift: frontend-only — no migration, no API/DTO change, no admin lifecycle change. Does
+not make `ANNOUNCEMENT` badge-eligible (would resurrect the `v0.134.0` immortal-row defect) and does
+not touch badge-decrement logic.
+
+Release A routing: Claude Code inline (frontend-only, ~2 source + 2 test files, no new infrastructure —
+too small to justify a Codex prompt). Verification tier: one `advisor()` call on the diff — no
+permission, money, or quota surface touched.
+
+**Release B — Campaign Feedback (backend + frontend).**
+
+- **Data model (backend).** New `campaign_feedback_responses` table (`V148`), one row per
+  `(user_id, campaign_id)` via a unique constraint. `CAMPAIGN_ID` is a named `String` constant
+  (`"STUDY_FRICTION_2026_09"`), deliberately **not** a Java enum or a campaign registry/table — this is
+  one fixed instrument, not a framework. `PrimaryBlocker`, `QuizIssue`, and `PlanIssue` **do** get real
+  enums (genuine 5–9-option closed sets, unlike `CampaignId`).
+- **Endpoints (backend).** `GET /feedback/campaign` (status: `submitted` / `campaignOpen`, no path
+  param — there is exactly one instrument) and `POST /feedback/campaign`. **Locked precedence:** the
+  unique-constraint duplicate check runs before the `closes-at` check, so a learner who already
+  responded and submits again after close sees their own already-submitted state (200), never a
+  "closed" rejection (409) — the close boundary only gates a genuinely new response.
+- **Close boundary (backend).** A configured property, not a DB column:
+  `notelib.campaign.study-friction-2026-09.closes-at`, bound as `String` and parsed to `Instant`
+  explicitly (`@Value` has no `Instant` converter in this codebase). No default — a missing or
+  malformed value fails application startup (fail-closed). **Owner-set value: `2026-10-06T00:00:00Z`**
+  (~2 weeks after this release deploys, set 2026-09-22).
+- **Frontend.** `/feedback` route (auth-gated), one adaptive selection screen (9 primary options,
+  conditional multi/single-select follow-ups, always-visible optional free text), three terminal states
+  in place on the same route (thank-you, already-responded, closed) — no wizard, no second route, no
+  announcement detail page.
+- **Account deletion.** `AccountPurgeService` gains a `CampaignFeedbackResponseRepository` purge call,
+  mirroring the existing `feedback` purge — `notifications.md:370-373` records this exact step shipping
+  missing for a different table in `v0.130.0`; do not repeat that omission.
+
+Release B anti-drift: no campaign table/entity/registry, no dynamic form schema, no `CampaignId` enum.
+Does not touch `notification-inbox.tsx` rendering, `AnnouncementEntity`, or the Admin announcements
+page (that is Release A, already shipped). Does not relax `developer.txt:105` or touch anything gated
+by `ADR-002` (unrelated H5/H6 threads from the `v0.155.0` incident). The permanent free-text Send
+Feedback channel is untouched.
+
+Release B routing: **Codex** (`docs/codex-prompts/v0.157.0-campaign-feedback.md`, Long mode) — new
+endpoint, migration, and service logic, per this repo's own routing rule. Verification: `/audit-diff`
+on the delivered diff before commit, per the standing rule for Codex-delivered work.
+
+### Shipped
+
+**Release B — Campaign Feedback:**
+
+- Added the fixed `STUDY_FRICTION_2026_09` research instrument: `V148` stores one structured response
+  per user, `GET /feedback/campaign` reports independent submitted/open state, and
+  `POST /feedback/campaign` validates and persists the response through a unique-index-backed,
+  concurrency-safe transaction. The backend closes new submissions at `2026-10-06T00:00:00Z`
+  (overridable via the `CAMPAIGN_CLOSES_AT` Render env var, added post-`advisor()`-review so the window
+  can move without a deploy) while preserving 200 idempotency for learners who already responded,
+  including after close.
+- Added the protected `/feedback` page with the nine-option primary question, four conditional
+  follow-ups, optional free text, accessible checkbox/radio controls, loading/form/thank-you/
+  already-responded/closed states, and fail-soft status loading. Campaign rows are explicitly removed
+  by account purge.
+- **Additive-only — no existing endpoint changed or removed**, including the permanent
+  `POST /feedback` Send Feedback channel. This does NOT mean deploy order is unconstrained: deploy both
+  backend and frontend, confirm both actually landed (`scripts/check-deploys.sh` — a merge is not a
+  deploy), **THEN** publish the announcement below. A frontend-first window would 404 `GET
+  /feedback/campaign` into the page's own fail-soft-to-form path (cosmetic — no wrong state reaches the
+  learner) but a genuinely new submission in that window 404s into a generic error rather than a
+  handled one.
+- **⚠️ OWNER ACTION REQUIRED POST-DEPLOY, NOT CODE: the campaign has no in-app entry point until this
+  is done.** `/feedback` is deliberately linked from nowhere (§1's lock keeps it separate from the
+  permanent Send Feedback channel) — its only door is an announcement authored and published in
+  Admin → What's New, using the plan's §F copy exactly:
+  Title `Help us improve NoteLib` · Body `What gets in the way when you study? Tell us what we should
+  improve — it takes about a minute.` · Link label `Share feedback` · Link path `/feedback` · Audience
+  `EVERYONE`. **The `closes-at` clock starts at deploy regardless of whether this is done** — `zero`
+  `announcements` rows have ever existed in production, so there is no existing muscle memory for this
+  step. Publish it promptly after confirming the deploy landed.
+- **`[CHECKPOINT — due 2026-10-08]` added to `ROADMAP.md`'s Backlog Index** — this campaign was
+  approved on a measured 1.8% click-through floor with no impression denominator (plan §A3); the read
+  is owed regardless of how the numbers land.
+
+**Release A (PR #1423, merged):**
+
+- **CTA affordance, clamp, hit-area and touch-target fixes in the notification inbox (frontend).**
+  `notification-inbox.tsx` now renders `ctaLabel` as a non-interactive `<span>` inside the body
+  `<Link>`/`<button>`, extends `aria-labelledby` to `${titleId} ${ctaId}` when a CTA is present, clamps
+  the body to 3 lines, and gives the dismiss button a 44px touch target with row padding moved onto the
+  interactive elements. **⚠️ Caught during `advisor()` review before commit: the body span was initially
+  `line-clamp-3 block` — Tailwind emits `.block { display: block }` AFTER `.line-clamp-3` in this
+  project's compiled CSS, so `block` would have silently overridden the clamp's `display: -webkit-box`
+  and shipped the clamp as a no-op.** Confirmed by compiling this project's actual Tailwind output
+  (`tailwindcss@4.2.1`) — `.line-clamp-3` at output index 4610, `.block` at 4741 — and independently
+  re-confirmed the same way during the pre-signoff falsification pass. Fixed by dropping `block`
+  (`-webkit-box` is already block-level); jsdom does no layout/cascade, so the test suite's
+  class-presence assertions could not have caught this on their own.
+- **Admin body character counter and Link label helper text (frontend).**
+  `app/admin/announcements/page.tsx` — live counter with a ~160-char soft target (neutral below it,
+  amber above; the 1000-char hard column/validator/`maxLength` are unchanged), plus helper text on the
+  Link label field.
+- **Tests.** `notification-inbox.test.tsx`: 28 pre-existing tests updated for the new accessible name
+  (the default fixture carries a `ctaLabel`, so several `getByRole("link", { name: … })` queries needed
+  the CTA label appended) plus new coverage for CTA render/absent, the anti-nesting guard, the clamp,
+  and the dismiss touch target — 31 tests, all passing. `announcements/page.test.tsx`: 3 new counter
+  tests. Full frontend suite: 220/220 suites, 2478/2479 tests passing (1 pre-existing skip), `tsc
+  --noEmit` clean, `next lint` clean (no new warnings).
+- **Docs.** `docs/features/notifications.md` updated with the CTA affordance contract, the
+  span-not-link/anti-nesting rule, the WCAG 2.5.3 `aria-labelledby` requirement, the clamp's `min-w-0`
+  dependency, and the Admin authoring-guidance section.
 
 ## v0.155.0 - Say What You Checked
 

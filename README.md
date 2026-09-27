@@ -2,7 +2,7 @@
 
 > Rebrand update: this project was renamed from StudySnap to NoteLib. Core behavior and database schema remain unchanged.
 
-Current release baseline: `v0.161.0 - Scannable Study Plans` (Released)
+Current release baseline: `v0.162.0 - The Answer Is the Text` (In Progress)
 
 NoteLib turns notes into exam-ready study materials. Students and board exam takers paste or generate notes, then use summaries, key concepts, quizzes, and adaptive practice to understand and retain what matters.
 
