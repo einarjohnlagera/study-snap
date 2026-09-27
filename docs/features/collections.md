@@ -851,7 +851,7 @@ Behavior:
 Behavior:
 
 - no authentication required
-- returns detail only when the collection is `PUBLIC`
+- returns detail only when the collection is `PUBLIC`; for a child Subject Plan, ALSO only when it has been published (`published_at` set) — a `PUBLIC` but never-published child returns `404` (`v0.161.0`)
 - private or missing collections return `CollectionNotFoundException` / `404`
 - stale private/deleted item notes are omitted from the public item payload rather than leaked
 
@@ -861,7 +861,7 @@ Behavior:
 
 Behavior:
 
-- authenticated users can adopt only `PUBLIC` source collections
+- authenticated users can adopt only `PUBLIC` source collections; for a child Subject Plan, the source must ALSO have been published (`published_at` set) — this standalone route is stricter than `adoptGoal` below, which adopts an already-published child regardless of its own visibility (`v0.161.0`)
 - if the caller already owns a collection with `sourcePlanId={id}`, the endpoint returns that existing personal plan id instead of creating a duplicate
 - otherwise the endpoint iterates source items in saved order and calls `copyNote(noteId, userId, includeStudyPack=true)` for each still-public source note
 - each source item is isolated; private, deleted, or otherwise unavailable notes are skipped and counted instead of failing the whole adoption
@@ -886,10 +886,10 @@ Response:
 
 Behavior:
 
-- authenticated users can adopt only `PUBLIC` source Goal collections; a public leaf plan passed to this endpoint returns `CollectionNotFoundException` / `404`
+- authenticated users can adopt only `PUBLIC` source Goal collections; a public leaf plan passed to this endpoint returns `CollectionNotFoundException` / `404`. **The root's own visibility gate is the only one on this route** — a child Subject Plan is adopted once it is PUBLISHED, whatever its OWN visibility (`v0.161.0`; before that, adoption additionally required each child to be `PUBLIC`, which could half-create the learner's Goal and fail on a published-but-`PRIVATE` child)
 - if the caller already owns a Goal with `sourcePlanId={id}`, the endpoint returns that existing personal Goal id with `alreadyAdopted=true`
 - otherwise the endpoint creates a private personal Goal with `sourcePlanId={source Goal id}` and copied title/description/courseProgram/estimatedStudyHours, but no direct items
-- each source child Subject plan is adopted through the existing leaf `adopt` flow, so note copying, per-note skip isolation, Study Pack inclusion, idempotency, and concurrent-adopt race recovery stay centralized
+- each source child Subject plan is adopted through the same underlying copy logic as the leaf `adopt` flow (note copying, per-note skip isolation, Study Pack inclusion, idempotency, and concurrent-adopt race recovery all stay centralized), but WITHOUT that route's own `PUBLIC`-visibility requirement on the child — only the stamp is checked here (`v0.161.0`)
 - after a child Subject is adopted, a standalone existing personal child (`parentCollectionId == null`) is re-parented under the new personal Goal and receives the source sibling position
 - an existing personal child already nested under another personal Goal is skipped; it is not duplicated and not re-parented
 - if all children are skipped, the Goal adopt still succeeds and redirects to the new empty personal Goal

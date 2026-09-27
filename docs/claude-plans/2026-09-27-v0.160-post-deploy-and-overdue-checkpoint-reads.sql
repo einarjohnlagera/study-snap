@@ -1,7 +1,7 @@
 -- READ-ONLY. Every statement below is a SELECT. Nothing here writes, locks or changes state.
--- Written 2026-09-27 at the v0.161.0 kickoff, for the owner to run in their DB console, because the
--- Render MCP server was unreachable (ENOTFOUND mcp.render.com) in the session that wrote it.
--- Paste each result back so it can be recorded in RELEASES.md / ROADMAP.md. Table and column names
+-- Written 2026-09-27 at the v0.161.0 kickoff (Render MCP was unreachable at the time). Run and recorded
+-- the same day, once Render reconnected: results are in RELEASES.md v0.160.0 and the ROADMAP checkpoint
+-- rows this file is cited from. Kept as a reference for what was actually checked. Table and column names
 -- were read from the Flyway migrations, not remembered. This file is a sizing/read artifact.
 
 -- ============================================================================================
