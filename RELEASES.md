@@ -173,6 +173,21 @@ during the survey and are NOT part of this release's scope (see "Also found" bel
    owner decision document: is this worth building, and if so, at which tier. **It ships no code.** Do not let this
    phase drift into an implementation mid-release — if the read makes a strong case, that becomes its own future
    release, not a scope change to this one.
+   **Shipped:** `docs/claude-plans/2026-09-27-question-quality-tier3-audit.md` (decision document) and its
+   companion `2026-09-27-question-quality-tier3-sample.sql` (the exact sampling queries, with two real bugs found
+   and stated rather than smoothed over — the stored keyed answer is `correctIndex`, not `answer`; a discarded
+   draft draw is named, not silently dropped). 65 real production questions read across 2 of 4 quiz stores
+   (`study_packs.quiz`; `exam_question_pool`'s Board/Long Exam tier, the store the one confirmed historical defect
+   came from) — 0 confirmed genuine-ambiguity defects, 2 near-miss patterns noted. **Corrected mid-audit, stated
+   plainly rather than smoothed over:** a first draft read the zero-defect sample as "no evidence of an actionable
+   rate," which overclaimed — the honest rule-of-three bound (0/65 rules out roughly a 1-in-22 rate, still >5,000
+   questions across the corpus if the true rate sits there) rules out a COMMON defect only, not a rare one, which
+   is the shape the one historical defect actually had. **Recommendation: do not build an automated Tier 3 gate
+   now; scope a learner-facing "flag this question" affordance first** (none exists in the product today, checked
+   directly) as the one instrument that scales to a rare-event rate a fixed-size sample cannot resolve —
+   explicitly weighed against the incident doc's own rejection of a learner-wide "answers may be wrong"
+   announcement on trust grounds, so the owner sees that tension named rather than assumed away. Existing Backlog
+   row updated with the outcome rather than duplicated.
 
 **Also found during the Backlog Index survey, NOT part of this release (flagged for a separate doc-correction pass):**
 The Backlog row titled "Admin summary/quiz repair paths replace Study Pack content in place with no exam-pool invalidation" is
