@@ -74,7 +74,7 @@ diff. Four items, no backend and no data semantics, so no cold pressure-test age
 
 ## v0.160.0 - Study Plans by Semester
 
-**Status: Released** (signed off 2026-09-26; PRs #1447 backend, #1448 frontend, #1449 pipeline, #1450 pressure-test fixes merged into the release branch; release PR merged as #1451 and tagged. Deploy state and the two post-deploy `SELECT` results (below) have not been reported to the session that opened `v0.161.0`; record them here when the owner gives them)
+**Status: Released** (signed off 2026-09-26; PRs #1447 backend, #1448 frontend, #1449 pipeline, #1450 pressure-test fixes merged into the release branch; release PR merged as #1451 and tagged. Backend deploy verified 2026-09-27 by a read-only query through Render: `V150` applied 2026-09-26T16:06:30Z, success. The Vercel side and `scripts/check-deploys.sh` were NOT run)
 
 Theme: let a curator place each Subject Plan in an academic term, so a Year reads as a semester-by-semester study
 plan, without adding a level to the collection hierarchy and without touching any Note.
@@ -193,10 +193,10 @@ Subject to Section to Note; Year and term placement stays in a separate editoria
 - The `Term` control also shows on a non-admin's own (non-adopted) Goals, with a warning that says a partially termed plan cannot be published; those users cannot publish. Not scoped further.
 - Non-admin-owned public collections that existed at V141 may have permanently locked children (V141 stamped their root); sized by the post-deploy read below.
 
-**Post-deploy verification owed (read-only, both are `SELECT`s; the Render MCP was disconnected during this session, so neither has been run):**
-1. After the `V150` deploy: `SELECT count(*) FROM note_collections WHERE term_label IS NOT NULL;` (expected 0; `term_label` does not exist in production before the deploy).
-2. Any time: `SELECT count(*) FROM note_collections c JOIN users u ON u.id = c.owner_user_id WHERE c.last_update_published_at IS NOT NULL AND u.role <> 'ADMIN';` (sizes the non-admin locked-children note above).
-3. `scripts/check-deploys.sh` after waiting at least five minutes past the merge.
+**Post-deploy verification (read-only `SELECT`s, run 2026-09-27 through the reconnected Render MCP):**
+1. `SELECT count(*) FROM note_collections WHERE term_label IS NOT NULL;` **= 0** (as expected; the column exists, `V150` applied 2026-09-26T16:06:30Z).
+2. `SELECT count(*) FROM note_collections c JOIN users u ON u.id = c.owner_user_id WHERE c.last_update_published_at IS NOT NULL AND u.role <> 'ADMIN';` **= 0**, so the non-admin locked-children limitation above affects no existing row.
+3. `scripts/check-deploys.sh` was NOT run (no Render API key in the session); the backend deploy is evidenced by `V150` above, the Vercel deploy remains unverified.
 
 **Checkpoint gate: none minted.** Everything shipped was owner-decided and none of it was gated on evidence; there is no instrumentation to read and a checkpoint without a metric is decorative. Real usage of the term feature will first be visible when a curator terms the BSCS Year, so the honest follow-up is the Phase B kickoff read, not a dated checkpoint.
 
