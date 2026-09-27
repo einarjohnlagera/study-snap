@@ -224,8 +224,18 @@ public class QuizValidationUtils {
         if (normalizedChoice.isEmpty()) {
             return false;
         }
+        // ⚠️ The lookbehind excludes a preceding digit or dot ONLY. Found 2026-09-27 at the v0.162.0 signoff
+        // (a scoped Opus falsification pass): a plain substring match with no sign exclusion means choice
+        // "0.40" is found INSIDE evidence text "-0.40" — the minus sign is invisible to this pattern. That
+        // silently masks a real mismatch: if the keyed choice is "0.40" but the model's explanation actually
+        // states the negated distractor "-0.40", this exact-match check reports the correct value as
+        // "present" and isAnswerExplanationInternallyInconsistent short-circuits to "consistent" without ever
+        // checking whether a wrong choice's value is also there. The `-`/`+` exclusion below closes it; the
+        // rounded-number path (roundedChoiceOccursInEvidence, below) was independently confirmed sign-safe
+        // already, since it parses the captured number into a BigDecimal and compares numerically rather than
+        // matching text — this fix targets only the exact-literal path where no such comparison happens.
         Pattern exactChoice = Pattern.compile(
-                "(?<![\\d.])" + Pattern.quote(normalizedChoice) + "(?!\\d|\\.\\d)"
+                "(?<![\\d.+-])" + Pattern.quote(normalizedChoice) + "(?!\\d|\\.\\d)"
         );
         if (exactChoice.matcher(normalizedEvidence).find()) {
             return true;
