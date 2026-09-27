@@ -130,11 +130,33 @@ this release. Phase D produces a decision document only, never code, in this rel
 C) touches only the regeneration-invalidation boundary, not Challenge Quiz's broader question-selection logic.
 
 **Verification tier (per `CLAUDE.md`'s release-size rule):** three items, within the 3-4-item sweet spot. Phase A0 is
-docs-only. `advisor()` before each phase's Codex prompt and on each diff is the baseline. Escalate past that to one
-scoped cold agent only if a trigger actually fires once the diffs exist — for example if the Challenge-bank fix (Phase
-C) turns out to touch a method H5 or another live path also touches. As scoped now, neither H5 nor the Challenge-bank
-fix touches a shared method, a permission boundary, or money/quota/production-data semantics, so a single `advisor()`
-summary per phase is the default; do not default to a cold agent "to be safe" without a fired trigger.
+docs-only. `advisor()` before each phase's Codex prompt and on each diff is the baseline. **CORRECTED 2026-09-27,
+scoping the Phase C prompt: the trigger fires for Phase C.** It bulk-deletes a learner's own stored
+`challenge_quiz_question_bank` rows — including recorded `lastKnownOutcome` history — as a side effect of a
+regeneration action, and for an Official-author pack those same deleted rows are the Challenge Quiz templates other
+learners' sessions read from (`OfficialChallengeQuizTemplateService.copyTemplateQuestions`). **Read against
+production, 2026-09-27: every bank row's `user_id` matches its pack's `owner_user_id` (0 counter-examples across all
+31,776 rows) — this is always the pack owner's own data, never a different learner's, so "who does the delete
+affect" was verified rather than assumed.** That still changes production-data semantics (deleted outcome history,
+and for 890 admin-owned packs with existing bank rows read at the same time — not necessarily all Official
+templates, only those additionally passing `isEligibleOfficialTemplate` actually re-seed — a genuine re-seed
+dependency on a bounded 8-worker/50-slot executor queue that admits roughly the first ~58 of a run this size and
+rejects the rest AT SUBMIT, deterministically, not merely "under load") — the class of change
+`v0.143.0`'s own precedent for this shared invalidation shape needed a falsification pass to catch a real deadlock
+risk in. **One scoped cold agent (Opus), falsification-framed, runs on the Phase C diff after Codex delivers it,
+before merge — not before, since there is nothing to falsify until the diff exists.** Two named targets, not an
+open-ended review: (1) row-lock ORDERING AND WAITING between the new bulk `DELETE` and
+`ChallengeQuizQuestionBankRepository.findClaimableForUpdate`/`findIncorrectClaimableForUpdate` (both already take
+`PESSIMISTIC_WRITE` locks) — not just whether a deadlock is possible (the `v0.143.0` class of bug), but also
+whether `ChallengeQuizService.startSession` can hold a bank row lock across its own LLM call while a regeneration's
+transaction waits on that same lock while ALSO holding a `study_packs` row lock `LongExamService.startSession`
+takes first — a long wait, not a deadlock, but a real contention path; (2) whether the Official-template re-seed
+(`AdminStudyPackService` re-fetching note+pack and calling `queueSeedIfEligible` after `regenerateOnePack` returns
+`true`) actually fires in practice given the shared `llmParallelTaskExecutor` (core 4, max 8, queue 50) both the
+890-pack bulk regeneration AND its own re-seed dispatch compete for — read the diff against
+`OfficialChallengeQuizTemplateService.queueSeedIfEligible`'s real behavior and that executor's real capacity, not
+the prompt's stated intent. H5 does not touch a shared method, a permission boundary, or production-data
+semantics, so it stays on the `advisor()`-only baseline — only Phase C's tier changed.
 
 ### Shipped
 
