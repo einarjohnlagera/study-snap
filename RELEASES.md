@@ -50,6 +50,7 @@ during the survey and are NOT part of this release's scope (see "Also found" bel
    to check at all; "must state the value" closes that gap for the numeric subset only. Do not claim a prose-answer
    effect in the release notes. Gated on reading H4's production rejection-rate baseline first, so a post-ship rate
    change is attributable to H5 alone — **which requires H6 to ship separately** (see the correction above).
+   **Shipped:** updated `adaptive-practice-developer.txt`, `board-exam-developer.txt`, `challenge-quiz-developer.txt`, `developer.txt`, `long-exam-developer.txt`, and `teacher-quiz-developer.txt`, pinned by `quizExplanationPromptsRequireExactNumericAnswerValueWithoutLetterReferences`.
    **Measurement, corrected 2026-09-27: the H4 retry/omit COUNT is the wrong metric for H5's effect and must not be
    read as a regression signal.** H5 gives H4 more evidence to check, so the retry count is EXPECTED TO RISE after H5
    ships — a rise is success, not a problem. The Challenge-bank fix (Phase C, same release) also raises generation
@@ -90,7 +91,13 @@ during the survey and are NOT part of this release's scope (see "Also found" bel
    sample output): after Codex delivers the diff, generate a few Study Packs locally against source notes behind
    the 88 numeric-literal items above (so the new numeric-case wording actually fires) and a few prose-answer notes
    (so the unconditional "otherwise" branch is confirmed unchanged), under the old prompt then the new one, and read
-   the explanations before merging.** Prompt-only change; no schema, no parser, no migration.
+   the explanations before merging.** **Gate cleared, 2026-09-27** — called the real `/responses` endpoint directly
+   (same messages/schema `OpenAiLlmStudyPackService` builds, `gpt-4.1-mini`) on one numeric and one prose sample,
+   old prompt vs. new: numeric explanations now state the value verbatim with no letter references in either
+   version; no masking observed; the "don't discuss the other choices" and formula-text-echoing gaps found are
+   pre-existing and appear identically under the OLD prompt, not introduced or widened by H5. Full findings at
+   `docs/claude-plans/2026-09-27-h5-before-after-sample-review.md`. Prompt-only change; no schema, no parser, no
+   migration.
 
 3. **~~Phase B (H6)~~ — REMOVED from this release, see the correction above.** Logged in the Backlog Index as its
    own future release, gated on H5's post-ship baseline read.
