@@ -1,3 +1,5 @@
+# RELEASES.md - NoteLib
+
 ## v0.161.0 - Scannable Study Plans
 
 **Status: In Progress**
@@ -35,10 +37,10 @@ drifted):**
 compact card in `v0.160.0`.
 
 **Owner decisions, 2026-09-27:** (a) **Collapsed by default in the READ view; expanded by default on the BUILD surfaces.** The
-Study Plan page's organize mode and the Year builder (`/collections/[id]/builder`, which already starts every Subject expanded,
+Year builder (`/collections/[id]/builder`, the only build surface a user can reach: the Study Plan page's own organize mode is dormant, `organizeMode` being a constant `false`; it already starts every Subject expanded,
 `study-plan-builder-page-client.tsx:1392`, and already has its own `Expand all` / `Collapse all` pair at `:2925`/`:2933`) keep
 their expanded default and are otherwise unchanged; the `Expand all` / `Collapse all` toggle is added to the Study Plan page in
-both read view and organize mode. (Cross-section drag is already a no-op, `handleDragEnd` `:3343`, and a note changes Section
+the read view (organize mode being dormant, the toggle's organize-mode behaviour is not user-reachable). (Cross-section drag is already a no-op, `handleDragEnd` `:3343`, and a note changes Section
 through its row's Section control, so nothing here may auto-expand a Section on drag.) (b) **Routing: Codex.** Written as
 `docs/codex-prompts/v0.161.0-scannable-study-plans.md` (gitignored); the diff is audited with `/audit-diff` before anything is
 committed. (c) **The `Not started` header change is Study Plan pages only for now**; whether it becomes product-wide is to be
@@ -65,9 +67,10 @@ diff. Four items, no backend and no data semantics, so no cold pressure-test age
 
 ### Shipped
 
-_(nothing yet)_
-
-# RELEASES.md - NoteLib
+- Study Plan read views now start Sections collapsed at every viewport width, except that an exactly one-Section plan starts expanded. The expansion logic keeps separate read-view and organize-mode overrides (`useSectionExpansionState`); organize mode is dormant on this page (`organizeMode` is a constant `false`, no setter, and the inline Organize toggle is no longer exposed), so that split is defensive code exercised only by its hook test, and the only build surface a user can reach is the Year builder, which is unchanged and already starts expanded. Expansion state is deliberately not persisted across reloads.
+- A low-prominence `Expand all` / `Collapse all` text toggle on the Study Plan read view controls every Section and is hidden when fewer than two Sections exist.
+- Untouched Section readiness badges now say `Not started`; Sections with some practice keep the existing `N% · M due` wording, and zero-concept Sections still show no badge.
+- The compact readiness header opts into `Not started · N concepts` for untouched Goal and leaf Study Plan pages. The Progress page and note detail page do not opt in and render exactly as before.
 
 ## v0.160.0 - Study Plans by Semester
 
