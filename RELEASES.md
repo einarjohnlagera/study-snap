@@ -1,16 +1,25 @@
 # RELEASES.md - NoteLib
 
-## v0.162.0 - The Answer Is the Text
+## v0.162.0 - Say the Value
 
 **Status: In Progress**
 
-Theme: a quiz's answer key says what it actually is, not a position the model has to recall — and stale exam content stops surviving a regeneration it should have invalidated.
+Theme: a quiz explanation is finally allowed to say what the numeric answer actually is, so the model's own internal-consistency check has something to check — and stale exam content stops surviving a regeneration it should have invalidated.
+
+**⚠️ CORRECTED 2026-09-27, same day as kickoff, before any Codex prompt was written.** The kickoff folded H6 into this
+release. The incident doc's own LOCKED owner decision (`docs/claude-findings/2026-09-19-quick-review-percentage-increase-correctness-incident.md`
+§Q.1 item 4, 2026-09-21) sequences H6 strictly AFTER H4/H5, not simultaneous with H5, specifically so a post-ship
+change in H4's retry rate stays attributable to H5 alone. **H6 is REMOVED from this release** and re-logged in the
+Backlog Index as its own future release, gated on H5's post-ship baseline read. The kickoff also wrote H5's wording
+as "explanations **may** state the answer's value"; the locked decision says "**must**" — "may" would not reliably
+move H4's recall, which is the whole point of H5. Corrected below.
 
 ### Planned Scope
 
-**Scope picked by the owner, 2026-09-27: four related items from the Backlog Index, surveyed and verified against
-code at kickoff, not taken from their status cells at face value.** Two stale rows were found during the survey and
-are NOT part of this release's scope (see "Also found" below).
+**Scope picked by the owner, 2026-09-27: three related items from the Backlog Index, surveyed and verified against
+code at kickoff, not taken from their status cells at face value.** A fourth item (H6) was folded in at kickoff and
+REMOVED the same day on re-reading a locked owner decision (see the correction above). Two stale rows were found
+during the survey and are NOT part of this release's scope (see "Also found" below).
 
 1. **Phase A0 (documentation, Claude-direct): ratify `docs/architecture/ADR-002-quiz-answer-identity-by-text.md`.**
    Flipped `Status` from `PROPOSED` to `ACCEPTED`. Its own open question ("does `board-exam-developer.txt` inherit
@@ -27,22 +36,64 @@ are NOT part of this release's scope (see "Also found" below).
    equivalent contract stays explicitly deferred, unchanged by this ratification.
 
 2. **Phase A (H5, backend, Codex).** Relax the explanation-restriction line in the six files named above so a quiz
-   explanation may state the answer's value, while still forbidding a letter reference (`A`/`B`/`C`/`D`). Gated per
-   its own Backlog row on reading H4's production rejection-rate baseline first, so a rate change after H5 ships is
-   attributable to H5 alone. **Baseline read at kickoff (Render logs, `srv-d6u0jkvgi27c73dvl9k0`, 2026-09-22 through
-   2026-09-27, since H4 shipped in `v0.155.0`): 10 `outcome=retrying` events, 0 `outcome=omitted`.** Small sample (5
-   days) — re-read immediately before the Codex prompt is written, not reused stale from this kickoff. Prompt-only
-   change; no schema, no parser, no migration.
+   explanation **must** state the answer's value when every choice in that question is a short numeric/unit
+   literal, while still forbidding a letter reference (`A`/`B`/`C`/`D`) — per the incident doc's locked wording, not
+   the softer "may" the kickoff first wrote. **Numeric-conditional, not universal — owner decision 2026-09-27**: an
+   unconditional version was considered and rejected once the ratio was read (numeric-literal MCQs are 1.7% of all
+   MCQ-shaped items, 88 of 5,110 generated since H4 shipped; an unconditional rule would force the other 98.3%,
+   prose-answer MCQs H4 never reads, to restate their full choice text verbatim for no validator benefit). Prose
+   MCQs keep the existing "don't restate" rule unchanged. **What this actually buys:**
+   `QuizValidationUtils.isAnswerExplanationInternallyInconsistent` (`:194-201`) excludes any MCQ with a non-numeric
+   choice unconditionally, before the explanation is even read — H4 has ZERO evaluation of prose-answer MCQs, not
+   "near-zero recall" as the Backlog row's original framing claimed. H5 can only raise H4's evaluable coverage on
+   NUMERIC-LITERAL-answer MCQs: today an explanation that fully complies with "don't restate" gives H4 no evidence
+   to check at all; "must state the value" closes that gap for the numeric subset only. Do not claim a prose-answer
+   effect in the release notes. Gated on reading H4's production rejection-rate baseline first, so a post-ship rate
+   change is attributable to H5 alone — **which requires H6 to ship separately** (see the correction above).
+   **Measurement, corrected 2026-09-27: the H4 retry/omit COUNT is the wrong metric for H5's effect and must not be
+   read as a regression signal.** H5 gives H4 more evidence to check, so the retry count is EXPECTED TO RISE after H5
+   ships — a rise is success, not a problem. The Challenge-bank fix (Phase C, same release) also raises generation
+   volume, which inflates the raw count independent of H5, and Render drops logs after ~30 days (the 2026-09-22
+   entries below expire ~2026-10-22), so a count-based read has no denominator and no shelf life. **The real metric
+   is a per-question coverage ratio computed from the stored JSONB, not the log:** among MCQs where every choice is
+   ≤20 characters and contains a digit (H4's own `isNumericUnitLiteral` predicate), what share have
+   `explanation || workingSolution` containing the text of `choices[correctIndex]`. Compare packs generated between
+   the H4 deploy (`v0.155.0`, 2026-09-22) and the H5 deploy against packs generated after H5 ships; the ratio should
+   rise post-H5. **This is the checkpoint's instrument, to be minted in full at signoff, not run now** (H5 has not
+   shipped yet), but its PRE-H5 baseline was read at correction time rather than left for signoff to discover it was
+   never read. **Exact query, full context and caveats saved verbatim to
+   `docs/claude-plans/2026-09-27-h5-coverage-ratio-baseline.sql`** (an approximation compared only against its own
+   future re-run, not a re-implementation of `QuizValidationUtils`'s normalized matcher) — signoff must run the
+   IDENTICAL query with the H5 deploy timestamp as the partition point, not a rewritten one. **As of 2026-09-27,
+   read against `study_packs.quiz` for packs generated since the H4 deploy (`v0.155.0`, 2026-09-22):** of 5,110
+   MCQ-shaped items, only **88 (1.7%) are numeric-literal** — the entire population H5's evaluable-coverage claim
+   applies to; of those 88, **60 (68.2%) already state the correct value verbatim** under the CURRENT "don't
+   restate" instruction (the ban is imperfectly followed today, this is not evidence H5 shipped); and **10 (16.7%
+   of the 60) already also mention a distractor's value** — a PRE-EXISTING case `QuizValidationUtils:207-209`'s
+   short-circuit cannot catch (it returns "consistent" the moment the correct value is found, before ever checking
+   for a distractor), tracked as a masking-risk baseline to re-read post-H5, not a defect introduced by H5. A
+   post-H5 numeric-MCQ sample well under ~80 items should re-date the checkpoint rather than be read as a verdict.
+   Confirmed no in-place regeneration occurred in this window (`updated_at` never exceeds `created_at` by more than
+   a minute across all 1,057 packs since 2026-09-22), so `created_at` is a clean partition point for the post-H5
+   comparison — re-verify this assumption at signoff rather than reusing it uncritically. **The 88-item numeric
+   population is small enough that "raises H4's evaluable coverage" is real but narrow — say so plainly rather than
+   implying broad impact.** Exact log filter for the retry/omit COUNT, recorded for context only, not as the
+   pass/fail signal: resource `srv-d6u0jkvgi27c73dvl9k0`, text `quiz_answer_explanation_consistency`, window
+   2026-09-22–2026-09-27 (H4-only baseline): 10 `outcome=retrying`, 0 `outcome=omitted` — five days of total
+   headroom across the whole system, for context on how small this signal currently is. The retry path
+   (`retryInternallyInconsistentQuestion`) reuses the SAME input messages as the first attempt
+   (`context.inputMessages().deepCopy()`), so there is no separate retry-prompt copy of the restriction to edit.
+   **The incident doc's own locked text (§Q.1 item 3, and the original recommendation at line 691) requires this to
+   ship "with a before/after sample review"** — a human reading of actual generated output under the old vs. new
+   prompt, distinct from the coverage-ratio metric above. **This is a gate on merging the H5 PR, run by this session
+   (not Codex — Codex has no OpenAI key/network access, so it cannot generate real packs and must not fabricate
+   sample output): after Codex delivers the diff, generate a few Study Packs locally against source notes behind
+   the 88 numeric-literal items above (so the new numeric-case wording actually fires) and a few prose-answer notes
+   (so the unconditional "otherwise" branch is confirmed unchanged), under the old prompt then the new one, and read
+   the explanations before merging.** Prompt-only change; no schema, no parser, no migration.
 
-3. **Phase B (H6, backend, Codex, per ADR-002's own Sequencing).** Replace the MCQ/TRUE_FALSE `answer` (`A`/`B`/`C`/`D`)
-   field with `correctAnswerText` (verbatim, exact-match against `choices`) in `schema.json` and the six
-   answer-format files named above. Parser: `resolveAnswerIndex` becomes an exact-match lookup, reusing (not
-   reinventing) `QuizItem.java`'s existing legacy text-matching rung. The full legacy precedence ladder
-   (`correctIndex > answerIndex > correctAnswerIndex > correctIndices[0] > exact-text > letter`) is retained
-   unchanged and is never pruned — this governs future generation only, no migration, no backfill across the
-   115,333 existing rows in the four quiz JSONB stores. Before/after sample review of rejection/omission rate is
-   required per the ADR's Consequences (verbatim copy-fidelity is a stricter demand than picking a letter and could
-   raise the omit rate — measure it, do not assume it is benign).
+3. **~~Phase B (H6)~~ — REMOVED from this release, see the correction above.** Logged in the Backlog Index as its
+   own future release, gated on H5's post-ship baseline read.
 
 4. **Phase C (Challenge Quiz bank invalidation, backend, Codex).** The sibling leg of the exam-pool invalidation
    defect `v0.143.0` already fixed for `StudyPackService`'s and the admin repair path's regeneration flows (both
@@ -63,30 +114,27 @@ are NOT part of this release's scope (see "Also found" below).
    release, not a scope change to this one.
 
 **Also found during the Backlog Index survey, NOT part of this release (flagged for a separate doc-correction pass):**
-Backlog row 702 ("Admin repair paths lack exam-pool invalidation") is stale — `AdminStudyPackTransactionHelper.regenerateOnePack`
-already calls `refreshPool` for both exam modes (`:77-78`). Backlog row 711 (`companionMayBeOutdated` returns false for
-non-admin) is also stale — the guard already lets an adopted copy (`sourcePlanId != null`) through to the real
+The Backlog row titled "Admin summary/quiz repair paths replace Study Pack content in place with no exam-pool invalidation" is
+stale — `AdminStudyPackTransactionHelper.regenerateOnePack` already calls `refreshPool` for both exam modes (`:77-78`). The row
+titled "`companionMayBeOutdated` returns false for non-ADMIN callers" is also stale — the guard already lets an adopted copy (`sourcePlanId != null`) through to the real
 staleness check (`NoteCollectionService.java:1663-1675`). Both would have been false positives if scoped as work;
 neither is touched by this release.
 
 Anti-drift: H4's internal-consistency validator, its retry-then-omit chain, and its MCQ-numeric-choices-only scope
-are UNCHANGED — this release only decides how a *new* generation's answer is represented, not how H4 grades it.
+are UNCHANGED — this release only decides what a *new* explanation is allowed to say, not how the answer is
+represented (that is H6, removed above) or how H4 grades it.
 No structural answer-key validation is added (the original incident's full corpus scan found zero violations of any
 kind; still not the fix, still not built). No migration touches `study_packs.quiz`, `exam_question_pool.questions`,
 `challenge_quiz_question_bank.question`, or `generated_quizzes.questions`. MULTI_SELECT gets no text-based contract
 this release. Phase D produces a decision document only, never code, in this release. The Challenge-bank fix (Phase
 C) touches only the regeneration-invalidation boundary, not Challenge Quiz's broader question-selection logic.
 
-**Verification tier (per `CLAUDE.md`'s release-size rule, stated plainly because this folds five items into one
-release, above the 3-4-item sweet spot):** Phase A0 is docs-only. Phases A and B both edit the same six prompt files
-in sequence — two PRs touching the same shared files is one of `CLAUDE.md`'s explicit triggers for escalation past a
-plain `advisor()` call. **One scoped cold agent (Opus), framed as falsification, runs before signoff**, targeting:
-whether the file-coverage map above is complete and correct once the actual diffs land, whether H5's relaxation
-leaks a letter reference through the legacy ladder or a code path outside `resolveAnswerIndex`, whether H6's
-exact-match resolver can silently mis-key on a choice-text collision, and whether the omit-rate measurement is real
-(a genuine before/after sample, not merely code that could produce one). `advisor()` before each phase's Codex
-prompt and on each diff, per standing process. Full three-agent pressure test is NOT warranted: no money, quota, or
-permission boundary is touched, and Phase C is an isolated regeneration-path fix with its own narrow blast radius.
+**Verification tier (per `CLAUDE.md`'s release-size rule):** three items, within the 3-4-item sweet spot. Phase A0 is
+docs-only. `advisor()` before each phase's Codex prompt and on each diff is the baseline. Escalate past that to one
+scoped cold agent only if a trigger actually fires once the diffs exist — for example if the Challenge-bank fix (Phase
+C) turns out to touch a method H5 or another live path also touches. As scoped now, neither H5 nor the Challenge-bank
+fix touches a shared method, a permission boundary, or money/quota/production-data semantics, so a single `advisor()`
+summary per phase is the default; do not default to a cold agent "to be safe" without a fired trigger.
 
 ### Shipped
 
