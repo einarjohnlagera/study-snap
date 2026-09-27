@@ -32,13 +32,14 @@ public class AdminStudyPackTransactionHelper {
     private final LlmStudyPackService llmStudyPackService;
     private final RegenerationProgressTracker progressTracker;
     private final ExamQuestionPoolService examQuestionPoolService;
+    private final ChallengeQuizQuestionBankService challengeQuizQuestionBankService;
 
     @Transactional
-    public void regenerateOnePack(StudyPackEntity pack) {
+    public boolean regenerateOnePack(StudyPackEntity pack) {
         if (pack == null || pack.getId() == null || pack.getNoteId() == null) {
             log.warn("Admin summary regeneration skipped study pack with missing identifiers");
             progressTracker.recordFailure();
-            return;
+            return false;
         }
 
         try {
@@ -47,11 +48,11 @@ public class AdminStudyPackTransactionHelper {
             if (currentPack == null) {
                 log.warn("Admin summary regeneration skipped missing packId={}", pack.getId());
                 progressTracker.recordSuccess();
-                return;
+                return false;
             }
             if (currentPack.getSummary() != null && currentPack.getSummary().contains(ENRICHED_SUMMARY_MARKER)) {
                 progressTracker.recordSuccess();
-                return;
+                return false;
             }
 
             NoteEntity note = noteRepository.findById(currentPack.getNoteId())
@@ -59,7 +60,7 @@ public class AdminStudyPackTransactionHelper {
             if (note == null) {
                 log.warn("Admin summary regeneration skipped packId={} because source note was not found", currentPack.getId());
                 progressTracker.recordSuccess();
-                return;
+                return false;
             }
 
             generationContextResolver.assertGenerationReady(note);
@@ -76,7 +77,11 @@ public class AdminStudyPackTransactionHelper {
             studyPackRepository.flush();
             examQuestionPoolService.refreshPool(currentPack.getId(), ExamQuestionPoolService.MODE_LONG_EXAM);
             examQuestionPoolService.refreshPool(currentPack.getId(), ExamQuestionPoolService.MODE_BOARD_EXAM);
+            // Summary feeds Challenge Quiz generation, so banked questions from the old summary must
+            // be removed before the caller queues a fresh Official template after commit.
+            challengeQuizQuestionBankService.invalidateForStudyPack(currentPack.getId());
             progressTracker.recordSuccess();
+            return true;
         } catch (Exception ex) {
             progressTracker.recordFailure();
             log.warn(
@@ -85,6 +90,7 @@ public class AdminStudyPackTransactionHelper {
                     ex.getMessage(),
                     ex
             );
+            return false;
         }
     }
 

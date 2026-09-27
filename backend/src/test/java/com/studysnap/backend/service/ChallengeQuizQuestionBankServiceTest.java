@@ -43,6 +43,19 @@ class ChallengeQuizQuestionBankServiceTest {
     private ChallengeQuizQuestionBankRepository questionBankRepository;
 
     @Test
+    void invalidateForStudyPack_joinsTheCallerTransactionAndBulkDeletes() throws NoSuchMethodException {
+        UUID studyPackId = UUID.randomUUID();
+        ChallengeQuizQuestionBankService service = new ChallengeQuizQuestionBankService(questionBankRepository);
+
+        service.invalidateForStudyPack(studyPackId);
+
+        verify(questionBankRepository).bulkDeleteAllForStudyPack(studyPackId);
+        assertThat(ChallengeQuizQuestionBankService.class
+                .getMethod("invalidateForStudyPack", UUID.class)
+                .getAnnotation(Transactional.class)).isNull();
+    }
+
+    @Test
     void releaseClaims_runsInANewTransactionSoOuterGenerationRollbackCannotUndoIt() throws NoSuchMethodException {
         Transactional transactional = ChallengeQuizQuestionBankService.class
                 .getMethod("releaseClaims", UUID.class, UUID.class, UUID.class)

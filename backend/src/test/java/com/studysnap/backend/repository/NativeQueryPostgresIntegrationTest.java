@@ -2,6 +2,7 @@ package com.studysnap.backend.repository;
 
 import com.studysnap.backend.entity.CombinedQuizEntity;
 import com.studysnap.backend.entity.CampaignFeedbackResponseEntity;
+import com.studysnap.backend.entity.ChallengeQuizQuestionBankEntity;
 import com.studysnap.backend.entity.EmailLogEntity;
 import com.studysnap.backend.entity.LearnerLevel;
 import com.studysnap.backend.entity.LinkedLearnerGrantScope;
@@ -16,6 +17,7 @@ import com.studysnap.backend.entity.NoteStatus;
 import com.studysnap.backend.entity.NoteRegenerationScope;
 import com.studysnap.backend.entity.RetentionEmailType;
 import com.studysnap.backend.dto.BulkRegenerateNotesRequest;
+import com.studysnap.backend.dto.QuizItem;
 import com.studysnap.backend.dto.NoteRegenerationPreflightRequest;
 import com.studysnap.backend.dto.NoteRegenerationPreflightResponse;
 import com.studysnap.backend.exception.BulkNoteRegenerationQuotaExceededException;
@@ -40,6 +42,7 @@ import com.studysnap.backend.entity.AnalyticsEventType;
 import com.studysnap.backend.service.AnalyticsService;
 import com.studysnap.backend.service.AuthService;
 import com.studysnap.backend.service.BillingUsagePeriodService;
+import com.studysnap.backend.service.ChallengeQuizQuestionBankService;
 import com.studysnap.backend.service.ConceptHealthService;
 import com.studysnap.backend.service.ContentModerationService;
 import com.studysnap.backend.service.EmailService;
@@ -429,6 +432,73 @@ class NativeQueryPostgresIntegrationTest {
 
     @Autowired
     private LinkedLearnerRequestExpiryWorker requestExpiryWorker;
+
+    /**
+     * Killing test for dropping the studyPackId predicate, scoping the delete to one user, or
+     * preserving claimed rows. Raw JDBC counts avoid the first-level cache masking a bulk-delete
+     * mutation after these entities have been persisted in the same test transaction.
+     */
+    @Test
+    void challengeQuestionBankInvalidationDeletesEveryRowForOnlyTheTargetStudyPack() {
+        UUID firstUserId = seedUser("bank-invalidation-first");
+        UUID secondUserId = seedUser("bank-invalidation-second");
+        UUID deletedNoteId = seedPublicNote(firstUserId, "Deleted bank source", new String[] {});
+        UUID untouchedNoteId = seedPublicNote(firstUserId, "Untouched bank source", new String[] {});
+        UUID deletedStudyPackId = seedStudyPack(firstUserId, deletedNoteId, "Deleted bank pack");
+        UUID untouchedStudyPackId = seedStudyPack(firstUserId, untouchedNoteId, "Untouched bank pack");
+        UUID deletedClaimSessionId = seedQuizSession(
+                firstUserId, deletedStudyPackId, deletedNoteId, null);
+        UUID untouchedClaimSessionId = seedQuizSession(
+                secondUserId, untouchedStudyPackId, untouchedNoteId, null);
+
+        questionBankRepository.saveAndFlush(questionBankEntry(
+                firstUserId, deletedStudyPackId, "deleted claimed", deletedClaimSessionId));
+        questionBankRepository.saveAndFlush(questionBankEntry(
+                secondUserId, deletedStudyPackId, "deleted unclaimed", null));
+        questionBankRepository.saveAndFlush(questionBankEntry(
+                firstUserId, untouchedStudyPackId, "untouched unclaimed", null));
+        questionBankRepository.saveAndFlush(questionBankEntry(
+                secondUserId, untouchedStudyPackId, "untouched claimed", untouchedClaimSessionId));
+        entityManager.clear();
+
+        questionBankRepository.bulkDeleteAllForStudyPack(deletedStudyPackId);
+
+        assertThat(jdbcTemplate.queryForObject(
+                "select count(*) from challenge_quiz_question_bank where study_pack_id = ?",
+                Integer.class,
+                deletedStudyPackId
+        )).isZero();
+        assertThat(jdbcTemplate.queryForObject(
+                "select count(*) from challenge_quiz_question_bank where study_pack_id = ?",
+                Integer.class,
+                untouchedStudyPackId
+        )).isEqualTo(2);
+    }
+
+    private ChallengeQuizQuestionBankEntity questionBankEntry(
+            UUID userId,
+            UUID studyPackId,
+            String questionText,
+            UUID claimedSessionId
+    ) {
+        ChallengeQuizQuestionBankEntity entry = new ChallengeQuizQuestionBankEntity();
+        entry.setId(UUID.randomUUID());
+        entry.setUserId(userId);
+        entry.setStudyPackId(studyPackId);
+        entry.setQuestionKey(questionText);
+        entry.setQuestion(new QuizItem(
+                questionText,
+                List.of("A", "B", "C", "D"),
+                0,
+                "Concept",
+                "Explanation"
+        ));
+        entry.setLearnerLevel(LearnerLevel.COLLEGE.name());
+        entry.setLastKnownOutcome("UNANSWERED");
+        entry.setClaimedSessionId(claimedSessionId);
+        entry.setGeneratedAt(OffsetDateTime.now(ZoneOffset.UTC));
+        return entry;
+    }
 
     /** Killing test for removing the pack index or changing its non-null predicate to the wrong leg. */
     @Test
@@ -4245,6 +4315,7 @@ class NativeQueryPostgresIntegrationTest {
                     }),
                     mock(ContentModerationService.class),
                     mock(ExamQuestionPoolService.class),
+                    mock(ChallengeQuizQuestionBankService.class),
                     mock(OfficialChallengeQuizTemplateService.class),
                     mock(OnboardingGuardService.class),
                     mock(StudyPackQuizMasteryService.class),
@@ -5145,6 +5216,7 @@ class NativeQueryPostgresIntegrationTest {
                     new StudyPackGenerationTaskDispatcher(Runnable::run),
                     mock(ContentModerationService.class),
                     mock(ExamQuestionPoolService.class),
+                    mock(ChallengeQuizQuestionBankService.class),
                     mock(OfficialChallengeQuizTemplateService.class),
                     mock(OnboardingGuardService.class),
                     mock(StudyPackQuizMasteryService.class),

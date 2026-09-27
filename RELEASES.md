@@ -110,6 +110,60 @@ during the survey and are NOT part of this release's scope (see "Also found" bel
    deleted content. Fix: invalidate or refresh the bank on the same regeneration boundary, mirroring the exam-pool
    fix's shape. No migration expected; confirm against `ChallengeQuizQuestionBankService`'s actual write path before
    the Codex prompt is written.
+   **Shipped:** `ChallengeQuizQuestionBankRepository.bulkDeleteAllForStudyPack` and
+   `ChallengeQuizQuestionBankService.invalidateForStudyPack` now delete all bank rows for a regenerated pack in one
+   JPQL statement. Exactly two of the three exam-pool invalidation sites call it after their existing
+   `studyPackRepository.flush()` and Long/Board refreshes: `StudyPackService` regeneration replaces `summary` and
+   `keyConcepts`, and `AdminStudyPackTransactionHelper.regenerateOnePack` replaces `summary`; quiz-only
+   `repairMalformedQuiz` remains untouched because `quiz` is not a Challenge-generation input. The admin helper now
+   reports whether content was actually replaced, and `AdminStudyPackService` then reloads the committed note and
+   pack and calls `OfficialChallengeQuizTemplateService.queueSeedIfEligible`; the learner-facing path already had
+   the equivalent post-commit seed. Production files: `ChallengeQuizQuestionBankRepository.java`,
+   `ChallengeQuizQuestionBankService.java`, `StudyPackService.java`, `AdminStudyPackTransactionHelper.java`, and
+   `AdminStudyPackService.java`. Tests: `NativeQueryPostgresIntegrationTest.java` proves the delete's pack predicate
+   and claimed-row behavior against Flyway PostgreSQL; `StudyPackServiceTest.java` and
+   `AdminStudyPackTransactionHelperTest.java` pin flush → exam refreshes → bank invalidation ordering;
+   `AdminStudyPackServiceTest.java` pins post-commit reload/re-seed and the false-result skip; and
+   `ChallengeQuizQuestionBankServiceTest.java` pins the unannotated transaction-joining service method.
+   **Verified via a scoped Opus falsification pass (worktree pinned to `d4cd98f3`), CORRECTED 2026-09-27: the
+   executor-rejection framing below was wrong, and two additional findings surfaced, both documented rather than
+   fixed.**
+   - **Executor math corrected.** 890 admin-owned packs matching summary regeneration had bank rows in production
+     on 2026-09-27 (not all Official-template eligible). The 4-core/8-max/50-queue `llmParallelTaskExecutor`
+     admits roughly the FIRST 58 of a bulk run's regeneration tasks and rejects the rest at submission —
+     **those rejected packs are never regenerated, so never invalidated, and need no re-seed at all.** Among the
+     ~58 admitted, only the one whose re-seed happens to land while the queue is still full is rejected — expect
+     about ONE rejected seed per saturated run, not most of them (the original wording overclaimed this). A
+     rejected seed still degrades safely (`copyTemplateQuestions` copies nothing, Challenge Quiz generates fresh
+     shortfall questions). Recovery: rerun `POST /admin/study-packs/seed-official-challenge-quiz-templates` only
+     AFTER the bulk run has fully finished, not while seeds may still be in flight — its existence gate can't see
+     an uncommitted seed, so an overlapping rerun wastes LLM calls and can occasionally double a template.
+   - **New finding, documented not fixed (`docs/features/quiz.md`): `generateMoreQuestions` ("+5 questions") can
+     race this invalidation.** It reads `summary` unlocked, then calls the LLM while holding a `PESSIMISTIC_WRITE`
+     lock on its own claimed bank rows; a concurrent regeneration's delete can run (or wait) around that call, and
+     the `+5` request's LLM-derived rows — built from the pre-regeneration summary — are inserted afterward and
+     survive the delete. A real fix needs a generation stamp on bank rows and a migration; tracked as its own
+     Backlog row (`docs/product/ROADMAP.md`) rather than folded in here. The same call also introduces a genuinely
+     new wait: a regeneration's bank delete can now block up to the LLM read timeout (180s) behind an in-flight
+     `+5` call on the same pack, while holding the Study Pack and Note row locks and one of only two
+     `studyPackGenerationTaskExecutor` threads. No cross-transaction deadlock was found reachable on the main
+     paths (`study_packs` is always locked before the bank, on both sides) — only this bounded-but-long wait.
+   - **Pre-existing bug this release widens the blast radius of, NOT fixed here, Backlog row added
+     (`docs/product/ROADMAP.md`): `ChallengeQuizQuestionBankService.releaseClaims`'s `REQUIRES_NEW` transaction can
+     wait indefinitely on locks its own caller's outer transaction already holds** (v0.60.2; fires on any
+     `RuntimeException` in `generateMoreQuestions`, including the ordinary `NotEnoughNewQuestionsException`, not
+     only real errors). **Verified against production, 2026-09-27:** `lock_timeout`, `statement_timeout`, and
+     `idle_in_transaction_session_timeout` are all `0` (unbounded) — if this ever fires, nothing currently stops
+     it. **Also checked 30 days of Render logs for direct evidence: 3 "Apparent connection leak detected" events
+     exist, and all 3 trace through `NoteController.listMine` — an unrelated path — not through
+     `ChallengeQuizService` at all.** No evidence this specific hang has ever fired; the risk is real but appears
+     dormant, not active. **What THIS release widens:** before this commit, a hang here only pinned one learner's
+     request and two DB connections; after this commit, a regeneration's new bank-delete call can queue up behind
+     the same held lock, so a hang also now blocks that Study Pack's regeneration indefinitely, holding a
+     `study_packs`/`notes` row lock and one of only two `studyPackGenerationTaskExecutor` threads. Not fixed in
+     this prompt — the naive fix (lock `study_packs` inside `generateMoreQuestions`) would invert `startSession`'s
+     own pack-then-session lock order and create a new same-user deadlock; a real fix needs more care than this
+     release's scope affords.
 
 5. **Phase D (Question Quality, Claude-direct, documentation/audit ONLY — no code).** Distinct from H4 (which
    verifies a stored answer agrees with its own explanation) and from H5/H6 (representation, not correctness): this

@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
@@ -59,6 +60,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.mock.web.MockMultipartFile;
@@ -107,6 +109,8 @@ class StudyPackServiceTest {
     @Mock
     private ExamQuestionPoolService examQuestionPoolService;
     @Mock
+    private ChallengeQuizQuestionBankService challengeQuizQuestionBankService;
+    @Mock
     private OfficialChallengeQuizTemplateService officialChallengeQuizTemplateService;
     @Mock
     private OnboardingGuardService onboardingGuardService;
@@ -150,6 +154,7 @@ class StudyPackServiceTest {
                 new StudyPackGenerationTaskDispatcher(Runnable::run),
                 contentModerationService,
                 examQuestionPoolService,
+                challengeQuizQuestionBankService,
                 officialChallengeQuizTemplateService,
                 onboardingGuardService,
                 studyPackQuizMasteryService,
@@ -686,6 +691,7 @@ class StudyPackServiceTest {
                 new StudyPackGenerationTaskDispatcher(Runnable::run),
                 contentModerationService,
                 examQuestionPoolService,
+                challengeQuizQuestionBankService,
                 officialChallengeQuizTemplateService,
                 onboardingGuardService,
                 studyPackQuizMasteryService,
@@ -734,6 +740,7 @@ class StudyPackServiceTest {
                 new StudyPackGenerationTaskDispatcher(Runnable::run),
                 contentModerationService,
                 examQuestionPoolService,
+                challengeQuizQuestionBankService,
                 officialChallengeQuizTemplateService,
                 onboardingGuardService,
                 studyPackQuizMasteryService,
@@ -817,6 +824,7 @@ class StudyPackServiceTest {
                 new StudyPackGenerationTaskDispatcher(generationTasks::add),
                 contentModerationService,
                 examQuestionPoolService,
+                challengeQuizQuestionBankService,
                 officialChallengeQuizTemplateService,
                 onboardingGuardService,
                 studyPackQuizMasteryService,
@@ -900,6 +908,7 @@ class StudyPackServiceTest {
                 new StudyPackGenerationTaskDispatcher(generationTasks::add),
                 contentModerationService,
                 examQuestionPoolService,
+                challengeQuizQuestionBankService,
                 officialChallengeQuizTemplateService,
                 onboardingGuardService,
                 studyPackQuizMasteryService,
@@ -951,6 +960,7 @@ class StudyPackServiceTest {
                 new StudyPackGenerationTaskDispatcher(generationTasks::add),
                 contentModerationService,
                 examQuestionPoolService,
+                challengeQuizQuestionBankService,
                 officialChallengeQuizTemplateService,
                 onboardingGuardService,
                 studyPackQuizMasteryService,
@@ -1096,10 +1106,14 @@ class StudyPackServiceTest {
 
         studyPackService.startAsyncGenerationFromNote(noteId.toString(), userId);
 
-        verify(examQuestionPoolService).refreshPool(
+        InOrder inOrder = inOrder(
+                studyPackRepository, examQuestionPoolService, challengeQuizQuestionBankService);
+        inOrder.verify(studyPackRepository).flush();
+        inOrder.verify(examQuestionPoolService).refreshPool(
                 studyPackId, ExamQuestionPoolService.MODE_LONG_EXAM);
-        verify(examQuestionPoolService).refreshPool(
+        inOrder.verify(examQuestionPoolService).refreshPool(
                 studyPackId, ExamQuestionPoolService.MODE_BOARD_EXAM);
+        inOrder.verify(challengeQuizQuestionBankService).invalidateForStudyPack(studyPackId);
         // v0.151.0: a STUDY_PACK-only regeneration replaces the quiz content exactly like the combined
         // scope does, so a shared quiz's live links must be deactivated here too -- this line used to
         // assert never() and pinned the bug (v0.110.2's protection was silently scope-gated away).
@@ -1582,6 +1596,7 @@ class StudyPackServiceTest {
                 existingPack.getId(), ExamQuestionPoolService.MODE_LONG_EXAM);
         verify(examQuestionPoolService).refreshPool(
                 existingPack.getId(), ExamQuestionPoolService.MODE_BOARD_EXAM);
+        verify(challengeQuizQuestionBankService).invalidateForStudyPack(existingPack.getId());
         verify(examQuestionPoolService).initiatePool(any(StudyPackEntity.class), eq(ownerUserId));
         verify(analyticsService).trackEvent(
                 eq(ownerUserId), eq(AnalyticsEventType.STUDY_PACK_GENERATED), any(UUID.class), any());

@@ -53,6 +53,8 @@ class AdminStudyPackTransactionHelperTest {
     private RegenerationProgressTracker progressTracker;
     @Mock
     private ExamQuestionPoolService examQuestionPoolService;
+    @Mock
+    private ChallengeQuizQuestionBankService challengeQuizQuestionBankService;
 
     private AdminStudyPackTransactionHelper transactionHelper;
 
@@ -65,8 +67,45 @@ class AdminStudyPackTransactionHelperTest {
                 generationContextResolver,
                 llmStudyPackService,
                 progressTracker,
-                examQuestionPoolService
+                examQuestionPoolService,
+                challengeQuizQuestionBankService
         );
+    }
+
+    @Test
+    void regenerateOnePack_returnsFalseForMissingIdentifiers() {
+        StudyPackEntity pack = new StudyPackEntity();
+
+        assertThat(transactionHelper.regenerateOnePack(pack)).isFalse();
+
+        verify(studyPackRepository, never()).findById(any());
+        verify(challengeQuizQuestionBankService, never()).invalidateForStudyPack(any());
+        verify(progressTracker).recordFailure();
+    }
+
+    @Test
+    void regenerateOnePack_returnsFalseForMissingPack() {
+        StudyPackEntity pack = buildPack(UUID.randomUUID(), List.of());
+        when(studyPackRepository.findById(pack.getId())).thenReturn(Optional.empty());
+
+        assertThat(transactionHelper.regenerateOnePack(pack)).isFalse();
+
+        verify(noteRepository, never()).findById(any());
+        verify(challengeQuizQuestionBankService, never()).invalidateForStudyPack(any());
+        verify(progressTracker).recordSuccess();
+    }
+
+    @Test
+    void regenerateOnePack_returnsFalseForAlreadyEnrichedSummary() {
+        StudyPackEntity pack = buildPack(UUID.randomUUID(), List.of());
+        pack.setSummary("Heading | Detail");
+        when(studyPackRepository.findById(pack.getId())).thenReturn(Optional.of(pack));
+
+        assertThat(transactionHelper.regenerateOnePack(pack)).isFalse();
+
+        verify(noteRepository, never()).findById(any());
+        verify(challengeQuizQuestionBankService, never()).invalidateForStudyPack(any());
+        verify(progressTracker).recordSuccess();
     }
 
     @Test
@@ -77,8 +116,7 @@ class AdminStudyPackTransactionHelperTest {
         when(studyPackRepository.findById(pack.getId())).thenReturn(Optional.of(pack));
         when(noteRepository.findById(pack.getNoteId())).thenReturn(Optional.empty());
 
-        assertThatCode(() -> transactionHelper.regenerateOnePack(pack))
-                .doesNotThrowAnyException();
+        assertThat(transactionHelper.regenerateOnePack(pack)).isFalse();
 
         verify(llmStudyPackService, never()).regenerateSummary(
                 org.mockito.ArgumentMatchers.any(),
@@ -86,6 +124,7 @@ class AdminStudyPackTransactionHelperTest {
         );
         verify(studyPackRepository, never()).save(org.mockito.ArgumentMatchers.any());
         verify(examQuestionPoolService, never()).refreshPool(any(), any());
+        verify(challengeQuizQuestionBankService, never()).invalidateForStudyPack(any());
     }
 
     @Test
@@ -98,11 +137,12 @@ class AdminStudyPackTransactionHelperTest {
         doThrow(new MultiProgramDomainContextRequiredException())
                 .when(generationContextResolver).assertGenerationReady(note);
 
-        transactionHelper.regenerateOnePack(pack);
+        assertThat(transactionHelper.regenerateOnePack(pack)).isFalse();
 
         verify(llmStudyPackService, never()).regenerateSummary(any(), any());
         verify(studyPackRepository, never()).save(any());
         verify(examQuestionPoolService, never()).refreshPool(any(), any());
+        verify(challengeQuizQuestionBankService, never()).invalidateForStudyPack(any());
         verify(progressTracker).recordFailure();
     }
 
@@ -119,17 +159,19 @@ class AdminStudyPackTransactionHelperTest {
                 .thenReturn("Regenerated summary with no marker");
         when(studyPackRepository.save(same(pack))).thenReturn(pack);
 
-        transactionHelper.regenerateOnePack(pack);
+        assertThat(transactionHelper.regenerateOnePack(pack)).isTrue();
 
         assertThat(pack.getSummary()).isEqualTo("Regenerated summary with no marker");
         // The flush must happen before either refreshPool call: it is the fix for the same
         // study_packs -> exam_question_pool lock-order inversion v0.143.0 found and closed on the
         // learner-facing regeneration path, and a mutant that drops or reorders it must fail this test.
-        InOrder inOrder = inOrder(studyPackRepository, examQuestionPoolService);
+        InOrder inOrder = inOrder(
+                studyPackRepository, examQuestionPoolService, challengeQuizQuestionBankService);
         inOrder.verify(studyPackRepository).save(pack);
         inOrder.verify(studyPackRepository).flush();
         inOrder.verify(examQuestionPoolService).refreshPool(pack.getId(), ExamQuestionPoolService.MODE_LONG_EXAM);
         inOrder.verify(examQuestionPoolService).refreshPool(pack.getId(), ExamQuestionPoolService.MODE_BOARD_EXAM);
+        inOrder.verify(challengeQuizQuestionBankService).invalidateForStudyPack(pack.getId());
         verify(progressTracker).recordSuccess();
     }
 
@@ -178,6 +220,7 @@ class AdminStudyPackTransactionHelperTest {
         inOrder.verify(studyPackRepository).flush();
         inOrder.verify(examQuestionPoolService).refreshPool(pack.getId(), ExamQuestionPoolService.MODE_LONG_EXAM);
         inOrder.verify(examQuestionPoolService).refreshPool(pack.getId(), ExamQuestionPoolService.MODE_BOARD_EXAM);
+        verify(challengeQuizQuestionBankService, never()).invalidateForStudyPack(any());
         verify(progressTracker).recordSuccess();
     }
 
