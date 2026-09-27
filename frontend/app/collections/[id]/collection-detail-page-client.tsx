@@ -14,7 +14,7 @@ import { Card, CardDescription, CardTitle } from "@/components/ui/card";
 import { GuidanceTip } from "@/components/ui/guidance-tip";
 import { SuggestionCombobox } from "@/components/ui/suggestion-combobox";
 import { PageHeader } from "@/components/page-header";
-import { ReadinessSummary } from "@/components/readiness/readiness-summary";
+import { isReadinessNotStarted, ReadinessSummary } from "@/components/readiness/readiness-summary";
 import { ResponsiveActionButton, ResponsiveActionContent, ResponsiveActionLink } from "@/components/ui/action-button";
 import {
   ADAPTIVE_PRACTICE_COLLECTION_DETAIL_ENTRY,
@@ -124,6 +124,7 @@ export type SectionReadiness = {
   mastered: number;
   total: number;
   due: number;
+  notPracticed: number;
 };
 type ContinuePlanAction = {
   item: NoteCollectionItem;
@@ -133,7 +134,6 @@ type ContinuePlanAction = {
 
 const TITLE_MAX_LENGTH = 150;
 const LABEL_MAX_LENGTH = 120;
-const LARGE_VIEWPORT_MIN_WIDTH = 1024;
 const TODAY_FOCUS_EYEBROW = "Today's Focus";
 const CONTINUE_STUDYING_LABEL = "Continue Studying";
 const QUICK_ACTIONS_LABEL = "Quick Actions";
@@ -238,14 +238,50 @@ export function aggregateSectionReadiness(
       return;
     }
     const sectionName = getSectionReadinessKey(item.label);
-    const previous = sectionCounts.get(sectionName) ?? { mastered: 0, total: 0, due: 0 };
+    const previous = sectionCounts.get(sectionName) ?? { mastered: 0, total: 0, due: 0, notPracticed: 0 };
     sectionCounts.set(sectionName, {
       mastered: previous.mastered + counts.masteredConceptCount,
       total: previous.total + counts.totalConceptCount,
       due: previous.due + counts.dueConceptCount,
+      notPracticed: previous.notPracticed + counts.notPracticedConceptCount,
     });
   });
   return sectionCounts;
+}
+
+export function useSectionExpansionState(organizeMode: boolean, sectionIds: string[]) {
+  const [readViewExpandedById, setReadViewExpandedById] = useState<Record<string, boolean>>({});
+  const [organizeExpandedById, setOrganizeExpandedById] = useState<Record<string, boolean>>({});
+  const expandedById = organizeMode ? organizeExpandedById : readViewExpandedById;
+  const setExpandedById = organizeMode ? setOrganizeExpandedById : setReadViewExpandedById;
+  const defaultExpanded = organizeMode || sectionIds.length === 1;
+  const isSectionExpanded = (sectionId: string) => expandedById[sectionId] ?? defaultExpanded;
+  const allSectionsExpanded = sectionIds.length > 0 && sectionIds.every(isSectionExpanded);
+
+  const toggleSectionExpanded = (sectionId: string) => {
+    setExpandedById((previous) => ({
+      ...previous,
+      [sectionId]: !(previous[sectionId] ?? defaultExpanded),
+    }));
+  };
+
+  const toggleAllSections = () => {
+    const nextExpanded = !allSectionsExpanded;
+    setExpandedById((previous) => {
+      const next = { ...previous };
+      sectionIds.forEach((sectionId) => {
+        next[sectionId] = nextExpanded;
+      });
+      return next;
+    });
+  };
+
+  return {
+    allSectionsExpanded,
+    isSectionExpanded,
+    toggleAllSections,
+    toggleSectionExpanded,
+  };
 }
 
 export function getLatestPracticedCollectionItem(items: NoteCollectionItem[]): NoteCollectionItem | null {
@@ -307,9 +343,23 @@ function SectionCardHeader({
   const cancelingRef = useRef(false);
   const isEditing = editingSectionId === section.id;
   const isUngrouped = section.name === UNGROUPED_SECTION_NAME;
+  const sectionReadinessPercentage = sectionReadiness && sectionReadiness.total > 0
+    ? Math.round((sectionReadiness.mastered / sectionReadiness.total) * 100)
+    : 0;
+  // ⚠️ "Not started" MUST NOT CONTRADICT THE NOTE ROWS BELOW IT. The backend counts a concept as
+  // "not practiced" until it has a CORRECT answer, so a learner who finished sessions but never got a
+  // concept right has notPracticed === total. Rows say "Practiced" for any completed session, so a
+  // Section is "Not started" only when the counts say so AND no note in it has a completed session.
+  const sectionHasPracticedNote = section.items.some((item) => item.lastSessionCompletedAt != null);
   const readinessStat = !organizeMode && sectionReadiness && sectionReadiness.total > 0 ? (
     <span className="rounded-full border border-blue-500/20 bg-blue-500/10 px-2 py-0.5 text-xs font-semibold text-blue-700 dark:text-blue-200">
-      {Math.round((sectionReadiness.mastered / sectionReadiness.total) * 100)}% · {sectionReadiness.due} due
+      {!sectionHasPracticedNote && isReadinessNotStarted({
+        masteryPercentage: sectionReadinessPercentage,
+        notPracticedConcepts: sectionReadiness.notPracticed,
+        totalConcepts: sectionReadiness.total,
+      })
+        ? "Not started"
+        : `${sectionReadinessPercentage}% · ${sectionReadiness.due} due`}
     </span>
   ) : null;
 
@@ -3056,8 +3106,6 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
   const [publishOpen, setPublishOpen] = useState(false);
   const [companionOpen, setCompanionOpen] = useState(false);
   const [organizeMode] = useState(false);
-  const [defaultSectionExpanded, setDefaultSectionExpanded] = useState<boolean | null>(null);
-  const [sectionExpandedById, setSectionExpandedById] = useState<Record<string, boolean>>({});
   const [editingSectionId, setEditingSectionId] = useState<string | null>(null);
   const [editingSectionName, setEditingSectionName] = useState("");
   const [pendingSectionRename, setPendingSectionRename] = useState<{ oldName: string; newName: string } | null>(null);
@@ -3126,10 +3174,6 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
     }
     void Promise.resolve().then(loadCollection);
   }, [loadCollection, router]);
-
-  useEffect(() => {
-    setDefaultSectionExpanded((globalThis.innerWidth ?? 0) >= LARGE_VIEWPORT_MIN_WIDTH);
-  }, []);
 
   useEffect(() => {
     setSkippedNoticeCount(getStudyPlanSkippedNotice(collectionId));
@@ -3469,30 +3513,12 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
     () => getCollectionItemSections(items),
     [items],
   );
-
-  useEffect(() => {
-    if (defaultSectionExpanded === null) {
-      return;
-    }
-    if (!hasSections) {
-      setSectionExpandedById({});
-      return;
-    }
-    setSectionExpandedById((previous) => {
-      const next: Record<string, boolean> = {};
-      itemSections.forEach((section) => {
-        next[section.id] = previous[section.id] ?? defaultSectionExpanded;
-      });
-      return next;
-    });
-  }, [defaultSectionExpanded, hasSections, itemSections]);
-
-  const toggleSectionExpanded = (sectionId: string) => {
-    setSectionExpandedById((previous) => ({
-      ...previous,
-      [sectionId]: !(previous[sectionId] ?? defaultSectionExpanded ?? false),
-    }));
-  };
+  const {
+    allSectionsExpanded,
+    isSectionExpanded,
+    toggleAllSections,
+    toggleSectionExpanded,
+  } = useSectionExpansionState(organizeMode, itemSections.map((section) => section.id));
 
   const handleSectionRenameStart = (section: CollectionItemSection) => {
     setEditingSectionId(section.id);
@@ -3888,6 +3914,7 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
 
           <ReadinessSummary
             variant="compact"
+            notStartedWhenUntouched
             title={`${goalDetail.title} readiness`}
             eyebrow={`${labels.goalSingular} readiness`}
             overallReadinessPercentage={goalDetail.overallReadinessPercentage}
@@ -4120,6 +4147,9 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
 
       <ReadinessSummary
         variant="compact"
+        // A leaf plan knows how many of its notes have a completed session; never say "Not started"
+        // once any has (the concept counts alone cannot see practice that never got a correct answer).
+        notStartedWhenUntouched={collection.progress.notesPracticed === 0}
         title={`${collection.title} readiness`}
         eyebrow={`${labels.singular} readiness`}
         overallReadinessPercentage={planReadiness?.overallReadinessPercentage ?? 0}
@@ -4150,9 +4180,18 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
       ) : null}
 
       <Card className="space-y-4 p-4 sm:p-6">
-        <div>
+        <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-3">
           <CardTitle>Notes</CardTitle>
-          <CardDescription>
+          {hasSections && itemSections.length >= 2 ? (
+            <button
+              type="button"
+              className="row-span-2 col-start-2 row-start-1 shrink-0 text-sm font-medium text-blue-600 hover:underline dark:text-blue-400"
+              onClick={toggleAllSections}
+            >
+              {allSectionsExpanded ? "Collapse all" : "Expand all"}
+            </button>
+          ) : null}
+          <CardDescription className="col-start-1">
             {items.length} {items.length === 1 ? "note" : "notes"} in saved order · {collection.progress.notesWithStudyPack}/{collection.progress.totalNotes} notes ready.
           </CardDescription>
         </div>
@@ -4180,7 +4219,7 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
                 {hasSections ? (
                   <div className="space-y-5">
                     {itemSections.map((section, sectionIndex) => {
-                      const isExpanded = sectionExpandedById[section.id] ?? defaultSectionExpanded ?? false;
+                      const isExpanded = isSectionExpanded(section.id);
                       const sectionContentId = `collection-section-${sectionIndex}`;
                       return (
                         <section key={section.id} aria-labelledby={`${sectionContentId}-heading`} className="rounded-xl border border-border bg-background p-4 shadow-sm sm:p-5">
@@ -4253,7 +4292,7 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
             ) : hasSections ? (
               <div className="space-y-5">
                 {itemSections.map((section, sectionIndex) => {
-                  const isExpanded = sectionExpandedById[section.id] ?? defaultSectionExpanded ?? false;
+                  const isExpanded = isSectionExpanded(section.id);
                   const sectionContentId = `collection-section-${sectionIndex}`;
                   return (
                     <section key={section.id} aria-labelledby={`${sectionContentId}-heading`} className="rounded-xl border border-border bg-background p-4 shadow-sm sm:p-5">

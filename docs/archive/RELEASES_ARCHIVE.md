@@ -1,6 +1,6 @@
 # RELEASES_ARCHIVE.md — NoteLib
 
-Archived sections of `RELEASES.md`. **Contents are NOT one contiguous range:** `v0.41.0`–`v0.120.0`, plus `v0.126.0` (moved at the `v0.132.0` kickoff), `v0.127.0` (moved at the `v0.133.0` kickoff) `v0.128.0` (moved at the `v0.134.0` kickoff) `v0.129.0` (moved at the `v0.135.0` kickoff) `v0.130.0` (moved at the `v0.136.0` kickoff) `v0.131.0` (moved at the `v0.137.0` kickoff) `v0.132.0` (moved at the `v0.138.0` kickoff) `v0.133.0` (moved at the `v0.139.0` kickoff), `v0.134.0` (moved at the `v0.140.0` kickoff), `v0.135.0` (moved at the `v0.141.0` kickoff), `v0.136.0` (moved at the `v0.142.0` kickoff), `v0.137.0` (moved at the `v0.143.0` kickoff), `v0.138.0` (moved at the `v0.144.0` kickoff), `v0.139.0` (moved at the `v0.145.0` kickoff), `v0.140.0` (moved at the `v0.146.0` kickoff), `v0.141.0` (moved at the `v0.147.0` kickoff), `v0.142.0` (moved at the `v0.148.0` kickoff), `v0.143.0` (moved at the `v0.149.0` kickoff), `v0.144.0` (moved at the `v0.150.0` kickoff), `v0.145.0` (moved at the `v0.151.0` kickoff), `v0.146.0` (moved at the `v0.152.0` kickoff), `v0.147.0` (moved at the `v0.153.0` kickoff), `v0.148.0` (moved at the `v0.154.0` kickoff), `v0.149.0` (moved at the `v0.155.0` kickoff), `v0.150.0` (moved at the `v0.156.0` signoff — the first time this archive check ran at signoff rather than kickoff, since v0.156.0 folded two releases' worth of scope into one and crossed the cap without an intervening kickoff) and `v0.151.0` (moved at the `v0.157.0` kickoff) and `v0.152.0` (moved at the `v0.158.0` kickoff) as the live file crossed its *current + last five* cap. Each version's own `## vX.Y.Z` heading is the index — search for it. `v0.40.1` and earlier moved here
+Archived sections of `RELEASES.md`. **Contents are NOT one contiguous range:** `v0.41.0`–`v0.120.0`, plus `v0.126.0` (moved at the `v0.132.0` kickoff), `v0.127.0` (moved at the `v0.133.0` kickoff) `v0.128.0` (moved at the `v0.134.0` kickoff) `v0.129.0` (moved at the `v0.135.0` kickoff) `v0.130.0` (moved at the `v0.136.0` kickoff) `v0.131.0` (moved at the `v0.137.0` kickoff) `v0.132.0` (moved at the `v0.138.0` kickoff) `v0.133.0` (moved at the `v0.139.0` kickoff), `v0.134.0` (moved at the `v0.140.0` kickoff), `v0.135.0` (moved at the `v0.141.0` kickoff), `v0.136.0` (moved at the `v0.142.0` kickoff), `v0.137.0` (moved at the `v0.143.0` kickoff), `v0.138.0` (moved at the `v0.144.0` kickoff), `v0.139.0` (moved at the `v0.145.0` kickoff), `v0.140.0` (moved at the `v0.146.0` kickoff), `v0.141.0` (moved at the `v0.147.0` kickoff), `v0.142.0` (moved at the `v0.148.0` kickoff), `v0.143.0` (moved at the `v0.149.0` kickoff), `v0.144.0` (moved at the `v0.150.0` kickoff), `v0.145.0` (moved at the `v0.151.0` kickoff), `v0.146.0` (moved at the `v0.152.0` kickoff), `v0.147.0` (moved at the `v0.153.0` kickoff), `v0.148.0` (moved at the `v0.154.0` kickoff), `v0.149.0` (moved at the `v0.155.0` kickoff), `v0.150.0` (moved at the `v0.156.0` signoff — the first time this archive check ran at signoff rather than kickoff, since v0.156.0 folded two releases' worth of scope into one and crossed the cap without an intervening kickoff) and `v0.151.0` (moved at the `v0.157.0` kickoff) and `v0.152.0` (moved at the `v0.158.0` kickoff) and `v0.153.0` and `v0.154.0` (moved at the `v0.159.0` and `v0.160.0` kickoffs; earlier passes did not extend this line) and `v0.155.0` (moved at the `v0.161.0` kickoff) as the live file crossed its *current + last five* cap. Each version's own `## vX.Y.Z` heading is the index — search for it. `v0.40.1` and earlier moved here
 2026-07-10; **`v0.41.0` through `v0.120.0` moved here 2026-09-07** in the `v0.126.0` pass, which
 resumed this convention after it had lapsed for 85 releases — `RELEASES.md` had reached 116
 sections against its documented design of *current + last few versions*. Both passes are MOVES,
@@ -17,6 +17,170 @@ See `RELEASES.md` for the current + most-recent versions, and its "Archived rele
 index for a one-line-per-version pointer back into this file.
 
 ---
+
+## v0.155.0 - Say What You Checked
+
+**Status: Released** (signed off 2026-09-22)
+
+Theme: fix a real quiz-grading correctness defect a learner caught and reported, and ship the
+validator that would have rejected it at generation time.
+
+Source: `docs/claude-findings/2026-09-19-quick-review-percentage-increase-correctness-incident.md`
+(full incident audit, §A–T), owner decisions locked 2026-09-21 (§Q.1).
+
+**What happened:** a learner answered a Quick Review question correctly, was graded wrong, re-ran the
+quiz picking the answer they knew was wrong to confirm the bug, then reported it. Root cause: the LLM
+emitted the wrong answer *letter* while its own explanation derived the correct value — a stored MCQ's
+`correctIndex` pointed at `"25%"` while its `explanation`/`workingSolution` both derived and stated
+`30%`. This is a generation-inconsistency defect, not parsing, persistence, shuffling, assembly,
+evaluation, or rendering — all four downstream layers were traced and confirmed correct. A deterministic
+corpus scan (zero LLM calls, re-run twice) across 115,333 production questions in four stores found
+**31 confirmed defects**, each independently hand-verified by re-deriving the correct answer from the
+question's own stated inputs, not trusted from its own suspect explanation. Realized learner exposure is
+exactly one person, two sessions — every other instance sits in never-served exam pools or the owner's
+own test account. **⚠️ CORRECTED 2026-09-22, discovered by the owner mid-repair, not caught at kickoff:**
+this count included a false "duplicate defect" in pool `2437d442` — a live re-read found the pool's
+second, similarly-worded question has a genuinely different choices array and was already correctly
+keyed, not a duplicate of the confirmed defect. **True count: 30 confirmed defects, not 31.** See the
+repair-SQL bullet below for the corrected per-store breakdown.
+
+### Planned Scope
+
+- **Repair SQL, owner-run, independent of code (data).**
+  `docs/claude-plans/2026-09-21-quiz-answer-key-repair.sql` — 38 idempotent statements across four
+  sections: A (12 `study_packs` rows), B (14 `exam_question_pool` rows, 14 array-element fixes), C (10
+  `challenge_quiz_question_bank` rows, zero real learner exposure), D (retroactive correction of session
+  `1e78a11d-…` and its `concept_health` row — kept deliberately separate per the owner's explicit "do not
+  silently rewrite history" condition; A–C run independently of D). Every statement's `WHERE` clause
+  re-asserts the current wrong value, so re-running the file is a safe no-op. **Claude does not execute
+  this file** — production write-only, owner's to run per this repo's read-only rule. **⚠️ CORRECTED
+  2026-09-22:** Section B originally claimed 15 array-element fixes across those 14 rows (one pool
+  supposedly carrying a genuine duplicate defect). The owner's own pre-check for that section returned 14
+  rows, not the expected 15; investigating found the "duplicate" was a different, already-correctly-keyed
+  question with a different choices array. Corrected to 14 rows / 14 fixes (38 total statements, not 39);
+  the actual `UPDATE` statement was always safely scoped regardless of the comment error, since it
+  matches on the defective question's specific choices array, which the correct question never shares.
+- **H4 — internal-consistency validator at the shared generation boundary (backend, the actual fix).**
+  For an MCQ whose choices are all numeric/unit literals, rejects the generated question if the keyed
+  choice's text does not appear in `explanation + workingSolution` while some other choice's text does
+  — narrow, deterministic, mirrors the exact detector measured against production this incident (1.3%
+  flag rate on 5,443 numeric-literal-answer questions, 30/30 confirmed genuine on manual re-derivation —
+  corrected 2026-09-22 from an originally-claimed 31st that turned out to be a different, already-correct
+  question, not a genuine defect).
+  **Locked retry chain (owner decision, §Q.1 item 2): retry the rejected question once; if still
+  invalid, omit it (pack generates with N−1) — never fail the whole pack.** Runs on the shared
+  generation boundary every quiz mode consumes, not once per mode.
+- **H1 — schema tightening (backend).** Constrains the LLM structured-output `answer` field to the
+  `A`/`B`/`C`/`D`/`null` enum, closing an existing schema/Java-side divergence. Free, no behavior change
+  on well-formed generations.
+- **H2 — dead-code removal (backend).** Deletes `QuizValidationUtils.randomizeChoices` — reorders
+  choices without remapping `correctIndex`, a real answer-identity-corruption hazard if ever wired into
+  a live path, currently called only by its own test.
+- **H3 — dead-code removal, Java only, no migration (backend).** Deletes `QuizQuestionEntity` /
+  `QuizQuestionRepository` and their tests — zero references anywhere outside themselves, the
+  `quiz_questions` table holds 0 production rows. Table drop itself is out of scope for this task (a
+  DDL change, owner-execution protocol); the Codex delivery states explicitly whether it left a
+  follow-up note or prepared a separate non-migration drop-table SQL artifact.
+- **H3b — MATCHING block-integrity check at generation (backend).** Measured non-zero yield (4 of 50
+  production MATCHING blocks, 8%, violate block-size or identical-choices rules already stated in the
+  prompt as CRITICAL but not enforced on every construction path). Enforced at generation; a violation
+  demotes to MCQ, mirroring the existing partial `normalizeMatchingGroups` behavior.
+
+**Explicitly out of scope, not folded in:**
+- **H5** (relax `developer.txt:105` so explanations must state the answer's value, still forbidding
+  letter references) — approved by the owner (§Q.1 item 3) but ships as its own later prompt, once this
+  validator's rejection-rate baseline exists in production; bundling it would make a post-ship
+  rejection-rate change unattributable to either change alone.
+- **H6** (replace the A/B/C/D letter contract with verbatim answer-text identity) — approved in concept
+  by the owner (§Q.1 item 4) but gated on `docs/architecture/ADR-002-quiz-answer-identity-by-text.md`,
+  currently **PROPOSED, not Accepted**. Not implemented until ratified.
+- Structural answer-key validation (index-in-range, exactly-one-correct, duplicate choices,
+  MULTI_SELECT key agreement) — the incident's own corpus scan found zero violations of any of these
+  across all 115,333 production questions; explicitly not the fix, not built.
+- The historical-sanitation `DETERMINISTIC_SCAN` and semantic (is-the-explanation-actually-right)
+  verification — both out of scope, per the incident doc's three-tier discipline (STRUCTURAL /
+  INTERNAL-CONSISTENCY / SEMANTIC, strictly separate; this release ships INTERNAL-CONSISTENCY only).
+
+Anti-drift: H4 evaluates MCQ-with-numeric-choices only — TRUE_FALSE, MULTI_SELECT, MATCHING,
+IDENTIFICATION, ENUMERATION, and prose-choice MCQ pass through unchanged; a question passing H4 is
+never to be represented as "verified correct" anywhere in logs/docs/UI, only as internally consistent.
+No file under `docs/architecture/ADR-001-*.md`, `docs/architecture/ADR-002-*.md`,
+`developer.txt:105` (or any sibling file's equivalent line), `StudyPackGenerationContextResolver`, or
+any Note-persistence path is touched by this release. `QuizItem.java`'s canonical constructor and
+`resolveCorrectIndex` precedence ladder are unmodified — this release only decides whether a `QuizItem`
+gets constructed, not how it resolves once constructed.
+
+**Routing: Codex** (`docs/codex-prompts/v0.155.0-quiz-answer-key-integrity-validator.md`, Long mode) —
+touches shared backend generation infrastructure across every quiz mode, per `CLAUDE.md`'s task-routing
+table. **Verification tier: one scoped cold agent, falsification-framed** — trigger: a generated-content
+semantics change reachable from every quiz mode. Framed against the specific claims the implementing
+session makes, same pattern as this repo's established precedent.
+
+### Shipped
+
+- **H4 — generated MCQ answer/explanation consistency gate.**
+  `QuizValidationUtils.java:187` implements the deliberately narrow numeric/unit-literal matcher with
+  LaTeX-wrapper cleanup, choice-precision rounding and numeric-token boundaries; the shared conversion
+  seam in `OpenAiLlmStudyPackService.java:2417` now retries one rejected question and omits a still-invalid
+  replacement without failing the rest of the pack. `OpenAiLlmStudyPackServiceTest.java:959-1065` proves
+  the exact reported defect, retry/omit behavior, and reach from Quick Review, Adaptive Practice,
+  Challenge Quiz, Long Exam, Board Exam and Teacher Generate Quiz; `QuizValidationUtilsTest.java:199-262`
+  covers the normalization and substring-collision cases. Short generated results now retain their
+  actual count through `ChallengeQuizService`, `QuickReviewAdaptivePracticeService` and
+  `GeneratedQuizService` instead of being converted back into whole-generation failures.
+  **⚠️ Pre-commit audit mutation-verified the two safety-critical pieces of this delivery, not just
+  read them:** reverting the boundary-aware match (`QuizValidationUtils.java:227-230`) to a plain
+  `contains()` check killed `answerExplanationConsistency_usesNumericBoundariesForOverlappingChoices` —
+  confirming the substring-collision guard the incident doc called out as "a REAL hazard" is genuinely
+  load-bearing, not decorative. Restored and re-verified green. **Quota-accounting confirmed
+  independently** (the Codex delivery's own output did not state this explicitly, per the prompt's
+  OUTPUT item 4 requirement): `recordUsage`/`incrementUsage` calls happen once per top-level generation
+  request in `StudyPackService.java`/`NoteGenerationService.java`, never per individual quiz question —
+  a question-level retry or omission inside `buildQuizItemOrRetry` is invisible to quota accounting by
+  construction, not merely by observed behavior.
+- **H1 — structured-output answer enum.**
+  `prompts/study-pack-v1/schema.json:70` constrains `answer` to `A`/`B`/`C`/`D`/`null`, matching the
+  existing Java parser contract; `OpenAiLlmStudyPackServiceTest.java:948` pins the deployed schema resource.
+- **H2 — hazardous dead choice randomizer removed.**
+  Deleted `QuizValidationUtils.randomizeChoices`, which shuffled choices without remapping the answer,
+  and its two self-only tests after confirming `backend/src` had no production caller.
+- **H3 — orphaned quiz-question Java mapping removed.**
+  Deleted `QuizQuestionEntity.java` and `QuizQuestionRepository.java` after confirming neither class was
+  referenced outside those two files. The zero-row `quiz_questions` table remains unchanged; dropping it
+  is a separate owner-run DDL follow-up, and this release includes no migration for it.
+- **H3b — MATCHING block integrity enforced on every generated path.**
+  `OpenAiLlmStudyPackService.java:575` now routes ungrouped MATCHING items through the existing 2–4-item,
+  identical-choices normalizer instead of letting them escape as singletons. Tests at
+  `OpenAiLlmStudyPackServiceTest.java:1132-1169` cover the previously escaping singleton and an oversized,
+  non-identical-choice block; both demote to MCQ. **⚠️ Pre-commit audit correction, not a defect:**
+  mutation-testing the new ungrouped-routing branch found the oversized/non-identical-choices test
+  (`generateLongExam_demotesOversizedMatchingBlockWithDifferingChoices`) still passes with that branch
+  removed — the pre-existing `resolveInvalidMatchingGroupReason` size/choice check already caught that
+  case whenever a block was properly grouped; only the ungrouped-singleton escape was a genuine gap this
+  diff closes. The test is a correct regression lock, but only the singleton fix is new behavior — the
+  incident's reported size-6 violation was already covered by code that predates this release.
+- **Data repair executed by the owner, 2026-09-22.**
+  `docs/claude-plans/2026-09-21-quiz-answer-key-repair.sql` run in full — Sections A (12 `study_packs`
+  rows), B (14 `exam_question_pool` rows), C (10 `challenge_quiz_question_bank` rows), and D (the
+  retroactive session/`concept_health` correction) — every per-section post-check returned clean.
+  **While running Section B, the owner's own pre-check surfaced a real documentation defect**: the
+  plan claimed 15 array-element fixes across those 14 rows (one pool supposedly carrying a genuine
+  duplicate defect); the pre-check returned 14. A live read-only query against the pool in question
+  found the "duplicate" was a different, already-correctly-keyed question with a different choices
+  array — not a duplicate at all. Corrected across all six places the wrong count was recorded (the
+  repair SQL's own comments, the incident finding doc, `ADR-002`, `RELEASES.md`, `ROADMAP.md`,
+  `CLAUDE.md`) plus two misleading labels in the plan file's own final-summary query that the
+  correction pass initially missed. The `UPDATE` statements themselves were always safely scoped
+  regardless of the documentation error — verified by the clean post-checks above.
+
+### Known Limitations
+
+- H4 has near-zero recall for prose-answer MCQs while current prompts avoid restating the answer value.
+  H5 remains a separately approved prompt change so this release first establishes an attributable
+  production rejection-rate baseline. Passing H4 means only internally consistent, never semantically
+  verified; H6 and the separate single-best-answer Question Quality audit remain deferred. All three
+  (H5, H6, the Question Quality audit) now have their own Backlog Index rows in `ROADMAP.md`, added at
+  this commit since the Codex delivery's own output explicitly deferred that question to this session.
 
 ## v0.154.0 - Closing the Loop
 

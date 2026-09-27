@@ -127,6 +127,7 @@ type ReadinessSummaryProps = {
   notPracticedConcepts: number;
   subjects: SubjectProgressEntry[];
   variant?: "full" | "compact";
+  notStartedWhenUntouched?: boolean;
   title?: string;
   eyebrow?: string;
   description?: string;
@@ -146,6 +147,7 @@ export function ReadinessSummary({
   notPracticedConcepts,
   subjects,
   variant = "full",
+  notStartedWhenUntouched = false,
   title = "How ready this set is right now",
   eyebrow = "Overall readiness",
   description,
@@ -157,6 +159,13 @@ export function ReadinessSummary({
   footer,
 }: Readonly<ReadinessSummaryProps>) {
   if (variant === "compact") {
+    const showNotStarted = notStartedWhenUntouched
+      && totalConcepts > 0
+      && isReadinessNotStarted({
+        masteryPercentage: overallReadinessPercentage,
+        notPracticedConcepts,
+        totalConcepts,
+      });
     return (
       <Card className="p-4 sm:p-5">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -171,12 +180,18 @@ export function ReadinessSummary({
               ) : totalConcepts > 0 ? (
                 <>
                   <p className="text-sm font-medium text-foreground/80">
-                    {overallReadinessPercentage}% ready &middot; {masteredConcepts}/{totalConcepts} mastered &middot; {dueConcepts} due
+                    {showNotStarted
+                      ? <>Not started &middot; {totalConcepts} {totalConcepts === 1 ? "concept" : "concepts"}</>
+                      : <>{overallReadinessPercentage}% ready &middot; {masteredConcepts}/{totalConcepts} mastered &middot; {dueConcepts} due</>}
                   </p>
-                  <p className="text-sm text-foreground/65">
-                    {notPracticedConcepts} not started
-                    {description ? <> &middot; {description}</> : null}
-                  </p>
+                  {showNotStarted ? (
+                    description ? <p className="text-sm text-foreground/65">{description}</p> : null
+                  ) : (
+                    <p className="text-sm text-foreground/65">
+                      {notPracticedConcepts} not started
+                      {description ? <> &middot; {description}</> : null}
+                    </p>
+                  )}
                   {countdown ? <p className="text-sm text-foreground/65">{countdown}</p> : null}
                 </>
               ) : (

@@ -1,8 +1,9 @@
-import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, renderHook, screen, waitFor, within } from "@testing-library/react";
 import {
   aggregateSectionReadiness,
   CollectionDetailPageClient,
   getLatestPracticedCollectionItem,
+  useSectionExpansionState,
 } from "./collection-detail-page-client";
 import {
   addCollectionItems,
@@ -272,16 +273,40 @@ describe("collection detail helpers", () => {
       { ...collection().items[0], noteId: "note-1", label: "Week 1" },
       { ...collection().items[1], noteId: "note-2", label: "Week 1" },
       { ...collection().items[0], noteId: "note-3", label: null },
+      { ...collection().items[1], noteId: "note-4", label: " not IN a SECTION " },
     ] as NoteCollectionItem[];
 
     const result = aggregateSectionReadiness(items, {
       "note-1": { totalConceptCount: 4, masteredConceptCount: 2, dueConceptCount: 1, notPracticedConceptCount: 1 },
       "note-2": { totalConceptCount: 3, masteredConceptCount: 1, dueConceptCount: 1, notPracticedConceptCount: 1 },
       "note-3": { totalConceptCount: 2, masteredConceptCount: 0, dueConceptCount: 0, notPracticedConceptCount: 2 },
+      "note-4": { totalConceptCount: 3, masteredConceptCount: 1, dueConceptCount: 1, notPracticedConceptCount: 2 },
     });
 
-    expect(result.get("Week 1")).toEqual({ mastered: 3, total: 7, due: 2 });
-    expect(result.get("Not in a section")).toEqual({ mastered: 0, total: 2, due: 0 });
+    expect(result.get("Week 1")).toEqual({ mastered: 3, total: 7, due: 2, notPracticed: 2 });
+    expect(result.get("Not in a section")).toEqual({ mastered: 1, total: 5, due: 1, notPracticed: 4 });
+  });
+
+  it("keeps read and organize section expansion overrides independent across a mode round trip", () => {
+    const { result, rerender } = renderHook(
+      ({ organizeMode }) => useSectionExpansionState(organizeMode, ["section:first", "section:second"]),
+      { initialProps: { organizeMode: false } },
+    );
+
+    expect(result.current.isSectionExpanded("section:first")).toBe(false);
+    expect(result.current.isSectionExpanded("section:second")).toBe(false);
+    act(() => result.current.toggleSectionExpanded("section:first"));
+    expect(result.current.isSectionExpanded("section:first")).toBe(true);
+
+    rerender({ organizeMode: true });
+    expect(result.current.isSectionExpanded("section:first")).toBe(true);
+    expect(result.current.isSectionExpanded("section:second")).toBe(true);
+    act(() => result.current.toggleSectionExpanded("section:first"));
+    expect(result.current.isSectionExpanded("section:first")).toBe(false);
+
+    rerender({ organizeMode: false });
+    expect(result.current.isSectionExpanded("section:first")).toBe(true);
+    expect(result.current.isSectionExpanded("section:second")).toBe(false);
   });
 
   it("selects the latest practiced note for continue state", () => {
@@ -295,7 +320,14 @@ describe("collection detail helpers", () => {
   });
 });
 
+const ORIGINAL_INNER_WIDTH = globalThis.window.innerWidth;
+
 describe("CollectionDetailPageClient", () => {
+  afterEach(() => {
+    // Some tests set a viewport width; never let it leak into the next test.
+    Object.defineProperty(globalThis.window, "innerWidth", { configurable: true, value: ORIGINAL_INNER_WIDTH });
+  });
+
   beforeEach(() => {
     pushMock.mockReset();
     replaceMock.mockReset();
@@ -376,10 +408,6 @@ describe("CollectionDetailPageClient", () => {
       topicsAdded: 0,
       subjectPlansAdded: 0,
       lastUpdatePublishedAt: "2026-09-08T00:00:00Z",
-    });
-    Object.defineProperty(globalThis.window, "innerWidth", {
-      configurable: true,
-      value: 1024,
     });
     let uuidCounter = 0;
     Object.defineProperty(globalThis, "crypto", {
@@ -2540,6 +2568,43 @@ describe("CollectionDetailPageClient", () => {
     expect(await screen.findByText("2 weeks until Dec 1, 2026 · 6 concepts remaining")).toBeInTheDocument();
   });
 
+  it("shows Not started in an untouched Goal readiness header", async () => {
+    (getCollection as jest.Mock).mockResolvedValue(collection({ title: "LET Mastery", childCount: 2, items: [] }));
+    (getCollectionGoal as jest.Mock).mockResolvedValue(goalDetail({
+      overallReadinessPercentage: 0,
+      masteredConcepts: 0,
+      dueConcepts: 0,
+      notPracticedConcepts: 6,
+      totalConcepts: 6,
+    }));
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    expect(await screen.findByText("Not started · 6 concepts")).toBeInTheDocument();
+    expect(screen.queryByText("0% ready · 0/6 mastered · 0 due")).not.toBeInTheDocument();
+    expect(screen.queryByText("6 not started")).not.toBeInTheDocument();
+  });
+
+  it("shows Not started in an untouched leaf-plan readiness header", async () => {
+    (getCollection as jest.Mock).mockResolvedValue(collection({
+      progress: { totalNotes: 2, notesWithStudyPack: 2, notesPracticed: 0 },
+    }));
+    (getPlanReadiness as jest.Mock).mockResolvedValue(planReadiness({
+      overallReadinessPercentage: 0,
+      masteredConcepts: 0,
+      dueConcepts: 0,
+      notPracticedConcepts: 8,
+      totalConcepts: 8,
+      subjects: [],
+    }));
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    expect(await screen.findByText("Not started · 8 concepts")).toBeInTheDocument();
+    expect(screen.queryByText("0% ready · 0/8 mastered · 0 due")).not.toBeInTheDocument();
+    expect(screen.queryByText("8 not started")).not.toBeInTheDocument();
+  });
+
   it("shows the readiness unavailable state without hiding the leaf plan", async () => {
     (getPlanReadiness as jest.Mock).mockRejectedValue(new Error("Readiness failed"));
 
@@ -2613,6 +2678,7 @@ describe("CollectionDetailPageClient", () => {
     render(<CollectionDetailPageClient collectionId="collection-1" />);
 
     const notesCard = await screen.findByText(/3 notes in saved order/);
+    fireEvent.click(screen.getByRole("button", { name: "Expand all" }));
     const notesRegion = notesCard.closest("div")?.parentElement;
     expect(notesRegion).not.toBeNull();
     const regionText = notesRegion?.textContent ?? "";
@@ -2640,6 +2706,7 @@ describe("CollectionDetailPageClient", () => {
     render(<CollectionDetailPageClient collectionId="collection-1" />);
 
     const namedHeader = await screen.findByRole("button", { name: /Major Specialization.*1 note/ });
+    fireEvent.click(screen.getByRole("button", { name: "Expand all" }));
     const ungroupedHeader = screen.getByRole("button", { name: "Not in a section 2 notes" });
     expect(Boolean(namedHeader.compareDocumentPosition(ungroupedHeader) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
     expect(screen.getByRole("heading", { level: 2, name: "Early Ungrouped" })).toBeInTheDocument();
@@ -2657,12 +2724,100 @@ describe("CollectionDetailPageClient", () => {
     expect(screen.getByRole("heading", { level: 2, name: "Dosage Calculations" })).toBeInTheDocument();
     expect(screen.queryAllByTestId("collection-section-heading")).toHaveLength(0);
     expect(screen.queryByRole("button", { name: /Not in a section/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^(Expand|Collapse) all$/ })).not.toBeInTheDocument();
+  });
+
+  it("expands exactly one read-view Section and counts Not in a section toward the collapsed default", async () => {
+    (getCollection as jest.Mock).mockResolvedValue(collection({
+      items: [
+        { ...collection().items[0], noteId: "note-1", title: "Foundations", label: "General Education", position: 0 },
+      ],
+      progress: { totalNotes: 1, notesWithStudyPack: 0, notesPracticed: 0 },
+    }));
+
+    const { unmount } = render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    const singleSection = await screen.findByRole("button", { name: /General Education.*1 note/ });
+    expect(singleSection).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByRole("heading", { level: 2, name: "Foundations" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^(Expand|Collapse) all$/ })).not.toBeInTheDocument();
+
+    unmount();
+    (getCollection as jest.Mock).mockResolvedValue(collection({
+      items: [
+        { ...collection().items[0], noteId: "note-1", title: "Foundations", label: "General Education", position: 0 },
+        { ...collection().items[1], noteId: "note-2", title: "Loose Note", label: null, position: 1 },
+      ],
+    }));
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    const namedSection = await screen.findByRole("button", { name: /General Education.*1 note/ });
+    const ungroupedSection = screen.getByRole("button", { name: /Not in a section.*1 note/ });
+    expect(namedSection).toHaveAttribute("aria-expanded", "false");
+    expect(ungroupedSection).toHaveAttribute("aria-expanded", "false");
+  });
+
+  it("toggles every read-view Section and updates the accessible label from the actual state", async () => {
+    (getCollection as jest.Mock).mockResolvedValue(collection({
+      items: [
+        { ...collection().items[0], noteId: "note-1", title: "Foundations", label: "General Education", position: 0 },
+        { ...collection().items[1], noteId: "note-2", title: "Assessment", label: "Professional Education", position: 1 },
+      ],
+    }));
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    const generalSection = await screen.findByRole("button", { name: /General Education.*1 note/ });
+    const professionalSection = screen.getByRole("button", { name: /Professional Education.*1 note/ });
+    fireEvent.click(screen.getByRole("button", { name: "Expand all" }));
+    expect(generalSection).toHaveAttribute("aria-expanded", "true");
+    expect(professionalSection).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByRole("button", { name: "Collapse all" })).toBeInTheDocument();
+
+    fireEvent.click(generalSection);
+    expect(screen.getByRole("button", { name: "Expand all" })).toBeInTheDocument();
+    expect(professionalSection).toHaveAttribute("aria-expanded", "true");
+
+    fireEvent.click(screen.getByRole("button", { name: "Expand all" }));
+    fireEvent.click(screen.getByRole("button", { name: "Collapse all" }));
+    expect(generalSection).toHaveAttribute("aria-expanded", "false");
+    expect(professionalSection).toHaveAttribute("aria-expanded", "false");
+    expect(screen.getByRole("button", { name: "Expand all" })).toBeInTheDocument();
+  });
+
+  it("shows Section readiness as Not started only when every concept is untouched", async () => {
+    (getCollection as jest.Mock).mockResolvedValue(collection({
+      items: [
+        { ...collection().items[0], noteId: "note-1", title: "Untouched", label: "Untouched Section", position: 0 },
+        { ...collection().items[1], noteId: "note-2", title: "Attempted", label: "Attempted Section", position: 1 },
+        { ...collection().items[0], noteId: "note-3", title: "Mastered", label: "Mastered Section", position: 2 },
+        { ...collection().items[1], noteId: "note-4", title: "No Concepts", label: "Empty Section", position: 3 },
+      ],
+      progress: { totalNotes: 4, notesWithStudyPack: 4, notesPracticed: 2 },
+    }));
+    (getNoteConceptCounts as jest.Mock).mockResolvedValue({
+      "note-1": { totalConceptCount: 4, masteredConceptCount: 0, dueConceptCount: 0, notPracticedConceptCount: 4 },
+      "note-2": { totalConceptCount: 4, masteredConceptCount: 0, dueConceptCount: 2, notPracticedConceptCount: 3 },
+      "note-3": { totalConceptCount: 4, masteredConceptCount: 1, dueConceptCount: 0, notPracticedConceptCount: 3 },
+      "note-4": { totalConceptCount: 0, masteredConceptCount: 0, dueConceptCount: 0, notPracticedConceptCount: 0 },
+    });
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    const untouchedHeader = await screen.findByRole("button", { name: /Untouched Section.*Not started/ });
+    expect(within(untouchedHeader).getByText("Not started")).toBeInTheDocument();
+    expect(within(screen.getByRole("button", { name: /Attempted Section/ })).getByText("0% · 2 due")).toBeInTheDocument();
+    expect(within(screen.getByRole("button", { name: /Mastered Section/ })).getByText("25% · 0 due")).toBeInTheDocument();
+    expect(within(screen.getByRole("button", { name: /Empty Section/ })).queryByText(/%|Not started|due/)).not.toBeInTheDocument();
+    expect(screen.queryByText("0% · 0 due")).not.toBeInTheDocument();
   });
 
   it("routes note organization to the Builder from the leaf hero only", async () => {
     render(<CollectionDetailPageClient collectionId="collection-1" />);
 
-    await screen.findByRole("heading", { level: 2, name: "Cell Respiration" });
+    fireEvent.click(await screen.findByRole("button", { name: "Expand all" }));
+    expect(screen.getByRole("heading", { level: 2, name: "Cell Respiration" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Organize" })).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Build" })).toHaveAttribute("href", "/collections/collection-1/builder");
     expect(screen.queryByRole("link", { name: "Edit" })).not.toBeInTheDocument();
@@ -2684,6 +2839,7 @@ describe("CollectionDetailPageClient", () => {
     render(<CollectionDetailPageClient collectionId="collection-1" />);
 
     const generalSection = await screen.findByRole("button", { name: /General Education.*1 note/ });
+    fireEvent.click(screen.getByRole("button", { name: "Expand all" }));
     expect(screen.getByRole("heading", { level: 2, name: "Foundations" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { level: 2, name: "Assessment" })).toBeInTheDocument();
 
@@ -2694,10 +2850,83 @@ describe("CollectionDetailPageClient", () => {
     expect(screen.getByRole("heading", { level: 2, name: "Assessment" })).toBeInTheDocument();
   });
 
-  it("starts section cards collapsed on mobile-sized viewports", async () => {
+  it("does not say Not started for a Section whose notes were practiced but never answered correctly", async () => {
+    (getCollection as jest.Mock).mockResolvedValue(collection({
+      items: [
+        { ...collection().items[0], noteId: "note-1", title: "Attempted Wrong", label: "Attempted Section", position: 0, lastSessionCompletedAt: "2026-09-20T10:00:00Z" },
+        { ...collection().items[1], noteId: "note-2", title: "Never Opened", label: "Untouched Section", position: 1, lastSessionCompletedAt: null },
+      ],
+      progress: { totalNotes: 2, notesWithStudyPack: 2, notesPracticed: 1 },
+    }));
+    (getNoteConceptCounts as jest.Mock).mockResolvedValue({
+      // Sessions completed, but every concept still counts as "not practiced" (no correct answer yet).
+      "note-1": { totalConceptCount: 4, masteredConceptCount: 0, dueConceptCount: 0, notPracticedConceptCount: 4 },
+      "note-2": { totalConceptCount: 4, masteredConceptCount: 0, dueConceptCount: 0, notPracticedConceptCount: 4 },
+    });
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    const attempted = await screen.findByRole("button", { name: /Attempted Section/ });
+    expect(await within(attempted).findByText("0% · 0 due")).toBeInTheDocument();
+    expect(within(attempted).queryByText("Not started")).not.toBeInTheDocument();
+    expect(within(screen.getByRole("button", { name: /Untouched Section/ })).getByText("Not started")).toBeInTheDocument();
+  });
+
+  it("does not say Not started in a leaf plan header once any note has a completed session", async () => {
+    (getCollection as jest.Mock).mockResolvedValue(collection({
+      progress: { totalNotes: 2, notesWithStudyPack: 2, notesPracticed: 1 },
+    }));
+    (getPlanReadiness as jest.Mock).mockResolvedValue(planReadiness({
+      overallReadinessPercentage: 0,
+      masteredConcepts: 0,
+      dueConcepts: 0,
+      notPracticedConcepts: 8,
+      totalConcepts: 8,
+      subjects: [],
+    }));
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    expect(await screen.findByText("0% ready · 0/8 mastered · 0 due")).toBeInTheDocument();
+    expect(screen.queryByText("Not started · 8 concepts")).not.toBeInTheDocument();
+  });
+
+  it("re-derives Section defaults when the Section count changes and keeps a manual override", async () => {
+    const oneSection = collection({
+      items: [
+        { ...collection().items[0], noteId: "note-1", title: "Foundations", label: "General Education", position: 0 },
+      ],
+    });
+    const twoSections = collection({
+      items: [
+        { ...collection().items[0], noteId: "note-1", title: "Foundations", label: "General Education", position: 0 },
+        { ...collection().items[1], noteId: "note-2", title: "Assessment", label: "Professional Education", position: 1 },
+      ],
+    });
+    (getCollection as jest.Mock).mockResolvedValue(oneSection);
+
+    const { unmount } = render(<CollectionDetailPageClient collectionId="collection-1" />);
+    expect(await screen.findByRole("button", { name: /General Education.*1 note/ })).toHaveAttribute("aria-expanded", "true");
+    unmount();
+
+    // A second Section appears (for example an Official update adds a labelled note): the lone Section's
+    // "exactly one Section is open" default no longer applies, so both start collapsed again.
+    (getCollection as jest.Mock).mockResolvedValue(twoSections);
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+    const general = await screen.findByRole("button", { name: /General Education.*1 note/ });
+    const professional = screen.getByRole("button", { name: /Professional Education.*1 note/ });
+    expect(general).toHaveAttribute("aria-expanded", "false");
+    expect(professional).toHaveAttribute("aria-expanded", "false");
+
+    fireEvent.click(general);
+    expect(general).toHaveAttribute("aria-expanded", "true");
+    expect(professional).toHaveAttribute("aria-expanded", "false");
+  });
+
+  it.each([1024, 390])("starts multi-section read views collapsed at %ipx", async (viewportWidth) => {
     Object.defineProperty(globalThis.window, "innerWidth", {
       configurable: true,
-      value: 390,
+      value: viewportWidth,
     });
     (getCollection as jest.Mock).mockResolvedValue(collection({
       items: [
@@ -2709,8 +2938,11 @@ describe("CollectionDetailPageClient", () => {
     render(<CollectionDetailPageClient collectionId="collection-1" />);
 
     const generalSection = await screen.findByRole("button", { name: /General Education.*1 note/ });
+    const professionalSection = screen.getByRole("button", { name: /Professional Education.*1 note/ });
     expect(generalSection).toHaveAttribute("aria-expanded", "false");
+    expect(professionalSection).toHaveAttribute("aria-expanded", "false");
     expect(screen.queryByRole("heading", { level: 2, name: "Foundations" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { level: 2, name: "Assessment" })).not.toBeInTheDocument();
 
     fireEvent.click(generalSection);
 
@@ -2729,7 +2961,8 @@ describe("CollectionDetailPageClient", () => {
 
     render(<CollectionDetailPageClient collectionId="collection-1" />);
 
-    expect(await screen.findByText("Needs Study Pack")).toBeInTheDocument();
+    fireEvent.click(await screen.findByRole("button", { name: "Expand all" }));
+    expect(screen.getByText("Needs Study Pack")).toBeInTheDocument();
     expect(screen.getByText("Not started")).toBeInTheDocument();
     expect(screen.getByText("Practiced")).toBeInTheDocument();
     expect(screen.queryByText("Study Pack ready")).not.toBeInTheDocument();
@@ -2783,7 +3016,8 @@ describe("CollectionDetailPageClient", () => {
 
     render(<CollectionDetailPageClient collectionId="collection-1" />);
 
-    expect(await screen.findByText("2 concepts due")).toBeInTheDocument();
+    fireEvent.click(await screen.findByRole("button", { name: "Expand all" }));
+    expect(screen.getByText("2 concepts due")).toBeInTheDocument();
     expect(screen.getByText("Cell membrane · ATP synthesis")).toBeInTheDocument();
     expect(screen.queryByText("0 concepts due")).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Upgrade to Plus" })).not.toBeInTheDocument();
@@ -3349,6 +3583,7 @@ describe("CollectionDetailPageClient", () => {
 
     await screen.findByRole("heading", { name: "Midterm Study Plan" });
     expect(listNotes).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole("button", { name: "Expand all" }));
     const cellRespirationRow = screen.getByRole("heading", { level: 2, name: "Cell Respiration" }).closest("li");
     expect(cellRespirationRow).not.toBeNull();
     expect(within(cellRespirationRow as HTMLElement).getByText("Private")).toBeInTheDocument();

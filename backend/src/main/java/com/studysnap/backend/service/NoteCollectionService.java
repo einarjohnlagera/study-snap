@@ -737,6 +737,7 @@ public class NoteCollectionService {
     public NoteCollectionDetailResponse getPublic(UUID collectionId) {
         NoteCollectionEntity collection = collectionRepository.findByIdAndVisibility(collectionId, CollectionVisibility.PUBLIC)
                 .orElseThrow(CollectionNotFoundException::new);
+        assertPublishedIfSubjectPlan(collection);
         // This is a source-side public read. Child Subject Plans added after the last curator
         // finalization have no publication stamp and must not reach anonymous visitors.
         List<NoteCollectionEntity> children = collectionRepository.findByParentCollectionIdIn(List.of(collectionId)).stream()
@@ -1070,7 +1071,24 @@ public class NoteCollectionService {
         NoteCollectionEntity source = collectionRepository
                 .findByIdAndVisibility(sourceCollectionId, CollectionVisibility.PUBLIC)
                 .orElseThrow(CollectionNotFoundException::new);
+        assertPublishedIfSubjectPlan(source);
+        return adoptSource(source, userId, reassertPrimaryAfterPersist);
+    }
 
+    /**
+     * Adopts an already-loaded source plan. The standalone route ({@link #adopt}) requires the source to be
+     * PUBLIC (and, for a Subject Plan, published) before calling this; {@code adoptGoal} calls it directly for
+     * the published children of a PUBLIC Goal, because inside an adopted Goal the publication stamp is the
+     * boundary. That is the rule the public preview already uses to count children and the rule Official
+     * update already uses, which hands a published but PRIVATE Subject Plan (title, description and term
+     * included) to an adopter; adoptGoal now delivers the same set on a fresh adoption.
+     */
+    private AdoptStudyPlanResponse adoptSource(
+            NoteCollectionEntity source,
+            UUID userId,
+            boolean reassertPrimaryAfterPersist
+    ) {
+        UUID sourceCollectionId = source.getId();
         // Fast idempotency path: an existing personal plan for this source is returned as-is.
         Optional<NoteCollectionEntity> alreadyAdopted =
                 collectionRepository.findByOwnerUserIdAndSourcePlanId(userId, sourceCollectionId);
@@ -1144,7 +1162,14 @@ public class NoteCollectionService {
         int totalNotesSkipped = 0;
         for (int index = 0; index < sourceChildren.size(); index++) {
             NoteCollectionEntity sourceChild = sourceChildren.get(index);
-            AdoptStudyPlanResponse childAdoptResult = adopt(sourceChild.getId(), userId, false);
+            // ⚠️ PUBLISHED IS NOT PUBLIC. Publish update stamps a Subject Plan without changing its visibility,
+            // and V141 stamped every pre-existing row, so a stamped child can be PRIVATE (at the 2026-09-27
+            // review the ALE and PNLE Review Sets each held such children; do not treat that as a standing
+            // count). The public-route adopt() requires PUBLIC and threw for such a child AFTER the learner's
+            // Goal was persisted: a half-created Goal that a retry returned as "already adopted". Inside an
+            // adopted Goal the publication stamp is the boundary (Official update already works that way),
+            // so the loaded child is adopted directly.
+            AdoptStudyPlanResponse childAdoptResult = adoptSource(sourceChild, userId, false);
             totalNotesCopied += childAdoptResult.copiedCount();
             totalNotesSkipped += childAdoptResult.skippedCount();
             Optional<NoteCollectionEntity> personalChild =
@@ -3156,6 +3181,19 @@ public class NoteCollectionService {
             throw new InvalidCollectionRequestException(LABEL_TOO_LONG_MESSAGE);
         }
         return label;
+    }
+
+    /**
+     * A PUBLIC child Subject Plan that has never been published (null {@code published_at}) is not part of
+     * the published curriculum: the parent's preview, {@code adoptGoal} and the source-update inspection
+     * already exclude it, and its curator may still be editing it (including its academic term). Reading
+     * or adopting it directly by id would bypass that boundary, so it is treated as not found. A root has
+     * no such stamp requirement here.
+     */
+    private void assertPublishedIfSubjectPlan(NoteCollectionEntity collection) {
+        if (collection.getParentCollectionId() != null && collection.getPublishedAt() == null) {
+            throw new CollectionNotFoundException();
+        }
     }
 
     private void applyTermPlacementUpdate(

@@ -78,6 +78,83 @@ describe("ReadinessSummary", () => {
     expect(screen.getByText("1 not started")).toBeInTheDocument();
   });
 
+  it("renders opt-in compact untouched readiness as Not started while preserving description and countdown", () => {
+    render(
+      <ReadinessSummary
+        variant="compact"
+        notStartedWhenUntouched
+        title="Study Plan readiness"
+        overallReadinessPercentage={0}
+        totalConcepts={6}
+        masteredConcepts={0}
+        dueConcepts={0}
+        notPracticedConcepts={6}
+        subjects={[]}
+        description="Begin with the first note."
+        countdown="3 weeks until Dec 1, 2026 · 6 concepts remaining"
+      />,
+    );
+
+    expect(screen.getByText("Not started · 6 concepts")).toBeInTheDocument();
+    expect(screen.queryByText("6 not started")).not.toBeInTheDocument();
+    expect(screen.getByText("Begin with the first note.")).toBeInTheDocument();
+    expect(screen.getByText("3 weeks until Dec 1, 2026 · 6 concepts remaining")).toBeInTheDocument();
+  });
+
+  it("keeps the existing compact readiness text after practice has started", () => {
+    render(
+      <ReadinessSummary
+        variant="compact"
+        notStartedWhenUntouched
+        overallReadinessPercentage={0}
+        totalConcepts={6}
+        masteredConcepts={0}
+        dueConcepts={1}
+        notPracticedConcepts={5}
+        subjects={[]}
+      />,
+    );
+
+    expect(screen.getByText("0% ready · 0/6 mastered · 1 due")).toBeInTheDocument();
+    expect(screen.getByText("5 not started")).toBeInTheDocument();
+    expect(screen.queryByText(/Not started · 6 concepts/)).not.toBeInTheDocument();
+  });
+
+  it("keeps the existing compact untouched text when the opt-in prop is absent", () => {
+    render(
+      <ReadinessSummary
+        variant="compact"
+        overallReadinessPercentage={0}
+        totalConcepts={6}
+        masteredConcepts={0}
+        dueConcepts={0}
+        notPracticedConcepts={6}
+        subjects={[]}
+      />,
+    );
+
+    expect(screen.getByText("0% ready · 0/6 mastered · 0 due")).toBeInTheDocument();
+    expect(screen.getByText("6 not started")).toBeInTheDocument();
+    expect(screen.queryByText(/Not started · 6 concepts/)).not.toBeInTheDocument();
+  });
+
+  it("does not apply the compact Not started wording to the full variant", () => {
+    render(
+      <ReadinessSummary
+        notStartedWhenUntouched
+        overallReadinessPercentage={0}
+        totalConcepts={6}
+        masteredConcepts={0}
+        dueConcepts={0}
+        notPracticedConcepts={6}
+        subjects={[]}
+      />,
+    );
+
+    expect(screen.getByText("0 mastered · 0 due · 6 not started")).toBeInTheDocument();
+    expect(screen.queryByText(/Not started · 6 concepts/)).not.toBeInTheDocument();
+  });
+
   it("renders the compact countdown slot only when provided", () => {
     const { rerender } = render(
       <ReadinessSummary
@@ -110,5 +187,22 @@ describe("ReadinessSummary", () => {
 
     expect(screen.queryByText("3 weeks until Dec 1, 2026 · 11 concepts remaining")).not.toBeInTheDocument();
     expect(screen.getByText("1 not started")).toBeInTheDocument();
+  });
+
+  it("uses the singular for a single untouched concept in the opt-in compact header", () => {
+    render(
+      <ReadinessSummary
+        variant="compact"
+        notStartedWhenUntouched
+        overallReadinessPercentage={0}
+        totalConcepts={1}
+        masteredConcepts={0}
+        dueConcepts={0}
+        notPracticedConcepts={1}
+        subjects={[]}
+      />,
+    );
+
+    expect(screen.getByText("Not started · 1 concept")).toBeInTheDocument();
   });
 });
