@@ -2,7 +2,7 @@
 
 ## v0.162.0 - Say the Value
 
-**Status: In Progress**
+**Status: Released** (signed off 2026-09-27; PRs #1455/#1456/#1457/#1458 merged into the release branch; release PR to `main` pending the owner's admin merge)
 
 Theme: a quiz explanation is finally allowed to say what the numeric answer actually is, so the model's own internal-consistency check has something to check — and stale exam content stops surviving a regeneration it should have invalidated.
 
@@ -236,7 +236,12 @@ semantics, so it stays on the `advisor()`-only baseline — only Phase C's tier 
 
 ### Shipped
 
-_(nothing yet)_
+- **Phase A0 — `ADR-002` ratified.** Status `PROPOSED` → `ACCEPTED`; its own open question (does `board-exam-developer.txt` inherit the letter contract from `schema.json` alone?) resolved by direct grep, not inference, and the resolution written back into the ADR itself. H6's implementation explicitly NOT scoped into this release — see the correction banner above.
+- **Phase A (H5) — PR #1455, merged `e0037692`.** All six quiz-prompt files now require an explanation to state a numeric-only MCQ's exact value, still forbidding any letter reference; prose-answer MCQs (98.3% of the corpus) unchanged, an owner decision made after reading the real numeric/prose split. Pre-deploy coverage-ratio baseline read (60/88, 68.2%); post-deploy read minted as a `[CHECKPOINT]` in `ROADMAP.md`'s Backlog Index. Before/after sample review run against the real OpenAI endpoint before merge, per the incident doc's own locked gate.
+- **Phase C — PR #1456, merged `9ac11bff`.** `ChallengeQuizQuestionBankService.invalidateForStudyPack` closes the Challenge-bank leg of the derived-artifacts invalidation defect class (`ROADMAP.md`'s "Derived artifacts keyed on the preserved `study_packs.id`" row, both legs now closed). Wired into exactly two of the exam-pool fix's three call sites, not a blind structural copy. A scoped Opus falsification pass on this diff (before merge) found and the release documented rather than fixed: a `generateMoreQuestions` race that can let a narrow window of stale-content rows survive a regeneration, and a pre-existing `releaseClaims` hang (`v0.60.2`) whose blast radius this fix widens — both logged as their own Backlog rows, production verified to have zero configured lock timeouts and no evidence the hang has ever fired.
+- **Phase D — PR #1457, merged `cf91ce5a`.** Question Quality Tier 3 audit: 65 real production questions read by hand across 2 of 4 quiz stores, 0 confirmed genuine-ambiguity defects, honest statistical reading (rules out a common defect, not a rare one), recommendation to build a learner "flag this question" affordance before an automated semantic gate. Ships no code, per its own scope. Full document: `docs/claude-plans/2026-09-27-question-quality-tier3-audit.md`.
+- **H4 sign-conflation fix — PR #1458, merged `e3625535`.** Found by a scoped Opus falsification pass run at signoff, against the actual merged release state (`cf91ce5a`), not any individual PR's own diff. `QuizValidationUtils`'s exact-value match treated `"0.40"` as present inside evidence text `"-0.40"` — the minus sign was invisible to the pattern — which could mask a real answer/explanation mismatch for any difference-type numeric question (discrimination index, net change, signed error). Pre-existing since `v0.155.0`'s H4, not introduced by H5, but H5 (this same release) makes it more reachable by requiring explanations to state a value at all. Fixed and mutation-verified (reverted the fix, confirmed the new test fails against pre-fix code, restored it).
+- **Signoff falsification pass, full report folded into the rows above and into `docs/product/ROADMAP.md`'s Backlog Index** rather than repeated here. Two additional findings, both documented as Known Limitations / Backlog rows, neither blocking: the coverage-ratio metric's denominator (H4's `isNumericUnitLiteral`, ≤20 chars + a digit) is slightly wider than H5's own numeric-condition wording ("not a phrase"), so the ratio cannot reach 100% by design — the post-deploy checkpoint read should say so rather than read a sub-100% result as a defect; and a low-severity, genuinely uncertain race between a Challenge session completing and a concurrent regeneration's bank delete, needing a two-connection Postgres test to resolve, not reproduced.
 
 ## v0.161.0 - Scannable Study Plans
 
