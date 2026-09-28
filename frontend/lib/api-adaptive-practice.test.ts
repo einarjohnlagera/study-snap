@@ -1,4 +1,4 @@
-import { generateAdaptiveQuickReviewQuiz } from "./api";
+import { answerAdaptivePracticeQuestion, generateAdaptiveQuickReviewQuiz } from "./api";
 import { ADAPTIVE_PRACTICE_DASHBOARD_TODAY_FOCUS_ENTRY } from "./adaptive-practice-entry";
 
 describe("Adaptive Practice API", () => {
@@ -31,6 +31,21 @@ describe("Adaptive Practice API", () => {
     expect(globalThis.fetch).toHaveBeenCalledWith(
       "http://localhost:8080/api/notes/note-1/adaptive-practice/start",
       expect.objectContaining({ method: "POST" }),
+    );
+  });
+
+  it("submits one Adaptive Practice selection to the answer endpoint", async () => {
+    await answerAdaptivePracticeQuestion("session-1", {
+      questionIndex: 2,
+      selectedMultiChoiceIndices: [0, 2],
+    });
+
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      "http://localhost:8080/api/adaptive-practice/sessions/session-1/answer",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ questionIndex: 2, selectedMultiChoiceIndices: [0, 2] }),
+      }),
     );
   });
 });

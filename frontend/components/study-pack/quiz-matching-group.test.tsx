@@ -57,4 +57,25 @@ describe("QuizMatchingGroup", () => {
     expect(screen.getByRole("button", { name: /Item 1 choice A.*Incorrect/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Item 2 choice C.*Correct/i })).toBeInTheDocument();
   });
+
+  it("reveals and locks one matching item while the next item remains answerable", () => {
+    const handleSelectChoice = jest.fn();
+
+    render(
+      <QuizMatchingGroup
+        items={matchingItems}
+        groupStartIndex={4}
+        selectedChoices={{ 4: 0 }}
+        revealAnswer={false}
+        revealedAnswers={{ 4: true, 5: false }}
+        onSelectChoice={handleSelectChoice}
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: /Item 1 choice B.*Correct/i })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /Item 1 choice A.*Incorrect/i })).toBeDisabled();
+
+    fireEvent.click(screen.getByRole("button", { name: /Item 2 choice C/i }));
+    expect(handleSelectChoice).toHaveBeenCalledWith(5, 2);
+  });
 });

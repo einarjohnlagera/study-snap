@@ -1414,7 +1414,20 @@ export type QuickReviewAdaptiveQuizResponse = {
   title: string;
   focusConcepts: AdaptivePracticeFocusConcept[];
   quiz: QuizItem[];
+  selectedChoices?: Record<number, number>;
+  selectedMultiChoices?: Record<number, number[]>;
   message: string;
+};
+
+export type AdaptivePracticeAnswerRequest = {
+  questionIndex: number;
+  selectedChoiceIndex?: number;
+  selectedMultiChoiceIndices?: number[];
+};
+
+export type AdaptivePracticeAnswerResponse = {
+  questionIndex: number;
+  question: QuizItem;
 };
 
 export type AdaptivePracticeCompleteRequest = {
@@ -1423,13 +1436,8 @@ export type AdaptivePracticeCompleteRequest = {
   durationSeconds?: number;
   correctConceptNames?: string[];
   /**
-   * The learner's answers, keyed by ABSOLUTE index in the session's quiz array.
-   *
-   * ⚠️ These are what let the server attribute ConceptHealth PER SOURCE PACK. Adaptive Practice has
-   * no progress endpoint, so nothing persists selections into session state during the session --
-   * if the client does not send them here, the server's per-source breakdown is empty and it falls
-   * back to attributing everything to the anchor pack and recording NO MISSES at all. That fallback
-   * is correct for a single-note session and wrong for a plan-scoped one.
+   * Legacy overlap fields. The server accepts these but derives scoring and ConceptHealth only from
+   * selections persisted by the per-answer endpoint.
    */
   selectedChoices?: Record<number, number>;
   selectedMultiChoices?: Record<number, number[]>;
@@ -4347,6 +4355,25 @@ export async function getAdaptivePracticeSession(
   return parseApiResponse<QuickReviewAdaptiveQuizResponse>(
     response,
     "Could not load Adaptive Practice session.",
+  );
+}
+
+export async function answerAdaptivePracticeQuestion(
+  sessionId: string,
+  request: AdaptivePracticeAnswerRequest,
+): Promise<AdaptivePracticeAnswerResponse> {
+  const response = await fetchWithAuth(
+    `/adaptive-practice/sessions/${sessionId}/answer`,
+    {
+      method: "POST",
+      headers: buildAuthHeaders("application/json"),
+      body: JSON.stringify(request),
+    },
+    true,
+  );
+  return parseApiResponse<AdaptivePracticeAnswerResponse>(
+    response,
+    "Could not check this Adaptive Practice answer.",
   );
 }
 

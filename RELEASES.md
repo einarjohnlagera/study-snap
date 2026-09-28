@@ -138,6 +138,32 @@ standing baseline rule.
   fallback to the old active-session fields for an older cached or pre-deploy completion response, so the
   reverse overlap is safe, but it does not make backend-first deployment safe. Run `scripts/check-deploys.sh`
   promptly after this release merges and confirm both Vercel and Render are on the release.
+- **Adaptive Practice answer-key redaction, per-answer reveal, and server-owned scoring:** every
+  `QuickReviewAdaptiveQuizResponse` now redacts `correctIndex`, `correctIndices`, `explanation`,
+  `workingSolution`, and `acceptableAnswers` from unanswered questions and removes accepted-answer content
+  from `acceptableAnswerGroups`; questions already answered through the new
+  `POST /adaptive-practice/sessions/{sessionId}/answer` endpoint are revealed together with the persisted
+  `selectedChoices`/`selectedMultiChoices` maps so a resumed session restores both position and feedback.
+  The endpoint locks the session row and each question index on its first persisted selection: an identical
+  retry is idempotent and performs no write, while a changed selection returns HTTP 409. MATCHING locks at
+  the same per-item index granularity, and MULTI_SELECT uses an explicit Check Answer step so checkbox edits
+  remain reversible until submission. The full stored quiz remains unchanged for scoring.
+
+  **Production-data semantics change:** Adaptive Practice completion previously had no server-side selections
+  and therefore used the client's `correctAnswers`, `selectedChoices`, and `selectedMultiChoices` as the only
+  source for both the stored score and `ConceptHealth`. Completion now ignores those legacy request
+  claims and derives both outputs from the server-persisted, locked selections for every session. The legacy
+  fields remain accepted for request-shape compatibility; `correctConceptNames` is consulted only for an old
+  edge-case row whose stored quiz is empty; a normal session with no stored selections scores zero and cannot
+  claim correct concepts. Include this change explicitly in the pre-signoff falsification brief.
+
+  **Deploy order: frontend and backend together; both overlap directions break.** An old frontend against the
+  new backend never calls `/answer`, so no selection is ever persisted; completion then treats every question
+  as unanswered and calls `recordIncorrectAnswers` for every concept in the quiz — an active miss on each
+  concept, not merely a withheld credit, feeding weak-concept selection and `twiceMissedConcepts` for every
+  learner who completes a session during the skew window. A new frontend against an old backend receives 404
+  from `/answer` and cannot reveal or advance. Run `scripts/check-deploys.sh` promptly after merge and confirm
+  both Vercel and Render are on the release.
 
 ## v0.162.0 - Say the Value
 
