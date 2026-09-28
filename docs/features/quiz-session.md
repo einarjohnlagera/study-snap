@@ -145,6 +145,31 @@ Once that critique has been served and stored, the question cannot be answered d
 is idempotent and returns the stored critique without another LLM call or database write. The lock is keyed on
 the stored critique, so a failed critique attempt does not prevent the learner from retrying the question.
 
+## Adaptive Practice answer and reveal boundary
+
+Adaptive Practice session responses carry the full answer key only for question indexes already answered
+through `POST /adaptive-practice/sessions/{sessionId}/answer`. Unanswered questions redact `correctIndex`,
+`correctIndices`, `explanation`, `workingSolution`, and `acceptableAnswers`, and carry no accepted-answer
+content in `acceptableAnswerGroups`. The same response includes the server-recorded `selectedChoices` and
+`selectedMultiChoices`, allowing resume to restore the learner's selections, advance to the first unanswered
+question, and keep completed items revealed.
+
+The answer endpoint locks the session row and records one immutable selection per question index. Repeating the
+same selection is idempotent and returns the stored question reveal without a write; changing it returns HTTP
+409. MATCHING blocks use this contract once per item, while MULTI_SELECT choices stay locally editable until the
+learner selects Check Answer. `/answer` accepts only choice indices (single or multi); this is safe only because
+`OpenAiLlmStudyPackService`'s schema-name gate keeps `note_lib_adaptive_quiz` generation from ever emitting
+IDENTIFICATION or ENUMERATION questionFormats. Widening that gate for Adaptive Practice would produce items this
+endpoint cannot answer, permanently redacted with no code path to reveal them.
+
+Completion derives its stored score and all `ConceptHealth` inputs from these server-recorded selections. Legacy client score and selection fields remain accepted during deployment overlap
+but do not override server state. The persisted selection is the reveal marker because Adaptive feedback is a
+deterministic lookup from the immutable stored quiz, not a separately generated critique. The full quiz in
+`session_state.quiz` is never redacted or rewritten, and `correctConceptNames` is consulted only for a legacy
+session whose stored quiz itself is empty. A session with no server-recorded selections at all (an old
+frontend that never called `/answer`) is not scored as merely uncredited: every question in it is treated as
+an active miss, and `recordIncorrectAnswers` is called for every concept in the quiz.
+
 ## Board Exam Multi-source State
 
 Board Exam sessions continue to use the existing `CHALLENGE` session row with `sessionState.mode = "board_exam"`. When a Pro user adds same-subject notes, the session stays anchored to the primary `studyPackId` and stores source attribution in `sessionState.sourceNoteRefs`.

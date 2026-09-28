@@ -29,6 +29,7 @@ import { getAuthUser } from "@/lib/auth";
 import { resolveRemainingUsageCredits } from "@/lib/plans";
 import { requireAuthenticatedOnboardedUser } from "@/lib/route-guards";
 import {
+  answerAdaptivePracticeQuestion,
   completeAdaptivePracticeSession,
   forfeitAdaptivePracticeSession,
   generateAdaptiveQuickReviewQuiz,
@@ -223,6 +224,7 @@ export default function AdaptivePracticePage() {
   const params = useParams<{ id: string }>();
   const searchParams = useSearchParams();
   const requestInFlightRef = useRef(false);
+  const answerRequestInFlightRef = useRef(false);
   const [completionResult, setCompletionResult] = useState<AdaptivePracticeCompleteResponse | null>(null);
   const [completionSignalLoaded, setCompletionSignalLoaded] = useState(false);
   const loadedForNoteRef = useRef<string | null>(null);
@@ -230,6 +232,8 @@ export default function AdaptivePracticePage() {
   const [loading, setLoading] = useState(true);
   const [startingAdaptive, setStartingAdaptive] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [answerError, setAnswerError] = useState<string | null>(null);
+  const [submittingAnswer, setSubmittingAnswer] = useState(false);
   const [adaptiveQuiz, setAdaptiveQuiz] = useState<QuickReviewAdaptiveQuizResponse | null>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [selectedChoices, setSelectedChoices] = useState<Record<number, number>>({});
@@ -301,13 +305,24 @@ export default function AdaptivePracticePage() {
   }, [noteId, pathname]);
 
   const applyAdaptiveSession = useCallback((response: QuickReviewAdaptiveQuizResponse) => {
+    const restoredSelectedChoices = response.selectedChoices ?? {};
+    const restoredSelectedMultiChoices = response.selectedMultiChoices ?? {};
+    const firstUnansweredIndex = response.quiz.findIndex((question, index) =>
+      question.questionFormat === "MULTI_SELECT"
+        ? restoredSelectedMultiChoices[index] == null
+        : restoredSelectedChoices[index] == null,
+    );
+    const resumeIndex = firstUnansweredIndex < 0
+      ? Math.max(0, response.quiz.length - 1)
+      : resolveQuizItemGroupAt(response.quiz, firstUnansweredIndex)?.startIndex ?? firstUnansweredIndex;
     setAdaptiveQuiz(response);
-    setCurrentIndex(0);
-    setSelectedChoices({});
-    setSelectedMultiChoices({});
+    setCurrentIndex(resumeIndex);
+    setSelectedChoices(restoredSelectedChoices);
+    setSelectedMultiChoices(restoredSelectedMultiChoices);
     setCompletionTracked(false);
     setShowAnswerReview(false);
     setNextStepResponse(null);
+    setAnswerError(null);
     if (response.status === "IN_PROGRESS" && response.quiz.length > 0) {
       setQuizStarted(true);
       setSessionStartedAt(Date.now());
@@ -477,9 +492,21 @@ export default function AdaptivePracticePage() {
   const selectedChoiceIndex = selectedChoices[currentIndex] ?? null;
   const selectedMultiChoiceIndices = selectedMultiChoices[currentIndex] ?? [];
   const currentQuestionIsMultiSelect = currentQuestion?.questionFormat === "MULTI_SELECT";
-  const hasAnsweredCurrent = currentMatchingGroup
+  const hasSelectedCurrent = currentMatchingGroup
     ? currentMatchingGroup.items.every((_, offset) => selectedChoices[currentMatchingGroup.startIndex + offset] != null)
     : currentQuestionIsMultiSelect ? selectedMultiChoiceIndices.length > 0 : selectedChoiceIndex !== null;
+  const hasRevealedCurrent = currentMatchingGroup
+    ? currentMatchingGroup.items.every((item, offset) =>
+        selectedChoices[currentMatchingGroup.startIndex + offset] != null && typeof item.correctIndex === "number")
+    : currentQuestionIsMultiSelect
+      ? selectedMultiChoiceIndices.length > 0 && Array.isArray(currentQuestion?.correctIndices)
+      : selectedChoiceIndex !== null && typeof currentQuestion?.correctIndex === "number";
+  const revealedMatchingAnswers = currentMatchingGroup
+    ? Object.fromEntries(currentMatchingGroup.items.map((item, offset) => [
+        currentMatchingGroup.startIndex + offset,
+        selectedChoices[currentMatchingGroup.startIndex + offset] != null && typeof item.correctIndex === "number",
+      ]))
+    : undefined;
   const isComplete = hasQuestions && currentIndex >= quiz.length;
   const score = useMemo(() => {
     return quiz.reduce((count, question, index) => {
@@ -687,8 +714,43 @@ export default function AdaptivePracticePage() {
     blockWithoutConfirmation: true,
   });
 
-  const handleSelectChoice = (choiceIndex: number) => {
-    if (!currentQuestion || hasAnsweredCurrent) {
+  const revealAnswer = async (
+    questionIndex: number,
+    request: { selectedChoiceIndex?: number; selectedMultiChoiceIndices?: number[] },
+  ) => {
+    if (!adaptiveQuiz?.sessionId || answerRequestInFlightRef.current) {
+      return false;
+    }
+    answerRequestInFlightRef.current = true;
+    setSubmittingAnswer(true);
+    setAnswerError(null);
+    try {
+      const response = await answerAdaptivePracticeQuestion(adaptiveQuiz.sessionId, {
+        questionIndex,
+        ...request,
+      });
+      setAdaptiveQuiz((previous) => previous
+        ? {
+            ...previous,
+            quiz: previous.quiz.map((question, index) =>
+              index === response.questionIndex ? response.question : question),
+          }
+        : previous);
+      return true;
+    } catch (err) {
+      setAnswerError(err instanceof Error ? err.message : "Could not check this answer. Try again.");
+      return false;
+    } finally {
+      answerRequestInFlightRef.current = false;
+      setSubmittingAnswer(false);
+    }
+  };
+
+  const handleSelectChoice = async (choiceIndex: number) => {
+    if (!currentQuestion || hasRevealedCurrent) {
+      return;
+    }
+    if (!await revealAnswer(currentIndex, { selectedChoiceIndex: choiceIndex })) {
       return;
     }
     setSelectedChoices((prev) => ({
@@ -697,8 +759,11 @@ export default function AdaptivePracticePage() {
     }));
   };
 
-  const handleSelectMatchingChoice = (questionIndex: number, choiceIndex: number) => {
-    if (!currentMatchingGroup || hasAnsweredCurrent) {
+  const handleSelectMatchingChoice = async (questionIndex: number, choiceIndex: number) => {
+    if (!currentMatchingGroup || selectedChoices[questionIndex] != null) {
+      return;
+    }
+    if (!await revealAnswer(questionIndex, { selectedChoiceIndex: choiceIndex })) {
       return;
     }
     setSelectedChoices((prev) => ({
@@ -708,17 +773,25 @@ export default function AdaptivePracticePage() {
   };
 
   const handleSelectMultiChoices = (choiceIndices: number[]) => {
-    if (!currentQuestion || !currentQuestionIsMultiSelect) {
+    if (!currentQuestion || !currentQuestionIsMultiSelect || hasRevealedCurrent) {
       return;
     }
+    setAnswerError(null);
     setSelectedMultiChoices((prev) => ({
       ...prev,
       [currentIndex]: choiceIndices,
     }));
   };
 
+  const handleSubmitMultiSelect = async () => {
+    if (!currentQuestionIsMultiSelect || selectedMultiChoiceIndices.length === 0 || hasRevealedCurrent) {
+      return;
+    }
+    await revealAnswer(currentIndex, { selectedMultiChoiceIndices });
+  };
+
   const handleNext = () => {
-    if (!hasAnsweredCurrent) {
+    if (!hasRevealedCurrent) {
       return;
     }
     const nextIndex = currentMatchingGroup ? currentMatchingGroup.endIndex + 1 : currentIndex + 1;
@@ -749,9 +822,8 @@ export default function AdaptivePracticePage() {
           correctAnswers: score,
           totalQuestions: quiz.length,
           durationSeconds,
-          // Sent so the server can bucket ConceptHealth by (sourceStudyPackId, concept). Without
-          // them its breakdown is empty, and a plan-scoped session attributes every concept to the
-          // anchor pack and records no misses -- the exact over-attribution shape item 1 removed.
+          // Kept in the request for mixed-deploy compatibility. The current backend ignores these
+          // legacy claims and derives scoring plus ConceptHealth from its locked session selections.
           selectedChoices,
           selectedMultiChoices,
         };
@@ -1076,8 +1148,10 @@ export default function AdaptivePracticePage() {
                 items={currentMatchingGroup.items}
                 groupStartIndex={currentMatchingGroup.startIndex}
                 selectedChoices={selectedChoices}
-                revealAnswer={hasAnsweredCurrent}
-                onSelectChoice={handleSelectMatchingChoice}
+                revealAnswer={hasRevealedCurrent}
+                revealedAnswers={revealedMatchingAnswers}
+                onSelectChoice={(questionIndex, choiceIndex) => void handleSelectMatchingChoice(questionIndex, choiceIndex)}
+                disabled={submittingAnswer}
               />
             ) : currentQuestion ? (
               <>
@@ -1092,14 +1166,15 @@ export default function AdaptivePracticePage() {
                   questionFormat={currentQuestion.questionFormat}
                   selectedChoiceIndex={selectedChoiceIndex}
                   selectedMultiChoiceIndices={selectedMultiChoiceIndices}
-                  revealAnswer={hasAnsweredCurrent && !currentQuestionIsMultiSelect}
-                  onSelectChoice={handleSelectChoice}
+                  revealAnswer={hasRevealedCurrent}
+                  onSelectChoice={(choiceIndex) => void handleSelectChoice(choiceIndex)}
                   onSelectMultiChoices={handleSelectMultiChoices}
+                  disabled={submittingAnswer}
                 />
               </>
             ) : null}
 
-            {hasAnsweredCurrent && currentQuestion && !currentQuestionIsMultiSelect && !currentMatchingGroup ? (
+            {hasRevealedCurrent && currentQuestion && !currentMatchingGroup ? (
               <div className="space-y-3 rounded-md border border-border bg-background p-3 text-sm text-foreground/80">
                 <p>
                   <span className="font-medium text-foreground">Explanation:</span>{" "}
@@ -1114,9 +1189,26 @@ export default function AdaptivePracticePage() {
               </div>
             ) : null}
 
+            {answerError ? (
+              <p role="alert" className="text-sm text-red-600 dark:text-red-400">{answerError}</p>
+            ) : null}
+
             <div className="flex justify-stretch sm:justify-end">
-              <Button type="button" className="w-full sm:w-auto" onClick={handleNext} disabled={!hasAnsweredCurrent}>
-                {currentIndex + 1 >= quiz.length ? "Finish Adaptive Practice" : "Next Question"}
+              <Button
+                type="button"
+                className="w-full sm:w-auto"
+                onClick={currentQuestionIsMultiSelect && !hasRevealedCurrent
+                  ? () => void handleSubmitMultiSelect()
+                  : handleNext}
+                disabled={submittingAnswer || (currentQuestionIsMultiSelect && !hasRevealedCurrent
+                  ? !hasSelectedCurrent
+                  : !hasRevealedCurrent)}
+              >
+                {submittingAnswer
+                  ? "Checking..."
+                  : currentQuestionIsMultiSelect && !hasRevealedCurrent
+                    ? "Check Answer"
+                    : currentIndex + 1 >= quiz.length ? "Finish Adaptive Practice" : "Next Question"}
               </Button>
             </div>
           </Card>

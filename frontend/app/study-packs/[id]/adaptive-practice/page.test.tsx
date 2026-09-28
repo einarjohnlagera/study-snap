@@ -15,6 +15,7 @@ jest.mock("@/components/exam-mode/exam-focus-context", () => ({
 import { getAuthUser } from "@/lib/auth";
 import { useBillingUsageSummary } from "@/hooks/use-billing-usage-summary";
 import {
+  answerAdaptivePracticeQuestion,
   completeAdaptivePracticeSession,
   forfeitAdaptivePracticeSession,
   generateAdaptiveQuickReviewQuiz,
@@ -53,6 +54,7 @@ jest.mock("@/hooks/use-billing-usage-summary", () => ({
 }));
 
 jest.mock("@/lib/api", () => ({
+  answerAdaptivePracticeQuestion: jest.fn(),
   completeAdaptivePracticeSession: jest.fn(),
   forfeitAdaptivePracticeSession: jest.fn(),
   generateAdaptiveQuickReviewQuiz: jest.fn(),
@@ -116,6 +118,14 @@ describe("AdaptivePracticePage", () => {
     (getAuthUser as jest.Mock).mockReset();
     (getNote as jest.Mock).mockReset();
     (generateAdaptiveQuickReviewQuiz as jest.Mock).mockReset();
+    (answerAdaptivePracticeQuestion as jest.Mock).mockReset();
+    (answerAdaptivePracticeQuestion as jest.Mock).mockImplementation((
+      _sessionId: string,
+      request: { questionIndex: number },
+    ) => Promise.resolve({
+      questionIndex: request.questionIndex,
+      question: adaptiveArtifactQuiz[request.questionIndex] ?? adaptiveArtifactQuiz[0],
+    }));
     (getAdaptivePracticeSession as jest.Mock).mockReset();
     (getInProgressAdaptivePracticeSession as jest.Mock).mockReset();
     (getInProgressAdaptivePracticeSession as jest.Mock).mockResolvedValue({
@@ -175,6 +185,239 @@ describe("AdaptivePracticePage", () => {
     expect(getNote).not.toHaveBeenCalled();
   });
 
+  it("restores answered selections and resumes at the first unanswered question", async () => {
+    pathnameMock = "/adaptive-practice/sessions/note-1";
+    (getAuthUser as jest.Mock).mockReturnValue({
+      id: "user-1",
+      emailVerifiedAt: "2026-03-21T09:00:00Z",
+    });
+    (getAdaptivePracticeSession as jest.Mock).mockResolvedValue({
+      sessionId: "note-1",
+      status: "IN_PROGRESS",
+      studyPackId: "study-pack-1",
+      noteId: "note-1",
+      title: "Derivatives",
+      focusConcepts: [],
+      message: "Focusing on concepts you need to improve.",
+      selectedChoices: { 0: 0 },
+      selectedMultiChoices: {},
+      quiz: [
+        adaptiveArtifactQuiz[0],
+        {
+          question: "What is the derivative of cos(x)?",
+          choices: ["sin(x)", "-sin(x)", "cos(x)", "-cos(x)"],
+          concept: "Trigonometric derivatives",
+        },
+      ],
+    });
+    (getNote as jest.Mock).mockResolvedValue({
+      id: "note-1",
+      title: "Derivatives",
+      studyPackStatus: "STUDY_PACK_READY",
+      quiz: adaptiveArtifactQuiz,
+      adaptivePracticeAvailable: true,
+    });
+
+    render(<AdaptivePracticePage />);
+
+    expect(await screen.findByText("2. What is the derivative of cos(x)?")).toBeInTheDocument();
+    expect(screen.getByText("Question 2 of 2")).toBeInTheDocument();
+    expect(screen.queryByText("The derivative of sin(x) is cos(x).")).not.toBeInTheDocument();
+  });
+
+  it("resumes a MATCHING group with one item already revealed and the next item answerable, wiring the reveal to /answer", async () => {
+    pathnameMock = "/adaptive-practice/sessions/note-1";
+    (getAuthUser as jest.Mock).mockReturnValue({
+      id: "user-1",
+      emailVerifiedAt: "2026-03-21T09:00:00Z",
+    });
+    const matchingChoices = [
+      "Bernoulli's Principle",
+      "Pascal's Law",
+      "Archimedes' Principle",
+      "Continuity Equation",
+    ];
+    (getAdaptivePracticeSession as jest.Mock).mockResolvedValue({
+      sessionId: "note-1",
+      status: "IN_PROGRESS",
+      studyPackId: "study-pack-1",
+      noteId: "note-1",
+      title: "Fluids",
+      focusConcepts: [],
+      message: "Focusing on concepts you need to improve.",
+      selectedChoices: { 0: 1 },
+      selectedMultiChoices: {},
+      quiz: [
+        {
+          question: "Pressure applied to a confined fluid is transmitted equally.",
+          choices: matchingChoices,
+          correctIndex: 1,
+          questionFormat: "MATCHING",
+          questionGroup: "group-1",
+          concept: "Fluid Mechanics",
+          explanation: "Pascal's Law describes pressure transmission in confined fluids.",
+        },
+        {
+          question: "Buoyant force equals the weight of fluid displaced.",
+          choices: matchingChoices,
+          questionFormat: "MATCHING",
+          questionGroup: "group-1",
+          concept: "Fluid Mechanics",
+        },
+      ],
+    });
+    (getNote as jest.Mock).mockResolvedValue({
+      id: "note-1",
+      title: "Fluids",
+      studyPackStatus: "STUDY_PACK_READY",
+      quiz: adaptiveArtifactQuiz,
+      adaptivePracticeAvailable: true,
+    });
+    (answerAdaptivePracticeQuestion as jest.Mock).mockResolvedValue({
+      questionIndex: 1,
+      question: {
+        question: "Buoyant force equals the weight of fluid displaced.",
+        choices: matchingChoices,
+        correctIndex: 2,
+        questionFormat: "MATCHING",
+        questionGroup: "group-1",
+        concept: "Fluid Mechanics",
+        explanation: "Archimedes' Principle describes buoyant force.",
+      },
+    });
+
+    render(<AdaptivePracticePage />);
+
+    expect(await screen.findByRole("button", { name: /Item 1 choice B.*Correct/i })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /Item 2 choice C/i })).toBeEnabled();
+
+    fireEvent.click(screen.getByRole("button", { name: /Item 1 choice B/i }));
+    expect(answerAdaptivePracticeQuestion).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: /Item 2 choice C/i }));
+    await waitFor(() => {
+      expect(answerAdaptivePracticeQuestion).toHaveBeenCalledWith("note-1", {
+        questionIndex: 1,
+        selectedChoiceIndex: 2,
+      });
+    });
+    expect(await screen.findByRole("button", { name: /Item 2 choice C.*Correct/i })).toBeDisabled();
+  });
+
+  it("resumes an already-answered MULTI_SELECT question already revealed, with no further Check Answer step", async () => {
+    pathnameMock = "/adaptive-practice/sessions/note-1";
+    (getAuthUser as jest.Mock).mockReturnValue({
+      id: "user-1",
+      emailVerifiedAt: "2026-03-21T09:00:00Z",
+    });
+    (getAdaptivePracticeSession as jest.Mock).mockResolvedValue({
+      sessionId: "note-1",
+      status: "IN_PROGRESS",
+      studyPackId: "study-pack-1",
+      noteId: "note-1",
+      title: "Derivatives",
+      focusConcepts: [],
+      message: "Focusing on concepts you need to improve.",
+      selectedChoices: {},
+      selectedMultiChoices: { 0: [0, 2] },
+      quiz: [
+        {
+          question: "Which functions have the listed derivatives?",
+          choices: ["sin(x)", "x²", "x", "ln(x)"],
+          questionFormat: "MULTI_SELECT",
+          concept: "Derivatives",
+          correctIndices: [0, 2],
+          explanation: "Sine and x have the listed derivatives.",
+          workingSolution: "Apply each derivative rule.",
+        },
+      ],
+    });
+    (getNote as jest.Mock).mockResolvedValue({
+      id: "note-1",
+      title: "Derivatives",
+      studyPackStatus: "STUDY_PACK_READY",
+      quiz: adaptiveArtifactQuiz,
+      adaptivePracticeAvailable: true,
+    });
+
+    render(<AdaptivePracticePage />);
+
+    expect(await screen.findByText("Sine and x have the listed derivatives.")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Check Answer" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Finish Adaptive Practice" })).toBeEnabled();
+    expect(answerAdaptivePracticeQuestion).not.toHaveBeenCalled();
+  });
+
+  it("keeps a failed answer submission retryable", async () => {
+    setupGeneratedAdaptiveQuiz();
+    (answerAdaptivePracticeQuestion as jest.Mock)
+      .mockRejectedValueOnce(new Error("Could not check this answer. Try again."))
+      .mockResolvedValueOnce({ questionIndex: 0, question: adaptiveArtifactQuiz[0] });
+
+    render(<AdaptivePracticePage />);
+
+    await screen.findByText("1. What is the derivative of sin(x)?");
+    const correctChoice = (await screen.findAllByRole("button")).find((button) =>
+      /^[A-D]\.\s*cos\(x\)$/i.test(button.textContent?.trim() ?? ""),
+    );
+    fireEvent.click(correctChoice!);
+    expect(await screen.findByRole("alert")).toHaveTextContent("Could not check this answer. Try again.");
+    expect(correctChoice).toBeEnabled();
+
+    fireEvent.click(correctChoice!);
+
+    expect(await screen.findByText("The derivative of sin(x) is cos(x).")).toBeInTheDocument();
+    expect(answerAdaptivePracticeQuestion).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps multi-select choices editable until Check Answer returns the reveal", async () => {
+    setupGeneratedAdaptiveQuiz();
+    const redactedMultiSelect = {
+      question: "Which functions have the listed derivatives?",
+      choices: ["sin(x)", "x²", "x", "ln(x)"],
+      questionFormat: "MULTI_SELECT",
+      concept: "Derivatives",
+    };
+    const revealedMultiSelect = {
+      ...redactedMultiSelect,
+      correctIndices: [0, 2],
+      explanation: "Sine and x have the listed derivatives.",
+      workingSolution: "Apply each derivative rule.",
+    };
+    (getInProgressAdaptivePracticeSession as jest.Mock).mockResolvedValue({
+      sessionId: "session-1",
+      status: "IN_PROGRESS",
+      studyPackId: "study-pack-1",
+      noteId: "note-1",
+      title: "Derivatives",
+      focusConcepts: [],
+      selectedChoices: {},
+      selectedMultiChoices: {},
+      message: "Focusing on concepts you need to improve.",
+      quiz: [redactedMultiSelect],
+    });
+    (answerAdaptivePracticeQuestion as jest.Mock).mockResolvedValue({
+      questionIndex: 0,
+      question: revealedMultiSelect,
+    });
+
+    render(<AdaptivePracticePage />);
+
+    await screen.findByText("1. Which functions have the listed derivatives?");
+    fireEvent.click(screen.getByRole("button", { name: /sin\(x\)$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /\. x$/i }));
+    expect(answerAdaptivePracticeQuestion).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Check Answer" }));
+
+    expect(await screen.findByText("Sine and x have the listed derivatives.")).toBeInTheDocument();
+    expect(answerAdaptivePracticeQuestion).toHaveBeenCalledWith("session-1", {
+      questionIndex: 0,
+      selectedMultiChoiceIndices: [0, 2],
+    });
+    expect(screen.getByRole("button", { name: "Finish Adaptive Practice" })).toBeEnabled();
+  });
+
   function setupGeneratedAdaptiveQuiz(noteStatus: "STUDY_PACK_READY" | "GENERATING" | "FAILED" = "STUDY_PACK_READY") {
     (getAuthUser as jest.Mock).mockReturnValue({
       id: "user-1",
@@ -199,11 +442,13 @@ describe("AdaptivePracticePage", () => {
         {
           question: "What is the derivative of sin(x)?",
           choices: ["cos(x)", "-cos(x)", "-sin(x)", "tan(x)"],
-          correctIndex: 0,
           concept: "Trigonometric derivatives",
-          explanation: "The derivative of sin(x) is cos(x).",
         },
       ],
+    });
+    (answerAdaptivePracticeQuestion as jest.Mock).mockResolvedValue({
+      questionIndex: 0,
+      question: adaptiveArtifactQuiz[0],
     });
     (getInProgressAdaptivePracticeSession as jest.Mock).mockResolvedValue({
       sessionId: "session-1",
@@ -216,9 +461,7 @@ describe("AdaptivePracticePage", () => {
         {
           question: "What is the derivative of sin(x)?",
           choices: ["cos(x)", "-cos(x)", "-sin(x)", "tan(x)"],
-          correctIndex: 0,
           concept: "Trigonometric derivatives",
-          explanation: "The derivative of sin(x) is cos(x).",
         },
       ],
     });
@@ -340,9 +583,7 @@ describe("AdaptivePracticePage", () => {
         {
           question: "What is the derivative of sin(x)?",
           choices: ["cos(x)", "-cos(x)", "-sin(x)", "tan(x)"],
-          correctIndex: 0,
           concept: "Trigonometric derivatives",
-          explanation: "The derivative of sin(x) is cos(x).",
         },
       ],
     });
@@ -352,12 +593,18 @@ describe("AdaptivePracticePage", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: "Start Adaptive Practice" }));
     await screen.findByText("1. What is the derivative of sin(x)?");
+    expect(screen.queryByText("The derivative of sin(x) is cos(x).")).not.toBeInTheDocument();
     const correctChoice = (await screen.findAllByRole("button")).find((button) =>
       /^[A-D]\.\s*cos\(x\)$/i.test(button.textContent?.trim() ?? ""),
     );
     expect(correctChoice).toBeDefined();
     fireEvent.click(correctChoice!);
-    fireEvent.click(screen.getByRole("button", { name: "Finish Adaptive Practice" }));
+    expect(await screen.findByText("The derivative of sin(x) is cos(x).")).toBeInTheDocument();
+    expect(answerAdaptivePracticeQuestion).toHaveBeenCalledWith("session-1", {
+      questionIndex: 0,
+      selectedChoiceIndex: 0,
+    });
+    fireEvent.click(await screen.findByRole("button", { name: "Finish Adaptive Practice" }));
 
     expect(await screen.findByText("Adaptive Practice Complete")).toBeInTheDocument();
     expect(screen.getByText("Score: 1 / 1 (100%)")).toBeInTheDocument();
@@ -373,18 +620,15 @@ describe("AdaptivePracticePage", () => {
       /^[A-D]\.\s*cos\(x\)$/i.test(button.textContent?.trim() ?? ""),
     );
     fireEvent.click(correctChoice!);
-    fireEvent.click(screen.getByRole("button", { name: "Finish Adaptive Practice" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Finish Adaptive Practice" }));
 
     await waitFor(() => {
       expect(completeAdaptivePracticeSession).toHaveBeenCalledWith("session-1", expect.objectContaining({
         correctAnswers: 1,
         totalQuestions: 1,
         correctConceptNames: ["Trigonometric derivatives"],
-        // ⚠️ LOAD-BEARING. Adaptive Practice has no progress endpoint, so nothing persists the
-        // learner's answers during the session. If the client stops sending them the server's
-        // per-source breakdown is empty, and a plan-scoped session silently attributes every
-        // concept to the anchor pack and records NO MISSES -- the over-attribution shape item 1
-        // removed. This assertion is what stops that regressing unnoticed.
+        // Legacy overlap fields remain during the coordinated deploy, but the backend now ignores
+        // them and derives score plus ConceptHealth from selections locked by /answer.
         selectedChoices: { 0: 0 },
         selectedMultiChoices: {},
       }));
@@ -401,7 +645,7 @@ describe("AdaptivePracticePage", () => {
       /^[A-D]\.\s*-cos\(x\)$/i.test(button.textContent?.trim() ?? ""),
     );
     fireEvent.click(wrongChoice!);
-    fireEvent.click(screen.getByRole("button", { name: "Finish Adaptive Practice" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Finish Adaptive Practice" }));
 
     await waitFor(() => {
       expect(completeAdaptivePracticeSession).toHaveBeenCalledWith("session-1", expect.objectContaining({
@@ -623,7 +867,7 @@ describe("AdaptivePracticePage", () => {
       /^[A-D]\.\s*cos\(x\)$/i.test(button.textContent?.trim() ?? ""),
     );
     fireEvent.click(correctChoice!);
-    fireEvent.click(screen.getByRole("button", { name: "Finish Adaptive Practice" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Finish Adaptive Practice" }));
     await screen.findByText("Adaptive Practice Complete");
     expect(screen.getByText("Was this quiz helpful?")).toBeInTheDocument();
     expect(screen.queryByText("How did your first quiz go?")).not.toBeInTheDocument();
@@ -675,7 +919,7 @@ describe("AdaptivePracticePage", () => {
       /^[A-D]\.\s*cos\(x\)$/i.test(button.textContent?.trim() ?? "")
     ));
     fireEvent.click(correctChoice!);
-    fireEvent.click(screen.getByRole("button", { name: "Finish Adaptive Practice" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Finish Adaptive Practice" }));
     await screen.findByText("Adaptive Practice Complete");
 
     expect(screen.getByRole("link", { name: /TRIGONOMETRIC DERIVATIVES/i })).toHaveAttribute(
@@ -737,7 +981,7 @@ describe("AdaptivePracticePage", () => {
       /^[A-D]\.\s*cos\(x\)$/i.test(button.textContent?.trim() ?? ""),
     );
     fireEvent.click(correctChoice!);
-    fireEvent.click(screen.getByRole("button", { name: "Finish Adaptive Practice" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Finish Adaptive Practice" }));
 
     expect(await screen.findByText("Recommended next step")).toBeInTheDocument();
     expect(screen.getByTestId("adaptive-next-step-guidance")).toHaveAttribute("aria-label", "What to do next");
@@ -795,7 +1039,7 @@ describe("AdaptivePracticePage", () => {
       /^[A-D]\.\s*cos\(x\)$/i.test(button.textContent?.trim() ?? ""),
     );
     fireEvent.click(correctChoice!);
-    fireEvent.click(screen.getByRole("button", { name: "Finish Adaptive Practice" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Finish Adaptive Practice" }));
 
     expect(await screen.findByText(/Watch out for mixing up mitosis and meiosis\./)).toBeInTheDocument();
     expect(screen.getByTestId("adaptive-companion-guidance")).toHaveAttribute("aria-label", "Companion guidance");
@@ -844,7 +1088,7 @@ describe("AdaptivePracticePage", () => {
       /^[A-D]\.\s*cos\(x\)$/i.test(button.textContent?.trim() ?? ""),
     );
     fireEvent.click(correctChoice!);
-    fireEvent.click(screen.getByRole("button", { name: "Finish Adaptive Practice" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Finish Adaptive Practice" }));
     await screen.findByText("Adaptive Practice Complete");
 
     expect(screen.queryByRole("button", { name: /^Note$/ })).not.toBeInTheDocument();
@@ -902,7 +1146,7 @@ describe("AdaptivePracticePage", () => {
       /^[A-D]\.\s*cos\(x\)$/i.test(button.textContent?.trim() ?? ""),
     );
     fireEvent.click(correctChoice!);
-    fireEvent.click(screen.getByRole("button", { name: "Finish Adaptive Practice" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Finish Adaptive Practice" }));
     await screen.findByText("Adaptive Practice Complete");
 
     expect(screen.getAllByRole("link", { name: "Note" }).length).toBeGreaterThan(0);
@@ -949,7 +1193,7 @@ describe("AdaptivePracticePage", () => {
       /^[A-D]\.\s*-cos\(x\)$/i.test(button.textContent?.trim() ?? ""),
     );
     fireEvent.click(wrongChoice!);
-    fireEvent.click(screen.getByRole("button", { name: "Finish Adaptive Practice" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Finish Adaptive Practice" }));
     await screen.findByText("Adaptive Practice Complete");
     fireEvent.click(screen.getByRole("button", { name: "Review Answers" }));
 

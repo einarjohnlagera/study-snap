@@ -2,6 +2,8 @@ package com.studysnap.backend.controller;
 
 import com.studysnap.backend.dto.AdaptivePracticeCompleteRequest;
 import com.studysnap.backend.dto.AdaptivePracticeCompleteResponse;
+import com.studysnap.backend.dto.AdaptivePracticeAnswerRequest;
+import com.studysnap.backend.dto.AdaptivePracticeAnswerResponse;
 import com.studysnap.backend.dto.QuickReviewAdaptiveQuizResponse;
 import com.studysnap.backend.dto.SimpleMessageResponse;
 import com.studysnap.backend.security.AuthenticatedUser;
@@ -42,6 +44,15 @@ public class AdaptivePracticeController {
             @AuthenticationPrincipal AuthenticatedUser user
     ) {
         return quickReviewAdaptivePracticeService.getAdaptiveSessionById(sessionId, user.userId());
+    }
+
+    @PostMapping("/sessions/{sessionId}/answer")
+    public AdaptivePracticeAnswerResponse answerAdaptivePracticeQuestion(
+            @PathVariable String sessionId,
+            @Valid @RequestBody AdaptivePracticeAnswerRequest request,
+            @AuthenticationPrincipal AuthenticatedUser user
+    ) {
+        return quickReviewAdaptivePracticeService.answerQuestion(sessionId, user.userId(), request);
     }
 
     @PostMapping("/sessions/{sessionId}/complete")

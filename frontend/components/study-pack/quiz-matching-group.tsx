@@ -11,6 +11,7 @@ type QuizMatchingGroupProps = {
   selectedChoices: Record<number, number>;
   onSelectChoice: (questionIndex: number, choiceIndex: number) => void;
   revealAnswer: boolean;
+  revealedAnswers?: Record<number, boolean>;
   selectionStyle?: "default" | "exam" | "board-exam";
   disabled?: boolean;
 };
@@ -21,6 +22,7 @@ export function QuizMatchingGroup({
   selectedChoices,
   onSelectChoice,
   revealAnswer,
+  revealedAnswers,
   selectionStyle = "default",
   disabled = false,
 }: QuizMatchingGroupProps) {
@@ -49,6 +51,7 @@ export function QuizMatchingGroup({
           const questionIndex = groupStartIndex + itemOffset;
           const selectedChoiceIndex = selectedChoices[questionIndex] ?? null;
           const correctIndex = resolveQuizCorrectIndex(item);
+          const revealItemAnswer = revealAnswer || Boolean(revealedAnswers?.[questionIndex]);
 
           return (
             <div key={`${questionIndex}-${item.question}`} className="space-y-2 rounded-md border border-border p-3">
@@ -59,9 +62,9 @@ export function QuizMatchingGroup({
                 {choices.map((choice, choiceIndex) => {
                   const isSelected = selectedChoiceIndex === choiceIndex;
                   const isCorrect = correctIndex === choiceIndex;
-                  const isIncorrectSelection = revealAnswer && isSelected && !isCorrect;
-                  const isInteractive = !revealAnswer && !disabled;
-                  const statusLabel = revealAnswer && isCorrect
+                  const isIncorrectSelection = revealItemAnswer && isSelected && !isCorrect;
+                  const isInteractive = !revealItemAnswer && !disabled;
+                  const statusLabel = revealItemAnswer && isCorrect
                     ? " Correct"
                     : isIncorrectSelection ? " Incorrect" : "";
 
@@ -75,7 +78,7 @@ export function QuizMatchingGroup({
                       onClick={() => onSelectChoice(questionIndex, choiceIndex)}
                       className={cn(
                         "min-h-10 rounded-md border px-2 text-sm font-semibold transition-colors",
-                        revealAnswer && isCorrect
+                        revealItemAnswer && isCorrect
                           ? "border-emerald-500/50 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
                           : isSelected
                             ? isIncorrectSelection
@@ -90,7 +93,7 @@ export function QuizMatchingGroup({
                       )}
                     >
                       {choiceLabel(choiceIndex)}
-                      {revealAnswer && isCorrect ? <span className="sr-only"> Correct</span> : null}
+                      {revealItemAnswer && isCorrect ? <span className="sr-only"> Correct</span> : null}
                       {isIncorrectSelection ? <span className="sr-only"> Incorrect</span> : null}
                     </button>
                   );
