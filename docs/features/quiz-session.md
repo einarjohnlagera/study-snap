@@ -137,6 +137,14 @@ session, including questions the learner has already answered.
 
 The recovery query is intentionally `LONG_EXAM`-only. Challenge Quiz needs its mode-owned stale-session path to release question-bank claims; Adaptive Practice and the Interview Practice sub-mode are also excluded. Recovery never generates replacement questions itself.
 
+## Interview Practice feedback boundary
+
+Interview Practice start and resume responses never carry the answer key in `question`, and answer responses
+never carry it in `nextQuestion`. The natural-language critique is the reveal for the question just answered.
+Once that critique has been served and stored, the question cannot be answered differently; an identical retry
+is idempotent and returns the stored critique without another LLM call or database write. The lock is keyed on
+the stored critique, so a failed critique attempt does not prevent the learner from retrying the question.
+
 ## Board Exam Multi-source State
 
 Board Exam sessions continue to use the existing `CHALLENGE` session row with `sessionState.mode = "board_exam"`. When a Pro user adds same-subject notes, the session stays anchored to the primary `studyPackId` and stores source attribution in `sessionState.sourceNoteRefs`.

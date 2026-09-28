@@ -19,6 +19,7 @@ import com.studysnap.backend.entity.QuickReviewSessionMode;
 import com.studysnap.backend.entity.QuickReviewSessionStatus;
 import com.studysnap.backend.entity.StudyPackEntity;
 import com.studysnap.backend.entity.StudyPackStatus;
+import com.studysnap.backend.exception.InterviewPracticeAnswerAlreadyRecordedException;
 import com.studysnap.backend.exception.InterviewPracticeQuotaExhaustedException;
 import com.studysnap.backend.exception.InterviewPracticeSessionNotFoundException;
 import com.studysnap.backend.exception.InterviewPracticeSessionNotInProgressException;
@@ -47,6 +48,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
@@ -180,6 +182,20 @@ public class InterviewPracticeService {
             throw new InvalidInterviewPracticeRequestException("Question index is invalid.");
         }
         int selectedChoiceIndex = parseChoiceIndex(request.selectedChoice());
+        Optional<InterviewPracticeCritique> storedCritique = QuizSessionStateUtils.extractInterviewFeedback(
+                session.getSessionState(),
+                questionIndex
+        );
+        if (storedCritique.isPresent()) {
+            Integer recordedChoiceIndex = QuizSessionStateUtils.extractSelectedChoiceIndexes(
+                    session.getSessionState(),
+                    quiz
+            ).get(questionIndex);
+            if (recordedChoiceIndex == null || recordedChoiceIndex != selectedChoiceIndex) {
+                throw new InterviewPracticeAnswerAlreadyRecordedException();
+            }
+            return toAnswerResponse(storedCritique.get(), quiz, questionIndex);
+        }
         int safeTimeSpentSeconds = Math.max(0, request.timeSpentSeconds());
         session.setSessionState(QuizSessionStateUtils.withInterviewAnswer(
                 session.getSessionState(),
@@ -202,13 +218,7 @@ public class InterviewPracticeService {
         ));
         session.setCurrentQuestionIndex(Math.min(questionIndex + 1, quiz.size()));
         quickReviewSessionRepository.save(session);
-        QuizItem nextQuestion = questionIndex + 1 < quiz.size() ? quiz.get(questionIndex + 1) : null;
-        return new InterviewPracticeAnswerResponse(
-                critique.verdict(),
-                critique.rationale(),
-                critique.followUp(),
-                nextQuestion
-        );
+        return toAnswerResponse(critique, quiz, questionIndex);
     }
 
     public InterviewReadinessReportResponse completeSession(UUID sessionId, UUID userId) {
@@ -429,7 +439,9 @@ public class InterviewPracticeService {
     private InterviewPracticeStartResponse toStartResponse(QuickReviewSessionEntity session) {
         List<QuizItem> quiz = QuizSessionStateUtils.extractQuiz(session.getSessionState());
         int currentIndex = session.getCurrentQuestionIndex() == null ? 0 : session.getCurrentQuestionIndex();
-        QuizItem question = !quiz.isEmpty() && currentIndex < quiz.size() ? quiz.get(currentIndex) : null;
+        QuizItem question = !quiz.isEmpty() && currentIndex < quiz.size()
+                ? quiz.get(currentIndex).withoutAnswerKey()
+                : null;
         return new InterviewPracticeStartResponse(
                 session.getId(),
                 session.getStatus().name(),
@@ -440,6 +452,22 @@ public class InterviewPracticeService {
                 SOFT_TIMER_SECONDS,
                 question,
                 QuizSessionStateUtils.extractInterviewSourceNoteRefs(session.getSessionState())
+        );
+    }
+
+    private InterviewPracticeAnswerResponse toAnswerResponse(
+            InterviewPracticeCritique critique,
+            List<QuizItem> quiz,
+            int questionIndex
+    ) {
+        QuizItem nextQuestion = questionIndex + 1 < quiz.size()
+                ? quiz.get(questionIndex + 1).withoutAnswerKey()
+                : null;
+        return new InterviewPracticeAnswerResponse(
+                critique.verdict(),
+                critique.rationale(),
+                critique.followUp(),
+                nextQuestion
         );
     }
 

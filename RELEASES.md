@@ -106,6 +106,23 @@ standing baseline rule.
   change or deploy ordering constraint applies: the existing frontend type already permits a null
   `correctIndex`, its resolver falls back to `-1`, and every Long Exam question component already renders with
   answer reveal disabled, so old and new frontend/backend combinations remain user-visible-behavior compatible.
+- **Interview Practice answer-key redaction and answer lock:** `InterviewPracticeStartResponse.question` and
+  `InterviewPracticeAnswerResponse.nextQuestion` now redact `correctIndex`, `correctIndices`, `explanation`,
+  `workingSolution`, `acceptableAnswers`, and `acceptableAnswerGroups`; the natural-language critique remains
+  the reveal for the question just answered. A question locks when its critique is first stored in
+  `sessionState.aiFeedback`, rather than when its provisional selection is written: retrying the same choice
+  returns the stored critique without another save or LLM call, while changing the choice returns HTTP 409 and
+  leaves the first answer intact. This also closes the unmetered, un-rate-limited critique loop: Interview
+  Practice quota is charged once at session start, so repeated answers previously created unlimited additional
+  LLM calls inside the same paid session.
+
+  **Known concurrency limitation:** the existing session read does not take a row lock, so two deliberately
+  concurrent requests for the same unanswered index can both pass the critique check before either stores its
+  result. Fixing that would hold a row lock across an LLM call; this PR deliberately accepts the scripted
+  same-user race, matching the Quick Review `releaseClaims` precedent that its partial concurrency guarantee is
+  adequate in practice. **Deploy order: either.** The frontend never reads the redacted answer fields and its
+  normal flow always advances after a critique, so an old client does not submit a changed answer that the new
+  409 guard would reject; old and new frontend/backend combinations remain compatible.
 
 ## v0.162.0 - Say the Value
 
