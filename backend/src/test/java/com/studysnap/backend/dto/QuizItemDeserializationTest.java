@@ -469,7 +469,7 @@ class QuizItemDeserializationTest {
         assertThat(redacted.explanation()).isNull();
         assertThat(redacted.workingSolution()).isNull();
         assertThat(redacted.acceptableAnswers()).isNull();
-        assertThat(redacted.acceptableAnswerGroups()).isNull();
+        assertThat(redacted.acceptableAnswerGroups()).containsExactly(List.of(), List.of());
         assertThat(redacted.question()).isEqualTo(source.question());
         assertThat(redacted.choices()).isSameAs(source.choices());
         assertThat(redacted.concept()).isEqualTo(source.concept());

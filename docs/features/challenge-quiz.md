@@ -261,6 +261,12 @@ The retained toast predates note-level authoring and now overstates the control 
 ## Review and export
 
 - completed sessions remain note-owned
+- Challenge Quiz and Board Exam start, in-progress, and progress responses never carry `correctIndex`,
+  `correctIndices`, `explanation`, `workingSolution`, `acceptableAnswers`, or accepted Enumeration answer
+  content; Challenge Quiz `generate-more` follows the same rule. Enumeration keeps only the outer
+  `acceptableAnswerGroups` length needed to render its input slots. The completion response is the sole inline
+  reveal channel: it carries the full quiz plus the learner's single-choice, multi-choice, Identification, and
+  Enumeration selection maps, and the result screen reads `QuizAnswerReview` from that completion payload.
 - answer review uses the shared review layout (`QuizAnswerReview`)
 - review/export must use persisted session data only
 - standalone session review (`NoteSessionReviewPageClient`) renders `QuizAnswerReview` with `stickyNav={true}`, which replaces the inline Prev/Next navigation with a `StickyAssessmentFooter` fixed to the viewport bottom — eliminates layout jitter when explanations expand/collapse

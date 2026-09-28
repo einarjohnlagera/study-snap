@@ -123,6 +123,21 @@ standing baseline rule.
   adequate in practice. **Deploy order: either.** The frontend never reads the redacted answer fields and its
   normal flow always advances after a critique, so an old client does not submit a changed answer that the new
   409 guard would reject; old and new frontend/backend combinations remain compatible.
+- **Challenge Quiz and Board Exam answer-key redaction:** active-session `ChallengeQuizStartResponse` payloads
+  and Challenge Quiz `GenerateMoreChallengeQuizResponse.newQuestions` now redact `correctIndex`,
+  `correctIndices`, `explanation`, `workingSolution`, and `acceptableAnswers`, and remove every accepted answer
+  from `acceptableAnswerGroups` while preserving its outer length so Enumeration still renders the required
+  number of inputs. `ChallengeQuizSessionResponse` now reveals the full unredacted `quiz` only at completion,
+  together with `selectedChoices`, `selectedMultiChoices`, `selectedIdentificationAnswers`, and
+  `selectedEnumerationAnswers`; both result branches use those completion fields for `QuizAnswerReview`.
+  Stored session questions remain complete for scoring and completion review.
+
+  **Deploy order: frontend and backend together.** An old frontend against the new backend would give
+  `QuizAnswerReview` the redacted active-session quiz with answer reveal enabled and render every learner
+  selection as incorrect, even though server scoring remains correct. The new frontend keeps a compatibility
+  fallback to the old active-session fields for an older cached or pre-deploy completion response, so the
+  reverse overlap is safe, but it does not make backend-first deployment safe. Run `scripts/check-deploys.sh`
+  promptly after this release merges and confirm both Vercel and Render are on the release.
 
 ## v0.162.0 - Say the Value
 

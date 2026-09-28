@@ -2168,7 +2168,7 @@ describe("ChallengeQuizPage", () => {
     expect(screen.queryByText("Was this quiz helpful?")).not.toBeInTheDocument();
   });
 
-  it("opens answer review with selected answer, correct answer, explanation, and concept", async () => {
+  it("uses the revealed completion payload when the in-session answer key is redacted", async () => {
     (getAuthUser as jest.Mock).mockReturnValue({
       planType: "PRO",
       emailVerifiedAt: "2026-03-21T09:00:00Z",
@@ -2211,9 +2211,9 @@ describe("ChallengeQuizPage", () => {
         {
           question: "What powers the cell?",
           choices: ["Mitochondria", "Nucleus", "Golgi apparatus", "Cell wall"],
-          correctIndex: 0,
+          correctIndex: null,
           concept: "Cell Biology",
-          explanation: "Mitochondria produce ATP for the cell.",
+          explanation: null,
         },
       ],
       currentQuestionIndex: 0,
@@ -2237,6 +2237,19 @@ describe("ChallengeQuizPage", () => {
       durationSeconds: 10,
       createdAt: "2026-03-21T10:00:00Z",
       completedAt: "2026-03-21T10:01:00Z",
+      quiz: [
+        {
+          question: "What powers the cell?",
+          choices: ["Mitochondria", "Nucleus", "Golgi apparatus", "Cell wall"],
+          correctIndex: 0,
+          concept: "Cell Biology",
+          explanation: "Mitochondria produce ATP for the cell.",
+        },
+      ],
+      selectedChoices: { "0": 1 },
+      selectedMultiChoices: {},
+      selectedIdentificationAnswers: {},
+      selectedEnumerationAnswers: {},
     });
 
     render(<ChallengeQuizPage />);
