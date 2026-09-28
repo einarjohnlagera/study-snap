@@ -425,6 +425,9 @@ public final class QuizItem {
      * <p>⚠️ This copy MUST NOT be persisted. {@code QuizItem} is also the JSONB storage shape for quiz
      * sessions, so writing a redacted copy back to {@code session_state} would permanently destroy the
      * stored answer key that scoring depends on.
+     *
+     * <p>Enumeration questions retain one empty inner list per accepted-answer group because the outer
+     * list length is the response contract for how many answer inputs the learner must receive.
      */
     public QuizItem withoutAnswerKey() {
         return new QuizItem(this);
@@ -444,7 +447,9 @@ public final class QuizItem {
         this.questionGroup = source.questionGroup;
         this.keyConcept = source.keyConcept;
         this.acceptableAnswers = null;
-        this.acceptableAnswerGroups = null;
+        this.acceptableAnswerGroups = source.acceptableAnswerGroups == null
+                ? null
+                : source.acceptableAnswerGroups.stream().map(ignored -> List.<String>of()).toList();
         this.sourceStudyPackId = source.sourceStudyPackId;
     }
 

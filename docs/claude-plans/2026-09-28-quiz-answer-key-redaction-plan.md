@@ -152,6 +152,23 @@ surface: submit, submit-again-same-choice (idempotent), submit-again-different-c
   answered items on resume for these three would hand out a trivial cheat: answer everything with a guess,
   refresh, see which ones were right from what's now revealed, go back and fix only the wrong ones.
 
+## `withoutAnswerKey()`'s per-field redaction decision, corrected at the Challenge Quiz PR (applies to every
+future mode that reuses this method — Adaptive Practice and Interview Practice both need to check this too)
+
+**`acceptableAnswerGroups` cannot simply be nulled — it is structural, not just content, for ENUMERATION
+questions.** `QuizEnumerationInput` (`frontend/components/study-pack/quiz-enumeration-input.tsx:27`) derives
+the NUMBER of answer input boxes it renders directly from `acceptableAnswerGroups.length`. Nulling it
+outright (the original design) would render zero input boxes for every Enumeration question — silently
+unanswerable, no error surfaced anywhere. **Fixed in the Challenge Quiz PR:** when `acceptableAnswerGroups` is
+non-null, the redacted copy keeps the same OUTER length but replaces every inner list with an empty list —
+preserving the slot count while hiding the accepted answers themselves. Every other field
+(`correctIndex`/`correctIndices`/`explanation`/`workingSolution`/`acceptableAnswers`) is still nulled outright;
+none of them are structural in this way for any format checked so far. **Long Exam never emits ENUMERATION**
+(confirmed against `long-exam-developer.txt`), so this correction doesn't affect the already-shipped PR #1460
+— but **check whether Adaptive Practice or Interview Practice emit ENUMERATION before reusing this method
+unmodified**, and re-derive whether any OTHER field is structural (not just answer-bearing) for a format
+those two modes serve that Challenge Quiz and Long Exam don't.
+
 ## PR-time checks flagged by the falsification pass, not yet resolved (resolve when each PR is scoped)
 
 - **Challenge Quiz/Board Exam:** `QuizAnswerReview` renders at `challenge-quiz/page.tsx:2651` and `:2880` —
