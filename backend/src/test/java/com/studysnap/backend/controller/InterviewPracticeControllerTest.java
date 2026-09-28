@@ -75,8 +75,7 @@ class InterviewPracticeControllerTest {
             "correctIndices",
             "explanation",
             "workingSolution",
-            "acceptableAnswers",
-            "acceptableAnswerGroups"
+            "acceptableAnswers"
     );
     private static final String KEY_CONCEPT = "Transaction boundaries";
 
@@ -339,8 +338,24 @@ class InterviewPracticeControllerTest {
                     .as("response field %s must not carry an answer", field)
                     .isTrue();
         }
+        JsonNode answerGroups = question.path("acceptableAnswerGroups");
+        assertThat(answerGroups.isMissingNode()
+                || answerGroups.isNull()
+                || allChildrenAreEmptyArrays(answerGroups)).isTrue();
         assertThat(question.path("answer").isMissingNode()).isTrue();
         assertThat(question.path("keyConcept").asText()).isEqualTo(KEY_CONCEPT);
+    }
+
+    private boolean allChildrenAreEmptyArrays(JsonNode groups) {
+        if (!groups.isArray()) {
+            return false;
+        }
+        for (JsonNode group : groups) {
+            if (!group.isArray() || !group.isEmpty()) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private HandlerMethodArgumentResolver authenticatedUserResolver(AuthenticatedUser authenticatedUser) {
