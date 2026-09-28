@@ -99,7 +99,13 @@ standing baseline rule.
 
 ### Shipped
 
-_(nothing yet)_
+- **Long Exam answer-key redaction:** `LongExamStartResponse` and `LongExamSessionResponse` now redact
+  `correctIndex`, `correctIndices`, `explanation`, `workingSolution`, `acceptableAnswers`, and
+  `acceptableAnswerGroups` from every question at every point in a Long Exam session. Responses retain
+  `keyConcept` for the domain breakdown, while the stored session quiz remains complete for scoring. No frontend
+  change or deploy ordering constraint applies: the existing frontend type already permits a null
+  `correctIndex`, its resolver falls back to `-1`, and every Long Exam question component already renders with
+  answer reveal disabled, so old and new frontend/backend combinations remain user-visible-behavior compatible.
 
 ## v0.162.0 - Say the Value
 
@@ -781,4 +787,3 @@ checkpoints are all carried from earlier releases and are re-stated on their row
     `INACTIVITY` effectiveness item above for whether that matters.
   - **Cross-note review re-check:** `quick_review_sessions` 906 total, `source_collection_id` NULL on all 906
     (179 since the Stage 1 audit); DEFER stands, gate is `[CHECKPOINT — due 2026-10-13]`.
-
