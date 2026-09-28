@@ -1000,7 +1000,12 @@ public class ChallengeQuizService {
                 saved.getCompletedAt(),
                 isFirstCompletedSessionEver,
                 isSecondCompletedSessionEver,
-                twiceMissedConcepts
+                twiceMissedConcepts,
+                quiz,
+                selectedChoices,
+                selectedMultiChoices,
+                selectedIdentificationAnswers,
+                selectedEnumerationAnswers
         );
     }
 
@@ -1208,9 +1213,12 @@ public class ChallengeQuizService {
         session.setTotalQuestions(newTotal);
         accumulateLlmUsage(session, generatedContent);
         quickReviewSessionRepository.save(session);
+        List<QuizItem> redactedQuestions = unique.stream()
+                .map(QuizItem::withoutAnswerKey)
+                .toList();
 
         return new GenerateMoreChallengeQuizResponse(
-                unique,
+                redactedQuestions,
                 newTotal,
                 newTimeLimitSeconds,
                 extractTimerStartedAtEpochSeconds(nextSessionState)
@@ -1897,6 +1905,9 @@ public class ChallengeQuizService {
             PlanType planType
     ) {
         List<QuizItem> quiz = QuizSessionStateUtils.extractQuiz(session.getSessionState());
+        List<QuizItem> redactedQuiz = quiz.stream()
+                .map(QuizItem::withoutAnswerKey)
+                .toList();
         if (quiz.isEmpty()) {
             if (session.getStatus() != QuickReviewSessionStatus.GENERATING
                     && session.getStatus() != QuickReviewSessionStatus.FAILED) {
@@ -1924,7 +1935,7 @@ public class ChallengeQuizService {
                 properties.getPricing().resolveMonthlyBoardExamLimit(planType),
                 mode,
                 extractDifficulty(session.getSessionState()),
-                quiz,
+                redactedQuiz,
                 session.getCurrentQuestionIndex() == null ? 0 : session.getCurrentQuestionIndex(),
                 sanitizeSessionStateForClient(session.getSessionState()),
                 extractResponseSourceNoteRefs(session.getSessionState()),

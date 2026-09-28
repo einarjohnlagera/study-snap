@@ -1545,6 +1545,14 @@ export type ChallengeQuizSessionResponse = {
   isFirstCompletedSessionEver?: boolean;
   isSecondCompletedSessionEver?: boolean;
   twiceMissedConcepts?: string[];
+  // Optional, matching the fallback in challenge-quiz/page.tsx (`result.quiz ?? quiz`): an
+  // older backend response mid-deploy won't carry these, so the type must not claim they're
+  // always present.
+  quiz?: QuizItem[];
+  selectedChoices?: Record<string, number>;
+  selectedMultiChoices?: Record<string, number[]>;
+  selectedIdentificationAnswers?: Record<string, string>;
+  selectedEnumerationAnswers?: Record<string, string[]>;
 };
 
 export type GenerateMoreChallengeQuizResponse = {

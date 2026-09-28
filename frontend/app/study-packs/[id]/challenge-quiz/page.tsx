@@ -2649,11 +2649,11 @@ export default function ChallengeQuizPage() {
           </div>
           {showAnswerReview ? (
             <QuizAnswerReview
-              quiz={quiz}
-              selectedChoices={selectedChoices}
-              selectedMultiChoices={selectedMultiChoices}
-              selectedIdentificationAnswers={selectedIdentificationAnswers}
-              selectedEnumerationAnswers={selectedEnumerationAnswers}
+              quiz={result.quiz ?? quiz}
+              selectedChoices={result.selectedChoices ?? selectedChoices}
+              selectedMultiChoices={result.selectedMultiChoices ?? selectedMultiChoices}
+              selectedIdentificationAnswers={result.selectedIdentificationAnswers ?? selectedIdentificationAnswers}
+              selectedEnumerationAnswers={result.selectedEnumerationAnswers ?? selectedEnumerationAnswers}
               className="mt-2"
               planType={viewerPlanType}
               footer={(
@@ -2878,11 +2878,11 @@ export default function ChallengeQuizPage() {
           </div>
           {showAnswerReview ? (
             <QuizAnswerReview
-              quiz={quiz}
-              selectedChoices={selectedChoices}
-              selectedMultiChoices={selectedMultiChoices}
-              selectedIdentificationAnswers={selectedIdentificationAnswers}
-              selectedEnumerationAnswers={selectedEnumerationAnswers}
+              quiz={result.quiz ?? quiz}
+              selectedChoices={result.selectedChoices ?? selectedChoices}
+              selectedMultiChoices={result.selectedMultiChoices ?? selectedMultiChoices}
+              selectedIdentificationAnswers={result.selectedIdentificationAnswers ?? selectedIdentificationAnswers}
+              selectedEnumerationAnswers={result.selectedEnumerationAnswers ?? selectedEnumerationAnswers}
               className="mt-2"
               planType={viewerPlanType}
               footer={(
