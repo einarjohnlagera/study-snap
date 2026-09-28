@@ -1,8 +1,73 @@
 # RELEASES.md - NoteLib
 
+## v0.163.0 - No Peeking
+
+**Status: In Progress**
+
+Theme: stop a quiz from telling a learner the answer before they've committed to one, and stop Challenge
+Quiz's question bank from racing itself during regeneration.
+
+### Planned Scope
+
+**Scope picked by the owner, 2026-09-27, from a Backlog Index survey (five candidates originally picked;
+one dropped at kickoff — see the note after item 4 — leaving four, at the top of the documented 3-4 item
+sweet spot).**
+
+1. **Quiz answer-key leak (full-stack).** `correctIndex`/`correctIndices`/`explanation` are served
+   unfiltered for unanswered questions across all 4 shared quiz session services. **Corrected the same
+   day this was scoped, before any Codex prompt was written:** first pitched as backend-only/contained;
+   checked directly, Quick Review's immediate per-choice feedback (`quiz-choice-list.tsx`) already
+   compares client-side against `correctIndex` sitting in the session-start payload, and the one round
+   trip that exists after an answer (`POST /quick-review/{sessionId}/progress`) returns
+   `QuickReviewSessionSummaryResponse` — a summary type carrying no quiz-item data — so redacting the
+   leak with no reveal path would break that UX. Scope is a new/widened endpoint plus frontend wiring;
+   the exact reveal-path mechanism is still an open design question, not yet a Codex prompt. Teacher
+   share-link quiz path stays explicitly untraced this release (see Anti-drift). Backlog Index row: "Quiz
+   session wire payload already includes `correctIndex`/`correctIndices`/`explanation` for unanswered
+   questions, across every shared quiz mode."
+2. **Challenge Quiz `releaseClaims` deadlock risk.** The `REQUIRES_NEW` transaction can wait indefinitely
+   on locks its own caller already holds (all three relevant timeouts are 0); dormant in production logs
+   today, not actively firing. Needs a real two-connection Postgres integration test before any fix
+   ships — a mocked-repository test would pass under the same defect by construction. Backlog Index row:
+   "`ChallengeQuizQuestionBankService.releaseClaims`'s `REQUIRES_NEW` transaction can wait indefinitely on
+   locks its own caller already holds."
+3. **Challenge Quiz bank-invalidation race.** `generateMoreQuestions` can race the bank-invalidation path
+   and let stale rows survive a regeneration. Needs a generation-stamp migration; no rewrite of existing
+   rows. Backlog Index row: "`ChallengeQuizService.generateMoreQuestions` can race `v0.162.0`'s new bank
+   invalidation, letting stale-content rows survive a regeneration."
+4. **Challenge Quiz session-complete vs. bank-delete throw.** Lower-severity, same falsification pass
+   that surfaced items 2-3, same shared `ChallengeQuizService`/bank code — bundled here rather than
+   deferred, since items 2-4 all touch the same shared method. Backlog Index row: "A Challenge session
+   completing at the exact moment a regeneration's bulk bank-delete commits could throw, not corrupt."
+
+**A fifth item the owner picked — Study Plan Builder drag-persist race — was DROPPED at kickoff, not
+scoped in.** Its Backlog Index row ("Study Plan Builder drag persists per drop and races its own save")
+had never carried a `Last reviewed` date; actually reading the current code at this kickoff (not just
+grepping for the old, lost Codex prompt) showed the deferred "Save order" model it called for already
+shipped in `v0.96.0` (`185e0cc7`, 2026-08-29) — `study-plan-builder-page-client.tsx`'s
+`savePendingLeafOrder`/`persistLeafItems` implement exactly that model, and all three traps the row named
+were addressed per that commit's own mutation-verified audit. The row is corrected to SHIPPED; see
+`ROADMAP.md`.
+
+Anti-drift: no automated Tier 3 question-quality gate this release; H4's validator, H5's wording, and
+H6's exclusion (still gated on H5's post-ship checkpoint) are all unchanged; the bank-invalidation
+migration (item 3) adds a generation-stamp column only — no other quiz JSONB store is touched; the
+teacher share-link quiz path is a known, explicitly out-of-scope gap for item 1, not silently ignored.
+
+**Verification tier:** four items, at the top of the 3-4-item sweet spot. **Two independent escalation
+triggers fire regardless of item count:** items 2-4 share the same method/bank code (shared-method-overlap
+trigger), and item 1 moves a privacy boundary (unanswered-question data exposure). Plan: one scoped cold
+agent (Opus, framed as falsification against this release's own claims) covering items 1-4's overlap,
+plus a real `MockMvc` request test for whatever endpoint the item-1 fix lands on, plus `advisor()` at each
+phase and on each diff per the standing baseline rule.
+
+### Shipped
+
+_(nothing yet)_
+
 ## v0.162.0 - Say the Value
 
-**Status: Released** (signed off 2026-09-27; PRs #1455/#1456/#1457/#1458 merged into the release branch; release PR to `main` pending the owner's admin merge)
+**Status: Released** (signed off 2026-09-27; PRs #1455/#1456/#1457/#1458 merged into the release branch; release PR merged to `main` as #1459 and tagged 2026-09-27; deploy verified on both platforms — Render live `c3e4deaa` at 14:21:57Z, Vercel matched at 14:25:36Z)
 
 Theme: a quiz explanation is finally allowed to say what the numeric answer actually is, so the model's own internal-consistency check has something to check — and stale exam content stops surviving a regeneration it should have invalidated.
 
@@ -681,178 +746,3 @@ checkpoints are all carried from earlier releases and are re-stated on their row
   - **Cross-note review re-check:** `quick_review_sessions` 906 total, `source_collection_id` NULL on all 906
     (179 since the Stage 1 audit); DEFER stands, gate is `[CHECKPOINT — due 2026-10-13]`.
 
-## v0.157.0 - Watching More Closely
-
-**Status: Released** (signed off and deployed 2026-09-24: Render live 02:40Z, `V149` applied 02:39Z, Vercel production 02:43Z)
-
-Theme: bring in five already-open, independently-produced PRs — traffic analytics, two production
-incident findings, refreshed GPT product-context docs, and a resolved retention-communication channel
-doctrine — onto one release branch instead of merging each straight to `main`, then implement the
-scoped pool-observability and retention-email instrumentation follow-ups without triggering a deploy
-until the owner is ready.
-
-### Planned Scope
-
-- **Vercel Web Analytics (frontend).** PR #1426, auto-generated by Vercel's own GitHub integration
-  after the owner enabled Web Analytics on the (free/Hobby) Vercel plan: adds `@vercel/analytics`
-  and one `<Analytics />` component to the root layout. Confirmed earlier this cycle: 50,000
-  events/month included, no charge risk on overage (collection just pauses). Independently re-verify
-  its own build/lint/test claims before signoff rather than trusting the PR body as-is.
-- **Pool observability scoping and implementation.** PR #1427 started the `threads.max` checkpoint
-  clock (owner confirmed removing Render's `SERVER_TOMCAT_THREADS_MAX` override) and scoped closing
-  the saturation detector's two known gaps (non-request-thread registry coverage and scheduler
-  contention) via a design verified against this project's actual Spring 7.0.5 jar. The implementation
-  is recorded under Shipped below.
-- **2026-09-22 production restart finding (docs only).** PR #1428 — a same-day incident where the
-  known four-occurrence pool-exhaustion signature is explicitly absent; trigger left genuinely
-  unidentified rather than rounded up to a guess.
-- **GPT context docs refreshed to v0.156.0 (docs only).** PR #1429 — `GPT_CONTEXT.md` and
-  `SURFACES_AND_FEATURES_CONTEXT.md` brought current for the notification-CTA and Campaign Feedback
-  work; other modules left flagged, not silently touched.
-- **Retention communication channel doctrine and Stages 1a–1b.** PR #1430 resolved "should retention
-  email move to in-app notification" with a channel-role doctrine rather than a binary answer. Key
-  finding: two of the four retention email intents already have live Dashboard current-state surfaces,
-  so no in-app notification is recommended for them independent of further evidence. Stage 1a's
-  click/open instrumentation and Stage 1b's budget governance are recorded under Shipped below; the
-  evidence-dependent Stages 2–3 remain separate.
-
-Anti-drift: the other docs-only PRs remain plans and findings, not diffs, until their own gates clear.
-Pool observability and retention Stages 1a–1b are the implemented follow-ups to that original set.
-
-### Shipped
-
-- **Vercel Web Analytics.** `@vercel/analytics` 2.0.1 and one `<Analytics />` in the root layout
-  (`frontend/app/layout.tsx:99`). Not taken from the PR body: `npm ci` accepts the lockfile, whose diff adds that
-  package and also refreshes the stale root `version` field (0.96.0 to 0.156.0; no other dependency changed),
-  `tsc --noEmit` is clean, lint has 0 errors, the production build succeeds and frontend Jest passes 2,489
-  tests (1 skipped). The free-plan limit (50,000 events/month, collection pauses rather than charging) was
-  checked against Vercel's published limits earlier this cycle and is not repository-verifiable.
-
-- **Stage 2 evidence bound for the retention instrumentation (docs).** From a read-only production read (queries and results in
-  `docs/claude-plans/2026-09-23-retention-volume-read.sql`): only `INACTIVITY` and `DUE_CONCEPTS_DIGEST` have a measurable audience (`WEAK_CONCEPT` 2 opted in,
-  `WEEKLY_SUMMARY` 1, `KNOWLEDGE_IMPACT_DIGEST` 0 — zero sends in 90 days each). Two-tier bound on clicks: 14
-  days, 100 recipients, and 30 clicks or 2,000 sends; 60-day backstop reads an unmet type as underpowered (a
-  re-date, not a verdict); kill criterion `INACTIVITY` click-through under 1%. Plan §I. The dated checkpoint
-  rows are in `ROADMAP.md`.
-
-- **Cold pressure test and its remediation.** Four cold reviews (Opus on retention, Sonnet and then Opus on
-  pool observability, and Codex across the whole release) tried to falsify the release against its plan; each
-  finding was verified in code before fixing, and several were rejected or downgraded with reasons below.
-  Verification at signoff: backend `clean install` BUILD SUCCESS with 2,511 tests including the real-Postgres
-  suite, frontend Jest 2,489. Fixed
-  (PR #1437): a non-ISO click timestamp escaped the catch and would 500 (`DateTimeParseException` is not an
-  `IllegalArgumentException`); the digest-first order coupled a digest failure to the day's `INACTIVITY` sends,
-  so the digest call is now isolated; three of four executors' decoration was unguarded by any test. Doc
-  corrections: `WELCOME` does have a writer, `clicked_at` is first-processed, the open counter is
-  whole-account. Two of these were defects in this release's own earlier work.
-
-- **Docs-only inputs, shipped as documents:** the pool-observability plan (#1427), the 2026-09-22 restart
-  finding (#1428, trigger still unidentified), GPT context refreshed to `v0.156.0` (#1429), and the retention
-  channel doctrine (#1430).
-
-- **The retention budget now governs all five scheduled retention email types against a retention-only
-  count.** `INACTIVITY`, `WEAK_CONCEPT`, `WEEKLY_SUMMARY`, `DUE_CONCEPTS_DIGEST`, and
-  `KNOWLEDGE_IMPACT_DIGEST` each recompute the available budget before bounding candidates; the orphaned
-  public `sendInactiveUserEmails()` entry point now shares the same budgeted inactivity path. The count
-  explicitly excludes transactional mail, dead/unclassified enum values, and the separately capped
-  admin-triggered `RE_ENGAGEMENT_2025` campaign, removing that campaign's accidental cross-talk with
-  automated retention dispatch. **Send order is now the priority mechanism, and that was found only by
-  reading production before signoff:** `INACTIVITY` sat at exactly 60/day (the 100-limit minus 40-reserve
-  ceiling) on 10 of the last 14 days while `DUE_CONCEPTS_DIGEST` sent 0–22/day unbudgeted. Extending the
-  budget to the digest with `INACTIVITY` first would have starved the digest to ~0 on most days, so
-  `runDaily` now dispatches the digest, then `WEAK_CONCEPT`, then `INACTIVITY` (`RetentionEmailScheduler.java:30`).
-  Daily sends stay at the cap and `INACTIVITY` yields roughly the digest's volume (about 60 down to 40–47/day);
-  **the later-running weekly and monthly types do not get the same protection — see Known limitations.** Two
-  guards fail if the order regresses. `transactionalReserve` (40) is unchanged, though real transactional
-  volume is 0–1/day; lowering `EMAIL_TRANSACTIONAL_RESERVE` would NOT help, because `INACTIVITY` has more
-  eligible learners than budget and would absorb the extra room.
-
-- **Retention email clicks now correlate to a send record without Resend message-id plumbing.** The
-  five dispatched retention types reserve their UUID `email_log.id` before rendering and add inert
-  `source` and `e` query parameters to the CTA, while persisting the row only after a successful send.
-  Verified `email.clicked` webhooks read Resend's documented `data.click.link` and
-  `data.click.timestamp`, then set that row's nullable `clicked_at`; unknown, purged, mismatched or
-  malformed correlations are acknowledged and skipped. `email.opened` uses top-level `created_at` to
-  increment `email_open_daily_counts` by UTC day with no per-send correlation. `EmailService`, Resend
-  message ids, and `UNFINISHED_NOTE` remain unchanged; Stage 1b's budget governance is described above.
-  Source doctrine:
-  `docs/claude-plans/retention-communication-channel-doctrine-final-plan.md` §D/§I.
-
-- **Pool saturation diagnostics now cover DB-bound background work.** A shared task decorator registers
-  the four DB-touching executors and every `@Scheduled` job (all route through the six guarded scheduling methods, which one test exercises) in `InFlightRequestRegistry`, using executor
-  thread names or Spring's exact `ClassName.methodName` scheduled-task description; the detector's own
-  `poll()` is explicitly excluded (test-proven mid-cycle, not just after). The custom scheduler subclasses
-  `ThreadPoolTaskScheduler` rather than using plain `setTaskDecorator()` — verified against the actual
-  resolved jar (bytecode) that `ThreadPoolTaskScheduler` hands the configured `TaskDecorator` a
-  `RunnableScheduledFuture` wrapper, not the user's task, which would have silently discarded every
-  scheduled job's description; the subclass pre-decorates the real task before Spring wraps it, and the
-  decorator no-ops on a `RunnableScheduledFuture` it's handed directly to avoid double-instrumenting.
-  Two `scheduled-task-` threads mean ONE slow DB-bound job can no longer starve the detector's polling; two DB-bound jobs firing at the same instant (for example 02:45Z) still can, for up to Hikari's connection timeout.
-  `runDaily`/`runWeekly` (`RetentionEmailScheduler`) are runtime-verified still anchored to `Asia/Manila`
-  after the scheduler swap (real `CronTrigger.nextExecution()` assertions, not inspection). **`runMonthly`
-  was NOT part of that verification and has no zone pinning at all — a pre-existing gap, not introduced
-  here, out of scope for this change and tracked as its own Backlog Index row** (see
-  `docs/product/ROADMAP.md`). Diagnostic registration
-  and cleanup fail open, and cleanup is unconditional when work throws. Source and design rationale:
-  `docs/claude-plans/done/2026-09-22-pool-observability-non-request-thread-coverage-plan.md`.
-
-### Known limitations
-
-- **`WEEKLY_SUMMARY` and `KNOWLEDGE_IMPACT_DIGEST` are budget-starved, permanently, while `INACTIVITY` saturates
-  the cap.** They run Sunday 18:00 Manila and on the 1st at 09:00 host time (17:00 Manila), after the 02:45 run
-  has used the day's budget, so they start with budget 0 and "eligible later" only reaches the next week or
-  month. Immaterial today (1 and 0 opted-in learners; no sends in 90 days) but more opt-ins would NOT unlock
-  them. Owner chose to document rather than cap `INACTIVITY`'s share now; a Backlog row gates the fix on
-  opt-in growth. `sendWeeklySummaryEmails_independentlyRespectsExhaustedBudget` asserts the starvation as
-  correct behaviour.
-- **The admin `RE_ENGAGEMENT_2025` campaign no longer counts toward the budget.** A campaign batch of up to
-  100 plus ~60 retention sends can exceed Resend's 100/day on the same day.
-- **`clicked_at` is the first click PROCESSED, not necessarily the earliest.** The webhook IS now exercised over
-  real HTTP (`ResendWebhookHttpTest`: signed click, non-ISO timestamp, signed open, unsigned request), but the
-  real check that Resend delivers these events is still the deploy + 3 day smoke read.
-- **The click marker is a capability, not a binding.** `e=<uuid>` is an unguessable v4 id, so a learner cannot
-  guess another learner's, but anyone who HOLDS one (for example from a forwarded email) can flag that one send
-  as clicked; the handler checks the email type, not the recipient. Impact is one analytics flag. It is
-  inert in the sense that no frontend code reads `e` (checked by search, not by a test).
-- **A send whose row fails to persist leaves an orphan marker.** If Resend accepts the email and the
-  `email_log` save or the surrounding commit then fails, the delivered link carries an `e` with no row (the
-  click is logged and skipped) and no cooldown row exists. The same window existed before this release.
-- **Budget and cooldown checks are not atomic.** Count, check and send have no lock, so two overlapping
-  instances or a duplicate cron fire could overspend the budget or double-send. Pre-existing, not introduced
-  here; the service runs one instance (checked in Render), so overlap is limited to deploy hand-over.
-- **A database failure in the click or open handler returns a 5xx on purpose,** so Resend retries a transient
-  outage instead of losing the event; only malformed payloads are acknowledged and skipped.
-- **The scheduler bean calls `initialize()` and Spring calls it again,** abandoning one executor that never
-  started a thread. Harmless; the existing executors follow the same pattern.
-- **The open counter is whole-account** (verification and password-reset opens are included) and keyed by UTC
-  day; directional only.
-- **Instrumentation is unverified emitting until deploy.** It needs Resend click and open tracking on the
-  sending domain and the webhook subscribed to `email.clicked`/`email.opened`; `RESEND_WEBHOOK_SECRET` is staged
-  in Render.
-- **`InFlightRequestRegistry` is keyed by `Thread`,** so an inner decorated task's removal would wipe an outer
-  entry on the same thread. No reachable trigger was found (latent).
-- **A registry entry means "running", not "holding a connection".** A generation thread in the middle of an LLM
-  call appears in a saturation log line exactly as one holding a connection does; read the log with that in mind.
-- **The decorator is a Spring bean, and the scheduler subclass is what makes it work.** Spring Boot applies a
-  lone `TaskDecorator` bean to its own executor and scheduler builders, and on Boot's default scheduler it would
-  silently register nothing (it receives the internal future, not the job). The bean-level test in
-  `AppConfigTest` fails if the custom scheduler is removed or replaced.
-- **`runMonthly` has no zone pin** (pre-existing; Backlog row).
-
-### Deploy notes
-
-- `V149` runs on deploy: a nullable `ADD COLUMN` on `email_log` plus a new table; additive.
-- No API form is removed, renamed or made required, so there is no frontend/backend deploy-ordering constraint.
-- **Behaviour change to expect:** `INACTIVITY` drops from about 60 to 40–47 a day. Confirm with
-  `retention.email.*.dispatch` log lines after the first daily run.
-- Owner check at deploy + 3 days: `SELECT count(*) FROM email_log WHERE clicked_at IS NOT NULL` and
-  `email_open_daily_counts`; zero of both means tracking or the webhook subscription is off.
-
-### Signoff scope record
-
-- Vercel Web Analytics: shipped (`layout.tsx:99`). Pool observability: shipped, and CHANGED from the plan —
-  plain `setTaskDecorator` on the scheduler would have lost every job's description, so a subclass was needed
-  (`InFlightThreadRegisteringTaskScheduler`; `AppConfig.java:41-44`). Restart finding, GPT context refresh,
-  retention doctrine: shipped as documents. Retention Stages 1a and 1b: shipped
-  (`ResendWebhookService.java:96,119`; `RetentionService.java:88,691,724,771`; `V149`). Stage 2/3: not started
-  by design. Nothing in Planned Scope is unbuilt.
