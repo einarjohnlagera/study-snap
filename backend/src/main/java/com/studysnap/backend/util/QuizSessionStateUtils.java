@@ -2,6 +2,7 @@ package com.studysnap.backend.util;
 
 import com.studysnap.backend.dto.InterviewSourceNoteRef;
 import com.studysnap.backend.dto.QuizItem;
+import com.studysnap.backend.service.model.InterviewPracticeCritique;
 import lombok.experimental.UtilityClass;
 
 import java.util.ArrayList;
@@ -9,6 +10,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 
 @UtilityClass
@@ -38,6 +40,9 @@ public class QuizSessionStateUtils {
     private static final String ACCEPTABLE_ANSWER_GROUPS_KEY = "acceptableAnswerGroups";
     private static final String SUB_MODE_KEY = "subMode";
     private static final String AI_FEEDBACK_KEY = "aiFeedback";
+    private static final String INTERVIEW_VERDICT_KEY = "verdict";
+    private static final String INTERVIEW_RATIONALE_KEY = "rationale";
+    private static final String INTERVIEW_FOLLOW_UP_KEY = "followUp";
     private static final String SOFT_TIMER_SECONDS_KEY = "softTimerSeconds";
     private static final String TIME_SPENT_SECONDS_KEY = "timeSpentSeconds";
     private static final String INTERVIEW_SOURCE_NOTE_REFS_KEY = "interviewSourceNoteRefs";
@@ -330,6 +335,28 @@ public class QuizSessionStateUtils {
         feedbackItems.set(questionIndex, feedback == null ? Map.of() : new LinkedHashMap<>(feedback));
         state.put(AI_FEEDBACK_KEY, feedbackItems);
         return state;
+    }
+
+    public Optional<InterviewPracticeCritique> extractInterviewFeedback(
+            Map<String, Object> sessionState,
+            int questionIndex
+    ) {
+        if (sessionState == null || sessionState.isEmpty() || questionIndex < 0) {
+            return Optional.empty();
+        }
+        Object raw = sessionState.get(AI_FEEDBACK_KEY);
+        if (!(raw instanceof List<?> feedbackItems) || questionIndex >= feedbackItems.size()) {
+            return Optional.empty();
+        }
+        Object rawFeedback = feedbackItems.get(questionIndex);
+        if (!(rawFeedback instanceof Map<?, ?> feedback) || feedback.isEmpty()) {
+            return Optional.empty();
+        }
+        return Optional.of(new InterviewPracticeCritique(
+                readStringValue(feedback, INTERVIEW_VERDICT_KEY),
+                readStringValue(feedback, INTERVIEW_RATIONALE_KEY),
+                readStringValue(feedback, INTERVIEW_FOLLOW_UP_KEY)
+        ));
     }
 
     public List<QuizItem> extractQuiz(Map<String, Object> sessionState) {
