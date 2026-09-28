@@ -677,6 +677,7 @@ public class LongExamService {
 
     private LongExamStartResponse buildStartResponse(QuickReviewSessionEntity session) {
         List<QuizItem> quiz = QuizSessionStateUtils.extractQuiz(session.getSessionState());
+        List<QuizItem> redactedQuiz = quiz.stream().map(QuizItem::withoutAnswerKey).toList();
         boolean canResume = session.getStatus() == QuickReviewSessionStatus.IN_PROGRESS
                 || session.getStatus() == QuickReviewSessionStatus.PAUSED;
         int totalQuestions = quiz.isEmpty() ? safeTotalQuestions(session) : quiz.size();
@@ -684,7 +685,7 @@ public class LongExamService {
         return new LongExamStartResponse(
                 session.getId(),
                 session.getStatus().name(),
-                canResume ? quiz : List.of(),
+                canResume ? redactedQuiz : List.of(),
                 totalQuestions,
                 extractDifficulty(session.getSessionState()),
                 canResume,
@@ -717,11 +718,12 @@ public class LongExamService {
 
     private LongExamSessionResponse buildSessionResponse(QuickReviewSessionEntity session) {
         List<QuizItem> quiz = QuizSessionStateUtils.extractQuiz(session.getSessionState());
+        List<QuizItem> redactedQuiz = quiz.stream().map(QuizItem::withoutAnswerKey).toList();
         int totalQuestions = quiz.isEmpty() ? safeTotalQuestions(session) : quiz.size();
         return new LongExamSessionResponse(
                 session.getId(),
                 session.getStatus().name(),
-                quiz,
+                redactedQuiz,
                 QuizSessionStateUtils.extractSelectedChoiceIndexes(session.getSessionState(), quiz),
                 QuizSessionStateUtils.extractSelectedMultiChoiceIndexes(session.getSessionState(), quiz),
                 QuizSessionStateUtils.extractSelectedIdentificationAnswers(session.getSessionState(), quiz),

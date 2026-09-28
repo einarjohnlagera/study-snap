@@ -130,6 +130,11 @@ Long Exam progress additionally accepts `selectedIdentificationAnswer`. A blank 
 on completion it is scored as incorrect rather than causing a submission failure. Identification uses the same
 generation-time `acceptableAnswers` and normalized exact-match grading as Challenge Quiz.
 
+Long Exam session responses are feedback-free at the wire boundary as well as in the UI. Start, active, get,
+progress, pause, and resume responses never carry `correctIndex`, `correctIndices`, `explanation`,
+`workingSolution`, `acceptableAnswers`, or `acceptableAnswerGroups` for any question at any point in the
+session, including questions the learner has already answered.
+
 The recovery query is intentionally `LONG_EXAM`-only. Challenge Quiz needs its mode-owned stale-session path to release question-bank claims; Adaptive Practice and the Interview Practice sub-mode are also excluded. Recovery never generates replacement questions itself.
 
 ## Board Exam Multi-source State
