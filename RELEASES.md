@@ -13,18 +13,41 @@ Quiz's question bank from racing itself during regeneration.
 one dropped at kickoff — see the note after item 4 — leaving four, at the top of the documented 3-4 item
 sweet spot).**
 
-1. **Quiz answer-key leak (full-stack).** `correctIndex`/`correctIndices`/`explanation` are served
-   unfiltered for unanswered questions across all 4 shared quiz session services. **Corrected the same
-   day this was scoped, before any Codex prompt was written:** first pitched as backend-only/contained;
-   checked directly, Quick Review's immediate per-choice feedback (`quiz-choice-list.tsx`) already
-   compares client-side against `correctIndex` sitting in the session-start payload, and the one round
-   trip that exists after an answer (`POST /quick-review/{sessionId}/progress`) returns
-   `QuickReviewSessionSummaryResponse` — a summary type carrying no quiz-item data — so redacting the
-   leak with no reveal path would break that UX. Scope is a new/widened endpoint plus frontend wiring;
-   the exact reveal-path mechanism is still an open design question, not yet a Codex prompt. Teacher
-   share-link quiz path stays explicitly untraced this release (see Anti-drift). Backlog Index row: "Quiz
-   session wire payload already includes `correctIndex`/`correctIndices`/`explanation` for unanswered
-   questions, across every shared quiz mode."
+1. **Quiz answer-key redaction across 6 practice-session surfaces (full-stack, far larger than first
+   scoped — see the design plan, revised after `advisor()` (3 rounds) and again after a cold Opus
+   falsification pass, which itself needed one more round of direct re-verification before its findings were
+   trusted).** `correctIndex`/`correctIndices`/`explanation` are served unfiltered, unconditionally, across
+   Long Exam, Board Exam, Adaptive Practice, and Challenge Quiz. **Interview Practice, discovered mid-item to
+   be a fully separate backend (`InterviewPracticeService`), added to scope: it has a real, already-shipping
+   resubmission exploit** — directly re-verified, not taken from a subagent's report: `answerQuestion`
+   (`:168-211`) takes a client-supplied `questionIndex` with no re-answer guard, generates a fresh LLM
+   critique (which reveals correctness) on every call, and `buildReport` (`:461`) scores whatever was stored
+   for that index at completion time — so submit-wrong-then-resubmit-correct is real and counts today. This
+   is the learner's own practice record (an Interview Readiness Report), not a cross-user exposure — treat it
+   as part of this item's normal ship cadence, not a separate hotfix, unless the owner decides otherwise.
+   **Quick Review gets the LEAST protection of the 6, not the most, and is deferred to its own design pass:**
+   its session has never stored a quiz at all (`session.setSessionState(null)` from creation) — this actually
+   makes the original kickoff claim ("the `/progress` round trip carries no quiz-item data") TRUE, just true
+   for a different, uglier reason than claimed: there's no session-side quiz to protect because the frontend
+   never reads one — `quick-review/page.tsx:371,417` sources the entire rendered quiz, answer key included,
+   from `getNote(noteId)` (`NoteResponse`), the exact endpoint decided to stay unredacted. **The "backend-only
+   pitch" history in the original kickoff text was still false** (traced to the discarded unauthorized fork,
+   echoed in without verification) — that correction stands; the response-type claim itself did not need
+   correcting, only its conclusion did. **Full corrected design:**
+   `docs/claude-plans/2026-09-28-quiz-answer-key-redaction-plan.md`. Owner decisions: Note Detail, Study
+   Pack, the public note page, and DOCX `WITH_ANSWERS` export all stay **unredacted**; Quick Review gets a
+   genuinely new quiz-less fetch, sized as its own short design pass, not dropped from scope; Challenge
+   Quiz/Board Exam's post-completion answer review widens `ChallengeQuizSessionResponse` directly rather than
+   adding a second round trip; Adaptive Practice's completion endpoint currently lets the client's submitted
+   selections override server-stored ones for scoring, which also changes what `ConceptHealth` gets written
+   from — fixed as part of this item, flagged for the pre-signoff falsification brief specifically. **⚠️
+   Explicitly a practice-integrity fix, not a security boundary** for the 5 modes other than Interview
+   Practice's already-live exploit — an account owner can still read their own note's answer key via the
+   Note/Study Pack page; this closes the *accidental* exposure and the *resubmission* exploit, not
+   account-owner self-access. Board Exam confirmed served by `ChallengeQuizService` (`MODE_BOARD_EXAM`), not
+   `LongExamService`. Teacher share-link quiz path (`/quiz/[token]`) traced and confirmed **already safe**.
+   Backlog Index row: "Quiz session wire payload already includes `correctIndex`/`correctIndices`/
+   `explanation` for unanswered questions, across every shared quiz mode."
 2. **Challenge Quiz `releaseClaims` deadlock risk.** The `REQUIRES_NEW` transaction can wait indefinitely
    on locks its own caller already holds (all three relevant timeouts are 0); dormant in production logs
    today, not actively firing. Needs a real two-connection Postgres integration test before any fix
@@ -51,15 +74,28 @@ were addressed per that commit's own mutation-verified audit. The row is correct
 
 Anti-drift: no automated Tier 3 question-quality gate this release; H4's validator, H5's wording, and
 H6's exclusion (still gated on H5's post-ship checkpoint) are all unchanged; the bank-invalidation
-migration (item 3) adds a generation-stamp column only — no other quiz JSONB store is touched; the
-teacher share-link quiz path is a known, explicitly out-of-scope gap for item 1, not silently ignored.
+migration (item 3) adds a generation-stamp column only; the teacher share-link quiz path is a known,
+explicitly out-of-scope gap for item 1, not silently ignored. Note/Study Pack pages, the public note page,
+and DOCX `WITH_ANSWERS` export all stay unredacted by owner decision (item 1's own plan file). **⚠️ Quick
+Review's fix, uniquely among item 1's surfaces, DOES touch a new quiz JSONB store**: its session currently
+stores `null` for `sessionState` and will need to start storing something once it gets its own quiz-less
+fetch design — this is a deliberate, scoped exception to "no other quiz JSONB store is touched," not an
+oversight, and needs its own migration/schema thought when that sub-item is designed.
 
-**Verification tier:** four items, at the top of the 3-4-item sweet spot. **Two independent escalation
-triggers fire regardless of item count:** items 2-4 share the same method/bank code (shared-method-overlap
-trigger), and item 1 moves a privacy boundary (unanswered-question data exposure). Plan: one scoped cold
-agent (Opus, framed as falsification against this release's own claims) covering items 1-4's overlap,
-plus a real `MockMvc` request test for whatever endpoint the item-1 fix lands on, plus `advisor()` at each
-phase and on each diff per the standing baseline rule.
+**Verification tier:** four release-level items, but item 1 alone is now confirmed by far the largest single
+piece of work in this release — 6 practice-session surfaces, one of them (Interview Practice) with an
+already-live exploit, one of them (Quick Review) needing a genuinely new data path rather than a response
+tweak. **A cold Opus falsification pass already ran at DESIGN time (2026-09-28, before any Codex prompt),
+against the plan document itself** — found and corrected 4 more plan-invalidating gaps beyond what
+`advisor()` caught across 3 earlier rounds, including the Quick Review no-op discovery. **A second, separate
+falsification pass is still owed before signoff, against the actual diffs**, per the standing pre-signoff
+gate — three escalation triggers justify it regardless of design-time work already done: items 2-4 share the
+same method/bank code; item 1 moves a privacy/visibility boundary and includes a live-exploit fix; and item
+1's Quick Review and Adaptive sub-items change production-data-write semantics. That pass's brief must
+include the answer-lock invariant and the per-mode progress-write safety table, not just response shapes.
+Every mode's fix needs a real `MockMvc` request test asserting on the raw serialized JSON body (not typed DTO
+fields alone) for every route each item touches, plus `advisor()` at each phase and on each diff per the
+standing baseline rule.
 
 ### Shipped
 
