@@ -751,7 +751,7 @@ public class QuickReviewAdaptivePracticeService {
         Map<Integer, List<Integer>> submittedSelectedMultiChoices
     ) {
         UUID sessionId = UuidParsingUtils.parseUuidOrThrow(sessionIdRaw, AdaptivePracticeSessionNotFoundException::new);
-        QuickReviewSessionEntity session = quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(
+        QuickReviewSessionEntity session = quickReviewSessionRepository.findByIdAndUserIdAndSessionModeForUpdate(
                 sessionId,
                 userId,
                 QuickReviewSessionMode.ADAPTIVE

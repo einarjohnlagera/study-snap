@@ -54,9 +54,19 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.transaction.TransactionException;
+import org.springframework.transaction.support.SimpleTransactionStatus;
+import org.springframework.transaction.support.TransactionCallback;
+import org.springframework.transaction.support.TransactionOperations;
 
 @ExtendWith(MockitoExtension.class)
 class InterviewPracticeServiceTest {
+    private static final TransactionOperations TEST_TRANSACTION_OPERATIONS = new TransactionOperations() {
+        @Override
+        public <T> T execute(TransactionCallback<T> action) throws TransactionException {
+            return action.doInTransaction(new SimpleTransactionStatus());
+        }
+    };
     @Mock
     private StudyPackRepository studyPackRepository;
     @Mock
@@ -81,6 +91,8 @@ class InterviewPracticeServiceTest {
     private StudyPackGenerationContextResolver generationContextResolver;
     @Mock
     private ConceptHealthService conceptHealthService;
+    @Mock
+    private jakarta.persistence.EntityManager entityManager;
 
     private InterviewPracticeService service;
 
@@ -99,7 +111,9 @@ class InterviewPracticeServiceTest {
                 analyticsService,
                 aiRateLimitService,
                 generationContextResolver,
-                conceptHealthService
+                conceptHealthService,
+                TEST_TRANSACTION_OPERATIONS,
+                entityManager
         );
     }
 
@@ -446,7 +460,7 @@ class InterviewPracticeServiceTest {
         UUID studyPackId = UUID.randomUUID();
         QuickReviewSessionEntity session = buildSession(userId, noteId, studyPackId, buildQuiz(2));
 
-        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(sessionId, userId, QuickReviewSessionMode.ADAPTIVE))
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionModeForUpdate(sessionId, userId, QuickReviewSessionMode.ADAPTIVE))
                 .thenReturn(Optional.of(session));
         when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
@@ -480,7 +494,7 @@ class InterviewPracticeServiceTest {
         InterviewPracticeCritique critique = new InterviewPracticeCritique(
                 "WORKABLE", "Good structure.", "What risk comes first?"
         );
-        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionModeForUpdate(
                 sessionId, userId, QuickReviewSessionMode.ADAPTIVE
         )).thenReturn(Optional.of(session));
         when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
@@ -496,7 +510,7 @@ class InterviewPracticeServiceTest {
         assertThat(retryResponse.followUp()).isEqualTo(firstResponse.followUp());
         assertThat(retryResponse.nextQuestion()).isEqualTo(firstResponse.nextQuestion());
         verify(quizGenerationService, times(1)).generateInterviewCritique(any(), eq(1));
-        verify(quickReviewSessionRepository, times(2)).save(session);
+        verify(quickReviewSessionRepository, times(1)).save(session);
     }
 
     @Test
@@ -505,7 +519,7 @@ class InterviewPracticeServiceTest {
         UUID sessionId = UUID.randomUUID();
         List<QuizItem> quiz = buildQuiz(1);
         QuickReviewSessionEntity session = buildSession(userId, UUID.randomUUID(), UUID.randomUUID(), quiz);
-        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionModeForUpdate(
                 sessionId, userId, QuickReviewSessionMode.ADAPTIVE
         )).thenReturn(Optional.of(session));
         when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
@@ -532,7 +546,7 @@ class InterviewPracticeServiceTest {
         UUID sessionId = UUID.randomUUID();
         List<QuizItem> quiz = buildQuiz(1);
         QuickReviewSessionEntity session = buildSession(userId, UUID.randomUUID(), UUID.randomUUID(), quiz);
-        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionModeForUpdate(
                 sessionId, userId, QuickReviewSessionMode.ADAPTIVE
         )).thenReturn(Optional.of(session));
         when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
@@ -569,7 +583,7 @@ class InterviewPracticeServiceTest {
         session.setSessionState(QuizSessionStateUtils.withInterviewAnswer(session.getSessionState(), 1, 2, 80));
         StudyPackEntity studyPack = buildStudyPack(userId, noteId, studyPackId);
 
-        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(sessionId, userId, QuickReviewSessionMode.ADAPTIVE))
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionModeForUpdate(sessionId, userId, QuickReviewSessionMode.ADAPTIVE))
                 .thenReturn(Optional.of(session));
         when(studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId)).thenReturn(Optional.of(studyPack));
         when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
@@ -622,7 +636,7 @@ class InterviewPracticeServiceTest {
         StudyPackEntity additionalStudyPack = buildStudyPack(userId, additionalNoteId, additionalStudyPackId);
         additionalStudyPack.setKeyConcepts(List.of("Concurrency"));
 
-        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(sessionId, userId, QuickReviewSessionMode.ADAPTIVE))
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionModeForUpdate(sessionId, userId, QuickReviewSessionMode.ADAPTIVE))
                 .thenReturn(Optional.of(session));
         when(studyPackRepository.findByIdAndOwnerUserId(primaryStudyPackId, userId))
                 .thenReturn(Optional.of(primaryStudyPack));
@@ -679,7 +693,7 @@ class InterviewPracticeServiceTest {
         additional.setKeyConcepts(List.of("Shear Force", "Bending Moment"));
         nonContributing.setKeyConcepts(List.of("Shear Force", "Bending Moment"));
 
-        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(sessionId, userId, QuickReviewSessionMode.ADAPTIVE))
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionModeForUpdate(sessionId, userId, QuickReviewSessionMode.ADAPTIVE))
                 .thenReturn(Optional.of(session));
         when(studyPackRepository.findByIdAndOwnerUserId(primaryStudyPackId, userId)).thenReturn(Optional.of(primary));
         when(studyPackRepository.findByIdAndOwnerUserId(additionalStudyPackId, userId)).thenReturn(Optional.of(additional));
@@ -725,7 +739,7 @@ class InterviewPracticeServiceTest {
         session.setSessionState(withInterviewSourceRefs(session.getSessionState(), missingStudyPackId, additionalNoteId));
         StudyPackEntity primaryStudyPack = buildStudyPack(userId, primaryNoteId, primaryStudyPackId);
 
-        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(sessionId, userId, QuickReviewSessionMode.ADAPTIVE))
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionModeForUpdate(sessionId, userId, QuickReviewSessionMode.ADAPTIVE))
                 .thenReturn(Optional.of(session));
         when(studyPackRepository.findByIdAndOwnerUserId(primaryStudyPackId, userId))
                 .thenReturn(Optional.of(primaryStudyPack));
@@ -768,7 +782,7 @@ class InterviewPracticeServiceTest {
         UUID studyPackId = UUID.randomUUID();
         QuickReviewSessionEntity session = buildSession(userId, noteId, studyPackId, buildQuiz(2));
 
-        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(sessionId, userId, QuickReviewSessionMode.ADAPTIVE))
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionModeForUpdate(sessionId, userId, QuickReviewSessionMode.ADAPTIVE))
                 .thenReturn(Optional.of(session));
         when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));

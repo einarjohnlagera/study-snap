@@ -717,6 +717,9 @@ public class StudyPackService {
         entity.setSourceText(sourceText);
         entity.setKeyConcepts(generated.keyConcepts());
         entity.setQuiz(generated.quiz());
+        if (!isNewStudyPack) {
+            entity.setQuizStamp(entity.getQuizStamp() + 1);
+        }
         entity.setOcrConfidence(ocrConfidence);
         entity.setModelTier(planType != null && planType.isPaid() ? ModelTier.PREMIUM : ModelTier.FREE);
         entity.setModelUsed(Optional.ofNullable(generated.modelUsed())

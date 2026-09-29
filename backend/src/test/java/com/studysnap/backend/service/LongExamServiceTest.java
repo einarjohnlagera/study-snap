@@ -968,7 +968,7 @@ class LongExamServiceTest {
         QuickReviewSessionEntity session = buildSession(userId, UUID.randomUUID(), QuickReviewSessionStatus.IN_PROGRESS,
             buildQuiz(20));
         session.setId(sessionId);
-        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(sessionId, userId,
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionModeForUpdate(sessionId, userId,
             QuickReviewSessionMode.LONG_EXAM))
             .thenReturn(Optional.of(session));
         when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
@@ -987,7 +987,7 @@ class LongExamServiceTest {
         QuickReviewSessionEntity session = buildSession(userId, UUID.randomUUID(), QuickReviewSessionStatus.PAUSED,
             buildQuiz(20));
         session.setId(sessionId);
-        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(sessionId, userId,
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionModeForUpdate(sessionId, userId,
             QuickReviewSessionMode.LONG_EXAM))
             .thenReturn(Optional.of(session));
 
@@ -1002,7 +1002,7 @@ class LongExamServiceTest {
         QuickReviewSessionEntity session = buildSession(userId, UUID.randomUUID(), QuickReviewSessionStatus.PAUSED,
             buildQuiz(20));
         session.setId(sessionId);
-        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(sessionId, userId,
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionModeForUpdate(sessionId, userId,
             QuickReviewSessionMode.LONG_EXAM))
             .thenReturn(Optional.of(session));
         when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
@@ -1021,7 +1021,7 @@ class LongExamServiceTest {
         QuickReviewSessionEntity session = buildSession(userId, UUID.randomUUID(), QuickReviewSessionStatus.IN_PROGRESS,
             buildQuiz(20));
         session.setId(sessionId);
-        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(sessionId, userId,
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionModeForUpdate(sessionId, userId,
             QuickReviewSessionMode.LONG_EXAM))
             .thenReturn(Optional.of(session));
         when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
@@ -1044,7 +1044,7 @@ class LongExamServiceTest {
         QuickReviewSessionEntity session = buildSession(userId, UUID.randomUUID(), QuickReviewSessionStatus.PAUSED,
             buildQuiz(20));
         session.setId(sessionId);
-        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(sessionId, userId,
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionModeForUpdate(sessionId, userId,
             QuickReviewSessionMode.LONG_EXAM))
             .thenReturn(Optional.of(session));
 
@@ -1069,7 +1069,7 @@ class LongExamServiceTest {
         session.setSessionState(QuizSessionStateUtils.withSelectedChoice(session.getSessionState(), 1, 0));
         session.setSessionState(QuizSessionStateUtils.withSelectedChoice(session.getSessionState(), 2, 2));
 
-        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(sessionId, userId,
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionModeForUpdate(sessionId, userId,
             QuickReviewSessionMode.LONG_EXAM))
             .thenReturn(Optional.of(session));
         StudyPackEntity studyPack = buildStudyPack(studyPackId, userId);
@@ -1142,7 +1142,7 @@ class LongExamServiceTest {
         StudyPackEntity additionalStudyPack = buildStudyPack(additionalStudyPackId, userId);
         additionalStudyPack.setKeyConcepts(List.of("Concurrency"));
 
-        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(sessionId, userId,
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionModeForUpdate(sessionId, userId,
             QuickReviewSessionMode.LONG_EXAM))
             .thenReturn(Optional.of(session));
         when(studyPackRepository.findByIdAndOwnerUserId(primaryStudyPackId, userId))
@@ -1200,7 +1200,7 @@ class LongExamServiceTest {
         StudyPackEntity sourceB = buildStudyPack(sourceBId, userId);
         sourceB.setKeyConcepts(List.of("Shear", "Moment"));
 
-        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(sessionId, userId, QuickReviewSessionMode.LONG_EXAM))
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionModeForUpdate(sessionId, userId, QuickReviewSessionMode.LONG_EXAM))
                 .thenReturn(Optional.of(session));
         when(studyPackRepository.findByIdAndOwnerUserId(sourceAId, userId)).thenReturn(Optional.of(sourceA));
         when(studyPackRepository.findByIdAndOwnerUserId(sourceBId, userId)).thenReturn(Optional.of(sourceB));
@@ -1236,7 +1236,7 @@ class LongExamServiceTest {
         session.setSessionState(withLongExamSourceRefs(session.getSessionState(), missingStudyPackId));
         StudyPackEntity primaryStudyPack = buildStudyPack(primaryStudyPackId, userId);
 
-        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(sessionId, userId,
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionModeForUpdate(sessionId, userId,
             QuickReviewSessionMode.LONG_EXAM))
             .thenReturn(Optional.of(session));
         when(studyPackRepository.findByIdAndOwnerUserId(primaryStudyPackId, userId))
@@ -1283,7 +1283,7 @@ class LongExamServiceTest {
         QuickReviewSessionEntity session = buildSession(userId, UUID.randomUUID(), QuickReviewSessionStatus.FORFEITED,
             buildQuiz(20));
         session.setId(sessionId);
-        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(sessionId, userId,
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionModeForUpdate(sessionId, userId,
             QuickReviewSessionMode.LONG_EXAM))
             .thenReturn(Optional.of(session));
 
@@ -1300,7 +1300,7 @@ class LongExamServiceTest {
         QuickReviewSessionEntity session = buildSession(userId, studyPackId, QuickReviewSessionStatus.IN_PROGRESS,
             buildQuiz(20));
         session.setId(sessionId);
-        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(sessionId, userId,
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionModeForUpdate(sessionId, userId,
             QuickReviewSessionMode.LONG_EXAM))
             .thenReturn(Optional.of(session));
         when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
@@ -1776,7 +1776,7 @@ class LongExamServiceTest {
         session.setSessionState(QuizSessionStateUtils.withSelectedIdentificationAnswer(
             session.getSessionState(), 2, "   "));
 
-        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionModeForUpdate(
             session.getId(), userId, QuickReviewSessionMode.LONG_EXAM)).thenReturn(Optional.of(session));
         when(studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId))
             .thenReturn(Optional.of(buildStudyPack(studyPackId, userId)));
@@ -1804,7 +1804,7 @@ class LongExamServiceTest {
             List.of(buildIdentificationItem("Name the powerhouse", "mitochondrion"))
         );
 
-        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionModeForUpdate(
             session.getId(), userId, QuickReviewSessionMode.LONG_EXAM)).thenReturn(Optional.of(session));
         when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
             .thenAnswer(invocation -> invocation.getArgument(0));

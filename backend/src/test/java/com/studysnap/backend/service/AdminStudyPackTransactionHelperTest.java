@@ -212,6 +212,7 @@ class AdminStudyPackTransactionHelperTest {
         transactionHelper.repairMalformedQuiz(pack);
 
         assertThat(pack.getQuiz()).isEqualTo(regeneratedQuiz);
+        assertThat(pack.getQuizStamp()).isEqualTo(1);
         assertThat(pack.getSummary()).isEqualTo(ORIGINAL_SUMMARY);
         assertThat(pack.getKeyConcepts()).containsExactly(ORIGINAL_CONCEPT);
         verify(studyPackRepository).save(pack);

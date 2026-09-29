@@ -225,6 +225,15 @@ class QuickReviewSessionControllerTest {
     }
 
     @Test
+    void nonOwnerWithoutLiveShareCannotStartOrResumeQuickReview() throws Exception {
+        when(noteShareRepository.existsLiveAuthorizedShare(noteId, recipientUserId)).thenReturn(false);
+        noteMockMvc.perform(post("/notes/{id}/quick-review/start", noteId))
+                .andExpect(status().isNotFound());
+        noteMockMvc.perform(get("/notes/{id}/quick-review/in-progress", noteId))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
     void answerAndProgressRoutesUseTheLockedServerState() throws Exception {
         String answerBody = "{\"questionIndex\":1,\"retryCount\":0,\"selectedChoiceIndex\":1}";
         sessionMockMvc.perform(post("/quick-review/{id}/answer", session.getId())

@@ -110,6 +110,7 @@ class NoteServiceLibraryPaginationIntegrationTest {
                     title varchar(255),
                     summary varchar(2000),
                     generation_stamp bigint not null default 0,
+                    quiz_stamp bigint not null default 0,
                     subject varchar(64),
                     source_text varchar(20000),
                     key_concepts json,

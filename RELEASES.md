@@ -62,9 +62,53 @@ sweet spot).**
    that surfaced items 2-3, same shared `ChallengeQuizService`/bank code — bundled here rather than
    deferred, since items 2-4 all touch the same shared method. Backlog Index row: "A Challenge session
    completing at the exact moment a regeneration's bulk bank-delete commits could throw, not corrupt."
+5. **Shared quiz-session-entity concurrency: unlocked writers can resurrect a completed session, and
+   Quick Review's staleness anchor is wrong.** Found by the item 1 pre-signoff falsification pass (three
+   cold Opus agents, one per surface), and by directly reading the shared entity's full writer set across
+   all five services afterward — the three-way split let this fall between the agents, since none of them
+   owned the shared entity itself. `QuickReviewSessionEntity` has no `@Version`/`@DynamicUpdate`; several
+   writers per service (`updateSessionProgress`/`forfeitSession` on Challenge Quiz; `answerQuestion`/
+   `completeSession` on Interview Practice; `completeSession`/`forfeitSession`/`saveConfidenceLevel` on
+   Quick Review; `saveProgress`/`pauseSession`/`resumeSession`/`completeSession`/`forfeitSession` on Long
+   Exam; `completeAdaptiveSession` on Adaptive Practice) read the row unlocked and later overwrite the
+   *entire* row. A racing unlocked write that read before a completion commits and saves after silently
+   reverts status to non-terminal — reproduced live on Postgres for Challenge Quiz by the falsification
+   agent. Before this release that was cosmetic; after item 1's redaction, `/complete` is the one channel
+   that reveals several modes' answer keys, so resurrecting a completed session is a real resubmit-with-
+   the-revealed-key exploit, not just data corruption. Interview Practice's own resubmission fix (item 1)
+   is separately incomplete: its per-index lock only stops a *sequential* resubmit of the *same* index; a
+   race across *different* indexes lets the later-committing write erase the other index's stored
+   critique, unlocking it for a real resubmit with the now-revealed answer. Separately, Quick Review's
+   staleness check compares session creation time against `notes.generation_enqueued_at` (set at enqueue),
+   but the quiz only changes at commit, and nothing blocks entry while the note is `GENERATING` — a
+   session created in that window is never caught as stale, which can leak the new quiz's key on resume
+   and let `completeSession`/`updateSessionProgress` (neither checks staleness at all) grant mastery from
+   answers given on a different quiz. `study_packs.generation_stamp` cannot anchor this fix as-is: it
+   advances on a summary-only admin repair that never touches the quiz (false stale) and does not advance
+   on the malformed-quiz repair path that does change the quiz (false fresh). Fix direction, decided with
+   the owner: extend the existing `PESSIMISTIC_WRITE`/`FOR UPDATE` pattern (already used by several other
+   writers in each service) to every unlocked mutating writer above, rather than adding `@Version` —
+   Challenge Quiz's `persistProgress` fires unserialized on every answer toggle with failures silently
+   swallowed client-side, so a reject-based optimistic lock would need new retry/merge semantics on the
+   highest-traffic path to avoid silently dropping legitimate overlapping writes; a wait-based lock closes
+   the same defect with no new conflict-handling code, since each writer's *existing* status check
+   correctly sees the fresh terminal state once unblocked. Interview Practice's fix does not hold a lock
+   across the LLM call (would serialize all answers behind LLM latency): it re-reads locked only for the
+   short merge-after-LLM step, matching the existing split-transaction precedent used elsewhere in this
+   codebase for the same reason. Quick Review's staleness anchor becomes a dedicated `quiz_stamp` (distinct
+   from `generation_stamp`), bumped only where `study_packs.quiz` is actually written in place, stored on
+   the session at creation and compared by value (not timestamp) at `/answer`, `/progress`, `/complete`,
+   and `findQuizMasteredAt`, with a defined fallback to the current timestamp check for sessions that
+   predate the migration. Known Limitations NOT in this item's scope, carried forward: two concurrent
+   recipient session starts can still 500 (insert-vs-insert, no row to lock yet); a lost `/progress`
+   network write can still lose the active retry-question set on reload; Adaptive Practice's legacy
+   concept-name fallback still trusts unfiltered client strings; and `AdminStudyPackTransactionHelper`'s
+   admin-repair stamp race (documented in item 2-4's Known Limitations) is broader than originally
+   described — it can revert a concurrent user regeneration's entire quiz and content, not just drop a
+   stamp increment.
 
-**A fifth item the owner picked — Study Plan Builder drag-persist race — was DROPPED at kickoff, not
-scoped in.** Its Backlog Index row ("Study Plan Builder drag persists per drop and races its own save")
+**A fifth candidate from the original kickoff survey — Study Plan Builder drag-persist race, unrelated to
+item 5 above — was DROPPED at kickoff, not scoped in.** Its Backlog Index row ("Study Plan Builder drag persists per drop and races its own save")
 had never carried a `Last reviewed` date; actually reading the current code at this kickoff (not just
 grepping for the old, lost Codex prompt) showed the deferred "Save order" model it called for already
 shipped in `v0.96.0` (`185e0cc7`, 2026-08-29) — `study-plan-builder-page-client.tsx`'s
@@ -100,6 +144,77 @@ fields alone) for every route each item touches, plus `advisor()` at each phase 
 standing baseline rule.
 
 ### Shipped
+
+- **Quiz-session concurrency and Quick Review quiz staleness (item 5):** Mutating writers across
+  Challenge Quiz, Interview Practice, Quick Review, Long Exam, and Adaptive Practice now lock the
+  session row before checking status and saving, so a writer that waits behind completion sees the
+  terminal state. Interview answers validate in one short transaction, call the LLM with no
+  database-transaction or row lock held, then lock and merge into a fresh session in a second
+  transaction; this closes the cross-index critique-erasure/resubmit race left by item 1. **The split
+  frees the transaction and row lock, not the pooled connection** — `spring.jpa.open-in-view` is ON here,
+  so one connection is held for the whole HTTP request regardless of transaction boundaries (per
+  `ConnectionLifetimeStartupLogger`'s own startup line); do not describe this as freeing a connection.
+  Challenge Quiz coalesces client
+  progress writes and awaits its final progress flush before leave. `V152` adds
+  `study_packs.quiz_stamp BIGINT NOT NULL DEFAULT 0` and nullable
+  `quick_review_sessions.quiz_stamp_at_creation`; quiz replacement bumps only the quiz stamp (inside
+  `saveStudyPack` itself, guarded by `!isNewStudyPack`, so all five of its callers are covered, not only
+  the async worker), and Quick Review compares the captured value on answer, progress, completion, and
+  mastery lookup. Legacy sessions with a null capture retain the earlier enqueue-timestamp rule. Real
+  PostgreSQL tests prove every newly locked writer waits behind a completion before reading terminal
+  status, prove the split Interview lock boundary and cross-index merge, and cover Quick Review's stamp
+  and legacy fallback. MockMvc requests pin both Adaptive completion aliases and the Quick Review
+  no-share denial. **Audit corrections, found before commit:**
+  - **The delivered Interview split did not actually split under production's own configuration.**
+    `spring.jpa.open-in-view` is ON here (the Spring Boot default — `application.yaml`'s own startup
+    logger confirms `open-in-view=ON` at boot), so one `EntityManager` spans the whole HTTP request; the
+    two `TransactionOperations.execute()` calls each open their own database transaction but share that
+    one `EntityManager`'s identity map, so phase B's "fresh" locked read handed back phase A's already-
+    managed, now-stale Java object — the row lock was real, but it protected a write into stale memory,
+    reopening the exact cross-index erasure this item exists to close. Confirmed with a new test that
+    manually binds an `EntityManagerHolder` per worker thread (the same mechanism
+    `OpenEntityManagerInViewInterceptor` uses), which failed against the delivered code and passes only
+    after adding `entityManager.refresh(session)` immediately after phase B's locked read. The original
+    two-thread test (no bound `EntityManagerHolder`) could not have caught this: absent open-in-view
+    binding, each phase gets its own fresh `EntityManager`, so it never exercised the identity-map path
+    at all.
+  - **Challenge Quiz's `finalizeChallengeSession` did not await the last progress write before
+    completing.** The server grades from stored `session_state`, not the client's request body — if the
+    last answer's coalesced progress write was still queued when `/complete` fired, the server would
+    score from a state missing that answer. `finalizeChallengeSession` now awaits the latest progress
+    flush first, mirroring Long Exam's `await flushIdentificationAnswer()` before its own completion.
+  - **The tab-hidden write regressed on real unload.** Coalescing made the `visibilitychange`-hidden
+    write wait behind whatever was already in flight; on a real tab close or mobile background-kill the
+    JS context can die before the queue ever drains, so the latest state might never be sent — before
+    coalescing, that write fired immediately. Added a queue-bypassing `persistLatestProgressImmediately`
+    used only by the tab-hidden path (send now, drop any stale queued entry for that session, and only
+    resolve that dropped entry's own waiters once the immediate write itself settles — resolving them
+    synchronously would let an awaiting caller like the completion flush above proceed before the
+    immediate write is even sent, racing it for the row lock). The explicit Leave action keeps the
+    original queue-respecting, awaited path deliberately — it already awaits the flush itself, so
+    queueing costs nothing there, and an existing test pins that sequencing. **The
+    `beforeunload`/route-change guard (`handleBeforeRouteLeave`) was deliberately left on the same
+    queue-respecting path, unlike the tab-hidden handler, even though it is NOT awaited and the page can
+    in principle close during it.** This is not verified to be safe by any test here — the assumption is
+    that modern browsers also fire `visibilitychange`→hidden before or alongside an actual unload, so
+    the tab-hidden bypass above already covers the real risk in practice. Known Limitation: a browser or
+    OS path that triggers `beforeunload` without ever firing `visibilitychange`→hidden first would still
+    queue behind an in-flight write with no bypass; not fixed here.
+  - **A newly added staleness guard on `/progress` and `/complete` contradicted an existing, deliberate
+    design decision.** `recheckMaterialAccess`'s empty-`Optional` case covers two paths, both
+    deliberately tolerated by the existing code, neither a denial: an infrastructure fault reading the
+    pack (its own comment: "completion has always tolerated a pack it cannot read"), and a pack that has
+    genuinely been deleted (`findVisibleStudyPack`'s Javadoc: "a pack that... has been deleted has
+    always succeeded — the caller owns the SESSION... denying it here would strand the learner's own
+    session for a reason that has nothing to do with sharing"). A genuine access denial already throws
+    through a separate path in the same method, so the added check could only ever fire on one of these
+    two tolerated cases, and only ever wrongly. Removed; `isStale`'s existing
+    `accessibleStudyPack.isPresent()` guard already does the right thing when the pack can't be read.
+  - Added an in-flight guard on Quick Review's `initializeSession(force=true)`: three call sites
+    (`/answer`, `/progress`, `/complete`) can each independently hit a stale-session 409 and each call
+    `initializeSession(true)`, and without a guard that can fire more than one concurrent `startSession`
+    — reaching this item's own already-accepted insert-vs-insert Known Limitation (F3) by a new path,
+    not a new failure mode, but cheap to close off anyway.
 
 - **Challenge Quiz bank concurrency (items 2-4):** Real Spring-proxied, PostgreSQL 18 Testcontainers
   reproductions found three `releaseClaims` faults before the fix: `generateMoreQuestions` held a bank-row
@@ -137,7 +252,10 @@ standing baseline rule.
     stale-stamped row's key — before inserting; it only dedupes within its own freshly generated batch.
     A stale row now sits unclaimable until the pack's next regeneration (instead of being claimed away
     quickly, as before this fix), so it occupies its key slot longer, raising the odds of hitting the
-    same already-documented same-level-duplicate failure. Not fixed here; would need the bank's existing
+    same already-documented same-level-duplicate failure. Only `+5`/`generateMoreQuestions` and
+    `seedTemplateAsync` can reach this collision: `startSession` holds the pack `FOR UPDATE` across its
+    LLM call. A collision rolls back that request and surfaces as HTTP 500; it is not a silent drop.
+    Not fixed here; would need the bank's existing
     keys threaded into the LLM dedup set the same way `copyTemplateQuestions` now does.
   - Unfiltering `existsByUserIdAndStudyPackId` trades one race for another: if `seedTemplateAsync` races
     the Official pack's own regeneration and leaves a stale-only template, `exists` now reports `true`
@@ -149,7 +267,8 @@ standing baseline rule.
     no `@Version` and no `GENERATING`-status interlock — confirmed by reading
     `StudyPackGenerationContextResolver.assertGenerationReady`, which only checks the multi-program
     Domain Context rule, not note status. A concurrent user-initiated regeneration of the same pack can
-    lose one increment. Pre-existing gap, not introduced by this release; not fixed here.
+    revert the concurrent user regeneration's entire quiz and content, including its stamp, rather
+    than merely lose one increment. Pre-existing gap, not introduced by this release; not fixed here.
 - **Completion/delete hypothesis resolved without a production fix:** The repository's owning-session
   read currently has `PESSIMISTIC_WRITE`. A first test harness substituted an unlocked query and
   produced the predicted stale-row throw, exposing an unfaithful fixture; the corrected real-query
@@ -169,15 +288,14 @@ standing baseline rule.
   the reveal for the question just answered. A question locks when its critique is first stored in
   `sessionState.aiFeedback`, rather than when its provisional selection is written: retrying the same choice
   returns the stored critique without another save or LLM call, while changing the choice returns HTTP 409 and
-  leaves the first answer intact. This also closes the unmetered, un-rate-limited critique loop: Interview
+  leaves the first answer intact for a sequential same-index retry. Item 5 additionally closes the
+  cross-index concurrent overwrite that could erase that critique. This also closes the unmetered, un-rate-limited critique loop: Interview
   Practice quota is charged once at session start, so repeated answers previously created unlimited additional
   LLM calls inside the same paid session.
 
-  **Known concurrency limitation:** the existing session read does not take a row lock, so two deliberately
-  concurrent requests for the same unanswered index can both pass the critique check before either stores its
-  result. Fixing that would hold a row lock across an LLM call; this PR deliberately accepts the scripted
-  same-user race, matching the Quick Review `releaseClaims` precedent that its partial concurrency guarantee is
-  adequate in practice. **Deploy order: either.** The frontend never reads the redacted answer fields and its
+  **Concurrency correction in item 5:** the earlier per-index guard stopped sequential same-index
+  retries, but did not stop concurrent answers on different indexes from erasing one another. Two
+  short locked transactions around the LLM call now recheck and merge fresh state. **Deploy order: either.** The frontend never reads the redacted answer fields and its
   normal flow always advances after a critique, so an old client does not submit a changed answer that the new
   409 guard would reject; old and new frontend/backend combinations remain compatible.
 - **Challenge Quiz and Board Exam answer-key redaction:** active-session `ChallengeQuizStartResponse` payloads
@@ -224,7 +342,7 @@ standing baseline rule.
 - **Quick Review answer-key redaction for owners and share recipients:** the widened start/resume response is
   now the page's only pre-completion data source. It supplies current Note metadata and a Study Pack quiz whose
   unanswered items have `correctIndex`, `correctIndices`, `explanation`, `workingSolution`, and accepted-answer
-  content redacted. `GET /notes/{id}` remains fully unredacted and unchanged. The new
+  content redacted. `GET /notes/{id}` and `GET /study-packs/shared/{id}` remain fully unredacted and unchanged. The new
   `POST /quick-review/{sessionId}/answer` endpoint locks the session row, reveals one stored Study Pack question,
   treats the same selection in the same attempt as idempotent, and returns HTTP 409 for a changed selection.
   MATCHING keeps its whole-group reveal while recording each item independently; MULTI_SELECT remains editable

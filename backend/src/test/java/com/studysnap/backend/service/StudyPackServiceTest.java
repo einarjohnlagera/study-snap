@@ -1073,6 +1073,7 @@ class StudyPackServiceTest {
         assertThat(savedStudyPack.getSummary()).isEqualTo("New summary");
         assertThat(savedStudyPack.getKeyConcepts()).containsExactly("New concept");
         assertThat(savedStudyPack.getQuiz()).extracting(QuizItem::question).containsExactly("New question");
+        assertThat(savedStudyPack.getQuizStamp()).isEqualTo(1);
         assertThat(savedStudyPack.getStatus()).isEqualTo(StudyPackStatus.DONE);
         assertThat(generatedNote.getStatus()).isEqualTo(NoteStatus.GENERATED);
         verify(userUsageService).incrementStudyPackGeneration(eq(userId), any(OffsetDateTime.class));

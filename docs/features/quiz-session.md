@@ -145,6 +145,22 @@ Once that critique has been served and stored, the question cannot be answered d
 is idempotent and returns the stored critique without another LLM call or database write. The lock is keyed on
 the stored critique, so a failed critique attempt does not prevent the learner from retrying the question.
 
+The first per-index guard covered sequential retries of the same index only. Concurrent answers on
+different indexes could previously overwrite one another and erase a critique, reopening that index.
+Interview Practice now validates under a short session-row lock, releases it for the LLM call, then
+locks and re-reads fresh state to merge the selection and critique together. **The re-read explicitly
+calls `entityManager.refresh()`, not just the locked repository query** — `spring.jpa.open-in-view` is
+ON in this app, so the validate and merge steps of one request share a single `EntityManager`, and its
+identity map would otherwise hand the merge step back the validate step's own already-managed, stale
+Java object regardless of what the locked query's SQL actually returns. Completion and forfeiture also
+lock the session row; other quiz-session modes lock every mutating read, so a completed row cannot be
+overwritten by a writer that started earlier.
+
+Quick Review stores the Study Pack's `quiz_stamp` at session creation. The stamp advances when an
+existing pack's quiz changes, not when regeneration is merely enqueued or a summary-only repair runs.
+Answer, progress, completion, and mastery lookup compare that captured value with the current pack.
+Sessions created before the stamp migration retain the prior enqueue-timestamp fallback.
+
 ## Adaptive Practice answer and reveal boundary
 
 Adaptive Practice session responses carry the full answer key only for question indexes already answered
@@ -187,9 +203,11 @@ all calls succeed. MULTI_SELECT checkboxes remain local until explicit submissio
 `retryQuestionIndexes` and `activeQuestionIndexes`; it cannot overwrite answer or lock maps.
 
 The same Note-anchored start and resume routes serve owners and authorized share recipients. Authorization runs
-before the unscoped Note metadata read, and mastery resolves for the caller. If the Note's
-`generationEnqueuedAt` is newer than the session's creation time, start forfeits the stale row and creates a
-fresh session, resume reports no active session, and `/answer` tells the client to restart. The quiz itself is
+before the unscoped Note metadata read, and mastery resolves for the caller. If the session's captured
+`quizStampAtCreation` differs from the Study Pack's current `quizStamp`, start forfeits the stale row and creates a
+fresh session, resume reports no active session, and `/answer`, `/progress`, and `/complete` tell the client
+to restart. Sessions with a null capture, created before the migration, retain the older
+`generationEnqueuedAt` comparison. The quiz itself is
 never copied into session state; its full answer key remains only on the persisted Study Pack.
 
 ## Board Exam Multi-source State

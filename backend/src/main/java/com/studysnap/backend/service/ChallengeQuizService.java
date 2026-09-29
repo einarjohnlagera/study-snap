@@ -858,7 +858,7 @@ public class ChallengeQuizService {
             UUID userId,
             ChallengeQuizProgressRequest request
     ) {
-        QuickReviewSessionEntity session = findChallengeSessionOrThrow(parseSessionId(sessionIdRaw), userId);
+        QuickReviewSessionEntity session = findChallengeSessionForUpdateOrThrow(parseSessionId(sessionIdRaw), userId);
         assertSessionInProgress(session);
 
         int totalQuestions = session.getTotalQuestions() == null ? 0 : session.getTotalQuestions();
@@ -1088,7 +1088,7 @@ public class ChallengeQuizService {
     }
 
     public SimpleMessageResponse forfeitSession(String sessionIdRaw, UUID userId) {
-        QuickReviewSessionEntity session = findChallengeSessionOrThrow(parseSessionId(sessionIdRaw), userId);
+        QuickReviewSessionEntity session = findChallengeSessionForUpdateOrThrow(parseSessionId(sessionIdRaw), userId);
         if (session.getStatus() != QuickReviewSessionStatus.IN_PROGRESS) {
             return new SimpleMessageResponse(CHALLENGE_QUIZ_SESSION_ALREADY_ENDED_MESSAGE);
         }

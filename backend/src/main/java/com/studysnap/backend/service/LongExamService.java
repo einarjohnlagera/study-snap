@@ -400,7 +400,7 @@ public class LongExamService {
     }
 
     public LongExamSessionResponse saveProgress(UUID sessionId, UUID userId, LongExamProgressRequest request) {
-        QuickReviewSessionEntity session = findOwnedSessionOrThrow(sessionId, userId);
+        QuickReviewSessionEntity session = findOwnedSessionForUpdateOrThrow(sessionId, userId);
         assertSessionInProgress(session);
 
         List<QuizItem> quiz = QuizSessionStateUtils.extractQuiz(session.getSessionState());
@@ -443,7 +443,7 @@ public class LongExamService {
     }
 
     public LongExamSessionResponse pauseSession(UUID sessionId, UUID userId) {
-        QuickReviewSessionEntity session = findOwnedSessionOrThrow(sessionId, userId);
+        QuickReviewSessionEntity session = findOwnedSessionForUpdateOrThrow(sessionId, userId);
         if (session.getStatus() != QuickReviewSessionStatus.IN_PROGRESS) {
             throw new LongExamSessionNotPausableException();
         }
@@ -454,7 +454,7 @@ public class LongExamService {
     }
 
     public LongExamSessionResponse resumeSession(UUID sessionId, UUID userId) {
-        QuickReviewSessionEntity session = findOwnedSessionOrThrow(sessionId, userId);
+        QuickReviewSessionEntity session = findOwnedSessionForUpdateOrThrow(sessionId, userId);
         if (session.getStatus() != QuickReviewSessionStatus.PAUSED) {
             throw new LongExamSessionNotInProgressException();
         }
@@ -469,7 +469,7 @@ public class LongExamService {
             UUID userId,
             LongExamCompleteRequest request
     ) {
-        QuickReviewSessionEntity session = findOwnedSessionOrThrow(sessionId, userId);
+        QuickReviewSessionEntity session = findOwnedSessionForUpdateOrThrow(sessionId, userId);
         if (session.getStatus() != QuickReviewSessionStatus.IN_PROGRESS
                 && session.getStatus() != QuickReviewSessionStatus.PAUSED) {
             throw new LongExamSessionNotInProgressException();
@@ -627,7 +627,7 @@ public class LongExamService {
     }
 
     public SimpleMessageResponse forfeitSession(UUID sessionId, UUID userId) {
-        QuickReviewSessionEntity session = findOwnedSessionOrThrow(sessionId, userId);
+        QuickReviewSessionEntity session = findOwnedSessionForUpdateOrThrow(sessionId, userId);
         if (session.getStatus() != QuickReviewSessionStatus.IN_PROGRESS
                 && session.getStatus() != QuickReviewSessionStatus.PAUSED) {
             throw new LongExamSessionNotInProgressException();
@@ -648,6 +648,12 @@ public class LongExamService {
                         userId,
                         QuickReviewSessionMode.LONG_EXAM
                 )
+                .orElseThrow(LongExamSessionNotFoundException::new);
+    }
+
+    private QuickReviewSessionEntity findOwnedSessionForUpdateOrThrow(UUID sessionId, UUID userId) {
+        return quickReviewSessionRepository.findByIdAndUserIdAndSessionModeForUpdate(
+                        sessionId, userId, QuickReviewSessionMode.LONG_EXAM)
                 .orElseThrow(LongExamSessionNotFoundException::new);
     }
 

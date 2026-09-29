@@ -25,7 +25,10 @@ item's own investigation.
 **⚠️ This is a practice-integrity fix, not a security boundary, and the release notes must say so plainly.**
 `docs/features/quiz.md:22,31` already documents, correctly, that a note/Study Pack owner's own answer key is
 "already present in the client payload" via `GET /notes/{id}` (`NoteResponse`) and `GET /study-packs/{id}`
-(`StudyPackResponse`) — **both stay unredacted by owner decision, 2026-09-28.** A sufficiently motivated
+(`StudyPackResponse`) — **both stay unredacted by owner decision, 2026-09-28.**
+`GET /study-packs/shared/{id}` (`NoteShareService.getSharedStudyPack`) also returns the full quiz
+with its answer key to a recipient's normal shared Study Pack entry page; this is an accepted,
+out-of-scope disclosure. A sufficiently motivated
 learner can always read their own note's answer key by visiting the Note/Study Pack page instead of the
 intended quiz-session flow. This plan makes the *intended* flow correct and closes the *accidental* exposure
 (devtools mid-quiz today shows every answer, unconditionally, with zero effort) — except for Quick Review,

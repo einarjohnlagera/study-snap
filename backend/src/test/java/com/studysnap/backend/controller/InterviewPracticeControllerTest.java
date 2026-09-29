@@ -40,6 +40,10 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.util.unit.DataSize;
+import org.springframework.transaction.TransactionException;
+import org.springframework.transaction.support.SimpleTransactionStatus;
+import org.springframework.transaction.support.TransactionCallback;
+import org.springframework.transaction.support.TransactionOperations;
 import org.springframework.web.bind.support.WebDataBinderFactory;
 import org.springframework.web.context.request.NativeWebRequest;
 import org.springframework.web.method.support.HandlerMethodArgumentResolver;
@@ -120,7 +124,14 @@ class InterviewPracticeControllerTest {
                 analyticsService,
                 aiRateLimitService,
                 generationContextResolver,
-                conceptHealthService
+                conceptHealthService,
+                new TransactionOperations() {
+                    @Override
+                    public <T> T execute(TransactionCallback<T> action) throws TransactionException {
+                        return action.doInTransaction(new SimpleTransactionStatus());
+                    }
+                },
+                mock(jakarta.persistence.EntityManager.class)
         );
         AuthenticatedUser authenticatedUser = new AuthenticatedUser(userId, UserRole.USER, true, 1);
         mockMvc = standaloneSetup(new InterviewPracticeController(service))
@@ -215,7 +226,7 @@ class InterviewPracticeControllerTest {
     @Test
     void answerRedactsNextQuestionAndDifferentChoiceRetryReturnsConflictWithoutChangingSelection() throws Exception {
         QuickReviewSessionEntity session = buildSession(buildQuiz(2));
-        when(sessionRepository.findByIdAndUserIdAndSessionMode(
+        when(sessionRepository.findByIdAndUserIdAndSessionModeForUpdate(
                 session.getId(), userId, QuickReviewSessionMode.ADAPTIVE
         )).thenReturn(Optional.of(session));
         when(quizGenerationService.generateInterviewCritique(any(), eq(1)))
@@ -258,7 +269,7 @@ class InterviewPracticeControllerTest {
         )).containsEntry(0, 1);
         assertThat(QuizSessionStateUtils.extractQuiz(session.getSessionState()).get(1).correctIndex()).isEqualTo(1);
         verify(quizGenerationService, times(1)).generateInterviewCritique(any(), eq(1));
-        verify(sessionRepository, times(2)).save(session);
+        verify(sessionRepository, times(1)).save(session);
     }
 
     private void configureOwnedStudyPack() {

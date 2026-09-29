@@ -34,9 +34,12 @@ import com.studysnap.backend.service.model.StudyPackGenerationContext;
 import com.studysnap.backend.util.QuizDeduplicationUtils;
 import com.studysnap.backend.util.QuizSessionReviewUtils;
 import com.studysnap.backend.util.QuizSessionStateUtils;
+import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.support.TransactionOperations;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -66,6 +69,7 @@ public class InterviewPracticeService {
     private static final String ANALYTICS_METADATA_SOURCE_COUNT = "sourceCount";
     private static final String MESSAGE_ADDITIONAL_NOTE_MISSING_STUDY_PACK = "One or more selected notes do not have a Study Pack.";
     private static final String MESSAGE_NOT_ENOUGH_UNIQUE_QUESTIONS = "Could not generate enough unique interview questions.";
+    private static final String MESSAGE_INVALID_QUESTION_INDEX = "Question index is invalid.";
     private static final String REPORT_BAND_READY = "READY";
     private static final String REPORT_BAND_ALMOST_READY = "ALMOST_READY";
     private static final String REPORT_BAND_NEEDS_PRACTICE = "NEEDS_PRACTICE";
@@ -95,6 +99,8 @@ public class InterviewPracticeService {
     private final AiRateLimitService aiRateLimitService;
     private final StudyPackGenerationContextResolver generationContextResolver;
     private final ConceptHealthService conceptHealthService;
+    private final TransactionOperations studyPackGenerationTransactionOperations;
+    private final EntityManager entityManager;
 
     public InterviewPracticeStartResponse startSession(UUID userId, InterviewPracticeStartRequest request) {
         authService.requireEmailVerified(userId);
@@ -167,46 +173,78 @@ public class InterviewPracticeService {
         }
     }
 
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public InterviewPracticeAnswerResponse answerQuestion(
             UUID sessionId,
             UUID userId,
             InterviewPracticeAnswerRequest request
     ) {
-        QuickReviewSessionEntity session = findInterviewSessionOrThrow(sessionId, userId);
+        int questionIndex = request.questionIndex();
+        AnswerPreparation preparation = studyPackGenerationTransactionOperations.execute(status -> {
+            QuickReviewSessionEntity session = findInterviewSessionForUpdateOrThrow(sessionId, userId);
+            if (session.getStatus() != QuickReviewSessionStatus.IN_PROGRESS) {
+                throw new InterviewPracticeSessionNotInProgressException();
+            }
+            List<QuizItem> quiz = QuizSessionStateUtils.extractQuiz(session.getSessionState());
+            if (questionIndex < 0 || questionIndex >= quiz.size()) {
+                throw new InvalidInterviewPracticeRequestException(MESSAGE_INVALID_QUESTION_INDEX);
+            }
+            int selectedChoiceIndex = parseChoiceIndex(request.selectedChoice());
+            Optional<InterviewPracticeCritique> stored = QuizSessionStateUtils.extractInterviewFeedback(
+                    session.getSessionState(), questionIndex);
+            if (stored.isPresent()) {
+                assertSameRecordedChoice(session, quiz, questionIndex, selectedChoiceIndex);
+                return new AnswerPreparation(null, selectedChoiceIndex,
+                        toAnswerResponse(stored.get(), quiz, questionIndex));
+            }
+            return new AnswerPreparation(quiz.get(questionIndex), selectedChoiceIndex, null);
+        });
+        if (preparation.cachedResponse() != null) {
+            return preparation.cachedResponse();
+        }
+        InterviewPracticeCritique critique = quizGenerationService.generateInterviewCritique(
+                preparation.question(), preparation.selectedChoiceIndex());
+        return studyPackGenerationTransactionOperations.execute(status -> recordCritique(
+                sessionId, userId, questionIndex, preparation.selectedChoiceIndex(),
+                Math.max(0, request.timeSpentSeconds()), critique));
+    }
+
+    private InterviewPracticeAnswerResponse recordCritique(
+            UUID sessionId, UUID userId, int questionIndex, int selectedChoiceIndex,
+            int safeTimeSpentSeconds, InterviewPracticeCritique critique
+    ) {
+        QuickReviewSessionEntity session = findInterviewSessionForUpdateOrThrow(sessionId, userId);
+        // ⚠️ MUST-REFRESH, NOT MERELY MUST-LOCK. Under spring.jpa.open-in-view (the default here — see
+        // application.yaml's Tomcat-thread comment), one EntityManager spans the whole HTTP request, so
+        // phase A's answerQuestion() and this phase both resolve the SAME managed Java instance by
+        // identity, regardless of what the FOR UPDATE query above would have returned on a fresh read.
+        // The row lock above is real (proven by the NOWAIT test), but without this refresh it protects a
+        // write into a STALE in-memory object — a concurrent request's critique for a DIFFERENT index,
+        // committed between phase A and here, would never be visible to this call, and this call's own
+        // save would silently erase it. refresh() re-populates this exact instance from the row this
+        // transaction just locked.
+        entityManager.refresh(session);
         if (session.getStatus() != QuickReviewSessionStatus.IN_PROGRESS) {
             throw new InterviewPracticeSessionNotInProgressException();
         }
         List<QuizItem> quiz = QuizSessionStateUtils.extractQuiz(session.getSessionState());
-        int questionIndex = request.questionIndex();
         if (questionIndex < 0 || questionIndex >= quiz.size()) {
-            throw new InvalidInterviewPracticeRequestException("Question index is invalid.");
+            throw new InvalidInterviewPracticeRequestException(MESSAGE_INVALID_QUESTION_INDEX);
         }
-        int selectedChoiceIndex = parseChoiceIndex(request.selectedChoice());
         Optional<InterviewPracticeCritique> storedCritique = QuizSessionStateUtils.extractInterviewFeedback(
                 session.getSessionState(),
                 questionIndex
         );
         if (storedCritique.isPresent()) {
-            Integer recordedChoiceIndex = QuizSessionStateUtils.extractSelectedChoiceIndexes(
-                    session.getSessionState(),
-                    quiz
-            ).get(questionIndex);
-            if (recordedChoiceIndex == null || recordedChoiceIndex != selectedChoiceIndex) {
-                throw new InterviewPracticeAnswerAlreadyRecordedException();
-            }
+            assertSameRecordedChoice(session, quiz, questionIndex, selectedChoiceIndex);
             return toAnswerResponse(storedCritique.get(), quiz, questionIndex);
         }
-        int safeTimeSpentSeconds = Math.max(0, request.timeSpentSeconds());
         session.setSessionState(QuizSessionStateUtils.withInterviewAnswer(
                 session.getSessionState(),
                 questionIndex,
                 selectedChoiceIndex,
                 safeTimeSpentSeconds
         ));
-        quickReviewSessionRepository.save(session);
-
-        QuizItem question = quiz.get(questionIndex);
-        InterviewPracticeCritique critique = quizGenerationService.generateInterviewCritique(question, selectedChoiceIndex);
         session.setSessionState(QuizSessionStateUtils.withInterviewFeedback(
                 session.getSessionState(),
                 questionIndex,
@@ -216,13 +254,25 @@ public class InterviewPracticeService {
                         "followUp", critique.followUp()
                 )
         ));
-        session.setCurrentQuestionIndex(Math.min(questionIndex + 1, quiz.size()));
+        session.setCurrentQuestionIndex(Math.max(session.getCurrentQuestionIndex(), questionIndex + 1));
         quickReviewSessionRepository.save(session);
         return toAnswerResponse(critique, quiz, questionIndex);
     }
 
+    private void assertSameRecordedChoice(QuickReviewSessionEntity session, List<QuizItem> quiz,
+                                          int questionIndex, int selectedChoiceIndex) {
+        Integer recorded = QuizSessionStateUtils.extractSelectedChoiceIndexes(
+                session.getSessionState(), quiz).get(questionIndex);
+        if (recorded == null || recorded != selectedChoiceIndex) {
+            throw new InterviewPracticeAnswerAlreadyRecordedException();
+        }
+    }
+
+    private record AnswerPreparation(QuizItem question, int selectedChoiceIndex,
+                                     InterviewPracticeAnswerResponse cachedResponse) {}
+
     public InterviewReadinessReportResponse completeSession(UUID sessionId, UUID userId) {
-        QuickReviewSessionEntity session = findInterviewSessionOrThrow(sessionId, userId);
+        QuickReviewSessionEntity session = findInterviewSessionForUpdateOrThrow(sessionId, userId);
         if (session.getStatus() != QuickReviewSessionStatus.IN_PROGRESS) {
             throw new InterviewPracticeSessionNotInProgressException();
         }
@@ -360,7 +410,7 @@ public class InterviewPracticeService {
     }
 
     public SimpleMessageResponse forfeitSession(UUID sessionId, UUID userId) {
-        QuickReviewSessionEntity session = findInterviewSessionOrThrow(sessionId, userId);
+        QuickReviewSessionEntity session = findInterviewSessionForUpdateOrThrow(sessionId, userId);
         if (session.getStatus() != QuickReviewSessionStatus.IN_PROGRESS) {
             return new SimpleMessageResponse(INTERVIEW_ALREADY_ENDED_MESSAGE);
         }
@@ -528,12 +578,9 @@ public class InterviewPracticeService {
         );
     }
 
-    private QuickReviewSessionEntity findInterviewSessionOrThrow(UUID sessionId, UUID userId) {
-        QuickReviewSessionEntity session = quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(
-                        sessionId,
-                        userId,
-                        QuickReviewSessionMode.ADAPTIVE
-                )
+    private QuickReviewSessionEntity findInterviewSessionForUpdateOrThrow(UUID sessionId, UUID userId) {
+        QuickReviewSessionEntity session = quickReviewSessionRepository.findByIdAndUserIdAndSessionModeForUpdate(
+                        sessionId, userId, QuickReviewSessionMode.ADAPTIVE)
                 .orElseThrow(InterviewPracticeSessionNotFoundException::new);
         if (!isInterviewSession(session)) {
             throw new InterviewPracticeSessionNotFoundException();

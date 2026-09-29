@@ -35,6 +35,9 @@ public class QuickReviewSessionEntity {
     @Column(name = "study_pack_id", nullable = true)
     private UUID studyPackId;
 
+    @Column(name = "quiz_stamp_at_creation")
+    private Long quizStampAtCreation;
+
     @Column(name = "note_id", nullable = true)
     private UUID noteId;
 

@@ -1098,6 +1098,18 @@ describe("QuickReviewPage redacted answer flow", () => {
     expect(screen.queryByText("Mitochondria produce ATP.")).not.toBeInTheDocument();
   });
 
+  it("restarts after a regeneration-stale completion instead of marking it tracked", async () => {
+    (completeQuickReviewSession as jest.Mock).mockRejectedValueOnce(new ApiRequestError(
+      "Restart required", { code: "QUICK_REVIEW_SESSION_STALE", status: 409 },
+    ));
+    render(<QuickReviewPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /Mitochondria/i }));
+    await screen.findByText("Mitochondria produce ATP.");
+    fireEvent.click(screen.getByRole("button", { name: "Finish Quick Review" }));
+    await waitFor(() => expect(startQuickReviewSession).toHaveBeenCalledTimes(2));
+  });
+
   it("does not fetch any Note or shared Study Pack before completion", async () => {
     (completeQuickReviewSession as jest.Mock).mockReturnValue(new Promise(() => {}));
     render(<QuickReviewPage />);

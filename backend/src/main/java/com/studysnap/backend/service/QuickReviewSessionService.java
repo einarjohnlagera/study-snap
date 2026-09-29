@@ -111,7 +111,7 @@ public class QuickReviewSessionService {
                 )
                 .orElse(null);
         if (existing != null) {
-            if (!isStale(existing, note)) {
+            if (!isStale(existing, studyPack, note)) {
                 return toStartResponse(existing, studyPack, note, userId);
             }
             markForfeited(existing);
@@ -129,6 +129,7 @@ public class QuickReviewSessionService {
         session.setId(UUID.randomUUID());
         session.setUserId(userId);
         session.setStudyPackId(studyPackId);
+        session.setQuizStampAtCreation(studyPack.getQuizStamp());
         session.setNoteId(studyPack.getNoteId());
         session.setSessionMode(QuickReviewSessionMode.QUICK_REVIEW);
         session.setStatus(QuickReviewSessionStatus.IN_PROGRESS);
@@ -165,7 +166,7 @@ public class QuickReviewSessionService {
                         QuickReviewSessionStatus.IN_PROGRESS
                 )
                 .orElse(null);
-        if (session == null || isStale(session, note)) {
+        if (session == null || isStale(session, studyPack, note)) {
             return emptyStartResponse(studyPack, note, userId);
         }
         return toStartResponse(session, studyPack, note, userId);
@@ -183,7 +184,10 @@ public class QuickReviewSessionService {
                         QuickReviewSessionMode.QUICK_REVIEW
                 )
                 .orElseThrow(QuickReviewSessionNotFoundException::new);
-        recheckMaterialAccess(session.getStudyPackId(), userId);
+        Optional<StudyPackEntity> accessibleStudyPack = recheckMaterialAccess(session.getStudyPackId(), userId);
+        if (accessibleStudyPack.isPresent() && isStale(session, accessibleStudyPack.get(), findNote(accessibleStudyPack.get()))) {
+            throw new QuickReviewSessionStaleException();
+        }
 
         if (session.getStatus() != QuickReviewSessionStatus.IN_PROGRESS) {
             throw new AppException(
@@ -236,7 +240,7 @@ public class QuickReviewSessionService {
         StudyPackEntity studyPack = recheckMaterialAccess(session.getStudyPackId(), userId)
                 .orElseThrow(StudyPackNotFoundException::new);
         NoteEntity note = findNote(studyPack);
-        if (isStale(session, note)) {
+        if (isStale(session, studyPack, note)) {
             throw new QuickReviewSessionStaleException();
         }
 
@@ -322,7 +326,7 @@ public class QuickReviewSessionService {
 
     public QuickReviewSessionResponse completeSession(String sessionIdRaw, UUID userId, QuickReviewSessionCompleteRequest request) {
         UUID sessionId = UuidParsingUtils.parseUuidOrThrow(sessionIdRaw, QuickReviewSessionNotFoundException::new);
-        QuickReviewSessionEntity session = quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(
+        QuickReviewSessionEntity session = quickReviewSessionRepository.findByIdAndUserIdAndSessionModeForUpdate(
                         sessionId,
                         userId,
                         QuickReviewSessionMode.QUICK_REVIEW
@@ -332,6 +336,10 @@ public class QuickReviewSessionService {
         // call — it is what cuts a revoked recipient off mid-session — but re-reading the same pack row
         // later in the same request bought nothing and multiplied reads on the busiest write path.
         Optional<StudyPackEntity> accessibleStudyPack = recheckMaterialAccess(session.getStudyPackId(), userId);
+        if (accessibleStudyPack.isPresent()
+                && isStale(session, accessibleStudyPack.get(), findNote(accessibleStudyPack.get()))) {
+            throw new QuickReviewSessionStaleException();
+        }
 
         if (session.getStatus() != QuickReviewSessionStatus.IN_PROGRESS) {
             throw new AppException(
@@ -497,7 +505,7 @@ public class QuickReviewSessionService {
 
     public SimpleMessageResponse forfeitSession(String sessionIdRaw, UUID userId) {
         UUID sessionId = UuidParsingUtils.parseUuidOrThrow(sessionIdRaw, QuickReviewSessionNotFoundException::new);
-        QuickReviewSessionEntity session = quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(
+        QuickReviewSessionEntity session = quickReviewSessionRepository.findByIdAndUserIdAndSessionModeForUpdate(
                         sessionId,
                         userId,
                         QuickReviewSessionMode.QUICK_REVIEW
@@ -520,7 +528,7 @@ public class QuickReviewSessionService {
             QuickReviewConfidenceLevel confidenceLevel
     ) {
         UUID sessionId = UuidParsingUtils.parseUuidOrThrow(sessionIdRaw, QuickReviewSessionNotFoundException::new);
-        QuickReviewSessionEntity session = quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(
+        QuickReviewSessionEntity session = quickReviewSessionRepository.findByIdAndUserIdAndSessionModeForUpdate(
                         sessionId,
                         userId,
                         QuickReviewSessionMode.QUICK_REVIEW
@@ -886,9 +894,14 @@ public class QuickReviewSessionService {
         return noteRepository.findById(studyPack.getNoteId()).orElse(null);
     }
 
-    private boolean isStale(QuickReviewSessionEntity session, NoteEntity note) {
-        return session != null
-                && note != null
+    private boolean isStale(QuickReviewSessionEntity session, StudyPackEntity studyPack, NoteEntity note) {
+        if (session == null) {
+            return false;
+        }
+        if (session.getQuizStampAtCreation() != null) {
+            return session.getQuizStampAtCreation() != studyPack.getQuizStamp();
+        }
+        return note != null
                 && note.getGenerationEnqueuedAt() != null
                 && session.getCreatedAt() != null
                 && session.getCreatedAt().isBefore(note.getGenerationEnqueuedAt());

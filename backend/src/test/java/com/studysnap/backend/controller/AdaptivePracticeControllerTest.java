@@ -237,6 +237,30 @@ class AdaptivePracticeControllerTest {
     }
 
     @Test
+    void primaryCompletionScoresStoredSelectionDespiteClientClaim() throws Exception {
+        assertCompletionScoresStoredSelection(adaptiveMockMvc,
+                "/adaptive-practice/sessions/{id}/complete");
+    }
+
+    @Test
+    void deprecatedCompletionScoresStoredSelectionDespiteClientClaim() throws Exception {
+        assertCompletionScoresStoredSelection(deprecatedQuickReviewMockMvc,
+                "/quick-review-sessions/adaptive-practice/{id}/complete");
+    }
+
+    private void assertCompletionScoresStoredSelection(MockMvc mvc, String route) throws Exception {
+        mvc.perform(post(route, noteSession.getId())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"correctAnswers":0,"totalQuestions":2,"durationSeconds":20,
+                                 "correctConceptNames":[],"selectedChoices":{"0":1}}
+                                """))
+                .andExpect(status().isOk());
+        assertThat(noteSession.getCorrectAnswers()).isEqualTo(1);
+        assertThat(noteSession.getScorePercentage()).isEqualByComparingTo("50.00");
+    }
+
+    @Test
     void answerRouteRevealsOneQuestionAndLocksItWithoutRedactingStoredQuiz() throws Exception {
         MvcResult result = adaptiveMockMvc.perform(post(
                         "/adaptive-practice/sessions/{id}/answer", noteSession.getId())
