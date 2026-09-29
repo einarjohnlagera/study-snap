@@ -27,6 +27,13 @@ Board Exam reserves and reverses its Challenge Quiz and Board Exam meters togeth
 `ChallengeQuizService.BOARD_EXAM_QUOTA_UNITS_PER_SESSION` and one idempotency stamp. Both meter decrements
 must clamp in SQL; never rely on the Challenge-meter CHECK constraint to make a partial refund safe.
 
+Challenge bank inserts must carry the generation stamp captured with the Study Pack summary before the LLM
+call. Summary/key-concept replacement advances the pack stamp in the same transaction as bank invalidation.
+Only reads offering new questions filter by current stamp (accepting NULL for legacy bank rows); a session's
+own outcome/release reads must find its claims regardless of stamp. `releaseClaims` uses a targeted bulk
+update in the caller's transaction, never `REQUIRES_NEW`; completion's owning-row lock protects its later
+outcome flush from a concurrent bank delete.
+
 `combined_quizzes` rows are immutable snapshots: never update, re-assemble, append, or delete their
 questions in place. `quiz_share_links` is one exclusive target arc — exactly one of `generated_quiz_id` and
 `combined_quiz_id` must be populated — so do not split the token space or share-link counter into a second

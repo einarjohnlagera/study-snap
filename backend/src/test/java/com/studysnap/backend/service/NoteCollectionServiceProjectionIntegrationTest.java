@@ -120,6 +120,7 @@ class NoteCollectionServiceProjectionIntegrationTest {
                     input_type varchar(32) not null,
                     title varchar(255) not null,
                     summary varchar(2000) not null,
+                    generation_stamp bigint not null default 0,
                     subject varchar(64),
                     source_text varchar(20000),
                     key_concepts json not null,

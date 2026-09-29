@@ -162,6 +162,7 @@ class AdminStudyPackTransactionHelperTest {
         assertThat(transactionHelper.regenerateOnePack(pack)).isTrue();
 
         assertThat(pack.getSummary()).isEqualTo("Regenerated summary with no marker");
+        assertThat(pack.getGenerationStamp()).isEqualTo(1L);
         // The flush must happen before either refreshPool call: it is the fix for the same
         // study_packs -> exam_question_pool lock-order inversion v0.143.0 found and closed on the
         // learner-facing regeneration path, and a mutant that drops or reorders it must fail this test.

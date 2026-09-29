@@ -196,10 +196,12 @@ public class OfficialChallengeQuizTemplateService {
             UUID userId,
             UUID callerStudyPackId,
             LearnerLevel effectiveCurriculumLevel,
+            Long callerGenerationStamp,
             UUID sessionId,
             Set<String> disallowedQuestionKeys,
             int count
     ) {
+        java.util.Objects.requireNonNull(callerGenerationStamp, "callerGenerationStamp");
         if (count <= 0) {
             return List.of();
         }
@@ -229,6 +231,7 @@ public class OfficialChallengeQuizTemplateService {
                 copy.setId(UUID.randomUUID());
                 copy.setUserId(userId);
                 copy.setStudyPackId(callerStudyPackId);
+                copy.setGenerationStamp(callerGenerationStamp);
                 copy.setOriginSessionId(sessionId);
                 copy.setQuestionKey(questionKey);
                 copy.setQuestion(source.getQuestion());
@@ -309,6 +312,7 @@ public class OfficialChallengeQuizTemplateService {
                         target.studyPack().getId(),
                         null,
                         StudyPackGenerationContextResolver.effectiveCurriculumLevel(target.context()),
+                        target.studyPack().getGenerationStamp(),
                         generated
                 );
                 return null;

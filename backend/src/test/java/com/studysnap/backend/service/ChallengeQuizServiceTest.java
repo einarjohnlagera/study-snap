@@ -241,7 +241,7 @@ class ChallengeQuizServiceTest {
                 any(UUID.class), any(UUID.class), any(), any(UUID.class), any(), anyInt()
         )).thenReturn(List.of());
         lenient().when(officialChallengeQuizTemplateService.copyTemplateQuestions(
-                any(UUID.class), any(UUID.class), any(), any(UUID.class), any(), anyInt()
+                any(UUID.class), any(UUID.class), any(), any(Long.class), any(UUID.class), any(), anyInt()
         )).thenReturn(List.of());
         lenient().when(noteRepository.findById(any(UUID.class))).thenReturn(Optional.empty());
         // ⚠️ Board Exam generation is ASYNCHRONOUS as of v0.106.0: startSession returns a GENERATING
@@ -601,7 +601,7 @@ class ChallengeQuizServiceTest {
         );
         verify(quizGenerationService, never()).generateChallengeQuiz(any(), any(), any(), any(), anyInt(), any(), any());
         verify(aiRateLimitService, never()).assertAllowed(any(), any(), any());
-        verify(challengeQuizQuestionBankService, never()).persistGeneratedQuestions(any(), any(), any(), any(), any());
+        verify(challengeQuizQuestionBankService, never()).persistGeneratedQuestions(any(), any(), any(), any(), any(), any());
     }
 
     @Test
@@ -632,6 +632,7 @@ class ChallengeQuizServiceTest {
                 eq(userId),
                 eq(studyPackId),
                 eq(LearnerLevel.COLLEGE),
+                eq(0L),
                 any(UUID.class),
                 any(),
                 eq(DEFAULT_ADAPTIVE_QUESTION_COUNT)
@@ -654,7 +655,7 @@ class ChallengeQuizServiceTest {
         verify(quizGenerationService, never()).generateChallengeQuiz(any(), any(), any(), any(), anyInt(), any(), any());
         verify(aiRateLimitService, never()).assertAllowed(any(), any(), any());
         verify(userUsageService).incrementChallengeQuizGeneration(eq(userId), any(OffsetDateTime.class));
-        verify(challengeQuizQuestionBankService, never()).persistGeneratedQuestions(any(), any(), any(), any(), any());
+        verify(challengeQuizQuestionBankService, never()).persistGeneratedQuestions(any(), any(), any(), any(), any(), any());
     }
 
     @ParameterizedTest
@@ -1050,7 +1051,7 @@ class ChallengeQuizServiceTest {
         assertThat(response.quiz()).containsAll(withoutAnswerKeys(withSourceStudyPackId(generatedQuiz, studyPackId)));
         verify(aiRateLimitService).assertAllowed(userId, PlanType.FREE, "challenge-quiz");
         verify(challengeQuizQuestionBankService).persistGeneratedQuestions(
-                eq(userId), eq(studyPackId), any(UUID.class), eq(LearnerLevel.COLLEGE), eq(generatedQuiz)
+                eq(userId), eq(studyPackId), any(UUID.class), eq(LearnerLevel.COLLEGE), eq(0L), eq(generatedQuiz)
         );
     }
 
@@ -1186,7 +1187,7 @@ class ChallengeQuizServiceTest {
         verify(generationContextResolver).resolveForStudyPack(userId, studyPack);
         verify(quizGenerationService, never()).generateBoardExamQuiz(any(), any(), any(), any(), anyInt(), any(), any());
         verify(challengeQuizQuestionBankService).persistGeneratedQuestions(
-                eq(userId), eq(studyPackId), any(UUID.class), eq(LearnerLevel.BOARD_EXAM_REVIEW), any()
+                eq(userId), eq(studyPackId), any(UUID.class), eq(LearnerLevel.BOARD_EXAM_REVIEW), eq(0L), any()
         );
         verify(analyticsService).trackEvent(eq(userId), eq(AnalyticsEventType.CHALLENGE_QUIZ_STARTED), eq(studyPackId), any());
         if (masteryLookupFails) {
@@ -3458,7 +3459,7 @@ class ChallengeQuizServiceTest {
         assertThat(session.getOutputTokens()).isEqualTo(70);
         assertThat(session.getCachedInputTokens()).isEqualTo(25);
         verify(challengeQuizQuestionBankService).persistGeneratedQuestions(
-                eq(userId), eq(studyPackId), eq(sessionId), eq(LearnerLevel.COLLEGE), any()
+                eq(userId), eq(studyPackId), eq(sessionId), eq(LearnerLevel.COLLEGE), eq(0L), any()
         );
     }
 
@@ -3559,7 +3560,7 @@ class ChallengeQuizServiceTest {
         assertThat(response.totalQuestions()).isEqualTo(10);
         verify(quizGenerationService, never()).generateMoreChallengeQuiz(any(), any(), any(), any(), any(), anyInt(), any(), any());
         verify(challengeQuizQuestionBankService, never()).persistGeneratedQuestions(
-                any(), any(), any(), any(), any()
+                any(), any(), any(), any(), any(), any()
         );
     }
 
@@ -3592,7 +3593,7 @@ class ChallengeQuizServiceTest {
         when(studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId)).thenReturn(Optional.of(studyPack));
         when(generationContextResolver.resolveForStudyPack(userId, studyPack)).thenReturn(generationContext);
         when(officialChallengeQuizTemplateService.copyTemplateQuestions(
-                eq(userId), eq(studyPackId), eq(LearnerLevel.COLLEGE), eq(sessionId), any(), eq(5)
+                eq(userId), eq(studyPackId), eq(LearnerLevel.COLLEGE), eq(0L), eq(sessionId), any(), eq(5)
         )).thenReturn(templateQuiz);
         when(quickReviewSessionRepository.save(any())).thenAnswer(invocation -> recordSession(invocation.getArgument(0)));
 
@@ -3608,7 +3609,7 @@ class ChallengeQuizServiceTest {
         assertThat(session.getCachedInputTokens()).isNull();
         verify(quizGenerationService, never()).generateMoreChallengeQuiz(any(), any(), any(), any(), any(), anyInt(), any(), any());
         verify(challengeQuizQuestionBankService, never()).persistGeneratedQuestions(
-                any(), any(), any(), any(), any()
+                any(), any(), any(), any(), any(), any()
         );
     }
 

@@ -176,6 +176,12 @@ Generated fields:
 - `key_concepts`
 - `quiz`
 - optional generation metadata (`model_used`, token usage, estimated cost, timestamps)
+- `study_packs.generation_stamp` (`BIGINT NOT NULL DEFAULT 0`): advances with summary/key-concept replacement
+  and Challenge bank invalidation in one transaction; unrelated pack metadata edits leave it unchanged
+
+`challenge_quiz_question_bank.generation_stamp` is nullable only for rows that predate the stamp migration.
+New bank rows require the value captured from their Study Pack before question generation. Claim-side reads
+accept matching or legacy-null stamps; owning-session outcome and release reads ignore the stamp.
 
 State transition:
 

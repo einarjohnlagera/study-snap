@@ -194,7 +194,7 @@ class ChallengeQuizControllerTest {
         lenient().when(sessionRepository.save(any(QuickReviewSessionEntity.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
         lenient().when(templateService.copyTemplateQuestions(
-                any(UUID.class), any(UUID.class), any(), any(UUID.class), any(), anyInt()
+                any(UUID.class), any(UUID.class), any(), any(Long.class), any(UUID.class), any(), anyInt()
         )).thenReturn(List.of());
         lenient().when(questionBankService.claimEligibleQuestions(
                 any(UUID.class), any(UUID.class), any(), any(UUID.class), any(), anyInt()

@@ -22,7 +22,6 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -56,13 +55,12 @@ class ChallengeQuizQuestionBankServiceTest {
     }
 
     @Test
-    void releaseClaims_runsInANewTransactionSoOuterGenerationRollbackCannotUndoIt() throws NoSuchMethodException {
+    void releaseClaims_joinsCallerTransactionSoClaimsAndForfeitShareItsFate() throws NoSuchMethodException {
         Transactional transactional = ChallengeQuizQuestionBankService.class
                 .getMethod("releaseClaims", UUID.class, UUID.class, UUID.class)
                 .getAnnotation(Transactional.class);
 
-        assertThat(transactional).isNotNull();
-        assertThat(transactional.propagation()).isEqualTo(Propagation.REQUIRES_NEW);
+        assertThat(transactional).isNull();
     }
 
     @Test
@@ -212,7 +210,7 @@ class ChallengeQuizQuestionBankServiceTest {
         ChallengeQuizQuestionBankService service = new ChallengeQuizQuestionBankService(questionBankRepository);
 
         service.persistGeneratedQuestions(
-                userId, studyPackId, sessionId, LearnerLevel.COLLEGE, List.of(
+                userId, studyPackId, sessionId, LearnerLevel.COLLEGE, 0L, List.of(
                         new QuizItem("New question", List.of("A", "B", "C", "D"), 0, "Concept", "Explanation")
                 )
         );
@@ -231,10 +229,10 @@ class ChallengeQuizQuestionBankServiceTest {
         QuizItem repeatedQuestion = quizItem("Same generated question");
 
         service.persistGeneratedQuestions(
-                userId, studyPackId, sessionId, LearnerLevel.JUNIOR_HIGH, List.of(repeatedQuestion)
+                userId, studyPackId, sessionId, LearnerLevel.JUNIOR_HIGH, 0L, List.of(repeatedQuestion)
         );
         service.persistGeneratedQuestions(
-                userId, studyPackId, sessionId, LearnerLevel.SENIOR_HIGH, List.of(repeatedQuestion)
+                userId, studyPackId, sessionId, LearnerLevel.SENIOR_HIGH, 0L, List.of(repeatedQuestion)
         );
 
         ArgumentCaptor<Iterable<ChallengeQuizQuestionBankEntity>> entries = ArgumentCaptor.forClass(Iterable.class);
@@ -242,6 +240,9 @@ class ChallengeQuizQuestionBankServiceTest {
         assertThat(entries.getAllValues())
                 .extracting(saved -> saved.iterator().next().getLearnerLevel())
                 .containsExactly(LearnerLevel.JUNIOR_HIGH.name(), LearnerLevel.SENIOR_HIGH.name());
+        assertThat(entries.getAllValues())
+                .extracting(saved -> saved.iterator().next().getGenerationStamp())
+                .containsExactly(0L, 0L);
     }
 
     private ChallengeQuizQuestionBankEntity bankedQuestion(String questionText) {

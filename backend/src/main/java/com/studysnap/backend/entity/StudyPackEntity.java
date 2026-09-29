@@ -48,6 +48,9 @@ public class StudyPackEntity implements StudyPackProgressView {
     @Column(nullable = false)
     private String summary;
 
+    @Column(name = "generation_stamp", nullable = false)
+    private long generationStamp;
+
     @Column(length = 64)
     private String subject;
 
