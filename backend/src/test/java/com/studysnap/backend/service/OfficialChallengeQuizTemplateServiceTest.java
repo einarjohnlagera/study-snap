@@ -101,6 +101,7 @@ class OfficialChallengeQuizTemplateServiceTest {
                 adopterId,
                 adopterStudyPackId,
                 StudyPackGenerationContextResolver.effectiveCurriculumLevel(adopterContext),
+                0L,
                 sessionId,
                 Set.of(),
                 5
@@ -112,6 +113,7 @@ class OfficialChallengeQuizTemplateServiceTest {
         ChallengeQuizQuestionBankEntity copiedRow = saved.getValue().getFirst();
         assertThat(copiedRow.getUserId()).isEqualTo(adopterId);
         assertThat(copiedRow.getStudyPackId()).isEqualTo(adopterStudyPackId);
+        assertThat(copiedRow.getGenerationStamp()).isZero();
         assertThat(copiedRow.getLearnerLevel()).isEqualTo(LearnerLevel.SENIOR_HIGH.name());
         assertThat(copiedRow.getQuestion()).isEqualTo(source.getQuestion());
         assertThat(copiedRow.getClaimedSessionId()).isEqualTo(sessionId);
@@ -138,6 +140,7 @@ class OfficialChallengeQuizTemplateServiceTest {
                 adopterStudyPack.getOwnerUserId(),
                 adopterStudyPackId,
                 LearnerLevel.COLLEGE,
+                0L,
                 UUID.randomUUID(),
                 Set.of(),
                 5
@@ -184,6 +187,7 @@ class OfficialChallengeQuizTemplateServiceTest {
 
         verify(questionBankService).persistGeneratedQuestions(
                 officialId, studyPackId, null, LearnerLevel.BOARD_EXAM_REVIEW,
+                0L,
                 List.of(new QuizItem("Official question", List.of("A", "B", "C", "D"), "A", "Concept", "Explanation"))
         );
     }
@@ -223,6 +227,7 @@ class OfficialChallengeQuizTemplateServiceTest {
 
         verify(questionBankService).persistGeneratedQuestions(
                 officialId, studyPackId, null, LearnerLevel.BOARD_EXAM_REVIEW,
+                0L,
                 List.of(new QuizItem("Official question", List.of("A", "B", "C", "D"), "A", "Concept", "Explanation"))
         );
     }

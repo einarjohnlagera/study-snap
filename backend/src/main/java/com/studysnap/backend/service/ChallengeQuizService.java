@@ -393,6 +393,7 @@ public class ChallengeQuizService {
             return toStartResponse(session, studyPack, boardExamUsedThisMonth + BOARD_EXAM_QUOTA_UNITS_PER_SESSION, planType);
         }
         List<String> disallowedQuestions = extractQuestionTexts(studyPack.getQuiz());
+        long generationStamp = studyPack.getGenerationStamp();
         Set<String> disallowedQuestionKeys = QuizDeduplicationUtils.toNormalizedQuestionSetFromStrings(disallowedQuestions);
         if (generationContext == null) {
             generationContext = buildQuizGenerationContext(userId, studyPack);
@@ -433,6 +434,7 @@ public class ChallengeQuizService {
                         userId,
                         studyPackId,
                         effectiveCurriculumLevel,
+                        generationStamp,
                         session.getId(),
                         disallowedQuestionKeys,
                         quizCount - bankedQuestions.size()
@@ -466,6 +468,7 @@ public class ChallengeQuizService {
                             studyPackId,
                             session.getId(),
                             effectiveCurriculumLevel,
+                            generationStamp,
                             uniqueGeneratedQuiz
                     );
                 }
@@ -1130,6 +1133,7 @@ public class ChallengeQuizService {
         String difficulty = extractDifficulty(session.getSessionState());
 
         StudyPackEntity studyPack = findOwnedStudyPackOrThrow(session.getStudyPackId(), userId);
+        long generationStamp = studyPack.getGenerationStamp();
         StudyPackGenerationContext generationContext = buildQuizGenerationContext(userId, studyPack);
         LearnerLevel effectiveCurriculumLevel = StudyPackGenerationContextResolver.effectiveCurriculumLevel(
                 generationContext
@@ -1147,6 +1151,7 @@ public class ChallengeQuizService {
                 userId,
                 session.getStudyPackId(),
                 effectiveCurriculumLevel,
+                generationStamp,
                 session.getId(),
                 disallowedQuestionKeys,
                 batchSize - bankedQuestions.size()
@@ -1193,6 +1198,7 @@ public class ChallengeQuizService {
                         session.getStudyPackId(),
                         session.getId(),
                         effectiveCurriculumLevel,
+                        generationStamp,
                         uniqueGenerated
                 );
             }

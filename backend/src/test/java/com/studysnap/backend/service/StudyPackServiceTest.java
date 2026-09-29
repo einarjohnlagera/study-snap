@@ -1114,6 +1114,7 @@ class StudyPackServiceTest {
         inOrder.verify(examQuestionPoolService).refreshPool(
                 studyPackId, ExamQuestionPoolService.MODE_BOARD_EXAM);
         inOrder.verify(challengeQuizQuestionBankService).invalidateForStudyPack(studyPackId);
+        assertThat(existingStudyPack.getGenerationStamp()).isEqualTo(1L);
         // v0.151.0: a STUDY_PACK-only regeneration replaces the quiz content exactly like the combined
         // scope does, so a shared quiz's live links must be deactivated here too -- this line used to
         // assert never() and pinned the bug (v0.110.2's protection was silently scope-gated away).
@@ -1597,6 +1598,7 @@ class StudyPackServiceTest {
         verify(examQuestionPoolService).refreshPool(
                 existingPack.getId(), ExamQuestionPoolService.MODE_BOARD_EXAM);
         verify(challengeQuizQuestionBankService).invalidateForStudyPack(existingPack.getId());
+        assertThat(existingPack.getGenerationStamp()).isEqualTo(1L);
         verify(examQuestionPoolService).initiatePool(any(StudyPackEntity.class), eq(ownerUserId));
         verify(analyticsService).trackEvent(
                 eq(ownerUserId), eq(AnalyticsEventType.STUDY_PACK_GENERATED), any(UUID.class), any());

@@ -74,7 +74,7 @@ were addressed per that commit's own mutation-verified audit. The row is correct
 
 Anti-drift: no automated Tier 3 question-quality gate this release; H4's validator, H5's wording, and
 H6's exclusion (still gated on H5's post-ship checkpoint) are all unchanged; the bank-invalidation
-migration (item 3) adds a generation-stamp column only; the teacher share-link quiz path is a known,
+migration (item 3) adds two generation-stamp columns only; the teacher share-link quiz path is a known,
 explicitly out-of-scope gap for item 1, not silently ignored. Note/Study Pack pages, the public note page,
 and DOCX `WITH_ANSWERS` export all stay unredacted by owner decision (item 1's own plan file). **⚠️ Quick
 Review's fix does not add a quiz store**: the session continues to use the Study Pack's persisted quiz and
@@ -89,13 +89,72 @@ against the plan document itself** — found and corrected 4 more plan-invalidat
 falsification pass is still owed before signoff, against the actual diffs**, per the standing pre-signoff
 gate — three escalation triggers justify it regardless of design-time work already done: items 2-4 share the
 same method/bank code; item 1 moves a privacy/visibility boundary and includes a live-exploit fix; and item
-1's Quick Review and Adaptive sub-items change production-data-write semantics. That pass's brief must
+1's Quick Review and Adaptive sub-items change production-data-write semantics. **The pre-signoff falsification
+brief must explicitly include items 2-4: bank claim/release and generation-stamp writes change production-data
+semantics, and concurrent transactions are inherently hard to reason about serially (CLAUDE.md escalation
+criterion). Ask the reviewer to falsify the actual `@Lock` behavior, the two regeneration transaction
+boundaries, and the real-Postgres test fixtures.** That pass's brief must
 include the answer-lock invariant and the per-mode progress-write safety table, not just response shapes.
 Every mode's fix needs a real `MockMvc` request test asserting on the raw serialized JSON body (not typed DTO
 fields alone) for every route each item touches, plus `advisor()` at each phase and on each diff per the
 standing baseline rule.
 
 ### Shipped
+
+- **Challenge Quiz bank concurrency (items 2-4):** Real Spring-proxied, PostgreSQL 18 Testcontainers
+  reproductions found three `releaseClaims` faults before the fix: `generateMoreQuestions` held a bank-row
+  lock while its `REQUIRES_NEW` release waited for a second connection until PostgreSQL's test-only
+  `lock_timeout` returned `55P03`; a failed start committed an unreleased claim on a `FAILED` session;
+  and expired `+5` rolled back its forfeit but committed an independent claim release. `c76e5c1d`
+  introduced `REQUIRES_NEW` on the mistaken premise that a rolled-back claim write needed a separate
+  release. Release is now a count-tolerant bulk `UPDATE` in the caller's transaction: it sees a failed
+  start's uncommitted claims, rolls back with a failed `+5`, and does not flush deleted entities at
+  commit. The same reproductions pass without a lock wait, orphaned claim, or released claim on rollback.
+  Read-only production checks on 2026-09-29 found zero claims owned by non-`IN_PROGRESS` sessions and zero
+  idle-in-transaction connections: no live incident or cleanup write is owed.
+- **Generation-stamp invalidation:** `V151` adds `study_packs.generation_stamp BIGINT NOT NULL DEFAULT 0`
+  and nullable `challenge_quiz_question_bank.generation_stamp`. Both content replacement paths advance
+  the pack stamp with the content write and bank delete in one transaction. Generation captures the
+  stamp with the summary before the LLM call and passes it to every bank insert path. New-question
+  claim and Redo Missed count/claim reads require the current stamp, accepting `NULL` only for bank
+  rows that predate the migration; the owning session's release and outcome reads never stamp-filter.
+  A two-connection LLM-window reproduction inserted five old-summary rows after invalidation: they
+  survived physically but ceased to be claimable after the stamp fix. Existing rows are neither wiped
+  nor made unclaimable at deploy. **Audit correction:** the delivered diff also stamp-filtered
+  `existsByUserIdAndStudyPackId`, `findOwnerStudyPackPairsByStudyPackIdIn`, and
+  `findQuestionKeysByUserIdAndStudyPackId` — these guard a WRITE (skip a re-seed, skip re-copying a
+  key the caller already holds) rather than hand out content, so filtering them made a stale-but-present
+  row invisible to the guard, letting the Official-template re-seed and adopter-copy paths reuse that
+  row's `question_key` and collide with `uq_challenge_quiz_question_bank_user_pack_key` — the same
+  rollback-only-transaction failure `docs/features/challenge-quiz.md` already documents for a same-level
+  duplicate. Reverted the filter on those three; the two claim/content-serving read paths above are
+  unaffected. The concurrency integration test's stale-stamp assertions for these three methods were
+  corrected to match (they must still see the stale row, not treat it as absent). **This closes the
+  template-copy and re-seed collision paths only — see Known Limitations for what it does not close.**
+- **Known limitations (Challenge Quiz bank concurrency):**
+  - The plain LLM-generation path (`ChallengeQuizService`'s shortfall call into
+    `persistGeneratedQuestions`) still does not check the caller's existing bank keys — including a
+    stale-stamped row's key — before inserting; it only dedupes within its own freshly generated batch.
+    A stale row now sits unclaimable until the pack's next regeneration (instead of being claimed away
+    quickly, as before this fix), so it occupies its key slot longer, raising the odds of hitting the
+    same already-documented same-level-duplicate failure. Not fixed here; would need the bank's existing
+    keys threaded into the LLM dedup set the same way `copyTemplateQuestions` now does.
+  - Unfiltering `existsByUserIdAndStudyPackId` trades one race for another: if `seedTemplateAsync` races
+    the Official pack's own regeneration and leaves a stale-only template, `exists` now reports `true`
+    forever (until that pack regenerates again), so the template is never re-seeded — adopters silently
+    fall back to the LLM instead, and `queueBackfill` counts that pack as `skipped`. Accepted as a rare,
+    self-resolving trade rather than fixed now.
+  - `AdminStudyPackTransactionHelper.regenerateOnePack`'s stamp bump
+    (`currentPack.setGenerationStamp(currentPack.getGenerationStamp() + 1)`) is a read-modify-write with
+    no `@Version` and no `GENERATING`-status interlock — confirmed by reading
+    `StudyPackGenerationContextResolver.assertGenerationReady`, which only checks the multi-program
+    Domain Context rule, not note status. A concurrent user-initiated regeneration of the same pack can
+    lose one increment. Pre-existing gap, not introduced by this release; not fixed here.
+- **Completion/delete hypothesis resolved without a production fix:** The repository's owning-session
+  read currently has `PESSIMISTIC_WRITE`. A first test harness substituted an unlocked query and
+  produced the predicted stale-row throw, exposing an unfaithful fixture; the corrected real-query
+  PostgreSQL test showed the delete waits for completion to commit. Completion succeeds, then the
+  delete commits. The test pins this lock so removing it would fail the race guard.
 
 - **Long Exam answer-key redaction:** `LongExamStartResponse` and `LongExamSessionResponse` now redact
   `correctIndex`, `correctIndices`, `explanation`, `workingSolution`, `acceptableAnswers`, and

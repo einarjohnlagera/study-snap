@@ -67,6 +67,7 @@ public class AdminStudyPackTransactionHelper {
             StudyPackGenerationContext context = buildContext(note);
             String newSummary = llmStudyPackService.regenerateSummary(note.getContent(), context);
             currentPack.setSummary(newSummary);
+            currentPack.setGenerationStamp(currentPack.getGenerationStamp() + 1);
             studyPackRepository.save(currentPack);
             // Same invalidation StudyPackService's regeneration path uses (v0.143.0) — this repair
             // replaces the pack's summary in place, and the summary is a direct exam-pool generation
