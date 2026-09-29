@@ -1,6 +1,8 @@
 package com.studysnap.backend.service;
 
 import com.studysnap.backend.dto.QuickReviewSessionCompleteRequest;
+import com.studysnap.backend.dto.QuickReviewAnswerRequest;
+import com.studysnap.backend.dto.QuickReviewAnswerResponse;
 import com.studysnap.backend.dto.QuickReviewSessionProgressRequest;
 import com.studysnap.backend.dto.QuickReviewSessionResponse;
 import com.studysnap.backend.dto.QuickReviewSessionStartResponse;
@@ -10,6 +12,9 @@ import com.studysnap.backend.config.StudySnapProperties;
 import com.studysnap.backend.exception.SharedNoteNotFoundException;
 import com.studysnap.backend.exception.QuickReviewSessionNotFoundException;
 import com.studysnap.backend.exception.QuickReviewNotAvailableException;
+import com.studysnap.backend.exception.QuickReviewAnswerAlreadyRecordedException;
+import com.studysnap.backend.exception.InvalidQuickReviewAnswerException;
+import com.studysnap.backend.exception.QuickReviewSessionStaleException;
 import com.studysnap.backend.entity.AnalyticsEventType;
 import com.studysnap.backend.entity.ActivityType;
 import com.studysnap.backend.entity.PlanType;
@@ -19,13 +24,16 @@ import com.studysnap.backend.entity.QuickReviewSessionEntity;
 import com.studysnap.backend.entity.QuickReviewSessionMode;
 import com.studysnap.backend.entity.QuickReviewSessionStatus;
 import com.studysnap.backend.entity.StudyPackEntity;
+import com.studysnap.backend.entity.NoteEntity;
 import com.studysnap.backend.exception.AppException;
 import com.studysnap.backend.model.StudyPackProgressProjection;
 import com.studysnap.backend.repository.ActivityEventRepository;
+import com.studysnap.backend.repository.NoteRepository;
 import com.studysnap.backend.repository.QuickReviewSessionRepository;
 import com.studysnap.backend.repository.StudyPackLatestCompletionProjection;
 import com.studysnap.backend.repository.StudyPackRepository;
 import com.studysnap.backend.service.model.StudyPackQuizMastery;
+import com.studysnap.backend.util.QuizSessionStateUtils;
 import com.studysnap.backend.testutil.builders.QuickReviewSessionEntityBuilder;
 import com.studysnap.backend.testutil.builders.StudyPackEntityBuilder;
 import org.junit.jupiter.api.BeforeEach;
@@ -80,6 +88,8 @@ class QuickReviewSessionServiceTest {
     private StudyPackQuizMasteryService studyPackQuizMasteryService;
     @Mock
     private NoteShareService noteShareService;
+    @Mock
+    private NoteRepository noteRepository;
 
     private QuickReviewSessionService quickReviewSessionService;
 
@@ -95,9 +105,10 @@ class QuickReviewSessionServiceTest {
                 subscriptionService,
                 featureGateService,
                 conceptHealthService,
-                studyPackQuizMasteryService
-        ,
-                org.mockito.Mockito.mock(com.studysnap.backend.service.NoteShareService.class));
+                studyPackQuizMasteryService,
+                noteShareService,
+                noteRepository
+        );
         lenient().when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
         lenient().when(quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(any(UUID.class), any(UUID.class), any()))
@@ -106,6 +117,10 @@ class QuickReviewSessionServiceTest {
                                 invocation.getArgument(1)
                         )
                         .filter(session -> invocation.getArgument(2) == session.getSessionMode()));
+        lenient().when(quickReviewSessionRepository.findByIdAndUserIdAndSessionModeForUpdate(
+                        any(UUID.class), any(UUID.class), any()))
+                .thenAnswer(invocation -> quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(
+                        invocation.getArgument(0), invocation.getArgument(1), invocation.getArgument(2)));
         lenient().when(quickReviewSessionRepository.findTopByUserIdAndStudyPackIdAndSessionModeAndStatusOrderByCreatedAtDesc(
                         any(UUID.class),
                         any(UUID.class),
@@ -329,7 +344,8 @@ class QuickReviewSessionServiceTest {
                 featureGateService,
                 conceptHealthService,
                 studyPackQuizMasteryService,
-                noteShareService
+                noteShareService,
+                noteRepository
         );
         when(quickReviewSessionRepository.findByIdAndUserId(sessionId, recipientUserId))
                 .thenReturn(Optional.of(session));
@@ -373,7 +389,8 @@ class QuickReviewSessionServiceTest {
                 featureGateService,
                 conceptHealthService,
                 studyPackQuizMasteryService,
-                noteShareService
+                noteShareService,
+                noteRepository
         );
         when(quickReviewSessionRepository.findByIdAndUserId(sessionId, recipientUserId))
                 .thenReturn(Optional.of(session));
@@ -417,7 +434,8 @@ class QuickReviewSessionServiceTest {
                 featureGateService,
                 conceptHealthService,
                 studyPackQuizMasteryService,
-                noteShareService
+                noteShareService,
+                noteRepository
         );
         when(quickReviewSessionRepository.findByIdAndUserId(sessionId, recipientUserId))
                 .thenReturn(Optional.of(session));
@@ -444,6 +462,15 @@ class QuickReviewSessionServiceTest {
         );
         verify(activityTrackingService, never()).recordActivity(
                 eq(ownerUserId), any(ActivityType.class), eq(studyPackId)
+        );
+        verify(analyticsService).trackEvent(
+                eq(recipientUserId), eq(AnalyticsEventType.QUICK_REVIEW_MASTERED), eq(studyPackId), any()
+        );
+        verify(analyticsService).trackEvent(
+                eq(recipientUserId), eq(AnalyticsEventType.STUDY_PACK_QUIZ_UNLOCKED), eq(studyPackId), any()
+        );
+        verify(analyticsService, never()).trackEvent(
+                eq(ownerUserId), any(AnalyticsEventType.class), eq(studyPackId), any()
         );
     }
 
@@ -486,13 +513,26 @@ class QuickReviewSessionServiceTest {
         UUID sessionId = UUID.randomUUID();
         UUID studyPackId = UUID.randomUUID();
         QuickReviewSessionEntity session = buildInProgressSession(sessionId, userId, studyPackId);
-        session.setSessionState(Map.of("selectedChoices", Map.of("0", 0, "1", 0, "2", 0, "3", 0, "4", 0)));
         StudyPackEntity studyPack = buildStudyPack(studyPackId, userId, 0);
         studyPack.setQuiz(buildSingleChoiceQuiz(5));
         when(quickReviewSessionRepository.findByIdAndUserId(sessionId, userId)).thenReturn(Optional.of(session));
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionModeForUpdate(
+                sessionId, userId, QuickReviewSessionMode.QUICK_REVIEW)).thenReturn(Optional.of(session));
         when(studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId)).thenReturn(Optional.of(studyPack));
         when(studyPackQuizMasteryService.tryResolve(userId, studyPack))
                 .thenReturn(Optional.of(StudyPackQuizMastery.notMastered()));
+
+        quickReviewSessionService.answerQuestion(
+                sessionId.toString(), userId, new QuickReviewAnswerRequest(0, 0, 1, null)
+        );
+        for (int questionIndex = 1; questionIndex < 5; questionIndex++) {
+            quickReviewSessionService.answerQuestion(
+                    sessionId.toString(), userId, new QuickReviewAnswerRequest(questionIndex, 0, 0, null)
+            );
+        }
+        quickReviewSessionService.answerQuestion(
+                sessionId.toString(), userId, new QuickReviewAnswerRequest(0, 1, 0, null)
+        );
 
         quickReviewSessionService.completeSession(
                 sessionId.toString(),
@@ -1277,6 +1317,432 @@ class QuickReviewSessionServiceTest {
                 .hasMessage("Quick Review session must be completed before saving confidence feedback.")
                 .extracting(ex -> ((AppException) ex).getCode())
                 .isEqualTo("SESSION_NOT_COMPLETED");
+    }
+
+    @Test
+    void answerQuestionLocksEachAttemptAndKeepsTheCumulativeSelectionCurrent() {
+        UUID userId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        QuickReviewSessionEntity session = buildInProgressSession(sessionId, userId, studyPackId);
+        StudyPackEntity studyPack = buildStudyPack(studyPackId, userId, 1);
+        studyPack.setQuiz(buildSingleChoiceQuiz(1));
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionModeForUpdate(
+                sessionId, userId, QuickReviewSessionMode.QUICK_REVIEW)).thenReturn(Optional.of(session));
+        when(studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId)).thenReturn(Optional.of(studyPack));
+        QuickReviewAnswerRequest request = new QuickReviewAnswerRequest(0, 0, 1, null);
+
+        QuickReviewAnswerResponse first = quickReviewSessionService.answerQuestion(
+                sessionId.toString(), userId, request
+        );
+        QuickReviewAnswerResponse repeated = quickReviewSessionService.answerQuestion(
+                sessionId.toString(), userId, request
+        );
+
+        assertThat(first.question().getCorrectIndex()).isZero();
+        assertThat(repeated).isEqualTo(first);
+        assertThat(QuizSessionStateUtils.extractRoundSelectionIndexes(
+                session.getSessionState(), 0, studyPack.getQuiz())).containsEntry(0, 1);
+        assertThat(QuizSessionStateUtils.extractSelectedChoiceIndexes(
+                session.getSessionState(), studyPack.getQuiz())).containsEntry(0, 1);
+        verify(quickReviewSessionRepository, times(1)).save(session);
+    }
+
+    @Test
+    void answerQuestionNormalizesAndLocksMultiSelectWithinTheAttempt() {
+        UUID userId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        QuickReviewSessionEntity session = buildInProgressSession(sessionId, userId, studyPackId);
+        StudyPackEntity studyPack = buildStudyPack(studyPackId, userId, 0);
+        QuizItem multiSelect = new QuizItem(
+                "Select both correct choices",
+                List.of("A", "B", "C", "D"),
+                null,
+                "Concept",
+                "A and C are correct.",
+                null,
+                "MULTI_SELECT",
+                null,
+                null,
+                List.of(0, 2)
+        );
+        studyPack.setQuiz(List.of(multiSelect));
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionModeForUpdate(
+                sessionId, userId, QuickReviewSessionMode.QUICK_REVIEW)).thenReturn(Optional.of(session));
+        when(studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId)).thenReturn(Optional.of(studyPack));
+
+        QuickReviewAnswerResponse first = quickReviewSessionService.answerQuestion(
+                sessionId.toString(), userId, new QuickReviewAnswerRequest(0, 0, null, List.of(2, 0, 2))
+        );
+        QuickReviewAnswerResponse repeated = quickReviewSessionService.answerQuestion(
+                sessionId.toString(), userId, new QuickReviewAnswerRequest(0, 0, null, List.of(0, 2))
+        );
+
+        assertThat(first.question().correctIndices()).containsExactly(0, 2);
+        assertThat(repeated).isEqualTo(first);
+        assertThatThrownBy(() -> quickReviewSessionService.answerQuestion(
+                sessionId.toString(), userId, new QuickReviewAnswerRequest(0, 0, null, List.of(1, 2))
+        )).isInstanceOf(QuickReviewAnswerAlreadyRecordedException.class);
+        assertThat(QuizSessionStateUtils.extractSelectedMultiChoiceIndexes(
+                session.getSessionState(), studyPack.getQuiz())).containsEntry(0, List.of(0, 2));
+        verify(quickReviewSessionRepository, times(1)).save(session);
+    }
+
+    @Test
+    void answerQuestionRejectsAChangedSelectionWithoutChangingTheStoredAnswer() {
+        UUID userId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        QuickReviewSessionEntity session = buildInProgressSession(sessionId, userId, studyPackId);
+        StudyPackEntity studyPack = buildStudyPack(studyPackId, userId, 1);
+        studyPack.setQuiz(buildSingleChoiceQuiz(1));
+        session.setSessionState(QuizSessionStateUtils.withRoundSelection(null, 0, 0, 1));
+        session.setSessionState(QuizSessionStateUtils.withSelectedChoice(session.getSessionState(), 0, 1));
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionModeForUpdate(
+                sessionId, userId, QuickReviewSessionMode.QUICK_REVIEW)).thenReturn(Optional.of(session));
+        when(studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId)).thenReturn(Optional.of(studyPack));
+        String sessionIdRaw = sessionId.toString();
+        QuickReviewAnswerRequest changed = new QuickReviewAnswerRequest(0, 0, 0, null);
+
+        assertThatThrownBy(() -> quickReviewSessionService.answerQuestion(sessionIdRaw, userId, changed))
+                .isInstanceOf(QuickReviewAnswerAlreadyRecordedException.class);
+
+        assertThat(QuizSessionStateUtils.extractSelectedChoiceIndexes(
+                session.getSessionState(), studyPack.getQuiz())).containsEntry(0, 1);
+        verify(quickReviewSessionRepository, never()).save(session);
+    }
+
+    @Test
+    void retryAnswerAdvancesTheDurableAttemptWhenTheTransitionProgressWriteWasLost() {
+        UUID userId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        QuickReviewSessionEntity session = buildInProgressSession(sessionId, userId, studyPackId);
+        StudyPackEntity studyPack = buildStudyPack(studyPackId, userId, 1);
+        studyPack.setQuiz(buildSingleChoiceQuiz(1));
+        session.setSessionState(QuizSessionStateUtils.withRoundSelection(null, 0, 0, 1));
+        session.setSessionState(QuizSessionStateUtils.withSelectedChoice(session.getSessionState(), 0, 1));
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionModeForUpdate(
+                sessionId, userId, QuickReviewSessionMode.QUICK_REVIEW)).thenReturn(Optional.of(session));
+        when(studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId)).thenReturn(Optional.of(studyPack));
+
+        quickReviewSessionService.answerQuestion(
+                sessionId.toString(), userId, new QuickReviewAnswerRequest(0, 1, 0, null)
+        );
+
+        assertThat(session.getRetryCount()).isEqualTo(1);
+        assertThat(session.getCurrentRound()).isEqualTo(QuickReviewRound.RETRY);
+        assertThat(QuizSessionStateUtils.extractRoundSelectionIndexes(
+                session.getSessionState(), 1, studyPack.getQuiz())).containsEntry(0, 0);
+        assertThat(QuizSessionStateUtils.extractSelectedChoiceIndexes(
+                session.getSessionState(), studyPack.getQuiz())).containsEntry(0, 0);
+    }
+
+    @Test
+    void answerQuestionRejectsRetryCountsOutsideTheTwoRoundInvariant() {
+        UUID userId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        QuickReviewSessionEntity session = buildInProgressSession(sessionId, userId, studyPackId);
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionModeForUpdate(
+                sessionId, userId, QuickReviewSessionMode.QUICK_REVIEW)).thenReturn(Optional.of(session));
+        when(studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId))
+                .thenReturn(Optional.of(buildStudyPack(studyPackId, userId, 1)));
+
+        assertThatThrownBy(() -> quickReviewSessionService.answerQuestion(
+                sessionId.toString(), userId, new QuickReviewAnswerRequest(0, 2, 0, null)
+        )).isInstanceOf(InvalidQuickReviewAnswerException.class);
+
+        verify(quickReviewSessionRepository, never()).save(session);
+    }
+
+    @Test
+    void answerQuestionRejectsARegenerationStaleSessionWithTheRestartCode() {
+        UUID userId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        QuickReviewSessionEntity session = buildInProgressSession(sessionId, userId, studyPackId);
+        StudyPackEntity studyPack = buildStudyPack(studyPackId, userId, 1);
+        studyPack.setNoteId(noteId);
+        NoteEntity note = new NoteEntity();
+        note.setId(noteId);
+        note.setGenerationEnqueuedAt(session.getCreatedAt().plusSeconds(1));
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionModeForUpdate(
+                sessionId, userId, QuickReviewSessionMode.QUICK_REVIEW)).thenReturn(Optional.of(session));
+        when(studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId)).thenReturn(Optional.of(studyPack));
+        when(noteRepository.findById(noteId)).thenReturn(Optional.of(note));
+
+        assertThatThrownBy(() -> quickReviewSessionService.answerQuestion(
+                sessionId.toString(), userId, new QuickReviewAnswerRequest(0, 0, 0, null)
+        ))
+                .isInstanceOf(QuickReviewSessionStaleException.class)
+                .extracting(error -> ((QuickReviewSessionStaleException) error).getCode())
+                .isEqualTo("QUICK_REVIEW_SESSION_STALE");
+
+        verify(quickReviewSessionRepository, never()).save(session);
+    }
+
+    @Test
+    void resumeMidRetryKeepsCumulativeInitialRevealsAndCurrentAttemptLocksSeparate() {
+        UUID userId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        QuickReviewSessionEntity session = buildInProgressSession(UUID.randomUUID(), userId, studyPackId);
+        session.setCurrentRound(QuickReviewRound.RETRY);
+        session.setRetryCount(1);
+        StudyPackEntity studyPack = buildStudyPack(studyPackId, userId, 3);
+        studyPack.setNoteId(noteId);
+        Map<String, Object> state = QuizSessionStateUtils.withSelectedChoice(null, 0, 0);
+        state = QuizSessionStateUtils.withSelectedChoice(state, 1, 1);
+        state = QuizSessionStateUtils.withRoundSelection(state, 0, 0, 0);
+        state = QuizSessionStateUtils.withRoundSelection(state, 0, 1, 1);
+        state = QuizSessionStateUtils.withRoundSelection(state, 1, 1, 0);
+        session.setSessionState(state);
+        when(studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId)).thenReturn(Optional.of(studyPack));
+        when(quickReviewSessionRepository
+                .findTopByUserIdAndStudyPackIdAndSessionModeAndStatusOrderByCreatedAtDesc(
+                        userId, studyPackId, QuickReviewSessionMode.QUICK_REVIEW,
+                        QuickReviewSessionStatus.IN_PROGRESS)).thenReturn(Optional.of(session));
+
+        QuickReviewSessionStartResponse response = quickReviewSessionService.getInProgressSession(
+                studyPackId.toString(), userId
+        );
+
+        assertThat(response.quiz().get(0).getCorrectIndex()).isZero();
+        assertThat(response.quiz().get(1).getCorrectIndex()).isNotNull();
+        assertThat(response.quiz().get(2).getCorrectIndex()).isNull();
+        assertThat(response.sessionState()).containsEntry("roundSelections", Map.of("1", 0));
+    }
+
+    @Test
+    void answerQuestionHardFailsWhenARecipientsShareWasRevoked() {
+        UUID recipientUserId = UUID.randomUUID();
+        UUID ownerUserId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        QuickReviewSessionEntity session = buildInProgressSession(sessionId, recipientUserId, studyPackId);
+        StudyPackEntity studyPack = buildStudyPack(studyPackId, ownerUserId, 1);
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionModeForUpdate(
+                sessionId, recipientUserId, QuickReviewSessionMode.QUICK_REVIEW)).thenReturn(Optional.of(session));
+        when(studyPackRepository.findByIdAndOwnerUserId(studyPackId, recipientUserId)).thenReturn(Optional.empty());
+        when(studyPackRepository.findById(studyPackId)).thenReturn(Optional.of(studyPack));
+        org.mockito.Mockito.doThrow(new SharedNoteNotFoundException())
+                .when(noteShareService).requireSharedStudyPackAccess(recipientUserId, studyPackId);
+
+        assertThatThrownBy(() -> quickReviewSessionService.answerQuestion(
+                sessionId.toString(), recipientUserId, new QuickReviewAnswerRequest(0, 0, 0, null)
+        )).isInstanceOf(SharedNoteNotFoundException.class);
+
+        assertThat(session.getSessionState()).isNull();
+        verify(quickReviewSessionRepository, never()).save(session);
+    }
+
+    @Test
+    void progressOnlyMergesNavigationAndCannotOverwriteServerOwnedAnswerMaps() {
+        UUID userId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        QuickReviewSessionEntity session = buildInProgressSession(sessionId, userId, studyPackId);
+        session.setSessionState(Map.of(
+                "selectedChoices", Map.of("0", 1),
+                "roundSelections", Map.of("0", Map.of("0", 1))
+        ));
+        StudyPackEntity studyPack = buildStudyPack(studyPackId, userId, 1);
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionModeForUpdate(
+                sessionId, userId, QuickReviewSessionMode.QUICK_REVIEW)).thenReturn(Optional.of(session));
+        when(studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId)).thenReturn(Optional.of(studyPack));
+
+        quickReviewSessionService.updateSessionProgress(
+                sessionId.toString(),
+                userId,
+                new QuickReviewSessionProgressRequest(1, QuickReviewRound.INITIAL, 0, Map.of(
+                        "selectedChoices", Map.of("0", 0),
+                        "roundSelections", Map.of("0", Map.of("0", 0)),
+                        "retryQuestionIndexes", List.of(0),
+                        "activeQuestionIndexes", List.of(0, 1)
+                ))
+        );
+
+        assertThat(session.getSessionState()).containsEntry("selectedChoices", Map.of("0", 1));
+        assertThat(session.getSessionState()).containsEntry("roundSelections", Map.of("0", Map.of("0", 1)));
+        assertThat(session.getSessionState()).containsEntry("retryQuestionIndexes", List.of(0));
+        assertThat(session.getSessionState()).containsEntry("activeQuestionIndexes", List.of(0, 1));
+    }
+
+    @Test
+    void progressAllowsTheActualRetryTransitionPairsAndRejectsRegression() {
+        UUID userId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        QuickReviewSessionEntity session = buildInProgressSession(sessionId, userId, studyPackId);
+        StudyPackEntity studyPack = buildStudyPack(studyPackId, userId, 1);
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionModeForUpdate(
+                sessionId, userId, QuickReviewSessionMode.QUICK_REVIEW)).thenReturn(Optional.of(session));
+        when(studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId)).thenReturn(Optional.of(studyPack));
+
+        quickReviewSessionService.updateSessionProgress(
+                sessionId.toString(), userId,
+                new QuickReviewSessionProgressRequest(1, QuickReviewRound.INITIAL, 1, Map.of())
+        );
+        quickReviewSessionService.updateSessionProgress(
+                sessionId.toString(), userId,
+                new QuickReviewSessionProgressRequest(0, QuickReviewRound.RETRY, 1, Map.of())
+        );
+
+        assertThatThrownBy(() -> quickReviewSessionService.updateSessionProgress(
+                sessionId.toString(), userId,
+                new QuickReviewSessionProgressRequest(0, QuickReviewRound.INITIAL, 1, Map.of())
+        )).isInstanceOf(AppException.class)
+                .extracting(error -> ((AppException) error).getCode())
+                .isEqualTo("INVALID_QUICK_REVIEW_PROGRESS");
+        assertThatThrownBy(() -> quickReviewSessionService.updateSessionProgress(
+                sessionId.toString(), userId,
+                new QuickReviewSessionProgressRequest(0, QuickReviewRound.RETRY, 0, Map.of())
+        )).isInstanceOf(AppException.class)
+                .extracting(error -> ((AppException) error).getCode())
+                .isEqualTo("INVALID_QUICK_REVIEW_PROGRESS");
+    }
+
+    @Test
+    void resumeMidRetryRevealsCumulativelyAnsweredItemsButReturnsOnlyTheCurrentAttemptLocks() {
+        UUID userId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        StudyPackEntity studyPack = buildStudyPack(studyPackId, userId, 2);
+        studyPack.setQuiz(buildSingleChoiceQuiz(2));
+        QuickReviewSessionEntity session = buildInProgressSession(sessionId, userId, studyPackId);
+        session.setCurrentRound(QuickReviewRound.RETRY);
+        session.setRetryCount(1);
+        Map<String, Object> state = QuizSessionStateUtils.withSelectedChoice(null, 0, 0);
+        state = QuizSessionStateUtils.withSelectedChoice(state, 1, 1);
+        state = QuizSessionStateUtils.withRoundSelection(state, 0, 0, 0);
+        state = QuizSessionStateUtils.withRoundSelection(state, 0, 1, 1);
+        session.setSessionState(state);
+        when(studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId)).thenReturn(Optional.of(studyPack));
+        when(quickReviewSessionRepository
+                .findTopByUserIdAndStudyPackIdAndSessionModeAndStatusOrderByCreatedAtDesc(
+                        userId, studyPackId, QuickReviewSessionMode.QUICK_REVIEW,
+                        QuickReviewSessionStatus.IN_PROGRESS)).thenReturn(Optional.of(session));
+
+        QuickReviewSessionStartResponse response = quickReviewSessionService.getInProgressSession(
+                studyPackId.toString(), userId
+        );
+
+        assertThat(response.quiz()).allSatisfy(question -> {
+            assertThat(question.getCorrectIndex()).isNotNull();
+            assertThat(question.getExplanation()).isNotNull();
+        });
+        assertThat(response.sessionState()).containsEntry("selectedChoices", Map.of("0", 0, "1", 1));
+        assertThat(response.sessionState()).containsEntry("roundSelections", Map.of());
+    }
+
+    @Test
+    void readOnlyResumeTreatsARegenerationStaleSessionAsAbsentAndRedactsEveryQuestion() {
+        UUID userId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        QuickReviewSessionEntity stale = buildInProgressSession(UUID.randomUUID(), userId, studyPackId);
+        stale.setSessionState(QuizSessionStateUtils.withSelectedChoice(null, 0, 0));
+        StudyPackEntity studyPack = buildStudyPack(studyPackId, userId, 1);
+        studyPack.setNoteId(noteId);
+        NoteEntity note = new NoteEntity();
+        note.setId(noteId);
+        note.setGenerationEnqueuedAt(stale.getCreatedAt().plusSeconds(1));
+        when(studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId)).thenReturn(Optional.of(studyPack));
+        when(noteRepository.findById(noteId)).thenReturn(Optional.of(note));
+        when(quickReviewSessionRepository
+                .findTopByUserIdAndStudyPackIdAndSessionModeAndStatusOrderByCreatedAtDesc(
+                        userId, studyPackId, QuickReviewSessionMode.QUICK_REVIEW,
+                        QuickReviewSessionStatus.IN_PROGRESS)).thenReturn(Optional.of(stale));
+
+        QuickReviewSessionStartResponse response = quickReviewSessionService.getInProgressSession(
+                studyPackId.toString(), userId
+        );
+
+        assertThat(response.sessionId()).isNull();
+        assertThat(response.sessionState()).isEmpty();
+        assertThat(response.quiz()).singleElement().satisfies(question -> {
+            assertThat(question.getCorrectIndex()).isNull();
+            assertThat(question.getExplanation()).isNull();
+        });
+        verify(quickReviewSessionRepository, never()).save(stale);
+    }
+
+    @Test
+    void startSessionForfeitsARegenerationStaleSessionAndRedactsTheFreshQuiz() {
+        UUID userId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        QuickReviewSessionEntity stale = buildInProgressSession(UUID.randomUUID(), userId, studyPackId);
+        StudyPackEntity studyPack = buildStudyPack(studyPackId, userId, 1);
+        studyPack.setNoteId(noteId);
+        studyPack.setQuiz(buildSingleChoiceQuiz(1));
+        NoteEntity note = new NoteEntity();
+        note.setId(noteId);
+        note.setTitle("Current title");
+        note.setGenerationEnqueuedAt(stale.getCreatedAt().plusMinutes(1));
+        when(studyPackRepository.findByIdAndOwnerUserIdForUpdate(studyPackId, userId))
+                .thenReturn(Optional.of(studyPack));
+        when(noteRepository.findById(noteId)).thenReturn(Optional.of(note));
+        when(quickReviewSessionRepository
+                .findTopByUserIdAndStudyPackIdAndSessionModeAndStatusOrderByCreatedAtDesc(
+                        userId, studyPackId, QuickReviewSessionMode.QUICK_REVIEW,
+                        QuickReviewSessionStatus.IN_PROGRESS)).thenReturn(Optional.of(stale));
+
+        QuickReviewSessionStartResponse response = quickReviewSessionService.startSession(
+                studyPackId.toString(), userId
+        );
+
+        assertThat(stale.getStatus()).isEqualTo(QuickReviewSessionStatus.FORFEITED);
+        assertThat(response.sessionId()).isNotEqualTo(stale.getId().toString());
+        assertThat(response.title()).isEqualTo("Current title");
+        assertThat(response.quiz()).singleElement().satisfies(question -> {
+            assertThat(question.getCorrectIndex()).isNull();
+            assertThat(question.getExplanation()).isNull();
+        });
+        assertThat(studyPack.getQuiz()).singleElement().extracting(QuizItem::getCorrectIndex).isEqualTo(0);
+        verify(quickReviewSessionRepository).flush();
+    }
+
+    @Test
+    void recipientStartUsesTheUnscopedNoteToReplaceARegenerationStaleSession() {
+        UUID recipientUserId = UUID.randomUUID();
+        UUID ownerUserId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        QuickReviewSessionEntity stale = buildInProgressSession(UUID.randomUUID(), recipientUserId, studyPackId);
+        StudyPackEntity studyPack = buildStudyPack(studyPackId, ownerUserId, 1);
+        studyPack.setNoteId(noteId);
+        NoteEntity note = new NoteEntity();
+        note.setId(noteId);
+        note.setTitle("Shared current title");
+        note.setGenerationEnqueuedAt(stale.getCreatedAt().plusMinutes(1));
+        when(studyPackRepository.findByIdAndOwnerUserIdForUpdate(studyPackId, recipientUserId))
+                .thenReturn(Optional.empty());
+        when(studyPackRepository.findById(studyPackId)).thenReturn(Optional.of(studyPack));
+        when(noteRepository.findById(noteId)).thenReturn(Optional.of(note));
+        when(quickReviewSessionRepository
+                .findTopByUserIdAndStudyPackIdAndSessionModeAndStatusOrderByCreatedAtDesc(
+                        recipientUserId, studyPackId, QuickReviewSessionMode.QUICK_REVIEW,
+                        QuickReviewSessionStatus.IN_PROGRESS)).thenReturn(Optional.of(stale));
+
+        QuickReviewSessionStartResponse response = quickReviewSessionService.startSession(
+                studyPackId.toString(), recipientUserId
+        );
+
+        assertThat(stale.getStatus()).isEqualTo(QuickReviewSessionStatus.FORFEITED);
+        assertThat(response.sessionId()).isNotEqualTo(stale.getId().toString());
+        assertThat(response.isOwner()).isFalse();
+        assertThat(response.title()).isEqualTo("Shared current title");
+        assertThat(response.quiz()).singleElement().satisfies(question -> {
+            assertThat(question.getCorrectIndex()).isNull();
+            assertThat(question.getExplanation()).isNull();
+        });
+        verify(noteShareService).requireSharedStudyPackAccess(recipientUserId, studyPackId);
+        verify(noteRepository).findById(noteId);
+        verify(studyPackQuizMasteryService).tryResolve(recipientUserId, studyPack);
     }
 
     @Test

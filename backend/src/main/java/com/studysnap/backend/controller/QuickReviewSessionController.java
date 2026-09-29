@@ -6,6 +6,8 @@ import com.studysnap.backend.dto.ChallengeQuizStartResponse;
 import com.studysnap.backend.dto.AdaptivePracticeCompleteRequest;
 import com.studysnap.backend.dto.AdaptivePracticeCompleteResponse;
 import com.studysnap.backend.dto.QuickReviewSessionCompleteRequest;
+import com.studysnap.backend.dto.QuickReviewAnswerRequest;
+import com.studysnap.backend.dto.QuickReviewAnswerResponse;
 import com.studysnap.backend.dto.QuickReviewSessionConfidenceRequest;
 import com.studysnap.backend.dto.QuickReviewAdaptiveQuizResponse;
 import com.studysnap.backend.dto.QuickReviewPerformanceSummaryResponse;
@@ -84,6 +86,15 @@ public class QuickReviewSessionController {
     ) {
         UUID userId = user.userId();
         return quickReviewSessionService.updateSessionProgress(sessionId, userId, request);
+    }
+
+    @PostMapping("/{sessionId}/answer")
+    public QuickReviewAnswerResponse answerQuestion(
+            @PathVariable String sessionId,
+            @Valid @RequestBody QuickReviewAnswerRequest request,
+            @AuthenticationPrincipal AuthenticatedUser user
+    ) {
+        return quickReviewSessionService.answerQuestion(sessionId, user.userId(), request);
     }
 
     @PostMapping("/{sessionId}/forfeit")

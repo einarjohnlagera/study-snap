@@ -106,9 +106,10 @@ class QuickReviewFirstCompletedQuizIntegrationTest {
                 subscriptionService,
                 featureGateService,
                 mock(ConceptHealthService.class),
-                mock(StudyPackQuizMasteryService.class)
-        ,
-                org.mockito.Mockito.mock(com.studysnap.backend.service.NoteShareService.class));
+                mock(StudyPackQuizMasteryService.class),
+                org.mockito.Mockito.mock(com.studysnap.backend.service.NoteShareService.class),
+                org.mockito.Mockito.mock(com.studysnap.backend.repository.NoteRepository.class)
+        );
         adaptivePracticeService = new QuickReviewAdaptivePracticeService(
                 studyPackRepository,
                 quickReviewSessionRepository,
