@@ -170,6 +170,28 @@ session whose stored quiz itself is empty. A session with no server-recorded sel
 frontend that never called `/answer`) is not scored as merely uncredited: every question in it is treated as
 an active miss, and `recordIncorrectAnswers` is called for every concept in the quiz.
 
+## Quick Review answer and reveal boundary
+
+Quick Review start and in-progress responses serve the Study Pack's fixed quiz with answer fields redacted for
+every unanswered index. `POST /quick-review/{sessionId}/answer` records a single- or multi-choice selection under
+a row lock and returns the full stored `QuizItem` for that index. An identical selection in the same attempt is
+idempotent; a different selection returns HTTP 409. The lock is bucketed by `retryCount` (`0` for INITIAL, `1`
+for RETRY), while cumulative `selectedChoices` and `selectedMultiChoices` maps always contain the latest accepted
+answer used by completion, `ConceptHealth`, and verified mastery. The answer request advances the durable retry
+count itself, so retry remains usable even if the transition's best-effort progress request was lost.
+
+Start and resume reveal indexes found in the cumulative maps and leave all others redacted. They also return the
+current attempt's selections and navigation state so a refresh restores position and feedback. MATCHING waits
+for the whole local group, calls `/answer` once per item, retries only failed items, and reveals the group after
+all calls succeed. MULTI_SELECT checkboxes remain local until explicit submission. `/progress` owns only
+`retryQuestionIndexes` and `activeQuestionIndexes`; it cannot overwrite answer or lock maps.
+
+The same Note-anchored start and resume routes serve owners and authorized share recipients. Authorization runs
+before the unscoped Note metadata read, and mastery resolves for the caller. If the Note's
+`generationEnqueuedAt` is newer than the session's creation time, start forfeits the stale row and creates a
+fresh session, resume reports no active session, and `/answer` tells the client to restart. The quiz itself is
+never copied into session state; its full answer key remains only on the persisted Study Pack.
+
 ## Board Exam Multi-source State
 
 Board Exam sessions continue to use the existing `CHALLENGE` session row with `sessionState.mode = "board_exam"`. When a Pro user adds same-subject notes, the session stays anchored to the primary `studyPackId` and stores source attribution in `sessionState.sourceNoteRefs`.

@@ -3,16 +3,21 @@ import QuickReviewPage from "./page";
 import {
   completeProductOnboarding,
   completeQuickReviewSession,
+  answerQuickReviewQuestion,
   forfeitQuickReviewSession,
   generateQuickReviewStudyTip,
   getCollectionGoal,
   getMe,
+  getMyStudyPack,
   getPostSessionNextStep,
   getNote,
+  getSharedNote,
+  getSharedStudyPack,
   saveQuickReviewConfidence,
   startQuickReviewSession,
   trackAnalyticsEvent,
   updateQuickReviewSessionProgress,
+  ApiRequestError,
 } from "@/lib/api";
 import { getAuthUser, setAuthUser } from "@/lib/auth";
 import { useBillingUsageSummary } from "@/hooks/use-billing-usage-summary";
@@ -23,6 +28,8 @@ const routerMock = {
   replace: jest.fn(),
 };
 let searchParamsValue = "";
+let pathnameValue = "/notes/note-1/quick-review";
+let routeIdValue = "note-1";
 const searchParamsMock = {
   toString: () => searchParamsValue,
 };
@@ -31,8 +38,8 @@ const useExamFocusModeMock = jest.fn();
 
 jest.mock("next/navigation", () => ({
   useRouter: () => routerMock,
-  usePathname: () => "/notes/note-1/quick-review",
-  useParams: () => ({ id: "note-1" }),
+  usePathname: () => pathnameValue,
+  useParams: () => ({ id: routeIdValue }),
   useSearchParams: () => searchParamsMock,
 }));
 
@@ -60,6 +67,7 @@ jest.mock("@/components/exam-mode/exam-focus-context", () => ({
 jest.mock("@/lib/api", () => ({
   completeProductOnboarding: jest.fn(),
   completeQuickReviewSession: jest.fn(),
+  answerQuickReviewQuestion: jest.fn(),
   forfeitQuickReviewSession: jest.fn(),
   generateQuickReviewStudyTip: jest.fn(),
   getCollectionGoal: jest.fn(),
@@ -67,12 +75,26 @@ jest.mock("@/lib/api", () => ({
   getMyStudyPack: jest.fn(),
   getPostSessionNextStep: jest.fn(),
   getNote: jest.fn(),
+  getSharedNote: jest.fn(),
+  getSharedStudyPack: jest.fn(),
   recordReviewCommitmentPrompted: jest.fn().mockResolvedValue({ message: "recorded" }),
   saveQuickReviewConfidence: jest.fn(),
   startQuickReviewSession: jest.fn(),
   trackAnalyticsEvent: jest.fn(),
   updateProfileLearnerLevel: jest.fn().mockResolvedValue({ learnerLevel: "COLLEGE" }),
   updateQuickReviewSessionProgress: jest.fn(),
+  ApiRequestError: class extends Error {
+    code: string | null;
+    status: number;
+    action = null;
+    details = null;
+
+    constructor(message: string, options: { code?: string | null; status: number }) {
+      super(message);
+      this.code = options.code ?? null;
+      this.status = options.status;
+    }
+  },
 }));
 
 // Shared fixture helpers
@@ -102,6 +124,14 @@ const baseSession = {
   currentRound: "INITIAL",
   retryCount: 0,
   sessionState: {},
+  noteId: "note-1",
+  quiz: baseNote.quiz,
+  title: "Cells",
+  keyConcepts: ["Cell organelles"],
+  quizMastered: false,
+  quizMasteredAt: null,
+  quizCount: 1,
+  isOwner: true,
 };
 const baseResult = {
   id: "session-1",
@@ -120,6 +150,8 @@ const baseResult = {
 describe("QuickReviewPage first-study onboarding", () => {
   beforeEach(() => {
     searchParamsValue = "";
+    pathnameValue = "/notes/note-1/quick-review";
+    routeIdValue = "note-1";
     pushMock.mockReset();
     routerMock.replace.mockReset();
     window.localStorage.clear();
@@ -127,6 +159,11 @@ describe("QuickReviewPage first-study onboarding", () => {
     (setAuthUser as jest.Mock).mockReset();
     (completeProductOnboarding as jest.Mock).mockReset();
     (completeQuickReviewSession as jest.Mock).mockReset();
+    (answerQuickReviewQuestion as jest.Mock).mockReset();
+    (answerQuickReviewQuestion as jest.Mock).mockImplementation(async (_sessionId, request) => ({
+      questionIndex: request.questionIndex,
+      question: baseNote.quiz[request.questionIndex],
+    }));
     (forfeitQuickReviewSession as jest.Mock).mockReset();
     (getNote as jest.Mock).mockReset();
     (startQuickReviewSession as jest.Mock).mockReset();
@@ -171,14 +208,7 @@ describe("QuickReviewPage first-study onboarding", () => {
       quickReviewAvailable: true,
       adaptivePracticeAvailable: false,
     });
-    (startQuickReviewSession as jest.Mock).mockResolvedValue({
-      sessionId: "session-1",
-      status: "IN_PROGRESS",
-      currentQuestionIndex: 0,
-      currentRound: "INITIAL",
-      retryCount: 0,
-      sessionState: {},
-    });
+    (startQuickReviewSession as jest.Mock).mockResolvedValue(baseSession);
     (updateQuickReviewSessionProgress as jest.Mock).mockResolvedValue({});
     (completeQuickReviewSession as jest.Mock).mockResolvedValue({
       id: "session-1",
@@ -204,6 +234,7 @@ describe("QuickReviewPage first-study onboarding", () => {
     render(<QuickReviewPage />);
 
     fireEvent.click(await screen.findByRole("button", { name: /Mitochondria/i }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Finish Quick Review" })).toBeEnabled());
     fireEvent.click(screen.getByRole("button", { name: "Finish Quick Review" }));
 
     expect(await screen.findByText("You’re all set!")).toBeInTheDocument();
@@ -219,6 +250,8 @@ describe("QuickReviewPage first-study onboarding", () => {
 describe("QuickReviewPage post-quiz UX", () => {
   beforeEach(() => {
     searchParamsValue = "";
+    pathnameValue = "/notes/note-1/quick-review";
+    routeIdValue = "note-1";
     pushMock.mockReset();
     window.localStorage.clear();
     window.sessionStorage.clear();
@@ -226,6 +259,11 @@ describe("QuickReviewPage post-quiz UX", () => {
     (setAuthUser as jest.Mock).mockReset();
     (completeProductOnboarding as jest.Mock).mockReset();
     (completeQuickReviewSession as jest.Mock).mockReset();
+    (answerQuickReviewQuestion as jest.Mock).mockReset();
+    (answerQuickReviewQuestion as jest.Mock).mockImplementation(async (_sessionId, request) => ({
+      questionIndex: request.questionIndex,
+      question: baseNote.quiz[request.questionIndex],
+    }));
     (forfeitQuickReviewSession as jest.Mock).mockReset();
     (forfeitQuickReviewSession as jest.Mock).mockResolvedValue({ message: "Quick Review session forfeited." });
     (generateQuickReviewStudyTip as jest.Mock).mockReset();
@@ -259,6 +297,7 @@ describe("QuickReviewPage post-quiz UX", () => {
     (getAuthUser as jest.Mock).mockReturnValue({
       id: "user-1",
       emailVerifiedAt: "2026-03-21T09:00:00Z",
+      planType: overrides.adaptivePracticeAvailable ? "PRO" : "FREE",
     });
     (getNote as jest.Mock).mockResolvedValue({
       ...baseNote,
@@ -309,6 +348,7 @@ describe("QuickReviewPage post-quiz UX", () => {
     render(<QuickReviewPage />);
 
     fireEvent.click(await screen.findByRole("button", { name: /Mitochondria/i }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Finish Quick Review" })).toBeEnabled());
     fireEvent.click(screen.getByRole("button", { name: "Finish Quick Review" }));
     await screen.findByText("Quick Review Complete");
 
@@ -325,6 +365,7 @@ describe("QuickReviewPage post-quiz UX", () => {
     render(<QuickReviewPage />);
 
     fireEvent.click(await screen.findByRole("button", { name: /Nucleus/i }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Finish Quick Review" })).toBeEnabled());
     fireEvent.click(screen.getByRole("button", { name: "Finish Quick Review" }));
     fireEvent.click(await screen.findByRole("button", { name: "Finish Review" }));
     await screen.findByText("Quick Review Complete");
@@ -346,6 +387,7 @@ describe("QuickReviewPage post-quiz UX", () => {
     render(<QuickReviewPage />);
 
     fireEvent.click(await screen.findByRole("button", { name: /Nucleus/i }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Finish Quick Review" })).toBeEnabled());
     fireEvent.click(screen.getByRole("button", { name: "Finish Quick Review" }));
     fireEvent.click(await screen.findByRole("button", { name: "Finish Review" }));
 
@@ -382,6 +424,7 @@ describe("QuickReviewPage post-quiz UX", () => {
     render(<QuickReviewPage />);
 
     fireEvent.click(await screen.findByRole("button", { name: /Nucleus/i }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Finish Quick Review" })).toBeEnabled());
     fireEvent.click(screen.getByRole("button", { name: "Finish Quick Review" }));
     fireEvent.click(await screen.findByRole("button", { name: "Finish Review" }));
 
@@ -405,6 +448,7 @@ describe("QuickReviewPage post-quiz UX", () => {
     render(<QuickReviewPage />);
 
     fireEvent.click(await screen.findByRole("button", { name: /Mitochondria/i }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Finish Quick Review" })).toBeEnabled());
     fireEvent.click(screen.getByRole("button", { name: "Finish Quick Review" }));
 
     await screen.findByRole("heading", { name: "Your results" });
@@ -424,6 +468,7 @@ describe("QuickReviewPage post-quiz UX", () => {
     render(<QuickReviewPage />);
 
     fireEvent.click(await screen.findByRole("button", { name: /Mitochondria/i }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Finish Quick Review" })).toBeEnabled());
     fireEvent.click(screen.getByRole("button", { name: "Finish Quick Review" }));
 
     expect(await screen.findByRole("heading", { name: "Your results" })).toBeInTheDocument();
@@ -458,6 +503,7 @@ describe("QuickReviewPage post-quiz UX", () => {
     render(<QuickReviewPage />);
 
     fireEvent.click(await screen.findByRole("button", { name: /Mitochondria/i }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Finish Quick Review" })).toBeEnabled());
     fireEvent.click(screen.getByRole("button", { name: "Finish Quick Review" }));
 
     expect(await screen.findByText("Recommended next step")).toBeInTheDocument();
@@ -482,6 +528,7 @@ describe("QuickReviewPage post-quiz UX", () => {
     render(<QuickReviewPage />);
 
     fireEvent.click(await screen.findByRole("button", { name: /Mitochondria/i }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Finish Quick Review" })).toBeEnabled());
     fireEvent.click(screen.getByRole("button", { name: "Finish Quick Review" }));
 
     expect(await screen.findByText(/That's another session toward this week's target/)).toBeInTheDocument();
@@ -495,6 +542,7 @@ describe("QuickReviewPage post-quiz UX", () => {
     render(<QuickReviewPage />);
 
     fireEvent.click(await screen.findByRole("button", { name: /Mitochondria/i }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Finish Quick Review" })).toBeEnabled());
     fireEvent.click(screen.getByRole("button", { name: "Finish Quick Review" }));
     await screen.findByText("Quick Review Complete");
 
@@ -515,6 +563,7 @@ describe("QuickReviewPage post-quiz UX", () => {
     render(<QuickReviewPage />);
 
     fireEvent.click(await screen.findByRole("button", { name: /Mitochondria/i }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Finish Quick Review" })).toBeEnabled());
     fireEvent.click(screen.getByRole("button", { name: "Finish Quick Review" }));
 
     expect(await screen.findByText(/Watch out for mixing up mitosis and meiosis\./)).toBeInTheDocument();
@@ -546,6 +595,7 @@ describe("QuickReviewPage post-quiz UX", () => {
     render(<QuickReviewPage />);
 
     fireEvent.click(await screen.findByRole("button", { name: /Mitochondria/i }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Finish Quick Review" })).toBeEnabled());
     fireEvent.click(screen.getByRole("button", { name: "Finish Quick Review" }));
 
     expect(await screen.findByRole("link", { name: "Ask Companion about this" })).toHaveAttribute(
@@ -562,6 +612,7 @@ describe("QuickReviewPage post-quiz UX", () => {
     render(<QuickReviewPage />);
 
     fireEvent.click(await screen.findByRole("button", { name: /Mitochondria/i }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Finish Quick Review" })).toBeEnabled());
     fireEvent.click(screen.getByRole("button", { name: "Finish Quick Review" }));
     await screen.findByText("Quick Review Complete");
 
@@ -576,7 +627,7 @@ describe("QuickReviewPage post-quiz UX", () => {
 
     expect(await screen.findByTestId("quick-review-top-bar")).toBeInTheDocument();
     await waitFor(() => {
-      expect(getNote).toHaveBeenCalledTimes(1);
+      expect(getNote).not.toHaveBeenCalled();
       expect(startQuickReviewSession).toHaveBeenCalledTimes(1);
     });
     expect(routerMock.replace).not.toHaveBeenCalled();
@@ -628,6 +679,7 @@ describe("QuickReviewPage post-quiz UX", () => {
     expect(useExamFocusModeMock).toHaveBeenLastCalledWith(true);
 
     fireEvent.click(await screen.findByRole("button", { name: /Mitochondria/i }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Finish Quick Review" })).toBeEnabled());
     fireEvent.click(screen.getByRole("button", { name: "Finish Quick Review" }));
     await screen.findByText("Quick Review Complete");
 
@@ -639,6 +691,7 @@ describe("QuickReviewPage post-quiz UX", () => {
     render(<QuickReviewPage />);
 
     fireEvent.click(await screen.findByRole("button", { name: /Mitochondria/i }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Finish Quick Review" })).toBeEnabled());
     fireEvent.click(screen.getByRole("button", { name: "Finish Quick Review" }));
     await screen.findByText("Quick Review Complete");
 
@@ -652,6 +705,7 @@ describe("QuickReviewPage post-quiz UX", () => {
     render(<QuickReviewPage />);
 
     fireEvent.click(await screen.findByRole("button", { name: /Nucleus/i }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Finish Quick Review" })).toBeEnabled());
     fireEvent.click(screen.getByRole("button", { name: "Finish Quick Review" }));
     fireEvent.click(await screen.findByRole("button", { name: "Finish Review" }));
     await screen.findByText("Quick Review Complete");
@@ -665,6 +719,7 @@ describe("QuickReviewPage post-quiz UX", () => {
     render(<QuickReviewPage />);
 
     fireEvent.click(await screen.findByRole("button", { name: /Mitochondria/i }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Finish Quick Review" })).toBeEnabled());
     fireEvent.click(screen.getByRole("button", { name: "Finish Quick Review" }));
     await screen.findByText("Quick Review Complete");
 
@@ -679,6 +734,7 @@ describe("QuickReviewPage post-quiz UX", () => {
     render(<QuickReviewPage />);
 
     fireEvent.click(await screen.findByRole("button", { name: /Nucleus/i }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Finish Quick Review" })).toBeEnabled());
     fireEvent.click(screen.getByRole("button", { name: "Finish Quick Review" }));
 
     expect(await screen.findByRole("button", { name: "Finish Review" })).toBeInTheDocument();
@@ -698,7 +754,7 @@ describe("QuickReviewPage post-quiz UX", () => {
       ...baseNote,
       quiz: [],
     });
-    (startQuickReviewSession as jest.Mock).mockResolvedValue(baseSession);
+    (startQuickReviewSession as jest.Mock).mockResolvedValue({ ...baseSession, quiz: [], quizCount: 0 });
 
     render(<QuickReviewPage />);
 
@@ -718,6 +774,7 @@ describe("QuickReviewPage post-quiz UX", () => {
     render(<QuickReviewPage />);
 
     fireEvent.click(await screen.findByRole("button", { name: /Mitochondria/i }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Finish Quick Review" })).toBeEnabled());
     fireEvent.click(screen.getByRole("button", { name: "Finish Quick Review" }));
     await screen.findByText("Quick Review Complete");
 
@@ -751,6 +808,7 @@ describe("QuickReviewPage post-quiz UX", () => {
     render(<QuickReviewPage />);
 
     fireEvent.click(await screen.findByRole("button", { name: /Mitochondria/i }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Finish Quick Review" })).toBeEnabled());
     fireEvent.click(screen.getByRole("button", { name: "Finish Quick Review" }));
     await screen.findByText("Quick Review Complete");
 
@@ -768,6 +826,7 @@ describe("QuickReviewPage post-quiz UX", () => {
     render(<QuickReviewPage />);
 
     fireEvent.click(await screen.findByRole("button", { name: /Mitochondria/i }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Finish Quick Review" })).toBeEnabled());
     fireEvent.click(screen.getByRole("button", { name: "Finish Quick Review" }));
     await screen.findByText("Quick Review Complete");
 
@@ -785,6 +844,7 @@ describe("QuickReviewPage post-quiz UX", () => {
     render(<QuickReviewPage />);
 
     fireEvent.click(await screen.findByRole("button", { name: /Mitochondria/i }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Finish Quick Review" })).toBeEnabled());
     fireEvent.click(screen.getByRole("button", { name: "Finish Quick Review" }));
     await screen.findByText("Quick Review Complete");
 
@@ -802,7 +862,8 @@ describe("QuickReviewPage post-quiz UX", () => {
 
     // Answer correctly (Mitochondria is correctIndex=0)
     fireEvent.click(await screen.findByRole("button", { name: /Mitochondria/i }));
-    fireEvent.click(await screen.findByRole("button", { name: "Finish Quick Review" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Finish Quick Review" })).toBeEnabled());
+    fireEvent.click(screen.getByRole("button", { name: "Finish Quick Review" }));
     await screen.findByText("Quick Review Complete");
 
     // Perfect score → showChallengeGuidedCta = true → "Take Another Challenge" appears
@@ -814,6 +875,7 @@ describe("QuickReviewPage post-quiz UX", () => {
     render(<QuickReviewPage />);
 
     fireEvent.click(await screen.findByRole("button", { name: /Nucleus/i }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Finish Quick Review" })).toBeEnabled());
     fireEvent.click(screen.getByRole("button", { name: "Finish Quick Review" }));
     fireEvent.click(await screen.findByRole("button", { name: "Finish Review" }));
     await screen.findByText("Quick Review Complete");
@@ -838,6 +900,7 @@ describe("QuickReviewPage post-quiz UX", () => {
     render(<QuickReviewPage />);
 
     fireEvent.click(await screen.findByRole("button", { name: /Nucleus/i }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Finish Quick Review" })).toBeEnabled());
     fireEvent.click(screen.getByRole("button", { name: "Finish Quick Review" }));
     fireEvent.click(await screen.findByRole("button", { name: "Finish Review" }));
     await screen.findByText("Quick Review Complete");
@@ -854,6 +917,7 @@ describe("QuickReviewPage post-quiz UX", () => {
     render(<QuickReviewPage />);
 
     fireEvent.click(await screen.findByRole("button", { name: /Mitochondria/i }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Finish Quick Review" })).toBeEnabled());
     fireEvent.click(screen.getByRole("button", { name: "Finish Quick Review" }));
     await screen.findByText("Quick Review Complete");
 
@@ -865,9 +929,569 @@ describe("QuickReviewPage post-quiz UX", () => {
     render(<QuickReviewPage />);
 
     fireEvent.click(await screen.findByRole("button", { name: /Mitochondria/i }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Finish Quick Review" })).toBeEnabled());
     fireEvent.click(screen.getByRole("button", { name: "Finish Quick Review" }));
     await screen.findByText("Quick Review Complete");
 
     expect(screen.queryByText("Ready to improve your weak areas?")).not.toBeInTheDocument();
+  });
+});
+
+describe("QuickReviewPage redacted answer flow", () => {
+  const redactedQuiz = [{
+    ...baseNote.quiz[0],
+    correctIndex: null,
+    correctIndices: null,
+    explanation: null,
+    workingSolution: null,
+    acceptableAnswers: null,
+  }];
+  const secondQuestion = {
+    question: "Which structure contains DNA?",
+    choices: ["Cell wall", "Nucleus", "Cytoplasm", "Membrane"],
+    correctIndex: 1,
+    concept: "Cell organelles",
+    explanation: "The nucleus contains the cell's DNA.",
+  };
+  const twoQuestionQuiz = [baseNote.quiz[0], secondQuestion];
+  const redactedSecondQuestion = {
+    ...secondQuestion,
+    correctIndex: null,
+    correctIndices: null,
+    explanation: null,
+    workingSolution: null,
+    acceptableAnswers: null,
+  };
+  const redact = (question: typeof baseNote.quiz[number]) => ({
+    ...question,
+    correctIndex: null,
+    correctIndices: null,
+    explanation: null,
+    workingSolution: null,
+    acceptableAnswers: null,
+  });
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    window.sessionStorage.clear();
+    routerMock.replace.mockReset();
+    pathnameValue = "/notes/note-1/quick-review";
+    routeIdValue = "note-1";
+    searchParamsValue = "";
+    (getAuthUser as jest.Mock).mockReturnValue({
+      id: "user-1",
+      emailVerifiedAt: "2026-03-21T09:00:00Z",
+      productOnboardingCompletedAt: "2026-03-21T09:00:00Z",
+      profileType: "STUDENT",
+    });
+    (useBillingUsageSummary as jest.Mock).mockReturnValue({ usageSummary: { plan: "FREE" } });
+    (getMe as jest.Mock).mockResolvedValue({ learnerLevel: "COLLEGE" });
+    (getPostSessionNextStep as jest.Mock).mockRejectedValue(new Error("not available"));
+    (startQuickReviewSession as jest.Mock).mockResolvedValue({ ...baseSession, quiz: redactedQuiz });
+    (getNote as jest.Mock).mockResolvedValue(baseNote);
+    (getSharedNote as jest.Mock).mockResolvedValue(baseNote);
+    (getSharedStudyPack as jest.Mock).mockResolvedValue({ ...baseNote, noteId: baseNote.id });
+    (answerQuickReviewQuestion as jest.Mock).mockImplementation(async (_sessionId, request) => ({
+      questionIndex: request.questionIndex,
+      question: baseNote.quiz[request.questionIndex],
+    }));
+    (updateQuickReviewSessionProgress as jest.Mock).mockResolvedValue({});
+    (completeQuickReviewSession as jest.Mock).mockResolvedValue({ ...baseResult, correctAnswers: 1 });
+    (generateQuickReviewStudyTip as jest.Mock).mockResolvedValue({ studyTip: null });
+  });
+
+  it("merges the per-answer reveal into an asymmetric redacted fixture", async () => {
+    render(<QuickReviewPage />);
+
+    expect(await screen.findByText("What is the powerhouse of the cell?")).toBeInTheDocument();
+    expect(screen.queryByText("Mitochondria produce ATP.")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Mitochondria/i }));
+
+    expect(await screen.findByText("Mitochondria produce ATP.")).toBeInTheDocument();
+    expect(answerQuickReviewQuestion).toHaveBeenCalledWith("session-1", {
+      questionIndex: 0,
+      retryCount: 0,
+      selectedChoiceIndex: 0,
+    });
+    expect(screen.getByRole("button", { name: "Finish Quick Review" })).toBeEnabled();
+  });
+
+  it("keeps a failed answer retryable without locking or revealing locally", async () => {
+    (answerQuickReviewQuestion as jest.Mock)
+      .mockRejectedValueOnce(new Error("Connection lost. Try again."))
+      .mockResolvedValueOnce({ questionIndex: 0, question: baseNote.quiz[0] });
+    render(<QuickReviewPage />);
+
+    const choice = await screen.findByRole("button", { name: /Mitochondria/i });
+    fireEvent.click(choice);
+    expect(await screen.findByText("Connection lost. Try again.")).toBeInTheDocument();
+    expect(screen.queryByText("Mitochondria produce ATP.")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Finish Quick Review" })).toBeDisabled();
+
+    fireEvent.click(choice);
+    expect(await screen.findByText("Mitochondria produce ATP.")).toBeInTheDocument();
+    expect(answerQuickReviewQuestion).toHaveBeenCalledTimes(2);
+  });
+
+  it.each([
+    ["QUICK_REVIEW_NOT_AVAILABLE"],
+    ["NOTE_STUDY_PACK_NOT_READY"],
+  ])("maps %s to the Study Pack generation message", async (code) => {
+    (startQuickReviewSession as jest.Mock).mockRejectedValue(new ApiRequestError(
+      "Unavailable",
+      { code, status: 409 },
+    ));
+
+    render(<QuickReviewPage />);
+
+    expect(await screen.findByText("Generate a Study Pack first.")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Retry" })).not.toBeInTheDocument();
+  });
+
+  it.each([403, 404])("maps start status %s to the not-found state", async (status) => {
+    (startQuickReviewSession as jest.Mock).mockRejectedValue(new ApiRequestError(
+      "Unavailable",
+      { status },
+    ));
+
+    render(<QuickReviewPage />);
+
+    expect(await screen.findByRole("heading", { name: "Note not found" })).toBeInTheDocument();
+  });
+
+  it("makes a transient start failure retryable", async () => {
+    (startQuickReviewSession as jest.Mock)
+      .mockRejectedValueOnce(new Error("Temporary outage"))
+      .mockResolvedValueOnce({ ...baseSession, quiz: redactedQuiz });
+    render(<QuickReviewPage />);
+
+    expect(await screen.findByText("Temporary outage")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+
+    expect(await screen.findByText("What is the powerhouse of the cell?")).toBeInTheDocument();
+    expect(startQuickReviewSession).toHaveBeenCalledTimes(2);
+  });
+
+  it("treats a deploy-skew response without quiz as retryable", async () => {
+    (startQuickReviewSession as jest.Mock).mockResolvedValue({
+      ...baseSession,
+      quiz: undefined,
+    });
+
+    render(<QuickReviewPage />);
+
+    expect(await screen.findByText("Quick Review could not load. Please try again.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Retry" })).toBeInTheDocument();
+  });
+
+  it("restarts after the server reports a regeneration-stale answer", async () => {
+    (answerQuickReviewQuestion as jest.Mock).mockRejectedValueOnce(new ApiRequestError(
+      "Restart required",
+      { code: "QUICK_REVIEW_SESSION_STALE", status: 409 },
+    ));
+    render(<QuickReviewPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /Mitochondria/i }));
+
+    await waitFor(() => expect(startQuickReviewSession).toHaveBeenCalledTimes(2));
+    expect(screen.queryByText("Restart required")).not.toBeInTheDocument();
+    expect(screen.queryByText("Mitochondria produce ATP.")).not.toBeInTheDocument();
+  });
+
+  it("does not fetch any Note or shared Study Pack before completion", async () => {
+    (completeQuickReviewSession as jest.Mock).mockReturnValue(new Promise(() => {}));
+    render(<QuickReviewPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /Mitochondria/i }));
+    await screen.findByText("Mitochondria produce ATP.");
+    fireEvent.click(screen.getByRole("button", { name: "Finish Quick Review" }));
+    await waitFor(() => expect(completeQuickReviewSession).toHaveBeenCalled());
+
+    expect(getNote).not.toHaveBeenCalled();
+    expect(getSharedNote).not.toHaveBeenCalled();
+    expect(getSharedStudyPack).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["explicit shared link", "source=shared"],
+    ["Dashboard-shaped link", ""],
+    ["digest-shaped link", "source=due-concepts-digest"],
+  ])("starts a recipient session from the %s", async (_label, query) => {
+    searchParamsValue = query;
+    (startQuickReviewSession as jest.Mock).mockResolvedValue({
+      ...baseSession,
+      quiz: redactedQuiz,
+      isOwner: false,
+    });
+
+    render(<QuickReviewPage />);
+
+    expect(await screen.findByTestId("quick-review-top-bar")).toBeInTheDocument();
+    expect(startQuickReviewSession).toHaveBeenCalledWith("note-1");
+    expect(getNote).not.toHaveBeenCalled();
+    expect(getSharedNote).not.toHaveBeenCalled();
+    expect(getSharedStudyPack).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: /Mitochondria/i }));
+    await screen.findByText("Mitochondria produce ATP.");
+    fireEvent.click(screen.getByRole("button", { name: "Finish Quick Review" }));
+    expect((await screen.findAllByRole("link", { name: "Note" })).map((link) => link.getAttribute("href")))
+      .toContain("/shared/notes/note-1");
+  });
+
+  it.each([
+    ["owner", true],
+    ["recipient", false],
+  ])("restores mid-INITIAL position, selections, and cumulative reveal for an %s", async (_caller, isOwner) => {
+    (startQuickReviewSession as jest.Mock).mockResolvedValue({
+      ...baseSession,
+      currentQuestionIndex: 1,
+      quiz: [baseNote.quiz[0], redactedSecondQuestion],
+      quizCount: 2,
+      isOwner,
+      sessionState: {
+        selectedChoices: { "0": 0 },
+        roundSelections: { "0": 0 },
+        activeQuestionIndexes: [0, 1],
+      },
+    });
+    (answerQuickReviewQuestion as jest.Mock).mockResolvedValue({
+      questionIndex: 1,
+      question: secondQuestion,
+    });
+    const firstMount = render(<QuickReviewPage />);
+    await screen.findByText("Which structure contains DNA?");
+    firstMount.unmount();
+    render(<QuickReviewPage />);
+
+    expect(await screen.findByText("Which structure contains DNA?")).toBeInTheDocument();
+    expect(startQuickReviewSession).toHaveBeenCalledTimes(2);
+    fireEvent.click(screen.getByRole("button", { name: /Nucleus/i }));
+    await screen.findByText("The nucleus contains the cell's DNA.");
+    fireEvent.click(screen.getByRole("button", { name: "Finish Quick Review" }));
+
+    await waitFor(() => expect(completeQuickReviewSession).toHaveBeenCalledWith(
+      "session-1",
+      expect.objectContaining({ correctAnswers: 2, totalQuestions: 2, retryCount: 0 }),
+    ));
+  });
+
+  it.each([
+    ["owner", true],
+    ["recipient", false],
+  ])("restores mid-RETRY state and cumulative reveal for an %s", async (_caller, isOwner) => {
+    (startQuickReviewSession as jest.Mock).mockResolvedValue({
+      ...baseSession,
+      currentQuestionIndex: 0,
+      currentRound: "RETRY",
+      retryCount: 1,
+      quiz: twoQuestionQuiz,
+      quizCount: 2,
+      isOwner,
+      sessionState: {
+        selectedChoices: { "0": 0, "1": 0 },
+        roundSelections: {},
+        retryQuestionIndexes: [1],
+        activeQuestionIndexes: [1],
+      },
+    });
+    (answerQuickReviewQuestion as jest.Mock).mockResolvedValue({
+      questionIndex: 1,
+      question: secondQuestion,
+    });
+    const firstMount = render(<QuickReviewPage />);
+    await screen.findByText("Which structure contains DNA?");
+    firstMount.unmount();
+    render(<QuickReviewPage />);
+
+    expect(await screen.findByText("Which structure contains DNA?")).toBeInTheDocument();
+    expect(startQuickReviewSession).toHaveBeenCalledTimes(2);
+    fireEvent.click(screen.getByRole("button", { name: /Nucleus/i }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Finish Retry" })).toBeEnabled());
+    fireEvent.click(screen.getByRole("button", { name: "Finish Retry" }));
+
+    await waitFor(() => expect(completeQuickReviewSession).toHaveBeenCalledWith(
+      "session-1",
+      expect.objectContaining({ correctAnswers: 2, totalQuestions: 2, retryCount: 1 }),
+    ));
+  });
+
+  it.each([
+    ["owner", true],
+    ["recipient", false],
+  ])("resumes after an in-flight answer lands during an %s remount", async (_caller, isOwner) => {
+    let finishAnswer!: (value: { questionIndex: number; question: typeof baseNote.quiz[0] }) => void;
+    (startQuickReviewSession as jest.Mock).mockResolvedValueOnce({
+      ...baseSession,
+      quiz: redactedQuiz,
+      isOwner,
+    });
+    (answerQuickReviewQuestion as jest.Mock).mockReturnValueOnce(new Promise((resolve) => {
+      finishAnswer = resolve;
+    }));
+    const firstMount = render(<QuickReviewPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /Mitochondria/i }));
+    await waitFor(() => expect(answerQuickReviewQuestion).toHaveBeenCalledTimes(1));
+    firstMount.unmount();
+    (startQuickReviewSession as jest.Mock).mockResolvedValue({
+      ...baseSession,
+      quiz: baseNote.quiz,
+      isOwner,
+      sessionState: {
+        selectedChoices: { "0": 0 },
+        roundSelections: { "0": 0 },
+        activeQuestionIndexes: [0],
+      },
+    });
+    finishAnswer({ questionIndex: 0, question: baseNote.quiz[0] });
+    render(<QuickReviewPage />);
+
+    expect(await screen.findByText("Mitochondria produce ATP.")).toBeInTheDocument();
+    expect(startQuickReviewSession).toHaveBeenCalledTimes(2);
+    expect(answerQuickReviewQuestion).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    ["owner", true],
+    ["recipient", false],
+  ])("keeps the server session across logout and fresh-login remount for an %s", async (_caller, isOwner) => {
+    (startQuickReviewSession as jest.Mock).mockResolvedValue({
+      ...baseSession,
+      quiz: baseNote.quiz,
+      isOwner,
+      sessionState: {
+        selectedChoices: { "0": 0 },
+        roundSelections: { "0": 0 },
+        activeQuestionIndexes: [0],
+      },
+    });
+    const firstLogin = render(<QuickReviewPage />);
+    expect(await screen.findByText("Mitochondria produce ATP.")).toBeInTheDocument();
+    firstLogin.unmount();
+    (getAuthUser as jest.Mock).mockReturnValue({
+      id: "user-1",
+      emailVerifiedAt: "2026-03-21T09:00:00Z",
+      productOnboardingCompletedAt: "2026-03-21T09:00:00Z",
+      profileType: "STUDENT",
+    });
+
+    render(<QuickReviewPage />);
+
+    expect(await screen.findByText("Mitochondria produce ATP.")).toBeInTheDocument();
+    expect(startQuickReviewSession).toHaveBeenCalledTimes(2);
+    expect(forfeitQuickReviewSession).not.toHaveBeenCalled();
+  });
+
+  it("uses isOwner for the owner Note link", async () => {
+    render(<QuickReviewPage />);
+    fireEvent.click(await screen.findByRole("button", { name: /Mitochondria/i }));
+    await screen.findByText("Mitochondria produce ATP.");
+    fireEvent.click(screen.getByRole("button", { name: "Finish Quick Review" }));
+    expect((await screen.findAllByRole("link", { name: "Note" })).map((link) => link.getAttribute("href")))
+      .toContain("/notes/note-1");
+  });
+
+  it("redirects a legacy Study Pack id and starts again only after the route id changes", async () => {
+    pathnameValue = "/study-packs/pack-1/quick-review";
+    routeIdValue = "pack-1";
+    (startQuickReviewSession as jest.Mock).mockRejectedValueOnce(new ApiRequestError(
+      "Not found",
+      { status: 404 },
+    ));
+    (getMyStudyPack as jest.Mock).mockResolvedValue({ noteId: "note-1" });
+    const view = render(<QuickReviewPage />);
+
+    await waitFor(() => expect(routerMock.replace).toHaveBeenCalledWith("/notes/note-1/quick-review"));
+    expect(startQuickReviewSession).toHaveBeenCalledTimes(1);
+
+    pathnameValue = "/notes/note-1/quick-review";
+    routeIdValue = "note-1";
+    view.rerender(<QuickReviewPage />);
+    await waitFor(() => expect(startQuickReviewSession).toHaveBeenCalledTimes(2));
+    view.rerender(<QuickReviewPage />);
+    expect(startQuickReviewSession).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not restart on a re-render but does start for a changed note id", async () => {
+    const view = render(<QuickReviewPage />);
+    await screen.findByText("What is the powerhouse of the cell?");
+
+    view.rerender(<QuickReviewPage />);
+    expect(startQuickReviewSession).toHaveBeenCalledTimes(1);
+
+    routeIdValue = "note-2";
+    (startQuickReviewSession as jest.Mock).mockResolvedValue({
+      ...baseSession,
+      noteId: "note-2",
+      quiz: redactedQuiz,
+    });
+    view.rerender(<QuickReviewPage />);
+    await waitFor(() => expect(startQuickReviewSession).toHaveBeenLastCalledWith("note-2"));
+    expect(startQuickReviewSession).toHaveBeenCalledTimes(2);
+  });
+
+  it.each([
+    ["owner", true],
+    ["recipient", false],
+  ])("resumes a day-later Dashboard-shaped URL for the %s", async (_caller, isOwner) => {
+    pathnameValue = "/notes/note-1/quick-review";
+    searchParamsValue = "";
+    (startQuickReviewSession as jest.Mock).mockResolvedValue({
+      ...baseSession,
+      isOwner,
+      currentQuestionIndex: 1,
+      quiz: [twoQuestionQuiz[0], redact(twoQuestionQuiz[1])],
+      quizCount: 2,
+      sessionState: {
+        selectedChoices: { "0": 0 },
+        roundSelections: { "0": 0 },
+        activeQuestionIndexes: [0, 1],
+      },
+    });
+
+    render(<QuickReviewPage />);
+
+    expect(await screen.findByText(secondQuestion.question)).toBeInTheDocument();
+    expect(startQuickReviewSession).toHaveBeenCalledWith("note-1");
+    expect(getNote).not.toHaveBeenCalled();
+    expect(getSharedNote).not.toHaveBeenCalled();
+    expect(getSharedStudyPack).not.toHaveBeenCalled();
+  });
+
+  it("keeps MULTI_SELECT local until Submit returns the reveal", async () => {
+    const redactedMultiSelect = {
+      question: "Which functions have the listed derivatives?",
+      choices: ["sin(x)", "x²", "x", "ln(x)"],
+      questionFormat: "MULTI_SELECT",
+      concept: "Derivatives",
+      correctIndices: null,
+      explanation: null,
+    };
+    const revealedMultiSelect = {
+      ...redactedMultiSelect,
+      correctIndices: [0, 2],
+      explanation: "Sine and x have the listed derivatives.",
+    };
+    (startQuickReviewSession as jest.Mock).mockResolvedValue({
+      ...baseSession,
+      quiz: [redactedMultiSelect],
+    });
+    (answerQuickReviewQuestion as jest.Mock).mockResolvedValue({
+      questionIndex: 0,
+      question: revealedMultiSelect,
+    });
+    render(<QuickReviewPage />);
+
+    await screen.findByText("Which functions have the listed derivatives?");
+    fireEvent.click(screen.getByRole("button", { name: /sin\(x\)$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /\. x$/i }));
+    expect(answerQuickReviewQuestion).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Submit" }));
+
+    expect(await screen.findByText("Sine and x have the listed derivatives.")).toBeInTheDocument();
+    expect(answerQuickReviewQuestion).toHaveBeenCalledWith("session-1", {
+      questionIndex: 0,
+      retryCount: 0,
+      selectedMultiChoiceIndices: [0, 2],
+    });
+    expect(screen.getByRole("button", { name: "Finish Quick Review" })).toBeEnabled();
+  });
+
+  it("retries only failed MATCHING items and reveals the group after every response succeeds", async () => {
+    const matchingFullQuiz = [
+      {
+        question: "First item",
+        choices: ["Alpha", "Beta", "Gamma", "Delta"],
+        correctIndex: 0,
+        concept: "Matching",
+        explanation: "First explanation",
+        questionFormat: "MATCHING",
+        questionGroup: "group-1",
+      },
+      {
+        question: "Second item",
+        choices: ["Alpha", "Beta", "Gamma", "Delta"],
+        correctIndex: 1,
+        concept: "Matching",
+        explanation: "Second explanation",
+        questionFormat: "MATCHING",
+        questionGroup: "group-1",
+      },
+    ];
+    const matchingRedactedQuiz = matchingFullQuiz.map((question) => ({
+      ...question,
+      correctIndex: null,
+      explanation: null,
+    }));
+    (startQuickReviewSession as jest.Mock).mockResolvedValue({
+      ...baseSession,
+      quiz: matchingRedactedQuiz,
+      quizCount: 2,
+    });
+    let secondAttempts = 0;
+    (answerQuickReviewQuestion as jest.Mock).mockImplementation(async (_sessionId, request) => {
+      if (request.questionIndex === 1 && secondAttempts++ === 0) {
+        throw new Error("Second item failed.");
+      }
+      return { questionIndex: request.questionIndex, question: matchingFullQuiz[request.questionIndex] };
+    });
+    render(<QuickReviewPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Item 1 choice A: Alpha" }));
+    fireEvent.click(screen.getByRole("button", { name: "Item 2 choice B: Beta" }));
+    expect(await screen.findByText("Second item failed.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Next" })).toBeDisabled();
+    expect(screen.queryByRole("button", { name: /Item 1 choice A: Alpha Correct/ })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Retry answer" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Next" })).toBeEnabled());
+    expect(screen.getByRole("button", { name: /Item 1 choice A: Alpha Correct/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Item 2 choice B: Beta Correct/ })).toBeInTheDocument();
+    expect((answerQuickReviewQuestion as jest.Mock).mock.calls.filter(([, request]) => request.questionIndex === 0)).toHaveLength(1);
+    expect((answerQuickReviewQuestion as jest.Mock).mock.calls.filter(([, request]) => request.questionIndex === 1)).toHaveLength(2);
+  });
+
+  it("resumes mid-RETRY into an already-confirmed MATCHING group without re-answering", async () => {
+    const matchingFullQuiz = [
+      {
+        question: "First item",
+        choices: ["Alpha", "Beta", "Gamma", "Delta"],
+        correctIndex: 0,
+        concept: "Matching",
+        explanation: "First explanation",
+        questionFormat: "MATCHING",
+        questionGroup: "group-1",
+      },
+      {
+        question: "Second item",
+        choices: ["Alpha", "Beta", "Gamma", "Delta"],
+        correctIndex: 1,
+        concept: "Matching",
+        explanation: "Second explanation",
+        questionFormat: "MATCHING",
+        questionGroup: "group-1",
+      },
+    ];
+    (startQuickReviewSession as jest.Mock).mockResolvedValue({
+      ...baseSession,
+      quiz: matchingFullQuiz,
+      quizCount: 2,
+      currentRound: "RETRY",
+      retryCount: 1,
+      currentQuestionIndex: 0,
+      sessionState: {
+        selectedChoices: { "0": 0, "1": 1 },
+        roundSelections: { "0": 0, "1": 1 },
+        retryQuestionIndexes: [0, 1],
+        activeQuestionIndexes: [0, 1],
+      },
+    });
+    render(<QuickReviewPage />);
+
+    expect(await screen.findByRole("button", { name: /Item 1 choice A: Alpha Correct/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Item 2 choice B: Beta Correct/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Next" })).toBeEnabled();
+    expect(answerQuickReviewQuestion).not.toHaveBeenCalled();
   });
 });

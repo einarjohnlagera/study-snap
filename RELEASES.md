@@ -77,10 +77,8 @@ H6's exclusion (still gated on H5's post-ship checkpoint) are all unchanged; the
 migration (item 3) adds a generation-stamp column only; the teacher share-link quiz path is a known,
 explicitly out-of-scope gap for item 1, not silently ignored. Note/Study Pack pages, the public note page,
 and DOCX `WITH_ANSWERS` export all stay unredacted by owner decision (item 1's own plan file). **⚠️ Quick
-Review's fix, uniquely among item 1's surfaces, DOES touch a new quiz JSONB store**: its session currently
-stores `null` for `sessionState` and will need to start storing something once it gets its own quiz-less
-fetch design — this is a deliberate, scoped exception to "no other quiz JSONB store is touched," not an
-oversight, and needs its own migration/schema thought when that sub-item is designed.
+Review's fix does not add a quiz store**: the session continues to use the Study Pack's persisted quiz and
+stores only locked selections plus navigation state in its existing `session_state` JSONB.
 
 **Verification tier:** four release-level items, but item 1 alone is now confirmed by far the largest single
 piece of work in this release — 6 practice-session surfaces, one of them (Interview Practice) with an
@@ -164,6 +162,39 @@ standing baseline rule.
   learner who completes a session during the skew window. A new frontend against an old backend receives 404
   from `/answer` and cannot reveal or advance. Run `scripts/check-deploys.sh` promptly after merge and confirm
   both Vercel and Render are on the release.
+- **Quick Review answer-key redaction for owners and share recipients:** the widened start/resume response is
+  now the page's only pre-completion data source. It supplies current Note metadata and a Study Pack quiz whose
+  unanswered items have `correctIndex`, `correctIndices`, `explanation`, `workingSolution`, and accepted-answer
+  content redacted. `GET /notes/{id}` remains fully unredacted and unchanged. The new
+  `POST /quick-review/{sessionId}/answer` endpoint locks the session row, reveals one stored Study Pack question,
+  treats the same selection in the same attempt as idempotent, and returns HTTP 409 for a changed selection.
+  MATCHING keeps its whole-group reveal while recording each item independently; MULTI_SELECT remains editable
+  until Submit. The cumulative selection maps retain the latest accepted answer for completion and mastery,
+  while attempt-bucketed maps enforce separate INITIAL and RETRY locks.
+
+  `/answer` also advances the stored `retryCount` to the client's requested attempt, bounded to `0` or `1`, so
+  a lost best-effort retry-transition `/progress` write cannot leave a RETRY answer colliding with the INITIAL
+  lock bucket. `/progress` now accepts only `retryQuestionIndexes` and `activeQuestionIndexes` from the client,
+  preserves all four server-owned answer maps, and rejects retry-count or round regression. Sessions created
+  before the Note's latest `generationEnqueuedAt` are stale: start forfeits and replaces them, resume treats them
+  as absent, and `/answer` returns a distinct restartable error. The unscoped Note read happens only after the
+  existing owner-or-live-share authorization, so the same staleness and title behavior applies to recipients.
+
+  Removing the owner-only `getNote` preflight also fixes recipient entry through Dashboard-shaped
+  `/notes/{id}/quick-review` links and due-concepts-digest links, in addition to the explicit shared-note link;
+  `isOwner` from the authorized response now selects the valid Note-detail destination. Production currently has
+  zero recipient Quick Review sessions and zero live `note_shares` rows, so these recipient paths ship before
+  real usage has exercised the Dashboard in-progress reader, `ConceptHealth`, or mastery-unlock analytics for a
+  recipient.
+
+  **Deploy order: frontend and backend together.** A new frontend against an old backend gets 404 from
+  `/answer`. An old frontend against the new backend never calls `/answer`, while narrowed `/progress` discards
+  the four answer-bearing keys it still sends. With no stored selections,
+  `computeConceptBreakdownForStoredSelections` returns an empty list; both `recordCorrectAnswers` and
+  `recordIncorrectAnswers` short-circuit, `verifiedCorrectAnswers` stays unset, and `verifiedPerfect` is always
+  false. This is a silent non-unlock rather than an active miss, but Quick Review's traffic makes it the
+  largest-reach deploy-skew window among the six answer-key PRs. Run `scripts/check-deploys.sh` promptly after
+  merge and confirm both frontend and backend are on the release.
 
 ## v0.162.0 - Say the Value
 

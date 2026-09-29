@@ -19,7 +19,7 @@ Regeneration compares historical sessions with the current quiz size. A quiz-siz
 
 **`verifiedCorrectAnswers` is not uniformly server-derived, and code must not assume it is.** Sessions completed **after** the `v0.74.0` migration are server-derived. Sessions completed **before** it were **grandfathered from the client-reported `correct_answers`**, because re-scoring in SQL would mean re-implementing answer resolution against raw JSONB and bypassing `QuizItem`'s `@JsonCreator` — where `correctIndex` is actually resolved, including the answer-as-letter case that generated quizzes rely on (`correctIndex` is absent from `schema.json`; `"answer"` is a letter per `developer.txt:15`). Getting that wrong locks existing learners out of a tab they already use, so the pre-deploy population is trusted once instead. **Do not "fix" this by adding a SQL scorer** — any re-derivation must go through `QuizItem`.
 
-The v0.74.0 Quiz-tab lock built on this signal is a **UX affordance, not a security control**. Quick Review scores in the client, and the saved Study Pack quiz—including its answers—is already present in the client payload. Server-derived verification removes accidental divergence between the progression gate and the persisted-selection evaluation used by the completion and `ConceptHealth` path; it does not make the gate tamper-proof, and v0.74.0 does not claim that it does.
+The Quiz-tab lock is a **UX affordance, not a security control**; the accepted self-study exposure through Note and Study Pack pages remains outside the security boundary. Practice sessions, now including Quick Review, redact each answer key until the learner answers that question, then reveal it and lock the selection.
 
 ## Note Detail Quiz-tab progression lock
 
@@ -28,7 +28,7 @@ The v0.74.0 Quiz-tab lock built on this signal is a **UX affordance, not a secur
 - The panel starts the note's existing Quick Review flow and can return the learner to Summary. Challenge Quiz remains available independently and is not gated or reordered.
 - Teachers and admins are curator-exempt and may inspect the saved quiz without mastery. Their bypass does not emit an unlock-open event.
 - For an unlocked non-curator, opening the tab emits `STUDY_PACK_QUIZ_TAB_OPENED_AFTER_UNLOCK` once for that tab open; locked and empty-quiz views do not emit it.
-- This lock covers **only private Note Detail**. The public share page and Study Pack generation-results view continue to reveal saved answers deliberately. Those accepted exceptions, plus the answers already present in the client payload, are why this remains a UX progression affordance rather than a security boundary.
+- Note Detail and the Study Pack page remain fully unredacted by design; that is intentional rather than a residual practice-session gap.
 
 ## Math notation
 

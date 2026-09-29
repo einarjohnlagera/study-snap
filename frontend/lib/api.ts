@@ -1315,6 +1315,26 @@ export type QuickReviewSessionStartResponse = {
   currentRound: "INITIAL" | "RETRY" | null;
   retryCount: number;
   sessionState: Record<string, unknown> | null;
+  noteId: string | null;
+  quiz: QuizItem[];
+  title: string | null;
+  keyConcepts: string[];
+  quizMastered: boolean;
+  quizMasteredAt: string | null;
+  quizCount: number;
+  isOwner: boolean;
+};
+
+export type QuickReviewAnswerRequest = {
+  questionIndex: number;
+  retryCount: number;
+  selectedChoiceIndex?: number;
+  selectedMultiChoiceIndices?: number[];
+};
+
+export type QuickReviewAnswerResponse = {
+  questionIndex: number;
+  question: QuizItem;
 };
 
 export type QuickReviewSessionCompleteRequest = {
@@ -4133,6 +4153,25 @@ export async function updateQuickReviewSessionProgress(
   return parseApiResponse<QuickReviewSessionSummaryResponse>(
     response,
     "Could not save Quick Review progress.",
+  );
+}
+
+export async function answerQuickReviewQuestion(
+  sessionId: string,
+  request: QuickReviewAnswerRequest,
+): Promise<QuickReviewAnswerResponse> {
+  const response = await fetchWithAuth(
+    `/quick-review/${sessionId}/answer`,
+    {
+      method: "POST",
+      headers: buildAuthHeaders("application/json"),
+      body: JSON.stringify(request),
+    },
+    true,
+  );
+  return parseApiResponse<QuickReviewAnswerResponse>(
+    response,
+    "Could not check this Quick Review answer.",
   );
 }
 
