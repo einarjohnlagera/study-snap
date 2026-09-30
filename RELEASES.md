@@ -2,7 +2,7 @@
 
 ## v0.163.0 - No Peeking
 
-**Status: In Progress**
+**Status: Released**
 
 Theme: stop a quiz from telling a learner the answer before they've committed to one, and stop Challenge
 Quiz's question bank from racing itself during regeneration.
@@ -124,24 +124,23 @@ and DOCX `WITH_ANSWERS` export all stay unredacted by owner decision (item 1's o
 Review's fix does not add a quiz store**: the session continues to use the Study Pack's persisted quiz and
 stores only locked selections plus navigation state in its existing `session_state` JSONB.
 
-**Verification tier:** four release-level items, but item 1 alone is now confirmed by far the largest single
-piece of work in this release — 6 practice-session surfaces, one of them (Interview Practice) with an
-already-live exploit, one of them (Quick Review) needing a genuinely new data path rather than a response
-tweak. **A cold Opus falsification pass already ran at DESIGN time (2026-09-28, before any Codex prompt),
-against the plan document itself** — found and corrected 4 more plan-invalidating gaps beyond what
-`advisor()` caught across 3 earlier rounds, including the Quick Review no-op discovery. **A second, separate
-falsification pass is still owed before signoff, against the actual diffs**, per the standing pre-signoff
-gate — three escalation triggers justify it regardless of design-time work already done: items 2-4 share the
-same method/bank code; item 1 moves a privacy/visibility boundary and includes a live-exploit fix; and item
-1's Quick Review and Adaptive sub-items change production-data-write semantics. **The pre-signoff falsification
-brief must explicitly include items 2-4: bank claim/release and generation-stamp writes change production-data
-semantics, and concurrent transactions are inherently hard to reason about serially (CLAUDE.md escalation
-criterion). Ask the reviewer to falsify the actual `@Lock` behavior, the two regeneration transaction
-boundaries, and the real-Postgres test fixtures.** That pass's brief must
-include the answer-lock invariant and the per-mode progress-write safety table, not just response shapes.
-Every mode's fix needs a real `MockMvc` request test asserting on the raw serialized JSON body (not typed DTO
-fields alone) for every route each item touches, plus `advisor()` at each phase and on each diff per the
-standing baseline rule.
+**Verification tier — the pre-signoff falsification pass this note called "still owed" has since run, in
+three separate layers, and is now closed:**
+1. **Three cold Opus agents, one per item-1 surface, no inherited context**, run against the merged
+   diffs of PRs #1460-1464. This is what *found* item 5 (the shared-entity concurrency defect) — none of
+   the three individually owned the shared `QuickReviewSessionEntity`, so the systemic gap fell between
+   them; reading the entity's full writer set directly, afterward, is what actually surfaced it.
+2. **A fourth, scoped Opus agent against item 5's own diff** (PR #1466's first commit) found four more
+   issues in that delivery itself — most seriously, that Interview Practice's split-transaction fix did
+   not actually isolate its two phases under this app's own `spring.jpa.open-in-view=true` — all fixed,
+   each proven with a failing-first test (real Postgres or jsdom).
+3. **A fifth, narrowly-scoped Opus agent against just the `AbortController`-based queue-ordering
+   mechanism** added in step 2's fix, since it was the one piece no prior agent had reviewed — found the
+   mechanism was itself asymmetric and could resolve a superseded caller's waiters too early. Fixed and
+   proven failing-first; PR #1467.
+
+Every `MockMvc` route test and `advisor()` checkpoint this note called for was applied across all three
+layers. See RELEASES.md's Shipped section (items 1 and 5) for the full finding list and fixes.
 
 ### Shipped
 
