@@ -51,7 +51,7 @@ Every note carries four durable metadata axes (a fifth, Target Audience, was ret
 
 1. **Title**
 2. **Subject** — specific. If the subject you'd write is the same as the Domain Context, it is too broad to be a useful shelf. `Algebra`, not `Engineering Mathematics`.
-3. **Domain Context** — one of the **12 ratified values**, below. This is what makes generated content sound like it belongs to the field.
+3. **Domain Context** — one of the **13 ratified values**, below. This is what makes generated content sound like it belongs to the field.
 4. **Note Learner Level** — `GRADE_SCHOOL` · `JUNIOR_HIGH` · `SENIOR_HIGH` · `COLLEGE` · `BOARD_EXAM_REVIEW` · `PROFESSIONAL`. This is the curriculum **floor**: a reader at a lower level gets softer scaffolding and wording, never easier curriculum.
 5. **Applicable Programs** — one or more catalog names, below. **Say all of them.** Under-listing recreates the duplication problem; you cannot "add the others later" without a curator editing every note by hand.
 6. ~~**Target Audience**~~ — **DO NOT SUPPLY IT. Removed in `v0.83.0`** from every request, response and authoring surface; the API ignores it. The server still writes the underlying column from the owner's profile to satisfy `NOT NULL`, and that is the only thing keeping it alive. **Why it was retired:** absent from every prompt, and its access-control purpose was never implemented. **⚠️ The ~99.3% Course/Program correlation is explicitly NOT the justification** — a board-heavy-catalog artifact, not semantic equivalence, and it must not be cited to justify dropping the column. **`v0.82.0`'s `V117` migrated its information into Authored Depth for curator-owned notes only** (`BOARD_TAKER`→`BOARD_EXAM_REVIEW`, `PROFESSIONAL`→`PROFESSIONAL`; **`STUDENT` stays NULL**, spanning four depths; 4,645 learner-owned notes never touched). **⚠️ `BOARD_TAKER` is NOT self-certifying — it failed in both programs anyone audited**, so `V117` excludes a **denylist** of non-licensure program values, **never derived from `exam_goal_slug`**. **Dropping the column waits on `[CHECKPOINT — due 2026-09-16]`**, which needs it to run the kill criterion, and it must **never** become a runtime depth fallback. **What replaced it for discovery:** an Authored Depth `?level=` filter — but it is **partially populated**, since 80 of 120 curator public notes formerly tagged `STUDENT` still have NULL depth and are unreachable by it. Full audit: `docs/claude-plans/target-audience-removal-proposal.md`.
@@ -101,7 +101,7 @@ Backend: `NoteEntity` (`backend/src/main/java/com/studysnap/backend/entity/NoteE
 | `content` | String | the note body itself — this is the source of truth users write |
 | `subject` | String, ≤64 chars | free text, see taxonomy section below |
 | `courseProgram` | String, ≤120 chars | the learner's **personal** free-text program. Since `v0.71.0` this is one of two representations — see §2 |
-| `domainContext` | enum, nullable | **the sole LLM domain constraint** (`v0.69.0`). 11 ratified values, see §0 |
+| `domainContext` | enum, nullable | **the sole LLM domain constraint** (`v0.69.0`). 13 ratified values, see §0 |
 | `learnerLevel` | enum, nullable | the note's own authored depth (`v0.69.0`). See correction below |
 | `tags` | `text[]` | free-form tag list |
 | `status` | enum `NoteStatus` | `DRAFT` / `GENERATING` / `FAILED` / `GENERATED` |

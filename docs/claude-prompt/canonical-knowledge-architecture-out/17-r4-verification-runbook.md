@@ -265,12 +265,16 @@ permanent per note.
 **Pass:** all 5 notes read College-level (BSCS Year 1 is coursework, not board-exam review — there is
 no PRC board for a first-year computing curriculum) and discipline-specific under `Computing`, with no
 more than one drift hit per the five-check list, no note showing all five failing at once, and — for
-any note where a true fallback arm exists — no material difference from that arm.
+any note where a true fallback arm exists — Computing reads no more generic than that arm (materially
+*better* than the fallback also passes; the comparison exists to catch drift toward vagueness, not to
+require parity).
 
 **Fail:** two or more of the five checks drift on the same note, or a fallback-arm note under
 `Computing` reads materially more generic than its fallback arm. Record which note and which checks,
 exactly as Step 2 requires — a fail here amends `ADR-001`'s `Computing` ratification, specifically the
-`[CHECKPOINT — due after BSCS Year 1 authoring completes]` it already carries, not a routine finding.
+`[CHECKPOINT — due when BSCS Year 1 Computing authoring reaches 10+ classified notes, backstop
+2026-12-29 regardless]` it already carries (full kill criterion on this checkpoint's `ROADMAP.md`
+Backlog Index row), not a routine finding.
 
 **Recording the result:** the same three places as "Recording the result" below, plus the
 `Computing`-specific `[CHECKPOINT]` on the amendment itself.
