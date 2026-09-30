@@ -315,10 +315,13 @@ export default function ChallengeQuizPage() {
     waiters: Array<() => void>;
   }>>([]);
   const progressRequestInFlightRef = useRef(false);
-  // Shared across drainProgressQueue and persistLatestProgressImmediately: whichever fires next always
-  // aborts the previous holder, so a superseded write (including one stuck mid-401-refresh-retry) can
-  // never land on the server after a newer one.
-  const progressAbortControllerRef = useRef<AbortController | null>(null);
+  // The one write (queue-drained or immediate) currently able to reach the server for this session, and
+  // everyone waiting on it. Shared by drainProgressQueue and persistLatestProgressImmediately via
+  // supersedeLiveWrite(): whichever fires next always aborts and absorbs the previous holder's waiters,
+  // so a superseded write (including one stuck mid-401-refresh-retry) can never land after a newer one,
+  // AND whoever was waiting on the superseded write only resolves once the write that superseded it
+  // actually settles — not the moment the old one is aborted.
+  const progressLiveWriteRef = useRef<{ controller: AbortController; waiters: Array<() => void> } | null>(null);
   const remainingSecondsRef = useRef(0);
   const challengeSessionRef = useRef<ChallengeQuizStartResponse | null>(null);
   const startInFlightRef = useRef(false);
@@ -780,8 +783,9 @@ export default function ChallengeQuizPage() {
     timeoutAutoSubmitRequestedRef.current = false;
     // Otherwise a hung progress write for the PRIOR session would keep blocking every progress write
     // for the rest of the page's life, including a new session started right after this reset.
-    progressAbortControllerRef.current?.abort();
-    progressAbortControllerRef.current = null;
+    progressLiveWriteRef.current?.controller.abort();
+    progressLiveWriteRef.current?.waiters.forEach((resolve) => resolve());
+    progressLiveWriteRef.current = null;
     progressRequestInFlightRef.current = false;
     pendingProgressRef.current.forEach((entry) => entry.waiters.forEach((resolve) => resolve()));
     pendingProgressRef.current = [];
@@ -809,17 +813,34 @@ export default function ChallengeQuizPage() {
     setPhase("prestart");
   }, [challengeSession?.mode, selectedMode, syncProgressRef]);
 
+  // Aborts and absorbs whatever write is currently live (queue-drained or immediate), returning its
+  // waiters so the caller can carry them forward onto its OWN write. The absorbed write's waiters must
+  // NOT resolve here — only once whichever write finally settles without itself being superseded again.
+  const supersedeLiveWrite = useCallback((): Array<() => void> => {
+    const current = progressLiveWriteRef.current;
+    progressLiveWriteRef.current = null;
+    if (!current) {
+      return [];
+    }
+    current.controller.abort();
+    return current.waiters;
+  }, []);
+
   const drainProgressQueue = useCallback(async () => {
     if (progressRequestInFlightRef.current) return;
     progressRequestInFlightRef.current = true;
     try {
       while (pendingProgressRef.current.length > 0) {
         const next = pendingProgressRef.current.shift()!;
+        // Absorb whatever was live before this item — including an untracked immediate write, which
+        // this loop must also supersede, not just the other way around.
+        const carriedWaiters = supersedeLiveWrite();
+        const allWaiters = [...carriedWaiters, ...next.waiters];
         // A dead-request safety net, not a UX bound (see PROGRESS_REQUEST_TIMEOUT_MS) — without this,
         // one hung write would block every later progress write for the rest of the page's life,
         // including a later session, since this loop awaits each write before considering the next.
         const controller = new AbortController();
-        progressAbortControllerRef.current = controller;
+        progressLiveWriteRef.current = { controller, waiters: allWaiters };
         const timeoutId = globalThis.setTimeout(() => controller.abort(), PROGRESS_REQUEST_TIMEOUT_MS);
         try {
           await updateChallengeQuizSessionProgress(next.sessionId, next.request, {
@@ -830,16 +851,19 @@ export default function ChallengeQuizPage() {
           // Challenge should continue even if a progress sync fails (including a timeout abort above).
         } finally {
           globalThis.clearTimeout(timeoutId);
-          if (progressAbortControllerRef.current === controller) {
-            progressAbortControllerRef.current = null;
+          // If something ELSE superseded us while we awaited, it already absorbed allWaiters via its
+          // own supersedeLiveWrite() call — it will resolve them when IT settles. Resolving here too
+          // would release a waiter before the write it's actually waiting on has landed.
+          if (progressLiveWriteRef.current?.controller === controller) {
+            progressLiveWriteRef.current = null;
+            allWaiters.forEach((resolve) => resolve());
           }
-          next.waiters.forEach((resolve) => resolve());
         }
       }
     } finally {
       progressRequestInFlightRef.current = false;
     }
-  }, []);
+  }, [supersedeLiveWrite]);
 
   const persistProgress = useCallback(
     (
@@ -907,32 +931,37 @@ export default function ChallengeQuizPage() {
       },
     };
     const pendingIndex = pendingProgressRef.current.findIndex((entry) => entry.sessionId === sessionId);
-    const dropped = pendingIndex >= 0 ? pendingProgressRef.current[pendingIndex] : null;
+    const pendingWaiters = pendingIndex >= 0 ? pendingProgressRef.current[pendingIndex].waiters : [];
     if (pendingIndex >= 0) {
       pendingProgressRef.current.splice(pendingIndex, 1);
     }
     // A request already IN FLIGHT (shifted off the queue, currently awaited by drainProgressQueue) is
     // not in pendingProgressRef and so isn't caught by the drop above — it carries older state than
     // what we're about to send. Left running, it (or a 401-refresh retry of it) could still land on the
-    // server AFTER this immediate write and overwrite it with that older state. Abort it: whichever
-    // write fires last always wins, so a superseded write can never land after a newer one.
-    progressAbortControllerRef.current?.abort();
+    // server AFTER this immediate write and overwrite it with that older state. Abort it, and absorb
+    // its waiters too: whichever write fires last always wins, so a superseded write can never land
+    // after a newer one, and whoever was waiting on it only resolves once THIS write actually settles.
+    const carriedWaiters = supersedeLiveWrite();
+    const allWaiters = [...carriedWaiters, ...pendingWaiters];
     const controller = new AbortController();
-    progressAbortControllerRef.current = controller;
-    // The dropped write's waiters (e.g. finalizeChallengeSession's own flush-before-complete await)
-    // must not resolve until THIS immediate request actually settles — resolving them synchronously,
-    // before the request is even sent, would let /complete proceed and race this write for the row
-    // lock, reopening the exact "server scores from stale state" defect this fix exists to close.
-    const settleDropped = () => {
-      if (progressAbortControllerRef.current === controller) {
-        progressAbortControllerRef.current = null;
+    progressLiveWriteRef.current = { controller, waiters: allWaiters };
+    // Bounded the same way the queue is (see PROGRESS_REQUEST_TIMEOUT_MS) — without this, a hung
+    // immediate write would leave everyone waiting on it (e.g. Leave, if it was dropped into this
+    // write's waiters) stuck forever, contradicting the whole point of a dead-request safety net.
+    const timeoutId = globalThis.setTimeout(() => controller.abort(), PROGRESS_REQUEST_TIMEOUT_MS);
+    const settle = () => {
+      globalThis.clearTimeout(timeoutId);
+      // If something else superseded US while in flight, it already absorbed allWaiters — don't
+      // double-resolve; it will resolve them once IT settles.
+      if (progressLiveWriteRef.current?.controller === controller) {
+        progressLiveWriteRef.current = null;
+        allWaiters.forEach((resolve) => resolve());
       }
-      dropped?.waiters.forEach((resolve) => resolve());
     };
-    // Challenge should continue even if this progress sync fails — settleDropped still runs either way.
+    // Challenge should continue even if this progress sync fails — settle still runs either way.
     void updateChallengeQuizSessionProgress(sessionId, request, { keepalive: true, signal: controller.signal })
-      .then(settleDropped, settleDropped);
-  }, []);
+      .then(settle, settle);
+  }, [supersedeLiveWrite]);
 
   const loadNote = useCallback(async () => {
     if (!noteId) {
