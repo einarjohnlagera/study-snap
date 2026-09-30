@@ -236,10 +236,9 @@ standing baseline rule.
       legitimately hold this row's lock that long), and `resetToPrestart` aborts and clears the queue.
     - **The tab-hidden immediate write and the queue were not ordered against each other** — an
       in-flight (or 401-refresh-retried) queued write carrying older state could still land on the
-      server after the newer immediate write, overwriting it. Fixed: firing either write now aborts
-      whatever the other one's controller currently is, so whichever fires last always wins and a
-      superseded write can never land after a newer one. `updateChallengeQuizSessionProgress` now
-      accepts an optional `AbortSignal`.
+      server after the newer immediate write, overwriting it. `updateChallengeQuizSessionProgress` now
+      accepts an optional `AbortSignal`. **This mechanism was itself corrected in a third round below —
+      it was asymmetric and dropped waiters early; read that bullet for the actual current design.**
     - **A quiz-repair race could give two different quiz contents the same `quiz_stamp`.** Both
       `StudyPackService.saveStudyPack` and `AdminStudyPackTransactionHelper`'s malformed-quiz repair read
       the pack unlocked and incremented `quizStamp` in Java, so a repair racing a real user regeneration
@@ -248,6 +247,38 @@ standing baseline rule.
       quiz_stamp = quiz_stamp + 1`, a targeted DB-level increment) replacing the Java-side
       read-increment-write in both places; neither caller's in-memory `quizStamp` field is set anymore,
       so nothing reads a value staler than what the atomic bump already applied.
+  - **A third, narrowly-scoped falsification pass (a fresh Opus agent, no inherited context, targeted
+    specifically at the abort/ordering mechanism above since it was the one piece no cold agent had yet
+    reviewed) found the mechanism above was itself broken in two ways, both confirmed with a temporary
+    probe test and both fixed here, each with its own failing-first test:**
+    - **The queue never aborted the previous holder — only the immediate path did.** `drainProgressQueue`
+      wrote its own controller into the shared ref without aborting whatever was there before it, so a
+      tab-hidden write left running when a later queue item started became silently untracked (no longer
+      abortable by anything).
+    - **The "hold waiters until settle" fix only covered a write that was still merely QUEUED, not one
+      already IN FLIGHT.** If the write a newer one superseded was the one currently being sent (e.g.
+      `finalizeChallengeSession`'s own flush, sent immediately because the queue was idle when Submit was
+      clicked), aborting it resolved its waiters right away — `/complete` could fire before the write that
+      actually superseded it had landed, reopening the "server scores from stale state" defect on a
+      narrower path.
+    - **Fixed by redesigning the shared state as `progressLiveWriteRef` — one record of `{ controller,
+      waiters }` for whichever write is currently live, queue-drained or immediate — and a shared
+      `supersedeLiveWrite()` helper that both writers call before sending their own request: it aborts
+      the current holder and returns its waiters, which the caller merges into its OWN waiters before
+      taking over the ref.** Waiters therefore chain forward through any number of supersessions and
+      resolve exactly once, when a write finally settles without itself being superseded again. The
+      immediate path also gained the same 30-second dead-request timeout the queue already had, closing
+      a case where a hung immediate write (with `handleLeaveSession`'s wait dropped into it) could stall
+      forever.
+    - **Known Limitation, not fixed here — inherent to a client-side-only ordering scheme:** an abort
+      only stops the *client* from waiting; it cannot recall bytes a request already sent to the server,
+      and the server has no sequence number to resolve two genuinely-simultaneous requests by anything
+      other than which one's transaction takes the row lock first. Two writes that are BOTH actually
+      in flight to the server at the same moment (not one queued behind the other) are still ordered by
+      server arrival, not by which one the client considers "newer." The one case this fix does close
+      completely is a write stuck mid-401-refresh-retry, since the abort signal is threaded through the
+      retry (`fetchWithAuth`) and a fetch started with an already-aborted signal never sends at all.
+      `/auth/refresh` itself is not abortable, and remains a narrow gap within that one case.
 
 - **Challenge Quiz bank concurrency (items 2-4):** Real Spring-proxied, PostgreSQL 18 Testcontainers
   reproductions found three `releaseClaims` faults before the fix: `generateMoreQuestions` held a bank-row
