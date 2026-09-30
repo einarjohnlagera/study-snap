@@ -15,6 +15,16 @@ changelog layer. `ROADMAP.md` keeps a one-line-per-version index at each origina
 
 ---
 
+**Kicked off 2026-09-24, signed off 2026-09-25.** `v0.158.0 — Reading the Evidence` is **Released** on `releases/v0.158.0` (merged as #1443 and tagged 2026-09-25; deployed and verified: Render live 06:30Z, Vercel production 06:33Z), cut from
+`main` after `v0.157.0` merged as #1440 and tagged (deployed 2026-09-24: Render live 02:40Z, `V149` applied 02:39Z,
+Vercel production 02:43Z). It discharged evidence this project already owes: three checkpoint reads that are past due
+(`connection-timeout` 5xx, due 2026-09-18; Learning Connections demand, due 2026-09-19; publication boundary, due
+2026-09-22), the first readings of the `v0.157.0` retention instrumentation (dispatch order in the logs, and the
+2026-09-27 "is it emitting" read), and one ready one-line fix (`runMonthly()` zone pin, merged as #1442). Nothing in it is feature
+scope. **Owner decision pending (added 2026-09-24): `INACTIVITY` email effectiveness** — a read-only production read
+showed a 0.7% 7-day return rate by the 11th-plus send to a dormant 235-user audience, with no control group;
+see `RELEASES.md` and its own Backlog row. Full scope in `RELEASES.md`. **Signed off with:** the `runMonthly()` zone pin merged (#1442, `RetentionEmailScheduler.java:79`); the three past-due checkpoint reads run and recorded on their rows (publication boundary NOT fired, re-dated to 2026-09-28; Learning Connections kill criterion does not fire; `connection-timeout: 5000` INCONCLUSIVE, leaning concerning, owner decision); the first `v0.157.0` retention run read AS DESIGNED (order digest, weak-concept, `INACTIVITY`; `INACTIVITY` 46 under a 46 budget, was 60). **Left open by the owner's call:** the `[CHECKPOINT — due 2026-09-27]` click/open read is done on or after that date, not held against signoff. **Two owner decisions now have Backlog rows:** `INACTIVITY` email effectiveness and the `connection-timeout` verdict. Moved at the `v0.164.0` kickoff.
+
 **Kicked off 2026-09-23, signed off 2026-09-24.** `v0.157.0 — Watching More Closely` is **Released** on
 `releases/v0.157.0` (nothing is deployed until the release PR to `main` merges). It landed five
 already-open PRs on the release branch instead of merging each to `main` (Vercel Web Analytics #1426 — the only
