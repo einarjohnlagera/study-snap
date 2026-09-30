@@ -115,8 +115,11 @@ It is generated, not authored, and it carries the three things a reader would ot
 2. `context already set — verify before changing` — on `Existing` and `Reuse` rows the Domain
    Context is a *recommendation to change*, not a blank to fill. Changing it is a separate decision
    from placing the note, and it affects future generation only.
-3. `unset requires a SINGLE applicable program` — the server rejects a save with 2+ Applicable
-   Programs and no Domain Context, so an unset row is a landmine on any shared note.
+3. `unset requires a SINGLE applicable program` — **⚠️ corrected 2026-09-30 (`v0.164.0`): the
+   server does not reject the SAVE.** A note with 2+ Applicable Programs and no Domain Context saves
+   fine; the check is generation-time only — requesting a Study Pack on it is rejected server-side,
+   because sending several disciplines as one domain constraint is logically unsatisfiable. An unset
+   row is still a landmine on any shared note, just one that fires at generation, not at save.
 
 ## `applicable_programs` is REQUIRED, and it is required PER NOTE SUBJECT
 

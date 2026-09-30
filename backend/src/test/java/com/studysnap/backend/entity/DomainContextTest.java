@@ -21,15 +21,15 @@ class DomainContextTest {
 
     @Test
     void fromString_roundTripsTheNewestValueAndStillRejectsUnknown() {
-        assertThat(DomainContext.fromString("basic_medical_sciences"))
-                .isEqualTo(DomainContext.BASIC_MEDICAL_SCIENCES);
-        assertThat(DomainContext.fromString("BASIC_MEDICAL_SCIENCES"))
-                .isEqualTo(DomainContext.BASIC_MEDICAL_SCIENCES);
-        assertThat(DomainContext.fromString("basic_medical_science")).isNull();
+        assertThat(DomainContext.fromString("computing"))
+                .isEqualTo(DomainContext.COMPUTING);
+        assertThat(DomainContext.fromString("COMPUTING"))
+                .isEqualTo(DomainContext.COMPUTING);
+        assertThat(DomainContext.fromString("computer_science")).isNull();
     }
 
     @Test
-    void valuesExposeTheTwelveRatifiedLabels() {
+    void valuesExposeTheThirteenRatifiedLabels() {
         assertThat(DomainContext.values()).extracting(DomainContext::getLabel).containsExactly(
                 "Engineering Mathematics",
                 "Engineering Sciences",
@@ -42,7 +42,8 @@ class DomainContextTest {
                 "Architectural Design",
                 "History and Theory of Architecture",
                 "Planning and Site Development",
-                "Basic Medical Sciences"
+                "Basic Medical Sciences",
+                "Computing"
         );
     }
 
@@ -65,7 +66,10 @@ class DomainContextTest {
             // v0.145.0, owner decision: false, with a discipline-specific repair keyword
             // ("pharmacokinetic") added to QUANTITATIVE_KEYWORDS in the same release. Flipping this
             // to true without an owner decision is irreversible per note.
-            "BASIC_MEDICAL_SCIENCES, false"
+            "BASIC_MEDICAL_SCIENCES, false",
+            // v0.164.0, owner decision: false, with no companion QUANTITATIVE_KEYWORDS change this
+            // release. Flipping this to true without an owner decision is irreversible per note.
+            "COMPUTING, false"
     })
     void declaresWhetherEachDomainContextIsQuantitative(DomainContext domainContext, boolean quantitative) {
         assertThat(domainContext.isQuantitative()).isEqualTo(quantitative);

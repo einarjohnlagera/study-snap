@@ -550,7 +550,8 @@ export type DomainContext =
   | "ARCHITECTURAL_DESIGN"
   | "ARCHITECTURAL_HISTORY_AND_THEORY"
   | "PLANNING_AND_SITE_DEVELOPMENT"
-  | "BASIC_MEDICAL_SCIENCES";
+  | "BASIC_MEDICAL_SCIENCES"
+  | "COMPUTING";
 export type PaidPlanType = "PLUS" | "PRO";
 export type LearnerLevel =
   | "GRADE_SCHOOL"
