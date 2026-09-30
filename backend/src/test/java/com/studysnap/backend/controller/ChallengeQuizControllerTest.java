@@ -166,7 +166,8 @@ class ChallengeQuizControllerTest {
                 recoveryRowWriter,
                 noteCollectionRepository,
                 noteCollectionItemRepository,
-                new LongExamPlanSourceSampler()
+                new LongExamPlanSourceSampler(),
+                mock(jakarta.persistence.EntityManager.class)
         );
         AuthenticatedUser authenticatedUser = new AuthenticatedUser(userId, UserRole.USER, true, 1);
         HandlerMethodArgumentResolver argumentResolver = authenticatedUserResolver(authenticatedUser);

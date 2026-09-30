@@ -135,6 +135,10 @@ const BOARD_EXAM_MODE: ChallengeQuizMode = "board_exam";
 const MAX_SESSION_QUESTIONS = 20;
 const TIMER_TICK_INTERVAL_MS = 1000;
 const PROGRESS_FLUSH_BEFORE_COMPLETE_TIMEOUT_MS = 5000;
+// Generous on purpose: a legitimate +5 Questions LLM call can hold this session's row lock for its
+// whole duration, so an ordinary progress write can legitimately wait a long time behind it. This is
+// a dead-request safety net, not a UX-latency bound — the 5s bound above is the latency-sensitive one.
+const PROGRESS_REQUEST_TIMEOUT_MS = 30000;
 const BOARD_EXAM_TOOLTIP_STORAGE_KEY_PREFIX = "notelib-board-exam-mode-tip-dismissed";
 const BOARD_EXAM_START_CONFIRM_TITLE = "Start Board Exam Mode?";
 const BOARD_EXAM_LEAVE_TITLE = "Leave exam?";
@@ -311,6 +315,10 @@ export default function ChallengeQuizPage() {
     waiters: Array<() => void>;
   }>>([]);
   const progressRequestInFlightRef = useRef(false);
+  // Shared across drainProgressQueue and persistLatestProgressImmediately: whichever fires next always
+  // aborts the previous holder, so a superseded write (including one stuck mid-401-refresh-retry) can
+  // never land on the server after a newer one.
+  const progressAbortControllerRef = useRef<AbortController | null>(null);
   const remainingSecondsRef = useRef(0);
   const challengeSessionRef = useRef<ChallengeQuizStartResponse | null>(null);
   const startInFlightRef = useRef(false);
@@ -770,6 +778,13 @@ export default function ChallengeQuizPage() {
 
   const resetToPrestart = useCallback((mode = challengeSession?.mode ?? selectedMode) => {
     timeoutAutoSubmitRequestedRef.current = false;
+    // Otherwise a hung progress write for the PRIOR session would keep blocking every progress write
+    // for the rest of the page's life, including a new session started right after this reset.
+    progressAbortControllerRef.current?.abort();
+    progressAbortControllerRef.current = null;
+    progressRequestInFlightRef.current = false;
+    pendingProgressRef.current.forEach((entry) => entry.waiters.forEach((resolve) => resolve()));
+    pendingProgressRef.current = [];
     syncProgressRef(0, {}, {}, {}, {});
     setChallengeSession(null);
     setResumeCandidate(null);
@@ -800,11 +815,24 @@ export default function ChallengeQuizPage() {
     try {
       while (pendingProgressRef.current.length > 0) {
         const next = pendingProgressRef.current.shift()!;
+        // A dead-request safety net, not a UX bound (see PROGRESS_REQUEST_TIMEOUT_MS) — without this,
+        // one hung write would block every later progress write for the rest of the page's life,
+        // including a later session, since this loop awaits each write before considering the next.
+        const controller = new AbortController();
+        progressAbortControllerRef.current = controller;
+        const timeoutId = globalThis.setTimeout(() => controller.abort(), PROGRESS_REQUEST_TIMEOUT_MS);
         try {
-          await updateChallengeQuizSessionProgress(next.sessionId, next.request, { keepalive: next.keepalive });
+          await updateChallengeQuizSessionProgress(next.sessionId, next.request, {
+            keepalive: next.keepalive,
+            signal: controller.signal,
+          });
         } catch {
-          // Challenge should continue even if a progress sync fails.
+          // Challenge should continue even if a progress sync fails (including a timeout abort above).
         } finally {
+          globalThis.clearTimeout(timeoutId);
+          if (progressAbortControllerRef.current === controller) {
+            progressAbortControllerRef.current = null;
+          }
           next.waiters.forEach((resolve) => resolve());
         }
       }
@@ -883,13 +911,27 @@ export default function ChallengeQuizPage() {
     if (pendingIndex >= 0) {
       pendingProgressRef.current.splice(pendingIndex, 1);
     }
+    // A request already IN FLIGHT (shifted off the queue, currently awaited by drainProgressQueue) is
+    // not in pendingProgressRef and so isn't caught by the drop above — it carries older state than
+    // what we're about to send. Left running, it (or a 401-refresh retry of it) could still land on the
+    // server AFTER this immediate write and overwrite it with that older state. Abort it: whichever
+    // write fires last always wins, so a superseded write can never land after a newer one.
+    progressAbortControllerRef.current?.abort();
+    const controller = new AbortController();
+    progressAbortControllerRef.current = controller;
     // The dropped write's waiters (e.g. finalizeChallengeSession's own flush-before-complete await)
     // must not resolve until THIS immediate request actually settles — resolving them synchronously,
     // before the request is even sent, would let /complete proceed and race this write for the row
     // lock, reopening the exact "server scores from stale state" defect this fix exists to close.
-    const settleDropped = () => dropped?.waiters.forEach((resolve) => resolve());
+    const settleDropped = () => {
+      if (progressAbortControllerRef.current === controller) {
+        progressAbortControllerRef.current = null;
+      }
+      dropped?.waiters.forEach((resolve) => resolve());
+    };
     // Challenge should continue even if this progress sync fails — settleDropped still runs either way.
-    void updateChallengeQuizSessionProgress(sessionId, request, { keepalive: true }).then(settleDropped, settleDropped);
+    void updateChallengeQuizSessionProgress(sessionId, request, { keepalive: true, signal: controller.signal })
+      .then(settleDropped, settleDropped);
   }, []);
 
   const loadNote = useCallback(async () => {

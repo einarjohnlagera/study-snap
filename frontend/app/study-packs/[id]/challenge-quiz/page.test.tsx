@@ -1807,12 +1807,58 @@ describe("ChallengeQuizPage", () => {
     expect(updateChallengeQuizSessionProgress).toHaveBeenCalledTimes(2);
     expect((updateChallengeQuizSessionProgress as jest.Mock).mock.calls[1]?.[1].sessionState.selectedChoices)
       .toEqual({ "0": 1 });
-    expect((updateChallengeQuizSessionProgress as jest.Mock).mock.calls[1]?.[2]).toEqual({ keepalive: true });
+    expect((updateChallengeQuizSessionProgress as jest.Mock).mock.calls[1]?.[2]).toMatchObject({ keepalive: true });
 
     await act(async () => {
       resolveWrites[0]?.();
       resolveWrites[1]?.();
     });
+  });
+
+  it("aborts an in-flight progress write instead of letting it land after a newer tab-hidden write", async () => {
+    setupInProgressChallengeQuiz();
+    (updateChallengeQuizSessionProgress as jest.Mock).mockImplementation((_id, _req, options) => new Promise((_resolve, reject) => {
+      options?.signal?.addEventListener("abort", () => reject(new Error("aborted")));
+    }));
+    render(<ChallengeQuizPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /Mitochondria/i }));
+    expect(updateChallengeQuizSessionProgress).toHaveBeenCalledTimes(1);
+    const firstSignal = (updateChallengeQuizSessionProgress as jest.Mock).mock.calls[0]?.[2]?.signal as AbortSignal;
+    expect(firstSignal.aborted).toBe(false);
+
+    Object.defineProperty(document, "visibilityState", { value: "hidden", configurable: true });
+    await act(async () => {
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+
+    // Without the fix, the first write (carrying older state) is left running and could still land on
+    // the server after the tab-hidden write (carrying newer state), overwriting it.
+    expect(firstSignal.aborted).toBe(true);
+    expect(updateChallengeQuizSessionProgress).toHaveBeenCalledTimes(2);
+  });
+
+  it("aborts a hung progress write after the timeout so it never blocks later writes forever", async () => {
+    jest.useFakeTimers();
+    setupInProgressChallengeQuiz();
+    (updateChallengeQuizSessionProgress as jest.Mock).mockImplementation((_id, _req, options) => new Promise((_resolve, reject) => {
+      options?.signal?.addEventListener("abort", () => reject(new Error("aborted")));
+    }));
+    render(<ChallengeQuizPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /Mitochondria/i }));
+    expect(updateChallengeQuizSessionProgress).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole("button", { name: /Nucleus/i }));
+    expect(updateChallengeQuizSessionProgress).toHaveBeenCalledTimes(1);
+
+    // Without the timeout, the first write hangs forever and the queue never reaches the second one.
+    await act(async () => {
+      jest.advanceTimersByTime(30_000);
+      await Promise.resolve();
+    });
+    await waitFor(() => expect(updateChallengeQuizSessionProgress).toHaveBeenCalledTimes(2));
+    jest.useRealTimers();
   });
 
   it("submits the active Board Exam before leaving", async () => {

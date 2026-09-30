@@ -212,10 +212,11 @@ class AdminStudyPackTransactionHelperTest {
         transactionHelper.repairMalformedQuiz(pack);
 
         assertThat(pack.getQuiz()).isEqualTo(regeneratedQuiz);
-        assertThat(pack.getQuizStamp()).isEqualTo(1);
         assertThat(pack.getSummary()).isEqualTo(ORIGINAL_SUMMARY);
         assertThat(pack.getKeyConcepts()).containsExactly(ORIGINAL_CONCEPT);
         verify(studyPackRepository).save(pack);
+        // Atomic DB-level increment, not a Java-side field set — see StudyPackRepository.bumpQuizStamp.
+        verify(studyPackRepository).bumpQuizStamp(pack.getId());
         // Same lock-order-inversion fix as regenerateOnePack: flush before either refreshPool call.
         InOrder inOrder = inOrder(studyPackRepository, examQuestionPoolService);
         inOrder.verify(studyPackRepository).save(pack);

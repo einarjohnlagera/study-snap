@@ -444,6 +444,57 @@ class ChallengeQuizBankConcurrencyIntegrationTest {
                 UUID.class, fixture.packId)).isNull();
     }
 
+    /**
+     * `resolveExistingChallengeSession` reads the existing session once unlocked (to capture
+     * {@code observedStatus}), then again locked — the same shape as Interview Practice's original bug.
+     * Both reads resolve to the SAME Java object by Hibernate identity within one persistence context,
+     * so without a refresh, "lockedExisting.getStatus() != observedStatus" compares a value to itself
+     * and can never catch a status a concurrent transaction committed between the two reads. This test
+     * injects exactly that commit between the two reads via a paused repository call.
+     */
+    @Test
+    @Timeout(15)
+    void startSessionDetectsAConcurrentCompletionBetweenItsTwoSessionReads() throws Exception {
+        Fixture fixture = seed(false);
+        CountDownLatch firstReadDone = new CountDownLatch(1);
+        CountDownLatch proceed = new CountDownLatch(1);
+        MethodInterceptor pauseBetweenReads = invocation -> {
+            Object result = invocation.proceed();
+            if (!invocation.getMethod().getName()
+                    .equals("findTopByUserIdAndStudyPackIdAndSessionModeAndStatusInOrderByCreatedAtDesc")) {
+                return result;
+            }
+            firstReadDone.countDown();
+            assertThat(proceed.await(8, TimeUnit.SECONDS)).isTrue();
+            return result;
+        };
+        ((Advised) sessionRepository).addAdvice(0, pauseBetweenReads);
+        when(quizGenerationService.generateChallengeQuiz(any(), any(), any(), any(),
+                any(Integer.class), any(), any())).thenThrow(new IllegalStateException("LLM failure"));
+        try (var executor = Executors.newFixedThreadPool(1)) {
+            var start = executor.submit(() ->
+                    challengeQuizService.startSession(fixture.packId.toString(), fixture.userId, null));
+            assertThat(firstReadDone.await(8, TimeUnit.SECONDS)).isTrue();
+            // A concurrent request committing the session as COMPLETED between the two reads above.
+            new TransactionTemplate(transactionManager).execute(status -> {
+                jdbc.update("update quick_review_sessions set status = 'COMPLETED', completed_at = now() where id = ?",
+                        fixture.sessionId);
+                return null;
+            });
+            proceed.countDown();
+            start.get(8, TimeUnit.SECONDS);
+        } finally {
+            ((Advised) sessionRepository).removeAdvice(pauseBetweenReads);
+        }
+        // Without the refresh fix, the stale guard sees no status change and startSession incorrectly
+        // resumes the now-COMPLETED session instead of treating it as gone and starting a new one.
+        UUID failedSessionId = jdbc.queryForObject("""
+                select id from quick_review_sessions
+                where study_pack_id = ? and status = 'FAILED' order by created_at desc limit 1
+                """, UUID.class, fixture.packId);
+        assertThat(failedSessionId).isNotNull().isNotEqualTo(fixture.sessionId);
+    }
+
     @Test
     @Timeout(15)
     void regenerationDuringLlmCallLeavesStaleRowsUnclaimable() throws Exception {

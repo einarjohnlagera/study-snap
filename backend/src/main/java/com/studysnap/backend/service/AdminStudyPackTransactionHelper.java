@@ -137,8 +137,9 @@ public class AdminStudyPackTransactionHelper {
             StudyPackGenerationContext context = buildContext(note);
             GeneratedStudyPackContent generated = llmStudyPackService.generateStudyPack(note.getContent(), context);
             currentPack.setQuiz(generated.quiz());
-            currentPack.setQuizStamp(currentPack.getQuizStamp() + 1);
             studyPackRepository.save(currentPack);
+            // Atomic — see StudyPackRepository.bumpQuizStamp's Javadoc.
+            studyPackRepository.bumpQuizStamp(currentPack.getId());
             // Same invalidation as regenerateOnePack above, and for the same reason: this replaces the
             // pack's quiz in place, which feeds the pool's answer-key exclusion filter, so a READY pool
             // must be reset. The flush ordering is load-bearing — see the comment above.

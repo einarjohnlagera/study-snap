@@ -213,8 +213,41 @@ standing baseline rule.
   - Added an in-flight guard on Quick Review's `initializeSession(force=true)`: three call sites
     (`/answer`, `/progress`, `/complete`) can each independently hit a stale-session 409 and each call
     `initializeSession(true)`, and without a guard that can fire more than one concurrent `startSession`
-    — reaching this item's own already-accepted insert-vs-insert Known Limitation (F3) by a new path,
-    not a new failure mode, but cheap to close off anyway.
+    — reaching this item's own already-accepted insert-vs-insert Known Limitation by a new path, not a
+    new failure mode, but cheap to close off anyway.
+  - **A second, independent falsification pass (a fresh Opus agent, no inherited context) found four
+    more issues in the diff above, all fixed and each proven with a real Postgres or jsdom failing-first
+    test:**
+    - **The identical stale-read-after-lock pattern also exists in `ChallengeQuizService.
+      resolveExistingChallengeSession`, pre-existing since July (`c76e5c1d`/`287f0069`), not introduced by
+      this item.** It reads the session unlocked to capture `observedStatus`, then locks it and compares
+      `lockedExisting.getStatus() != observedStatus` — the same object by Hibernate identity, so the
+      comparison can never fire. Proven live on real Postgres (a session completed by one connection
+      still read as `IN_PROGRESS` by a racing `startSession`). Fixed with the same
+      `entityManager.refresh()` pattern as Interview Practice's fix above, proven with a new test that
+      pauses between the two reads via an AOP interceptor and commits a status change from a second
+      connection in that window.
+    - **The coalescing queue had no per-request timeout, and nothing cleared it on
+      `resetToPrestart`** — one hung progress write (a fetch has no default timeout) would have blocked
+      every later progress write for the rest of the page's life, including a later session on the same
+      page, and `handleLeaveSession`'s new await could hang indefinitely, contradicting this item's own
+      "costs nothing there" claim above. Fixed: each queued write now carries an `AbortController` with
+      a 30-second dead-request bound (generous on purpose — a legitimate `+5 Questions` LLM call can
+      legitimately hold this row's lock that long), and `resetToPrestart` aborts and clears the queue.
+    - **The tab-hidden immediate write and the queue were not ordered against each other** — an
+      in-flight (or 401-refresh-retried) queued write carrying older state could still land on the
+      server after the newer immediate write, overwriting it. Fixed: firing either write now aborts
+      whatever the other one's controller currently is, so whichever fires last always wins and a
+      superseded write can never land after a newer one. `updateChallengeQuizSessionProgress` now
+      accepts an optional `AbortSignal`.
+    - **A quiz-repair race could give two different quiz contents the same `quiz_stamp`.** Both
+      `StudyPackService.saveStudyPack` and `AdminStudyPackTransactionHelper`'s malformed-quiz repair read
+      the pack unlocked and incremented `quizStamp` in Java, so a repair racing a real user regeneration
+      could compute the identical stamp value the regeneration just committed — defeating the invariant
+      `V152` exists to protect. Fixed with a new atomic `StudyPackRepository.bumpQuizStamp` (`SET
+      quiz_stamp = quiz_stamp + 1`, a targeted DB-level increment) replacing the Java-side
+      read-increment-write in both places; neither caller's in-memory `quizStamp` field is set anymore,
+      so nothing reads a value staler than what the atomic bump already applied.
 
 - **Challenge Quiz bank concurrency (items 2-4):** Real Spring-proxied, PostgreSQL 18 Testcontainers
   reproductions found three `releaseClaims` faults before the fix: `generateMoreQuestions` held a bank-row

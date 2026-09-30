@@ -178,10 +178,20 @@ Generated fields:
 - optional generation metadata (`model_used`, token usage, estimated cost, timestamps)
 - `study_packs.generation_stamp` (`BIGINT NOT NULL DEFAULT 0`): advances with summary/key-concept replacement
   and Challenge bank invalidation in one transaction; unrelated pack metadata edits leave it unchanged
+- `study_packs.quiz_stamp` (`BIGINT NOT NULL DEFAULT 0`): a separate stamp from `generation_stamp`,
+  advancing only when the pack's `quiz` column is actually replaced in place (not on a summary-only
+  repair, which never touches `quiz`). Bumped via `StudyPackRepository.bumpQuizStamp`, an atomic
+  `UPDATE ... SET quiz_stamp = quiz_stamp + 1` — never via a Java-side read-increment-write, which two
+  concurrent quiz replacements (e.g. a user regeneration racing an admin quiz repair) could otherwise
+  compute to the identical value.
 
 `challenge_quiz_question_bank.generation_stamp` is nullable only for rows that predate the stamp migration.
 New bank rows require the value captured from their Study Pack before question generation. Claim-side reads
 accept matching or legacy-null stamps; owning-session outcome and release reads ignore the stamp.
+
+`quick_review_sessions.quiz_stamp_at_creation` (`BIGINT`, nullable) captures the owning Study Pack's
+`quiz_stamp` when a Quick Review session starts; null for sessions that predate the migration, which
+fall back to comparing against `notes.generation_enqueued_at` instead.
 
 State transition:
 
