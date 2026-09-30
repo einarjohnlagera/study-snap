@@ -32,6 +32,7 @@ import com.studysnap.backend.entity.StudyPackEntity;
 import com.studysnap.backend.exception.AdaptivePracticeSessionActiveException;
 import com.studysnap.backend.entity.StudyPackStatus;
 import com.studysnap.backend.exception.InterviewPracticeQuotaExhaustedException;
+import com.studysnap.backend.exception.InterviewPracticeAnswerAlreadyRecordedException;
 import com.studysnap.backend.exception.InvalidInterviewPracticeRequestException;
 import com.studysnap.backend.repository.QuickReviewSessionRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
@@ -53,9 +54,19 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.transaction.TransactionException;
+import org.springframework.transaction.support.SimpleTransactionStatus;
+import org.springframework.transaction.support.TransactionCallback;
+import org.springframework.transaction.support.TransactionOperations;
 
 @ExtendWith(MockitoExtension.class)
 class InterviewPracticeServiceTest {
+    private static final TransactionOperations TEST_TRANSACTION_OPERATIONS = new TransactionOperations() {
+        @Override
+        public <T> T execute(TransactionCallback<T> action) throws TransactionException {
+            return action.doInTransaction(new SimpleTransactionStatus());
+        }
+    };
     @Mock
     private StudyPackRepository studyPackRepository;
     @Mock
@@ -80,6 +91,8 @@ class InterviewPracticeServiceTest {
     private StudyPackGenerationContextResolver generationContextResolver;
     @Mock
     private ConceptHealthService conceptHealthService;
+    @Mock
+    private jakarta.persistence.EntityManager entityManager;
 
     private InterviewPracticeService service;
 
@@ -98,7 +111,9 @@ class InterviewPracticeServiceTest {
                 analyticsService,
                 aiRateLimitService,
                 generationContextResolver,
-                conceptHealthService
+                conceptHealthService,
+                TEST_TRANSACTION_OPERATIONS,
+                entityManager
         );
     }
 
@@ -445,7 +460,7 @@ class InterviewPracticeServiceTest {
         UUID studyPackId = UUID.randomUUID();
         QuickReviewSessionEntity session = buildSession(userId, noteId, studyPackId, buildQuiz(2));
 
-        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(sessionId, userId, QuickReviewSessionMode.ADAPTIVE))
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionModeForUpdate(sessionId, userId, QuickReviewSessionMode.ADAPTIVE))
                 .thenReturn(Optional.of(session));
         when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
@@ -460,8 +475,101 @@ class InterviewPracticeServiceTest {
 
         assertThat(response.verdict()).isEqualTo("WORKABLE");
         assertThat(response.nextQuestion()).isNotNull();
+        assertThat(response.nextQuestion().correctIndex()).isNull();
+        assertThat(response.nextQuestion().explanation()).isNull();
         assertThat(QuizSessionStateUtils.extractInterviewTimeSpentSeconds(session.getSessionState(), buildQuiz(2)))
                 .containsEntry(0, 121);
+        assertThat(QuizSessionStateUtils.extractQuiz(session.getSessionState()).get(1).correctIndex()).isEqualTo(1);
+        assertThat(QuizSessionStateUtils.extractQuiz(session.getSessionState()).get(1).explanation())
+                .isEqualTo("Explanation 1");
+    }
+
+    @Test
+    void answerQuestionSameChoiceRetryReturnsStoredCritiqueWithoutCallingLlmOrSavingAgain() {
+        UUID userId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+        QuickReviewSessionEntity session = buildSession(
+                userId, UUID.randomUUID(), UUID.randomUUID(), buildQuiz(2)
+        );
+        InterviewPracticeCritique critique = new InterviewPracticeCritique(
+                "WORKABLE", "Good structure.", "What risk comes first?"
+        );
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionModeForUpdate(
+                sessionId, userId, QuickReviewSessionMode.ADAPTIVE
+        )).thenReturn(Optional.of(session));
+        when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(quizGenerationService.generateInterviewCritique(any(), eq(1))).thenReturn(critique);
+        InterviewPracticeAnswerRequest request = new InterviewPracticeAnswerRequest(0, "B", 45);
+
+        InterviewPracticeAnswerResponse firstResponse = service.answerQuestion(sessionId, userId, request);
+        InterviewPracticeAnswerResponse retryResponse = service.answerQuestion(sessionId, userId, request);
+
+        assertThat(retryResponse.verdict()).isEqualTo(firstResponse.verdict());
+        assertThat(retryResponse.rationale()).isEqualTo(firstResponse.rationale());
+        assertThat(retryResponse.followUp()).isEqualTo(firstResponse.followUp());
+        assertThat(retryResponse.nextQuestion()).isEqualTo(firstResponse.nextQuestion());
+        verify(quizGenerationService, times(1)).generateInterviewCritique(any(), eq(1));
+        verify(quickReviewSessionRepository, times(1)).save(session);
+    }
+
+    @Test
+    void answerQuestionDifferentChoiceRetryIsRejectedAndCompletionScoresTheFirstAnswer() {
+        UUID userId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+        List<QuizItem> quiz = buildQuiz(1);
+        QuickReviewSessionEntity session = buildSession(userId, UUID.randomUUID(), UUID.randomUUID(), quiz);
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionModeForUpdate(
+                sessionId, userId, QuickReviewSessionMode.ADAPTIVE
+        )).thenReturn(Optional.of(session));
+        when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(quizGenerationService.generateInterviewCritique(any(), eq(1)))
+                .thenReturn(new InterviewPracticeCritique("INCORRECT", "Review the transaction boundary.", "Why?"));
+        service.answerQuestion(sessionId, userId, new InterviewPracticeAnswerRequest(0, "B", 30));
+        InterviewPracticeAnswerRequest changedAnswer = new InterviewPracticeAnswerRequest(0, "A", 35);
+
+        assertThatThrownBy(() -> service.answerQuestion(sessionId, userId, changedAnswer))
+                .isInstanceOf(InterviewPracticeAnswerAlreadyRecordedException.class);
+
+        assertThat(QuizSessionStateUtils.extractSelectedChoiceIndexes(session.getSessionState(), quiz))
+                .containsEntry(0, 1);
+        InterviewReadinessReportResponse report = service.completeSession(sessionId, userId);
+        assertThat(report.correctAnswers()).isZero();
+        assertThat(report.scorePercentage()).isZero();
+        verify(quizGenerationService, times(1)).generateInterviewCritique(any(), eq(1));
+    }
+
+    @Test
+    void answerQuestionAfterCritiqueFailureAllowsAChangedChoiceBecauseNoFeedbackWasServed() {
+        UUID userId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+        List<QuizItem> quiz = buildQuiz(1);
+        QuickReviewSessionEntity session = buildSession(userId, UUID.randomUUID(), UUID.randomUUID(), quiz);
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionModeForUpdate(
+                sessionId, userId, QuickReviewSessionMode.ADAPTIVE
+        )).thenReturn(Optional.of(session));
+        when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(quizGenerationService.generateInterviewCritique(any(), anyInt()))
+                .thenThrow(new IllegalStateException("critique unavailable"))
+                .thenReturn(new InterviewPracticeCritique("STRONG", "Correct recovery.", "What next?"));
+        InterviewPracticeAnswerRequest failedAnswer = new InterviewPracticeAnswerRequest(0, "B", 20);
+
+        assertThatThrownBy(() -> service.answerQuestion(sessionId, userId, failedAnswer))
+                .isInstanceOf(IllegalStateException.class);
+        assertThat(QuizSessionStateUtils.extractInterviewFeedback(session.getSessionState(), 0)).isEmpty();
+
+        InterviewPracticeAnswerResponse response = service.answerQuestion(
+                sessionId,
+                userId,
+                new InterviewPracticeAnswerRequest(0, "A", 25)
+        );
+        assertThat(response.verdict()).isEqualTo("STRONG");
+        assertThat(QuizSessionStateUtils.extractSelectedChoiceIndexes(session.getSessionState(), quiz))
+                .containsEntry(0, 0);
+        assertThat(QuizSessionStateUtils.extractInterviewFeedback(session.getSessionState(), 0)).isPresent();
+        verify(quizGenerationService, times(2)).generateInterviewCritique(any(), anyInt());
     }
 
     @Test
@@ -475,7 +583,7 @@ class InterviewPracticeServiceTest {
         session.setSessionState(QuizSessionStateUtils.withInterviewAnswer(session.getSessionState(), 1, 2, 80));
         StudyPackEntity studyPack = buildStudyPack(userId, noteId, studyPackId);
 
-        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(sessionId, userId, QuickReviewSessionMode.ADAPTIVE))
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionModeForUpdate(sessionId, userId, QuickReviewSessionMode.ADAPTIVE))
                 .thenReturn(Optional.of(session));
         when(studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId)).thenReturn(Optional.of(studyPack));
         when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
@@ -528,7 +636,7 @@ class InterviewPracticeServiceTest {
         StudyPackEntity additionalStudyPack = buildStudyPack(userId, additionalNoteId, additionalStudyPackId);
         additionalStudyPack.setKeyConcepts(List.of("Concurrency"));
 
-        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(sessionId, userId, QuickReviewSessionMode.ADAPTIVE))
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionModeForUpdate(sessionId, userId, QuickReviewSessionMode.ADAPTIVE))
                 .thenReturn(Optional.of(session));
         when(studyPackRepository.findByIdAndOwnerUserId(primaryStudyPackId, userId))
                 .thenReturn(Optional.of(primaryStudyPack));
@@ -585,7 +693,7 @@ class InterviewPracticeServiceTest {
         additional.setKeyConcepts(List.of("Shear Force", "Bending Moment"));
         nonContributing.setKeyConcepts(List.of("Shear Force", "Bending Moment"));
 
-        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(sessionId, userId, QuickReviewSessionMode.ADAPTIVE))
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionModeForUpdate(sessionId, userId, QuickReviewSessionMode.ADAPTIVE))
                 .thenReturn(Optional.of(session));
         when(studyPackRepository.findByIdAndOwnerUserId(primaryStudyPackId, userId)).thenReturn(Optional.of(primary));
         when(studyPackRepository.findByIdAndOwnerUserId(additionalStudyPackId, userId)).thenReturn(Optional.of(additional));
@@ -631,7 +739,7 @@ class InterviewPracticeServiceTest {
         session.setSessionState(withInterviewSourceRefs(session.getSessionState(), missingStudyPackId, additionalNoteId));
         StudyPackEntity primaryStudyPack = buildStudyPack(userId, primaryNoteId, primaryStudyPackId);
 
-        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(sessionId, userId, QuickReviewSessionMode.ADAPTIVE))
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionModeForUpdate(sessionId, userId, QuickReviewSessionMode.ADAPTIVE))
                 .thenReturn(Optional.of(session));
         when(studyPackRepository.findByIdAndOwnerUserId(primaryStudyPackId, userId))
                 .thenReturn(Optional.of(primaryStudyPack));
@@ -674,7 +782,7 @@ class InterviewPracticeServiceTest {
         UUID studyPackId = UUID.randomUUID();
         QuickReviewSessionEntity session = buildSession(userId, noteId, studyPackId, buildQuiz(2));
 
-        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(sessionId, userId, QuickReviewSessionMode.ADAPTIVE))
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionModeForUpdate(sessionId, userId, QuickReviewSessionMode.ADAPTIVE))
                 .thenReturn(Optional.of(session));
         when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));

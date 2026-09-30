@@ -31,23 +31,24 @@ import { type AppPlanType } from "@/src/config/plans";
 import {
   completeProductOnboarding,
   completeQuickReviewSession,
+  answerQuickReviewQuestion,
   forfeitQuickReviewSession,
   generateQuickReviewStudyTip,
   getCollectionGoal,
   getMe,
   getMyStudyPack,
   getNote,
-  getSharedNote,
-  getSharedStudyPack,
   getPostSessionNextStep,
   saveQuickReviewConfidence,
   startQuickReviewSession,
   trackAnalyticsEvent,
   updateProfileLearnerLevel,
   updateQuickReviewSessionProgress,
+  ApiRequestError,
   type CompanionContent,
   type LearnerLevel,
-  type NoteResponse,
+  type QuizItem,
+  type QuickReviewSessionStartResponse,
   type PostSessionNextStepResponse,
   type ProfileType,
   type QuickReviewConfidenceLevel,
@@ -68,8 +69,6 @@ import {
   resolveQuizCorrectAnswer,
   resolveQuizCorrectIndex,
   resolveQuizItemGroupAt,
-  serializeSelectedChoiceIndexRecord,
-  serializeSelectedMultiChoiceIndicesRecord,
   toSelectedChoiceIndexRecord,
   toSelectedMultiChoiceIndicesRecord,
 } from "@/lib/quiz";
@@ -86,6 +85,10 @@ type SessionStatePayload = {
   roundSelections?: Record<string, number> | Record<string, string>;
   roundMultiSelections?: Record<string, number[]>;
 };
+type QuickReviewSessionInfo = Pick<
+  QuickReviewSessionStartResponse,
+  "noteId" | "title" | "keyConcepts" | "quizMastered" | "quizMasteredAt" | "isOwner"
+>;
 
 function getMotivationalFeedback(scorePercentage: number) {
   if (scorePercentage >= 100) {
@@ -175,10 +178,15 @@ export default function QuickReviewPage() {
   const pathname = usePathname();
   const params = useParams<{ id: string }>();
   const searchParams = useSearchParams();
-  const [note, setNote] = useState<NoteResponse | null>(null);
+  const [sessionInfo, setSessionInfo] = useState<QuickReviewSessionInfo | null>(null);
+  const [quiz, setQuiz] = useState<QuizItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [sessionInitializing, setSessionInitializing] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [errorKind, setErrorKind] = useState<"retry" | "not-found" | "unavailable" | null>(null);
+  const [answerError, setAnswerError] = useState<string | null>(null);
+  const [answering, setAnswering] = useState(false);
+  const [confirmedMatchingAnswers, setConfirmedMatchingAnswers] = useState<Record<number, true>>({});
   const [phase, setPhase] = useState<QuickReviewPhase>("initial");
   const [activeQuestionIndexes, setActiveQuestionIndexes] = useState<number[]>([]);
   const [currentRoundIndex, setCurrentRoundIndex] = useState(0);
@@ -215,7 +223,9 @@ export default function QuickReviewPage() {
   const [savingLearnerLevel, setSavingLearnerLevel] = useState(false);
   const [learnerLevelToast, setLearnerLevelToast] = useState<string | null>(null);
   const { usageSummary } = useBillingUsageSummary();
-  const loadedNoteIdRef = useRef<string | null>(null);
+  const startedNoteIdRef = useRef<string | null>(null);
+  const initializingSessionRef = useRef<string | null>(null);
+  const confirmedMatchingAnswersRef = useRef<Set<number>>(new Set());
   const legacyRedirectTargetRef = useRef<string | null>(null);
   const openLoopTrackedSessionIdRef = useRef<string | null>(null);
   const digestLandingTrackedRef = useRef(false);
@@ -228,10 +238,6 @@ export default function QuickReviewPage() {
     return Array.isArray(params.id) ? params.id[0] : params.id;
   }, [params]);
   const queryString = useMemo(() => searchParams.toString(), [searchParams]);
-  const isSharedSource = useMemo(
-    () => new URLSearchParams(queryString).get("source") === "shared",
-    [queryString],
-  );
   const isDueConceptsDigestVisit = useMemo(
     () => new URLSearchParams(queryString).get("source") === "due-concepts-digest",
     [queryString],
@@ -292,6 +298,8 @@ export default function QuickReviewPage() {
     setRetryQuestionIndexes([]);
     setRoundSelections({});
     setRoundMultiSelections({});
+    confirmedMatchingAnswersRef.current = new Set();
+    setConfirmedMatchingAnswers({});
     setSelectedChoices({});
     setSelectedMultiChoices({});
     setRetryCount(0);
@@ -307,16 +315,24 @@ export default function QuickReviewPage() {
     setShowAnswerReview(false);
     setMultiSelectSubmitted(false);
     setNextStepResponse(null);
+    setAnswerError(null);
+    setAnswering(false);
   }, []);
 
-  const loadNote = useCallback(async (force = false) => {
+  const initializeSession = useCallback(async (force = false) => {
     if (!noteId) {
       setError("Note not found.");
+      setErrorKind("not-found");
       setLoading(false);
+      setSessionInitializing(false);
       return;
     }
 
-    if (!force && loadedNoteIdRef.current === noteId) {
+    if (!force && startedNoteIdRef.current === noteId) {
+      return;
+    }
+
+    if (initializingSessionRef.current === noteId) {
       return;
     }
 
@@ -324,67 +340,72 @@ export default function QuickReviewPage() {
       return;
     }
 
+    initializingSessionRef.current = noteId;
+    startedNoteIdRef.current = noteId;
     setLoading(true);
+    setSessionInitializing(true);
     setError(null);
+    setErrorKind(null);
     try {
-      let detail: NoteResponse;
-      if (isSharedSource) {
-        const sharedNote = await getSharedNote(noteId);
-        if (!sharedNote.studyPackId) {
-          throw new Error("This shared note does not have a Study Pack yet.");
-        }
-        const sharedPack = await getSharedStudyPack(sharedNote.studyPackId);
-        detail = {
-          id: sharedNote.id,
-          title: sharedNote.title,
-          subject: sharedNote.subject,
-          courseProgram: sharedNote.courseProgram,
-          domainContext: null,
-          learnerLevel: sharedNote.learnerLevel,
-          tags: sharedNote.tags,
-          content: sharedNote.content,
-          visibility: "PRIVATE",
-          createdAt: sharedNote.sharedAt,
-          updatedAt: sharedNote.sharedAt,
-          copiedFromNoteId: null,
-          copiedFromUserId: null,
-          copiedFromTitle: null,
-          copiedFromPublic: false,
-          copiedAt: null,
-          studyPackId: sharedPack.id,
-          studyPackStatus: "STUDY_PACK_READY",
-          summary: sharedPack.summary,
-          keyConcepts: sharedPack.keyConcepts,
-          quiz: sharedPack.quiz,
-          quizMastered: false,
-          quizMasteredAt: null,
-          generatedQuiz: null,
-          lastUsedTargetLearnerLevel: null,
-          quizCount: sharedPack.quiz.length,
-          quickReviewAvailable: sharedPack.quiz.length > 0,
-          challengeQuizAvailable: false,
-          adaptivePracticeAvailable: false,
-          studyPackDone: true,
-          generationEnqueuedAt: null,
-        };
-      } else {
-        detail = await getNote(noteId);
+      const started = await startQuickReviewSession(noteId);
+      if (!Array.isArray(started.quiz) || !started.sessionId || !started.noteId) {
+        throw new Error("Quick Review could not load. Please try again.");
       }
-      if (!detail.quickReviewAvailable) {
-        setNote(detail);
-        loadedNoteIdRef.current = noteId;
-        setError("Generate a Study Pack first.");
-        return;
-      }
-      setNote(detail);
-      loadedNoteIdRef.current = noteId;
-      resetQuickReviewState(detail.quiz.map((_, index) => index));
+      const startedQuiz = started.quiz;
+      const allIndexes = startedQuiz.map((_, index) => index);
+      resetQuickReviewState(allIndexes);
+      setQuiz(startedQuiz);
+      setSessionInfo({
+        noteId: started.noteId,
+        title: started.title,
+        keyConcepts: started.keyConcepts ?? [],
+        quizMastered: started.quizMastered,
+        quizMasteredAt: started.quizMasteredAt,
+        isOwner: started.isOwner,
+      });
       setRecentSessions([]);
-      setCurrentSessionId(null);
       setSessionStartedAt(Date.now());
-      setSessionInitializing(true);
+      const state = (started.sessionState ?? {}) as SessionStatePayload;
+      const restoredSelectedChoices = toSelectedChoiceIndexRecord(state.selectedChoices, startedQuiz);
+      const restoredSelectedMultiChoices = toSelectedMultiChoiceIndicesRecord(state.selectedMultiChoices, startedQuiz);
+      const restoredRetryQuestionIndexes = toNumberArray(state.retryQuestionIndexes);
+      const restoredRoundSelections = toSelectedChoiceIndexRecord(state.roundSelections, startedQuiz);
+      const restoredRoundMultiSelections = toSelectedMultiChoiceIndicesRecord(state.roundMultiSelections, startedQuiz);
+      const round = started.currentRound ?? "INITIAL";
+      const restoredActiveIndexes = toNumberArray(state.activeQuestionIndexes);
+      const activeIndexes = round === "RETRY"
+        ? (restoredActiveIndexes.length > 0 ? restoredActiveIndexes : restoredRetryQuestionIndexes)
+        : allIndexes;
+      const restoredRoundIndex = Math.max(
+        0,
+        Math.min(started.currentQuestionIndex, Math.max(0, activeIndexes.length - 1)),
+      );
+      const isRetryTransition = round === "INITIAL"
+        && started.retryCount > 0
+        && restoredRetryQuestionIndexes.length > 0
+        && started.currentQuestionIndex >= allIndexes.length;
+      const confirmedIndexes = new Set([
+        ...Object.keys(restoredRoundSelections).map(Number),
+        ...Object.keys(restoredRoundMultiSelections).map(Number),
+      ]);
+
+      confirmedMatchingAnswersRef.current = confirmedIndexes;
+      setConfirmedMatchingAnswers(Object.fromEntries(
+        Array.from(confirmedIndexes).map((index) => [index, true as const]),
+      ));
+      setCurrentSessionId(started.sessionId);
+      setSelectedChoices(restoredSelectedChoices);
+      setSelectedMultiChoices(restoredSelectedMultiChoices);
+      setRetryQuestionIndexes(restoredRetryQuestionIndexes);
+      setActiveQuestionIndexes(activeIndexes.length > 0 ? activeIndexes : allIndexes);
+      setRoundSelections(restoredRoundSelections);
+      setRoundMultiSelections(restoredRoundMultiSelections);
+      setRetryCount(started.retryCount ?? 0);
+      setCurrentRoundIndex(restoredRoundIndex);
+      setPhase(isRetryTransition ? "retry-transition" : (round === "RETRY" ? "retry" : "initial"));
     } catch (err) {
-      if (pathname.startsWith("/study-packs/")) {
+      const requestError = err instanceof ApiRequestError ? err : null;
+      if (pathname.startsWith("/study-packs/") && (requestError?.status === 403 || requestError?.status === 404)) {
         const byStudyPack = await getMyStudyPack(noteId).catch(() => null);
         if (byStudyPack?.noteId) {
           const nextQuery = queryString;
@@ -401,22 +422,35 @@ export default function QuickReviewPage() {
           return;
         }
       }
-      loadedNoteIdRef.current = null;
-      const message = err instanceof Error ? err.message : "Could not load this note.";
-      setError(message);
-      setNote(null);
+      if (requestError?.code === "QUICK_REVIEW_NOT_AVAILABLE" || requestError?.code === "NOTE_STUDY_PACK_NOT_READY") {
+        setError("Generate a Study Pack first.");
+        setErrorKind("unavailable");
+      } else if (requestError?.status === 403 || requestError?.status === 404) {
+        setError("Note not found.");
+        setErrorKind("not-found");
+      } else {
+        setError(err instanceof Error ? err.message : "Could not start Quick Review.");
+        setErrorKind("retry");
+      }
+      setSessionInfo(null);
+      setQuiz([]);
     } finally {
+      // Guarded by identity, not just cleared: if noteId changed while this call was in flight, a
+      // newer call for the new noteId has already claimed the ref — this call must not clear that.
+      if (initializingSessionRef.current === noteId) {
+        initializingSessionRef.current = null;
+      }
       setLoading(false);
+      setSessionInitializing(false);
     }
-  }, [isSharedSource, noteId, pathname, queryString, resetQuickReviewState, router]);
+  }, [noteId, pathname, queryString, resetQuickReviewState, router]);
 
   useEffect(() => {
-    void loadNote();
-  }, [loadNote]);
+    void initializeSession();
+  }, [initializeSession]);
 
-  const quiz = useMemo(() => note?.quiz ?? [], [note]);
   const totalQuestions = quiz.length;
-  const isNotFound = error?.toLowerCase().includes("not found") ?? false;
+  const isNotFound = errorKind === "not-found";
   const isComplete = phase === "complete";
   const currentQuestionIndex = currentRoundIndex < activeQuestionIndexes.length
     ? activeQuestionIndexes[currentRoundIndex]
@@ -432,7 +466,10 @@ export default function QuickReviewPage() {
   const selectedChoiceIndex = currentQuestionIndex !== null ? roundSelections[currentQuestionIndex] ?? null : null;
   const selectedMultiChoiceIndices = currentQuestionIndex !== null ? roundMultiSelections[currentQuestionIndex] ?? [] : [];
   const hasAnsweredCurrent = activeMatchingGroup
-    ? activeMatchingGroup.items.every((_, offset) => roundSelections[activeMatchingGroup.startIndex + offset] != null)
+    ? activeMatchingGroup.items.every((_, offset) => {
+      const index = activeMatchingGroup.startIndex + offset;
+      return roundSelections[index] != null && confirmedMatchingAnswers[index] === true;
+    })
     : currentQuestionIsMultiSelect ? selectedMultiChoiceIndices.length > 0 : selectedChoiceIndex !== null;
   const score = useMemo(
     () =>
@@ -526,8 +563,10 @@ export default function QuickReviewPage() {
   const isStruggling = !isPerfectScore && (displayedWeakConcepts.length > 0 || scorePercentage < 80);
   const showChallengeGuidedCta = !isStruggling;
   const noteDetailHref = useMemo(
-    () => note ? (isSharedSource ? `/shared/notes/${note.id}` : `/notes/${note.id}`) : "/library",
-    [isSharedSource, note],
+    () => sessionInfo?.noteId
+      ? (sessionInfo.isOwner ? `/notes/${sessionInfo.noteId}` : `/shared/notes/${sessionInfo.noteId}`)
+      : "/library",
+    [sessionInfo],
   );
   const currentPlan = usageSummary?.plan ?? viewerPlanType ?? "FREE";
   const hasNextStepGuidance = nextStepResponse !== null || weeklyPacingWeeksRemaining !== null;
@@ -644,22 +683,21 @@ export default function QuickReviewPage() {
       return;
     }
     const sessionState: SessionStatePayload = {
-      selectedChoices: serializeSelectedChoiceIndexRecord(next.selectedChoices),
-      selectedMultiChoices: serializeSelectedMultiChoiceIndicesRecord(next.selectedMultiChoices),
       retryQuestionIndexes: next.retryQuestionIndexes,
       activeQuestionIndexes: next.activeQuestionIndexes,
-      roundSelections: serializeSelectedChoiceIndexRecord(next.roundSelections),
-      roundMultiSelections: serializeSelectedMultiChoiceIndicesRecord(next.roundMultiSelections),
     };
     updateQuickReviewSessionProgress(currentSessionId, {
       currentQuestionIndex: next.currentQuestionIndex,
       currentRound: next.currentRound,
       retryCount: next.retryCount,
       sessionState,
-    }).catch(() => {
-      // Progress persistence should not block review flow.
+    }).catch((err: unknown) => {
+      if (err instanceof ApiRequestError && err.code === "QUICK_REVIEW_SESSION_STALE") {
+        void initializeSession(true);
+      }
+      // Other progress persistence errors should not block review flow.
     });
-  }, [currentSessionId]);
+  }, [currentSessionId, initializeSession]);
 
   const persistCurrentProgress = useCallback(() => {
     if (currentQuestionIndex === null) {
@@ -690,65 +728,6 @@ export default function QuickReviewPage() {
     selectedMultiChoices,
   ]);
 
-  useEffect(() => {
-    if (!note || !sessionInitializing) {
-      return;
-    }
-
-    let isMounted = true;
-    void (async () => {
-      try {
-        const started = await startQuickReviewSession(note.id);
-        if (!isMounted || !started.sessionId) {
-          return;
-        }
-
-        const state = (started.sessionState ?? {}) as SessionStatePayload;
-        const restoredSelectedChoices = toSelectedChoiceIndexRecord(state.selectedChoices, quiz);
-        const restoredSelectedMultiChoices = toSelectedMultiChoiceIndicesRecord(state.selectedMultiChoices, quiz);
-        const restoredRetryQuestionIndexes = toNumberArray(state.retryQuestionIndexes);
-        const restoredRoundSelections = toSelectedChoiceIndexRecord(state.roundSelections, quiz);
-        const restoredRoundMultiSelections = toSelectedMultiChoiceIndicesRecord(state.roundMultiSelections, quiz);
-        const allIndexes = quiz.map((_, index) => index);
-        const round = started.currentRound ?? "INITIAL";
-        const retryIndexes = restoredRetryQuestionIndexes;
-        const restoredActiveIndexes = toNumberArray(state.activeQuestionIndexes);
-        const activeIndexes = round === "RETRY"
-          ? (restoredActiveIndexes.length > 0 ? restoredActiveIndexes : retryIndexes)
-          : allIndexes;
-        const restoredRoundIndex = Math.max(0, Math.min(started.currentQuestionIndex, Math.max(0, activeIndexes.length - 1)));
-        const isRetryTransition = round === "INITIAL"
-          && started.retryCount > 0
-          && retryIndexes.length > 0
-          && started.currentQuestionIndex >= allIndexes.length;
-
-        setCurrentSessionId(started.sessionId);
-        setSessionStartedAt(Date.now());
-        setSelectedChoices(restoredSelectedChoices);
-        setSelectedMultiChoices(restoredSelectedMultiChoices);
-        setRetryQuestionIndexes(retryIndexes);
-        setActiveQuestionIndexes(activeIndexes.length > 0 ? activeIndexes : allIndexes);
-        setRoundSelections(restoredRoundSelections);
-        setRoundMultiSelections(restoredRoundMultiSelections);
-        setRetryCount(started.retryCount ?? 0);
-        setCurrentRoundIndex(restoredRoundIndex);
-        setPhase(isRetryTransition ? "retry-transition" : (round === "RETRY" ? "retry" : "initial"));
-      } catch {
-        if (isMounted) {
-          setCurrentSessionId(null);
-        }
-      } finally {
-        if (isMounted) {
-          setSessionInitializing(false);
-        }
-      }
-    })();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [note, quiz, sessionInitializing]);
-
   const completeSessionIfNeeded = useCallback(async (finalRetryCount?: number) => {
     if (!currentSessionId || completionTracked || completingSession) {
       return;
@@ -760,6 +739,7 @@ export default function QuickReviewPage() {
       : undefined;
     const effectiveRetryCount = finalRetryCount ?? retryCount;
 
+    let staleCompletion = false;
     try {
       setNextStepResponse(null);
       const result = await completeQuickReviewSession(currentSessionId, {
@@ -773,8 +753,8 @@ export default function QuickReviewPage() {
       });
       setPersistedResult(result);
       setQuizMasteredAfterCompletion(false);
-      if (noteId) {
-        void getNote(noteId)
+      if (sessionInfo?.noteId) {
+        void getNote(sessionInfo.noteId)
           .then((detail) => {
             // `quizMastered` is sticky, so it is true for anyone who mastered this pack at ANY point.
             // Announcing "you earned access" off that alone congratulates a learner on an unlock they
@@ -794,18 +774,22 @@ export default function QuickReviewPage() {
       void getPostSessionNextStep(result.studyPackId)
         .then(setNextStepResponse)
         .catch(() => setNextStepResponse(null));
-    } catch {
-      // Session persistence errors should not block the review experience.
+    } catch (err) {
+      if (err instanceof ApiRequestError && err.code === "QUICK_REVIEW_SESSION_STALE") {
+        staleCompletion = true;
+        void initializeSession(true);
+      }
+      // Other session persistence errors should not block the review experience.
     } finally {
-      setCompletionTracked(true);
+      if (!staleCompletion) setCompletionTracked(true);
       setCompletingSession(false);
-      void trackAnalyticsEvent({
+      if (!staleCompletion) void trackAnalyticsEvent({
         eventType: "QUICK_REVIEW_COMPLETED",
         entityId: currentSessionId,
         metadata: { scorePercentage: totalQuestions > 0 ? Math.round((score / totalQuestions) * 100) : 0, weakConceptCount: weakConcepts.length },
       });
     }
-  }, [completingSession, completionTracked, currentSessionId, noteId, retryCount, score, sessionStartedAt, totalQuestions, weakConcepts]);
+  }, [completingSession, completionTracked, currentSessionId, initializeSession, retryCount, score, sessionInfo?.noteId, sessionStartedAt, totalQuestions, weakConcepts]);
 
   useEffect(() => {
     if (!shouldShowOpenLoop || !persistedResult || openLoopTrackedSessionIdRef.current === persistedResult.id) {
@@ -821,7 +805,7 @@ export default function QuickReviewPage() {
   }, [persistedResult, securedCount, shouldShowOpenLoop, totalConcepts]);
 
   useEffect(() => {
-    if (!isComplete || !note) {
+    if (!isComplete || !sessionInfo?.noteId) {
       return;
     }
     if (!isEmailVerified) {
@@ -834,7 +818,7 @@ export default function QuickReviewPage() {
     }
 
     let isMounted = true;
-    generateQuickReviewStudyTip(note.id, {
+    generateQuickReviewStudyTip(sessionInfo.noteId, {
       incorrectQuestions: incorrectQuestionsForStudyTip,
     })
       .then((response) => {
@@ -852,62 +836,133 @@ export default function QuickReviewPage() {
     return () => {
       isMounted = false;
     };
-  }, [incorrectQuestionsForStudyTip, isComplete, isEmailVerified, note]);
+  }, [incorrectQuestionsForStudyTip, isComplete, isEmailVerified, sessionInfo?.noteId]);
 
-  const handleSelectChoice = (choiceIndex: number) => {
-    if (!currentQuestion || currentQuestionIndex === null || hasAnsweredCurrent) {
+  const applyRevealedQuestions = useCallback((revealed: Array<{ questionIndex: number; question: QuizItem }>) => {
+    if (revealed.length === 0) {
       return;
     }
-    const nextRoundSelections = {
-      ...roundSelections,
-      [currentQuestionIndex]: choiceIndex,
-    };
-    const nextSelectedChoices = {
-      ...selectedChoices,
-      [currentQuestionIndex]: choiceIndex,
-    };
-    setRoundSelections(nextRoundSelections);
-    setSelectedChoices(nextSelectedChoices);
-    trackDigestFirstAnswer();
-    persistProgress({
-      currentQuestionIndex: currentRoundIndex,
-      currentRound: currentRoundType,
-      retryCount,
-      selectedChoices: nextSelectedChoices,
-      selectedMultiChoices,
-      retryQuestionIndexes,
-      activeQuestionIndexes,
-      roundSelections: nextRoundSelections,
-      roundMultiSelections,
+    const byIndex = new Map(revealed.map((entry) => [entry.questionIndex, entry.question]));
+    setQuiz((current) => current.map((question, index) => byIndex.get(index) ?? question));
+  }, []);
+
+  const handleAnswerFailure = useCallback((err: unknown) => {
+    if (err instanceof ApiRequestError && err.code === "QUICK_REVIEW_SESSION_STALE") {
+      void initializeSession(true);
+      return;
+    }
+    setAnswerError(err instanceof Error ? err.message : "Could not check this answer. Please try again.");
+  }, [initializeSession]);
+
+  const handleSelectChoice = async (choiceIndex: number) => {
+    if (!currentSessionId || !currentQuestion || currentQuestionIndex === null || hasAnsweredCurrent || answering) {
+      return;
+    }
+    setAnswering(true);
+    setAnswerError(null);
+    try {
+      const response = await answerQuickReviewQuestion(currentSessionId, {
+        questionIndex: currentQuestionIndex,
+        retryCount,
+        selectedChoiceIndex: choiceIndex,
+      });
+      applyRevealedQuestions([response]);
+      const nextRoundSelections = { ...roundSelections, [currentQuestionIndex]: choiceIndex };
+      const nextSelectedChoices = { ...selectedChoices, [currentQuestionIndex]: choiceIndex };
+      setRoundSelections(nextRoundSelections);
+      setSelectedChoices(nextSelectedChoices);
+      trackDigestFirstAnswer();
+      persistProgress({
+        currentQuestionIndex: currentRoundIndex,
+        currentRound: currentRoundType,
+        retryCount,
+        selectedChoices: nextSelectedChoices,
+        selectedMultiChoices,
+        retryQuestionIndexes,
+        activeQuestionIndexes,
+        roundSelections: nextRoundSelections,
+        roundMultiSelections,
+      });
+    } catch (err) {
+      handleAnswerFailure(err);
+    } finally {
+      setAnswering(false);
+    }
+  };
+
+  const submitMatchingGroup = async (nextRoundSelections: Record<number, number>) => {
+    if (!currentSessionId || !activeMatchingGroup || answering) {
+      return;
+    }
+    const pendingIndexes = activeMatchingGroup.items
+      .map((_, offset) => activeMatchingGroup.startIndex + offset)
+      .filter((index) => !confirmedMatchingAnswersRef.current.has(index));
+    if (pendingIndexes.length === 0) {
+      return;
+    }
+    setAnswering(true);
+    setAnswerError(null);
+    const results = await Promise.allSettled(pendingIndexes.map((questionIndex) => (
+      answerQuickReviewQuestion(currentSessionId, {
+        questionIndex,
+        retryCount,
+        selectedChoiceIndex: nextRoundSelections[questionIndex],
+      })
+    )));
+    const revealed: Array<{ questionIndex: number; question: QuizItem }> = [];
+    const nextSelectedChoices = { ...selectedChoices };
+    let firstFailure: unknown = null;
+    results.forEach((result, resultIndex) => {
+      const questionIndex = pendingIndexes[resultIndex];
+      if (result.status === "fulfilled") {
+        revealed.push(result.value);
+        nextSelectedChoices[questionIndex] = nextRoundSelections[questionIndex];
+        confirmedMatchingAnswersRef.current.add(questionIndex);
+      } else if (firstFailure === null) {
+        firstFailure = result.reason;
+      }
     });
+    applyRevealedQuestions(revealed);
+    setSelectedChoices(nextSelectedChoices);
+    setConfirmedMatchingAnswers(Object.fromEntries(
+      Array.from(confirmedMatchingAnswersRef.current).map((index) => [index, true as const]),
+    ));
+    if (revealed.length > 0) {
+      trackDigestFirstAnswer();
+    }
+    if (firstFailure !== null) {
+      handleAnswerFailure(firstFailure);
+    } else {
+      persistProgress({
+        currentQuestionIndex: currentRoundIndex,
+        currentRound: currentRoundType,
+        retryCount,
+        selectedChoices: nextSelectedChoices,
+        selectedMultiChoices,
+        retryQuestionIndexes,
+        activeQuestionIndexes,
+        roundSelections: nextRoundSelections,
+        roundMultiSelections,
+      });
+    }
+    setAnswering(false);
   };
 
   const handleSelectMatchingChoice = (questionIndex: number, choiceIndex: number) => {
-    if (!activeMatchingGroup || hasAnsweredCurrent) {
+    if (!activeMatchingGroup || hasAnsweredCurrent || answering || confirmedMatchingAnswersRef.current.has(questionIndex)) {
       return;
     }
     const nextRoundSelections = {
       ...roundSelections,
       [questionIndex]: choiceIndex,
     };
-    const nextSelectedChoices = {
-      ...selectedChoices,
-      [questionIndex]: choiceIndex,
-    };
     setRoundSelections(nextRoundSelections);
-    setSelectedChoices(nextSelectedChoices);
-    trackDigestFirstAnswer();
-    persistProgress({
-      currentQuestionIndex: currentRoundIndex,
-      currentRound: currentRoundType,
-      retryCount,
-      selectedChoices: nextSelectedChoices,
-      selectedMultiChoices,
-      retryQuestionIndexes,
-      activeQuestionIndexes,
-      roundSelections: nextRoundSelections,
-      roundMultiSelections,
-    });
+    const wholeGroupSelected = activeMatchingGroup.items.every((_, offset) => (
+      nextRoundSelections[activeMatchingGroup.startIndex + offset] != null
+    ));
+    if (wholeGroupSelected) {
+      void submitMatchingGroup(nextRoundSelections);
+    }
   };
 
   const handleSelectMultiChoices = (choiceIndices: number[]) => {
@@ -918,28 +973,46 @@ export default function QuickReviewPage() {
       ...roundMultiSelections,
       [currentQuestionIndex]: choiceIndices,
     };
-    const nextSelectedMultiChoices = {
-      ...selectedMultiChoices,
-      [currentQuestionIndex]: choiceIndices,
-    };
     setRoundMultiSelections(nextRoundMultiSelections);
-    setSelectedMultiChoices(nextSelectedMultiChoices);
-    persistProgress({
-      currentQuestionIndex: currentRoundIndex,
-      currentRound: currentRoundType,
-      retryCount,
-      selectedChoices,
-      selectedMultiChoices: nextSelectedMultiChoices,
-      retryQuestionIndexes,
-      activeQuestionIndexes,
-      roundSelections,
-      roundMultiSelections: nextRoundMultiSelections,
-    });
+    setAnswerError(null);
   };
 
-  const handleSubmitMultiSelect = () => {
-    setMultiSelectSubmitted(true);
-    trackDigestFirstAnswer();
+  const handleSubmitMultiSelect = async () => {
+    if (!currentSessionId || currentQuestionIndex === null || selectedMultiChoiceIndices.length === 0 || answering) {
+      return;
+    }
+    setAnswering(true);
+    setAnswerError(null);
+    try {
+      const response = await answerQuickReviewQuestion(currentSessionId, {
+        questionIndex: currentQuestionIndex,
+        retryCount,
+        selectedMultiChoiceIndices,
+      });
+      applyRevealedQuestions([response]);
+      const nextSelectedMultiChoices = {
+        ...selectedMultiChoices,
+        [currentQuestionIndex]: selectedMultiChoiceIndices,
+      };
+      setSelectedMultiChoices(nextSelectedMultiChoices);
+      setMultiSelectSubmitted(true);
+      trackDigestFirstAnswer();
+      persistProgress({
+        currentQuestionIndex: currentRoundIndex,
+        currentRound: currentRoundType,
+        retryCount,
+        selectedChoices,
+        selectedMultiChoices: nextSelectedMultiChoices,
+        retryQuestionIndexes,
+        activeQuestionIndexes,
+        roundSelections,
+        roundMultiSelections,
+      });
+    } catch (err) {
+      handleAnswerFailure(err);
+    } finally {
+      setAnswering(false);
+    }
   };
 
   const handleNext = () => {
@@ -1010,6 +1083,8 @@ export default function QuickReviewPage() {
     setMultiSelectSubmitted(false);
     setRoundSelections({});
     setRoundMultiSelections({});
+    confirmedMatchingAnswersRef.current = new Set();
+    setConfirmedMatchingAnswers({});
     persistProgress({
       currentQuestionIndex: 0,
       currentRound: "RETRY",
@@ -1076,7 +1151,7 @@ export default function QuickReviewPage() {
     }
   }, [router]);
 
-  const quizSessionActive = Boolean(note && currentSessionId && !isComplete && totalQuestions > 0 && !error);
+  const quizSessionActive = Boolean(sessionInfo && currentSessionId && !isComplete && totalQuestions > 0 && !error);
   useBottomViewportClaim(quizSessionActive);
   // ⚠️ Hides the whole app-shell header, and with it the notification bell, for the duration of the
   // quiz. Safe because the SAME expression gates the sticky top bar below, which carries the Leave
@@ -1098,7 +1173,7 @@ export default function QuickReviewPage() {
   return (
     <main className={cn(
       "mx-auto w-full max-w-3xl space-y-4 px-4 py-6 sm:px-6 sm:py-10",
-      note && currentQuestion && !isComplete && "pb-28 sm:pb-10",
+      sessionInfo && currentQuestion && !isComplete && "pb-28 sm:pb-10",
     )}>
       {quizSessionActive ? (
         <div
@@ -1112,8 +1187,8 @@ export default function QuickReviewPage() {
           </Button>
           <div className="min-w-0 flex-1 text-center">
             <p className="truncate text-sm font-semibold text-foreground">Quick Review</p>
-            {note?.title ? (
-              <p className="truncate text-xs text-foreground/55">{note.title}</p>
+            {sessionInfo?.title ? (
+              <p className="truncate text-xs text-foreground/55">{sessionInfo.title}</p>
             ) : null}
           </div>
           <div className="shrink-0 rounded-full border border-border bg-background px-3 py-1 text-sm font-semibold text-foreground">
@@ -1139,14 +1214,14 @@ export default function QuickReviewPage() {
               : error}
           </p>
           <div className="flex flex-col gap-2 sm:flex-row">
-            {!isNotFound ? (
-              <Button type="button" className="w-full sm:w-auto" onClick={() => void loadNote(true)}>
+            {errorKind === "retry" ? (
+              <Button type="button" className="w-full sm:w-auto" onClick={() => void initializeSession(true)}>
                 Retry
               </Button>
             ) : null}
           </div>
         </Card>
-      ) : note && totalQuestions === 0 ? (
+      ) : sessionInfo && totalQuestions === 0 ? (
         <Card className="motion-fade-enter space-y-4 p-4 sm:p-6">
           <h1 className="text-2xl font-semibold">No quiz questions available</h1>
           <p className="text-sm text-foreground/75">
@@ -1154,7 +1229,7 @@ export default function QuickReviewPage() {
           </p>
           <BackLink href={noteDetailHref} label="Note" />
         </Card>
-      ) : note && !currentSessionId ? (
+      ) : sessionInfo && !currentSessionId ? (
         <Card className="space-y-4 p-4 sm:p-6">
           <h1 className="text-2xl font-semibold">Quick Review not started</h1>
           <p className="text-sm text-foreground/75">
@@ -1162,7 +1237,7 @@ export default function QuickReviewPage() {
           </p>
           <BackLink href={noteDetailHref} label="Note" />
         </Card>
-      ) : note && isComplete ? (
+      ) : sessionInfo && isComplete ? (
         <Card className="space-y-4 p-4 sm:p-6">
           <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
             Quick Review Complete
@@ -1213,20 +1288,20 @@ export default function QuickReviewPage() {
           </div>
 
           <ReviewCommitmentPrompt
-            noteId={note?.id ?? null}
+            noteId={sessionInfo.noteId}
           />
           {hasNextStepGuidance ? (
             <ResultGuidanceGroup label="What to do next" testId="quick-review-next-step-guidance">
               <PostSessionNextStep
                 response={nextStepResponse}
                 currentPlan={currentPlan}
-                noteId={note?.id ?? null}
+                noteId={sessionInfo.noteId}
                 onOpenPaywall={() => openAdaptivePracticePaywall("quick_review_results_next_step")}
                 originatingQuizMode="QUICK_REVIEW"
                 contained
               />
               {nextStepResponse?.goalNudge ? (
-                <GoalNudgeCard goalNudge={nextStepResponse.goalNudge} noteId={note?.id ?? null} contained />
+                <GoalNudgeCard goalNudge={nextStepResponse.goalNudge} noteId={sessionInfo.noteId} contained />
               ) : null}
               <WeeklyPacingEchoCard
                 weeksRemaining={weeklyPacingWeeksRemaining}
@@ -1272,13 +1347,13 @@ export default function QuickReviewPage() {
                   <ul className="list-disc space-y-1 pl-5 text-foreground/85">
                     {displayedWeakConcepts.map((concept) => (
                       <li key={concept}>
-                        {note?.id && note.keyConcepts?.some((keyConcept) => (
+                        {sessionInfo.noteId && sessionInfo.keyConcepts?.some((keyConcept) => (
                           normalizeConceptKey(keyConcept) === normalizeConceptKey(concept)
                         )) ? (
                           <Link
-                            href={isSharedSource
-                              ? `/shared/notes/${note.id}`
-                              : `/notes/${note.id}?tab=key-concepts#${buildConceptAnchorId(concept)}`}
+                            href={sessionInfo.isOwner
+                              ? `/notes/${sessionInfo.noteId}?tab=key-concepts#${buildConceptAnchorId(concept)}`
+                              : `/shared/notes/${sessionInfo.noteId}`}
                             className="font-medium text-amber-700 underline underline-offset-4 dark:text-amber-300"
                           >
                             {concept}
@@ -1297,14 +1372,14 @@ export default function QuickReviewPage() {
                 once the learner is doing well, otherwise back to the notes. Adaptive Practice is
                 deliberately absent — Quick Review no longer routes into it (EXAM_MODES.md).
               */}
-              {showChallengeGuidedCta && !isSharedSource ? (
-                <Link href={`/notes/${note.id}/challenge-quiz`} className="block">
+              {showChallengeGuidedCta && sessionInfo.isOwner ? (
+                <Link href={`/notes/${sessionInfo.noteId}/challenge-quiz`} className="block">
                   <Button type="button" className="w-full">
                     Take Another Challenge
                   </Button>
                 </Link>
               ) : (
-                // ⚠️ noteDetailHref, not `/notes/${note.id}`. On shared material the note belongs to
+                // ⚠️ noteDetailHref, not an unconditional `/notes/${sessionInfo.noteId}`. On shared material the note belongs to
                 // someone else, so the owner-scoped route 404s with "does not belong to your account".
                 // This fallback renders precisely when the next-step fetch failed — and it always fails
                 // for a recipient, because PostSessionNextStepService resolves the pack owner-scoped.
@@ -1338,9 +1413,7 @@ export default function QuickReviewPage() {
           ) : null}
 
           {/* Upgrade nudge for non-Pro users */}
-          {!note?.adaptivePracticeAvailable ? (
-            <PostSuccessUpgradeNudge trigger="quick-review" />
-          ) : null}
+          <PostSuccessUpgradeNudge trigger="quick-review" />
 
           {/* Confidence + Learner level (secondary section) */}
           <div className="space-y-4 border-t border-border pt-4">
@@ -1436,14 +1509,14 @@ export default function QuickReviewPage() {
                 ? "second-quiz-feedback"
                 : "quiz-feedback"}
             quizLabel="Quick Review"
-            noteTitle={note.title}
+            noteTitle={sessionInfo.title ?? "Quick Review"}
             section={showAnswerReview ? "review" : "results"}
             isFirstCompletedSessionEver={persistedResult?.isFirstCompletedSessionEver}
             isSecondCompletedSessionEver={persistedResult?.isSecondCompletedSessionEver}
             userId={getAuthUser()?.id}
           />
         </Card>
-      ) : note && phase === "retry-transition" ? (
+      ) : sessionInfo && phase === "retry-transition" ? (
         <Card className="space-y-4 p-4 sm:p-6">
           <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
             Quick Review Progress
@@ -1468,7 +1541,7 @@ export default function QuickReviewPage() {
             </Button>
           </div>
         </Card>
-      ) : note && currentQuestion ? (
+      ) : sessionInfo && currentQuestion ? (
         <div className="space-y-4">
           <Card className="space-y-4 p-4 sm:p-5">
             <div className="space-y-1">
@@ -1520,6 +1593,22 @@ export default function QuickReviewPage() {
                 ) : null}
               </div>
             ) : null}
+            {answerError ? (
+              <div className="space-y-2 rounded-md border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-700 dark:text-red-300">
+                <p>{answerError}</p>
+                {activeMatchingGroup ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    disabled={answering}
+                    onClick={() => void submitMatchingGroup(roundSelections)}
+                  >
+                    Retry answer
+                  </Button>
+                ) : null}
+              </div>
+            ) : null}
           </Card>
           <div
             data-testid="quick-review-action-bar"
@@ -1530,7 +1619,7 @@ export default function QuickReviewPage() {
                 type="button"
                 className="w-full sm:w-auto"
                 onClick={currentQuestionIsMultiSelect && !multiSelectSubmitted ? handleSubmitMultiSelect : handleNext}
-                disabled={!hasAnsweredCurrent}
+                disabled={!hasAnsweredCurrent || answering}
               >
                 {currentQuestionIsMultiSelect && !multiSelectSubmitted
                   ? "Submit"

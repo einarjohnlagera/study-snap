@@ -162,6 +162,7 @@ class AdminStudyPackTransactionHelperTest {
         assertThat(transactionHelper.regenerateOnePack(pack)).isTrue();
 
         assertThat(pack.getSummary()).isEqualTo("Regenerated summary with no marker");
+        assertThat(pack.getGenerationStamp()).isEqualTo(1L);
         // The flush must happen before either refreshPool call: it is the fix for the same
         // study_packs -> exam_question_pool lock-order inversion v0.143.0 found and closed on the
         // learner-facing regeneration path, and a mutant that drops or reorders it must fail this test.
@@ -214,6 +215,8 @@ class AdminStudyPackTransactionHelperTest {
         assertThat(pack.getSummary()).isEqualTo(ORIGINAL_SUMMARY);
         assertThat(pack.getKeyConcepts()).containsExactly(ORIGINAL_CONCEPT);
         verify(studyPackRepository).save(pack);
+        // Atomic DB-level increment, not a Java-side field set — see StudyPackRepository.bumpQuizStamp.
+        verify(studyPackRepository).bumpQuizStamp(pack.getId());
         // Same lock-order-inversion fix as regenerateOnePack: flush before either refreshPool call.
         InOrder inOrder = inOrder(studyPackRepository, examQuestionPoolService);
         inOrder.verify(studyPackRepository).save(pack);

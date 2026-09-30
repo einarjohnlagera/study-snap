@@ -438,6 +438,48 @@ class QuizItemDeserializationTest {
         assertThat(shuffled.choices()).containsExactly("Other", "B. Smith");
     }
 
+    @Test
+    void answerKeyRedactionNullsOnlyAnswerFieldsWithoutRebuildingStoredContent() {
+        List<String> choices = List.of("B. Smith", "D.C. generator", "Plain", "Other");
+        List<Integer> correctIndices = List.of(0, 2);
+        List<String> acceptableAnswers = List.of("B. Smith", "Smith");
+        List<List<String>> acceptableAnswerGroups = List.of(List.of("B. Smith"), List.of("D.C. generator"));
+        QuizItem source = QuizItem.fromStoredComponents(
+                "Which answers apply?",
+                choices,
+                0,
+                "Electrical systems",
+                "The complete explanation.",
+                null,
+                "MULTI_SELECT",
+                "COMPUTATIONAL",
+                "A worked solution.",
+                correctIndices,
+                "group-1",
+                "Power distribution",
+                acceptableAnswers,
+                acceptableAnswerGroups,
+                "1fc9e930-ea2d-42a2-b116-0ab97a803c2c"
+        );
+
+        QuizItem redacted = source.withoutAnswerKey();
+
+        assertThat(redacted.correctIndex()).isNull();
+        assertThat(redacted.correctIndices()).isNull();
+        assertThat(redacted.explanation()).isNull();
+        assertThat(redacted.workingSolution()).isNull();
+        assertThat(redacted.acceptableAnswers()).isNull();
+        assertThat(redacted.acceptableAnswerGroups()).containsExactly(List.of(), List.of());
+        assertThat(redacted.question()).isEqualTo(source.question());
+        assertThat(redacted.choices()).isSameAs(source.choices());
+        assertThat(redacted.concept()).isEqualTo(source.concept());
+        assertThat(redacted.questionFormat()).isEqualTo(source.questionFormat());
+        assertThat(redacted.questionType()).isEqualTo(source.questionType());
+        assertThat(redacted.questionGroup()).isEqualTo(source.questionGroup());
+        assertThat(redacted.keyConcept()).isEqualTo(source.keyConcept());
+        assertThat(redacted.sourceStudyPackId()).isEqualTo(source.sourceStudyPackId());
+    }
+
     /**
      * ⚠️ REGRESSION GUARD FOUND BY THE PRE-SIGNOFF COLD AGENT. Skipping the choice-label strip on read made
      * {@code resolveCorrectIndex} disagree with itself: it still stripped the LEGACY ANSWER while the

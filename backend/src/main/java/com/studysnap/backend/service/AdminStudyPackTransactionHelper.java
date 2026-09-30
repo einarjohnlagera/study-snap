@@ -67,6 +67,7 @@ public class AdminStudyPackTransactionHelper {
             StudyPackGenerationContext context = buildContext(note);
             String newSummary = llmStudyPackService.regenerateSummary(note.getContent(), context);
             currentPack.setSummary(newSummary);
+            currentPack.setGenerationStamp(currentPack.getGenerationStamp() + 1);
             studyPackRepository.save(currentPack);
             // Same invalidation StudyPackService's regeneration path uses (v0.143.0) — this repair
             // replaces the pack's summary in place, and the summary is a direct exam-pool generation
@@ -137,6 +138,8 @@ public class AdminStudyPackTransactionHelper {
             GeneratedStudyPackContent generated = llmStudyPackService.generateStudyPack(note.getContent(), context);
             currentPack.setQuiz(generated.quiz());
             studyPackRepository.save(currentPack);
+            // Atomic — see StudyPackRepository.bumpQuizStamp's Javadoc.
+            studyPackRepository.bumpQuizStamp(currentPack.getId());
             // Same invalidation as regenerateOnePack above, and for the same reason: this replaces the
             // pack's quiz in place, which feeds the pool's answer-key exclusion filter, so a READY pool
             // must be reset. The flush ordering is load-bearing — see the comment above.

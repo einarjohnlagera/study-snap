@@ -24,6 +24,8 @@ public interface ChallengeQuizQuestionBankRepository extends JpaRepository<Chall
               and question.studyPackId = :studyPackId
               and ((:learnerLevel is null and question.learnerLevel is null) or question.learnerLevel = :learnerLevel)
               and (question.claimedSessionId is null or question.claimedSessionId = :sessionId)
+              and (question.generationStamp is null or question.generationStamp =
+                   (select pack.generationStamp from StudyPackEntity pack where pack.id = :studyPackId))
             order by question.generatedAt asc
             """)
     List<ChallengeQuizQuestionBankEntity> findClaimableForUpdate(
@@ -42,6 +44,8 @@ public interface ChallengeQuizQuestionBankRepository extends JpaRepository<Chall
               and ((:learnerLevel is null and question.learnerLevel is null) or question.learnerLevel = :learnerLevel)
               and question.lastKnownOutcome = :outcome
               and question.claimedSessionId is null
+              and (question.generationStamp is null or question.generationStamp =
+                   (select pack.generationStamp from StudyPackEntity pack where pack.id = :studyPackId))
             order by question.generatedAt asc
             """)
     List<ChallengeQuizQuestionBankEntity> findIncorrectClaimableForUpdate(
@@ -59,6 +63,8 @@ public interface ChallengeQuizQuestionBankRepository extends JpaRepository<Chall
               and ((:learnerLevel is null and question.learnerLevel is null) or question.learnerLevel = :learnerLevel)
               and question.lastKnownOutcome = :outcome
               and question.claimedSessionId is null
+              and (question.generationStamp is null or question.generationStamp =
+                   (select pack.generationStamp from StudyPackEntity pack where pack.id = :studyPackId))
             """)
     long countIncorrectEligibleQuestions(
             @Param("userId") UUID userId,
@@ -67,7 +73,15 @@ public interface ChallengeQuizQuestionBankRepository extends JpaRepository<Chall
             @Param("outcome") String outcome
     );
 
-    boolean existsByUserIdAndStudyPackId(UUID userId, UUID studyPackId);
+    // ⚠️ NOT stamp-filtered. This is a write-side guard ("has a template already been seeded for this
+    // owner+pack?"), not a read that hands out content — filtering it would make a stale-but-present
+    // row invisible to the check, triggering a re-seed that reinserts the same question_key and collides
+    // with uq_challenge_quiz_question_bank_user_pack_key on the still-present stale row.
+    @Query("""
+            select (count(question) > 0) from ChallengeQuizQuestionBankEntity question
+            where question.userId = :userId and question.studyPackId = :studyPackId
+            """)
+    boolean existsByUserIdAndStudyPackId(@Param("userId") UUID userId, @Param("studyPackId") UUID studyPackId);
 
     /**
      * The batched form of {@link #existsByUserIdAndStudyPackId}: one query answering "which of these
@@ -77,6 +91,9 @@ public interface ChallengeQuizQuestionBankRepository extends JpaRepository<Chall
      * selective half, and filtering on both columns independently would be a cross-product rather
      * than a pair match — a row belonging to some OTHER user's copy of a pack would then satisfy the
      * check for the Official author.
+     *
+     * <p>⚠️ NOT stamp-filtered, for the same reason as {@link #existsByUserIdAndStudyPackId}: this
+     * guards a write (skip re-seeding), it does not hand out content.
      */
     @Query("""
             select distinct new com.studysnap.backend.repository.ChallengeQuizQuestionBankOwnerProjection(
@@ -90,11 +107,21 @@ public interface ChallengeQuizQuestionBankRepository extends JpaRepository<Chall
             @Param("studyPackIds") Collection<UUID> studyPackIds
     );
 
+    // Stamp-filtered: this hands out TEMPLATE SOURCE content to copy into an adopter's bank, so a
+    // template regenerated since must not be copied.
+    @Query("""
+            select question from ChallengeQuizQuestionBankEntity question
+            where question.userId = :userId and question.studyPackId = :studyPackId
+              and (question.generationStamp is null or question.generationStamp =
+                   (select pack.generationStamp from StudyPackEntity pack where pack.id = :studyPackId))
+            order by question.generatedAt asc
+            """)
     List<ChallengeQuizQuestionBankEntity> findByUserIdAndStudyPackIdOrderByGeneratedAtAsc(
-            UUID userId,
-            UUID studyPackId
-    );
+            @Param("userId") UUID userId, @Param("studyPackId") UUID studyPackId);
 
+    // ⚠️ NOT stamp-filtered. This is the caller's own key-collision guard before an insert (excludes
+    // question_key values the caller's bank already holds) — it must see stale rows too, or a fresh
+    // generation/copy can reuse a key a stale row still occupies and hit the unique constraint.
     @Query("""
             select question.questionKey
             from ChallengeQuizQuestionBankEntity question
@@ -112,4 +139,14 @@ public interface ChallengeQuizQuestionBankRepository extends JpaRepository<Chall
             UUID studyPackId,
             UUID claimedSessionId
     );
+
+    @Modifying
+    @Query("""
+            update ChallengeQuizQuestionBankEntity question set question.claimedSessionId = null
+            where question.userId = :userId and question.studyPackId = :studyPackId
+              and question.claimedSessionId = :sessionId
+            """)
+    int releaseClaims(@Param("userId") UUID userId, @Param("studyPackId") UUID studyPackId,
+                      @Param("sessionId") UUID sessionId);
+
 }

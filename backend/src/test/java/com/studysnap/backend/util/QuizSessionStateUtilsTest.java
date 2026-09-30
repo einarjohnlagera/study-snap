@@ -164,6 +164,33 @@ class QuizSessionStateUtilsTest {
     }
 
     @Test
+    void extractInterviewFeedbackDistinguishesPaddingAndEmptyEntriesFromServedCritique() {
+        Map<String, Object> paddedState = QuizSessionStateUtils.withInterviewFeedback(
+                Map.of(),
+                2,
+                Map.of(
+                        "verdict", "WORKABLE",
+                        "rationale", "The tradeoff is explicit.",
+                        "followUp", "What would change at higher scale?"
+                )
+        );
+
+        assertThat(QuizSessionStateUtils.extractInterviewFeedback(paddedState, 0)).isEmpty();
+        assertThat(QuizSessionStateUtils.extractInterviewFeedback(paddedState, 1)).isEmpty();
+        assertThat(QuizSessionStateUtils.extractInterviewFeedback(paddedState, 3)).isEmpty();
+        assertThat(QuizSessionStateUtils.extractInterviewFeedback(
+                QuizSessionStateUtils.withInterviewFeedback(Map.of(), 0, Map.of()),
+                0
+        )).isEmpty();
+        assertThat(QuizSessionStateUtils.extractInterviewFeedback(paddedState, 2))
+                .hasValueSatisfying(critique -> {
+                    assertThat(critique.verdict()).isEqualTo("WORKABLE");
+                    assertThat(critique.rationale()).isEqualTo("The tradeoff is explicit.");
+                    assertThat(critique.followUp()).isEqualTo("What would change at higher scale?");
+                });
+    }
+
+    @Test
     void writeSelectedMultiChoice_andReadSelectedMultiChoices_roundTripWithoutChangingSelectedChoices() {
         List<QuizItem> quiz = List.of(
                 new QuizItem(

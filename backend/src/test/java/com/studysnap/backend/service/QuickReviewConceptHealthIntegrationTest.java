@@ -95,9 +95,10 @@ class QuickReviewConceptHealthIntegrationTest {
                 subscriptionService,
                 featureGateService,
                 conceptHealthService,
-                mock(StudyPackQuizMasteryService.class)
-        ,
-                org.mockito.Mockito.mock(com.studysnap.backend.service.NoteShareService.class));
+                mock(StudyPackQuizMasteryService.class),
+                org.mockito.Mockito.mock(com.studysnap.backend.service.NoteShareService.class),
+                org.mockito.Mockito.mock(com.studysnap.backend.repository.NoteRepository.class)
+        );
         when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
         when(subscriptionService.resolvePlan(any(UUID.class))).thenReturn(PlanType.PRO);
@@ -111,7 +112,7 @@ class QuickReviewConceptHealthIntegrationTest {
         StudyPackEntity studyPack = buildStudyPack(studyPackId, userId);
         QuickReviewSessionEntity session = buildInProgressSession(sessionId, userId, studyPackId);
 
-        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionModeForUpdate(
                 sessionId,
                 userId,
                 QuickReviewSessionMode.QUICK_REVIEW

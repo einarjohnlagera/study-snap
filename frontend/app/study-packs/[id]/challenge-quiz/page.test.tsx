@@ -149,6 +149,10 @@ describe("ChallengeQuizPage", () => {
   afterEach(() => {
     jest.useRealTimers();
     jest.restoreAllMocks();
+    // Several tests set document.visibilityState to "hidden" via Object.defineProperty, which has no
+    // teardown of its own — left unrestored, every later test in the file would run against a hidden
+    // document.
+    Object.defineProperty(document, "visibilityState", { value: "visible", configurable: true });
   });
 
   async function getModeCard(label: string): Promise<HTMLButtonElement> {
@@ -1470,6 +1474,175 @@ describe("ChallengeQuizPage", () => {
     expect(await screen.findByText("When will you come back?")).toBeInTheDocument();
   });
 
+  it("waits for the last progress write to land before completing, since the server scores from stored state", async () => {
+    setupInProgressChallengeQuiz();
+    mockCompletedChallengeQuiz();
+    (getMe as jest.Mock).mockResolvedValue({
+      id: "user-1",
+      learnerLevel: "COLLEGE",
+      examDate: null,
+      profileType: "STUDENT",
+      reviewDays: [],
+      reviewCommitmentPromptEligible: true,
+      reviewCommitmentPromptCount: 0,
+    });
+    const resolveWrites: Array<() => void> = [];
+    (updateChallengeQuizSessionProgress as jest.Mock).mockImplementation(() => new Promise<void>((resolve) => {
+      resolveWrites.push(resolve);
+    }));
+
+    render(<ChallengeQuizPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /Mitochondria/i }));
+    expect(updateChallengeQuizSessionProgress).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole("button", { name: "Complete Quiz" }));
+    await screen.findByRole("button", { name: "Submitting..." });
+    expect(completeChallengeQuizSession).not.toHaveBeenCalled();
+
+    // The click's own flush enqueues behind the still-in-flight write above; resolving that lets the
+    // queue drain to the enqueued one, which is the write /complete must actually wait for.
+    await act(async () => resolveWrites[0]?.());
+    await waitFor(() => expect(updateChallengeQuizSessionProgress).toHaveBeenCalledTimes(2));
+    expect(completeChallengeQuizSession).not.toHaveBeenCalled();
+
+    await act(async () => resolveWrites[1]?.());
+    await waitFor(() => expect(completeChallengeQuizSession).toHaveBeenCalledTimes(1));
+  });
+
+  it("does not complete early when the tab hides mid-flush, even though the in-flight flush write is aborted", async () => {
+    setupInProgressChallengeQuiz();
+    mockCompletedChallengeQuiz();
+    (getMe as jest.Mock).mockResolvedValue({
+      id: "user-1",
+      learnerLevel: "COLLEGE",
+      examDate: null,
+      profileType: "STUDENT",
+      reviewDays: [],
+      reviewCommitmentPromptEligible: true,
+      reviewCommitmentPromptCount: 0,
+    });
+    (updateChallengeQuizSessionProgress as jest.Mock)
+      .mockResolvedValueOnce({} as never)
+      .mockImplementation((_id, _req, options) => new Promise((_resolve, reject) => {
+        options?.signal?.addEventListener("abort", () => reject(new Error("aborted")));
+      }));
+
+    render(<ChallengeQuizPage />);
+    fireEvent.click(await screen.findByRole("button", { name: /Mitochondria/i }));
+    await waitFor(() => expect(updateChallengeQuizSessionProgress).toHaveBeenCalledTimes(1));
+
+    // Submit with the answer's own write already settled: the flush write becomes the queue's only,
+    // currently in-flight item, not one merged behind an existing in-flight write.
+    fireEvent.click(screen.getByRole("button", { name: "Complete Quiz" }));
+    await waitFor(() => expect(updateChallengeQuizSessionProgress).toHaveBeenCalledTimes(2));
+    const flushSignal = (updateChallengeQuizSessionProgress as jest.Mock).mock.calls[1]?.[2]?.signal as AbortSignal;
+    expect(completeChallengeQuizSession).not.toHaveBeenCalled();
+
+    // The tab hides while the flush write is still in flight: it gets aborted and superseded by an
+    // immediate write, but /complete must still wait for that IMMEDIATE write, not fire the moment the
+    // aborted flush write settles.
+    Object.defineProperty(document, "visibilityState", { value: "hidden", configurable: true });
+    await act(async () => {
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+    expect(flushSignal.aborted).toBe(true);
+    await waitFor(() => expect(updateChallengeQuizSessionProgress).toHaveBeenCalledTimes(3));
+    expect(completeChallengeQuizSession).not.toHaveBeenCalled();
+
+    // Settle the immediate write itself (any outcome — the mock rejects on its own signal's abort
+    // event regardless of who dispatches it); /complete must fire only now, not when the flush write
+    // was aborted above.
+    const immediateSignal = (updateChallengeQuizSessionProgress as jest.Mock).mock.calls[2]?.[2]?.signal as AbortSignal;
+    await act(async () => {
+      immediateSignal.dispatchEvent(new Event("abort"));
+    });
+    await waitFor(() => expect(completeChallengeQuizSession).toHaveBeenCalledTimes(1));
+  });
+
+  it("aborts an untracked immediate write before sending a later queued write, and absorbs its waiters", async () => {
+    setupInProgressChallengeQuiz();
+    (updateChallengeQuizSessionProgress as jest.Mock).mockImplementation((_id, _req, options) => new Promise((_resolve, reject) => {
+      options?.signal?.addEventListener("abort", () => reject(new Error("aborted")));
+    }));
+
+    render(<ChallengeQuizPage />);
+    await screen.findByRole("button", { name: /Mitochondria/i });
+
+    Object.defineProperty(document, "visibilityState", { value: "hidden", configurable: true });
+    await act(async () => {
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+    expect(updateChallengeQuizSessionProgress).toHaveBeenCalledTimes(1);
+    const immediateSignal = (updateChallengeQuizSessionProgress as jest.Mock).mock.calls[0]?.[2]?.signal as AbortSignal;
+    expect(immediateSignal.aborted).toBe(false);
+
+    // Without the fix, the queue never aborts a write it didn't itself start, so the immediate write
+    // above stays live and untracked — a later queue write wouldn't supersede it at all.
+    fireEvent.click(screen.getByRole("button", { name: /Nucleus/i }));
+    expect(immediateSignal.aborted).toBe(true);
+    expect(updateChallengeQuizSessionProgress).toHaveBeenCalledTimes(2);
+  });
+
+  it("bounds the immediate write with the same dead-request timeout as the queue", async () => {
+    jest.useFakeTimers();
+    setupInProgressChallengeQuiz();
+    (updateChallengeQuizSessionProgress as jest.Mock).mockImplementation((_id, _req, options) => new Promise((_resolve, reject) => {
+      options?.signal?.addEventListener("abort", () => reject(new Error("aborted")));
+    }));
+
+    render(<ChallengeQuizPage />);
+    await screen.findByRole("button", { name: /Mitochondria/i });
+
+    Object.defineProperty(document, "visibilityState", { value: "hidden", configurable: true });
+    await act(async () => {
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+    const immediateSignal = (updateChallengeQuizSessionProgress as jest.Mock).mock.calls[0]?.[2]?.signal as AbortSignal;
+    expect(immediateSignal.aborted).toBe(false);
+
+    await act(async () => {
+      jest.advanceTimersByTime(30_000);
+      await Promise.resolve();
+    });
+    expect(immediateSignal.aborted).toBe(true);
+    jest.useRealTimers();
+  });
+
+  it("completes anyway if the last progress write never lands, instead of stalling submit forever", async () => {
+    jest.useFakeTimers();
+    setupInProgressChallengeQuiz();
+    mockCompletedChallengeQuiz();
+    (getMe as jest.Mock).mockResolvedValue({
+      id: "user-1",
+      learnerLevel: "COLLEGE",
+      examDate: null,
+      profileType: "STUDENT",
+      reviewDays: [],
+      reviewCommitmentPromptEligible: true,
+      reviewCommitmentPromptCount: 0,
+    });
+    (updateChallengeQuizSessionProgress as jest.Mock).mockImplementation(() => new Promise<void>(() => {}));
+
+    render(<ChallengeQuizPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /Mitochondria/i }));
+    expect(updateChallengeQuizSessionProgress).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole("button", { name: "Complete Quiz" }));
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(completeChallengeQuizSession).not.toHaveBeenCalled();
+
+    await act(async () => {
+      jest.advanceTimersByTime(5_000);
+      await Promise.resolve();
+    });
+    await waitFor(() => expect(completeChallengeQuizSession).toHaveBeenCalledTimes(1));
+    jest.useRealTimers();
+  });
+
   it("blocks manual submit and shows the unanswered count", async () => {
     setupInProgressChallengeQuiz(
       "challenge",
@@ -1670,6 +1843,125 @@ describe("ChallengeQuizPage", () => {
       expect(forfeitChallengeQuizSession).toHaveBeenCalledWith("session-1");
     });
     expect(pushMock).toHaveBeenCalledWith("/notes/note-1");
+  });
+
+  it("waits for the latest progress write before forfeiting on leave", async () => {
+    setupInProgressChallengeQuiz();
+    let resolveProgress: (() => void) | undefined;
+    (updateChallengeQuizSessionProgress as jest.Mock).mockImplementation(() => new Promise<void>((resolve) => {
+      resolveProgress = resolve;
+    }));
+    render(<ChallengeQuizPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Leave Quiz" }));
+    const leaveButtons = screen.getAllByRole("button", { name: "Leave Quiz" });
+    fireEvent.click(leaveButtons[leaveButtons.length - 1]!);
+    await waitFor(() => expect(updateChallengeQuizSessionProgress).toHaveBeenCalledTimes(1));
+    expect(forfeitChallengeQuizSession).not.toHaveBeenCalled();
+
+    await act(async () => resolveProgress?.());
+    await waitFor(() => expect(updateChallengeQuizSessionProgress).toHaveBeenCalledTimes(2));
+    expect(forfeitChallengeQuizSession).not.toHaveBeenCalled();
+    await act(async () => resolveProgress?.());
+    await waitFor(() => expect(forfeitChallengeQuizSession).toHaveBeenCalledWith("session-1"));
+  });
+
+  it("coalesces rapid selections into one latest pending progress write", async () => {
+    setupInProgressChallengeQuiz();
+    const resolveWrites: Array<() => void> = [];
+    (updateChallengeQuizSessionProgress as jest.Mock).mockImplementation(() => new Promise<void>((resolve) => {
+      resolveWrites.push(resolve);
+    }));
+    render(<ChallengeQuizPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /Mitochondria/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Nucleus/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Golgi apparatus/i }));
+    expect(updateChallengeQuizSessionProgress).toHaveBeenCalledTimes(1);
+
+    await act(async () => resolveWrites[0]?.());
+    await waitFor(() => expect(updateChallengeQuizSessionProgress).toHaveBeenCalledTimes(2));
+    expect((updateChallengeQuizSessionProgress as jest.Mock).mock.calls[1]?.[1].sessionState.selectedChoices)
+      .toEqual({ "0": 2 });
+    await act(async () => resolveWrites[1]?.());
+  });
+
+  it("bypasses the pending progress queue and sends immediately when the tab hides", async () => {
+    setupInProgressChallengeQuiz();
+    const resolveWrites: Array<() => void> = [];
+    (updateChallengeQuizSessionProgress as jest.Mock).mockImplementation(() => new Promise<void>((resolve) => {
+      resolveWrites.push(resolve);
+    }));
+    render(<ChallengeQuizPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /Mitochondria/i }));
+    expect(updateChallengeQuizSessionProgress).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole("button", { name: /Nucleus/i }));
+    expect(updateChallengeQuizSessionProgress).toHaveBeenCalledTimes(1);
+
+    Object.defineProperty(document, "visibilityState", { value: "hidden", configurable: true });
+    act(() => {
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+
+    // The tab-hidden write must fire right away, not wait behind the still-unresolved first write —
+    // the JS context can be torn down before that write would ever get a chance to drain.
+    expect(updateChallengeQuizSessionProgress).toHaveBeenCalledTimes(2);
+    expect((updateChallengeQuizSessionProgress as jest.Mock).mock.calls[1]?.[1].sessionState.selectedChoices)
+      .toEqual({ "0": 1 });
+    expect((updateChallengeQuizSessionProgress as jest.Mock).mock.calls[1]?.[2]).toMatchObject({ keepalive: true });
+
+    await act(async () => {
+      resolveWrites[0]?.();
+      resolveWrites[1]?.();
+    });
+  });
+
+  it("aborts an in-flight progress write instead of letting it land after a newer tab-hidden write", async () => {
+    setupInProgressChallengeQuiz();
+    (updateChallengeQuizSessionProgress as jest.Mock).mockImplementation((_id, _req, options) => new Promise((_resolve, reject) => {
+      options?.signal?.addEventListener("abort", () => reject(new Error("aborted")));
+    }));
+    render(<ChallengeQuizPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /Mitochondria/i }));
+    expect(updateChallengeQuizSessionProgress).toHaveBeenCalledTimes(1);
+    const firstSignal = (updateChallengeQuizSessionProgress as jest.Mock).mock.calls[0]?.[2]?.signal as AbortSignal;
+    expect(firstSignal.aborted).toBe(false);
+
+    Object.defineProperty(document, "visibilityState", { value: "hidden", configurable: true });
+    await act(async () => {
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+
+    // Without the fix, the first write (carrying older state) is left running and could still land on
+    // the server after the tab-hidden write (carrying newer state), overwriting it.
+    expect(firstSignal.aborted).toBe(true);
+    expect(updateChallengeQuizSessionProgress).toHaveBeenCalledTimes(2);
+  });
+
+  it("aborts a hung progress write after the timeout so it never blocks later writes forever", async () => {
+    jest.useFakeTimers();
+    setupInProgressChallengeQuiz();
+    (updateChallengeQuizSessionProgress as jest.Mock).mockImplementation((_id, _req, options) => new Promise((_resolve, reject) => {
+      options?.signal?.addEventListener("abort", () => reject(new Error("aborted")));
+    }));
+    render(<ChallengeQuizPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /Mitochondria/i }));
+    expect(updateChallengeQuizSessionProgress).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole("button", { name: /Nucleus/i }));
+    expect(updateChallengeQuizSessionProgress).toHaveBeenCalledTimes(1);
+
+    // Without the timeout, the first write hangs forever and the queue never reaches the second one.
+    await act(async () => {
+      jest.advanceTimersByTime(30_000);
+      await Promise.resolve();
+    });
+    await waitFor(() => expect(updateChallengeQuizSessionProgress).toHaveBeenCalledTimes(2));
+    jest.useRealTimers();
   });
 
   it("submits the active Board Exam before leaving", async () => {
@@ -2168,7 +2460,7 @@ describe("ChallengeQuizPage", () => {
     expect(screen.queryByText("Was this quiz helpful?")).not.toBeInTheDocument();
   });
 
-  it("opens answer review with selected answer, correct answer, explanation, and concept", async () => {
+  it("uses the revealed completion payload when the in-session answer key is redacted", async () => {
     (getAuthUser as jest.Mock).mockReturnValue({
       planType: "PRO",
       emailVerifiedAt: "2026-03-21T09:00:00Z",
@@ -2211,9 +2503,9 @@ describe("ChallengeQuizPage", () => {
         {
           question: "What powers the cell?",
           choices: ["Mitochondria", "Nucleus", "Golgi apparatus", "Cell wall"],
-          correctIndex: 0,
+          correctIndex: null,
           concept: "Cell Biology",
-          explanation: "Mitochondria produce ATP for the cell.",
+          explanation: null,
         },
       ],
       currentQuestionIndex: 0,
@@ -2237,6 +2529,19 @@ describe("ChallengeQuizPage", () => {
       durationSeconds: 10,
       createdAt: "2026-03-21T10:00:00Z",
       completedAt: "2026-03-21T10:01:00Z",
+      quiz: [
+        {
+          question: "What powers the cell?",
+          choices: ["Mitochondria", "Nucleus", "Golgi apparatus", "Cell wall"],
+          correctIndex: 0,
+          concept: "Cell Biology",
+          explanation: "Mitochondria produce ATP for the cell.",
+        },
+      ],
+      selectedChoices: { "0": 1 },
+      selectedMultiChoices: {},
+      selectedIdentificationAnswers: {},
+      selectedEnumerationAnswers: {},
     });
 
     render(<ChallengeQuizPage />);

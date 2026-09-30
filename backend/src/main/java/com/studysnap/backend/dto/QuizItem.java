@@ -419,6 +419,40 @@ public final class QuizItem {
         return new QuizItem(copy, questionGroup, questionFormat, sourceStudyPackId);
     }
 
+    /**
+     * Returns a response-only copy without any answer-key fields, reusing already-sanitized values.
+     *
+     * <p>⚠️ This copy MUST NOT be persisted. {@code QuizItem} is also the JSONB storage shape for quiz
+     * sessions, so writing a redacted copy back to {@code session_state} would permanently destroy the
+     * stored answer key that scoring depends on.
+     *
+     * <p>Enumeration questions retain one empty inner list per accepted-answer group because the outer
+     * list length is the response contract for how many answer inputs the learner must receive.
+     */
+    public QuizItem withoutAnswerKey() {
+        return new QuizItem(this);
+    }
+
+    /** Trusted copy constructor for response redaction; no sanitizer is re-applied. */
+    private QuizItem(QuizItem source) {
+        this.question = source.question;
+        this.choices = source.choices;
+        this.correctIndex = null;
+        this.correctIndices = null;
+        this.concept = source.concept;
+        this.explanation = null;
+        this.questionFormat = source.questionFormat;
+        this.questionType = source.questionType;
+        this.workingSolution = null;
+        this.questionGroup = source.questionGroup;
+        this.keyConcept = source.keyConcept;
+        this.acceptableAnswers = null;
+        this.acceptableAnswerGroups = source.acceptableAnswerGroups == null
+                ? null
+                : source.acceptableAnswerGroups.stream().map(ignored -> List.<String>of()).toList();
+        this.sourceStudyPackId = source.sourceStudyPackId;
+    }
+
     /** Trusted copy constructor for the group/format rewrite; no sanitizer is re-applied. */
     private QuizItem(QuizItem source, String questionGroup, String questionFormat, String sourceStudyPackId) {
         this.question = source.question;

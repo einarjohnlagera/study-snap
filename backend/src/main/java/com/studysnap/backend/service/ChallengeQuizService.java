@@ -215,6 +215,7 @@ public class ChallengeQuizService {
     private final NoteCollectionRepository noteCollectionRepository;
     private final NoteCollectionItemRepository noteCollectionItemRepository;
     private final LongExamPlanSourceSampler longExamPlanSourceSampler;
+    private final jakarta.persistence.EntityManager entityManager;
 
     @Transactional
     public ChallengeQuizStartResponse startSession(String studyPackIdRaw, UUID userId, ChallengeQuizStartRequest request) {
@@ -393,6 +394,7 @@ public class ChallengeQuizService {
             return toStartResponse(session, studyPack, boardExamUsedThisMonth + BOARD_EXAM_QUOTA_UNITS_PER_SESSION, planType);
         }
         List<String> disallowedQuestions = extractQuestionTexts(studyPack.getQuiz());
+        long generationStamp = studyPack.getGenerationStamp();
         Set<String> disallowedQuestionKeys = QuizDeduplicationUtils.toNormalizedQuestionSetFromStrings(disallowedQuestions);
         if (generationContext == null) {
             generationContext = buildQuizGenerationContext(userId, studyPack);
@@ -433,6 +435,7 @@ public class ChallengeQuizService {
                         userId,
                         studyPackId,
                         effectiveCurriculumLevel,
+                        generationStamp,
                         session.getId(),
                         disallowedQuestionKeys,
                         quizCount - bankedQuestions.size()
@@ -466,6 +469,7 @@ public class ChallengeQuizService {
                             studyPackId,
                             session.getId(),
                             effectiveCurriculumLevel,
+                            generationStamp,
                             uniqueGeneratedQuiz
                     );
                 }
@@ -855,7 +859,7 @@ public class ChallengeQuizService {
             UUID userId,
             ChallengeQuizProgressRequest request
     ) {
-        QuickReviewSessionEntity session = findChallengeSessionOrThrow(parseSessionId(sessionIdRaw), userId);
+        QuickReviewSessionEntity session = findChallengeSessionForUpdateOrThrow(parseSessionId(sessionIdRaw), userId);
         assertSessionInProgress(session);
 
         int totalQuestions = session.getTotalQuestions() == null ? 0 : session.getTotalQuestions();
@@ -1000,7 +1004,12 @@ public class ChallengeQuizService {
                 saved.getCompletedAt(),
                 isFirstCompletedSessionEver,
                 isSecondCompletedSessionEver,
-                twiceMissedConcepts
+                twiceMissedConcepts,
+                quiz,
+                selectedChoices,
+                selectedMultiChoices,
+                selectedIdentificationAnswers,
+                selectedEnumerationAnswers
         );
     }
 
@@ -1080,7 +1089,7 @@ public class ChallengeQuizService {
     }
 
     public SimpleMessageResponse forfeitSession(String sessionIdRaw, UUID userId) {
-        QuickReviewSessionEntity session = findChallengeSessionOrThrow(parseSessionId(sessionIdRaw), userId);
+        QuickReviewSessionEntity session = findChallengeSessionForUpdateOrThrow(parseSessionId(sessionIdRaw), userId);
         if (session.getStatus() != QuickReviewSessionStatus.IN_PROGRESS) {
             return new SimpleMessageResponse(CHALLENGE_QUIZ_SESSION_ALREADY_ENDED_MESSAGE);
         }
@@ -1125,6 +1134,7 @@ public class ChallengeQuizService {
         String difficulty = extractDifficulty(session.getSessionState());
 
         StudyPackEntity studyPack = findOwnedStudyPackOrThrow(session.getStudyPackId(), userId);
+        long generationStamp = studyPack.getGenerationStamp();
         StudyPackGenerationContext generationContext = buildQuizGenerationContext(userId, studyPack);
         LearnerLevel effectiveCurriculumLevel = StudyPackGenerationContextResolver.effectiveCurriculumLevel(
                 generationContext
@@ -1142,6 +1152,7 @@ public class ChallengeQuizService {
                 userId,
                 session.getStudyPackId(),
                 effectiveCurriculumLevel,
+                generationStamp,
                 session.getId(),
                 disallowedQuestionKeys,
                 batchSize - bankedQuestions.size()
@@ -1188,6 +1199,7 @@ public class ChallengeQuizService {
                         session.getStudyPackId(),
                         session.getId(),
                         effectiveCurriculumLevel,
+                        generationStamp,
                         uniqueGenerated
                 );
             }
@@ -1208,9 +1220,12 @@ public class ChallengeQuizService {
         session.setTotalQuestions(newTotal);
         accumulateLlmUsage(session, generatedContent);
         quickReviewSessionRepository.save(session);
+        List<QuizItem> redactedQuestions = unique.stream()
+                .map(QuizItem::withoutAnswerKey)
+                .toList();
 
         return new GenerateMoreChallengeQuizResponse(
-                unique,
+                redactedQuestions,
                 newTotal,
                 newTimeLimitSeconds,
                 extractTimerStartedAtEpochSeconds(nextSessionState)
@@ -1410,6 +1425,14 @@ public class ChallengeQuizService {
         QuickReviewSessionEntity lockedExisting = quickReviewSessionRepository
                 .findByIdAndUserIdAndSessionModeForUpdate(existing.getId(), userId, QuickReviewSessionMode.CHALLENGE)
                 .orElse(null);
+        // ⚠️ MUST-REFRESH, NOT MERELY MUST-LOCK — the same reason as InterviewPracticeService.recordCritique.
+        // `existing` and `lockedExisting` are the SAME Java object by Hibernate identity (one persistence
+        // context, one entity per id), so without this, `lockedExisting.getStatus() != observedStatus` compares
+        // a value to itself and can never detect a status a concurrent transaction committed between the two
+        // reads above — the lock is real, but it would be protecting a comparison against stale memory.
+        if (lockedExisting != null) {
+            entityManager.refresh(lockedExisting);
+        }
         if (lockedExisting == null || lockedExisting.getStatus() != observedStatus) {
             return Optional.empty();
         }
@@ -1897,6 +1920,9 @@ public class ChallengeQuizService {
             PlanType planType
     ) {
         List<QuizItem> quiz = QuizSessionStateUtils.extractQuiz(session.getSessionState());
+        List<QuizItem> redactedQuiz = quiz.stream()
+                .map(QuizItem::withoutAnswerKey)
+                .toList();
         if (quiz.isEmpty()) {
             if (session.getStatus() != QuickReviewSessionStatus.GENERATING
                     && session.getStatus() != QuickReviewSessionStatus.FAILED) {
@@ -1924,7 +1950,7 @@ public class ChallengeQuizService {
                 properties.getPricing().resolveMonthlyBoardExamLimit(planType),
                 mode,
                 extractDifficulty(session.getSessionState()),
-                quiz,
+                redactedQuiz,
                 session.getCurrentQuestionIndex() == null ? 0 : session.getCurrentQuestionIndex(),
                 sanitizeSessionStateForClient(session.getSessionState()),
                 extractResponseSourceNoteRefs(session.getSessionState()),

@@ -170,6 +170,8 @@ class ChallengeQuizServiceTest {
      * can prove the sample is keyed on the session id the row is persisted under.
      */
     private LongExamPlanSourceSampler longExamPlanSourceSampler;
+    @Mock
+    private jakarta.persistence.EntityManager entityManager;
 
     private final Map<UUID, QuickReviewSessionEntity> savedSessionsById = new LinkedHashMap<>();
 
@@ -241,7 +243,7 @@ class ChallengeQuizServiceTest {
                 any(UUID.class), any(UUID.class), any(), any(UUID.class), any(), anyInt()
         )).thenReturn(List.of());
         lenient().when(officialChallengeQuizTemplateService.copyTemplateQuestions(
-                any(UUID.class), any(UUID.class), any(), any(UUID.class), any(), anyInt()
+                any(UUID.class), any(UUID.class), any(), any(Long.class), any(UUID.class), any(), anyInt()
         )).thenReturn(List.of());
         lenient().when(noteRepository.findById(any(UUID.class))).thenReturn(Optional.empty());
         // ⚠️ Board Exam generation is ASYNCHRONOUS as of v0.106.0: startSession returns a GENERATING
@@ -296,7 +298,8 @@ class ChallengeQuizServiceTest {
                 generationRecoveryRowWriter,
                 noteCollectionRepository,
                 noteCollectionItemRepository,
-                longExamPlanSourceSampler
+                longExamPlanSourceSampler,
+                entityManager
         );
     }
 
@@ -452,7 +455,9 @@ class ChallengeQuizServiceTest {
 
         assertThat(expired.getStatus()).isEqualTo(QuickReviewSessionStatus.FORFEITED);
         assertThat(response.sessionId()).isNotEqualTo(expiredSessionId.toString());
-        assertThat(response.quiz()).containsExactlyInAnyOrderElementsOf(withSourceStudyPackId(freshQuiz, studyPackId));
+        assertThat(response.quiz()).containsExactlyInAnyOrderElementsOf(
+                withoutAnswerKeys(withSourceStudyPackId(freshQuiz, studyPackId))
+        );
         verify(challengeQuizQuestionBankService).releaseClaims(userId, studyPackId, expiredSessionId);
     }
 
@@ -594,10 +599,12 @@ class ChallengeQuizServiceTest {
 
         ChallengeQuizStartResponse response = challengeQuizService.startSession(studyPackId.toString(), userId, null);
 
-        assertThat(response.quiz()).containsExactlyInAnyOrderElementsOf(withSourceStudyPackId(bankedQuiz, studyPackId));
+        assertThat(response.quiz()).containsExactlyInAnyOrderElementsOf(
+                withoutAnswerKeys(withSourceStudyPackId(bankedQuiz, studyPackId))
+        );
         verify(quizGenerationService, never()).generateChallengeQuiz(any(), any(), any(), any(), anyInt(), any(), any());
         verify(aiRateLimitService, never()).assertAllowed(any(), any(), any());
-        verify(challengeQuizQuestionBankService, never()).persistGeneratedQuestions(any(), any(), any(), any(), any());
+        verify(challengeQuizQuestionBankService, never()).persistGeneratedQuestions(any(), any(), any(), any(), any(), any());
     }
 
     @Test
@@ -628,6 +635,7 @@ class ChallengeQuizServiceTest {
                 eq(userId),
                 eq(studyPackId),
                 eq(LearnerLevel.COLLEGE),
+                eq(0L),
                 any(UUID.class),
                 any(),
                 eq(DEFAULT_ADAPTIVE_QUESTION_COUNT)
@@ -637,7 +645,9 @@ class ChallengeQuizServiceTest {
 
         ChallengeQuizStartResponse response = challengeQuizService.startSession(studyPackId.toString(), userId, null);
 
-        assertThat(response.quiz()).containsExactlyInAnyOrderElementsOf(withSourceStudyPackId(templateQuiz, studyPackId));
+        assertThat(response.quiz()).containsExactlyInAnyOrderElementsOf(
+                withoutAnswerKeys(withSourceStudyPackId(templateQuiz, studyPackId))
+        );
         ArgumentCaptor<QuickReviewSessionEntity> sessionCaptor = ArgumentCaptor.forClass(QuickReviewSessionEntity.class);
         verify(quickReviewSessionRepository, atLeastOnce()).save(sessionCaptor.capture());
         QuickReviewSessionEntity savedSession = sessionCaptor.getAllValues().getLast();
@@ -648,7 +658,7 @@ class ChallengeQuizServiceTest {
         verify(quizGenerationService, never()).generateChallengeQuiz(any(), any(), any(), any(), anyInt(), any(), any());
         verify(aiRateLimitService, never()).assertAllowed(any(), any(), any());
         verify(userUsageService).incrementChallengeQuizGeneration(eq(userId), any(OffsetDateTime.class));
-        verify(challengeQuizQuestionBankService, never()).persistGeneratedQuestions(any(), any(), any(), any(), any());
+        verify(challengeQuizQuestionBankService, never()).persistGeneratedQuestions(any(), any(), any(), any(), any(), any());
     }
 
     @ParameterizedTest
@@ -756,7 +766,9 @@ class ChallengeQuizServiceTest {
         ChallengeQuizStartResponse response = challengeQuizService.startRedoMissedSession(studyPackId.toString(), userId);
 
         assertThat(response.mode()).isEqualTo("challenge");
-        assertThat(response.quiz()).containsExactlyInAnyOrderElementsOf(withSourceStudyPackId(missedQuestions, studyPackId));
+        assertThat(response.quiz()).containsExactlyInAnyOrderElementsOf(
+                withoutAnswerKeys(withSourceStudyPackId(missedQuestions, studyPackId))
+        );
         assertThat(response.usedThisMonth()).isZero();
         verify(quizGenerationService, never()).generateChallengeQuiz(any(), any(), any(), any(), anyInt(), any(), any());
         verify(userUsageService, never()).incrementChallengeQuizGeneration(any(UUID.class), any(OffsetDateTime.class));
@@ -925,7 +937,9 @@ class ChallengeQuizServiceTest {
 
         assertThat(staleOrdinarySession.getStatus()).isEqualTo(QuickReviewSessionStatus.FORFEITED);
         assertThat(response.sessionId()).isNotEqualTo(staleSessionId.toString());
-        assertThat(response.quiz()).containsExactlyInAnyOrderElementsOf(withSourceStudyPackId(missedQuestions, studyPackId));
+        assertThat(response.quiz()).containsExactlyInAnyOrderElementsOf(
+                withoutAnswerKeys(withSourceStudyPackId(missedQuestions, studyPackId))
+        );
         verify(quickReviewSessionRepository).save(staleOrdinarySession);
         verify(challengeQuizQuestionBankService).releaseClaims(userId, studyPackId, staleSessionId);
     }
@@ -982,7 +996,9 @@ class ChallengeQuizServiceTest {
         ChallengeQuizStartResponse response = challengeQuizService.startRedoMissedSession(studyPackId.toString(), userId);
 
         assertThat(response.sessionId()).isNotEqualTo(staleSessionId.toString());
-        assertThat(response.quiz()).containsExactlyInAnyOrderElementsOf(withSourceStudyPackId(missedQuestions, studyPackId));
+        assertThat(response.quiz()).containsExactlyInAnyOrderElementsOf(
+                withoutAnswerKeys(withSourceStudyPackId(missedQuestions, studyPackId))
+        );
         verify(challengeQuizQuestionBankService).releaseClaims(userId, studyPackId, staleSessionId);
     }
 
@@ -1034,11 +1050,11 @@ class ChallengeQuizServiceTest {
         ChallengeQuizStartResponse response = challengeQuizService.startSession(studyPackId.toString(), userId, null);
 
         assertThat(response.quiz()).hasSize(DEFAULT_ADAPTIVE_QUESTION_COUNT);
-        assertThat(response.quiz()).containsAll(withSourceStudyPackId(bankedQuiz, studyPackId));
-        assertThat(response.quiz()).containsAll(withSourceStudyPackId(generatedQuiz, studyPackId));
+        assertThat(response.quiz()).containsAll(withoutAnswerKeys(withSourceStudyPackId(bankedQuiz, studyPackId)));
+        assertThat(response.quiz()).containsAll(withoutAnswerKeys(withSourceStudyPackId(generatedQuiz, studyPackId)));
         verify(aiRateLimitService).assertAllowed(userId, PlanType.FREE, "challenge-quiz");
         verify(challengeQuizQuestionBankService).persistGeneratedQuestions(
-                eq(userId), eq(studyPackId), any(UUID.class), eq(LearnerLevel.COLLEGE), eq(generatedQuiz)
+                eq(userId), eq(studyPackId), any(UUID.class), eq(LearnerLevel.COLLEGE), eq(0L), eq(generatedQuiz)
         );
     }
 
@@ -1060,6 +1076,12 @@ class ChallengeQuizServiceTest {
     private static List<QuizItem> withSourceStudyPackId(List<QuizItem> quiz, UUID studyPackId) {
         return quiz.stream()
                 .map(item -> item.withSourceStudyPackId(studyPackId.toString()))
+                .toList();
+    }
+
+    private static List<QuizItem> withoutAnswerKeys(List<QuizItem> quiz) {
+        return quiz.stream()
+                .map(QuizItem::withoutAnswerKey)
                 .toList();
     }
 
@@ -1168,7 +1190,7 @@ class ChallengeQuizServiceTest {
         verify(generationContextResolver).resolveForStudyPack(userId, studyPack);
         verify(quizGenerationService, never()).generateBoardExamQuiz(any(), any(), any(), any(), anyInt(), any(), any());
         verify(challengeQuizQuestionBankService).persistGeneratedQuestions(
-                eq(userId), eq(studyPackId), any(UUID.class), eq(LearnerLevel.BOARD_EXAM_REVIEW), any()
+                eq(userId), eq(studyPackId), any(UUID.class), eq(LearnerLevel.BOARD_EXAM_REVIEW), eq(0L), any()
         );
         verify(analyticsService).trackEvent(eq(userId), eq(AnalyticsEventType.CHALLENGE_QUIZ_STARTED), eq(studyPackId), any());
         if (masteryLookupFails) {
@@ -1248,7 +1270,9 @@ class ChallengeQuizServiceTest {
         for (int attempt = 0; attempt < 30; attempt++) {
             ChallengeQuizStartResponse response = challengeQuizService.startSession(studyPackId.toString(), userId, null);
 
-            assertThat(response.quiz()).containsExactlyInAnyOrderElementsOf(withSourceStudyPackId(generatedQuiz, studyPackId));
+            assertThat(response.quiz()).containsExactlyInAnyOrderElementsOf(
+                    withoutAnswerKeys(withSourceStudyPackId(generatedQuiz, studyPackId))
+            );
             List<Integer> groupIndices = new java.util.ArrayList<>();
             for (int index = 0; index < response.quiz().size(); index++) {
                 if ("group-1".equals(response.quiz().get(index).questionGroup())) {
@@ -2465,7 +2489,8 @@ class ChallengeQuizServiceTest {
                 generationRecoveryRowWriter,
                 noteCollectionRepository,
                 noteCollectionItemRepository,
-                longExamPlanSourceSampler
+                longExamPlanSourceSampler,
+                entityManager
         );
 
         when(studyPackRepository.findByIdAndOwnerUserIdForUpdate(studyPackId, userId)).thenReturn(Optional.of(studyPack));
@@ -3352,7 +3377,7 @@ class ChallengeQuizServiceTest {
         session.setCurrentQuestionIndex(0);
         session.setCurrentRound(QuickReviewRound.INITIAL);
 
-        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionModeForUpdate(
                 sessionId,
                 userId,
                 QuickReviewSessionMode.CHALLENGE
@@ -3438,7 +3463,7 @@ class ChallengeQuizServiceTest {
         assertThat(session.getOutputTokens()).isEqualTo(70);
         assertThat(session.getCachedInputTokens()).isEqualTo(25);
         verify(challengeQuizQuestionBankService).persistGeneratedQuestions(
-                eq(userId), eq(studyPackId), eq(sessionId), eq(LearnerLevel.COLLEGE), any()
+                eq(userId), eq(studyPackId), eq(sessionId), eq(LearnerLevel.COLLEGE), eq(0L), any()
         );
     }
 
@@ -3533,11 +3558,13 @@ class ChallengeQuizServiceTest {
 
         GenerateMoreChallengeQuizResponse response = challengeQuizService.generateMoreQuestions(sessionId.toString(), userId);
 
-        assertThat(response.newQuestions()).containsExactlyInAnyOrderElementsOf(withSourceStudyPackId(bankedQuiz, studyPackId));
+        assertThat(response.newQuestions()).containsExactlyInAnyOrderElementsOf(
+                withoutAnswerKeys(withSourceStudyPackId(bankedQuiz, studyPackId))
+        );
         assertThat(response.totalQuestions()).isEqualTo(10);
         verify(quizGenerationService, never()).generateMoreChallengeQuiz(any(), any(), any(), any(), any(), anyInt(), any(), any());
         verify(challengeQuizQuestionBankService, never()).persistGeneratedQuestions(
-                any(), any(), any(), any(), any()
+                any(), any(), any(), any(), any(), any()
         );
     }
 
@@ -3570,13 +3597,15 @@ class ChallengeQuizServiceTest {
         when(studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId)).thenReturn(Optional.of(studyPack));
         when(generationContextResolver.resolveForStudyPack(userId, studyPack)).thenReturn(generationContext);
         when(officialChallengeQuizTemplateService.copyTemplateQuestions(
-                eq(userId), eq(studyPackId), eq(LearnerLevel.COLLEGE), eq(sessionId), any(), eq(5)
+                eq(userId), eq(studyPackId), eq(LearnerLevel.COLLEGE), eq(0L), eq(sessionId), any(), eq(5)
         )).thenReturn(templateQuiz);
         when(quickReviewSessionRepository.save(any())).thenAnswer(invocation -> recordSession(invocation.getArgument(0)));
 
         GenerateMoreChallengeQuizResponse response = challengeQuizService.generateMoreQuestions(sessionId.toString(), userId);
 
-        assertThat(response.newQuestions()).containsExactlyInAnyOrderElementsOf(withSourceStudyPackId(templateQuiz, studyPackId));
+        assertThat(response.newQuestions()).containsExactlyInAnyOrderElementsOf(
+                withoutAnswerKeys(withSourceStudyPackId(templateQuiz, studyPackId))
+        );
         assertThat(response.totalQuestions()).isEqualTo(10);
         assertThat(session.getModelUsed()).isNull();
         assertThat(session.getInputTokens()).isNull();
@@ -3584,7 +3613,7 @@ class ChallengeQuizServiceTest {
         assertThat(session.getCachedInputTokens()).isNull();
         verify(quizGenerationService, never()).generateMoreChallengeQuiz(any(), any(), any(), any(), any(), anyInt(), any(), any());
         verify(challengeQuizQuestionBankService, never()).persistGeneratedQuestions(
-                any(), any(), any(), any(), any()
+                any(), any(), any(), any(), any(), any()
         );
     }
 

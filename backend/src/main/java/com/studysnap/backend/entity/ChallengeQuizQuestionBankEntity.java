@@ -28,6 +28,9 @@ public class ChallengeQuizQuestionBankEntity {
     @Column(name = "study_pack_id", nullable = false)
     private UUID studyPackId;
 
+    @Column(name = "generation_stamp")
+    private Long generationStamp;
+
     @Column(name = "origin_session_id")
     private UUID originSessionId;
 

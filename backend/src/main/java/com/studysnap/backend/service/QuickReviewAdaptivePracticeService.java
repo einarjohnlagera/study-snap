@@ -1,6 +1,8 @@
 package com.studysnap.backend.service;
 
 import com.studysnap.backend.config.StudySnapProperties;
+import com.studysnap.backend.dto.AdaptivePracticeAnswerRequest;
+import com.studysnap.backend.dto.AdaptivePracticeAnswerResponse;
 import com.studysnap.backend.dto.AdaptivePracticeCompleteResponse;
 import com.studysnap.backend.dto.AdaptivePracticeFocusConceptResponse;
 import com.studysnap.backend.dto.ChallengeQuizConceptStatResponse;
@@ -19,8 +21,11 @@ import com.studysnap.backend.entity.QuickReviewSessionMode;
 import com.studysnap.backend.entity.QuickReviewSessionStatus;
 import com.studysnap.backend.entity.StudyPackEntity;
 import com.studysnap.backend.entity.StudyPackStatus;
+import com.studysnap.backend.exception.AdaptivePracticeAnswerAlreadyRecordedException;
+import com.studysnap.backend.exception.AdaptivePracticeSessionNotInProgressException;
 import com.studysnap.backend.exception.AdaptivePracticeSessionNotFoundException;
 import com.studysnap.backend.exception.AppException;
+import com.studysnap.backend.exception.InvalidAdaptivePracticeAnswerException;
 import com.studysnap.backend.exception.StudyPackNotFoundException;
 import com.studysnap.backend.exception.CollectionNotFoundException;
 import com.studysnap.backend.exception.QuickReviewSessionAnchorException;
@@ -29,6 +34,7 @@ import com.studysnap.backend.repository.NoteCollectionRepository;
 import com.studysnap.backend.repository.QuickReviewSessionRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
 import com.studysnap.backend.security.AiRateLimitService;
+import com.studysnap.backend.model.StudyPackProgressProjection;
 import com.studysnap.backend.service.model.StudyPackGenerationContext;
 import com.studysnap.backend.util.QuizDeduplicationUtils;
 import com.studysnap.backend.util.QuizSessionReviewUtils;
@@ -43,13 +49,13 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
-import com.studysnap.backend.model.StudyPackProgressProjection;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -78,8 +84,6 @@ public class QuickReviewAdaptivePracticeService {
     private static final String PREMIUM_FEATURE_REQUIRED_MESSAGE = "Adaptive Practice is not available on your current plan.";
     private static final String MONTHLY_LIMIT_REACHED_CODE = "MONTHLY_ADAPTIVE_PRACTICE_LIMIT_REACHED";
     private static final String MONTHLY_LIMIT_REACHED_MESSAGE = "You've reached your monthly Adaptive Practice limit.";
-    private static final String INVALID_SESSION_RESULT_CODE = "INVALID_SESSION_RESULT";
-    private static final String INVALID_SESSION_RESULT_MESSAGE = "Correct answers cannot exceed total questions.";
     private static final String ADAPTIVE_PRACTICE_SESSION_COMPLETED_MESSAGE = "Adaptive Practice session completed.";
     private static final String ADAPTIVE_PRACTICE_SESSION_ALREADY_COMPLETED_MESSAGE = "Adaptive Practice session already completed.";
     private static final String ADAPTIVE_PRACTICE_SESSION_ALREADY_ENDED_MESSAGE = "Adaptive Practice session has already ended.";
@@ -747,7 +751,7 @@ public class QuickReviewAdaptivePracticeService {
         Map<Integer, List<Integer>> submittedSelectedMultiChoices
     ) {
         UUID sessionId = UuidParsingUtils.parseUuidOrThrow(sessionIdRaw, AdaptivePracticeSessionNotFoundException::new);
-        QuickReviewSessionEntity session = quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(
+        QuickReviewSessionEntity session = quickReviewSessionRepository.findByIdAndUserIdAndSessionModeForUpdate(
                 sessionId,
                 userId,
                 QuickReviewSessionMode.ADAPTIVE
@@ -764,18 +768,28 @@ public class QuickReviewAdaptivePracticeService {
             );
         }
 
-        int safeTotalQuestions = session.getTotalQuestions() == null
-            ? Optional.ofNullable(totalQuestions)
-              .orElse(0)
-            : session.getTotalQuestions();
-        int safeCorrectAnswers = correctAnswers == null ? 0 : Math.max(0, correctAnswers);
-        if (safeCorrectAnswers > safeTotalQuestions) {
-            throw new AppException(
-                INVALID_SESSION_RESULT_CODE,
-                INVALID_SESSION_RESULT_MESSAGE,
-                HttpStatus.BAD_REQUEST
-            );
-        }
+        List<QuizItem> storedQuiz = QuizSessionStateUtils.extractQuiz(session.getSessionState());
+        Map<Integer, Integer> effectiveSelectedChoices =
+                QuizSessionStateUtils.extractSelectedChoiceIndexes(session.getSessionState(), storedQuiz);
+        Map<Integer, List<Integer>> effectiveSelectedMultiChoices =
+                QuizSessionStateUtils.extractSelectedMultiChoiceIndexes(session.getSessionState(), storedQuiz);
+        Map<Integer, String> selectedIdentificationAnswers =
+                QuizSessionStateUtils.extractSelectedIdentificationAnswers(session.getSessionState(), storedQuiz);
+        Map<Integer, List<String>> selectedEnumerationAnswers =
+                QuizSessionStateUtils.extractSelectedEnumerationAnswers(session.getSessionState(), storedQuiz);
+        List<ChallengeQuizConceptStatResponse> overallBreakdown = QuizSessionReviewUtils.computeConceptBreakdown(
+                storedQuiz,
+                effectiveSelectedChoices,
+                effectiveSelectedMultiChoices,
+                selectedIdentificationAnswers,
+                selectedEnumerationAnswers
+        );
+        int safeTotalQuestions = storedQuiz.isEmpty()
+                ? Optional.ofNullable(session.getTotalQuestions()).orElse(0)
+                : storedQuiz.size();
+        int safeCorrectAnswers = overallBreakdown.stream()
+                .mapToInt(ChallengeQuizConceptStatResponse::correctAnswers)
+                .sum();
 
         BigDecimal scorePercentage = safeTotalQuestions == 0
             ? BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP)
@@ -795,20 +809,7 @@ public class QuickReviewAdaptivePracticeService {
         OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
         session.setCompletedAt(now);
         quickReviewSessionRepository.save(session);
-        List<QuizItem> storedQuiz = QuizSessionStateUtils.extractQuiz(session.getSessionState());
-        Map<Integer, Integer> effectiveSelectedChoices = submittedSelectedChoices == null
-                ? QuizSessionStateUtils.extractSelectedChoiceIndexes(session.getSessionState(), storedQuiz)
-                : submittedSelectedChoices;
-        Map<Integer, List<Integer>> effectiveSelectedMultiChoices = submittedSelectedMultiChoices == null
-                ? QuizSessionStateUtils.extractSelectedMultiChoiceIndexes(session.getSessionState(), storedQuiz)
-                : submittedSelectedMultiChoices;
-        Map<Integer, String> selectedIdentificationAnswers =
-                QuizSessionStateUtils.extractSelectedIdentificationAnswers(session.getSessionState(), storedQuiz);
-        Map<Integer, List<String>> selectedEnumerationAnswers =
-                QuizSessionStateUtils.extractSelectedEnumerationAnswers(session.getSessionState(), storedQuiz);
-        Map<String, List<ChallengeQuizConceptStatResponse>> breakdownBySource =
-                effectiveSelectedChoices.isEmpty() && effectiveSelectedMultiChoices.isEmpty()
-                        && selectedIdentificationAnswers.isEmpty() && selectedEnumerationAnswers.isEmpty()
+        Map<String, List<ChallengeQuizConceptStatResponse>> breakdownBySource = storedQuiz.isEmpty()
                 ? Map.of()
                 : QuizSessionReviewUtils.computeConceptBreakdownBySourceStudyPack(
                         storedQuiz,
@@ -817,9 +818,10 @@ public class QuickReviewAdaptivePracticeService {
                         selectedIdentificationAnswers,
                         selectedEnumerationAnswers);
         List<String> twiceMissedConcepts = new ArrayList<>();
-        if (breakdownBySource.isEmpty()) {
-            // No stored quiz/selections to derive a breakdown — fall back to the frontend-reported
-            // correct concepts and record no misses (they cannot be computed reliably).
+        if (storedQuiz.isEmpty()) {
+            // A legacy row with no stored quiz has nothing the server can derive. Keep the old
+            // correct-concept fallback only for that shape; an ordinary empty selection map now
+            // means the learner answered nothing and must never be replaced with client claims.
             List<String> correctConcepts = correctConceptNames == null ? List.of() : correctConceptNames;
             UUID fallbackStudyPackId = parseSourceStudyPackId(null, session.getStudyPackId());
             if (!correctConcepts.isEmpty() && fallbackStudyPackId != null) {
@@ -863,6 +865,90 @@ public class QuickReviewAdaptivePracticeService {
             isSecondCompletedSessionEver,
             twiceMissedConcepts
         );
+    }
+
+    public AdaptivePracticeAnswerResponse answerQuestion(
+            String sessionIdRaw,
+            UUID userId,
+            AdaptivePracticeAnswerRequest request
+    ) {
+        UUID sessionId = UuidParsingUtils.parseUuidOrThrow(
+                sessionIdRaw,
+                AdaptivePracticeSessionNotFoundException::new
+        );
+        QuickReviewSessionEntity session = quickReviewSessionRepository
+                .findByIdAndUserIdAndSessionModeForUpdate(sessionId, userId, QuickReviewSessionMode.ADAPTIVE)
+                .filter(candidate -> !isInterviewSession(candidate))
+                .orElseThrow(AdaptivePracticeSessionNotFoundException::new);
+        if (session.getStatus() != QuickReviewSessionStatus.IN_PROGRESS) {
+            throw new AdaptivePracticeSessionNotInProgressException();
+        }
+
+        List<QuizItem> quiz = QuizSessionStateUtils.extractQuiz(session.getSessionState());
+        int questionIndex = request.questionIndex();
+        if (questionIndex < 0 || questionIndex >= quiz.size()) {
+            throw new InvalidAdaptivePracticeAnswerException("Question index is outside this Adaptive Practice session.");
+        }
+
+        QuizItem question = quiz.get(questionIndex);
+        Map<Integer, Integer> selectedChoices =
+                QuizSessionStateUtils.extractSelectedChoiceIndexes(session.getSessionState(), quiz);
+        Map<Integer, List<Integer>> selectedMultiChoices =
+                QuizSessionStateUtils.extractSelectedMultiChoiceIndexes(session.getSessionState(), quiz);
+        if (question.isMultiSelect()) {
+            List<Integer> submitted = normalizeAdaptiveMultiChoice(request.selectedMultiChoiceIndices());
+            if (request.selectedChoiceIndex() != null || submitted.isEmpty()) {
+                throw new InvalidAdaptivePracticeAnswerException(
+                        "Select one or more choices for this multi-select question."
+                );
+            }
+            if (submitted.stream().anyMatch(index -> index < 0 || index >= question.choices().size())) {
+                throw new InvalidAdaptivePracticeAnswerException(
+                        "A selected choice is outside this question's choices."
+                );
+            }
+            List<Integer> recorded = selectedMultiChoices.get(questionIndex);
+            if (recorded != null) {
+                if (recorded.equals(submitted)) {
+                    return new AdaptivePracticeAnswerResponse(questionIndex, question);
+                }
+                throw new AdaptivePracticeAnswerAlreadyRecordedException();
+            }
+            session.setSessionState(QuizSessionStateUtils.withSelectedMultiChoice(
+                    session.getSessionState(), questionIndex, submitted
+            ));
+        } else {
+            Integer submitted = request.selectedChoiceIndex();
+            if (submitted == null || request.selectedMultiChoiceIndices() != null) {
+                throw new InvalidAdaptivePracticeAnswerException("Select one choice for this question.");
+            }
+            if (submitted < 0 || submitted >= question.choices().size()) {
+                throw new InvalidAdaptivePracticeAnswerException("Selected choice is outside this question's choices.");
+            }
+            Integer recorded = selectedChoices.get(questionIndex);
+            if (recorded != null) {
+                if (recorded.equals(submitted)) {
+                    return new AdaptivePracticeAnswerResponse(questionIndex, question);
+                }
+                throw new AdaptivePracticeAnswerAlreadyRecordedException();
+            }
+            session.setSessionState(QuizSessionStateUtils.withSelectedChoice(
+                    session.getSessionState(), questionIndex, submitted
+            ));
+        }
+        quickReviewSessionRepository.save(session);
+        return new AdaptivePracticeAnswerResponse(questionIndex, question);
+    }
+
+    private List<Integer> normalizeAdaptiveMultiChoice(List<Integer> selectedChoiceIndices) {
+        if (selectedChoiceIndices == null) {
+            return List.of();
+        }
+        return selectedChoiceIndices.stream()
+                .filter(Objects::nonNull)
+                .distinct()
+                .sorted()
+                .toList();
     }
 
     public SimpleMessageResponse forfeitAdaptiveSession(String sessionIdRaw, UUID userId) {
@@ -1048,6 +1134,15 @@ public class QuickReviewAdaptivePracticeService {
         NoteCollectionEntity sourceCollection
     ) {
         List<QuizItem> quiz = QuizSessionStateUtils.extractQuiz(session.getSessionState());
+        Map<Integer, Integer> selectedChoices =
+                QuizSessionStateUtils.extractSelectedChoiceIndexes(session.getSessionState(), quiz);
+        Map<Integer, List<Integer>> selectedMultiChoices =
+                QuizSessionStateUtils.extractSelectedMultiChoiceIndexes(session.getSessionState(), quiz);
+        List<QuizItem> responseQuiz = IntStream.range(0, quiz.size())
+                .mapToObj(index -> selectedChoices.containsKey(index) || selectedMultiChoices.containsKey(index)
+                        ? quiz.get(index)
+                        : quiz.get(index).withoutAnswerKey())
+                .toList();
         String message = switch (session.getStatus()) {
             case GENERATING -> ADAPTIVE_GENERATING_MESSAGE;
             case FAILED -> ADAPTIVE_GENERATION_FAILED_MESSAGE;
@@ -1060,7 +1155,9 @@ public class QuickReviewAdaptivePracticeService {
             session.getNoteId() == null ? null : session.getNoteId().toString(),
             sourceCollection == null ? requireStudyPack(studyPack).getTitle() : sourceCollection.getTitle(),
             extractFocusConcepts(session, studyPack),
-            quiz,
+            responseQuiz,
+            selectedChoices,
+            selectedMultiChoices,
             message
         );
     }

@@ -19,6 +19,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
@@ -37,6 +39,8 @@ class QuickReviewFirstCompletedQuizIntegrationTest {
     private ActivityEventRepository activityEventRepository;
     @Autowired
     private JdbcTemplate jdbcTemplate;
+    @Autowired
+    private PlatformTransactionManager transactionManager;
 
     private QuickReviewSessionService quickReviewSessionService;
     private QuickReviewAdaptivePracticeService adaptivePracticeService;
@@ -50,6 +54,7 @@ class QuickReviewFirstCompletedQuizIntegrationTest {
                     id uuid primary key,
                     user_id uuid not null,
                     study_pack_id uuid,
+                    quiz_stamp_at_creation bigint,
                     note_id uuid,
                     source_collection_id uuid,
                     session_mode varchar(32) not null,
@@ -106,9 +111,10 @@ class QuickReviewFirstCompletedQuizIntegrationTest {
                 subscriptionService,
                 featureGateService,
                 mock(ConceptHealthService.class),
-                mock(StudyPackQuizMasteryService.class)
-        ,
-                org.mockito.Mockito.mock(com.studysnap.backend.service.NoteShareService.class));
+                mock(StudyPackQuizMasteryService.class),
+                org.mockito.Mockito.mock(com.studysnap.backend.service.NoteShareService.class),
+                org.mockito.Mockito.mock(com.studysnap.backend.repository.NoteRepository.class)
+        );
         adaptivePracticeService = new QuickReviewAdaptivePracticeService(
                 studyPackRepository,
                 quickReviewSessionRepository,
@@ -176,14 +182,14 @@ class QuickReviewFirstCompletedQuizIntegrationTest {
         )).isOne();
 
         QuickReviewSessionEntity secondSession = saveInProgressSession(userId, QuickReviewSessionMode.ADAPTIVE);
-        var secondResponse = adaptivePracticeService.completeAdaptiveSession(
+        var secondResponse = new TransactionTemplate(transactionManager).execute(status -> adaptivePracticeService.completeAdaptiveSession(
                 secondSession.getId().toString(),
                 userId,
                 0,
                 1,
                 60,
                 null
-        );
+        ));
 
         assertThat(secondResponse.isFirstCompletedSessionEver()).isFalse();
         assertThat(secondResponse.isSecondCompletedSessionEver()).isTrue();
@@ -195,11 +201,11 @@ class QuickReviewFirstCompletedQuizIntegrationTest {
     }
 
     private QuickReviewSessionResponse complete(QuickReviewSessionEntity session, UUID userId) {
-        return quickReviewSessionService.completeSession(
+        return new TransactionTemplate(transactionManager).execute(status -> quickReviewSessionService.completeSession(
                 session.getId().toString(),
                 userId,
                 new QuickReviewSessionCompleteRequest(0, 1, 0, 60, null)
-        );
+        ));
     }
 
     private QuickReviewSessionEntity saveInProgressSession(UUID userId) {

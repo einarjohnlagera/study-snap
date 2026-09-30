@@ -2,6 +2,7 @@ package com.studysnap.backend.util;
 
 import com.studysnap.backend.dto.InterviewSourceNoteRef;
 import com.studysnap.backend.dto.QuizItem;
+import com.studysnap.backend.service.model.InterviewPracticeCritique;
 import lombok.experimental.UtilityClass;
 
 import java.util.ArrayList;
@@ -9,6 +10,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 
 @UtilityClass
@@ -33,11 +35,16 @@ public class QuizSessionStateUtils {
     private static final String SELECTED_CHOICES_KEY = "selectedChoices";
     private static final String CONCEPT_SELECTION_REASONS_KEY = "conceptSelectionReasons";
     private static final String SELECTED_MULTI_CHOICES_KEY = "selectedMultiChoices";
+    private static final String ROUND_SELECTIONS_KEY = "roundSelections";
+    private static final String ROUND_MULTI_SELECTIONS_KEY = "roundMultiSelections";
     private static final String SELECTED_IDENTIFICATION_ANSWERS_KEY = "selectedIdentificationAnswers";
     private static final String SELECTED_ENUMERATION_ANSWERS_KEY = "selectedEnumerationAnswers";
     private static final String ACCEPTABLE_ANSWER_GROUPS_KEY = "acceptableAnswerGroups";
     private static final String SUB_MODE_KEY = "subMode";
     private static final String AI_FEEDBACK_KEY = "aiFeedback";
+    private static final String INTERVIEW_VERDICT_KEY = "verdict";
+    private static final String INTERVIEW_RATIONALE_KEY = "rationale";
+    private static final String INTERVIEW_FOLLOW_UP_KEY = "followUp";
     private static final String SOFT_TIMER_SECONDS_KEY = "softTimerSeconds";
     private static final String TIME_SPENT_SECONDS_KEY = "timeSpentSeconds";
     private static final String INTERVIEW_SOURCE_NOTE_REFS_KEY = "interviewSourceNoteRefs";
@@ -157,6 +164,116 @@ public class QuizSessionStateUtils {
         selectedChoices.put(String.valueOf(questionIndex), normalizeIntegerList(choiceIndices));
         state.put(SELECTED_MULTI_CHOICES_KEY, selectedChoices);
         return state;
+    }
+
+    public Map<String, Object> withRoundSelection(
+            Map<String, Object> sessionState,
+            int retryCount,
+            int questionIndex,
+            int choiceIndex
+    ) {
+        return withAttemptSelection(sessionState, ROUND_SELECTIONS_KEY, retryCount, questionIndex, choiceIndex);
+    }
+
+    public Map<String, Object> withRoundMultiSelection(
+            Map<String, Object> sessionState,
+            int retryCount,
+            int questionIndex,
+            List<Integer> choiceIndices
+    ) {
+        return withAttemptSelection(
+                sessionState,
+                ROUND_MULTI_SELECTIONS_KEY,
+                retryCount,
+                questionIndex,
+                normalizeIntegerList(choiceIndices)
+        );
+    }
+
+    public Map<Integer, Integer> extractRoundSelectionIndexes(
+            Map<String, Object> sessionState,
+            int retryCount,
+            List<QuizItem> quiz
+    ) {
+        return extractSelectedChoiceIndexes(attemptState(sessionState, ROUND_SELECTIONS_KEY, retryCount), quiz);
+    }
+
+    public Map<Integer, List<Integer>> extractRoundMultiSelectionIndexes(
+            Map<String, Object> sessionState,
+            int retryCount,
+            List<QuizItem> quiz
+    ) {
+        return extractSelectedMultiChoiceIndexes(
+                attemptState(sessionState, ROUND_MULTI_SELECTIONS_KEY, retryCount),
+                quiz
+        );
+    }
+
+    public Map<String, Object> withCurrentRoundSelectionsForResponse(
+            Map<String, Object> sessionState,
+            int retryCount,
+            List<QuizItem> quiz
+    ) {
+        Map<String, Object> responseState = new LinkedHashMap<>();
+        if (sessionState != null && !sessionState.isEmpty()) {
+            responseState.putAll(sessionState);
+        }
+        responseState.put(
+                ROUND_SELECTIONS_KEY,
+                stringifyIntegerMap(extractRoundSelectionIndexes(sessionState, retryCount, quiz))
+        );
+        responseState.put(
+                ROUND_MULTI_SELECTIONS_KEY,
+                stringifyIntegerListMap(extractRoundMultiSelectionIndexes(sessionState, retryCount, quiz))
+        );
+        return responseState;
+    }
+
+    private Map<String, Object> withAttemptSelection(
+            Map<String, Object> sessionState,
+            String stateKey,
+            int retryCount,
+            int questionIndex,
+            Object selection
+    ) {
+        Map<String, Object> state = new LinkedHashMap<>();
+        if (sessionState != null && !sessionState.isEmpty()) {
+            state.putAll(sessionState);
+        }
+        Map<String, Object> attempts = copyStringKeyMap(state.get(stateKey));
+        Map<String, Object> attempt = copyStringKeyMap(attempts.get(String.valueOf(retryCount)));
+        attempt.put(String.valueOf(questionIndex), selection);
+        attempts.put(String.valueOf(retryCount), attempt);
+        state.put(stateKey, attempts);
+        return state;
+    }
+
+    private Map<String, Object> attemptState(Map<String, Object> sessionState, String stateKey, int retryCount) {
+        if (sessionState == null || sessionState.isEmpty()) {
+            return Map.of();
+        }
+        Map<String, Object> attempt = copyStringKeyMap(
+                copyStringKeyMap(sessionState.get(stateKey)).get(String.valueOf(retryCount))
+        );
+        if (attempt.isEmpty()) {
+            return Map.of();
+        }
+        String selectionKey = ROUND_SELECTIONS_KEY.equals(stateKey)
+                ? SELECTED_CHOICES_KEY
+                : SELECTED_MULTI_CHOICES_KEY;
+        return Map.of(selectionKey, attempt);
+    }
+
+    private Map<String, Object> stringifyIntegerMap(Map<Integer, Integer> selections) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        selections.forEach((key, value) -> result.put(String.valueOf(key), value));
+        return result;
+    }
+
+    private Map<String, Object> stringifyIntegerListMap(Map<Integer, List<Integer>> selections) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        selections.forEach((key, value) -> result.put(String.valueOf(key), value));
+        return result;
     }
 
     public Map<String, Object> clearSelectedMultiChoices(Map<String, Object> sessionState) {
@@ -330,6 +447,28 @@ public class QuizSessionStateUtils {
         feedbackItems.set(questionIndex, feedback == null ? Map.of() : new LinkedHashMap<>(feedback));
         state.put(AI_FEEDBACK_KEY, feedbackItems);
         return state;
+    }
+
+    public Optional<InterviewPracticeCritique> extractInterviewFeedback(
+            Map<String, Object> sessionState,
+            int questionIndex
+    ) {
+        if (sessionState == null || sessionState.isEmpty() || questionIndex < 0) {
+            return Optional.empty();
+        }
+        Object raw = sessionState.get(AI_FEEDBACK_KEY);
+        if (!(raw instanceof List<?> feedbackItems) || questionIndex >= feedbackItems.size()) {
+            return Optional.empty();
+        }
+        Object rawFeedback = feedbackItems.get(questionIndex);
+        if (!(rawFeedback instanceof Map<?, ?> feedback) || feedback.isEmpty()) {
+            return Optional.empty();
+        }
+        return Optional.of(new InterviewPracticeCritique(
+                readStringValue(feedback, INTERVIEW_VERDICT_KEY),
+                readStringValue(feedback, INTERVIEW_RATIONALE_KEY),
+                readStringValue(feedback, INTERVIEW_FOLLOW_UP_KEY)
+        ));
     }
 
     public List<QuizItem> extractQuiz(Map<String, Object> sessionState) {

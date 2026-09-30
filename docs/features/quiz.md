@@ -15,11 +15,14 @@ Shared ownership rule:
 
 Study Pack Quick Review mastery has one server-owned definition: for a `(user, Study Pack)`, there must be a completed `QUICK_REVIEW` session whose server-derived `verifiedCorrectAnswers` equals the Study Pack's current quiz size, and that size must be greater than zero. The verified score comes from persisted cumulative selections, so a perfect result reached through `Redo Mistakes` qualifies. Client-reported totals are not part of the predicate, other quiz modes cannot confer it, and a copied Study Pack starts with no mastery for its new owner.
 
-Regeneration compares historical sessions with the current quiz size. A quiz-size change may therefore remove mastery until the learner completes the new question set perfectly.
+Regeneration compares a session's captured `quiz_stamp` with the current Study Pack stamp, as well as
+the current quiz size. Replacing the quiz removes mastery until the learner completes that question set
+perfectly, even when the new quiz has the same number of questions. Legacy sessions with no captured
+stamp retain the prior enqueue-timestamp rule.
 
 **`verifiedCorrectAnswers` is not uniformly server-derived, and code must not assume it is.** Sessions completed **after** the `v0.74.0` migration are server-derived. Sessions completed **before** it were **grandfathered from the client-reported `correct_answers`**, because re-scoring in SQL would mean re-implementing answer resolution against raw JSONB and bypassing `QuizItem`'s `@JsonCreator` — where `correctIndex` is actually resolved, including the answer-as-letter case that generated quizzes rely on (`correctIndex` is absent from `schema.json`; `"answer"` is a letter per `developer.txt:15`). Getting that wrong locks existing learners out of a tab they already use, so the pre-deploy population is trusted once instead. **Do not "fix" this by adding a SQL scorer** — any re-derivation must go through `QuizItem`.
 
-The v0.74.0 Quiz-tab lock built on this signal is a **UX affordance, not a security control**. Quick Review scores in the client, and the saved Study Pack quiz—including its answers—is already present in the client payload. Server-derived verification removes accidental divergence between the progression gate and the persisted-selection evaluation used by the completion and `ConceptHealth` path; it does not make the gate tamper-proof, and v0.74.0 does not claim that it does.
+The Quiz-tab lock is a **UX affordance, not a security control**; the accepted self-study exposure through Note and Study Pack pages remains outside the security boundary. Practice sessions, now including Quick Review, redact each answer key until the learner answers that question, then reveal it and lock the selection.
 
 ## Note Detail Quiz-tab progression lock
 
@@ -28,7 +31,7 @@ The v0.74.0 Quiz-tab lock built on this signal is a **UX affordance, not a secur
 - The panel starts the note's existing Quick Review flow and can return the learner to Summary. Challenge Quiz remains available independently and is not gated or reordered.
 - Teachers and admins are curator-exempt and may inspect the saved quiz without mastery. Their bypass does not emit an unlock-open event.
 - For an unlocked non-curator, opening the tab emits `STUDY_PACK_QUIZ_TAB_OPENED_AFTER_UNLOCK` once for that tab open; locked and empty-quiz views do not emit it.
-- This lock covers **only private Note Detail**. The public share page and Study Pack generation-results view continue to reveal saved answers deliberately. Those accepted exceptions, plus the answers already present in the client payload, are why this remains a UX progression affordance rather than a security boundary.
+- Note Detail and the Study Pack page remain fully unredacted by design; that is intentional rather than a residual practice-session gap.
 
 ## Math notation
 
@@ -56,6 +59,12 @@ Two defences, and both are needed:
 
 ### Quick Review
 
+Quick Review compares the quiz-specific stamp captured when the session starts with the Study Pack's
+current stamp on answer, progress, completion, and mastery lookup. Sessions predating the stamp
+migration keep the enqueue-timestamp fallback. Interview Practice's first answer lock prevented only
+sequential same-index resubmission; the later split-transaction merge also closes the concurrent
+cross-index overwrite that could erase a stored critique and reopen an answered question.
+
 - lightweight review mode
 - available on Free, Plus, and Pro
 - uses the base Study Pack quiz
@@ -70,8 +79,7 @@ Two defences, and both are needed:
 - The Challenge start response supplies `maxSourceNotes`; the browser renders that value rather than replicating plan or learner-level cap logic.
 - generated separately from Quick Review
 - uses the shared mode-selection entry
-- Challenge questions are reused from `challenge_quiz_question_bank`, but a Study Pack regeneration that replaces `summary` or `keyConcepts` now deletes every bank row for that pack, including claimed questions and recorded outcomes — except for at most one `+5` batch that was generating concurrently with the regeneration (see the known race below). Quiz-only repair does not invalidate this bank because `quiz` is not a Challenge-generation input. As an intended consequence, `Redo Missed Questions` stops offering questions derived from content the regenerated note no longer contains.
-- **Known race, not fixed by this invalidation:** `ChallengeQuizService.generateMoreQuestions` ("+5 questions") reads the pack's `summary` unlocked, then calls the LLM while holding a `PESSIMISTIC_WRITE` lock on its own claimed bank rows — a regeneration's own bulk delete can be issued concurrently, and the `+5` request's LLM-derived rows (built from the pre-regeneration summary) are inserted afterward, so they survive the delete and are later claimable as if current. A learner would need to trigger `+5` on a pack at the same moment its owner (usually themselves) regenerates it; the fix would need a generation stamp on bank rows and a migration, so it is tracked as its own Backlog row rather than folded in here. A regeneration can also now wait — up to the LLM read timeout (180s) — behind that same in-flight `+5` call, while holding the Study Pack and Note row locks and one of only two `studyPackGenerationTaskExecutor` threads.
+- Challenge questions are reused from `challenge_quiz_question_bank`. Regeneration replaces the pack's summary or key concepts, advances `study_packs.generation_stamp`, and deletes the pack's bank rows in one transaction. A `+5 Questions` request that began before regeneration may still insert rows afterward, but those rows retain the older stamp and cannot be offered to a new session or Redo Missed Questions. Quiz-only repair leaves the stamp and bank unchanged because `quiz` is not a Challenge-generation input. Existing bank rows with a null stamp remain eligible until that pack's next regeneration deletes them.
 - Official Challenge templates share that bank. Learner-facing regeneration reuses its existing post-commit seed, while admin summary regeneration reloads the committed note and pack and requests a fresh seed. **Known bulk-admin limitation:** 890 admin-owned packs matching the summary-regeneration target had bank rows in production on 2026-09-27 (only the subset passing Official-template eligibility re-seeds). Summary regeneration and re-seeding compete for the same `llmParallelTaskExecutor` (core 4, max 8, queue 50): the outer admin loop admits roughly the first 58 packs and rejects the rest immediately at submission — those rejected packs are never regenerated, so never invalidated, and need no re-seed. Among the ~58 admitted, only the one whose re-seed lands exactly when the queue is still full (50/50, all 8 threads busy) is rejected — expect about one rejected seed per saturated run, not most of them. A rejected seed is not a learner-facing error: `copyTemplateQuestions` copies nothing and Challenge Quiz generates fresh shortfall questions instead. After a bulk `regenerateOfficialSummaries` run has fully finished (not while seeds may still be in flight — the existence gate can't see an uncommitted seed, so an overlapping rerun wastes LLM calls and can occasionally double a template), the owner can rerun `POST /admin/study-packs/seed-official-challenge-quiz-templates`, existence-gated, to fill any pack whose seed was rejected.
 - **Pre-existing, unrelated to this invalidation:** an *adopted* copy of an Official note that is later regenerated can refill its bank from the Official template (`OfficialChallengeQuizTemplateService.copyTemplateQuestions` follows `copiedFromNoteId` without checking the learner's content still matches) — the refilled questions may not match the learner's own regenerated content. This predates this release; it is not made worse by it.
 

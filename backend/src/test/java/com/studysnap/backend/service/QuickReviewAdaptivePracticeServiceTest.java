@@ -1,6 +1,7 @@
 package com.studysnap.backend.service;
 
 import com.studysnap.backend.config.StudySnapProperties;
+import com.studysnap.backend.dto.AdaptivePracticeAnswerRequest;
 import com.studysnap.backend.dto.AdaptivePracticeCompleteResponse;
 import com.studysnap.backend.dto.QuickReviewAdaptiveQuizResponse;
 import com.studysnap.backend.dto.QuizItem;
@@ -15,6 +16,9 @@ import com.studysnap.backend.entity.QuickReviewSessionStatus;
 import com.studysnap.backend.model.StudyPackProgressProjection;
 import com.studysnap.backend.entity.StudyPackEntity;
 import com.studysnap.backend.exception.AdaptivePracticeSessionNotFoundException;
+import com.studysnap.backend.exception.AdaptivePracticeAnswerAlreadyRecordedException;
+import com.studysnap.backend.exception.AdaptivePracticeSessionNotInProgressException;
+import com.studysnap.backend.exception.InvalidAdaptivePracticeAnswerException;
 import com.studysnap.backend.entity.StudyPackStatus;
 import com.studysnap.backend.entity.NoteCollectionEntity;
 import com.studysnap.backend.entity.NoteCollectionItemEntity;
@@ -629,14 +633,15 @@ class QuickReviewAdaptivePracticeServiceTest {
     }
 
     @Test
-    void completeAdaptiveSession_recordsCorrectConceptNamesWhenPresent() {
+    void completeAdaptiveSession_usesCorrectConceptNamesOnlyForALegacySessionWithoutAStoredQuiz() {
         UUID userId = UUID.randomUUID();
         UUID studyPackId = UUID.randomUUID();
         UUID noteId = UUID.randomUUID();
         UUID sessionId = UUID.randomUUID();
         QuickReviewSessionEntity session = buildInProgressAdaptiveSession(sessionId, userId, studyPackId, noteId);
+        session.setSessionState(Map.of());
 
-        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionModeForUpdate(
                 sessionId,
                 userId,
                 QuickReviewSessionMode.ADAPTIVE
@@ -662,6 +667,178 @@ class QuickReviewAdaptivePracticeServiceTest {
     }
 
     @Test
+    void answerQuestion_locksTheFirstSelectionAndMakesSameChoiceRetriesIdempotent() {
+        UUID userId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+        QuickReviewSessionEntity session = buildInProgressAdaptiveSession(
+                sessionId, userId, UUID.randomUUID(), UUID.randomUUID());
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionModeForUpdate(
+                sessionId, userId, QuickReviewSessionMode.ADAPTIVE)).thenReturn(Optional.of(session));
+        when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        var first = adaptivePracticeService.answerQuestion(
+                sessionId.toString(), userId, new AdaptivePracticeAnswerRequest(0, 0, null));
+        var retry = adaptivePracticeService.answerQuestion(
+                sessionId.toString(), userId, new AdaptivePracticeAnswerRequest(0, 0, null));
+
+        assertThat(first.question().correctIndex()).isZero();
+        assertThat(first.question().explanation()).isEqualTo("Explanation");
+        assertThat(retry).isEqualTo(first);
+        assertThat(QuizSessionStateUtils.extractSelectedChoiceIndexes(
+                session.getSessionState(), QuizSessionStateUtils.extractQuiz(session.getSessionState())))
+                .containsExactlyEntriesOf(Map.of(0, 0));
+        verify(quickReviewSessionRepository, times(1)).save(session);
+    }
+
+    @Test
+    void answerQuestion_rejectsAChangedSelectionAndLeavesTheStoredAnswerIntact() {
+        UUID userId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+        QuickReviewSessionEntity session = buildInProgressAdaptiveSession(
+                sessionId, userId, UUID.randomUUID(), UUID.randomUUID());
+        List<QuizItem> storedQuiz = QuizSessionStateUtils.extractQuiz(session.getSessionState());
+        session.setSessionState(QuizSessionStateUtils.withSelectedChoice(session.getSessionState(), 0, 0));
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionModeForUpdate(
+                sessionId, userId, QuickReviewSessionMode.ADAPTIVE)).thenReturn(Optional.of(session));
+
+        assertThatThrownBy(() -> adaptivePracticeService.answerQuestion(
+                sessionId.toString(), userId, new AdaptivePracticeAnswerRequest(0, 1, null)))
+                .isInstanceOf(AdaptivePracticeAnswerAlreadyRecordedException.class);
+
+        assertThat(QuizSessionStateUtils.extractSelectedChoiceIndexes(session.getSessionState(), storedQuiz))
+                .containsExactlyEntriesOf(Map.of(0, 0));
+        verify(quickReviewSessionRepository, never()).save(any());
+    }
+
+    @Test
+    void answerQuestion_rejectsInterviewPracticeRowsThatShareTheAdaptiveMode() {
+        UUID userId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+        QuickReviewSessionEntity interview = buildInProgressAdaptiveSession(
+                sessionId, userId, UUID.randomUUID(), UUID.randomUUID());
+        Map<String, Object> state = new LinkedHashMap<>(interview.getSessionState());
+        state.put("subMode", "INTERVIEW");
+        interview.setSessionState(state);
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionModeForUpdate(
+                sessionId, userId, QuickReviewSessionMode.ADAPTIVE)).thenReturn(Optional.of(interview));
+
+        assertThatThrownBy(() -> adaptivePracticeService.answerQuestion(
+                sessionId.toString(), userId, new AdaptivePracticeAnswerRequest(0, 0, null)))
+                .isInstanceOf(AdaptivePracticeSessionNotFoundException.class);
+
+        verify(quickReviewSessionRepository, never()).save(any());
+    }
+
+    @Test
+    void answerQuestion_normalizesAndLocksMultiSelectChoices() {
+        UUID userId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+        QuickReviewSessionEntity session = buildInProgressAdaptiveSession(
+                sessionId, userId, UUID.randomUUID(), UUID.randomUUID());
+        QuizItem multiSelect = new QuizItem(
+                "Select both correct choices",
+                List.of("A", "B", "C", "D"),
+                null,
+                "Concept",
+                "A and C are correct.",
+                null,
+                "MULTI_SELECT",
+                null,
+                null,
+                List.of(0, 2)
+        );
+        session.setSessionState(QuizSessionStateUtils.withQuiz(List.of(multiSelect), null));
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionModeForUpdate(
+                sessionId, userId, QuickReviewSessionMode.ADAPTIVE)).thenReturn(Optional.of(session));
+        when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        var first = adaptivePracticeService.answerQuestion(
+                sessionId.toString(), userId, new AdaptivePracticeAnswerRequest(0, null, List.of(2, 0, 2)));
+        var retry = adaptivePracticeService.answerQuestion(
+                sessionId.toString(), userId, new AdaptivePracticeAnswerRequest(0, null, List.of(0, 2)));
+
+        assertThat(first.question().correctIndices()).containsExactly(0, 2);
+        assertThat(retry).isEqualTo(first);
+        assertThat(QuizSessionStateUtils.extractSelectedMultiChoiceIndexes(
+                session.getSessionState(), List.of(multiSelect))).containsExactlyEntriesOf(Map.of(0, List.of(0, 2)));
+        verify(quickReviewSessionRepository, times(1)).save(session);
+    }
+
+    @Test
+    void answerQuestion_rejectsAnAnswerOnAnAlreadyCompletedSession() {
+        UUID userId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+        QuickReviewSessionEntity session = buildInProgressAdaptiveSession(
+                sessionId, userId, UUID.randomUUID(), UUID.randomUUID());
+        session.setStatus(QuickReviewSessionStatus.COMPLETED);
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionModeForUpdate(
+                sessionId, userId, QuickReviewSessionMode.ADAPTIVE)).thenReturn(Optional.of(session));
+
+        assertThatThrownBy(() -> adaptivePracticeService.answerQuestion(
+                sessionId.toString(), userId, new AdaptivePracticeAnswerRequest(0, 0, null)))
+                .isInstanceOf(AdaptivePracticeSessionNotInProgressException.class);
+
+        verify(quickReviewSessionRepository, never()).save(any());
+    }
+
+    @Test
+    void answerQuestion_rejectsAnOutOfRangeQuestionIndexAndAShapeMismatchedRequest() {
+        UUID userId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+        QuickReviewSessionEntity session = buildInProgressAdaptiveSession(
+                sessionId, userId, UUID.randomUUID(), UUID.randomUUID());
+        List<QuizItem> storedQuiz = QuizSessionStateUtils.extractQuiz(session.getSessionState());
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionModeForUpdate(
+                sessionId, userId, QuickReviewSessionMode.ADAPTIVE)).thenReturn(Optional.of(session));
+
+        assertThatThrownBy(() -> adaptivePracticeService.answerQuestion(
+                sessionId.toString(), userId, new AdaptivePracticeAnswerRequest(storedQuiz.size(), 0, null)))
+                .isInstanceOf(InvalidAdaptivePracticeAnswerException.class);
+
+        assertThatThrownBy(() -> adaptivePracticeService.answerQuestion(
+                sessionId.toString(), userId, new AdaptivePracticeAnswerRequest(0, null, List.of(0, 1))))
+                .isInstanceOf(InvalidAdaptivePracticeAnswerException.class);
+
+        verify(quickReviewSessionRepository, never()).save(any());
+    }
+
+    @Test
+    void getAdaptiveSessionById_revealsAnsweredItemsAndRedactsUnansweredItemsWithoutMutatingStorage() {
+        UUID userId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        StudyPackEntity studyPack = buildStudyPack(studyPackId, noteId, userId);
+        QuickReviewSessionEntity session = buildInProgressAdaptiveSession(sessionId, userId, studyPackId, noteId);
+        List<QuizItem> fullQuiz = List.of(
+                new QuizItem("Answered", List.of("A", "B", "C", "D"), "A", "One", "First explanation"),
+                new QuizItem("Unanswered", List.of("A", "B", "C", "D"), "B", "Two", "Second explanation")
+        );
+        session.setTotalQuestions(fullQuiz.size());
+        session.setSessionState(QuizSessionStateUtils.withSelectedChoice(
+                QuizSessionStateUtils.withQuiz(fullQuiz, null), 0, 0));
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(
+                sessionId, userId, QuickReviewSessionMode.ADAPTIVE)).thenReturn(Optional.of(session));
+        when(studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId)).thenReturn(Optional.of(studyPack));
+
+        QuickReviewAdaptiveQuizResponse response = adaptivePracticeService
+                .getAdaptiveSessionById(sessionId.toString(), userId);
+
+        assertThat(response.selectedChoices()).containsExactlyEntriesOf(Map.of(0, 0));
+        assertThat(response.selectedMultiChoices()).isEmpty();
+        assertThat(response.quiz().get(0).correctIndex()).isZero();
+        assertThat(response.quiz().get(0).explanation()).isEqualTo("First explanation");
+        assertThat(response.quiz().get(1).correctIndex()).isNull();
+        assertThat(response.quiz().get(1).explanation()).isNull();
+        List<QuizItem> stillStored = QuizSessionStateUtils.extractQuiz(session.getSessionState());
+        assertThat(stillStored.get(0).correctIndex()).isZero();
+        assertThat(stillStored.get(1).correctIndex()).isEqualTo(1);
+        assertThat(stillStored.get(1).explanation()).isEqualTo("Second explanation");
+    }
+
+    @Test
     void completeAdaptiveSession_recordsMissedConceptsFromStoredSelections() {
         UUID userId = UUID.randomUUID();
         UUID studyPackId = UUID.randomUUID();
@@ -677,7 +854,7 @@ class QuickReviewAdaptivePracticeServiceTest {
                 Map.of("selectedChoices", Map.of("0", "A", "1", "C"))
         ));
 
-        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionModeForUpdate(
                 sessionId,
                 userId,
                 QuickReviewSessionMode.ADAPTIVE
@@ -731,7 +908,7 @@ class QuickReviewAdaptivePracticeServiceTest {
                 Map.of("selectedChoices", Map.of("0", "B", "1", "C"))
         ));
 
-        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionModeForUpdate(
                 sessionId,
                 userId,
                 QuickReviewSessionMode.ADAPTIVE
@@ -758,14 +935,14 @@ class QuickReviewAdaptivePracticeServiceTest {
     }
 
     @Test
-    void completeAdaptiveSession_doesNotRecordConceptHealthWhenCorrectConceptNamesAreNull() {
+    void completeAdaptiveSession_treatsMissingStoredSelectionsAsUnansweredAndIgnoresClientCorrectConcepts() {
         UUID userId = UUID.randomUUID();
         UUID studyPackId = UUID.randomUUID();
         UUID noteId = UUID.randomUUID();
         UUID sessionId = UUID.randomUUID();
         QuickReviewSessionEntity session = buildInProgressAdaptiveSession(sessionId, userId, studyPackId, noteId);
 
-        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionModeForUpdate(
                 sessionId,
                 userId,
                 QuickReviewSessionMode.ADAPTIVE
@@ -779,11 +956,13 @@ class QuickReviewAdaptivePracticeServiceTest {
                 1,
                 1,
                 20,
-                null
+                List.of("Concept")
         );
 
         verify(conceptHealthService, never()).recordCorrectAnswers(any(), any(), any(), any());
-        verify(conceptHealthService, never()).recordIncorrectAnswers(any(), any(), any(), any());
+        verify(conceptHealthService).recordIncorrectAnswers(
+                eq(userId), eq(studyPackId), eq(List.of("Concept")), any(OffsetDateTime.class));
+        assertThat(session.getCorrectAnswers()).isZero();
     }
 
 
@@ -889,7 +1068,7 @@ class QuickReviewAdaptivePracticeServiceTest {
         Map<String, Object> state = new LinkedHashMap<>(interview.getSessionState());
         state.put("subMode", "INTERVIEW");
         interview.setSessionState(state);
-        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionModeForUpdate(
                 sessionId, userId, QuickReviewSessionMode.ADAPTIVE))
                 .thenReturn(Optional.of(interview));
 
@@ -1356,11 +1535,12 @@ class QuickReviewAdaptivePracticeServiceTest {
 
     /** An in-progress Interview Practice session anchored on one of the fixture's packs. */
     @Test
-    void completeAdaptiveSession_attributesConceptsPerSourcePackWhenSelectionsAreSubmitted() {
-        // The substantive half of the wiring fix. Adaptive Practice has NO progress endpoint, so
-        // nothing persists selections during the session -- if the client does not submit them the
-        // breakdown is empty and everything lands on the anchor pack with no misses recorded.
-        // Two packs, the SAME concept in both, NON-UNIFORM answers: A correct, B wrong.
+    void completeAdaptiveSession_usesStoredSelectionsForScoreAndConceptHealthDespiteWrongClientClaims() {
+        // The mutant this kills restores any of the old client-trusted inputs: correctAnswers,
+        // selectedChoices, or selectedMultiChoices. The stored choices and request deliberately
+        // disagree on both score and which source pack was answered correctly.
+        // Two packs, the SAME concept in both, NON-UNIFORM answers: both A items correct, both B
+        // items wrong. Single- and multi-choice client claims assert the exact opposite.
         UUID userId = UUID.randomUUID();
         UUID sessionId = UUID.randomUUID();
         UUID packA = UUID.randomUUID();
@@ -1375,11 +1555,27 @@ class QuickReviewAdaptivePracticeServiceTest {
         session.setStudyPackId(null);
         session.setNoteId(null);
         session.setSourceCollectionId(UUID.randomUUID());
+        QuizItem packAMulti = new QuizItem(
+                "A2", List.of("A", "B", "C", "D"), null, "Shear Force", "Explanation",
+                null, "MULTI_SELECT", null, null, List.of(0, 2)
+        ).withSourceStudyPackId(packA.toString());
+        QuizItem packBMulti = new QuizItem(
+                "B2", List.of("A", "B", "C", "D"), null, "Shear Force", "Explanation",
+                null, "MULTI_SELECT", null, null, List.of(0, 2)
+        ).withSourceStudyPackId(packB.toString());
         session.setSessionState(QuizSessionStateUtils.withQuiz(List.of(
                 stampedItem("A1", "Shear Force", packA),
-                stampedItem("B1", "Shear Force", packB)
+                stampedItem("B1", "Shear Force", packB),
+                packAMulti,
+                packBMulti
         ), session.getSessionState()));
-        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(
+        session.setSessionState(QuizSessionStateUtils.withSelectedChoice(session.getSessionState(), 0, 0));
+        session.setSessionState(QuizSessionStateUtils.withSelectedChoice(session.getSessionState(), 1, 1));
+        session.setSessionState(QuizSessionStateUtils.withSelectedMultiChoice(
+                session.getSessionState(), 2, List.of(0, 2)));
+        session.setSessionState(QuizSessionStateUtils.withSelectedMultiChoice(
+                session.getSessionState(), 3, List.of(1)));
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionModeForUpdate(
                 sessionId, userId, QuickReviewSessionMode.ADAPTIVE)).thenReturn(Optional.of(session));
         when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
@@ -1387,9 +1583,9 @@ class QuickReviewAdaptivePracticeServiceTest {
         lenient().when(studyPackRepository.findByIdAndOwnerUserId(packB, userId)).thenReturn(Optional.of(b));
 
         adaptivePracticeService.completeAdaptiveSession(
-                sessionId.toString(), userId, 1, 2, null, null,
-                Map.of(0, 0, 1, 1),   // index 0 correct, index 1 wrong
-                Map.of());
+                sessionId.toString(), userId, 4, 4, null, List.of("Client says both are right"),
+                Map.of(0, 1, 1, 0),   // client says A wrong and B correct; stored state says the reverse
+                Map.of(2, List.of(1), 3, List.of(0, 2)));
 
         // Same concept string, opposite outcomes, kept apart by SOURCE PACK -- which is the whole
         // point: merging them by name would record one pack's success against the other's failure.
@@ -1406,6 +1602,8 @@ class QuickReviewAdaptivePracticeServiceTest {
                 eq(userId), eq(packA), any(), any());
         verify(conceptHealthService, never()).recordCorrectAnswers(
                 eq(userId), eq(packB), any(), any());
+        assertThat(session.getCorrectAnswers()).isEqualTo(2);
+        assertThat(session.getScorePercentage()).isEqualByComparingTo("50.00");
     }
 
     /**
@@ -1427,7 +1625,7 @@ class QuickReviewAdaptivePracticeServiceTest {
         session.setStudyPackId(null);
         session.setNoteId(null);
         session.setSourceCollectionId(UUID.randomUUID());
-        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionModeForUpdate(
                 sessionId, userId, QuickReviewSessionMode.ADAPTIVE)).thenReturn(Optional.of(session));
         when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
@@ -1472,15 +1670,17 @@ class QuickReviewAdaptivePracticeServiceTest {
                 stampedItem("A1", "Shear Force", packA),
                 unstamped
         ), session.getSessionState()));
-        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(
+        session.setSessionState(QuizSessionStateUtils.withSelectedChoice(session.getSessionState(), 0, 0));
+        session.setSessionState(QuizSessionStateUtils.withSelectedChoice(session.getSessionState(), 1, 0));
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionModeForUpdate(
                 sessionId, userId, QuickReviewSessionMode.ADAPTIVE)).thenReturn(Optional.of(session));
         when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
         lenient().when(studyPackRepository.findByIdAndOwnerUserId(packA, userId)).thenReturn(Optional.of(a));
 
         adaptivePracticeService.completeAdaptiveSession(
-                sessionId.toString(), userId, 1, 2, null, null,
-                Map.of(0, 0, 1, 0),
+                sessionId.toString(), userId, 0, 2, null, null,
+                Map.of(0, 1, 1, 1),
                 Map.of());
 
         assertThat(session.getStatus()).isEqualTo(QuickReviewSessionStatus.COMPLETED);

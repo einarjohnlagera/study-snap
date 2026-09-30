@@ -1315,6 +1315,26 @@ export type QuickReviewSessionStartResponse = {
   currentRound: "INITIAL" | "RETRY" | null;
   retryCount: number;
   sessionState: Record<string, unknown> | null;
+  noteId: string | null;
+  quiz: QuizItem[];
+  title: string | null;
+  keyConcepts: string[];
+  quizMastered: boolean;
+  quizMasteredAt: string | null;
+  quizCount: number;
+  isOwner: boolean;
+};
+
+export type QuickReviewAnswerRequest = {
+  questionIndex: number;
+  retryCount: number;
+  selectedChoiceIndex?: number;
+  selectedMultiChoiceIndices?: number[];
+};
+
+export type QuickReviewAnswerResponse = {
+  questionIndex: number;
+  question: QuizItem;
 };
 
 export type QuickReviewSessionCompleteRequest = {
@@ -1414,7 +1434,20 @@ export type QuickReviewAdaptiveQuizResponse = {
   title: string;
   focusConcepts: AdaptivePracticeFocusConcept[];
   quiz: QuizItem[];
+  selectedChoices?: Record<number, number>;
+  selectedMultiChoices?: Record<number, number[]>;
   message: string;
+};
+
+export type AdaptivePracticeAnswerRequest = {
+  questionIndex: number;
+  selectedChoiceIndex?: number;
+  selectedMultiChoiceIndices?: number[];
+};
+
+export type AdaptivePracticeAnswerResponse = {
+  questionIndex: number;
+  question: QuizItem;
 };
 
 export type AdaptivePracticeCompleteRequest = {
@@ -1423,13 +1456,8 @@ export type AdaptivePracticeCompleteRequest = {
   durationSeconds?: number;
   correctConceptNames?: string[];
   /**
-   * The learner's answers, keyed by ABSOLUTE index in the session's quiz array.
-   *
-   * ⚠️ These are what let the server attribute ConceptHealth PER SOURCE PACK. Adaptive Practice has
-   * no progress endpoint, so nothing persists selections into session state during the session --
-   * if the client does not send them here, the server's per-source breakdown is empty and it falls
-   * back to attributing everything to the anchor pack and recording NO MISSES at all. That fallback
-   * is correct for a single-note session and wrong for a plan-scoped one.
+   * Legacy overlap fields. The server accepts these but derives scoring and ConceptHealth only from
+   * selections persisted by the per-answer endpoint.
    */
   selectedChoices?: Record<number, number>;
   selectedMultiChoices?: Record<number, number[]>;
@@ -1545,6 +1573,14 @@ export type ChallengeQuizSessionResponse = {
   isFirstCompletedSessionEver?: boolean;
   isSecondCompletedSessionEver?: boolean;
   twiceMissedConcepts?: string[];
+  // Optional, matching the fallback in challenge-quiz/page.tsx (`result.quiz ?? quiz`): an
+  // older backend response mid-deploy won't carry these, so the type must not claim they're
+  // always present.
+  quiz?: QuizItem[];
+  selectedChoices?: Record<string, number>;
+  selectedMultiChoices?: Record<string, number[]>;
+  selectedIdentificationAnswers?: Record<string, string>;
+  selectedEnumerationAnswers?: Record<string, string[]>;
 };
 
 export type GenerateMoreChallengeQuizResponse = {
@@ -4120,6 +4156,25 @@ export async function updateQuickReviewSessionProgress(
   );
 }
 
+export async function answerQuickReviewQuestion(
+  sessionId: string,
+  request: QuickReviewAnswerRequest,
+): Promise<QuickReviewAnswerResponse> {
+  const response = await fetchWithAuth(
+    `/quick-review/${sessionId}/answer`,
+    {
+      method: "POST",
+      headers: buildAuthHeaders("application/json"),
+      body: JSON.stringify(request),
+    },
+    true,
+  );
+  return parseApiResponse<QuickReviewAnswerResponse>(
+    response,
+    "Could not check this Quick Review answer.",
+  );
+}
+
 export async function completeQuickReviewSession(
   sessionId: string,
   request: QuickReviewSessionCompleteRequest,
@@ -4342,6 +4397,25 @@ export async function getAdaptivePracticeSession(
   );
 }
 
+export async function answerAdaptivePracticeQuestion(
+  sessionId: string,
+  request: AdaptivePracticeAnswerRequest,
+): Promise<AdaptivePracticeAnswerResponse> {
+  const response = await fetchWithAuth(
+    `/adaptive-practice/sessions/${sessionId}/answer`,
+    {
+      method: "POST",
+      headers: buildAuthHeaders("application/json"),
+      body: JSON.stringify(request),
+    },
+    true,
+  );
+  return parseApiResponse<AdaptivePracticeAnswerResponse>(
+    response,
+    "Could not check this Adaptive Practice answer.",
+  );
+}
+
 export async function completeAdaptivePracticeSession(
   sessionId: string,
   request: AdaptivePracticeCompleteRequest,
@@ -4428,7 +4502,7 @@ export async function getInProgressChallengeQuizSession(
 export async function updateChallengeQuizSessionProgress(
   sessionId: string,
   request: ChallengeQuizProgressRequest,
-  options: { keepalive?: boolean } = {},
+  options: { keepalive?: boolean; signal?: AbortSignal } = {},
 ): Promise<ChallengeQuizStartResponse> {
   const response = await fetchWithAuth(
     `/challenge-quiz/sessions/${sessionId}/progress`,
@@ -4437,6 +4511,7 @@ export async function updateChallengeQuizSessionProgress(
       headers: buildAuthHeaders("application/json"),
       body: JSON.stringify(request),
       keepalive: options.keepalive ?? false,
+      signal: options.signal,
     },
     true,
   );

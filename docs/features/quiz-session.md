@@ -130,7 +130,85 @@ Long Exam progress additionally accepts `selectedIdentificationAnswer`. A blank 
 on completion it is scored as incorrect rather than causing a submission failure. Identification uses the same
 generation-time `acceptableAnswers` and normalized exact-match grading as Challenge Quiz.
 
+Long Exam session responses are feedback-free at the wire boundary as well as in the UI. Start, active, get,
+progress, pause, and resume responses never carry `correctIndex`, `correctIndices`, `explanation`,
+`workingSolution`, `acceptableAnswers`, or `acceptableAnswerGroups` for any question at any point in the
+session, including questions the learner has already answered.
+
 The recovery query is intentionally `LONG_EXAM`-only. Challenge Quiz needs its mode-owned stale-session path to release question-bank claims; Adaptive Practice and the Interview Practice sub-mode are also excluded. Recovery never generates replacement questions itself.
+
+## Interview Practice feedback boundary
+
+Interview Practice start and resume responses never carry the answer key in `question`, and answer responses
+never carry it in `nextQuestion`. The natural-language critique is the reveal for the question just answered.
+Once that critique has been served and stored, the question cannot be answered differently; an identical retry
+is idempotent and returns the stored critique without another LLM call or database write. The lock is keyed on
+the stored critique, so a failed critique attempt does not prevent the learner from retrying the question.
+
+The first per-index guard covered sequential retries of the same index only. Concurrent answers on
+different indexes could previously overwrite one another and erase a critique, reopening that index.
+Interview Practice now validates under a short session-row lock, releases it for the LLM call, then
+locks and re-reads fresh state to merge the selection and critique together. **The re-read explicitly
+calls `entityManager.refresh()`, not just the locked repository query** — `spring.jpa.open-in-view` is
+ON in this app, so the validate and merge steps of one request share a single `EntityManager`, and its
+identity map would otherwise hand the merge step back the validate step's own already-managed, stale
+Java object regardless of what the locked query's SQL actually returns. Completion and forfeiture also
+lock the session row; other quiz-session modes lock every mutating read, so a completed row cannot be
+overwritten by a writer that started earlier.
+
+Quick Review stores the Study Pack's `quiz_stamp` at session creation. The stamp advances when an
+existing pack's quiz changes, not when regeneration is merely enqueued or a summary-only repair runs.
+Answer, progress, completion, and mastery lookup compare that captured value with the current pack.
+Sessions created before the stamp migration retain the prior enqueue-timestamp fallback.
+
+## Adaptive Practice answer and reveal boundary
+
+Adaptive Practice session responses carry the full answer key only for question indexes already answered
+through `POST /adaptive-practice/sessions/{sessionId}/answer`. Unanswered questions redact `correctIndex`,
+`correctIndices`, `explanation`, `workingSolution`, and `acceptableAnswers`, and carry no accepted-answer
+content in `acceptableAnswerGroups`. The same response includes the server-recorded `selectedChoices` and
+`selectedMultiChoices`, allowing resume to restore the learner's selections, advance to the first unanswered
+question, and keep completed items revealed.
+
+The answer endpoint locks the session row and records one immutable selection per question index. Repeating the
+same selection is idempotent and returns the stored question reveal without a write; changing it returns HTTP
+409. MATCHING blocks use this contract once per item, while MULTI_SELECT choices stay locally editable until the
+learner selects Check Answer. `/answer` accepts only choice indices (single or multi); this is safe only because
+`OpenAiLlmStudyPackService`'s schema-name gate keeps `note_lib_adaptive_quiz` generation from ever emitting
+IDENTIFICATION or ENUMERATION questionFormats. Widening that gate for Adaptive Practice would produce items this
+endpoint cannot answer, permanently redacted with no code path to reveal them.
+
+Completion derives its stored score and all `ConceptHealth` inputs from these server-recorded selections. Legacy client score and selection fields remain accepted during deployment overlap
+but do not override server state. The persisted selection is the reveal marker because Adaptive feedback is a
+deterministic lookup from the immutable stored quiz, not a separately generated critique. The full quiz in
+`session_state.quiz` is never redacted or rewritten, and `correctConceptNames` is consulted only for a legacy
+session whose stored quiz itself is empty. A session with no server-recorded selections at all (an old
+frontend that never called `/answer`) is not scored as merely uncredited: every question in it is treated as
+an active miss, and `recordIncorrectAnswers` is called for every concept in the quiz.
+
+## Quick Review answer and reveal boundary
+
+Quick Review start and in-progress responses serve the Study Pack's fixed quiz with answer fields redacted for
+every unanswered index. `POST /quick-review/{sessionId}/answer` records a single- or multi-choice selection under
+a row lock and returns the full stored `QuizItem` for that index. An identical selection in the same attempt is
+idempotent; a different selection returns HTTP 409. The lock is bucketed by `retryCount` (`0` for INITIAL, `1`
+for RETRY), while cumulative `selectedChoices` and `selectedMultiChoices` maps always contain the latest accepted
+answer used by completion, `ConceptHealth`, and verified mastery. The answer request advances the durable retry
+count itself, so retry remains usable even if the transition's best-effort progress request was lost.
+
+Start and resume reveal indexes found in the cumulative maps and leave all others redacted. They also return the
+current attempt's selections and navigation state so a refresh restores position and feedback. MATCHING waits
+for the whole local group, calls `/answer` once per item, retries only failed items, and reveals the group after
+all calls succeed. MULTI_SELECT checkboxes remain local until explicit submission. `/progress` owns only
+`retryQuestionIndexes` and `activeQuestionIndexes`; it cannot overwrite answer or lock maps.
+
+The same Note-anchored start and resume routes serve owners and authorized share recipients. Authorization runs
+before the unscoped Note metadata read, and mastery resolves for the caller. If the session's captured
+`quizStampAtCreation` differs from the Study Pack's current `quizStamp`, start forfeits the stale row and creates a
+fresh session, resume reports no active session, and `/answer`, `/progress`, and `/complete` tell the client
+to restart. Sessions with a null capture, created before the migration, retain the older
+`generationEnqueuedAt` comparison. The quiz itself is
+never copied into session state; its full answer key remains only on the persisted Study Pack.
 
 ## Board Exam Multi-source State
 

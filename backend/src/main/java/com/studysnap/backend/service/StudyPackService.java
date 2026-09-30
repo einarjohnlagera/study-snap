@@ -730,6 +730,11 @@ public class StudyPackService {
         entity.setUpdatedAt(now);
         entity.setTags(resolveTags(generated.tags(), generated.title()));
         StudyPackEntity savedEntity = studyPackRepository.save(entity);
+        if (!isNewStudyPack) {
+            // Atomic — see StudyPackRepository.bumpQuizStamp's Javadoc. savedEntity's own in-memory
+            // quizStamp is stale after this; nothing in this class reads it back, so that's fine.
+            studyPackRepository.bumpQuizStamp(savedEntity.getId());
+        }
         if (recordUsage) {
             userUsageService.incrementStudyPackGeneration(ownerUserId, now);
         }
@@ -890,6 +895,7 @@ public class StudyPackService {
                         noteId,
                         recordUsage
                 );
+                savedEntity.setGenerationStamp(savedEntity.getGenerationStamp() + 1);
                 markNoteGenerated(noteId, sourceNote);
                 // ⚠️ THE FLUSH IS LOAD-BEARING, NOT TIDINESS. Every other caller that touches both a
                 // Study Pack and its exam pool locks study_packs FIRST, then exam_question_pool

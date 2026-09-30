@@ -120,6 +120,8 @@ class NoteCollectionServiceProjectionIntegrationTest {
                     input_type varchar(32) not null,
                     title varchar(255) not null,
                     summary varchar(2000) not null,
+                    generation_stamp bigint not null default 0,
+                    quiz_stamp bigint not null default 0,
                     subject varchar(64),
                     source_text varchar(20000),
                     key_concepts json not null,
@@ -206,6 +208,7 @@ class NoteCollectionServiceProjectionIntegrationTest {
                     id uuid primary key,
                     user_id uuid not null,
                     study_pack_id uuid,
+                    quiz_stamp_at_creation bigint,
                     note_id uuid,
                     source_collection_id uuid,
                     session_mode varchar(32) not null,
@@ -579,7 +582,7 @@ class NoteCollectionServiceProjectionIntegrationTest {
                 .doesNotContain(".content")
                 .doesNotContain(" source_text")
                 .doesNotContain(".source_text")
-                .doesNotContain(".quiz")
+                .doesNotContainPattern("\\.quiz(?:,|\\s|$)")
                 .doesNotContain(" questions")
                 .doesNotContain(".questions"));
     }

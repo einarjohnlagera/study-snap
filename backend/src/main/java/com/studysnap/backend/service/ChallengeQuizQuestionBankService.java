@@ -14,13 +14,12 @@ import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Propagation;
-import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
@@ -91,8 +90,10 @@ public class ChallengeQuizQuestionBankService {
             UUID studyPackId,
             UUID sessionId,
             LearnerLevel effectiveCurriculumLevel,
+            Long generationStamp,
             List<QuizItem> questions
     ) {
+        Objects.requireNonNull(generationStamp, "generationStamp");
         if (questions == null || questions.isEmpty()) {
             return;
         }
@@ -108,6 +109,7 @@ public class ChallengeQuizQuestionBankService {
             entry.setId(UUID.randomUUID());
             entry.setUserId(userId);
             entry.setStudyPackId(studyPackId);
+            entry.setGenerationStamp(generationStamp);
             entry.setOriginSessionId(sessionId);
             entry.setQuestionKey(questionKey);
             entry.setQuestion(question);
@@ -236,15 +238,12 @@ public class ChallengeQuizQuestionBankService {
         }
     }
 
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void releaseClaims(UUID userId, UUID studyPackId, UUID sessionId) {
         try {
-            List<ChallengeQuizQuestionBankEntity> claimed = challengeQuizQuestionBankRepository
-                    .findByUserIdAndStudyPackIdAndClaimedSessionId(userId, studyPackId, sessionId);
-            claimed.forEach(entry -> entry.setClaimedSessionId(null));
-            if (!claimed.isEmpty()) {
-                challengeQuizQuestionBankRepository.saveAll(claimed);
-            }
+            // Run on the caller's connection: a failed generate-more rolls back its own claim write,
+            // while a failed start can see and release its still-uncommitted claim immediately.
+            // A concurrent bank delete simply makes this targeted UPDATE affect zero rows.
+            challengeQuizQuestionBankRepository.releaseClaims(userId, studyPackId, sessionId);
         } catch (RuntimeException exception) {
             log.warn("Challenge Quiz question-bank claim release failed for sessionId={}", sessionId, exception);
         }

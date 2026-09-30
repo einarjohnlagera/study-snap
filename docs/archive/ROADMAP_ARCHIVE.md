@@ -15,6 +15,24 @@ changelog layer. `ROADMAP.md` keeps a one-line-per-version index at each origina
 
 ---
 
+**Kicked off 2026-09-23, signed off 2026-09-24.** `v0.157.0 — Watching More Closely` is **Released** on
+`releases/v0.157.0` (nothing is deployed until the release PR to `main` merges). It landed five
+already-open PRs on the release branch instead of merging each to `main` (Vercel Web Analytics #1426 — the only
+one that was code; pool-observability scoping #1427; the 2026-09-22 restart finding #1428; GPT context to
+`v0.156.0` #1429; the retention channel doctrine #1430) and then implemented two of the plans they carried, each
+on the owner's explicit go-ahead. **Pool diagnostics now cover background threads** (a new two-thread scheduler and
+a decorator on four executors; the design changed from the plan because Spring hands a scheduler's decorator a
+wrapper, not the job). **Retention email click/open tracking** (`V149`) and **one daily budget over all five
+retention types** shipped, and production data read before signoff changed the design: `INACTIVITY` sits at the
+60/day cap, so send order is priority and the digest now runs first. A cold pressure test found two defects in
+this release's own work (a click-timestamp 500 and a digest-failure coupling), both fixed. **Known limitation,
+documented not fixed:** `WEEKLY_SUMMARY` and `KNOWLEDGE_IMPACT_DIGEST` are budget-starved (immaterial today).
+**Owed after deploy:** three dated `[CHECKPOINT]` rows below (dates provisional, assume a 2026-09-24 deploy) and
+owner-side Resend click/open tracking plus webhook events. Full scope in `RELEASES.md` and
+`docs/releases/v0.157.0.md`.
+
+---
+
 **Kicked off 2026-09-22, signed off 2026-09-22.** `v0.156.0 — Say What You Meant to Show` is
 **Released** on `releases/v0.156.0`, cut from `main` after `v0.155.0` merged as #1422 and tagged.
 **Pre-signoff verification: one scoped cold agent (Opus, no inherited context), framed as
