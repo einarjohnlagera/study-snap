@@ -186,6 +186,97 @@ prompt as the effective authoring domain. **Nothing to run.**
 
 ---
 
+## Step 5 — Computing, added `v0.164.0` (2026-09-30). NOT YET RUNNABLE — see below.
+
+**Why this addendum, not a second rubric.** `Computing`'s ADR-001 ratification (`v0.164.0`) requires
+this same R4 runbook, per the package's own instruction and `ADR-001`'s Water Treatment note: *"do
+not write a second evaluation rubric."* The five watch items and the pass/fail shape below are new
+content specific to `Computing`; the scoring mechanics (control, A/B, five-check table, ambiguous
+re-run) are the existing runbook's, reused as-is.
+
+**⚠️ Blocked on note authoring, checked read-only against production 2026-09-30: none of the 5 named
+notes below exist yet.** The BSCS Year 1 corpus is *planned, not authored* — consistent with how
+`ADR-001`'s own clause (a) evidence is framed. This step cannot run until a curator authors these
+notes (or equivalent substitutes), and even then it is an **owner action through the production UI**,
+never Claude's to run — the same constraint every other step above already carries, restated here
+because Domain Context + regenerate is a production write.
+
+**The five notes (package §8), chosen for deliberate variety:**
+
+| # | Note | Why this one |
+|---|---|---|
+| 1 | History and Evolution of Computing | conceptual, no code |
+| 2 | Variables and Data Types | programming concept |
+| 3 | Functions and Parameters | programming / executable-example pressure |
+| 4 | Propositional Logic for Computing | discrete mathematics |
+| 5 | Algorithmic Problem Solving | algorithmic reasoning |
+
+**⚠️ None of these 5 titles appear anywhere in the BSCS Year 1 TSV (checked directly, 2026-09-30) —
+they are illustrative titles the package names, not existing rows with a determined Subject Plan or
+Applicable Programs.** An earlier draft of this addendum assigned each one a specific Subject Plan by
+guessing from the title; that assignment was invented, not sourced, and is corrected here rather than
+carried forward. **Applicable Programs for each of these 5 is decided by whoever authors it**, and that
+decision changes what this step can actually run:
+
+**Structure, once the notes exist — the comparison arm depends on how many programs each note ends up
+carrying, checked per note before running anything:**
+
+- **If a note is authored single-program** (as the 34 Discrete Structures I rows are, per the
+  ratification's own correction): a true A/B is possible with no second variable. `resolveCourseProgram`
+  already resolves a lone joined program to its name when Domain Context is NULL, so leaving Domain
+  Context unset generates under the `Computer Science` (or whichever single program) fallback, and
+  setting it to `Computing` is the other arm — `ADR-001`'s own tie-break of last resort (generate under
+  both candidate values and compare).
+- **If a note is authored multi-program** (as most of the corpus's Introduction to Computing / Computer
+  Programming 1 / Computer Programming 2 rows are, at 3 programs each): **there is no fallback arm to
+  compare against.** `ADR-001`'s own multi-program rule rejects generation server-side when Domain
+  Context is NULL and 2+ programs are set — leaving it unset does not produce a `Computer Science`
+  fallback pack, it produces no pack at all. **Score these notes' `Computing` arm alone** against the
+  five watch items below; do **not** temporarily strip Applicable Programs down to one program to force
+  a comparison arm — that changes a second variable (Applicable Programs, a curation fact) at the same
+  time as the one this step is actually testing (Domain Context), and confounds the result exactly as
+  `ADR-001`'s Step 2 warns against for its own control/test pair.
+
+Curated notes also carry a NULL `notes.course_program` string by design (`ADR-001`'s Representation
+authority section) — the personal free-text field is never the lever for a curator-authored note's
+fallback; the joined `note_course_program` row count is.
+
+**Watch for (package §8), scored per note like Step 2's five-check table:**
+
+1. Inappropriate language-specific assumptions (a `Computing`-labelled pack should not silently
+   assume Python, or any one language, unless the source note does).
+2. Source code forced into conceptual material (History and Evolution of Computing should not sprout
+   code blocks it never had).
+3. Overly generic "computer literacy" treatment (drift toward a consumer-tech framing rather than
+   the discipline's own vocabulary).
+4. CS-specific framing bleeding into genuinely shared material (automata/formalism language
+   appearing in an Introduction-level note).
+5. Failure to recognize computational or discrete reasoning as such (Propositional Logic for
+   Computing and Algorithmic Problem Solving should read as rigorous, not softened to prose).
+
+**Also watch, specific to `quantitative = false` on this value:** whether computation guidance fired
+at all on note 4 (Propositional Logic) and note 5 (Algorithmic Problem Solving) — since `Computing`
+declares `false`, they depend entirely on the unchanged `QUANTITATIVE_KEYWORDS` scan, with no
+discipline-specific repair keyword added this release (unlike `BASIC_MEDICAL_SCIENCES`'s
+`"pharmacokinetic"`). If either shows no computation guidance where it should, that is evidence for a
+future keyword addition — not something to fix by flipping `quantitative` to `true`, which is
+permanent per note.
+
+**Pass:** all 5 notes read College-level (BSCS Year 1 is coursework, not board-exam review — there is
+no PRC board for a first-year computing curriculum) and discipline-specific under `Computing`, with no
+more than one drift hit per the five-check list, no note showing all five failing at once, and — for
+any note where a true fallback arm exists — no material difference from that arm.
+
+**Fail:** two or more of the five checks drift on the same note, or a fallback-arm note under
+`Computing` reads materially more generic than its fallback arm. Record which note and which checks,
+exactly as Step 2 requires — a fail here amends `ADR-001`'s `Computing` ratification, specifically the
+`[CHECKPOINT — due after BSCS Year 1 authoring completes]` it already carries, not a routine finding.
+
+**Recording the result:** the same three places as "Recording the result" below, plus the
+`Computing`-specific `[CHECKPOINT]` on the amendment itself.
+
+---
+
 ## Recording the result — do not leave it in a chat reply
 
 This is a ratified-decision-level outcome. It needs to land in three places:

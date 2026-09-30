@@ -1,6 +1,6 @@
 # Review Set shaping — module
 
-> Last updated: v0.148.0 - 2026-09-15 (Released). **`v0.148.0` closed the Nursing and Accountancy legs of the "unset note loses computation guidance" defect below** — `"nursing"` and `"accountancy"` are now literal `QUANTITATIVE_KEYWORDS` entries, so an unset Nursing or Accountancy note's program name now matches the keyword scan directly on its next regeneration (not retroactively). The Architecture leg (73 notes) is untouched and still open. See the corrected "MEASURED 2026-09-05" section below for the full before/after. --- PRIOR (v0.133.0): - 2026-09-08 (Released). **⚠️ THE LET CATALOG CHANGED — THIS DIRECTLY CHANGES YOUR INPUT.** `V142` seeds the `Education` program family with EIGHT members, ALL tagged `exam_goal_slug = 'let'`: `Education`, `Special Needs Education`, `Elementary Education`, `Secondary Education`, `Early Childhood Education`, `Technical-Vocational Teacher Education`, `Physical Education`, `Teacher Certification`. Before this, exactly ONE carried the LET slug. **So Q4 (the ready-to-add pool) and Q6 (the exact catalog program names) of `docs/curriculum/review-set-reshape-read.sql` return MORE ROWS than they did before `v0.133.0` — re-run the read; do not reuse a pre-`v0.133.0` result set.** **⚠️ `Special Needs Education – Generalist` NO LONGER EXISTS UNDER THAT NAME** — it was renamed to `Special Needs Education` keeping its `id`, so use the new name in any TSV you emit. **⚠️ `Teacher Certification` is the canonical name for the non-education-graduate LET route — do NOT emit `Professional Education`, which already exists both as a `DomainContext` value and as a Subject, and do NOT emit credential abbreviations (BEEd, BSEd, BPEd, CPE) as program names.** --- PRIOR (v0.132.0): - 2026-09-08 (Released). Rule 5 (the publication boundary) and the
+> Last updated: v0.164.0 - 2026-09-30 (In Progress). **`v0.164.0` ratified `Computing` as a 13th Domain Context value** — see the "Domain Context — the closed vocabulary" section below for the two-test operative rule. This directly changes your fixed list: `COMPUTING` is now legal to emit. --- PRIOR (v0.148.0): - 2026-09-15 (Released). **`v0.148.0` closed the Nursing and Accountancy legs of the "unset note loses computation guidance" defect below** — `"nursing"` and `"accountancy"` are now literal `QUANTITATIVE_KEYWORDS` entries, so an unset Nursing or Accountancy note's program name now matches the keyword scan directly on its next regeneration (not retroactively). The Architecture leg (73 notes) is untouched and still open. See the corrected "MEASURED 2026-09-05" section below for the full before/after. --- PRIOR (v0.133.0): - 2026-09-08 (Released). **⚠️ THE LET CATALOG CHANGED — THIS DIRECTLY CHANGES YOUR INPUT.** `V142` seeds the `Education` program family with EIGHT members, ALL tagged `exam_goal_slug = 'let'`: `Education`, `Special Needs Education`, `Elementary Education`, `Secondary Education`, `Early Childhood Education`, `Technical-Vocational Teacher Education`, `Physical Education`, `Teacher Certification`. Before this, exactly ONE carried the LET slug. **So Q4 (the ready-to-add pool) and Q6 (the exact catalog program names) of `docs/curriculum/review-set-reshape-read.sql` return MORE ROWS than they did before `v0.133.0` — re-run the read; do not reuse a pre-`v0.133.0` result set.** **⚠️ `Special Needs Education – Generalist` NO LONGER EXISTS UNDER THAT NAME** — it was renamed to `Special Needs Education` keeping its `id`, so use the new name in any TSV you emit. **⚠️ `Teacher Certification` is the canonical name for the non-education-graduate LET route — do NOT emit `Professional Education`, which already exists both as a `DomainContext` value and as a Subject, and do NOT emit credential abbreviations (BEEd, BSEd, BPEd, CPE) as program names.** --- PRIOR (v0.132.0): - 2026-09-08 (Released). Rule 5 (the publication boundary) and the
 > adopter-update note below it are new in this release.
 
 **Paste with `GPT_CONTEXT.md` when the task is designing or rebuilding a Review Set** (a board-exam
@@ -61,16 +61,39 @@ depends on every adopter ending up with an identical set.
 
 ## Domain Context — the closed vocabulary
 
-Only these twelve values exist. **Adding one is an architecture decision, not a curation call — do
-not propose a new value.**
+Only these thirteen values exist. **Adding one is an architecture decision, not a curation call —
+do not propose a new value.**
 
 `ENGINEERING_MATHEMATICS` · `ENGINEERING_SCIENCES` · `CIVIL_ENGINEERING` ·
 `PROFESSIONAL_PRACTICE_AND_REGULATION` · `GENERAL_EDUCATION` · `PROFESSIONAL_EDUCATION` ·
 `NURSING` · `ACCOUNTANCY` · `ARCHITECTURAL_DESIGN` · `ARCHITECTURAL_HISTORY_AND_THEORY` ·
-`PLANNING_AND_SITE_DEVELOPMENT` · `BASIC_MEDICAL_SCIENCES`
+`PLANNING_AND_SITE_DEVELOPMENT` · `BASIC_MEDICAL_SCIENCES` · `COMPUTING`
 
 **⚠️ Three were added in `v0.111.0`** to close a real gap: 132 of 364 ALE rows had no honest
 value under the previous eight, and 8 notes carrying two programs could not be generated at all.
+
+**⚠️ `COMPUTING` was added in `v0.164.0`, `quantitative = false`.** This is the closed vocabulary's
+one value with its own two-test operative rule, not just a boundary paragraph — apply both tests to
+every candidate note, in order:
+
+1. **Knowledge-domain test.** Is computation, information, algorithms, software, or computational
+   systems themselves the object of study? No → not `COMPUTING`; use the honest existing Domain
+   Context or the program-name fallback.
+2. **Canonical-treatment / sibling test.** Could this exact canonical note, unchanged in framing,
+   depth, and explanation, legitimately serve at least one sibling computing program (Computer
+   Science, Information Technology, Information Systems, Software Engineering)? Yes → `COMPUTING`.
+   No → specialization: Domain Context stays NULL, program-name fallback applies.
+
+**Binding constraint: multi-program tagging alone must never imply `COMPUTING`, and Subject-Plan
+membership never determines Domain Context.** Decide per note, always. `COMPUTING` is **not**:
+another name for Computer Science; a marker for every note in a BSCS curriculum; a generic
+"technical" context; assigned merely because several computing programs are tagged; or a
+replacement for General Education, Engineering Mathematics, Engineering Sciences, or
+single-program specialization. CS-specific formalism (automata and formal languages, theory of
+computation, computability) fails the sibling test and stays `Applicable Programs: Computer
+Science` / `Domain Context: NULL`. **The binding negative case: Precalculus is a BSCS Year 1
+prerequisite but is NOT `COMPUTING`** — it is classified by its own authoring tradition (pure
+mathematics), never by who is about to read it.
 
 **⚠️ `BASIC_MEDICAL_SCIENCES` was added in `v0.145.0`, `quantitative = false`.** Boundary test: does a
 professional role appear in the knowledge itself, or only in who is reading it? Role in the knowledge
@@ -80,7 +103,7 @@ pharmacokinetics and pharmacodynamics, drug classes, disease mechanisms and path
 physiology, shared laboratory or diagnostic parameters) → `BASIC_MEDICAL_SCIENCES`. Licensure, codes,
 ethics and professional regulation → `PROFESSIONAL_PRACTICE_AND_REGULATION`, not here. Its initial
 population (6 mechanism-framed multi-program Pharmacology notes) is named in
-`docs/claude-plans/domain-context-biomedical-business-calibration-stage2.md` §A11 — classify those by
+`docs/claude-plans/done/domain-context-biomedical-business-calibration-stage2.md` §A11 — classify those by
 reading their content, never their title.
 
 **⚠️ MEASURED 2026-09-05 — READ THIS BEFORE RECOMMENDING `(unset)` ANYWHERE. Leaving a note unset is

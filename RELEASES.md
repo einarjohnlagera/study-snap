@@ -43,7 +43,41 @@ prompt change (package §8 explicitly forbids preemptive prompt tuning); no prod
 
 ### Shipped
 
-_(nothing yet)_
+- **ADR-001 amendment ratifying `Computing`** (13 values total): superseded the 2026-09-04 rejection
+  (naming answered via ACM/IEEE Computing Curricula 2020 + CHED CMO No. 25 s.2015; comprehension test
+  answered as curator-facing, not learner-facing); recorded the two-test curator rule; corrected the
+  package's own 133/136 → 136/136 evidence and removed its erroneous 34-row `applicable_programs`
+  extension instruction; re-read production rather than citing the stale `12:51` ratio — catalog is
+  now 90 programs, ratio `13:90` = 0.144; carries a `[CHECKPOINT — due after BSCS Year 1 authoring
+  completes]`. Inline dated flags added at the two lines that named `Computing` as previously
+  rejected (not rewritten).
+- **`DomainContext.COMPUTING`** (backend enum, `quantitative = false`) and the matching frontend
+  `DOMAIN_CONTEXT_OPTIONS` entry / `DomainContext` union member, with a routing description (excludes
+  CS-specific formalism, IT/IS/SE specialization, Precalculus/Algebra). Test coverage: `DomainContextTest`
+  (13-label `containsExactly`, new CsvSource row, round-trip test updated to the newest value) and
+  `domain-context.test.ts` (length 12→13, new routing-clause pinning test). Full backend build
+  (2,636 tests) and full frontend suite (225 suites, 2,598 tests) both green.
+- **Doc sweep**, all corrected to 13 values / the new two-test rule: `REVIEW_SET_SHAPING_CONTEXT.md`,
+  `GPT_CONTEXT.md` (also discharged the "don't propose a 13th value" line, same pattern as the 9th/12th
+  discharges), `NOTES_AND_COLLECTIONS_CONTEXT.md` §0, `docs/features/notes.md`, `challenge-quiz.md`,
+  `study-pack-generation.md`. **Independent stale-claim fix**, `review-set-workbook-spec.md:118-119`:
+  corrected "the server rejects the save" to "generation-time only" — found true regardless of this
+  ratification. Bumped the "Last updated" stamps on both GPT-context docs; corrected a second stale
+  claim found along the way in `NOTES_AND_COLLECTIONS_CONTEXT.md` (Interior Design, Landscape
+  Architecture and Environmental Planning are now live catalog programs, not absent as it claimed;
+  catalog is 90 programs, not 41).
+- **R4 runbook addendum** (`17-r4-verification-runbook.md`): a Computing section for the 5 named pilot
+  notes, prepared but explicitly marked not-yet-runnable — none of the 5 exist in production yet
+  (read-only check, 2026-09-30), execution is an owner action through the production UI regardless, and
+  the comparison-arm mechanics are honestly scoped (a true A/B needs a single-program note; a
+  multi-program note can only be scored on its `Computing` arm alone, since `ADR-001`'s own
+  multi-program rule blocks a NULL-Domain-Context fallback from generating at all).
+- **`docs/curriculum/bscs-year1-decision-log.md`** D-13 and D-34 closed, citing this package; D-33
+  (Precalculus) stays open, unchanged, per the package's own scope.
+- **`docs/claude-plans/computing-domain-context-final-decision-package.md`** — dated correction note
+  added at the top recording both owner corrections, rather than silently editing the original.
+- **`docs/product/ROADMAP.md`** Backlog Index row updated: gate cleared for ratification/code, corrected
+  numbers, R4 pilot's actual blocker (notes don't exist) stated explicitly.
 
 ## v0.163.0 - No Peeking
 

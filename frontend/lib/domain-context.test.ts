@@ -6,7 +6,7 @@ import {
 
 describe("Domain Context descriptions", () => {
   it("declares curator guidance for every option", () => {
-    expect(DOMAIN_CONTEXT_OPTIONS).toHaveLength(12);
+    expect(DOMAIN_CONTEXT_OPTIONS).toHaveLength(13);
     DOMAIN_CONTEXT_OPTIONS.forEach((option) => {
       expect(getDomainContextDescription(option.value)).toBe(option.description);
       expect(option.description).not.toHaveLength(0);
@@ -73,6 +73,22 @@ describe("Domain Context descriptions", () => {
     expect(label("ARCHITECTURAL_DESIGN")).toBe("Architectural Design");
     expect(label("ARCHITECTURAL_HISTORY_AND_THEORY")).toBe("History and Theory of Architecture");
     expect(label("PLANNING_AND_SITE_DEVELOPMENT")).toBe("Planning and Site Development");
+  });
+
+  // ⚠️ Pins the ROUTING clauses specifically (v0.164.0), same reasoning as the two guards above:
+  // an enumeration-only description is the recurring failure mode this repo has already paid for
+  // twice. The two-test rule is "object of study, then cross-sibling reuse" -- these assertions pin
+  // what routes AWAY from Computing, not merely that a description exists.
+  it("routes CS-specific formalism, sibling specialization, and pure math away from Computing", () => {
+    const description = DOMAIN_CONTEXT_OPTIONS.find(
+      (option) => option.value === "COMPUTING",
+    )?.description;
+
+    expect(description).toContain("Not a synonym for Computer Science");
+    expect(description).toContain("not implied by multi-program tagging alone");
+    expect(description).toContain("theory of computation");
+    expect(description).toContain("stay on the program-name fallback instead");
+    expect(description).toContain("Precalculus, Algebra");
   });
 });
 
