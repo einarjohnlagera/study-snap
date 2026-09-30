@@ -21,7 +21,9 @@ public interface QuickReviewSessionRepository extends JpaRepository<QuickReviewS
     /**
      * When the learner last earned a perfect Quick Review on the Study Pack's CURRENT quiz.
      *
-     * <p>⚠️ THE {@code generationEnqueuedAt} CLAUSE IS THE WHOLE POINT AND MUST NOT BE DROPPED.
+     * <p>New sessions compare the quiz stamp captured at creation with the current Study Pack stamp.
+     * This compares which quiz was seen, rather than when generation was enqueued. The legacy
+     * {@code generationEnqueuedAt} clause remains for sessions created before the stamp migration.
      * Mastery is derived, never stored, and {@code saveStudyPack} preserves {@code study_packs.id} on
      * regeneration by design. Without this clause a session that mastered the OLD quiz keeps matching
      * the new one -- the sizes are equal by construction, because the prompt asks for
@@ -31,7 +33,7 @@ public interface QuickReviewSessionRepository extends JpaRepository<QuickReviewS
      * shipped to close, and combined Note + Study Pack regeneration widened it: the answer key would
      * belong to content the learner never read.
      *
-     * <p>⚠️ {@code notes.generation_enqueued_at} is the discriminator rather than
+     * <p>For legacy rows, {@code notes.generation_enqueued_at} is the discriminator rather than
      * {@code study_packs.updated_at} BECAUSE IT MOVES ONLY ON GENERATION. It has exactly two writers,
      * both generation starts. {@code updated_at} looks equivalent and is not: {@code updateTags},
      * {@code updateMetadata} and share-link creation all bump it without touching the quiz, so using it
@@ -51,9 +53,11 @@ public interface QuickReviewSessionRepository extends JpaRepository<QuickReviewS
               and q.status = com.studysnap.backend.entity.QuickReviewSessionStatus.COMPLETED
               and q.completedAt is not null
               and q.verifiedCorrectAnswers = :quizSize
-              and q.completedAt >= coalesce(
+              and ((q.quizStampAtCreation is not null and q.quizStampAtCreation =
+                    (select p.quizStamp from StudyPackEntity p where p.id = :studyPackId))
+                or (q.quizStampAtCreation is null and q.completedAt >= coalesce(
                     (select n.generationEnqueuedAt from NoteEntity n where n.id = :noteId),
-                    q.completedAt)
+                    q.completedAt)))
             """)
     OffsetDateTime findQuizMasteredAt(UUID userId, UUID studyPackId, int quizSize, UUID noteId);
     String SESSION_SUMMARY_PROJECTION = """

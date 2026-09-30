@@ -170,6 +170,8 @@ class ChallengeQuizServiceTest {
      * can prove the sample is keyed on the session id the row is persisted under.
      */
     private LongExamPlanSourceSampler longExamPlanSourceSampler;
+    @Mock
+    private jakarta.persistence.EntityManager entityManager;
 
     private final Map<UUID, QuickReviewSessionEntity> savedSessionsById = new LinkedHashMap<>();
 
@@ -296,7 +298,8 @@ class ChallengeQuizServiceTest {
                 generationRecoveryRowWriter,
                 noteCollectionRepository,
                 noteCollectionItemRepository,
-                longExamPlanSourceSampler
+                longExamPlanSourceSampler,
+                entityManager
         );
     }
 
@@ -2486,7 +2489,8 @@ class ChallengeQuizServiceTest {
                 generationRecoveryRowWriter,
                 noteCollectionRepository,
                 noteCollectionItemRepository,
-                longExamPlanSourceSampler
+                longExamPlanSourceSampler,
+                entityManager
         );
 
         when(studyPackRepository.findByIdAndOwnerUserIdForUpdate(studyPackId, userId)).thenReturn(Optional.of(studyPack));
@@ -3373,7 +3377,7 @@ class ChallengeQuizServiceTest {
         session.setCurrentQuestionIndex(0);
         session.setCurrentRound(QuickReviewRound.INITIAL);
 
-        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionModeForUpdate(
                 sessionId,
                 userId,
                 QuickReviewSessionMode.CHALLENGE

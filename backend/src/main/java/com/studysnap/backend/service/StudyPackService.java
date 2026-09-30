@@ -730,6 +730,11 @@ public class StudyPackService {
         entity.setUpdatedAt(now);
         entity.setTags(resolveTags(generated.tags(), generated.title()));
         StudyPackEntity savedEntity = studyPackRepository.save(entity);
+        if (!isNewStudyPack) {
+            // Atomic — see StudyPackRepository.bumpQuizStamp's Javadoc. savedEntity's own in-memory
+            // quizStamp is stale after this; nothing in this class reads it back, so that's fine.
+            studyPackRepository.bumpQuizStamp(savedEntity.getId());
+        }
         if (recordUsage) {
             userUsageService.incrementStudyPackGeneration(ownerUserId, now);
         }

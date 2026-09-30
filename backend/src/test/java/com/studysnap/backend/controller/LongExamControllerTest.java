@@ -235,7 +235,10 @@ class LongExamControllerTest {
     }
 
     private void configureSessionLookup(QuickReviewSessionEntity session) {
-        when(sessionRepository.findByIdAndUserIdAndSessionMode(
+        org.mockito.Mockito.lenient().when(sessionRepository.findByIdAndUserIdAndSessionModeForUpdate(
+                session.getId(), userId, QuickReviewSessionMode.LONG_EXAM
+        )).thenReturn(Optional.of(session));
+        org.mockito.Mockito.lenient().when(sessionRepository.findByIdAndUserIdAndSessionMode(
                 session.getId(), userId, QuickReviewSessionMode.LONG_EXAM
         )).thenReturn(Optional.of(session));
     }

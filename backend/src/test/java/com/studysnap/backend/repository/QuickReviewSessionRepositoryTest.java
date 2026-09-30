@@ -52,6 +52,7 @@ class QuickReviewSessionRepositoryTest {
                     id uuid primary key,
                     user_id uuid not null,
                     study_pack_id uuid,
+                    quiz_stamp_at_creation bigint,
                     note_id uuid,
                     source_collection_id uuid,
                     session_mode varchar(32) not null,

@@ -112,7 +112,7 @@ class QuickReviewConceptHealthIntegrationTest {
         StudyPackEntity studyPack = buildStudyPack(studyPackId, userId);
         QuickReviewSessionEntity session = buildInProgressSession(sessionId, userId, studyPackId);
 
-        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionModeForUpdate(
                 sessionId,
                 userId,
                 QuickReviewSessionMode.QUICK_REVIEW

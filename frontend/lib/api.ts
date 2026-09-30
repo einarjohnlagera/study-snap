@@ -4502,7 +4502,7 @@ export async function getInProgressChallengeQuizSession(
 export async function updateChallengeQuizSessionProgress(
   sessionId: string,
   request: ChallengeQuizProgressRequest,
-  options: { keepalive?: boolean } = {},
+  options: { keepalive?: boolean; signal?: AbortSignal } = {},
 ): Promise<ChallengeQuizStartResponse> {
   const response = await fetchWithAuth(
     `/challenge-quiz/sessions/${sessionId}/progress`,
@@ -4511,6 +4511,7 @@ export async function updateChallengeQuizSessionProgress(
       headers: buildAuthHeaders("application/json"),
       body: JSON.stringify(request),
       keepalive: options.keepalive ?? false,
+      signal: options.signal,
     },
     true,
   );

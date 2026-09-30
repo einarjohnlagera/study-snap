@@ -134,6 +134,11 @@ const CHALLENGE_MODE: ChallengeQuizMode = "challenge";
 const BOARD_EXAM_MODE: ChallengeQuizMode = "board_exam";
 const MAX_SESSION_QUESTIONS = 20;
 const TIMER_TICK_INTERVAL_MS = 1000;
+const PROGRESS_FLUSH_BEFORE_COMPLETE_TIMEOUT_MS = 5000;
+// Generous on purpose: a legitimate +5 Questions LLM call can hold this session's row lock for its
+// whole duration, so an ordinary progress write can legitimately wait a long time behind it. This is
+// a dead-request safety net, not a UX-latency bound — the 5s bound above is the latency-sensitive one.
+const PROGRESS_REQUEST_TIMEOUT_MS = 30000;
 const BOARD_EXAM_TOOLTIP_STORAGE_KEY_PREFIX = "notelib-board-exam-mode-tip-dismissed";
 const BOARD_EXAM_START_CONFIRM_TITLE = "Start Board Exam Mode?";
 const BOARD_EXAM_LEAVE_TITLE = "Leave exam?";
@@ -303,6 +308,17 @@ export default function ChallengeQuizPage() {
     selectedIdentificationAnswers: {},
     selectedEnumerationAnswers: {},
   });
+  const pendingProgressRef = useRef<Array<{
+    sessionId: string;
+    request: Parameters<typeof updateChallengeQuizSessionProgress>[1];
+    keepalive: boolean;
+    waiters: Array<() => void>;
+  }>>([]);
+  const progressRequestInFlightRef = useRef(false);
+  // Shared across drainProgressQueue and persistLatestProgressImmediately: whichever fires next always
+  // aborts the previous holder, so a superseded write (including one stuck mid-401-refresh-retry) can
+  // never land on the server after a newer one.
+  const progressAbortControllerRef = useRef<AbortController | null>(null);
   const remainingSecondsRef = useRef(0);
   const challengeSessionRef = useRef<ChallengeQuizStartResponse | null>(null);
   const startInFlightRef = useRef(false);
@@ -762,6 +778,13 @@ export default function ChallengeQuizPage() {
 
   const resetToPrestart = useCallback((mode = challengeSession?.mode ?? selectedMode) => {
     timeoutAutoSubmitRequestedRef.current = false;
+    // Otherwise a hung progress write for the PRIOR session would keep blocking every progress write
+    // for the rest of the page's life, including a new session started right after this reset.
+    progressAbortControllerRef.current?.abort();
+    progressAbortControllerRef.current = null;
+    progressRequestInFlightRef.current = false;
+    pendingProgressRef.current.forEach((entry) => entry.waiters.forEach((resolve) => resolve()));
+    pendingProgressRef.current = [];
     syncProgressRef(0, {}, {}, {}, {});
     setChallengeSession(null);
     setResumeCandidate(null);
@@ -786,6 +809,38 @@ export default function ChallengeQuizPage() {
     setPhase("prestart");
   }, [challengeSession?.mode, selectedMode, syncProgressRef]);
 
+  const drainProgressQueue = useCallback(async () => {
+    if (progressRequestInFlightRef.current) return;
+    progressRequestInFlightRef.current = true;
+    try {
+      while (pendingProgressRef.current.length > 0) {
+        const next = pendingProgressRef.current.shift()!;
+        // A dead-request safety net, not a UX bound (see PROGRESS_REQUEST_TIMEOUT_MS) — without this,
+        // one hung write would block every later progress write for the rest of the page's life,
+        // including a later session, since this loop awaits each write before considering the next.
+        const controller = new AbortController();
+        progressAbortControllerRef.current = controller;
+        const timeoutId = globalThis.setTimeout(() => controller.abort(), PROGRESS_REQUEST_TIMEOUT_MS);
+        try {
+          await updateChallengeQuizSessionProgress(next.sessionId, next.request, {
+            keepalive: next.keepalive,
+            signal: controller.signal,
+          });
+        } catch {
+          // Challenge should continue even if a progress sync fails (including a timeout abort above).
+        } finally {
+          globalThis.clearTimeout(timeoutId);
+          if (progressAbortControllerRef.current === controller) {
+            progressAbortControllerRef.current = null;
+          }
+          next.waiters.forEach((resolve) => resolve());
+        }
+      }
+    } finally {
+      progressRequestInFlightRef.current = false;
+    }
+  }, []);
+
   const persistProgress = useCallback(
     (
       nextIndex: number,
@@ -794,9 +849,10 @@ export default function ChallengeQuizPage() {
       nextSelectedIdentificationAnswers: Record<number, string> = progressRef.current.selectedIdentificationAnswers,
       nextSelectedEnumerationAnswers: Record<number, string[]> = progressRef.current.selectedEnumerationAnswers,
       keepalive = false,
-    ) => {
-      if (!challengeSession?.sessionId) {
-        return;
+    ): Promise<void> => {
+      const sessionId = challengeSession?.sessionId;
+      if (!sessionId) {
+        return Promise.resolve();
       }
 
       const sessionState = {
@@ -805,20 +861,78 @@ export default function ChallengeQuizPage() {
         selectedIdentificationAnswers: serializeSelectedIdentificationAnswerRecord(nextSelectedIdentificationAnswers),
         selectedEnumerationAnswers: serializeSelectedEnumerationAnswersRecord(nextSelectedEnumerationAnswers),
       };
+      const request = {
+        currentQuestionIndex: nextIndex,
+        sessionState,
+      };
 
-      void updateChallengeQuizSessionProgress(
-        challengeSession.sessionId,
-        {
-          currentQuestionIndex: nextIndex,
-          sessionState,
-        },
-        { keepalive },
-      ).catch(() => {
-        // Challenge should continue even if a progress sync fails.
+      return new Promise<void>((resolve) => {
+        const pendingIndex = pendingProgressRef.current.findIndex((entry) => entry.sessionId === sessionId);
+        const prior = pendingIndex >= 0 ? pendingProgressRef.current[pendingIndex] : null;
+        const pending = {
+          sessionId,
+          request,
+          keepalive: keepalive || (prior?.keepalive ?? false),
+          waiters: [...(prior?.waiters ?? []), resolve],
+        };
+        if (pendingIndex >= 0) {
+          pendingProgressRef.current[pendingIndex] = pending;
+        } else {
+          pendingProgressRef.current.push(pending);
+        }
+        void drainProgressQueue();
       });
     },
-    [challengeSession?.sessionId],
+    [challengeSession?.sessionId, drainProgressQueue],
   );
+
+  // Bypasses the coalescing queue entirely: fires the latest known progress immediately, with no
+  // await on any in-flight or queued write. Reserved for the tab-hidden path, where the JS context can
+  // be torn down before the queue would otherwise get a chance to drain — every other "leaving" caller
+  // (route change, an explicit Leave action) stays on the awaited, queue-respecting path above, since
+  // those keep the page alive long enough for the queue to drain on its own.
+  const persistLatestProgressImmediately = useCallback(() => {
+    const sessionId = challengeSessionRef.current?.sessionId;
+    if (!sessionId) {
+      return;
+    }
+    const latest = progressRef.current;
+    const request = {
+      currentQuestionIndex: latest.currentIndex,
+      sessionState: {
+        selectedChoices: serializeSelectedChoiceIndexRecord(latest.selectedChoices),
+        selectedMultiChoices: serializeSelectedMultiChoiceIndicesRecord(latest.selectedMultiChoices),
+        selectedIdentificationAnswers: serializeSelectedIdentificationAnswerRecord(latest.selectedIdentificationAnswers),
+        selectedEnumerationAnswers: serializeSelectedEnumerationAnswersRecord(latest.selectedEnumerationAnswers),
+      },
+    };
+    const pendingIndex = pendingProgressRef.current.findIndex((entry) => entry.sessionId === sessionId);
+    const dropped = pendingIndex >= 0 ? pendingProgressRef.current[pendingIndex] : null;
+    if (pendingIndex >= 0) {
+      pendingProgressRef.current.splice(pendingIndex, 1);
+    }
+    // A request already IN FLIGHT (shifted off the queue, currently awaited by drainProgressQueue) is
+    // not in pendingProgressRef and so isn't caught by the drop above — it carries older state than
+    // what we're about to send. Left running, it (or a 401-refresh retry of it) could still land on the
+    // server AFTER this immediate write and overwrite it with that older state. Abort it: whichever
+    // write fires last always wins, so a superseded write can never land after a newer one.
+    progressAbortControllerRef.current?.abort();
+    const controller = new AbortController();
+    progressAbortControllerRef.current = controller;
+    // The dropped write's waiters (e.g. finalizeChallengeSession's own flush-before-complete await)
+    // must not resolve until THIS immediate request actually settles — resolving them synchronously,
+    // before the request is even sent, would let /complete proceed and race this write for the row
+    // lock, reopening the exact "server scores from stale state" defect this fix exists to close.
+    const settleDropped = () => {
+      if (progressAbortControllerRef.current === controller) {
+        progressAbortControllerRef.current = null;
+      }
+      dropped?.waiters.forEach((resolve) => resolve());
+    };
+    // Challenge should continue even if this progress sync fails — settleDropped still runs either way.
+    void updateChallengeQuizSessionProgress(sessionId, request, { keepalive: true, signal: controller.signal })
+      .then(settleDropped, settleDropped);
+  }, []);
 
   const loadNote = useCallback(async () => {
     if (!noteId) {
@@ -1071,7 +1185,7 @@ export default function ChallengeQuizPage() {
 
   const persistLatestProgress = useCallback((keepalive = false) => {
     const latest = progressRef.current;
-    persistProgress(
+    return persistProgress(
       latest.currentIndex,
       latest.selectedChoices,
       latest.selectedMultiChoices,
@@ -1093,30 +1207,47 @@ export default function ChallengeQuizPage() {
       return null;
     }
 
+    submitInFlightRef.current = true;
     if (timeoutTriggered) {
       timeoutAutoSubmitRequestedRef.current = true;
     }
-
-    const latestSelectedChoices = progressRef.current.selectedChoices;
-    const latestSelectedMultiChoices = progressRef.current.selectedMultiChoices;
-    const latestSelectedIdentificationAnswers = progressRef.current.selectedIdentificationAnswers;
-    const latestSelectedEnumerationAnswers = progressRef.current.selectedEnumerationAnswers;
-    const { correctAnswers, totalQuestions: total } = computeScore(
-      activeSession.quiz,
-      latestSelectedChoices,
-      latestSelectedMultiChoices,
-      latestSelectedIdentificationAnswers,
-      latestSelectedEnumerationAnswers,
-    );
-    const durationSeconds = Math.max(0, activeSession.timeLimitSeconds - remainingSecondsRef.current);
-
-    submitInFlightRef.current = true;
     setSubmitting(true);
     setError(null);
     if (persistResultToPage) {
       setTimedOut(timeoutTriggered);
     }
     try {
+      // The server grades from its own stored session_state, not from correctAnswers/totalQuestions
+      // below (those are informational only) — the last answer's progress write must have landed
+      // before /complete runs, or the server scores from a state that is missing it. Bounded, not
+      // awaited unconditionally: a fetch call has no default timeout, so an unbounded await here could
+      // stall submit indefinitely on a stalled request — including the timeout auto-submit, which would
+      // then never complete a Board Exam client-side and get it forfeited on the next start instead of
+      // graded. Proceeding after the bound is never worse than before this fix existed, when /complete
+      // never waited for any flush at all.
+      await new Promise<void>((resolve) => {
+        let settled = false;
+        const settle = () => {
+          if (!settled) {
+            settled = true;
+            resolve();
+          }
+        };
+        persistLatestProgress().then(settle, settle);
+        globalThis.setTimeout(settle, PROGRESS_FLUSH_BEFORE_COMPLETE_TIMEOUT_MS);
+      });
+      const latestSelectedChoices = progressRef.current.selectedChoices;
+      const latestSelectedMultiChoices = progressRef.current.selectedMultiChoices;
+      const latestSelectedIdentificationAnswers = progressRef.current.selectedIdentificationAnswers;
+      const latestSelectedEnumerationAnswers = progressRef.current.selectedEnumerationAnswers;
+      const { correctAnswers, totalQuestions: total } = computeScore(
+        activeSession.quiz,
+        latestSelectedChoices,
+        latestSelectedMultiChoices,
+        latestSelectedIdentificationAnswers,
+        latestSelectedEnumerationAnswers,
+      );
+      const durationSeconds = Math.max(0, activeSession.timeLimitSeconds - remainingSecondsRef.current);
       const completed = await completeChallengeQuizSession(activeSession.sessionId, {
         correctAnswers,
         totalQuestions: total,
@@ -1154,7 +1285,7 @@ export default function ChallengeQuizPage() {
       submitInFlightRef.current = false;
       setSubmitting(false);
     }
-  }, []);
+  }, [persistLatestProgress]);
 
   const handleSubmit = useCallback(async (timeoutTriggered: boolean) => {
     try {
@@ -1282,7 +1413,7 @@ export default function ChallengeQuizPage() {
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === "hidden") {
-        persistLatestProgress(true);
+        persistLatestProgressImmediately();
         return;
       }
       syncVisibleTimerState();
@@ -1294,7 +1425,7 @@ export default function ChallengeQuizPage() {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       globalThis.removeEventListener("focus", syncVisibleTimerState);
     };
-  }, [deadlineEpochSeconds, handleSubmit, persistLatestProgress, phase]);
+  }, [deadlineEpochSeconds, handleSubmit, persistLatestProgressImmediately, phase]);
 
   const handleStartChallenge = useCallback(async (modeOverride?: ChallengeQuizMode, redoMissed = false) => {
     if (!note || startInFlightRef.current) {
@@ -1610,7 +1741,7 @@ export default function ChallengeQuizPage() {
     if (submitInFlightRef.current) {
       throw new Error("Challenge Quiz submission is already in progress.");
     }
-    persistLatestProgress(true);
+    await persistLatestProgress(true);
     if (activeSession.mode === BOARD_EXAM_MODE) {
       await finalizeChallengeSession({
         timeoutTriggered: false,

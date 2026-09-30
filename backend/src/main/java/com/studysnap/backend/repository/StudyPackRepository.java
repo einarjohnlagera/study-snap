@@ -20,6 +20,18 @@ import java.util.Optional;
 import java.util.UUID;
 
 public interface StudyPackRepository extends JpaRepository<StudyPackEntity, UUID> {
+    // ⚠️ ATOMIC ON PURPOSE — do not replace with entity.setQuizStamp(entity.getQuizStamp() + 1). Both
+    // saveStudyPack (async worker, and its four synchronous callers) and AdminStudyPackTransactionHelper's
+    // malformed-quiz repair read the pack unlocked and can run their LLM call concurrently with a real
+    // regeneration of the same pack; a Java-side read-increment-write can compute the SAME new value as a
+    // just-committed regeneration, giving two different quizzes the same quiz_stamp and defeating the
+    // whole point of V152 (Quick Review would then treat a session answered on the OTHER quiz as current).
+    // A DB-level atomic increment can't collide like that, regardless of which caller's transaction reads
+    // the row first — every increment lands on whatever value is current at that moment.
+    @Modifying
+    @Query("update StudyPackEntity s set s.quizStamp = s.quizStamp + 1 where s.id = :id")
+    void bumpQuizStamp(@Param("id") UUID id);
+
     String LIST_ITEM_PROJECTION = """
             new com.studysnap.backend.repository.StudyPackListItemProjection(
                 s.id,

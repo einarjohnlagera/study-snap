@@ -215,6 +215,7 @@ public class ChallengeQuizService {
     private final NoteCollectionRepository noteCollectionRepository;
     private final NoteCollectionItemRepository noteCollectionItemRepository;
     private final LongExamPlanSourceSampler longExamPlanSourceSampler;
+    private final jakarta.persistence.EntityManager entityManager;
 
     @Transactional
     public ChallengeQuizStartResponse startSession(String studyPackIdRaw, UUID userId, ChallengeQuizStartRequest request) {
@@ -858,7 +859,7 @@ public class ChallengeQuizService {
             UUID userId,
             ChallengeQuizProgressRequest request
     ) {
-        QuickReviewSessionEntity session = findChallengeSessionOrThrow(parseSessionId(sessionIdRaw), userId);
+        QuickReviewSessionEntity session = findChallengeSessionForUpdateOrThrow(parseSessionId(sessionIdRaw), userId);
         assertSessionInProgress(session);
 
         int totalQuestions = session.getTotalQuestions() == null ? 0 : session.getTotalQuestions();
@@ -1088,7 +1089,7 @@ public class ChallengeQuizService {
     }
 
     public SimpleMessageResponse forfeitSession(String sessionIdRaw, UUID userId) {
-        QuickReviewSessionEntity session = findChallengeSessionOrThrow(parseSessionId(sessionIdRaw), userId);
+        QuickReviewSessionEntity session = findChallengeSessionForUpdateOrThrow(parseSessionId(sessionIdRaw), userId);
         if (session.getStatus() != QuickReviewSessionStatus.IN_PROGRESS) {
             return new SimpleMessageResponse(CHALLENGE_QUIZ_SESSION_ALREADY_ENDED_MESSAGE);
         }
@@ -1424,6 +1425,14 @@ public class ChallengeQuizService {
         QuickReviewSessionEntity lockedExisting = quickReviewSessionRepository
                 .findByIdAndUserIdAndSessionModeForUpdate(existing.getId(), userId, QuickReviewSessionMode.CHALLENGE)
                 .orElse(null);
+        // ⚠️ MUST-REFRESH, NOT MERELY MUST-LOCK — the same reason as InterviewPracticeService.recordCritique.
+        // `existing` and `lockedExisting` are the SAME Java object by Hibernate identity (one persistence
+        // context, one entity per id), so without this, `lockedExisting.getStatus() != observedStatus` compares
+        // a value to itself and can never detect a status a concurrent transaction committed between the two
+        // reads above — the lock is real, but it would be protecting a comparison against stale memory.
+        if (lockedExisting != null) {
+            entityManager.refresh(lockedExisting);
+        }
         if (lockedExisting == null || lockedExisting.getStatus() != observedStatus) {
             return Optional.empty();
         }

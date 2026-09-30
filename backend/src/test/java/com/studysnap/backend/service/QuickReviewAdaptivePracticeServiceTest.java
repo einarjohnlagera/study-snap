@@ -641,7 +641,7 @@ class QuickReviewAdaptivePracticeServiceTest {
         QuickReviewSessionEntity session = buildInProgressAdaptiveSession(sessionId, userId, studyPackId, noteId);
         session.setSessionState(Map.of());
 
-        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionModeForUpdate(
                 sessionId,
                 userId,
                 QuickReviewSessionMode.ADAPTIVE
@@ -854,7 +854,7 @@ class QuickReviewAdaptivePracticeServiceTest {
                 Map.of("selectedChoices", Map.of("0", "A", "1", "C"))
         ));
 
-        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionModeForUpdate(
                 sessionId,
                 userId,
                 QuickReviewSessionMode.ADAPTIVE
@@ -908,7 +908,7 @@ class QuickReviewAdaptivePracticeServiceTest {
                 Map.of("selectedChoices", Map.of("0", "B", "1", "C"))
         ));
 
-        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionModeForUpdate(
                 sessionId,
                 userId,
                 QuickReviewSessionMode.ADAPTIVE
@@ -942,7 +942,7 @@ class QuickReviewAdaptivePracticeServiceTest {
         UUID sessionId = UUID.randomUUID();
         QuickReviewSessionEntity session = buildInProgressAdaptiveSession(sessionId, userId, studyPackId, noteId);
 
-        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionModeForUpdate(
                 sessionId,
                 userId,
                 QuickReviewSessionMode.ADAPTIVE
@@ -1068,7 +1068,7 @@ class QuickReviewAdaptivePracticeServiceTest {
         Map<String, Object> state = new LinkedHashMap<>(interview.getSessionState());
         state.put("subMode", "INTERVIEW");
         interview.setSessionState(state);
-        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionModeForUpdate(
                 sessionId, userId, QuickReviewSessionMode.ADAPTIVE))
                 .thenReturn(Optional.of(interview));
 
@@ -1575,7 +1575,7 @@ class QuickReviewAdaptivePracticeServiceTest {
                 session.getSessionState(), 2, List.of(0, 2)));
         session.setSessionState(QuizSessionStateUtils.withSelectedMultiChoice(
                 session.getSessionState(), 3, List.of(1)));
-        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionModeForUpdate(
                 sessionId, userId, QuickReviewSessionMode.ADAPTIVE)).thenReturn(Optional.of(session));
         when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
@@ -1625,7 +1625,7 @@ class QuickReviewAdaptivePracticeServiceTest {
         session.setStudyPackId(null);
         session.setNoteId(null);
         session.setSourceCollectionId(UUID.randomUUID());
-        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionModeForUpdate(
                 sessionId, userId, QuickReviewSessionMode.ADAPTIVE)).thenReturn(Optional.of(session));
         when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
@@ -1672,7 +1672,7 @@ class QuickReviewAdaptivePracticeServiceTest {
         ), session.getSessionState()));
         session.setSessionState(QuizSessionStateUtils.withSelectedChoice(session.getSessionState(), 0, 0));
         session.setSessionState(QuizSessionStateUtils.withSelectedChoice(session.getSessionState(), 1, 0));
-        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionModeForUpdate(
                 sessionId, userId, QuickReviewSessionMode.ADAPTIVE)).thenReturn(Optional.of(session));
         when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));

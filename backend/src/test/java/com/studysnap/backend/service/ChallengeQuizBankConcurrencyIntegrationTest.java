@@ -1,13 +1,26 @@
 package com.studysnap.backend.service;
 
 import com.studysnap.backend.dto.ChallengeQuizCompleteRequest;
+import com.studysnap.backend.dto.ChallengeQuizProgressRequest;
+import com.studysnap.backend.dto.LongExamProgressRequest;
+import com.studysnap.backend.dto.LongExamCompleteRequest;
+import com.studysnap.backend.dto.InterviewPracticeAnswerRequest;
+import com.studysnap.backend.dto.QuickReviewAnswerRequest;
+import com.studysnap.backend.dto.QuickReviewSessionCompleteRequest;
+import com.studysnap.backend.dto.QuickReviewSessionProgressRequest;
 import com.studysnap.backend.dto.QuizItem;
 import com.studysnap.backend.entity.ChallengeQuizQuestionBankEntity;
 import com.studysnap.backend.entity.PlanType;
+import com.studysnap.backend.entity.QuickReviewRound;
+import com.studysnap.backend.entity.QuickReviewConfidenceLevel;
+import com.studysnap.backend.exception.QuickReviewSessionStaleException;
+import com.studysnap.backend.exception.InterviewPracticeAnswerAlreadyRecordedException;
 import com.studysnap.backend.entity.LearnerLevel;
 import com.studysnap.backend.repository.ChallengeQuizQuestionBankOwnerProjection;
 import com.studysnap.backend.repository.ChallengeQuizQuestionBankRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
+import com.studysnap.backend.service.model.InterviewPracticeCritique;
+import com.studysnap.backend.util.QuizSessionStateUtils;
 import com.studysnap.backend.service.model.GeneratedChallengeQuizContent;
 import com.studysnap.backend.service.model.StudyPackGenerationContext;
 import org.aopalliance.intercept.MethodInterceptor;
@@ -35,6 +48,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.when;
 
 /** Exercises the real service proxies and PostgreSQL transactions, including commit-time flushes. */
@@ -52,11 +66,17 @@ class ChallengeQuizBankConcurrencyIntegrationTest {
 
     @Autowired JdbcTemplate jdbc;
     @Autowired ChallengeQuizService challengeQuizService;
+    @Autowired QuickReviewSessionService quickReviewSessionService;
+    @Autowired InterviewPracticeService interviewPracticeService;
+    @Autowired LongExamService longExamService;
+    @Autowired QuickReviewAdaptivePracticeService adaptivePracticeService;
+    @Autowired com.studysnap.backend.repository.QuickReviewSessionRepository sessionRepository;
     @Autowired ChallengeQuizQuestionBankService bankService;
     @Autowired AdminStudyPackTransactionHelper adminStudyPackTransactionHelper;
     @Autowired StudyPackRepository studyPackRepository;
     @Autowired PlatformTransactionManager transactionManager;
     @Autowired ChallengeQuizQuestionBankRepository bankRepository;
+    @Autowired jakarta.persistence.EntityManagerFactory entityManagerFactory;
 
     @MockitoBean AuthService authService;
     @MockitoBean SubscriptionService subscriptionService;
@@ -80,6 +100,291 @@ class ChallengeQuizBankConcurrencyIntegrationTest {
                 new BillingUsagePeriodService.UsagePeriod(PlanType.FREE, null,
                         OffsetDateTime.now(ZoneOffset.UTC).minusDays(1),
                         OffsetDateTime.now(ZoneOffset.UTC).plusDays(1), 2026, 9));
+    }
+
+    @Test
+    void quickReviewQuizStampRejectsEveryStaleWriteAndMastery() {
+        Fixture fixture = seed(false);
+        jdbc.update("update study_packs set quiz = '[{\"question\":\"Q\",\"choices\":[\"A\",\"B\"],\"correctIndex\":0,\"keyConcept\":\"Concept\"}]'::jsonb where id = ?", fixture.packId);
+        jdbc.update("update quick_review_sessions set session_mode = 'QUICK_REVIEW', quiz_stamp_at_creation = 0 where id = ?", fixture.sessionId);
+        jdbc.update("update study_packs set quiz_stamp = quiz_stamp + 1 where id = ?", fixture.packId);
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> quickReviewSessionService.answerQuestion(
+                fixture.sessionId.toString(), fixture.userId, new QuickReviewAnswerRequest(0, 0, 0, null)))
+                .isInstanceOf(QuickReviewSessionStaleException.class);
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> quickReviewSessionService.updateSessionProgress(
+                fixture.sessionId.toString(), fixture.userId,
+                new QuickReviewSessionProgressRequest(0, QuickReviewRound.INITIAL, 0, null)))
+                .isInstanceOf(QuickReviewSessionStaleException.class);
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> quickReviewSessionService.completeSession(
+                fixture.sessionId.toString(), fixture.userId,
+                new QuickReviewSessionCompleteRequest(1, 1, 0, 1, null)))
+                .isInstanceOf(QuickReviewSessionStaleException.class);
+
+        jdbc.update("update quick_review_sessions set status = 'COMPLETED', completed_at = now(), verified_correct_answers = 1 where id = ?", fixture.sessionId);
+        UUID noteId = jdbc.queryForObject("select note_id from study_packs where id = ?", UUID.class, fixture.packId);
+        assertThat(sessionRepository.findQuizMasteredAt(fixture.userId, fixture.packId, 1, noteId)).isNull();
+        jdbc.update("update quick_review_sessions set quiz_stamp_at_creation = null where id = ?", fixture.sessionId);
+        assertThat(sessionRepository.findQuizMasteredAt(fixture.userId, fixture.packId, 1, noteId)).isNotNull();
+        jdbc.update("update quick_review_sessions set status = 'IN_PROGRESS', completed_at = null where id = ?", fixture.sessionId);
+        jdbc.update("update notes set generation_enqueued_at = now() + interval '1 hour' where id = ?", noteId);
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> quickReviewSessionService.answerQuestion(
+                fixture.sessionId.toString(), fixture.userId, new QuickReviewAnswerRequest(0, 0, 0, null)))
+                .isInstanceOf(QuickReviewSessionStaleException.class);
+    }
+
+    @Test
+    @Timeout(15)
+    void interviewAnswersMergeDifferentIndexesWithoutHoldingTheSessionLockDuringCritique() throws Exception {
+        Fixture fixture = seed(false);
+        new TransactionTemplate(transactionManager).execute(status -> {
+            var session = sessionRepository.findById(fixture.sessionId).orElseThrow();
+            session.setSessionMode(com.studysnap.backend.entity.QuickReviewSessionMode.ADAPTIVE);
+            session.setTotalQuestions(2);
+            session.setSessionState(QuizSessionStateUtils.withInterviewPracticeState(
+                    List.of(question("First"), question("Second")), "INTERVIEW", 120));
+            sessionRepository.save(session);
+            return null;
+        });
+        CountDownLatch bothInLlm = new CountDownLatch(2);
+        CountDownLatch releaseLlm = new CountDownLatch(1);
+        when(quizGenerationService.generateInterviewCritique(any(), anyInt())).thenAnswer(invocation -> {
+            bothInLlm.countDown();
+            assertThat(releaseLlm.await(8, TimeUnit.SECONDS)).isTrue();
+            return new InterviewPracticeCritique("WORKABLE", "Stored critique", "Follow up");
+        });
+        try (var executor = Executors.newFixedThreadPool(2)) {
+            var first = executor.submit(() -> interviewPracticeService.answerQuestion(fixture.sessionId, fixture.userId,
+                    new InterviewPracticeAnswerRequest(0, "A", 10)));
+            var second = executor.submit(() -> interviewPracticeService.answerQuestion(fixture.sessionId, fixture.userId,
+                    new InterviewPracticeAnswerRequest(1, "B", 12)));
+            assertThat(bothInLlm.await(8, TimeUnit.SECONDS)).isTrue();
+            new TransactionTemplate(transactionManager).execute(status -> {
+                jdbc.queryForObject("select id from quick_review_sessions where id = ? for update nowait",
+                        UUID.class, fixture.sessionId);
+                return null;
+            });
+            releaseLlm.countDown();
+            first.get(8, TimeUnit.SECONDS);
+            second.get(8, TimeUnit.SECONDS);
+        } finally {
+            releaseLlm.countDown();
+        }
+        var saved = sessionRepository.findById(fixture.sessionId).orElseThrow();
+        var quiz = QuizSessionStateUtils.extractQuiz(saved.getSessionState());
+        assertThat(QuizSessionStateUtils.extractSelectedChoiceIndexes(saved.getSessionState(), quiz))
+                .containsEntry(0, 0).containsEntry(1, 1);
+        assertThat(QuizSessionStateUtils.extractInterviewFeedback(saved.getSessionState(), 0)).isPresent();
+        assertThat(QuizSessionStateUtils.extractInterviewFeedback(saved.getSessionState(), 1)).isPresent();
+        assertThat(saved.getCurrentQuestionIndex()).isEqualTo(2);
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> interviewPracticeService.answerQuestion(
+                fixture.sessionId, fixture.userId, new InterviewPracticeAnswerRequest(0, "B", 15)))
+                .isInstanceOf(InterviewPracticeAnswerAlreadyRecordedException.class);
+    }
+
+    /**
+     * The test above calls answerQuestion() directly from bare executor threads, so each phase gets its
+     * own fresh EntityManager — it cannot see a bug that only exists when one EntityManager spans both
+     * phases of a single request, which is what actually happens in production: this app runs with
+     * spring.jpa.open-in-view at its Spring Boot default (true; see application.yaml's Tomcat-thread
+     * comment for where that is documented), so Spring's OpenEntityManagerInViewInterceptor binds ONE
+     * EntityManager to the whole HTTP request/thread. This test reproduces that binding manually — the
+     * same mechanism the interceptor itself uses — around each worker thread's call.
+     */
+    @Test
+    @Timeout(15)
+    void interviewAnswersMergeDifferentIndexesUnderASharedRequestScopedEntityManager() throws Exception {
+        Fixture fixture = seed(false);
+        new TransactionTemplate(transactionManager).execute(status -> {
+            var session = sessionRepository.findById(fixture.sessionId).orElseThrow();
+            session.setSessionMode(com.studysnap.backend.entity.QuickReviewSessionMode.ADAPTIVE);
+            session.setTotalQuestions(2);
+            session.setSessionState(QuizSessionStateUtils.withInterviewPracticeState(
+                    List.of(question("First"), question("Second")), "INTERVIEW", 120));
+            sessionRepository.save(session);
+            return null;
+        });
+        CountDownLatch bothInLlm = new CountDownLatch(2);
+        CountDownLatch releaseLlm = new CountDownLatch(1);
+        when(quizGenerationService.generateInterviewCritique(any(), anyInt())).thenAnswer(invocation -> {
+            bothInLlm.countDown();
+            assertThat(releaseLlm.await(8, TimeUnit.SECONDS)).isTrue();
+            return new InterviewPracticeCritique("WORKABLE", "Stored critique", "Follow up");
+        });
+        try (var executor = Executors.newFixedThreadPool(2)) {
+            var first = executor.submit(() -> answerUnderBoundEntityManager(fixture, 0, "A", 10));
+            var second = executor.submit(() -> answerUnderBoundEntityManager(fixture, 1, "B", 12));
+            assertThat(bothInLlm.await(8, TimeUnit.SECONDS)).isTrue();
+            releaseLlm.countDown();
+            first.get(8, TimeUnit.SECONDS);
+            second.get(8, TimeUnit.SECONDS);
+        } finally {
+            releaseLlm.countDown();
+        }
+        var saved = sessionRepository.findById(fixture.sessionId).orElseThrow();
+        var quiz = QuizSessionStateUtils.extractQuiz(saved.getSessionState());
+        assertThat(QuizSessionStateUtils.extractSelectedChoiceIndexes(saved.getSessionState(), quiz))
+                .containsEntry(0, 0).containsEntry(1, 1);
+        assertThat(QuizSessionStateUtils.extractInterviewFeedback(saved.getSessionState(), 0)).isPresent();
+        assertThat(QuizSessionStateUtils.extractInterviewFeedback(saved.getSessionState(), 1)).isPresent();
+    }
+
+    private Object answerUnderBoundEntityManager(Fixture fixture, int questionIndex, String choice, int timeSpentSeconds) {
+        jakarta.persistence.EntityManager em = entityManagerFactory.createEntityManager();
+        org.springframework.transaction.support.TransactionSynchronizationManager.bindResource(
+                entityManagerFactory, new org.springframework.orm.jpa.EntityManagerHolder(em));
+        try {
+            return interviewPracticeService.answerQuestion(fixture.sessionId, fixture.userId,
+                    new InterviewPracticeAnswerRequest(questionIndex, choice, timeSpentSeconds));
+        } finally {
+            org.springframework.transaction.support.TransactionSynchronizationManager.unbindResource(entityManagerFactory);
+            em.close();
+        }
+    }
+
+    @Test
+    @Timeout(15)
+    void challengeProgressWaitsForCompletionAndCannotResurrectSession() throws Exception {
+        Fixture fixture = seed(false);
+        assertTerminalAfterWaitingWriter(fixture, () -> challengeQuizService.updateSessionProgress(
+                fixture.sessionId.toString(), fixture.userId, new ChallengeQuizProgressRequest(0, java.util.Map.of())));
+    }
+
+    @Test
+    @Timeout(15)
+    void quickReviewForfeitWaitsForCompletionAndCannotResurrectSession() throws Exception {
+        Fixture fixture = seed(false);
+        jdbc.update("update quick_review_sessions set session_mode = 'QUICK_REVIEW' where id = ?", fixture.sessionId);
+        assertTerminalAfterWaitingWriter(fixture, () -> quickReviewSessionService.forfeitSession(
+                fixture.sessionId.toString(), fixture.userId));
+    }
+
+    @Test
+    @Timeout(15)
+    void longExamProgressWaitsForCompletionAndCannotResurrectSession() throws Exception {
+        Fixture fixture = seed(false);
+        jdbc.update("update quick_review_sessions set session_mode = 'LONG_EXAM' where id = ?", fixture.sessionId);
+        assertTerminalAfterWaitingWriter(fixture, () -> longExamService.saveProgress(
+                fixture.sessionId, fixture.userId, new LongExamProgressRequest(0, 0)));
+    }
+
+    @Test
+    @Timeout(15)
+    void adaptiveCompletionWaitsForCompletionAndCannotResurrectSession() throws Exception {
+        Fixture fixture = seed(false);
+        jdbc.update("update quick_review_sessions set session_mode = 'ADAPTIVE' where id = ?", fixture.sessionId);
+        assertTerminalAfterWaitingWriter(fixture, () -> adaptivePracticeService.completeAdaptiveSession(
+                fixture.sessionId.toString(), fixture.userId, 0, 1, 1, List.of()));
+    }
+
+    @Test
+    @Timeout(15)
+    void interviewCompletionWaitsForCompletionAndCannotResurrectSession() throws Exception {
+        Fixture fixture = seed(false);
+        new TransactionTemplate(transactionManager).execute(status -> {
+            var session = sessionRepository.findById(fixture.sessionId).orElseThrow();
+            session.setSessionMode(com.studysnap.backend.entity.QuickReviewSessionMode.ADAPTIVE);
+            session.setSessionState(QuizSessionStateUtils.withInterviewPracticeState(
+                    List.of(question("Interview")), "INTERVIEW", 120));
+            return null;
+        });
+        assertTerminalAfterWaitingWriter(fixture, () -> interviewPracticeService.completeSession(
+                fixture.sessionId, fixture.userId));
+    }
+
+    @Test
+    @Timeout(30)
+    void remainingChallengeQuickReviewAndInterviewWritersWaitForTerminalState() throws Exception {
+        Fixture challenge = seed(false);
+        assertTerminalAfterWaitingWriter(challenge, () -> challengeQuizService.forfeitSession(
+                challenge.sessionId.toString(), challenge.userId));
+
+        Fixture reviewComplete = seed(false);
+        jdbc.update("update quick_review_sessions set session_mode = 'QUICK_REVIEW' where id = ?", reviewComplete.sessionId);
+        assertTerminalAfterWaitingWriter(reviewComplete, () -> quickReviewSessionService.completeSession(
+                reviewComplete.sessionId.toString(), reviewComplete.userId,
+                new QuickReviewSessionCompleteRequest(0, 1, 0, 1, null)));
+
+        Fixture reviewConfidence = seed(false);
+        jdbc.update("update quick_review_sessions set session_mode = 'QUICK_REVIEW' where id = ?", reviewConfidence.sessionId);
+        assertTerminalAfterWaitingWriter(reviewConfidence, () -> quickReviewSessionService.saveConfidenceLevel(
+                reviewConfidence.sessionId.toString(), reviewConfidence.userId, QuickReviewConfidenceLevel.HIGH));
+
+        Fixture interview = seed(false);
+        new TransactionTemplate(transactionManager).execute(status -> {
+            var session = sessionRepository.findById(interview.sessionId).orElseThrow();
+            session.setSessionMode(com.studysnap.backend.entity.QuickReviewSessionMode.ADAPTIVE);
+            session.setSessionState(QuizSessionStateUtils.withInterviewPracticeState(
+                    List.of(question("Interview")), "INTERVIEW", 120));
+            return null;
+        });
+        assertTerminalAfterWaitingWriter(interview, () -> interviewPracticeService.forfeitSession(
+                interview.sessionId, interview.userId));
+    }
+
+    @Test
+    @Timeout(30)
+    void remainingLongExamWritersWaitForTerminalState() throws Exception {
+        Fixture pause = seed(false);
+        jdbc.update("update quick_review_sessions set session_mode = 'LONG_EXAM' where id = ?", pause.sessionId);
+        assertTerminalAfterWaitingWriter(pause, () -> longExamService.pauseSession(pause.sessionId, pause.userId));
+
+        Fixture resume = seed(false);
+        jdbc.update("update quick_review_sessions set session_mode = 'LONG_EXAM', status = 'PAUSED' where id = ?", resume.sessionId);
+        assertTerminalAfterWaitingWriter(resume, () -> longExamService.resumeSession(resume.sessionId, resume.userId));
+
+        Fixture complete = seed(false);
+        jdbc.update("update quick_review_sessions set session_mode = 'LONG_EXAM' where id = ?", complete.sessionId);
+        assertTerminalAfterWaitingWriter(complete, () -> longExamService.completeSession(
+                complete.sessionId, complete.userId, new LongExamCompleteRequest(1)));
+
+        Fixture forfeit = seed(false);
+        jdbc.update("update quick_review_sessions set session_mode = 'LONG_EXAM' where id = ?", forfeit.sessionId);
+        assertTerminalAfterWaitingWriter(forfeit, () -> longExamService.forfeitSession(
+                forfeit.sessionId, forfeit.userId));
+    }
+
+    private void assertTerminalAfterWaitingWriter(Fixture fixture, Runnable writer) throws Exception {
+        CountDownLatch held = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        try (var executor = Executors.newFixedThreadPool(2)) {
+            var completion = executor.submit(() -> new TransactionTemplate(transactionManager).execute(status -> {
+                jdbc.queryForObject("select id from quick_review_sessions where id = ? for update",
+                        UUID.class, fixture.sessionId);
+                held.countDown();
+                try {
+                    if (!release.await(8, TimeUnit.SECONDS)) throw new AssertionError("release timeout");
+                } catch (InterruptedException exception) {
+                    Thread.currentThread().interrupt();
+                    throw new AssertionError(exception);
+                }
+                jdbc.update("update quick_review_sessions set status = 'COMPLETED', correct_answers = 1, score_percentage = 100, completed_at = now() where id = ?", fixture.sessionId);
+                return null;
+            }));
+            assertThat(held.await(8, TimeUnit.SECONDS)).isTrue();
+            var attempted = executor.submit(() -> {
+                try { writer.run(); } catch (RuntimeException expected) { return; }
+            });
+            boolean waiting = false;
+            long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(1500);
+            while (System.nanoTime() < deadline && !waiting) {
+                waiting = Boolean.TRUE.equals(jdbc.queryForObject("""
+                        select exists (select 1 from pg_stat_activity
+                        where wait_event_type = 'Lock' and query ilike '%quick_review_sessions%')
+                        """, Boolean.class));
+                if (!waiting) Thread.sleep(10);
+            }
+            assertThat(waiting).isTrue();
+            release.countDown();
+            completion.get(8, TimeUnit.SECONDS);
+            attempted.get(8, TimeUnit.SECONDS);
+        } finally {
+            release.countDown();
+        }
+        assertThat(jdbc.queryForObject("select status from quick_review_sessions where id = ?",
+                String.class, fixture.sessionId)).isEqualTo("COMPLETED");
+        assertThat(jdbc.queryForObject("select score_percentage from quick_review_sessions where id = ?",
+                java.math.BigDecimal.class, fixture.sessionId)).isEqualByComparingTo("100");
     }
 
     @Test
@@ -137,6 +442,57 @@ class ChallengeQuizBankConcurrencyIntegrationTest {
         assertThat(failedSessionId).isNotNull();
         assertThat(jdbc.queryForObject("select claimed_session_id from challenge_quiz_question_bank where study_pack_id = ?",
                 UUID.class, fixture.packId)).isNull();
+    }
+
+    /**
+     * `resolveExistingChallengeSession` reads the existing session once unlocked (to capture
+     * {@code observedStatus}), then again locked — the same shape as Interview Practice's original bug.
+     * Both reads resolve to the SAME Java object by Hibernate identity within one persistence context,
+     * so without a refresh, "lockedExisting.getStatus() != observedStatus" compares a value to itself
+     * and can never catch a status a concurrent transaction committed between the two reads. This test
+     * injects exactly that commit between the two reads via a paused repository call.
+     */
+    @Test
+    @Timeout(15)
+    void startSessionDetectsAConcurrentCompletionBetweenItsTwoSessionReads() throws Exception {
+        Fixture fixture = seed(false);
+        CountDownLatch firstReadDone = new CountDownLatch(1);
+        CountDownLatch proceed = new CountDownLatch(1);
+        MethodInterceptor pauseBetweenReads = invocation -> {
+            Object result = invocation.proceed();
+            if (!invocation.getMethod().getName()
+                    .equals("findTopByUserIdAndStudyPackIdAndSessionModeAndStatusInOrderByCreatedAtDesc")) {
+                return result;
+            }
+            firstReadDone.countDown();
+            assertThat(proceed.await(8, TimeUnit.SECONDS)).isTrue();
+            return result;
+        };
+        ((Advised) sessionRepository).addAdvice(0, pauseBetweenReads);
+        when(quizGenerationService.generateChallengeQuiz(any(), any(), any(), any(),
+                any(Integer.class), any(), any())).thenThrow(new IllegalStateException("LLM failure"));
+        try (var executor = Executors.newFixedThreadPool(1)) {
+            var start = executor.submit(() ->
+                    challengeQuizService.startSession(fixture.packId.toString(), fixture.userId, null));
+            assertThat(firstReadDone.await(8, TimeUnit.SECONDS)).isTrue();
+            // A concurrent request committing the session as COMPLETED between the two reads above.
+            new TransactionTemplate(transactionManager).execute(status -> {
+                jdbc.update("update quick_review_sessions set status = 'COMPLETED', completed_at = now() where id = ?",
+                        fixture.sessionId);
+                return null;
+            });
+            proceed.countDown();
+            start.get(8, TimeUnit.SECONDS);
+        } finally {
+            ((Advised) sessionRepository).removeAdvice(pauseBetweenReads);
+        }
+        // Without the refresh fix, the stale guard sees no status change and startSession incorrectly
+        // resumes the now-COMPLETED session instead of treating it as gone and starting a new one.
+        UUID failedSessionId = jdbc.queryForObject("""
+                select id from quick_review_sessions
+                where study_pack_id = ? and status = 'FAILED' order by created_at desc limit 1
+                """, UUID.class, fixture.packId);
+        assertThat(failedSessionId).isNotNull().isNotEqualTo(fixture.sessionId);
     }
 
     @Test

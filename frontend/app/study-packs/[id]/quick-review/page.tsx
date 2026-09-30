@@ -224,6 +224,7 @@ export default function QuickReviewPage() {
   const [learnerLevelToast, setLearnerLevelToast] = useState<string | null>(null);
   const { usageSummary } = useBillingUsageSummary();
   const startedNoteIdRef = useRef<string | null>(null);
+  const initializingSessionRef = useRef<string | null>(null);
   const confirmedMatchingAnswersRef = useRef<Set<number>>(new Set());
   const legacyRedirectTargetRef = useRef<string | null>(null);
   const openLoopTrackedSessionIdRef = useRef<string | null>(null);
@@ -331,10 +332,15 @@ export default function QuickReviewPage() {
       return;
     }
 
+    if (initializingSessionRef.current === noteId) {
+      return;
+    }
+
     if (!requireAuthenticatedOnboardedUser(router)) {
       return;
     }
 
+    initializingSessionRef.current = noteId;
     startedNoteIdRef.current = noteId;
     setLoading(true);
     setSessionInitializing(true);
@@ -429,6 +435,11 @@ export default function QuickReviewPage() {
       setSessionInfo(null);
       setQuiz([]);
     } finally {
+      // Guarded by identity, not just cleared: if noteId changed while this call was in flight, a
+      // newer call for the new noteId has already claimed the ref — this call must not clear that.
+      if (initializingSessionRef.current === noteId) {
+        initializingSessionRef.current = null;
+      }
       setLoading(false);
       setSessionInitializing(false);
     }
@@ -680,10 +691,13 @@ export default function QuickReviewPage() {
       currentRound: next.currentRound,
       retryCount: next.retryCount,
       sessionState,
-    }).catch(() => {
-      // Progress persistence should not block review flow.
+    }).catch((err: unknown) => {
+      if (err instanceof ApiRequestError && err.code === "QUICK_REVIEW_SESSION_STALE") {
+        void initializeSession(true);
+      }
+      // Other progress persistence errors should not block review flow.
     });
-  }, [currentSessionId]);
+  }, [currentSessionId, initializeSession]);
 
   const persistCurrentProgress = useCallback(() => {
     if (currentQuestionIndex === null) {
@@ -725,6 +739,7 @@ export default function QuickReviewPage() {
       : undefined;
     const effectiveRetryCount = finalRetryCount ?? retryCount;
 
+    let staleCompletion = false;
     try {
       setNextStepResponse(null);
       const result = await completeQuickReviewSession(currentSessionId, {
@@ -759,18 +774,22 @@ export default function QuickReviewPage() {
       void getPostSessionNextStep(result.studyPackId)
         .then(setNextStepResponse)
         .catch(() => setNextStepResponse(null));
-    } catch {
-      // Session persistence errors should not block the review experience.
+    } catch (err) {
+      if (err instanceof ApiRequestError && err.code === "QUICK_REVIEW_SESSION_STALE") {
+        staleCompletion = true;
+        void initializeSession(true);
+      }
+      // Other session persistence errors should not block the review experience.
     } finally {
-      setCompletionTracked(true);
+      if (!staleCompletion) setCompletionTracked(true);
       setCompletingSession(false);
-      void trackAnalyticsEvent({
+      if (!staleCompletion) void trackAnalyticsEvent({
         eventType: "QUICK_REVIEW_COMPLETED",
         entityId: currentSessionId,
         metadata: { scorePercentage: totalQuestions > 0 ? Math.round((score / totalQuestions) * 100) : 0, weakConceptCount: weakConcepts.length },
       });
     }
-  }, [completingSession, completionTracked, currentSessionId, retryCount, score, sessionInfo?.noteId, sessionStartedAt, totalQuestions, weakConcepts]);
+  }, [completingSession, completionTracked, currentSessionId, initializeSession, retryCount, score, sessionInfo?.noteId, sessionStartedAt, totalQuestions, weakConcepts]);
 
   useEffect(() => {
     if (!shouldShowOpenLoop || !persistedResult || openLoopTrackedSessionIdRef.current === persistedResult.id) {
