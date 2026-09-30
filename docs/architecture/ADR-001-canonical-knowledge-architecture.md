@@ -438,7 +438,7 @@ one explanation as settled would make that read unfalsifiable before it runs. **
 
 **Governance ratio, re-read rather than carried forward from the `v0.145.0` entry's stale `12:51`:** the catalog holds **90** programs `[PROD 2026-09-30]`, not 51 — a production-state claim that had already decayed by the time this amendment was written, corrected here per `CLAUDE.md`'s rule rather than repeated. **Ratio after this amendment: `13:90` = 0.144**, below the `12:51` = 0.235 reading it replaces and far below the 0.40 re-open threshold — the catalog is growing faster than the taxonomy, which is the intended shape.
 
-`[CHECKPOINT — due after BSCS Year 1 authoring completes]`: re-count `Computing`-tagged notes across live programs; if the population turns out overwhelmingly single-program in practice (the `Architecture` failure), re-open this value.
+`[CHECKPOINT — due when BSCS Year 1 Computing authoring reaches 10+ classified notes, backstop 2026-12-29 regardless]` (full gate detail, including the two-tier denominator rule, on this amendment's `ROADMAP.md` Backlog Index row): re-count `Computing`-tagged notes across live programs; if the population turns out overwhelmingly single-program in practice (the `Architecture` failure), re-open this value.
 
 ### Program-name fallback is a transitional state, not the end state
 

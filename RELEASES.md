@@ -2,7 +2,7 @@
 
 ## v0.164.0 - Computing
 
-**Status: In Progress**
+**Status: Released** (signed off 2026-09-30; PR #1469 merged into `releases/v0.164.0`)
 
 Theme: ratify `Computing` as a 13th Domain Context (ADR-001 amendment), ship the small enum/frontend value,
 correct the two stale claims in the ratification package's own numbers, and sweep the context/spec docs the
@@ -41,6 +41,32 @@ Anti-drift: no BSCS TSV edits (strategist's own action, out of this scope); no b
 `QUANTITATIVE_KEYWORDS` change (no companion keyword decision here, unlike `BASIC_MEDICAL_SCIENCES`); no
 prompt change (package §8 explicitly forbids preemptive prompt tuning); no production write of any kind.
 
+### Scope disposition (signoff, 2026-09-30)
+
+- **Every Planned Scope item: SHIPPED, verified against code with `file:line`, not from the release notes
+  alone.** ADR-001 amendment: `docs/architecture/ADR-001-canonical-knowledge-architecture.md:417`. Enum:
+  `DomainContext.java:47`. Frontend union member: `frontend/lib/api.ts:554`. R4 addendum:
+  `17-r4-verification-runbook.md:189`. Decision-log closure: `bscs-year1-decision-log.md:33,54`.
+- **The doc sweep EXPANDED beyond the four docs originally planned**, found during pre-commit review:
+  `docs/features/notes.md`, `challenge-quiz.md`, and `study-pack-generation.md` also enumerate the closed
+  Domain Context vocabulary and needed the same 12→13 update. Also fixed 6 stale file-path references left
+  by an unrelated prior session's rename batch, in the same 4 files this release was already editing, and
+  corrected a second stale claim discovered in `NOTES_AND_COLLECTIONS_CONTEXT.md` while re-stamping it
+  (Interior Design / Landscape Architecture / Environmental Planning are now live catalog programs, not
+  absent as it claimed; the catalog is 90 programs, not 41).
+- **A pressure-test pass (`advisor()`) on the diff before commit found and fixed four real defects before
+  they shipped**: an arithmetic error in the ADR (33/136 vs. the correct 34/136); a `[PROD]` tag on a count
+  that actually came from the local TSV, not a production read; an R4 addendum methodology built on
+  invented Subject-Plan assignments for the 5 pilot notes (none of which exist anywhere in the TSV), which
+  broke for 4 of the 5 notes because a 3-program note cannot generate under a NULL-Domain-Context fallback
+  at all under `ADR-001`'s own multi-program rule; and the kickoff's own commit-structure violation (code
+  and doc-sweep feature content was about to ride on the kickoff's direct-to-release-branch commit instead
+  of its own branch+PR).
+- **Not shipped, by design:** the BSCS TSV itself is not edited (strategist's own action); the R4 pilot did
+  not run (its 5 named notes don't exist in production yet); the 3 originally-`AMBIGUOUS` corpus rows are
+  not separately re-verified here (the owner's resolution to `COMPUTING_SHARED` is taken as given, per the
+  correction applied at kickoff).
+
 ### Shipped
 
 - **ADR-001 amendment ratifying `Computing`** (13 values total): superseded the 2026-09-04 rejection
@@ -48,9 +74,10 @@ prompt change (package §8 explicitly forbids preemptive prompt tuning); no prod
   answered as curator-facing, not learner-facing); recorded the two-test curator rule; corrected the
   package's own 133/136 → 136/136 evidence and removed its erroneous 34-row `applicable_programs`
   extension instruction; re-read production rather than citing the stale `12:51` ratio — catalog is
-  now 90 programs, ratio `13:90` = 0.144; carries a `[CHECKPOINT — due after BSCS Year 1 authoring
-  completes]`. Inline dated flags added at the two lines that named `Computing` as previously
-  rejected (not rewritten).
+  now 90 programs, ratio `13:90` = 0.144; carries `[CHECKPOINT — due when BSCS Year 1 Computing
+  authoring reaches 10+ classified notes, backstop 2026-12-29 regardless]`, added to the Backlog Index
+  at signoff with its full kill criterion and two-tier denominator rule. Inline dated flags added at
+  the two lines that named `Computing` as previously rejected (not rewritten).
 - **`DomainContext.COMPUTING`** (backend enum, `quantitative = false`) and the matching frontend
   `DOMAIN_CONTEXT_OPTIONS` entry / `DomainContext` union member, with a routing description (excludes
   CS-specific formalism, IT/IS/SE specialization, Precalculus/Algebra). Test coverage: `DomainContextTest`
@@ -62,10 +89,12 @@ prompt change (package §8 explicitly forbids preemptive prompt tuning); no prod
   discharges), `NOTES_AND_COLLECTIONS_CONTEXT.md` §0, `docs/features/notes.md`, `challenge-quiz.md`,
   `study-pack-generation.md`. **Independent stale-claim fix**, `review-set-workbook-spec.md:118-119`:
   corrected "the server rejects the save" to "generation-time only" — found true regardless of this
-  ratification. Bumped the "Last updated" stamps on both GPT-context docs; corrected a second stale
-  claim found along the way in `NOTES_AND_COLLECTIONS_CONTEXT.md` (Interior Design, Landscape
-  Architecture and Environmental Planning are now live catalog programs, not absent as it claimed;
-  catalog is 90 programs, not 41).
+  ratification. Bumped the "Last updated" stamps on `REVIEW_SET_SHAPING_CONTEXT.md` and
+  `NOTES_AND_COLLECTIONS_CONTEXT.md` at implementation, and on `GPT_CONTEXT.md` itself at signoff (all
+  three now read `v0.164.0 (Released)`, not `(In Progress)`); corrected a second stale claim found
+  along the way in `NOTES_AND_COLLECTIONS_CONTEXT.md` (Interior Design, Landscape Architecture and
+  Environmental Planning are now live catalog programs, not absent as it claimed; catalog is 90
+  programs, not 41).
 - **R4 runbook addendum** (`17-r4-verification-runbook.md`): a Computing section for the 5 named pilot
   notes, prepared but explicitly marked not-yet-runnable — none of the 5 exist in production yet
   (read-only check, 2026-09-30), execution is an owner action through the production UI regardless, and
@@ -77,7 +106,10 @@ prompt change (package §8 explicitly forbids preemptive prompt tuning); no prod
 - **`docs/claude-plans/computing-domain-context-final-decision-package.md`** — dated correction note
   added at the top recording both owner corrections, rather than silently editing the original.
 - **`docs/product/ROADMAP.md`** Backlog Index row updated: gate cleared for ratification/code, corrected
-  numbers, R4 pilot's actual blocker (notes don't exist) stated explicitly.
+  numbers, R4 pilot's actual blocker (notes don't exist) stated explicitly; at signoff, the row's Gate
+  cell was rewritten to carry the formal `[CHECKPOINT — due when BSCS Year 1 Computing authoring
+  reaches 10+ classified notes, backstop 2026-12-29 regardless]` tag with kill criterion,
+  instrumentation and two-tier denominator rule, per the signoff checkpoint gate.
 
 ## v0.163.0 - No Peeking
 
