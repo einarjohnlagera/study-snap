@@ -36,7 +36,23 @@ public enum DomainContext {
     // repair keyword for the false-negative class this creates ("pharmacokinetic" in
     // QUANTITATIVE_KEYWORDS) is discipline-specific and was measured working; do not flip this to
     // true without an owner decision, since a true signal is permanent per note.
-    BASIC_MEDICAL_SCIENCES("Basic Medical Sciences", false);
+    BASIC_MEDICAL_SCIENCES("Basic Medical Sciences", false),
+    // Added in v0.164.0 (owner decision, 2026-09-30), ratifying ADR-001's Computing amendment and
+    // superseding the 2026-09-04 rejection of this exact name. Appended, per the same rule as the
+    // blocks above. quantitative = false is a decision, not a default: the BSCS corpus mixes
+    // programming/logic (arguably quantitative) with conceptual history-of-computing material, and
+    // there is no companion QUANTITATIVE_KEYWORDS addition in this release, unlike
+    // BASIC_MEDICAL_SCIENCES's "pharmacokinetic" -- do not flip this to true without an owner
+    // decision and a measured keyword change, since a true signal is permanent per note.
+    // ⚠️ VERIFIED NUANCE (cold-review finding, 2026-09-30, not yet measured against production):
+    // "compute" is a plain-substring QUANTITATIVE_KEYWORDS entry, so the "Computer Science"
+    // program-name fallback string (used when Domain Context is unset) already trips it by
+    // accident -- but the label "Computing" does NOT contain "compute" as a substring, so
+    // reclassifying an unset single-program CS note into COMPUTING can silently remove that
+    // accidental computation-guidance signal unless subject/tags/summary trip another keyword.
+    // Not fixed here: no production Computing notes exist yet to measure against, and doing so
+    // would violate this release's own no-QUANTITATIVE_KEYWORDS-change scope.
+    COMPUTING("Computing", false);
 
     private final String label;
     private final boolean quantitative;

@@ -100,6 +100,16 @@ export const DOMAIN_CONTEXT_OPTIONS: Array<{ value: DomainContext; label: string
     // -- an enumeration-only description is the same defect that left 215 ALE rows unclassified.
     description: "Foundational biomedical knowledge shared across health professions: drug action and therapeutic mechanisms, pharmacokinetics and pharmacodynamics, drug classes, mechanisms of resistance and interaction, disease mechanisms and pathophysiology, normal physiology, and shared laboratory or diagnostic parameters. Use biomedical mechanisms and standard scientific terminology without assuming a specific professional role. Knowledge whose subject is the nursing role itself — medication administration rights, nursing assessment and monitoring duties, prioritization, or nursing documentation — belongs in Nursing. Licensure, codes, ethics, and professional regulation belong in Professional Practice & Regulation.",
   },
+  // ⚠️ Added in v0.164.0, ratifying ADR-001's Computing amendment. Two-test rule: (1) is
+  // computation, information, algorithms, software or computational systems the object of study,
+  // and (2) could this exact note, unchanged, legitimately serve at least one sibling computing
+  // program? Both routing clauses below are load-bearing, same reasoning as BASIC_MEDICAL_SCIENCES's
+  // pair -- an enumeration-only description is the failure mode that produced 215 unset ALE rows.
+  {
+    value: "COMPUTING",
+    label: "Computing",
+    description: "The shared authoring tradition reusable across Computer Science, Information Technology, Information Systems, and Software Engineering: variables and data types, conditional statements, functions and parameters, arrays and fundamental data structures, algorithmic problem solving, binary and data representation, computer systems fundamentals, and discrete logic treated for computation. Not a synonym for Computer Science, not every note in a computing curriculum, and not implied by multi-program tagging alone. CS-specific formalism (automata and formal languages, theory of computation, computability) and other sibling specializations (IT systems or network-administration practice, Information Systems business-process treatment, Computer Engineering circuit or device analysis) stay on the program-name fallback instead. Precalculus, Algebra, and other pure-mathematics prerequisites are not Computing regardless of which computing program requires them.",
+  },
 ];
 
 export function getDomainContextLabel(value: DomainContext): string {
