@@ -1,4 +1,15 @@
-# 2026-09-22 — production: single-instance restart, ~44s outage, mechanism NOT identified
+# 2026-09-22 — production: single-instance restart, ~44s outage — ~~mechanism NOT identified~~ RESOLVED 2026-10-01
+
+> **⚠️ CORRECTED 2026-10-01 — THE TRIGGER IS NOW IDENTIFIED. Read
+> `2026-10-01-prod-restarts-public-note-page-fanout-db-saturation.md` first.**
+> Render's event log (`list_events`) records `server_failed` at 13:50:02 with *"HTTP health check
+> failed (timed out after 5 seconds)"*. One public note was fetched 13 times in the preceding four
+> minutes, and database CPU read **0.100 against a 0.1 limit** at 13:49. This is the same mechanism
+> as the 2026-10-01 restart: a public note page fanning out into ranking queries.
+> **Two statements below are superseded and are left visible:** §3's "NOT identified" (the app log
+> is silent, but the platform event names the reason), and §7's "no read tool for Render's platform
+> event log" (`list_events` reads it). §2 (no pool exhaustion) and §4 (`MaxRAMPercentage` is not
+> implicated) stand.
 
 ## Status: diagnosis only. No code, config or data changed. No release opened.
 

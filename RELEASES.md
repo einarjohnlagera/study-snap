@@ -1,5 +1,112 @@
 # RELEASES.md - NoteLib
 
+## v0.165.0 - Bounded Discovery
+
+**Status: In Progress**
+
+Theme: stop a public Note page's discovery rails from fanning out into every page of a subject/program
+list and saturating the production database — 24 backend restarts in the last month — and fix three
+generation-behavior defects the Computing R4 BSCS pilot found.
+
+### Planned Scope
+
+**Two independent workstreams, bundled into one release at the owner's explicit direction** (urgency of
+the reliability fix was the reason given for not shipping it standalone, against the fix plan's own
+recommendation to the contrary — recorded here, not silently overridden).
+
+**Workstream 1 — production reliability (urgent).** Diagnosis: `docs/claude-findings/2026-10-01-prod-restarts-public-note-page-fanout-db-saturation.md`
+(Prod Investigator session). Fix plan: `docs/claude-plans/2026-10-01-public-note-page-fanout-fix-plan.md`.
+Owner product decision on the one open question (rail ranking): `docs/claude-plans/2026-10-01-public-note-discovery-rail-ordering-decision.md`.
+
+- **Root cause:** `frontend/app/public/library/[subject]/[slug]/page.tsx`'s two rails — "More from
+  {Subject}" and "More {Program} notes" — walk every page of the subject's/program's entire public-note
+  list via `fetchAllPublicNotePages` (`server-public-notes.ts:84-106`), which sends no `sort`, so every
+  page takes the ranked branch (`NoteService.java:807-831`): a full popularity-ranking query plus a count,
+  repeated per page (Accountancy: 8 pages; Civil Engineering: 18), to fill 7 cards the page then re-sorts
+  itself. 23 of 24 `server_failed` restarts since 2026-09-01 trace to the liveness probe timing out while
+  these queries saturate the `basic_256mb` (0.1 CPU) database.
+- **Fix (Leg B of the plan):** both rails become one bounded `page=0&pageSize=N&sort=recent&readyOnly=true`
+  fetch each, over-fetching by one row to exclude the current note (matching the existing pattern in
+  `getServerPublicNotesBySubject`), instead of walking pages and ranking in JS. `fetchAllPublicNotePages`
+  itself gains a required `sort=recent` parameter, which also fixes the subject listing page, exam hub
+  pages, and the sitemap — the plan's other named walkers — for free.
+- **Owner decision, not absorbed silently:** do **not** preserve live popularity ranking on these two
+  rails — switch to most-recent, deterministically. Raising the database plan is explicitly off the table
+  (pre-revenue). Full reasoning in the decision file above.
+- **Audited, not touched:** Explore's `/notes/public/discovery-sections` is already bounded (fixed
+  `limit=6`/section, no pagination walk, no count query) — not implicated in the outage, not changed.
+  Still runs live `POPULAR`/`FEATURED` ranking per request (not cached), recorded as a Discovery v2 /
+  precompute follow-up, not built here.
+- **Legs explicitly not in this release:** Leg A (raise DB plan) is an owner Render-dashboard action, not
+  code. Leg C (concurrency cap / query timeout on the ranked endpoint) is sequenced after A and B are
+  measured. Leg D (slug-route caching) is recommended deferred — the backend records page views on that
+  fetch, and caching would stop counting them.
+- **Index/migration:** none. `EXPLAIN` (no `ANALYZE`) against production confirms the bounded query is
+  already a large improvement over the current fan-out even without a dedicated index; the existing
+  `idx_notes_visibility_updated_at` index doesn't perfectly match (`created_at`, not `updated_at`), and
+  the subject/program filters are regexp/EXISTS-based and not trivially indexable regardless. Recorded as
+  a measured follow-up if the catalog grows enough to matter, not built speculatively.
+- **Count queries:** cannot be removed without new backend scope — `NoteService.listPublic` always runs a
+  count alongside the rows query for any SQL-orderable paginated request, regardless of whether the
+  caller needs `total`. Each rail costs 1 count + 1 bounded rows query (down from dozens of unbounded
+  queries), which is not built around in this release.
+
+**Workstream 2 — Computing R4 BSCS pilot generation-behavior fixes.** Evidence:
+`docs/curriculum/r4-pilot/r4-pilot-report.md`, `r4-pilot-fix-plan.md`. The pilot confirmed `Computing`
+Domain Context itself is correct on all five pilot Notes (do not touch Domain Context, Subject or
+Authored Depth) — metadata correction (Applicable Programs) and content decisions are the owner's own,
+through the production UI, not this release's.
+
+- **G1 — shell commands render as LaTeX math in a Study Pack Summary** (`$g++\ program.cpp\ -o\ program$`).
+  Measured against production first: 483/10,530 summaries contain `$`, essentially all genuine math
+  (spot-checked, plus a literal-string search for `g++`/`.cpp`/`./program` across every summary and quiz
+  in production found exactly **one** affected pack — the pilot's own). No existing-content risk to
+  justify a renderer heuristic (which would risk false-positiving on real formulas, demonstrated by my own
+  first-attempt regex producing 20 false positives). **Prompt-only fix**: add one instruction to the
+  "Math notation" block (never wrap shell/CLI/file-path content in `$`, use backticks) — applied
+  identically across all 11 prompt files sharing this exact block.
+- **G2 — Note Subject leaks into generated text as "{title} in {Subject}".** Two distinct mechanisms,
+  both fixed: (a) the Study Pack's own title — the existing Title rule already forbids folding
+  Course/Program into a title (`developer.txt:32-43`) but never named Subject; extend that *existing*
+  bullet to also cover Subject, identically in `developer.txt` and `note-generation-developer.txt`, no new
+  "don't do X" bullet (the `v0.96.0` anti-drift rule on wording). (b) the generated-note body's first
+  line — verified as a *separate*, deterministic mechanism: the stored note title is the curator's clean
+  topic, but the body's first line is the LLM's own independently-generated title
+  (`OpenAiLlmStudyPackService.java:2622`), never shown anywhere else (`GenerateNoteFromTopicResponse`
+  returns only `content`). Both fixed per owner decision: the prompt fix above (same root cause) **plus**
+  a deterministic code fix — write the already-known topic into the body instead of the model's own
+  internally-generated title.
+- **G5 — no log records the authoring domain or whether computation guidance fired.** One log line added
+  to the Study Pack generation path. No stored prompts (would need a migration, not done), no note content
+  logged.
+- **Documented, not scoped (per the pilot's own instruction to measure, not change):** G3 (one quiz
+  explanation asserted an unsupported "randomness" claim — single instance in 20 questions, doesn't trip
+  the pilot's stop condition); G4 (computation guidance depends on auto-generated tags when Subject has no
+  keyword — already documented as a known nuance in `v0.164.0`'s `DomainContext.java`, no regression
+  observed in the pilot sample); G6 (Bulk Generate has no instruction field — explicitly a curation
+  convention question under D-35, not a product gap).
+
+Anti-drift: no DB plan change; no new ranking infrastructure, Redis, recommendation engine, vector search
+or LLM call for discovery; no randomness; no Featured flag; no Explore or Public-Note-page redesign; no
+change to global Public Library ordering; no BSCS TSV edits (strategist's own action); no bulk
+generation; no `QUANTITATIVE_KEYWORDS` change; no production write of any kind.
+
+**Verification tier, pre-declared:** this release touches prompt text shared across every generation
+surface (11 files) and a production-reliability fix with no existing automated coverage of the request
+shape it changes — **one scoped cold falsification agent before signoff**, per the standing gate
+(delivery-introduced-defect trigger already fired once this cycle during the Computing pilot's own
+review process, and the reliability fix's request-shape guards are exactly the class of thing a cold
+agent should independently verify rather than trust from the implementing session).
+
+**Checkpoint gate, pre-declared:** Workstream 1 ships ahead of its own evidence (the thread-occupancy
+read in the diagnosis is INFERRED, not measured) — signoff owes a dated `[CHECKPOINT — due 7 days after
+this release's production deploy]` per the fix plan's own pre-stated kill criterion (`server_failed`
+events continuing at a comparable weekly rate means the diagnosis is wrong or incomplete).
+
+### Shipped
+
+_(nothing yet)_
+
 ## v0.164.0 - Computing
 
 **Status: Released** (signed off 2026-09-30; PR #1469 merged into `releases/v0.164.0`)
@@ -1007,122 +1114,3 @@ Subject to Section to Note; Year and term placement stays in a separate editoria
 3. `scripts/check-deploys.sh` was NOT run (no Render API key in the session); the backend deploy is evidenced by `V150` above, the Vercel deploy remains unverified.
 
 **Checkpoint gate: none minted.** Everything shipped was owner-decided and none of it was gated on evidence; there is no instrumentation to read and a checkpoint without a metric is decorative. Real usage of the term feature will first be visible when a curator terms the BSCS Year, so the honest follow-up is the Phase B kickoff read, not a dated checkpoint.
-
-## v0.159.0 - Nothing Lost in the Batch
-
-**Status: Released** (signed off 2026-09-25; Release A merged as #1444; release PR merged as #1446 and tagged; deployed and verified: Render live 15:24Z, Vercel production 15:28Z)
-
-Theme: stop batch operations losing their result. A bulk generation that fails topics leaves no trace once its
-consume-once receipt is read or swept, and a bulk regeneration finishes with no signal at all. Also close the one
-evidence question this project still owes an answer on: what the 5 s connection timeout is doing to users.
-
-### Planned Scope
-
-**Scope picked by the owner at kickoff (2026-09-25): Notifications Release A, and the `connection-timeout` follow-up.**
-Source for item 1: `docs/claude-plans/learning-relevant-notifications-stage1-plan.md` (audit and plan, written
-2026-09-24, NOT yet owner-approved to build; §12 is the release slice, §14 the decisions). **Every production
-figure in that plan is a 2026-09-24 snapshot and one had already decayed; re-read before any of it reaches a
-prompt.**
-
-0. **PREREQUISITE, OWNER DECISION, NOTHING IS BUILT UNTIL IT IS MADE: the badge/retention flag split.**
-   `NotificationCategory` (`entity/NotificationCategory.java`) derives badge eligibility and retention expiry from
-   ONE boolean as exact complements, so a completion notification cannot be both badge-eligible and
-   retention-expirable. The plan recommends option (c): split into `badgeEligible` and `retentionExpirable`, add
-   `ASYNC_RESULT(true, true)`, and REWRITE (not delete) the two XOR partition tests. Java-only, no migration; it
-   deliberately changes a documented invariant, which is why it is the owner's call.
-1. **Notifications Release A: async completion for BULK operations only (backend, no migration, no API/DTO/frontend
-   change).** Two new `NotificationType` values (`BULK_GENERATION_INCOMPLETE`, `BULK_REGENERATION_COMPLETE`), one
-   new `NotificationCategory` (`ASYNC_RESULT`), one producer service, two call sites:
-   `NoteBulkGenerationService.java:247-274` inside the existing `finally`, after the `recordResult` block, only
-   when something failed; `NoteBulkRegenerationService.java:439-443`, deliberately NOT in a `finally`. Destination
-   `/library`; dedup on `resultId` / `batchId`. ~9-11 files; routed to **Codex** (write the prompt from the plan,
-   with `advisor()` BEFORE it is written and on the diff, then `/audit-diff`). Still-open plan decisions
-   (§14): ship both triggers or one (recommend both), the failure-copy truncation budget (recommend ~850 chars then
-   "and N more"), and whether a zero-accepted or all-quota-blocked batch delivers nothing or the failure form.
-2. **`connection-timeout: 5000` follow-up.** (a) A proper read-only 500-cause read: classify the 500s by cause
-   (pool timeout vs database I/O drop vs other) over the retained window, since the 2026-09-24 read sampled only
-   the newest 30 log lines. (b) The owner's verdict against the row's kill criterion, which has no numeric
-   "material and sustained" threshold, so the owner sets it. (c) Any resulting change (revert to 30 s, or a
-   structural fix on pool holds) is its own owner-scoped item, never an inline fix.
-3. **One doc correction, found by the plan's audit and verified in code:** `CLAUDE.md` names
-   `NoteService.startAsyncGenerationFromNote()`, which does not exist; the real entry point is
-   `StudyPackService.startAsyncGenerationFromNote` (`StudyPackService.java:171`).
-
-Anti-drift: no single-note notification of any kind (the learner is on a page polling every 3 s); NO "Study Packs
-are ready" notification for bulk generation (the count it would use over-reports, plan §1.1); no per-item
-notifications, presence, websocket or SSE; no retry promise in the copy (the receipt is consume-once); never state a
-reconciled "N of M" count; never add a `finally` to `NoteBulkRegenerationService.processBatch` (`:64-65` forbids
-it); never call `deliver()` inside a transaction; no migration, endpoint, DTO field or `notification-inbox.tsx`
-change; Release B (learning continuity) is DEFERRED, not scheduled, and `RetentionEmailType.UNFINISHED_NOTE` stays
-untouched. No retention Stage 3; do not cap or reorder `INACTIVITY` here (its effectiveness and the budget-starvation
-rows are separate owner decisions). The notes and curriculum files other sessions left untracked are not this
-release's. **Verification:** a diff that changes behaviour must touch a test that runs it, so both call sites need
-a test that executes them; mutation-check every new test; one `advisor()` on the diff (no permission, money or
-production-data semantics change), escalating to one scoped falsification agent only if delivery introduces a defect
-the same session then fixes.
-
-### Scope disposition (signoff, 2026-09-25)
-
-- **Prerequisite decision (badge/retention flag split): DECIDED and SHIPPED**, option (c).
-- **Notifications Release A: SHIPPED** (#1444). Both triggers; 850-character topic budget; an all-quota-blocked batch
-  delivers the quota form. Anchors: `NoteBulkGenerationService.java:296`, `NoteBulkRegenerationService.java:449`,
-  `NotificationCategory.java:14-16`, `BulkOperationNotificationService.java`.
-- **`connection-timeout` follow-up: PARTLY DONE.** (a) the 500-cause read is DONE, recorded below and on its Backlog
-  row; (b) the owner's VERDICT is NOT made and carries forward on the row; (c) nothing was changed, by design.
-- **`CLAUDE.md` entry-point correction: SHIPPED** in the kickoff commit (`StudyPackService.java:171`).
-- **Not from the scope list, left open by the owner's call:** the `[CHECKPOINT — due 2026-09-27]` click/open read and the
-  2026-09-28 publication-boundary read.
-
-### Checkpoint gate
-
-Release A shipped ahead of its own evidence (one user drove regeneration; bulk generation volume had no direct metric),
-so it owes a checkpoint, added in this signoff commit: `[CHECKPOINT — due deploy + 30 days, backstop 2026-11-10]`
-with a kill criterion, a denominator clause, and the `notifications` table as the instrument. The instrument is the
-table, and the first production row is what proves it emits; both call sites are exercised by mutation-checked tests.
-
-### Known limitations
-
-- The regeneration call site has no try/catch of its own; the producer swallows every delivery failure and a test
-  (mutant M10) guards that, so an escape could only come from a future change to the producer.
-- The notification copy (exact titles and bodies) was drafted by the release and not separately reviewed by the owner.
-- The 500-cause read is a subagent's report, not independently re-run; application logs only go back to
-  2026-09-18 05:40Z, so ~350 of 439 500s (2026-09-04..09-18) cannot be attributed, and its log event count (68) exceeds
-  the metric 500 count (62) by ~5 unexplained.
-- The bulk generation RECEIPT still marks every accepted topic failed after an interruption (the outer catch), including
-  notes already created; only the notification was corrected. Whether the row actually persists during a real shutdown
-  was not verified.
-- Verification: `advisor()` before the Codex prompt and on the diff, mutation checks (21 killed), and one Opus cold
-  agent as a scoped falsification pass. No authorization, money or production-data semantics changed, so no full
-  three-agent test was warranted.
-
-### Shipped
-
-- **Bulk-operation in-app results.** Notifications now keep badge eligibility and unread expiry as
-  independent category policies. Failed or capacity-blocked bulk generation records its topic strings in
-  one bounded notification and stays silent on success; normally completed bulk regeneration sends one
-  completion notification, while an interrupted run sends none. Unit, call-path, badge/retention, and
-  real-database length guards exercise these claims.
-  Copy is fixed and exact (`docs/features/notifications.md`); bodies are bounded to an 850-character topic
-  budget in code, and the regeneration retry mints its own batch id so it notifies too. The pre-commit audit
-  found and fixed a contradiction in `notifications.md` (it still said every unread actionable row is retained
-  forever, which is false for `ASYNC_RESULT`) and a test gap (nothing pinned the dedup id of either trigger).
-  13 of 13 planted mutants were killed at first, each by a named test. **⚠️ That figure overstated the guard:** the
-  pressure test below found five mutants the merged suite did not kill (regeneration count arguments, separator
-  budget accounting, mixed-case suffix, one-per-group interleave); all are killed now (21 in total).
-- **Pre-signoff pressure test (one Opus cold agent, isolated worktree, framed as falsification) and its fixes, PR #1445.**
-  It held nine claims and broke three, plus test overstatement and doc defects; each was verified in code before it
-  was fixed. **(1)** An interrupted or failed-before-loop bulk generation notified that EVERY accepted topic failed,
-  including notes already created: the delay between items throws outside the per-item try and the outer catch
-  overwrites the lists. The notification now lists only topics that were NOT created (the receipt keeps the older
-  behaviour, see Known limitations). **(2)** In the mixed failed and quota-blocked case "and N more" attached to the
-  quota list although the omitted topics could all be failed ones; it is now `Plus N more not listed.` after both
-  sentences. **(3)** Regeneration copy claimed Study Packs were "unchanged" although a timed-out item may still succeed;
-  it now says they still work. **(4)** Five mutants survived the merged suite; new tests kill them. **(5)** Doc defects:
-  a self-contradicting ROADMAP row, a checkpoint SQL that omitted dismissals from its own kill criterion, and a
-  rationale that ignored the polling regenerate modal. The full build passed (2,527 tests) and all 21 mutants are killed.
-- **`connection-timeout: 5000` 500-cause read (read-only, no code change).** Application logs are retained only from
-  2026-09-18 05:40Z. In the observable week: ONE real saturation cluster (09-18 14:46-14:48, 34 requests, pool 20/20,
-  peak waiting 6); pool timeouts on 09-18 16:03 and 09-22 06:04 that followed database I/O drops with a collapsed pool;
-  26 database I/O drops in bursts on the first requests after a deploy goes live; 33 client-abort broken pipes not counted
-  as 500s; one 405 logged as a 500; one unknown. The 5 s timeout produced 500s in one incident; most other 500s are
-  deploy-time DB drops it does not cause. The verdict remains the owner's; a deploy-time-burst finding has its own row.

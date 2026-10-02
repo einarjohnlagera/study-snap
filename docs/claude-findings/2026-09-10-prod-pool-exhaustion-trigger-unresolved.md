@@ -15,6 +15,17 @@ Claims are **VERIFIED** (a log line, a metric, a query result, or code opened) o
 
 **⚠️⚠️ THIS HAS NOW RECURRED A FOURTH TIME — 2026-09-17, same signature, still unidentified. See §11.**
 
+> **⚠️ CORRECTED 2026-10-01 — §3's "The database … Idle throughout" AND §11's "Database ruled out as
+> the constraint" ARE WRONG, AND THE TRIGGER IS NOW IDENTIFIED.** Both read a 0.0626 CPU peak as idle.
+> **The database's CPU limit is 0.1**, so that is 63 % of the limit; the per-minute average reads
+> **0.100 at 13:14 on 09-10**. §6's conclusion "blocking I/O that is not the database" rested on that
+> reading. **Caveat kept:** the 09-10 pool-exhaustion minutes themselves (13:12–13:13) read 0.033 and
+> 0.013, so this incident fits less cleanly than the others.
+> The cause: `docs/claude-findings/2026-10-01-prod-restarts-public-note-page-fanout-db-saturation.md` — a public note page
+> walking every page of two ranked lists. One note was fetched 12 times before the 09-10 restart and 13
+> times before 09-17. §9's "Render environment variables cannot be read" still holds; the platform's
+> restart reason can be read with `list_events`.
+
 ---
 
 ## 0. ⚠️ What the first draft got wrong

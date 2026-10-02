@@ -1,6 +1,6 @@
 # RELEASES_ARCHIVE.md — NoteLib
 
-Archived sections of `RELEASES.md`. **Contents are NOT one contiguous range:** `v0.41.0`–`v0.120.0`, plus `v0.126.0` (moved at the `v0.132.0` kickoff), `v0.127.0` (moved at the `v0.133.0` kickoff) `v0.128.0` (moved at the `v0.134.0` kickoff) `v0.129.0` (moved at the `v0.135.0` kickoff) `v0.130.0` (moved at the `v0.136.0` kickoff) `v0.131.0` (moved at the `v0.137.0` kickoff) `v0.132.0` (moved at the `v0.138.0` kickoff) `v0.133.0` (moved at the `v0.139.0` kickoff), `v0.134.0` (moved at the `v0.140.0` kickoff), `v0.135.0` (moved at the `v0.141.0` kickoff), `v0.136.0` (moved at the `v0.142.0` kickoff), `v0.137.0` (moved at the `v0.143.0` kickoff), `v0.138.0` (moved at the `v0.144.0` kickoff), `v0.139.0` (moved at the `v0.145.0` kickoff), `v0.140.0` (moved at the `v0.146.0` kickoff), `v0.141.0` (moved at the `v0.147.0` kickoff), `v0.142.0` (moved at the `v0.148.0` kickoff), `v0.143.0` (moved at the `v0.149.0` kickoff), `v0.144.0` (moved at the `v0.150.0` kickoff), `v0.145.0` (moved at the `v0.151.0` kickoff), `v0.146.0` (moved at the `v0.152.0` kickoff), `v0.147.0` (moved at the `v0.153.0` kickoff), `v0.148.0` (moved at the `v0.154.0` kickoff), `v0.149.0` (moved at the `v0.155.0` kickoff), `v0.150.0` (moved at the `v0.156.0` signoff — the first time this archive check ran at signoff rather than kickoff, since v0.156.0 folded two releases' worth of scope into one and crossed the cap without an intervening kickoff) and `v0.151.0` (moved at the `v0.157.0` kickoff) and `v0.152.0` (moved at the `v0.158.0` kickoff) and `v0.153.0` and `v0.154.0` (moved at the `v0.159.0` and `v0.160.0` kickoffs; earlier passes did not extend this line) and `v0.155.0` (moved at the `v0.161.0` kickoff) and `v0.156.0` (moved at the `v0.162.0` kickoff) and `v0.157.0` (moved at the `v0.163.0` kickoff) and `v0.158.0` (moved at the `v0.164.0` kickoff) as the live file crossed its *current + last five* cap. Each version's own `## vX.Y.Z` heading is the index — search for it. `v0.40.1` and earlier moved here
+Archived sections of `RELEASES.md`. **Contents are NOT one contiguous range:** `v0.41.0`–`v0.120.0`, plus `v0.126.0` (moved at the `v0.132.0` kickoff), `v0.127.0` (moved at the `v0.133.0` kickoff) `v0.128.0` (moved at the `v0.134.0` kickoff) `v0.129.0` (moved at the `v0.135.0` kickoff) `v0.130.0` (moved at the `v0.136.0` kickoff) `v0.131.0` (moved at the `v0.137.0` kickoff) `v0.132.0` (moved at the `v0.138.0` kickoff) `v0.133.0` (moved at the `v0.139.0` kickoff), `v0.134.0` (moved at the `v0.140.0` kickoff), `v0.135.0` (moved at the `v0.141.0` kickoff), `v0.136.0` (moved at the `v0.142.0` kickoff), `v0.137.0` (moved at the `v0.143.0` kickoff), `v0.138.0` (moved at the `v0.144.0` kickoff), `v0.139.0` (moved at the `v0.145.0` kickoff), `v0.140.0` (moved at the `v0.146.0` kickoff), `v0.141.0` (moved at the `v0.147.0` kickoff), `v0.142.0` (moved at the `v0.148.0` kickoff), `v0.143.0` (moved at the `v0.149.0` kickoff), `v0.144.0` (moved at the `v0.150.0` kickoff), `v0.145.0` (moved at the `v0.151.0` kickoff), `v0.146.0` (moved at the `v0.152.0` kickoff), `v0.147.0` (moved at the `v0.153.0` kickoff), `v0.148.0` (moved at the `v0.154.0` kickoff), `v0.149.0` (moved at the `v0.155.0` kickoff), `v0.150.0` (moved at the `v0.156.0` signoff — the first time this archive check ran at signoff rather than kickoff, since v0.156.0 folded two releases' worth of scope into one and crossed the cap without an intervening kickoff) and `v0.151.0` (moved at the `v0.157.0` kickoff) and `v0.152.0` (moved at the `v0.158.0` kickoff) and `v0.153.0` and `v0.154.0` (moved at the `v0.159.0` and `v0.160.0` kickoffs; earlier passes did not extend this line) and `v0.155.0` (moved at the `v0.161.0` kickoff) and `v0.156.0` (moved at the `v0.162.0` kickoff) and `v0.157.0` (moved at the `v0.163.0` kickoff) and `v0.158.0` (moved at the `v0.164.0` kickoff) and `v0.159.0` (moved at the `v0.165.0` kickoff) as the live file crossed its *current + last five* cap. Each version's own `## vX.Y.Z` heading is the index — search for it. `v0.40.1` and earlier moved here
 2026-07-10; **`v0.41.0` through `v0.120.0` moved here 2026-09-07** in the `v0.126.0` pass, which
 resumed this convention after it had lapsed for 85 releases — `RELEASES.md` had reached 116
 sections against its documented design of *current + last few versions*. Both passes are MOVES,
@@ -20774,5 +20774,126 @@ checkpoints are all carried from earlier releases and are re-stated on their row
     `INACTIVITY` effectiveness item above for whether that matters.
   - **Cross-note review re-check:** `quick_review_sessions` 906 total, `source_collection_id` NULL on all 906
     (179 since the Stage 1 audit); DEFER stands, gate is `[CHECKPOINT — due 2026-10-13]`.
+
+---
+
+## v0.159.0 - Nothing Lost in the Batch
+
+**Status: Released** (signed off 2026-09-25; Release A merged as #1444; release PR merged as #1446 and tagged; deployed and verified: Render live 15:24Z, Vercel production 15:28Z)
+
+Theme: stop batch operations losing their result. A bulk generation that fails topics leaves no trace once its
+consume-once receipt is read or swept, and a bulk regeneration finishes with no signal at all. Also close the one
+evidence question this project still owes an answer on: what the 5 s connection timeout is doing to users.
+
+### Planned Scope
+
+**Scope picked by the owner at kickoff (2026-09-25): Notifications Release A, and the `connection-timeout` follow-up.**
+Source for item 1: `docs/claude-plans/learning-relevant-notifications-stage1-plan.md` (audit and plan, written
+2026-09-24, NOT yet owner-approved to build; §12 is the release slice, §14 the decisions). **Every production
+figure in that plan is a 2026-09-24 snapshot and one had already decayed; re-read before any of it reaches a
+prompt.**
+
+0. **PREREQUISITE, OWNER DECISION, NOTHING IS BUILT UNTIL IT IS MADE: the badge/retention flag split.**
+   `NotificationCategory` (`entity/NotificationCategory.java`) derives badge eligibility and retention expiry from
+   ONE boolean as exact complements, so a completion notification cannot be both badge-eligible and
+   retention-expirable. The plan recommends option (c): split into `badgeEligible` and `retentionExpirable`, add
+   `ASYNC_RESULT(true, true)`, and REWRITE (not delete) the two XOR partition tests. Java-only, no migration; it
+   deliberately changes a documented invariant, which is why it is the owner's call.
+1. **Notifications Release A: async completion for BULK operations only (backend, no migration, no API/DTO/frontend
+   change).** Two new `NotificationType` values (`BULK_GENERATION_INCOMPLETE`, `BULK_REGENERATION_COMPLETE`), one
+   new `NotificationCategory` (`ASYNC_RESULT`), one producer service, two call sites:
+   `NoteBulkGenerationService.java:247-274` inside the existing `finally`, after the `recordResult` block, only
+   when something failed; `NoteBulkRegenerationService.java:439-443`, deliberately NOT in a `finally`. Destination
+   `/library`; dedup on `resultId` / `batchId`. ~9-11 files; routed to **Codex** (write the prompt from the plan,
+   with `advisor()` BEFORE it is written and on the diff, then `/audit-diff`). Still-open plan decisions
+   (§14): ship both triggers or one (recommend both), the failure-copy truncation budget (recommend ~850 chars then
+   "and N more"), and whether a zero-accepted or all-quota-blocked batch delivers nothing or the failure form.
+2. **`connection-timeout: 5000` follow-up.** (a) A proper read-only 500-cause read: classify the 500s by cause
+   (pool timeout vs database I/O drop vs other) over the retained window, since the 2026-09-24 read sampled only
+   the newest 30 log lines. (b) The owner's verdict against the row's kill criterion, which has no numeric
+   "material and sustained" threshold, so the owner sets it. (c) Any resulting change (revert to 30 s, or a
+   structural fix on pool holds) is its own owner-scoped item, never an inline fix.
+3. **One doc correction, found by the plan's audit and verified in code:** `CLAUDE.md` names
+   `NoteService.startAsyncGenerationFromNote()`, which does not exist; the real entry point is
+   `StudyPackService.startAsyncGenerationFromNote` (`StudyPackService.java:171`).
+
+Anti-drift: no single-note notification of any kind (the learner is on a page polling every 3 s); NO "Study Packs
+are ready" notification for bulk generation (the count it would use over-reports, plan §1.1); no per-item
+notifications, presence, websocket or SSE; no retry promise in the copy (the receipt is consume-once); never state a
+reconciled "N of M" count; never add a `finally` to `NoteBulkRegenerationService.processBatch` (`:64-65` forbids
+it); never call `deliver()` inside a transaction; no migration, endpoint, DTO field or `notification-inbox.tsx`
+change; Release B (learning continuity) is DEFERRED, not scheduled, and `RetentionEmailType.UNFINISHED_NOTE` stays
+untouched. No retention Stage 3; do not cap or reorder `INACTIVITY` here (its effectiveness and the budget-starvation
+rows are separate owner decisions). The notes and curriculum files other sessions left untracked are not this
+release's. **Verification:** a diff that changes behaviour must touch a test that runs it, so both call sites need
+a test that executes them; mutation-check every new test; one `advisor()` on the diff (no permission, money or
+production-data semantics change), escalating to one scoped falsification agent only if delivery introduces a defect
+the same session then fixes.
+
+### Scope disposition (signoff, 2026-09-25)
+
+- **Prerequisite decision (badge/retention flag split): DECIDED and SHIPPED**, option (c).
+- **Notifications Release A: SHIPPED** (#1444). Both triggers; 850-character topic budget; an all-quota-blocked batch
+  delivers the quota form. Anchors: `NoteBulkGenerationService.java:296`, `NoteBulkRegenerationService.java:449`,
+  `NotificationCategory.java:14-16`, `BulkOperationNotificationService.java`.
+- **`connection-timeout` follow-up: PARTLY DONE.** (a) the 500-cause read is DONE, recorded below and on its Backlog
+  row; (b) the owner's VERDICT is NOT made and carries forward on the row; (c) nothing was changed, by design.
+- **`CLAUDE.md` entry-point correction: SHIPPED** in the kickoff commit (`StudyPackService.java:171`).
+- **Not from the scope list, left open by the owner's call:** the `[CHECKPOINT — due 2026-09-27]` click/open read and the
+  2026-09-28 publication-boundary read.
+
+### Checkpoint gate
+
+Release A shipped ahead of its own evidence (one user drove regeneration; bulk generation volume had no direct metric),
+so it owes a checkpoint, added in this signoff commit: `[CHECKPOINT — due deploy + 30 days, backstop 2026-11-10]`
+with a kill criterion, a denominator clause, and the `notifications` table as the instrument. The instrument is the
+table, and the first production row is what proves it emits; both call sites are exercised by mutation-checked tests.
+
+### Known limitations
+
+- The regeneration call site has no try/catch of its own; the producer swallows every delivery failure and a test
+  (mutant M10) guards that, so an escape could only come from a future change to the producer.
+- The notification copy (exact titles and bodies) was drafted by the release and not separately reviewed by the owner.
+- The 500-cause read is a subagent's report, not independently re-run; application logs only go back to
+  2026-09-18 05:40Z, so ~350 of 439 500s (2026-09-04..09-18) cannot be attributed, and its log event count (68) exceeds
+  the metric 500 count (62) by ~5 unexplained.
+- The bulk generation RECEIPT still marks every accepted topic failed after an interruption (the outer catch), including
+  notes already created; only the notification was corrected. Whether the row actually persists during a real shutdown
+  was not verified.
+- Verification: `advisor()` before the Codex prompt and on the diff, mutation checks (21 killed), and one Opus cold
+  agent as a scoped falsification pass. No authorization, money or production-data semantics changed, so no full
+  three-agent test was warranted.
+
+### Shipped
+
+- **Bulk-operation in-app results.** Notifications now keep badge eligibility and unread expiry as
+  independent category policies. Failed or capacity-blocked bulk generation records its topic strings in
+  one bounded notification and stays silent on success; normally completed bulk regeneration sends one
+  completion notification, while an interrupted run sends none. Unit, call-path, badge/retention, and
+  real-database length guards exercise these claims.
+  Copy is fixed and exact (`docs/features/notifications.md`); bodies are bounded to an 850-character topic
+  budget in code, and the regeneration retry mints its own batch id so it notifies too. The pre-commit audit
+  found and fixed a contradiction in `notifications.md` (it still said every unread actionable row is retained
+  forever, which is false for `ASYNC_RESULT`) and a test gap (nothing pinned the dedup id of either trigger).
+  13 of 13 planted mutants were killed at first, each by a named test. **⚠️ That figure overstated the guard:** the
+  pressure test below found five mutants the merged suite did not kill (regeneration count arguments, separator
+  budget accounting, mixed-case suffix, one-per-group interleave); all are killed now (21 in total).
+- **Pre-signoff pressure test (one Opus cold agent, isolated worktree, framed as falsification) and its fixes, PR #1445.**
+  It held nine claims and broke three, plus test overstatement and doc defects; each was verified in code before it
+  was fixed. **(1)** An interrupted or failed-before-loop bulk generation notified that EVERY accepted topic failed,
+  including notes already created: the delay between items throws outside the per-item try and the outer catch
+  overwrites the lists. The notification now lists only topics that were NOT created (the receipt keeps the older
+  behaviour, see Known limitations). **(2)** In the mixed failed and quota-blocked case "and N more" attached to the
+  quota list although the omitted topics could all be failed ones; it is now `Plus N more not listed.` after both
+  sentences. **(3)** Regeneration copy claimed Study Packs were "unchanged" although a timed-out item may still succeed;
+  it now says they still work. **(4)** Five mutants survived the merged suite; new tests kill them. **(5)** Doc defects:
+  a self-contradicting ROADMAP row, a checkpoint SQL that omitted dismissals from its own kill criterion, and a
+  rationale that ignored the polling regenerate modal. The full build passed (2,527 tests) and all 21 mutants are killed.
+- **`connection-timeout: 5000` 500-cause read (read-only, no code change).** Application logs are retained only from
+  2026-09-18 05:40Z. In the observable week: ONE real saturation cluster (09-18 14:46-14:48, 34 requests, pool 20/20,
+  peak waiting 6); pool timeouts on 09-18 16:03 and 09-22 06:04 that followed database I/O drops with a collapsed pool;
+  26 database I/O drops in bursts on the first requests after a deploy goes live; 33 client-abort broken pipes not counted
+  as 500s; one 405 logged as a 500; one unknown. The 5 s timeout produced 500s in one incident; most other 500s are
+  deploy-time DB drops it does not cause. The verdict remains the owner's; a deploy-time-burst finding has its own row.
 
 ---
