@@ -105,7 +105,51 @@ events continuing at a comparable weekly rate means the diagnosis is wrong or in
 
 ### Shipped
 
-_(nothing yet)_
+- **Workstream 1 — Public Note discovery rail fan-out fix (frontend only, no backend change needed).**
+  Both rails switched to one bounded `page=0&sort=recent&readyOnly=true` fetch each —
+  `getServerPublicNotesBySubjectSlugRecent` and `getServerPublicNotesByCourseProgramRecent`
+  (`frontend/lib/server-public-notes.ts:311-336`) — replacing the unbounded popularity-ranked walk (the
+  24-restart mechanism). `fetchAllPublicNotePages` (`server-public-notes.ts:100-122`) now always sends
+  `sort=recent`, which removes the expensive ranking-query multiplier from its other callers too — the
+  subject listing page and exam hub pages (via `getServerPublicNotesBySubjectSlug`/
+  `getServerPublicNotesByCourseProgram(s)`) and the sitemap — though those three still walk every page of
+  their subject/program/catalog (that part of their job is unchanged and out of scope; see the
+  full SURFACE/ENDPOINT audit in `docs/claude-plans/2026-10-01-public-note-discovery-rail-ordering-decision.md`).
+  No visible-ordering regression: all of those callers already re-derive their own
+  Featured/Popular/Recent/remaining sections in JS from the full set via
+  `lib/public-library-discovery.ts`'s own internal `.sort()`, independent of fetch order — audited, no
+  caller relies on arrival order. No caller passes its own `sort`, so no duplicate-param risk.
+  `app/public/library/[subject]/[slug]/page.tsx` now derives `courseProgram` from the note's own joined
+  `coursePrograms[0]` (`NoteService.resolvePublicDetailPrograms`, backed by
+  `NoteCourseProgramRepository.findByNoteId`'s `ORDER BY course_programs.name` — the same ordering
+  `findByNoteIds` used for the old list-item `applicablePrograms[0]` derivation, so multi-program notes
+  resolve to the identical program as before, and the join is confirmed stable across ISR revalidations)
+  instead of re-walking the program's note list. Tests: `frontend/lib/server-public-notes.test.ts`
+  (mutation-tested — guards confirmed to actually fail without `readyOnly=true`),
+  `frontend/app/public/library/[subject]/[slug]/page.test.tsx` (41 tests).
+  `docs/features/public-library.md` section K updated to describe recency ordering instead of the stale
+  engagement-score claim.
+  - **Known limitation, intentionally not fixed this release:** the Subject and Program rails are not
+    cross-deduped — after a visitor finishes the embedded Quick Check, a note sharing both the current
+    note's Subject and Course/Program can appear in the quiz-preview rail and the Program section. The
+    original rail contract's over-fetch covered the current note only; deduplicating Subject against
+    Program would require its own bounded headroom decision and could starve the smaller rail when
+    both top-N windows substantially overlap.
+    Pinned as current, deliberate behavior by a dedicated test in `page.test.tsx`
+    ("documents that the two most-recent-first rails are not cross-deduped"). Matches the owner's own
+    instruction verbatim ("If cross-rail duplication already has a simple bounded exclusion mechanism,
+    preserve it. If avoiding duplicates requires broad fetching/fan-out, production safety wins.").
+  - **Known limitation, verified zero production impact:** `getServerPublicNotesBySubjectSlugRecent` drops
+    the blank-subject/`general`-slug special case the unbounded walker carried (it used to fall back to a
+    full-catalog scan to find blank-subject siblings — the worst fan-out of all, not reintroduced). A
+    read-only `count(*)` against production (2026-10-02) confirms **0 public notes have a blank or
+    whitespace-only subject**, so this has no current effect.
+  - **Subject-vs-Subject duplication fixed:** the quiz-preview's "More from {Subject}" rail excludes
+    notes shown in the always-visible "More in {Subject}" section, when that section has enough notes
+    to render (`frontend/app/public/library/[subject]/[slug]/page.tsx:96-113`). Its single bounded
+    recent fetch now requests six candidates plus the current-note headroom, then displays up to three.
+    The "More in {Subject}" fetch and section are unchanged; when that section is hidden, the quiz
+    rail retains its available related notes.
 
 ## v0.164.0 - Computing
 
