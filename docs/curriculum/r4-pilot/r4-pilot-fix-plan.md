@@ -1,6 +1,7 @@
-# R4 Pilot — Fix Plan (2026-10-01) — PLAN ONLY, NOTHING IMPLEMENTED
+# R4 Pilot — Fix Plan (2026-10-01; G1, G2 and G5 shipped in v0.165.0)
 
-Source: `r4-pilot-report.md`. Written for the Release Implementor. Claude has changed nothing in production or in code.
+Source: `r4-pilot-report.md`. Written for the Release Implementor. At drafting, no production or
+code changes had been made; G1, G2 and G5 were subsequently authorized for v0.165.0.
 
 ## 0. Read this first: who can execute which part
 
@@ -35,17 +36,19 @@ My recommendation, labelled as a PROPOSAL:
 
 **If the owner chooses the authored path for a Note:** (1) replace the Note body with the file in this folder; (2) generate a fresh Study Pack once, with explicit confirmation as the versioning rule requires (the pack updates in place and keeps history); (3) do not edit the generated pack. **If the owner keeps a generated body:** the Note B quiz question on randomness must be removed or regenerated, and Note C needs the C++17 detail added.
 
-## 3. Code and generation items (separate branch and release; NOT part of this fix; none is authorized by D-35)
+## 3. Code and generation items (G1, G2 and G5 shipped in v0.165.0; none authorized by D-35 itself)
 
-These are findings, not requests. Each needs evidence at scale and an owner decision before becoming scope. The owner instruction for this pilot was to measure, not change.
+These were pilot findings, not requests when first recorded. The owner later scoped G1, G2 and G5 for
+v0.165.0; G3, G4 and G6 remain documented findings.
 
 | # | Finding | Origin | Observed in |
 |---|---|---|---|
-| G1 | Shell commands rendered as LaTeX math in a Summary (`$g++\ program.cpp\ -o\ program$`) | Study Pack generation | Note C |
-| G2 | Subject appended to the Note body's first line and to pack titles ("… in Programming Fundamentals") | generation behaviour | all five |
+| G1 | Shell commands rendered as LaTeX math in a Summary (`$g++\ program.cpp\ -o\ program$`); prompt rule shipped (`backend/src/main/resources/prompts/study-pack-v1/developer.txt:133`, all 11 Math notation prompts) | Study Pack generation | Note C |
+| G2(a) | Subject appended to pack titles; title-rule prompt fix shipped on all generation paths (`backend/src/main/resources/prompts/study-pack-v1/developer.txt:35`, `note-generation-developer.txt:21`) | generation behaviour | all five |
+| G2(b) | Subject appended to the Note body's first line; deterministic heading fix shipped for initial Bulk Generate only (`backend/src/main/java/com/studysnap/backend/service/NoteBulkGenerationService.java:359`) | generation behaviour | all five |
 | G3 | A quiz explanation asserts an unsupported claim (randomness) | Study Pack generation | Note B |
 | G4 | Computation guidance depends on auto-generated tags when the Subject has no keyword | generation prompt behaviour (latent) | Note B fired only via the tag "Algorithms" |
-| G5 | No log records the authoring domain or whether guidance fired; `study_packs` stores no prompt | observability | all |
+| G5 | Authoring domain and guidance trigger now logged (`backend/src/main/java/com/studysnap/backend/service/impl/OpenAiLlmStudyPackService.java:1698`); `study_packs` still stores no prompt | observability | all |
 | G6 | Bulk Generate cannot carry scope constraints (no instruction field) | product capability | Note D |
 
 G6 is a **convention** question under D-35 ("no new product field is authorized"), so the plan above handles it by choosing the authored path for scope-sensitive Notes rather than adding a field.
