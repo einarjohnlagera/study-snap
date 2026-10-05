@@ -63,8 +63,9 @@ through the production UI, not this release's.
   in production found exactly **one** affected pack — the pilot's own). No existing-content risk to
   justify a renderer heuristic (which would risk false-positiving on real formulas, demonstrated by my own
   first-attempt regex producing 20 false positives). **Prompt-only fix**: add one instruction to the
-  "Math notation" block (never wrap shell/CLI/file-path content in `$`, use backticks) — applied
-  identically across all 11 prompt files sharing this exact block.
+  "Math notation" block (shell commands, flags, file paths and code are not math; never place them
+  inside math delimiters or add a shell-prompt `$`) — the same new bullet applies to 10 files with a
+  byte-identical Math notation block and to `note-generation-developer.txt`'s JSON-escaping variant.
 - **G2 — Note Subject leaks into generated text as "{title} in {Subject}".** Two distinct mechanisms,
   both fixed: (a) the Study Pack's own title — the existing Title rule already forbids folding
   Course/Program into a title (`developer.txt:32-43`) but never named Subject; extend that *existing*
@@ -72,10 +73,10 @@ through the production UI, not this release's.
   "don't do X" bullet (the `v0.96.0` anti-drift rule on wording). (b) the generated-note body's first
   line — verified as a *separate*, deterministic mechanism: the stored note title is the curator's clean
   topic, but the body's first line is the LLM's own independently-generated title
-  (`OpenAiLlmStudyPackService.java:2622`), never shown anywhere else (`GenerateNoteFromTopicResponse`
-  returns only `content`). Both fixed per owner decision: the prompt fix above (same root cause) **plus**
-  a deterministic code fix — write the already-known topic into the body instead of the model's own
-  internally-generated title.
+  (`backend/src/main/java/com/studysnap/backend/service/impl/OpenAiLlmStudyPackService.java`),
+  never shown anywhere else (`GenerateNoteFromTopicResponse` returns only `content`). The prompt fix
+  applies to both title-emitting prompts; the deterministic body-heading fix applies to **Bulk Generate
+  only**, using its clean curator-supplied topic instead of the model's own title.
 - **G5 — no log records the authoring domain or whether computation guidance fired.** One log line added
   to the Study Pack generation path. No stored prompts (would need a migration, not done), no note content
   logged.
@@ -150,6 +151,29 @@ events continuing at a comparable weekly rate means the diagnosis is wrong or in
     recent fetch now requests six candidates plus the current-note headroom, then displays up to three.
     The "More in {Subject}" fetch and section are unchanged; when that section is hidden, the quiz
     rail retains its available related notes.
+- **Workstream 2 — Computing R4 pilot generation behavior (G1, G2, G5).** G1 adds one identical
+  shell/CLI-is-not-math bullet to all 11 Math notation prompts
+  (`backend/src/main/resources/prompts/study-pack-v1/developer.txt:133`,
+  `note-generation-developer.txt:89`). G2(a) extends the existing title rule to treat Subject as
+  context when it only names a broader container, with the pilot's Algorithms example in both
+  title-emitting prompts (`developer.txt:35-44`, `note-generation-developer.txt:21-30`). G2(b)
+  replaces the model's body heading with the curator's topic on **initial Bulk Generate only**
+  (`backend/src/main/java/com/studysnap/backend/service/NoteBulkGenerationService.java:359-371`).
+  Owner decision, 2026-10-02: the single-note editor and onboarding accept an informal learner-typed
+  topic distinct from a polished title, while Bulk Generate's topic is the clean curator title. The
+  pilot observed clean stored Note titles beside Subject-leaking generated body headings
+  (`docs/curriculum/r4-pilot/r4-pilot-report.md`, finding 6). G5 logs the effective authoring domain,
+  Subject, guidance result and trigger once per input-message build
+  (`backend/src/main/java/com/studysnap/backend/service/impl/OpenAiLlmStudyPackService.java:1698-1742`).
+  **Verification limit:** G1 and G2(a) are prompt text; automated tests pin file content, not model
+  behavior. The owner must regenerate a pilot Note's Study Pack and inspect its Summary and title
+  (`r4-pilot-fix-plan.md` section 4). **Known limitations:** the single-note editor and onboarding
+  rely on G2(a)'s prompt wording alone for generated titles; they do not get the deterministic body
+  override. A bulk-created note's body heading can revert to the model title if its content is later
+  regenerated through `StudyPackService.generateStudyPackFromExistingNoteAsync`, which bypasses
+  `NoteBulkGenerationService`. G5 gives aggregate Subject/Domain visibility, not per-note or
+  per-request correlation; the generation context has no note/request id, and one line is logged per
+  actual attempt, including retries and Long Exam batches.
 
 ## v0.164.0 - Computing
 

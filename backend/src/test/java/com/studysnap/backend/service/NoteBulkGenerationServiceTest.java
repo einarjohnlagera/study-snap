@@ -35,10 +35,13 @@ import com.studysnap.backend.service.model.StudyPackGenerationContext;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -498,6 +501,53 @@ class NoteBulkGenerationServiceTest {
                 eq(List.of())
         );
         verify(bulkOperationNotificationService, never()).bulkGenerationIncomplete(any(), any(), any(), any());
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    void queueBatch_usesCuratorTopicAsGeneratedBodyHeadingOnBothBulkBranches(boolean enforceLimits) {
+        UUID userId = UUID.randomUUID();
+        String topic = "Algorithms and Their Properties";
+        String generatedContent = "Algorithms and Their Properties in Programming Fundamentals\n\n"
+                + "📘 Overview\nAlgorithms solve problems.\n\n"
+                + "🧠 Key Idea\nA finite sequence of steps.\n\n"
+                + "⚔️ Core Details\nSteps must be clear.\n\n"
+                + "🎯 Why It Matters\nAlgorithms support programs.\n\n"
+                + "🧠 Quick Recall\nName the key properties.";
+        mockUser(userId, enforceLimits ? UserRole.USER : UserRole.ADMIN,
+                ProfileType.STUDENT, LearnerLevel.COLLEGE, COURSE_PROGRAM);
+        StudyPackGenerationContext context = context(LearnerLevel.COLLEGE, COURSE_PROGRAM);
+        if (enforceLimits) {
+            when(mePlanService.getNoteGenerationsRemaining(userId)).thenReturn(1);
+            when(generationContextResolver.resolveForBulkGeneration(userId, COURSE_PROGRAM, SUBJECT, null, null))
+                    .thenReturn(context);
+            when(noteGenerationService.generateFromTopic(
+                    any(GenerateNoteFromTopicRequest.class), eq(userId), eq(context)))
+                    .thenReturn(new GenerateNoteFromTopicResponse(generatedContent));
+        } else {
+            when(generationContextResolver.resolveForBulkGeneration(
+                    userId, List.of(CATALOG_PROGRAM_ID), null, SUBJECT, null, null))
+                    .thenReturn(context);
+            when(llmStudyPackService.generateNoteFromTopic(topic, context)).thenReturn(generatedContent);
+        }
+        when(noteService.create(any(UpsertNoteRequest.class), eq(userId)))
+                .thenReturn(noteResponse("note-1"));
+
+        service.queueBatch(request(List.of(topic), COURSE_PROGRAM, false), userId, enforceLimits);
+
+        ArgumentCaptor<UpsertNoteRequest> captor = ArgumentCaptor.forClass(UpsertNoteRequest.class);
+        verify(noteService).create(captor.capture(), eq(userId));
+        assertThat(captor.getValue().title()).isEqualTo(topic);
+        assertThat(captor.getValue().content())
+                .isEqualTo(topic + generatedContent.substring(generatedContent.indexOf("\n\n")));
+    }
+
+    @Test
+    void replaceGeneratedHeading_leavesUnstructuredContentUnchanged() {
+        String content = "Unstructured generated content";
+        assertThat((String) ReflectionTestUtils.invokeMethod(
+                service, "replaceGeneratedHeading", content, "Clean curator topic"))
+                .isEqualTo(content);
     }
 
     @Test

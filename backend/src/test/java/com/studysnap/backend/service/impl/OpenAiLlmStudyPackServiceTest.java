@@ -355,15 +355,45 @@ class OpenAiLlmStudyPackServiceTest {
             // Both halves of the distinction must be present. Either alone teaches the wrong lesson.
             assertThat(template).as(resourcePath)
                     .contains("include disciplinary or application context when it defines what is taught")
-                    .contains("omit Course/Program, learner-group, or curriculum context when it only says who the material is for")
+                    .contains("omit Course/Program, Subject, learner-group, or curriculum context when it only says who the material is for, what broader category it belongs to, or where it is used")
                     .contains("judgment about meaning, not about wording");
             // The positive cases are what stop a wording ban from being inferred from the negative ones.
             assertThat(template).as(resourcePath)
                     .contains("\"Nursing Management of Acute Asthma\" -> correct")
-                    .contains("\"Structural Applications of Differential Equations\" -> correct");
+                    .contains("\"Structural Applications of Differential Equations\" -> correct")
+                    .contains("\"Algorithms and Their Properties in Programming Fundamentals\" -> the Subject only names the container");
             // Universal by design: no per-program or per-discipline title logic, ever.
             assertThat(template).as(resourcePath).doesNotContain("if the Course/Program is");
         }
+    }
+
+    @Test
+    void everyGenerationPromptKeepsTheSameShellCommandMathCarveOut() throws IOException {
+        String shellRule = "- Shell commands, flags, file paths and code are not math: never place them inside `$...$`, and never write a shell-prompt `$` before a command.";
+        String commonMathBlock = null;
+        for (String fileName : List.of(
+                "adaptive-practice-developer.txt", "ask-companion-developer.txt", "board-exam-developer.txt",
+                "challenge-quiz-developer.txt", "companion-developer.txt", "developer.txt",
+                "interview-critique-developer.txt", "interview-practice-developer.txt",
+                "long-exam-developer.txt", "teacher-quiz-developer.txt"
+        )) {
+            String template = new ClassPathResource("prompts/study-pack-v1/" + fileName)
+                    .getContentAsString(StandardCharsets.UTF_8);
+            assertThat(template).as(fileName).contains(shellRule);
+            int start = template.indexOf("Math notation\n");
+            assertThat(start).as(fileName + " Math notation start").isGreaterThanOrEqualTo(0);
+            // The common Math notation block is the final block in each of these ten files.
+            String mathBlock = template.substring(start);
+            if (commonMathBlock == null) {
+                commonMathBlock = mathBlock;
+            } else {
+                assertThat(mathBlock).as(fileName + " Math notation block").isEqualTo(commonMathBlock);
+            }
+        }
+        String notePrompt = new ClassPathResource("prompts/study-pack-v1/note-generation-developer.txt")
+                .getContentAsString(StandardCharsets.UTF_8);
+        assertThat(notePrompt).contains("Math notation\n").contains(shellRule)
+                .contains("- Escape every backslash in the JSON you return:");
     }
 
     /**
@@ -523,6 +553,44 @@ class OpenAiLlmStudyPackServiceTest {
 
         assertThat(invokeIsQuantitativeContext(quantitativeDomain)).isTrue();
         assertThat(invokeIsQuantitativeContext(nonQuantitativeDomain)).isFalse();
+    }
+
+    @Test
+    void isQuantitativeContext_logsDomainSubjectResultAndTriggerForEveryDecisionPath() throws Exception {
+        Logger serviceLogger = (Logger) org.slf4j.LoggerFactory.getLogger(OpenAiLlmStudyPackService.class);
+        Level previousLevel = serviceLogger.getLevel();
+        ListAppender<ILoggingEvent> appender = new ListAppender<>();
+        appender.start();
+        serviceLogger.addAppender(appender);
+        serviceLogger.setLevel(Level.INFO);
+        try {
+            assertThat(invokeIsQuantitativeContext(new StudyPackGenerationContext(
+                    LearnerLevel.COLLEGE, null, "Maternal Health", List.of(),
+                    DomainContext.NURSING, LearnerLevel.COLLEGE))).isTrue();
+            assertThat(invokeIsQuantitativeContext(new StudyPackGenerationContext(
+                    LearnerLevel.COLLEGE, null, "Algebra", List.of(),
+                    DomainContext.GENERAL_EDUCATION, LearnerLevel.COLLEGE))).isTrue();
+            assertThat(invokeIsQuantitativeContext(new StudyPackGenerationContext(
+                    LearnerLevel.COLLEGE, null, "Ratios", List.of(),
+                    DomainContext.GENERAL_EDUCATION, LearnerLevel.COLLEGE))).isTrue();
+            assertThat(invokeIsQuantitativeContext(new StudyPackGenerationContext(
+                    LearnerLevel.COLLEGE, null, "History", List.of(),
+                    DomainContext.GENERAL_EDUCATION, LearnerLevel.COLLEGE))).isFalse();
+
+            List<String> decisions = appender.list.stream()
+                    .map(ILoggingEvent::getFormattedMessage)
+                    .filter(message -> message.startsWith("computation_guidance "))
+                    .toList();
+            assertThat(decisions).containsExactly(
+                    "computation_guidance authoringDomain='Nursing' subject='Maternal Health' enabled=true trigger='domainContext'",
+                    "computation_guidance authoringDomain='General Education' subject='Algebra' enabled=true trigger='keyword:algebra'",
+                    "computation_guidance authoringDomain='General Education' subject='Ratios' enabled=true trigger='anchored-keyword'",
+                    "computation_guidance authoringDomain='General Education' subject='History' enabled=false trigger='none'"
+            );
+        } finally {
+            serviceLogger.detachAppender(appender);
+            serviceLogger.setLevel(previousLevel);
+        }
     }
 
     // Pins that all three engineering domains produce computation guidance -- by the declared flag
@@ -1492,6 +1560,7 @@ class OpenAiLlmStudyPackServiceTest {
                 new StudyPackGenerationContext(null, "Civil Engineering", null, List.of("hydraulics"))
         );
 
+        assertThat(content).startsWith("Discharge Over Sharp-Crested Weirs\n\n📘 Overview\n");
         assertThat(content).contains("Discharge formula");
     }
 
