@@ -2,7 +2,7 @@
 
 ## v0.165.0 - Bounded Discovery
 
-**Status: In Progress**
+**Status: Released**
 
 Theme: stop a public Note page's discovery rails from fanning out into every page of a subject/program
 list and saturating the production database — 24 backend restarts in the last month — and fix three
