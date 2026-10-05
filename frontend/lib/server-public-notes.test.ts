@@ -1,9 +1,11 @@
 import {
   getServerPublicNoteCount,
   getServerPublicNotes,
+  getServerPublicNotesByCourseProgramRecent,
   getServerPublicNotesByCoursePrograms,
   getServerPublicNotesBySubject,
   getServerPublicNotesBySubjectSlug,
+  getServerPublicNotesBySubjectSlugRecent,
 } from "./server-public-notes";
 
 const originalFetch = global.fetch;
@@ -289,5 +291,96 @@ describe("public note fetches stay inside the 2MB data-cache limit", () => {
     requestedUrls.forEach((url) => {
       expect(url).toMatch(/[?&](pageSize=|subject=|courseProgram=)/);
     });
+  });
+
+  // ⚠️ GUARD, 2026-10-01: every URL this walker builds must carry a sort the database can execute as a
+  // plain index/ORDER BY -- the exact property whose absence caused the production outage this release
+  // closes (no `sort` -> the ranked branch -> a full popularity-ranking query PLUS a count, per page).
+  // `PublicLibrarySort.java` names exactly two SQL-orderable values: RECENT and TITLE. Mutation check:
+  // removing `&sort=recent` from the walker's request URL (server-public-notes.ts) fails this test.
+  it("always sends an SQL-orderable sort from the unbounded walker, regardless of caller", async () => {
+    global.fetch = jest.fn().mockResolvedValue(page([{ id: "note-1" }], false));
+
+    await getServerPublicNotes();
+    await getServerPublicNotesBySubjectSlug("biology");
+    await getServerPublicNotesByCoursePrograms(["Nursing"]);
+
+    const requestedUrls = (global.fetch as jest.Mock).mock.calls.map(([url]) => String(url));
+    expect(requestedUrls.length).toBeGreaterThan(0);
+    requestedUrls.forEach((url) => {
+      const sort = new URL(url).searchParams.get("sort");
+      expect(["recent", "title"]).toContain(sort);
+    });
+  });
+});
+
+// ⚠️ GUARDS, 2026-10-01, for the two Public Note page rails whose unbounded walk caused 24 production
+// restarts since 2026-09-01 (docs/claude-findings/2026-10-01-prod-restarts-public-note-page-fanout-db-saturation.md).
+// Each rail must now issue exactly ONE bounded request -- not a walk -- with an explicit `sort=recent`,
+// `readyOnly=true` (preserving the eligibility check the old unbounded JS filter used to apply after
+// the fact), and a `pageSize` bounded to the caller's own display count plus one (for current-note
+// exclusion), never the full candidate set. Mutation check, named per the plan's own requirement:
+// removing `sort=recent` or `readyOnly=true` from either function (server-public-notes.ts), or widening
+// `pageSize` into an unbounded walk, fails these tests.
+describe("bounded, most-recent-first Public Note page rails (production-outage fix)", () => {
+  afterEach(() => {
+    global.fetch = originalFetch;
+  });
+
+  const page = (items: unknown[]) => ({
+    ok: true,
+    json: async () => ({ items, total: items.length, hasMore: false }),
+  });
+
+  it("getServerPublicNotesBySubjectSlugRecent issues exactly one bounded, sorted, eligibility-checked request", async () => {
+    global.fetch = jest.fn().mockResolvedValue(page([{ id: "note-1" }]));
+
+    await getServerPublicNotesBySubjectSlugRecent("civil-engineering", 3);
+
+    expect((global.fetch as jest.Mock).mock.calls).toHaveLength(1);
+    const requestedUrl = new URL(String((global.fetch as jest.Mock).mock.calls[0][0]));
+    expect(requestedUrl.searchParams.get("subject")).toBe("civil-engineering");
+    expect(requestedUrl.searchParams.get("sort")).toBe("recent");
+    expect(requestedUrl.searchParams.get("readyOnly")).toBe("true");
+    expect(requestedUrl.searchParams.get("page")).toBe("0");
+    // limit + 1: enough to exclude the current note locally, never a walk.
+    expect(requestedUrl.searchParams.get("pageSize")).toBe("4");
+  });
+
+  it("getServerPublicNotesByCourseProgramRecent issues exactly one bounded, sorted, eligibility-checked request", async () => {
+    global.fetch = jest.fn().mockResolvedValue(page([{ id: "note-1" }]));
+
+    await getServerPublicNotesByCourseProgramRecent("Civil Engineering", 4);
+
+    expect((global.fetch as jest.Mock).mock.calls).toHaveLength(1);
+    const requestedUrl = new URL(String((global.fetch as jest.Mock).mock.calls[0][0]));
+    expect(requestedUrl.searchParams.get("courseProgram")).toBe("Civil Engineering");
+    expect(requestedUrl.searchParams.get("sort")).toBe("recent");
+    expect(requestedUrl.searchParams.get("readyOnly")).toBe("true");
+    expect(requestedUrl.searchParams.get("page")).toBe("0");
+    expect(requestedUrl.searchParams.get("pageSize")).toBe("5");
+  });
+
+  it("neither bounded rail function ever pages past page 0", async () => {
+    // A `hasMore: true` response must not trigger a second request -- these are single bounded
+    // fetches, not a walk. (fetchAllPublicNotePages is a different function and is covered above.)
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ items: [{ id: "note-1" }], total: 500, hasMore: true }),
+    });
+
+    await getServerPublicNotesBySubjectSlugRecent("civil-engineering", 3);
+    await getServerPublicNotesByCourseProgramRecent("Civil Engineering", 4);
+
+    expect((global.fetch as jest.Mock).mock.calls).toHaveLength(2);
+  });
+
+  it("returns an empty list without calling the backend for a blank filter or a non-positive limit", async () => {
+    global.fetch = jest.fn();
+
+    await expect(getServerPublicNotesBySubjectSlugRecent("   ", 3)).resolves.toEqual([]);
+    await expect(getServerPublicNotesByCourseProgramRecent("Civil Engineering", 0)).resolves.toEqual([]);
+
+    expect(global.fetch).not.toHaveBeenCalled();
   });
 });

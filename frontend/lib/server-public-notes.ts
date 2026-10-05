@@ -80,13 +80,29 @@ async function fetchPublicNoteList(path: string): Promise<ServerPublicNoteListRe
  * list exactly as before. A null on a later page returns what was collected instead of discarding it --
  * a partial catalog degrades the sitemap, whereas throwing would fail the build, which is the outcome
  * this whole change exists to prevent.
+ *
+ * ⚠️ ALWAYS sends `sort=recent` -- this is REQUIRED, not decorative, same reasoning as
+ * `getServerPublicNoteCount` above. With no `sort` the server defaults to RECOMMENDED, which is not
+ * SQL-orderable (`PublicLibrarySort.java`), so every page -- not just the first -- takes the ranked
+ * branch: a full popularity-ranking query plus a count, repeated once per page. That is the exact
+ * mechanism behind the 2026-10-01 production outage (24 backend restarts/30 days): a public Note page's
+ * two "More from {Subject}"/"More {Program} notes" rails called this function to walk an entire
+ * subject's or program's note list -- 8 pages for Accountancy, 18 for Civil Engineering -- recomputing
+ * live popularity on every single page, to fill 7 cards. `RECENT` is SQL-orderable
+ * (`order by created_at desc, id asc`), so every page here is now one cheap, indexed query instead of
+ * one ranking query. Per the owner's reliability decision
+ * (`docs/claude-plans/2026-10-01-public-note-discovery-rail-ordering-decision.md`), the two broken rails
+ * no longer call this function at all -- see `getServerPublicNotesBySubjectRecent` and
+ * `getServerPublicNotesByCourseProgramRecent` below -- but this walker still serves callers that
+ * genuinely need the full list (the subject listing page, exam hub pages, the sitemap), so it must stay
+ * cheap for all of them, not just the two rails that stopped using it.
  */
 async function fetchAllPublicNotePages(query: string): Promise<NoteListItemResponse[]> {
   const collected: NoteListItemResponse[] = [];
   const separator = query.length > 0 ? "&" : "";
   for (let page = 0; ; page += 1) {
     const payload = await fetchPublicNoteList(
-      `/notes/public?${query}${separator}page=${page}&pageSize=${PUBLIC_NOTES_PAGE_SIZE}`,
+      `/notes/public?${query}${separator}page=${page}&pageSize=${PUBLIC_NOTES_PAGE_SIZE}&sort=recent`,
     );
     const items = payload?.items ?? [];
     collected.push(...items);
@@ -273,6 +289,52 @@ export async function getServerPublicNotesBySubject(subject: string) {
   );
 }
 
+/**
+ * Bounded, most-recent-first replacement for the Public Note page's "More from {Subject}" rail.
+ *
+ * ⚠️ Added 2026-10-01, closing the production outage this release exists for. The rail used to call
+ * `getServerPublicNotesBySubjectSlug` (the UNBOUNDED walker above) to pull an entire subject's note
+ * list, rank it by popularity in JavaScript, and keep the top 3 -- up to 18 pages of ranking queries
+ * per render for a popular subject. One bounded page-0 fetch replaces the whole walk.
+ *
+ * ⚠️ `readyOnly=true` is REQUIRED here, and its absence would be a silent eligibility regression, not a
+ * cosmetic difference. The old unbounded path filtered `studyPackDone === true` in JS after fetching
+ * everything; a bounded fetch has nothing left to filter afterward, so the server must apply the same
+ * filter instead. This deliberately does NOT reuse `getServerPublicNotesBySubject` below (the
+ * already-bounded "More in {Subject}" rail), which does not pass `readyOnly` -- that is pre-existing,
+ * separate behavior this change does not touch.
+ *
+ * `limit` is the caller's bounded candidate count, which may include headroom for filtering notes
+ * already displayed elsewhere. This requests one extra row so the current note can be excluded
+ * (the exact pattern `getServerPublicNotesBySubject` already uses for its own display count).
+ */
+export async function getServerPublicNotesBySubjectSlugRecent(subjectSlug: string, limit: number) {
+  const normalizedSubjectSlug = subjectSlug.trim();
+  if (!normalizedSubjectSlug || limit <= 0) {
+    return [];
+  }
+  return fetchPublicNotes(
+    `/notes/public?readyOnly=true&subject=${encodeURIComponent(normalizedSubjectSlug)}&page=0&pageSize=${limit + 1}&sort=recent`,
+  );
+}
+
+/**
+ * Bounded, most-recent-first replacement for the Public Note page's "More {Program} notes" rail.
+ * Same reasoning and the same `readyOnly=true` requirement as
+ * `getServerPublicNotesBySubjectSlugRecent` above -- see its comment for the full mechanism this
+ * replaces. This rail used to call `getServerPublicNotesByCourseProgram` (the UNBOUNDED walker),
+ * costing up to 18 pages of ranking queries per render for a program the size of Civil Engineering.
+ */
+export async function getServerPublicNotesByCourseProgramRecent(courseProgram: string, limit: number) {
+  const normalizedCourseProgram = courseProgram.trim();
+  if (!normalizedCourseProgram || limit <= 0) {
+    return [];
+  }
+  return fetchPublicNotes(
+    `/notes/public?readyOnly=true&courseProgram=${encodeURIComponent(normalizedCourseProgram)}&page=0&pageSize=${limit + 1}&sort=recent`,
+  );
+}
+
 export async function getServerPublicNotesByCourseProgram(courseProgram: string) {
   const normalizedCourseProgram = courseProgram.trim();
   if (!normalizedCourseProgram) {
@@ -309,4 +371,3 @@ export async function getServerPublicNotesByCoursePrograms(coursePrograms: reado
   });
   return merged;
 }
-

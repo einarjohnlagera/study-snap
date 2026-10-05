@@ -21,7 +21,7 @@ import { SummaryMarkdown } from "@/components/ui/summary-markdown";
 import { buildPublicLibraryNotePathFromDetail, buildPublicLibraryNotePath, buildPublicLibrarySubjectPath } from "@/lib/public-note-path";
 import { buildPublicLibraryUrl, slugifyPublicLibraryFilterValue } from "@/lib/public-library-url";
 import { buildPublicNoteHook, normalizePublicNoteText, splitPublicNoteBlocks } from "@/lib/public-note-text";
-import { getServerPublicNoteBySeoPath, getServerPublicNotesBySubject, getServerPublicNotesBySubjectSlug, getServerPublicNotesByCourseProgram } from "@/lib/server-public-notes";
+import { getServerPublicNoteBySeoPath, getServerPublicNotesBySubject, getServerPublicNotesBySubjectSlugRecent, getServerPublicNotesByCourseProgramRecent } from "@/lib/server-public-notes";
 import { absoluteUrl, buildPageMetadata, truncateDescription } from "@/lib/site-metadata";
 import { buildArticleStructuredData, buildBreadcrumbStructuredData } from "@/lib/structured-data";
 import { EXAM_HUBS } from "@/lib/exam-hub-config";
@@ -33,6 +33,8 @@ type PublicLibrarySeoPageProps = {
     slug: string;
   }>;
 };
+
+const MORE_IN_SUBJECT_MIN_NOTES = 2;
 
 function buildDescription(title: string, summary?: string | null) {
   const normalizedSummary = normalizePublicNoteText(summary);
@@ -86,41 +88,45 @@ export default async function PublicLibrarySeoPage({ params }: Readonly<PublicLi
     notFound();
   }
 
-  const allSubjectNotes = await getServerPublicNotesBySubjectSlug(subject);
   const moreInSubject = note.subject?.trim()
     ? (await getServerPublicNotesBySubject(note.subject))
         .filter((relatedNote) => relatedNote.id !== note.id)
         .slice(0, 3)
     : [];
-  const relatedNotes = allSubjectNotes
-    .filter((n) => n.id !== note.id && n.studyPackDone === true)
-    .sort((a, b) => {
-      const scoreA = (a.viewCount ?? 0) + (a.copyCount ?? 0) * 3 + (a.likeCount ?? 0) * 2;
-      const scoreB = (b.viewCount ?? 0) + (b.copyCount ?? 0) * 3 + (b.likeCount ?? 0) * 2;
-      return scoreB - scoreA;
-    })
+  const moreInSubjectIds = new Set(
+    moreInSubject.length >= MORE_IN_SUBJECT_MIN_NOTES
+      ? moreInSubject.map((relatedNote) => relatedNote.id)
+      : [],
+  );
+  // ⚠️ Bounded, most-recent-first -- 2026-10-01. Used to walk the subject's ENTIRE note list
+  // (`getServerPublicNotesBySubjectSlug`, up to 18 pages for a large subject) and rank it by
+  // popularity in JS; that fan-out is the production outage this release exists to close. One
+  // bounded page-0 fetch replaces it; `readyOnly=true` on the request preserves the eligibility
+  // check the old JS `.filter(studyPackDone === true)` used to apply after the fact. Per the owner's
+  // reliability decision, ordering is deliberately most-recent, not popularity (see
+  // `docs/claude-plans/2026-10-01-public-note-discovery-rail-ordering-decision.md`).
+  // Fetch 6 candidates for 3 cards plus up to 3 visible "More in Subject" overlaps;
+  // the helper fetches one more row to allow for the current note.
+  const relatedNotes = (await getServerPublicNotesBySubjectSlugRecent(subject, 6))
+    .filter((n) => n.id !== note.id && !moreInSubjectIds.has(n.id))
     .slice(0, 3)
     .map((n) => ({ id: n.id, title: n.title, subject: n.subject, summaryPreview: n.summaryPreview, contentPreview: n.contentPreview }));
 
-  const currentListItem = allSubjectNotes.find((n) => n.id === note.id);
-  // Join rows first, personal-note string only as the fallback -- the same order every other program
-  // read uses (backend publicLibraryPrograms, getNormalizedNotePrograms). Reading the scalar first
-  // would resolve a mixed-shape note to its stale legacy value, and the rail below then filters
-  // join-first, so the page would advertise "More {stale program} notes" on a note that is no longer
-  // in that program. This contextual link is intentionally single-valued; discovery keeps every
-  // joined program.
-  const courseProgram = currentListItem?.applicablePrograms?.[0]
-    ?? currentListItem?.courseProgram
-    ?? null;
+  // ⚠️ Reads the note's OWN joined programs directly instead of deriving them from a list walk.
+  // `note.coursePrograms` (`resolvePublicDetailPrograms`, `NoteService.java:1637`) already returns
+  // joined catalog programs first, falling back to the legacy single string only when there are
+  // none -- the exact precedence the old `currentListItem?.applicablePrograms?.[0] ??
+  // currentListItem?.courseProgram` derivation existed to replicate via the (now-removed) unbounded
+  // subject walk. This contextual link is intentionally single-valued; discovery keeps every joined
+  // program (`coursePrograms` below, used by `CourseProgramsViewer`).
+  const courseProgram = note.coursePrograms?.[0] ?? null;
   const examSlug = await getServerExamSlugForCourseProgram(courseProgram);
+  // ⚠️ Bounded, most-recent-first -- same reasoning and the same production-outage mechanism as
+  // `relatedNotes` above. Used to walk `getServerPublicNotesByCourseProgram`'s ENTIRE program note
+  // list (up to 18 pages for Civil Engineering) to rank by popularity in JS.
   const moreByCourseProgram = courseProgram
-    ? (await getServerPublicNotesByCourseProgram(courseProgram))
-        .filter((n) => n.id !== note.id && n.studyPackDone === true)
-        .sort((a, b) => {
-          const scoreA = (a.viewCount ?? 0) + (a.copyCount ?? 0) * 3 + (a.likeCount ?? 0) * 2;
-          const scoreB = (b.viewCount ?? 0) + (b.copyCount ?? 0) * 3 + (b.likeCount ?? 0) * 2;
-          return scoreB - scoreA;
-        })
+    ? (await getServerPublicNotesByCourseProgramRecent(courseProgram, 4))
+        .filter((n) => n.id !== note.id)
         .slice(0, 4)
     : [];
 
@@ -397,7 +403,7 @@ export default async function PublicLibrarySeoPage({ params }: Readonly<PublicLi
           </section>
         ) : null}
 
-        {moreInSubject.length >= 2 ? (
+        {moreInSubject.length >= MORE_IN_SUBJECT_MIN_NOTES ? (
           <section className="space-y-4" aria-labelledby="more-subject-heading">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <h2 id="more-subject-heading" className="text-lg font-semibold sm:text-xl">

@@ -15,6 +15,16 @@ changelog layer. `ROADMAP.md` keeps a one-line-per-version index at each origina
 
 ---
 
+**Kicked off 2026-09-25, signed off 2026-09-25.** `v0.159.0 — Nothing Lost in the Batch` is **Released** on
+`releases/v0.159.0` (Release A merged as #1444; release PR merged as #1446 and tagged; deployed and verified: Render live
+2026-09-25 15:24Z, Vercel production 15:28Z), cut from `main` after `v0.158.0` merged as #1443 and tagged. **Owner scope pick, 2026-09-25: Notifications Release A
+and the `connection-timeout` follow-up.** Release A is bulk-only async-completion notifications
+(`docs/claude-plans/learning-relevant-notifications-stage1-plan.md`, backend only, no migration, Codex-routed) and is
+**BLOCKED on one owner decision: the badge/retention flag split in `NotificationCategory`.** The follow-up is a
+proper read-only 500-cause read plus the owner's verdict on the 5 s timeout. A doc correction rides along
+(`CLAUDE.md` misnames the async generation entry point). Anti-drift, verification tier and the still-open
+decisions are in `RELEASES.md`. **Signed off with:** Notifications Release A shipped (PR #1444: `ASYNC_RESULT(true, true)`, two types, one producer; generation is failure-only and bounded to 850 characters, regeneration notifies on normal completion only; 13/13 mutants killed) and the `CLAUDE.md` entry-point correction. **Not shipped:** the `connection-timeout` VERDICT, which the owner has not made; the 500-cause read is done and recorded on its row. **Left open by the owner's call:** the `[CHECKPOINT — due 2026-09-27]` click/open read and the 2026-09-28 publication-boundary read. **New rows:** a Release A checkpoint (deploy + 30 days) and an unverified deploy-time DB I/O burst finding. Moved at the `v0.165.0` kickoff.
+
 **Kicked off 2026-09-24, signed off 2026-09-25.** `v0.158.0 — Reading the Evidence` is **Released** on `releases/v0.158.0` (merged as #1443 and tagged 2026-09-25; deployed and verified: Render live 06:30Z, Vercel production 06:33Z), cut from
 `main` after `v0.157.0` merged as #1440 and tagged (deployed 2026-09-24: Render live 02:40Z, `V149` applied 02:39Z,
 Vercel production 02:43Z). It discharged evidence this project already owes: three checkpoint reads that are past due

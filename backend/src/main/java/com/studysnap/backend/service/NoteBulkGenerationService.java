@@ -356,6 +356,7 @@ public class NoteBulkGenerationService {
                         context
                 ).content()
                 : generateAdminContent(item.topic(), context);
+        content = replaceGeneratedHeading(content, item.topic());
 
         NoteResponse note = noteService.create(
                 new UpsertNoteRequest(
@@ -438,6 +439,11 @@ public class NoteBulkGenerationService {
     private String generateAdminContent(String topic, StudyPackGenerationContext context) {
         contentModerationService.validateOrThrow(topic);
         return llmStudyPackService.generateNoteFromTopic(topic, context);
+    }
+
+    private String replaceGeneratedHeading(String content, String topic) {
+        int headingEnd = content.indexOf("\n\n");
+        return headingEnd < 0 ? content : topic + content.substring(headingEnd);
     }
 
     private NormalizedBatch normalizeAndValidate(BulkGenerateNotesRequest request, UserEntity owner) {

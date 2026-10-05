@@ -606,13 +606,12 @@ Note: formatting improvements apply to how generated content is displayed on pub
 
 Items identified during the May 2026 conversion funnel audit, in priority order.
 
-### C — "Continue learning" block after mini quiz completes (medium effort)
+### C — "Continue learning" block after mini quiz completes (resolved)
 
-When the guest finishes the Quick Check, show 2–3 related public notes (same subject, exclude current) as compact cards alongside the existing two CTAs. Uses existing subject metadata; no backend change required.
+After the guest finishes all three Quick Check questions, `PublicMiniQuizPreview` shows up to three related public notes from the same subject as compact cards alongside the existing two CTAs. It excludes the current note and, when the separate "More in {Subject}" section renders, the notes already shown there. This uses existing subject metadata and one bounded fetch.
 
-- place the block inside the `PublicMiniQuizPreview` completion card, after the existing CTAs
-- limit to 2–3 compact cards to avoid overwhelming the completion moment
-- if no related notes exist, show nothing rather than a generic "explore more" link
+- The block renders inside the `PublicMiniQuizPreview` completion card, after the existing CTAs.
+- If no related notes remain, it shows nothing.
 
 ### D — (resolved) Consolidate auth-prompt patterns
 
@@ -640,16 +639,17 @@ The `guestAuthMode` prop has been removed from `PublicSeoCopyCta`. Card auth-mod
 
 `NoteListItemResponse` has no windowed engagement fields (`recentCopyCount`, `recentLikeCount`, etc.). Implementing a true 7-day trending signal requires backend support: either per-event timestamps queryable as a rolling aggregate, or precomputed windowed counts persisted alongside the note. Do not ship under a "Trending this week" label without real windowed data — lifetime totals on recent notes is not the same signal. Revisit when backend adds windowed count fields.
 
-### K — "More [CourseProgram] notes" section on public note detail (resolved in v0.22.0)
+### K — "More [CourseProgram] notes" section on public note detail (resolved in v0.22.0; reordered in v0.165.0)
 
 When the current public note has a `courseProgram` set, the detail page shows a lateral discovery section after the Practice Mode Teaser and before the Ownership Actions block:
 
 - Heading: `More {courseProgram} notes` with a `View all →` link to `/public/library?courseProgram={slug}`
-- Shows up to 4 other study-ready (`STUDY_PACK_READY`) public notes with the same `courseProgram`, sorted by engagement score (`viewCount + copyCount×3 + likeCount×2`)
+- Shows up to 4 other study-ready (`readyOnly=true`), most-recently-created public notes with the same `courseProgram` — **not** engagement-ranked. One bounded `page=0&sort=recent` fetch (`getServerPublicNotesByCourseProgramRecent`, `frontend/lib/server-public-notes.ts`) replaced walking the program's entire note list to rank it by engagement score in JS, which was the mechanism behind 24 backend restarts/30 days on the pre-revenue DB plan (`docs/claude-plans/2026-10-01-public-note-discovery-rail-ordering-decision.md`). Contextual rails on a Public Note page deliberately no longer compute live popularity; engagement ranking remains available on deliberate browse surfaces (Public Library, Explore).
 - Cards link to the canonical public note detail path; each card shows title, subject, and summary preview (line-clamped)
 - If the current note has no `courseProgram`, the section is hidden entirely
-- `courseProgram` is read from `NoteListItemResponse` (the list endpoint already includes it) — no `PublicNoteDetailResponse` DTO change is needed
-- Next.js deduplicates the `GET /notes/public` fetch within the same render via its built-in fetch deduplication for matching URL + cache options
+- `courseProgram` is now read from the note's own joined Applicable Programs (`PublicNoteDetailResponse.coursePrograms[0]`, `NoteService.resolvePublicDetailPrograms`), not derived by walking the program's note list and matching the current note against it
+- This same rail-order change applies to the sibling "More from {Subject}" rail inside `PublicMiniQuizPreview` (`getServerPublicNotesBySubjectSlugRecent`) — both were the two rails named in the outage fix. The separate, pre-existing "More in {Subject}" section below it (`getServerPublicNotesBySubject`, documented in `public-notes.md`) was already a single bounded `pageSize=4` fetch and was not part of this change.
+- Cross-rail duplication between these two most-recent-first rails is possible and intentionally not deduped this release — see "Known limitations" in `RELEASES.md` v0.165.0.
 
 ### I — Practice-mode preview teaser on public note detail (resolved, updated v0.39.2)
 

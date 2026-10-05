@@ -2,9 +2,9 @@ import { act, fireEvent, render, screen } from "@testing-library/react";
 import PublicLibrarySeoPage, { generateMetadata } from "./page";
 import {
   getServerPublicNoteBySeoPath,
-  getServerPublicNotesByCourseProgram,
+  getServerPublicNotesByCourseProgramRecent,
   getServerPublicNotesBySubject,
-  getServerPublicNotesBySubjectSlug,
+  getServerPublicNotesBySubjectSlugRecent,
 } from "@/lib/server-public-notes";
 import { PUBLIC_LIBRARY_RETURN_URL_STORAGE_KEY } from "@/lib/public-library-url";
 import { getServerExamSlugForCourseProgram } from "@/lib/server-exam-goal-course-programs";
@@ -20,8 +20,8 @@ jest.mock("next/navigation", () => ({
 jest.mock("@/lib/server-public-notes", () => ({
   getServerPublicNoteBySeoPath: jest.fn(),
   getServerPublicNotesBySubject: jest.fn().mockResolvedValue([]),
-  getServerPublicNotesBySubjectSlug: jest.fn().mockResolvedValue([]),
-  getServerPublicNotesByCourseProgram: jest.fn().mockResolvedValue([]),
+  getServerPublicNotesBySubjectSlugRecent: jest.fn().mockResolvedValue([]),
+  getServerPublicNotesByCourseProgramRecent: jest.fn().mockResolvedValue([]),
 }));
 
 jest.mock("@/lib/server-exam-goal-course-programs", () => ({
@@ -72,9 +72,24 @@ jest.mock("@/components/notes/public-note-author-card", () => ({
 }));
 
 jest.mock("@/components/notes/public-mini-quiz-preview", () => ({
-  PublicMiniQuizPreview: ({ quiz, noteId }: { quiz: { question: string }[]; noteId: string }) => (
+  PublicMiniQuizPreview: ({
+    quiz,
+    noteId,
+    relatedNotes,
+  }: {
+    quiz: { question: string }[];
+    noteId: string;
+    relatedNotes?: { id: string; title: string | null }[];
+  }) => (
     <div data-testid="mini-quiz-preview">
       Mini quiz for {noteId}: {quiz[0]?.question ?? "no question"}
+      {relatedNotes && relatedNotes.length > 0 ? (
+        <ul data-testid="quiz-preview-related-notes">
+          {relatedNotes.map((related) => (
+            <li key={related.id}>{related.title}</li>
+          ))}
+        </ul>
+      ) : null}
     </div>
   ),
 }));
@@ -130,10 +145,10 @@ describe("PublicLibrarySeoPage", () => {
     (getServerPublicNoteBySeoPath as jest.Mock).mockReset();
     (getServerPublicNotesBySubject as jest.Mock).mockReset();
     (getServerPublicNotesBySubject as jest.Mock).mockResolvedValue([]);
-    (getServerPublicNotesBySubjectSlug as jest.Mock).mockReset();
-    (getServerPublicNotesBySubjectSlug as jest.Mock).mockResolvedValue([]);
-    (getServerPublicNotesByCourseProgram as jest.Mock).mockReset();
-    (getServerPublicNotesByCourseProgram as jest.Mock).mockResolvedValue([]);
+    (getServerPublicNotesBySubjectSlugRecent as jest.Mock).mockReset();
+    (getServerPublicNotesBySubjectSlugRecent as jest.Mock).mockResolvedValue([]);
+    (getServerPublicNotesByCourseProgramRecent as jest.Mock).mockReset();
+    (getServerPublicNotesByCourseProgramRecent as jest.Mock).mockResolvedValue([]);
     (getServerExamSlugForCourseProgram as jest.Mock).mockReset();
     (getServerExamSlugForCourseProgram as jest.Mock).mockResolvedValue(null);
     window.sessionStorage.clear();
@@ -479,11 +494,12 @@ describe("PublicLibrarySeoPage", () => {
   });
 
   it("renders shared note cards for related course/program notes, excluding the current note", async () => {
-    (getServerPublicNoteBySeoPath as jest.Mock).mockResolvedValue(baseNote);
-    (getServerPublicNotesBySubjectSlug as jest.Mock).mockResolvedValue([
-      { ...baseNote, courseProgram: "Business Administration" },
-    ]);
-    (getServerPublicNotesByCourseProgram as jest.Mock).mockResolvedValue([
+    (getServerPublicNoteBySeoPath as jest.Mock).mockResolvedValue({
+      ...baseNote,
+      coursePrograms: ["Business Administration"],
+    });
+    (getServerPublicNotesByCourseProgramRecent as jest.Mock).mockResolvedValue([
+      { ...baseNote, id: "note-1", title: "Cell Structure", courseProgram: "Business Administration" },
       { ...baseNote, id: "note-2", title: "Marketing Basics", courseProgram: "Business Administration", contentPreview: "Marketing basics preview", summaryPreview: "Marketing basics summary" },
       { ...baseNote, id: "note-3", title: "Business Law", courseProgram: "Business Administration", contentPreview: "Business law preview", summaryPreview: "Business law summary" },
     ]);
@@ -497,21 +513,55 @@ describe("PublicLibrarySeoPage", () => {
     expect(screen.getByRole("heading", { name: "More Business Administration notes" })).toBeInTheDocument();
     expect(screen.getByText("Marketing Basics")).toBeInTheDocument();
     expect(screen.getByText("Business Law")).toBeInTheDocument();
+    // The current note (note-1) is in the mocked results (the server-side bounded fetch is not
+    // guaranteed to exclude it) but must never render as one of its own related cards.
+    expect(screen.queryByText("Cell Structure", { selector: "article" })).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: "See all in Business Administration" })).toHaveAttribute(
       "href",
       "/public/library?courseProgram=business-administration",
     );
-    expect(getServerPublicNotesByCourseProgram).toHaveBeenCalledWith("Business Administration");
+    expect(getServerPublicNotesByCourseProgramRecent).toHaveBeenCalledWith("Business Administration", 4);
+  });
+
+  it("renders exactly the display limit of course/program cards when the current note is absent from the fetched page", async () => {
+    // The over-fetch (limit + 1) exists to make room for excluding the current note WHEN it's in the
+    // page. When the backend's bounded page doesn't happen to include it, the filter is a no-op and the
+    // slice alone must still cap the render at the display limit (4), not render all 5 fetched notes.
+    (getServerPublicNoteBySeoPath as jest.Mock).mockResolvedValue({
+      ...baseNote,
+      coursePrograms: ["Business Administration"],
+    });
+    (getServerPublicNotesByCourseProgramRecent as jest.Mock).mockResolvedValue([
+      { ...baseNote, id: "note-2", title: "Marketing Basics", courseProgram: "Business Administration" },
+      { ...baseNote, id: "note-3", title: "Business Law", courseProgram: "Business Administration" },
+      { ...baseNote, id: "note-4", title: "Accounting 101", courseProgram: "Business Administration" },
+      { ...baseNote, id: "note-5", title: "Supply Chains", courseProgram: "Business Administration" },
+      { ...baseNote, id: "note-6", title: "Org Behavior", courseProgram: "Business Administration" },
+    ]);
+
+    render(
+      await PublicLibrarySeoPage({
+        params: Promise.resolve({ subject: "science", slug: "cell-structure" }),
+      }),
+    );
+
+    const cards = screen.getAllByTestId("shared-note-card");
+    expect(cards).toHaveLength(4);
+    expect(screen.queryByText("Org Behavior")).not.toBeInTheDocument();
   });
 
   it("derives the contextual course/program from a curated note's joined programs", async () => {
+    // ⚠️ Alphabetical order, not an arbitrary fixture choice: resolvePublicDetailPrograms backs
+    // `coursePrograms` with `NoteCourseProgramRepository.findByNoteId`, which carries
+    // `ORDER BY course_programs.name` (`NoteCourseProgramRepository.java:20-26`) -- the backend can
+    // never actually return ["Nursing", "Midwifery"] for a note joined to both, only this order.
     (getServerExamSlugForCourseProgram as jest.Mock).mockResolvedValue("pnle");
-    (getServerPublicNoteBySeoPath as jest.Mock).mockResolvedValue(baseNote);
-    (getServerPublicNotesBySubjectSlug as jest.Mock).mockResolvedValue([
-      { ...baseNote, courseProgram: null, applicablePrograms: ["Nursing", "Midwifery"] },
-    ]);
-    (getServerPublicNotesByCourseProgram as jest.Mock).mockResolvedValue([
-      { ...baseNote, id: "note-2", title: "Vital Signs", applicablePrograms: ["Nursing"] },
+    (getServerPublicNoteBySeoPath as jest.Mock).mockResolvedValue({
+      ...baseNote,
+      coursePrograms: ["Midwifery", "Nursing"],
+    });
+    (getServerPublicNotesByCourseProgramRecent as jest.Mock).mockResolvedValue([
+      { ...baseNote, id: "note-2", title: "Vital Signs", applicablePrograms: ["Midwifery"] },
     ]);
 
     render(
@@ -520,41 +570,17 @@ describe("PublicLibrarySeoPage", () => {
       }),
     );
 
-    expect(getServerExamSlugForCourseProgram).toHaveBeenCalledWith("Nursing");
-    expect(getServerPublicNotesByCourseProgram).toHaveBeenCalledWith("Nursing");
-    expect(screen.getByRole("heading", { name: "More Nursing notes" })).toBeInTheDocument();
-  });
-
-  it("prefers a mixed-shape note's joined program over its stale personal-note string", async () => {
-    // The scalar survives on a note that later gained join rows. Reading it first would link the exam
-    // hub and the rail to a program the note is no longer in, while the rail's own filter resolves
-    // join-first -- so the page would advertise "More Accountancy notes" on a Nursing note.
-    (getServerExamSlugForCourseProgram as jest.Mock).mockResolvedValue("pnle");
-    (getServerPublicNoteBySeoPath as jest.Mock).mockResolvedValue(baseNote);
-    (getServerPublicNotesBySubjectSlug as jest.Mock).mockResolvedValue([
-      { ...baseNote, courseProgram: "Accountancy", applicablePrograms: ["Nursing"] },
-    ]);
-    (getServerPublicNotesByCourseProgram as jest.Mock).mockResolvedValue([
-      { ...baseNote, id: "note-2", title: "Vital Signs", applicablePrograms: ["Nursing"] },
-    ]);
-
-    render(
-      await PublicLibrarySeoPage({
-        params: Promise.resolve({ subject: "science", slug: "cell-structure" }),
-      }),
-    );
-
-    expect(getServerExamSlugForCourseProgram).toHaveBeenCalledWith("Nursing");
-    expect(getServerPublicNotesByCourseProgram).toHaveBeenCalledWith("Nursing");
-    expect(screen.getByRole("heading", { name: "More Nursing notes" })).toBeInTheDocument();
+    expect(getServerExamSlugForCourseProgram).toHaveBeenCalledWith("Midwifery");
+    expect(getServerPublicNotesByCourseProgramRecent).toHaveBeenCalledWith("Midwifery", 4);
+    expect(screen.getByRole("heading", { name: "More Midwifery notes" })).toBeInTheDocument();
   });
 
   it("saves the course/program-filtered Public Library URL as the return URL when a related-course/program note is clicked", async () => {
-    (getServerPublicNoteBySeoPath as jest.Mock).mockResolvedValue(baseNote);
-    (getServerPublicNotesBySubjectSlug as jest.Mock).mockResolvedValue([
-      { ...baseNote, courseProgram: "Business Administration" },
-    ]);
-    (getServerPublicNotesByCourseProgram as jest.Mock).mockResolvedValue([
+    (getServerPublicNoteBySeoPath as jest.Mock).mockResolvedValue({
+      ...baseNote,
+      coursePrograms: ["Business Administration"],
+    });
+    (getServerPublicNotesByCourseProgramRecent as jest.Mock).mockResolvedValue([
       { ...baseNote, id: "note-2", title: "Marketing Basics", courseProgram: "Business Administration", contentPreview: "Marketing basics preview", summaryPreview: "Marketing basics summary" },
     ]);
 
@@ -572,11 +598,11 @@ describe("PublicLibrarySeoPage", () => {
 
   it("shows the exam hub callout banner exactly once, and keeps the course/program section pointed at the filtered library view, when the course/program maps to a hub", async () => {
     (getServerExamSlugForCourseProgram as jest.Mock).mockResolvedValue("pnle");
-    (getServerPublicNoteBySeoPath as jest.Mock).mockResolvedValue(baseNote);
-    (getServerPublicNotesBySubjectSlug as jest.Mock).mockResolvedValue([
-      { ...baseNote, courseProgram: "Nursing" },
-    ]);
-    (getServerPublicNotesByCourseProgram as jest.Mock).mockResolvedValue([
+    (getServerPublicNoteBySeoPath as jest.Mock).mockResolvedValue({
+      ...baseNote,
+      coursePrograms: ["Nursing"],
+    });
+    (getServerPublicNotesByCourseProgramRecent as jest.Mock).mockResolvedValue([
       { ...baseNote, id: "note-2", title: "Vital Signs", courseProgram: "Nursing", contentPreview: "Vital signs preview", summaryPreview: "Vital signs summary" },
     ]);
 
@@ -603,10 +629,17 @@ describe("PublicLibrarySeoPage", () => {
     );
   });
 
-  it("omits the course/program section when the current note has no course/program", async () => {
+  it("excludes visible More in Subject notes from the quiz-preview rail", async () => {
     (getServerPublicNoteBySeoPath as jest.Mock).mockResolvedValue(baseNote);
-    (getServerPublicNotesBySubjectSlug as jest.Mock).mockResolvedValue([
-      { ...baseNote, courseProgram: null },
+    (getServerPublicNotesBySubject as jest.Mock).mockResolvedValue([
+      { ...baseNote, id: "note-2", title: "Plant Cells" },
+      { ...baseNote, id: "note-3", title: "Animal Cells" },
+    ]);
+    (getServerPublicNotesBySubjectSlugRecent as jest.Mock).mockResolvedValue([
+      { ...baseNote, id: "note-1", title: "Cell Structure" },
+      { ...baseNote, id: "note-2", title: "Plant Cells" },
+      { ...baseNote, id: "note-3", title: "Animal Cells" },
+      { ...baseNote, id: "note-4", title: "Cell Division" },
     ]);
 
     render(
@@ -615,8 +648,79 @@ describe("PublicLibrarySeoPage", () => {
       }),
     );
 
+    expect(screen.getByRole("heading", { name: "More in Science" })).toBeInTheDocument();
+    const quizPreviewRelated = screen.getByTestId("quiz-preview-related-notes");
+    expect(quizPreviewRelated).not.toHaveTextContent("Plant Cells");
+    expect(quizPreviewRelated).not.toHaveTextContent("Animal Cells");
+    expect(quizPreviewRelated).not.toHaveTextContent("Cell Structure");
+    expect(quizPreviewRelated).toHaveTextContent("Cell Division");
+    expect(getServerPublicNotesBySubjectSlugRecent).toHaveBeenCalledTimes(1);
+    expect(getServerPublicNotesBySubjectSlugRecent).toHaveBeenCalledWith("science", 6);
+  });
+
+  it("keeps a related note in the quiz preview when More in Subject is hidden", async () => {
+    (getServerPublicNoteBySeoPath as jest.Mock).mockResolvedValue(baseNote);
+    (getServerPublicNotesBySubject as jest.Mock).mockResolvedValue([
+      { ...baseNote, id: "note-2", title: "Plant Cells" },
+    ]);
+    (getServerPublicNotesBySubjectSlugRecent as jest.Mock).mockResolvedValue([
+      { ...baseNote, id: "note-2", title: "Plant Cells" },
+    ]);
+
+    render(
+      await PublicLibrarySeoPage({
+        params: Promise.resolve({ subject: "science", slug: "cell-structure" }),
+      }),
+    );
+
+    expect(screen.queryByRole("heading", { name: "More in Science" })).not.toBeInTheDocument();
+    expect(screen.getByTestId("quiz-preview-related-notes")).toHaveTextContent("Plant Cells");
+  });
+
+  it("documents that the two most-recent-first rails are not cross-deduped: the same notes can render in both", async () => {
+    // ⚠️ Known, accepted trade-off (see docs/features/public-library.md section K and
+    // docs/claude-plans/2026-10-01-public-note-discovery-rail-ordering-decision.md): the rail contract
+    // bounds each rail's over-fetch to "the minimum... to exclude the current note (if required)", not
+    // to cross-rail dedup. Since both rails now independently sort most-recent-first, a note tagged with
+    // both the same Subject and the same Course/Program can legitimately appear in both rails at once.
+    // This test pins that CURRENT behavior so a future change either keeps it deliberate or is a
+    // conscious decision to add dedup, not an accidental regression either way.
+    (getServerPublicNoteBySeoPath as jest.Mock).mockResolvedValue({
+      ...baseNote,
+      coursePrograms: ["Business Administration"],
+    });
+    (getServerPublicNotesBySubjectSlugRecent as jest.Mock).mockResolvedValue([
+      { ...baseNote, id: "note-2", title: "Marketing Basics", contentPreview: "p", summaryPreview: "s" },
+    ]);
+    (getServerPublicNotesByCourseProgramRecent as jest.Mock).mockResolvedValue([
+      { ...baseNote, id: "note-2", title: "Marketing Basics", courseProgram: "Business Administration", contentPreview: "p", summaryPreview: "s" },
+    ]);
+
+    render(
+      await PublicLibrarySeoPage({
+        params: Promise.resolve({ subject: "science", slug: "cell-structure" }),
+      }),
+    );
+
+    const quizPreviewRelated = screen.getByTestId("quiz-preview-related-notes");
+    expect(quizPreviewRelated).toHaveTextContent("Marketing Basics");
+    expect(screen.getByRole("heading", { name: "More Business Administration notes" })).toBeInTheDocument();
+    // Same note title renders in both the quiz-preview "More from {Subject}" rail and the
+    // "More {Program} notes" section — not deduped, by design this release.
+    expect(screen.getAllByText("Marketing Basics")).toHaveLength(2);
+  });
+
+  it("omits the course/program section when the current note has no course/program", async () => {
+    (getServerPublicNoteBySeoPath as jest.Mock).mockResolvedValue(baseNote);
+
+    render(
+      await PublicLibrarySeoPage({
+        params: Promise.resolve({ subject: "science", slug: "cell-structure" }),
+      }),
+    );
+
     expect(screen.queryByRole("heading", { name: /More .* notes/ })).not.toBeInTheDocument();
-    expect(getServerPublicNotesByCourseProgram).not.toHaveBeenCalled();
+    expect(getServerPublicNotesByCourseProgramRecent).not.toHaveBeenCalled();
   });
 
   it("omits the subject section when no related subject notes are available", async () => {

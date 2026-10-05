@@ -330,6 +330,12 @@ Recorded so they are not re-derived:
 
 ## 11. ⚠️ RENDER EVIDENCE, READ 2026-09-04 — THE §5 QUERIES ARE NOW LARGELY MOOT, AND §3 IS NOT CONFIRMED
 
+> **⚠️ CORRECTED 2026-10-01 — "THE DATABASE WAS IDLE AND HEALTHY THROUGHOUT" (item 2 below) IS WRONG.**
+> It read CPU *"0.008–0.021 of a core"* without reading the limit. **The database's CPU limit is 0.1.**
+> Re-read on 2026-10-01, the per-minute average is **0.052 at 05:55 and 0.064 at 05:56 — 52–64 % of the
+> limit**, from a 0.008 baseline. "A database-side stall is refuted" under *Refuted* falls with it.
+> The cause identified since: `docs/claude-findings/2026-10-01-prod-restarts-public-note-page-fanout-db-saturation.md`.
+
 Read directly from Render (read-only: metrics, logs, deploy history, and `SHOW max_connections`).
 **⚠️ THIS SECTION REMOVES TWO HYPOTHESES AND CONFIRMS NEITHER OF THE REMAINING ONES.**
 
@@ -431,6 +437,12 @@ work of any kind existed in or before the window.** §3's root-cause class requi
 concurrent synchronous generations. There were **none, for at least an hour and fifty-six minutes**.
 
 ### Q2 — ⚠️ THE READ BURST §11 REFUTED IS BACK, AND IT IS ONE CLIENT HAMMERING ONE PAGE
+
+> **⚠️ CORRECTED 2026-10-01 — THIS OBSERVATION WAS THE TRIGGER, AND ONE CLAIM ABOUT IT IS WRONG.**
+> `PUBLIC_NOTE_VIEWED` is recorded **by the backend** on each note fetch (`NoteService.java:1187`),
+> not "fired client-side after the page renders". So a row is a backend fetch, not a completed page
+> load, and crawlers do leave rows. The same one-note pattern (11–18 fetches in four minutes) precedes
+> 15 of the 24 restarts since 2026-09-01 — see the 2026-10-01 finding, §6.
 
 Q2 was specified merely to corroborate Q1 from an independent table. It does something else: **it is the
 only instrument in this file that can see READS, and §11 never consulted it.**

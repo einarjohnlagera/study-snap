@@ -1696,42 +1696,50 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
     }
 
     private boolean isQuantitativeContext(StudyPackGenerationContext context, List<String> conceptHints, String summary) {
-        if (context != null && context.domainContext() != null && context.domainContext().isQuantitative()) {
-            return true;
-        }
+        String authoringDomain = context == null ? null : StudyPackGenerationContextResolver.effectiveAuthoringDomain(context);
+        String subject = context == null ? null : context.subject();
+        boolean quantitative = context != null && context.domainContext() != null && context.domainContext().isQuantitative();
+        String trigger = quantitative ? "domainContext" : "none";
 
-        StringBuilder haystack = new StringBuilder();
-        if (context != null) {
-            String authoringDomain = StudyPackGenerationContextResolver.effectiveAuthoringDomain(context);
+        if (!quantitative) {
+            StringBuilder haystack = new StringBuilder();
             if (authoringDomain != null) {
                 haystack.append(authoringDomain).append(' ');
             }
-            if (context.subject() != null) {
-                haystack.append(context.subject()).append(' ');
+            if (subject != null) {
+                haystack.append(subject).append(' ');
             }
-            if (context.tags() != null) {
+            if (context != null && context.tags() != null) {
                 context.tags().forEach(tag -> haystack.append(tag).append(' '));
             }
-        }
-        if (conceptHints != null) {
-            conceptHints.forEach(concept -> haystack.append(concept).append(' '));
-        }
-        if (summary != null) {
-            haystack.append(summary);
-        }
+            if (conceptHints != null) {
+                conceptHints.forEach(concept -> haystack.append(concept).append(' '));
+            }
+            if (summary != null) {
+                haystack.append(summary);
+            }
 
-        String normalized = haystack.toString().toLowerCase();
-        for (String keyword : QUANTITATIVE_KEYWORDS) {
-            if (normalized.contains(keyword)) {
-                return true;
+            String normalized = haystack.toString().toLowerCase();
+            for (String keyword : QUANTITATIVE_KEYWORDS) {
+                if (normalized.contains(keyword)) {
+                    quantitative = true;
+                    trigger = "keyword:" + keyword;
+                    break;
+                }
+            }
+            if (!quantitative) {
+                for (Pattern anchoredKeyword : QUANTITATIVE_KEYWORDS_ANCHORED) {
+                    if (anchoredKeyword.matcher(normalized).find()) {
+                        quantitative = true;
+                        trigger = "anchored-keyword";
+                        break;
+                    }
+                }
             }
         }
-        for (Pattern anchoredKeyword : QUANTITATIVE_KEYWORDS_ANCHORED) {
-            if (anchoredKeyword.matcher(normalized).find()) {
-                return true;
-            }
-        }
-        return false;
+        log.info("computation_guidance authoringDomain='{}' subject='{}' enabled={} trigger='{}'",
+                authoringDomain, subject, quantitative, trigger);
+        return quantitative;
     }
 
     private String resolveStaticContentCalibration(boolean hasDomain, boolean hasNoteLevel) {
