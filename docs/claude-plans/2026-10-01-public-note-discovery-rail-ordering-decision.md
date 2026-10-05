@@ -178,17 +178,23 @@ ones" and "say so explicitly" rules.
   starving the smaller rail when their top-N windows overlap substantially. A dedicated test
   (`page.test.tsx`: "documents that the two most-recent-first rails are not cross-deduped") pins this
   accepted behavior; `RELEASES.md` records it as a known limitation.
-- **Blast radius of the walker's new forced `sort=recent`: audited, no regression.** `fetchAllPublicNotePages`'s
-  remaining callers — `app/sitemap.ts`; `app/public/library/[subject]/page.tsx`'s `generateMetadata`/page
+- **Blast radius of the walker's new forced `sort=recent`: audited, no *rendered* regression — but one
+  corrected overclaim, found by the post-merge cold falsification pass.** `fetchAllPublicNotePages`'s
+  remaining callers are `app/sitemap.ts`; `app/public/library/[subject]/page.tsx`'s `generateMetadata`/page
   body (via `getServerPublicNotesBySubjectSlug`); and `app/exam/[slug]/page.tsx` (via the plural
-  `getServerPublicNotesByCoursePrograms`, which fans out to the same singular walker per program) — all
-  re-derive their own Featured/Popular/Recent/remaining sections via `lib/public-library-discovery.ts`'s
-  `getFeaturedNotes`/`getPopularNotes`/`getRecentNotes`, each of which fully re-sorts the complete set
-  it's given rather than trusting arrival order (confirmed for the exam hub's `remaining` section too,
-  which also routes through `getRecentNotes`). Changing the walker's fetch order therefore changes
-  nothing about what's rendered on any of them. None of these callers passes its own `sort`, so there's
-  no duplicate-`sort`-param risk. The walker doesn't cap pages (it walks until the server reports no
-  more), so there's no truncation risk either.
+  `getServerPublicNotesByCoursePrograms`, which fans out to the same singular walker per program). The
+  subject-listing page and exam hub page both re-derive their own Featured/Popular/Recent/remaining
+  sections via `lib/public-library-discovery.ts`'s `getFeaturedNotes`/`getPopularNotes`/`getRecentNotes`,
+  each of which fully re-sorts the complete set it's given rather than trusting arrival order (confirmed
+  for the exam hub's `remaining` section too, which also routes through `getRecentNotes`) — changing the
+  walker's fetch order changes nothing about what's rendered on either page. **`app/sitemap.ts` does
+  NOT re-sort** — it maps the walker's raw result directly into sitemap entries, so sitemap.xml now lists
+  Notes most-recent-first instead of the old popularity order. This was mis-audited as "all of them" in
+  an earlier pass of this file; left uncorrected, not a regression worth fixing, since a sitemap's entry
+  order carries no ranking signal to a crawler — there is no rendered "most popular first" UI for a
+  sitemap the way there is for the subject/exam-hub pages. None of these callers passes its own `sort`,
+  so there's no duplicate-`sort`-param risk. The walker doesn't cap pages (it walks until the server
+  reports no more), so there's no truncation risk either.
 - **`coursePrograms?.[0]` determinism: audited, confirmed stable.** `NoteCourseProgramRepository.findByNoteId`
   (`backend/.../repository/NoteCourseProgramRepository.java:20-26`) carries `ORDER BY course_programs.name`,
   so the joined-programs list — and therefore `coursePrograms[0]` — is alphabetically stable across ISR

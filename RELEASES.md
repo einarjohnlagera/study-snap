@@ -116,10 +116,15 @@ events continuing at a comparable weekly rate means the diagnosis is wrong or in
   `getServerPublicNotesByCourseProgram(s)`) and the sitemap — though those three still walk every page of
   their subject/program/catalog (that part of their job is unchanged and out of scope; see the
   full SURFACE/ENDPOINT audit in `docs/claude-plans/2026-10-01-public-note-discovery-rail-ordering-decision.md`).
-  No visible-ordering regression: all of those callers already re-derive their own
+  No visible-ordering regression on the subject listing page or exam hub pages: both re-derive their own
   Featured/Popular/Recent/remaining sections in JS from the full set via
-  `lib/public-library-discovery.ts`'s own internal `.sort()`, independent of fetch order — audited, no
-  caller relies on arrival order. No caller passes its own `sort`, so no duplicate-param risk.
+  `lib/public-library-discovery.ts`'s own internal `.sort()`, independent of fetch order — audited, neither
+  relies on arrival order. **Correction, found by the post-merge cold falsification pass**: the sitemap
+  (`app/sitemap.ts`) is the exception — it maps the walker's result directly into entries with no re-sort
+  step, so it now lists Notes most-recent-first instead of by the old popularity order. Not fixed, because
+  it's not a regression worth fixing: a sitemap's entry order carries no ranking signal to a crawler, so
+  this has no SEO or user-visible effect, unlike the subject/exam-hub pages' rendered card order. No caller
+  passes its own `sort`, so no duplicate-param risk.
   `app/public/library/[subject]/[slug]/page.tsx` now derives `courseProgram` from the note's own joined
   `coursePrograms[0]` (`NoteService.resolvePublicDetailPrograms`, backed by
   `NoteCourseProgramRepository.findByNoteId`'s `ORDER BY course_programs.name` — the same ordering
