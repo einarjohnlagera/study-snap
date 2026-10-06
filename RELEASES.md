@@ -171,8 +171,13 @@ events continuing at a comparable weekly rate means the diagnosis is wrong or in
   Subject, guidance result and trigger once per input-message build
   (`backend/src/main/java/com/studysnap/backend/service/impl/OpenAiLlmStudyPackService.java:1698-1742`).
   **Verification limit:** G1 and G2(a) are prompt text; automated tests pin file content, not model
-  behavior. The owner must regenerate a pilot Note's Study Pack and inspect its Summary and title
-  (`r4-pilot-fix-plan.md` section 4). **Known limitations:** the single-note editor and onboarding
+  behavior. **⚠️ Owner-verified 2026-10-06, result: G1 confirmed working (n=1); G2(a) PARTIALLY
+  FAILS (n=3)** — regenerating three pilot Notes' Study Packs post-deploy left 1 of 3 titles still
+  reading "{Title} in {Subject}" ("Algorithms and Their Properties in Programming Fundamentals"),
+  confirmed directly against `study_packs` by two independent sessions. A prompt-only rule is not
+  reliable for the title field; see `docs/claude-findings/2026-10-06-g2a-title-subject-leak-partial-failure.md`
+  for the evidence and the owner's two open options (a deterministic title strip mirroring G2(b),
+  or accepting curator-review as the only mitigation — not decided, not built). **Known limitations:** the single-note editor and onboarding
   rely on G2(a)'s prompt wording alone for generated titles; they do not get the deterministic body
   override. A bulk-created note's body heading can revert to the model title if its content is later
   regenerated through `StudyPackService.generateStudyPackFromExistingNoteAsync`, which bypasses
