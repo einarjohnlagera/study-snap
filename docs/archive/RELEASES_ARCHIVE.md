@@ -1,6 +1,6 @@
 # RELEASES_ARCHIVE.md — NoteLib
 
-Archived sections of `RELEASES.md`. **Contents are NOT one contiguous range:** `v0.41.0`–`v0.120.0`, plus `v0.126.0` (moved at the `v0.132.0` kickoff), `v0.127.0` (moved at the `v0.133.0` kickoff) `v0.128.0` (moved at the `v0.134.0` kickoff) `v0.129.0` (moved at the `v0.135.0` kickoff) `v0.130.0` (moved at the `v0.136.0` kickoff) `v0.131.0` (moved at the `v0.137.0` kickoff) `v0.132.0` (moved at the `v0.138.0` kickoff) `v0.133.0` (moved at the `v0.139.0` kickoff), `v0.134.0` (moved at the `v0.140.0` kickoff), `v0.135.0` (moved at the `v0.141.0` kickoff), `v0.136.0` (moved at the `v0.142.0` kickoff), `v0.137.0` (moved at the `v0.143.0` kickoff), `v0.138.0` (moved at the `v0.144.0` kickoff), `v0.139.0` (moved at the `v0.145.0` kickoff), `v0.140.0` (moved at the `v0.146.0` kickoff), `v0.141.0` (moved at the `v0.147.0` kickoff), `v0.142.0` (moved at the `v0.148.0` kickoff), `v0.143.0` (moved at the `v0.149.0` kickoff), `v0.144.0` (moved at the `v0.150.0` kickoff), `v0.145.0` (moved at the `v0.151.0` kickoff), `v0.146.0` (moved at the `v0.152.0` kickoff), `v0.147.0` (moved at the `v0.153.0` kickoff), `v0.148.0` (moved at the `v0.154.0` kickoff), `v0.149.0` (moved at the `v0.155.0` kickoff), `v0.150.0` (moved at the `v0.156.0` signoff — the first time this archive check ran at signoff rather than kickoff, since v0.156.0 folded two releases' worth of scope into one and crossed the cap without an intervening kickoff) and `v0.151.0` (moved at the `v0.157.0` kickoff) and `v0.152.0` (moved at the `v0.158.0` kickoff) and `v0.153.0` and `v0.154.0` (moved at the `v0.159.0` and `v0.160.0` kickoffs; earlier passes did not extend this line) and `v0.155.0` (moved at the `v0.161.0` kickoff) and `v0.156.0` (moved at the `v0.162.0` kickoff) and `v0.157.0` (moved at the `v0.163.0` kickoff) and `v0.158.0` (moved at the `v0.164.0` kickoff) and `v0.159.0` (moved at the `v0.165.0` kickoff) as the live file crossed its *current + last five* cap. Each version's own `## vX.Y.Z` heading is the index — search for it. `v0.40.1` and earlier moved here
+Archived sections of `RELEASES.md`. **Contents are NOT one contiguous range:** `v0.41.0`–`v0.120.0`, plus `v0.126.0` (moved at the `v0.132.0` kickoff), `v0.127.0` (moved at the `v0.133.0` kickoff) `v0.128.0` (moved at the `v0.134.0` kickoff) `v0.129.0` (moved at the `v0.135.0` kickoff) `v0.130.0` (moved at the `v0.136.0` kickoff) `v0.131.0` (moved at the `v0.137.0` kickoff) `v0.132.0` (moved at the `v0.138.0` kickoff) `v0.133.0` (moved at the `v0.139.0` kickoff), `v0.134.0` (moved at the `v0.140.0` kickoff), `v0.135.0` (moved at the `v0.141.0` kickoff), `v0.136.0` (moved at the `v0.142.0` kickoff), `v0.137.0` (moved at the `v0.143.0` kickoff), `v0.138.0` (moved at the `v0.144.0` kickoff), `v0.139.0` (moved at the `v0.145.0` kickoff), `v0.140.0` (moved at the `v0.146.0` kickoff), `v0.141.0` (moved at the `v0.147.0` kickoff), `v0.142.0` (moved at the `v0.148.0` kickoff), `v0.143.0` (moved at the `v0.149.0` kickoff), `v0.144.0` (moved at the `v0.150.0` kickoff), `v0.145.0` (moved at the `v0.151.0` kickoff), `v0.146.0` (moved at the `v0.152.0` kickoff), `v0.147.0` (moved at the `v0.153.0` kickoff), `v0.148.0` (moved at the `v0.154.0` kickoff), `v0.149.0` (moved at the `v0.155.0` kickoff), `v0.150.0` (moved at the `v0.156.0` signoff — the first time this archive check ran at signoff rather than kickoff, since v0.156.0 folded two releases' worth of scope into one and crossed the cap without an intervening kickoff) and `v0.151.0` (moved at the `v0.157.0` kickoff) and `v0.152.0` (moved at the `v0.158.0` kickoff) and `v0.153.0` and `v0.154.0` (moved at the `v0.159.0` and `v0.160.0` kickoffs; earlier passes did not extend this line) and `v0.155.0` (moved at the `v0.161.0` kickoff) and `v0.156.0` (moved at the `v0.162.0` kickoff) and `v0.157.0` (moved at the `v0.163.0` kickoff) and `v0.158.0` (moved at the `v0.164.0` kickoff) and `v0.159.0` (moved at the `v0.165.0` kickoff) and `v0.160.0` (moved at the `v0.166.0` kickoff) as the live file crossed its *current + last five* cap. Each version's own `## vX.Y.Z` heading is the index — search for it. `v0.40.1` and earlier moved here
 2026-07-10; **`v0.41.0` through `v0.120.0` moved here 2026-09-07** in the `v0.126.0` pass, which
 resumed this convention after it had lapsed for 85 releases — `RELEASES.md` had reached 116
 sections against its documented design of *current + last few versions*. Both passes are MOVES,
@@ -20895,5 +20895,135 @@ table, and the first production row is what proves it emits; both call sites are
   26 database I/O drops in bursts on the first requests after a deploy goes live; 33 client-abort broken pipes not counted
   as 500s; one 405 logged as a 500; one unknown. The 5 s timeout produced 500s in one incident; most other 500s are
   deploy-time DB drops it does not cause. The verdict remains the owner's; a deploy-time-burst finding has its own row.
+
+---
+
+## v0.160.0 - Study Plans by Semester
+
+**Status: Released** (signed off 2026-09-26; PRs #1447 backend, #1448 frontend, #1449 pipeline, #1450 pressure-test fixes merged into the release branch; release PR merged as #1451 and tagged. Backend deploy verified 2026-09-27 by a read-only query through Render: `V150` applied 2026-09-26T16:06:30Z, success. The Vercel side and `scripts/check-deploys.sh` were NOT run)
+
+Theme: let a curator place each Subject Plan in an academic term, so a Year reads as a semester-by-semester study
+plan, without adding a level to the collection hierarchy and without touching any Note.
+
+### Planned Scope
+
+**Scope picked and release shape confirmed by the owner, 2026-09-26: Degree Study Journeys, Phase A0 and Phase A.**
+Source: `docs/claude-plans/degree-study-journeys-stage1-architecture-audit.md` (decision-complete feature plan;
+**§21 is the implementor handoff, §18 the phases and decisions A-F, §22 confirms no owner decisions remain**).
+The learner-facing promise is **"BS Computer Science - 1st Year Study Plan"**, never a complete Degree Study Journey.
+
+- **Phase A0 (documentation first, Claude-direct):** `docs/architecture/ADR-003-curriculum-placement-and-hierarchy-depth.md`
+  (decisions A-F exactly as enumerated in plan §18; ADR-002 is taken by the quiz-answer-identity proposal), plus the
+  `docs/features/collections.md` update. No application behaviour.
+- **Phase A (implementation, Codex in slices: backend, then frontend, then pipeline):**
+  1. Two nullable columns on `note_collections`, `term_label VARCHAR(60)` and `term_order SMALLINT`; one additive
+     migration, no backfill, no index.
+  2. Persistence, DTO, service and **adoption preservation** of the term.
+  3. Curator term assignment in the Year builder: a combobox over terms already used in that Year, never raw freetext.
+  4. Year-page conditional term grouping (all-NULL flat / all-placed grouped / mixed with a trailing `Term not specified`).
+  5. Compact Subject cards on the Year page (title, note count, ONE progress signal), gated on the SAME condition as
+     term grouping (any non-null `term_label`), no count threshold.
+  6. `academic_term` in the curriculum pipeline: extend `review-set-workbook-spec.md` and `build_review_set_workbook.py`
+     and regenerate; never hand-add the column to a generated workbook.
+  7. The regression and invariant tests in plan §21.5.
+- **Endpoint form (decided here, plan §21.9):** extend the existing collection update with two OPTIONAL fields. That is
+  additive in both directions (optional on request, nullable on response), so frontend and backend may deploy in either
+  order, and **the release notes must say so explicitly.** If a new endpoint is added instead, that stops being true and
+  the release owes a deploy-ordering statement and a real-request `MockMvc` test with `.contentType(MediaType.APPLICATION_JSON)`.
+- **Backend Academic Term slice:** migration `V150` adds nullable `term_label` / `term_order`; the existing collection
+  PATCH accepts optional `termLabel` / `termOrder`; `persistAdoptedPlan`, `createSubjectAddition`, and the `adoptGoal()`
+  re-parent branch carry child placement; and the Goal-child plus owned/public detail DTOs expose it. The PATCH fields
+  are optional on request and nullable on response, so frontend and backend may deploy in either order.
+- **Frontend Academic Term slice:** `lib/collection-terms.ts` holds the single `hasTermPlacement` gate that drives BOTH
+  Year-page term grouping and compact Subject cards (no count threshold); the Year page renders ordered static term
+  headers with a subject count and an in-progress count (shown only when above zero), a trailing `Term not specified`
+  group in the mixed case, and compact cards (title, note count, ONE of `N% ready` / `Not started`); with every child
+  term NULL the existing full-size grid is byte-for-byte unchanged. The Year builder gains a per-Subject term combobox
+  over the Year's existing terms (a new label is allowed; the order is assigned, never typed). The PATCH fields it sends
+  are optional on request, so this slice also deploys in either order relative to the backend.
+- **Pipeline Academic Term slice:** `build_review_set_workbook.py` accepts an OPTIONAL `academic_term` column, constant
+  per plan, validated per Study Plan: unused for all Subject Plans or assigned to all of them, and a partial
+  assignment is refused with an error naming the Study Plan and the unassigned Subject Plans (also refused: mixed
+  values inside one plan, over 60 characters, `Term not specified`, and case/spacing-variant duplicates). The term
+  order is derived from first-seen file order and printed in the workbook. With no terms the output is unchanged:
+  ALE, CPALE, LET and PNLE were rebuilt with the old and new builder and compared on cell values, fonts, fills, borders, merges, column widths, row heights and freeze panes: identical. The new `docs/curriculum/test_build_review_set_workbook.py` runs by hand in the venv and is NOT in CI.
+  `docs/curriculum/review-set-workbook-spec.md` and the strategist module `docs/gpt-contexts/REVIEW_SET_SHAPING_CONTEXT.md`
+  now carry the column, and the strategist module's TSV header was corrected to include `applicable_programs`, which the
+  builder has required since 2026-09-10 (a contract drift, not a behaviour change).
+- **Phase B (collapsed-by-default Sections, and so on) is NOT in this release**; it has no dependency on Phase A and rides
+  in a later one. **Phase C (a Degree entity and landing page) is out.**
+- **⚠️ A gap in the plan, found and verified in code at kickoff (and since corrected in the plan, §7.1a), that the
+  implementation MUST close:** the plan's adoption invariant named only the adoption path, but a child Subject Plan copy
+  is built field by field in TWO places. `persistAdoptedPlan` (`NoteCollectionService.java:1956-2017`) serves BOTH `adopt()`
+  and `adoptGoal()`, because `adoptGoal` creates each child by calling `adopt()` and then re-parents it. The SECOND is the
+  Official-update addition, `createSubjectAddition` (`:2476-2515`, `CreatedSubjectAddition`), which copies title,
+  description, course program, learner level, estimated hours and the source-sync fields and, without the term, lands a
+  Subject added to an already-adopted Year with a NULL term next to siblings that have terms. That manufactures the mixed
+  state the plan calls a curator-quality defect and shows a `Term not specified` group with no curator involved. The term
+  must be carried at BOTH, each with its own test that fails when it is dropped. **`persistAdoptedGoal` (`:2019-2057`,
+  the root copy) must NOT get the term**: a root has no parent and therefore no term placement, so adding it there would be
+  a silent dead column, not a fix.
+
+Anti-drift (plan §21.2 and §21.4, binding): with every child term NULL the existing Review Set and Goal rendering is
+UNCHANGED, with no term headers, no `Term not specified` group, and FULL-SIZE cards, protecting five live Review Sets
+(PNLE, CPALE, ALE, LET, Civil Engineering); density is gated on the same condition as grouping and never on a count;
+Official update stays additive-only forever; NO Degree progress in any phase (a permanent product rule); academic
+placement never touches the Note and `applicable_programs` is never overloaded to carry a term (ADR-001); the hierarchy
+stays at exactly two persisted levels; no Degree landing page and no `journey_key`/`journey_order` fallback, no Degree
+entity, no whole-Degree adoption, no learner curriculum customization, no term entity/catalog/enum, no collection
+`type`/`kind` enum, no change to `ConceptHealth`. Subject Plans are NOT reusable across Degree Journeys; only canonical
+Notes are. **Verification:** `advisor()` BEFORE the Codex prompt is written and on each diff; a diff that changes
+behaviour must touch a test that runs it; mutation-check every new test and name the killer; the all-NULL regression must
+assert full-size cards; frontend `tsc --noEmit`, lint and tests plus the full backend build with Docker; and, because the
+release touches the adoption engine and five live Review Sets, ONE scoped Opus cold agent framed as falsification of
+invariants 1, 2 (every copy site), 3 and 4 before signoff. Seven items is a large release; say what that does to the
+verification tier if more is folded in. **Owner-side, not this release's work:** the Note Strategist keeps authoring
+Subject to Section to Note; Year and term placement stays in a separate editorial file until the pipeline extension ships.
+
+### Shipped
+
+**Status: Released 2026-09-26 on `releases/v0.160.0`; the release PR to `main` is the owner's admin merge and its auto-deploy runs `V150`.**
+
+**Scope disposition (every Planned Scope item, checked against code):**
+
+| Item | Disposition | Evidence |
+|---|---|---|
+| Phase A0: ADR-003 (decisions A-F) and `collections.md` | **Shipped** | `docs/architecture/ADR-003-curriculum-placement-and-hierarchy-depth.md`; amended 2026-09-26 from "two" to "three" child-copy sites, decisions unchanged (owner-approved) |
+| 1. Two nullable columns, one additive migration | **Shipped** | `V150__collection_academic_term.sql` |
+| 2. Persistence, DTO, service, adoption preservation at BOTH child-copy builders (+ a third) | **Shipped, with one addition** | `persistAdoptedPlan` (`NoteCollectionService.java:2020`), `createSubjectAddition` (`:2537`), and the `adoptGoal()` re-parent branch (`:1161`), which the plan missed; NOT `persistAdoptedGoal` (`:2058`) |
+| 3. Curator term assignment (combobox) | **Shipped, changed** | `frontend/components/collections/subject-term-control.tsx`. Changed: hidden on adopted copies, disabled on published rows, partial-term warning |
+| 4. Year-page term grouping | **Shipped** | `hasTermPlacement` (`frontend/lib/collection-terms.ts:36`) at `collection-detail-page-client.tsx:1764` |
+| 5. Compact Subject cards on the same gate | **Shipped** | `CompactSubjectCard`, no count threshold |
+| 6. `academic_term` in the pipeline | **Shipped** | `resolve_terms` (`docs/curriculum/build_review_set_workbook.py:99`); no existing workbook needed regenerating (none uses terms) |
+| 7. Regression and invariant tests | **Shipped** | all-NULL full-size regression, one test per carry site, PATCH round-trip with a real MockMvc request, grouping, pipeline tests |
+| Phase B / Phase C | **Not in this release, by owner decision** | Phase B is the next release's scope (Backlog row); Phase C is out |
+
+**Changed mid-release, by owner decision (2026-09-26), not in the kickoff scope:**
+- **Partial term assignment is invalid authoring input**, enforced by the pipeline builder and by refusing to publish a partially-termed Year (first publication and Publish update).
+- **A term obeys the Official publication boundary by being settled before it.** It can change only while its Subject Plan is unpublished (own `published_at` AND the root's `last_update_published_at` both set means frozen; `published_at` alone is not enough because V141 stamped every pre-existing row). An adopted copy can never change a term and the builder hides the control there. Moving a published Subject that carries a term, or that joins a termed Year, is refused.
+- Owner rejected documenting the original Finding 1 (terms reaching learners around the publication boundary) as a permanent limitation; option A above was chosen over a placement-revisions redesign of the Official update engine, which is logged in the Backlog Index as its own future release.
+
+**Deploy order: either.** Both new request fields (`termLabel`, `termOrder`) are optional on the request and nullable on the response, and `termLocked` is an added response field the frontend treats as absent-means-unlocked. A frontend-first deploy sends nothing the old backend rejects (Spring Boot 4 / Jackson 3 ignores unknown properties, which was read, not run against a live backend), and a backend-first deploy serves fields the old frontend ignores. **`V150` is additive and nullable (`ADD COLUMN` twice, no default, no `NOT NULL`, no index).**
+
+**Verification:** full backend build with Docker 2557 tests, 0 failures (the PostgreSQL 16 harness applies `V150`); frontend `tsc --noEmit` clean, lint 0 errors, jest 224 suites / 2533 tests; every new test mutation-checked with the killer named in the PR threads (#1447, #1448, #1449, #1450). The pipeline unit tests (`docs/curriculum/test_build_review_set_workbook.py`, 13 tests) run by hand in the venv and are NOT in CI. ALE, CPALE, LET and PNLE were rebuilt with the old and new builder and compared on cell values, fonts, fills, borders, merges, widths, row heights and freeze panes: identical. Civil Engineering is still refused for lacking `applicable_programs`, as before.
+
+**Pressure test (two scoped Opus cold agents, framed as falsification, plus `advisor()` before the prompt and on each diff).** The first ran over the whole release: no blocker; two SHOULD-FIX (a Continue/hero target that could differ from the first card shown in a termed Year, fixed; the system-created half-termed learner Year, resolved by the publication-boundary decision above) and notes. The second ran on the freeze and publish guards: no blocker; two SHOULD-FIX (the re-flip named a subject the curator could not change, fixed; moving a published Subject with `updateParent` could leave it un-termed and permanently locked in a termed Year and block every later Publish update, fixed by refusing that move) and notes. Both agents confirmed the all-NULL invariant, the copy sites, additive-only Official update and the transport names.
+
+**Known limitations (documented, owner-visible):**
+- **Retroactive term introduction or rename on an already-published Year is UNSUPPORTED.** The freeze makes those cases unreachable rather than merged, and the five live Official Review Sets can never gain terms (their children are published under a stamped root; delete-and-recreate is the only route and existing adopters keep old copies). Backlog row: *Official update: placement revisions*. Do not build it speculatively.
+- **The in-flight BSCS Year 1 file is a single `plan_no` with the subjects as sections, so it cannot carry per-Subject terms until it is reshaped to one `plan_no` per subject.** It is another session's untracked file and was not touched.
+- The `Term not specified` reserved name is rejected in the builder and pipeline only; the backend does not reject the string, so a direct API call can store it (the page renders it without error).
+- A `termOrder` beyond the 32-bit integer range, or a non-number, returns 500 from the catch-all handler (pre-existing behaviour of every `Integer` PATCH field); values from 32768 up to the int maximum return 400.
+- `termLocked` covers the freeze rule only, not the adopted-copy rule: a standalone adopted plan nested under a learner's own Goal by direct API would show an enabled control the backend refuses (the optimistic update rolls back).
+- A label of only NBSP is stored by the backend (Java `trim`/`isBlank`) though the frontend treats it as unplaced; the create option ("Use X") saves on blur rather than on click. Neither is reachable from normal use.
+- The `Term` control also shows on a non-admin's own (non-adopted) Goals, with a warning that says a partially termed plan cannot be published; those users cannot publish. Not scoped further.
+- Non-admin-owned public collections that existed at V141 may have permanently locked children (V141 stamped their root); sized by the post-deploy read below.
+
+**Post-deploy verification (read-only `SELECT`s, run 2026-09-27 through the reconnected Render MCP):**
+1. `SELECT count(*) FROM note_collections WHERE term_label IS NOT NULL;` **= 0** (as expected; the column exists, `V150` applied 2026-09-26T16:06:30Z).
+2. `SELECT count(*) FROM note_collections c JOIN users u ON u.id = c.owner_user_id WHERE c.last_update_published_at IS NOT NULL AND u.role <> 'ADMIN';` **= 0**, so the non-admin locked-children limitation above affects no existing row.
+3. `scripts/check-deploys.sh` was NOT run (no Render API key in the session); the backend deploy is evidenced by `V150` above, the Vercel deploy remains unverified.
+
+**Checkpoint gate: none minted.** Everything shipped was owner-decided and none of it was gated on evidence; there is no instrumentation to read and a checkpoint without a metric is decorative. Real usage of the term feature will first be visible when a curator terms the BSCS Year, so the honest follow-up is the Phase B kickoff read, not a dated checkpoint.
 
 ---
