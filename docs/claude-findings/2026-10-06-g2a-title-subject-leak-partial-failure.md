@@ -1,7 +1,9 @@
 # G2(a) prompt-only Study Pack title fix: confirmed partial failure, n=3
 
-**Status: finding, not yet scoped. Owner decision owed (below), no production write by Claude, no
-code change by Claude.**
+**Status: measured. A deterministic title strip (the obvious fix) was scoped, measured against
+production, and found to NOT be safely buildable — see "Why the deterministic strip doesn't work"
+below. Owner decision owed on the remaining option. No production write by Claude, no code change
+by Claude.**
 
 ## What happened
 
@@ -48,27 +50,67 @@ Mathematics"` — expected, not evidence either way.
   specific to the generated-outline content G3 was originally found in).
 - **G4 remains latent, unchanged** — not in scope, matches the pilot's own prior reading.
 
+## Why the deterministic strip doesn't work — measured 2026-10-06
+
+The obvious fix (mirroring G2(b)): detect and strip a trailing `" in {Subject}"` from
+`OpenAiLlmStudyPackService`'s model-generated title before it's stored — a single fix point
+(`toGeneratedStudyPackContent`, the only caller of `GeneratedStudyPackContent`'s real constructor
+besides the local-dev stub) that would transitively cover every consumer (`StudyPackEntity.title`,
+and a brand-new Note's own title in the `createFromText`/OCR-paste flow via `createGeneratedNote` —
+confirmed both read the same field, confirmed `applyGeneratedMetadataToNote` never overwrites an
+*existing* note's title so that path isn't a second consumer to worry about).
+
+**Measured before recommending it**, the same way G1 was measured at `v0.165.0` kickoff:
+
+```sql
+SELECT count(*) FROM study_packs sp JOIN notes n ON n.id = sp.note_id
+WHERE n.subject IS NOT NULL AND trim(n.subject) <> ''
+AND lower(trim(sp.title)) LIKE '% in ' || lower(trim(n.subject));
+-- 3390
+```
+
+**3,390 existing Study Pack titles end in `" in {the note's own Subject}"`.** A random 40-row sample
+of those is, without exception, legitimate: *"Torsion in Strength of Materials"*, *"Infection
+Control and Isolation Precautions in Nursing"*, *"Bloom's Taxonomy in Educational Psychology"* — this
+is simply how educational content titles itself; a stripped version of any of these would read
+worse, not better. **A blind `endsWith` strip would mangle on the order of 3,390 legitimate titles
+to catch however many of the (unknown, almost certainly small) genuine leaks are mixed into that same
+population** — this is exactly the Title rule's own "judgment about meaning, not about wording"
+distinction (`developer.txt`'s Title section), enforced as a mechanical wording ban, which is the
+precise anti-pattern the `v0.96.0` anti-drift rule exists to prevent and that
+`bothTitleEmittingPromptsTeachTitleSemanticsRatherThanAWordingBan`'s own doc comment names by name.
+**No narrower mechanical rule was found that distinguishes the one confirmed leak** (Subject =
+`Programming Fundamentals`, a broad curriculum-container label) **from the 40 sampled legitimates**
+(Subject = a specific discipline the title's topic genuinely belongs to, e.g. `Strength of
+Materials`, `Nursing`) **using the title string alone** — the distinction is exactly the
+container-vs-knowledge judgment the prompt rule already relies on a model to make, not something a
+regex can make for it.
+
+**Also, even restricted to an exact-suffix match, this backstop would only ever catch the exact
+defect class seen once**: the pre-fix "Pointers and References in C++ **Programming**" (a *partial*
+leak — Subject appended with extra words, not the exact Subject string) would not have matched an
+exact-suffix check at all. So the strip's real-world catch rate, even ignoring the false-positive
+problem, is narrower than "catches G2(a) misses" implies.
+
+**Conclusion: do not build this.** Recorded here as the measurement, not a recommendation — the
+Codex prompt this would have needed was never written.
+
 ## Owner decision owed (not Claude's to make)
 
-Two options, explicitly left open by the reporting session and not resolved here:
+With option 1 above ruled out by measurement, the remaining options are:
 
-1. **Add a deterministic strip for Study Pack titles**, mirroring G2(b)'s approach for the
-   generated-note body — e.g. detect and strip a trailing `" in {Subject}"` from the model's title
-   field before it's stored, the same way `NoteBulkGenerationService` already overrides the body
-   heading with the known topic. Scope note: unlike G2(b), this would need to run somewhere in the
-   Study Pack generation path (`OpenAiLlmStudyPackService`), not `NoteBulkGenerationService`, since
-   Study Pack titles are generated for every path (bulk and interactive), not just Bulk Generate —
-   the single-note-vs-bulk distinction that drove G2(b)'s scoping does not obviously apply the same
-   way here and needs its own look before scoping.
-2. **Leave G2(a) as the only mitigation and rely on curator review** — the R4 pilot's own curation
+1. **Accept G2(a) as the only mitigation and rely on curator review** — the R4 pilot's own curation
    convention already includes "check pack titles for a Subject suffix and correct them at review"
-   as the stated fallback for exactly this case.
-
-No action taken on either option. No production write made. No prompt or code change made.
+   as the stated fallback for exactly this case. Recommended by elimination, not independently
+   argued for here — it's what's left once the deterministic option is ruled out.
+2. **A narrower, more targeted heuristic** that specifically detects the broad-curriculum-container
+   pattern (e.g. only strip when the Subject matches a known generic/catalog-level label rather than
+   a specific discipline) — not scoped here; no obvious mechanical signal for "this Subject is a
+   broad container" was identified, and building one is a meaningfully larger effort than this
+   finding's own scope.
 
 ## Verification tier
 
-Read-only production `SELECT` only (3 pack ids, by primary key, confirmed as described above). No
-code change, so no test suite run. If option 1 above is scoped into a future release, it needs the
-same contract-test discipline `v0.165.0`'s G2(b) fix used (pin the real generation output's shape
-before depending on it, don't trust a hand-built fixture).
+Read-only production `SELECT`s only (3 pack ids by primary key for the original finding; one
+aggregate count plus a 40-row random sample for the strip measurement above). No code change, no
+Codex prompt written, no test suite run.
