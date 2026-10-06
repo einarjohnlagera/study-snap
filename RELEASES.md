@@ -6,12 +6,16 @@
 
 Theme: close out the two post-signoff follow-ups from `v0.165.0` that were already done and waiting
 on branches targeting `main` — bundled here instead, since merging doc-only branches straight to
-`main` triggers a production build/deploy the owner wants to avoid for changes this small.
+`main` triggers a production build/deploy the owner wants to avoid for changes this small. **Expanded
+2026-10-06, owner decision, past the original doc-only scope**, to fix the Hikari long-connection-hold
+mechanism the kickoff's own checkpoint sweep found and root-caused (see Shipped below) — two real
+unbounded-work defects, not an LLM-hold pattern, so `v0.112.0`'s deferred Phase 3 would not have
+addressed either.
 
 ### Planned Scope
 
-**Both items are docs-only, already written and reviewed on their own branches; this release's
-work is landing them, not authoring them.**
+**The first two items are docs-only, already written and reviewed on their own branches; this
+release's work is landing them, not authoring them.**
 
 - **Record `v0.165.0`'s confirmed deploy timestamp in its own `[CHECKPOINT]` row.** Branch
   `docs/v0.165.0-post-deploy-checkpoint` (PR #1475, opened against `main`, retargeted here). Render
@@ -31,14 +35,38 @@ work is landing them, not authoring them.**
   corrects an earlier overstated claim (the five-Applicable-Programs mixup was called "root-caused"
   to a Program Family shortcut; a peer session's own verification showed the family's membership
   doesn't fully reproduce the observed set, so the mechanism is plausible, not confirmed).
+- **Fix 1 — `PublicProfileService.buildPublicProfile`'s unbounded profile load (backend only).**
+  Confirmed root cause of the dominant Hikari long-hold pattern (see Shipped below): loads every
+  public note (full `content`) and every full `StudyPackEntity` (full quiz JSON) for one account with
+  no limit, to let the frontend pick its top-8-by-metric display. Fix: compute `totalCopies`/
+  `totalShares`/`totalViews`/the note count via SQL aggregates over ALL of the account's notes, and
+  only fetch full content/summary for a generous top-N (by copy/view/share) — same response shape, no
+  frontend change. Codex-scope (new aggregate + top-N query logic across `PublicProfileService.java`
+  and its repositories, ~3-4 files).
+- **Fix 2 — `NoteCollectionService.adoptGoal`'s sequential copy loop (backend + frontend — Option A,
+  owner decision 2026-10-06).** Confirmed root cause of the secondary long-hold pattern: copies a
+  Goal's children sequentially under one shared connection (open-in-view + HOLD mode), confirmed up to
+  571 notes in a real production Goal. **Owner chose the background-job fix over the smaller
+  synchronous EntityManager-clear option** — removes the connection-hold ceiling entirely rather than
+  raising it, at the cost of a bigger blast radius: `adoptGoal`'s copy path is shared with plain
+  `adopt()` and `applySourceUpdate` (row 782's mechanism), and the endpoint's response contract
+  changes from synchronous to a started-job response, requiring frontend polling/progress UX. Scope is
+  `adoptGoal` only — `adopt()`/`applySourceUpdate` stay synchronous (lower individual exposure: at most
+  one Subject Plan's worth of notes per call, not a whole Goal's). Codex-scope, multi-system
+  (frontend + backend).
 
-Anti-drift: no code change in this release at all — both items are documentation, correcting or
-recording claims about `v0.165.0`'s own behavior. No production write. No new feature work folded
-in (the Backlog survey done alongside this kickoff found no other item ready without an owner
-decision or further scoping — see the Backlog Index scan below).
+Anti-drift: no production write. `adopt()` and `applySourceUpdate`'s existing synchronous behavior and
+response shape must not change — only `adoptGoal`'s own endpoint moves to a background job. Fix 1 must
+not change `PublicProfileResponse`'s shape (no new pagination params) — verify against the frontend
+consumer (`public-profile-page-client.tsx`) before shipping, not just the backend tests.
 
-**Verification tier:** none beyond what each PR's own review already covered (doc-only, no code,
-no test suite affected). A single `advisor()` summary is enough before signoff.
+**Verification tier:** doc-only items — single `advisor()` summary, as before. **Fix 1 — one scoped
+cold falsification agent** (changes a production read path; verify the aggregate/top-N queries against
+real data, not just unit tests). **Fix 2 — at least one scoped cold falsification agent, and consider
+whether it rises to the full three-agent tier**: it changes a shared method's call-site contract
+(`adoptGoal`) while leaving two siblings (`adopt()`, `applySourceUpdate`) on the old path, and it
+introduces new async/job infrastructure — re-evaluate the tier once the Codex prompt's actual diff
+shape is known.
 
 ### Shipped
 
@@ -60,11 +88,20 @@ no test suite affected). A single `advisor()` summary is enough before signoff.
   68.2% pre-H5 baseline, n=228 — not underpowered) — H5 did not achieve its stated goal; bears on
   whether H6 is worth scoping. (2) Additive-update apply uptake is 0.3% (1 of 367, against a healthy
   44% offer rate, so not an "offer gap") — per the `v0.116.0` checkpoint's own kill criterion, Slices
-  4-5 (structural updates) must NOT be built on this mechanism. **One real root cause found:** HikariCP
-  `Apparent connection leak` traces (real, recurring) all name non-LLM paths
-  (`PublicProfileController.getByUsername`, `NoteCollectionController.adoptGoal`) — criterion (ii)
-  fires, so `v0.112.0`'s deferred Phase 3 (transaction-boundary work for slow LLM holds) is RESCOPED,
-  since it would not have addressed this leak; the actual cause in those two paths is still unscoped.
+  4-5 (structural updates) must NOT be built on this mechanism. **One finding corrected same day:**
+  HikariCP `Apparent connection leak` traces are real and recurring, but pairing all 9 against their
+  `"...was returned to the pool (unleaked)"` lines confirms these are LONG HOLDS (63s–142s sampled),
+  not permanent leaks — the first pass's "criterion (ii) fires" was an overclaim (a leak trace's stack
+  shows where a connection was acquired, not what the request did afterward). None of the three
+  pre-stated kill criteria cleanly fits; recorded as such rather than forced into one. **Two confirmed
+  root causes found instead, both unbounded synchronous DB work, neither an LLM hold:**
+  `PublicProfileService.buildPublicProfile` loads every public note plus every full Study Pack for one
+  account with no limit (confirmed in production: the top account has 1,997 public notes), and
+  `NoteCollectionService.adoptGoal` copies a Goal's children sequentially under one shared connection
+  (confirmed: the largest production Goal has 571 notes), both amplified by `open-in-view=ON` +
+  `DELAYED_ACQUISITION_AND_HOLD`. Neither is "connections held across slow external calls," so
+  `v0.112.0`'s deferred Phase 3 (scoped to LLM-call transaction boundaries) does not address either —
+  that conclusion survives the correction; only its justification changed.
   **Four re-dated** (populations still too small to read: Adaptive Practice proximal tier, combined-quiz
   tip impressions, bulk-regen TEACHER allowance). **Two closed clean:** classification-authority-transfer
   (zero-cohort, exactly as its own denominator clause predicted) and title-suggestion uptake (24.6% apply
