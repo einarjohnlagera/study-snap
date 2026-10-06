@@ -42,7 +42,15 @@ no test suite affected). A single `advisor()` summary is enough before signoff.
 
 ### Shipped
 
-_(nothing yet)_
+- **PR #1475 — `v0.165.0` deploy-timestamp checkpoint record.** Merged into `releases/v0.166.0`
+  (`7933a96a`). Records Render live 2026-10-05T15:21:14Z / Vercel Production deployment success
+  15:24:27Z into the outage-fix `[CHECKPOINT]` row, starting its clock
+  (due `2026-10-12T15:24:27Z`) instead of leaving it "not yet measurable."
+- **PR #1476 — G2(a) title-leak finding + Applicable Programs root-cause correction.** Merged into
+  `releases/v0.166.0` (`63bd1d68`). Adds `docs/claude-findings/2026-10-06-g2a-title-subject-leak-partial-failure.md`
+  and the decision not to build a deterministic title strip (see Planned Scope above for the
+  measurement); corrects the ROADMAP Backlog row's "root-caused" wording on the five-Applicable-Programs
+  deviation to "plausible, not confirmed."
 
 ## v0.165.0 - Bounded Discovery
 
