@@ -51,6 +51,28 @@ no test suite affected). A single `advisor()` summary is enough before signoff.
   and the decision not to build a deterministic title strip (see Planned Scope above for the
   measurement); corrects the ROADMAP Backlog row's "root-caused" wording on the five-Applicable-Programs
   deviation to "plausible, not confirmed."
+- **Kickoff's overdue-`[CHECKPOINT]` sweep, read and closed (doc-only, no code change).** The kickoff's
+  own step-9 scan found 6 overdue (`due 2026-10-04`/`10-05`) and 3 due-today (`10-06`) checkpoint rows
+  in `ROADMAP.md`'s Backlog Index, all genuinely unactioned. All 9 read against production (read-only
+  SQL via `query_render_postgres`, Render app-log traces via `list_logs`, one owner-answered question
+  that isn't data-derivable) and written up in `ROADMAP.md` with results. **Two kill criteria FIRED and
+  are recorded plainly, not explained away:** (1) H5's coverage ratio FELL post-deploy (61.4% vs. the
+  68.2% pre-H5 baseline, n=228 — not underpowered) — H5 did not achieve its stated goal; bears on
+  whether H6 is worth scoping. (2) Additive-update apply uptake is 0.3% (1 of 367, against a healthy
+  44% offer rate, so not an "offer gap") — per the `v0.116.0` checkpoint's own kill criterion, Slices
+  4-5 (structural updates) must NOT be built on this mechanism. **One real root cause found:** HikariCP
+  `Apparent connection leak` traces (real, recurring) all name non-LLM paths
+  (`PublicProfileController.getByUsername`, `NoteCollectionController.adoptGoal`) — criterion (ii)
+  fires, so `v0.112.0`'s deferred Phase 3 (transaction-boundary work for slow LLM holds) is RESCOPED,
+  since it would not have addressed this leak; the actual cause in those two paths is still unscoped.
+  **Four re-dated** (populations still too small to read: Adaptive Practice proximal tier, combined-quiz
+  tip impressions, bulk-regen TEACHER allowance). **Two closed clean:** classification-authority-transfer
+  (zero-cohort, exactly as its own denominator clause predicted) and title-suggestion uptake (24.6% apply
+  rate — meaningful use, kill criterion does not fire, keep the card). **One closed on owner input:**
+  bulk-regen receipt TTL — no report of a lost receipt, no extension; a related owner question (does
+  bulk regeneration survive a restart/deploy mid-batch) was checked in code and confirmed already
+  correctly handled (`NoteBulkRegenerationReceiptService.getReceipt`'s `stale` flag plus the frontend's
+  explicit restart-explanation banner) — no gap, nothing built.
 
 ## v0.165.0 - Bounded Discovery
 
