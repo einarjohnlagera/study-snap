@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { adoptGoal, adoptStudyPlan } from "@/lib/api";
+import { adoptGoal, adoptStudyPlan, waitForGoalAdoption } from "@/lib/api";
 import {
   buildDiscoveryIntentFallbackPath,
   clearDiscoveryIntentCookie,
@@ -14,6 +14,10 @@ import { setStudyPlanSkippedNotice } from "@/lib/study-plan-skipped-notice";
 
 export function DiscoveryIntentConsumer() {
   const router = useRouter();
+  const [progress, setProgress] = useState<string | null>(null);
+  const [error, setError] = useState(false);
+  const retry = useRef<(() => void) | null>(null);
+  const fallbackPath = useRef<string>("/dashboard");
 
   useEffect(() => {
     const intent = getDiscoveryIntentCookie();
@@ -25,6 +29,7 @@ export function DiscoveryIntentConsumer() {
     // writes are synchronous, so a StrictMode double-invoke or a remount re-reads null and returns
     // at the check above. Moving either clear after the await produces a genuine double adoption.
     clearDiscoveryIntentCookie();
+    fallbackPath.current = buildDiscoveryIntentFallbackPath(intent.returnPath);
 
     // Not a mounted-flag: StrictMode's synthetic unmount is indistinguishable from a real one, so
     // a mounted-flag suppresses the first invocation's legitimate navigation while the second
@@ -35,9 +40,14 @@ export function DiscoveryIntentConsumer() {
     const stillHere = () => globalThis.location?.pathname === startPath;
 
     const resumeAdoption = async () => {
+      setError(false);
       try {
         if (intent.planType === "goal") {
-          const result = await adoptGoal(intent.planId);
+          setProgress("Starting Goal adoption…");
+          const started = await adoptGoal(intent.planId);
+          const result = await waitForGoalAdoption(started, (status) => {
+            setProgress(`Copying Subject Plans: ${status.processedSubjectCount} of ${status.totalSubjectCount}`);
+          });
           if (!stillHere()) {
             return;
           }
@@ -61,13 +71,20 @@ export function DiscoveryIntentConsumer() {
         if (!stillHere()) {
           return;
         }
+        if (intent.planType !== "goal") {
+          router.replace(fallbackPath.current);
+          return;
+        }
         // Deliberately a catch-all: the visitor has already left the card that would have shown the
         // real error, so there is nowhere to surface it. The notice therefore says the adoption
         // could not be completed and that the plan MAY be gone, rather than asserting a cause it
         // cannot know — a network failure and an unpublished plan land here identically.
-        router.replace(buildDiscoveryIntentFallbackPath(intent.returnPath));
+        setProgress(null);
+        setError(true);
       }
     };
+
+    retry.current = () => void resumeAdoption();
 
     // Without the stillHere() checks above, a resolved adoption yanks the visitor out of whatever
     // they navigated to — losing an in-progress note draft — because they see a fully interactive
@@ -76,5 +93,12 @@ export function DiscoveryIntentConsumer() {
     void resumeAdoption();
   }, [router]);
 
-  return null;
+  if (error) {
+    return <div role="alert" className="fixed bottom-4 left-4 z-50 rounded-lg border bg-background p-4 shadow-lg">
+      <p>Could not finish adopting this Goal. Your progress is saved.</p>
+      <button type="button" className="underline" onClick={() => retry.current?.()}>Try again</button>
+      <button type="button" className="ml-4 underline" onClick={() => router.replace(fallbackPath.current)}>Go back</button>
+    </div>;
+  }
+  return progress ? <p role="status" className="fixed bottom-4 left-4 z-50 rounded-lg border bg-background p-4 shadow-lg">{progress}</p> : null;
 }

@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
 import {
   adoptGoal,
+  waitForGoalAdoption,
   adoptStudyPlan,
   getPublicStudyPlanDetail,
   trackAnalyticsEvent,
@@ -47,6 +48,7 @@ export function PublicStudyPlanCard({
   const router = useRouter();
   const labels = useMemo(() => getCollectionLabels(profileType), [profileType]);
   const [adopting, setAdopting] = useState(false);
+  const [adoptionProgress, setAdoptionProgress] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [preview, setPreview] = useState<NoteCollectionDetail | null>(null);
@@ -139,7 +141,11 @@ export function PublicStudyPlanCard({
     setError(null);
     try {
       if (isGoal) {
-        const result = await adoptGoal(plan.id);
+        const started = await adoptGoal(plan.id);
+        const result = await waitForGoalAdoption(started, (progress) => {
+          setAdoptionProgress(`Copying Subject Plans: ${progress.processedSubjectCount} of ${progress.totalSubjectCount}`);
+        });
+        setAdoptionProgress(null);
         setStudyPlanSkippedNotice(result.goalCollectionId, result.skippedSubjectCount);
         setJustAdoptedNotice(result.goalCollectionId);
         router.push(`/collections/${result.goalCollectionId}`);
@@ -149,6 +155,7 @@ export function PublicStudyPlanCard({
       setStudyPlanSkippedNotice(result.collectionId, result.skippedCount);
       router.push(`/collections/${result.collectionId}`);
     } catch (adoptError) {
+      setAdoptionProgress(null);
       setError(adoptError instanceof Error ? adoptError.message : `Could not start this ${isGoal ? labels.goalSingular : labels.singular}.`);
     } finally {
       setAdopting(false);
@@ -227,7 +234,7 @@ export function PublicStudyPlanCard({
           type="button"
           className="w-full"
           loading={adopting}
-          loadingText="Starting..."
+          loadingText={adoptionProgress ?? "Starting..."}
           onClick={handleStart}
         >
           {buttonLabel}

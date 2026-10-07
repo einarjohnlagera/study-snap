@@ -173,6 +173,23 @@ public class AppConfig {
         return executor;
     }
 
+    /**
+     * Goal adoption uses one worker per Goal and one short transaction per Subject Plan. Two workers
+     * can consume at most two of the production pool's 20 connections at a time. Queued work is
+     * persisted first; shutdown does not drain the queue because the recovery sweep resumes it.
+     */
+    @Bean
+    public AsyncTaskExecutor goalAdoptionTaskExecutor(InFlightThreadRegisteringTaskDecorator taskDecorator) {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setThreadNamePrefix("goal-adoption-");
+        executor.setCorePoolSize(2);
+        executor.setMaxPoolSize(2);
+        executor.setQueueCapacity(20);
+        executor.setTaskDecorator(taskDecorator);
+        executor.initialize();
+        return executor;
+    }
+
     @Bean
     public AsyncTaskExecutor llmParallelTaskExecutor() {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();

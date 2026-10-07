@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { DashboardStudyPlanSection } from "./dashboard-study-plan-section";
 import {
   adoptGoal,
+  waitForGoalAdoption,
   adoptStudyPlan,
   listCollections,
   listPublicStudyPlans,
@@ -19,6 +20,7 @@ jest.mock("next/navigation", () => ({
 
 jest.mock("@/lib/api", () => ({
   adoptGoal: jest.fn(),
+  waitForGoalAdoption: jest.fn(),
   adoptStudyPlan: jest.fn(),
   listCollections: jest.fn(),
   listPublicStudyPlans: jest.fn(),
@@ -50,6 +52,7 @@ describe("DashboardStudyPlanSection", () => {
     pushMock.mockReset();
     globalThis.sessionStorage.clear();
     (adoptGoal as jest.Mock).mockReset();
+    (waitForGoalAdoption as jest.Mock).mockReset().mockImplementation(async (result) => result);
     (adoptStudyPlan as jest.Mock).mockReset();
     (listCollections as jest.Mock).mockReset();
     (listPublicStudyPlans as jest.Mock).mockReset();
@@ -245,6 +248,23 @@ describe("DashboardStudyPlanSection", () => {
       expect(setJustAdoptedNotice).toHaveBeenCalledWith("personal-goal-1");
       expect(pushMock).toHaveBeenCalledWith("/collections/personal-goal-1");
     });
+  });
+
+  it("shows Goal copy progress and offers the Start action again when status cannot be reached", async () => {
+    (listPublicStudyPlans as jest.Mock).mockResolvedValue([{ ...publicPlan, id: "source-goal-1", childCount: 2 }]);
+    (adoptGoal as jest.Mock).mockResolvedValue({ goalCollectionId: "personal-goal-1", status: "STARTED", jobId: "job-1" });
+    let failStatus!: (error: Error) => void;
+    (waitForGoalAdoption as jest.Mock).mockImplementation(async (_started, onProgress) => {
+      onProgress({ processedSubjectCount: 1, totalSubjectCount: 2 });
+      return new Promise((_resolve, reject) => { failStatus = reject; });
+    });
+
+    render(<DashboardStudyPlanSection courseProgram="LET" profileType="STUDENT" />);
+    fireEvent.click(await screen.findByRole("button", { name: "Start this Goal" }));
+    expect(await screen.findByText("Copying Subject Plans: 1 of 2")).toBeInTheDocument();
+    failStatus(new Error("Could not check Goal adoption progress. Try again."));
+    expect(await screen.findByText("Could not check Goal adoption progress. Try again.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Start this Goal" })).toBeEnabled();
   });
 
   it("continues an already adopted Goal without adopting again", async () => {

@@ -70,6 +70,32 @@ shape is known.
 
 ### Shipped
 
+- **Goal adoption now runs as a resumable background job.** The production Goal with 571 notes
+  and confirmed 60–140s+ Hikari connection holds motivated moving its per-child copy loop off the
+  request thread. The request still creates the personal Goal and returns its id immediately; a
+  dedicated two-worker executor copies each published Subject Plan in its own transaction. A
+  persisted job row exposes owner-scoped progress, and a configured sweep re-enqueues stale work
+  after deploys. Completion stamps the Companion baseline and primary invariant and writes the
+  Goal adoption analytics event atomically with the completed marker. Dashboard, public cards,
+  discovery intent, and the collection page display progress and offer retry on status failure.
+  `adopt()` and `applySourceUpdate` share the copy primitive but are unchanged — verified both by
+  tracing every call path and by the existing test suite, which asserts their behavior unchanged.
+  **Audited by a cold falsification pass (2026-10-07) against the Codex prompt's own acceptance
+  criteria before merging** — no blocking defects found. One real gap it caught: the Testcontainers
+  integration test only ever seeded PUBLIC children, so the "adopts every stamped child regardless
+  of visibility" invariant (the exact defect `v0.161.0` PR #1453 fixed) had no test exercising the
+  real job execution path for a PRIVATE one — traced the code and confirmed the path itself is
+  unchanged by this diff, then closed the gap with `stampedPrivateChildIsAdoptedTheSameAsAPublicOne`,
+  which passes against a real Postgres container. **Known limitations, not blocking:**
+  `waitForGoalAdoption`'s poll loop has no caller-side cancellation, so a component that calls it
+  directly (rather than through the effect-based poll already used by all 4 call sites) leaves a
+  dangling promise after unmount — no crash, just a wasted request; the collection detail page's
+  poll effect re-checks status on every view of an already-completed Goal rather than caching that
+  it finished, which is wasteful but not incorrect; and `runGoalAdoption`'s initial claim
+  transaction isn't covered by its own error logging, so a failure there would surface as an
+  uncaught executor-thread exception rather than through this app's structured `goal_adoption_failed`
+  log line.
+
 - **PR #1475 — `v0.165.0` deploy-timestamp checkpoint record.** Merged into `releases/v0.166.0`
   (`7933a96a`). Records Render live 2026-10-05T15:21:14Z / Vercel Production deployment success
   15:24:27Z into the outage-fix `[CHECKPOINT]` row, starting its clock
