@@ -4,7 +4,9 @@ import { getAuthUser } from "@/lib/auth";
 import {
   getCreatorImpact,
   getPublicCreatorProfile,
+  getPublicCreatorFocus,
   getPublicProfile,
+  getPublicProfileFocus,
   trackAnalyticsEvent,
   updatePublicProfileVisibility,
   type PublicProfileResponse,
@@ -30,6 +32,8 @@ jest.mock("@/lib/api", () => {
     getCreatorImpact: jest.fn(),
     getPublicProfile: jest.fn(),
     getPublicCreatorProfile: jest.fn(),
+    getPublicProfileFocus: jest.fn(),
+    getPublicCreatorFocus: jest.fn(),
     trackAnalyticsEvent: jest.fn(),
     updatePublicProfileVisibility: jest.fn(),
   };
@@ -79,6 +83,10 @@ describe("PublicProfilePageClient", () => {
     (getCreatorImpact as jest.Mock).mockReset();
     (getPublicProfile as jest.Mock).mockReset();
     (getPublicCreatorProfile as jest.Mock).mockReset();
+    (getPublicProfileFocus as jest.Mock).mockReset();
+    (getPublicCreatorFocus as jest.Mock).mockReset();
+    (getPublicProfileFocus as jest.Mock).mockResolvedValue({ coursePrograms: [{ label: "Biology", count: 1 }], subjects: [{ label: "Biology", count: 1 }] });
+    (getPublicCreatorFocus as jest.Mock).mockResolvedValue({ coursePrograms: [{ label: "Biology", count: 1 }], subjects: [{ label: "Biology", count: 1 }] });
     (trackAnalyticsEvent as jest.Mock).mockReset();
     (updatePublicProfileVisibility as jest.Mock).mockReset();
     pushMock.mockReset();
@@ -88,6 +96,21 @@ describe("PublicProfilePageClient", () => {
       value: { writeText: clipboardWriteText },
       configurable: true,
     });
+  });
+
+  it("builds Learning Focus from full-corpus counts when ranked cards favor another subject", () => {
+    (getAuthUser as jest.Mock).mockReturnValue(null);
+    render(<PublicProfilePageClient userId="user-1" initialResult={{
+      status: "ok",
+      profile: { ...baseProfile, publicNotesCount: 350,
+        publicNotes: [{ ...baseProfile.publicNotes[0], courseProgram: "Physics", subject: "Physics" }] },
+      focus: {
+        coursePrograms: [{ label: "Math", count: 300 }, { label: "Physics", count: 50 }],
+        subjects: [{ label: "Math", count: 300 }, { label: "Physics", count: 50 }],
+      },
+    }} />);
+    expect(screen.getByText("Mostly shares notes in Math and Physics.")).toBeInTheDocument();
+    expect(getPublicProfile).not.toHaveBeenCalled();
   });
 
   it("shows owner-only profile controls while keeping note cards action-free", async () => {

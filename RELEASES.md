@@ -96,6 +96,26 @@ shape is known.
   uncaught executor-thread exception rather than through this app's structured `goal_adoption_failed`
   log line.
 
+- **Bounded Public Profile reads and a lightweight author-card summary (v0.166.0).** Production
+  long connection holds of 63–142 seconds coincided with a DB-CPU pin and health-check failure;
+  the largest creator had 1,997 public notes, all previously hydrated with full content and Study
+  Pack quiz JSON on a profile request. SQL now sums copies, shares, and views across every public
+  note while only ranked candidates are hydrated. The author card on each public note requests a
+  three-field count-based summary instead of the full profile. Grouped full-catalog labels keep
+  Learning Focus accurate when ranked cards favor a different subject. The full response shape,
+  visitor display, profile ISR cache, and owner-only refetch gate stay the same. **Audited
+  (2026-10-07) by tracing every changed file and running the full affected test suites, including
+  the new `PublicProfilePostgresIntegrationTest`, which seeds 210 real notes with engineered ties
+  and explicitly asserts the hydrated candidates' own totals are LESS than the true aggregate — a
+  guard against a totals-computed-from-candidates regression, not just a passing count.** No
+  blocking defects found; the Learning Focus split (a second lightweight aggregate endpoint,
+  beyond what the originating prompt specified) was Codex's own catch of a real consequence of
+  bounding `publicNotes` — the existing Learning Focus sentence derived its course/subject labels
+  by iterating that list directly, which this fix would have silently narrowed to only the
+  ranked-candidate subset. **Known limitation, not blocking:** the server-rendered profile page's
+  `getServerFocus` call throws on any failure, which fails the whole page rather than degrading
+  gracefully if only the Learning Focus request has a transient issue — matches this function's
+  existing error-handling pattern for the main profile fetch, not a new regression.
 - **PR #1475 — `v0.165.0` deploy-timestamp checkpoint record.** Merged into `releases/v0.166.0`
   (`7933a96a`). Records Render live 2026-10-05T15:21:14Z / Vercel Production deployment success
   15:24:27Z into the outage-fix `[CHECKPOINT]` row, starting its clock

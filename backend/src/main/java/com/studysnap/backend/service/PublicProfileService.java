@@ -2,11 +2,12 @@ package com.studysnap.backend.service;
 
 import com.studysnap.backend.dto.PublicProfileNoteResponse;
 import com.studysnap.backend.dto.PublicProfileResponse;
+import com.studysnap.backend.dto.PublicProfileSummaryResponse;
+import com.studysnap.backend.dto.PublicProfileFocusResponse;
 import com.studysnap.backend.dto.SubjectCount;
 import com.studysnap.backend.entity.AnalyticsEventType;
 import com.studysnap.backend.entity.NoteEntity;
 import com.studysnap.backend.entity.NoteVisibility;
-import com.studysnap.backend.entity.StudyPackEntity;
 import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.entity.UserRole;
 import com.studysnap.backend.exception.PublicProfileNotFoundException;
@@ -14,6 +15,7 @@ import com.studysnap.backend.exception.PublicProfilePrivateException;
 import com.studysnap.backend.repository.AnalyticsEventRepository;
 import com.studysnap.backend.repository.NoteCopyCountProjection;
 import com.studysnap.backend.repository.NoteRepository;
+import com.studysnap.backend.repository.PublicProfileMetricsRepository;
 import com.studysnap.backend.repository.NoteSubjectCountProjection;
 import com.studysnap.backend.repository.PublicNoteEventCountProjection;
 import com.studysnap.backend.repository.StudyPackRepository;
@@ -34,6 +36,9 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import java.util.LinkedHashMap;
+import java.util.Set;
+import java.util.HashSet;
+import java.util.Comparator;
 
 @Service
 @Transactional(readOnly = true)
@@ -52,6 +57,7 @@ public class PublicProfileService {
     private final NoteCourseProgramRepository noteCourseProgramRepository;
     private final StudyPackRepository studyPackRepository;
     private final AnalyticsEventRepository analyticsEventRepository;
+    private final PublicProfileMetricsRepository publicProfileMetricsRepository;
 
     public PublicProfileResponse getByUserId(String userIdRaw, UUID viewerUserId) {
         UUID userId = UuidParsingUtils.parseUuidOrThrow(userIdRaw, PublicProfileNotFoundException::new);
@@ -70,14 +76,71 @@ public class PublicProfileService {
         return buildPublicProfile(user, user.getId(), viewerUserId);
     }
 
+    public PublicProfileSummaryResponse getSummaryByUserId(String userIdRaw, UUID viewerUserId) {
+        UUID userId = UuidParsingUtils.parseUuidOrThrow(userIdRaw, PublicProfileNotFoundException::new);
+        UserEntity user = userRepository.findById(userId)
+                .orElseThrow(PublicProfileNotFoundException::new);
+        return buildSummary(user, userId, viewerUserId);
+    }
+
+    public PublicProfileSummaryResponse getSummaryByUsername(String usernameRaw, UUID viewerUserId) {
+        String username = normalizeOptionalText(usernameRaw);
+        if (username == null) {
+            throw new PublicProfileNotFoundException();
+        }
+        UserEntity user = userRepository.findByUsernameIgnoreCase(username)
+                .orElseThrow(PublicProfileNotFoundException::new);
+        return buildSummary(user, user.getId(), viewerUserId);
+    }
+
+    public PublicProfileFocusResponse getFocusByUserId(String userIdRaw, UUID viewerUserId) {
+        UUID userId = UuidParsingUtils.parseUuidOrThrow(userIdRaw, PublicProfileNotFoundException::new);
+        UserEntity user = userRepository.findById(userId)
+                .orElseThrow(PublicProfileNotFoundException::new);
+        assertProfileVisible(user, userId, viewerUserId);
+        return publicProfileMetricsRepository.focus(userId);
+    }
+
+    public PublicProfileFocusResponse getFocusByUsername(String usernameRaw, UUID viewerUserId) {
+        String username = normalizeOptionalText(usernameRaw);
+        if (username == null) {
+            throw new PublicProfileNotFoundException();
+        }
+        UserEntity user = userRepository.findByUsernameIgnoreCase(username)
+                .orElseThrow(PublicProfileNotFoundException::new);
+        assertProfileVisible(user, user.getId(), viewerUserId);
+        return publicProfileMetricsRepository.focus(user.getId());
+    }
+
+    private PublicProfileSummaryResponse buildSummary(UserEntity user, UUID userId, UUID viewerUserId) {
+        assertProfileVisible(user, userId, viewerUserId);
+        return new PublicProfileSummaryResponse(resolvePublicDisplayName(user),
+                normalizeOptionalText(user.getBio()),
+                noteRepository.countByOwnerUserIdAndVisibility(userId, NoteVisibility.PUBLIC));
+    }
+
+    private void assertProfileVisible(UserEntity user, UUID userId, UUID viewerUserId) {
+        if (!Boolean.TRUE.equals(user.getPublicProfileVisible()) && !userId.equals(viewerUserId)) {
+            throw new PublicProfilePrivateException();
+        }
+    }
+
     private PublicProfileResponse buildPublicProfile(UserEntity user, UUID userId, UUID viewerUserId) {
         boolean publicProfileVisible = Boolean.TRUE.equals(user.getPublicProfileVisible());
         boolean viewerOwnsProfile = userId.equals(viewerUserId);
-        if (!publicProfileVisible && !viewerOwnsProfile) {
-            throw new PublicProfilePrivateException();
-        }
+        assertProfileVisible(user, userId, viewerUserId);
 
-        List<NoteEntity> publicNotes = noteRepository.findByOwnerUserIdAndVisibilityOrderByUpdatedAtDesc(userId, NoteVisibility.PUBLIC);
+        int publicNotesCount = Math.toIntExact(noteRepository.countByOwnerUserIdAndVisibility(userId, NoteVisibility.PUBLIC));
+        PublicProfileMetricsRepository.Totals totals = publicProfileMetricsRepository.totals(userId);
+        List<UUID> candidateIds = publicProfileMetricsRepository.candidateNoteIds(userId);
+        Set<UUID> candidateIdSet = new HashSet<>(candidateIds);
+        List<NoteEntity> publicNotes = candidateIds.isEmpty() ? List.of() : noteRepository.findAllById(candidateIds)
+                .stream()
+                .filter(note -> userId.equals(note.getOwnerUserId())
+                        && note.getVisibility() == NoteVisibility.PUBLIC
+                        && candidateIdSet.contains(note.getId()))
+                .sorted(Comparator.comparing(NoteEntity::getUpdatedAt).reversed())
+                .toList();
         // One batched lookup for the whole profile rather than a query per card.
         Map<UUID, List<String>> programNamesByNoteId = new LinkedHashMap<>();
         noteCourseProgramRepository
@@ -89,10 +152,7 @@ public class PublicProfileService {
         Map<UUID, Long> copyCountsByNoteId = loadCopyCounts(publicNotes);
         Map<UUID, Long> shareCountsByNoteId = loadPublicEventCounts(publicNotes, AnalyticsEventType.PUBLIC_NOTE_SHARED);
         Map<UUID, Long> viewCountsByNoteId = loadPublicEventCounts(publicNotes, AnalyticsEventType.PUBLIC_NOTE_VIEWED);
-        Map<UUID, StudyPackEntity> studyPackByNoteId = loadStudyPacks(publicNotes);
-        long totalCopies = copyCountsByNoteId.values().stream().mapToLong(Long::longValue).sum();
-        long totalShares = shareCountsByNoteId.values().stream().mapToLong(Long::longValue).sum();
-        long totalViews = viewCountsByNoteId.values().stream().mapToLong(Long::longValue).sum();
+        Map<UUID, String> studyPackSummariesByNoteId = loadStudyPackSummaries(publicNotes);
         long totalProfileShares = analyticsEventRepository.countByEventTypeAndEntityId(AnalyticsEventType.PUBLIC_PROFILE_SHARED, userId);
         List<NoteSubjectCountProjection> publicSubjectCounts = noteRepository.countSubjectsByOwnerUserIdAndVisibility(userId, NoteVisibility.PUBLIC);
         List<SubjectCount> notesBySubject = publicSubjectCounts.stream()
@@ -111,10 +171,10 @@ public class PublicProfileService {
                 publicProfileVisible,
                 viewerOwnsProfile,
                 userId.toString(),
-                publicNotes.size(),
-                totalCopies,
-                totalShares,
-                totalViews,
+                publicNotesCount,
+                totals.copies(),
+                totals.shares(),
+                totals.views(),
                 totalProfileShares,
                 notesBySubject,
                 publicSubjectCounts.size(),
@@ -132,7 +192,7 @@ public class PublicProfileService {
                                 note.getTags() == null ? List.of() : Arrays.asList(note.getTags()),
                                 ContentPreviewUtils.buildContentPreview(note.getContent(), CONTENT_PREVIEW_MAX_LENGTH),
                                 SummaryPreviewUtils.buildSummaryPreview(
-                                        studyPackByNoteId.get(note.getId()) == null ? null : studyPackByNoteId.get(note.getId()).getSummary(),
+                                        studyPackSummariesByNoteId.get(note.getId()),
                                         SUMMARY_PREVIEW_MAX_LENGTH
                                 ),
                                 copyCountsByNoteId.getOrDefault(note.getId(), 0L),
@@ -161,7 +221,7 @@ public class PublicProfileService {
         return countsByNoteId;
     }
 
-    private Map<UUID, StudyPackEntity> loadStudyPacks(List<NoteEntity> publicNotes) {
+    private Map<UUID, String> loadStudyPackSummaries(List<NoteEntity> publicNotes) {
         if (publicNotes.isEmpty()) {
             return Map.of();
         }
@@ -169,13 +229,13 @@ public class PublicProfileService {
         List<UUID> noteIds = publicNotes.stream()
                 .map(NoteEntity::getId)
                 .toList();
-        Map<UUID, StudyPackEntity> studyPackByNoteId = new HashMap<>();
-        for (StudyPackEntity studyPack : studyPackRepository.findByNoteIdIn(noteIds)) {
+        Map<UUID, String> summariesByNoteId = new HashMap<>();
+        for (StudyPackRepository.NoteSummary studyPack : studyPackRepository.findSummariesByNoteIdIn(noteIds)) {
             if (studyPack.getNoteId() != null) {
-                studyPackByNoteId.put(studyPack.getNoteId(), studyPack);
+                summariesByNoteId.put(studyPack.getNoteId(), studyPack.getSummary());
             }
         }
-        return studyPackByNoteId;
+        return summariesByNoteId;
     }
 
     private Map<UUID, Long> loadPublicEventCounts(List<NoteEntity> publicNotes, AnalyticsEventType eventType) {
