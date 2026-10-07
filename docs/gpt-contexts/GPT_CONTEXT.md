@@ -3,7 +3,16 @@
 > **This is the core brief. Paste it as your first message in a new GPT chat session.**
 > Then paste any module below that matches the conversation — see "Which modules to paste".
 > Update this file whenever a new version ships or the roadmap shifts significantly.
-> Last updated: v0.165.0 - 2026-10-05 (Released). **`v0.165.0` closed a production outage (24 backend
+> Last updated: v0.166.0 - 2026-10-07 (Released). **`v0.166.0` fixed a confirmed HikariCP
+long-connection-hold pattern found via a routine overdue-checkpoint sweep: `PublicProfileService`'s
+unbounded profile load (fixed, backend-only, bounded via SQL aggregates + top-N candidates, same
+response shape) and `NoteCollectionService.adoptGoal`'s synchronous per-child copy loop (moved to a
+resumable background job — owner chose this over a cheaper synchronous patch, explicitly accepting a
+bigger blast radius to fix the architecture rather than raise the ceiling; `adopt()`/`applySourceUpdate`
+unchanged). Also landed two already-written doc-only follow-ups from `v0.165.0` (a deploy-timestamp
+checkpoint record, and a finding that `v0.165.0`'s title-leak prompt fix is only partially reliable,
+with a measured decision not to build a deterministic strip). No new UI beyond Goal-adoption's
+progress/polling display. Previous: v0.165.0 - 2026-10-05 (Released). **`v0.165.0` closed a production outage (24 backend
 restarts/30 days — a public Note page's two discovery rails fanned out into every page of a Subject's or
 Program's note list, ranking by popularity in JS) by switching both rails to one bounded, most-recent-first
 fetch each, and fixed three Computing-pilot generation defects: shell commands rendering as malformed LaTeX

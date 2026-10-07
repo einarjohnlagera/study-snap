@@ -2,7 +2,7 @@
 
 ## v0.166.0 - Measured Twice
 
-**Status: In Progress**
+**Status: Released** (signed off 2026-10-07; PRs #1475, #1476, #1477, #1478 merged into `releases/v0.166.0`)
 
 Theme: close out the two post-signoff follow-ups from `v0.165.0` that were already done and waiting
 on branches targeting `main` — bundled here instead, since merging doc-only branches straight to
