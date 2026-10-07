@@ -1,6 +1,6 @@
 # RELEASES_ARCHIVE.md — NoteLib
 
-Archived sections of `RELEASES.md`. **Contents are NOT one contiguous range:** `v0.41.0`–`v0.120.0`, plus `v0.126.0` (moved at the `v0.132.0` kickoff), `v0.127.0` (moved at the `v0.133.0` kickoff) `v0.128.0` (moved at the `v0.134.0` kickoff) `v0.129.0` (moved at the `v0.135.0` kickoff) `v0.130.0` (moved at the `v0.136.0` kickoff) `v0.131.0` (moved at the `v0.137.0` kickoff) `v0.132.0` (moved at the `v0.138.0` kickoff) `v0.133.0` (moved at the `v0.139.0` kickoff), `v0.134.0` (moved at the `v0.140.0` kickoff), `v0.135.0` (moved at the `v0.141.0` kickoff), `v0.136.0` (moved at the `v0.142.0` kickoff), `v0.137.0` (moved at the `v0.143.0` kickoff), `v0.138.0` (moved at the `v0.144.0` kickoff), `v0.139.0` (moved at the `v0.145.0` kickoff), `v0.140.0` (moved at the `v0.146.0` kickoff), `v0.141.0` (moved at the `v0.147.0` kickoff), `v0.142.0` (moved at the `v0.148.0` kickoff), `v0.143.0` (moved at the `v0.149.0` kickoff), `v0.144.0` (moved at the `v0.150.0` kickoff), `v0.145.0` (moved at the `v0.151.0` kickoff), `v0.146.0` (moved at the `v0.152.0` kickoff), `v0.147.0` (moved at the `v0.153.0` kickoff), `v0.148.0` (moved at the `v0.154.0` kickoff), `v0.149.0` (moved at the `v0.155.0` kickoff), `v0.150.0` (moved at the `v0.156.0` signoff — the first time this archive check ran at signoff rather than kickoff, since v0.156.0 folded two releases' worth of scope into one and crossed the cap without an intervening kickoff) and `v0.151.0` (moved at the `v0.157.0` kickoff) and `v0.152.0` (moved at the `v0.158.0` kickoff) and `v0.153.0` and `v0.154.0` (moved at the `v0.159.0` and `v0.160.0` kickoffs; earlier passes did not extend this line) and `v0.155.0` (moved at the `v0.161.0` kickoff) and `v0.156.0` (moved at the `v0.162.0` kickoff) and `v0.157.0` (moved at the `v0.163.0` kickoff) and `v0.158.0` (moved at the `v0.164.0` kickoff) and `v0.159.0` (moved at the `v0.165.0` kickoff) and `v0.160.0` (moved at the `v0.166.0` kickoff) as the live file crossed its *current + last five* cap. Each version's own `## vX.Y.Z` heading is the index — search for it. `v0.40.1` and earlier moved here
+Archived sections of `RELEASES.md`. **Contents are NOT one contiguous range:** `v0.41.0`–`v0.120.0`, plus `v0.126.0` (moved at the `v0.132.0` kickoff), `v0.127.0` (moved at the `v0.133.0` kickoff) `v0.128.0` (moved at the `v0.134.0` kickoff) `v0.129.0` (moved at the `v0.135.0` kickoff) `v0.130.0` (moved at the `v0.136.0` kickoff) `v0.131.0` (moved at the `v0.137.0` kickoff) `v0.132.0` (moved at the `v0.138.0` kickoff) `v0.133.0` (moved at the `v0.139.0` kickoff), `v0.134.0` (moved at the `v0.140.0` kickoff), `v0.135.0` (moved at the `v0.141.0` kickoff), `v0.136.0` (moved at the `v0.142.0` kickoff), `v0.137.0` (moved at the `v0.143.0` kickoff), `v0.138.0` (moved at the `v0.144.0` kickoff), `v0.139.0` (moved at the `v0.145.0` kickoff), `v0.140.0` (moved at the `v0.146.0` kickoff), `v0.141.0` (moved at the `v0.147.0` kickoff), `v0.142.0` (moved at the `v0.148.0` kickoff), `v0.143.0` (moved at the `v0.149.0` kickoff), `v0.144.0` (moved at the `v0.150.0` kickoff), `v0.145.0` (moved at the `v0.151.0` kickoff), `v0.146.0` (moved at the `v0.152.0` kickoff), `v0.147.0` (moved at the `v0.153.0` kickoff), `v0.148.0` (moved at the `v0.154.0` kickoff), `v0.149.0` (moved at the `v0.155.0` kickoff), `v0.150.0` (moved at the `v0.156.0` signoff — the first time this archive check ran at signoff rather than kickoff, since v0.156.0 folded two releases' worth of scope into one and crossed the cap without an intervening kickoff) and `v0.151.0` (moved at the `v0.157.0` kickoff) and `v0.152.0` (moved at the `v0.158.0` kickoff) and `v0.153.0` and `v0.154.0` (moved at the `v0.159.0` and `v0.160.0` kickoffs; earlier passes did not extend this line) and `v0.155.0` (moved at the `v0.161.0` kickoff) and `v0.156.0` (moved at the `v0.162.0` kickoff) and `v0.157.0` (moved at the `v0.163.0` kickoff) and `v0.158.0` (moved at the `v0.164.0` kickoff) and `v0.159.0` (moved at the `v0.165.0` kickoff) and `v0.160.0` (moved at the `v0.166.0` kickoff) and `v0.161.0` (moved at the `v0.167.0` kickoff) as the live file crossed its *current + last five* cap. Each version's own `## vX.Y.Z` heading is the index — search for it. `v0.40.1` and earlier moved here
 2026-07-10; **`v0.41.0` through `v0.120.0` moved here 2026-09-07** in the `v0.126.0` pass, which
 resumed this convention after it had lapsed for 85 releases — `RELEASES.md` had reached 116
 sections against its documented design of *current + last few versions*. Both passes are MOVES,
@@ -21025,5 +21025,98 @@ Subject to Section to Note; Year and term placement stays in a separate editoria
 3. `scripts/check-deploys.sh` was NOT run (no Render API key in the session); the backend deploy is evidenced by `V150` above, the Vercel deploy remains unverified.
 
 **Checkpoint gate: none minted.** Everything shipped was owner-decided and none of it was gated on evidence; there is no instrumentation to read and a checkpoint without a metric is decorative. Real usage of the term feature will first be visible when a curator terms the BSCS Year, so the honest follow-up is the Phase B kickoff read, not a dated checkpoint.
+
+---
+## v0.161.0 - Scannable Study Plans
+
+**Status: Released** (signed off 2026-09-27; PRs #1452 frontend, #1453 pressure-test fix merged into the release branch; release PR to `main` pending the owner's admin merge)
+
+Theme: make a Study Plan page scannable. A learner opening a plan sees its Sections collapsed until they choose one,
+can open or close them all at once, and is told `Not started` instead of `0% · 0 due` when they have no evidence yet.
+
+### Planned Scope
+
+**Scope picked by the owner, 2026-09-26 (at the `v0.160.0` signoff); kicked off 2026-09-27: Degree Study Journeys Phase B (plan §13, §18 Phase B, §9.6), scoped frontend-only at kickoff; a
+backend fix landed during pre-signoff pressure testing (see below).** Source: `docs/claude-plans/degree-study-journeys-stage1-architecture-audit.md`. Independent of Phase A, which shipped
+in `v0.160.0`. **Every claim below was re-read in code at kickoff, not taken from the plan (the plan's line numbers had
+drifted):**
+
+1. **Sections collapsed by default at every breakpoint.** Today the default is seeded once at mount from viewport width
+   (`LARGE_VIEWPORT_MIN_WIDTH = 1024`, `collection-detail-page-client.tsx:136`; seeded at `:3131`; applied at `:3484` and the
+   two `?? defaultSectionExpanded` render sites `:4183`, `:4256`), so a desktop learner sees every Section of a 312-note plan
+   expanded. New rule: collapsed everywhere, with ONE deterministic exception: a plan with exactly one Section expands it.
+   Screen width may decide layout density, never how much curriculum a learner must process.
+2. **An `Expand all` / `Collapse all` toggle on the Study Plan page.** It does not exist there (grep-verified in
+   `collection-detail-page-client.tsx`); the Year builder already has a two-button pair at `study-plan-builder-page-client.tsx:2925`/`:2933`
+   that this must not be confused with. One low-prominence text button in the Section
+   list header that reads `Expand all` normally and `Collapse all` once every Section is open.
+3. **`Not started` at the Section summary row.** The header badge is gated only on `sectionReadiness.total > 0`
+   (`SectionCardHeader`, `:310`), so a Section whose notes exist but are all unpracticed renders `0% · 0 due`. `SectionReadiness`
+   (`:123`) has no not-practiced count, so it grows one (`aggregateSectionReadiness`, `:230`), and the badge shows `Not started`
+   when nothing has been practiced.
+4. **`Not started` at the Year/plan summary.** The compact header in the shared `ReadinessSummary`
+   (`components/readiness/readiness-summary.tsx:171-177`) renders `0% ready · 0/N mastered · 0 due` for untouched content, while
+   the same file already has `isReadinessNotStarted` (`:19`) for per-subject entries. **Verify every consumer of
+   `ReadinessSummary` before changing its compact header, and scope the change to the collection pages if others exist.**
+
+**Already built, so NOT scope (verified):** full-row clickable Section headers, the collapsed summary row with note count and
+3-title peek, multiple Sections open at once, `aria-expanded` on the header. The Subject-card `Not started` shipped with the
+compact card in `v0.160.0`.
+
+**Owner decisions, 2026-09-27:** (a) **Collapsed by default in the READ view; expanded by default on the BUILD surfaces.** ⚠️ CORRECTED post-kickoff: the Year builder does not "start every Subject expanded" — `refreshBuilder({ seedCollapsed: true })` collapses every Subject on first load (`dc9ca58c`, `collapsedSubjectIds` seeded from `nextSubjects`, not empty as first stated at `:1392`), and its toggle pair is at `:2943`/`:2951`, not `:2925`/`:2933`. The owner re-confirmed on 2026-09-27, after this was found, that the Year builder is left unchanged by this release regardless. The
+Year builder (`/collections/[id]/builder`, the only build surface a user can reach: the Study Plan page's own organize mode is dormant, `organizeMode` being a constant `false`) keeps
+their expanded default and are otherwise unchanged; the `Expand all` / `Collapse all` toggle is added to the Study Plan page in
+the read view (organize mode being dormant, the toggle's organize-mode behaviour is not user-reachable). (Cross-section drag is already a no-op, `handleDragEnd` `:3343`, and a note changes Section
+through its row's Section control, so nothing here may auto-expand a Section on drag.) (b) **Routing: Codex.** Written as
+`docs/codex-prompts/v0.161.0-scannable-study-plans.md` (gitignored); the diff is audited with `/audit-diff` before anything is
+committed. (c) **The `Not started` header change is Study Plan pages only for now**; whether it becomes product-wide is to be
+judged after this ships (the Progress page's goal card and the note detail page use the same compact header and are untouched).
+
+**Implementor decision:** item 4 is done through an opt-in prop on the compact `ReadinessSummary` header, set ONLY at the two Study
+Plan page call sites (Goal `collection-detail-page-client.tsx:3889`, leaf `:4121`), so the other compact call sites (the Progress
+page's goal card `app/progress/progress-report-client.tsx:507` and the note detail page
+`components/notes/private-note-detail-page-client.tsx:3301`) render exactly as before.
+
+**Explicitly NOT in this release (as scoped at kickoff; a backend fix was added afterward by pre-signoff pressure testing, see Shipped):** persisting expansion state (decided in plan §13.1; it would restore a deep expansion the
+learner does not remember making); accordion single-open; the artifact-level `getCollectionLabels(profileType, collection?)`
+terminology resolver (plan: only if justified, and nothing here justifies it); any migration or new endpoint; any
+Term, Degree or placement-revision work (placement revisions is its own Backlog row); any change to mastery math or
+`ConceptHealth`.
+
+Anti-drift: Sections stay a computed grouping (no entity, no table); no new mastery signal at any level; the Year page term
+grouping and compact cards from `v0.160.0` are untouched; Review Set rendering must not change beyond the default-collapsed
+Sections and the `Not started` wording (five live Review Sets). **Verification:** frontend `tsc --noEmit`, lint and jest;
+tests for the default state at BOTH viewport widths (now identical), the single-Section exception, the toggle's label flip,
+and a render assertion that `0% · 0 due` never appears for zero evidence at Section or plan grain; mutation-check every new
+test and name the killer; a diff that changes behaviour must touch a test that runs it; `advisor()` before the Codex prompt is written, `/audit-diff` on delivery, and `advisor()` on the
+diff. The first two Opus passes (frontend behaviour; release housekeeping) and the Codex pass ran while the release was still frontend-only; the Codex pass surfaced the adoption-boundary defect, which was then fixed and re-verified by a fourth, narrower Opus pass scoped to that fix diff.
+
+### Shipped
+
+- Study Plan read views now start Sections collapsed at every viewport width, except that an exactly one-Section plan starts expanded. The expansion logic keeps separate read-view and organize-mode overrides (`useSectionExpansionState`); organize mode is dormant on this page (`organizeMode` is a constant `false`, no setter, and the inline Organize toggle is no longer exposed), so that split is defensive code exercised only by its hook test, and the only build surface a user can reach is the Year builder, which is unchanged and already collapses its Subject blocks on first load (with its own `Expand all` / `Collapse all` pair). Expansion state is deliberately not persisted across reloads.
+- A low-prominence `Expand all` / `Collapse all` text toggle on the Study Plan read view controls every Section and is hidden when fewer than two Sections exist.
+- Untouched Section readiness badges say `Not started` only when no note in the Section has a completed session (a learner who practiced but never answered a concept correctly keeps the `N% · M due` wording, matching the note rows' `Practiced` label); Sections with some evidence keep the existing `N% · M due` wording, and zero-concept Sections still show no badge.
+- The compact readiness header opts into `Not started · N concepts` for an untouched Goal, and for an untouched leaf Study Plan only while `progress.notesPracticed === 0`. The Progress page and note detail page do not opt in and render exactly as before. The Goal header and the termed compact Subject cards (`isSubjectStarted`) have no per-note practice signal, so a Goal or a termed Subject where the learner practiced without ever answering correctly still reads `Not started` — a documented limitation, not exposed today (no live Year carries a term).
+- **Pre-signoff pressure-test fix, backend (PR #1453; this widens the release beyond frontend-only):** a child Subject Plan that is `PUBLIC` but has never been published (null `published_at`) is now treated as not found by the anonymous public read and by a standalone `adopt()`, so its term (or title) cannot reach an anonymous reader or a standalone adopter before Publish update. `adoptGoal` now adopts every child that carries a publication stamp, whatever its visibility, instead of requiring `PUBLIC`. A published-but-`PRIVATE` child made a fresh Goal adoption throw *after* the learner's Goal had already been persisted, leaving a half-created Goal a retry could not repair; **confirmed live by two distinct mechanisms, not one:** PNLE's two `PRIVATE` children were created 2026-09-10 (after `V141`) with `published_at IS NULL` and were later stamped by an explicit Publish update on 2026-09-14 without their visibility being flipped to `PUBLIC` — the mechanism the code comments already describe. ALE's seven `PRIVATE` children predate `V141` (created 2026-08-29 and 2026-09-05) and have `published_at == created_at` exactly, the signature of `V141`'s blanket backfill (`UPDATE note_collections SET published_at = created_at WHERE published_at IS NULL`, with no visibility predicate) rather than an explicit Publish update — these were curator drafts that the backfill made look published. Both mechanisms produce the identical symptom in `adoptGoal` and are fixed by the same change: the publication stamp, not visibility, is the boundary. **Since when:** `adoptGoal` has required each child to be `PUBLIC` (by delegating to the public-route `adopt()`) since Goal adoption itself was introduced, well before any publication-stamp concept existed; ALE's child at sibling position 0 has been `PRIVATE` since its creation on 2026-08-29, so the earliest zero-Subject ALE adoptions (2026-08-31, 2026-09-04) predate `V141` (2026-09-08) entirely and cannot be blamed on the stamp filter — the stamp filter (added in `v0.132.0`, PR introducing the publication boundary) only added an ADDITIONAL required condition on top of the pre-existing `PUBLIC` requirement; it never explains the defect's origin. This now matches what the public preview counts and what Official update already delivers (title, description and term of a published `PRIVATE` child). Deploy order is either: the API shape is unchanged, and a never-published child now returns 404 on a direct read or adopt where it previously either leaked or threw mid-adoption.
+- Four cold falsification passes ran on this release, in two rounds: while the release was still frontend-only, one Opus pass ran over the whole release AND one Opus pass ran over release housekeeping/docs, in parallel, alongside a separate Codex pass over both v0.160.0 and v0.161.0; the Codex pass is what found the adoption-boundary defect below. After the fix, a fourth, narrower Opus pass ran on the fix diff alone and confirmed it. Findings from all passes are dispositioned in Known Limitations below.
+
+### Known Limitations
+
+- **Existing adopters are not repaired by the adoption-boundary fix.** As of the 2026-09-27 read, 27 of 31 ALE adopters and all 17 PNLE adopters hold fewer Subject Plans than the source now has published (2 ALE adopters hold zero); this count is not split between pre- and post-defect causes and is not itself evidence the defect affected all of them equally, since ALE's own source additions have been growing independently. Re-adopting returns the existing (short) Goal unchanged. `Review update` already offers the missing Subject Plans as additions and was not changed by this release; no backfill was written or run — repairing existing adopters is a separate owner decision, tracked as its own Backlog row.
+- **The `Not started` header change is scoped to the Study Plan pages, not product-wide** (owner decision, pending a judgment after this ships): the Progress page's goal card and the note detail page keep the old `0% ready · 0/N mastered · 0 due` wording for untouched content.
+- **A Codex finding was refuted, not adopted:** a claim that the frontend-first deploy order was unsafe (an unknown-property rejection) was checked against the live Spring context; the JSON converter is a Jackson 3 `JsonMapper` with `FAIL_ON_UNKNOWN_PROPERTIES=false`, so either deploy order remains safe.
+- **Section grouping keys on the trimmed label only**, not the canonical whitespace-collapsed form `docs/features/collections.md` describes elsewhere; two legacy labels differing only in internal whitespace render as two Sections. Pre-existing, unrelated to this release's changes; not fixed here.
+- **The SMALLINT term-order ceiling (32767) has no dedicated guard** in the frontend combobox or the pipeline builder; reaching it needs an impractical number of terms per Year and is not fixed in this release.
+
+
+### Checkpoint gate
+
+No `[CHECKPOINT — due YYYY-MM-DD]` row was minted for this release. Nothing shipped ahead of its own evidence: the collapse/toggle/`Not started` scope was owner-decided against re-read code, and the adoption-boundary fix was verified against production reads (the ALE/PNLE stamped-but-private shapes, the note-visibility check, and the mechanism split above), not shipped on a bootstrap argument.
+
+### Post-deploy verification owed
+
+`SELECT count(*) FROM note_collections a JOIN note_collections r ON r.id = a.source_plan_id WHERE a.parent_collection_id IS NULL AND r.parent_collection_id IS NULL AND a.created_at >= '<deploy timestamp>' AND NOT EXISTS (SELECT 1 FROM note_collections k WHERE k.parent_collection_id = a.id);` — expected 0; a `STUDY_GOAL_ADOPTED` analytics event does not fire on the failing first attempt (it throws before `trackStudyGoalAdopted`), only on the harmless retry, so this reads the actual row shape rather than the event log. Also run `scripts/check-deploys.sh` (both Vercel and Render matter for this release) at least five minutes after the merge, and confirm `v0.160.0`'s still-unverified Vercel deploy while there.
+
+
 
 ---
