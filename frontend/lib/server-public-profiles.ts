@@ -12,10 +12,17 @@ export type ServerPublicProfileResult =
   | { status: "not_found" };
 
 export async function getServerPublicProfile(userId: string): Promise<ServerPublicProfileResult> {
-  const response = await fetch(buildApiUrl(`/public/profile/${userId}`), {
+  // Both requests are fired before either is awaited, so a visibility toggle can't land in the gap
+  // between two sequential requests. The no-op .catch keeps an unused rejection (the private/
+  // not-found profile branches below never await this promise) from surfacing as unhandled.
+  const profileFetch = fetch(buildApiUrl(`/public/profile/${userId}`), {
     method: "GET",
     next: { revalidate: 300 },
   });
+  const focusPromise = getServerFocus(`/public/profile/${userId}/learning-focus`);
+  focusPromise.catch(() => {});
+
+  const response = await profileFetch;
 
   if (response.status === 404) {
     return { status: "not_found" };
@@ -30,7 +37,7 @@ export async function getServerPublicProfile(userId: string): Promise<ServerPubl
   return {
     status: "ok",
     profile: (await response.json()) as PublicProfileResponse,
-    focus: await getServerFocus(`/public/profile/${userId}/learning-focus`),
+    focus: await focusPromise,
   };
 }
 
@@ -41,10 +48,14 @@ async function getServerFocus(path: string): Promise<PublicProfileFocusResponse>
 }
 
 export async function getServerPublicCreatorProfile(username: string): Promise<ServerPublicProfileResult> {
-  const response = await fetch(buildApiUrl(`/public/creator/${username}`), {
+  const profileFetch = fetch(buildApiUrl(`/public/creator/${username}`), {
     method: "GET",
     next: { revalidate: 300 },
   });
+  const focusPromise = getServerFocus(`/public/creator/${username}/learning-focus`);
+  focusPromise.catch(() => {});
+
+  const response = await profileFetch;
 
   if (response.status === 404) {
     return { status: "not_found" };
@@ -59,6 +70,6 @@ export async function getServerPublicCreatorProfile(username: string): Promise<S
   return {
     status: "ok",
     profile: (await response.json()) as PublicProfileResponse,
-    focus: await getServerFocus(`/public/creator/${username}/learning-focus`),
+    focus: await focusPromise,
   };
 }
