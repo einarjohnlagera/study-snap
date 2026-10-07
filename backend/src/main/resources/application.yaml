@@ -567,6 +567,10 @@ studysnap:
     pool-generating-bound-minutes: ${GENERATION_POOL_GENERATING_BOUND_MINUTES:60}
     long-exam-session-bound-minutes: ${GENERATION_LONG_EXAM_SESSION_BOUND_MINUTES:30}
     note-bound-minutes: ${GENERATION_NOTE_BOUND_MINUTES:120}
+  goal-adoption:
+    recovery-cron: ${GOAL_ADOPTION_RECOVERY_CRON:0 * * * * *}
+    stale-minutes: ${GOAL_ADOPTION_STALE_MINUTES:10}
+    recovery-batch-size: ${GOAL_ADOPTION_RECOVERY_BATCH_SIZE:20}
   notifications:
     cleanup-cron: ${NOTIFICATION_CLEANUP_CRON:0 15 * * * *}
     retention-days: ${NOTIFICATION_RETENTION_DAYS:90}

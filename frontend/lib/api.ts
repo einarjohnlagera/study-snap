@@ -2225,11 +2225,28 @@ export type AdoptStudyPlanResponse = {
 
 export type AdoptGoalResponse = {
   goalCollectionId: string;
+  collectionId?: string;
+  status?: "STARTED" | "PENDING" | "RUNNING" | "COMPLETED" | "FAILED";
+  jobId?: string | null;
+  processedSubjectCount?: number;
+  totalSubjectCount?: number;
   adoptedSubjectCount: number;
   skippedSubjectCount: number;
   totalNotesCopied: number;
   totalNotesSkipped: number;
   alreadyAdopted: boolean;
+};
+
+export type GoalAdoptionStatusResponse = {
+  collectionId: string;
+  jobId: string;
+  status: "PENDING" | "RUNNING" | "COMPLETED" | "FAILED";
+  processedSubjectCount: number;
+  totalSubjectCount: number;
+  adoptedSubjectCount: number;
+  skippedSubjectCount: number;
+  totalNotesCopied: number;
+  totalNotesSkipped: number;
 };
 
 export type ReviewSetUpdateChange = {
@@ -2351,6 +2368,17 @@ export type PublicProfileResponse = {
   notesBySubject: SubjectCountResponse[];
   totalPublicSubjectCount: number;
   publicNotes: PublicProfileNoteResponse[];
+};
+
+export type PublicProfileSummaryResponse = {
+  displayName: string;
+  bio: string | null;
+  publicNotesCount: number;
+};
+
+export type PublicProfileFocusResponse = {
+  coursePrograms: Array<{ label: string; count: number }>;
+  subjects: Array<{ label: string; count: number }>;
 };
 
 export type CreatorImpactNoteResponse = {
@@ -5790,6 +5818,43 @@ export async function adoptGoal(id: string): Promise<AdoptGoalResponse> {
   return parseApiResponse<AdoptGoalResponse>(response, "Could not start this Goal.");
 }
 
+export async function getGoalAdoptionStatus(goalId: string): Promise<GoalAdoptionStatusResponse> {
+  const response = await fetchWithAuth(
+    `/collections/${encodeURIComponent(goalId)}/adoption-status`,
+    { method: "GET", headers: buildAuthHeaders() },
+    true,
+  );
+  return parseApiResponse<GoalAdoptionStatusResponse>(response, "Could not check Goal adoption progress. Try again.");
+}
+
+/** Wait for a persisted Goal job; a status fetch failure returns control to the caller's retry UI. */
+export async function waitForGoalAdoption(
+  started: AdoptGoalResponse,
+  onProgress?: (progress: GoalAdoptionStatusResponse) => void,
+): Promise<AdoptGoalResponse> {
+  if (!started.jobId || started.status === "COMPLETED") return started;
+  for (;;) {
+    const progress = await getGoalAdoptionStatus(started.goalCollectionId);
+    onProgress?.(progress);
+    if (progress.status === "COMPLETED") {
+      return {
+        ...started,
+        adoptedSubjectCount: progress.adoptedSubjectCount,
+        skippedSubjectCount: progress.skippedSubjectCount,
+        totalNotesCopied: progress.totalNotesCopied,
+        totalNotesSkipped: progress.totalNotesSkipped,
+        status: "COMPLETED",
+        processedSubjectCount: progress.processedSubjectCount,
+        totalSubjectCount: progress.totalSubjectCount,
+      };
+    }
+    if (progress.status === "FAILED") {
+      throw new Error("Goal adoption paused. Try again to resume it.");
+    }
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+  }
+}
+
 export async function getReviewSetSourceUpdate(id: string): Promise<ReviewSetUpdateResponse> {
   const response = await fetchWithAuth(
     `/collections/${encodeURIComponent(id)}/source-update`,
@@ -6255,6 +6320,36 @@ export async function getPublicCreatorProfile(username: string): Promise<PublicP
     headers: buildAuthHeaders(),
   });
   return parseApiResponse<PublicProfileResponse>(response, "Could not load this public profile.");
+}
+
+export async function getPublicProfileSummary(userId: string): Promise<PublicProfileSummaryResponse> {
+  const response = await fetch(buildUrl(`/public/profile/${encodeURIComponent(userId)}/summary`), {
+    method: "GET",
+    headers: buildAuthHeaders(),
+  });
+  return parseApiResponse<PublicProfileSummaryResponse>(response, "Could not load this author.");
+}
+
+export async function getPublicCreatorSummary(username: string): Promise<PublicProfileSummaryResponse> {
+  const response = await fetch(buildUrl(`/public/creator/${encodeURIComponent(username)}/summary`), {
+    method: "GET",
+    headers: buildAuthHeaders(),
+  });
+  return parseApiResponse<PublicProfileSummaryResponse>(response, "Could not load this author.");
+}
+
+export async function getPublicProfileFocus(userId: string): Promise<PublicProfileFocusResponse> {
+  const response = await fetch(buildUrl(`/public/profile/${encodeURIComponent(userId)}/learning-focus`), {
+    method: "GET", headers: buildAuthHeaders(),
+  });
+  return parseApiResponse<PublicProfileFocusResponse>(response, "Could not load Learning Focus.");
+}
+
+export async function getPublicCreatorFocus(username: string): Promise<PublicProfileFocusResponse> {
+  const response = await fetch(buildUrl(`/public/creator/${encodeURIComponent(username)}/learning-focus`), {
+    method: "GET", headers: buildAuthHeaders(),
+  });
+  return parseApiResponse<PublicProfileFocusResponse>(response, "Could not load Learning Focus.");
 }
 
 export async function getCreatorImpact(

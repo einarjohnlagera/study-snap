@@ -11,6 +11,8 @@ import com.studysnap.backend.dto.CreateNoteCollectionRequest;
 import com.studysnap.backend.dto.GenerateCompanionRequest;
 import com.studysnap.backend.dto.GeneratedCompanionContentResponse;
 import com.studysnap.backend.dto.GoalCollectionChildResponse;
+import com.studysnap.backend.dto.GoalAdoptionStatusResponse;
+import com.studysnap.backend.config.StudySnapProperties;
 import com.studysnap.backend.dto.GoalCollectionDetailResponse;
 import com.studysnap.backend.dto.GoalChildItemsResponse;
 import com.studysnap.backend.dto.NoteCollectionDetailResponse;
@@ -30,6 +32,9 @@ import com.studysnap.backend.dto.SubjectProgressEntry;
 import com.studysnap.backend.dto.UpdateNoteCollectionRequest;
 import com.studysnap.backend.dto.WeeklyFocusDayEntry;
 import com.studysnap.backend.entity.AnalyticsEventType;
+import com.studysnap.backend.entity.AnalyticsEventEntity;
+import com.studysnap.backend.entity.GoalAdoptionJobEntity;
+import com.studysnap.backend.entity.GoalAdoptionJobStatus;
 import com.studysnap.backend.entity.CollectionVisibility;
 import com.studysnap.backend.entity.LearnerLevel;
 import com.studysnap.backend.entity.NoteCollectionEntity;
@@ -41,6 +46,7 @@ import com.studysnap.backend.entity.NoteVisibility;
 import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.entity.UserRole;
 import com.studysnap.backend.exception.CollectionItemNotFoundException;
+import com.studysnap.backend.exception.AppException;
 import com.studysnap.backend.exception.CollectionNotFoundException;
 import com.studysnap.backend.exception.CollectionNotPublishableException;
 import com.studysnap.backend.exception.InvalidCollectionRequestException;
@@ -49,6 +55,8 @@ import com.studysnap.backend.exception.ReviewSetUpdateNotPublishableException;
 import com.studysnap.backend.exception.UserNotFoundException;
 import com.studysnap.backend.model.StudyPackProgressView;
 import com.studysnap.backend.repository.GeneratedQuizRepository;
+import com.studysnap.backend.repository.AnalyticsEventRepository;
+import com.studysnap.backend.repository.GoalAdoptionJobRepository;
 import com.studysnap.backend.repository.GeneratedQuizNoteProjection;
 import com.studysnap.backend.repository.NoteCollectionChildCountProjection;
 import com.studysnap.backend.repository.NoteCollectionAdoptionCountProjection;
@@ -202,6 +210,10 @@ public class NoteCollectionService {
     private final UserRepository userRepository;
     private final TransactionOperations collectionTransactionOperations;
     private final ApplicationEventPublisher applicationEventPublisher;
+    private final GoalAdoptionJobRepository goalAdoptionJobRepository;
+    private final GoalAdoptionDispatcher goalAdoptionDispatcher;
+    private final StudySnapProperties properties;
+    private final AnalyticsEventRepository analyticsEventRepository;
 
     @Transactional(readOnly = true)
     public List<NoteCollectionSummaryResponse> list(UUID userId) {
@@ -1088,6 +1100,13 @@ public class NoteCollectionService {
             UUID userId,
             boolean reassertPrimaryAfterPersist
     ) {
+        return adoptSource(source, userId, reassertPrimaryAfterPersist, Set.of(), false);
+    }
+
+    private AdoptStudyPlanResponse adoptSource(
+            NoteCollectionEntity source, UUID userId, boolean reassertPrimaryAfterPersist,
+            Set<UUID> excludedNoteIds, boolean failFastOnNoteError
+    ) {
         UUID sourceCollectionId = source.getId();
         // Fast idempotency path: an existing personal plan for this source is returned as-is.
         Optional<NoteCollectionEntity> alreadyAdopted =
@@ -1099,7 +1118,7 @@ public class NoteCollectionService {
         // adopt() is intentionally non-transactional so each note copy runs in its own transaction:
         // a single failed copy is isolated and never rolls back the whole adopt.
         List<CopiedPlanItem> copiedItems = new ArrayList<>();
-        int skippedCount = copySourceItems(source, userId, copiedItems);
+        int skippedCount = copySourceItems(source, userId, copiedItems, excludedNoteIds, failFastOnNoteError);
 
         try {
             return persistAdoptedPlan(source, userId, copiedItems, skippedCount, reassertPrimaryAfterPersist);
@@ -1116,134 +1135,260 @@ public class NoteCollectionService {
         NoteCollectionEntity source = collectionRepository
                 .findByIdAndVisibility(sourceGoalId, CollectionVisibility.PUBLIC)
                 .orElseThrow(CollectionNotFoundException::new);
-        // ⚠️ EXISTING ADOPTERS ARE RESOLVED FIRST, BEFORE ANY PUBLICATION GATE. Their copy already
-        // exists; whether the source currently has publishable children is irrelevant to them.
-        Optional<NoteCollectionEntity> alreadyAdopted =
+        Optional<NoteCollectionEntity> existing =
                 collectionRepository.findByOwnerUserIdAndSourcePlanId(userId, sourceGoalId);
-        if (alreadyAdopted.isPresent()) {
-            return alreadyAdoptedGoalResponse(userId, sourceGoalId, alreadyAdopted.get());
+        if (existing.isPresent()) {
+            return existingGoalJobResponse(userId, sourceGoalId, existing.get(), true);
         }
 
-        // Goal adoption copies source children. Keep unfinished Subject Plans out of the new adopter's
-        // library until they receive a source-side publication stamp.
-        //
-        // ⚠️ THE GATE BELOW MUST READ THE SAME FILTERED, OWNER-SCOPED LIST THE COPY LOOP READS.
-        // It previously gated on countByParentCollectionId, which filters by neither publication nor
-        // owner: a Goal whose children were all unpublished passed the gate, filtered to an empty list,
-        // and copied nothing. adoptGoal never copies the root's own items, so the learner received a
-        // collection with zero Subject Plans and zero notes -- silently, because both adoptedSubjectCount
-        // and skippedSubjectCount were 0 -- which then became their primary collection and could not be
-        // repaired by re-adopting, since findByOwnerUserIdAndSourcePlanId now matched.
-        List<NoteCollectionEntity> sourceChildren = collectionRepository
+        // The publication stamp, rather than visibility, decides which Subject Plans are in a
+        // published Goal. Freeze their IDs now so a resumed job processes the same curriculum.
+        List<UUID> sourceChildIds = collectionRepository
                 .findOrderedChildrenByParentCollectionIdAndOwnerUserId(sourceGoalId, source.getOwnerUserId())
                 .stream()
                 .filter(child -> child.getPublishedAt() != null)
+                .map(NoteCollectionEntity::getId)
                 .toList();
-        if (sourceChildren.isEmpty()) {
+        if (sourceChildIds.isEmpty()) {
             throw new CollectionNotFoundException();
         }
         AdoptedGoalPersistence persistedGoal;
         try {
-            persistedGoal = persistAdoptedGoal(source, userId);
+            persistedGoal = persistAdoptedGoal(source, userId, sourceChildIds);
         } catch (DataIntegrityViolationException raceLost) {
             NoteCollectionEntity winner = collectionRepository
                     .findByOwnerUserIdAndSourcePlanId(userId, sourceGoalId)
                     .orElseThrow(() -> raceLost);
-            return alreadyAdoptedGoalResponse(userId, sourceGoalId, winner);
+            return existingGoalJobResponse(userId, sourceGoalId, winner, true);
         }
         if (persistedGoal.alreadyAdopted()) {
-            return alreadyAdoptedGoalResponse(userId, sourceGoalId, persistedGoal.collection());
+            return existingGoalJobResponse(userId, sourceGoalId, persistedGoal.collection(), true);
         }
+        GoalAdoptionJobEntity job = goalAdoptionJobRepository
+                .findByGoalIdAndOwnerUserId(persistedGoal.collection().getId(), userId)
+                .orElseThrow();
+        enqueueGoalAdoption(job.getId());
+        return goalJobResponse(job, false, true);
+    }
 
-        LocalDate earliestChildTargetDate = null;
-        int adoptedSubjectCount = 0;
-        int skippedSubjectCount = 0;
-        int totalNotesCopied = 0;
-        int totalNotesSkipped = 0;
-        for (int index = 0; index < sourceChildren.size(); index++) {
-            NoteCollectionEntity sourceChild = sourceChildren.get(index);
-            // ⚠️ PUBLISHED IS NOT PUBLIC. Publish update stamps a Subject Plan without changing its visibility,
-            // and V141 stamped every pre-existing row, so a stamped child can be PRIVATE (at the 2026-09-27
-            // review the ALE and PNLE Review Sets each held such children; do not treat that as a standing
-            // count). The public-route adopt() requires PUBLIC and threw for such a child AFTER the learner's
-            // Goal was persisted: a half-created Goal that a retry returned as "already adopted". Inside an
-            // adopted Goal the publication stamp is the boundary (Official update already works that way),
-            // so the loaded child is adopted directly.
-            AdoptStudyPlanResponse childAdoptResult = adoptSource(sourceChild, userId, false);
-            totalNotesCopied += childAdoptResult.copiedCount();
-            totalNotesSkipped += childAdoptResult.skippedCount();
-            Optional<NoteCollectionEntity> personalChild =
-                    collectionRepository.findByOwnerUserIdAndSourcePlanId(userId, sourceChild.getId());
-            if (personalChild.isEmpty()) {
-                skippedSubjectCount++;
-                continue;
-            }
-
-            NoteCollectionEntity child = personalChild.get();
-            if (child.getParentCollectionId() == null) {
-                child.setParentCollectionId(persistedGoal.collection().getId());
-                child.setSiblingPosition(index);
-                child.setTermLabel(sourceChild.getTermLabel());
-                child.setTermOrder(sourceChild.getTermOrder());
-                // Same invariant as updateParent(): a collection that becomes a child must not
-                // keep carrying targetCompletionDate or Companion, both top-level-Goal-only fields.
-                // ⚠️ THE INVARIANT IS REAL; SILENTLY DESTROYING THE LEARNER'S OWN DATE WAS NOT. The
-                // date cleared here can only ever be one the LEARNER set: adopt() above may have just
-                // created this child, but persistAdoptedPlan never copies targetCompletionDate from the
-                // source, so a freshly copied child's date is always null. A non-null date therefore
-                // means a pre-existing standalone adoption the learner dated themselves. It is carried
-                // up to the Goal below rather than lost.
-                // (Corrected 2026-09-05: an earlier version of this comment claimed the branch runs
-                // only on pre-existing rows, which is false — adopt() at :906 feeds it fresh copies too.
-                // The conclusion survives; the reason it survives is the null-copy above, not the path.)
-                if (child.getTargetCompletionDate() != null
-                        && (earliestChildTargetDate == null
-                            || child.getTargetCompletionDate().isBefore(earliestChildTargetDate))) {
-                    earliestChildTargetDate = child.getTargetCompletionDate();
+    private AdoptGoalResponse existingGoalJobResponse(
+            UUID userId, UUID sourceGoalId, NoteCollectionEntity existing, boolean alreadyAdopted
+    ) {
+        Optional<GoalAdoptionJobEntity> job =
+                goalAdoptionJobRepository.findByGoalIdAndOwnerUserId(existing.getId(), userId);
+        if (job.isEmpty()) {
+            // Goals adopted before this job table existed retain their completed response.
+            return alreadyAdoptedGoalResponse(userId, sourceGoalId, existing);
+        }
+        GoalAdoptionJobEntity current = job.get();
+        boolean retryingFailure = current.getStatus() == GoalAdoptionJobStatus.FAILED;
+        if (retryingFailure) {
+            current = collectionTransactionOperations.execute(status -> {
+                GoalAdoptionJobEntity locked = goalAdoptionJobRepository.findByIdForUpdate(job.get().getId())
+                        .orElseThrow(CollectionNotFoundException::new);
+                if (locked.getStatus() == GoalAdoptionJobStatus.FAILED) {
+                    locked.setStatus(GoalAdoptionJobStatus.PENDING);
+                    locked.setRunToken(null);
+                    locked.setUpdatedAt(OffsetDateTime.now());
+                    goalAdoptionJobRepository.save(locked);
                 }
-                child.setTargetCompletionDate(null);
-                child.setCompanion(null);
-                child.setCompanionStructureSnapshot(null);
-                touch(child);
-                collectionRepository.save(child);
-                adoptedSubjectCount++;
-            } else {
-                skippedSubjectCount++;
-            }
+                return locked;
+            });
         }
+        if (current.getStatus() == GoalAdoptionJobStatus.PENDING) {
+            enqueueGoalAdoption(current.getId());
+        }
+        return goalJobResponse(current, alreadyAdopted, retryingFailure);
+    }
 
-        // ⚠️ THE LEARNER'S OWN EXAM DATE IS PROMOTED, NOT DISCARDED. A Subject Plan they adopted
-        // standalone may already carry a date they chose; nesting it under a Goal clears that field by
-        // an invariant this code does not get to relax. The earliest such date wins, because a
-        // completion target is a DEADLINE and the nearest one is the binding one. A Goal that already
-        // has its own date keeps it -- a freshly adopted Goal never copies one (persistAdoptedGoal
-        // leaves it null deliberately), so in practice this fills an empty field rather than competing.
-        if (earliestChildTargetDate != null && persistedGoal.collection().getTargetCompletionDate() == null) {
-            persistedGoal.collection().setTargetCompletionDate(earliestChildTargetDate);
-            touch(persistedGoal.collection());
-            collectionRepository.save(persistedGoal.collection());
+    private AdoptGoalResponse goalJobResponse(GoalAdoptionJobEntity job, boolean alreadyAdopted,
+                                              boolean freshlyDispatched) {
+        String status = freshlyDispatched ? "STARTED" : job.getStatus().name();
+        return new AdoptGoalResponse(job.getGoalId(), job.getAdoptedSubjectCount(),
+                job.getSkippedSubjectCount(), job.getTotalNotesCopied(), job.getTotalNotesSkipped(),
+                alreadyAdopted, job.getGoalId(), status, job.getId(),
+                job.getProcessedSubjectCount(), job.getSourceChildIds().size());
+    }
+
+    @Transactional(readOnly = true)
+    public GoalAdoptionStatusResponse getGoalAdoptionStatus(UUID goalId, UUID userId) {
+        // Owner predicate belongs to the query. Unknown and foreign job IDs have the same result.
+        return goalAdoptionJobRepository.findByGoalIdAndOwnerUserId(goalId, userId)
+                .map(GoalAdoptionStatusResponse::from)
+                .orElseThrow(CollectionNotFoundException::new);
+    }
+
+    /** Dispatch only persisted work. Queue saturation leaves PENDING/FAILED for the next sweep. */
+    public void enqueueGoalAdoption(UUID jobId) {
+        try {
+            goalAdoptionDispatcher.dispatch(jobId, this::runGoalAdoption);
+        } catch (RuntimeException exception) {
+            log.warn("goal_adoption_dispatch_deferred jobId={}", jobId, exception);
         }
-        // After the children exist, so the baseline records child ids rather than an empty structure.
-        stampCompanionBaseline(persistedGoal.collection(), userId);
-        trackStudyGoalAdopted(
-                userId,
-                sourceGoalId,
-                persistedGoal.collection().getId(),
-                adoptedSubjectCount,
-                skippedSubjectCount,
-                totalNotesCopied,
-                totalNotesSkipped,
-                false
-        );
-        reassertPrimaryInvariant(userId);
-        return new AdoptGoalResponse(
-                persistedGoal.collection().getId(),
-                adoptedSubjectCount,
-                skippedSubjectCount,
-                totalNotesCopied,
-                totalNotesSkipped,
-                false
-        );
+    }
+
+    /** No top-level transaction: every Subject Plan gets a fresh persistence context and connection. */
+    public void runGoalAdoption(UUID jobId) {
+        UUID token = collectionTransactionOperations.execute(status -> {
+            GoalAdoptionJobEntity job = goalAdoptionJobRepository.findByIdForUpdate(jobId).orElse(null);
+            if (job == null || job.getStatus() == GoalAdoptionJobStatus.COMPLETED) {
+                return null;
+            }
+            if (job.getStatus() == GoalAdoptionJobStatus.RUNNING
+                    && !job.getUpdatedAt().isBefore(OffsetDateTime.now().minusMinutes(
+                            properties.getGoalAdoption().getStaleMinutes()))) {
+                return null;
+            }
+            UUID claimed = UUID.randomUUID();
+            job.setRunToken(claimed);
+            job.setStatus(GoalAdoptionJobStatus.RUNNING);
+            job.setUpdatedAt(OffsetDateTime.now());
+            goalAdoptionJobRepository.save(job);
+            return claimed;
+        });
+        if (token == null) {
+            return;
+        }
+        try {
+            Set<UUID> excludedNoteIds = new HashSet<>();
+            while (true) {
+                boolean processed;
+                try {
+                    processed = Boolean.TRUE.equals(collectionTransactionOperations.execute(
+                            status -> processNextGoalChild(jobId, token, excludedNoteIds)));
+                } catch (GoalAdoptionNoteCopyFailure noteFailure) {
+                    // The failed child transaction has rolled back, so any repository operation
+                    // that marked it rollback-only cannot poison the retry. Re-run the same child
+                    // with this note counted as skipped. No copied notes from that attempt survive.
+                    excludedNoteIds.add(noteFailure.noteId());
+                    continue;
+                } catch (AppException childFailure) {
+                    // An invalid individual Subject Plan is visible in the same skipped-subject
+                    // counter as a missing child. The failed child transaction has already rolled
+                    // back; the checkpoint below is a separate short transaction.
+                    log.warn("goal_adoption_child_skipped jobId={}", jobId, childFailure);
+                    processed = Boolean.TRUE.equals(collectionTransactionOperations.execute(
+                            status -> skipFailedGoalChild(jobId, token)));
+                }
+                if (!processed) {
+                    break;
+                }
+                excludedNoteIds.clear();
+            }
+            collectionTransactionOperations.execute(status -> {
+                finalizeGoalAdoption(jobId, token);
+                return null;
+            });
+        } catch (RuntimeException exception) {
+            log.error("goal_adoption_failed jobId={}", jobId, exception);
+            collectionTransactionOperations.execute(status -> {
+                GoalAdoptionJobEntity job = goalAdoptionJobRepository.findByIdForUpdate(jobId).orElse(null);
+                if (job != null && token.equals(job.getRunToken())) {
+                    job.setStatus(GoalAdoptionJobStatus.FAILED);
+                    job.setUpdatedAt(OffsetDateTime.now());
+                    goalAdoptionJobRepository.save(job);
+                }
+                return null;
+            });
+        }
+    }
+
+    private boolean processNextGoalChild(UUID jobId, UUID token, Set<UUID> excludedNoteIds) {
+        GoalAdoptionJobEntity job = goalAdoptionJobRepository.findByIdForUpdate(jobId).orElseThrow();
+        if (!token.equals(job.getRunToken()) || job.getStatus() != GoalAdoptionJobStatus.RUNNING) {
+            return false;
+        }
+        int index = job.getProcessedSubjectCount();
+        if (index >= job.getSourceChildIds().size()) {
+            return false;
+        }
+        UUID childId = job.getSourceChildIds().get(index);
+        NoteCollectionEntity sourceChild = collectionRepository.findById(childId).orElse(null);
+        if (sourceChild == null) {
+            job.setSkippedSubjectCount(job.getSkippedSubjectCount() + 1);
+        } else {
+            adoptGoalChild(job, sourceChild, index, excludedNoteIds);
+        }
+        job.setProcessedSubjectCount(index + 1);
+        job.setUpdatedAt(OffsetDateTime.now());
+        goalAdoptionJobRepository.save(job);
+        return true;
+    }
+
+    private boolean skipFailedGoalChild(UUID jobId, UUID token) {
+        GoalAdoptionJobEntity job = goalAdoptionJobRepository.findByIdForUpdate(jobId).orElseThrow();
+        if (!token.equals(job.getRunToken()) || job.getStatus() != GoalAdoptionJobStatus.RUNNING
+                || job.getProcessedSubjectCount() >= job.getSourceChildIds().size()) {
+            return false;
+        }
+        job.setSkippedSubjectCount(job.getSkippedSubjectCount() + 1);
+        job.setProcessedSubjectCount(job.getProcessedSubjectCount() + 1);
+        job.setUpdatedAt(OffsetDateTime.now());
+        goalAdoptionJobRepository.save(job);
+        return true;
+    }
+
+    private void adoptGoalChild(GoalAdoptionJobEntity job, NoteCollectionEntity sourceChild,
+                                int index, Set<UUID> excludedNoteIds) {
+        UUID userId = job.getOwnerUserId();
+        // The same idempotent primitive used by standalone adoption handles a replay after a crash.
+        AdoptStudyPlanResponse result = adoptSource(sourceChild, userId, false, excludedNoteIds, true);
+        job.setTotalNotesCopied(job.getTotalNotesCopied() + result.copiedCount());
+        job.setTotalNotesSkipped(job.getTotalNotesSkipped() + result.skippedCount());
+        NoteCollectionEntity child = collectionRepository
+                .findByOwnerUserIdAndSourcePlanId(userId, sourceChild.getId()).orElse(null);
+        if (child == null || child.getParentCollectionId() != null) {
+            job.setSkippedSubjectCount(job.getSkippedSubjectCount() + 1);
+            return;
+        }
+        NoteCollectionEntity goal = collectionRepository.findById(job.getGoalId()).orElseThrow();
+        child.setParentCollectionId(goal.getId());
+        child.setSiblingPosition(index);
+        child.setTermLabel(sourceChild.getTermLabel());
+        child.setTermOrder(sourceChild.getTermOrder());
+        LocalDate childDate = child.getTargetCompletionDate();
+        if (childDate != null && (goal.getTargetCompletionDate() == null
+                || childDate.isBefore(goal.getTargetCompletionDate()))) {
+            goal.setTargetCompletionDate(childDate);
+            touch(goal);
+            collectionRepository.save(goal);
+        }
+        child.setTargetCompletionDate(null);
+        child.setCompanion(null);
+        child.setCompanionStructureSnapshot(null);
+        touch(child);
+        collectionRepository.save(child);
+        job.setAdoptedSubjectCount(job.getAdoptedSubjectCount() + 1);
+    }
+
+    private void finalizeGoalAdoption(UUID jobId, UUID token) {
+        GoalAdoptionJobEntity job = goalAdoptionJobRepository.findByIdForUpdate(jobId).orElseThrow();
+        if (!token.equals(job.getRunToken()) || job.getStatus() != GoalAdoptionJobStatus.RUNNING
+                || job.getProcessedSubjectCount() != job.getSourceChildIds().size()) {
+            return;
+        }
+        NoteCollectionEntity goal = collectionRepository.findById(job.getGoalId()).orElseThrow();
+        stampCompanionBaseline(goal, job.getOwnerUserId());
+        reassertPrimaryInvariant(job.getOwnerUserId());
+        trackStudyGoalAdopted(job);
+        job.setStatus(GoalAdoptionJobStatus.COMPLETED);
+        job.setUpdatedAt(OffsetDateTime.now());
+        goalAdoptionJobRepository.save(job);
+    }
+
+    private void trackStudyGoalAdopted(GoalAdoptionJobEntity job) {
+        // The event and COMPLETED marker commit atomically. The job ID is the event ID, so a
+        // recovery replay cannot mint a duplicate even if a future call path bypasses the lock.
+        AnalyticsEventEntity event = new AnalyticsEventEntity();
+        event.setId(job.getId());
+        event.setUserId(job.getOwnerUserId());
+        event.setEntityId(job.getGoalId());
+        event.setEventType(AnalyticsEventType.STUDY_GOAL_ADOPTED);
+        event.setMetadataJson(studyGoalAdoptionMetadata(job.getSourceGoalId(),
+                job.getAdoptedSubjectCount(), job.getSkippedSubjectCount(),
+                job.getTotalNotesCopied(), job.getTotalNotesSkipped(), false));
+        event.setCreatedAt(OffsetDateTime.now());
+        analyticsEventRepository.saveAndFlush(event);
     }
 
     @Transactional(readOnly = true)
@@ -1981,7 +2126,8 @@ public class NoteCollectionService {
         }
     }
 
-    private int copySourceItems(NoteCollectionEntity source, UUID userId, List<CopiedPlanItem> copiedItems) {
+    private int copySourceItems(NoteCollectionEntity source, UUID userId, List<CopiedPlanItem> copiedItems,
+                                Set<UUID> excludedNoteIds, boolean failFastOnNoteError) {
         // Adoption reads the source side. An unpublished addition remains curator-only until the
         // explicit publication transaction stamps it.
         List<NoteCollectionItemEntity> sourceItems = itemRepository
@@ -1990,6 +2136,10 @@ public class NoteCollectionService {
                 .toList();
         int skippedCount = 0;
         for (NoteCollectionItemEntity sourceItem : sourceItems) {
+            if (excludedNoteIds.contains(sourceItem.getNoteId())) {
+                skippedCount++;
+                continue;
+            }
             try {
                 if (!isPublicSourceNote(sourceItem.getNoteId())) {
                     skippedCount++;
@@ -2002,6 +2152,9 @@ public class NoteCollectionService {
                         sourceItem.getPosition()
                 ));
             } catch (RuntimeException exception) {
+                if (failFastOnNoteError) {
+                    throw new GoalAdoptionNoteCopyFailure(sourceItem.getNoteId(), exception);
+                }
                 skippedCount++;
                 log.warn(
                         "study_plan_adopt_item_skipped sourcePlanId={} noteId={} userId={}",
@@ -2013,6 +2166,19 @@ public class NoteCollectionService {
             }
         }
         return skippedCount;
+    }
+
+    private static final class GoalAdoptionNoteCopyFailure extends RuntimeException {
+        private final UUID noteId;
+
+        private GoalAdoptionNoteCopyFailure(UUID noteId, RuntimeException cause) {
+            super(cause);
+            this.noteId = noteId;
+        }
+
+        private UUID noteId() {
+            return noteId;
+        }
     }
 
     private AdoptStudyPlanResponse persistAdoptedPlan(
@@ -2080,7 +2246,8 @@ public class NoteCollectionService {
         });
     }
 
-    private AdoptedGoalPersistence persistAdoptedGoal(NoteCollectionEntity source, UUID userId) {
+    private AdoptedGoalPersistence persistAdoptedGoal(
+            NoteCollectionEntity source, UUID userId, List<UUID> sourceChildIds) {
         return collectionTransactionOperations.execute(status -> {
             Optional<NoteCollectionEntity> existing =
                     collectionRepository.findByOwnerUserIdAndSourcePlanIdForUpdate(userId, source.getId());
@@ -2115,6 +2282,16 @@ public class NoteCollectionService {
             collection.setCreatedAt(now);
             collection.setUpdatedAt(now);
             NoteCollectionEntity saved = collectionRepository.saveAndFlush(collection);
+            GoalAdoptionJobEntity job = new GoalAdoptionJobEntity();
+            job.setId(UUID.randomUUID());
+            job.setGoalId(saved.getId());
+            job.setOwnerUserId(userId);
+            job.setSourceGoalId(source.getId());
+            job.setSourceChildIds(sourceChildIds);
+            job.setStatus(GoalAdoptionJobStatus.PENDING);
+            job.setCreatedAt(OffsetDateTime.now());
+            job.setUpdatedAt(job.getCreatedAt());
+            goalAdoptionJobRepository.save(job);
             assignAdoptedCollectionAsPrimaryWhenMissing(userId, saved);
             return new AdoptedGoalPersistence(saved, false);
         });
@@ -2812,15 +2989,23 @@ public class NoteCollectionService {
                 userId,
                 AnalyticsEventType.STUDY_GOAL_ADOPTED,
                 personalGoalId,
-                Map.of(
+                studyGoalAdoptionMetadata(sourceGoalId, adoptedSubjectCount, skippedSubjectCount,
+                        totalNotesCopied, totalNotesSkipped, alreadyAdopted)
+        );
+    }
+
+    private Map<String, Object> studyGoalAdoptionMetadata(
+            UUID sourceGoalId, int adoptedSubjectCount, int skippedSubjectCount,
+            int totalNotesCopied, int totalNotesSkipped, boolean alreadyAdopted
+    ) {
+        return Map.of(
                         SOURCE_PLAN_ID_METADATA_KEY, sourceGoalId.toString(),
                         ADOPTED_SUBJECT_COUNT_METADATA_KEY, adoptedSubjectCount,
                         SKIPPED_SUBJECT_COUNT_METADATA_KEY, skippedSubjectCount,
                         TOTAL_NOTES_COPIED_METADATA_KEY, totalNotesCopied,
                         TOTAL_NOTES_SKIPPED_METADATA_KEY, totalNotesSkipped,
                         ALREADY_ADOPTED_METADATA_KEY, alreadyAdopted
-                )
-        );
+                );
     }
 
     private record AdoptedGoalPersistence(NoteCollectionEntity collection, boolean alreadyAdopted) {

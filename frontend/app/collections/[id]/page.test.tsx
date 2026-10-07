@@ -16,6 +16,7 @@ import {
   generateAdaptivePracticeForCollection,
   getCollection,
   getCollectionGoal,
+  getGoalAdoptionStatus,
   getActiveAskCompanionSession,
   getMe,
   getNoteConceptCounts,
@@ -81,6 +82,7 @@ jest.mock("@/lib/api", () => {
     deleteCollection: jest.fn(),
     getCollection: jest.fn(),
     getCollectionGoal: jest.fn(),
+    getGoalAdoptionStatus: jest.fn(),
     getActiveAskCompanionSession: jest.fn(),
     startAskCompanionSession: jest.fn(),
     askCompanionQuestion: jest.fn(),
@@ -340,6 +342,7 @@ describe("CollectionDetailPageClient", () => {
     (generateAdaptivePracticeForCollection as jest.Mock).mockReset();
     (getCollection as jest.Mock).mockReset();
     (getCollectionGoal as jest.Mock).mockReset();
+    (getGoalAdoptionStatus as jest.Mock).mockReset();
     (getActiveAskCompanionSession as jest.Mock).mockReset();
     (getMe as jest.Mock).mockReset();
     (getNoteConceptCounts as jest.Mock).mockReset();
@@ -409,6 +412,9 @@ describe("CollectionDetailPageClient", () => {
       subjectPlansAdded: 0,
       lastUpdatePublishedAt: "2026-09-08T00:00:00Z",
     });
+    (getGoalAdoptionStatus as jest.Mock).mockRejectedValue(
+      new ApiRequestError("No adoption job", { status: 404 }),
+    );
     let uuidCounter = 0;
     Object.defineProperty(globalThis, "crypto", {
       configurable: true,
@@ -439,6 +445,30 @@ describe("CollectionDetailPageClient", () => {
 
     expect(await screen.findByRole("heading", { name: "Midterm Study Plan" })).toBeInTheDocument();
     expect(listNotes).not.toHaveBeenCalled();
+  });
+
+  it("shows a direct visitor Goal adoption progress while children are being copied", async () => {
+    (getCollection as jest.Mock).mockResolvedValue(collection({ sourcePlanId: "source-goal-1", childCount: 0, items: [] }));
+    (getCollectionGoal as jest.Mock).mockResolvedValue(goalDetail({ childCount: 0, children: [] }));
+    (getGoalAdoptionStatus as jest.Mock).mockResolvedValue({
+      collectionId: "collection-1", jobId: "job-1", status: "RUNNING",
+      processedSubjectCount: 1, totalSubjectCount: 3,
+    });
+
+    const view = render(<CollectionDetailPageClient collectionId="collection-1" />);
+    expect(await screen.findByRole("status")).toHaveTextContent("Copying Subject Plans: 1 of 3");
+    view.unmount();
+  });
+
+  it("offers retry if the direct Goal status read is unreachable", async () => {
+    (getCollection as jest.Mock).mockResolvedValue(collection({ sourcePlanId: "source-goal-1", childCount: 0, items: [] }));
+    (getCollectionGoal as jest.Mock).mockResolvedValue(goalDetail({ childCount: 0, children: [] }));
+    (getGoalAdoptionStatus as jest.Mock).mockRejectedValueOnce(new Error("network down"));
+    const view = render(<CollectionDetailPageClient collectionId="collection-1" />);
+    expect(await screen.findByRole("alert")).toHaveTextContent("Could not finish checking Goal adoption");
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    await waitFor(() => expect(getGoalAdoptionStatus).toHaveBeenCalledTimes(2));
+    view.unmount();
   });
 
   /**

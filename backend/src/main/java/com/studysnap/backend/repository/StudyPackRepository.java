@@ -20,6 +20,14 @@ import java.util.Optional;
 import java.util.UUID;
 
 public interface StudyPackRepository extends JpaRepository<StudyPackEntity, UUID> {
+    interface NoteSummary {
+        UUID getNoteId();
+        String getSummary();
+    }
+
+    @Query("select s.noteId as noteId, s.summary as summary from StudyPackEntity s where s.noteId in :noteIds")
+    List<NoteSummary> findSummariesByNoteIdIn(@Param("noteIds") List<UUID> noteIds);
+
     // ⚠️ ATOMIC ON PURPOSE — do not replace with entity.setQuizStamp(entity.getQuizStamp() + 1). Both
     // saveStudyPack (async worker, and its four synchronous callers) and AdminStudyPackTransactionHelper's
     // malformed-quiz repair read the pack unlocked and can run their LLM call concurrently with a real

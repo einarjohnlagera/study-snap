@@ -7,9 +7,10 @@ Public Profile is the public showcase surface for one creator's public identity 
 ## Key Files
 
 **Backend**
-- `backend/src/main/java/com/studysnap/backend/controller/PublicProfileController.java` — `GET /public/creator/{username}`, `GET /public/profile/{userId}` (legacy compat), `PUT /users/profile/public-visibility`
-- `backend/src/main/java/com/studysnap/backend/service/PublicProfileService.java` — profile resolution; public notes aggregation (capped at 8, sorted copies→views→shares→title); metric aggregation (`totalCopies`, `totalViews`, `totalShares`, `totalProfileShares`); public subject-count aggregation
-- `backend/src/main/java/com/studysnap/backend/dto/PublicProfileResponse.java` — response shape: `displayName`, `username`, `publicNotesCount`, metrics, `notesBySubject`, `totalPublicSubjectCount`, capped note list
+- `backend/src/main/java/com/studysnap/backend/controller/PublicProfileController.java` — full profile and three-field summary routes by username and legacy user ID
+- `backend/src/main/java/com/studysnap/backend/service/PublicProfileService.java` — shared visibility gate; SQL totals across every public note; bounded note hydration for the profile; count-only author summary
+- `backend/src/main/java/com/studysnap/backend/repository/PublicProfileMetricsRepository.java` — SQL totals, the union of the top 50 note IDs by copies, views, shares, and the compound display order, plus grouped Learning Focus labels
+- `backend/src/main/java/com/studysnap/backend/dto/PublicProfileResponse.java` — unchanged full response shape: `displayName`, `username`, `publicNotesCount`, metrics, `notesBySubject`, `totalPublicSubjectCount`, bounded candidate note list
 - `backend/src/main/java/com/studysnap/backend/controller/CreatorImpactController.java` — authenticated self-only paginated and summary endpoints; never accepts another creator id
 - `backend/src/main/java/com/studysnap/backend/service/CreatorImpactService.java` — owner-private completed-session aggregation, stable impact ranking, and page-bounded secondary metrics
 
@@ -20,6 +21,7 @@ Public Profile is the public showcase surface for one creator's public identity 
 - `frontend/app/impact/` — authenticated private contribution page
 - `frontend/lib/server-public-profiles.ts` — server-side `getPublicCreatorProfile(username)` fetch helper
 - `frontend/lib/api.ts` — public-profile calls plus paginated `getCreatorImpact(...)`, `getCreatorImpactSummary()`, and profile visibility updates
+- `frontend/components/notes/public-note-author-card.tsx` — uses the lightweight summary route; it never fetches the full profile note list
 
 ## Anti-drift Notes
 
@@ -41,6 +43,8 @@ Current route compatibility note:
 Related APIs:
 
 - `GET /api/public/profile/{userId}`
+- `GET /api/public/profile/{userId}/summary` and `GET /api/public/creator/{username}/summary` return only `displayName`, `bio`, and the true `publicNotesCount`; they use the same private-profile gate and 403/404 errors as the full routes
+- `GET /api/public/profile/{userId}/learning-focus` and `GET /api/public/creator/{username}/learning-focus` return grouped program and subject counts so the existing Learning Focus sentence still reflects every public note; the same visibility gate applies
 - `GET /api/creator-impact/me?impacted=true|false&page=&size=` (authenticated owner only)
 - `GET /api/creator-impact/me/summary` (authenticated owner only)
 - `PUT /api/users/profile/public-visibility` (owner only)
@@ -62,7 +66,14 @@ Related APIs:
 - `totalProfileShares` when the profile link has been shared (counts `PUBLIC_PROFILE_SHARED` events fired when someone copies the "Share Profile" link)
 - `notesBySubject` as the top 5 public-note subjects by count, sorted descending
 - `totalPublicSubjectCount` as the uncapped count of distinct public-note subjects
-- list of public notes only (capped at 8, sorted by copies → views → shares → title)
+- list of public notes only (the frontend displays up to 8, sorted by copies → views → shares → title)
+
+The full profile response keeps its existing fields. SQL computes the note count and metric totals over
+all of the creator's public notes. Only the union of ranked top-50 candidates is loaded with full
+content and Study Pack summaries; Study Pack quiz JSON is never fetched for profile cards. The
+Public Library remains the place to browse every note. Learning Focus uses the separate grouped
+label read, since it describes the full catalog rather than just the ranked cards. Server-rendered
+profile reads retain their 300-second ISR cache and the client refresh remains owner-only.
 
 Portfolio polish:
 

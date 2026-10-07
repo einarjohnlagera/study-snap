@@ -1,5 +1,177 @@
 # RELEASES.md - NoteLib
 
+## v0.166.0 - Measured Twice
+
+**Status: Released** (signed off 2026-10-07; PRs #1475, #1476, #1477, #1478 merged into `releases/v0.166.0`)
+
+Theme: close out the two post-signoff follow-ups from `v0.165.0` that were already done and waiting
+on branches targeting `main` — bundled here instead, since merging doc-only branches straight to
+`main` triggers a production build/deploy the owner wants to avoid for changes this small. **Expanded
+2026-10-06, owner decision, past the original doc-only scope**, to fix the Hikari long-connection-hold
+mechanism the kickoff's own checkpoint sweep found and root-caused (see Shipped below) — two real
+unbounded-work defects, not an LLM-hold pattern, so `v0.112.0`'s deferred Phase 3 would not have
+addressed either.
+
+### Planned Scope
+
+**The first two items are docs-only, already written and reviewed on their own branches; this
+release's work is landing them, not authoring them.**
+
+- **Record `v0.165.0`'s confirmed deploy timestamp in its own `[CHECKPOINT]` row.** Branch
+  `docs/v0.165.0-post-deploy-checkpoint` (PR #1475, opened against `main`, retargeted here). Render
+  live 2026-10-05T15:21:14Z, Vercel Production deployment success 15:24:27Z — both confirmed serving
+  the same commit via `gh api`. Gives the outage-fix checkpoint a real start time
+  (`2026-10-12T15:24:27Z` due date) instead of "not yet measurable."
+- **G2(a) title-leak finding, correction, and a measured decision not to build a deterministic
+  fix.** Branch `docs/g2a-title-leak-finding-and-correction` (PR #1476, opened against `main`,
+  retargeted here). A peer session's post-deploy production evidence showed `v0.165.0`'s G2(a)
+  prompt fix doesn't reliably stop Subject leaking into Study Pack titles (1 of 3 regenerated packs
+  still leaked). The obvious fix — a deterministic strip mirroring G2(b) — was scoped and then
+  measured against production before being recommended: **3,390 existing Study Pack titles already
+  end in `"{something} in {the note's own Subject}"`, and a 40-row random sample is, without
+  exception, legitimate** ("Torsion in Strength of Materials", "Infection Control... in Nursing") —
+  a blind strip would mangle thousands of good titles to catch an unknown, likely small number of
+  real leaks, with no mechanical rule found to tell them apart. **Decision: do not build it.** Also
+  corrects an earlier overstated claim (the five-Applicable-Programs mixup was called "root-caused"
+  to a Program Family shortcut; a peer session's own verification showed the family's membership
+  doesn't fully reproduce the observed set, so the mechanism is plausible, not confirmed).
+- **Fix 1 — `PublicProfileService.buildPublicProfile`'s unbounded profile load (backend only).**
+  Confirmed root cause of the dominant Hikari long-hold pattern (see Shipped below): loads every
+  public note (full `content`) and every full `StudyPackEntity` (full quiz JSON) for one account with
+  no limit, to let the frontend pick its top-8-by-metric display. Fix: compute `totalCopies`/
+  `totalShares`/`totalViews`/the note count via SQL aggregates over ALL of the account's notes, and
+  only fetch full content/summary for a generous top-N (by copy/view/share) — same response shape, no
+  frontend change. Codex-scope (new aggregate + top-N query logic across `PublicProfileService.java`
+  and its repositories, ~3-4 files).
+- **Fix 2 — `NoteCollectionService.adoptGoal`'s sequential copy loop (backend + frontend — Option A,
+  owner decision 2026-10-06).** Confirmed root cause of the secondary long-hold pattern: copies a
+  Goal's children sequentially under one shared connection (open-in-view + HOLD mode), confirmed up to
+  571 notes in a real production Goal. **Owner chose the background-job fix over the smaller
+  synchronous EntityManager-clear option** — removes the connection-hold ceiling entirely rather than
+  raising it, at the cost of a bigger blast radius: `adoptGoal`'s copy path is shared with plain
+  `adopt()` and `applySourceUpdate` (row 782's mechanism), and the endpoint's response contract
+  changes from synchronous to a started-job response, requiring frontend polling/progress UX. Scope is
+  `adoptGoal` only — `adopt()`/`applySourceUpdate` stay synchronous (lower individual exposure: at most
+  one Subject Plan's worth of notes per call, not a whole Goal's). Codex-scope, multi-system
+  (frontend + backend).
+
+Anti-drift: no production write. `adopt()` and `applySourceUpdate`'s existing synchronous behavior and
+response shape must not change — only `adoptGoal`'s own endpoint moves to a background job. Fix 1 must
+not change `PublicProfileResponse`'s shape (no new pagination params) — verify against the frontend
+consumer (`public-profile-page-client.tsx`) before shipping, not just the backend tests.
+
+**Verification tier:** doc-only items — single `advisor()` summary, as before. **Fix 1 — one scoped
+cold falsification agent** (changes a production read path; verify the aggregate/top-N queries against
+real data, not just unit tests). **Fix 2 — at least one scoped cold falsification agent, and consider
+whether it rises to the full three-agent tier**: it changes a shared method's call-site contract
+(`adoptGoal`) while leaving two siblings (`adopt()`, `applySourceUpdate`) on the old path, and it
+introduces new async/job infrastructure — re-evaluate the tier once the Codex prompt's actual diff
+shape is known.
+
+### Shipped
+
+- **Goal adoption now runs as a resumable background job.** The production Goal with 571 notes
+  and confirmed 60–140s+ Hikari connection holds motivated moving its per-child copy loop off the
+  request thread. The request still creates the personal Goal and returns its id immediately; a
+  dedicated two-worker executor copies each published Subject Plan in its own transaction. A
+  persisted job row exposes owner-scoped progress, and a configured sweep re-enqueues stale work
+  after deploys. Completion stamps the Companion baseline and primary invariant and writes the
+  Goal adoption analytics event atomically with the completed marker. Dashboard, public cards,
+  discovery intent, and the collection page display progress and offer retry on status failure.
+  `adopt()` and `applySourceUpdate` share the copy primitive but are unchanged — verified both by
+  tracing every call path and by the existing test suite, which asserts their behavior unchanged.
+  **Audited by a cold falsification pass (2026-10-07) against the Codex prompt's own acceptance
+  criteria before merging** — no blocking defects found. One real gap it caught: the Testcontainers
+  integration test only ever seeded PUBLIC children, so the "adopts every stamped child regardless
+  of visibility" invariant (the exact defect `v0.161.0` PR #1453 fixed) had no test exercising the
+  real job execution path for a PRIVATE one — traced the code and confirmed the path itself is
+  unchanged by this diff, then closed the gap with `stampedPrivateChildIsAdoptedTheSameAsAPublicOne`,
+  which passes against a real Postgres container. **Known limitations, not blocking:**
+  `waitForGoalAdoption`'s poll loop has no caller-side cancellation, so a component that calls it
+  directly (rather than through the effect-based poll already used by all 4 call sites) leaves a
+  dangling promise after unmount — no crash, just a wasted request; the collection detail page's
+  poll effect re-checks status on every view of an already-completed Goal rather than caching that
+  it finished, which is wasteful but not incorrect; and `runGoalAdoption`'s initial claim
+  transaction isn't covered by its own error logging, so a failure there would surface as an
+  uncaught executor-thread exception rather than through this app's structured `goal_adoption_failed`
+  log line.
+
+- **Bounded Public Profile reads and a lightweight author-card summary (v0.166.0).** Production
+  long connection holds of 63–142 seconds coincided with a DB-CPU pin and health-check failure;
+  the largest creator had 1,997 public notes, all previously hydrated with full content and Study
+  Pack quiz JSON on a profile request. SQL now sums copies, shares, and views across every public
+  note while only ranked candidates are hydrated. The author card on each public note requests a
+  three-field count-based summary instead of the full profile. Grouped full-catalog labels keep
+  Learning Focus accurate when ranked cards favor a different subject. The full response shape,
+  visitor display, profile ISR cache, and owner-only refetch gate stay the same. **Audited
+  (2026-10-07) by tracing every changed file and running the full affected test suites, including
+  the new `PublicProfilePostgresIntegrationTest`, which seeds 210 real notes with engineered ties
+  and explicitly asserts the hydrated candidates' own totals are LESS than the true aggregate — a
+  guard against a totals-computed-from-candidates regression, not just a passing count.** No
+  blocking defects found; the Learning Focus split (a second lightweight aggregate endpoint,
+  beyond what the originating prompt specified) was Codex's own catch of a real consequence of
+  bounding `publicNotes` — the existing Learning Focus sentence derived its course/subject labels
+  by iterating that list directly, which this fix would have silently narrowed to only the
+  ranked-candidate subset. **Correction, 2026-10-07, from a second cold falsification pass run
+  specifically on this fix (the release's own Planned Scope had called for one; it was skipped at
+  merge time in favor of a direct audit, a process gap caught and closed after the fact):** the
+  original "known limitation, not blocking" note below undersold a real finding. Splitting the
+  server-rendered profile page into two sequential fetches (profile, then Learning Focus)
+  introduced a genuine inter-request race that did not exist before — if an owner's profile
+  visibility toggled in the gap between the two calls, the second request would 403 and throw,
+  failing the whole page even though the first request had just succeeded. **Fixed same day:**
+  `frontend/lib/server-public-profiles.ts` now fires both requests before awaiting either (profile
+  fetch issued first, matching the existing test's call-order assertion; the Learning Focus
+  promise carries a no-op `.catch` so an unawaited rejection on the private/not-found branches
+  never surfaces as unhandled), closing the window to the same near-zero exposure the single-fetch
+  page always had. Two new tests pin this: one proves both fetches fire before either resolves,
+  one proves the private-profile branch cannot throw from the discarded focus promise. The same
+  pass also found a second, lower-severity item, left as a known limitation rather than fixed: the
+  hydrated candidates' SQL tie-break (`title collate "und-x-icu"`) is not provably identical to the
+  frontend's `.localeCompare()` tie-break (runtime-default locale, not pinned to root) — they could
+  disagree on accented or locale-sensitive titles. Theoretical, not observed in the 210-note test
+  fixture, not worth a fix on its own.
+- **PR #1475 — `v0.165.0` deploy-timestamp checkpoint record.** Merged into `releases/v0.166.0`
+  (`7933a96a`). Records Render live 2026-10-05T15:21:14Z / Vercel Production deployment success
+  15:24:27Z into the outage-fix `[CHECKPOINT]` row, starting its clock
+  (due `2026-10-12T15:24:27Z`) instead of leaving it "not yet measurable."
+- **PR #1476 — G2(a) title-leak finding + Applicable Programs root-cause correction.** Merged into
+  `releases/v0.166.0` (`63bd1d68`). Adds `docs/claude-findings/2026-10-06-g2a-title-subject-leak-partial-failure.md`
+  and the decision not to build a deterministic title strip (see Planned Scope above for the
+  measurement); corrects the ROADMAP Backlog row's "root-caused" wording on the five-Applicable-Programs
+  deviation to "plausible, not confirmed."
+- **Kickoff's overdue-`[CHECKPOINT]` sweep, read and closed (doc-only, no code change).** The kickoff's
+  own step-9 scan found 6 overdue (`due 2026-10-04`/`10-05`) and 3 due-today (`10-06`) checkpoint rows
+  in `ROADMAP.md`'s Backlog Index, all genuinely unactioned. All 9 read against production (read-only
+  SQL via `query_render_postgres`, Render app-log traces via `list_logs`, one owner-answered question
+  that isn't data-derivable) and written up in `ROADMAP.md` with results. **Two kill criteria FIRED and
+  are recorded plainly, not explained away:** (1) H5's coverage ratio FELL post-deploy (61.4% vs. the
+  68.2% pre-H5 baseline, n=228 — not underpowered) — H5 did not achieve its stated goal; bears on
+  whether H6 is worth scoping. (2) Additive-update apply uptake is 0.3% (1 of 367, against a healthy
+  44% offer rate, so not an "offer gap") — per the `v0.116.0` checkpoint's own kill criterion, Slices
+  4-5 (structural updates) must NOT be built on this mechanism. **One finding corrected same day:**
+  HikariCP `Apparent connection leak` traces are real and recurring, but pairing all 9 against their
+  `"...was returned to the pool (unleaked)"` lines confirms these are LONG HOLDS (63s–142s sampled),
+  not permanent leaks — the first pass's "criterion (ii) fires" was an overclaim (a leak trace's stack
+  shows where a connection was acquired, not what the request did afterward). None of the three
+  pre-stated kill criteria cleanly fits; recorded as such rather than forced into one. **Two confirmed
+  root causes found instead, both unbounded synchronous DB work, neither an LLM hold:**
+  `PublicProfileService.buildPublicProfile` loads every public note plus every full Study Pack for one
+  account with no limit (confirmed in production: the top account has 1,997 public notes), and
+  `NoteCollectionService.adoptGoal` copies a Goal's children sequentially under one shared connection
+  (confirmed: the largest production Goal has 571 notes), both amplified by `open-in-view=ON` +
+  `DELAYED_ACQUISITION_AND_HOLD`. Neither is "connections held across slow external calls," so
+  `v0.112.0`'s deferred Phase 3 (scoped to LLM-call transaction boundaries) does not address either —
+  that conclusion survives the correction; only its justification changed.
+  **Four re-dated** (populations still too small to read: Adaptive Practice proximal tier, combined-quiz
+  tip impressions, bulk-regen TEACHER allowance). **Two closed clean:** classification-authority-transfer
+  (zero-cohort, exactly as its own denominator clause predicted) and title-suggestion uptake (24.6% apply
+  rate — meaningful use, kill criterion does not fire, keep the card). **One closed on owner input:**
+  bulk-regen receipt TTL — no report of a lost receipt, no extension; a related owner question (does
+  bulk regeneration survive a restart/deploy mid-batch) was checked in code and confirmed already
+  correctly handled (`NoteBulkRegenerationReceiptService.getReceipt`'s `stale` flag plus the frontend's
+  explicit restart-explanation banner) — no gap, nothing built.
+
 ## v0.165.0 - Bounded Discovery
 
 **Status: Released**
@@ -171,8 +343,13 @@ events continuing at a comparable weekly rate means the diagnosis is wrong or in
   Subject, guidance result and trigger once per input-message build
   (`backend/src/main/java/com/studysnap/backend/service/impl/OpenAiLlmStudyPackService.java:1698-1742`).
   **Verification limit:** G1 and G2(a) are prompt text; automated tests pin file content, not model
-  behavior. The owner must regenerate a pilot Note's Study Pack and inspect its Summary and title
-  (`r4-pilot-fix-plan.md` section 4). **Known limitations:** the single-note editor and onboarding
+  behavior. **⚠️ Owner-verified 2026-10-06, result: G1 confirmed working (n=1); G2(a) PARTIALLY
+  FAILS (n=3)** — regenerating three pilot Notes' Study Packs post-deploy left 1 of 3 titles still
+  reading "{Title} in {Subject}" ("Algorithms and Their Properties in Programming Fundamentals"),
+  confirmed directly against `study_packs` by two independent sessions. A prompt-only rule is not
+  reliable for the title field; see `docs/claude-findings/2026-10-06-g2a-title-subject-leak-partial-failure.md`
+  for the evidence and the owner's two open options (a deterministic title strip mirroring G2(b),
+  or accepting curator-review as the only mitigation — not decided, not built). **Known limitations:** the single-note editor and onboarding
   rely on G2(a)'s prompt wording alone for generated titles; they do not get the deterministic body
   override. A bulk-created note's body heading can revert to the model title if its content is later
   regenerated through `StudyPackService.generateStudyPackFromExistingNoteAsync`, which bypasses
@@ -1060,130 +1237,7 @@ No `[CHECKPOINT — due YYYY-MM-DD]` row was minted for this release. Nothing sh
 
 `SELECT count(*) FROM note_collections a JOIN note_collections r ON r.id = a.source_plan_id WHERE a.parent_collection_id IS NULL AND r.parent_collection_id IS NULL AND a.created_at >= '<deploy timestamp>' AND NOT EXISTS (SELECT 1 FROM note_collections k WHERE k.parent_collection_id = a.id);` — expected 0; a `STUDY_GOAL_ADOPTED` analytics event does not fire on the failing first attempt (it throws before `trackStudyGoalAdopted`), only on the harmless retry, so this reads the actual row shape rather than the event log. Also run `scripts/check-deploys.sh` (both Vercel and Render matter for this release) at least five minutes after the merge, and confirm `v0.160.0`'s still-unverified Vercel deploy while there.
 
-## v0.160.0 - Study Plans by Semester
 
-**Status: Released** (signed off 2026-09-26; PRs #1447 backend, #1448 frontend, #1449 pipeline, #1450 pressure-test fixes merged into the release branch; release PR merged as #1451 and tagged. Backend deploy verified 2026-09-27 by a read-only query through Render: `V150` applied 2026-09-26T16:06:30Z, success. The Vercel side and `scripts/check-deploys.sh` were NOT run)
+## Archived releases
 
-Theme: let a curator place each Subject Plan in an academic term, so a Year reads as a semester-by-semester study
-plan, without adding a level to the collection hierarchy and without touching any Note.
-
-### Planned Scope
-
-**Scope picked and release shape confirmed by the owner, 2026-09-26: Degree Study Journeys, Phase A0 and Phase A.**
-Source: `docs/claude-plans/degree-study-journeys-stage1-architecture-audit.md` (decision-complete feature plan;
-**§21 is the implementor handoff, §18 the phases and decisions A-F, §22 confirms no owner decisions remain**).
-The learner-facing promise is **"BS Computer Science - 1st Year Study Plan"**, never a complete Degree Study Journey.
-
-- **Phase A0 (documentation first, Claude-direct):** `docs/architecture/ADR-003-curriculum-placement-and-hierarchy-depth.md`
-  (decisions A-F exactly as enumerated in plan §18; ADR-002 is taken by the quiz-answer-identity proposal), plus the
-  `docs/features/collections.md` update. No application behaviour.
-- **Phase A (implementation, Codex in slices: backend, then frontend, then pipeline):**
-  1. Two nullable columns on `note_collections`, `term_label VARCHAR(60)` and `term_order SMALLINT`; one additive
-     migration, no backfill, no index.
-  2. Persistence, DTO, service and **adoption preservation** of the term.
-  3. Curator term assignment in the Year builder: a combobox over terms already used in that Year, never raw freetext.
-  4. Year-page conditional term grouping (all-NULL flat / all-placed grouped / mixed with a trailing `Term not specified`).
-  5. Compact Subject cards on the Year page (title, note count, ONE progress signal), gated on the SAME condition as
-     term grouping (any non-null `term_label`), no count threshold.
-  6. `academic_term` in the curriculum pipeline: extend `review-set-workbook-spec.md` and `build_review_set_workbook.py`
-     and regenerate; never hand-add the column to a generated workbook.
-  7. The regression and invariant tests in plan §21.5.
-- **Endpoint form (decided here, plan §21.9):** extend the existing collection update with two OPTIONAL fields. That is
-  additive in both directions (optional on request, nullable on response), so frontend and backend may deploy in either
-  order, and **the release notes must say so explicitly.** If a new endpoint is added instead, that stops being true and
-  the release owes a deploy-ordering statement and a real-request `MockMvc` test with `.contentType(MediaType.APPLICATION_JSON)`.
-- **Backend Academic Term slice:** migration `V150` adds nullable `term_label` / `term_order`; the existing collection
-  PATCH accepts optional `termLabel` / `termOrder`; `persistAdoptedPlan`, `createSubjectAddition`, and the `adoptGoal()`
-  re-parent branch carry child placement; and the Goal-child plus owned/public detail DTOs expose it. The PATCH fields
-  are optional on request and nullable on response, so frontend and backend may deploy in either order.
-- **Frontend Academic Term slice:** `lib/collection-terms.ts` holds the single `hasTermPlacement` gate that drives BOTH
-  Year-page term grouping and compact Subject cards (no count threshold); the Year page renders ordered static term
-  headers with a subject count and an in-progress count (shown only when above zero), a trailing `Term not specified`
-  group in the mixed case, and compact cards (title, note count, ONE of `N% ready` / `Not started`); with every child
-  term NULL the existing full-size grid is byte-for-byte unchanged. The Year builder gains a per-Subject term combobox
-  over the Year's existing terms (a new label is allowed; the order is assigned, never typed). The PATCH fields it sends
-  are optional on request, so this slice also deploys in either order relative to the backend.
-- **Pipeline Academic Term slice:** `build_review_set_workbook.py` accepts an OPTIONAL `academic_term` column, constant
-  per plan, validated per Study Plan: unused for all Subject Plans or assigned to all of them, and a partial
-  assignment is refused with an error naming the Study Plan and the unassigned Subject Plans (also refused: mixed
-  values inside one plan, over 60 characters, `Term not specified`, and case/spacing-variant duplicates). The term
-  order is derived from first-seen file order and printed in the workbook. With no terms the output is unchanged:
-  ALE, CPALE, LET and PNLE were rebuilt with the old and new builder and compared on cell values, fonts, fills, borders, merges, column widths, row heights and freeze panes: identical. The new `docs/curriculum/test_build_review_set_workbook.py` runs by hand in the venv and is NOT in CI.
-  `docs/curriculum/review-set-workbook-spec.md` and the strategist module `docs/gpt-contexts/REVIEW_SET_SHAPING_CONTEXT.md`
-  now carry the column, and the strategist module's TSV header was corrected to include `applicable_programs`, which the
-  builder has required since 2026-09-10 (a contract drift, not a behaviour change).
-- **Phase B (collapsed-by-default Sections, and so on) is NOT in this release**; it has no dependency on Phase A and rides
-  in a later one. **Phase C (a Degree entity and landing page) is out.**
-- **⚠️ A gap in the plan, found and verified in code at kickoff (and since corrected in the plan, §7.1a), that the
-  implementation MUST close:** the plan's adoption invariant named only the adoption path, but a child Subject Plan copy
-  is built field by field in TWO places. `persistAdoptedPlan` (`NoteCollectionService.java:1956-2017`) serves BOTH `adopt()`
-  and `adoptGoal()`, because `adoptGoal` creates each child by calling `adopt()` and then re-parents it. The SECOND is the
-  Official-update addition, `createSubjectAddition` (`:2476-2515`, `CreatedSubjectAddition`), which copies title,
-  description, course program, learner level, estimated hours and the source-sync fields and, without the term, lands a
-  Subject added to an already-adopted Year with a NULL term next to siblings that have terms. That manufactures the mixed
-  state the plan calls a curator-quality defect and shows a `Term not specified` group with no curator involved. The term
-  must be carried at BOTH, each with its own test that fails when it is dropped. **`persistAdoptedGoal` (`:2019-2057`,
-  the root copy) must NOT get the term**: a root has no parent and therefore no term placement, so adding it there would be
-  a silent dead column, not a fix.
-
-Anti-drift (plan §21.2 and §21.4, binding): with every child term NULL the existing Review Set and Goal rendering is
-UNCHANGED, with no term headers, no `Term not specified` group, and FULL-SIZE cards, protecting five live Review Sets
-(PNLE, CPALE, ALE, LET, Civil Engineering); density is gated on the same condition as grouping and never on a count;
-Official update stays additive-only forever; NO Degree progress in any phase (a permanent product rule); academic
-placement never touches the Note and `applicable_programs` is never overloaded to carry a term (ADR-001); the hierarchy
-stays at exactly two persisted levels; no Degree landing page and no `journey_key`/`journey_order` fallback, no Degree
-entity, no whole-Degree adoption, no learner curriculum customization, no term entity/catalog/enum, no collection
-`type`/`kind` enum, no change to `ConceptHealth`. Subject Plans are NOT reusable across Degree Journeys; only canonical
-Notes are. **Verification:** `advisor()` BEFORE the Codex prompt is written and on each diff; a diff that changes
-behaviour must touch a test that runs it; mutation-check every new test and name the killer; the all-NULL regression must
-assert full-size cards; frontend `tsc --noEmit`, lint and tests plus the full backend build with Docker; and, because the
-release touches the adoption engine and five live Review Sets, ONE scoped Opus cold agent framed as falsification of
-invariants 1, 2 (every copy site), 3 and 4 before signoff. Seven items is a large release; say what that does to the
-verification tier if more is folded in. **Owner-side, not this release's work:** the Note Strategist keeps authoring
-Subject to Section to Note; Year and term placement stays in a separate editorial file until the pipeline extension ships.
-
-### Shipped
-
-**Status: Released 2026-09-26 on `releases/v0.160.0`; the release PR to `main` is the owner's admin merge and its auto-deploy runs `V150`.**
-
-**Scope disposition (every Planned Scope item, checked against code):**
-
-| Item | Disposition | Evidence |
-|---|---|---|
-| Phase A0: ADR-003 (decisions A-F) and `collections.md` | **Shipped** | `docs/architecture/ADR-003-curriculum-placement-and-hierarchy-depth.md`; amended 2026-09-26 from "two" to "three" child-copy sites, decisions unchanged (owner-approved) |
-| 1. Two nullable columns, one additive migration | **Shipped** | `V150__collection_academic_term.sql` |
-| 2. Persistence, DTO, service, adoption preservation at BOTH child-copy builders (+ a third) | **Shipped, with one addition** | `persistAdoptedPlan` (`NoteCollectionService.java:2020`), `createSubjectAddition` (`:2537`), and the `adoptGoal()` re-parent branch (`:1161`), which the plan missed; NOT `persistAdoptedGoal` (`:2058`) |
-| 3. Curator term assignment (combobox) | **Shipped, changed** | `frontend/components/collections/subject-term-control.tsx`. Changed: hidden on adopted copies, disabled on published rows, partial-term warning |
-| 4. Year-page term grouping | **Shipped** | `hasTermPlacement` (`frontend/lib/collection-terms.ts:36`) at `collection-detail-page-client.tsx:1764` |
-| 5. Compact Subject cards on the same gate | **Shipped** | `CompactSubjectCard`, no count threshold |
-| 6. `academic_term` in the pipeline | **Shipped** | `resolve_terms` (`docs/curriculum/build_review_set_workbook.py:99`); no existing workbook needed regenerating (none uses terms) |
-| 7. Regression and invariant tests | **Shipped** | all-NULL full-size regression, one test per carry site, PATCH round-trip with a real MockMvc request, grouping, pipeline tests |
-| Phase B / Phase C | **Not in this release, by owner decision** | Phase B is the next release's scope (Backlog row); Phase C is out |
-
-**Changed mid-release, by owner decision (2026-09-26), not in the kickoff scope:**
-- **Partial term assignment is invalid authoring input**, enforced by the pipeline builder and by refusing to publish a partially-termed Year (first publication and Publish update).
-- **A term obeys the Official publication boundary by being settled before it.** It can change only while its Subject Plan is unpublished (own `published_at` AND the root's `last_update_published_at` both set means frozen; `published_at` alone is not enough because V141 stamped every pre-existing row). An adopted copy can never change a term and the builder hides the control there. Moving a published Subject that carries a term, or that joins a termed Year, is refused.
-- Owner rejected documenting the original Finding 1 (terms reaching learners around the publication boundary) as a permanent limitation; option A above was chosen over a placement-revisions redesign of the Official update engine, which is logged in the Backlog Index as its own future release.
-
-**Deploy order: either.** Both new request fields (`termLabel`, `termOrder`) are optional on the request and nullable on the response, and `termLocked` is an added response field the frontend treats as absent-means-unlocked. A frontend-first deploy sends nothing the old backend rejects (Spring Boot 4 / Jackson 3 ignores unknown properties, which was read, not run against a live backend), and a backend-first deploy serves fields the old frontend ignores. **`V150` is additive and nullable (`ADD COLUMN` twice, no default, no `NOT NULL`, no index).**
-
-**Verification:** full backend build with Docker 2557 tests, 0 failures (the PostgreSQL 16 harness applies `V150`); frontend `tsc --noEmit` clean, lint 0 errors, jest 224 suites / 2533 tests; every new test mutation-checked with the killer named in the PR threads (#1447, #1448, #1449, #1450). The pipeline unit tests (`docs/curriculum/test_build_review_set_workbook.py`, 13 tests) run by hand in the venv and are NOT in CI. ALE, CPALE, LET and PNLE were rebuilt with the old and new builder and compared on cell values, fonts, fills, borders, merges, widths, row heights and freeze panes: identical. Civil Engineering is still refused for lacking `applicable_programs`, as before.
-
-**Pressure test (two scoped Opus cold agents, framed as falsification, plus `advisor()` before the prompt and on each diff).** The first ran over the whole release: no blocker; two SHOULD-FIX (a Continue/hero target that could differ from the first card shown in a termed Year, fixed; the system-created half-termed learner Year, resolved by the publication-boundary decision above) and notes. The second ran on the freeze and publish guards: no blocker; two SHOULD-FIX (the re-flip named a subject the curator could not change, fixed; moving a published Subject with `updateParent` could leave it un-termed and permanently locked in a termed Year and block every later Publish update, fixed by refusing that move) and notes. Both agents confirmed the all-NULL invariant, the copy sites, additive-only Official update and the transport names.
-
-**Known limitations (documented, owner-visible):**
-- **Retroactive term introduction or rename on an already-published Year is UNSUPPORTED.** The freeze makes those cases unreachable rather than merged, and the five live Official Review Sets can never gain terms (their children are published under a stamped root; delete-and-recreate is the only route and existing adopters keep old copies). Backlog row: *Official update: placement revisions*. Do not build it speculatively.
-- **The in-flight BSCS Year 1 file is a single `plan_no` with the subjects as sections, so it cannot carry per-Subject terms until it is reshaped to one `plan_no` per subject.** It is another session's untracked file and was not touched.
-- The `Term not specified` reserved name is rejected in the builder and pipeline only; the backend does not reject the string, so a direct API call can store it (the page renders it without error).
-- A `termOrder` beyond the 32-bit integer range, or a non-number, returns 500 from the catch-all handler (pre-existing behaviour of every `Integer` PATCH field); values from 32768 up to the int maximum return 400.
-- `termLocked` covers the freeze rule only, not the adopted-copy rule: a standalone adopted plan nested under a learner's own Goal by direct API would show an enabled control the backend refuses (the optimistic update rolls back).
-- A label of only NBSP is stored by the backend (Java `trim`/`isBlank`) though the frontend treats it as unplaced; the create option ("Use X") saves on blur rather than on click. Neither is reachable from normal use.
-- The `Term` control also shows on a non-admin's own (non-adopted) Goals, with a warning that says a partially termed plan cannot be published; those users cannot publish. Not scoped further.
-- Non-admin-owned public collections that existed at V141 may have permanently locked children (V141 stamped their root); sized by the post-deploy read below.
-
-**Post-deploy verification (read-only `SELECT`s, run 2026-09-27 through the reconnected Render MCP):**
-1. `SELECT count(*) FROM note_collections WHERE term_label IS NOT NULL;` **= 0** (as expected; the column exists, `V150` applied 2026-09-26T16:06:30Z).
-2. `SELECT count(*) FROM note_collections c JOIN users u ON u.id = c.owner_user_id WHERE c.last_update_published_at IS NOT NULL AND u.role <> 'ADMIN';` **= 0**, so the non-admin locked-children limitation above affects no existing row.
-3. `scripts/check-deploys.sh` was NOT run (no Render API key in the session); the backend deploy is evidenced by `V150` above, the Vercel deploy remains unverified.
-
-**Checkpoint gate: none minted.** Everything shipped was owner-decided and none of it was gated on evidence; there is no instrumentation to read and a checkpoint without a metric is decorative. Real usage of the term feature will first be visible when a curator terms the BSCS Year, so the honest follow-up is the Phase B kickoff read, not a dated checkpoint.
+- `v0.160.0 — Study Plans by Semester` (Released) — Degree Study Journeys Phase A0/A: academic-term placement on Subject Plans, Year-page term grouping, compact Subject cards, and the curriculum-pipeline `academic_term` column; moved at the `v0.166.0` kickoff.

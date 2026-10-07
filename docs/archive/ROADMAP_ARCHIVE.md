@@ -5208,3 +5208,14 @@ TypeScript union member only, so no `api-*.test.ts` request-shape test is owed e
 explicitly at signoff rather than skipping silently). Deploy ordering: ship frontend and backend
 together — frontend-first silently drops a curator's save via `fromString`'s null return. Full scope
 in `RELEASES.md`.
+
+**Kicked off 2026-09-26, signed off 2026-09-26.** `v0.160.0 — Study Plans by Semester` is **Released** on `releases/v0.160.0` (release PR merged as #1451 and tagged; deploy state not reported to the `v0.161.0` kickoff), cut from
+`main` after `v0.159.0` merged as #1446 and tagged. **Owner scope pick and release shape, 2026-09-26: Degree Study
+Journeys Phase A0 (ADR-003, documentation) and Phase A (Academic Term on the Subject Plan, term grouping and compact
+Subject cards on the Year page, curator term assignment, `academic_term` in the curriculum pipeline).** Source
+`docs/claude-plans/degree-study-journeys-stage1-architecture-audit.md` (§21 handoff). Additive in both deploy
+directions (two optional fields on the existing collection update). **A plan gap was found and verified at kickoff:**
+a child Subject Plan copy is built field by field in TWO places, `persistAdoptedPlan` (serves `adopt()` and `adoptGoal()`)
+and the Official-update addition `createSubjectAddition` (`NoteCollectionService.java:2476-2515`), and the term must be
+carried at both; NOT at `persistAdoptedGoal`, the root copy. Phase B is a later release; Phase C is out. Anti-drift, verification tier and the required
+tests are in `RELEASES.md`.

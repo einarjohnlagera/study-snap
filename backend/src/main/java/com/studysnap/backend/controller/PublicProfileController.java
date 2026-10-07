@@ -1,6 +1,8 @@
 package com.studysnap.backend.controller;
 
 import com.studysnap.backend.dto.PublicProfileResponse;
+import com.studysnap.backend.dto.PublicProfileSummaryResponse;
+import com.studysnap.backend.dto.PublicProfileFocusResponse;
 import com.studysnap.backend.security.AuthenticatedUser;
 import com.studysnap.backend.service.PublicProfileService;
 import lombok.RequiredArgsConstructor;
@@ -25,11 +27,43 @@ public class PublicProfileController {
         return publicProfileService.getByUserId(userId, viewer == null ? null : viewer.userId());
     }
 
+    @GetMapping("/profile/{userId}/summary")
+    public PublicProfileSummaryResponse getSummaryByUserId(
+            @PathVariable String userId,
+            @AuthenticationPrincipal AuthenticatedUser viewer
+    ) {
+        return publicProfileService.getSummaryByUserId(userId, viewer == null ? null : viewer.userId());
+    }
+
+    @GetMapping("/profile/{userId}/learning-focus")
+    public PublicProfileFocusResponse getFocusByUserId(
+            @PathVariable String userId,
+            @AuthenticationPrincipal AuthenticatedUser viewer
+    ) {
+        return publicProfileService.getFocusByUserId(userId, viewer == null ? null : viewer.userId());
+    }
+
     @GetMapping("/creator/{username}")
     public PublicProfileResponse getByUsername(
             @PathVariable String username,
             @AuthenticationPrincipal AuthenticatedUser viewer
     ) {
         return publicProfileService.getByUsername(username, viewer == null ? null : viewer.userId());
+    }
+
+    @GetMapping("/creator/{username}/summary")
+    public PublicProfileSummaryResponse getSummaryByUsername(
+            @PathVariable String username,
+            @AuthenticationPrincipal AuthenticatedUser viewer
+    ) {
+        return publicProfileService.getSummaryByUsername(username, viewer == null ? null : viewer.userId());
+    }
+
+    @GetMapping("/creator/{username}/learning-focus")
+    public PublicProfileFocusResponse getFocusByUsername(
+            @PathVariable String username,
+            @AuthenticationPrincipal AuthenticatedUser viewer
+    ) {
+        return publicProfileService.getFocusByUsername(username, viewer == null ? null : viewer.userId());
     }
 }

@@ -3,6 +3,7 @@ import PublishedPlansPage, { metadata } from "./page";
 import { PublishedPlansPageClient } from "./published-plans-page-client";
 import {
   adoptGoal,
+  waitForGoalAdoption,
   adoptStudyPlan,
   getMe,
   getPublicStudyPlanDetail,
@@ -28,6 +29,7 @@ jest.mock("@/lib/auth", () => ({
 
 jest.mock("@/lib/api", () => ({
   adoptGoal: jest.fn(),
+  waitForGoalAdoption: jest.fn(),
   adoptStudyPlan: jest.fn(),
   getMe: jest.fn(),
   getPublicStudyPlanDetail: jest.fn(),
@@ -65,6 +67,7 @@ describe("PublishedPlansPage", () => {
     globalThis.sessionStorage.clear();
     clearDiscoveryIntentCookie();
     (adoptGoal as jest.Mock).mockReset();
+    (waitForGoalAdoption as jest.Mock).mockReset().mockImplementation(async (result) => result);
     (adoptStudyPlan as jest.Mock).mockReset();
     (getMe as jest.Mock).mockReset();
     (getPublicStudyPlanDetail as jest.Mock).mockReset();
