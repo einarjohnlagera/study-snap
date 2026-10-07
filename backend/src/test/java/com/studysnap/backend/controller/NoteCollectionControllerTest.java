@@ -2,6 +2,7 @@ package com.studysnap.backend.controller;
 
 import com.studysnap.backend.dto.AddNoteCollectionItemsRequest;
 import com.studysnap.backend.dto.AdoptGoalResponse;
+import com.studysnap.backend.dto.GoalAdoptionStatusResponse;
 import com.studysnap.backend.dto.AdoptStudyPlanResponse;
 import com.studysnap.backend.dto.CompanionContent;
 import com.studysnap.backend.dto.CompanionFaqItem;
@@ -450,6 +451,39 @@ class NoteCollectionControllerTest {
 
         assertThat(result).isEqualTo(response);
         verify(service).adoptGoal(UUID.fromString(COLLECTION_ID), user.userId());
+    }
+
+    @Test
+    void goalAdoptionEndpoints_returnStartedAndOwnerScopedProgressOverHttp() throws Exception {
+        AuthenticatedUser user = authenticatedUser();
+        UUID sourceId = UUID.fromString(COLLECTION_ID);
+        UUID personalId = UUID.randomUUID();
+        UUID jobId = UUID.randomUUID();
+        when(service.adoptGoal(sourceId, user.userId())).thenReturn(new AdoptGoalResponse(
+                personalId, 0, 0, 0, 0, false, personalId, "STARTED", jobId, 0, 3));
+        when(service.getGoalAdoptionStatus(personalId, user.userId())).thenReturn(
+                new GoalAdoptionStatusResponse(personalId, jobId, "RUNNING", 1, 3, 1, 0, 2, 0));
+
+        buildMockMvc(user).perform(post("/collections/" + COLLECTION_ID + "/adopt-goal"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.collectionId").value(personalId.toString()))
+                .andExpect(jsonPath("$.jobId").value(jobId.toString()))
+                .andExpect(jsonPath("$.status").value("STARTED"));
+        buildMockMvc(user).perform(get("/collections/" + personalId + "/adoption-status"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("RUNNING"))
+                .andExpect(jsonPath("$.processedSubjectCount").value(1));
+    }
+
+    @Test
+    void goalAdoptionStatus_returns404ForUnknownOrForeignGoal() throws Exception {
+        AuthenticatedUser user = authenticatedUser();
+        UUID goalId = UUID.fromString(COLLECTION_ID);
+        when(service.getGoalAdoptionStatus(goalId, user.userId()))
+                .thenThrow(new CollectionNotFoundException());
+
+        buildMockMvc(user).perform(get("/collections/" + COLLECTION_ID + "/adoption-status"))
+                .andExpect(status().isNotFound());
     }
 
     @Test

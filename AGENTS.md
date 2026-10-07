@@ -2,6 +2,16 @@
 
 Never use Note generation lifecycle (`NoteStatus`, or the `studyPackStatus` string derived from it) as a proxy for learning artifact availability. Derive capability from the Study Pack's own artifacts (`quiz`, `keyConcepts`, `status`) via `StudyPackArtifactFacts`.
 
+Long Goal adoption runs through a persisted, resumable job on a dedicated bounded executor. Keep
+the request to root-and-job creation, use one `TransactionTemplate` transaction per child Subject
+Plan, and never put `@Transactional` on the job driver. Open-in-view is request-scoped, so re-fetch
+entities inside each worker transaction. Checkpoint each child with its write, and finalize the
+Companion baseline, primary invariant, durable analytics event, and `COMPLETED` marker atomically.
+If a note copy fails inside a child transaction, roll that attempt back and retry the child in a
+fresh transaction with that note counted as skipped; catching a repository error inside the same
+transaction leaves it rollback-only. This isolation applies only to the Goal worker.
+Keep standalone `adopt()` and additive `applySourceUpdate()` synchronous.
+
 **v0.116.0 implementation note:** additive Review Set drift compares source facts at last sync with the
 source now. Never compare source label/position with the learner placement, because adoption may already
 have renumbered after filtering. Updates append additions only; learner removal writes the composite

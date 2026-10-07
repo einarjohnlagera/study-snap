@@ -2225,11 +2225,28 @@ export type AdoptStudyPlanResponse = {
 
 export type AdoptGoalResponse = {
   goalCollectionId: string;
+  collectionId?: string;
+  status?: "STARTED" | "PENDING" | "RUNNING" | "COMPLETED" | "FAILED";
+  jobId?: string | null;
+  processedSubjectCount?: number;
+  totalSubjectCount?: number;
   adoptedSubjectCount: number;
   skippedSubjectCount: number;
   totalNotesCopied: number;
   totalNotesSkipped: number;
   alreadyAdopted: boolean;
+};
+
+export type GoalAdoptionStatusResponse = {
+  collectionId: string;
+  jobId: string;
+  status: "PENDING" | "RUNNING" | "COMPLETED" | "FAILED";
+  processedSubjectCount: number;
+  totalSubjectCount: number;
+  adoptedSubjectCount: number;
+  skippedSubjectCount: number;
+  totalNotesCopied: number;
+  totalNotesSkipped: number;
 };
 
 export type ReviewSetUpdateChange = {
@@ -5788,6 +5805,43 @@ export async function adoptGoal(id: string): Promise<AdoptGoalResponse> {
     true,
   );
   return parseApiResponse<AdoptGoalResponse>(response, "Could not start this Goal.");
+}
+
+export async function getGoalAdoptionStatus(goalId: string): Promise<GoalAdoptionStatusResponse> {
+  const response = await fetchWithAuth(
+    `/collections/${encodeURIComponent(goalId)}/adoption-status`,
+    { method: "GET", headers: buildAuthHeaders() },
+    true,
+  );
+  return parseApiResponse<GoalAdoptionStatusResponse>(response, "Could not check Goal adoption progress. Try again.");
+}
+
+/** Wait for a persisted Goal job; a status fetch failure returns control to the caller's retry UI. */
+export async function waitForGoalAdoption(
+  started: AdoptGoalResponse,
+  onProgress?: (progress: GoalAdoptionStatusResponse) => void,
+): Promise<AdoptGoalResponse> {
+  if (!started.jobId || started.status === "COMPLETED") return started;
+  for (;;) {
+    const progress = await getGoalAdoptionStatus(started.goalCollectionId);
+    onProgress?.(progress);
+    if (progress.status === "COMPLETED") {
+      return {
+        ...started,
+        adoptedSubjectCount: progress.adoptedSubjectCount,
+        skippedSubjectCount: progress.skippedSubjectCount,
+        totalNotesCopied: progress.totalNotesCopied,
+        totalNotesSkipped: progress.totalNotesSkipped,
+        status: "COMPLETED",
+        processedSubjectCount: progress.processedSubjectCount,
+        totalSubjectCount: progress.totalSubjectCount,
+      };
+    }
+    if (progress.status === "FAILED") {
+      throw new Error("Goal adoption paused. Try again to resume it.");
+    }
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+  }
 }
 
 export async function getReviewSetSourceUpdate(id: string): Promise<ReviewSetUpdateResponse> {

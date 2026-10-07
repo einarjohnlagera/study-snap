@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import OnboardingPage from "./page";
 import {
   adoptGoal,
+  waitForGoalAdoption,
   adoptStudyPlan,
   completeOnboarding,
   completeOnboardingProfileType,
@@ -109,6 +110,7 @@ jest.mock("@/lib/auth", () => ({
 
 jest.mock("@/lib/api", () => ({
   adoptGoal: jest.fn(),
+  waitForGoalAdoption: jest.fn(),
   adoptStudyPlan: jest.fn(),
   completeOnboarding: jest.fn(),
   completeOnboardingProfileType: jest.fn(),
@@ -166,6 +168,7 @@ describe("OnboardingPage", () => {
     (updateLearningProfileContext as jest.Mock).mockReset();
     (adoptStudyPlan as jest.Mock).mockReset();
     (adoptGoal as jest.Mock).mockReset();
+    (waitForGoalAdoption as jest.Mock).mockReset().mockImplementation(async (result) => result);
     (listCollections as jest.Mock).mockReset();
     (listPublicStudyPlans as jest.Mock).mockReset();
     (requestOfficialStudyPlan as jest.Mock).mockReset();

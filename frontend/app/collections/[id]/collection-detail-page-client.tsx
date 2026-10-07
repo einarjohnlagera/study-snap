@@ -42,6 +42,7 @@ import {
   sortCollectionItemsByPosition,
 } from "@/lib/collection-exam";
 import {
+  adoptGoal,
   applyReviewSetSourceUpdate,
   ApiRequestError,
   clearCollectionTargetDate,
@@ -50,6 +51,7 @@ import {
   deleteCollection,
   getCollection,
   getCollectionGoal,
+  getGoalAdoptionStatus,
   getMe,
   getNoteConceptCounts,
   getPlanReadiness,
@@ -76,6 +78,7 @@ import {
   type CompanionSection,
   type GoalCollectionChildResponse,
   type GoalCollectionDetailResponse,
+  type GoalAdoptionStatusResponse,
   type LearnerLevel,
   type NoteConceptCountsResponse,
   type NoteCollectionDetail,
@@ -3058,6 +3061,10 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
   const [loadState, setLoadState] = useState<LoadState>("loading");
   const [collection, setCollection] = useState<NoteCollectionDetail | null>(null);
   const [goalDetail, setGoalDetail] = useState<GoalCollectionDetailResponse | null>(null);
+  const [adoptionStatus, setAdoptionStatus] = useState<GoalAdoptionStatusResponse | null>(null);
+  const [adoptionStatusError, setAdoptionStatusError] = useState(false);
+  const [adoptionRetry, setAdoptionRetry] = useState(0);
+  const adoptionReloaded = useRef(false);
   const [items, setItems] = useState<NoteCollectionItem[]>([]);
   const [sectionCounts, setSectionCounts] = useState<Map<string, SectionReadiness> | null>(null);
   const [planReadiness, setPlanReadiness] = useState<PlanReadinessResponse | null>(null);
@@ -3174,6 +3181,59 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
     }
     void Promise.resolve().then(loadCollection);
   }, [loadCollection, router]);
+
+  useEffect(() => {
+    if (!collection?.sourcePlanId || collection.parentCollectionId !== null || collection.items.length > 0) return;
+    let active = true;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const poll = async () => {
+      try {
+        const status = await getGoalAdoptionStatus(collectionId);
+        if (!active) return;
+        setAdoptionStatus(status);
+        setAdoptionStatusError(status.status === "FAILED");
+        if (status.status === "COMPLETED" && !adoptionReloaded.current) {
+          adoptionReloaded.current = true;
+          void loadCollection();
+        } else if (status.status === "PENDING" || status.status === "RUNNING") {
+          timer = setTimeout(() => void poll(), 1500);
+        }
+      } catch (error) {
+        if (!active) return;
+        // Legacy adopted Goals have no job row.
+        if (error instanceof ApiRequestError && error.status === 404) return;
+        setAdoptionStatusError(true);
+      }
+    };
+    void poll();
+    return () => { active = false; if (timer) clearTimeout(timer); };
+  }, [collection?.sourcePlanId, collection?.parentCollectionId, collection?.items.length,
+    collectionId, loadCollection, adoptionRetry]);
+
+  const adoptionProgressCard = adoptionStatusError ? (
+    <Card className="p-4" role="alert">
+      <p>Could not finish checking Goal adoption. Your copied plans are saved.</p>
+      <Button type="button" variant="outline" onClick={() => {
+        const resume = async () => {
+          setAdoptionStatusError(false);
+          if (adoptionStatus?.status === "FAILED" && collection?.sourcePlanId) {
+            try {
+              await adoptGoal(collection.sourcePlanId);
+            } catch {
+              setAdoptionStatusError(true);
+              return;
+            }
+          }
+          setAdoptionRetry((value) => value + 1);
+        };
+        void resume();
+      }}>Try again</Button>
+    </Card>
+  ) : adoptionStatus && adoptionStatus.status !== "COMPLETED" ? (
+    <Card className="p-4" role="status">
+      Copying Subject Plans: {adoptionStatus.processedSubjectCount} of {adoptionStatus.totalSubjectCount}
+    </Card>
+  ) : null;
 
   useEffect(() => {
     setSkippedNoticeCount(getStudyPlanSkippedNotice(collectionId));
@@ -3853,6 +3913,7 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
     return (
       <main className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8">
         <BackLink href={backLinkHref} label={backLinkLabel} />
+        {adoptionProgressCard}
         <PlanHeroCard
           collection={collection}
           eyebrowLabel={labels.goalSingular}
@@ -4061,6 +4122,7 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
   return (
     <main className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8">
       <BackLink href={backLinkHref} label={backLinkLabel} />
+      {adoptionProgressCard}
       <PlanHeroCard
         collection={collection}
         eyebrowLabel={labels.singular}

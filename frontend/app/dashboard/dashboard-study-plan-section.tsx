@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
 import {
   adoptGoal,
+  waitForGoalAdoption,
   adoptStudyPlan,
   listCollections,
   listPublicStudyPlans,
@@ -173,6 +174,7 @@ export function DashboardStudyPlanSection({
   const [adoptedPlan, setAdoptedPlan] = useState<NoteCollectionSummary | null>(null);
   const [loadedCourseProgram, setLoadedCourseProgram] = useState<string | null>(null);
   const [adopting, setAdopting] = useState(false);
+  const [adoptionProgress, setAdoptionProgress] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [startedPlan, setStartedPlan] = useState<StudyPlanStartContext | null>(null);
 
@@ -408,7 +410,11 @@ export function DashboardStudyPlanSection({
         return;
       }
       if (isGoal) {
-        const result = await adoptGoal(displayPlan.id);
+        const started = await adoptGoal(displayPlan.id);
+        const result = await waitForGoalAdoption(started, (progress) => {
+          setAdoptionProgress(`Copying Subject Plans: ${progress.processedSubjectCount} of ${progress.totalSubjectCount}`);
+        });
+        setAdoptionProgress(null);
         setStudyPlanSkippedNotice(result.goalCollectionId, result.skippedSubjectCount);
         setJustAdoptedNotice(result.goalCollectionId);
         const startContext = {
@@ -440,6 +446,7 @@ export function DashboardStudyPlanSection({
       setStartedPlan(startContext);
       await finishStart(startContext);
     } catch (adoptError) {
+      setAdoptionProgress(null);
       setError(adoptError instanceof Error ? adoptError.message : `Could not start this ${isGoal ? labels.goalSingular : labels.singular}.`);
     } finally {
       setAdopting(false);
@@ -473,7 +480,7 @@ export function DashboardStudyPlanSection({
         </div>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-sm text-foreground/70">{detailLine}</p>
-          <Button type="button" loading={adopting} loadingText="Starting..." onClick={handleStart}>
+          <Button type="button" loading={adopting} loadingText={adoptionProgress ?? "Starting..."} onClick={handleStart}>
             {ctaLabel}
           </Button>
         </div>

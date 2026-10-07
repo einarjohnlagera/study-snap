@@ -30,6 +30,8 @@ notelib:
 # reproducible only by timing. Jobs are exercised by calling them directly; none of them should ever
 # run on a wall clock during a test.
 studysnap:
+  goal-adoption:
+    recovery-cron: "-"
   generation:
     recovery-cron: "-"
     # ⚠️ Hourly at :45 in production, so this is the one that actually fired during a full suite.

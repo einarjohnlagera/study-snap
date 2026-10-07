@@ -27,7 +27,16 @@ public class StudySnapProperties {
     private final Retention retention = new Retention();
     private final Account account = new Account();
     private final Generation generation = new Generation();
+    private final GoalAdoption goalAdoption = new GoalAdoption();
     private final Notifications notifications = new Notifications();
+
+    @Getter
+    @Setter
+    public static class GoalAdoption {
+        private String recoveryCron = "0 * * * * *";
+        private int staleMinutes = 10;
+        private int recoveryBatchSize = 20;
+    }
 
     @Setter
     private String appName = "NoteLib";

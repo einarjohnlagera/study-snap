@@ -1,7 +1,7 @@
-import { render, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { StrictMode } from "react";
 import { DiscoveryIntentConsumer } from "./discovery-intent-consumer";
-import { adoptGoal, adoptStudyPlan } from "@/lib/api";
+import { adoptGoal, adoptStudyPlan, waitForGoalAdoption } from "@/lib/api";
 import {
   clearDiscoveryIntentCookie,
   getDiscoveryIntentCookie,
@@ -16,6 +16,7 @@ jest.mock("next/navigation", () => ({
 
 jest.mock("@/lib/api", () => ({
   adoptGoal: jest.fn(),
+  waitForGoalAdoption: jest.fn(),
   adoptStudyPlan: jest.fn(),
 }));
 
@@ -23,6 +24,7 @@ describe("DiscoveryIntentConsumer", () => {
   beforeEach(() => {
     replaceMock.mockReset();
     (adoptGoal as jest.Mock).mockReset();
+    (waitForGoalAdoption as jest.Mock).mockReset().mockImplementation(async (result) => result);
     (adoptStudyPlan as jest.Mock).mockReset();
     clearDiscoveryIntentCookie();
     document.cookie = "notelib-exam-intent=; path=/; max-age=0; SameSite=Strict";
@@ -101,6 +103,22 @@ describe("DiscoveryIntentConsumer", () => {
     await waitFor(() => expect(adoptGoal).toHaveBeenCalledWith("source-goal-1"));
     expect(document.cookie).not.toContain("notelib-exam-intent=ale");
     expect(replaceMock).toHaveBeenCalledWith("/collections/personal-goal-1");
+  });
+
+  it("shows Goal progress and retry when the status read fails", async () => {
+    setDiscoveryIntentCookie({ planId: "source-goal-1", planType: "goal", returnPath: "/explore" });
+    (adoptGoal as jest.Mock).mockResolvedValue({ goalCollectionId: "personal-goal-1", status: "STARTED", jobId: "job-1" });
+    let failStatus!: (error: Error) => void;
+    (waitForGoalAdoption as jest.Mock).mockImplementation(async (_started, onProgress) => {
+      onProgress({ processedSubjectCount: 1, totalSubjectCount: 2 });
+      return new Promise((_resolve, reject) => { failStatus = reject; });
+    });
+    render(<DiscoveryIntentConsumer />);
+    expect(await screen.findByRole("status")).toHaveTextContent("Copying Subject Plans: 1 of 2");
+    failStatus(new Error("unreachable"));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Your progress is saved");
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    await waitFor(() => expect(adoptGoal).toHaveBeenCalledTimes(2));
   });
 
   it("clears an unavailable plan and returns to a normal Explore notice state", async () => {
