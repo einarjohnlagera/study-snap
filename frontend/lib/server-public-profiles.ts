@@ -1,4 +1,4 @@
-import type { PublicProfileResponse } from "@/lib/api";
+import type { PublicProfileResponse, PublicProfileFocusResponse } from "@/lib/api";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080/api";
 
@@ -7,7 +7,7 @@ function buildApiUrl(path: string) {
 }
 
 export type ServerPublicProfileResult =
-  | { status: "ok"; profile: PublicProfileResponse }
+  | { status: "ok"; profile: PublicProfileResponse; focus?: PublicProfileFocusResponse }
   | { status: "private" }
   | { status: "not_found" };
 
@@ -30,7 +30,14 @@ export async function getServerPublicProfile(userId: string): Promise<ServerPubl
   return {
     status: "ok",
     profile: (await response.json()) as PublicProfileResponse,
+    focus: await getServerFocus(`/public/profile/${userId}/learning-focus`),
   };
+}
+
+async function getServerFocus(path: string): Promise<PublicProfileFocusResponse> {
+  const response = await fetch(buildApiUrl(path), { method: "GET", next: { revalidate: 300 } });
+  if (!response.ok) throw new Error("Could not load public profile Learning Focus.");
+  return (await response.json()) as PublicProfileFocusResponse;
 }
 
 export async function getServerPublicCreatorProfile(username: string): Promise<ServerPublicProfileResult> {
@@ -52,5 +59,6 @@ export async function getServerPublicCreatorProfile(username: string): Promise<S
   return {
     status: "ok",
     profile: (await response.json()) as PublicProfileResponse,
+    focus: await getServerFocus(`/public/creator/${username}/learning-focus`),
   };
 }

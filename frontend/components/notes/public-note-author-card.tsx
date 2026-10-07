@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { getPublicCreatorProfile, getPublicProfile, type PublicProfileResponse } from "@/lib/api";
+import { getPublicCreatorSummary, getPublicProfileSummary, type PublicProfileSummaryResponse } from "@/lib/api";
 import { buildPublicCreatorOrProfilePath } from "@/lib/public-note-path";
 
 type PublicNoteAuthorCardProps = {
@@ -20,7 +20,7 @@ export function PublicNoteAuthorCard({
   authorDisplayName,
   authorUsername,
 }: Readonly<PublicNoteAuthorCardProps>) {
-  const [profile, setProfile] = useState<PublicProfileResponse | null>(null);
+  const [profile, setProfile] = useState<PublicProfileSummaryResponse | null>(null);
   const hasAuthorIdentity = Boolean(ownerUserId || authorUsername);
   const fallbackName = authorDisplayName?.trim() || "NoteLib learner";
 
@@ -30,7 +30,7 @@ export function PublicNoteAuthorCard({
     }
 
     let cancelled = false;
-    const loadProfile = authorUsername ? getPublicCreatorProfile : getPublicProfile;
+    const loadProfile = authorUsername ? getPublicCreatorSummary : getPublicProfileSummary;
     const profileKey = authorUsername ?? ownerUserId;
     if (!profileKey) {
       return;

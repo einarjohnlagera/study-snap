@@ -2353,6 +2353,17 @@ export type PublicProfileResponse = {
   publicNotes: PublicProfileNoteResponse[];
 };
 
+export type PublicProfileSummaryResponse = {
+  displayName: string;
+  bio: string | null;
+  publicNotesCount: number;
+};
+
+export type PublicProfileFocusResponse = {
+  coursePrograms: Array<{ label: string; count: number }>;
+  subjects: Array<{ label: string; count: number }>;
+};
+
 export type CreatorImpactNoteResponse = {
   noteId: string;
   title: string | null;
@@ -6255,6 +6266,36 @@ export async function getPublicCreatorProfile(username: string): Promise<PublicP
     headers: buildAuthHeaders(),
   });
   return parseApiResponse<PublicProfileResponse>(response, "Could not load this public profile.");
+}
+
+export async function getPublicProfileSummary(userId: string): Promise<PublicProfileSummaryResponse> {
+  const response = await fetch(buildUrl(`/public/profile/${encodeURIComponent(userId)}/summary`), {
+    method: "GET",
+    headers: buildAuthHeaders(),
+  });
+  return parseApiResponse<PublicProfileSummaryResponse>(response, "Could not load this author.");
+}
+
+export async function getPublicCreatorSummary(username: string): Promise<PublicProfileSummaryResponse> {
+  const response = await fetch(buildUrl(`/public/creator/${encodeURIComponent(username)}/summary`), {
+    method: "GET",
+    headers: buildAuthHeaders(),
+  });
+  return parseApiResponse<PublicProfileSummaryResponse>(response, "Could not load this author.");
+}
+
+export async function getPublicProfileFocus(userId: string): Promise<PublicProfileFocusResponse> {
+  const response = await fetch(buildUrl(`/public/profile/${encodeURIComponent(userId)}/learning-focus`), {
+    method: "GET", headers: buildAuthHeaders(),
+  });
+  return parseApiResponse<PublicProfileFocusResponse>(response, "Could not load Learning Focus.");
+}
+
+export async function getPublicCreatorFocus(username: string): Promise<PublicProfileFocusResponse> {
+  const response = await fetch(buildUrl(`/public/creator/${encodeURIComponent(username)}/learning-focus`), {
+    method: "GET", headers: buildAuthHeaders(),
+  });
+  return parseApiResponse<PublicProfileFocusResponse>(response, "Could not load Learning Focus.");
 }
 
 export async function getCreatorImpact(

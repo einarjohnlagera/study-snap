@@ -7,7 +7,6 @@ import com.studysnap.backend.entity.DomainContext;
 import com.studysnap.backend.entity.NoteEntity;
 import com.studysnap.backend.entity.NoteVisibility;
 import com.studysnap.backend.entity.ProfileType;
-import com.studysnap.backend.entity.StudyPackEntity;
 import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.entity.LearnerLevel;
 import com.studysnap.backend.entity.UserRole;
@@ -15,6 +14,7 @@ import com.studysnap.backend.exception.AppException;
 import com.studysnap.backend.repository.AnalyticsEventRepository;
 import com.studysnap.backend.repository.NoteCopyCountProjection;
 import com.studysnap.backend.repository.NoteRepository;
+import com.studysnap.backend.repository.PublicProfileMetricsRepository;
 import com.studysnap.backend.repository.NoteSubjectCountProjection;
 import com.studysnap.backend.repository.PublicNoteEventCountProjection;
 import com.studysnap.backend.repository.StudyPackRepository;
@@ -37,6 +37,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.ArgumentMatchers.any;
 
 @ExtendWith(MockitoExtension.class)
 class PublicProfileServiceTest {
@@ -51,12 +53,17 @@ class PublicProfileServiceTest {
     private StudyPackRepository studyPackRepository;
     @Mock
     private AnalyticsEventRepository analyticsEventRepository;
+    @Mock
+    private PublicProfileMetricsRepository publicProfileMetricsRepository;
 
     private PublicProfileService publicProfileService;
 
     @BeforeEach
     void setUp() {
-        publicProfileService = new PublicProfileService(userRepository, noteRepository, noteCourseProgramRepository, studyPackRepository, analyticsEventRepository);
+        publicProfileService = new PublicProfileService(userRepository, noteRepository, noteCourseProgramRepository,
+                studyPackRepository, analyticsEventRepository, publicProfileMetricsRepository);
+        lenient().when(publicProfileMetricsRepository.totals(any(UUID.class)))
+                .thenReturn(new PublicProfileMetricsRepository.Totals(0, 0, 0));
     }
 
     @Test
@@ -80,14 +87,17 @@ class PublicProfileServiceTest {
 
         NoteEntity noteOne = buildPublicNote(noteOneId, userId, "Plant Cells", "Biology", new String[]{"cells", "plants"});
         NoteEntity noteTwo = buildPublicNote(noteTwoId, userId, "Atomic Bonds", "Chemistry", new String[]{"atoms"});
-        StudyPackEntity noteOneStudyPack = buildStudyPack(noteOneId, "Cells make up plant tissue.");
-        StudyPackEntity noteTwoStudyPack = buildStudyPack(noteTwoId, "Bonds hold atoms together.");
-
+        noteOne.setUpdatedAt(noteTwo.getUpdatedAt().plusMinutes(1));
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
-        when(noteRepository.findByOwnerUserIdAndVisibilityOrderByUpdatedAtDesc(userId, NoteVisibility.PUBLIC))
+        when(publicProfileMetricsRepository.candidateNoteIds(userId)).thenReturn(List.of(noteOneId, noteTwoId));
+        when(noteRepository.findAllById(List.of(noteOneId, noteTwoId)))
                 .thenReturn(List.of(noteOne, noteTwo));
-        when(studyPackRepository.findByNoteIdIn(List.of(noteOneId, noteTwoId)))
-                .thenReturn(List.of(noteOneStudyPack, noteTwoStudyPack));
+        when(studyPackRepository.findSummariesByNoteIdIn(List.of(noteOneId, noteTwoId)))
+                .thenReturn(List.of(summary(noteOneId, "Cells make up plant tissue."),
+                        summary(noteTwoId, "Bonds hold atoms together.")));
+        when(noteRepository.countByOwnerUserIdAndVisibility(userId, NoteVisibility.PUBLIC)).thenReturn(2L);
+        when(publicProfileMetricsRepository.totals(userId))
+                .thenReturn(new PublicProfileMetricsRepository.Totals(7, 4, 20));
         when(noteRepository.countCopiedPublicNotesBySourceNoteIds(List.of(noteOneId, noteTwoId)))
                 .thenReturn(List.of(
                         projection(noteOneId, 5L),
@@ -191,8 +201,8 @@ class PublicProfileServiceTest {
         curated.setCourseProgram(null);
 
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
-        when(noteRepository.findByOwnerUserIdAndVisibilityOrderByUpdatedAtDesc(userId, NoteVisibility.PUBLIC))
-                .thenReturn(List.of(curated));
+        when(publicProfileMetricsRepository.candidateNoteIds(userId)).thenReturn(List.of(noteId));
+        when(noteRepository.findAllById(List.of(noteId))).thenReturn(List.of(curated));
         when(noteRepository.countSubjectsByOwnerUserIdAndVisibility(userId, NoteVisibility.PUBLIC))
                 .thenReturn(List.of());
         when(noteCourseProgramRepository.findByNoteIds(List.of(noteId))).thenReturn(Map.of(
@@ -228,8 +238,6 @@ class PublicProfileServiceTest {
         user.setPublicProfileVisible(true);
 
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
-        when(noteRepository.findByOwnerUserIdAndVisibilityOrderByUpdatedAtDesc(userId, NoteVisibility.PUBLIC))
-                .thenReturn(List.of());
         when(noteRepository.countSubjectsByOwnerUserIdAndVisibility(userId, NoteVisibility.PUBLIC))
                 .thenReturn(List.of());
 
@@ -259,8 +267,6 @@ class PublicProfileServiceTest {
         user.setPublicProfileVisible(true);
 
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
-        when(noteRepository.findByOwnerUserIdAndVisibilityOrderByUpdatedAtDesc(userId, NoteVisibility.PUBLIC))
-                .thenReturn(List.of());
         when(noteRepository.countSubjectsByOwnerUserIdAndVisibility(userId, NoteVisibility.PUBLIC))
                 .thenReturn(List.of(subjectProjection("Biology", 4L)));
 
@@ -284,8 +290,6 @@ class PublicProfileServiceTest {
         user.setPublicProfileVisible(true);
 
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
-        when(noteRepository.findByOwnerUserIdAndVisibilityOrderByUpdatedAtDesc(userId, NoteVisibility.PUBLIC))
-                .thenReturn(List.of());
         when(noteRepository.countSubjectsByOwnerUserIdAndVisibility(userId, NoteVisibility.PUBLIC))
                 .thenReturn(List.of(
                         subjectProjection("Biology", 9L),
@@ -322,8 +326,6 @@ class PublicProfileServiceTest {
         user.setPublicProfileVisible(true);
 
         when(userRepository.findByUsernameIgnoreCase("creator")).thenReturn(Optional.of(user));
-        when(noteRepository.findByOwnerUserIdAndVisibilityOrderByUpdatedAtDesc(userId, NoteVisibility.PUBLIC))
-                .thenReturn(List.of());
 
         PublicProfileResponse response = publicProfileService.getByUsername("creator", null);
 
@@ -343,8 +345,6 @@ class PublicProfileServiceTest {
         user.setPublicProfileVisible(true);
 
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
-        when(noteRepository.findByOwnerUserIdAndVisibilityOrderByUpdatedAtDesc(userId, NoteVisibility.PUBLIC))
-                .thenReturn(List.of());
 
         PublicProfileResponse response = publicProfileService.getByUserId(userId.toString(), null);
 
@@ -395,13 +395,56 @@ class PublicProfileServiceTest {
         user.setPublicProfileVisible(false);
 
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
-        when(noteRepository.findByOwnerUserIdAndVisibilityOrderByUpdatedAtDesc(userId, NoteVisibility.PUBLIC))
-                .thenReturn(List.of());
 
         PublicProfileResponse response = publicProfileService.getByUserId(userId.toString(), userId);
 
         assertThat(response.displayName()).isEqualTo("Hidden Helper");
         assertThat(response.publicProfileVisible()).isFalse();
+    }
+
+    @Test
+    void summaryUsesCountAndTheSamePrivateAndMissingProfileGate() {
+        UUID userId = UUID.randomUUID();
+        UserEntity user = new UserEntity();
+        user.setId(userId);
+        user.setUsername("creator");
+        user.setDisplayName("Creator");
+        user.setBio("Public notes");
+        user.setPublicProfileVisible(false);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(userRepository.findByUsernameIgnoreCase("creator")).thenReturn(Optional.of(user));
+
+        assertThatThrownBy(() -> publicProfileService.getSummaryByUserId(userId.toString(), null))
+                .isInstanceOf(AppException.class)
+                .extracting(error -> ((AppException) error).getCode())
+                .isEqualTo("PUBLIC_PROFILE_PRIVATE");
+        assertThatThrownBy(() -> publicProfileService.getSummaryByUsername("creator", null))
+                .isInstanceOf(AppException.class)
+                .extracting(error -> ((AppException) error).getCode())
+                .isEqualTo("PUBLIC_PROFILE_PRIVATE");
+        assertThatThrownBy(() -> publicProfileService.getFocusByUserId(userId.toString(), null))
+                .isInstanceOf(AppException.class)
+                .extracting(error -> ((AppException) error).getCode())
+                .isEqualTo("PUBLIC_PROFILE_PRIVATE");
+
+        when(noteRepository.countByOwnerUserIdAndVisibility(userId, NoteVisibility.PUBLIC)).thenReturn(1997L);
+        assertThat(publicProfileService.getSummaryByUserId(userId.toString(), userId).publicNotesCount())
+                .isEqualTo(1997L);
+        assertThat(publicProfileService.getSummaryByUsername("creator", userId).displayName())
+                .isEqualTo("Creator");
+        verify(noteRepository, org.mockito.Mockito.times(2))
+                .countByOwnerUserIdAndVisibility(userId, NoteVisibility.PUBLIC);
+        org.mockito.Mockito.verifyNoInteractions(publicProfileMetricsRepository, studyPackRepository);
+    }
+
+    @Test
+    void summaryReturnsNotFoundForMissingUser() {
+        UUID missing = UUID.randomUUID();
+        when(userRepository.findById(missing)).thenReturn(Optional.empty());
+        assertThatThrownBy(() -> publicProfileService.getSummaryByUserId(missing.toString(), null))
+                .isInstanceOf(AppException.class)
+                .extracting(error -> ((AppException) error).getCode())
+                .isEqualTo("PUBLIC_PROFILE_NOT_FOUND");
     }
 
     private NoteEntity buildPublicNote(UUID noteId, UUID ownerUserId, String title, String subject, String[] tags) {
@@ -420,12 +463,11 @@ class PublicProfileServiceTest {
         return note;
     }
 
-    private StudyPackEntity buildStudyPack(UUID noteId, String summary) {
-        StudyPackEntity studyPack = new StudyPackEntity();
-        studyPack.setId(UUID.randomUUID());
-        studyPack.setNoteId(noteId);
-        studyPack.setSummary(summary);
-        return studyPack;
+    private StudyPackRepository.NoteSummary summary(UUID noteId, String text) {
+        return new StudyPackRepository.NoteSummary() {
+            public UUID getNoteId() { return noteId; }
+            public String getSummary() { return text; }
+        };
     }
 
     private NoteCopyCountProjection projection(UUID noteId, long copyCount) {

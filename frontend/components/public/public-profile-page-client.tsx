@@ -17,10 +17,13 @@ import { buildPublicLibraryUrl } from "@/lib/public-library-url";
 import {
   ApiRequestError,
   getPublicCreatorProfile,
+  getPublicCreatorFocus,
   getPublicProfile,
+  getPublicProfileFocus,
   trackAnalyticsEvent,
   type ProfileType,
   type PublicProfileResponse,
+  type PublicProfileFocusResponse,
   updatePublicProfileVisibility,
 } from "@/lib/api";
 import {
@@ -110,6 +113,9 @@ export function PublicProfilePageClient({
   const [profile, setProfile] = useState<PublicProfileResponse | null>(
     initialResult.status === "ok" ? initialResult.profile : null,
   );
+  const [focus, setFocus] = useState<PublicProfileFocusResponse | null>(
+    initialResult.status === "ok" ? initialResult.focus ?? null : null,
+  );
   const [pageState, setPageState] = useState<"loading" | "ready" | "private" | "error">(
     initialResult.status === "ok"
       ? "ready"
@@ -152,12 +158,14 @@ export function PublicProfilePageClient({
     setErrorMessage(null);
 
     const loadProfile = lookupType === "username" ? getPublicCreatorProfile : getPublicProfile;
-    void loadProfile(userId)
-      .then((nextProfile) => {
+    const loadFocus = lookupType === "username" ? getPublicCreatorFocus : getPublicProfileFocus;
+    void Promise.all([loadProfile(userId), loadFocus(userId)])
+      .then(([nextProfile, nextFocus]) => {
         if (cancelled) {
           return;
         }
         setProfile(nextProfile);
+        setFocus(nextFocus);
         setPageState("ready");
       })
       .catch((error: unknown) => {
@@ -261,31 +269,33 @@ export function PublicProfilePageClient({
 
   const topCoursePrograms = useMemo(() => {
     const counts = new Map<string, number>();
-    for (const note of profile?.publicNotes ?? []) {
-      const courseProgram = normalizeCourseProgram(note.courseProgram);
+    const labels = focus?.coursePrograms ?? (profile?.publicNotes ?? []).map((note) => ({ label: note.courseProgram, count: 1 }));
+    for (const entry of labels) {
+      const courseProgram = normalizeCourseProgram(entry.label);
       if (courseProgram) {
-        counts.set(courseProgram, (counts.get(courseProgram) ?? 0) + 1);
+        counts.set(courseProgram, (counts.get(courseProgram) ?? 0) + entry.count);
       }
     }
     return Array.from(counts.entries())
       .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]))
       .slice(0, 2)
       .map(([value]) => value);
-  }, [profile?.publicNotes]);
+  }, [focus?.coursePrograms, profile?.publicNotes]);
 
   const summaryTopSubjects = useMemo(() => {
     const counts = new Map<string, number>();
-    for (const note of profile?.publicNotes ?? []) {
-      const subject = note.subject?.trim();
+    const labels = focus?.subjects ?? (profile?.publicNotes ?? []).map((note) => ({ label: note.subject, count: 1 }));
+    for (const entry of labels) {
+      const subject = entry.label?.trim();
       if (subject) {
-        counts.set(subject, (counts.get(subject) ?? 0) + 1);
+        counts.set(subject, (counts.get(subject) ?? 0) + entry.count);
       }
     }
     return Array.from(counts.entries())
       .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]))
       .slice(0, 3)
       .map(([value]) => value);
-  }, [profile?.publicNotes]);
+  }, [focus?.subjects, profile?.publicNotes]);
 
   const learningFocusSummary = useMemo(() => {
     const overlappingLabels = topCoursePrograms.filter((value) => summaryTopSubjects.includes(value));
