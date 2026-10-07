@@ -112,10 +112,25 @@ shape is known.
   beyond what the originating prompt specified) was Codex's own catch of a real consequence of
   bounding `publicNotes` — the existing Learning Focus sentence derived its course/subject labels
   by iterating that list directly, which this fix would have silently narrowed to only the
-  ranked-candidate subset. **Known limitation, not blocking:** the server-rendered profile page's
-  `getServerFocus` call throws on any failure, which fails the whole page rather than degrading
-  gracefully if only the Learning Focus request has a transient issue — matches this function's
-  existing error-handling pattern for the main profile fetch, not a new regression.
+  ranked-candidate subset. **Correction, 2026-10-07, from a second cold falsification pass run
+  specifically on this fix (the release's own Planned Scope had called for one; it was skipped at
+  merge time in favor of a direct audit, a process gap caught and closed after the fact):** the
+  original "known limitation, not blocking" note below undersold a real finding. Splitting the
+  server-rendered profile page into two sequential fetches (profile, then Learning Focus)
+  introduced a genuine inter-request race that did not exist before — if an owner's profile
+  visibility toggled in the gap between the two calls, the second request would 403 and throw,
+  failing the whole page even though the first request had just succeeded. **Fixed same day:**
+  `frontend/lib/server-public-profiles.ts` now fires both requests before awaiting either (profile
+  fetch issued first, matching the existing test's call-order assertion; the Learning Focus
+  promise carries a no-op `.catch` so an unawaited rejection on the private/not-found branches
+  never surfaces as unhandled), closing the window to the same near-zero exposure the single-fetch
+  page always had. Two new tests pin this: one proves both fetches fire before either resolves,
+  one proves the private-profile branch cannot throw from the discarded focus promise. The same
+  pass also found a second, lower-severity item, left as a known limitation rather than fixed: the
+  hydrated candidates' SQL tie-break (`title collate "und-x-icu"`) is not provably identical to the
+  frontend's `.localeCompare()` tie-break (runtime-default locale, not pinned to root) — they could
+  disagree on accented or locale-sensitive titles. Theoretical, not observed in the 210-note test
+  fixture, not worth a fix on its own.
 - **PR #1475 — `v0.165.0` deploy-timestamp checkpoint record.** Merged into `releases/v0.166.0`
   (`7933a96a`). Records Render live 2026-10-05T15:21:14Z / Vercel Production deployment success
   15:24:27Z into the outage-fix `[CHECKPOINT]` row, starting its clock
