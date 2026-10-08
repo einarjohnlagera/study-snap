@@ -71,6 +71,73 @@ itself out of scope for this release and becomes its own future Backlog candidat
   (announcement fan-out pool saturation, `/notes/public` re-saturation, SEO `sort=recent`
   engagement, shared-quiz promotion floor) are genuinely production-only reads and are marked
   blocked rather than guessed at; none had their `Last reviewed` date advanced.
+- **Render MCP reconnected, 2026-10-08 — every blocked read above was run.** All read-only
+  `SELECT`s via `mcp__render__query_render_postgres` (self-wrapped in a read-only transaction) plus
+  two Render platform reads (`get_metrics`, `list_logs`); no write made or considered.
+  - **Study Journey Purpose's Q11 production read: RESOLVED (corrected once after an advisor pass
+    caught that `published_at IS NOT NULL` alone isn't "official root" — any user can publish their
+    own collection; re-run with an `owner.role` join).** Every published, curator-owned
+    (`role=ADMIN`) `courseProgram` root in production is the only one for its program today — no
+    academic/licensure-prep collision exists yet, so `courseProgram`/`exam_goal_slug` currently
+    disambiguates, though this is a point-in-time fact (it breaks the day a program publishes a
+    second root), not a structural guarantee. Sharper finding, also corrected once: Civil
+    Engineering's curator-owned, 2-adopter official root ("🏗️ CELE Comprehensive Review") has
+    `exam_goal_slug IS NULL` — but the goal-nudge *filter* itself still works for it via the
+    free-text fallback (checked against `ProgressReportService.filterGoalStudyPacks:446-448`); the
+    real gap is narrower — no Exam Hub discovery page, and `GOAL_TYPE_SUBJECT` framing instead of
+    the recognized-exam `GOAL_TYPE_EXAM` framing on the dashboard goal card. Decision file and
+    `ROADMAP.md:701` updated accordingly.
+  - **Announcement pool-starve checkpoint:** 419 active users (197 max in one `profile_type`), only
+    1 non-DRAFT announcement ever. Falls in the kill criterion's 200-500 advisory band, not a clean
+    pass — re-dated to `2026-11-07` (this pass's own judgment call on cadence) with interim guidance
+    to publish large announcements off-peak.
+  - **Failure-reason column checkpoint: CLOSED.** 9 notes carry a failure code (2 distinct codes),
+    and all 9 now sit at `status = GENERATED` while still carrying their failure reason — the
+    retry-survival guard this column exists for is confirmed in production.
+  - **`/notes/public` pool-saturation checkpoint: SUPERSEDED, not a clean close.** Postgres
+    `active_connections` holding flat at 20-22 for 30 days is uninformative (HikariCP keeps
+    `maximumPoolSize` connections open regardless of load). `list_logs` for the literal Hikari
+    phrase `"Connection leak detection"` (timed out once, succeeded on retry) found zero matches
+    2026-09-09 → 2026-10-01 and exactly two on 2026-10-04, neither naming `/notes/public`. Checked
+    whether these two (both resolving to `NoteCollectionService.adoptGoal`) were a bystander effect
+    of `/notes/public` DB saturation rather than their own thing: the existing incident's own
+    fingerprint (the same note's `PUBLIC_NOTE_VIEWED` ≥3 times inside either hold window) and
+    `server_failed`/`server_restarted` events both came back empty for that evening — negative on
+    both, so folded as a dated data point into the pool-exhaustion row's already-open
+    "connections held on unidentified blocking I/O" question (`ROADMAP.md`'s 2026-09-18 row)
+    rather than opened as a new finding. **But this row's own narrow instrument still cannot close
+    its real question: `/notes/public` saturation DID recur inside this same 30-day window** — 24
+    restarts since 2026-09-01, diagnosed 2026-10-01, fixed as `v0.165.0` Leg B — through DB CPU
+    exhaustion on an unbounded ranked-branch fan-out. A leak-detection trace names where a
+    connection was *acquired*, not what actually saturated the database, so it can't reliably
+    attribute a DB-wide slowdown to any one path either way. Superseded by the Leg B row and its
+    own post-fix checkpoint (clock from 2026-10-05), not an independent pass.
+  - **SEO `sort=recent` checkpoint: CLOSED, no material fall.** `PUBLIC_NOTE_VIEWED`/`pathType=seo`
+    (56,444 all-time, 32,037 in the last 30 days) shows no drop around the deploy week and both full
+    weeks after it are higher than any week before — though the deploy week itself (1,991) and the
+    week right after (6,476) bracket a lower week in between (2,838), so "grew every week" overstates
+    it; the honest read is "no material fall," not uninterrupted growth — a raw traffic count, not a
+    controlled comparison, but the kill criterion's own metric shows no fall.
+  - **Shared-quiz promotion-floor checkpoint: applied as written — promoted, floor unmet, hands to
+    an owner decision, not reclassified.** 1 share link from 1 generator against a 20-link/5-generator
+    floor; that one link was created 2026-09-05, a day *before* the promoting tip shipped (`v0.122.0`,
+    2026-09-06), so there have been zero links since promotion; the 1,245 tip impressions are 7
+    distinct users (6 learners, 1 admin), not 1,245 people — and 1,245 ÷ 7 ≈ 178 firings per user for
+    a tip documented as one-time, recorded as a separate over-firing observation, not fixed. An
+    earlier draft of this read reclassified the unmet floor as "not really promoted" to avoid the
+    owner-decision branch; withdrawn as fitting the criterion to the data after the fact. The row now
+    states the facts (near-zero reach, zero post-promotion links) and leaves the call to the owner.
+  - **`INACTIVITY` retention-email checkpoint (separately tracked, `due 2026-10-08`): RE-DATED to
+    `2026-11-23`, not a kill-criterion fire.** Went through two wrong conclusions before landing on
+    the right one, kept in the row as the record: first read all-time `email_log` (5,003 sent, 0
+    clicked) and read it as the kill criterion firing; corrected after an advisor pass to check
+    whether click tracking was globally broken (it wasn't — `DUE_CONCEPTS_DIGEST` recorded real
+    clicks, confirmed via `email_log` and `email_open_daily_counts`); corrected again on finding the
+    actual error — tracking is Stage 1a instrumentation (`V149`, installed 2026-09-24), not
+    `INACTIVITY`'s lifetime history, and re-anchored to that deploy, `INACTIVITY` sent only 537 (not
+    5,003) with 0 clicks, meeting neither leg of the row's own 30-click-or-2,000-send floor. An
+    unmet floor is a re-date per the row's own rule, not a verdict either way — re-dated to the
+    doctrine's own pre-specified 60-day backstop from the `V149` deploy, not a fresh interval.
 
 ## v0.166.0 - Measured Twice
 
