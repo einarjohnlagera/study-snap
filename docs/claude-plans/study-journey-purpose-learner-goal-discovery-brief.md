@@ -2,6 +2,8 @@
 
 **Status: PARKED.** Discovery-and-record only — nothing below is authorized for implementation. No schema, migration, enum, metadata field, UI, prompt change, recommendation behavior, or release scope.
 
+**§11's 12 open questions were worked in order at the `v0.167.0` kickoff (2026-10-07/08) — see `docs/claude-plans/study-journey-purpose-learner-goal-discovery-decision.md`.** That pass found a correction to this brief's own premise (the *"Premise verified against current code, 2026-10-06"* line below) and a concrete, code-reproducible instance of the behavioral gap §2 asks for — read it before extending this brief further.
+
 **Not part of BSCS Year 1. Not part of the Computing Domain Context release.** Neither is blocked by this, and this is not blocked by either.
 
 **The name is intentionally unresolved.** The first pass of this discovery used a single working name (`Learning Goal` / `Preparation Goal`). A review pass found that framing too broad — it conflates two things that may not be the same concept. This revision separates them and is explicitly not claiming either needs its own persistence; see §1.

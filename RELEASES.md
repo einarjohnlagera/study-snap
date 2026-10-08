@@ -44,7 +44,33 @@ itself out of scope for this release and becomes its own future Backlog candidat
 
 ### Shipped
 
-_(nothing yet)_
+- **Study Journey Purpose / Learner Goal — §11 question pass (2026-10-07/08).** Worked all 12 of
+  the discovery brief's §11 open questions, in order, as a companion decision file:
+  `docs/claude-plans/study-journey-purpose-learner-goal-discovery-decision.md`. Found and corrected
+  a stale half of the brief's own "premise verified against current code" line: `UserEntity.studyGoal` and
+  `course_programs.exam_goal_slug` already persist crude, shipped versions of Learner Goal and
+  Target Credential at the profile/catalog grain — the brief's "nothing already represents either
+  concept" claim held only at the Note/Collection grain it checked. Found a concrete,
+  code-reproducible gap (not a bug — Journey terminology and the terminal exam-mode CTA are keyed
+  solely to the viewer's `ProfileType`, never to the Journey itself, and catalog adoption is
+  verified unrestricted by profile), but confirmed the quiz-mode half of that gap sits against a
+  **locked** contract (`EXAM_MODES.md`'s audience-by-profile mapping), so any fix there is a product
+  decision, not a cheap rewire. Q1 (which problem to solve) is explicitly left to the owner with 3
+  evidenced candidate scopes, not picked unilaterally. One empirical question (whether published
+  Journeys sharing a `courseProgram` are already distinguishable without new metadata) is blocked on
+  a production read — Render MCP `CONNECT_TIMEOUT` all session — and left open rather than guessed.
+  `ROADMAP.md`'s Backlog Index row for the brief (`:701`) updated to summarize these findings and
+  point at the new decision file.
+- **Six `[CHECKPOINT — due 2026-10-07]` ROADMAP rows read** (the handoff note's count of five was
+  itself wrong — one row, the shared-quiz-promotion checkpoint, was missing from its list). One closed on its own kill criterion (archive
+  convention: `RELEASES.md` at 6 sections, `CLAUDE.md`'s `Current version:` block at 1,304 chars,
+  neither regrown — **but note `CLAUDE.md`'s total file size, 50,177 chars, remains over the
+  checkpoint's separate ~45,000-char observation**, unrelated to the kill criterion itself). One
+  partially advanced with a code-only finding (`generation_failure_reason` write path confirmed
+  live via `StudyPackService.java:1316-1338`, prod count still unread). The remaining four
+  (announcement fan-out pool saturation, `/notes/public` re-saturation, SEO `sort=recent`
+  engagement, shared-quiz promotion floor) are genuinely production-only reads and are marked
+  blocked rather than guessed at; none had their `Last reviewed` date advanced.
 
 ## v0.166.0 - Measured Twice
 
