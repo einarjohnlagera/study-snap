@@ -2,7 +2,7 @@
 
 ## v0.167.0 - Study Journey Purpose
 
-**Status: In Progress**
+**Status: Released** (signed off 2026-10-08; commits `22584379`/`1dd1c80c` on `releases/v0.167.0`)
 
 Theme: activate the parked "Study Journey Purpose / Learner Goal" architecture discovery, resolve
 its Q1 ("what problem are we solving"), and implement the chosen scope. **Started as investigation-only
@@ -73,6 +73,24 @@ Codex prompt; Codex implements; `/audit-diff` runs on the diff before commit.
 tier — no money/quota/permission surface is touched, per `CLAUDE.md`'s gate), plus a real-request
 (`MockMvc`) test for the new/changed DTO fields, plus the standing Postgres migration harness for
 the Civil Engineering `CHECK`-constraint change.
+
+**Falsification pass results (2026-10-08, cold agent, 10 claims checked against live code, not the
+commit message):** all 10 confirmed — both audit fixes (privacy, N+1), the collision-guard test,
+the page-chrome/per-collection-noun split, the `EXAM_MODES.md`/`exam-mode-visibility.ts` exclusion
+(empty diff, verified), mutual-exclusivity in both directions, real transport-level tests for every
+new file, feature-doc accuracy, and 327 backend + 39 frontend tests passing. **Nothing found that
+blocks signoff.** Three non-blocking follow-ups logged rather than silently dropped:
+- No direct unit test pins `resolveWithoutInheritance` against a collection that itself has a
+  non-null `parentCollectionId` (currently only exercised indirectly via a parentless collection,
+  equivalent in effect, not in intent-signaling). Low priority — add if this area is touched again.
+- No test exercises `resolve()`'s cross-owner defensive branch (fails closed, currently
+  dead-from-a-coverage-perspective).
+- `NativeQueryPostgresIntegrationTest`'s V154 migration test was verified by reading source only in
+  this pass (the falsification run used `-Dnativequery.pg.skip=true`); it was run earlier in this
+  session with Docker and passed, but wasn't re-run live in the same pass as the other 9 claims.
+- Candidate B's "only 2 production users" figure is a production-state claim from the discovery
+  phase, not re-verified in this pass — same decay risk as any other prod-state claim per
+  `CLAUDE.md`; re-check before relying on it further rather than assuming it still holds.
 
 ### Shipped
 
