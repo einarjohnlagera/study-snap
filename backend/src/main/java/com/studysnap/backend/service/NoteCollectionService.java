@@ -12,6 +12,7 @@ import com.studysnap.backend.dto.GenerateCompanionRequest;
 import com.studysnap.backend.dto.GeneratedCompanionContentResponse;
 import com.studysnap.backend.dto.GoalCollectionChildResponse;
 import com.studysnap.backend.dto.GoalAdoptionStatusResponse;
+import com.studysnap.backend.config.ExamGoalConfig;
 import com.studysnap.backend.config.StudySnapProperties;
 import com.studysnap.backend.dto.GoalCollectionDetailResponse;
 import com.studysnap.backend.dto.GoalChildItemsResponse;
@@ -54,6 +55,7 @@ import com.studysnap.backend.exception.NoteNotFoundException;
 import com.studysnap.backend.exception.ReviewSetUpdateNotPublishableException;
 import com.studysnap.backend.exception.UserNotFoundException;
 import com.studysnap.backend.model.StudyPackProgressView;
+import com.studysnap.backend.repository.CourseProgramCatalogRepository;
 import com.studysnap.backend.repository.GeneratedQuizRepository;
 import com.studysnap.backend.repository.AnalyticsEventRepository;
 import com.studysnap.backend.repository.GoalAdoptionJobRepository;
@@ -195,6 +197,8 @@ public class NoteCollectionService {
     );
 
     private final NoteCollectionRepository collectionRepository;
+    private final CollectionExamGoalResolver collectionExamGoalResolver;
+    private final CourseProgramCatalogRepository courseProgramCatalogRepository;
     private final QuickReviewSessionRepository quickReviewSessionRepository;
     private final NoteCollectionItemRepository itemRepository;
     private final NoteCollectionItemRemovalRepository itemRemovalRepository;
@@ -231,6 +235,7 @@ public class NoteCollectionService {
         Map<UUID, Integer> rolledUpReadyCountsByCollectionId = rollUpCounts(collections, children, readyCountsByCollectionId);
         Map<UUID, Integer> childCountsByCollectionId = loadChildCounts(collections);
         Map<UUID, Integer> practicedCountsByCollectionId = loadPracticedCounts(userId, collections);
+        Map<UUID, String> examGoalSlugsByCollectionId = resolveExamGoalSlugsForRoots(collections);
         return collections.stream()
                 .map(collection -> toSummaryResponse(
                         collection,
@@ -238,7 +243,8 @@ public class NoteCollectionService {
                         rolledUpReadyCountsByCollectionId.getOrDefault(collection.getId(), 0),
                         childCountsByCollectionId.getOrDefault(collection.getId(), 0),
                         0,
-                        practicedCountsByCollectionId.getOrDefault(collection.getId(), 0)
+                        practicedCountsByCollectionId.getOrDefault(collection.getId(), 0),
+                        examGoalSlugsByCollectionId.get(collection.getId())
                 ))
                 .toList();
     }
@@ -258,13 +264,16 @@ public class NoteCollectionService {
                 // NOT computed: this endpoint exists only to populate the bulk-authoring selector,
                 // which reads id, title and resolvedLearnerLevel. Do not consume practicedCount
                 // from this response without loading it first; it is a placeholder, not a count.
+                // resolvedExamGoalSlug is likewise unused here — passed null directly rather than
+                // calling the resolver, to avoid an unused per-row DB lookup on this list.
                 .map(collection -> toSummaryResponse(
                         collection,
                         itemCountsByCollectionId.getOrDefault(collection.getId(), 0),
                         readyCountsByCollectionId.getOrDefault(collection.getId(), 0),
                         0,
                         0,
-                        0
+                        0,
+                        null
                 ))
                 .toList();
     }
@@ -310,6 +319,7 @@ public class NoteCollectionService {
         Map<UUID, Integer> rolledUpReadyCountsByCollectionId = rollUpCounts(collections, children, readyCountsByCollectionId);
         Map<UUID, Integer> childCountsByCollectionId = childCountsByParentId(children);
         Map<UUID, Integer> adoptionCountsByCollectionId = loadAdoptionCounts(collections);
+        Map<UUID, String> examGoalSlugsByCollectionId = resolveExamGoalSlugsForRoots(collections);
         return collections.stream()
                 .map(collection -> toSummaryResponse(
                         collection,
@@ -317,7 +327,8 @@ public class NoteCollectionService {
                         rolledUpReadyCountsByCollectionId.getOrDefault(collection.getId(), 0),
                         childCountsByCollectionId.getOrDefault(collection.getId(), 0),
                         adoptionCountsByCollectionId.getOrDefault(collection.getId(), 0),
-                        0
+                        0,
+                        examGoalSlugsByCollectionId.get(collection.getId())
                 ))
                 .toList();
     }
@@ -510,7 +521,8 @@ public class NoteCollectionService {
                 weeklyFocusByDay,
                 collection.getCreatedAt(),
                 collection.getUpdatedAt(),
-                scheduledChildResponses
+                scheduledChildResponses,
+                collectionExamGoalResolver.resolve(collection)
         );
     }
 
@@ -3520,13 +3532,20 @@ public class NoteCollectionService {
         collection.setUpdatedAt(now);
     }
 
+    /**
+     * {@code resolvedExamGoalSlug} is looked up by the caller in one batched query across the whole
+     * page rather than once per row here — see {@link #resolveExamGoalSlugsForRoots}, {@link #list},
+     * {@link #listPublic}. {@link #listNoteAccepting} passes {@code null} directly since that
+     * endpoint's consumer never reads this field.
+     */
     private NoteCollectionSummaryResponse toSummaryResponse(
             NoteCollectionEntity collection,
             int itemCount,
             int readyCount,
             int childCount,
             int adoptionCount,
-            int notesPracticed
+            int notesPracticed,
+            String resolvedExamGoalSlug
     ) {
         return new NoteCollectionSummaryResponse(
                 collection.getId(),
@@ -3544,8 +3563,35 @@ public class NoteCollectionService {
                 adoptionCount,
                 notesPracticed,
                 collection.getCreatedAt(),
-                collection.getUpdatedAt()
+                collection.getUpdatedAt(),
+                resolvedExamGoalSlug
         );
+    }
+
+    /**
+     * Batches {@link CollectionExamGoalResolver}'s per-row DB lookup into one query across a page of
+     * ROOT collections (no {@code parentCollectionId}) — calling the resolver once per row here would
+     * mean one extra SELECT per exam-flavored root on every library/public-catalog list render.
+     */
+    private Map<UUID, String> resolveExamGoalSlugsForRoots(List<NoteCollectionEntity> roots) {
+        Set<String> candidateCoursePrograms = roots.stream()
+                .filter(collection -> collection.getLearnerLevel() == LearnerLevel.BOARD_EXAM_REVIEW
+                        && collection.getCourseProgram() != null)
+                .map(NoteCollectionEntity::getCourseProgram)
+                .collect(Collectors.toSet());
+        if (candidateCoursePrograms.isEmpty()) {
+            return Map.of();
+        }
+        Map<String, String> slugsByCourseProgram = courseProgramCatalogRepository
+                .findExamGoalSlugsByNames(candidateCoursePrograms);
+        Map<UUID, String> slugsByCollectionId = new HashMap<>();
+        for (NoteCollectionEntity root : roots) {
+            String slug = slugsByCourseProgram.get(root.getCourseProgram());
+            if (slug != null && ExamGoalConfig.isValidSlug(slug)) {
+                slugsByCollectionId.put(root.getId(), slug);
+            }
+        }
+        return slugsByCollectionId;
     }
 
     private NoteCollectionDetailResponse toDetailResponse(
@@ -3575,7 +3621,8 @@ public class NoteCollectionService {
                 collection.getCreatedAt(),
                 collection.getUpdatedAt(),
                 progress,
-                itemResponses
+                itemResponses,
+                collectionExamGoalResolver.resolve(collection)
         );
     }
 
@@ -3614,7 +3661,14 @@ public class NoteCollectionService {
                 collection.getCreatedAt(),
                 collection.getUpdatedAt(),
                 progress,
-                itemResponses
+                itemResponses,
+                // Uses resolveWithoutInheritance, NOT resolve, for the identical reason as
+                // resolvedLearnerLevel above: this collection is already known PUBLIC (that's why
+                // we're here), so its OWN courseProgram/learnerLevel are safe to expose — but
+                // resolve() would walk to a parent via parentCollectionId with no visibility check,
+                // and a PUBLIC collection may have a non-null parentCollectionId that is PRIVATE.
+                // Only this collection's own fields are consulted; nothing is inherited.
+                collectionExamGoalResolver.resolveWithoutInheritance(collection)
         );
     }
 

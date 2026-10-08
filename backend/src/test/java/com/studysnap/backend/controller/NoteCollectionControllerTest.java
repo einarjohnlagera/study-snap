@@ -797,7 +797,7 @@ class NoteCollectionControllerTest {
      * addition.
      */
     @Test
-    void goalDetailResponseFieldSetIsUnchanged() {
+    void goalDetailResponseFieldSetIncludesOnlyTheAdditiveExamSignal() {
         assertThat(GoalCollectionDetailResponse.class.getRecordComponents())
                 .extracting(java.lang.reflect.RecordComponent::getName)
                 .containsExactly(
@@ -824,7 +824,8 @@ class NoteCollectionControllerTest {
                         "weeklyFocusByDay",
                         "createdAt",
                         "updatedAt",
-                        "children"
+                        "children",
+                        "resolvedExamGoalSlug"
                 );
     }
 

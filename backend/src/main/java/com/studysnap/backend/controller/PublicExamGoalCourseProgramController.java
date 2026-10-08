@@ -23,4 +23,11 @@ public class PublicExamGoalCourseProgramController {
         ExamGoalConfig.getValidSlugs().forEach(slug -> result.put(slug, courseProgramProvider.getCoursePrograms(slug)));
         return result;
     }
+
+    @GetMapping("/definitions")
+    public Map<String, String> listExamGoalDefinitions() {
+        Map<String, String> result = new LinkedHashMap<>();
+        ExamGoalConfig.getValidSlugs().forEach(slug -> result.put(slug, ExamGoalConfig.getFullName(slug)));
+        return result;
+    }
 }

@@ -19,8 +19,17 @@ public record NoteCollectionSummaryResponse(
         int adoptionCount,
         int notesPracticed,
         Instant createdAt,
-        Instant updatedAt
+        Instant updatedAt,
+        String resolvedExamGoalSlug
 ) {
+    public NoteCollectionSummaryResponse(UUID id, String title, String description, String visibility,
+            String courseProgram, String learnerLevel, String resolvedLearnerLevel, UUID sourcePlanId,
+            UUID parentCollectionId, int itemCount, int readyCount, int childCount, int adoptionCount,
+            int notesPracticed, Instant createdAt, Instant updatedAt) {
+        this(id, title, description, visibility, courseProgram, learnerLevel, resolvedLearnerLevel,
+                sourcePlanId, parentCollectionId, itemCount, readyCount, childCount, adoptionCount,
+                notesPracticed, createdAt, updatedAt, null);
+    }
     public NoteCollectionSummaryResponse(
             UUID id,
             String title,
@@ -38,6 +47,6 @@ public record NoteCollectionSummaryResponse(
             Instant updatedAt
     ) {
         this(id, title, description, visibility, courseProgram, null, null, sourcePlanId,
-                parentCollectionId, itemCount, readyCount, childCount, adoptionCount, notesPracticed, createdAt, updatedAt);
+                parentCollectionId, itemCount, readyCount, childCount, adoptionCount, notesPracticed, createdAt, updatedAt, null);
     }
 }

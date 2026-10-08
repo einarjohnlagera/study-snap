@@ -456,6 +456,7 @@ export type GoalCollectionDetailResponse = {
   description: string | null;
   visibility: "PRIVATE" | "PUBLIC";
   courseProgram: string | null;
+  resolvedExamGoalSlug?: string | null;
   targetCompletionDate: string | null;
   companion: CompanionContent | null;
   companionMayBeOutdated: boolean;
@@ -1923,7 +1924,7 @@ export type CreateCourseProgramRequest = {
   name: string;
   programFamilyId?: string | null;
   programFamilyIds?: string[];
-  examGoalSlug?: "ale" | "pnle" | "let" | "cpale" | null;
+  examGoalSlug?: "ale" | "pnle" | "let" | "cpale" | "ce" | null;
 };
 
 export type ApplicableProgram = {
@@ -2139,6 +2140,7 @@ export type NoteCollectionSummary = {
   courseProgram: string | null;
   learnerLevel?: LearnerLevel | null;
   resolvedLearnerLevel?: LearnerLevel | null;
+  resolvedExamGoalSlug?: string | null;
   sourcePlanId: string | null;
   parentCollectionId: string | null;
   itemCount: number;
@@ -2192,6 +2194,7 @@ export type NoteCollectionDetail = {
   courseProgram: string | null;
   learnerLevel?: LearnerLevel | null;
   resolvedLearnerLevel?: LearnerLevel | null;
+  resolvedExamGoalSlug?: string | null;
   estimatedStudyHours: number | null;
   targetCompletionDate: string | null;
   termLabel?: string | null;
@@ -3024,6 +3027,11 @@ export async function setStudyGoal(studyGoal: string | null): Promise<MeResponse
   const me = await parseApiResponse<MeResponse>(response, "Could not update study goal. Please try again.");
   syncStoredAuthUserFromMe(me);
   return me;
+}
+
+export async function listExamGoalDefinitions(): Promise<Record<string, string>> {
+  const response = await fetch(buildUrl("/public/exam-goals/course-programs/definitions"));
+  return parseApiResponse<Record<string, string>>(response, "Could not load exam goals.");
 }
 
 export async function setFocusSubjects(subjects: string[]): Promise<MeResponse> {

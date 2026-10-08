@@ -3,7 +3,21 @@
 > **This is the core brief. Paste it as your first message in a new GPT chat session.**
 > Then paste any module below that matches the conversation — see "Which modules to paste".
 > Update this file whenever a new version ships or the roadmap shifts significantly.
-> Last updated: v0.166.0 - 2026-10-07 (Released). **`v0.166.0` fixed a confirmed HikariCP
+> Last updated: v0.167.0 - 2026-10-08 (Released). **`v0.167.0` resolved the "Study Journey Purpose /
+Learner Goal" architecture discovery's Q1 and implemented the owner-picked scope.** A Study Journey
+that is a recognized licensure Review Set now shows exam-specific terminology (`CollectionExamGoalResolver`,
+derived server-side from the Journey's own root `courseProgram` + `learnerLevel == BOARD_EXAM_REVIEW`,
+exposed as `resolvedExamGoalSlug`) regardless of the viewer's own `ProfileType` — library chrome
+(nav, empty states) stays viewer-keyed, and the locked terminal-exam-mode contract
+(`resolvePlanPremiumExamMode`/`EXAM_MODES.md`) was deliberately left untouched. Profile's Study Focus
+gained a constrained picker letting a learner deliberately choose or switch an exam goal for the
+first time (no schema change; true multi-goal support stays explicitly deferred — only 2 production
+accounts show that pattern). Civil Engineering (`'ce'`/CELE) joined the four existing recognized
+exams via a small, row-count-guarded migration. **A pre-commit audit pass found and fixed a privacy
+gap** (the public collection page was resolving exam terminology by walking to a potentially-private
+parent with no visibility check) **and an N+1 query pattern**, both before either shipped. See
+`NOTES_AND_COLLECTIONS_CONTEXT.md` for the full detail. Backend + frontend, one small migration, no
+new persistence beyond the single `'ce'` slug. Previous: v0.166.0 - 2026-10-07 (Released). **`v0.166.0` fixed a confirmed HikariCP
 long-connection-hold pattern found via a routine overdue-checkpoint sweep: `PublicProfileService`'s
 unbounded profile load (fixed, backend-only, bounded via SQL aggregates + top-N candidates, same
 response shape) and `NoteCollectionService.adoptGoal`'s synchronous per-child copy loop (moved to a

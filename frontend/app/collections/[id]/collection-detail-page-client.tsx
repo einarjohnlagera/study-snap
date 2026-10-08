@@ -3053,7 +3053,7 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
   const isAdmin = authUser?.role === "ADMIN";
   const showWeakAreas = canViewConceptHealth(currentPlan);
   const upgradeCtas = useMemo(() => getUpgradeCtas(currentPlan), [currentPlan]);
-  const labels = useMemo(() => getCollectionLabels(authUser?.profileType), [authUser?.profileType]);
+  const viewerLabels = useMemo(() => getCollectionLabels(authUser?.profileType), [authUser?.profileType]);
   const terminalAction = useMemo(
     () => getCollectionTerminalAction(authUser?.profileType, currentPlan),
     [authUser?.profileType, currentPlan],
@@ -3061,6 +3061,10 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
   const [loadState, setLoadState] = useState<LoadState>("loading");
   const [collection, setCollection] = useState<NoteCollectionDetail | null>(null);
   const [goalDetail, setGoalDetail] = useState<GoalCollectionDetailResponse | null>(null);
+  const labels = useMemo(
+    () => getCollectionLabels(authUser?.profileType, collection?.resolvedExamGoalSlug ?? goalDetail?.resolvedExamGoalSlug),
+    [authUser?.profileType, collection?.resolvedExamGoalSlug, goalDetail?.resolvedExamGoalSlug],
+  );
   const [adoptionStatus, setAdoptionStatus] = useState<GoalAdoptionStatusResponse | null>(null);
   const [adoptionStatusError, setAdoptionStatusError] = useState(false);
   const [adoptionRetry, setAdoptionRetry] = useState(0);
@@ -3128,7 +3132,7 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
   const backLinkHref = collection?.parentCollectionId && parentTitle
     ? `/collections/${collection.parentCollectionId}`
     : "/collections";
-  const backLinkLabel = collection?.parentCollectionId && parentTitle ? parentTitle : labels.plural;
+  const backLinkLabel = collection?.parentCollectionId && parentTitle ? parentTitle : viewerLabels.plural;
 
   const sensors = useSensors(
     useSensor(PointerSensor),

@@ -19,6 +19,7 @@ import {
   getMe,
   getSignInMethods,
   listCoursePrograms,
+  listExamGoalDefinitions,
   listSubjects,
   setFocusSubjects,
   setStudyGoal,
@@ -244,6 +245,8 @@ export default function ProfilePage() {
   const [savingStudyFocus, setSavingStudyFocus] = useState(false);
   const [isEditingGoal, setIsEditingGoal] = useState(false);
   const [studyGoalMessage, setStudyGoalMessage] = useState<string | null>(null);
+  const [examGoalDefinitions, setExamGoalDefinitions] = useState<Record<string, string>>({});
+  const [savingExamGoal, setSavingExamGoal] = useState(false);
   const [showAllStudyFocusSubjects, setShowAllStudyFocusSubjects] = useState(false);
   const [selectedFocusSubjects, setSelectedFocusSubjects] = useState<string[]>([]);
   const catalogCourseProgramNames = useCourseProgramCatalogNames();
@@ -290,11 +293,12 @@ export default function ProfilePage() {
     setSignInMethodsMessage(null);
     setLearningProfileErrors({});
     try {
-      const [meResult, courseProgramsResult, subjectsResult, signInMethodsResult] = await Promise.allSettled([
+      const [meResult, courseProgramsResult, subjectsResult, signInMethodsResult, examGoalsResult] = await Promise.allSettled([
         getMe(),
         listCoursePrograms("mine"),
         listSubjects("mine"),
         getSignInMethods(),
+        listExamGoalDefinitions(),
       ]);
       if (meResult.status !== "fulfilled") {
         throw meResult.reason;
@@ -322,6 +326,7 @@ export default function ProfilePage() {
       setCourseProgramSuggestions(courseProgramsResult.status === "fulfilled" ? courseProgramsResult.value : []);
       setFocusSubjectSuggestions(subjectsResult.status === "fulfilled" ? subjectsResult.value : []);
       setSignInMethods(signInMethodsResult.status === "fulfilled" ? signInMethodsResult.value : null);
+      setExamGoalDefinitions(examGoalsResult.status === "fulfilled" ? examGoalsResult.value : {});
     } catch (err) {
       const message = err instanceof Error ? err.message : "Could not load profile.";
       setError(message);
@@ -740,6 +745,22 @@ export default function ProfilePage() {
       setStudyGoalMessage(err instanceof Error ? err.message : "Could not clear study focus. Please try again.");
     } finally {
       setClearingStudyGoal(false);
+    }
+  };
+
+  const handleSelectExamGoal = async (slug: string) => {
+    if (!Object.hasOwn(examGoalDefinitions, slug) || savingExamGoal) return;
+    setSavingExamGoal(true);
+    setStudyGoalMessage(null);
+    try {
+      const updated = await setStudyGoal(slug);
+      setProfile(updated);
+      setSelectedFocusSubjects(updated.focusSubjects ?? []);
+      setIsEditingGoal(false);
+    } catch (err) {
+      setStudyGoalMessage(err instanceof Error ? err.message : "Could not set exam goal. Please try again.");
+    } finally {
+      setSavingExamGoal(false);
     }
   };
 
@@ -1211,7 +1232,7 @@ export default function ProfilePage() {
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                   <div className="space-y-1">
                     <p className="text-sm font-medium">
-                      {getExamHubConfig(profile.studyGoal)?.fullName ?? profile.studyGoal}
+                      {examGoalDefinitions[profile.studyGoal] ?? getExamHubConfig(profile.studyGoal)?.fullName ?? profile.studyGoal}
                     </p>
                     <p className="text-xs text-foreground/60">Your progress report tracks mastery toward this goal.</p>
                   </div>
@@ -1336,6 +1357,20 @@ export default function ProfilePage() {
                   </div>
                 </div>
               )}
+              <div className="space-y-2">
+                <label htmlFor="profile-exam-goal" className="text-sm font-medium">Choose an exam goal</label>
+                <SuggestionCombobox
+                  id="profile-exam-goal"
+                  ariaLabel="Choose an exam goal"
+                  value={profile.studyGoal && examGoalDefinitions[profile.studyGoal] ? profile.studyGoal : ""}
+                  options={Object.entries(examGoalDefinitions).map(([value, label]) => ({ value, label }))}
+                  onChange={() => {}}
+                  onOptionSelect={(slug) => void handleSelectExamGoal(slug)}
+                  allowCustom={false}
+                  disabled={savingExamGoal || clearingStudyGoal || savingStudyFocus || Object.keys(examGoalDefinitions).length === 0}
+                  placeholder="Search recognized exams"
+                />
+              </div>
               {studyGoalMessage ? (
                 <p className="text-xs text-red-600 dark:text-red-400">{studyGoalMessage}</p>
               ) : null}

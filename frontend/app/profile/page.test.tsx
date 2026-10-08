@@ -7,8 +7,10 @@ import {
   getMe,
   getSignInMethods,
   listCoursePrograms,
+  listExamGoalDefinitions,
   listSubjects,
   setFocusSubjects,
+  setStudyGoal,
   trackAnalyticsEvent,
   updateExamDate,
   updateUserProfile,
@@ -40,6 +42,7 @@ jest.mock("@/lib/api", () => ({
   getSignInMethods: jest.fn(),
   getUserNotePerformanceSummary: jest.fn().mockResolvedValue([]),
   listCoursePrograms: jest.fn(),
+  listExamGoalDefinitions: jest.fn(),
   listSubjects: jest.fn(),
   setFocusSubjects: jest.fn(),
   setStudyGoal: jest.fn(),
@@ -91,6 +94,8 @@ describe("Profile page", () => {
     (getCourseProgramCatalog as jest.Mock).mockReset();
     (getSignInMethods as jest.Mock).mockReset();
     (listCoursePrograms as jest.Mock).mockReset();
+    (listExamGoalDefinitions as jest.Mock).mockReset();
+    (setStudyGoal as jest.Mock).mockReset();
     (listSubjects as jest.Mock).mockReset();
     (setFocusSubjects as jest.Mock).mockReset();
     (updateUserProfile as jest.Mock).mockReset();
@@ -111,6 +116,7 @@ describe("Profile page", () => {
       googleEmail: null,
     });
     (listCoursePrograms as jest.Mock).mockResolvedValue(["Nursing", "Computer Science"]);
+    (listExamGoalDefinitions as jest.Mock).mockResolvedValue({ ale: "Architect Licensure Examination", ce: "Civil Engineering Licensure Examination (CELE)" });
     (listSubjects as jest.Mock).mockResolvedValue(["Pharmacology", "Anatomy", "Biochemistry"]);
     (setFocusSubjects as jest.Mock).mockResolvedValue({
       ...profileResponse,
@@ -597,6 +603,43 @@ describe("Profile page", () => {
     render(<ProfilePage />);
 
     expect(await screen.findByText("Create some notes first — your subjects will appear here as focus options.")).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "Choose an exam goal" })).toBeEnabled();
     expect(screen.queryByRole("button", { name: "Save Focus" })).not.toBeInTheDocument();
+  });
+
+  it("offers CELE when empty and switches an existing goal without changing state before success", async () => {
+    (getMe as jest.Mock).mockResolvedValue({ ...profileResponse, studyGoal: "ale" });
+    let finish!: (value: unknown) => void;
+    (setStudyGoal as jest.Mock).mockReturnValue(new Promise((resolve) => { finish = resolve; }));
+    render(<ProfilePage />);
+    const picker = await screen.findByRole("textbox", { name: "Choose an exam goal" });
+    fireEvent.click(screen.getByRole("button", { name: "Toggle suggestions" }));
+    fireEvent.click(await screen.findByRole("option", { name: "Civil Engineering Licensure Examination (CELE)" }));
+    expect(setStudyGoal).toHaveBeenCalledWith("ce");
+    expect(screen.getByText("Architect Licensure Examination")).toBeInTheDocument();
+    finish({ ...profileResponse, studyGoal: "ce", focusSubjects: [] });
+    await waitFor(() => expect(picker).toHaveValue("Civil Engineering Licensure Examination (CELE)"));
+  });
+
+  it("surfaces a failed exam selection and leaves the saved focus visible", async () => {
+    (getMe as jest.Mock).mockResolvedValue({ ...profileResponse, focusSubjects: ["Pharmacology"] });
+    (setStudyGoal as jest.Mock).mockRejectedValue(new Error("Network unavailable"));
+    render(<ProfilePage />);
+    await screen.findByRole("textbox", { name: "Choose an exam goal" });
+    fireEvent.click(screen.getByRole("button", { name: "Toggle suggestions" }));
+    fireEvent.click(await screen.findByRole("option", { name: "Civil Engineering Licensure Examination (CELE)" }));
+    expect(await screen.findByText("Network unavailable")).toBeInTheDocument();
+    expect(screen.getByText("Pharmacology")).toBeInTheDocument();
+  });
+
+  it("replaces subject focus with a selected exam after the server confirms the change", async () => {
+    (getMe as jest.Mock).mockResolvedValue({ ...profileResponse, focusSubjects: ["Pharmacology"] });
+    (setStudyGoal as jest.Mock).mockResolvedValue({ ...profileResponse, studyGoal: "ce", focusSubjects: [] });
+    render(<ProfilePage />);
+    await screen.findByRole("textbox", { name: "Choose an exam goal" });
+    fireEvent.click(screen.getByRole("button", { name: "Toggle suggestions" }));
+    fireEvent.click(await screen.findByRole("option", { name: "Civil Engineering Licensure Examination (CELE)" }));
+    await waitFor(() => expect(screen.getByText("Civil Engineering Licensure Examination (CELE)")).toBeInTheDocument());
+    expect(screen.queryByText("Pharmacology")).not.toBeInTheDocument();
   });
 });

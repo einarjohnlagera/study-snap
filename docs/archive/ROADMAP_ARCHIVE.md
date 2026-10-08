@@ -5219,3 +5219,16 @@ a child Subject Plan copy is built field by field in TWO places, `persistAdopted
 and the Official-update addition `createSubjectAddition` (`NoteCollectionService.java:2476-2515`), and the term must be
 carried at both; NOT at `persistAdoptedGoal`, the root copy. Phase B is a later release; Phase C is out. Anti-drift, verification tier and the required
 tests are in `RELEASES.md`.
+**Kicked off 2026-09-27, signed off 2026-09-27.** `v0.161.0 — Scannable Study Plans` is **Released** on `releases/v0.161.0` (release PR merged as #1454 and tagged 2026-09-27; deploy verified on both platforms — Render live 07:23:31Z, Vercel serving the same commit — and the post-deploy adoption-boundary read came back 0), cut from `main` after
+`v0.160.0` merged as #1451 and tagged, signed off 2026-09-27. **Owner scope pick, 2026-09-26 (at the `v0.160.0` signoff): Degree Study Journeys Phase B**,
+scoped frontend-only at kickoff; a backend fix landed during pre-signoff pressure testing (see below): Sections collapsed by default at every breakpoint (with a single-Section exception), an `Expand all` /
+`Collapse all` toggle on the Study Plan page, and `Not started` instead of `0% · 0 due` at the Section summary row and the
+plan-summary header. Every claim was re-read in code at kickoff. **Pre-signoff pressure testing (two parallel Opus falsification passes plus a Codex pass, then a fourth confirmatory Opus pass on the fix) found and fixed a real production defect: `adoptGoal` required each child to be `PUBLIC`, which half-created a learner's Goal on the live ALE and PNLE Review Sets whenever a published child was still `PRIVATE` — confirmed by two distinct causes (PNLE: a Publish update that stamped a child without making it `PUBLIC`; ALE: pre-existing `PRIVATE` drafts that `V141`'s blanket backfill made look published). The fix (PR #1453) makes the publication stamp the boundary inside an adopted Goal and closes an anonymous-read/standalone-adopt gap for a never-published child. See `RELEASES.md` v0.161.0 for the full mechanism split.** Anti-drift, the owner decisions (Codex routing; collapsed by default in the read view, expanded on the build surfaces; `Not started` header on Study Plan
+pages only) and the verification tier are in `RELEASES.md`. **Kickoff scans found seven `[CHECKPOINT]` rows due 2026-09-26 or 2026-09-27 and still open; all were read the same day
+through the reconnected Render MCP (read-only `SELECT`s, `docs/claude-plans/2026-09-27-v0.160-post-deploy-and-overdue-checkpoint-reads.sql`) and recorded in their own rows:** the five Learning
+Connections rows (`v0.91.0`-`v0.95.0`) have no usable denominator (ONE relationship, zero invitation links) and were re-dated to 2026-10-27
+on their own clauses; `v0.87.0` is not answerable from the database; the retention click/open read found opens delivering and
+clicks at zero, so click tracking is off and the fix is the owner's. **`v0.160.0` post-deploy reads (2026-09-27): `V150` applied
+2026-09-26T16:06:30Z (success); `term_label IS NOT NULL` count = 0; non-admin-owned roots with `last_update_published_at` = 0.**
+
+---

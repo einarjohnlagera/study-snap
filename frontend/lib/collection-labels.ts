@@ -95,8 +95,26 @@ const PREMIUM_EXAM_LABELS: Record<PlanPremiumExamMode, string> = {
   interview: "Start Interview Practice",
 };
 
-export function getCollectionLabels(profileType: ProfileType | null | undefined): CollectionLabels {
-  return LABELS_BY_PROFILE[profileType ?? "PROFESSIONAL"] ?? DEFAULT_LABELS;
+const EXAM_SHORT_NAMES: Record<string, string> = {
+  ale: "ALE", pnle: "PNLE", let: "LET", cpale: "CPALE", ce: "CELE",
+};
+
+export function getCollectionLabels(
+  profileType: ProfileType | null | undefined,
+  resolvedExamGoalSlug?: string | null,
+): CollectionLabels {
+  const viewerLabels = LABELS_BY_PROFILE[profileType ?? "PROFESSIONAL"] ?? DEFAULT_LABELS;
+  const exam = resolvedExamGoalSlug ? EXAM_SHORT_NAMES[resolvedExamGoalSlug] : null;
+  if (!exam) return viewerLabels;
+  return {
+    ...viewerLabels,
+    singular: `${exam} Review Set`,
+    plural: `${exam} Review Sets`,
+    goalSingular: `${exam} Review Set`,
+    subjectSingular: `${exam} Subject Plan`,
+    sectionSingular: `${exam} Section`,
+    primarySingular: `Primary ${exam} Review Set`,
+  };
 }
 
 export function getCollectionTerminalAction(

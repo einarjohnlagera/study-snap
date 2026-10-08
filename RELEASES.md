@@ -1,5 +1,194 @@
 # RELEASES.md - NoteLib
 
+## v0.167.0 - Study Journey Purpose
+
+**Status: Released** (signed off 2026-10-08; commits `22584379`/`1dd1c80c` on `releases/v0.167.0`)
+
+Theme: activate the parked "Study Journey Purpose / Learner Goal" architecture discovery, resolve
+its Q1 ("what problem are we solving"), and implement the chosen scope. **Started as investigation-only
+per the discovery brief's §14** (`docs/claude-plans/study-journey-purpose-learner-goal-discovery-brief.md`)
+— **scope expanded in place, owner decision 2026-10-08, after the investigation (§11, all 12 questions)
+completed and the owner picked Q1's scope.** The brief's blanket "no implementation" constraint is
+superseded for exactly the scope named below; everything else in §14 (no certification/role catalog,
+no `ProfileType` change, no recommendation-engine change, no BSCS backfill) still holds.
+
+### Investigation phase (complete)
+
+Worked the brief's §11 open questions in order, as a companion decision file
+(`docs/claude-plans/study-journey-purpose-learner-goal-discovery-decision.md`), corrected and
+re-verified across several passes (see that file's own §0a and the git history on this branch for
+the full trail). Found the brief's own premise partially stale (`UserEntity.studyGoal` and
+`course_programs.exam_goal_slug` already persisted crude versions of both concepts), found a
+genuine presentation gap (Journey terminology keyed to viewer `ProfileType`, never to the Journey
+itself), and left Q1 to the owner with three evidenced candidate scopes.
+
+### Implementation phase — Q1 resolved as Candidate A + B (+ Civil Engineering), owner decision 2026-10-08
+
+**A second verification pass, done before any implementation, recalibrated both candidates** —
+smaller and better-evidenced than the decision doc's speculative Q12 sizing in both cases:
+
+- **Candidate A is a labeling fix, not a mode-selection fix.** `getAvailableExamModes` proves
+  `EXAM_MODES.md`'s Audience & Profile-Type Mapping table is load-bearing: Board Exam Mode is never
+  offered as a tile to a non-Board-Taker profile. Letting `resolvePlanPremiumExamMode` (the terminal
+  CTA on a collection page) override viewer profile with Journey nature would route a viewer toward
+  a mode their own profile-gated screen doesn't list — a real contract violation, not a risk.
+  **`resolvePlanPremiumExamMode` and `EXAM_MODES.md` are explicitly OUT of scope.** Only
+  `getCollectionLabels` (terminology) changes, resolved server-side from a collection's root
+  ancestor's `courseProgram` → `course_programs.exam_goal_slug`, gated additionally on the root's
+  own `learner_level = BOARD_EXAM_REVIEW` (a concrete guard against the future collision Q11 left
+  open — two roots sharing one `courseProgram` with different purposes). Page-chrome labels
+  (`navLabel`, empty states) stay viewer-keyed; only per-collection nouns become Journey-aware.
+- **Candidate B's real gap is smaller than "single-valuedness."** Production read: only **2 users**
+  have adopted roots spanning ≥2 distinct `exam_goal_slug`s — building multi-goal infrastructure
+  now would ship ahead of its evidence. `docs/features/profile.md:97-99` documents the EXAM/SUBJECT
+  split as intentional (not a bug). What's actually missing: no UI lets a learner deliberately
+  choose or switch their exam goal — the only paths are Profile's "Clear" and the dashboard banner's
+  single auto-suggestion; "Change" is documented to redirect into editing `focusSubjects` instead.
+  **Fix: add a constrained exam-goal combobox (reusing the existing `SuggestionCombobox`/
+  `CourseProgramCombobox` pattern, `allowCustom=false` per this repo's taxonomy-field rule) wired to
+  the existing `updateStudyGoal` endpoint — no new column, no migration.** True multi-goal support
+  is explicitly deferred, not silently dropped: re-open only if the ≥2-distinct-exam-goal population
+  grows past a handful.
+- **Civil Engineering fold-in (owner-confirmed, 2026-10-08):** widen `course_programs.exam_goal_slug`'s
+  `CHECK` constraint to include `'ce'`, seed it onto the existing Civil Engineering row, add it to
+  `ExamGoalConfig.java` and the new exam-goal combobox's options. The one piece of this release that
+  needs a migration.
+
+Shipped implementation:
+
+- **A:** Collection detail, Goal detail, and summary responses now carry the exam slug resolved from the root collection's program and `BOARD_EXAM_REVIEW` level. Collection nouns show ALE, PNLE, LET, CPALE, or CELE Review Set terminology across profiles; library chrome stays profile-keyed.
+- **B:** Profile's Study Focus now offers a constrained exam picker alongside Change and Clear. It lists the server's valid exam definitions, allows switching, and clears subject focus when a goal is saved.
+- **CE:** V154 widens the catalog constraint and assigns `ce` to Civil Engineering, with a row-count guard. `ExamGoalConfig` names CELE and includes it in valid slugs. The optional Exam Hub page was deferred because it creates a new public SEO surface.
+
+Anti-drift for the implementation phase: additive only — no change to `ProfileType`, no
+recommendation-engine change, no certification/role catalog beyond the single `'ce'` slug, no
+backfill of existing Study Journeys' presentation, no touch to `resolvePlanPremiumExamMode`/
+`EXAM_MODES.md`. New DTO fields are additive (old clients ignore them; no field removed or renamed).
+
+**Delivery:** Codex-routed per `CLAUDE.md`'s task-routing table (new backend service logic +
+multi-system frontend/backend change). Claude Code designed the scope above and will write the
+Codex prompt; Codex implements; `/audit-diff` runs on the diff before commit.
+
+**Verification tier:** one scoped cold falsification agent on the diff (not the full three-agent
+tier — no money/quota/permission surface is touched, per `CLAUDE.md`'s gate), plus a real-request
+(`MockMvc`) test for the new/changed DTO fields, plus the standing Postgres migration harness for
+the Civil Engineering `CHECK`-constraint change.
+
+**Falsification pass results (2026-10-08, cold agent, 10 claims checked against live code, not the
+commit message):** all 10 confirmed — both audit fixes (privacy, N+1), the collision-guard test,
+the page-chrome/per-collection-noun split, the `EXAM_MODES.md`/`exam-mode-visibility.ts` exclusion
+(empty diff, verified), mutual-exclusivity in both directions, real transport-level tests for every
+new file, feature-doc accuracy, and 327 backend + 39 frontend tests passing. **Nothing found that
+blocks signoff.** Three non-blocking follow-ups logged rather than silently dropped:
+- No direct unit test pins `resolveWithoutInheritance` against a collection that itself has a
+  non-null `parentCollectionId` (currently only exercised indirectly via a parentless collection,
+  equivalent in effect, not in intent-signaling). Low priority — add if this area is touched again.
+- No test exercises `resolve()`'s cross-owner defensive branch (fails closed, currently
+  dead-from-a-coverage-perspective).
+- `NativeQueryPostgresIntegrationTest`'s V154 migration test was verified by reading source only in
+  this pass (the falsification run used `-Dnativequery.pg.skip=true`); it was run earlier in this
+  session with Docker and passed, but wasn't re-run live in the same pass as the other 9 claims.
+- Candidate B's "only 2 production users" figure is a production-state claim from the discovery
+  phase, not re-verified in this pass — same decay risk as any other prod-state claim per
+  `CLAUDE.md`; re-check before relying on it further rather than assuming it still holds.
+
+### Shipped
+
+- **Study Journey Purpose / Learner Goal — §11 question pass (2026-10-07/08).** Worked all 12 of
+  the discovery brief's §11 open questions, in order, as a companion decision file:
+  `docs/claude-plans/study-journey-purpose-learner-goal-discovery-decision.md`. Found and corrected
+  a stale half of the brief's own "premise verified against current code" line: `UserEntity.studyGoal` and
+  `course_programs.exam_goal_slug` already persist crude, shipped versions of Learner Goal and
+  Target Credential at the profile/catalog grain — the brief's "nothing already represents either
+  concept" claim held only at the Note/Collection grain it checked. Found a concrete,
+  code-reproducible gap (not a bug — Journey terminology and the terminal exam-mode CTA are keyed
+  solely to the viewer's `ProfileType`, never to the Journey itself, and catalog adoption is
+  verified unrestricted by profile), but confirmed the quiz-mode half of that gap sits against a
+  **locked** contract (`EXAM_MODES.md`'s audience-by-profile mapping), so any fix there is a product
+  decision, not a cheap rewire. Q1 (which problem to solve) is explicitly left to the owner with 3
+  evidenced candidate scopes, not picked unilaterally. One empirical question (whether published
+  Journeys sharing a `courseProgram` are already distinguishable without new metadata) is blocked on
+  a production read — Render MCP `CONNECT_TIMEOUT` all session — and left open rather than guessed.
+  `ROADMAP.md`'s Backlog Index row for the brief (`:701`) updated to summarize these findings and
+  point at the new decision file.
+- **Six `[CHECKPOINT — due 2026-10-07]` ROADMAP rows read** (the handoff note's count of five was
+  itself wrong — one row, the shared-quiz-promotion checkpoint, was missing from its list). One closed on its own kill criterion (archive
+  convention: `RELEASES.md` at 6 sections, `CLAUDE.md`'s `Current version:` block at 1,304 chars,
+  neither regrown — **but note `CLAUDE.md`'s total file size, 50,177 chars, remains over the
+  checkpoint's separate ~45,000-char observation**, unrelated to the kill criterion itself). One
+  partially advanced with a code-only finding (`generation_failure_reason` write path confirmed
+  live via `StudyPackService.java:1316-1338`, prod count still unread). The remaining four
+  (announcement fan-out pool saturation, `/notes/public` re-saturation, SEO `sort=recent`
+  engagement, shared-quiz promotion floor) are genuinely production-only reads and are marked
+  blocked rather than guessed at; none had their `Last reviewed` date advanced.
+- **Render MCP reconnected, 2026-10-08 — every blocked read above was run.** All read-only
+  `SELECT`s via `mcp__render__query_render_postgres` (self-wrapped in a read-only transaction) plus
+  two Render platform reads (`get_metrics`, `list_logs`); no write made or considered.
+  - **Study Journey Purpose's Q11 production read: RESOLVED (corrected once after an advisor pass
+    caught that `published_at IS NOT NULL` alone isn't "official root" — any user can publish their
+    own collection; re-run with an `owner.role` join).** Every published, curator-owned
+    (`role=ADMIN`) `courseProgram` root in production is the only one for its program today — no
+    academic/licensure-prep collision exists yet, so `courseProgram`/`exam_goal_slug` currently
+    disambiguates, though this is a point-in-time fact (it breaks the day a program publishes a
+    second root), not a structural guarantee. Sharper finding, also corrected once: Civil
+    Engineering's curator-owned, 2-adopter official root ("🏗️ CELE Comprehensive Review") has
+    `exam_goal_slug IS NULL` — but the goal-nudge *filter* itself still works for it via the
+    free-text fallback (checked against `ProgressReportService.filterGoalStudyPacks:446-448`); the
+    real gap is narrower — no Exam Hub discovery page, and `GOAL_TYPE_SUBJECT` framing instead of
+    the recognized-exam `GOAL_TYPE_EXAM` framing on the dashboard goal card. Decision file and
+    `ROADMAP.md:701` updated accordingly.
+  - **Announcement pool-starve checkpoint:** 419 active users (197 max in one `profile_type`), only
+    1 non-DRAFT announcement ever. Falls in the kill criterion's 200-500 advisory band, not a clean
+    pass — re-dated to `2026-11-07` (this pass's own judgment call on cadence) with interim guidance
+    to publish large announcements off-peak.
+  - **Failure-reason column checkpoint: CLOSED.** 9 notes carry a failure code (2 distinct codes),
+    and all 9 now sit at `status = GENERATED` while still carrying their failure reason — the
+    retry-survival guard this column exists for is confirmed in production.
+  - **`/notes/public` pool-saturation checkpoint: SUPERSEDED, not a clean close.** Postgres
+    `active_connections` holding flat at 20-22 for 30 days is uninformative (HikariCP keeps
+    `maximumPoolSize` connections open regardless of load). `list_logs` for the literal Hikari
+    phrase `"Connection leak detection"` (timed out once, succeeded on retry) found zero matches
+    2026-09-09 → 2026-10-01 and exactly two on 2026-10-04, neither naming `/notes/public`. Checked
+    whether these two (both resolving to `NoteCollectionService.adoptGoal`) were a bystander effect
+    of `/notes/public` DB saturation rather than their own thing: the existing incident's own
+    fingerprint (the same note's `PUBLIC_NOTE_VIEWED` ≥3 times inside either hold window) and
+    `server_failed`/`server_restarted` events both came back empty for that evening — negative on
+    both, so folded as a dated data point into the pool-exhaustion row's already-open
+    "connections held on unidentified blocking I/O" question (`ROADMAP.md`'s 2026-09-18 row)
+    rather than opened as a new finding. **But this row's own narrow instrument still cannot close
+    its real question: `/notes/public` saturation DID recur inside this same 30-day window** — 24
+    restarts since 2026-09-01, diagnosed 2026-10-01, fixed as `v0.165.0` Leg B — through DB CPU
+    exhaustion on an unbounded ranked-branch fan-out. A leak-detection trace names where a
+    connection was *acquired*, not what actually saturated the database, so it can't reliably
+    attribute a DB-wide slowdown to any one path either way. Superseded by the Leg B row and its
+    own post-fix checkpoint (clock from 2026-10-05), not an independent pass.
+  - **SEO `sort=recent` checkpoint: CLOSED, no material fall.** `PUBLIC_NOTE_VIEWED`/`pathType=seo`
+    (56,444 all-time, 32,037 in the last 30 days) shows no drop around the deploy week and both full
+    weeks after it are higher than any week before — though the deploy week itself (1,991) and the
+    week right after (6,476) bracket a lower week in between (2,838), so "grew every week" overstates
+    it; the honest read is "no material fall," not uninterrupted growth — a raw traffic count, not a
+    controlled comparison, but the kill criterion's own metric shows no fall.
+  - **Shared-quiz promotion-floor checkpoint: applied as written — promoted, floor unmet, hands to
+    an owner decision, not reclassified.** 1 share link from 1 generator against a 20-link/5-generator
+    floor; that one link was created 2026-09-05, a day *before* the promoting tip shipped (`v0.122.0`,
+    2026-09-06), so there have been zero links since promotion; the 1,245 tip impressions are 7
+    distinct users (6 learners, 1 admin), not 1,245 people — and 1,245 ÷ 7 ≈ 178 firings per user for
+    a tip documented as one-time, recorded as a separate over-firing observation, not fixed. An
+    earlier draft of this read reclassified the unmet floor as "not really promoted" to avoid the
+    owner-decision branch; withdrawn as fitting the criterion to the data after the fact. The row now
+    states the facts (near-zero reach, zero post-promotion links) and leaves the call to the owner.
+  - **`INACTIVITY` retention-email checkpoint (separately tracked, `due 2026-10-08`): RE-DATED to
+    `2026-11-23`, not a kill-criterion fire.** Went through two wrong conclusions before landing on
+    the right one, kept in the row as the record: first read all-time `email_log` (5,003 sent, 0
+    clicked) and read it as the kill criterion firing; corrected after an advisor pass to check
+    whether click tracking was globally broken (it wasn't — `DUE_CONCEPTS_DIGEST` recorded real
+    clicks, confirmed via `email_log` and `email_open_daily_counts`); corrected again on finding the
+    actual error — tracking is Stage 1a instrumentation (`V149`, installed 2026-09-24), not
+    `INACTIVITY`'s lifetime history, and re-anchored to that deploy, `INACTIVITY` sent only 537 (not
+    5,003) with 0 clicks, meeting neither leg of the row's own 30-click-or-2,000-send floor. An
+    unmet floor is a re-date per the row's own rule, not a verdict either way — re-dated to the
+    doctrine's own pre-specified 60-day backstop from the `V149` deploy, not a fresh interval.
+
 ## v0.166.0 - Measured Twice
 
 **Status: Released** (signed off 2026-10-07; PRs #1475, #1476, #1477, #1478 merged into `releases/v0.166.0`)
@@ -1147,97 +1336,7 @@ semantics, so it stays on the `advisor()`-only baseline — only Phase C's tier 
 - **H4 sign-conflation fix — PR #1458, merged `e3625535`.** Found by a scoped Opus falsification pass run at signoff, against the actual merged release state (`cf91ce5a`), not any individual PR's own diff. `QuizValidationUtils`'s exact-value match treated `"0.40"` as present inside evidence text `"-0.40"` — the minus sign was invisible to the pattern — which could mask a real answer/explanation mismatch for any difference-type numeric question (discrimination index, net change, signed error). Pre-existing since `v0.155.0`'s H4, not introduced by H5, but H5 (this same release) makes it more reachable by requiring explanations to state a value at all. Fixed and mutation-verified (reverted the fix, confirmed the new test fails against pre-fix code, restored it).
 - **Signoff falsification pass, full report folded into the rows above and into `docs/product/ROADMAP.md`'s Backlog Index** rather than repeated here. Two additional findings, both documented as Known Limitations / Backlog rows, neither blocking: the coverage-ratio metric's denominator (H4's `isNumericUnitLiteral`, ≤20 chars + a digit) is slightly wider than H5's own numeric-condition wording ("not a phrase"), so the ratio cannot reach 100% by design — the post-deploy checkpoint read should say so rather than read a sub-100% result as a defect; and a low-severity, genuinely uncertain race between a Challenge session completing and a concurrent regeneration's bank delete, needing a two-connection Postgres test to resolve, not reproduced.
 
-## v0.161.0 - Scannable Study Plans
-
-**Status: Released** (signed off 2026-09-27; PRs #1452 frontend, #1453 pressure-test fix merged into the release branch; release PR to `main` pending the owner's admin merge)
-
-Theme: make a Study Plan page scannable. A learner opening a plan sees its Sections collapsed until they choose one,
-can open or close them all at once, and is told `Not started` instead of `0% · 0 due` when they have no evidence yet.
-
-### Planned Scope
-
-**Scope picked by the owner, 2026-09-26 (at the `v0.160.0` signoff); kicked off 2026-09-27: Degree Study Journeys Phase B (plan §13, §18 Phase B, §9.6), scoped frontend-only at kickoff; a
-backend fix landed during pre-signoff pressure testing (see below).** Source: `docs/claude-plans/degree-study-journeys-stage1-architecture-audit.md`. Independent of Phase A, which shipped
-in `v0.160.0`. **Every claim below was re-read in code at kickoff, not taken from the plan (the plan's line numbers had
-drifted):**
-
-1. **Sections collapsed by default at every breakpoint.** Today the default is seeded once at mount from viewport width
-   (`LARGE_VIEWPORT_MIN_WIDTH = 1024`, `collection-detail-page-client.tsx:136`; seeded at `:3131`; applied at `:3484` and the
-   two `?? defaultSectionExpanded` render sites `:4183`, `:4256`), so a desktop learner sees every Section of a 312-note plan
-   expanded. New rule: collapsed everywhere, with ONE deterministic exception: a plan with exactly one Section expands it.
-   Screen width may decide layout density, never how much curriculum a learner must process.
-2. **An `Expand all` / `Collapse all` toggle on the Study Plan page.** It does not exist there (grep-verified in
-   `collection-detail-page-client.tsx`); the Year builder already has a two-button pair at `study-plan-builder-page-client.tsx:2925`/`:2933`
-   that this must not be confused with. One low-prominence text button in the Section
-   list header that reads `Expand all` normally and `Collapse all` once every Section is open.
-3. **`Not started` at the Section summary row.** The header badge is gated only on `sectionReadiness.total > 0`
-   (`SectionCardHeader`, `:310`), so a Section whose notes exist but are all unpracticed renders `0% · 0 due`. `SectionReadiness`
-   (`:123`) has no not-practiced count, so it grows one (`aggregateSectionReadiness`, `:230`), and the badge shows `Not started`
-   when nothing has been practiced.
-4. **`Not started` at the Year/plan summary.** The compact header in the shared `ReadinessSummary`
-   (`components/readiness/readiness-summary.tsx:171-177`) renders `0% ready · 0/N mastered · 0 due` for untouched content, while
-   the same file already has `isReadinessNotStarted` (`:19`) for per-subject entries. **Verify every consumer of
-   `ReadinessSummary` before changing its compact header, and scope the change to the collection pages if others exist.**
-
-**Already built, so NOT scope (verified):** full-row clickable Section headers, the collapsed summary row with note count and
-3-title peek, multiple Sections open at once, `aria-expanded` on the header. The Subject-card `Not started` shipped with the
-compact card in `v0.160.0`.
-
-**Owner decisions, 2026-09-27:** (a) **Collapsed by default in the READ view; expanded by default on the BUILD surfaces.** ⚠️ CORRECTED post-kickoff: the Year builder does not "start every Subject expanded" — `refreshBuilder({ seedCollapsed: true })` collapses every Subject on first load (`dc9ca58c`, `collapsedSubjectIds` seeded from `nextSubjects`, not empty as first stated at `:1392`), and its toggle pair is at `:2943`/`:2951`, not `:2925`/`:2933`. The owner re-confirmed on 2026-09-27, after this was found, that the Year builder is left unchanged by this release regardless. The
-Year builder (`/collections/[id]/builder`, the only build surface a user can reach: the Study Plan page's own organize mode is dormant, `organizeMode` being a constant `false`) keeps
-their expanded default and are otherwise unchanged; the `Expand all` / `Collapse all` toggle is added to the Study Plan page in
-the read view (organize mode being dormant, the toggle's organize-mode behaviour is not user-reachable). (Cross-section drag is already a no-op, `handleDragEnd` `:3343`, and a note changes Section
-through its row's Section control, so nothing here may auto-expand a Section on drag.) (b) **Routing: Codex.** Written as
-`docs/codex-prompts/v0.161.0-scannable-study-plans.md` (gitignored); the diff is audited with `/audit-diff` before anything is
-committed. (c) **The `Not started` header change is Study Plan pages only for now**; whether it becomes product-wide is to be
-judged after this ships (the Progress page's goal card and the note detail page use the same compact header and are untouched).
-
-**Implementor decision:** item 4 is done through an opt-in prop on the compact `ReadinessSummary` header, set ONLY at the two Study
-Plan page call sites (Goal `collection-detail-page-client.tsx:3889`, leaf `:4121`), so the other compact call sites (the Progress
-page's goal card `app/progress/progress-report-client.tsx:507` and the note detail page
-`components/notes/private-note-detail-page-client.tsx:3301`) render exactly as before.
-
-**Explicitly NOT in this release (as scoped at kickoff; a backend fix was added afterward by pre-signoff pressure testing, see Shipped):** persisting expansion state (decided in plan §13.1; it would restore a deep expansion the
-learner does not remember making); accordion single-open; the artifact-level `getCollectionLabels(profileType, collection?)`
-terminology resolver (plan: only if justified, and nothing here justifies it); any migration or new endpoint; any
-Term, Degree or placement-revision work (placement revisions is its own Backlog row); any change to mastery math or
-`ConceptHealth`.
-
-Anti-drift: Sections stay a computed grouping (no entity, no table); no new mastery signal at any level; the Year page term
-grouping and compact cards from `v0.160.0` are untouched; Review Set rendering must not change beyond the default-collapsed
-Sections and the `Not started` wording (five live Review Sets). **Verification:** frontend `tsc --noEmit`, lint and jest;
-tests for the default state at BOTH viewport widths (now identical), the single-Section exception, the toggle's label flip,
-and a render assertion that `0% · 0 due` never appears for zero evidence at Section or plan grain; mutation-check every new
-test and name the killer; a diff that changes behaviour must touch a test that runs it; `advisor()` before the Codex prompt is written, `/audit-diff` on delivery, and `advisor()` on the
-diff. The first two Opus passes (frontend behaviour; release housekeeping) and the Codex pass ran while the release was still frontend-only; the Codex pass surfaced the adoption-boundary defect, which was then fixed and re-verified by a fourth, narrower Opus pass scoped to that fix diff.
-
-### Shipped
-
-- Study Plan read views now start Sections collapsed at every viewport width, except that an exactly one-Section plan starts expanded. The expansion logic keeps separate read-view and organize-mode overrides (`useSectionExpansionState`); organize mode is dormant on this page (`organizeMode` is a constant `false`, no setter, and the inline Organize toggle is no longer exposed), so that split is defensive code exercised only by its hook test, and the only build surface a user can reach is the Year builder, which is unchanged and already collapses its Subject blocks on first load (with its own `Expand all` / `Collapse all` pair). Expansion state is deliberately not persisted across reloads.
-- A low-prominence `Expand all` / `Collapse all` text toggle on the Study Plan read view controls every Section and is hidden when fewer than two Sections exist.
-- Untouched Section readiness badges say `Not started` only when no note in the Section has a completed session (a learner who practiced but never answered a concept correctly keeps the `N% · M due` wording, matching the note rows' `Practiced` label); Sections with some evidence keep the existing `N% · M due` wording, and zero-concept Sections still show no badge.
-- The compact readiness header opts into `Not started · N concepts` for an untouched Goal, and for an untouched leaf Study Plan only while `progress.notesPracticed === 0`. The Progress page and note detail page do not opt in and render exactly as before. The Goal header and the termed compact Subject cards (`isSubjectStarted`) have no per-note practice signal, so a Goal or a termed Subject where the learner practiced without ever answering correctly still reads `Not started` — a documented limitation, not exposed today (no live Year carries a term).
-- **Pre-signoff pressure-test fix, backend (PR #1453; this widens the release beyond frontend-only):** a child Subject Plan that is `PUBLIC` but has never been published (null `published_at`) is now treated as not found by the anonymous public read and by a standalone `adopt()`, so its term (or title) cannot reach an anonymous reader or a standalone adopter before Publish update. `adoptGoal` now adopts every child that carries a publication stamp, whatever its visibility, instead of requiring `PUBLIC`. A published-but-`PRIVATE` child made a fresh Goal adoption throw *after* the learner's Goal had already been persisted, leaving a half-created Goal a retry could not repair; **confirmed live by two distinct mechanisms, not one:** PNLE's two `PRIVATE` children were created 2026-09-10 (after `V141`) with `published_at IS NULL` and were later stamped by an explicit Publish update on 2026-09-14 without their visibility being flipped to `PUBLIC` — the mechanism the code comments already describe. ALE's seven `PRIVATE` children predate `V141` (created 2026-08-29 and 2026-09-05) and have `published_at == created_at` exactly, the signature of `V141`'s blanket backfill (`UPDATE note_collections SET published_at = created_at WHERE published_at IS NULL`, with no visibility predicate) rather than an explicit Publish update — these were curator drafts that the backfill made look published. Both mechanisms produce the identical symptom in `adoptGoal` and are fixed by the same change: the publication stamp, not visibility, is the boundary. **Since when:** `adoptGoal` has required each child to be `PUBLIC` (by delegating to the public-route `adopt()`) since Goal adoption itself was introduced, well before any publication-stamp concept existed; ALE's child at sibling position 0 has been `PRIVATE` since its creation on 2026-08-29, so the earliest zero-Subject ALE adoptions (2026-08-31, 2026-09-04) predate `V141` (2026-09-08) entirely and cannot be blamed on the stamp filter — the stamp filter (added in `v0.132.0`, PR introducing the publication boundary) only added an ADDITIONAL required condition on top of the pre-existing `PUBLIC` requirement; it never explains the defect's origin. This now matches what the public preview counts and what Official update already delivers (title, description and term of a published `PRIVATE` child). Deploy order is either: the API shape is unchanged, and a never-published child now returns 404 on a direct read or adopt where it previously either leaked or threw mid-adoption.
-- Four cold falsification passes ran on this release, in two rounds: while the release was still frontend-only, one Opus pass ran over the whole release AND one Opus pass ran over release housekeeping/docs, in parallel, alongside a separate Codex pass over both v0.160.0 and v0.161.0; the Codex pass is what found the adoption-boundary defect below. After the fix, a fourth, narrower Opus pass ran on the fix diff alone and confirmed it. Findings from all passes are dispositioned in Known Limitations below.
-
-### Known Limitations
-
-- **Existing adopters are not repaired by the adoption-boundary fix.** As of the 2026-09-27 read, 27 of 31 ALE adopters and all 17 PNLE adopters hold fewer Subject Plans than the source now has published (2 ALE adopters hold zero); this count is not split between pre- and post-defect causes and is not itself evidence the defect affected all of them equally, since ALE's own source additions have been growing independently. Re-adopting returns the existing (short) Goal unchanged. `Review update` already offers the missing Subject Plans as additions and was not changed by this release; no backfill was written or run — repairing existing adopters is a separate owner decision, tracked as its own Backlog row.
-- **The `Not started` header change is scoped to the Study Plan pages, not product-wide** (owner decision, pending a judgment after this ships): the Progress page's goal card and the note detail page keep the old `0% ready · 0/N mastered · 0 due` wording for untouched content.
-- **A Codex finding was refuted, not adopted:** a claim that the frontend-first deploy order was unsafe (an unknown-property rejection) was checked against the live Spring context; the JSON converter is a Jackson 3 `JsonMapper` with `FAIL_ON_UNKNOWN_PROPERTIES=false`, so either deploy order remains safe.
-- **Section grouping keys on the trimmed label only**, not the canonical whitespace-collapsed form `docs/features/collections.md` describes elsewhere; two legacy labels differing only in internal whitespace render as two Sections. Pre-existing, unrelated to this release's changes; not fixed here.
-- **The SMALLINT term-order ceiling (32767) has no dedicated guard** in the frontend combobox or the pipeline builder; reaching it needs an impractical number of terms per Year and is not fixed in this release.
-
-
-### Checkpoint gate
-
-No `[CHECKPOINT — due YYYY-MM-DD]` row was minted for this release. Nothing shipped ahead of its own evidence: the collapse/toggle/`Not started` scope was owner-decided against re-read code, and the adoption-boundary fix was verified against production reads (the ALE/PNLE stamped-but-private shapes, the note-visibility check, and the mechanism split above), not shipped on a bootstrap argument.
-
-### Post-deploy verification owed
-
-`SELECT count(*) FROM note_collections a JOIN note_collections r ON r.id = a.source_plan_id WHERE a.parent_collection_id IS NULL AND r.parent_collection_id IS NULL AND a.created_at >= '<deploy timestamp>' AND NOT EXISTS (SELECT 1 FROM note_collections k WHERE k.parent_collection_id = a.id);` — expected 0; a `STUDY_GOAL_ADOPTED` analytics event does not fire on the failing first attempt (it throws before `trackStudyGoalAdopted`), only on the harmless retry, so this reads the actual row shape rather than the event log. Also run `scripts/check-deploys.sh` (both Vercel and Render matter for this release) at least five minutes after the merge, and confirm `v0.160.0`'s still-unverified Vercel deploy while there.
-
-
 ## Archived releases
 
 - `v0.160.0 — Study Plans by Semester` (Released) — Degree Study Journeys Phase A0/A: academic-term placement on Subject Plans, Year-page term grouping, compact Subject cards, and the curriculum-pipeline `academic_term` column; moved at the `v0.166.0` kickoff.
+- `v0.161.0 — Scannable Study Plans` (Released) — Degree Study Journeys Phase B: Study Plan Sections collapsed by default, an `Expand all`/`Collapse all` toggle, `Not started` wording at Section and plan grain; plus a pre-signoff pressure-test fix making `adoptGoal` adopt every published-but-private child instead of requiring `PUBLIC`. Moved at the `v0.167.0` kickoff.

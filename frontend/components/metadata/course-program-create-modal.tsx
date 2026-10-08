@@ -85,7 +85,7 @@ export function CourseProgramCreateModal({
       const created = await createCourseProgram({
         name,
         programFamilyIds,
-        examGoalSlug: examGoalSlug ? examGoalSlug as "ale" | "pnle" | "let" | "cpale" : null,
+        examGoalSlug: examGoalSlug ? examGoalSlug as "ale" | "pnle" | "let" | "cpale" | "ce" : null,
       });
       onCreated(created);
       onClose();
@@ -156,6 +156,7 @@ export function CourseProgramCreateModal({
             <option value="">No exam goal</option>
             <option value="ale">ALE</option><option value="pnle">PNLE</option>
             <option value="let">LET</option><option value="cpale">CPALE</option>
+            <option value="ce">CELE</option>
           </select>
         </div>
         {error ? <p role="alert" className="text-sm text-red-600 dark:text-red-400">{error}</p> : null}
