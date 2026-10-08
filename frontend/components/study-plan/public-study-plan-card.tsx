@@ -46,7 +46,10 @@ export function PublicStudyPlanCard({
   signedOutHref = "/auth",
 }: Readonly<PublicStudyPlanCardProps>) {
   const router = useRouter();
-  const labels = useMemo(() => getCollectionLabels(profileType), [profileType]);
+  const labels = useMemo(
+    () => getCollectionLabels(profileType, plan.resolvedExamGoalSlug),
+    [profileType, plan.resolvedExamGoalSlug],
+  );
   const [adopting, setAdopting] = useState(false);
   const [adoptionProgress, setAdoptionProgress] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);

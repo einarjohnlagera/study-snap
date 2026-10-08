@@ -29,6 +29,8 @@ Admin-published collections are the v0.31.0 exception: an admin can publish a co
 
 The full published catalog is browseable to anonymous visitors both at `/collections/published` and in `/explore`'s default Review Sets tab. Preview and the Adopt affordance stay visible; authentication is gated only when Adopt is clicked. On Explore, that click stores the plan id, Goal-vs-leaf shape, and current Explore query context in the short-lived discovery-intent cookie, then routes to signup without calling the protected adopt endpoint. After verification and onboarding, Dashboard consumes the intent once and performs the existing authenticated adoption. An unavailable source clears the cookie and returns to Explore with a normal notice.
 
+Collection detail, Goal detail, and summary responses include nullable `resolvedExamGoalSlug`. The server walks `parentCollectionId` to the root, then requires the root's own `learnerLevel` to be `BOARD_EXAM_REVIEW` and resolves its `courseProgram` through `course_programs.exam_goal_slug`. Missing roots, programs, or catalog matches produce `null`. A child Subject Plan can inherit the signal even when its own program is null. `getCollectionLabels(profileType, resolvedExamGoalSlug)` uses the slug for per-collection nouns: `{ALE|PNLE|LET|CPALE|CELE} Review Set(s)`, the corresponding exam Subject Plan and Section, and `Primary {exam} Review Set`. Library navigation, new action, empty states, and list description remain keyed only to viewer profile. Exam-mode availability and terminal mode selection remain profile-keyed.
+
 Official Review Set public responses carry an exact, non-null `adoptionCount`: the current number of
 collections whose `sourcePlanId` is that Official source, excluding rows owned by the source's own owner.
 The database's one-owner-per-source invariant means the row count needs no `DISTINCT`. Parent Goals and
@@ -36,7 +38,7 @@ child Subject Plans have independent counts and are never summed. Rows without `
 so legacy missing provenance under-counts by design; the backend does not reconstruct it. The backend always
 returns the exact integer. The threshold for whether to display it is client display policy only.
 
-Anonymous published-catalog vocabulary reuses `getCollectionLabels("STUDENT")`, producing `Official Study Plans`; it must not fall through to the null-profile `Official Collections` default. Authenticated profile-aware labels and Start/Continue behavior are unchanged.
+Anonymous published-catalog page chrome reuses `getCollectionLabels("STUDENT")`, producing `Official Study Plans`; it must not fall through to the null-profile `Official Collections` default. Individual published cards use their server-resolved exam slug for Start/Continue nouns when present.
 
 **Study Plans vs saved library filters (do not consolidate).** A Study Plan is a *durable, ordered, named organizer* — the canonical way a learner groups notes by unit/grade level/preference. A saved library filter is a *transient quick lens* (a stored search/filter combo) over the whole library. They serve different jobs and both are intentionally kept: filters are how a learner narrows the library (including while assembling a plan from selection); the plan is the resulting durable grouping.
 
@@ -309,7 +311,7 @@ The v0.34.0 leaf-plan builder uses the same route for childless collections:
 
 The backend API must not branch on `ProfileType`.
 
-Profile-aware presentation is a frontend responsibility. The backend responses stay neutral: `title`, `description`, `items`.
+Presentation is a frontend responsibility. The backend supplies content plus the nullable root-derived exam-flavor signal; it does not supply profile-specific wording.
 
 | Profile | Frontend label | Primary terminal action |
 |---|---|---|
@@ -490,7 +492,7 @@ The detail response also includes a read-only `progress` summary:
 
 The detail progress rollup is computed only for the collection detail response from the item data already assembled for that request. Collection list cards stay lightweight: they receive only `itemCount` plus the summary `notesPracticed` execution count and derive the three-label badge client-side.
 
-The rollup is profile-agnostic and presentation-neutral. Frontend profile labels still come only from `getCollectionLabels`; the backend returns the same counts for Study Plans, Review Sets, Lesson Plans, and Collections. It adds no persisted progress field, generated content, AI call, or quota category.
+The rollup is profile-agnostic and presentation-neutral. Frontend labels come from `getCollectionLabels`, with an optional server-resolved exam slug for collection nouns; the backend returns the same counts for Study Plans, Review Sets, Lesson Plans, and Collections. It adds no persisted progress field, generated content, AI call, or quota category.
 
 Collection detail items also expose a read-only weak-area signal from the existing `ConceptHealthService` due-concept model:
 

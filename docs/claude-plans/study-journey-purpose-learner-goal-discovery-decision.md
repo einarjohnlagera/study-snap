@@ -1,6 +1,6 @@
-# [DISCOVERY — WORKING THROUGH] Study Journey Purpose / Learner Goal: §11 Question Pass
+# [DECISION — Q1 RESOLVED] Study Journey Purpose / Learner Goal: §11 Question Pass + Implementation Scope
 
-**Companion to, not a replacement for:** `study-journey-purpose-learner-goal-discovery-brief.md`. That file stays the record of the problem framing (§1-§10, §12-§14); this file is the evidence-anchored pass through its §11 open questions, run 2026-10-07/08 at the `v0.167.0` kickoff. **Status unchanged: PARKED.** Nothing here authorizes schema, migration, enum, metadata field, UI, prompt, `ProfileType`, or recommendation-engine change. No code was written. No production write occurred.
+**Companion to, not a replacement for:** `study-journey-purpose-learner-goal-discovery-brief.md`. That file stays the record of the problem framing (§1-§10, §12-§14); this file is the evidence-anchored pass through its §11 open questions, run 2026-10-07/08 at the `v0.167.0` kickoff, **plus the owner's Q1 resolution and implementation scope, decided 2026-10-08 (see §Q1 Resolution at the end).** No code was written in THIS file's own authoring; implementation is delegated to a Codex prompt per `CLAUDE.md`'s task routing, written separately. No production write occurred during the investigation itself — the Civil Engineering slug migration described in the resolution is implementation, not investigation.
 
 **One premise in the brief needs correcting before these questions can be answered on top of it — see §0.**
 
@@ -116,8 +116,22 @@ No counter-evidence found to the brief's strong prior (§8/§9 open question). R
 
 ## Open items this pass leaves for the owner / the next pass
 
-1. **Q1 — pick a problem scope** (Candidate A / A+B / C) before any minimum model is finalized. Still the owner's, not resolved by this pass.
+1. ~~**Q1 — pick a problem scope**~~ **RESOLVED 2026-10-08 — see §Q1 Resolution below.**
 2. ~~Run the Q11 production read~~ **DONE, 2026-10-08** — see §0a/Q11. `courseProgram`/`exam_goal_slug` is currently sufficient to disambiguate every published Journey; this expires the moment a program publishes a second, competing root (Q12's caveat).
 3. **Civil Engineering's missing `exam_goal_slug` is now a confirmed live gap (no Exam Hub page, no exam-recognized goal framing, for a 2-adopter curated Review Set), not a hypothetical asymmetry** — a candidate for its own small Backlog item (needs a `CHECK`-constraint migration plus an `EXAM_HUBS` entry, so it is the owner's to schedule) rather than something this pass recommends doing regardless.
 
-This file and the original brief both stay indexed in `ROADMAP.md`'s Backlog Index — the existing row for the brief has already been updated in place (same commit as this file) to summarize these findings and point here; it will need a further update once the owner has weighed in on Q1.
+This file and the original brief both stay indexed in `ROADMAP.md`'s Backlog Index — the existing row for the brief has already been updated in place to summarize these findings and point here, and again below to record Q1's resolution.
+
+---
+
+## §Q1 Resolution — owner decision, 2026-10-08
+
+The owner picked **Candidate A + Candidate B**, and separately confirmed folding in the Civil Engineering `exam_goal_slug` gap (§10 table / Q10 above) into the same work. **This is now an implementation decision, not a discovery one** — tracked going forward in `RELEASES.md`'s `v0.167.0` entry, `ROADMAP.md`'s Backlog row, and a Codex prompt, not primarily in this file.
+
+A second verification pass, run before scoping the implementation (not before this point in the document — the candidates above still describe the state of knowledge at resolution time), **recalibrated both candidates smaller than this file's own Q12 speculated:**
+
+- **Candidate A ships as a labeling-only fix.** `frontend/lib/exam-mode-visibility.ts`'s `getAvailableExamModes(profileType)` — the function that decides which mode *tiles* are even visible on the mode-selection screen — confirmed that `EXAM_MODES.md`'s Audience & Profile-Type Mapping table is a real, load-bearing lock, not just presentational caution: Board Exam Mode is **never** returned for a non-Board-Taker profile. This means the Q12 speculation about changing `resolvePlanPremiumExamMode` (the terminal CTA, a *different* function from `getAvailableExamModes`) to let Journey nature override viewer profile would have routed a viewer toward a mode their own profile-gated screen doesn't even list — a genuine contract violation this file's Q12 only flagged as a "cost," not a hard blocker. **`resolvePlanPremiumExamMode` and `EXAM_MODES.md` are out of scope for Candidate A.** Only `getCollectionLabels` changes, resolving a Journey's nature server-side from its root ancestor's `courseProgram` → `course_programs.exam_goal_slug` (walking to root because 94% of adopted child Subject Plans have `courseProgram = NULL`; all adopted roots have it set — confirmed by production read), additionally gated on the root's own `learner_level = BOARD_EXAM_REVIEW` as the concrete guard against the collision Q11 left open.
+- **Candidate B ships smaller than "fix single-valuedness."** A production read found only **2 users** with adopted roots spanning ≥2 distinct `exam_goal_slug`s — building real multi-goal persistence now would ship ahead of its evidence. `docs/features/profile.md:97-99` also documents the existing EXAM/SUBJECT split as **intentional**, not a defect. What tracing every write path (`UserProfileController.updateStudyGoal` → `AuthService.updateStudyGoal`, the single backend chokepoint) actually found missing: **no UI lets a learner deliberately choose or switch an exam goal** — only clear it, or auto-accept one single suggestion from the dashboard banner. Candidate B ships as a constrained picker UI (reusing the existing `SuggestionCombobox`/`CourseProgramCombobox` pattern, no free text) wired to the existing endpoint — no new column, no migration. True multi-goal support is explicitly deferred: re-open only if the ≥2-distinct-goal population grows past a handful, not silently dropped.
+- **Civil Engineering** widens `course_programs.exam_goal_slug`'s `CHECK` constraint to add `'ce'`, seeds it onto the existing CELE row, and adds it to `ExamGoalConfig.java` and the new picker's options — the one piece of this scope needing an actual migration.
+
+Full implementation plan, including the explicit `resolvePlanPremiumExamMode` exclusion stated for the owner's sign-off and the file:line pointers for each change, is recorded in this session's conversation and the Codex prompt it produced; this section exists so a reader of this decision file sees the resolution without needing that separate artifact.

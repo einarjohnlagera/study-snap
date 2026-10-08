@@ -602,6 +602,9 @@ public class AuthService {
         String normalizedStudyGoal = normalizeStudyGoal(request.studyGoal());
 
         user.setStudyGoal(normalizedStudyGoal);
+        if (normalizedStudyGoal != null) {
+            user.setFocusSubjects(new String[0]);
+        }
         user.setUpdatedAt(OffsetDateTime.now());
         return toMeResponse(user);
     }

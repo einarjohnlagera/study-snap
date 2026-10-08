@@ -1369,12 +1369,15 @@ function buildSubjects(goal: GoalCollectionDetailResponse, childItems: GoalChild
 export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collectionId: string }>) {
   const router = useRouter();
   const [authUser, setAuthUser] = useState<AuthUser | null>(null);
-  const labels = useMemo(() => getCollectionLabels(authUser?.profileType), [authUser?.profileType]);
   const [loadState, setLoadState] = useState<LoadState>("loading");
   const [loadError, setLoadError] = useState<string | null>(null);
   const [refreshingBuilder, setRefreshingBuilder] = useState(false);
   const [collection, setCollection] = useState<NoteCollectionDetail | null>(null);
   const [goal, setGoal] = useState<GoalCollectionDetailResponse | null>(null);
+  const labels = useMemo(
+    () => getCollectionLabels(authUser?.profileType, collection?.resolvedExamGoalSlug ?? goal?.resolvedExamGoalSlug),
+    [authUser?.profileType, collection?.resolvedExamGoalSlug, goal?.resolvedExamGoalSlug],
+  );
   const [subjects, setSubjects] = useState<BuilderSubject[]>([]);
   const [leafItems, setLeafItems] = useState<LeafBuilderNote[]>([]);
   const [lastSavedLeafItems, setLastSavedLeafItems] = useState<LeafBuilderNote[]>([]);

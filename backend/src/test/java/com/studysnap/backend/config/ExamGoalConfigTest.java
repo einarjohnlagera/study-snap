@@ -21,6 +21,7 @@ class ExamGoalConfigTest {
                 "Physical Education",
                 "Teacher Certification");
         assertThat(ExamGoalConfig.getFallbackCoursePrograms(ExamGoalConfig.CPALE)).containsExactly("Accountancy");
+        assertThat(ExamGoalConfig.getFallbackCoursePrograms(ExamGoalConfig.CE)).containsExactly("Civil Engineering");
     }
 
     @Test
@@ -29,6 +30,10 @@ class ExamGoalConfigTest {
         assertThat(ExamGoalConfig.isValidSlug("PNLE")).isTrue();
         assertThat(ExamGoalConfig.isValidSlug(" let ")).isTrue();
         assertThat(ExamGoalConfig.isValidSlug(ExamGoalConfig.CPALE)).isTrue();
+        assertThat(ExamGoalConfig.getValidSlugs()).contains(ExamGoalConfig.CE);
+        assertThat(ExamGoalConfig.getShortName(ExamGoalConfig.CE)).isEqualTo("CELE");
+        assertThat(ExamGoalConfig.getFullName(ExamGoalConfig.CE))
+                .isEqualTo("Civil Engineering Licensure Examination (CELE)");
         assertThat(ExamGoalConfig.isValidSlug(" CPALE ")).isTrue();
         assertThat(ExamGoalConfig.isValidSlug("cpa")).isFalse();
         assertThat(ExamGoalConfig.isValidSlug(null)).isFalse();

@@ -33,6 +33,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
@@ -52,8 +54,12 @@ import java.util.stream.Collectors;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest(properties = "spring.jpa.properties.hibernate.session_factory.statement_inspector=com.studysnap.backend.testutil.SqlCaptureStatementInspector")
+@AutoConfigureMockMvc
 @Transactional
 class NoteCollectionServiceProjectionIntegrationTest {
     private static final String COLLECTION_TITLE = "Biology Unit";
@@ -76,6 +82,8 @@ class NoteCollectionServiceProjectionIntegrationTest {
     private NoteCollectionItemRepository itemRepository;
     @Autowired
     private JdbcTemplate jdbcTemplate;
+    @Autowired
+    private MockMvc mockMvc;
     @PersistenceContext
     private EntityManager entityManager;
     @Autowired
@@ -83,6 +91,10 @@ class NoteCollectionServiceProjectionIntegrationTest {
 
     @BeforeEach
     void initSchema() {
+        jdbcTemplate.execute("create table if not exists course_programs (id uuid primary key, name varchar(120) not null unique, exam_goal_slug varchar(32))");
+        jdbcTemplate.execute("alter table course_programs add column if not exists exam_goal_slug varchar(32)");
+        jdbcTemplate.update("merge into course_programs (id, name, exam_goal_slug) key(name) values (?, ?, ?)",
+                UUID.fromString("20000000-0000-0000-0000-000000000005"), "Civil Engineering", "ce");
         jdbcTemplate.execute("""
                 create table if not exists notes (
                     id uuid primary key,
@@ -270,6 +282,17 @@ class NoteCollectionServiceProjectionIntegrationTest {
         jdbcTemplate.execute("delete from notes");
         conceptHealthService.reset();
         SqlCaptureStatementInspector.clear();
+    }
+
+    @Test
+    void publicCollectionRequestCarriesRootExamFlavor() throws Exception {
+        NoteCollectionEntity root = saveCollection(UUID.randomUUID(), CollectionVisibility.PUBLIC);
+        root.setCourseProgram("Civil Engineering");
+        root.setLearnerLevel(LearnerLevel.BOARD_EXAM_REVIEW);
+        collectionRepository.saveAndFlush(root);
+        mockMvc.perform(get("/collections/public/{id}", root.getId()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.resolvedExamGoalSlug").value("ce"));
     }
 
     @Test

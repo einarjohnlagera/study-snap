@@ -29,6 +29,20 @@ public record GoalCollectionDetailResponse(
         List<WeeklyFocusDayEntry> weeklyFocusByDay,
         Instant createdAt,
         Instant updatedAt,
-        List<GoalCollectionChildResponse> children
+        List<GoalCollectionChildResponse> children,
+        String resolvedExamGoalSlug
 ) {
+    public GoalCollectionDetailResponse(UUID collectionId, String title, String description, String visibility,
+            String courseProgram, LocalDate targetCompletionDate, CompanionContent companion,
+            boolean companionMayBeOutdated, UUID sourcePlanId, UUID parentCollectionId, int itemCount,
+            int childCount, int overallReadinessPercentage, int masteredConcepts, int dueConcepts,
+            int notPracticedConcepts, int totalConcepts, Integer weeksRemaining, Integer conceptsRemaining,
+            Integer todaysConceptBudget, List<WeeklyFocusDayEntry> weeklyFocusByDay, Instant createdAt,
+            Instant updatedAt, List<GoalCollectionChildResponse> children) {
+        this(collectionId, title, description, visibility, courseProgram, targetCompletionDate, companion,
+                companionMayBeOutdated, sourcePlanId, parentCollectionId, itemCount, childCount,
+                overallReadinessPercentage, masteredConcepts, dueConcepts, notPracticedConcepts,
+                totalConcepts, weeksRemaining, conceptsRemaining, todaysConceptBudget, weeklyFocusByDay,
+                createdAt, updatedAt, children, null);
+    }
 }

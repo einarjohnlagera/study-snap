@@ -4,6 +4,7 @@ import com.studysnap.backend.dto.CourseProgramCatalogItemResponse;
 import com.studysnap.backend.dto.ProgramFamilyResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.RowCallbackHandler;
 import org.springframework.stereotype.Repository;
 
 import java.sql.ResultSet;
@@ -63,10 +64,26 @@ public class CourseProgramCatalogRepository {
     private static final String UPDATE_IS_ACTIVE = "UPDATE course_programs SET is_active = ? WHERE id = ?";
     private static final String FIND_ID_BY_NAME = "SELECT id FROM course_programs WHERE name = ?";
     private static final String FIND_NAMES_BY_EXAM_GOAL_SLUG = "SELECT name FROM course_programs WHERE exam_goal_slug = ? ORDER BY name";
+    private static final String FIND_EXAM_GOAL_SLUG_BY_NAME = "SELECT exam_goal_slug FROM course_programs WHERE name = ?";
 
     private final JdbcTemplate jdbcTemplate;
 
     public List<String> findNamesByExamGoalSlug(String slug) { return jdbcTemplate.queryForList(FIND_NAMES_BY_EXAM_GOAL_SLUG, String.class, slug); }
+    public Optional<String> findExamGoalSlugByName(String name) {
+        return jdbcTemplate.query(FIND_EXAM_GOAL_SLUG_BY_NAME, (rs, row) -> rs.getString(1), name).stream().findFirst();
+    }
+    /** Batched form of {@link #findExamGoalSlugByName} for list responses — avoids one query per row. */
+    public Map<String, String> findExamGoalSlugsByNames(Collection<String> names) {
+        if (names.isEmpty()) return Map.of();
+        String placeholders = String.join(",", java.util.Collections.nCopies(names.size(), "?"));
+        Map<String, String> result = new LinkedHashMap<>();
+        jdbcTemplate.query(
+                "SELECT name, exam_goal_slug FROM course_programs WHERE name IN (" + placeholders + ") AND exam_goal_slug IS NOT NULL",
+                (RowCallbackHandler) rs -> result.put(rs.getString("name"), rs.getString("exam_goal_slug")),
+                names.toArray()
+        );
+        return result;
+    }
     public List<CourseProgramCatalogItemResponse> findAll() { return queryCatalog(FIND_ALL); }
     public Optional<CourseProgramCatalogItemResponse> findById(UUID id) { return queryCatalog(FIND_BY_ID, id).stream().findFirst(); }
     public Optional<CourseProgramCatalogItemResponse> findByNormalizedName(String name) { return queryCatalog(FIND_BY_NORMALIZED_NAME, name).stream().findFirst(); }

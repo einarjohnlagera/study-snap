@@ -53,6 +53,24 @@ describe("getCollectionLabels", () => {
     expect(getCollectionLabels("PROFESSIONAL").primarySingular).toBe("Primary Collection");
     expect(getCollectionLabels(null).primarySingular).toBe("Primary Collection");
   });
+
+  it("uses the resolved exam for collection nouns while keeping library chrome viewer-keyed", () => {
+    const student = getCollectionLabels("STUDENT");
+    const exam = getCollectionLabels("STUDENT", "pnle");
+    expect(exam).toMatchObject({
+      singular: "PNLE Review Set",
+      plural: "PNLE Review Sets",
+      goalSingular: "PNLE Review Set",
+      subjectSingular: "PNLE Subject Plan",
+      sectionSingular: "PNLE Section",
+      primarySingular: "Primary PNLE Review Set",
+    });
+    for (const key of ["navLabel", "newCtaLabel", "emptyTitle", "emptyBody", "listDescription"] as const) {
+      expect(exam[key]).toBe(student[key]);
+    }
+    expect(getCollectionLabels("STUDENT", null)).toEqual(student);
+    expect(getCollectionLabels("TEACHER", "ce").singular).toBe("CELE Review Set");
+  });
 });
 
 describe("getCollectionTerminalAction", () => {

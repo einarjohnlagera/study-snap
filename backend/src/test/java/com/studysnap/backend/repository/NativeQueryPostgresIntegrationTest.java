@@ -161,6 +161,15 @@ import static org.mockito.Mockito.verify;
 @ExtendWith(NativeQueryPostgresIntegrationTest.DockerRequiredUnlessOptedOut.class)
 @Import(LinkedLearnerRequestExpiryWorker.class)
 class NativeQueryPostgresIntegrationTest {
+    @Test
+    void civilEngineeringExamGoalMigrationSeedsTheExistingRow() {
+        assertThat(jdbcTemplate.queryForObject(
+                "select exam_goal_slug from course_programs where name = 'Civil Engineering'", String.class
+        )).isEqualTo("ce");
+        assertThat(jdbcTemplate.queryForObject(
+                "select count(*) from course_programs where name = 'Civil Engineering'", Integer.class
+        )).isEqualTo(1);
+    }
     private static final String SKIP_PROPERTY = "nativequery.pg.skip";
     private static final String SKIP_FLAG = "-D" + SKIP_PROPERTY + "=true";
     private static final String CLASS_SUFFIX = ".class";

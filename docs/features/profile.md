@@ -95,8 +95,9 @@ Rules:
 - Subject chips come from the user's own AI-inferred note / Study Pack subjects, not course-program suggestions.
 - Users can select multiple subjects and save them as `focusSubjects`.
 - Saving a non-empty `focusSubjects` list clears `studyGoal`; the two are mutually exclusive when changed from Profile.
-- The exam hub intent flow may still set `studyGoal` directly and does not need to touch `focusSubjects`.
+- The exam hub intent flow may still set `studyGoal` directly; the shared writer clears `focusSubjects` whenever it saves a non-null goal.
 - If `studyGoal` already exists, Profile shows the current goal with `Change` and `Clear`; `Change` moves the user into the subject multi-select.
+- A constrained exam-goal combobox appears in Study Focus whether a goal is set or not. It lists the full names from the server's valid exam definitions and saves the selected slug through `PUT /users/profile/goal`; it also permits switching directly between exams. Selecting an exam clears `focusSubjects` in the same server transaction. The displayed goal changes only after the save succeeds, and a failed save shows an inline error.
 - If `focusSubjects` exists and `studyGoal` is empty, Profile shows `Focusing on:` plus subject pills with `Change` and `Clear`.
 - If there are no user subjects yet, Profile shows: `Create some notes first — your subjects will appear here as focus options.`
 

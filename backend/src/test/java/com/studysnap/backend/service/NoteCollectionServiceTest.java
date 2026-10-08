@@ -211,6 +211,8 @@ class NoteCollectionServiceTest {
         });
         service = new NoteCollectionService(
                 collectionRepository,
+                org.mockito.Mockito.mock(CollectionExamGoalResolver.class),
+                org.mockito.Mockito.mock(com.studysnap.backend.repository.CourseProgramCatalogRepository.class),
                 quickReviewSessionRepository,
                 itemRepository,
                 itemRemovalRepository,

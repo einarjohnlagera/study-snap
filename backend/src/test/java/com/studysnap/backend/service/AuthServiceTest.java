@@ -1434,6 +1434,7 @@ class AuthServiceTest {
     void updateExamGoal_savesValidGoalAndReturnsUpdatedProfile() {
         UUID userId = UUID.randomUUID();
         UserEntity user = activeUser(userId, "current@example.com");
+        user.setFocusSubjects(new String[] {"Pharmacology"});
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
         when(subscriptionService.getPlanSnapshot(userId))
             .thenReturn(new SubscriptionService.PlanSnapshot(
@@ -1447,6 +1448,7 @@ class AuthServiceTest {
 
         assertThat(response.studyGoal()).isEqualTo("ale");
         assertThat(user.getStudyGoal()).isEqualTo("ale");
+        assertThat(user.getFocusSubjects()).isEmpty();
     }
 
     @Test

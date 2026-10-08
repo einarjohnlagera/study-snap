@@ -4,43 +4,75 @@
 
 **Status: In Progress**
 
-Theme: activate the parked "Study Journey Purpose / Learner Goal" architecture discovery — work
-through its 12 open questions and pressure-test any candidate model against 5 cross-domain cases,
-producing a resolved decision document. This is **not** a schema-or-code release: the discovery
-brief (`docs/claude-plans/study-journey-purpose-learner-goal-discovery-brief.md`) is explicit that
-no implementation is authorized on this pass — no schema, migration, enum, metadata field, UI,
-prompt change, or recommendation-behavior change. The deliverable is a decision, not a diff.
+Theme: activate the parked "Study Journey Purpose / Learner Goal" architecture discovery, resolve
+its Q1 ("what problem are we solving"), and implement the chosen scope. **Started as investigation-only
+per the discovery brief's §14** (`docs/claude-plans/study-journey-purpose-learner-goal-discovery-brief.md`)
+— **scope expanded in place, owner decision 2026-10-08, after the investigation (§11, all 12 questions)
+completed and the owner picked Q1's scope.** The brief's blanket "no implementation" constraint is
+superseded for exactly the scope named below; everything else in §14 (no certification/role catalog,
+no `ProfileType` change, no recommendation-engine change, no BSCS backfill) still holds.
 
-### Planned Scope
+### Investigation phase (complete)
 
-- **Investigation: Study Journey Purpose vs. Learner Goal.** Owner-picked candidate (confirmed
-  directly with the owner 2026-10-07, after a Feature Planner audit, a Product UX review pass, and
-  a Claude tightening pass). Work the brief's §11 open questions **in order**, starting with "what
-  concrete user/product problem are we solving" and "what behavior is impossible or incorrect with
-  today's Study Journey identity/structure/membership/`ProfileType`/learner state" — not "where
-  should this be stored." Pressure-test any candidate model against the 5 named cross-domain cases
-  in §10 (Computing, Nursing, Accountancy, Architecture/Civil Engineering, Education) before it is
-  treated as approved. Output is a decision document (this brief, updated in place, or a successor),
-  not shipped product changes.
-- **Doc-only follow-up riding along (owner decision 2026-10-07).** Three small, already-prepared
-  items that had nowhere else to land: the `ROADMAP.md` Backlog Index row indexing the discovery
-  brief above (already updated in place to the tightened Study Journey Purpose / Learner Goal
-  framing); and two owner-execution SQL handoffs for the R4 BSCS authoring pilot's remaining
-  authored-body replacements (`docs/claude-plans/2026-10-06-r4-pilot-authored-note-bodies-c-and-d.sql`,
-  `2026-10-06-r4-pilot-authored-note-body-b-optional.sql`), prepared but not run, referenced from the
-  R4 pilot Backlog row and `r4-pilot-report.md` §13.
+Worked the brief's §11 open questions in order, as a companion decision file
+(`docs/claude-plans/study-journey-purpose-learner-goal-discovery-decision.md`), corrected and
+re-verified across several passes (see that file's own §0a and the git history on this branch for
+the full trail). Found the brief's own premise partially stale (`UserEntity.studyGoal` and
+`course_programs.exam_goal_slug` already persisted crude versions of both concepts), found a
+genuine presentation gap (Journey terminology keyed to viewer `ProfileType`, never to the Journey
+itself), and left Q1 to the owner with three evidenced candidate scopes.
 
-Anti-drift: **no implementation of any kind for the Study Journey Purpose / Learner Goal concept** —
-the brief's own §14 is the binding constraint (no schema, no migration, no enum, no metadata field,
-no UI, no prompt change, no `ProfileType` change, no recommendation-engine change, no certification
-or role catalog, no backfill of existing Study Journeys). No production write. No BSCS TSV edits, no
-bulk generation (this work is explicitly independent of BSCS Year 1 and the Computing Domain Context
-release, per the brief's own framing).
+### Implementation phase — Q1 resolved as Candidate A + B (+ Civil Engineering), owner decision 2026-10-08
 
-**Verification tier:** this release produces a decision document, not code — a single `advisor()`
-pass on the final reasoning before signoff is the right tier, not a cold-agent code audit. If the
-investigation's own conclusion recommends a concrete next step that touches code, that step is
-itself out of scope for this release and becomes its own future Backlog candidate.
+**A second verification pass, done before any implementation, recalibrated both candidates** —
+smaller and better-evidenced than the decision doc's speculative Q12 sizing in both cases:
+
+- **Candidate A is a labeling fix, not a mode-selection fix.** `getAvailableExamModes` proves
+  `EXAM_MODES.md`'s Audience & Profile-Type Mapping table is load-bearing: Board Exam Mode is never
+  offered as a tile to a non-Board-Taker profile. Letting `resolvePlanPremiumExamMode` (the terminal
+  CTA on a collection page) override viewer profile with Journey nature would route a viewer toward
+  a mode their own profile-gated screen doesn't list — a real contract violation, not a risk.
+  **`resolvePlanPremiumExamMode` and `EXAM_MODES.md` are explicitly OUT of scope.** Only
+  `getCollectionLabels` (terminology) changes, resolved server-side from a collection's root
+  ancestor's `courseProgram` → `course_programs.exam_goal_slug`, gated additionally on the root's
+  own `learner_level = BOARD_EXAM_REVIEW` (a concrete guard against the future collision Q11 left
+  open — two roots sharing one `courseProgram` with different purposes). Page-chrome labels
+  (`navLabel`, empty states) stay viewer-keyed; only per-collection nouns become Journey-aware.
+- **Candidate B's real gap is smaller than "single-valuedness."** Production read: only **2 users**
+  have adopted roots spanning ≥2 distinct `exam_goal_slug`s — building multi-goal infrastructure
+  now would ship ahead of its evidence. `docs/features/profile.md:97-99` documents the EXAM/SUBJECT
+  split as intentional (not a bug). What's actually missing: no UI lets a learner deliberately
+  choose or switch their exam goal — the only paths are Profile's "Clear" and the dashboard banner's
+  single auto-suggestion; "Change" is documented to redirect into editing `focusSubjects` instead.
+  **Fix: add a constrained exam-goal combobox (reusing the existing `SuggestionCombobox`/
+  `CourseProgramCombobox` pattern, `allowCustom=false` per this repo's taxonomy-field rule) wired to
+  the existing `updateStudyGoal` endpoint — no new column, no migration.** True multi-goal support
+  is explicitly deferred, not silently dropped: re-open only if the ≥2-distinct-exam-goal population
+  grows past a handful.
+- **Civil Engineering fold-in (owner-confirmed, 2026-10-08):** widen `course_programs.exam_goal_slug`'s
+  `CHECK` constraint to include `'ce'`, seed it onto the existing Civil Engineering row, add it to
+  `ExamGoalConfig.java` and the new exam-goal combobox's options. The one piece of this release that
+  needs a migration.
+
+Shipped implementation:
+
+- **A:** Collection detail, Goal detail, and summary responses now carry the exam slug resolved from the root collection's program and `BOARD_EXAM_REVIEW` level. Collection nouns show ALE, PNLE, LET, CPALE, or CELE Review Set terminology across profiles; library chrome stays profile-keyed.
+- **B:** Profile's Study Focus now offers a constrained exam picker alongside Change and Clear. It lists the server's valid exam definitions, allows switching, and clears subject focus when a goal is saved.
+- **CE:** V154 widens the catalog constraint and assigns `ce` to Civil Engineering, with a row-count guard. `ExamGoalConfig` names CELE and includes it in valid slugs. The optional Exam Hub page was deferred because it creates a new public SEO surface.
+
+Anti-drift for the implementation phase: additive only — no change to `ProfileType`, no
+recommendation-engine change, no certification/role catalog beyond the single `'ce'` slug, no
+backfill of existing Study Journeys' presentation, no touch to `resolvePlanPremiumExamMode`/
+`EXAM_MODES.md`. New DTO fields are additive (old clients ignore them; no field removed or renamed).
+
+**Delivery:** Codex-routed per `CLAUDE.md`'s task-routing table (new backend service logic +
+multi-system frontend/backend change). Claude Code designed the scope above and will write the
+Codex prompt; Codex implements; `/audit-diff` runs on the diff before commit.
+
+**Verification tier:** one scoped cold falsification agent on the diff (not the full three-agent
+tier — no money/quota/permission surface is touched, per `CLAUDE.md`'s gate), plus a real-request
+(`MockMvc`) test for the new/changed DTO fields, plus the standing Postgres migration harness for
+the Civil Engineering `CHECK`-constraint change.
 
 ### Shipped
 
