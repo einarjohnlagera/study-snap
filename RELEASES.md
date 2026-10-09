@@ -4,27 +4,42 @@
 
 **Status: In Progress**
 
-Theme: continue the Study Journey Purpose / Learner Goal architecture by shipping the three
-remaining pieces that were deferred from `v0.167.0` for lack of readiness, now that each has been
-re-checked and the owner has decided to proceed despite the original caution each was deferred on.
+Theme: continue the Study Journey Purpose / Learner Goal architecture by shipping the two
+remaining pieces that are actually ready to scope right now, after an `advisor()` pass caught that
+the original 3-item plan had sequencing and decision gaps.
 
 ### Planned Scope
 
 - **Civil Engineering Exam Hub page.** Adds a discovery page for CE alongside the four that already
-  exist (ALE, PNLE, LET, CPALE) in `frontend/lib/exam-hub-config.ts`. Smallest of the three —
-  config + a page, mirroring an existing pattern exactly. **Owner override of Product UX's earlier
-  "defer pending adoption evidence" call** — no new evidence arrived; this is a deliberate reversal,
-  recorded as such.
-- **Multi-goal exam support.** Lets a learner pursue more than one recognized exam goal at once.
-  **Owner override of the `[CHECKPOINT — due 2026-12-07]` gate** — re-verified 2026-10-09, still only
-  2 production users show the pattern; this ships ahead of that checkpoint's own evidence bar, on
-  conviction rather than a changed population. Needs a schema change (`studyGoal` is currently a
-  single column) — scope to be finalized once the Codex prompt is drafted.
-- **Public Note → Study Journey discovery.** Surfaces a link from a public Note to its matching
-  Study Journey, where one exists. **Not yet designed** — the original discovery brief's §14 kept
-  this explicitly forbidden pending its own fresh decision, which this release now makes, but no one
-  has specified what the surface actually looks like yet. Design happens as part of scoping this
-  item's Codex prompt, not assumed from the other two.
+  exist (ALE, PNLE, LET, CPALE) in `frontend/lib/exam-hub-config.ts`. **Owner override of Product
+  UX's earlier "defer pending adoption evidence" call** — no new evidence arrived; this is a
+  deliberate reversal, recorded as such. Codex prompt: `docs/codex-prompts/v0.169.0-ce-exam-hub.md`.
+  Found during scoping, not assumed: 4 files (not just the config) hardcode the 4 existing slugs by
+  name, including one (`exam-hubs-guide.tsx`) already independently stale (missing CPALE) before
+  this task touched it — fixed as one move, deriving all of them from the shared config instead of
+  a 3rd/4th/5th duplicate list. Production size checked directly: CE's 113 public notes sit between
+  the smallest (ALE, 90) and largest (CPALE, 154) already-live hubs — no new bound needed.
+- **Multi-goal exam support — gated on owner decisions, no Codex prompt written yet.** An
+  `advisor()` pass caught that this isn't ready to scope: if it migrates existing `studyGoal` values
+  it's a production-data-semantics change (one of `CLAUDE.md`'s cold-agent triggers, not a plain
+  schema change as first framed), and five concrete decisions are needed before any prompt can be
+  written (storage shape and migration, what the goal card/nudges show with several goals, whether
+  EXAM/SUBJECT exclusivity survives, what the exam-hub intent flow does, what happens to the
+  single-goal picker). Batched to the owner 2026-10-10; still **ships ahead of the
+  `[CHECKPOINT — due 2026-12-07]` gate's own evidence bar** once scoped (still 2 users as of
+  2026-10-09) — that part of the override stands regardless of the answers.
+
+### Deferred out of this release (sequencing, not scope changes)
+
+- **Public Note → Study Journey discovery — moved to `v0.170.0`.** Two problems caught by
+  `advisor()`: (1) it already has a design — Feature Planner's RC-5 in
+  `docs/claude-plans/2026-10-09-product-health-release-plan.md` §3 ("Part of Official Review Set
+  X") — so this release does not need to design it from scratch, only reuse that spec; (2) RC-5's
+  own stated gate is the two active stability checkpoints (`v0.165.0`'s discovery-rail fix, due
+  2026-10-12, and `v0.166.0`'s Hikari long-hold fix, due 2026-10-14) — a new per-request lookup on
+  public Note pages, shipped before those read out, makes both checkpoints' kill criteria
+  uninterpretable (the same contamination pattern already recorded for Learning Connections).
+  Sequencing this after 10-14 roughly lines up with the Claude budget reset on 10-12 anyway.
 
 Anti-drift carried over from the original discovery brief, still binding for everything in this
 release: no `ProfileType` change, no recommendation-engine change beyond the explicitly-decided
@@ -54,7 +69,7 @@ fixed in the same session).
 
 ### Shipped
 
-_(nothing yet)_
+_(nothing yet — Codex delivered the CE Exam Hub implementation, pending audit and commit on its own branch)_
 
 ## v0.168.0 - Free Quota, Fairly Metered
 

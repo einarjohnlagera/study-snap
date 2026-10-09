@@ -7,16 +7,18 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 ## Current Release Baseline
 
 **Kicked off 2026-10-10.** `v0.169.0 — Study Journey, Continued` is **In Progress** on
-`releases/v0.169.0`, cut from `main` after `v0.168.0` merged as #1484 and tagged. **Ships 3 of the 4
-items deferred from `v0.167.0`: Civil Engineering Exam Hub page, multi-goal exam support, and Public
-Note → Study Journey discovery.** Two are explicit owner overrides of earlier caution, not new
-evidence: CE's Exam Hub was Product-UX-deferred pending adoption data (none arrived); multi-goal
-ships ahead of its own `[CHECKPOINT — due 2026-12-07]` (still 2 users as of 2026-10-09). Public Note
-discovery was never designed, only reserved for a future decision — this release makes that decision
-and designs the surface as part of scoping it. **The 4th deferred item, Degree Journey catalog
-(Phase C), stays explicitly out** — its own dependency (≥2 published Years) is a content-authoring
-gap no decision can override; exactly one BSCS Year exists, unpublished. All three items are
-Codex-routed given a 2026-10-12 Claude usage reset; full scope in `RELEASES.md`.
+`releases/v0.169.0`, cut from `main` after `v0.168.0` merged as #1484 and tagged. **Narrowed from an
+initial 3-item scope to 2, after `advisor()` caught sequencing and decision gaps in the other two.**
+Shipping: **Civil Engineering Exam Hub page** (owner override of Product UX's "defer pending
+adoption evidence" call, no new evidence arrived — Codex-implemented, in progress) and **multi-goal
+exam support** (gated on 5 owner decisions batched 2026-10-10, not yet scoped into a prompt; ships
+ahead of its own `[CHECKPOINT — due 2026-12-07]` regardless — still 2 users as of 2026-10-09).
+**Moved to `v0.170.0`:** Public Note → Study Journey discovery — it already has a design (Feature
+Planner's RC-5) and its own gate is two active stability checkpoints (due 2026-10-12, 2026-10-14)
+that a new per-request public-note lookup would contaminate if shipped before they read out. **Still
+excluded:** Degree Journey catalog (Phase C) — its own dependency (≥2 published Years) is a
+content-authoring gap no decision overrides; exactly one BSCS Year exists, unpublished. Full scope
+in `RELEASES.md`.
 
 **Kicked off 2026-10-09, signed off 2026-10-09.** `v0.168.0 — Free Quota, Fairly Metered` is
 **Released** on `releases/v0.168.0`, cut from `main` after `v0.167.0` merged as #1481 and tagged.
