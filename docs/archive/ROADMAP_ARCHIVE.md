@@ -5232,3 +5232,57 @@ clicks at zero, so click tracking is off and the fix is the owner's. **`v0.160.0
 2026-09-26T16:06:30Z (success); `term_label IS NOT NULL` count = 0; non-admin-owned roots with `last_update_published_at` = 0.**
 
 ---
+**Kicked off 2026-09-27, corrected the same day.** `v0.162.0 — Say the Value` is **Released** on
+`releases/v0.162.0`, cut from `main` after `v0.161.0` merged as #1454 and tagged; release PR merged to
+`main` as #1459 and tagged 2026-09-27, deploy verified on both platforms (Render live `c3e4deaa`, Vercel
+matched).
+**Owner scope pick, 2026-09-27, from a Backlog Index survey (not a pre-negotiated plan): ratify `ADR-002` (Status
+flipped PROPOSED to ACCEPTED), then H5 (relax the explanation-restriction line so an explanation MUST state the
+answer's value, still forbidding a letter reference), the Challenge Quiz question-bank invalidation-on-regeneration
+fix (the sibling leg of the exam-pool fix `v0.143.0` already shipped), and a documentation-only Question Quality
+scoping pass (no code).** **⚠️ H6 was folded into this kickoff and REMOVED the same day, before any Codex prompt was
+written:** the incident doc's own locked decision (§Q.1 item 4, 2026-09-21) sequences H6 strictly after H4/H5, not
+simultaneous, so a post-ship change in H4's retry rate stays attributable to H5 alone; H6 is logged as its own future
+release below, gated on H5's post-ship baseline. ADR-002's own open question about `board-exam-developer.txt`
+inheriting its letter contract from `schema.json` was resolved by grep at kickoff, not left to be re-derived — see
+`RELEASES.md` v0.162.0 for the exact six-and-six file split, and for the correction that H5 raises H4's evaluable
+coverage on numeric-literal MCQs only, never a prose-answer effect. **The Backlog survey also found two stale rows
+(the "Admin summary/quiz repair paths..." row and the "`companionMayBeOutdated` returns false for non-ADMIN..." row)
+already fixed in code but still
+marked open; corrected in this kickoff's Backlog Index scan, not scoped as work.** Anti-drift, the file-coverage map,
+the H4 rejection-rate baseline read, and the verification tier are in `RELEASES.md`.
+
+**Older baselines moved to `docs/archive/ROADMAP_ARCHIVE.md` at the `v0.130.0`, `v0.133.0`, `v0.139.0`, `v0.148.0` and `v0.156.0` signoffs and the `v0.134.0` / `v0.135.0` / `v0.136.0` / `v0.140.0` / `v0.141.0` / `v0.142.0` / `v0.144.0` / `v0.145.0` / `v0.146.0` / `v0.147.0` / `v0.149.0` / `v0.150.0` / `v0.151.0` / `v0.152.0` / `v0.153.0` / `v0.154.0` / `v0.155.0` / `v0.157.0` / `v0.158.0` / `v0.159.0` / `v0.160.0` / `v0.163.0` / `v0.164.0` / `v0.165.0` / `v0.166.0` / `v0.167.0` kickoffs. **⚠️ `v0.156.0` is the first entry in the signoffs half of this list** — every prior move happened at kickoff (CLAUDE.md step 7a); this one ran at signoff instead (this checklist's own duplicated step) because `v0.156.0` folded two releases' worth of scope into one and crossed the cap without an intervening kickoff.
+
+- `v0.161.0 — Scannable Study Plans` (Released) — Degree Study Journeys Phase B: Study Plan Sections collapsed by default, an `Expand all`/`Collapse all` toggle, `Not started` wording at Section and plan grain; plus a pre-signoff fix making `adoptGoal` adopt every published-but-private child instead of requiring `PUBLIC`. Moved at the `v0.167.0` kickoff.
+- `v0.160.0 — Study Plans by Semester` (Released) — Degree Study Journeys Phase A0/A: academic-term placement on Subject Plans, Year-page term grouping, compact Subject cards, and the curriculum-pipeline `academic_term` column; moved at the `v0.166.0` kickoff.
+- `v0.159.0 — Nothing Lost in the Batch` (Released) — bulk-only async-completion notifications (two new types, one producer, failure-only generation notice, normal-completion regeneration notice) and the `connection-timeout` 500-cause read; moved at the `v0.165.0` kickoff.
+- `v0.158.0 — Reading the Evidence` (Released) — discharged three overdue checkpoint reads (`connection-timeout` 5xx, Learning Connections demand, publication boundary), the first `v0.157.0` retention-instrumentation readings, and the `runMonthly()` zone-pin fix; moved at the `v0.164.0` kickoff.
+- `v0.157.0 — Watching More Closely` (Released) — landed five already-open PRs on one release branch (Vercel Web Analytics, pool-observability scoping, a production restart finding, GPT context refresh, retention channel doctrine) and implemented pool saturation diagnostics for background threads plus retention email click/open tracking and a shared five-type send budget; moved at the `v0.163.0` kickoff.
+- `v0.156.0 — Say What You Meant to Show` (Released) — actionable-announcement campaign feedback (Release A frontend CTA affordance, Release B backend feedback collection), folded from two planned releases into one; moved at the `v0.162.0` kickoff.
+- `v0.155.0 — Say What You Checked` (Released) — fixed a learner-reported quiz grading defect (a wrong answer letter against a correct explanation) and shipped the H4 validator that rejects it at generation time; moved at the `v0.161.0` kickoff.
+- `v0.154.0 — Closing the Loop` (Released) — closed three independently verified, gate-true Backlog Index items; moved at the `v0.160.0` kickoff.
+- `v0.153.0 — The Missing Telemetry` (Released) — stopped re-investigating a recurring pool-exhaustion outage a fifth time and shipped the instrumentation that would answer it; moved at the `v0.159.0` kickoff.
+- `v0.152.0 — The Missing Half of v0.150.0` (Released) — gave the many-to-many Program Family architecture the curator UX it needed: family-first Admin management, one canonical `CourseProgramCreateModal`, and an additive backfill of the approved initial membership matrix; moved at the `v0.158.0` kickoff.
+- `v0.151.0 — No Backdoor Left, Round Two` (Released) — closed the same share-link deactivation gate gap `v0.143.0`/`v0.144.0` closed for the exam question pool, this time for shared quiz links, across both the single-Note and bulk regeneration paths; moved at the `v0.157.0` kickoff.
+- `v0.150.0 — Membership, Not a Slot` (Released) — Program Family membership became many-to-many (a Course/Program may belong to zero, one, or several families), closing a real production bug where a brand-new empty family was structurally invisible to the Note-authoring family picker; moved at the `v0.156.0` signoff.
+- `v0.149.0 — Precision Before Coverage` (Released) — two new Program Family shortcuts (Health Sciences, Accounting) on the existing generic mechanism, plus the admin catalog-lifecycle capability and reassignment endpoint needed to maintain them; moved at the `v0.155.0` kickoff.
+- `v0.148.0 — Say What You Mean` (Released) — two small backend correctness fixes: word-boundary anchoring for 7 `QUANTITATIVE_KEYWORDS` (plus two new unanchored keywords, `nursing`/`accountancy`), and a deterministic default review day for null-`review_days` digest recipients closing a measured 3-day send clustering. Moved at the `v0.154.0` kickoff.
+- `v0.147.0 — The Escape Hatch` (Released) — fixed the Bulk Regenerate modal permanently wedging on a stale/expired batch id, discriminating a 404 on the receipt poll as terminal and adding an explicit "start a new batch" escape. Moved at the `v0.153.0` kickoff.
+- `v0.146.0 — Knowledge, Not Lost` (Released) — artifact-first learning availability: an intact Study Pack stays usable for every learning action even while the note's latest generation attempt is running or failed, fixing the only generation-failure pattern ever observed in production. Moved at the `v0.152.0` kickoff.
+- `v0.145.0 — Knowledge, Not Role` (Released) — added `DomainContext.BASIC_MEDICAL_SCIENCES` and widened `QUANTITATIVE_KEYWORDS` by one string; the PPR description rewrite stayed blocked on an owner-run production validation. Moved at the `v0.151.0` kickoff.
+- `v0.144.0 — No Backdoor Left` (Released) — admin summary/quiz repair paths now invalidate the exam pool, closing the fourth and last known path through `v0.143.0`'s "derived artifacts" defect class; moved at the `v0.150.0` kickoff.
+- `v0.143.0 — No Way Out` (Released) — long-exam focus-mode guard fix, unconditional exam-pool refresh on Study Pack regeneration, plus a scoped cold falsification pass that found and fixed a real deadlock risk; moved at the `v0.149.0` kickoff.
+- `v0.142.0 — Awareness Before Action` (Released) — notification inbox CTA-close fix and the adopted Review Set update panel, plus a pre-signoff falsification pass that found and fixed a real backend race; moved at the `v0.148.0` signoff.
+- `v0.141.0 — Formulas That Render` (Released) — fixed the currency/formula math-span mis-pairing that printed raw LaTeX in quiz content; moved at the `v0.147.0` kickoff.
+- `v0.140.0 — Pending Work in Reach` (Released) — dirty-state sticky bar for the Study Plan builder so the commit control (Save) stays in reach on long plans; moved at the `v0.146.0` kickoff.
+- `v0.139.0 — Reopened` (Released) — the `v0.72.0` retention checkpoint fired its kill criterion (0 of 9 committed); owner redesigned the prompt rather than reopening it; `check-deploys.sh` corrected to report a confirmed drift as drift, not "could not check". Moved at the `v0.145.0` kickoff.** — this section holds the current version plus the last five, per the documented design. **⚠️ THE `v0.144.0` MOVE CAUGHT A LAG: `v0.137.0`'s AND `v0.138.0`'s baseline paragraphs had NOT been archived at any prior kickoff, even though `RELEASES.md`'s own equivalent sections for both were already moved — this section's own archive cadence had fallen behind the count it exists to enforce, and by two paragraphs rather than one. Both are moved here now; nothing between `v0.133.0` and `v0.137.0` was found unarchived by this pass, but this pass did not sweep further back than the live table's own overflow — a future kickoff should re-verify the full range holds no other gap.**
+
+- `v0.136.0 — Contribution Surface` (Released) — bounded the unbounded Impact query, added a dedicated `/impact` page and a lightweight summary endpoint; moved at the `v0.142.0` kickoff
+- `v0.133.0 — Education Family` (Released) — seeded the Education family and eight LET-tagged programs via `V142`; moved at the `v0.139.0` kickoff
+- `v0.126.0 — Context Budget` (Released) — resumed the archiving convention after 85 releases; RELEASES.md 1.87M -> 131K chars, CLAUDE.md 358K -> 39K.
+- `v0.125.0 — Bounded Reads` (Released) — closed the last full-catalog entity load and shipped server-side note search, the stated prerequisite for bounding the note picker.
+- `v0.124.0 — Collection Path Performance` (Released) — batched the Goal builder's per-child reads; overrode its own re-read gate by explicit owner decision.
+- `v0.123.0 — Collection Builder Integrity` (Released) — fixed the unbounded write→refresh loop on section labels; ingress unresolved, mechanics proven from code.
+
+---

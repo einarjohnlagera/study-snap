@@ -1,5 +1,84 @@
 # RELEASES.md - NoteLib
 
+## v0.168.0 - Free Quota, Fairly Metered
+
+**Status: In Progress**
+
+Theme: fix a confirmed production defect where Free-tier Study Pack quota counted note copies and
+shared-pack remixes the same as paid LLM generations, incorrectly blocking real generation capacity
+for 76 real users.
+
+### Background
+
+Found by a same-day, four-correction-pass product health audit
+(`docs/claude-findings/2026-10-08-product-health-funnel-audit.md`, indexed at this kickoff), confirmed
+independently by a concurrent session ("Feature Planner") working the same evidence, and root-caused
+jointly: `StudyPackUsageService.resolveUsage` takes `max(trackedUsage.studyPackGenerations(),
+persistedStudyPackCount)`, where `persistedStudyPackCount` is a raw `COUNT(*)` of `study_packs` rows
+by owner and period — with no distinction between a real LLM generation and a copy/remix.
+`copySourceStudyPack` (`NoteService.java`, shipped `v0.52.0`-era per the audit, confirmed 2026-06-04)
+and `remixSharedStudyPack` (`ShareService.java`) both insert a `study_packs` row with no LLM call and
+never call `incrementStudyPackGeneration` — correctly, since neither is a generation. The floor's raw
+count doesn't make that distinction, so a user who copies/adopts heavily can hit `remaining = 0` on
+their real generation quota having generated nothing. **75 of the 76 affected users hit this via Study
+Plan adoption in the prior 30 days** — the single behavior the same audit's §6 found most predictive of
+retention, meaning the bug actively penalizes the product's best-performing behavior.
+
+**Considered and explicitly excluded from this release**, per the owner's own request to scope
+narrowly after a wider "fully implement Study Journey" option was evaluated and found not ready:
+- **CE dashboard goal-card framing** — re-checked 2026-10-09 and found **already resolved** as a side
+  effect of `v0.167.0` (Civil Engineering is now a valid `exam_goal_slug`, so `buildGoalNudge` already
+  resolves `GOAL_TYPE_EXAM` for it); zero production users currently have this goal set either way.
+  Nothing to ship. Not to be re-proposed without new evidence.
+- **Exam Hub page for Civil Engineering** — Product UX explicitly deferred this pending adoption
+  evidence; unchanged since that decision.
+- **Multi-goal support** — re-verified live 2026-10-09: still exactly 2 production users show the
+  pattern (checkpoint due 2026-12-07, not yet due; see `ROADMAP.md`'s Backlog Index).
+- **Degree Journey catalog (Phase C of `docs/claude-plans/degree-study-journeys-stage1-architecture-audit.md`)**
+  — architecturally fully approved with zero open decisions (§22), but its own stated dependency
+  ("at least two published Years") is unmet: exactly one BS Computer Science Year root exists today,
+  and it is unpublished. Content-authoring gate, not a code gate.
+- **Public Note → Study Journey discovery** — the original discovery brief's §14 keeps
+  "recommendations"/"Explore" changes explicitly forbidden without their own fresh decision.
+
+### Fix
+
+`StudyPackUsageService.resolveUsage` drops the `persistedStudyPackCount` floor and the `max()`
+entirely, trusting `trackedUsage.studyPackGenerations()` alone. Verified safe by enumerating every
+`StudyPackEntity` construction site in the backend (exactly three: the real generation path in
+`StudyPackService.saveStudyPack`, which always increments except for the existing, intentional
+`ADMIN`-bypass via `enforceLimits`; and the two copy/remix paths above, which never should). No
+evidence found that the floor has ever caught a genuine undercount — its only observable effect was
+inflating usage for copies, remixes, and (incidentally) failing to respect the existing ADMIN
+quota-exemption either, since a raw count has no exemption logic.
+
+**Spend decision (owner, 2026-10-09):** restoring quota to the 76 blocked users is bounded by real
+production token averages at ~$2.08/month at full utilization by every affected user (derived from
+`study_packs`' own 90-day average input/output tokens on the FREE tier — 3,077 input + 943 output
+tokens/generation, `gpt-4.1-mini` pricing) — not the audit's own abstract "2.8M tokens" framing, which
+had no dollar figure attached. **Owner decided: ship uncapped, no spend ceiling** — the exposure is
+immaterial at this scale.
+
+**Known limitation, explicitly not fixed here:** `study_packs.estimated_cost` is NULL on 100% of
+production rows (FREE and PREMIUM alike) — confirmed while deriving the number above. The column
+exists but whatever is meant to populate it (`GeneratedStudyPackContent.estimatedCost()`) does not.
+Not bundled into this release — unsized, and this release is deliberately kept to one fix.
+
+Anti-drift: no change to quota VALUES, no change to plan tiers, no change to any other usage-metered
+feature (Challenge Quiz, Adaptive Practice, Long Exam). Additive-safe: `UsageSnapshot`'s shape is
+unchanged, only its internal computation.
+
+**Delivery:** isolated bug fix, 1 file + its test — Claude Code implements directly per `CLAUDE.md`'s
+task-routing table, no Codex prompt.
+
+**Verification tier:** one scoped cold falsification agent at signoff (money/quota semantics changed,
+per `CLAUDE.md`'s gate), plus the existing `StudyPackUsageServiceTest` suite updated to assert the
+corrected behavior.
+
+### Shipped
+
+_(nothing yet)_
+
 ## v0.167.0 - Study Journey Purpose
 
 **Status: Released** (signed off 2026-10-08; commits `22584379`/`1dd1c80c` on `releases/v0.167.0`)
