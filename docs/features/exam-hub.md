@@ -18,6 +18,7 @@ Exam hubs give board-exam communities a public destination that collects relevan
 - `/exam/pnle` — Philippine Nurse Licensure Examination (PNLE).
 - `/exam/let` — Licensure Examination for Teachers (LET).
 - `/exam/cpale` — Certified Public Accountant Licensure Examination (CPALE).
+- `/exam/ce` — Civil Engineering Licensure Examination (CELE).
 
 Unknown slugs return `notFound()`.
 
@@ -36,6 +37,7 @@ Program names come from `course_programs.exam_goal_slug`. `frontend/lib/exam-hub
 | Slug | Exam | Included `courseProgram` values |
 |---|---|---|
 | `cpale` | Certified Public Accountant Licensure Examination (CPALE) | `Accountancy` |
+| `ce` | Civil Engineering Licensure Examination (CELE) | `Civil Engineering` |
 
 Filtering matches `courseProgram` exactly (case-insensitive, trimmed) — not `subject`. Accountancy-adjacent notes that carry a different courseProgram value (e.g. "Business", "Commerce") with subject="Accounting" will not surface in this hub. This is a known, accepted characteristic of exact catalog-name matching, not a bug — do not broaden the filter to match on `subject` to compensate.
 
@@ -119,7 +121,7 @@ The zero-note empty state additionally links to the matching Learn category (`Re
 Track 2 lets authenticated users confirm one study goal using the existing nullable `users.study_goal` field.
 Its scope is generalized:
 
-- `goalType = "EXAM"` when `studyGoal` is a configured exam slug (`ale`, `pnle`, `let`).
+- `goalType = "EXAM"` when `studyGoal` is a configured exam slug (`ale`, `pnle`, `let`, `cpale`, `ce`).
 - `goalType = "SUBJECT"` when `studyGoal` is any other non-blank `courseProgram` value.
 - Clearing the goal stores `null`.
 
@@ -238,7 +240,6 @@ Zero-note exam states should honestly say: `No {Exam Name} notes have been share
 
 Deferred candidates from the v0.25.0 audit:
 
-- Civil Engineering.
 - Electrical Engineering.
 - Mechanical Engineering.
 - Pharmacy.

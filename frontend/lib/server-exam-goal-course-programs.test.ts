@@ -47,6 +47,19 @@ describe("server exam-goal course programs", () => {
     await expect(getServerExamGoalCoursePrograms("cpale")).resolves.toEqual(["Accountancy"]);
   });
 
+  it("resolves CE from the catalog and falls back to Civil Engineering", async () => {
+    (globalThis.fetch as jest.Mock).mockResolvedValue({
+      ok: true,
+      json: async () => ({ ce: ["Civil Engineering"] }),
+    });
+
+    await expect(getServerExamGoalCoursePrograms("ce")).resolves.toEqual(["Civil Engineering"]);
+    await expect(getServerExamSlugForCourseProgram(" Civil Engineering ")).resolves.toBe("ce");
+
+    (globalThis.fetch as jest.Mock).mockRejectedValue(new Error("backend unavailable"));
+    await expect(getServerExamGoalCoursePrograms("ce")).resolves.toEqual(["Civil Engineering"]);
+  });
+
   it("uses catalog-derived values for the reverse mapping", async () => {
     (globalThis.fetch as jest.Mock).mockResolvedValue({
       ok: true,

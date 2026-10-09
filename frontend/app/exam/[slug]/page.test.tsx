@@ -112,7 +112,7 @@ describe("ExamHubPage", () => {
   });
 
   it("defines exactly the configured exam hubs and course program aliases", () => {
-    expect(EXAM_HUB_SLUGS).toEqual(["ale", "pnle", "let", "cpale"]);
+    expect(EXAM_HUB_SLUGS).toEqual(["ale", "pnle", "let", "cpale", "ce"]);
     expect(EXAM_HUBS.ale.coursePrograms).toEqual(["Architecture"]);
     expect(EXAM_HUBS.pnle.coursePrograms).toEqual(["Nursing"]);
     // ⚠️ EIGHT since V142 (v0.133.0) seeded the Education family, all tagged 'let'.
@@ -127,7 +127,7 @@ describe("ExamHubPage", () => {
       "Teacher Certification",
     ]);
     expect(EXAM_HUBS.cpale.coursePrograms).toEqual(["Accountancy"]);
-    expect(generateStaticParams()).toEqual([{ slug: "ale" }, { slug: "pnle" }, { slug: "let" }, { slug: "cpale" }]);
+    expect(generateStaticParams()).toEqual([{ slug: "ale" }, { slug: "pnle" }, { slug: "let" }, { slug: "cpale" }, { slug: "ce" }]);
   });
 
   it.each([
@@ -145,6 +145,27 @@ describe("ExamHubPage", () => {
     expect(screen.getAllByText(firstCourseProgram).length).toBeGreaterThanOrEqual(1);
     expect(getServerExamGoalCoursePrograms).toHaveBeenCalledWith(slug);
     expect(getServerPublicNotesByCoursePrograms).toHaveBeenCalledWith(EXAM_HUBS[slug as keyof typeof EXAM_HUBS].coursePrograms);
+  });
+
+  it("renders /exam/ce with CELE copy and Civil Engineering notes", async () => {
+    const civilNote = buildNote({
+      id: "civil-structures",
+      title: "Civil Engineering Structures",
+      slug: "civil-engineering-structures",
+      courseProgram: "Civil Engineering",
+      copyCount: 12,
+      viewCount: 120,
+    });
+    (getServerPublicNotesByCoursePrograms as jest.Mock).mockResolvedValue([civilNote]);
+
+    render(await ExamHubPage({ params: Promise.resolve({ slug: "ce" }) }));
+
+    expect(screen.getByRole("heading", { name: "Civil Engineering Licensure Examination (CELE)" })).toBeInTheDocument();
+    expect(screen.getByText(EXAM_HUBS.ce.description, { exact: false })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Civil Engineering Structures/ })).toBeInTheDocument();
+    expect(getServerExamGoalCoursePrograms).toHaveBeenCalledWith("ce");
+    expect(getServerPublicNotesByCoursePrograms).toHaveBeenCalledWith(["Civil Engineering"]);
+    expect(notFoundMock).not.toHaveBeenCalled();
   });
 
   it("shows one excerpt per card, note preview first, summary as a labeled fallback", async () => {
@@ -196,6 +217,7 @@ describe("ExamHubPage", () => {
     ["pnle", "Free PNLE Reviewer Notes & Practice Quizzes — Philippine Nurse Licensure Examination (PNLE) | NoteLib"],
     ["let", "Free LET Reviewer Notes & Practice Quizzes — Licensure Examination for Teachers (LET) | NoteLib"],
     ["cpale", "Free CPALE Reviewer Notes & Practice Quizzes — Certified Public Accountant Licensure Examination (CPALE) | NoteLib"],
+    ["ce", "Free CELE Reviewer Notes & Practice Quizzes — Civil Engineering Licensure Examination (CELE) | NoteLib"],
   ])("generates metadata for /exam/%s", async (slug, title) => {
     const metadata = await generateMetadata({ params: Promise.resolve({ slug }) });
 
