@@ -1,6 +1,5 @@
 package com.studysnap.backend.service;
 
-import com.studysnap.backend.repository.StudyPackRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -12,22 +11,23 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class StudyPackUsageService {
     private final UserUsageService userUsageService;
-    private final StudyPackRepository studyPackRepository;
 
     @Transactional(readOnly = true)
     public UsageSnapshot resolveUsage(UUID userId, OffsetDateTime referenceTime) {
         return resolveUsage(userId, userUsageService.getMonthlyUsage(userId, referenceTime));
     }
 
+    /**
+     * Counts generations only — never note copies or shared-pack remixes, both of which insert a
+     * {@code study_packs} row with no LLM call. A prior version additionally floored this at the raw
+     * {@code study_packs} row count for the period, which silently counted those non-generation rows
+     * as if they were paid generations. No construction site for a real generation has ever skipped
+     * {@link UserUsageService#incrementStudyPackGeneration}, so that floor never corrected a real
+     * undercount — it only ever inflated usage for copies and remixes.
+     */
     @Transactional(readOnly = true)
     public UsageSnapshot resolveUsage(UUID userId, UserUsageService.MonthlyUsage trackedUsage) {
-        long persistedStudyPackCount = studyPackRepository.countByOwnerUserIdAndCreatedAtGreaterThanEqualAndCreatedAtLessThan(
-                userId,
-                trackedUsage.periodStart(),
-                trackedUsage.periodEnd()
-        );
-        int usedCount = Math.toIntExact(Math.max(trackedUsage.studyPackGenerations(), persistedStudyPackCount));
-        return new UsageSnapshot(trackedUsage.periodStart(), trackedUsage.periodEnd(), usedCount);
+        return new UsageSnapshot(trackedUsage.periodStart(), trackedUsage.periodEnd(), trackedUsage.studyPackGenerations());
     }
 
     public record UsageSnapshot(

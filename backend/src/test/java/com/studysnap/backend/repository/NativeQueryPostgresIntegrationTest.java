@@ -4310,7 +4310,7 @@ class NativeQueryPostgresIntegrationTest {
                     mock(AnalyticsService.class),
                     subscriptionService,
                     userUsageService,
-                    new StudyPackUsageService(userUsageService, studyPackRepository),
+                    new StudyPackUsageService(userUsageService),
                     mock(OcrRateLimitService.class),
                     mock(OcrUsageProtectionService.class),
                     mock(AiRateLimitService.class),
@@ -5114,7 +5114,7 @@ class NativeQueryPostgresIntegrationTest {
             return new MePlanService(
                     subscriptionService,
                     userUsageService,
-                    new StudyPackUsageService(userUsageService, studyPackRepository),
+                    new StudyPackUsageService(userUsageService),
                     userRepository,
                     mock(FeatureGateService.class),
                     new StudySnapProperties()
@@ -5216,7 +5216,7 @@ class NativeQueryPostgresIntegrationTest {
                     mock(AnalyticsService.class),
                     subscriptionService,
                     userUsageService,
-                    new StudyPackUsageService(userUsageService, studyPackRepository),
+                    new StudyPackUsageService(userUsageService),
                     mock(OcrRateLimitService.class),
                     mock(OcrUsageProtectionService.class),
                     mock(AiRateLimitService.class),
