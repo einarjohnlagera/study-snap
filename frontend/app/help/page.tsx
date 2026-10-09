@@ -90,7 +90,7 @@ const HELP_CARDS: HelpCard[] = [
     id: "exam-hubs",
     icon: Compass,
     title: "Exam Hubs",
-    description: "Curated note collections for the ALE, PNLE, and LET licensure exams.",
+    description: "Curated note collections for the ALE, PNLE, LET, CPALE, and CELE licensure exams.",
     modalDescription: "Find review material for major licensure exams.",
   },
   {

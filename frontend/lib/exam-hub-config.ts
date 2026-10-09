@@ -1,4 +1,7 @@
-export type ExamHubSlug = "ale" | "pnle" | "let" | "cpale";
+import { Calculator, GraduationCap, HardHat, Heart, PenTool } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
+
+export type ExamHubSlug = "ale" | "pnle" | "let" | "cpale" | "ce";
 
 export type ExamHubConfig = {
   slug: ExamHubSlug;
@@ -48,9 +51,24 @@ export const EXAM_HUBS = {
     description: "Free CPALE reviewer notes and practice quizzes for Philippine accountancy board exam takers",
     coursePrograms: ["Accountancy"],
   },
+  ce: {
+    slug: "ce",
+    shortName: "CELE",
+    fullName: "Civil Engineering Licensure Examination (CELE)",
+    description: "Free CELE reviewer notes and practice quizzes for Philippine civil engineering board exam takers",
+    coursePrograms: ["Civil Engineering"],
+  },
 } as const satisfies Record<ExamHubSlug, ExamHubConfig>;
 
 export const EXAM_HUB_SLUGS = Object.keys(EXAM_HUBS) as ExamHubSlug[];
+
+export const EXAM_HUB_ICONS: Record<ExamHubSlug, LucideIcon> = {
+  ale: PenTool,
+  pnle: Heart,
+  let: GraduationCap,
+  cpale: Calculator,
+  ce: HardHat,
+};
 
 export function getExamHubConfig(slug: string): ExamHubConfig | null {
   return Object.prototype.hasOwnProperty.call(EXAM_HUBS, slug)
