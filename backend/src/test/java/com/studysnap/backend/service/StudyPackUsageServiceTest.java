@@ -46,14 +46,19 @@ class StudyPackUsageServiceTest {
     }
 
     /**
-     * Regression guard for the quota-metering defect: a user who has copied or remixed many notes
-     * inserts a {@code study_packs} row each time, with no LLM call and no increment to
-     * {@code studyPackGenerations}. {@link StudyPackUsageService} must never consult the raw
-     * {@code study_packs} row count — only the tracked generation counter — so heavy copy/remix
-     * activity must never inflate a user's reported usage above their real generation count.
+     * This test exercises the pass-through logic only — it does not simulate a copy or remix, since
+     * {@link StudyPackUsageService} has nothing to simulate against: it takes no
+     * {@code StudyPackRepository} and consults no {@code study_packs} row count at all, so no copy or
+     * remix activity could reach this class even if the test constructed one. The actual regression
+     * guard against the quota-metering defect is structural, not a runtime check: {@code NoteService}
+     * (owns {@code copySourceStudyPack}) and {@code ShareService} (owns
+     * {@code remixSharedStudyPack}) have no {@code UserUsageService} dependency anywhere in their
+     * constructors, and neither does anything either one depends on — confirmed by reading both
+     * classes' full field lists. Copying or remixing a note is therefore architecturally incapable of
+     * calling {@code incrementStudyPackGeneration}, not merely observed not to in this test.
      */
     @Test
-    void usedCountIsZeroWhenNoGenerationsTrackedRegardlessOfCopyOrRemixActivity() {
+    void usedCountIsZeroWhenNoGenerationsAreTracked() {
         UUID userId = UUID.randomUUID();
         UserUsageService.MonthlyUsage trackedUsage = new UserUsageService.MonthlyUsage(
                 OffsetDateTime.parse("2026-03-10T00:00:00Z"),
