@@ -301,7 +301,7 @@ Errors should remain supportive and actionable.
   - actions: `Upgrade Plan`, `Get More Study Packs`, `Maybe Later`
 - Limit messaging should make it clear that Plus and Pro increase Study Pack capacity and that Pro unlocks Adaptive Practice plus Board Exam Mode.
 - Warning banners and generation blocking must use the same backend-resolved effective usage count so remaining counts and enforcement never disagree.
-- Study Pack quota only increments after a successful Study Pack is saved.
+- Study Pack quota only increments on a real LLM generation, never merely on a `study_packs` row being saved — copying a note or remixing a shared pack also saves a row with no LLM call and must never count (fixed in `v0.168.0`; see `docs/features/subscriptions-and-usage-limits.md` for the full defect history).
 - Failed generation attempts, note saves, opening generation surfaces, and failed retries must not consume Study Pack quota.
 
 ## Async note generation flow

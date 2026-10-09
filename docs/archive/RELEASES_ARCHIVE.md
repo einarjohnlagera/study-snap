@@ -21120,3 +21120,247 @@ No `[CHECKPOINT — due YYYY-MM-DD]` row was minted for this release. Nothing sh
 
 
 ---
+## v0.162.0 - Say the Value
+
+**Status: Released** (signed off 2026-09-27; PRs #1455/#1456/#1457/#1458 merged into the release branch; release PR merged to `main` as #1459 and tagged 2026-09-27; deploy verified on both platforms — Render live `c3e4deaa` at 14:21:57Z, Vercel matched at 14:25:36Z)
+
+Theme: a quiz explanation is finally allowed to say what the numeric answer actually is, so the model's own internal-consistency check has something to check — and stale exam content stops surviving a regeneration it should have invalidated.
+
+**⚠️ CORRECTED 2026-09-27, same day as kickoff, before any Codex prompt was written.** The kickoff folded H6 into this
+release. The incident doc's own LOCKED owner decision (`docs/claude-findings/2026-09-19-quick-review-percentage-increase-correctness-incident.md`
+§Q.1 item 4, 2026-09-21) sequences H6 strictly AFTER H4/H5, not simultaneous with H5, specifically so a post-ship
+change in H4's retry rate stays attributable to H5 alone. **H6 is REMOVED from this release** and re-logged in the
+Backlog Index as its own future release, gated on H5's post-ship baseline read. The kickoff also wrote H5's wording
+as "explanations **may** state the answer's value"; the locked decision says "**must**" — "may" would not reliably
+move H4's recall, which is the whole point of H5. Corrected below.
+
+### Planned Scope
+
+**Scope picked by the owner, 2026-09-27: three related items from the Backlog Index, surveyed and verified against
+code at kickoff, not taken from their status cells at face value.** A fourth item (H6) was folded in at kickoff and
+REMOVED the same day on re-reading a locked owner decision (see the correction above). Two stale rows were found
+during the survey and are NOT part of this release's scope (see "Also found" below).
+
+1. **Phase A0 (documentation, Claude-direct): ratify `docs/architecture/ADR-002-quiz-answer-identity-by-text.md`.**
+   Flipped `Status` from `PROPOSED` to `ACCEPTED`. Its own open question ("does `board-exam-developer.txt` inherit
+   the letter contract from `schema.json` alone?") is RESOLVED by grep, not inference, and the answer splits by
+   which of two separate lines each prompt file carries: the ANSWER-FORMAT line ("exactly one of A, B, C, D") is in
+   exactly six files (`adaptive-practice-developer.txt:18`, `challenge-quiz-developer.txt:20`,
+   `interview-practice-developer.txt:13`, `developer.txt:90`, `long-exam-developer.txt:24`,
+   `teacher-quiz-developer.txt:18`) — `board-exam-developer.txt` carries NONE of its own and does inherit from
+   `schema.json` alone, confirming the ADR's suspicion. The EXPLANATION-RESTRICTION line (the one H5 touches) is a
+   DIFFERENT set of six: `adaptive-practice-developer.txt:28`, `board-exam-developer.txt:19`,
+   `challenge-quiz-developer.txt:48`, `developer.txt:105`, `long-exam-developer.txt:46`,
+   `teacher-quiz-developer.txt:29` — `board-exam-developer.txt` DOES carry this one, so H5 must edit it explicitly;
+   `interview-practice-developer.txt` carries no such line, so H5 has nothing to relax there. MULTI_SELECT's
+   equivalent contract stays explicitly deferred, unchanged by this ratification.
+
+2. **Phase A (H5, backend, Codex).** Relax the explanation-restriction line in the six files named above so a quiz
+   explanation **must** state the answer's value when every choice in that question is a short numeric/unit
+   literal, while still forbidding a letter reference (`A`/`B`/`C`/`D`) — per the incident doc's locked wording, not
+   the softer "may" the kickoff first wrote. **Numeric-conditional, not universal — owner decision 2026-09-27**: an
+   unconditional version was considered and rejected once the ratio was read (numeric-literal MCQs are 1.7% of all
+   MCQ-shaped items, 88 of 5,110 generated since H4 shipped; an unconditional rule would force the other 98.3%,
+   prose-answer MCQs H4 never reads, to restate their full choice text verbatim for no validator benefit). Prose
+   MCQs keep the existing "don't restate" rule unchanged. **What this actually buys:**
+   `QuizValidationUtils.isAnswerExplanationInternallyInconsistent` (`:194-201`) excludes any MCQ with a non-numeric
+   choice unconditionally, before the explanation is even read — H4 has ZERO evaluation of prose-answer MCQs, not
+   "near-zero recall" as the Backlog row's original framing claimed. H5 can only raise H4's evaluable coverage on
+   NUMERIC-LITERAL-answer MCQs: today an explanation that fully complies with "don't restate" gives H4 no evidence
+   to check at all; "must state the value" closes that gap for the numeric subset only. Do not claim a prose-answer
+   effect in the release notes. Gated on reading H4's production rejection-rate baseline first, so a post-ship rate
+   change is attributable to H5 alone — **which requires H6 to ship separately** (see the correction above).
+   **Shipped:** updated `adaptive-practice-developer.txt`, `board-exam-developer.txt`, `challenge-quiz-developer.txt`, `developer.txt`, `long-exam-developer.txt`, and `teacher-quiz-developer.txt`, pinned by `quizExplanationPromptsRequireExactNumericAnswerValueWithoutLetterReferences`.
+   **Measurement, corrected 2026-09-27: the H4 retry/omit COUNT is the wrong metric for H5's effect and must not be
+   read as a regression signal.** H5 gives H4 more evidence to check, so the retry count is EXPECTED TO RISE after H5
+   ships — a rise is success, not a problem. The Challenge-bank fix (Phase C, same release) also raises generation
+   volume, which inflates the raw count independent of H5, and Render drops logs after ~30 days (the 2026-09-22
+   entries below expire ~2026-10-22), so a count-based read has no denominator and no shelf life. **The real metric
+   is a per-question coverage ratio computed from the stored JSONB, not the log:** among MCQs where every choice is
+   ≤20 characters and contains a digit (H4's own `isNumericUnitLiteral` predicate), what share have
+   `explanation || workingSolution` containing the text of `choices[correctIndex]`. Compare packs generated between
+   the H4 deploy (`v0.155.0`, 2026-09-22) and the H5 deploy against packs generated after H5 ships; the ratio should
+   rise post-H5. **This is the checkpoint's instrument, to be minted in full at signoff, not run now** (H5 has not
+   shipped yet), but its PRE-H5 baseline was read at correction time rather than left for signoff to discover it was
+   never read. **Exact query, full context and caveats saved verbatim to
+   `docs/claude-plans/2026-09-27-h5-coverage-ratio-baseline.sql`** (an approximation compared only against its own
+   future re-run, not a re-implementation of `QuizValidationUtils`'s normalized matcher) — signoff must run the
+   IDENTICAL query with the H5 deploy timestamp as the partition point, not a rewritten one. **As of 2026-09-27,
+   read against `study_packs.quiz` for packs generated since the H4 deploy (`v0.155.0`, 2026-09-22):** of 5,110
+   MCQ-shaped items, only **88 (1.7%) are numeric-literal** — the entire population H5's evaluable-coverage claim
+   applies to; of those 88, **60 (68.2%) already state the correct value verbatim** under the CURRENT "don't
+   restate" instruction (the ban is imperfectly followed today, this is not evidence H5 shipped); and **10 (16.7%
+   of the 60) already also mention a distractor's value** — a PRE-EXISTING case `QuizValidationUtils:207-209`'s
+   short-circuit cannot catch (it returns "consistent" the moment the correct value is found, before ever checking
+   for a distractor), tracked as a masking-risk baseline to re-read post-H5, not a defect introduced by H5. A
+   post-H5 numeric-MCQ sample well under ~80 items should re-date the checkpoint rather than be read as a verdict.
+   Confirmed no in-place regeneration occurred in this window (`updated_at` never exceeds `created_at` by more than
+   a minute across all 1,057 packs since 2026-09-22), so `created_at` is a clean partition point for the post-H5
+   comparison — re-verify this assumption at signoff rather than reusing it uncritically. **The 88-item numeric
+   population is small enough that "raises H4's evaluable coverage" is real but narrow — say so plainly rather than
+   implying broad impact.** Exact log filter for the retry/omit COUNT, recorded for context only, not as the
+   pass/fail signal: resource `srv-d6u0jkvgi27c73dvl9k0`, text `quiz_answer_explanation_consistency`, window
+   2026-09-22–2026-09-27 (H4-only baseline): 10 `outcome=retrying`, 0 `outcome=omitted` — five days of total
+   headroom across the whole system, for context on how small this signal currently is. The retry path
+   (`retryInternallyInconsistentQuestion`) reuses the SAME input messages as the first attempt
+   (`context.inputMessages().deepCopy()`), so there is no separate retry-prompt copy of the restriction to edit.
+   **The incident doc's own locked text (§Q.1 item 3, and the original recommendation at line 691) requires this to
+   ship "with a before/after sample review"** — a human reading of actual generated output under the old vs. new
+   prompt, distinct from the coverage-ratio metric above. **This is a gate on merging the H5 PR, run by this session
+   (not Codex — Codex has no OpenAI key/network access, so it cannot generate real packs and must not fabricate
+   sample output): after Codex delivers the diff, generate a few Study Packs locally against source notes behind
+   the 88 numeric-literal items above (so the new numeric-case wording actually fires) and a few prose-answer notes
+   (so the unconditional "otherwise" branch is confirmed unchanged), under the old prompt then the new one, and read
+   the explanations before merging.** **Gate cleared, 2026-09-27** — called the real `/responses` endpoint directly
+   (same messages/schema `OpenAiLlmStudyPackService` builds, `gpt-4.1-mini`) on one numeric and one prose sample,
+   old prompt vs. new: numeric explanations now state the value verbatim with no letter references in either
+   version; no masking observed; the "don't discuss the other choices" and formula-text-echoing gaps found are
+   pre-existing and appear identically under the OLD prompt, not introduced or widened by H5. Full findings at
+   `docs/claude-plans/done/2026-09-27-h5-before-after-sample-review.md`. Prompt-only change; no schema, no parser, no
+   migration.
+
+3. **~~Phase B (H6)~~ — REMOVED from this release, see the correction above.** Logged in the Backlog Index as its
+   own future release, gated on H5's post-ship baseline read.
+
+4. **Phase C (Challenge Quiz bank invalidation, backend, Codex).** The sibling leg of the exam-pool invalidation
+   defect `v0.143.0` already fixed for `StudyPackService`'s and the admin repair path's regeneration flows (both
+   confirmed at kickoff to already call `examQuestionPoolService.refreshPool`). The Challenge question bank leg is
+   confirmed STILL open: `ChallengeQuizQuestionBankService`/`ChallengeQuizService` (grep-verified) are never called
+   from either regeneration path, so a regenerated note's Challenge Quiz keeps serving questions drawn from the
+   deleted content. Fix: invalidate or refresh the bank on the same regeneration boundary, mirroring the exam-pool
+   fix's shape. No migration expected; confirm against `ChallengeQuizQuestionBankService`'s actual write path before
+   the Codex prompt is written.
+   **Shipped:** `ChallengeQuizQuestionBankRepository.bulkDeleteAllForStudyPack` and
+   `ChallengeQuizQuestionBankService.invalidateForStudyPack` now delete all bank rows for a regenerated pack in one
+   JPQL statement. Exactly two of the three exam-pool invalidation sites call it after their existing
+   `studyPackRepository.flush()` and Long/Board refreshes: `StudyPackService` regeneration replaces `summary` and
+   `keyConcepts`, and `AdminStudyPackTransactionHelper.regenerateOnePack` replaces `summary`; quiz-only
+   `repairMalformedQuiz` remains untouched because `quiz` is not a Challenge-generation input. The admin helper now
+   reports whether content was actually replaced, and `AdminStudyPackService` then reloads the committed note and
+   pack and calls `OfficialChallengeQuizTemplateService.queueSeedIfEligible`; the learner-facing path already had
+   the equivalent post-commit seed. Production files: `ChallengeQuizQuestionBankRepository.java`,
+   `ChallengeQuizQuestionBankService.java`, `StudyPackService.java`, `AdminStudyPackTransactionHelper.java`, and
+   `AdminStudyPackService.java`. Tests: `NativeQueryPostgresIntegrationTest.java` proves the delete's pack predicate
+   and claimed-row behavior against Flyway PostgreSQL; `StudyPackServiceTest.java` and
+   `AdminStudyPackTransactionHelperTest.java` pin flush → exam refreshes → bank invalidation ordering;
+   `AdminStudyPackServiceTest.java` pins post-commit reload/re-seed and the false-result skip; and
+   `ChallengeQuizQuestionBankServiceTest.java` pins the unannotated transaction-joining service method.
+   **Verified via a scoped Opus falsification pass (worktree pinned to `d4cd98f3`), CORRECTED 2026-09-27: the
+   executor-rejection framing below was wrong, and two additional findings surfaced, both documented rather than
+   fixed.**
+   - **Executor math corrected.** 890 admin-owned packs matching summary regeneration had bank rows in production
+     on 2026-09-27 (not all Official-template eligible). The 4-core/8-max/50-queue `llmParallelTaskExecutor`
+     admits roughly the FIRST 58 of a bulk run's regeneration tasks and rejects the rest at submission —
+     **those rejected packs are never regenerated, so never invalidated, and need no re-seed at all.** Among the
+     ~58 admitted, only the one whose re-seed happens to land while the queue is still full is rejected — expect
+     about ONE rejected seed per saturated run, not most of them (the original wording overclaimed this). A
+     rejected seed still degrades safely (`copyTemplateQuestions` copies nothing, Challenge Quiz generates fresh
+     shortfall questions). Recovery: rerun `POST /admin/study-packs/seed-official-challenge-quiz-templates` only
+     AFTER the bulk run has fully finished, not while seeds may still be in flight — its existence gate can't see
+     an uncommitted seed, so an overlapping rerun wastes LLM calls and can occasionally double a template.
+   - **New finding, documented not fixed (`docs/features/quiz.md`): `generateMoreQuestions` ("+5 questions") can
+     race this invalidation.** It reads `summary` unlocked, then calls the LLM while holding a `PESSIMISTIC_WRITE`
+     lock on its own claimed bank rows; a concurrent regeneration's delete can run (or wait) around that call, and
+     the `+5` request's LLM-derived rows — built from the pre-regeneration summary — are inserted afterward and
+     survive the delete. A real fix needs a generation stamp on bank rows and a migration; tracked as its own
+     Backlog row (`docs/product/ROADMAP.md`) rather than folded in here. The same call also introduces a genuinely
+     new wait: a regeneration's bank delete can now block up to the LLM read timeout (180s) behind an in-flight
+     `+5` call on the same pack, while holding the Study Pack and Note row locks and one of only two
+     `studyPackGenerationTaskExecutor` threads. No cross-transaction deadlock was found reachable on the main
+     paths (`study_packs` is always locked before the bank, on both sides) — only this bounded-but-long wait.
+   - **Pre-existing bug this release widens the blast radius of, NOT fixed here, Backlog row added
+     (`docs/product/ROADMAP.md`): `ChallengeQuizQuestionBankService.releaseClaims`'s `REQUIRES_NEW` transaction can
+     wait indefinitely on locks its own caller's outer transaction already holds** (v0.60.2; fires on any
+     `RuntimeException` in `generateMoreQuestions`, including the ordinary `NotEnoughNewQuestionsException`, not
+     only real errors). **Verified against production, 2026-09-27:** `lock_timeout`, `statement_timeout`, and
+     `idle_in_transaction_session_timeout` are all `0` (unbounded) — if this ever fires, nothing currently stops
+     it. **Also checked 30 days of Render logs for direct evidence: 3 "Apparent connection leak detected" events
+     exist, and all 3 trace through `NoteController.listMine` — an unrelated path — not through
+     `ChallengeQuizService` at all.** No evidence this specific hang has ever fired; the risk is real but appears
+     dormant, not active. **What THIS release widens:** before this commit, a hang here only pinned one learner's
+     request and two DB connections; after this commit, a regeneration's new bank-delete call can queue up behind
+     the same held lock, so a hang also now blocks that Study Pack's regeneration indefinitely, holding a
+     `study_packs`/`notes` row lock and one of only two `studyPackGenerationTaskExecutor` threads. Not fixed in
+     this prompt — the naive fix (lock `study_packs` inside `generateMoreQuestions`) would invert `startSession`'s
+     own pack-then-session lock order and create a new same-user deadlock; a real fix needs more care than this
+     release's scope affords.
+
+5. **Phase D (Question Quality, Claude-direct, documentation/audit ONLY — no code).** Distinct from H4 (which
+   verifies a stored answer agrees with its own explanation) and from H5/H6 (representation, not correctness): this
+   is whether a generated question has a single defensible best answer at all. Its own Backlog row says there is no
+   measured defect rate yet for genuine ambiguity. This phase reads production for one, using the three-tier
+   discipline (STRUCTURAL / INTERNAL-CONSISTENCY / SEMANTIC) the original incident doc established, and produces an
+   owner decision document: is this worth building, and if so, at which tier. **It ships no code.** Do not let this
+   phase drift into an implementation mid-release — if the read makes a strong case, that becomes its own future
+   release, not a scope change to this one.
+   **Shipped:** `docs/claude-plans/2026-09-27-question-quality-tier3-audit.md` (decision document) and its
+   companion `2026-09-27-question-quality-tier3-sample.sql` (the exact sampling queries, with two real bugs found
+   and stated rather than smoothed over — the stored keyed answer is `correctIndex`, not `answer`; a discarded
+   draft draw is named, not silently dropped). 65 real production questions read across 2 of 4 quiz stores
+   (`study_packs.quiz`; `exam_question_pool`'s Board/Long Exam tier, the store the one confirmed historical defect
+   came from) — 0 confirmed genuine-ambiguity defects, 2 near-miss patterns noted. **Corrected mid-audit, stated
+   plainly rather than smoothed over:** a first draft read the zero-defect sample as "no evidence of an actionable
+   rate," which overclaimed — the honest rule-of-three bound (0/65 rules out roughly a 1-in-22 rate, still >5,000
+   questions across the corpus if the true rate sits there) rules out a COMMON defect only, not a rare one, which
+   is the shape the one historical defect actually had. **Recommendation: do not build an automated Tier 3 gate
+   now; scope a learner-facing "flag this question" affordance first** (none exists in the product today, checked
+   directly) as the one instrument that scales to a rare-event rate a fixed-size sample cannot resolve —
+   explicitly weighed against the incident doc's own rejection of a learner-wide "answers may be wrong"
+   announcement on trust grounds, so the owner sees that tension named rather than assumed away. Existing Backlog
+   row updated with the outcome rather than duplicated.
+
+**Also found during the Backlog Index survey, NOT part of this release (flagged for a separate doc-correction pass):**
+The Backlog row titled "Admin summary/quiz repair paths replace Study Pack content in place with no exam-pool invalidation" is
+stale — `AdminStudyPackTransactionHelper.regenerateOnePack` already calls `refreshPool` for both exam modes (`:77-78`). The row
+titled "`companionMayBeOutdated` returns false for non-ADMIN callers" is also stale — the guard already lets an adopted copy (`sourcePlanId != null`) through to the real
+staleness check (`NoteCollectionService.java:1663-1675`). Both would have been false positives if scoped as work;
+neither is touched by this release.
+
+Anti-drift: H4's internal-consistency validator, its retry-then-omit chain, and its MCQ-numeric-choices-only scope
+are UNCHANGED — this release only decides what a *new* explanation is allowed to say, not how the answer is
+represented (that is H6, removed above) or how H4 grades it.
+No structural answer-key validation is added (the original incident's full corpus scan found zero violations of any
+kind; still not the fix, still not built). No migration touches `study_packs.quiz`, `exam_question_pool.questions`,
+`challenge_quiz_question_bank.question`, or `generated_quizzes.questions`. MULTI_SELECT gets no text-based contract
+this release. Phase D produces a decision document only, never code, in this release. The Challenge-bank fix (Phase
+C) touches only the regeneration-invalidation boundary, not Challenge Quiz's broader question-selection logic.
+
+**Verification tier (per `CLAUDE.md`'s release-size rule):** three items, within the 3-4-item sweet spot. Phase A0 is
+docs-only. `advisor()` before each phase's Codex prompt and on each diff is the baseline. **CORRECTED 2026-09-27,
+scoping the Phase C prompt: the trigger fires for Phase C.** It bulk-deletes a learner's own stored
+`challenge_quiz_question_bank` rows — including recorded `lastKnownOutcome` history — as a side effect of a
+regeneration action, and for an Official-author pack those same deleted rows are the Challenge Quiz templates other
+learners' sessions read from (`OfficialChallengeQuizTemplateService.copyTemplateQuestions`). **Read against
+production, 2026-09-27: every bank row's `user_id` matches its pack's `owner_user_id` (0 counter-examples across all
+31,776 rows) — this is always the pack owner's own data, never a different learner's, so "who does the delete
+affect" was verified rather than assumed.** That still changes production-data semantics (deleted outcome history,
+and for 890 admin-owned packs with existing bank rows read at the same time — not necessarily all Official
+templates, only those additionally passing `isEligibleOfficialTemplate` actually re-seed — a genuine re-seed
+dependency on a bounded 8-worker/50-slot executor queue that admits roughly the first ~58 of a run this size and
+rejects the rest AT SUBMIT, deterministically, not merely "under load") — the class of change
+`v0.143.0`'s own precedent for this shared invalidation shape needed a falsification pass to catch a real deadlock
+risk in. **One scoped cold agent (Opus), falsification-framed, runs on the Phase C diff after Codex delivers it,
+before merge — not before, since there is nothing to falsify until the diff exists.** Two named targets, not an
+open-ended review: (1) row-lock ORDERING AND WAITING between the new bulk `DELETE` and
+`ChallengeQuizQuestionBankRepository.findClaimableForUpdate`/`findIncorrectClaimableForUpdate` (both already take
+`PESSIMISTIC_WRITE` locks) — not just whether a deadlock is possible (the `v0.143.0` class of bug), but also
+whether `ChallengeQuizService.startSession` can hold a bank row lock across its own LLM call while a regeneration's
+transaction waits on that same lock while ALSO holding a `study_packs` row lock `LongExamService.startSession`
+takes first — a long wait, not a deadlock, but a real contention path; (2) whether the Official-template re-seed
+(`AdminStudyPackService` re-fetching note+pack and calling `queueSeedIfEligible` after `regenerateOnePack` returns
+`true`) actually fires in practice given the shared `llmParallelTaskExecutor` (core 4, max 8, queue 50) both the
+890-pack bulk regeneration AND its own re-seed dispatch compete for — read the diff against
+`OfficialChallengeQuizTemplateService.queueSeedIfEligible`'s real behavior and that executor's real capacity, not
+the prompt's stated intent. H5 does not touch a shared method, a permission boundary, or production-data
+semantics, so it stays on the `advisor()`-only baseline — only Phase C's tier changed.
+
+### Shipped
+
+- **Phase A0 — `ADR-002` ratified.** Status `PROPOSED` → `ACCEPTED`; its own open question (does `board-exam-developer.txt` inherit the letter contract from `schema.json` alone?) resolved by direct grep, not inference, and the resolution written back into the ADR itself. H6's implementation explicitly NOT scoped into this release — see the correction banner above.
+- **Phase A (H5) — PR #1455, merged `e0037692`.** All six quiz-prompt files now require an explanation to state a numeric-only MCQ's exact value, still forbidding any letter reference; prose-answer MCQs (98.3% of the corpus) unchanged, an owner decision made after reading the real numeric/prose split. Pre-deploy coverage-ratio baseline read (60/88, 68.2%); post-deploy read minted as a `[CHECKPOINT]` in `ROADMAP.md`'s Backlog Index. Before/after sample review run against the real OpenAI endpoint before merge, per the incident doc's own locked gate.
+- **Phase C — PR #1456, merged `9ac11bff`.** `ChallengeQuizQuestionBankService.invalidateForStudyPack` closes the Challenge-bank leg of the derived-artifacts invalidation defect class (`ROADMAP.md`'s "Derived artifacts keyed on the preserved `study_packs.id`" row, both legs now closed). Wired into exactly two of the exam-pool fix's three call sites, not a blind structural copy. A scoped Opus falsification pass on this diff (before merge) found and the release documented rather than fixed: a `generateMoreQuestions` race that can let a narrow window of stale-content rows survive a regeneration, and a pre-existing `releaseClaims` hang (`v0.60.2`) whose blast radius this fix widens — both logged as their own Backlog rows, production verified to have zero configured lock timeouts and no evidence the hang has ever fired.
+- **Phase D — PR #1457, merged `cf91ce5a`.** Question Quality Tier 3 audit: 65 real production questions read by hand across 2 of 4 quiz stores, 0 confirmed genuine-ambiguity defects, honest statistical reading (rules out a common defect, not a rare one), recommendation to build a learner "flag this question" affordance before an automated semantic gate. Ships no code, per its own scope. Full document: `docs/claude-plans/2026-09-27-question-quality-tier3-audit.md`.
+- **H4 sign-conflation fix — PR #1458, merged `e3625535`.** Found by a scoped Opus falsification pass run at signoff, against the actual merged release state (`cf91ce5a`), not any individual PR's own diff. `QuizValidationUtils`'s exact-value match treated `"0.40"` as present inside evidence text `"-0.40"` — the minus sign was invisible to the pattern — which could mask a real answer/explanation mismatch for any difference-type numeric question (discrimination index, net change, signed error). Pre-existing since `v0.155.0`'s H4, not introduced by H5, but H5 (this same release) makes it more reachable by requiring explanations to state a value at all. Fixed and mutation-verified (reverted the fix, confirmed the new test fails against pre-fix code, restored it).
+- **Signoff falsification pass, full report folded into the rows above and into `docs/product/ROADMAP.md`'s Backlog Index** rather than repeated here. Two additional findings, both documented as Known Limitations / Backlog rows, neither blocking: the coverage-ratio metric's denominator (H4's `isNumericUnitLiteral`, ≤20 chars + a digit) is slightly wider than H5's own numeric-condition wording ("not a phrase"), so the ratio cannot reach 100% by design — the post-deploy checkpoint read should say so rather than read a sub-100% result as a defect; and a low-severity, genuinely uncertain race between a Challenge session completing and a concurrent regeneration's bank delete, needing a two-connection Postgres test to resolve, not reproduced.
+
+---

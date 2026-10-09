@@ -3,7 +3,11 @@
 > **This is the core brief. Paste it as your first message in a new GPT chat session.**
 > Then paste any module below that matches the conversation — see "Which modules to paste".
 > Update this file whenever a new version ships or the roadmap shifts significantly.
-> Last updated: v0.167.0 - 2026-10-08 (Released). **`v0.167.0` resolved the "Study Journey Purpose /
+> Last updated: v0.168.0 - 2026-10-09 (Released). **`v0.168.0` was a backend bug fix only — a Study
+> Pack generation quota defect that incorrectly counted note copies/remixes against real users'
+> monthly limit — with no product-facing behavior or pricing change.** Nothing in this brief or its
+> modules described the fixed mechanism, so nothing here needed correcting; this line exists only to
+> keep the stamp current. Previously v0.167.0 - 2026-10-08 (Released). **`v0.167.0` resolved the "Study Journey Purpose /
 Learner Goal" architecture discovery's Q1 and implemented the owner-picked scope.** A Study Journey
 that is a recognized licensure Review Set now shows exam-specific terminology (`CollectionExamGoalResolver`,
 derived server-side from the Journey's own root `courseProgram` + `learnerLevel == BOARD_EXAM_REVIEW`,
