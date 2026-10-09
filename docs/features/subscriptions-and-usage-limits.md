@@ -84,7 +84,7 @@ This is signal visibility only. It does not grant Adaptive Practice, consume or 
 - remaining Study Packs come from backend usage calculations
 - when remaining reaches `2` or `1`, show the near-limit warning banner
 - when remaining reaches `0`, keep `Generate Study Pack` clickable and show the appropriate limit/paywall modal on click
-- quota increments only after a successful Study Pack is persisted
+- quota increments only on a real LLM generation (`incrementStudyPackGeneration`'s one call site), never merely on a `study_packs` row being persisted — a copy (`copySourceStudyPack`) or a shared-pack remix (`remixSharedStudyPack`) also persists a row but makes no LLM call and must never count. **`v0.168.0` fixed a defect where usage was additionally floored at the raw persisted-row count, which silently counted those non-generation rows as if they were paid generations — confirmed to never have caught a genuine undercount, since the floor predates `copySourceStudyPack` by two months.**
 - saving a note, failed generation, or failed retry must not consume Study Pack quota
 
 ## Topic note generation and OCR
