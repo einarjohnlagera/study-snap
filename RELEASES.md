@@ -69,7 +69,12 @@ fixed in the same session).
 
 ### Shipped
 
-_(nothing yet — Codex delivered the CE Exam Hub implementation, pending audit and commit on its own branch)_
+- **Civil Engineering Exam Hub (CELE) — PR #1485, commit `3200c773`.** Added `/exam/ce` and all 5
+  consuming surfaces (index page, Help Center guide and card, server-side course-program resolution).
+  Fixed `EXAM_HUB_ICONS` duplication along the way — moved into `exam-hub-config.ts` as the single
+  source of truth, which also fixed `exam-hubs-guide.tsx`'s pre-existing CPALE omission. Implemented
+  via Codex, independently re-verified (tests, `tsc --noEmit`, `npm run build` all re-run fresh, not
+  trusted from the delivery report alone).
 
 ## v0.168.0 - Free Quota, Fairly Metered
 
