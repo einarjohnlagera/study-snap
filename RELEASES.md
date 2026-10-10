@@ -4,9 +4,10 @@
 
 **Status: In Progress**
 
-Theme: continue the Study Journey Purpose / Learner Goal architecture by shipping the two
-remaining pieces that are actually ready to scope right now, after an `advisor()` pass caught that
-the original 3-item plan had sequencing and decision gaps.
+Theme: continue the Study Journey Purpose / Learner Goal architecture by shipping the one piece
+that's actually ready — after an `advisor()` pass caught that the original 3-item plan had
+sequencing and decision gaps, and the owner then explicitly chose to close this release on that
+one piece rather than fold in the others.
 
 ### Planned Scope
 
@@ -19,15 +20,41 @@ the original 3-item plan had sequencing and decision gaps.
   this task touched it — fixed as one move, deriving all of them from the shared config instead of
   a 3rd/4th/5th duplicate list. Production size checked directly: CE's 113 public notes sit between
   the smallest (ALE, 90) and largest (CPALE, 154) already-live hubs — no new bound needed.
-- **Multi-goal exam support — gated on owner decisions, no Codex prompt written yet.** An
-  `advisor()` pass caught that this isn't ready to scope: if it migrates existing `studyGoal` values
-  it's a production-data-semantics change (one of `CLAUDE.md`'s cold-agent triggers, not a plain
-  schema change as first framed), and five concrete decisions are needed before any prompt can be
-  written (storage shape and migration, what the goal card/nudges show with several goals, whether
-  EXAM/SUBJECT exclusivity survives, what the exam-hub intent flow does, what happens to the
-  single-goal picker). Batched to the owner 2026-10-10; still **ships ahead of the
-  `[CHECKPOINT — due 2026-12-07]` gate's own evidence bar** once scoped (still 2 users as of
-  2026-10-09) — that part of the override stands regardless of the answers.
+
+### Multi-goal exam support — owner direction recorded 2026-10-10, explicitly NOT authorized to implement
+
+The 5 batched questions got real answers, but **the owner was explicit these are product-direction
+preferences, not technical authorization** — before any Codex prompt, Feature Planner is to validate
+the storage migration, state transitions, onboarding semantics, cost, and acceptance criteria against
+the current code. No multi-goal implementation prompt exists, and none should until that validation
+and a separate go-ahead happen. Recorded here so the direction isn't re-litigated or lost before that
+validation happens:
+
+1. **Storage — a normalized join table**, one row per (user, exam goal), with one goal flagged
+   active per user. No redundant active-state storage (e.g. not a separate "active goal" column
+   that can drift from the join rows). Existing single `studyGoal` values migrate losslessly;
+   current users keep their existing goal, now active.
+2. **Dashboard & nudges — the active goal only** drives general dashboard nudges; other goals stay
+   visible/accessible but don't compete for nudge real estate. **Exception:** post-session next
+   steps must reflect the actual session/Study Journey context even when it differs from the active
+   goal — a session on a non-active goal's material must not get nudged toward the active goal
+   instead.
+3. **EXAM/SUBJECT exclusivity — unchanged.** Multiple exam goals may coexist with each other; a
+   subject focus still can't coexist with any exam goal. This is a profile-preference rule only —
+   it has never restricted which Notes/Study Plans are reachable, and broadening subject/exam
+   coexistence needs its own separate decision, not an inference from this one.
+4. **Exam-hub signup intent — add and activate**, never silently replace other exam goals. For a
+   learner who currently has subject focus (not an exam goal), the existing exclusivity contract
+   still requires clear disclosure before the intent flow overwrites it. Signing up via an Exam Hub
+   must NOT auto-adopt any Review Set — goal-setting and content-adoption stay separate actions.
+5. **Picker — a real goal-management surface** in Profile's Study Focus (add/remove/set-active),
+   not a single-select-to-multi-select conversion with no active-goal concept. Removing a goal must
+   never delete adopted content or assessment history — it only changes which goal drives nudges.
+
+**Release boundary:** multi-goal stays out of `v0.169.0` entirely. It remains additionally gated on
+the `[CHECKPOINT — due 2026-12-07]` population read (still 2 users as of 2026-10-09) and
+prioritization against the product-health release plan — neither is resolved by this direction
+record.
 
 ### Deferred out of this release (sequencing, not scope changes)
 
