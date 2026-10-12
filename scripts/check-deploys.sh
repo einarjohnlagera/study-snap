@@ -14,6 +14,37 @@
 # frontend, and v0.135.0 called an endpoint form v0.136.0 had made a 400. The
 # shipped feature was dead on arrival and nothing noticed for six hours.
 #
+# ⚠️ KNOWN FALSE-POSITIVE MODE, FOUND 2026-10-12 (v0.169.0's merge, 75944e3b).
+# This script reads the Vercel half through GitHub's Deployments API
+# (`gh api repos/.../deployments?environment=Production`) specifically because
+# that needs no secret. That merge commit NEVER APPEARED in that API — not
+# "pending", genuinely absent, confirmed by also checking the commit status API
+# (empty) — 14+ minutes after merge, well past the normal latency window this
+# file's other notes establish. The script reported DRIFT. **Vercel's own
+# dashboard showed the opposite: a real Production deployment for 75944e3b,
+# status Ready, in 5m48s — right on schedule.** The owner caught this with a
+# screenshot of the dashboard; nothing on the GitHub-API side ever surfaced it,
+# even on a repeat query several minutes later.
+#
+# Working theory, not confirmed: the PR branch tip (`aee0229`) got its own
+# "Preview" deployment recorded ~2 minutes before the live site reflected the
+# new content, and the merge commit's tree was byte-identical to it (a trivial,
+# non-conflicting merge) — Vercel may have promoted that already-built artifact
+# directly to Production rather than re-running a fresh build keyed to the new
+# merge SHA, so no GitHub Deployment object ever gets created for the merge
+# commit specifically, even though the right content is correctly live.
+#
+# ⚠️ WHAT THIS MEANS FOR READING THIS SCRIPT'S OUTPUT: a Vercel "DRIFT" verdict
+# is not self-verifying the way the Render half is (Render's API is queried
+# directly, by commit SHA, and has not shown this failure mode). Before acting
+# on a Vercel DRIFT report — redeploying, treating it as a repeat of the
+# v0.136.0 incident, telling the owner something is broken — cross-check
+# against the actual Vercel dashboard (or `curl` the live site for content only
+# the new commit could serve) rather than trusting the GitHub API read alone.
+# This cuts the other way too: a Vercel "matches main" result from this script
+# is still trustworthy — the gap is specifically GitHub's API under-reporting
+# real deployments, not over-reporting fake ones.
+#
 # ⚠️ THE KEY DESIGN POINT: Render's service carries notifyOnFail, and a
 # notify-on-FAILURE cannot detect a deploy that never STARTED. Nothing failed
 # here; nothing was ever queued. So this script tests for ABSENCE, not failure.
