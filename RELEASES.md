@@ -2,7 +2,7 @@
 
 ## v0.169.0 - Study Journey, Continued
 
-**Status: In Progress**
+**Status: Released** (signed off 2026-10-12; commit `3200c773` on `releases/v0.169.0`)
 
 Theme: continue the Study Journey Purpose / Learner Goal architecture by shipping the one piece
 that's actually ready — after an `advisor()` pass caught that the original 3-item plan had
