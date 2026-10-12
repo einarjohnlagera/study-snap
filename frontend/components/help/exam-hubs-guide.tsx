@@ -1,20 +1,13 @@
 import Link from "next/link";
-import { ArrowRight, Compass, GraduationCap, Heart, PenTool, Target } from "lucide-react";
-import type { LucideIcon } from "lucide-react";
+import { ArrowRight, Compass, Target } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
+import { EXAM_HUB_ICONS, EXAM_HUB_SLUGS, EXAM_HUBS } from "@/lib/exam-hub-config";
 
-type Hub = {
-  icon: LucideIcon;
-  shortName: string;
-  fullName: string;
-  href: string;
-};
-
-const HUBS: Hub[] = [
-  { icon: PenTool, shortName: "ALE", fullName: "Architect Licensure Examination", href: "/exam/ale" },
-  { icon: Heart, shortName: "PNLE", fullName: "Philippine Nurse Licensure Examination", href: "/exam/pnle" },
-  { icon: GraduationCap, shortName: "LET", fullName: "Licensure Examination for Teachers", href: "/exam/let" },
-];
+const HUBS = EXAM_HUB_SLUGS.map((slug) => ({
+  ...EXAM_HUBS[slug],
+  icon: EXAM_HUB_ICONS[slug],
+  href: `/exam/${slug}`,
+}));
 
 export function ExamHubsGuide() {
   return (

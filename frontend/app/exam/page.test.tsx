@@ -14,6 +14,7 @@ describe("ExamHubIndexPage", () => {
     expect(screen.getByRole("link", { name: /Philippine Nurse Licensure Examination \(PNLE\)/ })).toHaveAttribute("href", "/exam/pnle");
     expect(screen.getByRole("link", { name: /Licensure Examination for Teachers \(LET\)/ })).toHaveAttribute("href", "/exam/let");
     expect(screen.getByRole("link", { name: /Certified Public Accountant Licensure Examination \(CPALE\)/ })).toHaveAttribute("href", "/exam/cpale");
+    expect(screen.getByRole("link", { name: /Civil Engineering Licensure Examination \(CELE\)/ })).toHaveAttribute("href", "/exam/ce");
   });
 
   it("renders no back link, because /exam is a top-level destination", () => {
@@ -27,8 +28,8 @@ describe("ExamHubIndexPage", () => {
 
   it("exports SEO metadata for the index page", () => {
     expect(metadata).toMatchObject({
-      title: "NoteLib Exam Hubs – ALE, PNLE, LET, and CPALE Review Notes",
-      description: "Browse NoteLib exam hubs for ALE, PNLE, LET, and CPALE public notes, summaries, and practice quizzes.",
+      title: "NoteLib Exam Hubs – ALE, PNLE, LET, CPALE, and CELE Review Notes",
+      description: "Browse NoteLib exam hubs for ALE, PNLE, LET, CPALE, and CELE public notes, summaries, and practice quizzes.",
       alternates: {
         canonical: "https://notelib.app/exam",
       },

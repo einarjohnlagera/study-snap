@@ -3,7 +3,13 @@
 > **This is the core brief. Paste it as your first message in a new GPT chat session.**
 > Then paste any module below that matches the conversation — see "Which modules to paste".
 > Update this file whenever a new version ships or the roadmap shifts significantly.
-> Last updated: v0.168.0 - 2026-10-09 (Released). **`v0.168.0` was a backend bug fix only — a Study
+> Last updated: v0.169.0 - 2026-10-12 (Released). **`v0.169.0` added Civil Engineering (CELE) as a
+> 5th Exam Hub** (`/exam/ce`, alongside ALE/PNLE/LET/CPALE) — an owner override of a prior
+> Product-UX "wait for adoption evidence" call, now carrying its own `[CHECKPOINT — due deploy + 30
+> days]` on whether that override paid off. Two other Study Journey candidates (multi-goal exam
+> support, Public Note → Study Journey discovery) were considered and deliberately held back — see
+> `SURFACES_AND_FEATURES_CONTEXT.md`'s Study Focus note for multi-goal's current (still single-goal)
+> state. Previously v0.168.0 - 2026-10-09 (Released). **`v0.168.0` was a backend bug fix only — a Study
 > Pack generation quota defect that incorrectly counted note copies/remixes against real users'
 > monthly limit — with no product-facing behavior or pricing change.** Nothing in this brief or its
 > modules described the fixed mechanism, so nothing here needed correcting; this line exists only to

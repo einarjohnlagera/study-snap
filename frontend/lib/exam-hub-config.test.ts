@@ -1,4 +1,4 @@
-import { getExamSlugForCourseProgram } from "./exam-hub-config";
+import { EXAM_HUBS, getExamHubConfig, getExamSlugForCourseProgram } from "./exam-hub-config";
 
 describe("exam hub config", () => {
   it.each([
@@ -11,8 +11,17 @@ describe("exam hub config", () => {
     expect(getExamSlugForCourseProgram(courseProgram)).toBe(expectedSlug);
   });
 
+  it("recognizes Civil Engineering as the CELE hub", () => {
+    expect(getExamHubConfig("ce")).toEqual(EXAM_HUBS.ce);
+    expect(EXAM_HUBS.ce).toMatchObject({
+      shortName: "CELE",
+      fullName: "Civil Engineering Licensure Examination (CELE)",
+      coursePrograms: ["Civil Engineering"],
+    });
+    expect(getExamSlugForCourseProgram(" Civil Engineering ")).toBe("ce");
+  });
+
   it("returns null for unknown course programs", () => {
-    expect(getExamSlugForCourseProgram("Civil Engineering")).toBeNull();
     expect(getExamSlugForCourseProgram("Medical – Surgical Nursing")).toBeNull();
     expect(getExamSlugForCourseProgram(null)).toBeNull();
   });

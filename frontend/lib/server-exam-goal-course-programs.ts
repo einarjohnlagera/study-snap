@@ -15,6 +15,7 @@ function fallbackCoursePrograms(): ExamGoalCoursePrograms {
     pnle: EXAM_HUBS.pnle.coursePrograms,
     let: EXAM_HUBS.let.coursePrograms,
     cpale: EXAM_HUBS.cpale.coursePrograms,
+    ce: EXAM_HUBS.ce.coursePrograms,
   };
 }
 
@@ -37,6 +38,7 @@ function parseCoursePrograms(payload: unknown): ExamGoalCoursePrograms {
     pnle: resolvePrograms("pnle"),
     let: resolvePrograms("let"),
     cpale: resolvePrograms("cpale"),
+    ce: resolvePrograms("ce"),
   };
 }
 

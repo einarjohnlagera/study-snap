@@ -5286,3 +5286,28 @@ the H4 rejection-rate baseline read, and the verification tier are in `RELEASES.
 - `v0.123.0 — Collection Builder Integrity` (Released) — fixed the unbounded write→refresh loop on section labels; ingress unresolved, mechanics proven from code.
 
 ---
+**Kicked off 2026-09-28, signed off 2026-09-30.** `v0.163.0 — No Peeking` is **Released** on
+`releases/v0.163.0`, cut from
+`main` after `v0.162.0` merged as #1459 and tagged; deploy verified on both platforms before kickoff —
+Render live `c3e4deaa` at 14:21:57Z, Vercel matched at 14:25:36Z (`vercel[bot]`-triggered, plain latency,
+not a repeat of the `v0.136.0` miss). **Owner-picked scope, 2026-09-27, from a Backlog Index survey: five
+items picked, one dropped at kickoff (2026-09-28), leaving four** — quiz answer-key redaction across 6
+practice-session surfaces (confirmed 2026-09-28, after `advisor()` AND a cold Opus falsification pass on the
+design plan itself, to be far larger than first scoped — full detail in `RELEASES.md` and
+`docs/claude-plans/2026-09-28-quiz-answer-key-redaction-plan.md`, not restated here: Interview Practice is a
+separate backend with a live exploit, added to scope; Quick Review's leak runs through the unredacted
+`NoteResponse` endpoint and needs a genuinely new quiz-less fetch, not a response tweak; Board Exam traced to
+`ChallengeQuizService` not `LongExamService`; Note/Study Pack/public-note pages and DOCX export stay
+unredacted by owner decision); two Challenge Quiz bank race conditions found
+by `v0.162.0`'s own falsification pass (`releaseClaims`'s unbounded lock wait, and
+`generateMoreQuestions` racing bank-invalidation); and a lower-severity Challenge Quiz
+session-complete-vs-bank-delete throw bundled with the same two since all three share
+`ChallengeQuizService`/bank code. **⚠️ The Study Plan Builder drag-persist race, the owner's 5th pick, was
+DROPPED at kickoff:** its Backlog Index row had never carried a `Last reviewed` date, and reading the
+current code (not just grepping for the old, lost Codex prompt) showed the deferred "Save order" model it
+called for already shipped in `v0.96.0` (`185e0cc7`) — row corrected to SHIPPED. **At four items, top of
+the 3-4-item sweet spot — two escalation triggers still fire regardless of count:** shared-method overlap
+(the three Challenge Quiz items) and a privacy-boundary move (the quiz leak). One scoped cold agent (Opus,
+falsification framing) is planned before signoff. Full scope in `RELEASES.md`.
+
+---

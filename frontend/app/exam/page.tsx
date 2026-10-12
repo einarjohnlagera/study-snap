@@ -1,24 +1,15 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowRight, Calculator, GraduationCap, Heart, PenTool } from "lucide-react";
-import type { LucideIcon } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { PublicFooter } from "@/components/public/public-footer";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
-import { EXAM_HUB_SLUGS, EXAM_HUBS } from "@/lib/exam-hub-config";
-import type { ExamHubSlug } from "@/lib/exam-hub-config";
+import { EXAM_HUB_ICONS, EXAM_HUB_SLUGS, EXAM_HUBS } from "@/lib/exam-hub-config";
 import { buildPageMetadata } from "@/lib/site-metadata";
 
-const EXAM_HUB_ICONS: Record<ExamHubSlug, LucideIcon> = {
-  ale: PenTool,
-  pnle: Heart,
-  let: GraduationCap,
-  cpale: Calculator,
-};
-
-const examIndexDescription = "Browse NoteLib exam hubs for ALE, PNLE, LET, and CPALE public notes, summaries, and practice quizzes.";
+const examIndexDescription = "Browse NoteLib exam hubs for ALE, PNLE, LET, CPALE, and CELE public notes, summaries, and practice quizzes.";
 
 export const metadata: Metadata = buildPageMetadata({
-  title: "NoteLib Exam Hubs – ALE, PNLE, LET, and CPALE Review Notes",
+  title: "NoteLib Exam Hubs – ALE, PNLE, LET, CPALE, and CELE Review Notes",
   description: examIndexDescription,
   path: "/exam",
 });
