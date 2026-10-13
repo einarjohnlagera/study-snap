@@ -129,7 +129,7 @@ A new dated section in ADR-001, recorded as an owner decision under the ADR's ow
 1. `docs/gpt-contexts/REVIEW_SET_SHAPING_CONTEXT.md` — add `Computing` as the 13th ratified value in the strategist's fixed list, and add the two-test rule (§2 above) as the operative per-Note instruction, replacing the current blanket "do not propose a new value" language for this one case now that it's ratified.
 2. `docs/curriculum/review-set-workbook-spec.md:118-119` — correct the stale claim that the server rejects a *save* with 2+ Applicable Programs and no Domain Context (it doesn't; the check is generation-time only — see the backing document §1). Independent of this ratification; can ship immediately as a docs-only fix.
 3. `docs/curriculum/bscs-year1-preliminary-shaping.NOT-IMPLEMENTATION-READY.tsv` — once ratified, the strategist replaces `PENDING_PRODUCT_UX_DECISION` with `COMPUTING` on the 133 confirmed rows (§4), leaves the 3 ambiguous rows pending (§6), and separately extends `applicable_programs` on the 33 Discrete Structures I rows (§5) — three distinct edits, not one bulk find-replace. **Not this package's action; the strategist's, once ratified.**
-4. `docs/curriculum/bscs-year1-decision-log.md` — D-13 and D-34 close, citing this package. D-33 (Precalculus + the "technical mathematics for non-engineering programs" sub-question) stays open — see §10.
+4. `docs/claude-plans/bscs-year1/bscs-year1-decision-log.md` — D-13 and D-34 close, citing this package. D-33 (Precalculus + the "technical mathematics for non-engineering programs" sub-question) stays open — see §10.
 
 ---
 

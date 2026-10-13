@@ -46,12 +46,12 @@ Per batch, enter exactly these values. **Overwrite the Section field**: the form
 | Make public | **Off** (private until publication; notes must be public before the collection can publish) |
 | Topics | one title per line, copied exactly from the block |
 
-### Batch 1: Introduction to Computing / The Computing Disciplines and Profession
+### Batch 1: 💻 Introduction to Computing / The Computing Disciplines and Profession
 
 - **Subject:** Computer Science
 - **Domain Context:** Computing
 - **Applicable Programs:** Computer Science, Information Technology, Information Systems
-- **Collection (Subject Plan):** Introduction to Computing
+- **Collection (Subject Plan):** 💻 Introduction to Computing
 - **Section:** The Computing Disciplines and Profession
 - **Notes:** 4 (4 BULK)
 
@@ -64,12 +64,12 @@ Professional Societies and Standards in Computing
 Analyzing Organizational Computing Solutions
 ```
 
-### Batch 2: Introduction to Computing / History and Evolution of Computing
+### Batch 2: 💻 Introduction to Computing / History and Evolution of Computing
 
 - **Subject:** Computer Science
 - **Domain Context:** Computing
 - **Applicable Programs:** Computer Science, Information Technology, Information Systems
-- **Collection (Subject Plan):** Introduction to Computing
+- **Collection (Subject Plan):** 💻 Introduction to Computing
 - **Section:** History and Evolution of Computing
 - **Notes:** 4 (4 BULK)
 
@@ -82,12 +82,12 @@ Foundations of Modern Computing: Turing and von Neumann
 Evolution of Personal and Mobile Computing
 ```
 
-### Batch 3: Introduction to Computing / Information Representation
+### Batch 3: 💻 Introduction to Computing / Information Representation
 
 - **Subject:** Computer Science
 - **Domain Context:** Computing
 - **Applicable Programs:** Computer Science, Information Technology, Information Systems
-- **Collection (Subject Plan):** Introduction to Computing
+- **Collection (Subject Plan):** 💻 Introduction to Computing
 - **Section:** Information Representation
 - **Notes:** 6 (6 BULK)
 
@@ -102,12 +102,12 @@ Character Encoding: ASCII and Unicode
 Representing Images, Audio and Video
 ```
 
-### Batch 4: Introduction to Computing / Computer Systems: Organization and Architecture
+### Batch 4: 💻 Introduction to Computing / Computer Systems: Organization and Architecture
 
 - **Subject:** Computer Science
 - **Domain Context:** Computing
 - **Applicable Programs:** Computer Science, Information Technology, Information Systems
-- **Collection (Subject Plan):** Introduction to Computing
+- **Collection (Subject Plan):** 💻 Introduction to Computing
 - **Section:** Computer Systems: Organization and Architecture
 - **Notes:** 7 (7 BULK)
 
@@ -123,12 +123,12 @@ Functions of an Operating System
 Programming Languages and Language Levels
 ```
 
-### Batch 5: Introduction to Computing / Networks, the Internet and the Web
+### Batch 5: 💻 Introduction to Computing / Networks, the Internet and the Web
 
 - **Subject:** Computer Networking
 - **Domain Context:** Computing
 - **Applicable Programs:** Computer Science, Information Technology, Information Systems
-- **Collection (Subject Plan):** Introduction to Computing
+- **Collection (Subject Plan):** 💻 Introduction to Computing
 - **Section:** Networks, the Internet and the Web
 - **Notes:** 3 (3 BULK)
 
@@ -140,12 +140,12 @@ IP Addresses and the Domain Name System
 Internet Protocols: TCP/IP and HTTP Basics
 ```
 
-### Batch 6: Introduction to Computing / Networks, the Internet and the Web
+### Batch 6: 💻 Introduction to Computing / Networks, the Internet and the Web
 
 - **Subject:** Web Development
 - **Domain Context:** Computing
 - **Applicable Programs:** Computer Science, Information Technology, Information Systems
-- **Collection (Subject Plan):** Introduction to Computing
+- **Collection (Subject Plan):** 💻 Introduction to Computing
 - **Section:** Networks, the Internet and the Web
 - **Notes:** 4 (4 BULK)
 
@@ -158,12 +158,12 @@ HTML Links, Images, Lists, Tables and Forms
 CSS Fundamentals: Selectors, Properties and the Box Model
 ```
 
-### Batch 7: Introduction to Computing / Computer Security and Malware
+### Batch 7: 💻 Introduction to Computing / Computer Security and Malware
 
 - **Subject:** Information Assurance and Security
 - **Domain Context:** Computing
 - **Applicable Programs:** Computer Science, Information Technology, Information Systems
-- **Collection (Subject Plan):** Introduction to Computing
+- **Collection (Subject Plan):** 💻 Introduction to Computing
 - **Section:** Computer Security and Malware
 - **Notes:** 5 (5 BULK)
 
@@ -177,12 +177,12 @@ Network Security Essentials: Firewalls and VPNs
 Privacy, Data Protection and Safe Computing Practices
 ```
 
-### Batch 8: Introduction to Computing / Ethics, Society and Emerging Trends
+### Batch 8: 💻 Introduction to Computing / Ethics, Society and Emerging Trends
 
 - **Subject:** Computer Science
 - **Domain Context:** Computing
 - **Applicable Programs:** Computer Science, Information Technology, Information Systems
-- **Collection (Subject Plan):** Introduction to Computing
+- **Collection (Subject Plan):** 💻 Introduction to Computing
 - **Section:** Ethics, Society and Emerging Trends
 - **Notes:** 4 (4 BULK)
 
@@ -195,12 +195,12 @@ Artificial Intelligence and Human Judgment
 Cloud Computing, the Internet of Things and Big Data
 ```
 
-### Batch 9: Computer Programming 1 / Problem Solving and Algorithms
+### Batch 9: ⌨️ Computer Programming 1 / Problem Solving and Algorithms
 
 - **Subject:** Programming Fundamentals
 - **Domain Context:** Computing
 - **Applicable Programs:** Computer Science, Information Technology, Information Systems
-- **Collection (Subject Plan):** Computer Programming 1
+- **Collection (Subject Plan):** ⌨️ Computer Programming 1
 - **Section:** Problem Solving and Algorithms
 - **Notes:** 3 (3 BULK-N)
 
@@ -212,12 +212,12 @@ Problem-Solving Steps in Programming
 Pseudocode and Flowcharts
 ```
 
-### Batch 10: Computer Programming 1 / Program Structure, Variables and Data Types
+### Batch 10: ⌨️ Computer Programming 1 / Program Structure, Variables and Data Types
 
 - **Subject:** Programming Fundamentals
 - **Domain Context:** Computing
 - **Applicable Programs:** Computer Science, Information Technology, Information Systems
-- **Collection (Subject Plan):** Computer Programming 1
+- **Collection (Subject Plan):** ⌨️ Computer Programming 1
 - **Section:** Program Structure, Variables and Data Types
 - **Notes:** 6 (2 BULK-N, 4 BULK-S)
 
@@ -232,12 +232,12 @@ Fundamental Data Types in C++
 Type Conversion and Casting in C++
 ```
 
-### Batch 11: Computer Programming 1 / Expressions and Operators
+### Batch 11: ⌨️ Computer Programming 1 / Expressions and Operators
 
 - **Subject:** Programming Fundamentals
 - **Domain Context:** Computing
 - **Applicable Programs:** Computer Science, Information Technology, Information Systems
-- **Collection (Subject Plan):** Computer Programming 1
+- **Collection (Subject Plan):** ⌨️ Computer Programming 1
 - **Section:** Expressions and Operators
 - **Notes:** 4 (4 BULK-S)
 
@@ -250,12 +250,12 @@ Relational and Logical Operators in C++
 Integer Division, Modulo and Numeric Limits in C++
 ```
 
-### Batch 12: Computer Programming 1 / Input and Output
+### Batch 12: ⌨️ Computer Programming 1 / Input and Output
 
 - **Subject:** Programming Fundamentals
 - **Domain Context:** Computing
 - **Applicable Programs:** Computer Science, Information Technology, Information Systems
-- **Collection (Subject Plan):** Computer Programming 1
+- **Collection (Subject Plan):** ⌨️ Computer Programming 1
 - **Section:** Input and Output
 - **Notes:** 2 (2 BULK-S)
 
@@ -266,12 +266,12 @@ Console Input and Output in C++
 Formatted Output in C++
 ```
 
-### Batch 13: Computer Programming 1 / Selection
+### Batch 13: ⌨️ Computer Programming 1 / Selection
 
 - **Subject:** Programming Fundamentals
 - **Domain Context:** Computing
 - **Applicable Programs:** Computer Science, Information Technology, Information Systems
-- **Collection (Subject Plan):** Computer Programming 1
+- **Collection (Subject Plan):** ⌨️ Computer Programming 1
 - **Section:** Selection
 - **Notes:** 3 (1 BULK-N, 2 BULK-S)
 
@@ -283,12 +283,12 @@ Nested Selection and Switch Statements in C++
 Boolean Conditions and Short-Circuit Evaluation
 ```
 
-### Batch 14: Computer Programming 1 / Iteration
+### Batch 14: ⌨️ Computer Programming 1 / Iteration
 
 - **Subject:** Programming Fundamentals
 - **Domain Context:** Computing
 - **Applicable Programs:** Computer Science, Information Technology, Information Systems
-- **Collection (Subject Plan):** Computer Programming 1
+- **Collection (Subject Plan):** ⌨️ Computer Programming 1
 - **Section:** Iteration
 - **Notes:** 4 (2 BULK-N, 2 BULK-S)
 
@@ -301,12 +301,12 @@ Nested Loops
 Loop Control and Common Loop Patterns
 ```
 
-### Batch 15: Computer Programming 1 / Input Validation
+### Batch 15: ⌨️ Computer Programming 1 / Input Validation
 
 - **Subject:** Programming Fundamentals
 - **Domain Context:** Computing
 - **Applicable Programs:** Computer Science, Information Technology, Information Systems
-- **Collection (Subject Plan):** Computer Programming 1
+- **Collection (Subject Plan):** ⌨️ Computer Programming 1
 - **Section:** Input Validation
 - **Notes:** 2 (1 BULK-N, 1 BULK-S)
 
@@ -317,12 +317,12 @@ Input Validation: Checking Before Trusting Data
 Handling Invalid Console Input in C++
 ```
 
-### Batch 16: Computer Programming 1 / Functions and Procedural Abstraction
+### Batch 16: ⌨️ Computer Programming 1 / Functions and Procedural Abstraction
 
 - **Subject:** Programming Fundamentals
 - **Domain Context:** Computing
 - **Applicable Programs:** Computer Science, Information Technology, Information Systems
-- **Collection (Subject Plan):** Computer Programming 1
+- **Collection (Subject Plan):** ⌨️ Computer Programming 1
 - **Section:** Functions and Procedural Abstraction
 - **Notes:** 6 (3 BULK-N, 3 BULK-S)
 
@@ -337,12 +337,12 @@ Scope and Lifetime of Variables in C++
 Modular Program Design
 ```
 
-### Batch 17: Computer Programming 1 / Recursion
+### Batch 17: ⌨️ Computer Programming 1 / Recursion
 
 - **Subject:** Programming Fundamentals
 - **Domain Context:** Computing
 - **Applicable Programs:** Computer Science, Information Technology, Information Systems
-- **Collection (Subject Plan):** Computer Programming 1
+- **Collection (Subject Plan):** ⌨️ Computer Programming 1
 - **Section:** Recursion
 - **Notes:** 2 (2 BULK-N)
 
@@ -353,12 +353,12 @@ Recursion: Base Case and Recursive Case
 Tracing Recursive Calls
 ```
 
-### Batch 18: Computer Programming 1 / Testing, Debugging and Code Quality
+### Batch 18: ⌨️ Computer Programming 1 / Testing, Debugging and Code Quality
 
 - **Subject:** Programming Fundamentals
 - **Domain Context:** Computing
 - **Applicable Programs:** Computer Science, Information Technology, Information Systems
-- **Collection (Subject Plan):** Computer Programming 1
+- **Collection (Subject Plan):** ⌨️ Computer Programming 1
 - **Section:** Testing, Debugging and Code Quality
 - **Notes:** 6 (5 BULK-N, 1 BULK-S)
 
@@ -405,7 +405,7 @@ Domain Context Computing, Authored Depth College. Paste the **plain-text** versi
 
 **Teaching order per section.** Bulk Generate adds notes in the order you typed them, but existing, reused and manually created notes arrive separately, so check each section matches this order and drag in the Builder where it does not. A section whose non-bulk notes are all at the start or all at the end needs no fix if you add them first or last respectively. Marks: B = bulk, X = existing, R = reuse, A = authored.
 
-### Introduction to Computing
+### 💻 Introduction to Computing
 
 1. **The Computing Disciplines and Profession** `XBBBB`
    - The Computing Disciplines: Computer Science, Information Technology, Information Systems, Software Engineering and Computer Engineering
@@ -454,7 +454,7 @@ Domain Context Computing, Authored Depth College. Paste the **plain-text** versi
    - Emerging Technologies and Their Social Impacts
    - Cloud Computing, the Internet of Things and Big Data
 
-### Computer Programming 1
+### ⌨️ Computer Programming 1
 
 1. **Problem Solving and Algorithms** `BBXBX` **(order fix needed: a non-bulk note sits in the middle)**
    - What Programming Is and How Programs Run

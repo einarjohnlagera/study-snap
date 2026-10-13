@@ -11,6 +11,7 @@ CPALE, PNLE) that the curator builds and publishes.
 | `civil-engineering-comprehensive-review.tsv` / `-target-shape.xlsx` | the CE reshape target: 10 plans, 75 sections, 568 notes, all `Unmapped` pending Q7 reconciliation |
 | `<set>.tsv` | the source rows for one Review Set. **Edit this, then regenerate** — never hand-edit the workbook |
 | `<set>-target-shape.xlsx` | the generated deliverable the curator builds from |
+| `bscs-year1-shaping.tsv` / `bscs-year1-study-plan-target-shape.xlsx` | the BS Computer Science 1st-year reference journey (10 Subject Plans); the optional Precalculus plan is `bscs-precalculus-preparatory-*`. Planning material: `docs/claude-plans/bscs-year1/` |
 
 The strategist-facing half is a paste-ready GPT module at
 `docs/gpt-contexts/REVIEW_SET_SHAPING_CONTEXT.md`. It and the spec here are two halves of one

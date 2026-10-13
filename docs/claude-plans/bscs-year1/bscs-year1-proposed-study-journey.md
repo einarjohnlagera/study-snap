@@ -29,7 +29,7 @@ Semester placement is a **NoteLib reference arrangement**, not a claim of univer
 
 ## FIRST SEMESTER
 
-### 1. Introduction to Computing
+### 1. 💻 Introduction to Computing
 
 *An orientation to the computing disciplines and profession, the history and components of computer systems, how data is represented, how the Internet and the Web work, and the security, ethical and social issues of computing.*
 
@@ -114,7 +114,7 @@ Semester placement is a **NoteLib reference arrangement**, not a claim of univer
 - [REUSE] Emerging Technologies and Their Social Impacts · *Science and Technology* — Cross-plan reuse of a STRONG General Education note (Science, Technology and Society corpus).
 - [NEW] Cloud Computing, the Internet of Things and Big Data · *Computer Science*
 
-### 2. Computer Programming 1
+### 2. ⌨️ Computer Programming 1
 
 *Fundamentals of programming: designing, implementing, testing and debugging programs with primitive data types, computation, input and output, selection, iteration, functions and recursion, and reviewing code for style and clarity. Concepts are taught language-neutrally where the knowledge is portable; C++ is the reference language for executable examples.*
 
@@ -202,7 +202,7 @@ Semester placement is a **NoteLib reference arrangement**, not a claim of univer
 - [NEW] Documentation, Comments and Coding Style · *Programming Fundamentals* · class N
 - [NEW] Reviewing Another Programmer's Code · *Programming Fundamentals* · class N
 
-### 3. Mathematics in the Modern World
+### 3. 📐 Mathematics in the Modern World
 
 *The nature and language of mathematics and its use in data, geometric design, codes, optimisation, finance, social choice, graphs and mathematical systems; placement varies by university.*
 
@@ -276,7 +276,7 @@ Semester placement is a **NoteLib reference arrangement**, not a claim of univer
 - [EXCLUDED] Algebraic Expressions and Equations · *Mathematics* — Foundational algebra at introductory depth; Precalculus covers this knowledge at the intended depth.
 - [EXCLUDED] Geometry and Measurement · *Mathematics* — Introductory geometry/measurement; not the CHED "geometric designs" topic.
 
-### 4. The Contemporary World
+### 4. 🌏 The Contemporary World
 
 *Globalization and its economic, political, social and environmental dimensions, including global governance, inequality, migration, media and technology, climate change, and the place of the Philippines in the world; placement varies by university.*
 
@@ -313,7 +313,7 @@ Semester placement is a **NoteLib reference arrangement**, not a claim of univer
 - [REUSE] The Philippines in a Globalized World · *The Contemporary World*
 - [NEW] Regional Integration and ASEAN · *The Contemporary World* — Recommended gap (INFERENCE): Antique gives the course an ASEAN focus.
 
-### 5. Art Appreciation
+### 5. 🎨 Art Appreciation
 
 *The elements, forms and meanings of art, approaches to interpretation and criticism, major art movements, and Philippine art and cultural heritage; placement varies by university.*
 
@@ -350,7 +350,7 @@ Semester placement is a **NoteLib reference arrangement**, not a claim of univer
 
 ## SECOND SEMESTER
 
-### 6. Computer Programming 2
+### 6. 🧠 Computer Programming 2
 
 *Intermediate programming with arrays, strings, structures, pointers and references, linked lists, files and standard libraries, building on Computer Programming 1 with attention to static versus dynamic data structures and program quality. Memory, pointers and linked structures are taught as an instrument for understanding the computational model, with the safer standard-library alternatives shown alongside; C++ is the reference language.*
 
@@ -433,7 +433,7 @@ Semester placement is a **NoteLib reference arrangement**, not a claim of univer
 - [NEW] Code Review and Refactoring · *Programming Fundamentals* · class N
 - [NEW] Structured Problem Solving with Larger Programs · *Programming Fundamentals* · class N
 
-### 7. Discrete Structures I
+### 7. 🧮 Discrete Structures I
 
 *The mathematical foundations of computing: propositional and predicate logic with rules of inference, sets, relations and functions, integers and divisibility, and proof techniques including induction and program correctness. Assumes competence in algebra and trigonometry (the CHED prerequisite); learners who need preparation can adopt the separate optional plan 'Precalculus (Algebra and Trigonometry)'.*
 
@@ -507,7 +507,7 @@ Semester placement is a **NoteLib reference arrangement**, not a claim of univer
 - [NEW] Strong Induction · *Discrete Mathematics*
 - [NEW] Proving Program Correctness: Assertions and Loop Invariants · *Discrete Mathematics* — Serves CMO 25 DS1 LO3 ("prove program correctness").
 
-### 8. Understanding the Self
+### 8. 🪞 Understanding the Self
 
 *How the self is understood from philosophical, psychological, biological, social and cultural perspectives, its physical, material, digital and political dimensions, and how to manage and care for oneself; placement varies by university.*
 
@@ -543,7 +543,7 @@ Semester placement is a **NoteLib reference arrangement**, not a claim of univer
 
 - [EXCLUDED] Self-Understanding and the Development of the Professional Teacher · *Understanding the Self* — Teacher-framed treatment (10 teaching/classroom terms); belongs to the Education program family.
 
-### 9. Readings in Philippine History
+### 9. 📜 Readings in Philippine History
 
 *Philippine history read through primary sources and historical interpretation, from precolonial society through Spanish and American rule, the Revolution, the Japanese occupation and the postwar republic to Martial Law and contemporary legacies; placement varies by university.*
 
@@ -584,7 +584,7 @@ Semester placement is a **NoteLib reference arrangement**, not a claim of univer
 - [REUSE] Martial Law and Democratic Restoration · *Philippine History*
 - [REUSE] Contemporary Philippine Society and Historical Legacies · *Philippine History*
 
-### 10. Purposive Communication
+### 10. 💬 Purposive Communication
 
 *Effective, audience-aware communication in academic, professional, global and digital settings, with critical reading, academic and workplace writing, and oral presentation; placement varies by university.*
 

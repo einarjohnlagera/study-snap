@@ -20,11 +20,11 @@
 | **B** | Bulk Generate, then **curator edit** to add C++17 specifics (standard, `-std=c++17 -Wall -Wextra`, an executable example) | 29 | Reference-language notes whose scope the title carries well enough |
 | **C** | **Curator-authored body**, then generate the Study Pack | 11 | Scope-sensitive notes (13, less Building and Running a C++ Program and Pointers and References in C++, which exist as pilot Notes): the memory section, the build and testing notes, and anything at risk of an STL or build-system survey |
 
-Path C notes (13 in the corpus; 11 still to create, the two pilot Notes marked * already exist): Building Reusable Modules in C++; Building and Running a C++ Program*; Common Memory Errors in C++; Debugging C++ Programs with a Debugger; Dynamic Memory Allocation in C++; Exceptions in C++; Growable Arrays with std::vector in C++; Linked List Operations in C++; Memory Layout: Stack and Heap in C++; Pointers and References in C++*; Testing a C++ Program with assert and Test Drivers; Unit Testing in C++; Using Standard Libraries in C++. **Authored bodies already exist and compile for the five pilot Notes** (`r4-pilot/note-A` to `note-E`; two of them, C and D, are Path C) and those Notes are **already in production**, and **drafts of the other eleven Path C bodies are in `authored-bodies/`**; none of this is in production.
+Path C notes (13 in the corpus; 11 still to create, the two pilot Notes marked * already exist): Building Reusable Modules in C++; Building and Running a C++ Program*; Common Memory Errors in C++; Debugging C++ Programs with a Debugger; Dynamic Memory Allocation in C++; Exceptions in C++; Growable Arrays with std::vector in C++; Linked List Operations in C++; Memory Layout: Stack and Heap in C++; Pointers and References in C++*; Testing a C++ Program with assert and Test Drivers; Unit Testing in C++; Using Standard Libraries in C++. **Authored bodies already exist and compile for the five pilot Notes** (`claude-findings/r4-pilot/note-A` to `note-E`; two of them, C and D, are Path C) and those Notes are **already in production**, and **drafts of the other eleven Path C bodies are in `authored-bodies/`**; none of this is in production.
 
 **Why C is limited to 13.** Authoring all 42 reference-language notes would be heavy; the pilot showed the generator handles plain C++ facts correctly and fails on *scope*, so the notes where scope is the point are Path C and the rest are Path B.
 
-**Path C feasibility (checked in the code, 2026-10-06):** the manual Note request carries all the TSV metadata, there is no cap on the Note body, and Study Pack generation rejects (does not truncate) text over `max-notes-chars` (default 12,000; the production value was not read). All 16 authored bodies are at most 9,756 characters. **The model sees the body with all whitespace collapsed to single spaces**, which flattens code; the 2026-10-06 re-run on authored Notes B, C and D showed no visible harm in three samples (`r4-pilot/r4-pilot-report.md` section 13). The R4 pilot recommendation is **safe to scale with curator convention**. Details: `authored-bodies/README.md`.
+**Path C feasibility (checked in the code, 2026-10-06):** the manual Note request carries all the TSV metadata, there is no cap on the Note body, and Study Pack generation rejects (does not truncate) text over `max-notes-chars` (default 12,000; the production value was not read). All 16 authored bodies are at most 9,756 characters. **The model sees the body with all whitespace collapsed to single spaces**, which flattens code; the 2026-10-06 re-run on authored Notes B, C and D showed no visible harm in three samples (`claude-findings/r4-pilot/r4-pilot-report.md` section 13). The R4 pilot recommendation is **safe to scale with curator convention**. Details: `authored-bodies/README.md`.
 
 ## 3. Phases (follows D-12; each phase ends with an R4 sample check before the next)
 
@@ -57,13 +57,13 @@ There are two ways to batch, and they differ in when the collection must exist. 
 | S5 | Programming Fundamentals | COMPUTING | Computer Science, Information Technology, Information Systems | 64 | A-N:25, B:29, C:10 |
 | S6 | Mathematics | GENERAL_EDUCATION | Computer Science, Information Systems, Information Technology | 13 | A:13 |
 | S7 | Mathematics | GENERAL_EDUCATION | Computer Science, Early Childhood Education, Elementary Education, Information Systems, Information Technology, Physical Education, Secondary Education, Special Needs Education, Technical-Vocational Teacher Education | 3 | A:3 |
-| S8 | The Contemporary World | GENERAL_EDUCATION | Computer Science, Early Childhood Education, Elementary Education, Physical Education, Secondary Education, Special Needs Education, Technical-Vocational Teacher Education | 1 | A:1 |
+| S8 | 🌏 The Contemporary World | GENERAL_EDUCATION | Computer Science, Early Childhood Education, Elementary Education, Physical Education, Secondary Education, Special Needs Education, Technical-Vocational Teacher Education | 1 | A:1 |
 | S9 | Data Structures and Algorithms | COMPUTING | Computer Science, Information Technology, Information Systems | 6 | A-N:5, C:1 |
 | S10 | Discrete Mathematics | COMPUTING | Computer Science | 33 | A:33 |
-| S11 | Understanding the Self | GENERAL_EDUCATION | Computer Science | 1 | A:1 |
-| S12 | Understanding the Self | GENERAL_EDUCATION | Computer Science, Early Childhood Education, Elementary Education, Physical Education, Secondary Education, Special Needs Education, Technical-Vocational Teacher Education | 1 | A:1 |
-| S13 | Purposive Communication | GENERAL_EDUCATION | Computer Science | 2 | A:2 |
-| S14 | Purposive Communication | GENERAL_EDUCATION | Computer Science, Information Systems, Information Technology | 2 | A:2 |
+| S11 | 🪞 Understanding the Self | GENERAL_EDUCATION | Computer Science | 1 | A:1 |
+| S12 | 🪞 Understanding the Self | GENERAL_EDUCATION | Computer Science, Early Childhood Education, Elementary Education, Physical Education, Secondary Education, Special Needs Education, Technical-Vocational Teacher Education | 1 | A:1 |
+| S13 | 💬 Purposive Communication | GENERAL_EDUCATION | Computer Science | 2 | A:2 |
+| S14 | 💬 Purposive Communication | GENERAL_EDUCATION | Computer Science, Information Systems, Information Technology | 2 | A:2 |
 | S15 | Algebra | (unset) | Computer Science | 18 | A:18 |
 | S16 | Trigonometry | (unset) | Computer Science | 8 | A:8 |
 | S17 | Analytic Geometry | (unset) | Computer Science | 5 | A:5 |

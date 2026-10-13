@@ -4,7 +4,7 @@
 
 ## 0. Preconditions (do not start before these)
 
-- [ ] The R4 pilot is closed: the five pilot Notes' Applicable Programs are fixed, the content path is decided, and the read-back passes (`r4-pilot/r4-pilot-fix-plan.md`).
+- [ ] The R4 pilot is closed: the five pilot Notes' Applicable Programs are fixed, the content path is decided, and the read-back passes (`claude-findings/r4-pilot/r4-pilot-fix-plan.md`).
 - [ ] The Year description wording is confirmed (D-29, text in section 1).
 - [ ] You know which batching option you are using (`bscs-year1-authoring-batch-plan.md` section 4). **If Option 2, do sections 1 to 3 BEFORE generating notes**, because each batch needs the Subject Plan's id.
 - [ ] The old private "BS Computer Science" collection is left untouched (preserved, not deleted or migrated; D-01).
@@ -13,7 +13,7 @@
 
 | Field | Value |
 |---|---|
-| Title | `BS Computer Science — 1st Year` |
+| Title | `🖥️ BS Computer Science — 1st Year` |
 | Visibility | **Private** until section 7 |
 | Course / program | `Computer Science` (**owner to confirm**: this puts the Year in the BSCS recommendation slot; the Precalculus root is deliberately left unset so it cannot displace it, D-26) |
 | Term | none (a root cannot carry a term; setting one is refused) |
@@ -27,23 +27,23 @@ Create them in this order; each child receives the next sibling position automat
 
 | # | Subject Plan | Term label | Term order | Notes expected (Reuse / New / Excluded) |
 |---|---|---|---|---|
-| 1 | Introduction to Computing | First Semester | 1 | 2 / 37 / 0 (total placed 39) |
-| 2 | Computer Programming 1 | First Semester | 1 | 2 / 40 / 0 (total placed 42) |
-| 3 | Mathematics in the Modern World | First Semester | 1 | 5 / 16 / 4 (total placed 21) |
-| 4 | The Contemporary World | First Semester | 1 | 8 / 1 / 0 (total placed 9) |
-| 5 | Art Appreciation | First Semester | 1 | 7 / 0 / 0 (total placed 7) |
-| 6 | Computer Programming 2 | Second Semester | 2 | 1 / 30 / 0 (total placed 31) |
-| 7 | Discrete Structures I | Second Semester | 2 | 1 / 33 / 0 (total placed 34) |
-| 8 | Understanding the Self | Second Semester | 2 | 6 / 2 / 1 (total placed 8) |
-| 9 | Readings in Philippine History | Second Semester | 2 | 10 / 0 / 0 (total placed 10) |
-| 10 | Purposive Communication | Second Semester | 2 | 8 / 4 / 0 (total placed 12) |
+| 1 | 💻 Introduction to Computing | First Semester | 1 | 2 / 37 / 0 (total placed 39) |
+| 2 | ⌨️ Computer Programming 1 | First Semester | 1 | 2 / 40 / 0 (total placed 42) |
+| 3 | 📐 Mathematics in the Modern World | First Semester | 1 | 5 / 16 / 4 (total placed 21) |
+| 4 | 🌏 The Contemporary World | First Semester | 1 | 8 / 1 / 0 (total placed 9) |
+| 5 | 🎨 Art Appreciation | First Semester | 1 | 7 / 0 / 0 (total placed 7) |
+| 6 | 🧠 Computer Programming 2 | Second Semester | 2 | 1 / 30 / 0 (total placed 31) |
+| 7 | 🧮 Discrete Structures I | Second Semester | 2 | 1 / 33 / 0 (total placed 34) |
+| 8 | 🪞 Understanding the Self | Second Semester | 2 | 6 / 2 / 1 (total placed 8) |
+| 9 | 📜 Readings in Philippine History | Second Semester | 2 | 10 / 0 / 0 (total placed 10) |
+| 10 | 💬 Purposive Communication | Second Semester | 2 | 8 / 4 / 0 (total placed 12) |
 
 - [ ] All 10 Subject Plans created under the Year, in order, private.
 - [ ] Terms set on all 10 (First Semester = 1, Second Semester = 2).
 
 ## 3. Subject Plan descriptions (paste verbatim) and section order
 
-### 1. Introduction to Computing — First Semester
+### 1. 💻 Introduction to Computing — First Semester
 
 **Description:** An orientation to the computing disciplines and profession, the history and components of computer systems, how data is represented, how the Internet and the Web work, and the security, ethical and social issues of computing.
 
@@ -57,7 +57,7 @@ Create them in this order; each child receives the next sibling position automat
 | 6 | Computer Security and Malware | 0 | 5 | 0 |
 | 7 | Ethics, Society and Emerging Trends | 1 | 4 | 0 |
 
-### 2. Computer Programming 1 — First Semester
+### 2. ⌨️ Computer Programming 1 — First Semester
 
 **Description:** Fundamentals of programming: designing, implementing, testing and debugging programs with primitive data types, computation, input and output, selection, iteration, functions and recursion, and reviewing code for style and clarity. Concepts are taught language-neutrally where the knowledge is portable; C++ is the reference language for executable examples.
 
@@ -74,7 +74,7 @@ Create them in this order; each child receives the next sibling position automat
 | 9 | Recursion | 0 | 2 | 0 |
 | 10 | Testing, Debugging and Code Quality | 0 | 8 | 0 |
 
-### 3. Mathematics in the Modern World — First Semester
+### 3. 📐 Mathematics in the Modern World — First Semester
 
 **Description:** The nature and language of mathematics and its use in data, geometric design, codes, optimisation, finance, social choice, graphs and mathematical systems; placement varies by university.
 
@@ -91,7 +91,7 @@ Create them in this order; each child receives the next sibling position automat
 | 9 | Graphs and Mathematical Systems | 0 | 2 | 0 |
 | 10 | Held out of this journey (Excluded) | 0 | 0 | 4 |
 
-### 4. The Contemporary World — First Semester
+### 4. 🌏 The Contemporary World — First Semester
 
 **Description:** Globalization and its economic, political, social and environmental dimensions, including global governance, inequality, migration, media and technology, climate change, and the place of the Philippines in the world; placement varies by university.
 
@@ -102,7 +102,7 @@ Create them in this order; each child receives the next sibling position automat
 | 3 | Technology and Society | 1 | 0 | 0 |
 | 4 | The Philippines and the World | 1 | 1 | 0 |
 
-### 5. Art Appreciation — First Semester
+### 5. 🎨 Art Appreciation — First Semester
 
 **Description:** The elements, forms and meanings of art, approaches to interpretation and criticism, major art movements, and Philippine art and cultural heritage; placement varies by university.
 
@@ -113,7 +113,7 @@ Create them in this order; each child receives the next sibling position automat
 | 3 | Interpretation and Criticism | 1 | 0 | 0 |
 | 4 | History and Heritage | 2 | 0 | 0 |
 
-### 6. Computer Programming 2 — Second Semester
+### 6. 🧠 Computer Programming 2 — Second Semester
 
 **Description:** Intermediate programming with arrays, strings, structures, pointers and references, linked lists, files and standard libraries, building on Computer Programming 1 with attention to static versus dynamic data structures and program quality. Memory, pointers and linked structures are taught as an instrument for understanding the computational model, with the safer standard-library alternatives shown alongside; C++ is the reference language.
 
@@ -131,7 +131,7 @@ Create them in this order; each child receives the next sibling position automat
 | 10 | Standard Libraries and Modules | 0 | 2 | 0 |
 | 11 | Program Quality | 0 | 3 | 0 |
 
-### 7. Discrete Structures I — Second Semester
+### 7. 🧮 Discrete Structures I — Second Semester
 
 **Description:** The mathematical foundations of computing: propositional and predicate logic with rules of inference, sets, relations and functions, integers and divisibility, and proof techniques including induction and program correctness. Assumes competence in algebra and trigonometry (the CHED prerequisite); learners who need preparation can adopt the separate optional plan 'Precalculus (Algebra and Trigonometry)'.
 
@@ -146,7 +146,7 @@ Create them in this order; each child receives the next sibling position automat
 | 7 | Integers and Divisibility | 0 | 2 | 0 |
 | 8 | Proof Techniques | 0 | 8 | 0 |
 
-### 8. Understanding the Self — Second Semester
+### 8. 🪞 Understanding the Self — Second Semester
 
 **Description:** How the self is understood from philosophical, psychological, biological, social and cultural perspectives, its physical, material, digital and political dimensions, and how to manage and care for oneself; placement varies by university.
 
@@ -157,7 +157,7 @@ Create them in this order; each child receives the next sibling position automat
 | 3 | Managing and Caring for the Self | 2 | 1 | 0 |
 | 4 | Held out of this journey (Excluded) | 0 | 0 | 1 |
 
-### 9. Readings in Philippine History — Second Semester
+### 9. 📜 Readings in Philippine History — Second Semester
 
 **Description:** Philippine history read through primary sources and historical interpretation, from precolonial society through Spanish and American rule, the Revolution, the Japanese occupation and the postwar republic to Martial Law and contemporary legacies; placement varies by university.
 
@@ -169,7 +169,7 @@ Create them in this order; each child receives the next sibling position automat
 | 4 | American, Japanese and Postwar Periods | 3 | 0 | 0 |
 | 5 | Contemporary Philippines | 2 | 0 | 0 |
 
-### 10. Purposive Communication — Second Semester
+### 10. 💬 Purposive Communication — Second Semester
 
 **Description:** Effective, audience-aware communication in academic, professional, global and digital settings, with critical reading, academic and workplace writing, and oral presentation; placement varies by university.
 
@@ -194,7 +194,7 @@ Create them in this order; each child receives the next sibling position automat
 
 | Field | Value |
 |---|---|
-| Title | `Precalculus (Algebra and Trigonometry)` |
+| Title | `📈 Precalculus (Algebra and Trigonometry)` |
 | Shape | a **standalone root that holds its notes directly** (no child plans, no Year around it) |
 | Course / program | **leave unset** (D-26; otherwise it could displace the Year in the recommendation slot) |
 | Term | none |
