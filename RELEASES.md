@@ -37,7 +37,26 @@ own PublicProfileController/NoteCollectionController tracing.
 
 ### Shipped
 
-_(nothing yet)_
+- **Public Note → Official Review Set link** (PR #1490, commit `dadac05a`). Backend: new
+  `NoteCollectionItemRepository.findOfficialReviewSetRootForNote` native query (admin-owned,
+  top-level, true-source root; a PUBLIC root collection is never filtered on `published_at`, a child
+  collection and its item both require one — matching `listPublic`/`getPublic` exactly), wired into
+  `NoteService.mapToPublicDetail`; `PublicNoteDetailResponse` gains `officialReviewSetId`/
+  `officialReviewSetTitle`; 3 new `AnalyticsEventType` values. Frontend: `PublicNoteOfficialSetLink`
+  callout on the public note detail page linking to `/collections/published?highlight={id}`;
+  `PublicStudyPlanCard` widened with a `discoverySource: "public_note"` branch and a
+  `defaultPreviewOpen` prop; `PublishedPlansPageClient`'s "Browse All" grid reads `?highlight=` to
+  scroll to and auto-expand the matching card; `discovery-intent.ts`'s signed-out return-path
+  allowlist widened (`isDiscoveryReturnPath`, renamed from `isExplorePath`) to accept
+  `/collections/published` paths, with an adversarial test (`/collections/published-evil`).
+  Audited before commit: fixed a misplaced code comment and generic "Collection" copy corrected to
+  "Review Set" (`getCollectionLabels(null)` default was wrong here — this is a fixed product concept,
+  not a viewer-varying one). **Known limitation, non-blocking:** the "Recommended" grid on
+  `/collections/published` (course/program-filtered, authenticated-only) doesn't receive the
+  highlight/`defaultPreviewOpen` wiring that the "Browse All" grid does — acceptance criteria are
+  still met since Browse All is always the unfiltered superset and always renders the target plan.
+  Backend: 2,659 tests/0 failures (incl. the Testcontainers native-query Postgres harness, 46 queries
+  now PREPAREd). Frontend: 230/230 suites, 2,634/2,635 tests (1 pre-existing unrelated skip).
 
 ## v0.169.0 - Study Journey, Continued
 
