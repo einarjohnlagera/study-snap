@@ -1,39 +1,116 @@
 # RELEASES.md - NoteLib
 
-## v0.170.0 - Public Note → Official Review Set Discovery
+## v0.170.0 - Study Journey, Closed
 
 **Status: In Progress**
 
-Theme: close the last Study Journey item — give a signed-out visitor reading a public Note a path into
-the Official Review Set it belongs to, reusing the existing `/collections/published` discovery surface
-rather than building a new one.
+Theme: close out the Study Journey Purpose / Learner Goal architecture — the last discovery item
+(Public Note → Official Review Set) plus multi-goal exam support, both shipping on explicit owner
+overrides of their own evidence gates rather than waiting for either to clear naturally. **Renamed
+same-day from "Public Note → Official Review Set Discovery"** when the owner expanded scope to include
+item 2 below; nothing had deployed yet.
 
 ### Planned Scope
 
-- **Public Note → Official Review Set link (RC-5, backend + frontend).** On the public note detail page
-  (`/public/library/[subject]/[slug]`), when the note sits in a qualifying Official Review Set — top-level,
-  a true source (not an adopted copy), owned by a `UserRole.ADMIN` account — show a callout linking to
-  `/collections/published?highlight={id}`, which scrolls to and expands that set's existing
-  `PublicStudyPlanCard`. Reuses the existing signed-out intent-cookie handoff (`discovery-intent.ts`),
-  widened to accept this new return path. 3 new analytics events
-  (`PUBLIC_NOTE_OFFICIAL_SET_LINK_CLICKED/_PREVIEWED/_ADOPT_CLICKED`). No new migration — the lookup uses
-  the existing `idx_note_collection_items_note_id` index and runs inside `NoteService.mapToPublicDetail`'s
-  existing read-only transaction.
+1. **Public Note → Official Review Set link (RC-5, backend + frontend). SHIPPED — see below.** On the
+   public note detail page (`/public/library/[subject]/[slug]`), when the note sits in a qualifying
+   Official Review Set — top-level, a true source (not an adopted copy), owned by a `UserRole.ADMIN`
+   account — show a callout linking to `/collections/published?highlight={id}`, which scrolls to and
+   expands that set's existing `PublicStudyPlanCard`. Reuses the existing signed-out intent-cookie
+   handoff (`discovery-intent.ts`), widened to accept this new return path. 3 new analytics events
+   (`PUBLIC_NOTE_OFFICIAL_SET_LINK_CLICKED/_PREVIEWED/_ADOPT_CLICKED`). No new migration — the lookup
+   uses the existing `idx_note_collection_items_note_id` index and runs inside
+   `NoteService.mapToPublicDetail`'s existing read-only transaction.
+
+   **⚠️ Kicked off ahead of the `v0.166.0` Hikari checkpoint clearing (owner override, 2026-10-13).**
+   This item's own gate — stated at the `v0.169.0` kickoff — was two stability checkpoints:
+   `v0.165.0`'s (due 2026-10-12, closed clean via PR #1489) and `v0.166.0`'s Hikari long-hold checkpoint
+   (`[CHECKPOINT — due 2026-10-14T11:19:29Z, backstop 2026-10-21]`, `ROADMAP.md`'s Backlog Index), which
+   was **not yet due** at kickoff — roughly a day out. Codex's implementation (audited and committed as
+   `dadac05a` on `feat/v0.170.0-public-note-review-set-link` before kickoff) adds exactly one new
+   public-note-page database lookup, which is the class of load the Hikari checkpoint exists to watch
+   for. **⚠️ Not actually blocking by the time this release reaches `main`**: nothing in this change
+   deploys until `releases/v0.170.0` merges, and the checkpoint's own due date (2026-10-14T11:19:29Z) is
+   earlier than this release — a 2-item release — is likely to sign off. **Read the checkpoint at
+   signoff, before the `main` merge, not just at this kickoff** — the override may turn out to have cost
+   nothing in practice. This release owes its own `[CHECKPOINT]` row at signoff either way, reading the
+   post-merge `Apparent connection leak` trace rate for any new attribution to this lookup, distinct from
+   `v0.166.0`'s own two traced methods (`PublicProfileController`/`NoteCollectionController`).
+
+2. **Multi-goal exam support (backend + frontend). IN PROGRESS — Codex prompt pending.** The owner's 5
+   direction points, recorded verbatim at the `v0.169.0` kickoff (2026-10-10):
+
+   1. **Storage — a normalized join table**, one row per (user, exam goal), with one goal flagged
+      active per user. No redundant active-state storage. Existing single `studyGoal` values migrate
+      losslessly; current users keep their existing goal, now active.
+   2. **Dashboard & nudges — the active goal only** drives general dashboard nudges; other goals stay
+      visible/accessible but don't compete for nudge real estate. **Exception:** post-session next
+      steps must reflect the actual session/Study Journey context even when it differs from the active
+      goal.
+   3. **EXAM/SUBJECT exclusivity — unchanged.** Multiple exam goals may coexist with each other; a
+      subject focus still can't coexist with any exam goal. Profile-preference rule only, never a
+      Note/Study Plan access restriction.
+   4. **Exam-hub signup intent — add and activate**, never silently replace other exam goals. Clear
+      disclosure before the intent flow overwrites an existing subject focus. Signing up via an Exam
+      Hub must NOT auto-adopt any Review Set.
+   5. **Picker — a real goal-management surface** in Profile's Study Focus (add/remove/set-active).
+      Removing a goal must never delete adopted content or assessment history.
+
+   **Validated feasible against current code before any Codex prompt**, per the owner's own
+   instruction recorded above: `docs/claude-plans/2026-10-12-multi-goal-exam-support-feasibility-validation.md`
+   (Feature Planner, 2026-10-12). Technical verdict: every point is buildable, no blocking
+   contradiction found. **4 follow-up decisions made 2026-10-13, at this scope expansion, resolving the
+   validation document's §8 open questions:**
+   - Adding an additional exam goal while one is active: the new goal becomes the **sole** active goal
+     (deactivates the previous one) — reads point 1's "one goal flagged active" literally.
+   - Removing the currently-active goal when other adopted goals exist: **auto-promotes** another
+     adopted goal to active (mirrors `NoteCollectionService.reassertPrimaryInvariant`'s existing
+     pattern for Study Plan adoption — same shape, not the same code, since that operates on
+     `NoteCollectionEntity` not exam slugs). **Tie-breaker when more than one goal is eligible for
+     promotion: the most recently added remaining goal, then lowest `id`.**
+   - Disclosure before a silent goal-clearing write is required in **both** directions — not just
+     "exam-intent flow overwrites a subject focus" (point 4's literal wording) but also "setting a
+     subject focus clears every adopted exam goal" (the reverse, previously unaddressed). Reuses the
+     existing `AppModal`/`ProfileTypeSwitchModal` confirm-modal pattern; no new UI primitive.
+   - **Bundled into this same work, not deferred:** `GoalPromptBanner`'s confirmed-live defect (gates
+     only on `studyGoal`, never checks `focusSubjects`, so a user with subject focus sees "no goal yet"
+     and one click silently wipes their `focusSubjects` with zero disclosure — verified against
+     production, 1 of 426 real users is in exactly this state today) and its separate dismissal-state
+     bug (component-local, re-shows on reload). PR #1488 (which had backlogged this defect for a future
+     release) is closed unmerged as superseded — fixing it now, not later.
+
+   **Applied defaults, per the validation document's own recommendation (low-stakes, argued well
+   there, not re-litigated here):** the 3 legacy free-text `studyGoal` rows are left untouched (adding
+   any active exam goal still clears the legacy value, closing the exclusivity gap this would
+   otherwise open); "SUBJECT focus" in point 4 means `focusSubjects`, not legacy free-text; a single
+   shared "resolve active exam goal(s)" method is introduced, consolidating 4 call sites
+   (`AuthService`, `ProgressReportService` ×3, `PostSessionNextStepService`) that currently each
+   independently re-derive "is this an EXAM goal" — closing a drift risk `ExamGoalConfig.java:38-43`'s
+   own comment already documents one prior incident of.
+
+   **⚠️ Kicked off ahead of the `[CHECKPOINT — due 2026-12-07]` population gate clearing — explicit
+   owner override, 2026-10-13.** That checkpoint's own stated trigger ("re-open only if the
+   ≥2-distinct-goal population grows past a handful") has **not** been met: still 2 of 426 users,
+   unchanged since 2026-10-09, re-confirmed 2026-10-12. This is a deliberate reversal of three prior
+   owner decisions (2026-10-08, -09, -10) that each declined to build this on the same number. **This
+   release owes its own `[CHECKPOINT]`** at signoff, tracking whether the population actually grows now
+   that the capability exists — the original checkpoint measured whether to build it; this one measures
+   whether building it mattered.
+
+   **Verification note:** this item adds a data-mutating migration, changes API/export response
+   shapes, and touches profile, dashboard, post-session, exam-hub, and GDPR-export code — clears the
+   bar for at least one scoped cold falsification agent at signoff per the pressure-test gate, and is a
+   candidate for the full 3-agent pressure test given the permission-adjacent (goal/content exclusivity)
+   surface. Decide at signoff, not assumed here.
 
 Anti-drift: no `ProfileType` change, no recommendation-engine change, no Degree Journey/Academic
-Term/ConceptHealth change, no change to `resolvePlanPremiumExamMode`/`EXAM_MODES.md`.
+Term/ConceptHealth change, no change to `resolvePlanPremiumExamMode`/`EXAM_MODES.md`, no change to
+`UserEntity.examDate`'s existing single-valuedness (a known, separate, out-of-scope gap).
 
-**⚠️ Kicked off ahead of the `v0.166.0` Hikari checkpoint clearing (owner override, 2026-10-13).** This
-item's own gate — stated at the `v0.169.0` kickoff — was two stability checkpoints: `v0.165.0`'s (due
-2026-10-12, closed clean via PR #1489) and `v0.166.0`'s Hikari long-hold checkpoint
-(`[CHECKPOINT — due 2026-10-14T11:19:29Z, backstop 2026-10-21]`, `ROADMAP.md`'s Backlog Index), which was
-**not yet due** at kickoff — roughly a day out. The owner explicitly directed kickoff+merge now rather than
-waiting. Codex's implementation (audited and committed as `dadac05a` on
-`feat/v0.170.0-public-note-review-set-link` before this kickoff) adds exactly one new public-note-page
-database lookup, which is the class of load the Hikari checkpoint exists to watch for. **This release owes
-its own `[CHECKPOINT]` row at signoff** reading the post-merge `Apparent connection leak` trace rate
-specifically for any new attribution to this release's lookup, distinct from the `v0.166.0` checkpoint's
-own PublicProfileController/NoteCollectionController tracing.
+**Explicitly excluded, unaffected by either override above:** the Degree Journey catalog (Phase C) —
+its own dependency (≥2 published Years) is a content-authoring gap no decision overrides; exactly one
+BSCS Year exists, unpublished — and Phase D (learner curriculum customization), not yet scoped, deferred
+pending real adopters. Neither is "Study Journey" work this release can close by deciding to.
 
 ### Shipped
 
