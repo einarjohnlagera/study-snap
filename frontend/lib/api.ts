@@ -664,6 +664,7 @@ export type AnalyticsEventType =
   | "PUBLIC_NOTE_QUIZ_YOURSELF_CLICKED"
   | "PUBLIC_NOTE_FLASHCARDS_CLICKED"
   | "PUBLIC_NOTE_SHARED"
+  | "PUBLIC_NOTE_OFFICIAL_SET_LINK_CLICKED"
   | "NOTE_SHARED_WITH_CONNECTION"
   | "NOTE_SHARE_REVOKED"
   | "SHARED_NOTE_OPENED"
@@ -682,6 +683,8 @@ export type AnalyticsEventType =
   | "EXPLORE_TAB_SWITCHED"
   | "EXPLORE_OFFICIAL_SET_PREVIEWED"
   | "EXPLORE_OFFICIAL_SET_ADOPT_CLICKED"
+  | "PUBLIC_NOTE_OFFICIAL_SET_PREVIEWED"
+  | "PUBLIC_NOTE_OFFICIAL_SET_ADOPT_CLICKED"
   | "PUBLISHED_PLANS_VIEWED"
   | "OFFLINE_FALLBACK_SERVED"
   | "STUDY_GOAL_SET"
@@ -2330,6 +2333,8 @@ export type PublicNoteDetailResponse = {
   isOfficialAuthor: boolean;
   isCurrentUser: boolean;
   updatedAt: string;
+  officialReviewSetId?: string | null;
+  officialReviewSetTitle?: string | null;
 };
 
 export type PublicProfileNoteResponse = {

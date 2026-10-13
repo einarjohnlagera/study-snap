@@ -170,6 +170,25 @@ describe("PublicLibrarySeoPage", () => {
     expect(screen.getAllByText(/Cell structure is fundamental to biology/i).length).toBeGreaterThanOrEqual(1);
   });
 
+  it("links a public note to its Official set only when both root fields are present", async () => {
+    const params = Promise.resolve({ subject: "science", slug: "cell-structure" });
+    (getServerPublicNoteBySeoPath as jest.Mock).mockResolvedValue({
+      ...baseNote, officialReviewSetId: "set-1", officialReviewSetTitle: "Science Review",
+    });
+    const { unmount } = render(await PublicLibrarySeoPage({ params }));
+    expect(screen.getByText("Part of")).toBeInTheDocument();
+    expect(screen.getByText("Science Review")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Browse this Review Set →" }))
+      .toHaveAttribute("href", "/collections/published?highlight=set-1");
+    unmount();
+
+    (getServerPublicNoteBySeoPath as jest.Mock).mockResolvedValue({
+      ...baseNote, officialReviewSetId: "set-1", officialReviewSetTitle: null,
+    });
+    render(await PublicLibrarySeoPage({ params }));
+    expect(screen.queryByText("Part of")).not.toBeInTheDocument();
+  });
+
   it("renders hook derived from the first two sentences of the summary", async () => {
     (getServerPublicNoteBySeoPath as jest.Mock).mockResolvedValue(baseNote);
 

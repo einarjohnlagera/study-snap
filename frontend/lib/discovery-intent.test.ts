@@ -22,9 +22,9 @@ describe("discovery intent cookie", () => {
     expect(getDiscoveryIntentCookie()).toEqual(intent);
   });
 
-  it("rejects a returnPath that is not an Explore path", () => {
+  it("rejects a returnPath outside the supported discovery pages", () => {
     // returnPath round-trips through a cookie, so it is attacker-influenceable: anything that can
-    // write the cookie chooses where the post-signup handoff sends the visitor. isExplorePath is the
+    // write the cookie chooses where the post-signup handoff sends the visitor. The narrow path allowlist is the
     // only thing preventing that from becoming an open redirect, and nothing else pinned it —
     // weakening it to `typeof === "string"` left all 32 tests green.
     for (const hostile of [
@@ -33,6 +33,7 @@ describe("discovery intent cookie", () => {
       "/dashboard",
       "/exploration",
       "/explore-evil",
+      "/collections/published-evil",
       "javascript:alert(1)",
       "",
     ]) {
@@ -46,7 +47,16 @@ describe("discovery intent cookie", () => {
     }
   });
 
-  it("never builds a fallback path outside Explore", () => {
+  it("accepts a highlighted published-set return path", () => {
+    const intent = { planId: "set-1", planType: "study-plan" as const,
+      returnPath: "/collections/published?highlight=set-1" };
+    expect(setDiscoveryIntentCookie(intent)).toBe(true);
+    expect(getDiscoveryIntentCookie()).toEqual(intent);
+    expect(buildDiscoveryIntentFallbackPath(intent.returnPath))
+      .toBe("/collections/published?highlight=set-1&discoveryNotice=adopt-unavailable");
+  });
+
+  it("never builds a fallback path outside supported discovery pages", () => {
     expect(buildDiscoveryIntentFallbackPath("https://evil.example.com")).toBe(
       "/explore?discoveryNotice=adopt-unavailable",
     );

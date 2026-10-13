@@ -13,6 +13,8 @@ A collection is the reusable container behind v0.27.0 organization workflows:
 
 The backend entity is universal and profile-agnostic. It does not decide labels, CTAs, or profile-specific terminal actions.
 
+Public note detail pages can point readers to the existing `/collections/published?highlight={rootId}` adoption surface. For this link, "Official" means a PUBLIC, top-level, source collection owned by an ADMIN account, excluding the deleted-user sentinel. A note placed directly on that root qualifies regardless of its item publish stamp; a note placed on a child qualifies only after both child and item have publish stamps. If several roots qualify, the most recently updated root wins, breaking ties by ID.
+
 ## Core Model
 
 A `NoteCollection` is a playlist over existing notes.

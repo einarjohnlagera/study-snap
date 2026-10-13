@@ -55,6 +55,8 @@ import com.studysnap.backend.repository.CourseProgramCatalogRepository;
 import com.studysnap.backend.repository.GeneratedQuizRepository;
 import com.studysnap.backend.repository.NoteCopyCountProjection;
 import com.studysnap.backend.repository.NoteCourseProgramRepository;
+import com.studysnap.backend.repository.NoteCollectionItemRepository;
+import com.studysnap.backend.repository.OfficialReviewSetProjection;
 import com.studysnap.backend.repository.NoteLibraryCandidateProjection;
 import com.studysnap.backend.repository.NoteLibraryFilterCriteria;
 import com.studysnap.backend.repository.NoteLibrarySubjectIdProjection;
@@ -167,6 +169,7 @@ public class NoteService {
     private final OnboardingGuardService onboardingGuardService;
     private final OfficialChallengeQuizTemplateService officialChallengeQuizTemplateService;
     private final NoteCourseProgramRepository noteCourseProgramRepository;
+    private final NoteCollectionItemRepository noteCollectionItemRepository;
     private final CourseProgramCatalogRepository courseProgramCatalogRepository;
     private final StudyPackQuizMasteryService studyPackQuizMasteryService;
     private final StudyPackGenerationContextResolver studyPackGenerationContextResolver;
@@ -1612,6 +1615,9 @@ public class NoteService {
     private PublicNoteDetailResponse mapToPublicDetail(NoteEntity note, StudyPackEntity studyPack, UUID viewerUserId) {
         UserEntity owner = userRepository.findById(note.getOwnerUserId()).orElse(null);
         boolean isOfficialAuthor = isOfficialAuthor(owner);
+        OfficialReviewSetProjection officialSet = noteCollectionItemRepository
+                .findOfficialReviewSetRootForNote(note.getId(), AccountPurgeService.DELETED_USER_ID)
+                .orElse(null);
         return new PublicNoteDetailResponse(
                 note.getId().toString(),
                 null,
@@ -1630,7 +1636,9 @@ public class NoteService {
                 isOfficialAuthor,
                 isCurrentUser(note.getOwnerUserId(), viewerUserId),
                 note.getUpdatedAt(),
-                studyPack == null ? null : StudyPackArtifactFacts.isDone(studyPack.getStatus())
+                studyPack == null ? null : StudyPackArtifactFacts.isDone(studyPack.getStatus()),
+                officialSet == null ? null : officialSet.getId().toString(),
+                officialSet == null ? null : officialSet.getTitle()
         );
     }
 
