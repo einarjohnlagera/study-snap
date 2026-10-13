@@ -10,6 +10,7 @@ Routes:
 
 - canonical list route for signed-in and signed-out users: `/public/library`
 - canonical public note detail route: `/public/library/{subject}/{slug}`
+- A public note detail page shows `Part of {title}` when the note belongs to a qualifying Official Review Set. It links to `/collections/published?highlight={rootId}`, which opens and scrolls to the existing preview card. The match is one deterministic root: an ADMIN-owned, top-level, source (`source_plan_id IS NULL`), PUBLIC collection. Root items need no publish stamp; child placements require both the child and item to be published. Other public collections and adopted copies do not produce this link.
 - canonical public creator/profile route: `/public/creator/{username}`
   - canonical subject landing page: `/public/library/{subject}` — server-rendered, not a redirect (see item J below)
 - legacy compatibility redirects:

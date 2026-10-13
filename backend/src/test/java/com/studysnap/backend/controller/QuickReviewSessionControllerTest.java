@@ -365,6 +365,7 @@ class QuickReviewSessionControllerTest {
                 mock(com.studysnap.backend.service.OnboardingGuardService.class),
                 mock(com.studysnap.backend.service.OfficialChallengeQuizTemplateService.class),
                 mock(com.studysnap.backend.repository.NoteCourseProgramRepository.class),
+                mock(com.studysnap.backend.repository.NoteCollectionItemRepository.class),
                 mock(com.studysnap.backend.repository.CourseProgramCatalogRepository.class),
                 mock(com.studysnap.backend.service.StudyPackQuizMasteryService.class),
                 mock(com.studysnap.backend.service.StudyPackGenerationContextResolver.class)

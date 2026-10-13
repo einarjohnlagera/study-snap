@@ -11,6 +11,7 @@ import { PublicPracticeModeTeaser } from "@/components/notes/public-practice-mod
 import { PublicLibraryBackLink } from "@/components/notes/public-library-back-link";
 import { PublicLibraryReturnLink } from "@/components/notes/public-library-return-link";
 import { PublicNoteAuthorCard } from "@/components/notes/public-note-author-card";
+import { PublicNoteOfficialSetLink } from "@/components/notes/public-note-official-set-link";
 import { PublicNoteAuthorLine, PublicNoteOwnershipActions } from "@/components/notes/public-note-ownership-actions";
 import { CourseProgramsViewer } from "@/components/metadata/course-programs-viewer";
 import { PublicSeoCopyCta } from "@/components/notes/public-seo-copy-cta";
@@ -342,6 +343,13 @@ export default async function PublicLibrarySeoPage({ params }: Readonly<PublicLi
         {/* Practice mode teaser — before ownership actions */}
         {!isDraft ? <PublicPracticeModeTeaser /> : null}
 
+        {/* Official Review Set callout — only when this note is in a qualifying admin-owned set */}
+        {note.officialReviewSetId && note.officialReviewSetTitle ? (
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-blue-500/20 bg-blue-500/5 px-4 py-3">
+            <p className="text-sm text-foreground/80">Part of <strong>{note.officialReviewSetTitle}</strong></p>
+            <PublicNoteOfficialSetLink id={note.officialReviewSetId} />
+          </div>
+        ) : null}
         {/* Exam hub contextual callout — only when this note's courseProgram maps to a hub */}
         {examSlug ? (
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-blue-500/20 bg-blue-500/5 px-4 py-3">

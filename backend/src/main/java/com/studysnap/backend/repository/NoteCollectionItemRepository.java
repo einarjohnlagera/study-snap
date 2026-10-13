@@ -49,6 +49,29 @@ public interface NoteCollectionItemRepository extends JpaRepository<NoteCollecti
             @Param("ownerUserId") UUID ownerUserId
     );
 
+    /** One deterministic Official root, newest first; root items do not require a publish stamp. */
+    @Query(value = """
+            select root.id as id, root.title as title
+            from note_collection_items item
+            join note_collections placement on placement.id = item.collection_id
+            join note_collections root on root.id = coalesce(placement.parent_collection_id, placement.id)
+            join users owner on owner.id = root.owner_user_id
+            where item.note_id = :noteId
+              and root.parent_collection_id is null
+              and root.source_plan_id is null
+              and root.visibility = 'PUBLIC'
+              and owner.role = 'ADMIN'
+              and owner.id <> :deletedUserId
+              and (placement.parent_collection_id is null
+                   or (placement.published_at is not null and item.published_at is not null))
+            order by root.updated_at desc, root.id asc
+            limit 1
+            """, nativeQuery = true)
+    Optional<OfficialReviewSetProjection> findOfficialReviewSetRootForNote(
+            @Param("noteId") UUID noteId,
+            @Param("deletedUserId") UUID deletedUserId
+    );
+
     /**
      * Readable items of one collection in plan order, excluding the note just completed.
      *

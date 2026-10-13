@@ -309,6 +309,25 @@ describe("PublicStudyPlanCard", () => {
     expect(pushMock).toHaveBeenCalledWith("/auth?mode=signup&redirect=%2Fexplore");
   });
 
+  it("opens a public-note preview on arrival and tracks preview and adopt clicks", async () => {
+    (getPublicStudyPlanDetail as jest.Mock).mockResolvedValue({ ...leafPlan, items: [] });
+    render(<PublicStudyPlanCard plan={leafPlan} adoptedCollection={null} canAdopt={false}
+      discoverySource="public_note" defaultPreviewOpen />);
+
+    expect(screen.getByRole("button", { name: "Hide plan preview" })).toHaveAttribute("aria-expanded", "true");
+    await waitFor(() => expect(getPublicStudyPlanDetail).toHaveBeenCalledTimes(1));
+    expect(await screen.findByText("This plan does not have any available notes yet.")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Sign in to adopt" }));
+    expect(trackAnalyticsEvent).toHaveBeenCalledWith({
+      eventType: "PUBLIC_NOTE_OFFICIAL_SET_PREVIEWED", entityId: leafPlan.id,
+      metadata: { source: "public_note" },
+    });
+    expect(trackAnalyticsEvent).toHaveBeenCalledWith({
+      eventType: "PUBLIC_NOTE_OFFICIAL_SET_ADOPT_CLICKED", entityId: leafPlan.id,
+      metadata: { source: "public_note" },
+    });
+  });
+
   it("preserves discoveryMetadata's pointerSource alongside discoverySource's own `source` key", async () => {
     render(
       <PublicStudyPlanCard

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
@@ -27,7 +27,8 @@ type PublicStudyPlanCardProps = {
   profileType?: ProfileType | null;
   canAdopt?: boolean;
   discoveryMetadata?: Record<string, string>;
-  discoverySource?: "exam_hub" | "explore";
+  discoverySource?: "exam_hub" | "explore" | "public_note";
+  defaultPreviewOpen?: boolean;
   // Returns the destination to use, so a caller can decide it from what the click just learned
   // (e.g. whether an intent cookie actually stored). A precomputed prop cannot: React state set
   // during the click is not visible until the next render, so the stale href would be used.
@@ -42,6 +43,7 @@ export function PublicStudyPlanCard({
   canAdopt = true,
   discoveryMetadata,
   discoverySource,
+  defaultPreviewOpen = false,
   onSignedOutAdopt,
   signedOutHref = "/auth",
 }: Readonly<PublicStudyPlanCardProps>) {
@@ -53,7 +55,8 @@ export function PublicStudyPlanCard({
   const [adopting, setAdopting] = useState(false);
   const [adoptionProgress, setAdoptionProgress] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(defaultPreviewOpen);
+  const initialPreviewStarted = useRef(false);
   const [preview, setPreview] = useState<NoteCollectionDetail | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [loadingPreview, setLoadingPreview] = useState(false);
@@ -91,17 +94,14 @@ export function PublicStudyPlanCard({
     }
   };
 
-  const handlePreview = () => {
-    if (previewOpen) {
-      setPreviewOpen(false);
-      return;
-    }
-    setPreviewOpen(true);
+  const openPreview = () => {
     if (discoverySource) {
       void trackAnalyticsEvent({
         eventType: discoverySource === "exam_hub"
           ? "EXAM_HUB_OFFICIAL_SET_PREVIEWED"
-          : "EXPLORE_OFFICIAL_SET_PREVIEWED",
+          : discoverySource === "public_note"
+            ? "PUBLIC_NOTE_OFFICIAL_SET_PREVIEWED"
+            : "EXPLORE_OFFICIAL_SET_PREVIEWED",
         entityId: plan.id,
         metadata: { ...discoveryMetadata, source: discoverySource },
       });
@@ -109,6 +109,25 @@ export function PublicStudyPlanCard({
     if (!preview && !loadingPreview) {
       void loadPreview();
     }
+  };
+
+  useEffect(() => {
+    if (defaultPreviewOpen && !initialPreviewStarted.current) {
+      initialPreviewStarted.current = true;
+      setPreviewOpen(true);
+      openPreview();
+    }
+  // Only the initial opening runs here; later openings use the button.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [defaultPreviewOpen]);
+
+  const handlePreview = () => {
+    if (previewOpen) {
+      setPreviewOpen(false);
+      return;
+    }
+    setPreviewOpen(true);
+    openPreview();
   };
 
   const previewReadyLine = preview?.readyCount == null
@@ -127,7 +146,9 @@ export function PublicStudyPlanCard({
       void trackAnalyticsEvent({
         eventType: discoverySource === "exam_hub"
           ? "EXAM_HUB_OFFICIAL_SET_ADOPT_CLICKED"
-          : "EXPLORE_OFFICIAL_SET_ADOPT_CLICKED",
+          : discoverySource === "public_note"
+            ? "PUBLIC_NOTE_OFFICIAL_SET_ADOPT_CLICKED"
+            : "EXPLORE_OFFICIAL_SET_ADOPT_CLICKED",
         entityId: plan.id,
         metadata: { ...discoveryMetadata, source: discoverySource },
       });

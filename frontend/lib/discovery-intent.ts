@@ -13,8 +13,11 @@ export type DiscoveryIntent = {
   returnPath: string;
 };
 
-function isExplorePath(value: unknown): value is string {
-  return typeof value === "string" && (value === "/explore" || value.startsWith("/explore?"));
+function isDiscoveryReturnPath(value: unknown): value is string {
+  return typeof value === "string" && (
+    value === "/explore" || value.startsWith("/explore?")
+    || value === "/collections/published" || value.startsWith("/collections/published?")
+  );
 }
 
 function isDiscoveryIntent(value: unknown): value is DiscoveryIntent {
@@ -25,7 +28,7 @@ function isDiscoveryIntent(value: unknown): value is DiscoveryIntent {
   return typeof candidate.planId === "string"
     && candidate.planId.trim().length > 0
     && (candidate.planType === "goal" || candidate.planType === "study-plan")
-    && isExplorePath(candidate.returnPath);
+    && isDiscoveryReturnPath(candidate.returnPath);
 }
 
 /**
@@ -86,7 +89,7 @@ export function clearDiscoveryIntentCookie(): void {
 }
 
 export function buildDiscoveryIntentFallbackPath(returnPath: string): string {
-  const safeReturnPath = isExplorePath(returnPath) ? returnPath : "/explore";
+  const safeReturnPath = isDiscoveryReturnPath(returnPath) ? returnPath : "/explore";
   const [pathname, query = ""] = safeReturnPath.split("?", 2);
   const params = new URLSearchParams(query);
   params.set(DISCOVERY_NOTICE_QUERY_PARAM, DISCOVERY_ADOPT_UNAVAILABLE_NOTICE);
