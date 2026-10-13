@@ -189,6 +189,19 @@ pending real adopters. Neither is "Study Journey" work this release can close by
   `user_exam_goals` row; the resolver prefers the row, so the stale write is silently ignored rather
   than losing data, and the window closes once rollover completes.
 
+- **Two carried-along process/doc fixes (PR #1487, PR #1489).** Both had been open against `main`
+  since before this release and were blocked there by the same `require_extra_approval_for_unattributed_changes`
+  ruleset rule as this release's own signoff PR; retargeted to `releases/v0.170.0` and merged here so
+  they ride to `main` with the rest of this release rather than sitting blocked indefinitely.
+  **PR #1489** closes the `v0.165.0` discovery-rail checkpoint on its due date: zero `server_failed`
+  restarts in the full 7-day post-deploy window (down from a ~7/week baseline) — the fix worked. This
+  is the checkpoint Item 1's own kickoff text above cites as "closed clean via PR #1489"; that claim
+  is accurate as of this merge, not before it. **PR #1487** documents a `check-deploys.sh`
+  false-positive mode found during `v0.169.0`'s deploy: a real, successful Vercel deployment that
+  never appeared in GitHub's Deployments API, so a future Vercel "DRIFT" verdict from that script
+  should be cross-checked against the actual Vercel dashboard before anyone acts on it. Comment-only
+  change to the script; no logic changed.
+
 ## v0.169.0 - Study Journey, Continued
 
 **Status: Released** (signed off 2026-10-12; commit `3200c773` on `releases/v0.169.0`)
