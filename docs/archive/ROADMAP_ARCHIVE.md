@@ -5252,7 +5252,7 @@ already fixed in code but still
 marked open; corrected in this kickoff's Backlog Index scan, not scoped as work.** Anti-drift, the file-coverage map,
 the H4 rejection-rate baseline read, and the verification tier are in `RELEASES.md`.
 
-**Older baselines moved to `docs/archive/ROADMAP_ARCHIVE.md` at the `v0.130.0`, `v0.133.0`, `v0.139.0`, `v0.148.0` and `v0.156.0` signoffs and the `v0.134.0` / `v0.135.0` / `v0.136.0` / `v0.140.0` / `v0.141.0` / `v0.142.0` / `v0.144.0` / `v0.145.0` / `v0.146.0` / `v0.147.0` / `v0.149.0` / `v0.150.0` / `v0.151.0` / `v0.152.0` / `v0.153.0` / `v0.154.0` / `v0.155.0` / `v0.157.0` / `v0.158.0` / `v0.159.0` / `v0.160.0` / `v0.163.0` / `v0.164.0` / `v0.165.0` / `v0.166.0` / `v0.167.0` kickoffs. **⚠️ `v0.156.0` is the first entry in the signoffs half of this list** — every prior move happened at kickoff (CLAUDE.md step 7a); this one ran at signoff instead (this checklist's own duplicated step) because `v0.156.0` folded two releases' worth of scope into one and crossed the cap without an intervening kickoff.
+**Older baselines moved to `docs/archive/ROADMAP_ARCHIVE.md` at the `v0.130.0`, `v0.133.0`, `v0.139.0`, `v0.148.0` and `v0.156.0` signoffs and the `v0.134.0` / `v0.135.0` / `v0.136.0` / `v0.140.0` / `v0.141.0` / `v0.142.0` / `v0.144.0` / `v0.145.0` / `v0.146.0` / `v0.147.0` / `v0.149.0` / `v0.150.0` / `v0.151.0` / `v0.152.0` / `v0.153.0` / `v0.154.0` / `v0.155.0` / `v0.157.0` / `v0.158.0` / `v0.159.0` / `v0.160.0` / `v0.163.0` / `v0.164.0` / `v0.165.0` / `v0.166.0` / `v0.167.0` / `v0.170.0` kickoffs. **⚠️ `v0.156.0` is the first entry in the signoffs half of this list** — every prior move happened at kickoff (CLAUDE.md step 7a); this one ran at signoff instead (this checklist's own duplicated step) because `v0.156.0` folded two releases' worth of scope into one and crossed the cap without an intervening kickoff.
 
 - `v0.161.0 — Scannable Study Plans` (Released) — Degree Study Journeys Phase B: Study Plan Sections collapsed by default, an `Expand all`/`Collapse all` toggle, `Not started` wording at Section and plan grain; plus a pre-signoff fix making `adoptGoal` adopt every published-but-private child instead of requiring `PUBLIC`. Moved at the `v0.167.0` kickoff.
 - `v0.160.0 — Study Plans by Semester` (Released) — Degree Study Journeys Phase A0/A: academic-term placement on Subject Plans, Year-page term grouping, compact Subject cards, and the curriculum-pipeline `academic_term` column; moved at the `v0.166.0` kickoff.
@@ -5311,3 +5311,23 @@ the 3-4-item sweet spot — two escalation triggers still fire regardless of cou
 falsification framing) is planned before signoff. Full scope in `RELEASES.md`.
 
 ---
+
+---
+
+**Kicked off 2026-09-30, signed off 2026-09-30.** `v0.164.0 — Computing` is **Released** on
+`releases/v0.164.0` (feature PR #1469 merged), cut from `main` after `v0.163.0` merged as #1468 and
+tagged. **Owner-directed, 2026-09-30, closing Workstream A**
+(`docs/claude-plans/computing-domain-context-final-decision-package.md`): ratify `Computing` as a 13th
+Domain Context via an ADR-001 amendment superseding the 2026-09-04 rejection, ship the small
+enum/frontend value, sweep the context/spec docs that read the closed vocabulary, and prepare (not run)
+a Computing addendum to the existing R4 runbook. **Two corrections applied to the package's own numbers
+before anything cites them:** the 34 Discrete Structures I rows keep `applicable_programs = Computer
+Science` only (the package's own §5/§9/§10 are wrong on this point); the BSCS Year 1 corpus is 136/136
+classified, not 133/136. **Signed off with:** the ADR-001 amendment, enum/frontend value, and full doc
+sweep (expanded beyond the original plan to include `docs/features/notes.md`, `challenge-quiz.md` and
+`study-pack-generation.md`, found during pre-commit review — see `RELEASES.md`'s Scope disposition).
+**A `[CHECKPOINT — due when BSCS Year 1 Computing authoring reaches 10+ classified notes, backstop
+2026-12-29 regardless]` row was added at signoff**, since this release's composition-matrix evidence is
+a catalog fact, not yet a note-population fact — zero Computing notes are authored today. **Not shipped:**
+the BSCS TSV edits (strategist's own action) and the R4 pilot (its 5 named notes don't exist yet). Full
+scope in `RELEASES.md`.

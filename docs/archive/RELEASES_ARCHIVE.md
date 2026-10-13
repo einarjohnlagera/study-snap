@@ -1,6 +1,6 @@
 # RELEASES_ARCHIVE.md — NoteLib
 
-Archived sections of `RELEASES.md`. **Contents are NOT one contiguous range:** `v0.41.0`–`v0.120.0`, plus `v0.126.0` (moved at the `v0.132.0` kickoff), `v0.127.0` (moved at the `v0.133.0` kickoff) `v0.128.0` (moved at the `v0.134.0` kickoff) `v0.129.0` (moved at the `v0.135.0` kickoff) `v0.130.0` (moved at the `v0.136.0` kickoff) `v0.131.0` (moved at the `v0.137.0` kickoff) `v0.132.0` (moved at the `v0.138.0` kickoff) `v0.133.0` (moved at the `v0.139.0` kickoff), `v0.134.0` (moved at the `v0.140.0` kickoff), `v0.135.0` (moved at the `v0.141.0` kickoff), `v0.136.0` (moved at the `v0.142.0` kickoff), `v0.137.0` (moved at the `v0.143.0` kickoff), `v0.138.0` (moved at the `v0.144.0` kickoff), `v0.139.0` (moved at the `v0.145.0` kickoff), `v0.140.0` (moved at the `v0.146.0` kickoff), `v0.141.0` (moved at the `v0.147.0` kickoff), `v0.142.0` (moved at the `v0.148.0` kickoff), `v0.143.0` (moved at the `v0.149.0` kickoff), `v0.144.0` (moved at the `v0.150.0` kickoff), `v0.145.0` (moved at the `v0.151.0` kickoff), `v0.146.0` (moved at the `v0.152.0` kickoff), `v0.147.0` (moved at the `v0.153.0` kickoff), `v0.148.0` (moved at the `v0.154.0` kickoff), `v0.149.0` (moved at the `v0.155.0` kickoff), `v0.150.0` (moved at the `v0.156.0` signoff — the first time this archive check ran at signoff rather than kickoff, since v0.156.0 folded two releases' worth of scope into one and crossed the cap without an intervening kickoff) and `v0.151.0` (moved at the `v0.157.0` kickoff) and `v0.152.0` (moved at the `v0.158.0` kickoff) and `v0.153.0` and `v0.154.0` (moved at the `v0.159.0` and `v0.160.0` kickoffs; earlier passes did not extend this line) and `v0.155.0` (moved at the `v0.161.0` kickoff) and `v0.156.0` (moved at the `v0.162.0` kickoff) and `v0.157.0` (moved at the `v0.163.0` kickoff) and `v0.158.0` (moved at the `v0.164.0` kickoff) and `v0.159.0` (moved at the `v0.165.0` kickoff) and `v0.160.0` (moved at the `v0.166.0` kickoff) and `v0.161.0` (moved at the `v0.167.0` kickoff) as the live file crossed its *current + last five* cap. Each version's own `## vX.Y.Z` heading is the index — search for it. `v0.40.1` and earlier moved here
+Archived sections of `RELEASES.md`. **Contents are NOT one contiguous range:** `v0.41.0`–`v0.120.0`, plus `v0.126.0` (moved at the `v0.132.0` kickoff), `v0.127.0` (moved at the `v0.133.0` kickoff) `v0.128.0` (moved at the `v0.134.0` kickoff) `v0.129.0` (moved at the `v0.135.0` kickoff) `v0.130.0` (moved at the `v0.136.0` kickoff) `v0.131.0` (moved at the `v0.137.0` kickoff) `v0.132.0` (moved at the `v0.138.0` kickoff) `v0.133.0` (moved at the `v0.139.0` kickoff), `v0.134.0` (moved at the `v0.140.0` kickoff), `v0.135.0` (moved at the `v0.141.0` kickoff), `v0.136.0` (moved at the `v0.142.0` kickoff), `v0.137.0` (moved at the `v0.143.0` kickoff), `v0.138.0` (moved at the `v0.144.0` kickoff), `v0.139.0` (moved at the `v0.145.0` kickoff), `v0.140.0` (moved at the `v0.146.0` kickoff), `v0.141.0` (moved at the `v0.147.0` kickoff), `v0.142.0` (moved at the `v0.148.0` kickoff), `v0.143.0` (moved at the `v0.149.0` kickoff), `v0.144.0` (moved at the `v0.150.0` kickoff), `v0.145.0` (moved at the `v0.151.0` kickoff), `v0.146.0` (moved at the `v0.152.0` kickoff), `v0.147.0` (moved at the `v0.153.0` kickoff), `v0.148.0` (moved at the `v0.154.0` kickoff), `v0.149.0` (moved at the `v0.155.0` kickoff), `v0.150.0` (moved at the `v0.156.0` signoff — the first time this archive check ran at signoff rather than kickoff, since v0.156.0 folded two releases' worth of scope into one and crossed the cap without an intervening kickoff) and `v0.151.0` (moved at the `v0.157.0` kickoff) and `v0.152.0` (moved at the `v0.158.0` kickoff) and `v0.153.0` and `v0.154.0` (moved at the `v0.159.0` and `v0.160.0` kickoffs; earlier passes did not extend this line) and `v0.155.0` (moved at the `v0.161.0` kickoff) and `v0.156.0` (moved at the `v0.162.0` kickoff) and `v0.157.0` (moved at the `v0.163.0` kickoff) and `v0.158.0` (moved at the `v0.164.0` kickoff) and `v0.159.0` (moved at the `v0.165.0` kickoff) and `v0.160.0` (moved at the `v0.166.0` kickoff) and `v0.161.0` (moved at the `v0.167.0` kickoff) and `v0.164.0` (moved at the `v0.170.0` kickoff) as the live file crossed its *current + last five* cap. Each version's own `## vX.Y.Z` heading is the index — search for it. `v0.40.1` and earlier moved here
 2026-07-10; **`v0.41.0` through `v0.120.0` moved here 2026-09-07** in the `v0.126.0` pass, which
 resumed this convention after it had lapsed for 85 releases — `RELEASES.md` had reached 116
 sections against its documented design of *current + last few versions*. Both passes are MOVES,
@@ -21801,3 +21801,117 @@ layers. See RELEASES.md's Shipped section (items 1 and 5) for the full finding l
   merge and confirm both frontend and backend are on the release.
 
 ---
+
+---
+
+## v0.164.0 - Computing
+
+**Status: Released** (signed off 2026-09-30; PR #1469 merged into `releases/v0.164.0`)
+
+Theme: ratify `Computing` as a 13th Domain Context (ADR-001 amendment), ship the small enum/frontend value,
+correct the two stale claims in the ratification package's own numbers, and sweep the context/spec docs the
+strategist and curators read.
+
+### Planned Scope
+
+**Owner-directed, 2026-09-30, closing Workstream A** (`docs/claude-plans/computing-domain-context-final-decision-package.md`,
+ratification-ready close-out; supersedes `computing-domain-context-decision.md` and its tightening prompt for
+*action*, both kept as the evidence trail). Named "Workstream A" in `docs/curriculum/bscs-year1-decision-log.md`,
+whose rows D-13 and D-34 are blocked on this closing.
+
+- **ADR-001 amendment ratifying `Computing`** (enum `COMPUTING`, label `Computing`, `quantitative = false`) —
+  a new dated section superseding the 2026-09-04 rejection, answering both of its grounds (naming borrowed from
+  ACM/IEEE Computing Curricula 2020 and CHED CMO No. 25 s.2015; the comprehension test applies to curators, not
+  learners), stating the two-test curator decision rule (object-of-study, then cross-sibling-reuse) as the durable
+  operational boundary, and recording the corrected clause (a) evidence and the corrected governance ratio.
+- **Two corrections to the package's own numbers, applied before anything cites them:** (1) the 34 Discrete
+  Structures I rows do **not** get `applicable_programs` extended to IT/IS/SE — Domain Context = `Computing`,
+  Applicable Programs stays Computer Science only, contrary to package §5/§9/§10; (2) the BSCS Year 1 corpus is
+  136/136 classified (the 3 `AMBIGUOUS` rows resolved to `COMPUTING_SHARED`), not 133/136 as the package states.
+- **Enum/frontend value** — `DomainContext.COMPUTING` (backend), `DOMAIN_CONTEXT_OPTIONS` entry + `DomainContext`
+  union member (frontend), with a routing description (excludes CS-specific formalism, IT/IS/SE specialization
+  treatment, and Precalculus/Algebra) and updated count/label tests on both sides.
+- **Doc sweep** — `REVIEW_SET_SHAPING_CONTEXT.md` (closed vocabulary + two-test boundary paragraph),
+  `review-set-workbook-spec.md:118-119` (independent stale-claim fix: the save-time rejection claim is wrong;
+  the check is generation-time only), `GPT_CONTEXT.md` (12→13, and discharging the "don't propose a 13th value"
+  line the same way the 9th/12th-value rules were discharged), `NOTES_AND_COLLECTIONS_CONTEXT.md` §0 (12→13).
+- **R4 runbook addendum** (`docs/claude-prompt/canonical-knowledge-architecture-out/17-r4-verification-runbook.md`)
+  — a Computing section for the 5 named pilot notes, prepared but **not executable today**: none of the 5 exist
+  in production yet (read-only check, 2026-09-30), and driving the pilot is an owner action through the
+  production UI in any case (a Domain Context write + regeneration), never Claude's to run.
+- Close `docs/curriculum/bscs-year1-decision-log.md` D-13 and D-34, citing this package.
+
+Anti-drift: no BSCS TSV edits (strategist's own action, out of this scope); no bulk generation; no
+`QUANTITATIVE_KEYWORDS` change (no companion keyword decision here, unlike `BASIC_MEDICAL_SCIENCES`); no
+prompt change (package §8 explicitly forbids preemptive prompt tuning); no production write of any kind.
+
+### Scope disposition (signoff, 2026-09-30)
+
+- **Every Planned Scope item: SHIPPED, verified against code with `file:line`, not from the release notes
+  alone.** ADR-001 amendment: `docs/architecture/ADR-001-canonical-knowledge-architecture.md:417`. Enum:
+  `DomainContext.java:47`. Frontend union member: `frontend/lib/api.ts:554`. R4 addendum:
+  `17-r4-verification-runbook.md:189`. Decision-log closure: `bscs-year1-decision-log.md:33,54`.
+- **The doc sweep EXPANDED beyond the four docs originally planned**, found during pre-commit review:
+  `docs/features/notes.md`, `challenge-quiz.md`, and `study-pack-generation.md` also enumerate the closed
+  Domain Context vocabulary and needed the same 12→13 update. Also fixed 6 stale file-path references left
+  by an unrelated prior session's rename batch, in the same 4 files this release was already editing, and
+  corrected a second stale claim discovered in `NOTES_AND_COLLECTIONS_CONTEXT.md` while re-stamping it
+  (Interior Design / Landscape Architecture / Environmental Planning are now live catalog programs, not
+  absent as it claimed; the catalog is 90 programs, not 41).
+- **A pressure-test pass (`advisor()`) on the diff before commit found and fixed four real defects before
+  they shipped**: an arithmetic error in the ADR (33/136 vs. the correct 34/136); a `[PROD]` tag on a count
+  that actually came from the local TSV, not a production read; an R4 addendum methodology built on
+  invented Subject-Plan assignments for the 5 pilot notes (none of which exist anywhere in the TSV), which
+  broke for 4 of the 5 notes because a 3-program note cannot generate under a NULL-Domain-Context fallback
+  at all under `ADR-001`'s own multi-program rule; and the kickoff's own commit-structure violation (code
+  and doc-sweep feature content was about to ride on the kickoff's direct-to-release-branch commit instead
+  of its own branch+PR).
+- **Not shipped, by design:** the BSCS TSV itself is not edited (strategist's own action); the R4 pilot did
+  not run (its 5 named notes don't exist in production yet); the 3 originally-`AMBIGUOUS` corpus rows are
+  not separately re-verified here (the owner's resolution to `COMPUTING_SHARED` is taken as given, per the
+  correction applied at kickoff).
+
+### Shipped
+
+- **ADR-001 amendment ratifying `Computing`** (13 values total): superseded the 2026-09-04 rejection
+  (naming answered via ACM/IEEE Computing Curricula 2020 + CHED CMO No. 25 s.2015; comprehension test
+  answered as curator-facing, not learner-facing); recorded the two-test curator rule; corrected the
+  package's own 133/136 → 136/136 evidence and removed its erroneous 34-row `applicable_programs`
+  extension instruction; re-read production rather than citing the stale `12:51` ratio — catalog is
+  now 90 programs, ratio `13:90` = 0.144; carries `[CHECKPOINT — due when BSCS Year 1 Computing
+  authoring reaches 10+ classified notes, backstop 2026-12-29 regardless]`, added to the Backlog Index
+  at signoff with its full kill criterion and two-tier denominator rule. Inline dated flags added at
+  the two lines that named `Computing` as previously rejected (not rewritten).
+- **`DomainContext.COMPUTING`** (backend enum, `quantitative = false`) and the matching frontend
+  `DOMAIN_CONTEXT_OPTIONS` entry / `DomainContext` union member, with a routing description (excludes
+  CS-specific formalism, IT/IS/SE specialization, Precalculus/Algebra). Test coverage: `DomainContextTest`
+  (13-label `containsExactly`, new CsvSource row, round-trip test updated to the newest value) and
+  `domain-context.test.ts` (length 12→13, new routing-clause pinning test). Full backend build
+  (2,636 tests) and full frontend suite (225 suites, 2,598 tests) both green.
+- **Doc sweep**, all corrected to 13 values / the new two-test rule: `REVIEW_SET_SHAPING_CONTEXT.md`,
+  `GPT_CONTEXT.md` (also discharged the "don't propose a 13th value" line, same pattern as the 9th/12th
+  discharges), `NOTES_AND_COLLECTIONS_CONTEXT.md` §0, `docs/features/notes.md`, `challenge-quiz.md`,
+  `study-pack-generation.md`. **Independent stale-claim fix**, `review-set-workbook-spec.md:118-119`:
+  corrected "the server rejects the save" to "generation-time only" — found true regardless of this
+  ratification. Bumped the "Last updated" stamps on `REVIEW_SET_SHAPING_CONTEXT.md` and
+  `NOTES_AND_COLLECTIONS_CONTEXT.md` at implementation, and on `GPT_CONTEXT.md` itself at signoff (all
+  three now read `v0.164.0 (Released)`, not `(In Progress)`); corrected a second stale claim found
+  along the way in `NOTES_AND_COLLECTIONS_CONTEXT.md` (Interior Design, Landscape Architecture and
+  Environmental Planning are now live catalog programs, not absent as it claimed; catalog is 90
+  programs, not 41).
+- **R4 runbook addendum** (`17-r4-verification-runbook.md`): a Computing section for the 5 named pilot
+  notes, prepared but explicitly marked not-yet-runnable — none of the 5 exist in production yet
+  (read-only check, 2026-09-30), execution is an owner action through the production UI regardless, and
+  the comparison-arm mechanics are honestly scoped (a true A/B needs a single-program note; a
+  multi-program note can only be scored on its `Computing` arm alone, since `ADR-001`'s own
+  multi-program rule blocks a NULL-Domain-Context fallback from generating at all).
+- **`docs/curriculum/bscs-year1-decision-log.md`** D-13 and D-34 closed, citing this package; D-33
+  (Precalculus) stays open, unchanged, per the package's own scope.
+- **`docs/claude-plans/computing-domain-context-final-decision-package.md`** — dated correction note
+  added at the top recording both owner corrections, rather than silently editing the original.
+- **`docs/product/ROADMAP.md`** Backlog Index row updated: gate cleared for ratification/code, corrected
+  numbers, R4 pilot's actual blocker (notes don't exist) stated explicitly; at signoff, the row's Gate
+  cell was rewritten to carry the formal `[CHECKPOINT — due when BSCS Year 1 Computing authoring
+  reaches 10+ classified notes, backstop 2026-12-29 regardless]` tag with kill criterion,
+  instrumentation and two-tier denominator rule, per the signoff checkpoint gate.
+
