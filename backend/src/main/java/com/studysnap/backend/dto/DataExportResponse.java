@@ -40,8 +40,18 @@ public record DataExportResponse(
             LocalDate examDate,
             Integer birthYear,
             List<ProvisionalBirthYear> provisionalBirthYears,
-            OffsetDateTime createdAt
+            OffsetDateTime createdAt,
+            List<ExamGoalResponse> examGoals
     ) {
+        public Account(String email, String firstName, String lastName, String displayName,
+                String username, ProfileType profileType, LearnerLevel learnerLevel,
+                String courseProgram, String studyGoal, List<String> focusSubjects,
+                LocalDate examDate, Integer birthYear,
+                List<ProvisionalBirthYear> provisionalBirthYears, OffsetDateTime createdAt) {
+            this(email, firstName, lastName, displayName, username, profileType, learnerLevel,
+                    courseProgram, studyGoal, focusSubjects, examDate, birthYear,
+                    provisionalBirthYears, createdAt, List.of());
+        }
     }
 
     /**

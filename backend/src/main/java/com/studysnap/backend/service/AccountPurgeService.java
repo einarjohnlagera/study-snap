@@ -37,6 +37,7 @@ import com.studysnap.backend.repository.SubscriptionRepository;
 import com.studysnap.backend.repository.UserAuthProviderRepository;
 import com.studysnap.backend.repository.UserLibraryFilterRepository;
 import com.studysnap.backend.repository.UserRepository;
+import com.studysnap.backend.repository.UserExamGoalRepository;
 import com.studysnap.backend.repository.UserUsageRepository;
 import com.studysnap.backend.repository.VoucherRedemptionRepository;
 import lombok.RequiredArgsConstructor;
@@ -62,6 +63,7 @@ public class AccountPurgeService {
     private final StudySnapProperties properties;
     private final PlatformTransactionManager transactionManager;
     private final UserRepository userRepository;
+    private final UserExamGoalRepository userExamGoalRepository;
     private final NoteRepository noteRepository;
     private final StudyPackRepository studyPackRepository;
     private final StudyPackDraftRepository studyPackDraftRepository;
@@ -169,6 +171,7 @@ public class AccountPurgeService {
     }
 
     private void deletePersonalRows(UUID userId) {
+        userExamGoalRepository.deleteByUserId(userId);
         quizShareLinkRepository.deleteByOwnerUserId(userId);
         generatedQuizRepository.deleteByOwnerUserId(userId);
         quickReviewSessionRepository.deleteByUserId(userId);

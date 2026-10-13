@@ -1,6 +1,9 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import ProfilePage from "./page";
 import {
+  addExamGoal,
+  activateExamGoal,
+  removeExamGoal,
   completeOnboardingProfileType,
   connectGoogle,
   getCourseProgramCatalog,
@@ -35,6 +38,9 @@ jest.mock("@/lib/route-guards", () => ({
 }));
 
 jest.mock("@/lib/api", () => ({
+  addExamGoal: jest.fn(),
+  activateExamGoal: jest.fn(),
+  removeExamGoal: jest.fn(),
   completeOnboardingProfileType: jest.fn(),
   connectGoogle: jest.fn(),
   getCourseProgramCatalog: jest.fn(),
@@ -63,6 +69,7 @@ const profileResponse = {
   learnerLevel: "COLLEGE",
   courseProgram: "Nursing",
   studyGoal: null,
+  examGoals: [],
   focusSubjects: [],
   schoolName: null,
   publicProfileVisible: true,
@@ -96,6 +103,9 @@ describe("Profile page", () => {
     (listCoursePrograms as jest.Mock).mockReset();
     (listExamGoalDefinitions as jest.Mock).mockReset();
     (setStudyGoal as jest.Mock).mockReset();
+    (addExamGoal as jest.Mock).mockReset();
+    (activateExamGoal as jest.Mock).mockReset();
+    (removeExamGoal as jest.Mock).mockReset();
     (listSubjects as jest.Mock).mockReset();
     (setFocusSubjects as jest.Mock).mockReset();
     (updateUserProfile as jest.Mock).mockReset();
@@ -608,38 +618,71 @@ describe("Profile page", () => {
   });
 
   it("offers CELE when empty and switches an existing goal without changing state before success", async () => {
-    (getMe as jest.Mock).mockResolvedValue({ ...profileResponse, studyGoal: "ale" });
+    (getMe as jest.Mock).mockResolvedValue({ ...profileResponse, studyGoal: "ale", examGoals: [{ slug: "ale", isActive: true }] });
     let finish!: (value: unknown) => void;
-    (setStudyGoal as jest.Mock).mockReturnValue(new Promise((resolve) => { finish = resolve; }));
-    render(<ProfilePage />);
-    const picker = await screen.findByRole("textbox", { name: "Choose an exam goal" });
-    fireEvent.click(screen.getByRole("button", { name: "Toggle suggestions" }));
-    fireEvent.click(await screen.findByRole("option", { name: "Civil Engineering Licensure Examination (CELE)" }));
-    expect(setStudyGoal).toHaveBeenCalledWith("ce");
-    expect(screen.getByText("Architect Licensure Examination")).toBeInTheDocument();
-    finish({ ...profileResponse, studyGoal: "ce", focusSubjects: [] });
-    await waitFor(() => expect(picker).toHaveValue("Civil Engineering Licensure Examination (CELE)"));
-  });
-
-  it("surfaces a failed exam selection and leaves the saved focus visible", async () => {
-    (getMe as jest.Mock).mockResolvedValue({ ...profileResponse, focusSubjects: ["Pharmacology"] });
-    (setStudyGoal as jest.Mock).mockRejectedValue(new Error("Network unavailable"));
+    (addExamGoal as jest.Mock).mockReturnValue(new Promise((resolve) => { finish = resolve; }));
     render(<ProfilePage />);
     await screen.findByRole("textbox", { name: "Choose an exam goal" });
     fireEvent.click(screen.getByRole("button", { name: "Toggle suggestions" }));
     fireEvent.click(await screen.findByRole("option", { name: "Civil Engineering Licensure Examination (CELE)" }));
+    expect(addExamGoal).toHaveBeenCalledWith("ce");
+    expect(screen.getAllByText("Architect Licensure Examination").length).toBeGreaterThan(0);
+    finish([{ slug: "ale", isActive: false }, { slug: "ce", isActive: true }]);
+    await waitFor(() => expect(screen.getAllByText(/Civil Engineering Licensure Examination/).length).toBeGreaterThan(0));
+  });
+
+  it("surfaces a failed exam selection and leaves the saved focus visible", async () => {
+    (getMe as jest.Mock).mockResolvedValue({ ...profileResponse, focusSubjects: ["Pharmacology"] });
+    (addExamGoal as jest.Mock).mockRejectedValue(new Error("Network unavailable"));
+    render(<ProfilePage />);
+    await screen.findByRole("textbox", { name: "Choose an exam goal" });
+    fireEvent.click(screen.getByRole("button", { name: "Toggle suggestions" }));
+    fireEvent.click(await screen.findByRole("option", { name: "Civil Engineering Licensure Examination (CELE)" }));
+    expect(addExamGoal).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Confirm change" }));
     expect(await screen.findByText("Network unavailable")).toBeInTheDocument();
     expect(screen.getByText("Pharmacology")).toBeInTheDocument();
   });
 
   it("replaces subject focus with a selected exam after the server confirms the change", async () => {
     (getMe as jest.Mock).mockResolvedValue({ ...profileResponse, focusSubjects: ["Pharmacology"] });
-    (setStudyGoal as jest.Mock).mockResolvedValue({ ...profileResponse, studyGoal: "ce", focusSubjects: [] });
+    (addExamGoal as jest.Mock).mockResolvedValue([{ slug: "ce", isActive: true }]);
     render(<ProfilePage />);
     await screen.findByRole("textbox", { name: "Choose an exam goal" });
     fireEvent.click(screen.getByRole("button", { name: "Toggle suggestions" }));
     fireEvent.click(await screen.findByRole("option", { name: "Civil Engineering Licensure Examination (CELE)" }));
-    await waitFor(() => expect(screen.getByText("Civil Engineering Licensure Examination (CELE)")).toBeInTheDocument());
+    expect(addExamGoal).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Confirm change" }));
+    await waitFor(() => expect(addExamGoal).toHaveBeenCalledWith("ce"));
     expect(screen.queryByText("Pharmacology")).not.toBeInTheDocument();
+  });
+
+  it("confirms before saving subjects clears every adopted exam goal", async () => {
+    (getMe as jest.Mock).mockResolvedValue({ ...profileResponse, studyGoal: "ale",
+      examGoals: [{ slug: "ale", isActive: true }, { slug: "ce", isActive: false }] });
+    render(<ProfilePage />);
+    fireEvent.click(await screen.findByRole("button", { name: "Change" }));
+    fireEvent.click(screen.getByRole("button", { name: "Pharmacology" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save Focus" }));
+    expect(setFocusSubjects).not.toHaveBeenCalled();
+    expect(screen.getByText(/clear all 2 adopted exam goals/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Confirm change" }));
+    await waitFor(() => expect(setFocusSubjects).toHaveBeenCalledWith(["Pharmacology"]));
+  });
+
+  it("activates and removes adopted goals after the server replies and records events", async () => {
+    (getMe as jest.Mock).mockResolvedValue({ ...profileResponse, studyGoal: "ale",
+      examGoals: [{ slug: "ale", isActive: true }, { slug: "ce", isActive: false }] });
+    (activateExamGoal as jest.Mock).mockResolvedValue([
+      { slug: "ale", isActive: false }, { slug: "ce", isActive: true },
+    ]);
+    (removeExamGoal as jest.Mock).mockResolvedValue([{ slug: "ale", isActive: true }]);
+    render(<ProfilePage />);
+    fireEvent.click(await screen.findByRole("button", { name: "Set active" }));
+    await waitFor(() => expect(activateExamGoal).toHaveBeenCalledWith("ce"));
+    expect(trackAnalyticsEvent).toHaveBeenCalledWith(expect.objectContaining({ eventType: "EXAM_GOAL_ACTIVATED" }));
+    fireEvent.click(screen.getAllByRole("button", { name: "Remove" })[1]);
+    await waitFor(() => expect(removeExamGoal).toHaveBeenCalledWith("ce"));
+    expect(trackAnalyticsEvent).toHaveBeenCalledWith(expect.objectContaining({ eventType: "EXAM_GOAL_REMOVED" }));
   });
 });

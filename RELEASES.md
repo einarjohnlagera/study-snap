@@ -135,6 +135,25 @@ pending real adopters. Neither is "Study Journey" work this release can close by
   Backend: 2,659 tests/0 failures (incl. the Testcontainers native-query Postgres harness, 46 queries
   now PREPAREd). Frontend: 230/230 suites, 2,634/2,635 tests (1 pre-existing unrelated skip).
 
+- **Multi-goal exam support.** V155 moves valid scalar exam slugs
+  into `user_exam_goals`, preserving legacy free-text values; Profile can add, remove, and activate
+  goals, and Dashboard uses the active goal while post-session nudges follow the completed note's
+  adopted-goal context. Subject focus and exam goals remain exclusive with confirmation before
+  either direction clears existing preferences. The goal prompt now respects subject focus and
+  persists generic dismissal. Account data export schema 1.3 includes every goal. **Frontend and backend must deploy
+  together.** After V155 runs, rolling the backend back to v0.169.0 is **not safe for the 16 migrated
+  users**: their scalar `studyGoal` is empty and that backend cannot read the retained rows in
+  `user_exam_goals`. At signoff, add a post-ship population checkpoint to measure whether the
+  ≥2-distinct-goal cohort grows beyond the 2-of-426 baseline; this release shipped ahead of that
+  evidence gate by owner decision. Audited before commit against the Codex prompt's acceptance
+  criteria: migration backfill replay test, real-Postgres flush-order test (partial unique index
+  verified present), purge deletes rows (not sentinel-reassigned), GDPR export includes every
+  adopted goal, `PUT /users/profile/goal` kept contract-compatible for un-upgraded clients, and new
+  `EXAM_GOAL_*` analytics events confirmed firing (not just enum members) via frontend tests.
+  Backend: 2,672 tests/0 failures (incl. the Testcontainers native-query Postgres harness).
+  Frontend: 231/231 suites, 2,642/2,643 tests (1 pre-existing unrelated skip), `tsc --noEmit` clean,
+  lint clean.
+
 ## v0.169.0 - Study Journey, Continued
 
 **Status: Released** (signed off 2026-10-12; commit `3200c773` on `releases/v0.169.0`)

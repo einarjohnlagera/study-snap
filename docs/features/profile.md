@@ -86,7 +86,8 @@ Study Focus is the profile-owned setup surface for progress goals that are not s
 
 Stored fields:
 
-- `studyGoal`: legacy/current single goal string. It may contain an exam slug such as `ale` or an older course-program goal.
+- `user_exam_goals`: one row per adopted exam slug, with exactly one active row when any goals exist. Adding an existing slug activates its existing row. Removing the active row promotes the most recently added remaining goal (then lowest id).
+- `studyGoal`: retained for legacy free-text goals only after V155 migrates valid exam slugs into `user_exam_goals`. Existing response shapes still expose an effective scalar derived from the active row for older clients.
 - `focusSubjects`: subject-level multi-select saved as `users.focus_subjects text[]`.
 
 Rules:
@@ -94,10 +95,11 @@ Rules:
 - The Study Focus picker loads subject chips from `GET /subjects?scope=mine`.
 - Subject chips come from the user's own AI-inferred note / Study Pack subjects, not course-program suggestions.
 - Users can select multiple subjects and save them as `focusSubjects`.
-- Saving a non-empty `focusSubjects` list clears `studyGoal`; the two are mutually exclusive when changed from Profile.
-- The exam hub intent flow may still set `studyGoal` directly; the shared writer clears `focusSubjects` whenever it saves a non-null goal.
-- If `studyGoal` already exists, Profile shows the current goal with `Change` and `Clear`; `Change` moves the user into the subject multi-select.
-- A constrained exam-goal combobox appears in Study Focus whether a goal is set or not. It lists the full names from the server's valid exam definitions and saves the selected slug through `PUT /users/profile/goal`; it also permits switching directly between exams. Selecting an exam clears `focusSubjects` in the same server transaction. The displayed goal changes only after the save succeeds, and a failed save shows an inline error.
+- Saving a non-empty `focusSubjects` list clears every adopted exam goal and the legacy scalar. If any exam goal exists, Profile confirms this loss before writing. Adding an exam goal clears `focusSubjects`; Profile and the Exam Hub intent banner confirm that direction when subjects are already selected.
+- The exam hub intent flow adds and activates its slug without removing other exam goals or adopting content.
+- The constrained exam-goal combobox adds a goal. Adopted goals appear in a list with Set active and Remove actions; changes appear after the server confirms them. Removing a goal does not remove adopted content or assessment history.
+- Goal reads take the active `user_exam_goals` row first, then legacy `studyGoal`, then `focusSubjects`. General dashboard nudges use the active goal. Post-session next steps use an adopted goal matching the completed note when it differs from the active goal.
+- `PUT /users/profile/goal` remains compatible with older clients: a valid slug adds and activates, free text clears exam rows, and null clears all goal preferences.
 - If `focusSubjects` exists and `studyGoal` is empty, Profile shows `Focusing on:` plus subject pills with `Change` and `Clear`.
 - If there are no user subjects yet, Profile shows: `Create some notes first — your subjects will appear here as focus options.`
 

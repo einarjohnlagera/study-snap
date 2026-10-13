@@ -56,6 +56,8 @@ class ProgressReportServiceTest {
 
     @Mock
     private ExamGoalCourseProgramProvider examGoalCourseProgramProvider;
+    @Mock
+    private com.studysnap.backend.repository.UserExamGoalRepository userExamGoalRepository;
 
     private ProgressReportService progressReportService;
 
@@ -68,7 +70,8 @@ class ProgressReportServiceTest {
                 conceptHealthService,
                 noteRepository,
                 noteCourseProgramRepository,
-                examGoalCourseProgramProvider
+                examGoalCourseProgramProvider,
+                new UserExamGoalResolver(userExamGoalRepository, examGoalCourseProgramProvider)
         );
         lenient().when(examGoalCourseProgramProvider.getCoursePrograms("ale"))
                 .thenReturn(List.of("Architecture"));

@@ -72,6 +72,8 @@ class AccountPurgeServiceTest {
     @Mock
     private UserRepository userRepository;
     @Mock
+    private com.studysnap.backend.repository.UserExamGoalRepository userExamGoalRepository;
+    @Mock
     private NoteRepository noteRepository;
     @Mock
     private StudyPackRepository studyPackRepository;
@@ -139,6 +141,7 @@ class AccountPurgeServiceTest {
                 properties,
                 transactionManager,
                 userRepository,
+                userExamGoalRepository,
                 noteRepository,
                 studyPackRepository,
                 studyPackDraftRepository,
@@ -210,6 +213,7 @@ class AccountPurgeServiceTest {
         verify(quizShareLinkRepository).deleteByOwnerUserId(userId);
         verify(generatedQuizRepository).deleteByOwnerUserId(userId);
         verify(quickReviewSessionRepository).deleteByUserId(userId);
+        verify(userExamGoalRepository).deleteByUserId(userId);
         verify(conceptHealthRepository).deleteByUserId(userId);
         verify(memorizationCardRepository).deleteByUserId(userId);
         verify(activityEventRepository).deleteByUserId(userId);

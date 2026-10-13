@@ -55,12 +55,17 @@ class MeControllerTest {
     private UserRepository userRepository;
     @Mock
     private AuthService authService;
+    @Mock
+    private com.studysnap.backend.service.UserExamGoalResolver userExamGoalResolver;
 
     private MeController meController;
 
     @BeforeEach
     void setUp() {
-        meController = new MeController(mePlanService, progressReportService, userRepository, authService);
+        meController = new MeController(mePlanService, progressReportService, userRepository, authService,
+                userExamGoalResolver);
+        org.mockito.Mockito.lenient().when(userExamGoalResolver.effectiveStudyGoal(any()))
+                .thenAnswer(invocation -> ((com.studysnap.backend.entity.UserEntity) invocation.getArgument(0)).getStudyGoal());
     }
 
     @Test

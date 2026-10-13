@@ -1,8 +1,10 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { GoalPromptBanner } from "./goal-prompt-banner";
-import { setStudyGoal, trackAnalyticsEvent } from "@/lib/api";
+import { addExamGoal, adoptStudyPlan, setStudyGoal, trackAnalyticsEvent } from "@/lib/api";
 
 jest.mock("@/lib/api", () => ({
+  addExamGoal: jest.fn(),
+  adoptStudyPlan: jest.fn(),
   setStudyGoal: jest.fn(),
   trackAnalyticsEvent: jest.fn(),
 }));
@@ -10,9 +12,13 @@ jest.mock("@/lib/api", () => ({
 describe("GoalPromptBanner", () => {
   beforeEach(() => {
     document.cookie = "notelib-exam-intent=; path=/; max-age=0; SameSite=Strict";
+    localStorage.clear();
     (setStudyGoal as jest.Mock).mockReset();
+    (addExamGoal as jest.Mock).mockReset();
+    (adoptStudyPlan as jest.Mock).mockReset();
     (trackAnalyticsEvent as jest.Mock).mockReset();
     (setStudyGoal as jest.Mock).mockResolvedValue({ studyGoal: "ale" });
+    (addExamGoal as jest.Mock).mockResolvedValue([{ slug: "ale", isActive: true }]);
   });
 
   it("renders nothing when an exam goal is already set", () => {
@@ -21,11 +27,47 @@ describe("GoalPromptBanner", () => {
     expect(screen.queryByText(/Make Architect Licensure Examination/)).not.toBeInTheDocument();
   });
 
+  it("suppresses the generic prompt when subjects are already focused", () => {
+    render(<GoalPromptBanner studyGoal={null} courseProgram="Architecture" profileType="STUDENT"
+      focusSubjects={["Biology"]} />);
+    expect(screen.queryByText(/Suggested Goal/)).not.toBeInTheDocument();
+  });
+
+  it("offers an intent goal even when a different goal is active", async () => {
+    document.cookie = "notelib-exam-intent=pnle; path=/; max-age=1800; SameSite=Strict";
+    render(<GoalPromptBanner studyGoal="ale" courseProgram="Architecture" profileType="STUDENT"
+      examGoals={[{ slug: "ale", isActive: true }]} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Set as my goal" }));
+    await waitFor(() => expect(addExamGoal).toHaveBeenCalledWith("pnle"));
+    expect(adoptStudyPlan).not.toHaveBeenCalled();
+    expect(trackAnalyticsEvent).toHaveBeenCalledWith(expect.objectContaining({ eventType: "EXAM_GOAL_ADDED" }));
+  });
+
+  it("confirms before intent clears an existing subject focus", async () => {
+    document.cookie = "notelib-exam-intent=pnle; path=/; max-age=1800; SameSite=Strict";
+    render(<GoalPromptBanner studyGoal={null} courseProgram="Nursing" profileType="STUDENT"
+      focusSubjects={["Biology"]} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Set as my goal" }));
+    expect(addExamGoal).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Add exam goal" }));
+    await waitFor(() => expect(addExamGoal).toHaveBeenCalledWith("pnle"));
+  });
+
   it("renders nothing when no cookie and no course program exist", () => {
     render(<GoalPromptBanner studyGoal={null} courseProgram={null} profileType="STUDENT" />);
 
     expect(screen.queryByText(/Suggested Goal/)).not.toBeInTheDocument();
     expect(screen.queryByText(/Suggested Focus/)).not.toBeInTheDocument();
+  });
+
+  it("persists generic dismissal across a remount", async () => {
+    const props = { studyGoal: null, courseProgram: "Architecture", profileType: "STUDENT", userId: "user-1" };
+    const view = render(<GoalPromptBanner {...props} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Dismiss" }));
+    expect(localStorage.getItem("notelib-goal-prompt-dismissed:user-1")).toBe("1");
+    view.unmount();
+    render(<GoalPromptBanner {...props} />);
+    expect(screen.queryByText("Suggested Goal: ALE")).not.toBeInTheDocument();
   });
 
   it("renders from a valid exam intent cookie", async () => {
@@ -65,7 +107,7 @@ describe("GoalPromptBanner", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Set as my goal" }));
 
     await waitFor(() => {
-      expect(setStudyGoal).toHaveBeenCalledWith("ale");
+      expect(addExamGoal).toHaveBeenCalledWith("ale");
     });
     expect(document.cookie).not.toContain("notelib-exam-intent=ale");
     expect(trackAnalyticsEvent).toHaveBeenCalledWith({
@@ -95,7 +137,7 @@ describe("GoalPromptBanner", () => {
   });
 
   it("keeps the banner visible and shows an inline error when saving fails", async () => {
-    (setStudyGoal as jest.Mock).mockRejectedValue(new Error("Could not update exam goal."));
+    (addExamGoal as jest.Mock).mockRejectedValue(new Error("Could not update exam goal."));
     render(<GoalPromptBanner studyGoal={null} courseProgram="Education" profileType="STUDENT" />);
 
     fireEvent.click(await screen.findByRole("button", { name: "Set as my goal" }));

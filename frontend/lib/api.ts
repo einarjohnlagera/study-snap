@@ -348,7 +348,10 @@ export type GoalSummaryResponse = {
   totalConcepts: number;
   notPracticedConcepts: number;
   weakestGoalSubject: string | null;
+  examGoals?: ExamGoalResponse[];
 };
+
+export type ExamGoalResponse = { slug: string; isActive: boolean };
 
 export type ProgressReportResponse = {
   subjects: SubjectProgressEntry[];
@@ -613,6 +616,9 @@ export type AnalyticsEventType =
   | "COLLECTION_SECTION_ASSIGNED"
   | "STUDY_PLAN_ADOPTED"
   | "STUDY_GOAL_ADOPTED"
+  | "EXAM_GOAL_ADDED"
+  | "EXAM_GOAL_ACTIVATED"
+  | "EXAM_GOAL_REMOVED"
   | "PLAN_READINESS_VIEWED"
   | "COMPANION_GENERATED"
   | "STUDY_PACK_GENERATED"
@@ -1096,6 +1102,7 @@ export type MeResponse = {
   learnerLevel: LearnerLevel | null;
   courseProgram: string | null;
   studyGoal?: string | null;
+  examGoals?: ExamGoalResponse[];
   focusSubjects?: string[] | null;
   schoolName: string | null;
   publicProfileVisible: boolean;
@@ -3032,6 +3039,27 @@ export async function setStudyGoal(studyGoal: string | null): Promise<MeResponse
   const me = await parseApiResponse<MeResponse>(response, "Could not update study goal. Please try again.");
   syncStoredAuthUserFromMe(me);
   return me;
+}
+
+export async function addExamGoal(slug: string): Promise<ExamGoalResponse[]> {
+  const response = await fetchWithAuth("/users/profile/exam-goals", {
+    method: "POST", headers: buildAuthHeaders("application/json"), body: JSON.stringify({ slug }),
+  }, true);
+  return parseApiResponse<ExamGoalResponse[]>(response, "Could not add exam goal.");
+}
+
+export async function activateExamGoal(slug: string): Promise<ExamGoalResponse[]> {
+  const response = await fetchWithAuth(`/users/profile/exam-goals/${encodeURIComponent(slug)}/active`, {
+    method: "PUT", headers: buildAuthHeaders("application/json"),
+  }, true);
+  return parseApiResponse<ExamGoalResponse[]>(response, "Could not activate exam goal.");
+}
+
+export async function removeExamGoal(slug: string): Promise<ExamGoalResponse[]> {
+  const response = await fetchWithAuth(`/users/profile/exam-goals/${encodeURIComponent(slug)}`, {
+    method: "DELETE", headers: buildAuthHeaders("application/json"),
+  }, true);
+  return parseApiResponse<ExamGoalResponse[]>(response, "Could not remove exam goal.");
 }
 
 export async function listExamGoalDefinitions(): Promise<Record<string, string>> {
