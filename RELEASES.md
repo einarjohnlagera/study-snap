@@ -2,7 +2,7 @@
 
 ## v0.170.0 - Study Journey, Closed
 
-**Status: In Progress**
+**Status: Released**
 
 Theme: close out the Study Journey Purpose / Learner Goal architecture — the last discovery item
 (Public Note → Official Review Set) plus multi-goal exam support, both shipping on explicit owner
@@ -102,7 +102,11 @@ item 2 below; nothing had deployed yet.
    shapes, and touches profile, dashboard, post-session, exam-hub, and GDPR-export code — clears the
    bar for at least one scoped cold falsification agent at signoff per the pressure-test gate, and is a
    candidate for the full 3-agent pressure test given the permission-adjacent (goal/content exclusivity)
-   surface. Decide at signoff, not assumed here.
+   surface. **Decided at signoff:** one scoped cold agent (fresh context, `opus`, read-only, instructed
+   to falsify 7 named claims), not the full 3-agent test — `git diff --name-only` on both PRs found no
+   shared Java method between PR #1490 and PR #1491 (3 shared files, disjoint lines each), and the
+   goal/content exclusivity surface is a profile-preference rule, never an access-control boundary (no
+   cross-user read, no money/quota change), so the full-test trigger does not fire. Findings below.
 
    **Audited before commit** against the Codex prompt's full acceptance-criteria list: migration
    backfill replay test against seeded (non-empty) data; a real-Postgres `@SpringBootTest` +
@@ -167,7 +171,23 @@ pending real adopters. Neither is "Study Journey" work this release can close by
   `EXAM_GOAL_*` analytics events confirmed firing (not just enum members) via frontend tests.
   Backend: 2,672 tests/0 failures (incl. the Testcontainers native-query Postgres harness).
   Frontend: 231/231 suites, 2,642/2,643 tests (1 pre-existing unrelated skip), `tsc --noEmit` clean,
-  lint clean.
+  lint clean. **Known limitations, found by the pre-signoff falsification agent, none blocking:**
+  (1) `PUT /users/profile/goal`'s `studyGoal: null` branch now also empties `focusSubjects`
+  (`AuthService.java:605-621`) — a deliberate "full reset" per the Codex prompt, but a genuine
+  behavior change from `v0.169.0` (null used to leave `focusSubjects` untouched); an un-upgraded
+  client sending `null` during the brief deploy-rollover window sees this new behavior before its own
+  UI catches up. (2) V155 does not special-case a legacy row holding both a valid exam-slug
+  `studyGoal` and non-empty `focusSubjects` — confirmed via a read-only production query at signoff
+  (2026-10-13) that 0 of 426 users are in that state today, so the gap is theoretical, not live; if it
+  ever becomes non-zero, such a migrated row would hold an active goal and focus subjects
+  simultaneously, violating the new exclusivity invariant. (3) The migration's SQL `trim()` is
+  whitespace-only, narrower than `ExamGoalConfig`'s Java-side slug normalization — a value like
+  `"ale\n"` would not migrate and falls back harmlessly to legacy scalar handling via the resolver.
+  (4) The Official Review Set predicate (Item 1) does not exclude a `PENDING_DELETION` admin
+  account's collection until the account is actually purged. (5) During the deploy rollover, an old
+  backend instance can still write a stale scalar `studyGoal` for a user who already has an active
+  `user_exam_goals` row; the resolver prefers the row, so the stale write is silently ignored rather
+  than losing data, and the window closes once rollover completes.
 
 ## v0.169.0 - Study Journey, Continued
 

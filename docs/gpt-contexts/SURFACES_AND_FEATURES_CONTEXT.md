@@ -2,7 +2,13 @@
 
 > **Module — not a standalone brief.** Paste `GPT_CONTEXT.md` first; this file assumes it.
 > Paste this module when the conversation is about **a specific screen or feature surface, Note Collections, or the Companion**.
-> Last updated: v0.167.0 - 2026-10-08 (Released). **`v0.167.0` changed the "Vision & Locked Rules"
+> Last updated: v0.170.0 - 2026-10-13 (In Progress). **`v0.170.0` shipped true multi-goal exam
+> support, overriding the "ONE exam goal"/"true multi-goal support stays explicitly deferred" lines
+> in the `v0.167.0` paragraph directly below** (owner override — the deferral's own "re-open past a
+> handful" trigger was never met; population stayed 2 of 426). A learner can now adopt SEVERAL exam
+> goals via a new `user_exam_goals` join table, mark one active, and switch/remove without losing
+> adopted content or history; `studyGoal` is now legacy free-text-only. See `docs/features/profile.md`
+> for the full picker/precedence detail. Previously v0.167.0 - 2026-10-08 (Released). **`v0.167.0` changed the "Vision & Locked Rules"
 > line below about Note Collection terminology — it is no longer purely `getCollectionLabels(profileType)`.**
 > A collection whose ROOT qualifies (`learnerLevel = BOARD_EXAM_REVIEW` and a `courseProgram` carrying a
 > recognized `exam_goal_slug`) now gets exam-specific per-collection nouns ("PNLE Review Set," "CELE
@@ -133,7 +139,7 @@ Everything below is live in production and has **zero users**. Audited against r
 - Public note actions copy/create private owned notes first; private study actions never run against a public source note.
 - Public Profile is `/public/creator/{username}` canonical, `/public/profile/{userId}` legacy-compatible.
 - Profile Settings (`/profile`) is private editing; Public Profile owns visibility and sharing.
-- **Study Focus (`/profile`), since `v0.167.0`:** a constrained picker lets a learner deliberately set/switch ONE recognized exam goal (ALE, PNLE, LET, CPALE, CELE), clearing any saved subject focus in the same save. Previously the only paths were a single dashboard auto-suggestion banner or clearing the goal entirely — there was no deliberate "choose/change" path. True multi-goal support stays explicitly deferred.
+- **Study Focus (`/profile`), since `v0.170.0`:** a learner can adopt SEVERAL exam goals (ALE, PNLE, LET, CPALE, CELE) via a new `user_exam_goals` join table, mark one active, and switch/remove without losing adopted content or history, clearing any saved subject focus in the same save. `v0.167.0` had shipped this as a single-goal-only picker; `v0.170.0` overrode that deferral (owner override — the "re-open past a handful" trigger was never met, population stayed 2 of 426) and built true multi-goal support.
 
 ### Note Collections (Study Plans / Review Sets)
 

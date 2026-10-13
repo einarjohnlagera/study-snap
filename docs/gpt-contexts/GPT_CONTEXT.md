@@ -3,7 +3,13 @@
 > **This is the core brief. Paste it as your first message in a new GPT chat session.**
 > Then paste any module below that matches the conversation — see "Which modules to paste".
 > Update this file whenever a new version ships or the roadmap shifts significantly.
-> Last updated: v0.169.0 - 2026-10-12 (Released). **`v0.169.0` added Civil Engineering (CELE) as a
+> Last updated: v0.170.0 - 2026-10-13 (In Progress). **`v0.170.0` shipped both Study Journey
+> candidates line 10 below said were "deliberately held back": multi-goal exam support (owner
+> override — population stayed 2 of 426, the deferral's own trigger was never met — a learner can
+> now adopt several exam goals via a new `user_exam_goals` table, not just one) and the Public Note →
+> Official Review Set link (a callout on a public note's detail page when it sits in a qualifying
+> curator-owned Review Set). See `SURFACES_AND_FEATURES_CONTEXT.md`'s Study Focus note and
+> `docs/features/profile.md` for the multi-goal detail. Previously v0.169.0 - 2026-10-12 (Released). **`v0.169.0` added Civil Engineering (CELE) as a
 > 5th Exam Hub** (`/exam/ce`, alongside ALE/PNLE/LET/CPALE) — an owner override of a prior
 > Product-UX "wait for adoption evidence" call, now carrying its own `[CHECKPOINT — due deploy + 30
 > days]` on whether that override paid off. Two other Study Journey candidates (multi-goal exam
