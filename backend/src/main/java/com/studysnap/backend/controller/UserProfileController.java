@@ -1,6 +1,8 @@
 package com.studysnap.backend.controller;
 
 import com.studysnap.backend.dto.MeResponse;
+import com.studysnap.backend.dto.ExamGoalRequest;
+import com.studysnap.backend.dto.ExamGoalResponse;
 import com.studysnap.backend.dto.UpdateExamDateRequest;
 import com.studysnap.backend.dto.UpdateFocusSubjectsRequest;
 import com.studysnap.backend.dto.UpdateLearningContextRequest;
@@ -16,9 +18,14 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.util.List;
 
 @RestController
 @RequestMapping("/users")
@@ -61,6 +68,33 @@ public class UserProfileController {
             @RequestBody UpdateStudyGoalRequest request
     ) {
         return authService.updateStudyGoal(user.userId(), request);
+    }
+
+    @PostMapping("/profile/exam-goals")
+    @PreAuthorize("isAuthenticated()")
+    public List<ExamGoalResponse> addExamGoal(
+            @AuthenticationPrincipal AuthenticatedUser user,
+            @RequestBody ExamGoalRequest request
+    ) {
+        return authService.addExamGoal(user.userId(), request.slug());
+    }
+
+    @PutMapping("/profile/exam-goals/{slug}/active")
+    @PreAuthorize("isAuthenticated()")
+    public List<ExamGoalResponse> activateExamGoal(
+            @AuthenticationPrincipal AuthenticatedUser user,
+            @PathVariable String slug
+    ) {
+        return authService.activateExamGoal(user.userId(), slug);
+    }
+
+    @DeleteMapping("/profile/exam-goals/{slug}")
+    @PreAuthorize("isAuthenticated()")
+    public List<ExamGoalResponse> removeExamGoal(
+            @AuthenticationPrincipal AuthenticatedUser user,
+            @PathVariable String slug
+    ) {
+        return authService.removeExamGoal(user.userId(), slug);
     }
 
     @PutMapping("/profile/focus-subjects")

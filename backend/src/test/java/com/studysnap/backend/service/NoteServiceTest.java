@@ -118,6 +118,8 @@ class NoteServiceTest {
     @Mock
     private NoteCourseProgramRepository noteCourseProgramRepository;
     @Mock
+    private com.studysnap.backend.repository.NoteCollectionItemRepository noteCollectionItemRepository;
+    @Mock
     private com.studysnap.backend.repository.CourseProgramCatalogRepository courseProgramCatalogRepository;
     @Mock
     private StudyPackQuizMasteryService studyPackQuizMasteryService;
@@ -145,10 +147,13 @@ class NoteServiceTest {
                 onboardingGuardService,
                 officialChallengeQuizTemplateService,
                 noteCourseProgramRepository,
+                noteCollectionItemRepository,
                 courseProgramCatalogRepository,
                 studyPackQuizMasteryService,
                 studyPackGenerationContextResolver
         );
+        lenient().when(noteCollectionItemRepository.findOfficialReviewSetRootForNote(any(), any()))
+                .thenReturn(java.util.Optional.empty());
         lenient().when(noteRepository.save(any(NoteEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
         lenient().when(noteRepository.findAllSubjectValues()).thenReturn(List.of());
         lenient().when(noteRepository.findPublicLibraryListItemProjectionsByIdIn(any())).thenAnswer(invocation -> {
@@ -1974,6 +1979,14 @@ class NoteServiceTest {
         when(studyPackRepository.findByNoteId(noteId)).thenReturn(Optional.of(studyPack));
         when(userRepository.findById(ownerUserId)).thenReturn(Optional.of(owner));
 
+        com.studysnap.backend.repository.OfficialReviewSetProjection officialSet =
+                mock(com.studysnap.backend.repository.OfficialReviewSetProjection.class);
+        UUID officialSetId = UUID.randomUUID();
+        when(officialSet.getId()).thenReturn(officialSetId);
+        when(officialSet.getTitle()).thenReturn("History Review");
+        when(noteCollectionItemRepository.findOfficialReviewSetRootForNote(
+                noteId, AccountPurgeService.DELETED_USER_ID)).thenReturn(Optional.of(officialSet));
+
         var response = noteService.getPublicBySeoPath("history", "world-war-1-causes", null);
 
         assertThat(response.id()).isEqualTo(noteId.toString());
@@ -1984,6 +1997,8 @@ class NoteServiceTest {
         assertThat(response.content()).isEqualTo("content");
         assertThat(response.summary()).isEqualTo("Summary");
         assertThat(response.keyConcepts()).containsExactly("Alliance systems");
+        assertThat(response.officialReviewSetId()).isEqualTo(officialSetId.toString());
+        assertThat(response.officialReviewSetTitle()).isEqualTo("History Review");
     }
 
     @Test

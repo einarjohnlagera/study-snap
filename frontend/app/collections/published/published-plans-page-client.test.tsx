@@ -356,6 +356,36 @@ describe("PublishedPlansPage", () => {
     expect(pushMock).toHaveBeenCalledWith("/auth?mode=signup&intent=discovery-adopt");
   });
 
+  it("opens and scrolls to the highlighted Official set, preserving public-note adoption intent", async () => {
+    currentAuthUser = null;
+    searchParamsMock = new URLSearchParams({ highlight: planOne.id });
+    const scrollIntoView = jest.fn();
+    HTMLElement.prototype.scrollIntoView = scrollIntoView;
+
+    render(<PublishedPlansPageClient />);
+
+    expect(await screen.findByRole("button", { name: "Hide plan preview" })).toBeInTheDocument();
+    expect(scrollIntoView).toHaveBeenCalledWith({ block: "center" });
+    expect(getPublicStudyPlanDetail).toHaveBeenCalledWith(planOne.id);
+    expect(await screen.findByText("Educational Psychology")).toBeInTheDocument();
+    fireEvent.click(screen.getAllByRole("button", { name: "Sign in to adopt" })[1]);
+    expect(getDiscoveryIntentCookie()).toEqual({
+      planId: planOne.id, planType: "study-plan",
+      returnPath: `/collections/published?highlight=${planOne.id}`,
+    });
+  });
+
+  it("leaves the listing alone for a stale highlight", async () => {
+    currentAuthUser = null;
+    searchParamsMock = new URLSearchParams({ highlight: "missing-plan" });
+    const scrollIntoView = jest.fn();
+    HTMLElement.prototype.scrollIntoView = scrollIntoView;
+    render(<PublishedPlansPageClient />);
+    expect(await screen.findAllByRole("button", { name: /^Preview this plan/ })).toHaveLength(2);
+    expect(scrollIntoView).not.toHaveBeenCalled();
+    expect(getPublicStudyPlanDetail).not.toHaveBeenCalled();
+  });
+
   it("carries pointer origin on an anonymous adopt click from the browse-all grid", async () => {
     // For an anonymous viewer loadRecommended returns early with an empty list, so EVERY anonymous
     // adopt click originates in browse-all — the one grid that was not receiving discoveryMetadata.

@@ -1175,6 +1175,37 @@ class NoteControllerTest {
     }
 
     @Test
+    void publicNoteRoutesSerializeOfficialSetFieldsIncludingNull() throws Exception {
+        String noteId = UUID.randomUUID().toString();
+        PublicNoteDetailResponse withSet = new PublicNoteDetailResponse(
+                noteId, null, "Cell Structure", "Science", List.of(), List.of(), "body", "body",
+                "STUDY_PACK_READY", null, List.of(), List.of(), "Author", null, false, false,
+                OffsetDateTime.now(), null, "set-1", "Science Review"
+        );
+        PublicNoteDetailResponse withoutSet = new PublicNoteDetailResponse(
+                noteId, null, "Cell Structure", "Science", List.of(), List.of(), "body", "body",
+                "STUDY_PACK_READY", null, List.of(), List.of(), "Author", null, false, false,
+                OffsetDateTime.now(), null, null, null
+        );
+        when(noteService.getPublicById(noteId, null)).thenReturn(withSet, withoutSet);
+        when(noteService.getPublicBySeoPath("science", "cell-structure", null)).thenReturn(withSet, withoutSet);
+        MockMvc mvc = buildMockMvc(null);
+
+        mvc.perform(get("/notes/public/" + noteId)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.officialReviewSetId").value("set-1"))
+                .andExpect(jsonPath("$.officialReviewSetTitle").value("Science Review"));
+        mvc.perform(get("/notes/public/seo/science/cell-structure")).andExpect(status().isOk())
+                .andExpect(jsonPath("$.officialReviewSetId").value("set-1"))
+                .andExpect(jsonPath("$.officialReviewSetTitle").value("Science Review"));
+        mvc.perform(get("/notes/public/" + noteId)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.officialReviewSetId").value(nullValue()))
+                .andExpect(jsonPath("$.officialReviewSetTitle").value(nullValue()));
+        mvc.perform(get("/notes/public/seo/science/cell-structure")).andExpect(status().isOk())
+                .andExpect(jsonPath("$.officialReviewSetId").value(nullValue()))
+                .andExpect(jsonPath("$.officialReviewSetTitle").value(nullValue()));
+    }
+
+    @Test
     void listPublic_delegatesViewerIdentityWithoutExcludingOwnNotes() {
         UUID userId = UUID.randomUUID();
         AuthenticatedUser user = new AuthenticatedUser(userId, UserRole.USER, true, 1);

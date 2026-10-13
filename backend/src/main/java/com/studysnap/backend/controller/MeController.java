@@ -12,6 +12,7 @@ import com.studysnap.backend.security.AuthenticatedUser;
 import com.studysnap.backend.service.AuthService;
 import com.studysnap.backend.service.MePlanService;
 import com.studysnap.backend.service.ProgressReportService;
+import com.studysnap.backend.service.UserExamGoalResolver;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -35,6 +36,7 @@ public class MeController {
     private final ProgressReportService progressReportService;
     private final UserRepository userRepository;
     private final AuthService authService;
+    private final UserExamGoalResolver userExamGoalResolver;
 
     @PostMapping("/review-commitment/prompted")
     @PreAuthorize("isAuthenticated()")
@@ -61,7 +63,7 @@ public class MeController {
                 : Arrays.asList(userEntity.getFocusSubjects());
         ProgressReportResponse response = progressReportService.getProgressReport(
                 user.userId(),
-                userEntity.getStudyGoal(),
+                userExamGoalResolver.effectiveStudyGoal(userEntity),
                 focusSubjects,
                 OffsetDateTime.now()
         );
@@ -78,16 +80,17 @@ public class MeController {
     public GoalNudgeResponse getGoal(@AuthenticationPrincipal AuthenticatedUser user) {
         UserEntity userEntity = userRepository.findById(user.userId())
                 .orElseThrow(UserNotFoundException::new);
-        if (userEntity.getStudyGoal() == null || userEntity.getStudyGoal().isBlank()) {
+        String studyGoal = userExamGoalResolver.effectiveStudyGoal(userEntity);
+        if (studyGoal == null || studyGoal.isBlank()) {
             return null;
         }
         try {
-            return progressReportService.buildGoalNudge(user.userId(), userEntity.getStudyGoal(), OffsetDateTime.now());
+            return progressReportService.buildGoalNudge(user.userId(), studyGoal, OffsetDateTime.now());
         } catch (RuntimeException ex) {
             log.warn(
                     "dashboard_goal_summary_unavailable userId={} studyGoal={} reason={}",
                     user.userId(),
-                    userEntity.getStudyGoal(),
+                    studyGoal,
                     ex.getMessage()
             );
             return null;

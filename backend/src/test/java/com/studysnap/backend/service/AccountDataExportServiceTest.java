@@ -72,6 +72,8 @@ class AccountDataExportServiceTest {
     private QuickReviewSessionRepository quickReviewSessionRepository;
     @Mock
     private LinkedLearnerProvisionalBirthYearRepository provisionalBirthYearRepository;
+    @Mock
+    private UserExamGoalResolver userExamGoalResolver;
 
     @Test
     void exportForUser_includesOwnedContentAndPracticeSummaryOnly() throws Exception {
@@ -101,6 +103,9 @@ class AccountDataExportServiceTest {
                 eq(userId),
                 any(Pageable.class)
         )).thenReturn(List.of(quickReview, challenge));
+        when(userExamGoalResolver.goalList(user)).thenReturn(List.of(
+                new com.studysnap.backend.dto.ExamGoalResponse("ale", false),
+                new com.studysnap.backend.dto.ExamGoalResponse("pnle", true)));
 
         DataExportResponse export = service().exportForUser(userId);
 
@@ -111,9 +116,11 @@ class AccountDataExportServiceTest {
                 eq(userId),
                 any(Pageable.class)
         );
-        // 1.2 adds Account.provisionalBirthYears. The version is pinned deliberately: this payload
+        // 1.3 adds the complete exam-goal list. The version is pinned deliberately: this payload
         // is a compliance surface a person can download and keep, so a shape change is versioned.
-        assertThat(export.meta().schemaVersion()).isEqualTo("1.2");
+        assertThat(export.meta().schemaVersion()).isEqualTo("1.3");
+        assertThat(export.account().examGoals()).extracting(com.studysnap.backend.dto.ExamGoalResponse::slug)
+                .containsExactly("ale", "pnle");
         assertThat(export.account().email()).isEqualTo("note@example.com");
         assertThat(export.account().birthYear()).isEqualTo(2001);
         assertThat(export.notes()).extracting(DataExportResponse.Note::id)
@@ -214,7 +221,8 @@ class AccountDataExportServiceTest {
                 noteCollectionRepository,
                 noteCollectionItemRepository,
                 quickReviewSessionRepository,
-                provisionalBirthYearRepository
+                provisionalBirthYearRepository,
+                userExamGoalResolver
         );
     }
 

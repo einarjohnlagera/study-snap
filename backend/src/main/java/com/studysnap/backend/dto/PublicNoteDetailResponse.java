@@ -21,7 +21,9 @@ public record PublicNoteDetailResponse(
         boolean isOfficialAuthor,
         boolean isCurrentUser,
         OffsetDateTime updatedAt,
-        Boolean studyPackDone
+        Boolean studyPackDone,
+        String officialReviewSetId,
+        String officialReviewSetTitle
 ) {
     public PublicNoteDetailResponse(
             String id,
@@ -43,7 +45,8 @@ public record PublicNoteDetailResponse(
     ) {
         this(
                 id, ownerUserId, title, subject, List.of(), tags, content, contentPreview, studyPackStatus, summary,
-                keyConcepts, quiz, authorDisplayName, authorUsername, isOfficialAuthor, isCurrentUser, updatedAt, null
+                keyConcepts, quiz, authorDisplayName, authorUsername, isOfficialAuthor, isCurrentUser, updatedAt, null,
+                null, null
         );
     }
 }

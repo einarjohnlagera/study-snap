@@ -48,6 +48,7 @@ public class ProgressReportService {
     private final NoteRepository noteRepository;
     private final NoteCourseProgramRepository noteCourseProgramRepository;
     private final ExamGoalCourseProgramProvider examGoalCourseProgramProvider;
+    private final UserExamGoalResolver userExamGoalResolver;
 
     @Transactional(readOnly = true)
     public ProgressReportResponse getProgressReport(UUID userId, String studyGoal, OffsetDateTime now) {
@@ -87,7 +88,7 @@ public class ProgressReportService {
         }
 
         Map<String, List<StudyPackProgressView>> packsBySubject = groupQualifyingPacksBySubject(userId);
-        boolean studyGoalIsSlug = ExamGoalConfig.isValidSlug(normalizedGoal);
+        boolean studyGoalIsSlug = userExamGoalResolver.isExamGoal(normalizedGoal);
         String goalType = studyGoalIsSlug ? GOAL_TYPE_EXAM : GOAL_TYPE_SUBJECT;
         String goalName = studyGoalIsSlug ? ExamGoalConfig.getShortName(normalizedGoal) : normalizedGoal;
         String goalLabel = studyGoalIsSlug ? ExamGoalConfig.getFullName(normalizedGoal) : goalName;
@@ -363,7 +364,7 @@ public class ProgressReportService {
             return buildSubjectFocusGoalSummary(userId, focusSubjects, packsBySubject, now);
         }
 
-        boolean studyGoalIsSlug = ExamGoalConfig.isValidSlug(studyGoal);
+        boolean studyGoalIsSlug = userExamGoalResolver.isExamGoal(studyGoal);
         String goalType = studyGoalIsSlug ? GOAL_TYPE_EXAM : GOAL_TYPE_SUBJECT;
         String goalName = studyGoalIsSlug ? ExamGoalConfig.getShortName(studyGoal) : studyGoal;
         String goalLabel = studyGoalIsSlug ? ExamGoalConfig.getFullName(studyGoal) : goalName;
@@ -383,7 +384,8 @@ public class ProgressReportService {
                 counts.masteredConcepts(),
                 counts.totalConcepts(),
                 counts.notPracticedConcepts(),
-                weakestGoalSubject
+                weakestGoalSubject,
+                userExamGoalResolver.goalList(userId)
         );
     }
 
@@ -420,7 +422,8 @@ public class ProgressReportService {
                 counts.masteredConcepts(),
                 counts.totalConcepts(),
                 counts.notPracticedConcepts(),
-                resolveWeakestGoalSubject(goalPacks, userId, now)
+                resolveWeakestGoalSubject(goalPacks, userId, now),
+                userExamGoalResolver.goalList(userId)
         );
     }
 
@@ -447,7 +450,7 @@ public class ProgressReportService {
                 ? examGoalCourseProgramProvider.getCoursePrograms(studyGoal)
                 : List.of(studyGoal);
         Set<String> goalCoursePrograms = goalCourseProgramValues.stream()
-                .map(this::normalizeCourseProgramKey)
+                .map(UserExamGoalResolver::normalizeProgramKey)
                 .filter(Objects::nonNull)
                 .collect(Collectors.toSet());
         // Join-first, batched. Reading notes.course_program alone excluded EVERY curated note, whose
@@ -465,7 +468,7 @@ public class ProgressReportService {
                                         .toList(),
                                 note.getCourseProgram()
                         ).stream()
-                        .anyMatch(program -> goalCoursePrograms.contains(normalizeCourseProgramKey(program))))
+                        .anyMatch(program -> goalCoursePrograms.contains(UserExamGoalResolver.normalizeProgramKey(program))))
                 .map(NoteEntity::getId)
                 .collect(Collectors.toSet());
 
@@ -673,13 +676,6 @@ public class ProgressReportService {
         return concept.toLowerCase(Locale.ROOT);
     }
 
-    private String normalizeCourseProgramKey(String courseProgram) {
-        if (courseProgram == null || courseProgram.isBlank()) {
-            return null;
-        }
-        return courseProgram.trim().toLowerCase(Locale.ROOT);
-    }
-
     private List<String> normalizeFocusSubjects(List<String> focusSubjects) {
         if (focusSubjects == null || focusSubjects.isEmpty()) {
             return List.of();
@@ -703,7 +699,7 @@ public class ProgressReportService {
             return null;
         }
         String normalizedGoal = studyGoal.trim();
-        return ExamGoalConfig.isValidSlug(normalizedGoal) ? normalizedGoal.toLowerCase(Locale.ROOT) : normalizedGoal;
+        return userExamGoalResolver.isExamGoal(normalizedGoal) ? normalizedGoal.toLowerCase(Locale.ROOT) : normalizedGoal;
     }
 
     public record ConceptCounts(

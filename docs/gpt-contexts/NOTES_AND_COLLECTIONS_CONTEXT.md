@@ -6,7 +6,14 @@
 > subject pages). This is a structural snapshot, not a proposal — it describes what exists now so a
 > design conversation starts from real constraints instead of assumptions.
 > Update this file when the Note schema, taxonomy model, or collection model changes.
-> Last updated: v0.167.0 - 2026-10-08 (Released). **`v0.167.0` made `getCollectionLabels` (in
+> Last updated: v0.170.0 - 2026-10-13 (In Progress). **`v0.170.0` shipped true multi-goal exam
+> support, overriding the `v0.167.0` deferral below (owner override, population stayed 2 of 426 —
+> the deferral's own "re-open past a handful" trigger was never met) — a learner can now adopt
+> SEVERAL exam goals simultaneously via a new `user_exam_goals` join table, mark one active, and
+> switch/remove without losing adopted content or assessment history. `V155` migrates any legacy
+> scalar `studyGoal` that already holds a valid exam slug into the new table and nulls the scalar for
+> those rows; `studyGoal` is now legacy free-text-only. See `docs/features/profile.md` for the full
+> picker/precedence detail. Previously v0.167.0 - 2026-10-08 (Released). **`v0.167.0` made `getCollectionLabels` (in
 > `collection-labels.ts`) exam-aware: a Study Journey whose root is `learnerLevel = BOARD_EXAM_REVIEW`
 > with a `courseProgram` carrying a recognized `exam_goal_slug` now gets exam-specific per-collection
 > nouns ("PNLE Review Set," "CELE Review Set," etc.), resolved server-side via

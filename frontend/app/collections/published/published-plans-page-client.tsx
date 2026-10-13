@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
 import { PageHeader } from "@/components/page-header";
@@ -54,6 +54,9 @@ export function PublishedPlansPageClient({
 }: Readonly<PublishedPlansPageClientProps> = {}) {
   const authUser = useMemo(() => getAuthUser(), []);
   const searchParams = useSearchParams();
+  const highlight = searchParams.get("highlight");
+  const highlightedCardRef = useRef<HTMLDivElement>(null);
+  const lastScrolledHighlight = useRef<string | null>(null);
   const profileType = authUser === null ? "STUDENT" : authUser.profileType;
   const canAdopt = authUser !== null;
   const labels = useMemo(() => getCollectionLabels(profileType), [profileType]);
@@ -66,18 +69,21 @@ export function PublishedPlansPageClient({
   // known inside this click, and state set here is not readable until the next render — so a
   // precomputed href would always be one click stale.
   const preserveSignedOutAdopt = useCallback((plan: NoteCollectionSummary) => {
-    if (discoverySource !== "explore") {
+    const fromPublicNote = highlight === plan.id;
+    if (discoverySource !== "explore" && !fromPublicNote) {
       return undefined;
     }
     const stored = setDiscoveryIntentCookie({
       planId: plan.id,
       planType: plan.childCount > 0 ? "goal" : "study-plan",
-      returnPath: exploreReturnPath,
+      returnPath: fromPublicNote
+        ? `/collections/published?highlight=${encodeURIComponent(plan.id)}`
+        : exploreReturnPath,
     });
     // A blocked cookie jar accepts the write and stores nothing, so the signup screen must not
     // promise that the plan is waiting. The unsaved variant tells the visitor to pick it again.
     return `/auth?mode=signup&intent=${stored ? DISCOVERY_AUTH_INTENT : DISCOVERY_AUTH_INTENT_UNSAVED}`;
-  }, [discoverySource, exploreReturnPath]);
+  }, [discoverySource, exploreReturnPath, highlight]);
   const backLink = useMemo(() => {
     const ref = searchParams.get("ref");
     if (ref === "/dashboard" || ref?.startsWith("/dashboard/")) {
@@ -169,6 +175,15 @@ export function PublishedPlansPageClient({
   useEffect(() => {
     void Promise.resolve().then(loadPlans);
   }, [loadPlans]);
+
+  useEffect(() => {
+    if (highlight && browseAllState === "ready"
+        && browseAllPlans.some(({ plan }) => plan.id === highlight)
+        && lastScrolledHighlight.current !== highlight) {
+      highlightedCardRef.current?.scrollIntoView({ block: "center" });
+      lastScrolledHighlight.current = highlight;
+    }
+  }, [highlight, browseAllState, browseAllPlans]);
 
   const description = courseProgram
     ? `Published ${labels.plural.toLowerCase()} for ${courseProgram}. Adopt any of them to start studying with a curated set of notes.`
@@ -296,17 +311,19 @@ export function PublishedPlansPageClient({
               // EVERY anonymous adopt originates here. Pointer origin was therefore recorded for
               // authenticated clicks and never for anonymous ones, the biased-loss shape v0.80.0
               // exists for.
-              <PublicStudyPlanCard
-                key={plan.id}
-                plan={plan}
-                adoptedCollection={adoptedCollection}
-                profileType={profileType}
-                canAdopt={canAdopt}
-                discoverySource={discoverySource}
-                discoveryMetadata={discoveryMetadata}
-                onSignedOutAdopt={() => preserveSignedOutAdopt(plan)}
-                signedOutHref={discoverySource === "explore" ? signedOutHref : undefined}
-              />
+              <div key={plan.id} ref={plan.id === highlight ? highlightedCardRef : undefined}>
+                <PublicStudyPlanCard
+                  plan={plan}
+                  adoptedCollection={adoptedCollection}
+                  profileType={profileType}
+                  canAdopt={canAdopt}
+                  discoverySource={plan.id === highlight ? "public_note" : discoverySource}
+                  defaultPreviewOpen={plan.id === highlight}
+                  discoveryMetadata={discoveryMetadata}
+                  onSignedOutAdopt={() => preserveSignedOutAdopt(plan)}
+                  signedOutHref={discoverySource === "explore" ? signedOutHref : undefined}
+                />
+              </div>
             ))}
           </div>
         ) : null}

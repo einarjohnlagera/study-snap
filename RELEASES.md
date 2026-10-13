@@ -1,5 +1,207 @@
 # RELEASES.md - NoteLib
 
+## v0.170.0 - Study Journey, Closed
+
+**Status: Released**
+
+Theme: close out the Study Journey Purpose / Learner Goal architecture — the last discovery item
+(Public Note → Official Review Set) plus multi-goal exam support, both shipping on explicit owner
+overrides of their own evidence gates rather than waiting for either to clear naturally. **Renamed
+same-day from "Public Note → Official Review Set Discovery"** when the owner expanded scope to include
+item 2 below; nothing had deployed yet.
+
+### Planned Scope
+
+1. **Public Note → Official Review Set link (RC-5, backend + frontend). SHIPPED — see below.** On the
+   public note detail page (`/public/library/[subject]/[slug]`), when the note sits in a qualifying
+   Official Review Set — top-level, a true source (not an adopted copy), owned by a `UserRole.ADMIN`
+   account — show a callout linking to `/collections/published?highlight={id}`, which scrolls to and
+   expands that set's existing `PublicStudyPlanCard`. Reuses the existing signed-out intent-cookie
+   handoff (`discovery-intent.ts`), widened to accept this new return path. 3 new analytics events
+   (`PUBLIC_NOTE_OFFICIAL_SET_LINK_CLICKED/_PREVIEWED/_ADOPT_CLICKED`). No new migration — the lookup
+   uses the existing `idx_note_collection_items_note_id` index and runs inside
+   `NoteService.mapToPublicDetail`'s existing read-only transaction.
+
+   **⚠️ Kicked off ahead of the `v0.166.0` Hikari checkpoint clearing (owner override, 2026-10-13).**
+   This item's own gate — stated at the `v0.169.0` kickoff — was two stability checkpoints:
+   `v0.165.0`'s (due 2026-10-12, closed clean via PR #1489) and `v0.166.0`'s Hikari long-hold checkpoint
+   (`[CHECKPOINT — due 2026-10-14T11:19:29Z, backstop 2026-10-21]`, `ROADMAP.md`'s Backlog Index), which
+   was **not yet due** at kickoff — roughly a day out. Codex's implementation (audited and committed as
+   `dadac05a` on `feat/v0.170.0-public-note-review-set-link` before kickoff) adds exactly one new
+   public-note-page database lookup, which is the class of load the Hikari checkpoint exists to watch
+   for. **⚠️ Not actually blocking by the time this release reaches `main`**: nothing in this change
+   deploys until `releases/v0.170.0` merges, and the checkpoint's own due date (2026-10-14T11:19:29Z) is
+   earlier than this release — a 2-item release — is likely to sign off. **Read the checkpoint at
+   signoff, before the `main` merge, not just at this kickoff** — the override may turn out to have cost
+   nothing in practice. This release owes its own `[CHECKPOINT]` row at signoff either way, reading the
+   post-merge `Apparent connection leak` trace rate for any new attribution to this lookup, distinct from
+   `v0.166.0`'s own two traced methods (`PublicProfileController`/`NoteCollectionController`).
+
+2. **Multi-goal exam support (backend + frontend). SHIPPED — PR #1491, commit `04435dde` on
+   `releases/v0.170.0`.** The owner's 5
+   direction points, recorded verbatim at the `v0.169.0` kickoff (2026-10-10):
+
+   1. **Storage — a normalized join table**, one row per (user, exam goal), with one goal flagged
+      active per user. No redundant active-state storage. Existing single `studyGoal` values migrate
+      losslessly; current users keep their existing goal, now active.
+   2. **Dashboard & nudges — the active goal only** drives general dashboard nudges; other goals stay
+      visible/accessible but don't compete for nudge real estate. **Exception:** post-session next
+      steps must reflect the actual session/Study Journey context even when it differs from the active
+      goal.
+   3. **EXAM/SUBJECT exclusivity — unchanged.** Multiple exam goals may coexist with each other; a
+      subject focus still can't coexist with any exam goal. Profile-preference rule only, never a
+      Note/Study Plan access restriction.
+   4. **Exam-hub signup intent — add and activate**, never silently replace other exam goals. Clear
+      disclosure before the intent flow overwrites an existing subject focus. Signing up via an Exam
+      Hub must NOT auto-adopt any Review Set.
+   5. **Picker — a real goal-management surface** in Profile's Study Focus (add/remove/set-active).
+      Removing a goal must never delete adopted content or assessment history.
+
+   **Validated feasible against current code before any Codex prompt**, per the owner's own
+   instruction recorded above: `docs/claude-plans/2026-10-12-multi-goal-exam-support-feasibility-validation.md`
+   (Feature Planner, 2026-10-12). Technical verdict: every point is buildable, no blocking
+   contradiction found. **4 follow-up decisions made 2026-10-13, at this scope expansion, resolving the
+   validation document's §8 open questions:**
+   - Adding an additional exam goal while one is active: the new goal becomes the **sole** active goal
+     (deactivates the previous one) — reads point 1's "one goal flagged active" literally.
+   - Removing the currently-active goal when other adopted goals exist: **auto-promotes** another
+     adopted goal to active (mirrors `NoteCollectionService.reassertPrimaryInvariant`'s existing
+     pattern for Study Plan adoption — same shape, not the same code, since that operates on
+     `NoteCollectionEntity` not exam slugs). **Tie-breaker when more than one goal is eligible for
+     promotion: the most recently added remaining goal, then lowest `id`.**
+   - Disclosure before a silent goal-clearing write is required in **both** directions — not just
+     "exam-intent flow overwrites a subject focus" (point 4's literal wording) but also "setting a
+     subject focus clears every adopted exam goal" (the reverse, previously unaddressed). Reuses the
+     existing `AppModal`/`ProfileTypeSwitchModal` confirm-modal pattern; no new UI primitive.
+   - **Bundled into this same work, not deferred:** `GoalPromptBanner`'s confirmed-live defect (gates
+     only on `studyGoal`, never checks `focusSubjects`, so a user with subject focus sees "no goal yet"
+     and one click silently wipes their `focusSubjects` with zero disclosure — verified against
+     production, 1 of 426 real users is in exactly this state today) and its separate dismissal-state
+     bug (component-local, re-shows on reload). PR #1488 (which had backlogged this defect for a future
+     release) is closed unmerged as superseded — fixing it now, not later.
+
+   **Applied defaults, per the validation document's own recommendation (low-stakes, argued well
+   there, not re-litigated here):** the 3 legacy free-text `studyGoal` rows are left untouched (adding
+   any active exam goal still clears the legacy value, closing the exclusivity gap this would
+   otherwise open); "SUBJECT focus" in point 4 means `focusSubjects`, not legacy free-text; a single
+   shared "resolve active exam goal(s)" method is introduced, consolidating 4 call sites
+   (`AuthService`, `ProgressReportService` ×3, `PostSessionNextStepService`) that currently each
+   independently re-derive "is this an EXAM goal" — closing a drift risk `ExamGoalConfig.java:38-43`'s
+   own comment already documents one prior incident of.
+
+   **⚠️ Kicked off ahead of the `[CHECKPOINT — due 2026-12-07]` population gate clearing — explicit
+   owner override, 2026-10-13.** That checkpoint's own stated trigger ("re-open only if the
+   ≥2-distinct-goal population grows past a handful") has **not** been met: still 2 of 426 users,
+   unchanged since 2026-10-09, re-confirmed 2026-10-12. This is a deliberate reversal of three prior
+   owner decisions (2026-10-08, -09, -10) that each declined to build this on the same number. **This
+   release owes its own `[CHECKPOINT]`** at signoff, tracking whether the population actually grows now
+   that the capability exists — the original checkpoint measured whether to build it; this one measures
+   whether building it mattered.
+
+   **Verification note:** this item adds a data-mutating migration, changes API/export response
+   shapes, and touches profile, dashboard, post-session, exam-hub, and GDPR-export code — clears the
+   bar for at least one scoped cold falsification agent at signoff per the pressure-test gate, and is a
+   candidate for the full 3-agent pressure test given the permission-adjacent (goal/content exclusivity)
+   surface. **Decided at signoff:** one scoped cold agent (fresh context, `opus`, read-only, instructed
+   to falsify 7 named claims), not the full 3-agent test — `git diff --name-only` on both PRs found no
+   shared Java method between PR #1490 and PR #1491 (3 shared files, disjoint lines each), and the
+   goal/content exclusivity surface is a profile-preference rule, never an access-control boundary (no
+   cross-user read, no money/quota change), so the full-test trigger does not fire. Findings below.
+
+   **Audited before commit** against the Codex prompt's full acceptance-criteria list: migration
+   backfill replay test against seeded (non-empty) data; a real-Postgres `@SpringBootTest` +
+   `@Testcontainers` test proving the partial unique index exists and the actual Hibernate flush order
+   holds under add/remove/idempotent-re-add (not H2, which has no such index); `AccountPurgeService`
+   deletes `user_exam_goals` rows rather than sentinel-reassigning (the table enforces per-user
+   uniqueness); GDPR export (schema 1.3) includes every adopted goal, not just the active one; the
+   pre-existing `PUT /users/profile/goal` endpoint kept its request/response contract unchanged for
+   un-upgraded clients; `EXAM_GOAL_ADDED/ACTIVATED/REMOVED` confirmed firing from real user actions (not
+   just enum membership), verified by a test asserting the call. One false-positive raised and reverted
+   during audit: "CELE" in `progress-focus-guide.tsx` is the correct, pre-existing Civil Engineering
+   exam acronym (`ExamGoalConfig.java`), not a typo. Backend: 2,672 tests/0 failures (incl. the
+   Testcontainers native-query and real-Postgres flush-order harnesses). Frontend: 231/231 suites,
+   2,642/2,643 tests (1 pre-existing unrelated skip), `tsc --noEmit` clean, `npm run lint` clean.
+
+Anti-drift: no `ProfileType` change, no recommendation-engine change, no Degree Journey/Academic
+Term/ConceptHealth change, no change to `resolvePlanPremiumExamMode`/`EXAM_MODES.md`, no change to
+`UserEntity.examDate`'s existing single-valuedness (a known, separate, out-of-scope gap).
+
+**Explicitly excluded, unaffected by either override above:** the Degree Journey catalog (Phase C) —
+its own dependency (≥2 published Years) is a content-authoring gap no decision overrides; exactly one
+BSCS Year exists, unpublished — and Phase D (learner curriculum customization), not yet scoped, deferred
+pending real adopters. Neither is "Study Journey" work this release can close by deciding to.
+
+### Shipped
+
+- **Public Note → Official Review Set link** (PR #1490, commit `dadac05a`). Backend: new
+  `NoteCollectionItemRepository.findOfficialReviewSetRootForNote` native query (admin-owned,
+  top-level, true-source root; a PUBLIC root collection is never filtered on `published_at`, a child
+  collection and its item both require one — matching `listPublic`/`getPublic` exactly), wired into
+  `NoteService.mapToPublicDetail`; `PublicNoteDetailResponse` gains `officialReviewSetId`/
+  `officialReviewSetTitle`; 3 new `AnalyticsEventType` values. Frontend: `PublicNoteOfficialSetLink`
+  callout on the public note detail page linking to `/collections/published?highlight={id}`;
+  `PublicStudyPlanCard` widened with a `discoverySource: "public_note"` branch and a
+  `defaultPreviewOpen` prop; `PublishedPlansPageClient`'s "Browse All" grid reads `?highlight=` to
+  scroll to and auto-expand the matching card; `discovery-intent.ts`'s signed-out return-path
+  allowlist widened (`isDiscoveryReturnPath`, renamed from `isExplorePath`) to accept
+  `/collections/published` paths, with an adversarial test (`/collections/published-evil`).
+  Audited before commit: fixed a misplaced code comment and generic "Collection" copy corrected to
+  "Review Set" (`getCollectionLabels(null)` default was wrong here — this is a fixed product concept,
+  not a viewer-varying one). **Known limitation, non-blocking:** the "Recommended" grid on
+  `/collections/published` (course/program-filtered, authenticated-only) doesn't receive the
+  highlight/`defaultPreviewOpen` wiring that the "Browse All" grid does — acceptance criteria are
+  still met since Browse All is always the unfiltered superset and always renders the target plan.
+  Backend: 2,659 tests/0 failures (incl. the Testcontainers native-query Postgres harness, 46 queries
+  now PREPAREd). Frontend: 230/230 suites, 2,634/2,635 tests (1 pre-existing unrelated skip).
+
+- **Multi-goal exam support.** V155 moves valid scalar exam slugs
+  into `user_exam_goals`, preserving legacy free-text values; Profile can add, remove, and activate
+  goals, and Dashboard uses the active goal while post-session nudges follow the completed note's
+  adopted-goal context. Subject focus and exam goals remain exclusive with confirmation before
+  either direction clears existing preferences. The goal prompt now respects subject focus and
+  persists generic dismissal. Account data export schema 1.3 includes every goal. **Frontend and backend must deploy
+  together.** After V155 runs, rolling the backend back to v0.169.0 is **not safe for the 16 migrated
+  users**: their scalar `studyGoal` is empty and that backend cannot read the retained rows in
+  `user_exam_goals`. At signoff, add a post-ship population checkpoint to measure whether the
+  ≥2-distinct-goal cohort grows beyond the 2-of-426 baseline; this release shipped ahead of that
+  evidence gate by owner decision. Audited before commit against the Codex prompt's acceptance
+  criteria: migration backfill replay test, real-Postgres flush-order test (partial unique index
+  verified present), purge deletes rows (not sentinel-reassigned), GDPR export includes every
+  adopted goal, `PUT /users/profile/goal` kept contract-compatible for un-upgraded clients, and new
+  `EXAM_GOAL_*` analytics events confirmed firing (not just enum members) via frontend tests.
+  Backend: 2,672 tests/0 failures (incl. the Testcontainers native-query Postgres harness).
+  Frontend: 231/231 suites, 2,642/2,643 tests (1 pre-existing unrelated skip), `tsc --noEmit` clean,
+  lint clean. **Known limitations, found by the pre-signoff falsification agent, none blocking:**
+  (1) `PUT /users/profile/goal`'s `studyGoal: null` branch now also empties `focusSubjects`
+  (`AuthService.java:605-621`) — a deliberate "full reset" per the Codex prompt, but a genuine
+  behavior change from `v0.169.0` (null used to leave `focusSubjects` untouched); an un-upgraded
+  client sending `null` during the brief deploy-rollover window sees this new behavior before its own
+  UI catches up. (2) V155 does not special-case a legacy row holding both a valid exam-slug
+  `studyGoal` and non-empty `focusSubjects` — confirmed via a read-only production query at signoff
+  (2026-10-13) that 0 of 426 users are in that state today, so the gap is theoretical, not live; if it
+  ever becomes non-zero, such a migrated row would hold an active goal and focus subjects
+  simultaneously, violating the new exclusivity invariant. (3) The migration's SQL `trim()` is
+  whitespace-only, narrower than `ExamGoalConfig`'s Java-side slug normalization — a value like
+  `"ale\n"` would not migrate and falls back harmlessly to legacy scalar handling via the resolver.
+  (4) The Official Review Set predicate (Item 1) does not exclude a `PENDING_DELETION` admin
+  account's collection until the account is actually purged. (5) During the deploy rollover, an old
+  backend instance can still write a stale scalar `studyGoal` for a user who already has an active
+  `user_exam_goals` row; the resolver prefers the row, so the stale write is silently ignored rather
+  than losing data, and the window closes once rollover completes.
+
+- **Two carried-along process/doc fixes (PR #1487, PR #1489).** Both had been open against `main`
+  since before this release and were blocked there by the same `require_extra_approval_for_unattributed_changes`
+  ruleset rule as this release's own signoff PR; retargeted to `releases/v0.170.0` and merged here so
+  they ride to `main` with the rest of this release rather than sitting blocked indefinitely.
+  **PR #1489** closes the `v0.165.0` discovery-rail checkpoint on its due date: zero `server_failed`
+  restarts in the full 7-day post-deploy window (down from a ~7/week baseline) — the fix worked. This
+  is the checkpoint Item 1's own kickoff text above cites as "closed clean via PR #1489"; that claim
+  is accurate as of this merge, not before it. **PR #1487** documents a `check-deploys.sh`
+  false-positive mode found during `v0.169.0`'s deploy: a real, successful Vercel deployment that
+  never appeared in GitHub's Deployments API, so a future Vercel "DRIFT" verdict from that script
+  should be cross-checked against the actual Vercel dashboard before anyone acts on it. Comment-only
+  change to the script; no logic changed.
+
 ## v0.169.0 - Study Journey, Continued
 
 **Status: Released** (signed off 2026-10-12; commit `3200c773` on `releases/v0.169.0`)
@@ -747,120 +949,10 @@ events continuing at a comparable weekly rate means the diagnosis is wrong or in
   per-request correlation; the generation context has no note/request id, and one line is logged per
   actual attempt, including retries and Long Exam batches.
 
-## v0.164.0 - Computing
-
-**Status: Released** (signed off 2026-09-30; PR #1469 merged into `releases/v0.164.0`)
-
-Theme: ratify `Computing` as a 13th Domain Context (ADR-001 amendment), ship the small enum/frontend value,
-correct the two stale claims in the ratification package's own numbers, and sweep the context/spec docs the
-strategist and curators read.
-
-### Planned Scope
-
-**Owner-directed, 2026-09-30, closing Workstream A** (`docs/claude-plans/computing-domain-context-final-decision-package.md`,
-ratification-ready close-out; supersedes `computing-domain-context-decision.md` and its tightening prompt for
-*action*, both kept as the evidence trail). Named "Workstream A" in `docs/curriculum/bscs-year1-decision-log.md`,
-whose rows D-13 and D-34 are blocked on this closing.
-
-- **ADR-001 amendment ratifying `Computing`** (enum `COMPUTING`, label `Computing`, `quantitative = false`) —
-  a new dated section superseding the 2026-09-04 rejection, answering both of its grounds (naming borrowed from
-  ACM/IEEE Computing Curricula 2020 and CHED CMO No. 25 s.2015; the comprehension test applies to curators, not
-  learners), stating the two-test curator decision rule (object-of-study, then cross-sibling-reuse) as the durable
-  operational boundary, and recording the corrected clause (a) evidence and the corrected governance ratio.
-- **Two corrections to the package's own numbers, applied before anything cites them:** (1) the 34 Discrete
-  Structures I rows do **not** get `applicable_programs` extended to IT/IS/SE — Domain Context = `Computing`,
-  Applicable Programs stays Computer Science only, contrary to package §5/§9/§10; (2) the BSCS Year 1 corpus is
-  136/136 classified (the 3 `AMBIGUOUS` rows resolved to `COMPUTING_SHARED`), not 133/136 as the package states.
-- **Enum/frontend value** — `DomainContext.COMPUTING` (backend), `DOMAIN_CONTEXT_OPTIONS` entry + `DomainContext`
-  union member (frontend), with a routing description (excludes CS-specific formalism, IT/IS/SE specialization
-  treatment, and Precalculus/Algebra) and updated count/label tests on both sides.
-- **Doc sweep** — `REVIEW_SET_SHAPING_CONTEXT.md` (closed vocabulary + two-test boundary paragraph),
-  `review-set-workbook-spec.md:118-119` (independent stale-claim fix: the save-time rejection claim is wrong;
-  the check is generation-time only), `GPT_CONTEXT.md` (12→13, and discharging the "don't propose a 13th value"
-  line the same way the 9th/12th-value rules were discharged), `NOTES_AND_COLLECTIONS_CONTEXT.md` §0 (12→13).
-- **R4 runbook addendum** (`docs/claude-prompt/canonical-knowledge-architecture-out/17-r4-verification-runbook.md`)
-  — a Computing section for the 5 named pilot notes, prepared but **not executable today**: none of the 5 exist
-  in production yet (read-only check, 2026-09-30), and driving the pilot is an owner action through the
-  production UI in any case (a Domain Context write + regeneration), never Claude's to run.
-- Close `docs/curriculum/bscs-year1-decision-log.md` D-13 and D-34, citing this package.
-
-Anti-drift: no BSCS TSV edits (strategist's own action, out of this scope); no bulk generation; no
-`QUANTITATIVE_KEYWORDS` change (no companion keyword decision here, unlike `BASIC_MEDICAL_SCIENCES`); no
-prompt change (package §8 explicitly forbids preemptive prompt tuning); no production write of any kind.
-
-### Scope disposition (signoff, 2026-09-30)
-
-- **Every Planned Scope item: SHIPPED, verified against code with `file:line`, not from the release notes
-  alone.** ADR-001 amendment: `docs/architecture/ADR-001-canonical-knowledge-architecture.md:417`. Enum:
-  `DomainContext.java:47`. Frontend union member: `frontend/lib/api.ts:554`. R4 addendum:
-  `17-r4-verification-runbook.md:189`. Decision-log closure: `bscs-year1-decision-log.md:33,54`.
-- **The doc sweep EXPANDED beyond the four docs originally planned**, found during pre-commit review:
-  `docs/features/notes.md`, `challenge-quiz.md`, and `study-pack-generation.md` also enumerate the closed
-  Domain Context vocabulary and needed the same 12→13 update. Also fixed 6 stale file-path references left
-  by an unrelated prior session's rename batch, in the same 4 files this release was already editing, and
-  corrected a second stale claim discovered in `NOTES_AND_COLLECTIONS_CONTEXT.md` while re-stamping it
-  (Interior Design / Landscape Architecture / Environmental Planning are now live catalog programs, not
-  absent as it claimed; the catalog is 90 programs, not 41).
-- **A pressure-test pass (`advisor()`) on the diff before commit found and fixed four real defects before
-  they shipped**: an arithmetic error in the ADR (33/136 vs. the correct 34/136); a `[PROD]` tag on a count
-  that actually came from the local TSV, not a production read; an R4 addendum methodology built on
-  invented Subject-Plan assignments for the 5 pilot notes (none of which exist anywhere in the TSV), which
-  broke for 4 of the 5 notes because a 3-program note cannot generate under a NULL-Domain-Context fallback
-  at all under `ADR-001`'s own multi-program rule; and the kickoff's own commit-structure violation (code
-  and doc-sweep feature content was about to ride on the kickoff's direct-to-release-branch commit instead
-  of its own branch+PR).
-- **Not shipped, by design:** the BSCS TSV itself is not edited (strategist's own action); the R4 pilot did
-  not run (its 5 named notes don't exist in production yet); the 3 originally-`AMBIGUOUS` corpus rows are
-  not separately re-verified here (the owner's resolution to `COMPUTING_SHARED` is taken as given, per the
-  correction applied at kickoff).
-
-### Shipped
-
-- **ADR-001 amendment ratifying `Computing`** (13 values total): superseded the 2026-09-04 rejection
-  (naming answered via ACM/IEEE Computing Curricula 2020 + CHED CMO No. 25 s.2015; comprehension test
-  answered as curator-facing, not learner-facing); recorded the two-test curator rule; corrected the
-  package's own 133/136 → 136/136 evidence and removed its erroneous 34-row `applicable_programs`
-  extension instruction; re-read production rather than citing the stale `12:51` ratio — catalog is
-  now 90 programs, ratio `13:90` = 0.144; carries `[CHECKPOINT — due when BSCS Year 1 Computing
-  authoring reaches 10+ classified notes, backstop 2026-12-29 regardless]`, added to the Backlog Index
-  at signoff with its full kill criterion and two-tier denominator rule. Inline dated flags added at
-  the two lines that named `Computing` as previously rejected (not rewritten).
-- **`DomainContext.COMPUTING`** (backend enum, `quantitative = false`) and the matching frontend
-  `DOMAIN_CONTEXT_OPTIONS` entry / `DomainContext` union member, with a routing description (excludes
-  CS-specific formalism, IT/IS/SE specialization, Precalculus/Algebra). Test coverage: `DomainContextTest`
-  (13-label `containsExactly`, new CsvSource row, round-trip test updated to the newest value) and
-  `domain-context.test.ts` (length 12→13, new routing-clause pinning test). Full backend build
-  (2,636 tests) and full frontend suite (225 suites, 2,598 tests) both green.
-- **Doc sweep**, all corrected to 13 values / the new two-test rule: `REVIEW_SET_SHAPING_CONTEXT.md`,
-  `GPT_CONTEXT.md` (also discharged the "don't propose a 13th value" line, same pattern as the 9th/12th
-  discharges), `NOTES_AND_COLLECTIONS_CONTEXT.md` §0, `docs/features/notes.md`, `challenge-quiz.md`,
-  `study-pack-generation.md`. **Independent stale-claim fix**, `review-set-workbook-spec.md:118-119`:
-  corrected "the server rejects the save" to "generation-time only" — found true regardless of this
-  ratification. Bumped the "Last updated" stamps on `REVIEW_SET_SHAPING_CONTEXT.md` and
-  `NOTES_AND_COLLECTIONS_CONTEXT.md` at implementation, and on `GPT_CONTEXT.md` itself at signoff (all
-  three now read `v0.164.0 (Released)`, not `(In Progress)`); corrected a second stale claim found
-  along the way in `NOTES_AND_COLLECTIONS_CONTEXT.md` (Interior Design, Landscape Architecture and
-  Environmental Planning are now live catalog programs, not absent as it claimed; catalog is 90
-  programs, not 41).
-- **R4 runbook addendum** (`17-r4-verification-runbook.md`): a Computing section for the 5 named pilot
-  notes, prepared but explicitly marked not-yet-runnable — none of the 5 exist in production yet
-  (read-only check, 2026-09-30), execution is an owner action through the production UI regardless, and
-  the comparison-arm mechanics are honestly scoped (a true A/B needs a single-program note; a
-  multi-program note can only be scored on its `Computing` arm alone, since `ADR-001`'s own
-  multi-program rule blocks a NULL-Domain-Context fallback from generating at all).
-- **`docs/curriculum/bscs-year1-decision-log.md`** D-13 and D-34 closed, citing this package; D-33
-  (Precalculus) stays open, unchanged, per the package's own scope.
-- **`docs/claude-plans/computing-domain-context-final-decision-package.md`** — dated correction note
-  added at the top recording both owner corrections, rather than silently editing the original.
-- **`docs/product/ROADMAP.md`** Backlog Index row updated: gate cleared for ratification/code, corrected
-  numbers, R4 pilot's actual blocker (notes don't exist) stated explicitly; at signoff, the row's Gate
-  cell was rewritten to carry the formal `[CHECKPOINT — due when BSCS Year 1 Computing authoring
-  reaches 10+ classified notes, backstop 2026-12-29 regardless]` tag with kill criterion,
-  instrumentation and two-tier denominator rule, per the signoff checkpoint gate.
-
 ## Archived releases
 
 - `v0.163.0 — No Peeking` (Released) — archived to `docs/archive/RELEASES_ARCHIVE.md`.
 - `v0.162.0 — Say the Value` (Released) — archived to `docs/archive/RELEASES_ARCHIVE.md`.
 - `v0.160.0 — Study Plans by Semester` (Released) — Degree Study Journeys Phase A0/A: academic-term placement on Subject Plans, Year-page term grouping, compact Subject cards, and the curriculum-pipeline `academic_term` column; moved at the `v0.166.0` kickoff.
 - `v0.161.0 — Scannable Study Plans` (Released) — Degree Study Journeys Phase B: Study Plan Sections collapsed by default, an `Expand all`/`Collapse all` toggle, `Not started` wording at Section and plan grain; plus a pre-signoff pressure-test fix making `adoptGoal` adopt every published-but-private child instead of requiring `PUBLIC`. Moved at the `v0.167.0` kickoff.
+- `v0.164.0 — Computing` (Released) — ratified `Computing` as a 13th Domain Context (ADR-001 amendment), shipped the enum/frontend value, swept the context/spec docs; carries a `[CHECKPOINT — due when BSCS Year 1 Computing authoring reaches 10+ classified notes, backstop 2026-12-29]`. Moved at the `v0.170.0` kickoff.

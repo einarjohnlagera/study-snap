@@ -180,7 +180,7 @@ class NativeQueryPostgresIntegrationTest {
      * v0.93.0 pressure test: at 25 against an actual 31, the reflective scan could silently degrade by
      * six queries and stay green, which is the same false comfort the harness exists to remove.
      */
-    private static final int EXPECTED_NATIVE_QUERIES = 45;
+    private static final int EXPECTED_NATIVE_QUERIES = 46;
     private static final String REPOSITORY_CLASSES =
             "classpath*:com/studysnap/backend/repository/**/*.class";
 
@@ -413,6 +413,8 @@ class NativeQueryPostgresIntegrationTest {
 
     @Autowired
     private NoteCollectionRepository noteCollectionRepository;
+    @Autowired
+    private NoteCollectionItemRepository noteCollectionItemRepository;
     @Autowired
     private NoteRepository noteRepository;
 
@@ -3007,6 +3009,28 @@ class NativeQueryPostgresIntegrationTest {
         )).isZero();
     }
 
+    @Test
+    void examGoalBackfillMigratesValidSlugAndLeavesLegacyFreeTextUntouched() {
+        UUID exam = seedUser("exam-backfill");
+        UUID freeText = seedUser("text-backfill");
+        UUID empty = seedUser("empty-backfill");
+        jdbcTemplate.update("update users set study_goal = ' ALE ' where id = ?", exam);
+        jdbcTemplate.update("update users set study_goal = 'some free text goal' where id = ?", freeText);
+
+        String migration = migrationSql("V155__user_exam_goals.sql");
+        jdbcTemplate.execute(migration.substring(migration.indexOf("DO $$")));
+
+        assertThat(jdbcTemplate.queryForObject(
+                "select count(*) from user_exam_goals where user_id = ? and exam_goal_slug = 'ale' and is_active",
+                Integer.class, exam)).isOne();
+        assertThat(jdbcTemplate.queryForObject("select study_goal from users where id = ?", String.class, exam)).isNull();
+        assertThat(jdbcTemplate.queryForObject("select study_goal from users where id = ?", String.class, freeText))
+                .isEqualTo("some free text goal");
+        assertThat(jdbcTemplate.queryForObject("select count(*) from user_exam_goals where user_id in (?, ?)",
+                Integer.class, freeText, empty)).isZero();
+        assertThat(jdbcTemplate.queryForObject("select study_goal from users where id = ?", String.class, empty)).isNull();
+    }
+
     /**
      * Killing test for replacing V141's created-at backfill with NULL-as-published semantics, a
      * visibility-limited item update, or a deploy-time timestamp. The fixture has all three shapes
@@ -3115,6 +3139,48 @@ class NativeQueryPostgresIntegrationTest {
                 .isFalse();
         assertThat(afterPublish.getTopicsAdded()).isZero();
         assertThat(afterPublish.getSubjectPlansAdded()).isZero();
+    }
+
+    @Test
+    void officialReviewSetForPublicNoteUsesRootOwnerAndPublishedChildFacts() {
+        UUID admin = seedCuratorUser("note-set-admin");
+        UUID learner = seedUser("note-set-learner");
+        UUID note = seedPublicNote(admin, "Linked topic", new String[] {});
+        UUID otherNote = seedPublicNote(admin, "Unpublished topic", new String[] {});
+        UUID root = seedCollection(admin, "Official source");
+        jdbcTemplate.update("update note_collections set visibility = 'PUBLIC' where id = ?", root);
+        seedCollectionItem(root, note); // A PUBLIC root's item needs no publish stamp.
+        assertThat(noteCollectionItemRepository.findOfficialReviewSetRootForNote(note, UUID.randomUUID()))
+                .get().extracting(OfficialReviewSetProjection::getId).isEqualTo(root);
+        assertThat(noteCollectionItemRepository.findOfficialReviewSetRootForNote(note, admin))
+                .as("the deleted-owner parameter must exclude even an ADMIN row").isEmpty();
+
+        UUID child = seedCollection(admin, "Child");
+        jdbcTemplate.update("update note_collections set parent_collection_id = ? where id = ?", root, child);
+        seedCollectionItem(child, otherNote);
+        assertThat(noteCollectionItemRepository.findOfficialReviewSetRootForNote(otherNote, UUID.randomUUID())).isEmpty();
+        jdbcTemplate.update("update note_collections set published_at = now() where id = ?", child);
+        assertThat(noteCollectionItemRepository.findOfficialReviewSetRootForNote(otherNote, UUID.randomUUID())).isEmpty();
+        jdbcTemplate.update("update note_collection_items set published_at = now() where collection_id = ?", child);
+        assertThat(noteCollectionItemRepository.findOfficialReviewSetRootForNote(otherNote, UUID.randomUUID()))
+                .get().extracting(OfficialReviewSetProjection::getId).isEqualTo(root);
+
+        UUID publicUserSet = seedCollection(learner, "Self published");
+        jdbcTemplate.update("update note_collections set visibility = 'PUBLIC' where id = ?", publicUserSet);
+        UUID negativeNote = seedPublicNote(learner, "Not official", new String[] {});
+        seedCollectionItem(publicUserSet, negativeNote);
+        UUID adopted = seedCollection(learner, "Adopted copy");
+        jdbcTemplate.update("update note_collections set source_plan_id = ? where id = ?", root, adopted);
+        seedCollectionItem(adopted, negativeNote);
+        assertThat(noteCollectionItemRepository.findOfficialReviewSetRootForNote(negativeNote, UUID.randomUUID())).isEmpty();
+
+        UUID newer = seedCollection(admin, "Newer official source");
+        jdbcTemplate.update("update note_collections set visibility = 'PUBLIC', updated_at = now() + interval '1 day' where id = ?", newer);
+        seedCollectionItem(newer, note);
+        for (int attempt = 0; attempt < 3; attempt++) {
+            assertThat(noteCollectionItemRepository.findOfficialReviewSetRootForNote(note, UUID.randomUUID()))
+                    .get().extracting(OfficialReviewSetProjection::getId).isEqualTo(newer);
+        }
     }
 
     // ------------------------------------------------------------------------------------------------

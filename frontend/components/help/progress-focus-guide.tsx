@@ -157,14 +157,14 @@ export function ProgressFocusGuide() {
           <li className="flex gap-2 text-xs leading-relaxed text-foreground/65">
             <Target className="mt-0.5 h-3.5 w-3.5 shrink-0 text-foreground/50" aria-hidden="true" />
             <span>
-              <span className="font-medium text-foreground/80">Exam goal</span> — or aim at a licensure exam (ALE,
-              PNLE, LET) and track readiness toward it.
+              <span className="font-medium text-foreground/80">Exam goals</span> — add one or more licensure exams
+              (ALE, PNLE, LET, CPALE, CELE), then mark one active for your general Progress summary.
             </span>
           </li>
         </ul>
         <p className="text-xs leading-relaxed text-foreground/55">
-          Subjects and an exam goal are mutually exclusive — the most recent choice wins. Either way, Progress
-          shows combined mastery across your focus.
+          Subjects and exam goals are mutually exclusive. Profile asks before either choice clears the other.
+          Removing an exam goal keeps your adopted study material and practice history.
         </p>
       </section>
 
