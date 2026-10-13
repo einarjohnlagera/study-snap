@@ -3009,6 +3009,28 @@ class NativeQueryPostgresIntegrationTest {
         )).isZero();
     }
 
+    @Test
+    void examGoalBackfillMigratesValidSlugAndLeavesLegacyFreeTextUntouched() {
+        UUID exam = seedUser("exam-backfill");
+        UUID freeText = seedUser("text-backfill");
+        UUID empty = seedUser("empty-backfill");
+        jdbcTemplate.update("update users set study_goal = ' ALE ' where id = ?", exam);
+        jdbcTemplate.update("update users set study_goal = 'some free text goal' where id = ?", freeText);
+
+        String migration = migrationSql("V155__user_exam_goals.sql");
+        jdbcTemplate.execute(migration.substring(migration.indexOf("DO $$")));
+
+        assertThat(jdbcTemplate.queryForObject(
+                "select count(*) from user_exam_goals where user_id = ? and exam_goal_slug = 'ale' and is_active",
+                Integer.class, exam)).isOne();
+        assertThat(jdbcTemplate.queryForObject("select study_goal from users where id = ?", String.class, exam)).isNull();
+        assertThat(jdbcTemplate.queryForObject("select study_goal from users where id = ?", String.class, freeText))
+                .isEqualTo("some free text goal");
+        assertThat(jdbcTemplate.queryForObject("select count(*) from user_exam_goals where user_id in (?, ?)",
+                Integer.class, freeText, empty)).isZero();
+        assertThat(jdbcTemplate.queryForObject("select study_goal from users where id = ?", String.class, empty)).isNull();
+    }
+
     /**
      * Killing test for replacing V141's created-at backfill with NULL-as-published semantics, a
      * visibility-limited item update, or a deploy-time timestamp. The fixture has all three shapes

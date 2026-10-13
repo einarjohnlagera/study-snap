@@ -1,7 +1,6 @@
 package com.studysnap.backend.service;
 
 import com.studysnap.backend.util.QuizSessionStateUtils;
-import com.studysnap.backend.config.ExamGoalConfig;
 import com.studysnap.backend.config.StudySnapProperties;
 import com.studysnap.backend.dto.ApplicableProgramResponse;
 import com.studysnap.backend.dto.ConceptHealthEntryResponse;
@@ -79,11 +78,11 @@ public class PostSessionNextStepService {
     private final ProgressReportService progressReportService;
     private final ChallengeQuizQuestionBankService challengeQuizQuestionBankService;
     private final StudyPackGenerationContextResolver generationContextResolver;
-    private final ExamGoalCourseProgramProvider examGoalCourseProgramProvider;
     private final StudyPackQuizMasteryService studyPackQuizMasteryService;
     private final NoteCollectionItemRepository noteCollectionItemRepository;
     private final QuizSessionHistoryService quizSessionHistoryService;
     private final NoteCollectionRepository noteCollectionRepository;
+    private final UserExamGoalResolver userExamGoalResolver;
 
     @Transactional(readOnly = true)
     public NextStepResponse getNextStep(UUID userId, UUID studyPackId) {
@@ -532,7 +531,7 @@ public class PostSessionNextStepService {
 
 
     private GoalNudgeResponse resolveGoalNudge(UserEntity user, StudyPackEntity studyPack) {
-        String studyGoal = user.getStudyGoal();
+        String studyGoal = userExamGoalResolver.effectiveStudyGoal(user);
         if (studyGoal == null || studyGoal.isBlank() || studyPack.getNoteId() == null) {
             return null;
         }
@@ -552,13 +551,24 @@ public class PostSessionNextStepService {
                             .toList(),
                     note.getCourseProgram()
             );
-            if (notePrograms.isEmpty()) {
-                return null;
+            List<com.studysnap.backend.entity.UserExamGoalEntity> adopted = userExamGoalResolver.adoptedGoals(user);
+            if (!adopted.isEmpty()) {
+                // The active goal wins any overlap. Otherwise, the resolver's recency/id order picks
+                // one inactive adopted goal whose material this session actually used.
+                String sessionGoal = adopted.stream()
+                        .filter(goal -> goal.isActive() && notePrograms.stream()
+                                .anyMatch(program -> userExamGoalResolver.matchesProgram(goal.getExamGoalSlug(), program)))
+                        .map(com.studysnap.backend.entity.UserExamGoalEntity::getExamGoalSlug)
+                        .findFirst()
+                        .orElseGet(() -> adopted.stream()
+                                .filter(goal -> !goal.isActive() && notePrograms.stream()
+                                        .anyMatch(program -> userExamGoalResolver.matchesProgram(goal.getExamGoalSlug(), program)))
+                                .map(com.studysnap.backend.entity.UserExamGoalEntity::getExamGoalSlug)
+                                .findFirst().orElse(studyGoal));
+                return progressReportService.buildGoalNudge(user.getId(), sessionGoal, OffsetDateTime.now(ZoneOffset.UTC));
             }
-            // Applicable to several programs means in-goal if ANY of them is: the note genuinely serves
-            // that goal, so nudging the learner elsewhere would be wrong.
-            if (notePrograms.stream().anyMatch(program -> isCurrentNoteInGoal(studyGoal, program))) {
-                return null;
+            if (notePrograms.stream().anyMatch(program -> userExamGoalResolver.matchesProgram(studyGoal, program))) {
+                return null; // Preserve legacy free-text behavior for users without adopted exam rows.
             }
             return progressReportService.buildGoalNudge(user.getId(), studyGoal, OffsetDateTime.now(ZoneOffset.UTC));
         } catch (RuntimeException ex) {
@@ -571,14 +581,6 @@ public class PostSessionNextStepService {
             );
             return null;
         }
-    }
-
-    private boolean isCurrentNoteInGoal(String studyGoal, String noteCourseProgram) {
-        if (ExamGoalConfig.isValidSlug(studyGoal)) {
-            return examGoalCourseProgramProvider.getCoursePrograms(studyGoal).stream()
-                    .anyMatch(courseProgram -> Objects.equals(courseProgram, noteCourseProgram));
-        }
-        return Objects.equals(studyGoal, noteCourseProgram);
     }
 
     private AdaptivePracticeQuota resolveAdaptivePracticeQuota(UUID userId, PlanType planType) {

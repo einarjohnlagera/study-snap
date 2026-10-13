@@ -23,6 +23,11 @@ import {
   listSubjects,
   setFocusSubjects,
   setStudyGoal,
+  addExamGoal,
+  activateExamGoal,
+  removeExamGoal,
+  trackAnalyticsEvent,
+  type ExamGoalResponse,
   type SignInMethodsResponse,
   type LearnerLevel,
   type MeResponse,
@@ -247,6 +252,9 @@ export default function ProfilePage() {
   const [studyGoalMessage, setStudyGoalMessage] = useState<string | null>(null);
   const [examGoalDefinitions, setExamGoalDefinitions] = useState<Record<string, string>>({});
   const [savingExamGoal, setSavingExamGoal] = useState(false);
+  const [pendingStudyFocusChange, setPendingStudyFocusChange] = useState<
+    { kind: "exam"; slug: string } | { kind: "subjects"; subjects: string[] } | null
+  >(null);
   const [showAllStudyFocusSubjects, setShowAllStudyFocusSubjects] = useState(false);
   const [selectedFocusSubjects, setSelectedFocusSubjects] = useState<string[]>([]);
   const catalogCourseProgramNames = useCourseProgramCatalogNames();
@@ -444,6 +452,17 @@ export default function ProfilePage() {
     () => profile?.focusSubjects?.filter((subject) => subject.trim().length > 0) ?? [],
     [profile?.focusSubjects],
   );
+  const adoptedExamGoals = profile?.examGoals ?? [];
+
+  const applyExamGoalList = (goals: ExamGoalResponse[]) => {
+    setProfile((current) => current ? {
+      ...current,
+      examGoals: goals,
+      studyGoal: goals.find((goal) => goal.isActive)?.slug ?? null,
+      focusSubjects: [],
+    } : current);
+    setSelectedFocusSubjects([]);
+  };
 
   const visibleFocusSubjects = useMemo(
     () => showAllStudyFocusSubjects ? focusSubjectSuggestions : focusSubjectSuggestions.slice(0, 8),
@@ -736,8 +755,7 @@ export default function ProfilePage() {
     setClearingStudyGoal(true);
     setStudyGoalMessage(null);
     try {
-      await setStudyGoal(null);
-      const updated = await setFocusSubjects([]);
+      const updated = await setStudyGoal(null);
       setProfile(updated);
       setIsEditingGoal(true);
       setSelectedFocusSubjects([]);
@@ -750,15 +768,53 @@ export default function ProfilePage() {
 
   const handleSelectExamGoal = async (slug: string) => {
     if (!Object.hasOwn(examGoalDefinitions, slug) || savingExamGoal) return;
+    if (currentFocusSubjects.length > 0) {
+      setPendingStudyFocusChange({ kind: "exam", slug });
+      return;
+    }
+    await commitAddExamGoal(slug);
+  };
+
+  const commitAddExamGoal = async (slug: string) => {
     setSavingExamGoal(true);
     setStudyGoalMessage(null);
     try {
-      const updated = await setStudyGoal(slug);
-      setProfile(updated);
-      setSelectedFocusSubjects(updated.focusSubjects ?? []);
+      const existed = adoptedExamGoals.some((goal) => goal.slug === slug);
+      const goals = await addExamGoal(slug);
+      applyExamGoalList(goals);
+      void trackAnalyticsEvent({ eventType: existed ? "EXAM_GOAL_ACTIVATED" : "EXAM_GOAL_ADDED",
+        metadata: { examGoalSlug: slug } });
       setIsEditingGoal(false);
     } catch (err) {
       setStudyGoalMessage(err instanceof Error ? err.message : "Could not set exam goal. Please try again.");
+    } finally {
+      setSavingExamGoal(false);
+    }
+  };
+
+  const handleActivateExamGoal = async (slug: string) => {
+    if (savingExamGoal) return;
+    setSavingExamGoal(true);
+    setStudyGoalMessage(null);
+    try {
+      applyExamGoalList(await activateExamGoal(slug));
+      void trackAnalyticsEvent({ eventType: "EXAM_GOAL_ACTIVATED", metadata: { examGoalSlug: slug } });
+    } catch (err) {
+      setStudyGoalMessage(err instanceof Error ? err.message : "Could not activate exam goal.");
+    } finally {
+      setSavingExamGoal(false);
+    }
+  };
+
+  const handleRemoveExamGoal = async (slug: string) => {
+    if (savingExamGoal) return;
+    setSavingExamGoal(true);
+    setStudyGoalMessage(null);
+    try {
+      applyExamGoalList(await removeExamGoal(slug));
+      void trackAnalyticsEvent({ eventType: "EXAM_GOAL_REMOVED", metadata: { examGoalSlug: slug } });
+    } catch (err) {
+      setStudyGoalMessage(err instanceof Error ? err.message : "Could not remove exam goal.");
     } finally {
       setSavingExamGoal(false);
     }
@@ -793,10 +849,18 @@ export default function ProfilePage() {
     if (savingStudyFocus || selectedFocusSubjects.length === 0) {
       return;
     }
+    if (adoptedExamGoals.length > 0) {
+      setPendingStudyFocusChange({ kind: "subjects", subjects: selectedFocusSubjects });
+      return;
+    }
+    await commitFocusSubjects(selectedFocusSubjects);
+  };
+
+  const commitFocusSubjects = async (subjects: string[]) => {
     setSavingStudyFocus(true);
     setStudyGoalMessage(null);
     try {
-      const updated = await setFocusSubjects(selectedFocusSubjects);
+      const updated = await setFocusSubjects(subjects);
       setProfile(updated);
       setSelectedFocusSubjects(updated.focusSubjects ?? []);
       setIsEditingGoal(false);
@@ -805,6 +869,13 @@ export default function ProfilePage() {
     } finally {
       setSavingStudyFocus(false);
     }
+  };
+
+  const confirmStudyFocusChange = async () => {
+    const pending = pendingStudyFocusChange;
+    setPendingStudyFocusChange(null);
+    if (pending?.kind === "exam") await commitAddExamGoal(pending.slug);
+    if (pending?.kind === "subjects") await commitFocusSubjects(pending.subjects);
   };
 
   return (
@@ -1357,12 +1428,31 @@ export default function ProfilePage() {
                   </div>
                 </div>
               )}
+              {adoptedExamGoals.length > 0 ? (
+                <div className="space-y-2 border-t border-border pt-4">
+                  <p className="text-sm font-medium">Your exam goals</p>
+                  {adoptedExamGoals.map((goal) => (
+                    <div key={goal.slug} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border px-3 py-2">
+                      <span className="text-sm">
+                        {examGoalDefinitions[goal.slug] ?? goal.slug}
+                        {goal.isActive ? <span className="ml-2 text-xs text-blue-600">Active</span> : null}
+                      </span>
+                      <span className="flex gap-2">
+                        {!goal.isActive ? <Button type="button" size="sm" variant="outline"
+                          disabled={savingExamGoal} onClick={() => void handleActivateExamGoal(goal.slug)}>Set active</Button> : null}
+                        <Button type="button" size="sm" variant="outline" disabled={savingExamGoal}
+                          onClick={() => void handleRemoveExamGoal(goal.slug)}>Remove</Button>
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
               <div className="space-y-2">
-                <label htmlFor="profile-exam-goal" className="text-sm font-medium">Choose an exam goal</label>
+                <label htmlFor="profile-exam-goal" className="text-sm font-medium">Add an exam goal</label>
                 <SuggestionCombobox
                   id="profile-exam-goal"
                   ariaLabel="Choose an exam goal"
-                  value={profile.studyGoal && examGoalDefinitions[profile.studyGoal] ? profile.studyGoal : ""}
+                  value=""
                   options={Object.entries(examGoalDefinitions).map(([value, label]) => ({ value, label }))}
                   onChange={() => {}}
                   onOptionSelect={(slug) => void handleSelectExamGoal(slug)}
@@ -1382,6 +1472,18 @@ export default function ProfilePage() {
       ) : null}
 
       {/* Profile type switch confirmation modal */}
+      <AppModal isOpen={pendingStudyFocusChange !== null} title="Change study focus?"
+        onClose={() => setPendingStudyFocusChange(null)}
+        actions={<div className="flex justify-end gap-2">
+          <Button type="button" variant="outline" onClick={() => setPendingStudyFocusChange(null)}>Cancel</Button>
+          <Button type="button" onClick={() => void confirmStudyFocusChange()}>Confirm change</Button>
+        </div>}>
+        <p className="text-sm text-foreground/80">
+          {pendingStudyFocusChange?.kind === "exam"
+            ? `Adding this exam goal will clear your ${currentFocusSubjects.length} subject ${currentFocusSubjects.length === 1 ? "focus" : "focuses"}.`
+            : `Saving a subject focus will clear all ${adoptedExamGoals.length} adopted exam ${adoptedExamGoals.length === 1 ? "goal" : "goals"}.`}
+        </p>
+      </AppModal>
       <ProfileTypeSwitchModal
         pendingProfileType={pendingProfileType}
         saving={savingProfileType}

@@ -11,6 +11,7 @@ import com.studysnap.backend.dto.GoogleConnectRequest;
 import com.studysnap.backend.dto.LoginRequest;
 import com.studysnap.backend.dto.LogoutRequest;
 import com.studysnap.backend.dto.MeResponse;
+import com.studysnap.backend.dto.ExamGoalResponse;
 import com.studysnap.backend.dto.OnboardingProfileTypeRequest;
 import com.studysnap.backend.dto.ReactivateAccountRequest;
 import com.studysnap.backend.dto.RefreshTokenRequest;
@@ -135,6 +136,8 @@ public class AuthService {
     private final EmailVerificationService emailVerificationService;
     private final AnalyticsService analyticsService;
     private final PasswordResetService passwordResetService;
+    private final UserExamGoalService userExamGoalService;
+    private final UserExamGoalResolver userExamGoalResolver;
 
     public AuthResponse signup(SignupRequest request, String ipAddress, String userAgent) {
         String email = normalizeEmail(request.email());
@@ -506,11 +509,13 @@ public class AuthService {
         return toMeResponse(user);
     }
 
+    @Transactional
     public MeResponse updateFocusSubjects(UUID userId, UpdateFocusSubjectsRequest request) {
-        UserEntity user = findUserOrThrow(userId);
+        UserEntity user = userRepository.findByIdForUpdate(userId).orElseThrow(UserNotFoundException::new);
         List<String> focusSubjects = normalizeFocusSubjects(request.subjects() != null ? request.subjects() : List.of());
         user.setFocusSubjects(focusSubjects.toArray(String[]::new));
         if (!focusSubjects.isEmpty()) {
+            userExamGoalService.clearAll(userId);
             user.setStudyGoal(null);
         }
         user.setUpdatedAt(OffsetDateTime.now());
@@ -598,15 +603,36 @@ public class AuthService {
 
     @Transactional
     public MeResponse updateStudyGoal(UUID userId, UpdateStudyGoalRequest request) {
-        UserEntity user = findUserOrThrow(userId);
+        UserEntity user = userRepository.findByIdForUpdate(userId).orElseThrow(UserNotFoundException::new);
         String normalizedStudyGoal = normalizeStudyGoal(request.studyGoal());
-
-        user.setStudyGoal(normalizedStudyGoal);
-        if (normalizedStudyGoal != null) {
+        if (normalizedStudyGoal == null) {
+            userExamGoalService.clearAll(userId);
+            user.setStudyGoal(null);
+            user.setFocusSubjects(new String[0]);
+        } else if (userExamGoalResolver.isExamGoal(normalizedStudyGoal)) {
+            userExamGoalService.addAndActivate(userId, normalizedStudyGoal);
+        } else {
+            userExamGoalService.clearAll(userId);
+            user.setStudyGoal(normalizedStudyGoal);
             user.setFocusSubjects(new String[0]);
         }
         user.setUpdatedAt(OffsetDateTime.now());
         return toMeResponse(user);
+    }
+
+    @Transactional
+    public List<ExamGoalResponse> addExamGoal(UUID userId, String slug) {
+        return userExamGoalService.addAndActivate(userId, slug);
+    }
+
+    @Transactional
+    public List<ExamGoalResponse> activateExamGoal(UUID userId, String slug) {
+        return userExamGoalService.setActive(userId, slug);
+    }
+
+    @Transactional
+    public List<ExamGoalResponse> removeExamGoal(UUID userId, String slug) {
+        return userExamGoalService.remove(userId, slug);
     }
 
     public MeResponse updatePublicProfileVisibility(UUID userId, UpdatePublicProfileVisibilityRequest request) {
@@ -638,7 +664,7 @@ public class AuthService {
                 user.getBio(),
                 user.getLearnerLevel(),
                 user.getCourseProgram(),
-                user.getStudyGoal(),
+                userExamGoalResolver.effectiveStudyGoal(user),
                 toFocusSubjectResponse(user),
                 user.getSchoolName(),
                 Boolean.TRUE.equals(user.getPublicProfileVisible()),
@@ -667,7 +693,8 @@ public class AuthService {
                 user.getRole(),
                 user.getStatus(),
                 planSnapshot.planType(),
-                planSnapshot.toResponse()
+                planSnapshot.toResponse(),
+                userExamGoalResolver.goalList(user)
         );
     }
 

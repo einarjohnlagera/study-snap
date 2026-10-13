@@ -61,6 +61,7 @@ import { DashboardPrimaryCollectionHero, DashboardPrimaryCollectionHeroSkeleton 
 import { ProfessionalInterviewPracticeCard } from "@/components/dashboard/professional-interview-practice-card";
 import { DashboardGoalCard } from "@/components/dashboard/dashboard-goal-card";
 import { GoalPromptBanner } from "@/components/dashboard/goal-prompt-banner";
+import { getExamIntentCookie } from "@/lib/exam-intent";
 import { DiscoveryIntentConsumer } from "@/components/dashboard/discovery-intent-consumer";
 import { LinkedLearnerInvitationIntentConsumer } from "@/components/dashboard/linked-learner-invitation-intent-consumer";
 import { AppModal } from "@/components/ui/app-modal";
@@ -438,7 +439,7 @@ export default function DashboardPage() {
           setPrimaryCollectionGoal(null);
           setPrimaryCollectionGoalLoading(false);
         }
-        if (me.studyGoal) {
+        if (me.studyGoal && !getExamIntentCookie()) {
           setGoalSummary(null);
           setGoalSummaryLoading(true);
           void getGoalSummary()
@@ -750,7 +751,9 @@ export default function DashboardPage() {
       secondaryActionIcon="open"
     />
   );
-  const dashboardGoalFallback = profile?.studyGoal ? (
+  const intentSlug = getExamIntentCookie();
+  const showExamIntentOffer = Boolean(intentSlug && intentSlug !== profile?.studyGoal);
+  const dashboardGoalFallback = profile?.studyGoal && !showExamIntentOffer ? (
     goalSummary ? (
       <DashboardGoalCard goalSummary={goalSummary} />
     ) : goalSummaryLoading ? (
@@ -761,6 +764,9 @@ export default function DashboardPage() {
       studyGoal={profile?.studyGoal ?? null}
       courseProgram={profile?.courseProgram ?? null}
       profileType={profile?.profileType ?? null}
+      focusSubjects={profile?.focusSubjects ?? []}
+      examGoals={profile?.examGoals ?? []}
+      userId={profile?.id}
     />
   );
   const hasPrimaryCollection = Boolean(profile?.primaryCollectionId);

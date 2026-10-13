@@ -53,8 +53,36 @@ public record MeResponse(
         UserRole role,
         UserStatus status,
         PlanType planType,
-        SubscriptionPlanStatusResponse subscription
+        SubscriptionPlanStatusResponse subscription,
+        List<ExamGoalResponse> examGoals
 ) {
+    public MeResponse(
+            String id, String email, String pendingEmail, String firstName, String lastName,
+            String displayName, String username, String bio, LearnerLevel learnerLevel,
+            String courseProgram, String studyGoal, List<String> focusSubjects, String schoolName,
+            boolean publicProfileVisible, String countryCode, ProfileType profileType,
+            LocalDate examDate, List<String> reviewDays, boolean reviewCommitmentOutstanding,
+            boolean reviewCommitmentPromptEligible, int reviewCommitmentPromptCount,
+            EngagementMode engagementMode, boolean inactivityRemindersEnabled,
+            boolean weakConceptRemindersEnabled, boolean weeklySummaryRemindersEnabled,
+            boolean dueConceptsDigestRemindersEnabled, boolean knowledgeImpactDigestRemindersEnabled,
+            boolean marketingEmailsEnabled, boolean mobileTabBarEnabled,
+            ThemePreference themePreference, OffsetDateTime emailVerifiedAt,
+            OffsetDateTime onboardingCompletedAt, OffsetDateTime productOnboardingCompletedAt,
+            UUID primaryCollectionId, Integer studyDaysPerWeek, long studyPackCount,
+            UserRole role, UserStatus status, PlanType planType,
+            SubscriptionPlanStatusResponse subscription
+    ) {
+        this(id, email, pendingEmail, firstName, lastName, displayName, username, bio, learnerLevel,
+                courseProgram, studyGoal, focusSubjects, schoolName, publicProfileVisible, countryCode,
+                profileType, examDate, reviewDays, reviewCommitmentOutstanding,
+                reviewCommitmentPromptEligible, reviewCommitmentPromptCount, engagementMode,
+                inactivityRemindersEnabled, weakConceptRemindersEnabled, weeklySummaryRemindersEnabled,
+                dueConceptsDigestRemindersEnabled, knowledgeImpactDigestRemindersEnabled,
+                marketingEmailsEnabled, mobileTabBarEnabled, themePreference, emailVerifiedAt,
+                onboardingCompletedAt, productOnboardingCompletedAt, primaryCollectionId,
+                studyDaysPerWeek, studyPackCount, role, status, planType, subscription, List.of());
+    }
     public MeResponse(
             String id,
             String email,

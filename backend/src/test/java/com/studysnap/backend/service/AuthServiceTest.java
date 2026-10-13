@@ -93,6 +93,10 @@ class AuthServiceTest {
     private AnalyticsService analyticsService;
     @Mock
     private PasswordResetService passwordResetService;
+    @Mock
+    private UserExamGoalService userExamGoalService;
+    @Mock
+    private UserExamGoalResolver userExamGoalResolver;
 
     private AuthService authService;
 
@@ -110,13 +114,20 @@ class AuthServiceTest {
             googleIdentityTokenVerifier,
             emailVerificationService,
             analyticsService,
-            passwordResetService
+            passwordResetService,
+            userExamGoalService,
+            userExamGoalResolver
         );
         lenient().when(jwtService.generateAccessToken(any(UserEntity.class))).thenReturn("access-token");
         lenient().when(jwtService.resolveAccessTokenExpiry()).thenReturn(OffsetDateTime.now().plusMinutes(15));
         lenient().when(studyPackRepository.countByOwnerUserId(any(UUID.class))).thenReturn(0L);
         lenient().when(refreshTokenService.issue(any(UserEntity.class), any(Boolean.class), any(), any(), any()))
             .thenReturn(new RefreshTokenService.IssuedRefreshToken("refresh-token", OffsetDateTime.now().plusDays(7)));
+        lenient().when(userExamGoalResolver.isExamGoal(any(String.class)))
+            .thenAnswer(invocation -> com.studysnap.backend.config.ExamGoalConfig.isValidSlug(invocation.getArgument(0)));
+        lenient().when(userExamGoalResolver.effectiveStudyGoal(any(UserEntity.class)))
+            .thenAnswer(invocation -> ((UserEntity) invocation.getArgument(0)).getStudyGoal());
+        lenient().when(userExamGoalResolver.goalList(any(UserEntity.class))).thenReturn(java.util.List.of());
     }
 
     @Test
@@ -1435,7 +1446,7 @@ class AuthServiceTest {
         UUID userId = UUID.randomUUID();
         UserEntity user = activeUser(userId, "current@example.com");
         user.setFocusSubjects(new String[] {"Pharmacology"});
-        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(userRepository.findByIdForUpdate(userId)).thenReturn(Optional.of(user));
         when(subscriptionService.getPlanSnapshot(userId))
             .thenReturn(new SubscriptionService.PlanSnapshot(
                 PlanType.FREE,
@@ -1446,16 +1457,15 @@ class AuthServiceTest {
 
         MeResponse response = authService.updateStudyGoal(userId, new UpdateStudyGoalRequest(" ALE "));
 
-        assertThat(response.studyGoal()).isEqualTo("ale");
-        assertThat(user.getStudyGoal()).isEqualTo("ale");
-        assertThat(user.getFocusSubjects()).isEmpty();
+        verify(userExamGoalService).addAndActivate(userId, "ale");
+        assertThat(user.getStudyGoal()).isNull();
     }
 
     @Test
     void updateExamGoal_acceptsCourseProgramGoal() {
         UUID userId = UUID.randomUUID();
         UserEntity user = activeUser(userId, "current@example.com");
-        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(userRepository.findByIdForUpdate(userId)).thenReturn(Optional.of(user));
         when(subscriptionService.getPlanSnapshot(userId))
             .thenReturn(new SubscriptionService.PlanSnapshot(
                 PlanType.FREE,
@@ -1475,7 +1485,7 @@ class AuthServiceTest {
         UUID userId = UUID.randomUUID();
         UserEntity user = activeUser(userId, "current@example.com");
         user.setStudyGoal("pnle");
-        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(userRepository.findByIdForUpdate(userId)).thenReturn(Optional.of(user));
         when(subscriptionService.getPlanSnapshot(userId))
             .thenReturn(new SubscriptionService.PlanSnapshot(
                 PlanType.FREE,
@@ -1495,7 +1505,7 @@ class AuthServiceTest {
         UUID userId = UUID.randomUUID();
         UserEntity user = activeUser(userId, "current@example.com");
         UpdateStudyGoalRequest request = new UpdateStudyGoalRequest("  ");
-        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(userRepository.findByIdForUpdate(userId)).thenReturn(Optional.of(user));
 
         assertThatThrownBy(() -> authService.updateStudyGoal(userId, request))
             .isInstanceOf(InvalidGoalException.class)
@@ -1507,7 +1517,7 @@ class AuthServiceTest {
         UUID userId = UUID.randomUUID();
         UserEntity user = activeUser(userId, "current@example.com");
         UpdateStudyGoalRequest request = new UpdateStudyGoalRequest("A".repeat(101));
-        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(userRepository.findByIdForUpdate(userId)).thenReturn(Optional.of(user));
 
         assertThatThrownBy(() -> authService.updateStudyGoal(userId, request))
             .isInstanceOf(InvalidGoalException.class)

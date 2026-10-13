@@ -102,6 +102,8 @@ class PostSessionNextStepServiceTest {
     private QuizSessionHistoryService quizSessionHistoryService;
     @Mock
     private NoteCollectionRepository noteCollectionRepository;
+    @Mock
+    private com.studysnap.backend.repository.UserExamGoalRepository userExamGoalRepository;
 
     private StudySnapProperties properties;
     private PostSessionNextStepService postSessionNextStepService;
@@ -122,11 +124,11 @@ class PostSessionNextStepServiceTest {
                 progressReportService,
                 challengeQuizQuestionBankService,
                 generationContextResolver,
-                examGoalCourseProgramProvider,
                 studyPackQuizMasteryService,
                 noteCollectionItemRepository,
                 quizSessionHistoryService,
-                noteCollectionRepository
+                noteCollectionRepository,
+                new UserExamGoalResolver(userExamGoalRepository, examGoalCourseProgramProvider)
         );
         lenient().when(examGoalCourseProgramProvider.getCoursePrograms("pnle"))
                 .thenReturn(List.of("Nursing"));
@@ -522,6 +524,73 @@ class PostSessionNextStepServiceTest {
     }
 
     @Test
+    void getNextStepRedirectsToAdoptedSessionGoal() {
+        UUID userId = UUID.randomUUID();
+        StudyPackEntity studyPack = buildStudyPack(userId);
+        stubOwnedStudyPack(userId, studyPack, null);
+        stubNote(userId, studyPack.getNoteId(), "Nursing");
+        stubReviewPackPath(userId, studyPack);
+        com.studysnap.backend.entity.UserExamGoalEntity active = new com.studysnap.backend.entity.UserExamGoalEntity();
+        active.setExamGoalSlug("ale");
+        active.setActive(true);
+        com.studysnap.backend.entity.UserExamGoalEntity inactive = new com.studysnap.backend.entity.UserExamGoalEntity();
+        inactive.setExamGoalSlug("pnle");
+        when(userExamGoalRepository.findByUserIdAndActiveTrue(userId)).thenReturn(Optional.of(active));
+        when(userExamGoalRepository.findByUserIdOrderByCreatedAtDescIdAsc(userId)).thenReturn(List.of(active, inactive));
+        lenient().when(examGoalCourseProgramProvider.getCoursePrograms("ale")).thenReturn(List.of("Architecture"));
+        GoalNudgeResponse nursing = new GoalNudgeResponse("pnle", "EXAM", "PNLE", "PNLE", 42, 3, null);
+        when(progressReportService.buildGoalNudge(eq(userId), eq("pnle"), any(OffsetDateTime.class)))
+                .thenReturn(nursing);
+
+        assertThat(postSessionNextStepService.getNextStep(userId, studyPack.getId()).goalNudge()).isEqualTo(nursing);
+        verify(progressReportService).buildGoalNudge(eq(userId), eq("pnle"), any(OffsetDateTime.class));
+    }
+
+    @Test
+    void getNextStepUsesActiveAdoptedGoalWhenNoteMatchesNoAdoptedGoal() {
+        UUID userId = UUID.randomUUID();
+        StudyPackEntity studyPack = buildStudyPack(userId);
+        stubOwnedStudyPack(userId, studyPack, null);
+        stubNote(userId, studyPack.getNoteId(), "Biochemistry");
+        stubReviewPackPath(userId, studyPack);
+        com.studysnap.backend.entity.UserExamGoalEntity active = new com.studysnap.backend.entity.UserExamGoalEntity();
+        active.setExamGoalSlug("ale");
+        active.setActive(true);
+        when(userExamGoalRepository.findByUserIdAndActiveTrue(userId)).thenReturn(Optional.of(active));
+        when(userExamGoalRepository.findByUserIdOrderByCreatedAtDescIdAsc(userId)).thenReturn(List.of(active));
+        lenient().when(examGoalCourseProgramProvider.getCoursePrograms("ale")).thenReturn(List.of("Architecture"));
+        GoalNudgeResponse architecture = new GoalNudgeResponse("ale", "EXAM", "ALE", "ALE", 30, 2, null);
+        when(progressReportService.buildGoalNudge(eq(userId), eq("ale"), any(OffsetDateTime.class)))
+                .thenReturn(architecture);
+
+        assertThat(postSessionNextStepService.getNextStep(userId, studyPack.getId()).goalNudge())
+                .isEqualTo(architecture);
+    }
+
+    @Test
+    void getNextStepPrefersActiveGoalWhenNoteAlsoMatchesInactiveGoal() {
+        UUID userId = UUID.randomUUID();
+        StudyPackEntity studyPack = buildStudyPack(userId);
+        stubOwnedStudyPack(userId, studyPack, null);
+        stubCuratedNote(userId, studyPack.getNoteId(), "Nursing", "Architecture");
+        stubReviewPackPath(userId, studyPack);
+        com.studysnap.backend.entity.UserExamGoalEntity active = new com.studysnap.backend.entity.UserExamGoalEntity();
+        active.setExamGoalSlug("ale");
+        active.setActive(true);
+        com.studysnap.backend.entity.UserExamGoalEntity inactive = new com.studysnap.backend.entity.UserExamGoalEntity();
+        inactive.setExamGoalSlug("pnle");
+        when(userExamGoalRepository.findByUserIdAndActiveTrue(userId)).thenReturn(Optional.of(active));
+        when(userExamGoalRepository.findByUserIdOrderByCreatedAtDescIdAsc(userId)).thenReturn(List.of(inactive, active));
+        lenient().when(examGoalCourseProgramProvider.getCoursePrograms("ale")).thenReturn(List.of("Architecture"));
+        GoalNudgeResponse architecture = new GoalNudgeResponse("ale", "EXAM", "ALE", "ALE", 30, 2, null);
+        when(progressReportService.buildGoalNudge(eq(userId), eq("ale"), any(OffsetDateTime.class)))
+                .thenReturn(architecture);
+
+        assertThat(postSessionNextStepService.getNextStep(userId, studyPack.getId()).goalNudge())
+                .isEqualTo(architecture);
+    }
+
+    @Test
     void getNextStep_readsTheJoinWhenResolvingWhetherACuratedNoteIsInTheGoal() {
         // M3: reading notes.course_program alone made every curated note look programme-less -- ADR-001
         // defines a curator-authored note's string as null -- so the nudge was skipped for exactly the
@@ -735,11 +804,11 @@ class PostSessionNextStepServiceTest {
                 progressReportService,
                 realQuestionBankService,
                 generationContextResolver,
-                examGoalCourseProgramProvider,
                 studyPackQuizMasteryService,
                 noteCollectionItemRepository,
                 quizSessionHistoryService,
-                noteCollectionRepository
+                noteCollectionRepository,
+                org.mockito.Mockito.mock(UserExamGoalResolver.class)
         );
         stubOwnedStudyPack(userId, studyPack);
         stubPlanAndUsage(userId, PlanType.FREE, 0);

@@ -82,7 +82,9 @@ class AuthServiceFirstTouchAttributionTest {
                 googleIdentityTokenVerifier,
                 emailVerificationService,
                 analyticsService,
-                passwordResetService
+                passwordResetService,
+                org.mockito.Mockito.mock(UserExamGoalService.class),
+                org.mockito.Mockito.mock(UserExamGoalResolver.class)
         );
         when(jwtService.generateAccessToken(any(UserEntity.class))).thenReturn("access-token");
         when(jwtService.resolveAccessTokenExpiry()).thenReturn(OffsetDateTime.now().plusMinutes(15));

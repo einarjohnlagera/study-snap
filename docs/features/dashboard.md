@@ -41,6 +41,10 @@ When `GET /auth/me` returns a `primaryCollectionId`, Dashboard adds a condensed 
 
 ## Current Personalization Prompt
 
+### Exam goal prompt
+
+The generic `GoalPromptBanner` appears only when the learner has no active exam goal, legacy goal, or subject focus. Its dismissal persists per user across reloads. An Exam Hub intent cookie takes priority over generic dismissal: when its exam differs from the active goal, the banner offers to add and activate it, retaining other adopted exam goals. If subject focus is set, the banner asks for confirmation before clearing it. General goal nudges use only the active exam goal; a post-session next step may instead use a different adopted goal matching that session's note.
+
 After onboarding completes, Dashboard may show a lightweight learner-level prompt near the top.
 
 Current prompt copy:

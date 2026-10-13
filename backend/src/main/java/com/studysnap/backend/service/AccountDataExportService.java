@@ -33,7 +33,7 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 public class AccountDataExportService {
-    private static final String SCHEMA_VERSION = "1.2";
+    private static final String SCHEMA_VERSION = "1.3";
     private static final int SESSION_EXPORT_BATCH_SIZE = 100;
 
     private final UserRepository userRepository;
@@ -43,6 +43,7 @@ public class AccountDataExportService {
     private final NoteCollectionItemRepository noteCollectionItemRepository;
     private final QuickReviewSessionRepository quickReviewSessionRepository;
     private final LinkedLearnerProvisionalBirthYearRepository provisionalBirthYearRepository;
+    private final UserExamGoalResolver userExamGoalResolver;
 
     @Transactional(readOnly = true)
     public DataExportResponse exportForUser(UUID userId) {
@@ -80,7 +81,7 @@ public class AccountDataExportService {
                 user.getProfileType(),
                 user.getLearnerLevel(),
                 user.getCourseProgram(),
-                user.getStudyGoal(),
+                userExamGoalResolver.effectiveStudyGoal(user),
                 toList(user.getFocusSubjects()),
                 user.getExamDate(),
                 user.getBirthYear(),
@@ -88,7 +89,8 @@ public class AccountDataExportService {
                         .map(row -> new DataExportResponse.ProvisionalBirthYear(
                                 row.getRelationshipId(), row.getBirthYear(), row.getDeclaredAt()))
                         .toList(),
-                user.getCreatedAt()
+                user.getCreatedAt(),
+                userExamGoalResolver.goalList(user)
         );
     }
 
