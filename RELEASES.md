@@ -37,7 +37,8 @@ item 2 below; nothing had deployed yet.
    post-merge `Apparent connection leak` trace rate for any new attribution to this lookup, distinct from
    `v0.166.0`'s own two traced methods (`PublicProfileController`/`NoteCollectionController`).
 
-2. **Multi-goal exam support (backend + frontend). IN PROGRESS — Codex prompt pending.** The owner's 5
+2. **Multi-goal exam support (backend + frontend). SHIPPED — PR #1491, commit `04435dde` on
+   `releases/v0.170.0`.** The owner's 5
    direction points, recorded verbatim at the `v0.169.0` kickoff (2026-10-10):
 
    1. **Storage — a normalized join table**, one row per (user, exam goal), with one goal flagged
@@ -102,6 +103,20 @@ item 2 below; nothing had deployed yet.
    bar for at least one scoped cold falsification agent at signoff per the pressure-test gate, and is a
    candidate for the full 3-agent pressure test given the permission-adjacent (goal/content exclusivity)
    surface. Decide at signoff, not assumed here.
+
+   **Audited before commit** against the Codex prompt's full acceptance-criteria list: migration
+   backfill replay test against seeded (non-empty) data; a real-Postgres `@SpringBootTest` +
+   `@Testcontainers` test proving the partial unique index exists and the actual Hibernate flush order
+   holds under add/remove/idempotent-re-add (not H2, which has no such index); `AccountPurgeService`
+   deletes `user_exam_goals` rows rather than sentinel-reassigning (the table enforces per-user
+   uniqueness); GDPR export (schema 1.3) includes every adopted goal, not just the active one; the
+   pre-existing `PUT /users/profile/goal` endpoint kept its request/response contract unchanged for
+   un-upgraded clients; `EXAM_GOAL_ADDED/ACTIVATED/REMOVED` confirmed firing from real user actions (not
+   just enum membership), verified by a test asserting the call. One false-positive raised and reverted
+   during audit: "CELE" in `progress-focus-guide.tsx` is the correct, pre-existing Civil Engineering
+   exam acronym (`ExamGoalConfig.java`), not a typo. Backend: 2,672 tests/0 failures (incl. the
+   Testcontainers native-query and real-Postgres flush-order harnesses). Frontend: 231/231 suites,
+   2,642/2,643 tests (1 pre-existing unrelated skip), `tsc --noEmit` clean, `npm run lint` clean.
 
 Anti-drift: no `ProfileType` change, no recommendation-engine change, no Degree Journey/Academic
 Term/ConceptHealth change, no change to `resolvePlanPremiumExamMode`/`EXAM_MODES.md`, no change to
