@@ -2,7 +2,7 @@
 
 ## v0.171.0 - Checkout, Recovered
 
-**Status: In Progress**
+**Status: Released**
 
 Theme: close the checkout-abandonment leak the product-health release plan's RC-0 diagnosis found
 (`docs/claude-plans/2026-10-09-product-health-release-plan.md`), plus signup entry-surface

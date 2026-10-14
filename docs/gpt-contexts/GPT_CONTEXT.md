@@ -3,7 +3,16 @@
 > **This is the core brief. Paste it as your first message in a new GPT chat session.**
 > Then paste any module below that matches the conversation — see "Which modules to paste".
 > Update this file whenever a new version ships or the roadmap shifts significantly.
-> Last updated: v0.170.0 - 2026-10-13 (In Progress). **`v0.170.0` shipped both Study Journey
+> Last updated: v0.171.0 - 2026-10-14 (Released). **`v0.171.0` closed the checkout-abandonment leak a
+> product-health funnel audit found: all 16 failed Xendit invoices in production showed plain
+> un-engaged expiry — no channel picked, no attempt — never a declined payment, so the fix is
+> Xendit's own native payment-reminder email (one `payer_email` field added to invoice creation, plus
+> the owner enabling a Xendit dashboard toggle), not a product feature.** `[CHECKPOINT — due
+> 2026-10-21]`: whether the reminder actually fires inside the 24h invoice window is unverified —
+> Xendit sends it directly to the payer, so there is no event this product can instrument to confirm
+> it; needs a real test checkout. Also added `first_touch_surface` (landing / public note / explore /
+> exam hub / other) to the existing signup attribution columns, closing the one gap in knowing which
+> entry surface actually produces signups. Previously v0.170.0 - 2026-10-13 (Released). **`v0.170.0` shipped both Study Journey
 > candidates line 10 below said were "deliberately held back": multi-goal exam support (owner
 > override — population stayed 2 of 426, the deferral's own trigger was never met — a learner can
 > now adopt several exam goals via a new `user_exam_goals` table, not just one) and the Public Note →
