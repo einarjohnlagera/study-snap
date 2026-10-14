@@ -111,6 +111,7 @@ class DashboardServiceProjectionIntegrationTest {
                     utm_content varchar(255),
                     utm_term varchar(255),
                     referrer varchar(2048),
+                    first_touch_surface varchar(32),
                     profile_type varchar(32),
                     exam_date date,
                     review_days text array,

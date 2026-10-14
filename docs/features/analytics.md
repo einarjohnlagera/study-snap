@@ -83,7 +83,7 @@ Top-of-funnel and acquisition events:
 
 ### First-touch signup attribution
 
-New users may carry nullable `utm_source`, `utm_medium`, `utm_campaign`, `utm_content`, `utm_term`, and `referrer` fields on `users`. The frontend captures these from the first browser landing in session storage, then both email/password and Google signup submit paths send the same payload. Attribution is written only while creating a new user and is never overwritten by a later login.
+New users may carry nullable `utm_source`, `utm_medium`, `utm_campaign`, `utm_content`, `utm_term`, `referrer`, and `first_touch_surface` fields on `users`. The frontend captures these from the first browser landing in session storage, then both email/password and Google signup submit paths send the same payload. Attribution is written only while creating a new user and is never overwritten by a later login.
 
 ### Page-view referrer attribution
 

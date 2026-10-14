@@ -33,8 +33,9 @@ attribution from the same plan.
    **Restarts RC-4's baseline clock**: any checkout-path change lands inside the post-RC-1 baseline
    window (started 2026-10-09), so the price test's start moves past ~2026-11-06 regardless.
 
-3. **RC-2 — Minimal funnel attribution (signup entry surface). SCOPED at this kickoff, not yet
-   implemented.** Extends the existing first-touch-attribution mechanism (`V93__user_first_touch_attribution.sql`'s
+3. **RC-2 — Minimal funnel attribution (signup entry surface). SHIPPED in this working tree
+   (PR and commit pending; record their number and hash after creation).** Extends the existing
+   first-touch-attribution mechanism (`V93__user_first_touch_attribution.sql`'s
    `utm_source`/`utm_medium`/`utm_campaign`/`utm_content`/`utm_term`/`referrer` columns, captured
    client-side via `sessionStorage` and submitted once at signup) with one more column,
    `first_touch_surface` (`V156`), classifying the first-touch pathname into `landing` / `public_note`
@@ -44,8 +45,7 @@ attribution from the same plan.
    anonymous-session-state risk (the capture mechanism already runs on every page today, including
    public ones, per `app/layout.tsx:78`). Narrowed from the plan's "optionally the raw path truncated"
    — class only. Touches both stacks (new migration + `UserEntity`/`SignupRequest`/`GoogleAuthRequest`/
-   `AuthService` + `first-touch-attribution.ts`/`lib/api.ts`), so routed as a Codex prompt rather than
-   implemented inline.
+   `AuthService` + `first-touch-attribution.ts`/`lib/api.ts`).
 
 4. **RC-6 — deferred, not scoped into this release.** Raising the discovery-intent/copy-intent
    cookie TTLs touches the same adoption-path instrumentation RC-5 (shipped `v0.170.0`, 2026-10-13) is

@@ -14,8 +14,9 @@ reminder) via Xendit's native invoice-reminder notification (owner enabled Setti
 Notifications → "Payment reminders" 2026-10-14) plus one `payer_email` field added to
 `PaymentService.createInvoice` — not the in-house reminder job originally sketched in the
 product-health plan; **unverified whether the reminder fires inside the 24h invoice window**, owed as
-a `[CHECKPOINT — due 2026-10-21]`. **RC-2** (signup entry-surface attribution) SCOPED, not yet
-implemented — a `first_touch_surface` column extending `V93`'s existing first-touch-attribution
+a `[CHECKPOINT — due 2026-10-21]`. **RC-2** (signup entry-surface attribution) implemented in this
+working tree, with PR and commit pending — a `first_touch_surface` column extending `V93`'s existing
+first-touch-attribution
 columns. **RC-6** deferred — conflicts with RC-5's (`v0.170.0`) still-undated adoption-read
 window. Full scope, anti-drift and the Hikari checkpoint read performed at this kickoff in
 `RELEASES.md`.
