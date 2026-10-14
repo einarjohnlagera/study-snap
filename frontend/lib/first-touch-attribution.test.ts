@@ -1,4 +1,4 @@
-import { captureFirstTouchAttribution, getFirstTouchAttribution } from "./first-touch-attribution";
+import { captureFirstTouchAttribution, classifyFirstTouchSurface, getFirstTouchAttribution } from "./first-touch-attribution";
 
 describe("first-touch attribution", () => {
   beforeEach(() => {
@@ -18,6 +18,7 @@ describe("first-touch attribution", () => {
       utmContent: "story",
       utmTerm: "pnle",
       referrer: "https://example.com/campaign",
+      firstTouchSurface: "landing",
     });
   });
 
@@ -27,5 +28,43 @@ describe("first-touch attribution", () => {
     captureFirstTouchAttribution();
 
     expect(getFirstTouchAttribution().utmSource).toBe("instagram");
+    expect(getFirstTouchAttribution().firstTouchSurface).toBe("landing");
+  });
+
+  it.each([
+    ["/", "landing"],
+    ["/public", "public_note"],
+    ["/public/library", "public_note"],
+    ["/public/notes/example", "public_note"],
+    ["/public/creator/example", "public_note"],
+    ["/public/profile/example", "public_note"],
+    ["/publicity", "other"],
+    ["/explore", "explore"],
+    ["/explore/topics", "explore"],
+    ["/explorer", "other"],
+    ["/exam", "exam_hub"],
+    ["/exam/ale", "exam_hub"],
+    ["/example", "other"],
+    ["/auth", "other"],
+  ])("classifies %s as %s", (pathname, expected) => {
+    expect(classifyFirstTouchSurface(pathname)).toBe(expected);
+  });
+
+  it("round-trips the entry surface through real sessionStorage", () => {
+    window.history.replaceState({}, "", "/exam/ale?utm_source=search");
+
+    captureFirstTouchAttribution();
+
+    expect(getFirstTouchAttribution().firstTouchSurface).toBe("exam_hub");
+  });
+
+  it("drops an unrecognized stored surface on read", () => {
+    window.sessionStorage.setItem("notelib-first-touch-attribution", JSON.stringify({ firstTouchSurface: "<script>" }));
+
+    expect(getFirstTouchAttribution().firstTouchSurface).toBeUndefined();
+  });
+
+  it("returns no attribution when storage has no entry", () => {
+    expect(getFirstTouchAttribution()).toEqual({});
   });
 });

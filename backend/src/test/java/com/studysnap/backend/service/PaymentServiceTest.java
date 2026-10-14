@@ -137,6 +137,7 @@ class PaymentServiceTest {
         JsonNode requestBody = objectMapper.readTree(readRequestBody(requestCaptor.getValue()));
         assertThat(requestBody.path("amount").decimalValue()).isEqualByComparingTo("249.00");
         assertThat(requestBody.path("description").asText()).isEqualTo("NoteLib Pro Monthly");
+        assertThat(requestBody.path("payer_email").asText()).isEqualTo("checkout-buyer@example.com");
         assertThat(requestBody.path("success_redirect_url").asText())
                 .isEqualTo("http://localhost:3000/billing/success?plan=PRO&returnUrl=%2Fnotes%2Fnew");
     }
@@ -465,6 +466,7 @@ class PaymentServiceTest {
     private UserEntity buildUser(UUID userId) {
         UserEntity user = new UserEntity();
         user.setId(userId);
+        user.setEmail("checkout-buyer@example.com");
         return user;
     }
 

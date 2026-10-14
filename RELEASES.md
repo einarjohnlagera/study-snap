@@ -1,5 +1,84 @@
 # RELEASES.md - NoteLib
 
+## v0.171.0 - Checkout, Recovered
+
+**Status: Released**
+
+Theme: close the checkout-abandonment leak the product-health release plan's RC-0 diagnosis found
+(`docs/claude-plans/2026-10-09-product-health-release-plan.md`), plus signup entry-surface
+attribution from the same plan.
+
+### Planned Scope
+
+1. **RC-0 — Checkout diagnosis: CLOSED by owner decision, 2026-10-14, outreach step skipped.** The
+   Xendit dashboard pull was done directly by the owner: none of the 16 failed invoices show a
+   selected payment channel or an attempt inside the invoice — every one is a plain, un-engaged
+   expiry, not a declined payment. The one-question outreach to the 11 genuine users (why didn't you
+   finish paying?) was explicitly skipped — a deliberate call, not an oversight, accepting the plan's
+   own named risk ("building recovery for a cause RC-0 did not find"). Per-invoice table (Xendit
+   invoice IDs, emails, plan/amount) was handed to the owner out-of-band; not committed here per the
+   plan's own acceptance criteria ("no emails in any committed file").
+
+2. **RC-3 — Checkout reminder, via Xendit's native invoice notifications (not an in-house job). SHIPPED
+   (PR #1495, commit `ab8e006e` on `releases/v0.171.0`).**
+   `advisor()` caught, before any Codex prompt was written, that Xendit's Invoice API supports a
+   native payment-reminder email gated by an account-level Settings → Checkout → Notifications
+   toggle — **the owner has already enabled "Payment reminders" in the Xendit dashboard, 2026-10-14.**
+   Our own `createInvoice` call (`PaymentService.java:330-347`) sends no `payer_email` today, so
+   Xendit has never had an address to notify. The code fix is one field: add `payer_email` (the
+   checkout user's own email, already available via `userRepository.findById(userId)` in
+   `createCheckoutSession`) to the invoice-creation payload. No migration, no job, no template, no
+   `email_log` row — this supersedes the in-house reminder-job design originally sketched for RC-3 in
+   the product-health plan (kept there as historical record, not an instruction to build it).
+   **Restarts RC-4's baseline clock**: any checkout-path change lands inside the post-RC-1 baseline
+   window (started 2026-10-09), so the price test's start moves past ~2026-11-06 regardless.
+
+3. **RC-2 — Minimal funnel attribution (signup entry surface). SHIPPED (PR #1496, commit `4e3f727e`
+   on `releases/v0.171.0`).** Implemented by Codex from a Long-mode prompt, independently re-verified
+   (full backend suite including `NativeQueryPostgresIntegrationTest`: 2675/0; full frontend suite:
+   2662/0) before merging — Codex's own sandbox could not reach Docker for the Postgres-backed test.
+   Extends the existing
+   first-touch-attribution mechanism (`V93__user_first_touch_attribution.sql`'s
+   `utm_source`/`utm_medium`/`utm_campaign`/`utm_content`/`utm_term`/`referrer` columns, captured
+   client-side via `sessionStorage` and submitted once at signup) with one more column,
+   `first_touch_surface` (`V156`), classifying the first-touch pathname into `landing` / `public_note`
+   / `explore` / `exam_hub` / `other`. Resolves both halves of the plan's §8 item 9 from this existing
+   precedent rather than as fresh decisions: a `users` column (matching all 6 siblings, not the
+   `SIGNUP_COMPLETED`-metadata alternative, which covers only 311/420 historic accounts), and no new
+   anonymous-session-state risk (the capture mechanism already runs on every page today, including
+   public ones, per `app/layout.tsx:78`). Narrowed from the plan's "optionally the raw path truncated"
+   — class only. Touches both stacks (new migration + `UserEntity`/`SignupRequest`/`GoogleAuthRequest`/
+   `AuthService` + `first-touch-attribution.ts`/`lib/api.ts`).
+
+4. **RC-6 — deferred, not scoped into this release.** Raising the discovery-intent/copy-intent
+   cookie TTLs touches the same adoption-path instrumentation RC-5 (shipped `v0.170.0`, 2026-10-13) is
+   currently measuring for its own H3 pre/post read. The product-health plan says RC-6 "should not
+   land inside the RC-5 window," but RC-5 was never given a concrete window end-date at `v0.170.0`
+   signoff (a gap in itself — flagged below). Revisit once that window is explicitly dated.
+
+### Anti-drift
+
+No change to `PricingService`, voucher resolution, webhook handling, or any payment amount. No new
+endpoint. `payer_email` is read-only existing data, not collected anew.
+
+### Known gaps carried into this release
+
+- **RC-3's reminder is UNVERIFIED to actually fire inside the 24h invoice window — `[CHECKPOINT —
+  due 2026-10-21]` owed, since the outreach step that would have given independent signal on checkout
+  behavior was itself skipped (RC-0).** Xendit's per-invoice `reminder_time`/`reminder_time_unit`
+  fields were not set (only `payer_email` was added), so timing falls back to the Xendit account's own
+  Dashboard Invoice Settings default — unconfirmed, and some Xendit SDK examples pair a 1-day-before
+  reminder with a 48h invoice, not NoteLib's 24h. **Proximal check (owed, owner action): start a real
+  test checkout, leave it unpaid, confirm the reminder email arrives within 24h.** If it does not fire,
+  RC-3 has shipped a dashboard toggle with no effect, not a verified fix. Recorded in
+  `docs/features/billing.md`.
+- **RC-5 (`v0.170.0`) never got its own `[CHECKPOINT]` row for its H3 adoption read at signoff** —
+  only the Hikari leak-trace checkpoint was added. This is why RC-6's deferral above has no concrete
+  re-open date; owed as a follow-up.
+- **The `v0.166.0` Hikari checkpoint (`due 2026-10-14T11:19:29Z`) was read at this kickoff and found a
+  THIRD long-hold mechanism `v0.166.0` did not catch** — see `ROADMAP.md`'s Backlog Index for the full
+  read and the new row it produced. Not in this release's scope; flagged to the owner as a candidate.
+
 ## v0.170.0 - Study Journey, Closed
 
 **Status: Released**
@@ -764,191 +843,6 @@ shape is known.
   correctly handled (`NoteBulkRegenerationReceiptService.getReceipt`'s `stale` flag plus the frontend's
   explicit restart-explanation banner) — no gap, nothing built.
 
-## v0.165.0 - Bounded Discovery
-
-**Status: Released**
-
-Theme: stop a public Note page's discovery rails from fanning out into every page of a subject/program
-list and saturating the production database — 24 backend restarts in the last month — and fix three
-generation-behavior defects the Computing R4 BSCS pilot found.
-
-### Planned Scope
-
-**Two independent workstreams, bundled into one release at the owner's explicit direction** (urgency of
-the reliability fix was the reason given for not shipping it standalone, against the fix plan's own
-recommendation to the contrary — recorded here, not silently overridden).
-
-**Workstream 1 — production reliability (urgent).** Diagnosis: `docs/claude-findings/2026-10-01-prod-restarts-public-note-page-fanout-db-saturation.md`
-(Prod Investigator session). Fix plan: `docs/claude-plans/2026-10-01-public-note-page-fanout-fix-plan.md`.
-Owner product decision on the one open question (rail ranking): `docs/claude-plans/2026-10-01-public-note-discovery-rail-ordering-decision.md`.
-
-- **Root cause:** `frontend/app/public/library/[subject]/[slug]/page.tsx`'s two rails — "More from
-  {Subject}" and "More {Program} notes" — walk every page of the subject's/program's entire public-note
-  list via `fetchAllPublicNotePages` (`server-public-notes.ts:84-106`), which sends no `sort`, so every
-  page takes the ranked branch (`NoteService.java:807-831`): a full popularity-ranking query plus a count,
-  repeated per page (Accountancy: 8 pages; Civil Engineering: 18), to fill 7 cards the page then re-sorts
-  itself. 23 of 24 `server_failed` restarts since 2026-09-01 trace to the liveness probe timing out while
-  these queries saturate the `basic_256mb` (0.1 CPU) database.
-- **Fix (Leg B of the plan):** both rails become one bounded `page=0&pageSize=N&sort=recent&readyOnly=true`
-  fetch each, over-fetching by one row to exclude the current note (matching the existing pattern in
-  `getServerPublicNotesBySubject`), instead of walking pages and ranking in JS. `fetchAllPublicNotePages`
-  itself gains a required `sort=recent` parameter, which also fixes the subject listing page, exam hub
-  pages, and the sitemap — the plan's other named walkers — for free.
-- **Owner decision, not absorbed silently:** do **not** preserve live popularity ranking on these two
-  rails — switch to most-recent, deterministically. Raising the database plan is explicitly off the table
-  (pre-revenue). Full reasoning in the decision file above.
-- **Audited, not touched:** Explore's `/notes/public/discovery-sections` is already bounded (fixed
-  `limit=6`/section, no pagination walk, no count query) — not implicated in the outage, not changed.
-  Still runs live `POPULAR`/`FEATURED` ranking per request (not cached), recorded as a Discovery v2 /
-  precompute follow-up, not built here.
-- **Legs explicitly not in this release:** Leg A (raise DB plan) is an owner Render-dashboard action, not
-  code. Leg C (concurrency cap / query timeout on the ranked endpoint) is sequenced after A and B are
-  measured. Leg D (slug-route caching) is recommended deferred — the backend records page views on that
-  fetch, and caching would stop counting them.
-- **Index/migration:** none. `EXPLAIN` (no `ANALYZE`) against production confirms the bounded query is
-  already a large improvement over the current fan-out even without a dedicated index; the existing
-  `idx_notes_visibility_updated_at` index doesn't perfectly match (`created_at`, not `updated_at`), and
-  the subject/program filters are regexp/EXISTS-based and not trivially indexable regardless. Recorded as
-  a measured follow-up if the catalog grows enough to matter, not built speculatively.
-- **Count queries:** cannot be removed without new backend scope — `NoteService.listPublic` always runs a
-  count alongside the rows query for any SQL-orderable paginated request, regardless of whether the
-  caller needs `total`. Each rail costs 1 count + 1 bounded rows query (down from dozens of unbounded
-  queries), which is not built around in this release.
-
-**Workstream 2 — Computing R4 BSCS pilot generation-behavior fixes.** Evidence:
-`docs/curriculum/r4-pilot/r4-pilot-report.md`, `r4-pilot-fix-plan.md`. The pilot confirmed `Computing`
-Domain Context itself is correct on all five pilot Notes (do not touch Domain Context, Subject or
-Authored Depth) — metadata correction (Applicable Programs) and content decisions are the owner's own,
-through the production UI, not this release's.
-
-- **G1 — shell commands render as LaTeX math in a Study Pack Summary** (`$g++\ program.cpp\ -o\ program$`).
-  Measured against production first: 483/10,530 summaries contain `$`, essentially all genuine math
-  (spot-checked, plus a literal-string search for `g++`/`.cpp`/`./program` across every summary and quiz
-  in production found exactly **one** affected pack — the pilot's own). No existing-content risk to
-  justify a renderer heuristic (which would risk false-positiving on real formulas, demonstrated by my own
-  first-attempt regex producing 20 false positives). **Prompt-only fix**: add one instruction to the
-  "Math notation" block (shell commands, flags, file paths and code are not math; never place them
-  inside math delimiters or add a shell-prompt `$`) — the same new bullet applies to 10 files with a
-  byte-identical Math notation block and to `note-generation-developer.txt`'s JSON-escaping variant.
-- **G2 — Note Subject leaks into generated text as "{title} in {Subject}".** Two distinct mechanisms,
-  both fixed: (a) the Study Pack's own title — the existing Title rule already forbids folding
-  Course/Program into a title (`developer.txt:32-43`) but never named Subject; extend that *existing*
-  bullet to also cover Subject, identically in `developer.txt` and `note-generation-developer.txt`, no new
-  "don't do X" bullet (the `v0.96.0` anti-drift rule on wording). (b) the generated-note body's first
-  line — verified as a *separate*, deterministic mechanism: the stored note title is the curator's clean
-  topic, but the body's first line is the LLM's own independently-generated title
-  (`backend/src/main/java/com/studysnap/backend/service/impl/OpenAiLlmStudyPackService.java`),
-  never shown anywhere else (`GenerateNoteFromTopicResponse` returns only `content`). The prompt fix
-  applies to both title-emitting prompts; the deterministic body-heading fix applies to **Bulk Generate
-  only**, using its clean curator-supplied topic instead of the model's own title.
-- **G5 — no log records the authoring domain or whether computation guidance fired.** One log line added
-  to the Study Pack generation path. No stored prompts (would need a migration, not done), no note content
-  logged.
-- **Documented, not scoped (per the pilot's own instruction to measure, not change):** G3 (one quiz
-  explanation asserted an unsupported "randomness" claim — single instance in 20 questions, doesn't trip
-  the pilot's stop condition); G4 (computation guidance depends on auto-generated tags when Subject has no
-  keyword — already documented as a known nuance in `v0.164.0`'s `DomainContext.java`, no regression
-  observed in the pilot sample); G6 (Bulk Generate has no instruction field — explicitly a curation
-  convention question under D-35, not a product gap).
-
-Anti-drift: no DB plan change; no new ranking infrastructure, Redis, recommendation engine, vector search
-or LLM call for discovery; no randomness; no Featured flag; no Explore or Public-Note-page redesign; no
-change to global Public Library ordering; no BSCS TSV edits (strategist's own action); no bulk
-generation; no `QUANTITATIVE_KEYWORDS` change; no production write of any kind.
-
-**Verification tier, pre-declared:** this release touches prompt text shared across every generation
-surface (11 files) and a production-reliability fix with no existing automated coverage of the request
-shape it changes — **one scoped cold falsification agent before signoff**, per the standing gate
-(delivery-introduced-defect trigger already fired once this cycle during the Computing pilot's own
-review process, and the reliability fix's request-shape guards are exactly the class of thing a cold
-agent should independently verify rather than trust from the implementing session).
-
-**Checkpoint gate, pre-declared:** Workstream 1 ships ahead of its own evidence (the thread-occupancy
-read in the diagnosis is INFERRED, not measured) — signoff owes a dated `[CHECKPOINT — due 7 days after
-this release's production deploy]` per the fix plan's own pre-stated kill criterion (`server_failed`
-events continuing at a comparable weekly rate means the diagnosis is wrong or incomplete).
-
-### Shipped
-
-- **Workstream 1 — Public Note discovery rail fan-out fix (frontend only, no backend change needed).**
-  Both rails switched to one bounded `page=0&sort=recent&readyOnly=true` fetch each —
-  `getServerPublicNotesBySubjectSlugRecent` and `getServerPublicNotesByCourseProgramRecent`
-  (`frontend/lib/server-public-notes.ts:311-336`) — replacing the unbounded popularity-ranked walk (the
-  24-restart mechanism). `fetchAllPublicNotePages` (`server-public-notes.ts:100-122`) now always sends
-  `sort=recent`, which removes the expensive ranking-query multiplier from its other callers too — the
-  subject listing page and exam hub pages (via `getServerPublicNotesBySubjectSlug`/
-  `getServerPublicNotesByCourseProgram(s)`) and the sitemap — though those three still walk every page of
-  their subject/program/catalog (that part of their job is unchanged and out of scope; see the
-  full SURFACE/ENDPOINT audit in `docs/claude-plans/2026-10-01-public-note-discovery-rail-ordering-decision.md`).
-  No visible-ordering regression on the subject listing page or exam hub pages: both re-derive their own
-  Featured/Popular/Recent/remaining sections in JS from the full set via
-  `lib/public-library-discovery.ts`'s own internal `.sort()`, independent of fetch order — audited, neither
-  relies on arrival order. **Correction, found by the post-merge cold falsification pass**: the sitemap
-  (`app/sitemap.ts`) is the exception — it maps the walker's result directly into entries with no re-sort
-  step, so it now lists Notes most-recent-first instead of by the old popularity order. Not fixed, because
-  it's not a regression worth fixing: a sitemap's entry order carries no ranking signal to a crawler, so
-  this has no SEO or user-visible effect, unlike the subject/exam-hub pages' rendered card order. No caller
-  passes its own `sort`, so no duplicate-param risk.
-  `app/public/library/[subject]/[slug]/page.tsx` now derives `courseProgram` from the note's own joined
-  `coursePrograms[0]` (`NoteService.resolvePublicDetailPrograms`, backed by
-  `NoteCourseProgramRepository.findByNoteId`'s `ORDER BY course_programs.name` — the same ordering
-  `findByNoteIds` used for the old list-item `applicablePrograms[0]` derivation, so multi-program notes
-  resolve to the identical program as before, and the join is confirmed stable across ISR revalidations)
-  instead of re-walking the program's note list. Tests: `frontend/lib/server-public-notes.test.ts`
-  (mutation-tested — guards confirmed to actually fail without `readyOnly=true`),
-  `frontend/app/public/library/[subject]/[slug]/page.test.tsx` (41 tests).
-  `docs/features/public-library.md` section K updated to describe recency ordering instead of the stale
-  engagement-score claim.
-  - **Known limitation, intentionally not fixed this release:** the Subject and Program rails are not
-    cross-deduped — after a visitor finishes the embedded Quick Check, a note sharing both the current
-    note's Subject and Course/Program can appear in the quiz-preview rail and the Program section. The
-    original rail contract's over-fetch covered the current note only; deduplicating Subject against
-    Program would require its own bounded headroom decision and could starve the smaller rail when
-    both top-N windows substantially overlap.
-    Pinned as current, deliberate behavior by a dedicated test in `page.test.tsx`
-    ("documents that the two most-recent-first rails are not cross-deduped"). Matches the owner's own
-    instruction verbatim ("If cross-rail duplication already has a simple bounded exclusion mechanism,
-    preserve it. If avoiding duplicates requires broad fetching/fan-out, production safety wins.").
-  - **Known limitation, verified zero production impact:** `getServerPublicNotesBySubjectSlugRecent` drops
-    the blank-subject/`general`-slug special case the unbounded walker carried (it used to fall back to a
-    full-catalog scan to find blank-subject siblings — the worst fan-out of all, not reintroduced). A
-    read-only `count(*)` against production (2026-10-02) confirms **0 public notes have a blank or
-    whitespace-only subject**, so this has no current effect.
-  - **Subject-vs-Subject duplication fixed:** the quiz-preview's "More from {Subject}" rail excludes
-    notes shown in the always-visible "More in {Subject}" section, when that section has enough notes
-    to render (`frontend/app/public/library/[subject]/[slug]/page.tsx:96-113`). Its single bounded
-    recent fetch now requests six candidates plus the current-note headroom, then displays up to three.
-    The "More in {Subject}" fetch and section are unchanged; when that section is hidden, the quiz
-    rail retains its available related notes.
-- **Workstream 2 — Computing R4 pilot generation behavior (G1, G2, G5).** G1 adds one identical
-  shell/CLI-is-not-math bullet to all 11 Math notation prompts
-  (`backend/src/main/resources/prompts/study-pack-v1/developer.txt:133`,
-  `note-generation-developer.txt:89`). G2(a) extends the existing title rule to treat Subject as
-  context when it only names a broader container, with the pilot's Algorithms example in both
-  title-emitting prompts (`developer.txt:35-44`, `note-generation-developer.txt:21-30`). G2(b)
-  replaces the model's body heading with the curator's topic on **initial Bulk Generate only**
-  (`backend/src/main/java/com/studysnap/backend/service/NoteBulkGenerationService.java:359-371`).
-  Owner decision, 2026-10-02: the single-note editor and onboarding accept an informal learner-typed
-  topic distinct from a polished title, while Bulk Generate's topic is the clean curator title. The
-  pilot observed clean stored Note titles beside Subject-leaking generated body headings
-  (`docs/curriculum/r4-pilot/r4-pilot-report.md`, finding 6). G5 logs the effective authoring domain,
-  Subject, guidance result and trigger once per input-message build
-  (`backend/src/main/java/com/studysnap/backend/service/impl/OpenAiLlmStudyPackService.java:1698-1742`).
-  **Verification limit:** G1 and G2(a) are prompt text; automated tests pin file content, not model
-  behavior. **⚠️ Owner-verified 2026-10-06, result: G1 confirmed working (n=1); G2(a) PARTIALLY
-  FAILS (n=3)** — regenerating three pilot Notes' Study Packs post-deploy left 1 of 3 titles still
-  reading "{Title} in {Subject}" ("Algorithms and Their Properties in Programming Fundamentals"),
-  confirmed directly against `study_packs` by two independent sessions. A prompt-only rule is not
-  reliable for the title field; see `docs/claude-findings/2026-10-06-g2a-title-subject-leak-partial-failure.md`
-  for the evidence and the owner's two open options (a deterministic title strip mirroring G2(b),
-  or accepting curator-review as the only mitigation — not decided, not built). **Known limitations:** the single-note editor and onboarding
-  rely on G2(a)'s prompt wording alone for generated titles; they do not get the deterministic body
-  override. A bulk-created note's body heading can revert to the model title if its content is later
-  regenerated through `StudyPackService.generateStudyPackFromExistingNoteAsync`, which bypasses
-  `NoteBulkGenerationService`. G5 gives aggregate Subject/Domain visibility, not per-note or
-  per-request correlation; the generation context has no note/request id, and one line is logged per
-  actual attempt, including retries and Long Exam batches.
-
 ## Archived releases
 
 - `v0.163.0 — No Peeking` (Released) — archived to `docs/archive/RELEASES_ARCHIVE.md`.
@@ -956,3 +850,4 @@ events continuing at a comparable weekly rate means the diagnosis is wrong or in
 - `v0.160.0 — Study Plans by Semester` (Released) — Degree Study Journeys Phase A0/A: academic-term placement on Subject Plans, Year-page term grouping, compact Subject cards, and the curriculum-pipeline `academic_term` column; moved at the `v0.166.0` kickoff.
 - `v0.161.0 — Scannable Study Plans` (Released) — Degree Study Journeys Phase B: Study Plan Sections collapsed by default, an `Expand all`/`Collapse all` toggle, `Not started` wording at Section and plan grain; plus a pre-signoff pressure-test fix making `adoptGoal` adopt every published-but-private child instead of requiring `PUBLIC`. Moved at the `v0.167.0` kickoff.
 - `v0.164.0 — Computing` (Released) — ratified `Computing` as a 13th Domain Context (ADR-001 amendment), shipped the enum/frontend value, swept the context/spec docs; carries a `[CHECKPOINT — due when BSCS Year 1 Computing authoring reaches 10+ classified notes, backstop 2026-12-29]`. Moved at the `v0.170.0` kickoff.
+- `v0.165.0 — Bounded Discovery` (Released) — closed the public-note discovery-rail DB-saturation restart mechanism (Leg B) and shipped three R4-pilot generation-quality fixes (G1, G2b, G5); carries its own now-closed `[CHECKPOINT — due 2026-10-12T15:24:27Z]` (fix worked, 0 restarts). Moved at the `v0.171.0` kickoff.

@@ -163,7 +163,8 @@ public class AuthService {
                 request.utmCampaign(),
                 request.utmContent(),
                 request.utmTerm(),
-                request.referrer()
+                request.referrer(),
+                request.firstTouchSurface()
         );
         user.setProfileType(null);
         user.setEngagementMode(EngagementMode.FOCUSED);
@@ -1097,7 +1098,8 @@ public class AuthService {
                 request.utmCampaign(),
                 request.utmContent(),
                 request.utmTerm(),
-                request.referrer()
+                request.referrer(),
+                request.firstTouchSurface()
         );
         user.setProfileType(null);
         user.setEngagementMode(EngagementMode.FOCUSED);
@@ -1150,7 +1152,8 @@ public class AuthService {
             String utmCampaign,
             String utmContent,
             String utmTerm,
-            String referrer
+            String referrer,
+            String firstTouchSurface
     ) {
         user.setUtmSource(normalizeOptionalText(utmSource));
         user.setUtmMedium(normalizeOptionalText(utmMedium));
@@ -1158,6 +1161,10 @@ public class AuthService {
         user.setUtmContent(normalizeOptionalText(utmContent));
         user.setUtmTerm(normalizeOptionalText(utmTerm));
         user.setReferrer(normalizeOptionalText(referrer));
+        user.setFirstTouchSurface(firstTouchSurface == null ? null : switch (firstTouchSurface) {
+            case "landing", "public_note", "explore", "exam_hub", "other" -> firstTouchSurface;
+            default -> null;
+        });
     }
 
     private SignInMethodsResponse buildSignInMethodsResponse(UserEntity user) {

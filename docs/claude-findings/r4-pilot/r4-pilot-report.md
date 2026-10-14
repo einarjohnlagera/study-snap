@@ -4,7 +4,7 @@
 
 ## 0. The result in one paragraph
 
-**The pilot did not run as specified, so the final recommendation is withheld (section 11).** Four of the five Notes existed at first; **"Pointers and References in C++" was created afterwards and is evaluated in section 12: it fails the D-27 guardrail.** The four that exist are **not the Notes I authored**: their bodies are the generator's standard ~2,000-character outlines written from the title, so the pilot measured the *bulk path*, not authored canonical Notes. And **all four carry five Applicable Programs** instead of the shaping TSV's set. Within those limits, the generator behaved well on the architecture questions (Computing legality, framing, neutral-versus-C++), with real findings on quiz quality, depth and formatting.
+**The pilot did not run as specified at first; it was re-run on authored bodies on 2026-10-06, and the final recommendation is issued in section 13.** The original text of this paragraph follows. Four of the five Notes existed at first; **"Pointers and References in C++" was created afterwards and is evaluated in section 12: it fails the D-27 guardrail.** The four that exist are **not the Notes I authored**: their bodies are the generator's standard ~2,000-character outlines written from the title, so the pilot measured the *bulk path*, not authored canonical Notes. And **all four carry five Applicable Programs** instead of the shaping TSV's set. Within those limits, the generator behaved well on the architecture questions (Computing legality, framing, neutral-versus-C++), with real findings on quiz quality, depth and formatting.
 
 ## 1. Production preflight (before the pilot)
 
@@ -152,3 +152,54 @@ All four packs are five multiple-choice questions, mostly definitional recall, w
 **Updated recommendation status.** Still withheld. The evidence now supports the provisional reading: **SAFE TO SCALE WITH CURATOR CONVENTION**, where the convention must include "scope-sensitive S notes (memory, allocation, linked structures) use curator-authored bodies, not title-only bulk generation." See `r4-pilot-fix-plan.md`.
 
 **Do not begin the next batch.** I have not.
+
+
+## 13. Re-run on authored bodies (read back 2026-10-06) and final recommendation
+
+**What the owner did (FACT, read from production).** Applicable Programs were corrected on all five Notes and now match the TSV exactly (Notes A–D: Computer Science, Information Systems, Information Technology; Note E: Computer Science only). The bodies of Notes **B, C and D** were replaced with the authored text (new lengths 7,575, 6,958 and 7,893 characters, first line the Note title) and their Study Packs were regenerated **in place** (same pack ids; source text lengths 7,385, 6,812 and 7,539 after whitespace collapsing). Notes A and E keep their generated bodies and original packs. Domain Context, Subject, depth and visibility are unchanged; each title still has exactly one Note.
+
+### Updated scorecard
+
+Key: **P** pass · **PE** pass with curator edit · **FG** fail, generation behaviour · **FS** fail, source Note · **FM** fail, metadata.
+
+| Note | Domain | Canonical | Depth | N/S | Computation guidance | Assessment | Hallucination | Metadata |
+|---|---|---|---|---|---|---|---|---|
+| A Computing Disciplines (generated body, unchanged) | P | PE | FS (outline) | n/a | P (fires via Subject) | PE | P | **P** (was FM) |
+| B Algorithms (**authored, N**) | P | P | **P** | **P** | P (fires only via the tag "Algorithms") | PE | P | **P** (was FM) |
+| C Building and Running (**authored, S**) | P | P | **P** | **P** | P (does not fire; nothing to compute) | PE | P | **P** (was FM) |
+| D Pointers and References (**authored, S**) | P | P | **P** | **P**, guardrail **P** | P (does not fire) | PE | P | **P** (was FM) |
+| E Propositions (generated body, unchanged) | P | PE | FS (outline) | n/a | P (fires via Subject) | PE | P | **P** (was FM) |
+
+### The two gate results
+
+- **Note D passes the D-27 guardrail.** The regenerated pack has no dynamic-allocation theme (no `new`/`delete`, and *Dynamic Memory Allocation* is not a Key Concept). It covers `nullptr`, reassignment, lifetime and dangling pointers, undefined behaviour, and "modern C++ best practices" (prefer values and references; smart pointers named as the safe way to manage dynamic memory). The misleading "both are essential for dynamic memory management" claim is gone. Its quiz is correct and each question has one defensible answer.
+- **Note C now gets C++17.** The pack states `-std=c++17` and `-Wall -Wextra`, asks a question on the C++17 command, and explains the three compile stages, error types, the edit-compile-run cycle and exit status. **The LaTeX problem is gone:** commands now appear as code (`g++`, `-std=c++17`) and not as `$...$` math, which is the first real-output confirmation that v0.165.0's G1 fix works (one sample).
+
+### N/S fidelity (D-35)
+
+- **N (Note B): clean again, now on authored content.** The pack and its Note contain no language-specific content, no code, and describe an algorithm as "independent of programming languages and hardware". The earlier efficiency/effectiveness conflation and the "must have input" claim are gone, and the randomness question has disappeared.
+- **S (Notes C and D): correct, natural C++** within the approved subset, with the standard stated.
+
+### Findings that remain
+
+1. **G2 is only partly fixed.** Note B's regenerated pack is still titled "Algorithms and Their Properties **in Programming Fundamentals**", after the v0.165.0 deploy (2026-10-05). D's pack is now clean ("Pointers and References in C++", it used to end "... Programming"), C's was and is clean. **One of three regenerated packs still leaks the Subject, so the prompt-only title fix is not sufficient.** Origin: generation prompt behaviour. This is evidence for the Release Implementor, not a reason to change metadata or content.
+2. **Quiz questions still need a curator pass.** Across the 15 questions in B, C and D there is **no wrong answer**, but **one has more than one defensible answer** (Note C, Q2: "which command compiles and links a C++17 source file" lists `g++ hello.cpp -o hello` and `g++ -o hello hello.cpp`, which also compile and link; only the first adds the standard flag) and **one is weak** (Note B, Q5: "random unrelated data" as the not-recommended input is answerable from the Note but is a thin distractor). **All three quizzes are five recall-level questions with no code-reading or tracing item**, even for Note B where guidance fired and the Note contains traced examples. This is a depth limit of the Study Pack quiz, not a correctness problem.
+3. **Whitespace collapsing did not visibly harm code understanding in this sample.** The model sees the body with line breaks collapsed. The D and C packs read the code correctly (`int* p`, `int& r`, the compile command), including a body with many `//` comments. **This is three samples; it does not prove long, comment-heavy programs are safe.** The linked-list body (`pc-04`, about 100 lines of code) is the next test; the `/* */` convention stays a fallback, not an edit to make now.
+4. **Computation guidance (replayed on the new tags).** B fires only because the generated tag contains "Algorithms"; C and D do not fire; A and E fire through their Subjects. No quality regression was observed anywhere, because none of these Notes needs a computation question. The latent dependence on auto-generated tags remains as recorded (G4).
+
+### Stop conditions: none triggered
+
+Computing framing is correct, N Notes stay neutral, S Notes get usable C++17, there was no Domain Context legality problem, there is no systematic quiz correctness problem, and no Note body was distorted to coax the generator.
+
+### Final recommendation
+
+**SAFE TO SCALE WITH CURATOR CONVENTION.** The convention, all evidenced above:
+
+1. **Scope-sensitive and code-bearing S Notes use curator-authored bodies** (the 13 Path C Notes). Title-only generation cannot carry the guardrail (shown in section 12), and authored bodies pass (this section).
+2. **Verify metadata at creation for every Note**, Applicable Programs above all; it was wrong on five of five.
+3. **Review every Study Pack for answer ambiguity and unsupported claims** before it is accepted; budget one fix per three or four packs on this evidence.
+4. **Check pack titles for a Subject suffix** until G2 is fixed, and correct them at review.
+5. **Bulk-generated Notes are acceptable only where outline depth is acceptable.** Notes A and E show the depth: definitional, no examples. Choose per Note (batch plan, Paths A and A-N), knowing the trade.
+6. **Gate each phase with a small R4 sample**, as the batch plan states.
+
+**Not covered by this recommendation:** the address-sanitizer reports and debugger sessions in the authored bodies remain unrun on a working toolchain; the remaining eight Path C bodies have not been through generation; Notes A and E were not re-run. **Do not begin the next batch** until the owner chooses to.

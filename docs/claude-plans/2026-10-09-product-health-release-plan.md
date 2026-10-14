@@ -10,6 +10,26 @@
 
 ---
 
+> ### ⚠️ Status update, 2026-10-12 — read this before the rest of the document, which still describes RC-1 as in-progress in several places
+>
+> - **RC-1 (the Study Pack quota fix) has shipped — `v0.168.0`, "Free Quota, Fairly Metered," signed off 2026-10-09, deployed (commit `0ce371a3`) 2026-10-09T14:41:25+08:00.** The body text below still frames it as "in progress on `v0.168.0`" and leaves "Option A vs Option B" open in several places (§3, §6, §8, the closing section) — those are now resolved: **Option B shipped** (dropped the `max()`/`persistedStudyPackCount` floor entirely, trusting the tracked generation counter alone), not Option A.
+> - **The spend-threshold owner decision this document asks for (§8 item 2) was made, differently than framed here:** the owner reviewed real production token averages (~$2.08/month at full utilization by all 76 affected users, derived from `study_packs`' own 90-day FREE-tier token averages) and **decided to ship uncapped, no threshold** — the exposure was judged immaterial at this scale, rather than a weekly-count revert trigger being set.
+> - **RC-5 (Public Note → Study Journey discovery) has been explicitly sequenced to `v0.170.0`**, not merely gated on the stability checkpoints as this document's §6/§7 frame it — confirmed by an `advisor()` pass during `v0.169.0`'s kickoff, reusing this document's own RC-5 spec rather than re-designing it.
+> - **This document's own RC-0 (checkout diagnosis) status is unconfirmed as of 2026-10-12** — it does not appear in `RELEASES.md` or `ROADMAP.md` as actioned or not. Do not treat this document's "RC-0 is the single highest-value unclaimed action" framing as still current without checking.
+> - The rest of this document (§4 pricing spec, §5 funnel spec, the RC-2/RC-3/RC-6 designs) was not re-verified against current state on 2026-10-12 and may have further drift beyond the items named above — treat as a snapshot from 2026-10-09, not a live-maintained plan.
+
+---
+
+> ### ⚠️ Status update, 2026-10-14 — RC-0 and RC-3 are now closed/shipped; §3 RC-3(b) must NOT be built
+>
+> - **RC-0 is CLOSED by owner decision.** The Xendit dashboard pull (step 1) found plain un-engaged invoice expiry on all 16 failed invoices — no channel selected, no attempt inside the invoice. The one-question outreach (step 2) was explicitly skipped, accepting this plan's own named risk ("building recovery for a cause RC-0 did not find").
+> - **RC-3 SHIPPED as `v0.171.0`, but NOT via the in-house reminder-job design this document sketches below (§3 RC-3, scope items a–d).** `advisor()` caught that Xendit's Invoice API already supports a native payment-reminder email, gated by an account-level dashboard toggle (Settings → Checkout → Notifications → "Payment reminders," enabled by the owner 2026-10-14). The code fix was one field — `payer_email` added to the existing invoice-creation payload — not a new job, migration, template or `email_log` row. **Do not build §3 RC-3(b) (the in-house reminder email) — it is superseded, not merely deferred.**
+> - **⚠️ Unverified: whether the native reminder actually fires inside NoteLib's 24h invoice window.** Xendit's reminder timing (`reminder_time`/`reminder_time_unit`) falls back to the account's own Dashboard Invoice Settings when omitted per-invoice (which is what NoteLib does) — that default was not confirmed, and some Xendit SDK examples pair a 1-day-before-expiry reminder with a 48h invoice, not 24h. **Owed before signoff: a real test checkout, left unpaid, confirming the email actually arrives within 24h.**
+> - **RC-2 was scoped at the `v0.171.0` kickoff** (one `users` column via migration, extending the existing `utm_source`/`referrer` first-touch-attribution columns and capture path — not the `SIGNUP_COMPLETED` metadata alternative this document's §8 item 9 also named) but not yet implemented.
+> - **RC-6 stays deferred** — it touches the same adoption-path instrumentation RC-5 is currently measuring, and RC-5 was never given a concrete read-by date at its own signoff (a gap, tracked separately).
+
+---
+
 > ### ⚠️ Stale premise — now RESOLVED by direct confirmation from Release Implementor (2026-10-09)
 >
 > **The brief said:** "The Study Journey release is already signed off but unmerged. Release Implementor is conducting a narrow pre-merge assessment."

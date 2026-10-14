@@ -13,6 +13,7 @@ import com.studysnap.backend.entity.PaymentTransactionEntity;
 import com.studysnap.backend.entity.PaymentTransactionStatus;
 import com.studysnap.backend.entity.PlanType;
 import com.studysnap.backend.entity.SubscriptionEntity;
+import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.exception.InvalidCheckoutReturnUrlException;
 import com.studysnap.backend.exception.InvalidPaymentWebhookTokenException;
 import com.studysnap.backend.exception.PaymentCheckoutUnavailableException;
@@ -22,6 +23,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 import java.io.IOException;
 import java.math.BigDecimal;
@@ -64,6 +66,7 @@ public class PaymentService {
     private static final String STATUS_FAILED = "FAILED";
     private static final String STATUS_EXPIRED = "EXPIRED";
     private static final String FIELD_EXTERNAL_ID = "external_id";
+    private static final String FIELD_PAYER_EMAIL = "payer_email";
     private static final String FIELD_STATUS = "status";
     private static final String FIELD_ID = "id";
     private static final String FIELD_INVOICE_URL = "invoice_url";
@@ -90,7 +93,7 @@ public class PaymentService {
             String requestedReturnUrl,
             String cfIpCountry
     ) {
-        userRepository.findById(userId).orElseThrow(UserNotFoundException::new);
+        UserEntity user = userRepository.findById(userId).orElseThrow(UserNotFoundException::new);
 
         ensureCheckoutConfigured();
         BillingCycle billingCycle = requestedBillingCycle == null ? DEFAULT_BILLING_CYCLE : requestedBillingCycle;
@@ -144,7 +147,7 @@ public class PaymentService {
         }
 
         String externalId = buildExternalId(userId, now);
-        InvoiceCheckout invoiceCheckout = createInvoice(externalId, returnUrl, now, checkoutSelection);
+        InvoiceCheckout invoiceCheckout = createInvoice(externalId, returnUrl, now, checkoutSelection, user.getEmail());
         if (invoiceCheckout.checkoutUrl() == null) {
             throw new PaymentCheckoutUnavailableException("Could not start the payment checkout right now.");
         }
@@ -333,10 +336,14 @@ public class PaymentService {
             String externalId,
             String returnUrl,
             OffsetDateTime now,
-            PricingService.CheckoutSelection checkoutSelection
+            PricingService.CheckoutSelection checkoutSelection,
+            String payerEmail
     ) {
         ObjectNode payload = objectMapper.createObjectNode();
         payload.put(FIELD_EXTERNAL_ID, externalId);
+        if (StringUtils.hasText(payerEmail)) {
+            payload.put(FIELD_PAYER_EMAIL, payerEmail);
+        }
         payload.put("amount", checkoutSelection.effectivePrice());
         payload.put("description", buildInvoiceDescription(checkoutSelection));
         payload.put("invoice_duration", INVOICE_DURATION_SECONDS);
