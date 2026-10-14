@@ -5341,7 +5341,7 @@ days — a public Note page's two discovery rails fan out into every page of a s
 recompute live popularity ranking per page, saturating the pre-revenue `basic_256mb` database; owner
 decision switches both rails to one bounded, `recent`-sorted fetch each, explicitly declining to raise
 the DB plan (`docs/claude-plans/2026-10-01-public-note-discovery-rail-ordering-decision.md`); (2) three
-generation-behavior fixes from the Computing R4 BSCS pilot (`docs/curriculum/r4-pilot/`): shell commands
+generation-behavior fixes from the Computing R4 BSCS pilot (`docs/claude-findings/r4-pilot/`): shell commands
 rendering as LaTeX math, Note Subject leaking into generated titles/body text (deterministic fix scoped
 to Bulk Generate only — the owner narrowed this mid-release since the single-note editor/onboarding path
 uses an informal topic field, not a polished title), and missing computation-guidance observability.

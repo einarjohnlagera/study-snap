@@ -21970,7 +21970,7 @@ Owner product decision on the one open question (rail ranking): `docs/claude-pla
   queries), which is not built around in this release.
 
 **Workstream 2 — Computing R4 BSCS pilot generation-behavior fixes.** Evidence:
-`docs/curriculum/r4-pilot/r4-pilot-report.md`, `r4-pilot-fix-plan.md`. The pilot confirmed `Computing`
+`docs/claude-findings/r4-pilot/r4-pilot-report.md`, `r4-pilot-fix-plan.md`. The pilot confirmed `Computing`
 Domain Context itself is correct on all five pilot Notes (do not touch Domain Context, Subject or
 Authored Depth) — metadata correction (Applicable Programs) and content decisions are the owner's own,
 through the production UI, not this release's.
@@ -22085,7 +22085,7 @@ events continuing at a comparable weekly rate means the diagnosis is wrong or in
   Owner decision, 2026-10-02: the single-note editor and onboarding accept an informal learner-typed
   topic distinct from a polished title, while Bulk Generate's topic is the clean curator title. The
   pilot observed clean stored Note titles beside Subject-leaking generated body headings
-  (`docs/curriculum/r4-pilot/r4-pilot-report.md`, finding 6). G5 logs the effective authoring domain,
+  (`docs/claude-findings/r4-pilot/r4-pilot-report.md`, finding 6). G5 logs the effective authoring domain,
   Subject, guidance result and trigger once per input-message build
   (`backend/src/main/java/com/studysnap/backend/service/impl/OpenAiLlmStudyPackService.java:1698-1742`).
   **Verification limit:** G1 and G2(a) are prompt text; automated tests pin file content, not model
