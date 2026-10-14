@@ -19,7 +19,8 @@ item from the same plan.
    invoice IDs, emails, plan/amount) was handed to the owner out-of-band; not committed here per the
    plan's own acceptance criteria ("no emails in any committed file").
 
-2. **RC-3 — Checkout reminder, via Xendit's native invoice notifications (not an in-house job).**
+2. **RC-3 — Checkout reminder, via Xendit's native invoice notifications (not an in-house job). SHIPPED
+   (PR #1495, commit `ab8e006e` on `releases/v0.171.0`).**
    `advisor()` caught, before any Codex prompt was written, that Xendit's Invoice API supports a
    native payment-reminder email gated by an account-level Settings → Checkout → Notifications
    toggle — **the owner has already enabled "Payment reminders" in the Xendit dashboard, 2026-10-14.**
