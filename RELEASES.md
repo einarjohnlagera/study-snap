@@ -33,8 +33,11 @@ attribution from the same plan.
    **Restarts RC-4's baseline clock**: any checkout-path change lands inside the post-RC-1 baseline
    window (started 2026-10-09), so the price test's start moves past ~2026-11-06 regardless.
 
-3. **RC-2 — Minimal funnel attribution (signup entry surface). SHIPPED in this working tree
-   (PR and commit pending; record their number and hash after creation).** Extends the existing
+3. **RC-2 — Minimal funnel attribution (signup entry surface). SHIPPED (PR #1496, commit `4e3f727e`
+   on `releases/v0.171.0`).** Implemented by Codex from a Long-mode prompt, independently re-verified
+   (full backend suite including `NativeQueryPostgresIntegrationTest`: 2675/0; full frontend suite:
+   2662/0) before merging — Codex's own sandbox could not reach Docker for the Postgres-backed test.
+   Extends the existing
    first-touch-attribution mechanism (`V93__user_first_touch_attribution.sql`'s
    `utm_source`/`utm_medium`/`utm_campaign`/`utm_content`/`utm_term`/`referrer` columns, captured
    client-side via `sessionStorage` and submitted once at signup) with one more column,
