@@ -12,6 +12,19 @@ const UTM_QUERY_PARAMS = [
 ] as const;
 
 type AttributionKey = keyof FirstTouchAttribution;
+type FirstTouchSurface = "landing" | "public_note" | "explore" | "exam_hub" | "other";
+
+function isFirstTouchSurface(value: unknown): value is FirstTouchSurface {
+  return value === "landing" || value === "public_note" || value === "explore" || value === "exam_hub" || value === "other";
+}
+
+export function classifyFirstTouchSurface(pathname: string): FirstTouchSurface {
+  if (pathname === "/") return "landing";
+  if (pathname === "/public" || pathname.startsWith("/public/")) return "public_note";
+  if (pathname === "/explore" || pathname.startsWith("/explore/")) return "explore";
+  if (pathname === "/exam" || pathname.startsWith("/exam/")) return "exam_hub";
+  return "other";
+}
 
 function normalizeValue(value: string | null | undefined, maxLength = UTM_VALUE_MAX_LENGTH): string | undefined {
   const normalized = value?.trim();
@@ -31,6 +44,7 @@ function toAttribution(value: unknown): FirstTouchAttribution {
     utmContent: typeof stored.utmContent === "string" ? normalizeValue(stored.utmContent) : undefined,
     utmTerm: typeof stored.utmTerm === "string" ? normalizeValue(stored.utmTerm) : undefined,
     referrer: typeof stored.referrer === "string" ? normalizeValue(stored.referrer, REFERRER_MAX_LENGTH) : undefined,
+    firstTouchSurface: isFirstTouchSurface(stored.firstTouchSurface) ? stored.firstTouchSurface : undefined,
   };
 }
 
@@ -47,6 +61,7 @@ export function captureFirstTouchAttribution(): void {
     const queryParams = new URLSearchParams(globalThis.location.search);
     const attribution: FirstTouchAttribution = {
       referrer: normalizeValue(globalThis.document.referrer, REFERRER_MAX_LENGTH),
+      firstTouchSurface: classifyFirstTouchSurface(globalThis.location.pathname),
     };
     for (const [queryParam, attributionKey] of UTM_QUERY_PARAMS) {
       const value = normalizeValue(queryParams.get(queryParam));

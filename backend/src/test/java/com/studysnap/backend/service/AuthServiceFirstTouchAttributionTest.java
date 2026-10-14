@@ -2,6 +2,7 @@ package com.studysnap.backend.service;
 
 import com.studysnap.backend.dto.GoogleAuthRequest;
 import com.studysnap.backend.dto.SignupRequest;
+import com.studysnap.backend.controller.AuthController;
 import com.studysnap.backend.entity.AuthProvider;
 import com.studysnap.backend.entity.PlanType;
 import com.studysnap.backend.entity.UserAuthProviderEntity;
@@ -12,6 +13,7 @@ import com.studysnap.backend.repository.StudyPackRepository;
 import com.studysnap.backend.repository.UserAuthProviderRepository;
 import com.studysnap.backend.repository.UserRepository;
 import com.studysnap.backend.security.JwtService;
+import com.studysnap.backend.security.AuthRateLimitService;
 import com.studysnap.backend.security.SecurityProperties;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -20,6 +22,12 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.http.MediaType;
+import org.springframework.test.web.servlet.MockMvc;
+
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.springframework.test.web.servlet.setup.MockMvcBuilders.standaloneSetup;
 
 import java.time.OffsetDateTime;
 import java.util.Optional;
@@ -67,6 +75,7 @@ class AuthServiceFirstTouchAttributionTest {
     private PasswordResetService passwordResetService;
 
     private AuthService authService;
+    private MockMvc mockMvc;
 
     @BeforeEach
     void setUp() {
@@ -86,6 +95,11 @@ class AuthServiceFirstTouchAttributionTest {
                 org.mockito.Mockito.mock(UserExamGoalService.class),
                 org.mockito.Mockito.mock(UserExamGoalResolver.class)
         );
+        mockMvc = standaloneSetup(new AuthController(
+                authService,
+                org.mockito.Mockito.mock(AuthRateLimitService.class),
+                org.mockito.Mockito.mock(com.studysnap.backend.service.AccountDataExportService.class)
+        )).build();
         when(jwtService.generateAccessToken(any(UserEntity.class))).thenReturn("access-token");
         when(jwtService.resolveAccessTokenExpiry()).thenReturn(OffsetDateTime.now().plusMinutes(15));
         when(refreshTokenService.issue(any(UserEntity.class), any(Boolean.class), any(), any(), any()))
@@ -108,6 +122,7 @@ class AuthServiceFirstTouchAttributionTest {
         assertThat(savedUser.getUtmContent()).isEqualTo("story");
         assertThat(savedUser.getUtmTerm()).isEqualTo("pnle");
         assertThat(savedUser.getReferrer()).isEqualTo("https://example.com/campaign");
+        assertThat(savedUser.getFirstTouchSurface()).isEqualTo("exam_hub");
     }
 
     @Test
@@ -126,6 +141,7 @@ class AuthServiceFirstTouchAttributionTest {
         assertThat(savedUser.getUtmContent()).isNull();
         assertThat(savedUser.getUtmTerm()).isNull();
         assertThat(savedUser.getReferrer()).isNull();
+        assertThat(savedUser.getFirstTouchSurface()).isNull();
     }
 
     @Test
@@ -149,6 +165,7 @@ class AuthServiceFirstTouchAttributionTest {
         assertThat(savedUser.getUtmContent()).isEqualTo("story");
         assertThat(savedUser.getUtmTerm()).isEqualTo("pnle");
         assertThat(savedUser.getReferrer()).isEqualTo("https://example.com/campaign");
+        assertThat(savedUser.getFirstTouchSurface()).isEqualTo("exam_hub");
     }
 
     @Test
@@ -157,6 +174,7 @@ class AuthServiceFirstTouchAttributionTest {
         UserEntity existingUser = activeUser(userId);
         existingUser.setUtmSource("existing-source");
         existingUser.setReferrer("https://first.example.com");
+        existingUser.setFirstTouchSurface("landing");
         UserAuthProviderEntity provider = new UserAuthProviderEntity();
         provider.setUserId(userId);
         provider.setProvider(AuthProvider.GOOGLE);
@@ -172,7 +190,59 @@ class AuthServiceFirstTouchAttributionTest {
 
         assertThat(existingUser.getUtmSource()).isEqualTo("existing-source");
         assertThat(existingUser.getReferrer()).isEqualTo("https://first.example.com");
+        assertThat(existingUser.getFirstTouchSurface()).isEqualTo("landing");
         verify(userRepository, never()).save(any(UserEntity.class));
+    }
+
+    @Test
+    void signupEndpoint_roundTripsFirstTouchSurfaceFromJson() throws Exception {
+        stubEmailSignup();
+
+        mockMvc.perform(post("/auth/signup")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"email":"note@example.com","password":"password123","firstName":"Note",
+                                 "displayName":"note","firstTouchSurface":"exam_hub"}
+                                """))
+                .andExpect(status().isOk());
+
+        assertThat(capturedSavedUser().getFirstTouchSurface()).isEqualTo("exam_hub");
+    }
+
+    @Test
+    void signupEndpoint_invalidFirstTouchSurfaceStillSucceedsAndStoresNull() throws Exception {
+        stubEmailSignup();
+
+        mockMvc.perform(post("/auth/signup")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"email":"note@example.com","password":"password123","firstName":"Note",
+                                 "displayName":"note","firstTouchSurface":"<script>"}
+                                """))
+                .andExpect(status().isOk());
+
+        assertThat(capturedSavedUser().getFirstTouchSurface()).isNull();
+    }
+
+    @Test
+    void signupEndpoint_withoutAttributionStillSucceeds() throws Exception {
+        stubEmailSignup();
+
+        mockMvc.perform(post("/auth/signup")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"email":"note@example.com","password":"password123","firstName":"Note","displayName":"note"}
+                                """))
+                .andExpect(status().isOk());
+
+        assertThat(capturedSavedUser().getFirstTouchSurface()).isNull();
+    }
+
+    private void stubEmailSignup() {
+        when(userRepository.existsByEmailIgnoreCase("note@example.com")).thenReturn(false);
+        when(userRepository.existsByUsernameIgnoreCase("note")).thenReturn(false);
+        when(passwordEncoder.encode("password123")).thenReturn("hashed");
+        when(userRepository.save(any(UserEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
     }
 
     private SignupRequest signupRequest() {
@@ -186,7 +256,8 @@ class AuthServiceFirstTouchAttributionTest {
                 "board_review",
                 "story",
                 "pnle",
-                "https://example.com/campaign"
+                "https://example.com/campaign",
+                "exam_hub"
         );
     }
 
@@ -199,7 +270,8 @@ class AuthServiceFirstTouchAttributionTest {
                 "board_review",
                 "story",
                 "pnle",
-                "https://example.com/campaign"
+                "https://example.com/campaign",
+                "exam_hub"
         );
     }
 

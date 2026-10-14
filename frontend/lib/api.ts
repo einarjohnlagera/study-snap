@@ -1042,6 +1042,7 @@ export type FirstTouchAttribution = {
   utmContent?: string;
   utmTerm?: string;
   referrer?: string;
+  firstTouchSurface?: string;
 };
 
 export type SignupRequest = FirstTouchAttribution & {

@@ -91,6 +91,9 @@ public class UserEntity {
     @Column(name = "referrer", length = 2048)
     private String referrer;
 
+    @Column(name = "first_touch_surface", length = 32)
+    private String firstTouchSurface;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "profile_type")
     private ProfileType profileType;

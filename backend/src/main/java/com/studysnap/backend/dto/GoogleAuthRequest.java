@@ -18,9 +18,11 @@ public record GoogleAuthRequest(
         @Size(max = 255, message = "UTM term is too long.")
         String utmTerm,
         @Size(max = 2048, message = "Referrer is too long.")
-        String referrer
+        String referrer,
+        @Size(max = 32, message = "First-touch surface is too long.")
+        String firstTouchSurface
 ) {
     public GoogleAuthRequest(String code, Boolean keepSignedIn) {
-        this(code, keepSignedIn, null, null, null, null, null, null);
+        this(code, keepSignedIn, null, null, null, null, null, null, null);
     }
 }

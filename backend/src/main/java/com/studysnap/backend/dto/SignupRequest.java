@@ -27,9 +27,11 @@ public record SignupRequest(
         @Size(max = 255, message = "UTM term is too long.")
         String utmTerm,
         @Size(max = 2048, message = "Referrer is too long.")
-        String referrer
+        String referrer,
+        @Size(max = 32, message = "First-touch surface is too long.")
+        String firstTouchSurface
 ) {
     public SignupRequest(String email, String password, String firstName, String displayName) {
-        this(email, password, firstName, displayName, null, null, null, null, null, null);
+        this(email, password, firstName, displayName, null, null, null, null, null, null, null);
     }
 }
