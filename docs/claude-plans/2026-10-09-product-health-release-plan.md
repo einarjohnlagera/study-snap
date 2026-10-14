@@ -10,6 +10,16 @@
 
 ---
 
+> ### ⚠️ Status update, 2026-10-12 — read this before the rest of the document, which still describes RC-1 as in-progress in several places
+>
+> - **RC-1 (the Study Pack quota fix) has shipped — `v0.168.0`, "Free Quota, Fairly Metered," signed off 2026-10-09, deployed (commit `0ce371a3`) 2026-10-09T14:41:25+08:00.** The body text below still frames it as "in progress on `v0.168.0`" and leaves "Option A vs Option B" open in several places (§3, §6, §8, the closing section) — those are now resolved: **Option B shipped** (dropped the `max()`/`persistedStudyPackCount` floor entirely, trusting the tracked generation counter alone), not Option A.
+> - **The spend-threshold owner decision this document asks for (§8 item 2) was made, differently than framed here:** the owner reviewed real production token averages (~$2.08/month at full utilization by all 76 affected users, derived from `study_packs`' own 90-day FREE-tier token averages) and **decided to ship uncapped, no threshold** — the exposure was judged immaterial at this scale, rather than a weekly-count revert trigger being set.
+> - **RC-5 (Public Note → Study Journey discovery) has been explicitly sequenced to `v0.170.0`**, not merely gated on the stability checkpoints as this document's §6/§7 frame it — confirmed by an `advisor()` pass during `v0.169.0`'s kickoff, reusing this document's own RC-5 spec rather than re-designing it.
+> - **This document's own RC-0 (checkout diagnosis) status is unconfirmed as of 2026-10-12** — it does not appear in `RELEASES.md` or `ROADMAP.md` as actioned or not. Do not treat this document's "RC-0 is the single highest-value unclaimed action" framing as still current without checking.
+> - The rest of this document (§4 pricing spec, §5 funnel spec, the RC-2/RC-3/RC-6 designs) was not re-verified against current state on 2026-10-12 and may have further drift beyond the items named above — treat as a snapshot from 2026-10-09, not a live-maintained plan.
+
+---
+
 > ### ⚠️ Stale premise — now RESOLVED by direct confirmation from Release Implementor (2026-10-09)
 >
 > **The brief said:** "The Study Journey release is already signed off but unmerged. Release Implementor is conducting a narrow pre-merge assessment."

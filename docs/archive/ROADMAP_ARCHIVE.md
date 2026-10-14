@@ -5331,3 +5331,26 @@ sweep (expanded beyond the original plan to include `docs/features/notes.md`, `c
 a catalog fact, not yet a note-population fact — zero Computing notes are authored today. **Not shipped:**
 the BSCS TSV edits (strategist's own action) and the R4 pilot (its 5 named notes don't exist yet). Full
 scope in `RELEASES.md`.
+
+---
+
+**Kicked off 2026-10-02, signed off 2026-10-05.** `v0.165.0 — Bounded Discovery` is **Released** on
+`releases/v0.165.0`, cut from `main` after `v0.164.0` merged as #1470 and tagged. **Two independent
+workstreams, bundled at owner direction:** (1) a production-reliability fix for 24 backend restarts/30
+days — a public Note page's two discovery rails fan out into every page of a subject/program list and
+recompute live popularity ranking per page, saturating the pre-revenue `basic_256mb` database; owner
+decision switches both rails to one bounded, `recent`-sorted fetch each, explicitly declining to raise
+the DB plan (`docs/claude-plans/2026-10-01-public-note-discovery-rail-ordering-decision.md`); (2) three
+generation-behavior fixes from the Computing R4 BSCS pilot (`docs/curriculum/r4-pilot/`): shell commands
+rendering as LaTeX math, Note Subject leaking into generated titles/body text (deterministic fix scoped
+to Bulk Generate only — the owner narrowed this mid-release since the single-note editor/onboarding path
+uses an informal topic field, not a polished title), and missing computation-guidance observability.
+**Signed off with:** an independent cold falsification pass against the merged code (not release notes)
+confirmed 14 of 16 specific claims outright and found one real overclaim — `app/sitemap.ts` doesn't
+re-sort before use, unlike the subject/exam-hub pages — corrected in `RELEASES.md` and the decision doc;
+harmless since a sitemap's entry order carries no ranking signal. **⚠️ `v0.165.0` shipped ahead of its own
+evidence on Workstream 1**: the outage diagnosis's thread-occupancy read was inferred, not measured.
+**Merged to `main` (PR #1474) and deployed 2026-10-05**: Render live 15:21:14Z, Vercel's Production
+deployment confirmed success 15:24:27Z, both verified serving the same commit — a
+`[CHECKPOINT — due 2026-10-12T15:24:27Z]` row tracks whether `server_failed` restarts actually dropped.
+Full scope in `RELEASES.md`.
