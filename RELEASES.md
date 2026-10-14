@@ -5,8 +5,8 @@
 **Status: In Progress**
 
 Theme: close the checkout-abandonment leak the product-health release plan's RC-0 diagnosis found
-(`docs/claude-plans/2026-10-09-product-health-release-plan.md`), plus one independent instrumentation
-item from the same plan.
+(`docs/claude-plans/2026-10-09-product-health-release-plan.md`), plus signup entry-surface
+attribution from the same plan.
 
 ### Planned Scope
 
@@ -33,7 +33,21 @@ item from the same plan.
    **Restarts RC-4's baseline clock**: any checkout-path change lands inside the post-RC-1 baseline
    window (started 2026-10-09), so the price test's start moves past ~2026-11-06 regardless.
 
-3. **RC-6 — deferred, not scoped into this release.** Raising the discovery-intent/copy-intent
+3. **RC-2 — Minimal funnel attribution (signup entry surface). SCOPED at this kickoff, not yet
+   implemented.** Extends the existing first-touch-attribution mechanism (`V93__user_first_touch_attribution.sql`'s
+   `utm_source`/`utm_medium`/`utm_campaign`/`utm_content`/`utm_term`/`referrer` columns, captured
+   client-side via `sessionStorage` and submitted once at signup) with one more column,
+   `first_touch_surface` (`V156`), classifying the first-touch pathname into `landing` / `public_note`
+   / `explore` / `exam_hub` / `other`. Resolves both halves of the plan's §8 item 9 from this existing
+   precedent rather than as fresh decisions: a `users` column (matching all 6 siblings, not the
+   `SIGNUP_COMPLETED`-metadata alternative, which covers only 311/420 historic accounts), and no new
+   anonymous-session-state risk (the capture mechanism already runs on every page today, including
+   public ones, per `app/layout.tsx:78`). Narrowed from the plan's "optionally the raw path truncated"
+   — class only. Touches both stacks (new migration + `UserEntity`/`SignupRequest`/`GoogleAuthRequest`/
+   `AuthService` + `first-touch-attribution.ts`/`lib/api.ts`), so routed as a Codex prompt rather than
+   implemented inline.
+
+4. **RC-6 — deferred, not scoped into this release.** Raising the discovery-intent/copy-intent
    cookie TTLs touches the same adoption-path instrumentation RC-5 (shipped `v0.170.0`, 2026-10-13) is
    currently measuring for its own H3 pre/post read. The product-health plan says RC-6 "should not
    land inside the RC-5 window," but RC-5 was never given a concrete window end-date at `v0.170.0`
@@ -46,6 +60,15 @@ endpoint. `payer_email` is read-only existing data, not collected anew.
 
 ### Known gaps carried into this release
 
+- **RC-3's reminder is UNVERIFIED to actually fire inside the 24h invoice window — `[CHECKPOINT —
+  due 2026-10-21]` owed, since the outreach step that would have given independent signal on checkout
+  behavior was itself skipped (RC-0).** Xendit's per-invoice `reminder_time`/`reminder_time_unit`
+  fields were not set (only `payer_email` was added), so timing falls back to the Xendit account's own
+  Dashboard Invoice Settings default — unconfirmed, and some Xendit SDK examples pair a 1-day-before
+  reminder with a 48h invoice, not NoteLib's 24h. **Proximal check (owed, owner action): start a real
+  test checkout, leave it unpaid, confirm the reminder email arrives within 24h.** If it does not fire,
+  RC-3 has shipped a dashboard toggle with no effect, not a verified fix. Recorded in
+  `docs/features/billing.md`.
 - **RC-5 (`v0.170.0`) never got its own `[CHECKPOINT]` row for its H3 adoption read at signoff** —
   only the Hikari leak-trace checkpoint was added. This is why RC-6's deferral above has no concrete
   re-open date; owed as a follow-up.

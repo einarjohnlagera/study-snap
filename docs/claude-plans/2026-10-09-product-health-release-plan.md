@@ -20,6 +20,16 @@
 
 ---
 
+> ### ⚠️ Status update, 2026-10-14 — RC-0 and RC-3 are now closed/shipped; §3 RC-3(b) must NOT be built
+>
+> - **RC-0 is CLOSED by owner decision.** The Xendit dashboard pull (step 1) found plain un-engaged invoice expiry on all 16 failed invoices — no channel selected, no attempt inside the invoice. The one-question outreach (step 2) was explicitly skipped, accepting this plan's own named risk ("building recovery for a cause RC-0 did not find").
+> - **RC-3 SHIPPED as `v0.171.0`, but NOT via the in-house reminder-job design this document sketches below (§3 RC-3, scope items a–d).** `advisor()` caught that Xendit's Invoice API already supports a native payment-reminder email, gated by an account-level dashboard toggle (Settings → Checkout → Notifications → "Payment reminders," enabled by the owner 2026-10-14). The code fix was one field — `payer_email` added to the existing invoice-creation payload — not a new job, migration, template or `email_log` row. **Do not build §3 RC-3(b) (the in-house reminder email) — it is superseded, not merely deferred.**
+> - **⚠️ Unverified: whether the native reminder actually fires inside NoteLib's 24h invoice window.** Xendit's reminder timing (`reminder_time`/`reminder_time_unit`) falls back to the account's own Dashboard Invoice Settings when omitted per-invoice (which is what NoteLib does) — that default was not confirmed, and some Xendit SDK examples pair a 1-day-before-expiry reminder with a 48h invoice, not 24h. **Owed before signoff: a real test checkout, left unpaid, confirming the email actually arrives within 24h.**
+> - **RC-2 was scoped at the `v0.171.0` kickoff** (one `users` column via migration, extending the existing `utm_source`/`referrer` first-touch-attribution columns and capture path — not the `SIGNUP_COMPLETED` metadata alternative this document's §8 item 9 also named) but not yet implemented.
+> - **RC-6 stays deferred** — it touches the same adoption-path instrumentation RC-5 is currently measuring, and RC-5 was never given a concrete read-by date at its own signoff (a gap, tracked separately).
+
+---
+
 > ### ⚠️ Stale premise — now RESOLVED by direct confirmation from Release Implementor (2026-10-09)
 >
 > **The brief said:** "The Study Journey release is already signed off but unmerged. Release Implementor is conducting a narrow pre-merge assessment."
