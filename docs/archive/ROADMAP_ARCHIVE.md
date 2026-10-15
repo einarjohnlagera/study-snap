@@ -5354,3 +5354,26 @@ evidence on Workstream 1**: the outage diagnosis's thread-occupancy read was inf
 deployment confirmed success 15:24:27Z, both verified serving the same commit — a
 `[CHECKPOINT — due 2026-10-12T15:24:27Z]` row tracks whether `server_failed` restarts actually dropped.
 Full scope in `RELEASES.md`.
+
+**Kicked off 2026-10-06, signed off 2026-10-07.** `v0.166.0 — Measured Twice` is **Released** on
+`releases/v0.166.0`, cut from `main` after `v0.165.0` merged as #1474 and tagged. **Bundles two already-written,
+already-reviewed doc-only follow-ups** that were each sitting on their own branch targeting `main`
+directly (PR #1475, PR #1476) — retargeted here instead, since merging a doc-only branch straight to
+`main` triggers a production build/deploy the owner wants to avoid for changes this small. (1)
+Records `v0.165.0`'s confirmed deploy timestamp (Render live 15:21:14Z, Vercel success 15:24:27Z,
+2026-10-05) into its own outage-fix `[CHECKPOINT]` row, giving it a real due date instead of "not
+yet measurable." (2) Records a peer-reported, independently-verified finding that `v0.165.0`'s
+G2(a) prompt fix doesn't reliably stop Subject leaking into Study Pack titles (1 of 3 regenerated
+packs still leaked), scopes the obvious fix (a deterministic title strip mirroring G2(b)), measures
+it against production (3,390 existing titles already end in `"... in {Subject}"`, a 40-row sample
+all legitimate), and recommends NOT building it — plus corrects an earlier overstated "root-caused"
+claim about an unrelated Applicable-Programs mixup. **Expanded 2026-10-06, owner decision, and both
+SHIPPED:** the kickoff's own overdue-checkpoint sweep root-caused a real HikariCP long-connection-hold
+pattern — two unbounded synchronous-DB-work defects (`PublicProfileService.buildPublicProfile`'s
+unlimited profile load, PR #1478; `NoteCollectionService.adoptGoal`'s sequential copy loop, PR #1477),
+neither an LLM-hold pattern, so `v0.112.0`'s deferred Phase 3 doesn't cover either. `adoptGoal`'s fix
+(owner chose the background-job option over a smaller synchronous batching fix) is a multi-system
+change; the profile-load fix is backend-only. Both audited (direct trace + a cold falsification pass
+for the Goal-adoption fix) before merging. A `[CHECKPOINT — due Render deploy + 7 days]` on whether
+the fixes actually stop the Hikari long-hold traces is tracked in `ROADMAP.md`'s Backlog Index, not
+yet readable (not yet merged to `main`). Full scope in `RELEASES.md`.
