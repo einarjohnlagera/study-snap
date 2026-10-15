@@ -129,7 +129,12 @@ public class ChallengeQuizQuestionBankService {
         // failed the FK check, deterministically and silently. Isolation is still the right long-term
         // shape, but it requires the session row to be visible first. See the Backlog Index row.
         try {
-            challengeQuizQuestionBankRepository.saveAll(entries);
+            for (ChallengeQuizQuestionBankEntity entry : entries) {
+                if (ChallengeQuizQuestionBankInsert.insert(challengeQuizQuestionBankRepository, entry) == 0) {
+                    log.debug("Challenge Quiz question-bank duplicate skipped for userId={}, studyPackId={}, keyPrefix={}",
+                            userId, studyPackId, entry.getQuestionKey().substring(0, Math.min(24, entry.getQuestionKey().length())));
+                }
+            }
         } catch (RuntimeException exception) {
             log.warn("Challenge Quiz question-bank write failed for userId={}, studyPackId={}",
                     userId, studyPackId, exception);
