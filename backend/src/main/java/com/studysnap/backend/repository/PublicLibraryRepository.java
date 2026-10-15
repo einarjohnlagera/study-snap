@@ -71,5 +71,11 @@ public interface PublicLibraryRepository {
             int limit
     );
 
+    DiscoveryRankedIds findPublicLibraryFeaturedAndPopularIds(
+            PublicLibraryFilterCriteria criteria, OffsetDateTime rankedAt, int limitPerSection);
+
+    record DiscoveryRankedIds(List<UUID> featuredIds, List<UUID> popularIds) {
+    }
+
     List<NoteListItemProjection> findPublicLibraryListItemProjectionsByIdIn(Collection<UUID> noteIds);
 }

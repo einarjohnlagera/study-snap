@@ -62,6 +62,9 @@ public class PublicLibraryRepositoryImpl implements PublicLibraryRepository {
     private static final String RANK_STUDY_PACK_JOIN = " left join study_packs sp on sp.note_id = n.id ";
     private static final String RANK_NOW_PARAMETER = "rankNow";
     private static final String EXCLUDED_NOTE_ID_PARAMETER = "rankExcludedNoteId";
+    private static final String DISCOVERY_LIMIT_PARAMETER = "limitPerSection";
+    private static final String FEATURED_SECTION = "featured";
+    private static final String POPULAR_SECTION = "popular";
     /**
      * ⚠️ Each engagement metric joins a derived table that aggregates ONCE, rather than a correlated
      * subquery evaluated per row. That is deliberate for {@code analytics_events}: a correlated count
@@ -305,6 +308,73 @@ public class PublicLibraryRepositoryImpl implements PublicLibraryRepository {
         query.setFirstResult(offset);
         query.setMaxResults(limit);
         return tuples(query).stream().map(tuple -> toUuid(tuple.get(ID_ALIAS))).toList();
+    }
+
+    @Override
+    public DiscoveryRankedIds findPublicLibraryFeaturedAndPopularIds(
+            PublicLibraryFilterCriteria criteria, OffsetDateTime rankedAt, int limitPerSection
+    ) {
+        FilterSql filter = buildFilter(criteria);
+        String featuredPredicate = rankedEligibilityPredicate(PublicLibrarySort.FEATURED);
+        String popularPredicate = rankedEligibilityPredicate(PublicLibrarySort.POPULAR);
+        String featuredOrder = rankedOrderKeys(PublicLibrarySort.FEATURED,
+                "base.copies_metric", "base.likes_metric", "base.views_metric", "base.created_at", "base.id");
+        String popularOrder = rankedOrderKeys(PublicLibrarySort.POPULAR,
+                "base.copies_metric", "base.likes_metric", "base.views_metric", "base.created_at", "base.id");
+        String featuredPositionOrder = rankedOrderKeys(PublicLibrarySort.FEATURED,
+                "f.copies_metric", "f.likes_metric", "f.views_metric", "f.created_at", "f.id");
+        String popularPositionOrder = rankedOrderKeys(PublicLibrarySort.POPULAR,
+                "p.copies_metric", "p.likes_metric", "p.views_metric", "p.created_at", "p.id");
+        String sql = """
+                with featured_ids as (
+                    select n.id
+                    %s%s and %s
+                ), base as (
+                    select n.id as id,
+                           n.created_at as created_at,
+                           %s as copies_metric,
+                           %s as likes_metric,
+                           %s as views_metric,
+                           case when fi.id is not null then 1 else 0 end as featured_eligible,
+                           case when %s then 1 else 0 end as popular_eligible
+                    %s left join featured_ids fi on fi.id = n.id %s
+                ), featured as (
+                    select * from base
+                    where featured_eligible = 1
+                    order by %s limit :%s
+                ), popular as (
+                    select * from base
+                    where popular_eligible = 1
+                      and not exists (select 1 from featured f where f.id = base.id)
+                    order by %s limit :%s
+                )
+                select '%s' as section, row_number() over (order by %s) as position, f.id as id from featured f
+                union all
+                select '%s' as section, row_number() over (order by %s) as position, p.id as id from popular p
+                order by section, position
+                """.formatted(RANKED_FROM_BASE + RANK_STUDY_PACK_JOIN, filter.whereClause(), featuredPredicate,
+                RANK_COPIES, RANK_LIKES, RANK_VIEWS, popularPredicate,
+                RANKED_FROM_BASE + RANK_COPIES_JOIN + RANK_LIKES_JOIN + RANK_VIEWS_JOIN,
+                filter.whereClause(), featuredOrder, DISCOVERY_LIMIT_PARAMETER,
+                popularOrder, DISCOVERY_LIMIT_PARAMETER,
+                FEATURED_SECTION, featuredPositionOrder, POPULAR_SECTION, popularPositionOrder);
+        Query query = createNativeQuery(sql);
+        bind(query, filter.parameters());
+        query.setParameter(RANK_NOW_PARAMETER, rankedAt);
+        query.setParameter(DISCOVERY_LIMIT_PARAMETER, limitPerSection);
+        List<UUID> featuredIds = new ArrayList<>();
+        List<UUID> popularIds = new ArrayList<>();
+        for (Tuple row : tuples(query)) {
+            String section = String.valueOf(row.get("section"));
+            if (FEATURED_SECTION.equals(section)) {
+                featuredIds.add(toUuid(row.get(ID_ALIAS)));
+            } else if (POPULAR_SECTION.equals(section)) {
+                popularIds.add(toUuid(row.get(ID_ALIAS)));
+            } else {
+                throw new IllegalStateException("Unexpected discovery section: " + section);
+            }
+        }
+        return new DiscoveryRankedIds(featuredIds, popularIds);
     }
 
     @Override
@@ -574,15 +644,20 @@ public class PublicLibraryRepositoryImpl implements PublicLibraryRepository {
      * well as to the page, or {@code hasMore} changes meaning. Every other sort returns "".
      */
     private String rankedEligibility(PublicLibrarySort sort) {
+        String predicate = rankedEligibilityPredicate(sort);
+        return predicate.isEmpty() ? "" : " and " + predicate;
+    }
+
+    private String rankedEligibilityPredicate(PublicLibrarySort sort) {
         if (sort == null) {
             return "";
         }
         return switch (sort) {
-            case FEATURED -> " and " + STUDY_PACK_READY_SQL
+            case FEATURED -> STUDY_PACK_READY_SQL
                     + " and (sp.summary is not null and trim(sp.summary) <> '')"
                     + " and (n.content is not null and trim(n.content) <> '')"
                     + " and " + StudyPackQuizSqlExpressions.quizCount("sp", isPostgres()) + " > 0 ";
-            case POPULAR, COPIED -> " and (" + RANK_COPIES + " >= " + PublicNotesScoringUtils.POPULAR_MIN_COPIES
+            case POPULAR, COPIED -> "(" + RANK_COPIES + " >= " + PublicNotesScoringUtils.POPULAR_MIN_COPIES
                     + " or " + RANK_VIEWS + " >= " + PublicNotesScoringUtils.POPULAR_MIN_VIEWS + ") ";
             default -> "";
         };
@@ -601,14 +676,24 @@ public class PublicLibraryRepositoryImpl implements PublicLibraryRepository {
         if (sort == null) {
             return " order by n.updated_at desc, " + ID_ASC;
         }
+        if (sort == PublicLibrarySort.RECENT || sort == PublicLibrarySort.TITLE) {
+            return orderBy(sort);
+        }
+        return " order by " + rankedOrderKeys(sort, RANK_COPIES, RANK_LIKES, RANK_VIEWS,
+                "n.created_at", "n.id");
+    }
+
+    private String rankedOrderKeys(PublicLibrarySort sort, String copies, String likes, String views,
+                                   String createdAt, String id) {
         return switch (sort) {
-            case FEATURED, RECOMMENDED -> " order by " + rankScoreSql() + " desc, " + RANK_COPIES + " desc, "
-                    + RANK_VIEWS + " desc, " + CREATED_AT_DESC + ", " + ID_ASC;
-            case POPULAR, COPIED -> " order by " + RANK_COPIES + " desc, " + RANK_VIEWS + " desc, "
-                    + RANK_LIKES + " desc, " + CREATED_AT_DESC + ", " + ID_ASC;
-            case VIEWS -> " order by " + RANK_VIEWS + " desc, " + CREATED_AT_DESC + ", " + ID_ASC;
-            case MOST_COPIED -> " order by " + RANK_COPIES + " desc, " + CREATED_AT_DESC + ", " + ID_ASC;
-            case RECENT, TITLE -> orderBy(sort);
+            case FEATURED, RECOMMENDED -> rankScoreSql(copies, likes, views, createdAt) + " desc, "
+                    + copies + " desc, " + views + " desc, " + createdAt + " desc, " + id + " asc";
+            case POPULAR, COPIED -> copies + " desc, " + views + " desc, " + likes + " desc, "
+                    + createdAt + " desc, " + id + " asc";
+            case VIEWS -> views + " desc, " + createdAt + " desc, " + id + " asc";
+            case MOST_COPIED -> copies + " desc, " + createdAt + " desc, " + id + " asc";
+            case RECENT -> createdAt + " desc, " + id + " asc";
+            default -> throw new IllegalArgumentException(RANKED_SORT_PATH_REQUIRED_MESSAGE);
         };
     }
 
@@ -622,11 +707,11 @@ public class PublicLibraryRepositoryImpl implements PublicLibraryRepository {
      * arithmetic this reproduces. The weights come from {@link PublicNotesScoringUtils} rather than
      * being repeated here.
      */
-    private String rankScoreSql() {
+    private String rankScoreSql(String copies, String likes, String views, String createdAt) {
         String daysSince = isPostgres()
                 ? "floor(extract(epoch from (cast(:" + RANK_NOW_PARAMETER
-                        + " as timestamp with time zone) - n.created_at)) / 86400)"
-                : "floor(cast(datediff(second, n.created_at, cast(:" + RANK_NOW_PARAMETER
+                        + " as timestamp with time zone) - " + createdAt + ")) / 86400)"
+                : "floor(cast(datediff(second, " + createdAt + ", cast(:" + RANK_NOW_PARAMETER
                         + " as timestamp with time zone)) as double precision) / 86400)";
         String decay = "greatest("
                 + doublePrecision("1") + " / (" + doublePrecision("1") + " + greatest("
@@ -634,9 +719,9 @@ public class PublicLibraryRepositoryImpl implements PublicLibraryRepository {
                 + doublePrecision(String.valueOf(PublicNotesScoringUtils.FEATURED_DECAY_HALF_LIFE_DAYS)) + "), "
                 + doublePrecision(String.valueOf(PublicNotesScoringUtils.FEATURED_DECAY_MIN_FACTOR)) + ")";
         String base = doublePrecision(
-                RANK_COPIES + " * " + PublicNotesScoringUtils.FEATURED_COPY_WEIGHT
-                        + " + " + RANK_LIKES + " * " + PublicNotesScoringUtils.FEATURED_LIKE_WEIGHT
-                        + " + " + RANK_VIEWS + " * " + PublicNotesScoringUtils.FEATURED_VIEW_WEIGHT
+                copies + " * " + PublicNotesScoringUtils.FEATURED_COPY_WEIGHT
+                        + " + " + likes + " * " + PublicNotesScoringUtils.FEATURED_LIKE_WEIGHT
+                        + " + " + views + " * " + PublicNotesScoringUtils.FEATURED_VIEW_WEIGHT
         );
         return "(" + base + " * " + decay + ")";
     }

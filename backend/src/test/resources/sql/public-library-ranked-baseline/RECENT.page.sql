@@ -1,0 +1,1 @@
+select n.id as id from notes n  where n.visibility = 'PUBLIC' order by n.created_at desc, n.id asc fetch first ? rows only
