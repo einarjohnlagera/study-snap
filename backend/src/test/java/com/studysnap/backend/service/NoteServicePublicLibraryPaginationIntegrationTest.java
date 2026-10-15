@@ -33,6 +33,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.core.task.support.TaskExecutorAdapter;
+import com.github.benmanes.caffeine.cache.Ticker;
 
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
@@ -69,16 +72,23 @@ class NoteServicePublicLibraryPaginationIntegrationTest {
     private JdbcTemplate jdbcTemplate;
     @Autowired
     private EntityManager entityManager;
+    @Autowired
+    private PlatformTransactionManager transactionManager;
+    @Autowired
+    private PublicLibraryDiscoveryRankingCache applicationDiscoveryRankingCache;
 
     private final Map<UUID, Long> likeCounts = new HashMap<>();
     private final Map<UUID, Long> shareCounts = new HashMap<>();
     private final Map<UUID, Long> viewCounts = new HashMap<>();
+    private final Map<UUID, List<UUID>> viewerLikes = new HashMap<>();
     private final Map<UUID, StudyPackEntity> studyPacks = new HashMap<>();
     private final Map<UUID, UserEntity> users = new HashMap<>();
     private NoteService noteService;
+    private PublicLibraryDiscoveryRankingCache discoveryRankingCache;
 
     @BeforeEach
     void initSchema() {
+        applicationDiscoveryRankingCache.invalidateAll();
         createSchema();
         jdbcTemplate.execute("delete from analytics_events");
         jdbcTemplate.execute("delete from public_note_likes");
@@ -90,6 +100,7 @@ class NoteServicePublicLibraryPaginationIntegrationTest {
         likeCounts.clear();
         shareCounts.clear();
         viewCounts.clear();
+        viewerLikes.clear();
         studyPacks.clear();
         users.clear();
         noteService = createNoteService();
@@ -735,6 +746,55 @@ class NoteServicePublicLibraryPaginationIntegrationTest {
         assertThat(sql.split("from notes rank_copy_n", -1)).hasSize(2);
     }
 
+    @Test
+    void discoveryCacheHitDropsPrivateNoteWithoutBackfillOrReranking() {
+        UUID ownerId = insertUser("visibilityowner", UserRole.USER);
+        for (int index = 0; index < 6; index++) {
+            saveNote(ownerId, "Recent " + index, "Science", null, new String[]{"recent"},
+                    NoteStatus.DRAFT, NoteVisibility.PUBLIC, NoteTargetProfileType.STUDENT, index);
+        }
+        flushAndClear();
+        var first = noteService.getPublicLibraryDiscoverySections(null);
+        assertThat(first.recent()).hasSize(6);
+        UUID hiddenId = UUID.fromString(first.recent().getFirst().id());
+        noteRepository.findById(hiddenId).orElseThrow().setVisibility(NoteVisibility.PRIVATE);
+        flushAndClear();
+
+        SqlCaptureStatementInspector.clear();
+        var second = noteService.getPublicLibraryDiscoverySections(null);
+        assertThat(second.recent()).hasSize(5);
+        assertThat(ids(second.recent())).doesNotContain(hiddenId.toString());
+        assertThat(SqlCaptureStatementInspector.statements().stream()
+                .filter(sql -> sql.contains("rank_view") || sql.contains("rank_copy_n"))).isEmpty();
+        assertThat(SqlCaptureStatementInspector.statements().stream()
+                .filter(sql -> sql.contains("n.visibility = 'PUBLIC'"))).isNotEmpty();
+    }
+
+    @Test
+    void discoveryRankingIsSharedAcrossAnonymousAndViewersWhileLikedStateStaysLive() {
+        UUID ownerId = insertUser("viewerowner", UserRole.USER);
+        NoteEntity note = saveNote(ownerId, "Visible note", "Science", null, new String[]{"recent"},
+                NoteStatus.DRAFT, NoteVisibility.PUBLIC, NoteTargetProfileType.STUDENT, 1);
+        UUID viewerOne = UUID.randomUUID();
+        UUID viewerTwo = UUID.randomUUID();
+        viewerLikes.put(viewerOne, List.of(note.getId()));
+        flushAndClear();
+
+        assertThat(noteService.getPublicLibraryDiscoverySections(null).recent().getFirst().likedByCurrentUser())
+                .isFalse();
+        assertThat(noteService.getPublicLibraryDiscoverySections(viewerOne).recent().getFirst().likedByCurrentUser())
+                .isTrue();
+        assertThat(noteService.getPublicLibraryDiscoverySections(viewerTwo).recent().getFirst().likedByCurrentUser())
+                .isFalse();
+        viewerLikes.put(viewerTwo, List.of(note.getId()));
+        SqlCaptureStatementInspector.clear();
+        assertThat(noteService.getPublicLibraryDiscoverySections(viewerTwo).recent().getFirst().likedByCurrentUser())
+                .isTrue();
+        assertThat(discoveryRankingCache.stats().missCount()).isEqualTo(1);
+        assertThat(SqlCaptureStatementInspector.statements().stream()
+                .filter(sql -> sql.contains("rank_view") || sql.contains("rank_copy_n"))).isEmpty();
+    }
+
     private PublicNoteListResponse page(
             UUID viewerUserId,
             String search,
@@ -1009,7 +1069,7 @@ class NoteServicePublicLibraryPaginationIntegrationTest {
                     .toList();
         });
         lenient().when(publicNoteLikeRepository.findLikedNoteIdsByUserIdAndNoteIdIn(any(), any()))
-                .thenReturn(List.of());
+                .thenAnswer(invocation -> viewerLikes.getOrDefault(invocation.getArgument(0), List.of()));
         lenient().when(studyPackRepository.findByNoteIdIn(any())).thenAnswer(invocation -> {
             List<UUID> requestedIds = invocation.getArgument(0);
             return requestedIds.stream().map(studyPacks::get).filter(java.util.Objects::nonNull).toList();
@@ -1028,6 +1088,8 @@ class NoteServicePublicLibraryPaginationIntegrationTest {
         });
         lenient().when(quizSessionHistoryService.findLatestSessionCompletedAtByNoteIds(any(), any()))
                 .thenReturn(Map.of());
+        discoveryRankingCache = new PublicLibraryDiscoveryRankingCache(noteRepository, transactionManager,
+                new TaskExecutorAdapter(Runnable::run), Ticker.systemTicker());
         return new NoteService(
                 noteRepository,
                 org.mockito.Mockito.mock(com.studysnap.backend.repository.NoteShareRepository.class),
@@ -1047,7 +1109,8 @@ class NoteServicePublicLibraryPaginationIntegrationTest {
                 mock(com.studysnap.backend.repository.NoteCollectionItemRepository.class),
                 mock(com.studysnap.backend.repository.CourseProgramCatalogRepository.class),
                 mock(StudyPackQuizMasteryService.class),
-                mock(StudyPackGenerationContextResolver.class)
+                mock(StudyPackGenerationContextResolver.class),
+                discoveryRankingCache
         );
     }
 
