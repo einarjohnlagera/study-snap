@@ -3,7 +3,7 @@
 > **This is the core brief. Paste it as your first message in a new GPT chat session.**
 > Then paste any module below that matches the conversation — see "Which modules to paste".
 > Update this file whenever a new version ships or the roadmap shifts significantly.
-> Last updated: v0.171.0 - 2026-10-14 (Released). **`v0.171.0` closed the checkout-abandonment leak a
+> Last updated: v0.172.0 - 2026-10-15 (Released). **`v0.172.0 — Headroom` targeted the production database's memory ceiling (9 Postgres backend kills by signal 9 in 7 days on `basic_256mb`).** The Public Library discovery sections now rank Featured and Popular in one statement, computing each engagement aggregate once. The overview reuses loaded sections instead of re-fetching, and copy counts stay current. The owner set `max_parallel_workers_per_gather = 0` on the database. Challenge Quiz bank inserts now skip a duplicate question instead of failing the request with HTTP 500. **Whether the kills stopped is NOT yet known:** `[CHECKPOINT — due 2026-10-22]`, baseline 9 per 7 days. The plan upgrade is deferred (no paying users yet) and the aggregate cache is next release. *(previously v0.171.0)* - 2026-10-14 (Released). **`v0.171.0` closed the checkout-abandonment leak a
 > product-health funnel audit found: all 16 failed Xendit invoices in production showed plain
 > un-engaged expiry — no channel picked, no attempt — never a declined payment, so the fix is
 > Xendit's own native payment-reminder email (one `payer_email` field added to invoice creation, plus

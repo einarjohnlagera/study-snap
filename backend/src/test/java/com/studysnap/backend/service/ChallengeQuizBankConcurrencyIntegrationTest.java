@@ -32,6 +32,7 @@ import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.Future;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.BeforeEach;
@@ -72,6 +73,7 @@ class ChallengeQuizBankConcurrencyIntegrationTest {
     @Autowired QuickReviewAdaptivePracticeService adaptivePracticeService;
     @Autowired com.studysnap.backend.repository.QuickReviewSessionRepository sessionRepository;
     @Autowired ChallengeQuizQuestionBankService bankService;
+    @Autowired OfficialChallengeQuizTemplateService templateService;
     @Autowired AdminStudyPackTransactionHelper adminStudyPackTransactionHelper;
     @Autowired StudyPackRepository studyPackRepository;
     @Autowired PlatformTransactionManager transactionManager;
@@ -100,6 +102,112 @@ class ChallengeQuizBankConcurrencyIntegrationTest {
                 new BillingUsagePeriodService.UsagePeriod(PlanType.FREE, null,
                         OffsetDateTime.now(ZoneOffset.UTC).minusDays(1),
                         OffsetDateTime.now(ZoneOffset.UTC).plusDays(1), 2026, 9));
+    }
+
+    @Test
+    void duplicateInsertSkipsAtTheStatementAndPreservesTheFirstRowAcrossLevels() {
+        Fixture fixture = seed(false);
+        UUID firstId = jdbc.queryForObject("select id from challenge_quiz_question_bank where study_pack_id = ?",
+                UUID.class, fixture.packId);
+        QuizItem duplicate = question("Bank question");
+        new TransactionTemplate(transactionManager).execute(status -> {
+            bankService.persistGeneratedQuestions(fixture.userId, fixture.packId, null,
+                    LearnerLevel.COLLEGE, 0L, List.of(duplicate));
+            return null;
+        });
+        assertThat(jdbc.queryForObject("select count(*) from challenge_quiz_question_bank where study_pack_id = ?",
+                Integer.class, fixture.packId)).isEqualTo(1);
+        assertThat(bankRepository.findById(firstId).orElseThrow().getOriginSessionId()).isEqualTo(fixture.sessionId);
+        assertThat(bankRepository.findById(firstId).orElseThrow().getClaimedSessionId()).isEqualTo(fixture.sessionId);
+
+        jdbc.update("update challenge_quiz_question_bank set learner_level = null where id = ?", firstId);
+        new TransactionTemplate(transactionManager).execute(status -> {
+            bankService.persistGeneratedQuestions(fixture.userId, fixture.packId, null,
+                    null, 0L, List.of(duplicate));
+            return null;
+        });
+        assertThat(jdbc.queryForObject("select count(*) from challenge_quiz_question_bank where study_pack_id = ?",
+                Integer.class, fixture.packId)).isEqualTo(1);
+        new TransactionTemplate(transactionManager).execute(status -> {
+            bankService.persistGeneratedQuestions(fixture.userId, fixture.packId, null,
+                    LearnerLevel.SENIOR_HIGH, 0L, List.of(duplicate));
+            return null;
+        });
+        assertThat(jdbc.queryForObject("select count(*) from challenge_quiz_question_bank where study_pack_id = ?",
+                Integer.class, fixture.packId)).isEqualTo(2);
+    }
+
+    @Test
+    @Timeout(15)
+    void concurrentDuplicateInsertWaitsForCommitThenSkipsWithoutPoisoningEitherTransaction() throws Exception {
+        Fixture fixture = seed(false);
+        jdbc.update("delete from challenge_quiz_question_bank where study_pack_id = ?", fixture.packId);
+        CountDownLatch inserted = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        CountDownLatch secondStarted = new CountDownLatch(1);
+        try (var executor = Executors.newFixedThreadPool(2)) {
+            Future<?> first = executor.submit(() -> new TransactionTemplate(transactionManager).execute(status -> {
+                assertThat(insertBankRow(fixture, "race key", "COLLEGE")).isEqualTo(1);
+                inserted.countDown();
+                try { assertThat(release.await(8, TimeUnit.SECONDS)).isTrue(); }
+                catch (InterruptedException exception) { Thread.currentThread().interrupt(); throw new RuntimeException(exception); }
+                return null;
+            }));
+            assertThat(inserted.await(8, TimeUnit.SECONDS)).isTrue();
+            Future<?> second = executor.submit(() -> new TransactionTemplate(transactionManager).execute(status -> {
+                secondStarted.countDown();
+                assertThat(insertBankRow(fixture, "race key", "COLLEGE")).isZero();
+                return null;
+            }));
+            assertThat(secondStarted.await(8, TimeUnit.SECONDS)).isTrue();
+            long beforeCommit = System.nanoTime();
+            Thread.sleep(150);
+            assertThat(second.isDone()).isFalse();
+            release.countDown();
+            first.get(8, TimeUnit.SECONDS);
+            assertThat(TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - beforeCommit)).isLessThan(1800);
+            second.get(8, TimeUnit.SECONDS);
+        } finally {
+            release.countDown();
+        }
+        assertThat(jdbc.queryForObject("select count(*) from challenge_quiz_question_bank where study_pack_id = ?",
+                Integer.class, fixture.packId)).isEqualTo(1);
+    }
+
+    private int insertBankRow(Fixture fixture, String key, String level) {
+        return bankRepository.insertIfAbsent(UUID.randomUUID(), fixture.userId, fixture.packId, 0L,
+                null, key, "{\"question\":\"Race key\",\"choices\":[\"A\",\"B\"],\"correctIndex\":0}",
+                level, "UNANSWERED", null, OffsetDateTime.now(ZoneOffset.UTC));
+    }
+
+    @Test
+    void nativeJsonInsertRoundTripsEveryQuizItemShapeThroughTheEntity() {
+        Fixture fixture = seed(false);
+        jdbc.update("delete from challenge_quiz_question_bank where study_pack_id = ?", fixture.packId);
+        List<QuizItem> items = List.of(
+                QuizItem.fromStoredComponents("Multiple choice", List.of("A. B. Smith", "D.C. generator"), 0,
+                        "concept", "explanation", null, null, "MCQ", "working", null,
+                        null, "key", List.of("answer"), List.of(List.of("group")), "source"),
+                QuizItem.fromStoredComponents("Multi select", List.of("first", "second"), 0,
+                        "concept", "explanation", null, "MULTI_SELECT", "MULTI_SELECT", "working",
+                        List.of(0, 1), null, "key", List.of("answer"), List.of(List.of("group")), "source"),
+                QuizItem.fromStoredComponents("Identification", List.of(), null, "concept", "explanation",
+                        null, "IDENTIFICATION", "IDENTIFICATION", "working", null, null,
+                        "key", List.of("one", "two"), List.of(List.of("group")), "source"),
+                QuizItem.fromStoredComponents("Enumeration", List.of(), null, "concept", "explanation",
+                        null, "ENUMERATION", "ENUMERATION", "working", null, null,
+                        "key", List.of("one"), List.of(List.of("first", "second")), "source"),
+                QuizItem.fromStoredComponents("Matching group", List.of("left", "right"), 0,
+                        "concept", "explanation", null, null, "MATCHING", "working", null,
+                        "group one", "key", List.of("answer"), List.of(List.of("group")), "source"));
+        new TransactionTemplate(transactionManager).execute(status -> {
+            bankService.persistGeneratedQuestions(fixture.userId, fixture.packId, null,
+                    LearnerLevel.COLLEGE, 0L, items);
+            return null;
+        });
+        List<QuizItem> reloaded = bankRepository.findByUserIdAndStudyPackIdOrderByGeneratedAtAsc(
+                fixture.userId, fixture.packId).stream().map(ChallengeQuizQuestionBankEntity::getQuestion).toList();
+        assertThat(reloaded).containsExactlyInAnyOrderElementsOf(items);
     }
 
     @Test
@@ -444,6 +552,64 @@ class ChallengeQuizBankConcurrencyIntegrationTest {
                 UUID.class, fixture.packId)).isNull();
     }
 
+    @Test
+    @Timeout(15)
+    void startSessionFlushesItsNewSessionBeforeBankInserts() {
+        Fixture fixture = seed(false);
+        jdbc.update("update quick_review_sessions set status = 'COMPLETED', completed_at = now() where id = ?",
+                fixture.sessionId);
+        jdbc.update("delete from challenge_quiz_question_bank where study_pack_id = ?", fixture.packId);
+        List<QuizItem> generated = java.util.stream.IntStream.range(0, 12)
+                .mapToObj(index -> question("Started " + index)).toList();
+        when(quizGenerationService.generateChallengeQuiz(any(), any(), any(), any(),
+                any(Integer.class), any(), any())).thenReturn(GeneratedChallengeQuizContent.withoutUsage(generated));
+
+        challengeQuizService.startSession(fixture.packId.toString(), fixture.userId, null);
+
+        assertThat(jdbc.queryForObject("""
+                select count(*) from challenge_quiz_question_bank bank
+                join quick_review_sessions session on session.id = bank.claimed_session_id
+                where bank.study_pack_id = ? and bank.origin_session_id = session.id
+                  and session.status = 'IN_PROGRESS'
+                """, Integer.class, fixture.packId)).isEqualTo(generated.size());
+    }
+
+    @Test
+    @Timeout(15)
+    void officialSeedAndAdopterCopyBothPersistBankRows() {
+        Fixture official = seed(false);
+        UUID officialNoteId = jdbc.queryForObject("select note_id from study_packs where id = ?",
+                UUID.class, official.packId);
+        jdbc.update("update users set role = 'ADMIN' where id = ?", official.userId);
+        jdbc.update("update notes set visibility = 'PUBLIC' where id = ?", officialNoteId);
+        jdbc.update("delete from challenge_quiz_question_bank where study_pack_id = ?", official.packId);
+        when(quizGenerationService.generateChallengeQuiz(any(), any(), any(), any(),
+                any(Integer.class), any(), any())).thenReturn(GeneratedChallengeQuizContent.withoutUsage(
+                List.of(question("Official seeded question"))));
+
+        templateService.seedTemplateAsync(officialNoteId, official.packId);
+
+        assertThat(jdbc.queryForObject("""
+                select count(*) from challenge_quiz_question_bank
+                where study_pack_id = ? and origin_session_id is null
+                """, Integer.class, official.packId)).isEqualTo(1);
+
+        Fixture adopter = seed(false);
+        UUID adopterNoteId = jdbc.queryForObject("select note_id from study_packs where id = ?",
+                UUID.class, adopter.packId);
+        jdbc.update("update notes set copied_from_note_id = ? where id = ?", officialNoteId, adopterNoteId);
+        jdbc.update("delete from challenge_quiz_question_bank where study_pack_id = ?", adopter.packId);
+        List<QuizItem> copied = new TransactionTemplate(transactionManager).execute(status ->
+                templateService.copyTemplateQuestions(adopter.userId, adopter.packId, LearnerLevel.COLLEGE,
+                        0L, adopter.sessionId, java.util.Set.of(), 1));
+
+        assertThat(copied).extracting(QuizItem::question).containsExactly("Official seeded question");
+        assertThat(jdbc.queryForObject("""
+                select count(*) from challenge_quiz_question_bank
+                where study_pack_id = ? and origin_session_id = ? and claimed_session_id = ?
+                """, Integer.class, adopter.packId, adopter.sessionId, adopter.sessionId)).isEqualTo(1);
+    }
+
     /**
      * `resolveExistingChallengeSession` reads the existing session once unlocked (to capture
      * {@code observedStatus}), then again locked — the same shape as Interview Practice's original bug.
@@ -561,6 +727,39 @@ class ChallengeQuizBankConcurrencyIntegrationTest {
 
     @Test
     @Timeout(15)
+    void generateMoreServesAPreexistingUnclaimableDuplicateAndCommitsNewRows() {
+        Fixture fixture = seed(false);
+        jdbc.update("""
+                update challenge_quiz_question_bank
+                set question_key = 'duplicate generated',
+                    question = '{"question":"Duplicate generated","choices":["A","B"],"correctIndex":0}'::jsonb,
+                    generation_stamp = -1
+                where study_pack_id = ?
+                """, fixture.packId);
+        when(quizGenerationService.generateMoreChallengeQuiz(any(), any(), any(), any(), any(),
+                any(Integer.class), any(), any())).thenReturn(GeneratedChallengeQuizContent.withoutUsage(List.of(
+                question("Duplicate generated"), question("New two"), question("New three"),
+                question("New four"), question("New five"))));
+
+        challengeQuizService.generateMoreQuestions(fixture.sessionId.toString(), fixture.userId);
+
+        var session = sessionRepository.findById(fixture.sessionId).orElseThrow();
+        assertThat(QuizSessionStateUtils.extractQuiz(session.getSessionState()))
+                .extracting(QuizItem::question).contains("Duplicate generated", "New five");
+        assertThat(jdbc.queryForObject("select count(*) from challenge_quiz_question_bank where study_pack_id = ?",
+                Integer.class, fixture.packId)).isEqualTo(5);
+        assertThat(jdbc.queryForObject("""
+                select count(*) from challenge_quiz_question_bank
+                where study_pack_id = ? and generation_stamp = 0 and claimed_session_id = ?
+                """, Integer.class, fixture.packId, fixture.sessionId)).isEqualTo(4);
+        assertThat(jdbc.queryForObject("""
+                select claimed_session_id from challenge_quiz_question_bank
+                where study_pack_id = ? and question_key = 'duplicate generated'
+                """, UUID.class, fixture.packId)).isEqualTo(fixture.sessionId);
+    }
+
+    @Test
+    @Timeout(15)
     void legacyNullBankStampRemainsEligibleButStaleStampedRowsDoNot() {
         Fixture fixture = seed(false);
         jdbc.update("update challenge_quiz_question_bank set claimed_session_id = null, last_known_outcome = 'INCORRECT' where study_pack_id = ?",
@@ -594,7 +793,7 @@ class ChallengeQuizBankConcurrencyIntegrationTest {
         // ⚠️ The next three are DELIBERATELY NOT stamp-filtered: each guards a WRITE (skip a re-seed,
         // skip re-copying a key the caller already holds), not a read that hands out content. Filtering
         // them would make a stale-but-present row invisible to the guard, so a fresh write could reuse
-        // that row's question_key and collide with uq_challenge_quiz_question_bank_user_pack_key.
+        // that row's question_key and re-serve it; the duplicate bank insert would then be skipped.
         assertThat(bankRepository.findQuestionKeysByUserIdAndStudyPackId(
                 fixture.userId, fixture.packId)).containsExactly("bank question");
         assertThat(bankRepository.existsByUserIdAndStudyPackId(fixture.userId, fixture.packId)).isTrue();

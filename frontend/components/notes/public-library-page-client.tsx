@@ -315,7 +315,7 @@ interface PublicNoteCardProps {
   currentUsername: string | null;
   onNavigate: (path: string) => void;
   existingCopyNoteId?: string | null;
-  onCopySuccess: (payload: { copiedNoteId: string; sourceNoteId: string; studyPackStatus: NoteListItemResponse["studyPackStatus"] }) => void;
+  onCopySuccess: (payload: { copiedNoteId: string; sourceNoteId: string; isOwner: boolean; studyPackStatus: NoteListItemResponse["studyPackStatus"] }) => void;
   onLikeSuccess: (payload: { noteId: string; liked: boolean; likeCount: number }) => void;
 }
 
@@ -407,6 +407,7 @@ function PublicNoteCard({
                 onCopySuccess={({ copiedNoteId, studyPackStatus }) => onCopySuccess({
                   copiedNoteId,
                   sourceNoteId: item.id,
+                  isOwner,
                   studyPackStatus,
                 })}
               />
@@ -427,7 +428,7 @@ interface PublicLibraryDiscoverySectionProps {
   onNavigate: (path: string) => void;
   onViewMore: () => void;
   copiedNoteIdsBySourceId: Record<string, string>;
-  onCopySuccess: (payload: { copiedNoteId: string; sourceNoteId: string; studyPackStatus: NoteListItemResponse["studyPackStatus"] }) => void;
+  onCopySuccess: (payload: { copiedNoteId: string; sourceNoteId: string; isOwner: boolean; studyPackStatus: NoteListItemResponse["studyPackStatus"] }) => void;
   onLikeSuccess: (payload: { noteId: string; liked: boolean; likeCount: number }) => void;
 }
 
@@ -505,6 +506,8 @@ export function PublicLibraryPageClient({
   const [loadMoreLoading, setLoadMoreLoading] = useState(false);
   const [loadMoreError, setLoadMoreError] = useState<string | null>(null);
   const [copiedNoteIdsBySourceId, setCopiedNoteIdsBySourceId] = useState<Record<string, string>>({});
+  const copiedNoteIdsBySourceIdRef = useRef<Record<string, string>>({});
+  const locallyCopiedNoteIdsBySourceIdRef = useRef<Record<string, string>>({});
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCourseProgram, setSelectedCourseProgram] = useState<string>(ALL_COURSE_PROGRAMS);
   const [learnerLevelDraft, setLearnerLevelDraft] = useState<LearnerLevel | null>(null);
@@ -546,6 +549,7 @@ export function PublicLibraryPageClient({
   const lastSyncedSearchRef = useRef<string | null>(null);
   const listRequestTokenRef = useRef(0);
   const discoveryRequestTokenRef = useRef(0);
+  const discoverySectionsLoadedRef = useRef(false);
   const [recentTags, setRecentTags] = useState<string[]>([]);
   const [recentSubjects, setRecentSubjects] = useState<string[]>([]);
   const [recentCoursePrograms, setRecentCoursePrograms] = useState<string[]>([]);
@@ -653,10 +657,12 @@ export function PublicLibraryPageClient({
       const response = await listPublicLibraryDiscoverySections();
       if (requestToken === discoveryRequestTokenRef.current) {
         setDiscoverySections(response);
+        discoverySectionsLoadedRef.current = true;
       }
     } catch (loadError) {
       if (requestToken === discoveryRequestTokenRef.current) {
         setDiscoverySections({ featured: [], popular: [], recent: [] });
+        discoverySectionsLoadedRef.current = false;
         setDiscoveryError(loadError instanceof Error ? loadError.message : "Could not load discovery sections.");
       }
     } finally {
@@ -668,7 +674,9 @@ export function PublicLibraryPageClient({
 
   useEffect(() => {
     if (isDiscoveryMode && activeDiscoveryView === null) {
-      void loadDiscoverySections();
+      if (!discoverySectionsLoadedRef.current) {
+        void loadDiscoverySections();
+      }
       return;
     }
     discoveryRequestTokenRef.current += 1;
@@ -735,6 +743,8 @@ export function PublicLibraryPageClient({
 
   const loadCopiedNotes = useCallback(async () => {
     if (!currentUserId) {
+      locallyCopiedNoteIdsBySourceIdRef.current = {};
+      copiedNoteIdsBySourceIdRef.current = {};
       setCopiedNoteIdsBySourceId({});
       return;
     }
@@ -747,9 +757,13 @@ export function PublicLibraryPageClient({
           next[item.copiedFromNoteId] = item.id;
         }
       }
-      setCopiedNoteIdsBySourceId(next);
+      const merged = { ...next, ...locallyCopiedNoteIdsBySourceIdRef.current };
+      copiedNoteIdsBySourceIdRef.current = merged;
+      setCopiedNoteIdsBySourceId(merged);
     } catch {
-      setCopiedNoteIdsBySourceId({});
+      const merged = { ...locallyCopiedNoteIdsBySourceIdRef.current };
+      copiedNoteIdsBySourceIdRef.current = merged;
+      setCopiedNoteIdsBySourceId(merged);
     }
   }, [currentUserId]);
 
@@ -757,12 +771,31 @@ export function PublicLibraryPageClient({
     void loadCopiedNotes();
   }, [loadCopiedNotes]);
 
-  const handleCopySuccess = useCallback((payload: { copiedNoteId: string; sourceNoteId: string; studyPackStatus: NoteListItemResponse["studyPackStatus"] }) => {
+  const handleCopySuccess = useCallback((payload: { copiedNoteId: string; sourceNoteId: string; isOwner: boolean; studyPackStatus: NoteListItemResponse["studyPackStatus"] }) => {
     markPublicLibraryNoteAdoptedThisSession();
-    setCopiedNoteIdsBySourceId((previous) => ({
-      ...previous,
+    const alreadyCopied = Boolean(copiedNoteIdsBySourceIdRef.current[payload.sourceNoteId]);
+    locallyCopiedNoteIdsBySourceIdRef.current = {
+      ...locallyCopiedNoteIdsBySourceIdRef.current,
       [payload.sourceNoteId]: payload.copiedNoteId,
-    }));
+    };
+    copiedNoteIdsBySourceIdRef.current = {
+      ...copiedNoteIdsBySourceIdRef.current,
+      [payload.sourceNoteId]: payload.copiedNoteId,
+    };
+    setCopiedNoteIdsBySourceId(copiedNoteIdsBySourceIdRef.current);
+    if (!alreadyCopied && !payload.isOwner) {
+      const updateItem = (item: NoteListItemResponse) => (
+        item.id === payload.sourceNoteId
+          ? { ...item, copyCount: (item.copyCount ?? 0) + 1 }
+          : item
+      );
+      setItems((previous) => previous.map(updateItem));
+      setDiscoverySections((previous) => ({
+        featured: previous.featured.map(updateItem),
+        popular: previous.popular.map(updateItem),
+        recent: previous.recent.map(updateItem),
+      }));
+    }
     setCopySuccessState({
       copiedNoteId: payload.copiedNoteId,
       studyPackStatus: payload.studyPackStatus,

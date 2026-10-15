@@ -111,6 +111,9 @@ Public Library has two display modes:
 
 **Discovery mode** (default, no active search/filters/sort changes):
 - the client consumes `GET /notes/public/discovery-sections`; the backend supplies up to six mutually exclusive notes per section
+- discovery sections are fetched once per page mount and reused when the overview is re-entered; Retry always refetches, and a failed load is retried on the next overview entry
+- after a new non-owner card copy succeeds, the source card's copy count increases in the loaded browse list and all discovery sections, so returning to the reused overview shows the count without another discovery request; an existing copy or an owner's own copy does not increase the public copy count
+- the backend ranks Featured and Popular in one statement, computing each copies, likes, and views engagement aggregate once per call; Recent keeps its separate bounded query
 - 🔥 Featured Notes — render the first 3 server-ranked study-ready notes by quality + engagement
 - 📈 Most Popular — render the first 5 server-ranked notes meeting the social-proof threshold (excluding Featured notes)
 - 🆕 Recently Added — render the first 5 by `createdAt` (excluding Featured and Popular)
@@ -362,7 +365,7 @@ Supported query params:
 
 `most_copied` sorts every matching note by copies then creation time without the Popular eligibility gate. `recommended` applies the existing decay-adjusted engagement score to every matching note without the Featured eligibility gate. The gated `featured` and `popular`/`copied` keys remain available for focused discovery-section views.
 
-`GET /notes/public/discovery-sections` is deliberately **unfiltered** — it ignores every browse filter, `level` included, exactly as it already ignores search, subject, tags, course/program and creator. It is a standalone discovery surface rather than a view of the filtered list, so a depth chip narrows the browse list without changing these sections. It returns mutually exclusive `featured`, `popular`, and `recent` lists capped at six each: Featured is selected first, Popular excludes Featured ids, and Recent excludes both earlier sections. Its candidate scan is lean and candidate-set engagement counts are batch-loaded; full list-item enrichment runs only for the final union of at most 18 notes. The discovery homepage consumes these lists directly and preserves its existing 3/5/5 visual display limits (`NoteService.getPublicLibraryDiscoverySections`, `PublicLibraryPageClient.loadDiscoverySections`).
+`GET /notes/public/discovery-sections` is deliberately **unfiltered** — it ignores every browse filter, `level` included, exactly as it already ignores search, subject, tags, course/program and creator. It is a standalone discovery surface rather than a view of the filtered list, so a depth chip narrows the browse list without changing these sections. It returns mutually exclusive `featured`, `popular`, and `recent` lists capped at six each: Featured is selected first, Popular excludes Featured ids, and Recent excludes both earlier sections. The shared Featured/Popular ranking statement computes each engagement aggregate once; candidate-set engagement counts for response enrichment are batch-loaded. Full list-item enrichment runs only for the final union of at most 18 notes. The discovery homepage consumes these lists directly and preserves its existing 3/5/5 visual display limits (`NoteService.getPublicLibraryDiscoverySections`, `PublicLibraryPageClient.loadDiscoverySections`).
 
 Whole-library Public Library facet values have dedicated anonymous endpoints, independent of the currently loaded result page:
 

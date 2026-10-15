@@ -1,6 +1,6 @@
 # RELEASES_ARCHIVE.md — NoteLib
 
-Archived sections of `RELEASES.md`. **Contents are NOT one contiguous range:** `v0.41.0`–`v0.120.0`, plus `v0.126.0` (moved at the `v0.132.0` kickoff), `v0.127.0` (moved at the `v0.133.0` kickoff) `v0.128.0` (moved at the `v0.134.0` kickoff) `v0.129.0` (moved at the `v0.135.0` kickoff) `v0.130.0` (moved at the `v0.136.0` kickoff) `v0.131.0` (moved at the `v0.137.0` kickoff) `v0.132.0` (moved at the `v0.138.0` kickoff) `v0.133.0` (moved at the `v0.139.0` kickoff), `v0.134.0` (moved at the `v0.140.0` kickoff), `v0.135.0` (moved at the `v0.141.0` kickoff), `v0.136.0` (moved at the `v0.142.0` kickoff), `v0.137.0` (moved at the `v0.143.0` kickoff), `v0.138.0` (moved at the `v0.144.0` kickoff), `v0.139.0` (moved at the `v0.145.0` kickoff), `v0.140.0` (moved at the `v0.146.0` kickoff), `v0.141.0` (moved at the `v0.147.0` kickoff), `v0.142.0` (moved at the `v0.148.0` kickoff), `v0.143.0` (moved at the `v0.149.0` kickoff), `v0.144.0` (moved at the `v0.150.0` kickoff), `v0.145.0` (moved at the `v0.151.0` kickoff), `v0.146.0` (moved at the `v0.152.0` kickoff), `v0.147.0` (moved at the `v0.153.0` kickoff), `v0.148.0` (moved at the `v0.154.0` kickoff), `v0.149.0` (moved at the `v0.155.0` kickoff), `v0.150.0` (moved at the `v0.156.0` signoff — the first time this archive check ran at signoff rather than kickoff, since v0.156.0 folded two releases' worth of scope into one and crossed the cap without an intervening kickoff) and `v0.151.0` (moved at the `v0.157.0` kickoff) and `v0.152.0` (moved at the `v0.158.0` kickoff) and `v0.153.0` and `v0.154.0` (moved at the `v0.159.0` and `v0.160.0` kickoffs; earlier passes did not extend this line) and `v0.155.0` (moved at the `v0.161.0` kickoff) and `v0.156.0` (moved at the `v0.162.0` kickoff) and `v0.157.0` (moved at the `v0.163.0` kickoff) and `v0.158.0` (moved at the `v0.164.0` kickoff) and `v0.159.0` (moved at the `v0.165.0` kickoff) and `v0.160.0` (moved at the `v0.166.0` kickoff) and `v0.161.0` (moved at the `v0.167.0` kickoff) and `v0.164.0` (moved at the `v0.170.0` kickoff) and `v0.165.0` (moved at the `v0.171.0` kickoff) as the live file crossed its *current + last five* cap. Each version's own `## vX.Y.Z` heading is the index — search for it. `v0.40.1` and earlier moved here
+Archived sections of `RELEASES.md`. **Contents are NOT one contiguous range:** `v0.41.0`–`v0.120.0`, plus `v0.126.0` (moved at the `v0.132.0` kickoff), `v0.127.0` (moved at the `v0.133.0` kickoff) `v0.128.0` (moved at the `v0.134.0` kickoff) `v0.129.0` (moved at the `v0.135.0` kickoff) `v0.130.0` (moved at the `v0.136.0` kickoff) `v0.131.0` (moved at the `v0.137.0` kickoff) `v0.132.0` (moved at the `v0.138.0` kickoff) `v0.133.0` (moved at the `v0.139.0` kickoff), `v0.134.0` (moved at the `v0.140.0` kickoff), `v0.135.0` (moved at the `v0.141.0` kickoff), `v0.136.0` (moved at the `v0.142.0` kickoff), `v0.137.0` (moved at the `v0.143.0` kickoff), `v0.138.0` (moved at the `v0.144.0` kickoff), `v0.139.0` (moved at the `v0.145.0` kickoff), `v0.140.0` (moved at the `v0.146.0` kickoff), `v0.141.0` (moved at the `v0.147.0` kickoff), `v0.142.0` (moved at the `v0.148.0` kickoff), `v0.143.0` (moved at the `v0.149.0` kickoff), `v0.144.0` (moved at the `v0.150.0` kickoff), `v0.145.0` (moved at the `v0.151.0` kickoff), `v0.146.0` (moved at the `v0.152.0` kickoff), `v0.147.0` (moved at the `v0.153.0` kickoff), `v0.148.0` (moved at the `v0.154.0` kickoff), `v0.149.0` (moved at the `v0.155.0` kickoff), `v0.150.0` (moved at the `v0.156.0` signoff — the first time this archive check ran at signoff rather than kickoff, since v0.156.0 folded two releases' worth of scope into one and crossed the cap without an intervening kickoff) and `v0.151.0` (moved at the `v0.157.0` kickoff) and `v0.152.0` (moved at the `v0.158.0` kickoff) and `v0.153.0` and `v0.154.0` (moved at the `v0.159.0` and `v0.160.0` kickoffs; earlier passes did not extend this line) and `v0.155.0` (moved at the `v0.161.0` kickoff) and `v0.156.0` (moved at the `v0.162.0` kickoff) and `v0.157.0` (moved at the `v0.163.0` kickoff) and `v0.158.0` (moved at the `v0.164.0` kickoff) and `v0.159.0` (moved at the `v0.165.0` kickoff) and `v0.160.0` (moved at the `v0.166.0` kickoff) and `v0.161.0` (moved at the `v0.167.0` kickoff) and `v0.164.0` (moved at the `v0.170.0` kickoff) and `v0.165.0` (moved at the `v0.171.0` kickoff) and `v0.166.0` (moved at the `v0.172.0` kickoff) as the live file crossed its *current + last five* cap. Each version's own `## vX.Y.Z` heading is the index — search for it. `v0.40.1` and earlier moved here
 2026-07-10; **`v0.41.0` through `v0.120.0` moved here 2026-09-07** in the `v0.126.0` pass, which
 resumed this convention after it had lapsed for 85 releases — `RELEASES.md` had reached 116
 sections against its documented design of *current + last few versions*. Both passes are MOVES,
@@ -22103,3 +22103,174 @@ events continuing at a comparable weekly rate means the diagnosis is wrong or in
   per-request correlation; the generation context has no note/request id, and one line is logged per
   actual attempt, including retries and Long Exam batches.
 
+## v0.166.0 - Measured Twice
+
+**Status: Released** (signed off 2026-10-07; PRs #1475, #1476, #1477, #1478 merged into `releases/v0.166.0`)
+
+Theme: close out the two post-signoff follow-ups from `v0.165.0` that were already done and waiting
+on branches targeting `main` — bundled here instead, since merging doc-only branches straight to
+`main` triggers a production build/deploy the owner wants to avoid for changes this small. **Expanded
+2026-10-06, owner decision, past the original doc-only scope**, to fix the Hikari long-connection-hold
+mechanism the kickoff's own checkpoint sweep found and root-caused (see Shipped below) — two real
+unbounded-work defects, not an LLM-hold pattern, so `v0.112.0`'s deferred Phase 3 would not have
+addressed either.
+
+### Planned Scope
+
+**The first two items are docs-only, already written and reviewed on their own branches; this
+release's work is landing them, not authoring them.**
+
+- **Record `v0.165.0`'s confirmed deploy timestamp in its own `[CHECKPOINT]` row.** Branch
+  `docs/v0.165.0-post-deploy-checkpoint` (PR #1475, opened against `main`, retargeted here). Render
+  live 2026-10-05T15:21:14Z, Vercel Production deployment success 15:24:27Z — both confirmed serving
+  the same commit via `gh api`. Gives the outage-fix checkpoint a real start time
+  (`2026-10-12T15:24:27Z` due date) instead of "not yet measurable."
+- **G2(a) title-leak finding, correction, and a measured decision not to build a deterministic
+  fix.** Branch `docs/g2a-title-leak-finding-and-correction` (PR #1476, opened against `main`,
+  retargeted here). A peer session's post-deploy production evidence showed `v0.165.0`'s G2(a)
+  prompt fix doesn't reliably stop Subject leaking into Study Pack titles (1 of 3 regenerated packs
+  still leaked). The obvious fix — a deterministic strip mirroring G2(b) — was scoped and then
+  measured against production before being recommended: **3,390 existing Study Pack titles already
+  end in `"{something} in {the note's own Subject}"`, and a 40-row random sample is, without
+  exception, legitimate** ("Torsion in Strength of Materials", "Infection Control... in Nursing") —
+  a blind strip would mangle thousands of good titles to catch an unknown, likely small number of
+  real leaks, with no mechanical rule found to tell them apart. **Decision: do not build it.** Also
+  corrects an earlier overstated claim (the five-Applicable-Programs mixup was called "root-caused"
+  to a Program Family shortcut; a peer session's own verification showed the family's membership
+  doesn't fully reproduce the observed set, so the mechanism is plausible, not confirmed).
+- **Fix 1 — `PublicProfileService.buildPublicProfile`'s unbounded profile load (backend only).**
+  Confirmed root cause of the dominant Hikari long-hold pattern (see Shipped below): loads every
+  public note (full `content`) and every full `StudyPackEntity` (full quiz JSON) for one account with
+  no limit, to let the frontend pick its top-8-by-metric display. Fix: compute `totalCopies`/
+  `totalShares`/`totalViews`/the note count via SQL aggregates over ALL of the account's notes, and
+  only fetch full content/summary for a generous top-N (by copy/view/share) — same response shape, no
+  frontend change. Codex-scope (new aggregate + top-N query logic across `PublicProfileService.java`
+  and its repositories, ~3-4 files).
+- **Fix 2 — `NoteCollectionService.adoptGoal`'s sequential copy loop (backend + frontend — Option A,
+  owner decision 2026-10-06).** Confirmed root cause of the secondary long-hold pattern: copies a
+  Goal's children sequentially under one shared connection (open-in-view + HOLD mode), confirmed up to
+  571 notes in a real production Goal. **Owner chose the background-job fix over the smaller
+  synchronous EntityManager-clear option** — removes the connection-hold ceiling entirely rather than
+  raising it, at the cost of a bigger blast radius: `adoptGoal`'s copy path is shared with plain
+  `adopt()` and `applySourceUpdate` (row 782's mechanism), and the endpoint's response contract
+  changes from synchronous to a started-job response, requiring frontend polling/progress UX. Scope is
+  `adoptGoal` only — `adopt()`/`applySourceUpdate` stay synchronous (lower individual exposure: at most
+  one Subject Plan's worth of notes per call, not a whole Goal's). Codex-scope, multi-system
+  (frontend + backend).
+
+Anti-drift: no production write. `adopt()` and `applySourceUpdate`'s existing synchronous behavior and
+response shape must not change — only `adoptGoal`'s own endpoint moves to a background job. Fix 1 must
+not change `PublicProfileResponse`'s shape (no new pagination params) — verify against the frontend
+consumer (`public-profile-page-client.tsx`) before shipping, not just the backend tests.
+
+**Verification tier:** doc-only items — single `advisor()` summary, as before. **Fix 1 — one scoped
+cold falsification agent** (changes a production read path; verify the aggregate/top-N queries against
+real data, not just unit tests). **Fix 2 — at least one scoped cold falsification agent, and consider
+whether it rises to the full three-agent tier**: it changes a shared method's call-site contract
+(`adoptGoal`) while leaving two siblings (`adopt()`, `applySourceUpdate`) on the old path, and it
+introduces new async/job infrastructure — re-evaluate the tier once the Codex prompt's actual diff
+shape is known.
+
+### Shipped
+
+- **Goal adoption now runs as a resumable background job.** The production Goal with 571 notes
+  and confirmed 60–140s+ Hikari connection holds motivated moving its per-child copy loop off the
+  request thread. The request still creates the personal Goal and returns its id immediately; a
+  dedicated two-worker executor copies each published Subject Plan in its own transaction. A
+  persisted job row exposes owner-scoped progress, and a configured sweep re-enqueues stale work
+  after deploys. Completion stamps the Companion baseline and primary invariant and writes the
+  Goal adoption analytics event atomically with the completed marker. Dashboard, public cards,
+  discovery intent, and the collection page display progress and offer retry on status failure.
+  `adopt()` and `applySourceUpdate` share the copy primitive but are unchanged — verified both by
+  tracing every call path and by the existing test suite, which asserts their behavior unchanged.
+  **Audited by a cold falsification pass (2026-10-07) against the Codex prompt's own acceptance
+  criteria before merging** — no blocking defects found. One real gap it caught: the Testcontainers
+  integration test only ever seeded PUBLIC children, so the "adopts every stamped child regardless
+  of visibility" invariant (the exact defect `v0.161.0` PR #1453 fixed) had no test exercising the
+  real job execution path for a PRIVATE one — traced the code and confirmed the path itself is
+  unchanged by this diff, then closed the gap with `stampedPrivateChildIsAdoptedTheSameAsAPublicOne`,
+  which passes against a real Postgres container. **Known limitations, not blocking:**
+  `waitForGoalAdoption`'s poll loop has no caller-side cancellation, so a component that calls it
+  directly (rather than through the effect-based poll already used by all 4 call sites) leaves a
+  dangling promise after unmount — no crash, just a wasted request; the collection detail page's
+  poll effect re-checks status on every view of an already-completed Goal rather than caching that
+  it finished, which is wasteful but not incorrect; and `runGoalAdoption`'s initial claim
+  transaction isn't covered by its own error logging, so a failure there would surface as an
+  uncaught executor-thread exception rather than through this app's structured `goal_adoption_failed`
+  log line.
+
+- **Bounded Public Profile reads and a lightweight author-card summary (v0.166.0).** Production
+  long connection holds of 63–142 seconds coincided with a DB-CPU pin and health-check failure;
+  the largest creator had 1,997 public notes, all previously hydrated with full content and Study
+  Pack quiz JSON on a profile request. SQL now sums copies, shares, and views across every public
+  note while only ranked candidates are hydrated. The author card on each public note requests a
+  three-field count-based summary instead of the full profile. Grouped full-catalog labels keep
+  Learning Focus accurate when ranked cards favor a different subject. The full response shape,
+  visitor display, profile ISR cache, and owner-only refetch gate stay the same. **Audited
+  (2026-10-07) by tracing every changed file and running the full affected test suites, including
+  the new `PublicProfilePostgresIntegrationTest`, which seeds 210 real notes with engineered ties
+  and explicitly asserts the hydrated candidates' own totals are LESS than the true aggregate — a
+  guard against a totals-computed-from-candidates regression, not just a passing count.** No
+  blocking defects found; the Learning Focus split (a second lightweight aggregate endpoint,
+  beyond what the originating prompt specified) was Codex's own catch of a real consequence of
+  bounding `publicNotes` — the existing Learning Focus sentence derived its course/subject labels
+  by iterating that list directly, which this fix would have silently narrowed to only the
+  ranked-candidate subset. **Correction, 2026-10-07, from a second cold falsification pass run
+  specifically on this fix (the release's own Planned Scope had called for one; it was skipped at
+  merge time in favor of a direct audit, a process gap caught and closed after the fact):** the
+  original "known limitation, not blocking" note below undersold a real finding. Splitting the
+  server-rendered profile page into two sequential fetches (profile, then Learning Focus)
+  introduced a genuine inter-request race that did not exist before — if an owner's profile
+  visibility toggled in the gap between the two calls, the second request would 403 and throw,
+  failing the whole page even though the first request had just succeeded. **Fixed same day:**
+  `frontend/lib/server-public-profiles.ts` now fires both requests before awaiting either (profile
+  fetch issued first, matching the existing test's call-order assertion; the Learning Focus
+  promise carries a no-op `.catch` so an unawaited rejection on the private/not-found branches
+  never surfaces as unhandled), closing the window to the same near-zero exposure the single-fetch
+  page always had. Two new tests pin this: one proves both fetches fire before either resolves,
+  one proves the private-profile branch cannot throw from the discarded focus promise. The same
+  pass also found a second, lower-severity item, left as a known limitation rather than fixed: the
+  hydrated candidates' SQL tie-break (`title collate "und-x-icu"`) is not provably identical to the
+  frontend's `.localeCompare()` tie-break (runtime-default locale, not pinned to root) — they could
+  disagree on accented or locale-sensitive titles. Theoretical, not observed in the 210-note test
+  fixture, not worth a fix on its own.
+- **PR #1475 — `v0.165.0` deploy-timestamp checkpoint record.** Merged into `releases/v0.166.0`
+  (`7933a96a`). Records Render live 2026-10-05T15:21:14Z / Vercel Production deployment success
+  15:24:27Z into the outage-fix `[CHECKPOINT]` row, starting its clock
+  (due `2026-10-12T15:24:27Z`) instead of leaving it "not yet measurable."
+- **PR #1476 — G2(a) title-leak finding + Applicable Programs root-cause correction.** Merged into
+  `releases/v0.166.0` (`63bd1d68`). Adds `docs/claude-findings/2026-10-06-g2a-title-subject-leak-partial-failure.md`
+  and the decision not to build a deterministic title strip (see Planned Scope above for the
+  measurement); corrects the ROADMAP Backlog row's "root-caused" wording on the five-Applicable-Programs
+  deviation to "plausible, not confirmed."
+- **Kickoff's overdue-`[CHECKPOINT]` sweep, read and closed (doc-only, no code change).** The kickoff's
+  own step-9 scan found 6 overdue (`due 2026-10-04`/`10-05`) and 3 due-today (`10-06`) checkpoint rows
+  in `ROADMAP.md`'s Backlog Index, all genuinely unactioned. All 9 read against production (read-only
+  SQL via `query_render_postgres`, Render app-log traces via `list_logs`, one owner-answered question
+  that isn't data-derivable) and written up in `ROADMAP.md` with results. **Two kill criteria FIRED and
+  are recorded plainly, not explained away:** (1) H5's coverage ratio FELL post-deploy (61.4% vs. the
+  68.2% pre-H5 baseline, n=228 — not underpowered) — H5 did not achieve its stated goal; bears on
+  whether H6 is worth scoping. (2) Additive-update apply uptake is 0.3% (1 of 367, against a healthy
+  44% offer rate, so not an "offer gap") — per the `v0.116.0` checkpoint's own kill criterion, Slices
+  4-5 (structural updates) must NOT be built on this mechanism. **One finding corrected same day:**
+  HikariCP `Apparent connection leak` traces are real and recurring, but pairing all 9 against their
+  `"...was returned to the pool (unleaked)"` lines confirms these are LONG HOLDS (63s–142s sampled),
+  not permanent leaks — the first pass's "criterion (ii) fires" was an overclaim (a leak trace's stack
+  shows where a connection was acquired, not what the request did afterward). None of the three
+  pre-stated kill criteria cleanly fits; recorded as such rather than forced into one. **Two confirmed
+  root causes found instead, both unbounded synchronous DB work, neither an LLM hold:**
+  `PublicProfileService.buildPublicProfile` loads every public note plus every full Study Pack for one
+  account with no limit (confirmed in production: the top account has 1,997 public notes), and
+  `NoteCollectionService.adoptGoal` copies a Goal's children sequentially under one shared connection
+  (confirmed: the largest production Goal has 571 notes), both amplified by `open-in-view=ON` +
+  `DELAYED_ACQUISITION_AND_HOLD`. Neither is "connections held across slow external calls," so
+  `v0.112.0`'s deferred Phase 3 (scoped to LLM-call transaction boundaries) does not address either —
+  that conclusion survives the correction; only its justification changed.
+  **Four re-dated** (populations still too small to read: Adaptive Practice proximal tier, combined-quiz
+  tip impressions, bulk-regen TEACHER allowance). **Two closed clean:** classification-authority-transfer
+  (zero-cohort, exactly as its own denominator clause predicted) and title-suggestion uptake (24.6% apply
+  rate — meaningful use, kill criterion does not fire, keep the card). **One closed on owner input:**
+  bulk-regen receipt TTL — no report of a lost receipt, no extension; a related owner question (does
+  bulk regeneration survive a restart/deploy mid-batch) was checked in code and confirmed already
+  correctly handled (`NoteBulkRegenerationReceiptService.getReceipt`'s `stale` flag plus the frontend's
+  explicit restart-explanation banner) — no gap, nothing built.

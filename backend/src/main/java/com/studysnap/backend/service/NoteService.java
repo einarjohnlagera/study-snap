@@ -66,6 +66,7 @@ import com.studysnap.backend.repository.NoteLibraryValueCountProjection;
 import com.studysnap.backend.repository.NoteRepository;
 import com.studysnap.backend.repository.NoteShareRepository;
 import com.studysnap.backend.repository.NoteStatusProjection;
+import com.studysnap.backend.repository.PublicLibraryRepository;
 import com.studysnap.backend.repository.PublicNoteLikeCountProjection;
 import com.studysnap.backend.repository.PublicLibraryFilterCriteria;
 import com.studysnap.backend.repository.PublicNoteLikeRepository;
@@ -932,9 +933,9 @@ public class NoteService {
      * anonymous at {@code /notes/public/discovery-sections} and it called the candidate query with
      * EMPTY criteria, so it loaded the entire public catalog unconditionally on every request.
      *
-     * <p>It now issues three bounded queries of six rows each. That is faithful to what it replaced:
-     * the Java version filtered the already-ranked list and then took six, and filtering before a
-     * limit is the same as excluding ids inside the query that produces the limit.
+     * <p>Featured and Popular now share one ranked statement, so the copies, likes, and views
+     * aggregates are each computed once per call (2026-10-14 DB memory-ceiling finding). Their
+     * eligibility, exclusion, and six-row caps stay in SQL. Recent uses its own bounded query.
      */
     @Transactional(readOnly = true)
     public PublicLibraryDiscoverySectionsResponse getPublicLibraryDiscoverySections(UUID viewerUserId) {
@@ -950,14 +951,14 @@ public class NoteService {
                 List.of()
         );
         OffsetDateTime rankedAt = OffsetDateTime.now();
-        List<UUID> featuredIds = findDiscoverySectionIds(
-                criteria, PublicLibrarySort.FEATURED, rankedAt, List.of());
-        List<UUID> popularIds = findDiscoverySectionIds(
-                criteria, PublicLibrarySort.POPULAR, rankedAt, featuredIds);
+        PublicLibraryRepository.DiscoveryRankedIds rankedSections = noteRepository
+                .findPublicLibraryFeaturedAndPopularIds(criteria, rankedAt, PUBLIC_DISCOVERY_SECTION_LIMIT);
+        List<UUID> featuredIds = rankedSections.featuredIds();
+        List<UUID> popularIds = rankedSections.popularIds();
         List<UUID> usedIds = new ArrayList<>(featuredIds);
         usedIds.addAll(popularIds);
         List<UUID> recentIds = findDiscoverySectionIds(
-                criteria, PublicLibrarySort.RECENT, rankedAt, usedIds);
+                criteria, rankedAt, usedIds);
 
         List<UUID> unionIds = java.util.stream.Stream.of(featuredIds, popularIds, recentIds)
                 .flatMap(List::stream)
@@ -982,13 +983,12 @@ public class NoteService {
 
     private List<UUID> findDiscoverySectionIds(
             PublicLibraryFilterCriteria criteria,
-            PublicLibrarySort sort,
             OffsetDateTime rankedAt,
             Collection<UUID> excludedNoteIds
     ) {
         return noteRepository.findPublicLibraryRankedPageIds(
                 criteria,
-                sort,
+                PublicLibrarySort.RECENT,
                 rankedAt,
                 excludedNoteIds,
                 0,
