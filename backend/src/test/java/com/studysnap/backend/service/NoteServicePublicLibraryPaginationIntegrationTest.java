@@ -15,9 +15,11 @@ import com.studysnap.backend.entity.StudyPackEntity;
 import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.entity.UserRole;
 import com.studysnap.backend.exception.InvalidPublicLibraryQueryException;
+import com.studysnap.backend.model.PublicLibrarySort;
 import com.studysnap.backend.repository.AnalyticsEventRepository;
 import com.studysnap.backend.repository.GeneratedQuizRepository;
 import com.studysnap.backend.repository.NoteRepository;
+import com.studysnap.backend.repository.PublicLibraryFilterCriteria;
 import com.studysnap.backend.repository.PublicNoteEventCountProjection;
 import com.studysnap.backend.repository.PublicNoteLikeCountProjection;
 import com.studysnap.backend.repository.PublicNoteLikeRepository;
@@ -649,6 +651,88 @@ class NoteServicePublicLibraryPaginationIntegrationTest {
         assertThat(popularIds).allMatch(allPublicNoteIds::contains);
         assertThat(recentIds).allMatch(allPublicNoteIds::contains)
                 .contains(boardOnly.getId().toString());
+    }
+
+    @Test
+    void rankedPageAndCountSqlRemainByteIdenticalForEveryPaginatedSort() throws Exception {
+        var criteria = new PublicLibraryFilterCriteria(
+                null, null, null, null, List.of(), null, null, null, false, List.of());
+        for (PublicLibrarySort sort : List.of(PublicLibrarySort.FEATURED, PublicLibrarySort.POPULAR,
+                PublicLibrarySort.RECOMMENDED, PublicLibrarySort.COPIED, PublicLibrarySort.VIEWS,
+                PublicLibrarySort.MOST_COPIED, PublicLibrarySort.RECENT)) {
+            SqlCaptureStatementInspector.clear();
+            noteRepository.findPublicLibraryRankedPageIds(criteria, sort, BASE_TIME, List.of(), 0, 6);
+            assertThat(SqlCaptureStatementInspector.statements().getLast())
+                    .isEqualTo(rankedSqlBaseline(sort, "page"));
+            SqlCaptureStatementInspector.clear();
+            noteRepository.countPublicLibraryRankedMatches(criteria, sort);
+            assertThat(SqlCaptureStatementInspector.statements().getLast())
+                    .isEqualTo(rankedSqlBaseline(sort, "count"));
+        }
+    }
+
+    private String rankedSqlBaseline(PublicLibrarySort sort, String kind) throws Exception {
+        String path = "/sql/public-library-ranked-baseline/" + sort.name() + "." + kind + ".sql";
+        try (var stream = getClass().getResourceAsStream(path)) {
+            assertThat(stream).as(path).isNotNull();
+            return new String(stream.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+        }
+    }
+
+    @Test
+    void discoveryRankedSectionsMatchTheExistingPageQueriesAfterFeaturedExclusion() {
+        UUID ownerId = insertUser("discoveryoracle", UserRole.USER);
+        List<NoteEntity> featured = new ArrayList<>();
+        for (int index = 0; index < 8; index++) {
+            NoteEntity note = saveNote(ownerId, "Oracle featured " + index, "Science", null,
+                    new String[]{"oracle"}, NoteStatus.GENERATED, NoteVisibility.PUBLIC,
+                    NoteTargetProfileType.STUDENT, index == 1 ? 1 : index + 1);
+            insertStudyPack(note, true);
+            // The first two have equal score and age, so the id tiebreak decides their order.
+            recordViews(note.getId(), index < 2 ? 30L : 24L + index);
+            featured.add(note);
+        }
+        insertCopies(featured.getFirst().getId(), ownerId, 10);
+        insertCopies(featured.get(1).getId(), ownerId, 10);
+        insertCopies(featured.get(4).getId(), ownerId, 3);
+        for (int index = 0; index < 7; index++) {
+            NoteEntity note = saveNote(ownerId, "Oracle popular " + index, "Science", null,
+                    new String[]{"oracle"}, NoteStatus.DRAFT, NoteVisibility.PUBLIC,
+                    NoteTargetProfileType.STUDENT, index + 20);
+            recordViews(note.getId(), 40L + index);
+        }
+        flushAndClear();
+        PublicLibraryFilterCriteria criteria = new PublicLibraryFilterCriteria(
+                null, null, null, null, List.of(), null, null, null, false, List.of());
+        OffsetDateTime rankedAt = OffsetDateTime.now();
+
+        var sections = noteRepository.findPublicLibraryFeaturedAndPopularIds(criteria, rankedAt, 6);
+        List<UUID> expectedFeatured = noteRepository.findPublicLibraryRankedPageIds(
+                criteria, PublicLibrarySort.FEATURED, rankedAt, List.of(), 0, 6);
+        List<UUID> expectedPopular = noteRepository.findPublicLibraryRankedPageIds(
+                criteria, PublicLibrarySort.POPULAR, rankedAt, expectedFeatured, 0, 6);
+
+        assertThat(featured).hasSizeGreaterThan(6);
+        assertThat(expectedFeatured).contains(featured.get(4).getId());
+        // The two tied notes lead Featured; which comes first is the database's id tiebreak, which the
+        // oracle comparison below pins. Do not sort UUIDs in Java here: UUID.compareTo is signed and
+        // does not match SQL uuid ordering, which made this assertion depend on the random ids.
+        assertThat(expectedFeatured.subList(0, 2))
+                .containsExactlyInAnyOrder(featured.getFirst().getId(), featured.get(1).getId());
+        assertThat(sections.featuredIds()).containsExactlyElementsOf(expectedFeatured);
+        assertThat(sections.popularIds()).containsExactlyElementsOf(expectedPopular);
+        assertThat(sections.popularIds()).hasSize(6);
+    }
+
+    @Test
+    void discoveryComputesEachEngagementAggregateOncePerCall() {
+        SqlCaptureStatementInspector.clear();
+        noteService.getPublicLibraryDiscoverySections(null);
+        String sql = String.join("\n", SqlCaptureStatementInspector.statements()).toLowerCase();
+
+        assertThat(sql.split("from analytics_events rank_view", -1)).hasSize(2);
+        assertThat(sql.split("from public_note_likes rank_like", -1)).hasSize(2);
+        assertThat(sql.split("from notes rank_copy_n", -1)).hasSize(2);
     }
 
     private PublicNoteListResponse page(

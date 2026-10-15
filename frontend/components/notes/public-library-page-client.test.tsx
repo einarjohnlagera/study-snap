@@ -1218,6 +1218,57 @@ describe("PublicLibraryPageClient", () => {
     });
   });
 
+  it("reuses loaded discovery sections after returning from a section view", async () => {
+    const featured = createPublicNote({ id: "featured-one", title: "Featured once" });
+    (listPublicNotes as jest.Mock).mockResolvedValue(publicNoteListResponse([featured]));
+    (listPublicLibraryDiscoverySections as jest.Mock).mockResolvedValue({ featured: [featured], popular: [], recent: [] });
+    const { rerender } = render(<PublicLibraryPageClient />);
+    expect(await screen.findByText("Featured once")).toBeInTheDocument();
+    await waitFor(() => expect(listPublicLibraryDiscoverySections).toHaveBeenCalledTimes(1));
+
+    currentSearch = "?view=featured";
+    rerender(<PublicLibraryPageClient />);
+    await waitFor(() => expect(listPublicNotes).toHaveBeenLastCalledWith(expect.objectContaining({ sort: "featured" })));
+    currentSearch = "";
+    rerender(<PublicLibraryPageClient />);
+    expect(await screen.findByText("Featured once")).toBeInTheDocument();
+    expect(listPublicLibraryDiscoverySections).toHaveBeenCalledTimes(1);
+  });
+
+  it("refetches on Retry after a discovery error and reuses the successful result", async () => {
+    const recovered = createPublicNote({ id: "recovered", title: "Recovered discovery" });
+    (listPublicNotes as jest.Mock).mockResolvedValue(publicNoteListResponse([recovered]));
+    (listPublicLibraryDiscoverySections as jest.Mock)
+      .mockRejectedValueOnce(new Error("Discovery unavailable"))
+      .mockResolvedValue({ featured: [recovered], popular: [], recent: [] });
+    const { rerender } = render(<PublicLibraryPageClient />);
+    expect(await screen.findByText("Could not load discovery sections")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    expect(await screen.findByText("Recovered discovery")).toBeInTheDocument();
+    expect(listPublicLibraryDiscoverySections).toHaveBeenCalledTimes(2);
+    currentSearch = "?view=featured";
+    rerender(<PublicLibraryPageClient />);
+    currentSearch = "";
+    rerender(<PublicLibraryPageClient />);
+    expect(listPublicLibraryDiscoverySections).toHaveBeenCalledTimes(2);
+  });
+
+  it("refetches when overview is revisited after a failed discovery load", async () => {
+    const recovered = createPublicNote({ id: "recovered", title: "Recovered overview" });
+    (listPublicNotes as jest.Mock).mockResolvedValue(publicNoteListResponse([recovered]));
+    (listPublicLibraryDiscoverySections as jest.Mock)
+      .mockRejectedValueOnce(new Error("Discovery unavailable"))
+      .mockResolvedValue({ featured: [recovered], popular: [], recent: [] });
+    const { rerender } = render(<PublicLibraryPageClient />);
+    expect(await screen.findByText("Could not load discovery sections")).toBeInTheDocument();
+    currentSearch = "?view=featured";
+    rerender(<PublicLibraryPageClient />);
+    currentSearch = "";
+    rerender(<PublicLibraryPageClient />);
+    expect(await screen.findByText("Recovered overview")).toBeInTheDocument();
+    expect(listPublicLibraryDiscoverySections).toHaveBeenCalledTimes(2);
+  });
+
   it("sources facet choices from the dedicated endpoints and prioritizes a recently chosen course", async () => {
     (listSubjects as jest.Mock).mockResolvedValue(["Server Subject"]);
     (listCoursePrograms as jest.Mock).mockResolvedValue([

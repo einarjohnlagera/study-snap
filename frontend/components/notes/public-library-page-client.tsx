@@ -546,6 +546,7 @@ export function PublicLibraryPageClient({
   const lastSyncedSearchRef = useRef<string | null>(null);
   const listRequestTokenRef = useRef(0);
   const discoveryRequestTokenRef = useRef(0);
+  const discoverySectionsLoadedRef = useRef(false);
   const [recentTags, setRecentTags] = useState<string[]>([]);
   const [recentSubjects, setRecentSubjects] = useState<string[]>([]);
   const [recentCoursePrograms, setRecentCoursePrograms] = useState<string[]>([]);
@@ -653,10 +654,12 @@ export function PublicLibraryPageClient({
       const response = await listPublicLibraryDiscoverySections();
       if (requestToken === discoveryRequestTokenRef.current) {
         setDiscoverySections(response);
+        discoverySectionsLoadedRef.current = true;
       }
     } catch (loadError) {
       if (requestToken === discoveryRequestTokenRef.current) {
         setDiscoverySections({ featured: [], popular: [], recent: [] });
+        discoverySectionsLoadedRef.current = false;
         setDiscoveryError(loadError instanceof Error ? loadError.message : "Could not load discovery sections.");
       }
     } finally {
@@ -668,7 +671,9 @@ export function PublicLibraryPageClient({
 
   useEffect(() => {
     if (isDiscoveryMode && activeDiscoveryView === null) {
-      void loadDiscoverySections();
+      if (!discoverySectionsLoadedRef.current) {
+        void loadDiscoverySections();
+      }
       return;
     }
     discoveryRequestTokenRef.current += 1;

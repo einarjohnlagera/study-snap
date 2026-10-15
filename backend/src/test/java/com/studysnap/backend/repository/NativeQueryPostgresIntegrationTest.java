@@ -2219,6 +2219,33 @@ class NativeQueryPostgresIntegrationTest {
         assertThat(withoutTopTwo).containsExactly(f.kilo(), f.golf(), f.hotel());
     }
 
+    @Test
+    void discoveryFeaturedAndPopularMatchExistingRankedPagesOnRealPostgresRows() {
+        RankingFixture fixture = seedRankingFixture("discovery-equivalence");
+        // Alpha and Bravo now tie on score at the top; copies breaks that tie.
+        UUID owner = seedUser("discovery-tie-owner");
+        seedNoteCopies(owner, fixture.alpha(), 8);
+        seedNoteViews(fixture.bravo(), 24);
+        for (UUID noteId : List.of(fixture.charlie(), fixture.hotel(), fixture.india(),
+                fixture.juliet(), fixture.kilo(), fixture.lima())) {
+            markFeaturedEligible(seedUser("discovery-pack-" + noteId), noteId, "Discovery pack");
+        }
+        PublicLibraryFilterCriteria criteria = publicRankingCriteria();
+        var sections = publicLibraryRepository.findPublicLibraryFeaturedAndPopularIds(
+                criteria, fixture.rankedAt(), 6);
+        List<UUID> expectedFeatured = publicLibraryRepository.findPublicLibraryRankedPageIds(
+                criteria, PublicLibrarySort.FEATURED, fixture.rankedAt(), List.of(), 0, 6);
+        List<UUID> expectedPopular = publicLibraryRepository.findPublicLibraryRankedPageIds(
+                criteria, PublicLibrarySort.POPULAR, fixture.rankedAt(), expectedFeatured, 0, 6);
+
+        assertThat(expectedFeatured).hasSize(6);
+        assertThat(expectedFeatured).contains(fixture.alpha(), fixture.bravo());
+        assertThat(expectedFeatured).containsSubsequence(fixture.alpha(), fixture.bravo());
+        assertThat(expectedFeatured).contains(fixture.lima());
+        assertThat(sections.featuredIds()).containsExactlyElementsOf(expectedFeatured);
+        assertThat(sections.popularIds()).containsExactlyElementsOf(expectedPopular);
+    }
+
     private List<UUID> rank(RankingFixture fixture, PublicLibrarySort sort) {
         return publicLibraryRepository.findPublicLibraryRankedPageIds(
                 publicRankingCriteria(), sort, fixture.rankedAt(), List.of(), 0, 50);

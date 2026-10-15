@@ -1,0 +1,1 @@
+select count(*) from notes n  where n.visibility = 'PUBLIC'
