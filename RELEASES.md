@@ -27,7 +27,7 @@ owner deferred it to this release on 2026-10-14.
 
 ### Planned Scope
 
-1. **Discovery ranking cache (backend, Tier H, Codex). `[with-Codex: feat/discovery-ranking-cache @ ../study-snap-item-discovery-ranking-cache]`**
+1. **Discovery ranking cache (backend, Tier H, Codex). ✅ Merged #1503 (`70fdd019`), 2026-10-15; see Shipped.**
    - **Tier N → H (2026-10-15, before the brief):** single-flight under concurrent load is the charter's concurrency trigger, and a waiter holding a JDBC connection under open-in-view would reproduce this method's own leak traces. A scoped cold falsification pass is owed at pre-signoff. Brief: `docs/codex-prompts/v0.173.0-discovery-ranking-cache.md` (no stale-on-error: `expireAfterWrite` 300 s keeps Product UX's bound).
    - Add Caffeine and cache the copies/likes/views aggregates behind
      `NoteService.getPublicLibraryDiscoverySections` for a short TTL (fix plan: 60–300 s).
@@ -83,7 +83,39 @@ Anti-drift:
 
 ### Shipped
 
-_(nothing yet)_
+1. **Explore discovery rankings cached for 300 s** — #1503 (`70fdd019`), Tier H.
+   - `PublicLibraryDiscoveryRankingCache` holds one viewer-independent snapshot of the Featured /
+     Popular / Recent id lists. It is a Caffeine `AsyncLoadingCache` (`:51-55`): the 300 s TTL counts
+     from completion, concurrent misses share one computation and its failure, and a failure is not
+     cached.
+   - The ranking runs on `discoveryRankingTaskExecutor` (`AppConfig.java:35`) in its own read-only
+     transaction. `NoteService.getPublicLibraryDiscoverySections` (`:940-942`) is `NOT_SUPPORTED`, so
+     waiting requests hold no JDBC connection.
+   - Card projections, counts, the `visibility = 'PUBLIC'` re-check and the viewer's liked state run on
+     every request. There is no early invalidation and no stale-on-error. Repository SQL, ranking
+     formulas, the pool and migrations are unchanged; the one new dependency is Caffeine 3.2.3, from
+     the Boot BOM.
+   - Instrumentation:
+     - `DISCOVERY_RANKING_CACHE computed` (INFO): `durationMs`, the three list sizes, cumulative
+       hits/misses/failures, and `shortSectionResponses`. The line emits; it appeared 13 times in the
+       full build.
+     - `DISCOVERY_RANKING_CACHE failed` (WARN).
+     - A request that joins a ranking still in flight counts as a **hit**: in a cold-start burst of 8,
+       7 show as hits.
+   - Verification:
+     - Full `./mvnw clean install` with Docker: 2,694 tests, 0 failures.
+     - `concurrentHttpDiscoveryWaitersDoNotHoldJdbcConnections` (real HTTP, 8 concurrent requests,
+       ≤1 active connection) fails with **9** when the method is reverted to `readOnly = true`. That
+       mutation was run by Release Implementor.
+     - `inFlightRankingSurvivesTtlAndExpiresFromCompletion` fails with 2 rankings under insertion-time
+       expiry. That mutation was run by Codex; the test was read by Release Implementor.
+     - Two defects in Codex pass 1 were confirmed and fixed in fix-1: the TTL started at insertion, and
+       the connection guard bypassed the real request path.
+   - **Known gaps:**
+     - No test asserts that `shortSectionResponses` rises.
+     - The HTTP test's identical-body check is trivial, because every section is stubbed empty.
+     - `future.join()` has no timeout. That is no worse than the previous per-request query.
+   - **Still owed at pre-signoff:** a scoped cold falsification pass (Tier H).
 
 ## v0.172.0 - Headroom
 
