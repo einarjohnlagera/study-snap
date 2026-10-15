@@ -27,16 +27,32 @@ owner deferred it to this release on 2026-10-14.
 
 ### Planned Scope
 
-1. **Discovery aggregate cache (backend, Tier N, Codex). `[queued]`**
+1. **Discovery ranking cache (backend, Tier H, Codex). `[with-Codex: feat/discovery-ranking-cache @ ../study-snap-item-discovery-ranking-cache]`**
+   - **Tier N → H (2026-10-15, before the brief):** single-flight under concurrent load is the charter's concurrency trigger, and a waiter holding a JDBC connection under open-in-view would reproduce this method's own leak traces. A scoped cold falsification pass is owed at pre-signoff. Brief: `docs/codex-prompts/v0.173.0-discovery-ranking-cache.md` (no stale-on-error: `expireAfterWrite` 300 s keeps Product UX's bound).
    - Add Caffeine and cache the copies/likes/views aggregates behind
      `NoteService.getPublicLibraryDiscoverySections` for a short TTL (fix plan: 60–300 s).
-   - **Open in the contract, to settle before the brief:**
-     - What is cached: the aggregate maps only, or the ranked id lists.
-     - The TTL value.
-     - Whether a copy or like invalidates the entry. Without it, a reload inside the TTL shows the
-       pre-copy count, a visible regression from what #1500 just fixed in-page.
-   - **Re-read before the brief, read-only:** the backend's `instance_count` (the plan's safety
-     argument is a single instance outside deploy windows; 2026-10-14 reading).
+   - **Product UX decision, 2026-10-15 (APPROVED with safeguards; consultation prompt
+     `docs/claude-plans/2026-10-15-discovery-cache-product-ux-consultation-prompt.md`):**
+     - **Cache the ranked id lists of all three sections (Featured, Most Popular, Recently Added) as
+       one coherent snapshot, TTL 300 s.** Existing ranking and exclusion semantics are preserved.
+       Card counts and the viewer's liked state stay live per request, and are never cached.
+     - **No early invalidation**: not on publish, unpublish, copy, like or view.
+     - **The per-request `visibility = 'PUBLIC'` re-check stays on every response, cache hits
+       included.** A private or deleted note drops out at once, even if a section then shows fewer
+       than 6 cards.
+     - No user-facing freshness notice, and no promise that publishing lands a note in Recently Added
+       (it orders by creation date, which this release must not change).
+     - **Safeguards to verify:** concurrent misses must not each run the ranking query
+       (single-flight). A failing refresh must not cause a retry storm. Cold-start, expiry and
+       failure behaviour must be tested under concurrency. No per-copy or per-like invalidation, and
+       no expensive per-request backfill.
+     - **Post-deploy:** compare the 7-day signal-9 count against the baseline of 9. Add bounded
+       instrumentation for ranking computations, hit/miss, refresh failures, ranking duration and
+       short (< 6) sections.
+     - **Why the copy-count concern is gone:** counts are loaded per request by
+       `NoteService.toListItems`, not by the ranking, so #1500's in-page freshness is unaffected.
+   - **Re-read 2026-10-15, read-only:** backend `numInstances` = 1 (Render `get_service`), so an
+     in-memory cache is consistent across visitors.
    - Guard (fix plan): a test asserting the aggregate computation runs at most once per TTL window
      across repeated `getPublicLibraryDiscoverySections` calls, plus a real-request test if any
      endpoint changes.

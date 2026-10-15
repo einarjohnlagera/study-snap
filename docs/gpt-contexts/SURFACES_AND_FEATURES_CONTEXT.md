@@ -2,7 +2,7 @@
 
 > **Module — not a standalone brief.** Paste `GPT_CONTEXT.md` first; this file assumes it.
 > Paste this module when the conversation is about **a specific screen or feature surface, Note Collections, or the Companion**.
-> Last updated: v0.170.0 - 2026-10-13 (In Progress). **`v0.170.0` shipped true multi-goal exam
+> Last updated: v0.173.0 - 2026-10-15 (In Progress). **Explore discovery overview (`/explore` and the anonymous `/public/library`):** three sections of 6 cards — ⭐ Featured Notes (engagement score with time decay), 🔥 Most Popular (engagement, excluding Featured), 🆕 Recently Added (newest by note creation date, excluding both). Since `v0.172.0`, returning to the overview reuses the loaded sections, and a copy made on the page bumps that card's copy count in place. **`v0.173.0` proposes caching the ranked section lists in backend memory for a short window**; card counts and the viewer's liked state stay live per request, and a note made private drops out immediately (the section shows 5 cards until the window expires). Product UX decided 2026-10-15: one snapshot of all three sections, 300-second window, no early refresh on publish/unpublish/copy/like, no user-facing freshness notice. *(previously v0.170.0)* - 2026-10-13 (In Progress). **`v0.170.0` shipped true multi-goal exam
 > support, overriding the "ONE exam goal"/"true multi-goal support stays explicitly deferred" lines
 > in the `v0.167.0` paragraph directly below** (owner override — the deferral's own "re-open past a
 > handful" trigger was never met; population stayed 2 of 426). A learner can now adopt SEVERAL exam
