@@ -304,6 +304,7 @@ So the full-test trigger did not fire, and Release Implementor ran **one Opus co
 **This is provisional, the same framing as D6's Opus default.** It rests on one controlled trial (n=1, see the trial note just below), on an item carrying a concurrency trigger.
 - **Revisit after the next 3–4 implementation runs made under this rule**, with the same cost/quality rubric as the trial, before treating it as a permanent default.
 - **Split that sample by trigger type:** migration / multi-system / shared-method on one side, brief-time Tier-H triggers on the other. Otherwise items carrying Tier-H triggers bias the result the way this n=1 sample already does.
+- **Record each run's quota cost against the headroom estimate (owner, 2026-10-15).** For every D10-triggered run, record its actual 5h-window and weekly `used_percent` change. Read it from the `~/.codex` rollout `rate_limits`, as in the trial. Compare it against the ~55–60% worst-week projection, so the revisit also answers whether that estimate holds under trigger-keyed scope. **If one week carries several D10-triggered runs, flag it to the owner immediately** rather than waiting for the 3–4-run revisit, because that is the risk the frequency correction raised.
 
 *The trial (2026-10-15, gpt-6-sol).* The `v0.173.0` discovery-ranking-cache brief ran twice: byte-identical text, same base `e9d0c4df`, high effort run alone, so the quota deltas are clean. The rubric and decision rule were written before the high output was read.
 
