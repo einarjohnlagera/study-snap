@@ -108,16 +108,10 @@ class OfficialChallengeQuizTemplateServiceTest {
         );
 
         assertThat(copied).containsExactly(source.getQuestion());
-        ArgumentCaptor<List<ChallengeQuizQuestionBankEntity>> saved = ArgumentCaptor.forClass(List.class);
-        verify(questionBankRepository).saveAll(saved.capture());
-        ChallengeQuizQuestionBankEntity copiedRow = saved.getValue().getFirst();
-        assertThat(copiedRow.getUserId()).isEqualTo(adopterId);
-        assertThat(copiedRow.getStudyPackId()).isEqualTo(adopterStudyPackId);
-        assertThat(copiedRow.getGenerationStamp()).isZero();
-        assertThat(copiedRow.getLearnerLevel()).isEqualTo(LearnerLevel.SENIOR_HIGH.name());
-        assertThat(copiedRow.getQuestion()).isEqualTo(source.getQuestion());
-        assertThat(copiedRow.getClaimedSessionId()).isEqualTo(sessionId);
-        assertThat(copiedRow.getLastKnownOutcome()).isEqualTo("UNANSWERED");
+        verify(questionBankRepository).insertIfAbsent(
+                any(), eq(adopterId), eq(adopterStudyPackId), eq(0L), eq(sessionId),
+                eq(source.getQuestionKey()), any(), eq(LearnerLevel.SENIOR_HIGH.name()),
+                eq("UNANSWERED"), eq(sessionId), any());
         verify(quizGenerationService, org.mockito.Mockito.never())
                 .generateChallengeQuiz(any(), any(), any(), any(), any(Integer.class), any(), any());
     }

@@ -206,7 +206,8 @@ class ChallengeQuizQuestionBankServiceTest {
         UUID userId = UUID.randomUUID();
         UUID studyPackId = UUID.randomUUID();
         UUID sessionId = UUID.randomUUID();
-        doThrow(new RuntimeException("connection reset")).when(questionBankRepository).saveAll(any());
+        doThrow(new RuntimeException("connection reset")).when(questionBankRepository).insertIfAbsent(
+                any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any());
         ChallengeQuizQuestionBankService service = new ChallengeQuizQuestionBankService(questionBankRepository);
 
         service.persistGeneratedQuestions(
@@ -215,7 +216,8 @@ class ChallengeQuizQuestionBankServiceTest {
                 )
         );
 
-        verify(questionBankRepository).saveAll(any());
+        verify(questionBankRepository).insertIfAbsent(
+                any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any());
         verifyNoMoreInteractions(questionBankRepository);
     }
 
@@ -235,14 +237,13 @@ class ChallengeQuizQuestionBankServiceTest {
                 userId, studyPackId, sessionId, LearnerLevel.SENIOR_HIGH, 0L, List.of(repeatedQuestion)
         );
 
-        ArgumentCaptor<Iterable<ChallengeQuizQuestionBankEntity>> entries = ArgumentCaptor.forClass(Iterable.class);
-        verify(questionBankRepository, times(2)).saveAll(entries.capture());
-        assertThat(entries.getAllValues())
-                .extracting(saved -> saved.iterator().next().getLearnerLevel())
-                .containsExactly(LearnerLevel.JUNIOR_HIGH.name(), LearnerLevel.SENIOR_HIGH.name());
-        assertThat(entries.getAllValues())
-                .extracting(saved -> saved.iterator().next().getGenerationStamp())
-                .containsExactly(0L, 0L);
+        ArgumentCaptor<String> levels = ArgumentCaptor.forClass(String.class);
+        verify(questionBankRepository, times(2)).insertIfAbsent(
+                any(), eq(userId), eq(studyPackId), eq(0L), eq(sessionId),
+                eq("same generated question"), any(), levels.capture(), eq("UNANSWERED"),
+                eq(sessionId), any());
+        assertThat(levels.getAllValues()).containsExactly(
+                LearnerLevel.JUNIOR_HIGH.name(), LearnerLevel.SENIOR_HIGH.name());
     }
 
     private ChallengeQuizQuestionBankEntity bankedQuestion(String questionText) {

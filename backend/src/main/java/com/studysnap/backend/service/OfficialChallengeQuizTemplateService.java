@@ -250,10 +250,16 @@ public class OfficialChallengeQuizTemplateService {
             }
             // Joins the CALLER's transaction — see ChallengeQuizQuestionBankService.persistGeneratedQuestions
             // for why the REQUIRES_NEW isolation attempted in v0.81.0 was reverted (FK to an uncommitted
-            // quick_review_sessions row). All-or-nothing is fine: the caller recomputes `shortfall` and
-            // generates fresh questions for the remainder.
+            // quick_review_sessions row). A duplicate bank row is skipped at insert while its
+            // question remains in this session's copiedQuestions list.
             try {
-                questionBankRepository.saveAll(copies);
+                for (ChallengeQuizQuestionBankEntity copy : copies) {
+                    if (ChallengeQuizQuestionBankInsert.insert(questionBankRepository, copy) == 0) {
+                        log.debug("Official Challenge template duplicate skipped for userId={}, studyPackId={}, keyPrefix={}",
+                                userId, callerStudyPackId,
+                                copy.getQuestionKey().substring(0, Math.min(24, copy.getQuestionKey().length())));
+                    }
+                }
             } catch (RuntimeException exception) {
                 log.warn("Official Challenge template copy failed for userId={}, studyPackId={}",
                         userId, callerStudyPackId, exception);
