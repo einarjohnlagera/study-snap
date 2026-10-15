@@ -2,8 +2,8 @@
 
 ## v0.172.0 - Headroom
 
-**Status: In Progress** (kicked off 2026-10-14, base branch `releases/v0.172.0`, cut from `main` after
-`v0.171.0` merged as #1497)
+**Status: Released** (signed off 2026-10-15 on `releases/v0.172.0`; kicked off 2026-10-14, cut from
+`main` after `v0.171.0` merged as #1497. PRs #1498, #1499, #1500.)
 
 Theme: stop the production database being pushed past its 268 MB memory ceiling. The cheapest
 already-diagnosed code legs land here: stop the Explore discovery sections computing the same
@@ -36,7 +36,8 @@ Both are made worse by a memory floor sitting within ~45 MB of the ceiling.
 ### Planned Scope
 
 1. **Discovery sections: compute the engagement aggregates once (Leg D, Option 1), and stop
-   re-fetching on tab switch (backend + frontend, Tier N, Codex). `[queued]`**
+   re-fetching on discovery-overview re-entry (backend + frontend, Tier H, Codex). `[shipped: #1498 4871be7e + follow-up #1500 fc7da866]`**
+   - **Re-tiered N → H (2026-10-15):** delivery introduced defects that this session then fixed, which is the charter's Tier H trigger. Pass 1 sorted the whole public catalog twice with ~2,437-byte rows (prod `EXPLAIN`, and Codex's own review). Pass 2 moved `n.content` into a 1,290-byte-wide hash join inside the ranking subquery (prod `EXPLAIN`). Pass 1's H2 oracle tie-check also sorted UUIDs in Java (signed `compareTo`), so it passed or failed depending on the random ids; Release Implementor rewrote that one assertion as `subList(0, 2).containsExactlyInAnyOrder(...)`. The oracle comparison itself is unchanged. A scoped cold falsification pass is owed at pre-signoff (it can be batched with item 2). The paginated listing's golden SQL files were verified against the pre-refactor code (`fcfae82b`) in a throwaway worktree.
    - **Backend.** `NoteService.getPublicLibraryDiscoverySections` (`NoteService.java:953-960`) runs
      the ranked query separately for `FEATURED` and `POPULAR`. Each run builds the
      `RANK_COPIES_JOIN`/`RANK_LIKES_JOIN`/`RANK_VIEWS_JOIN` aggregates from scratch
@@ -45,13 +46,26 @@ Both are made worse by a memory floor sitting within ~45 MB of the ceiling.
      returned IDs. Same results, same ordering, same thresholds.
    - **One scoring definition.** The paginated listing (`NoteService.java:829`, `:915`) keeps using
      the existing fragments, so there must be exactly one definition of the scoring formula.
-   - **Frontend.** `public-library-page-client.tsx:648-675` re-requests discovery sections on every
-     `activeDiscoveryView` change. Reuse the already-loaded response instead.
+   - **Frontend.** `public-library-page-client.tsx:648-675` re-requests discovery sections each time
+     discovery overview is re-entered (`?view=` round-trip, filter cleared; Explore only `hidden`-toggles the tab, so its tab switch does not remount). Reuse the already-loaded response instead.
    - **Guards.**
      - A test asserting the aggregate computation runs at most once per call.
      - The rewritten SQL covered by `NativeQueryPostgresIntegrationTest`.
      - A result-equivalence test against the old two-query output on seeded data.
-2. **Challenge `+5`: duplicate bank question no longer 500s (backend, Tier N, Codex). `[queued]`**
+2. **Challenge `+5`: duplicate bank question no longer 500s (backend, Tier N, Codex). `[shipped: #1499 89f4edad]`**
+   - **Audit (2026-10-15).** Both bank writers (`persistGeneratedQuestions`, which also serves
+     `seedTemplateAsync`, and `copyTemplateQuestions`) now go through one native
+     `insertIfAbsent … on conflict do nothing`. A skipped question is still served in its session but
+     is not banked or claimed for it. Real-PostgreSQL guards: same key twice at the same level, at a
+     NULL level and at a different level; a two-connection race; `+5` with a pre-existing duplicate;
+     bank rows present after start, `+5`, seed and copy; and a jsonb round-trip through the entity.
+     Removing `on conflict do nothing` fails three tests by name, including the end-to-end `+5` test.
+     Removing `flushAutomatically` fails nothing, so the start-path row-existence test guards the
+     outcome but does not prove the unflushed-session state was reproduced; the flag stays as a
+     harmless safeguard. The three claim queries gained `cast(:learnerLevel as string)`, which changes
+     no behaviour (verified by reverting it). It is needed only because `NativeQueryParameterTypingTest`
+     scans whole files and flags JPQL `:param is null` once a file holds a native query; narrowing
+     that lint is a follow-up. Full `./mvnw clean install` with Docker: 2685 tests, 0 failures.
    - **The defect.** `ChallengeQuizQuestionBankService` de-duplicates new bank rows only within the
      incoming batch (`:101-106`), never against rows already in the bank. A same-level repeat of
      `question_key` therefore hits `uq_challenge_quiz_question_bank_user_pack_key` and rolls back the
@@ -65,8 +79,13 @@ Both are made worse by a memory floor sitting within ~45 MB of the ceiling.
 
 **Owner action, outside the code release:** Leg B,
 `ALTER DATABASE notelib_db_prod SET max_parallel_workers_per_gather = 0;`. The statement, expected
-effect and verification are handed over in `docs/claude-plans/2026-10-14-db-leg-b-parallel-workers.sql`.
+effect and verification are handed over in `docs/claude-plans/done/2026-10-14-db-leg-b-parallel-workers.sql`.
 It only applies to new sessions, so it is fully live after the next deploy cycles the pool.
+**Applied by the owner 2026-10-15** (before ~03:04Z). Verified read-only at signoff (05:39Z):
+`pg_db_role_setting` holds `max_parallel_workers_per_gather=0` for `notelib_db_prod`, a new connection
+reads `0` (source `database`), and all 20 app connections opened at or after 05:14Z, after the `ALTER`.
+The owner's IntelliJ console kept reading `1` because its connection predated the `ALTER` and
+"detach session" reuses it.
 
 **Kill criterion, stated before any leg lands:** count `*terminated by signal 9*` lines on
 `dpg-d6tvb8fkijhs73fda4m0-a` over 7 days after the release deploys and Leg B is applied. **Baseline: 9.**
@@ -84,7 +103,79 @@ Anti-drift:
 
 ### Shipped
 
-_(nothing yet)_
+1. **Discovery sections compute the engagement aggregates once (Leg D), and stop re-fetching on
+   overview re-entry** — #1498 (`4871be7e`), Tier H.
+   - `PublicLibraryRepositoryImpl.findPublicLibraryFeaturedAndPopularIds` (`:314`) ranks Featured and
+     Popular in one statement. Each of the copies/likes/views aggregates appears once. A narrow
+     `featured_ids` CTE keeps `n.content`/`sp.summary`/`sp.quiz` in scan filters only. Each section
+     filters to eligible notes, then `ORDER BY … LIMIT`. Called from `NoteService.java:955`; RECENT
+     keeps its own query and still excludes both.
+   - One scoring definition, shared with the paginated listing via `rankedOrderKeys`/`rankScoreSql`.
+     14 golden files pin the paginated page/count SQL. The pin was verified against the pre-refactor
+     code.
+   - Prod `EXPLAIN` (read-only, planner estimate): old pair ~25,300 total cost, widest node 48 bytes;
+     final ~18,600, widest node 64 bytes. Two earlier Codex passes were rejected for wide sorts and
+     joins (see the re-tier note in Planned Scope).
+   - Frontend: `discoverySectionsLoadedRef` (`public-library-page-client.tsx:552`) reuses a successful
+     load across overview re-entry. Retry always fetches, and an error resets the flag.
+2. **Copy counts stay current on the reused overview** — #1500 (`fc7da866`), a follow-up to item 1
+   that the cold falsification pass found. Reusing the sections froze `copyCount` at first load.
+   `handleCopySuccess` (`public-library-page-client.tsx:774`) now adds one on the source card in the
+   browse list and all three sections. It skips a re-copy (the backend returns the existing copy) and
+   an owner's own copy, which is never counted. Copies recorded during the mount are merged over the
+   copied-notes load (`:510`), so an in-flight load cannot erase them. Each of the four guards is
+   mutation-checked against a named test.
+3. **Challenge bank duplicates are skipped at insert instead of returning HTTP 500** — #1499
+   (`89f4edad`).
+   - Both bank writers route through `ChallengeQuizQuestionBankRepository.insertIfAbsent`
+     (`:31`, `on conflict do nothing` at `:29`), called from `ChallengeQuizQuestionBankService.java:133`
+     and `OfficialChallengeQuizTemplateService.java:257`.
+   - A skipped question is still served but not banked or claimed for that session
+     (`challenge-quiz.md` "Per-user question bank").
+   - Real-PostgreSQL guards cover same, NULL and different level; a two-connection race; `+5` with a
+     pre-existing duplicate; rows persisted on every path; and a jsonb round-trip.
+
+**Pre-signoff pressure test: one scoped cold falsification agent (Opus), Tier H trigger.** Leg D's
+delivery introduced defects that the same session fixed. The agent tested 6 Leg D claims, 7 Item 2
+claims and 2 release-wide sweeps, using mutation testing in a throwaway worktree. **No code defect was
+found in either PR.** Confirmed findings and their disposition:
+- Frozen copy counts on the reused overview: **fixed in #1500**.
+- Stale Backlog rows (`v0.81.0` checkpoint, "Isolate Challenge bank writes properly"): **corrected in
+  this signoff**.
+- Two imprecise sentences in `challenge-quiz.md` (the seed path's transaction; the shortfall's dedup
+  scope): **corrected in this signoff**.
+- An unpinned flush flag and narrow golden coverage: recorded below.
+
+**Checkpoint:** `[CHECKPOINT — due 2026-10-22]` in `ROADMAP.md`'s Backlog Index carries the signal-9
+kill criterion (baseline 9 in 7 days).
+
+**Owner note, outside this release's scope:** the Official Challenge template seed for note
+`0c6b0be8-8b7d-41dc-9619-94cab1d52064` (pack `3deae879-…`) failed at 2026-10-13T03:32:35Z. A read-only
+log read at signoff traced it to an LLM output-validation failure: `AppException: Challenge quiz
+generation returned an invalid quiz format` from `validateGeneratedQuizItem`, after its one retry. It
+was **not** a duplicate-key violation, so it is not evidence against item 2 being latent. The pack has
+**0** bank rows and the note is `PUBLIC`, so the admin backfill seed will pick it up if re-run.
+
+### Known Limitations
+
+- **Shared-then-public copy count:** a learner who copied a note while it was privately shared, and
+  then copies it again after it goes public, reuses the old copy. That copy isn't counted publicly
+  (`copied_from_public = false`), but the card shows +1 until reload. Closing this needs the backend to
+  say whether a copy is new.
+- **`@Modifying(flushAutomatically = true)` on `insertIfAbsent` is not pinned by any test.** Removing it
+  fails nothing, most likely because Hibernate already flushes before native DML. The start-path test
+  proves bank rows land, but not that an unflushed session row was ever reproduced.
+- **The paginated golden files pin only the H2 dialect with empty criteria.** The PostgreSQL branch of
+  `rankScoreSql`, which #1498 edited, is unchanged by reading but not byte-pinned. Discovery's filter
+  parameters are oracle-tested on H2 only; production discovery always sends empty criteria.
+- **No end-to-end duplicate test on the start or template-copy paths.** They share `insertIfAbsent`
+  with the tested `+5` path, so they are covered by construction only.
+- **Non-duplicate bank write failures** (foreign-key, check-constraint or 512-character `question_key`
+  overflow) still poison the caller's transaction, as before.
+- **`NativeQueryParameterTypingTest` scans whole files**, so it flagged the JPQL `:learnerLevel is null`
+  in the bank repository once that file held a native query. The three claim queries now use
+  `cast(:learnerLevel as string)`, which is behaviour-neutral (verified on PG with a NULL level).
+  Narrowing the lint to native-query blocks is a follow-up.
 
 ## v0.171.0 - Checkout, Recovered
 
