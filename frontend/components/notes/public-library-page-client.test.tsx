@@ -19,6 +19,7 @@ const replaceMock = jest.fn();
 const pathnameMock = jest.fn();
 let currentSearch = "";
 let mobileSheetMatches = false;
+let mockSimulateCopySuccess = false;
 
 jest.mock("next/navigation", () => ({
   useRouter: () => ({
@@ -46,6 +47,27 @@ jest.mock("@/lib/api", () => ({
   togglePublicNoteLike: jest.fn(),
   trackAnalyticsEvent: jest.fn(),
 }));
+
+jest.mock("./public-library-copy-action", () => {
+  const ActualCopyAction = jest.requireActual("./public-library-copy-action").PublicLibraryCopyAction;
+  return {
+    PublicLibraryCopyAction: (props: {
+      noteId: string;
+      isOwner: boolean;
+      existingCopyNoteId?: string | null;
+      onCopySuccess: (payload: { copiedNoteId: string; studyPackStatus: "DRAFT" }) => void;
+    }) => mockSimulateCopySuccess ? (
+      <button
+        type="button"
+        data-existing-copy={props.existingCopyNoteId ?? ""}
+        data-is-owner={String(props.isOwner)}
+        onClick={() => props.onCopySuccess({ copiedNoteId: "copied-featured", studyPackStatus: "DRAFT" })}
+      >
+        Simulate copy success
+      </button>
+    ) : <ActualCopyAction {...props} />,
+  };
+});
 
 function createPublicNote(overrides: Record<string, unknown> = {}) {
   return {
@@ -142,6 +164,7 @@ describe("PublicLibraryPageClient", () => {
     currentAuthUser = { id: "user-1" };
     currentSearch = "";
     mobileSheetMatches = false;
+    mockSimulateCopySuccess = false;
     window.history.replaceState({}, "", "/public/library");
     (listNotes as jest.Mock).mockResolvedValue([]);
     (listPublicStudyPlans as jest.Mock).mockResolvedValue([]);
@@ -1232,6 +1255,100 @@ describe("PublicLibraryPageClient", () => {
     currentSearch = "";
     rerender(<PublicLibraryPageClient />);
     expect(await screen.findByText("Featured once")).toBeInTheDocument();
+    expect(listPublicLibraryDiscoverySections).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows a newly copied note's count on the reused overview without refetching discovery", async () => {
+    const featured = createPublicNote({ id: "featured-one", title: "Featured once", copyCount: 0 });
+    (listPublicNotes as jest.Mock).mockResolvedValue(publicNoteListResponse([featured]));
+    (listPublicLibraryDiscoverySections as jest.Mock).mockResolvedValue({ featured: [featured], popular: [], recent: [] });
+    (copyNote as jest.Mock).mockResolvedValue({ id: "copied-featured", studyPackStatus: "DRAFT" });
+    const { rerender } = render(<PublicLibraryPageClient />);
+    expect(await screen.findByText("Featured once")).toBeInTheDocument();
+    await waitFor(() => expect(listPublicLibraryDiscoverySections).toHaveBeenCalledTimes(1));
+
+    currentSearch = "?view=featured";
+    rerender(<PublicLibraryPageClient />);
+    await waitFor(() => expect(listPublicNotes).toHaveBeenLastCalledWith(expect.objectContaining({ sort: "featured" })));
+    fireEvent.click(await screen.findByRole("button", { name: "Add to Library" }));
+    expect(await screen.findByRole("dialog", { name: "Copied to your library" })).toBeInTheDocument();
+
+    currentSearch = "";
+    rerender(<PublicLibraryPageClient />);
+    expect(screen.getByRole("heading", { name: "⭐ Featured Notes" })).toBeInTheDocument();
+    expect(await screen.findByText("1 copy")).toBeInTheDocument();
+    expect(listPublicLibraryDiscoverySections).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not bump the count when the backend reuses an existing copy", async () => {
+    mockSimulateCopySuccess = true;
+    const featured = createPublicNote({ id: "featured-one", title: "Featured once", copyCount: 0 });
+    (listPublicNotes as jest.Mock).mockResolvedValue(publicNoteListResponse([featured]));
+    (listPublicLibraryDiscoverySections as jest.Mock).mockResolvedValue({ featured: [featured], popular: [], recent: [] });
+    (listNotes as jest.Mock).mockResolvedValue([createPublicNote({
+      id: "copied-featured",
+      copiedFromNoteId: "featured-one",
+      copiedFromPublic: true,
+    })]);
+    const { rerender } = render(<PublicLibraryPageClient />);
+    expect(await screen.findByText("Featured once")).toBeInTheDocument();
+    await waitFor(() => expect(listNotes).toHaveBeenCalledTimes(1));
+    currentSearch = "?view=featured";
+    rerender(<PublicLibraryPageClient />);
+    await waitFor(() => expect(listPublicNotes).toHaveBeenLastCalledWith(expect.objectContaining({ sort: "featured" })));
+    const repeatCopy = screen.getByRole("button", { name: "Simulate copy success" });
+    expect(repeatCopy).toHaveAttribute("data-existing-copy", "copied-featured");
+    fireEvent.click(repeatCopy);
+    currentSearch = "";
+    rerender(<PublicLibraryPageClient />);
+    expect(screen.queryByText("1 copy")).not.toBeInTheDocument();
+    expect(listPublicLibraryDiscoverySections).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps a copy made while copied notes are loading and does not count its repeat", async () => {
+    mockSimulateCopySuccess = true;
+    const copiedNotesLoad = deferred<ReturnType<typeof createPublicNote>[]>();
+    (listNotes as jest.Mock).mockReturnValue(copiedNotesLoad.promise);
+    const featured = createPublicNote({ id: "featured-one", title: "Featured once", copyCount: 0 });
+    (listPublicNotes as jest.Mock).mockResolvedValue(publicNoteListResponse([featured]));
+    (listPublicLibraryDiscoverySections as jest.Mock).mockResolvedValue({ featured: [featured], popular: [], recent: [] });
+
+    render(<PublicLibraryPageClient />);
+    const copyAction = await screen.findByRole("button", { name: "Simulate copy success" });
+    await waitFor(() => expect(listNotes).toHaveBeenCalledTimes(1));
+    expect(copyAction).toHaveAttribute("data-existing-copy", "");
+
+    fireEvent.click(copyAction);
+    expect(screen.getByText("1 copy")).toBeInTheDocument();
+    await act(async () => {
+      copiedNotesLoad.resolve([]);
+    });
+
+    const repeatCopy = screen.getByRole("button", { name: "Simulate copy success" });
+    expect(repeatCopy).toHaveAttribute("data-existing-copy", "copied-featured");
+    fireEvent.click(repeatCopy);
+    expect(screen.getByText("1 copy")).toBeInTheDocument();
+    expect(screen.queryByText("2 copies")).not.toBeInTheDocument();
+  });
+
+  it("does not bump the count for an owner copy", async () => {
+    mockSimulateCopySuccess = true;
+    const featured = createPublicNote({
+      id: "featured-one", title: "My featured note", ownerUserId: "user-1", isCurrentUser: true, copyCount: 0,
+    });
+    (listPublicNotes as jest.Mock).mockResolvedValue(publicNoteListResponse([featured]));
+    (listPublicLibraryDiscoverySections as jest.Mock).mockResolvedValue({ featured: [featured], popular: [], recent: [] });
+    const { rerender } = render(<PublicLibraryPageClient />);
+    expect(await screen.findByText("My featured note")).toBeInTheDocument();
+    currentSearch = "?view=featured";
+    rerender(<PublicLibraryPageClient />);
+    await waitFor(() => expect(listPublicNotes).toHaveBeenLastCalledWith(expect.objectContaining({ sort: "featured" })));
+    const ownerCopy = screen.getByRole("button", { name: "Simulate copy success" });
+    expect(ownerCopy).toHaveAttribute("data-is-owner", "true");
+    fireEvent.click(ownerCopy);
+    currentSearch = "";
+    rerender(<PublicLibraryPageClient />);
+    expect(screen.queryByText("1 copy")).not.toBeInTheDocument();
     expect(listPublicLibraryDiscoverySections).toHaveBeenCalledTimes(1);
   });
 

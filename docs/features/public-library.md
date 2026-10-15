@@ -112,6 +112,7 @@ Public Library has two display modes:
 **Discovery mode** (default, no active search/filters/sort changes):
 - the client consumes `GET /notes/public/discovery-sections`; the backend supplies up to six mutually exclusive notes per section
 - discovery sections are fetched once per page mount and reused when the overview is re-entered; Retry always refetches, and a failed load is retried on the next overview entry
+- after a new non-owner card copy succeeds, the source card's copy count increases in the loaded browse list and all discovery sections, so returning to the reused overview shows the count without another discovery request; an existing copy or an owner's own copy does not increase the public copy count
 - the backend ranks Featured and Popular in one statement, computing each copies, likes, and views engagement aggregate once per call; Recent keeps its separate bounded query
 - 🔥 Featured Notes — render the first 3 server-ranked study-ready notes by quality + engagement
 - 📈 Most Popular — render the first 5 server-ranked notes meeting the social-proof threshold (excluding Featured notes)
