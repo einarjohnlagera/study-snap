@@ -66,7 +66,6 @@ import com.studysnap.backend.repository.NoteLibraryValueCountProjection;
 import com.studysnap.backend.repository.NoteRepository;
 import com.studysnap.backend.repository.NoteShareRepository;
 import com.studysnap.backend.repository.NoteStatusProjection;
-import com.studysnap.backend.repository.PublicLibraryRepository;
 import com.studysnap.backend.repository.PublicNoteLikeCountProjection;
 import com.studysnap.backend.repository.PublicLibraryFilterCriteria;
 import com.studysnap.backend.repository.PublicNoteLikeRepository;
@@ -90,6 +89,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.annotation.Propagation;
 
 import java.time.Instant;
 import java.time.OffsetDateTime;
@@ -130,7 +130,6 @@ public class NoteService {
     private static final String ANALYTICS_METADATA_PREVIOUS_DOMAIN_CONTEXT = "previousDomainContext";
     private static final String ANALYTICS_AUTOMATIC_DOMAIN_NONE = "NONE";
     private static final String ANALYTICS_DOMAIN_CONTEXT_AUTOMATIC = "AUTOMATIC";
-    private static final int PUBLIC_DISCOVERY_SECTION_LIMIT = 6;
     /**
      * The ceiling on the unpaginated {@code /notes/public} shape. It matches the controller's own
      * {@code size} clamp, so a caller that passes {@code size} sees no change at all; what changes is
@@ -174,6 +173,7 @@ public class NoteService {
     private final CourseProgramCatalogRepository courseProgramCatalogRepository;
     private final StudyPackQuizMasteryService studyPackQuizMasteryService;
     private final StudyPackGenerationContextResolver studyPackGenerationContextResolver;
+    private final PublicLibraryDiscoveryRankingCache discoveryRankingCache;
 
 
     public NoteResponse create(UpsertNoteRequest request, UUID ownerUserId) {
@@ -933,32 +933,16 @@ public class NoteService {
      * anonymous at {@code /notes/public/discovery-sections} and it called the candidate query with
      * EMPTY criteria, so it loaded the entire public catalog unconditionally on every request.
      *
-     * <p>Featured and Popular now share one ranked statement, so the copies, likes, and views
-     * aggregates are each computed once per call (2026-10-14 DB memory-ceiling finding). Their
-     * eligibility, exclusion, and six-row caps stay in SQL. Recent uses its own bounded query.
+     * <p>Featured and Popular share one ranked statement in the cached computation. Their eligibility,
+     * exclusion, and six-row caps stay in SQL. Recent uses its own bounded query. The request waits
+     * before any enrichment query, outside the class-level transaction.
      */
-    @Transactional(readOnly = true)
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public PublicLibraryDiscoverySectionsResponse getPublicLibraryDiscoverySections(UUID viewerUserId) {
-        PublicLibraryFilterCriteria criteria = buildPublicLibraryFilterCriteria(
-                viewerUserId,
-                null,
-                null,
-                List.of(),
-                null,
-                null,
-                null,
-                false,
-                List.of()
-        );
-        OffsetDateTime rankedAt = OffsetDateTime.now();
-        PublicLibraryRepository.DiscoveryRankedIds rankedSections = noteRepository
-                .findPublicLibraryFeaturedAndPopularIds(criteria, rankedAt, PUBLIC_DISCOVERY_SECTION_LIMIT);
-        List<UUID> featuredIds = rankedSections.featuredIds();
-        List<UUID> popularIds = rankedSections.popularIds();
-        List<UUID> usedIds = new ArrayList<>(featuredIds);
-        usedIds.addAll(popularIds);
-        List<UUID> recentIds = findDiscoverySectionIds(
-                criteria, rankedAt, usedIds);
+        PublicLibraryDiscoveryRankingCache.Snapshot snapshot = discoveryRankingCache.get();
+        List<UUID> featuredIds = snapshot.featuredIds();
+        List<UUID> popularIds = snapshot.popularIds();
+        List<UUID> recentIds = snapshot.recentIds();
 
         List<UUID> unionIds = java.util.stream.Stream.of(featuredIds, popularIds, recentIds)
                 .flatMap(List::stream)
@@ -974,26 +958,11 @@ public class NoteService {
         );
         Map<String, NoteListItemResponse> enrichedById = enriched.stream()
                 .collect(Collectors.toMap(NoteListItemResponse::id, item -> item));
-        return new PublicLibraryDiscoverySectionsResponse(
-                enrichPublicRankingItems(featuredIds, enrichedById),
-                enrichPublicRankingItems(popularIds, enrichedById),
-                enrichPublicRankingItems(recentIds, enrichedById)
-        );
-    }
-
-    private List<UUID> findDiscoverySectionIds(
-            PublicLibraryFilterCriteria criteria,
-            OffsetDateTime rankedAt,
-            Collection<UUID> excludedNoteIds
-    ) {
-        return noteRepository.findPublicLibraryRankedPageIds(
-                criteria,
-                PublicLibrarySort.RECENT,
-                rankedAt,
-                excludedNoteIds,
-                0,
-                PUBLIC_DISCOVERY_SECTION_LIMIT
-        );
+        List<NoteListItemResponse> featured = enrichPublicRankingItems(featuredIds, enrichedById);
+        List<NoteListItemResponse> popular = enrichPublicRankingItems(popularIds, enrichedById);
+        List<NoteListItemResponse> recent = enrichPublicRankingItems(recentIds, enrichedById);
+        discoveryRankingCache.recordResponse(snapshot, featured.size(), popular.size(), recent.size());
+        return new PublicLibraryDiscoverySectionsResponse(featured, popular, recent);
     }
 
     @Transactional(readOnly = true)

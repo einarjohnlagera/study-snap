@@ -1,5 +1,6 @@
 package com.studysnap.backend.config;
 
+import com.github.benmanes.caffeine.cache.Ticker;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -24,6 +25,23 @@ public class AppConfig {
     private static final int ANALYTICS_SHUTDOWN_AWAIT_SECONDS = 20;
     private static final int NOTIFICATION_FAN_OUT_QUEUE_CAPACITY = 100;
     private static final int NOTIFICATION_FAN_OUT_SHUTDOWN_AWAIT_SECONDS = 20;
+
+    @Bean
+    public Ticker discoveryRankingTicker() {
+        return Ticker.systemTicker();
+    }
+
+    @Bean
+    public AsyncTaskExecutor discoveryRankingTaskExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setThreadNamePrefix("discovery-ranking-");
+        executor.setCorePoolSize(1);
+        executor.setMaxPoolSize(1);
+        executor.setQueueCapacity(16);
+        executor.setRejectedExecutionHandler(new ThreadPoolExecutor.AbortPolicy());
+        executor.initialize();
+        return executor;
+    }
 
     @Bean
     public PasswordEncoder passwordEncoder() {
