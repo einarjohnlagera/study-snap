@@ -111,11 +111,80 @@ Anti-drift:
        expiry. That mutation was run by Codex; the test was read by Release Implementor.
      - Two defects in Codex pass 1 were confirmed and fixed in fix-1: the TTL started at insertion, and
        the connection guard bypassed the real request path.
-   - **Known gaps:**
+   - **Known gaps (as merged in #1503; the first two are closed by item 2):**
      - No test asserts that `shortSectionResponses` rises.
      - The HTTP test's identical-body check is trivial, because every section is stubbed empty.
-     - `future.join()` has no timeout. That is no worse than the previous per-request query.
-   - **Still owed at pre-signoff:** a scoped cold falsification pass (Tier H).
+     - ~~`future.join()` has no timeout. That is no worse than the previous per-request query.~~
+       **Corrected 2026-10-16: this was wrong.** The old query failed alone. Here a stalled ranking left an
+       in-flight future that never expired, and every request pinned a Tomcat thread (25 total) on it.
+       Health checks starved, and Explore stayed frozen until restart. The cold pass found it (C8), and
+       item 2 fixes it.
+   - The Tier-H cold falsification pass (Opus, read-only) ran on 2026-10-15. It found no blockers;
+     its findings are resolved under item 2.
+
+2. **Stalled rankings bounded and the cache hardened** — #1504 (`ff555530`), Tier H, Codex at high
+   effort (D10).
+   - **C8 (stall):** the ranking transaction has a 50 s statement timeout
+     (`PublicLibraryDiscoveryRankingCache.java:40`, via `TransactionTemplate.setTimeout`). The loader
+     future has a 55 s `orTimeout` backstop (`:41`). Both are under the 60 s Hikari leak threshold.
+     - 50/55 rather than the 30/45 that was built: before `v0.172.0`, this endpoint held connections over
+       60 s three times during CPU spikes. A shorter cancel risks a cancel-and-retry loop with no backoff.
+       The owner chose this on 2026-10-16.
+     - A timed-out ranking is not cached, so the next request retries.
+   - **Rejection:** when the queue of 16 is full, the load fails at once and reports one failure, with
+     no orphan timer. A queued load whose future already timed out skips the ranking.
+   - **Accounting (both Codex-review P2s):**
+     - The success line and the `shortSectionResponses` reset happen only when `complete()` delivers
+       the snapshot.
+     - The counter is captured before publishing and added back if the snapshot is not delivered. That
+       last race can't be reproduced by a test, so this fix is unverified.
+     - Failures, including `Error`, are counted once per load.
+   - **Missing decorator:** `InFlightThreadRegisteringTaskDecorator` is now set on
+     `discoveryRankingTaskExecutor`, pinned by
+     `AppConfigTest.discoveryRankingExecutorIsBoundedAbortOnOverflowAndRegistered`.
+   - **C10 (test gaps):**
+     - The pagination fixture now has 7 notes, so a backfill would be detected, and it asserts
+       `shortSectionResponses`.
+     - The cold test is now `coldRequestsShareOneRanking`; its "no connection" half could not fail, so
+       that claim was dropped there and is left to the HTTP test.
+     - The HTTP test now sends one authenticated (JWT) request.
+   - The inert `invalidateAll` call in the pagination test was removed.
+   - **New tests:**
+     - `PublicLibraryDiscoveryTimeoutPostgresIntegrationTest.lockedNativeRankingIsCancelledServerSideAndNextRequestRetries`
+       (Docker): an `ACCESS EXCLUSIVE` lock on `notes` checks the server-side cancel, the worker being
+       released, and recovery after unlock.
+     - Unit tests for a late result after the wait timeout, a rejected submission, a timed-out queued
+       load, and a failure logged once.
+   - **Verification:**
+     - Full `./mvnw clean install` with Docker: 2,701 tests, 0 failures, at 30/45 and again at 50/55.
+     - Mutations run by Release Implementor:
+       - Removing the transaction timeout fails the lock test at "each caller sees PostgreSQL
+         cancellation before the 5 s backstop".
+       - Removing both bounds now fails in about 7 s. Before fix-1, the test hung instead.
+       - Removing `readOnly` gives 9 connections against 1 in the HTTP test.
+     - Codex killed the complete-guard, rejection-handling and decorator mutations.
+   - **D10 cost (gpt-6-sol), as 5h-window / weekly `used_percent`:**
+
+     | Run | Effort | 5h window | Weekly |
+     |---|---|---|---|
+     | Hardening pass | high | 49→72 | 8→11 |
+     | Review | medium | +2 | 11→12 |
+     | Fix-1 | high | 0→7 (after the 5h reset) | 12→13 |
+
+     That is two D10 runs this week on one item, and the owner was told.
+   - **Known limitations (cold-pass notes, not fixed):**
+     - **A dead socket can't be cancelled.** The worker stays stuck until restart. Each request fails
+       after 55 s, and requests fail at once once the queue of 16 fills. Tomcat threads stay free, so
+       health checks don't restart the service, but Explore is down until restart.
+     - **C2:** for a few microseconds after a failed ranking, a request can join the failed future.
+       Retries have no backoff.
+     - **C7 (log emitters):**
+       - One failure also emits Caffeine's own WARNING and one `unhandled_exception` ERROR per waiting
+         request. Count failures from `DISCOVERY_RANKING_CACHE failed` only.
+       - Joining an in-flight ranking counts as a hit.
+       - `shortSectionResponses` resets after each delivered computation.
+     - The HTTP test's identical-body check is still trivial.
+     - **C11:** the doc-wording notes were folded into `docs/features/public-library.md`.
 
 ## v0.172.0 - Headroom
 
