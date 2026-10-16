@@ -212,6 +212,124 @@ whoever eventually briefs the implementation.
    blocks the migration itself, but the second could mean the routing fix's real surface is wider than
    `study_packs` alone.
 
+## Owner decisions received (2026-10-16, relayed by Release Manager) — findings on the two assigned side
+issues, plus the two open proposals
+
+Owner decided: release-size split not yet approved (restated to owner separately); $10 benchmark cap
+approved (read-only, no production writes, execution plan confirmed with owner before spend); Sol runs at
+its documented default reasoning effort, measured then tuned; **decision #4 is a hybrid, not plain option
+(c):** official NoteLib curation uses Sol with its own cost cap/monitoring and must **not** depend only on
+subscription tier, while personal generation stays FREE→Luna / Plus,Pro→Sol; curated content stays
+reusable (no repeat generation calls, i.e., keep the existing copy-is-free-of-tokens behavior). v0.173.0
+stays unchanged; v0.174.0 kicks off after v0.173.0 signoff (10-22 merge gate).
+
+Two side issues were assigned back to this session, "before implementation scope is final." Both closed
+by code-reading alone — no further production read was needed for either.
+
+### 5a — What `model_tier` means, settled from code, not data
+
+**`model_tier` reflects the plan of whoever performed the StudyPack row's most recent generation action
+(initial create, or a later explicit regeneration) — never the copier's plan at copy time, and never
+recomputed afterward except by another explicit regeneration.** Two code paths are the *only* ways this
+field is ever set, confirmed exhaustively:
+- **Copy path** (`NoteService.copySourceStudyPack`, `:438-467`): clones `modelTier`/`modelUsed`
+  **verbatim** from the source (`:460-461`). A copy, by itself, can never change `model_tier` — the two
+  must always match unless something else touched the row afterward.
+- **Generate-or-regenerate path** (`StudyPackService.java:690-724`, the shared save method both initial
+  generation and in-place regeneration funnel through): looks up the **existing** entity by `noteId` if
+  one exists (`:697-699` — this is what makes it "regenerate in place" rather than "create new"), then
+  unconditionally recomputes `entity.setModelTier(...)` from the **current caller's** `planType` (`:721`).
+
+**This resolves the 34-row anomaly without touching any historical data:** since the copy path cannot
+produce a tier mismatch by construction, every one of the 34 `PREMIUM`-source/`FREE`-tagged copies must
+have gone through an explicit regeneration by its (FREE-plan) copying user after the copy was made — the
+Versioning rule in `CLAUDE.md` permits exactly this ("Regeneration... updates the existing Study Pack
+in-place"). **These 34 rows are not a defect and need no correction** — they correctly record that a
+FREE-plan user explicitly regenerated their own copy and got FREE-tier content, which is working as
+designed. Optional, non-blocking cross-check if anyone wants independent confirmation: these 34 rows
+should show real `input_tokens`/`output_tokens` (evidence of an actual LLM call), unlike an untouched copy
+which Prod Investigator already confirmed carries none.
+
+### 5b — Challenge Quiz and exam-pool generation: CONFIRMED to bypass the tier-aware resolver, and the
+surface is much wider than previously scoped
+
+**Every quiz-content generation method in `OpenAiLlmStudyPackService` is FREE-only today, except Interview
+Practice's question half and Companion generation.** Traced every public method on the
+`LlmStudyPackService` interface to its model resolver call:
+
+| Method | Resolver called | Tier-aware? |
+|---|---|---|
+| `generateStudyPackOnce` (initial Study Pack + quiz, `:288`) | `requireConfiguredModel()` (FREE) | **No** — the already-known bug |
+| `regenerateSummaryOnce` (`:231`) | FREE | **No** |
+| `generateNoteFromTopicOnce` (`:251`) | FREE | **No** |
+| `generateQuickReviewStudyTip` (`:1793`) | FREE | **No** (low stakes — a text tip, not a quiz question) |
+| `generateAdaptivePracticeQuiz` (`:1832`) | FREE | **No** |
+| `generateChallengeQuiz` / `generateMoreChallengeQuiz` (`:1906`, `:1937`, via `generateChallengeQuizWithSchema` `:2273`) | FREE | **No** |
+| `generateBoardExamQuiz` (`:1966`) | FREE | **No** |
+| `generateLongExam` / `generateLongExamParallel` (`:1995`, `:2013`+) | FREE | **No** |
+| `generateTeacherQuiz` (`:2144`) | FREE | **No** |
+| `generateCompanion` (`:273`) | `requireConfiguredPremiumModel()` | Yes (hardcoded premium, no branch needed) |
+| `generateInterviewPracticeQuiz` (question generation, `:1860`) | Premium | Yes (hardcoded — correct because Interview Practice is itself a gated paid-only `Feature`, so every caller already qualifies) |
+| `generateInterviewCritique` (`:1880`) | `requireConfiguredCritiqueModel()` | Separate CRITIQUE slot, not PREMIUM — not in scope for the FREE/PREMIUM question |
+
+**None of the eight FREE-only methods above take a tier/plan parameter in their signature at all** — this
+isn't a wrong branch, it's an absent one, same shape as the original `generateStudyPackOnce` finding, just
+present at nine call sites instead of one. `ExamQuestionPoolService` (writes `exam_question_pool`,
+answering the "is exam-pool generation plan-tiered the same way" question directly: **yes, the same way —
+i.e., not tiered at all**) and `ChallengeQuizService` both route through this same
+`QuizGenerationService` → `LlmStudyPackService` chain; `QuizGenerationService` itself only branches on a
+mock-mode flag for local dev, never on tier.
+
+**Scope consequence, stated plainly per your request to include this in the proposed scope:** fixing the
+PREMIUM-routing bug is not a one-method patch. It means adding a tier (or resolved-model) parameter to the
+`LlmStudyPackService` interface and threading it through all nine FREE-only call sites and their callers
+(`StudyPackService` ×4 already identified, `AdminStudyPackTransactionHelper`, `ChallengeQuizService`,
+`ExamQuestionPoolService`, `QuickReviewAdaptivePracticeService`, `OfficialChallengeQuizTemplateService`,
+`LongExamService`) — a real interface change with regression-test surface across every quiz mode, not a
+single-file fix. This reinforces the release-size challenge above rather than changing its recommended
+split: the fix still belongs in v0.174.0 (it's the reason the release exists), but it is bigger than the
+original Backlog row implied, and should be sized as such when the Codex brief is written.
+
+### Curation-identification proposal (your open ask)
+
+**Recommend: a role check, narrower than the existing `CuratorAuthoringPredicate.isCurator()`.** That
+predicate already exists and is already used for curated-authoring permissions
+(`NoteService`/`NoteGenerationService`/`NoteBulkGenerationService`), defined as `user.getRole() ==
+UserRole.ADMIN || user.getProfileType() == ProfileType.TEACHER` (with an onboarding guard). **Reusing it
+unmodified for Sol-routing would be wrong**, not just imprecise: it would route every `TEACHER`-profile
+account's personal note authoring to Sol too, regardless of payment — a real teacher using NoteLib for
+their own class is not "official NoteLib curation," and routing that whole population to Sol by default
+reopens exactly the uncontrolled-cost risk decision #4 exists to prevent. **Recommend keying the
+curation-routing check on `UserRole.ADMIN` alone, not the full `isCurator()` predicate** — this is a field
+already being read today, requires no new abstraction, and matches the actual observed pattern exactly
+(100% of the public catalog traces to the one `ADMIN` account). Leave `isCurator()` itself untouched for
+its existing authoring-permission purpose; this is a second, narrower, independent check at the
+model-resolution point only.
+
+**A sharper alternative, if the owner wants the check tied to the content rather than the account:** key
+off the same curated-authoring code path already gated by `isTeacherOrAdmin`/`curator` in
+`NoteService`/`NoteBulkGenerationService` (i.e., an explicit flag set only on the bulk/curated-authoring
+entry points), rather than inferring "this is curation" from the account's role at generation time. This
+is more precise — it survives the owner's `ADMIN` account ever being used for something non-curation —
+but is a larger change (a new parameter threaded through, not a read of an existing field). Recommend
+starting with the `ADMIN`-role check as the v0.174.0 MVP, since it is simpler and already matches reality,
+and revisiting only if the account's usage pattern ever diverges from "this account = curation."
+
+### Curation cost-cap shape proposal (owner sets the value)
+
+**No dollar-cost ledger exists anywhere in production today** (confirmed in the 2026-10-15 read:
+`study_packs.estimated_cost` is NULL on every row and nothing populates it). A hard pre-generation quota
+gate would need that ledger built first — real scope, not a config flag. **Recommend starting with
+monitoring, not a hard block:** a scheduled read-only computation (reusing the `input_tokens`/
+`output_tokens` columns already on every row, no new write) that sums the `ADMIN` account's Sol-tagged
+generation cost for the current month against an owner-set dollar threshold, and alerts (not blocks) when
+crossed — curation is an owner-initiated, supervised process, not a live end-user path, so a hard cutoff
+mid-curation-run is more disruptive than useful at this stage. A hard block can be added later if
+monitoring shows it's actually needed. This leaves end-user Plus/Pro usage on its existing
+`FeatureGateService`/`UserUsageEntity` quota mechanism, completely unchanged — this proposal only adds a
+new monitoring read for the one `ADMIN`-routed cost stream, not a new billing control (consistent with
+tightened plan §8's "recommend cost caps... but do not implement new billing controls without approval").
+
 ## Handoff
 
 **Complete and ready for Release Implementor.** The blocking production read landed 2026-10-16
