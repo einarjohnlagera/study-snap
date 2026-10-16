@@ -55,6 +55,18 @@ the admin account's subscription tier, all before `gpt-4.1` retires on 2027-01-1
      model **regardless of its plan** (owner, 2026-10-16). Do NOT use
      `CuratorAuthoringPredicate.isCurator()`: it also matches TEACHER profiles and would route
      teachers' personal notes to Sol.
+   - **Two separate checks, one destination (Feature Planner, 2026-10-16):** Plus/Pro reach the
+     premium model through the plan tier; ADMIN curation reaches it through its own `UserRole.ADMIN`
+     check.
+     - Do not fold curation into a shared `ModelTier` value. `model_tier` stays as it is:
+       `planType.isPaid()` at `StudyPackService.java:721`, which is `PLUS || PRO` only
+       (`PlanType.java:8-10`).
+     - So the admin's non-billable PRO grant is already tagged `PREMIUM` today. That is why 98% of
+       rows carry the tag.
+     - Item 4's monitor therefore identifies curation by the owner account's role plus
+       `model_used`, never by `model_tier`.
+     - The role check is what keeps curation on the premium model if the admin account's plan ever
+       changes.
    - **Tier H triggers:**
      - per-generation cost (money semantics);
      - a shared-method change across 7 services;
