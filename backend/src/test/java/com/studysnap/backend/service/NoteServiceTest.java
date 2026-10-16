@@ -150,7 +150,8 @@ class NoteServiceTest {
                 noteCollectionItemRepository,
                 courseProgramCatalogRepository,
                 studyPackQuizMasteryService,
-                studyPackGenerationContextResolver
+                studyPackGenerationContextResolver,
+                org.mockito.Mockito.mock(com.studysnap.backend.service.PublicLibraryDiscoveryRankingCache.class)
         );
         lenient().when(noteCollectionItemRepository.findOfficialReviewSetRootForNote(any(), any()))
                 .thenReturn(java.util.Optional.empty());

@@ -1,6 +1,6 @@
 # RELEASES_ARCHIVE.md — NoteLib
 
-Archived sections of `RELEASES.md`. **Contents are NOT one contiguous range:** `v0.41.0`–`v0.120.0`, plus `v0.126.0` (moved at the `v0.132.0` kickoff), `v0.127.0` (moved at the `v0.133.0` kickoff) `v0.128.0` (moved at the `v0.134.0` kickoff) `v0.129.0` (moved at the `v0.135.0` kickoff) `v0.130.0` (moved at the `v0.136.0` kickoff) `v0.131.0` (moved at the `v0.137.0` kickoff) `v0.132.0` (moved at the `v0.138.0` kickoff) `v0.133.0` (moved at the `v0.139.0` kickoff), `v0.134.0` (moved at the `v0.140.0` kickoff), `v0.135.0` (moved at the `v0.141.0` kickoff), `v0.136.0` (moved at the `v0.142.0` kickoff), `v0.137.0` (moved at the `v0.143.0` kickoff), `v0.138.0` (moved at the `v0.144.0` kickoff), `v0.139.0` (moved at the `v0.145.0` kickoff), `v0.140.0` (moved at the `v0.146.0` kickoff), `v0.141.0` (moved at the `v0.147.0` kickoff), `v0.142.0` (moved at the `v0.148.0` kickoff), `v0.143.0` (moved at the `v0.149.0` kickoff), `v0.144.0` (moved at the `v0.150.0` kickoff), `v0.145.0` (moved at the `v0.151.0` kickoff), `v0.146.0` (moved at the `v0.152.0` kickoff), `v0.147.0` (moved at the `v0.153.0` kickoff), `v0.148.0` (moved at the `v0.154.0` kickoff), `v0.149.0` (moved at the `v0.155.0` kickoff), `v0.150.0` (moved at the `v0.156.0` signoff — the first time this archive check ran at signoff rather than kickoff, since v0.156.0 folded two releases' worth of scope into one and crossed the cap without an intervening kickoff) and `v0.151.0` (moved at the `v0.157.0` kickoff) and `v0.152.0` (moved at the `v0.158.0` kickoff) and `v0.153.0` and `v0.154.0` (moved at the `v0.159.0` and `v0.160.0` kickoffs; earlier passes did not extend this line) and `v0.155.0` (moved at the `v0.161.0` kickoff) and `v0.156.0` (moved at the `v0.162.0` kickoff) and `v0.157.0` (moved at the `v0.163.0` kickoff) and `v0.158.0` (moved at the `v0.164.0` kickoff) and `v0.159.0` (moved at the `v0.165.0` kickoff) and `v0.160.0` (moved at the `v0.166.0` kickoff) and `v0.161.0` (moved at the `v0.167.0` kickoff) and `v0.164.0` (moved at the `v0.170.0` kickoff) and `v0.165.0` (moved at the `v0.171.0` kickoff) and `v0.166.0` (moved at the `v0.172.0` kickoff) as the live file crossed its *current + last five* cap. Each version's own `## vX.Y.Z` heading is the index — search for it. `v0.40.1` and earlier moved here
+Archived sections of `RELEASES.md`. **Contents are NOT one contiguous range:** `v0.41.0`–`v0.120.0`, plus `v0.126.0` (moved at the `v0.132.0` kickoff), `v0.127.0` (moved at the `v0.133.0` kickoff) `v0.128.0` (moved at the `v0.134.0` kickoff) `v0.129.0` (moved at the `v0.135.0` kickoff) `v0.130.0` (moved at the `v0.136.0` kickoff) `v0.131.0` (moved at the `v0.137.0` kickoff) `v0.132.0` (moved at the `v0.138.0` kickoff) `v0.133.0` (moved at the `v0.139.0` kickoff), `v0.134.0` (moved at the `v0.140.0` kickoff), `v0.135.0` (moved at the `v0.141.0` kickoff), `v0.136.0` (moved at the `v0.142.0` kickoff), `v0.137.0` (moved at the `v0.143.0` kickoff), `v0.138.0` (moved at the `v0.144.0` kickoff), `v0.139.0` (moved at the `v0.145.0` kickoff), `v0.140.0` (moved at the `v0.146.0` kickoff), `v0.141.0` (moved at the `v0.147.0` kickoff), `v0.142.0` (moved at the `v0.148.0` kickoff), `v0.143.0` (moved at the `v0.149.0` kickoff), `v0.144.0` (moved at the `v0.150.0` kickoff), `v0.145.0` (moved at the `v0.151.0` kickoff), `v0.146.0` (moved at the `v0.152.0` kickoff), `v0.147.0` (moved at the `v0.153.0` kickoff), `v0.148.0` (moved at the `v0.154.0` kickoff), `v0.149.0` (moved at the `v0.155.0` kickoff), `v0.150.0` (moved at the `v0.156.0` signoff — the first time this archive check ran at signoff rather than kickoff, since v0.156.0 folded two releases' worth of scope into one and crossed the cap without an intervening kickoff) and `v0.151.0` (moved at the `v0.157.0` kickoff) and `v0.152.0` (moved at the `v0.158.0` kickoff) and `v0.153.0` and `v0.154.0` (moved at the `v0.159.0` and `v0.160.0` kickoffs; earlier passes did not extend this line) and `v0.155.0` (moved at the `v0.161.0` kickoff) and `v0.156.0` (moved at the `v0.162.0` kickoff) and `v0.157.0` (moved at the `v0.163.0` kickoff) and `v0.158.0` (moved at the `v0.164.0` kickoff) and `v0.159.0` (moved at the `v0.165.0` kickoff) and `v0.160.0` (moved at the `v0.166.0` kickoff) and `v0.161.0` (moved at the `v0.167.0` kickoff) and `v0.164.0` (moved at the `v0.170.0` kickoff) and `v0.165.0` (moved at the `v0.171.0` kickoff) and `v0.166.0` (moved at the `v0.172.0` kickoff) and `v0.167.0` (moved at the `v0.173.0` kickoff) as the live file crossed its *current + last five* cap. Each version's own `## vX.Y.Z` heading is the index — search for it. `v0.40.1` and earlier moved here
 2026-07-10; **`v0.41.0` through `v0.120.0` moved here 2026-09-07** in the `v0.126.0` pass, which
 resumed this convention after it had lapsed for 85 releases — `RELEASES.md` had reached 116
 sections against its documented design of *current + last few versions*. Both passes are MOVES,
@@ -22274,3 +22274,192 @@ shape is known.
   bulk regeneration survive a restart/deploy mid-batch) was checked in code and confirmed already
   correctly handled (`NoteBulkRegenerationReceiptService.getReceipt`'s `stale` flag plus the frontend's
   explicit restart-explanation banner) — no gap, nothing built.
+
+## v0.167.0 - Study Journey Purpose
+
+**Status: Released** (signed off 2026-10-08; commits `22584379`/`1dd1c80c` on `releases/v0.167.0`)
+
+Theme: activate the parked "Study Journey Purpose / Learner Goal" architecture discovery, resolve
+its Q1 ("what problem are we solving"), and implement the chosen scope. **Started as investigation-only
+per the discovery brief's §14** (`docs/claude-plans/study-journey-purpose-learner-goal-discovery-brief.md`)
+— **scope expanded in place, owner decision 2026-10-08, after the investigation (§11, all 12 questions)
+completed and the owner picked Q1's scope.** The brief's blanket "no implementation" constraint is
+superseded for exactly the scope named below; everything else in §14 (no certification/role catalog,
+no `ProfileType` change, no recommendation-engine change, no BSCS backfill) still holds.
+
+### Investigation phase (complete)
+
+Worked the brief's §11 open questions in order, as a companion decision file
+(`docs/claude-plans/study-journey-purpose-learner-goal-discovery-decision.md`), corrected and
+re-verified across several passes (see that file's own §0a and the git history on this branch for
+the full trail). Found the brief's own premise partially stale (`UserEntity.studyGoal` and
+`course_programs.exam_goal_slug` already persisted crude versions of both concepts), found a
+genuine presentation gap (Journey terminology keyed to viewer `ProfileType`, never to the Journey
+itself), and left Q1 to the owner with three evidenced candidate scopes.
+
+### Implementation phase — Q1 resolved as Candidate A + B (+ Civil Engineering), owner decision 2026-10-08
+
+**A second verification pass, done before any implementation, recalibrated both candidates** —
+smaller and better-evidenced than the decision doc's speculative Q12 sizing in both cases:
+
+- **Candidate A is a labeling fix, not a mode-selection fix.** `getAvailableExamModes` proves
+  `EXAM_MODES.md`'s Audience & Profile-Type Mapping table is load-bearing: Board Exam Mode is never
+  offered as a tile to a non-Board-Taker profile. Letting `resolvePlanPremiumExamMode` (the terminal
+  CTA on a collection page) override viewer profile with Journey nature would route a viewer toward
+  a mode their own profile-gated screen doesn't list — a real contract violation, not a risk.
+  **`resolvePlanPremiumExamMode` and `EXAM_MODES.md` are explicitly OUT of scope.** Only
+  `getCollectionLabels` (terminology) changes, resolved server-side from a collection's root
+  ancestor's `courseProgram` → `course_programs.exam_goal_slug`, gated additionally on the root's
+  own `learner_level = BOARD_EXAM_REVIEW` (a concrete guard against the future collision Q11 left
+  open — two roots sharing one `courseProgram` with different purposes). Page-chrome labels
+  (`navLabel`, empty states) stay viewer-keyed; only per-collection nouns become Journey-aware.
+- **Candidate B's real gap is smaller than "single-valuedness."** Production read: only **2 users**
+  have adopted roots spanning ≥2 distinct `exam_goal_slug`s — building multi-goal infrastructure
+  now would ship ahead of its evidence. `docs/features/profile.md:97-99` documents the EXAM/SUBJECT
+  split as intentional (not a bug). What's actually missing: no UI lets a learner deliberately
+  choose or switch their exam goal — the only paths are Profile's "Clear" and the dashboard banner's
+  single auto-suggestion; "Change" is documented to redirect into editing `focusSubjects` instead.
+  **Fix: add a constrained exam-goal combobox (reusing the existing `SuggestionCombobox`/
+  `CourseProgramCombobox` pattern, `allowCustom=false` per this repo's taxonomy-field rule) wired to
+  the existing `updateStudyGoal` endpoint — no new column, no migration.** True multi-goal support
+  is explicitly deferred, not silently dropped: re-open only if the ≥2-distinct-exam-goal population
+  grows past a handful.
+- **Civil Engineering fold-in (owner-confirmed, 2026-10-08):** widen `course_programs.exam_goal_slug`'s
+  `CHECK` constraint to include `'ce'`, seed it onto the existing Civil Engineering row, add it to
+  `ExamGoalConfig.java` and the new exam-goal combobox's options. The one piece of this release that
+  needs a migration.
+
+Shipped implementation:
+
+- **A:** Collection detail, Goal detail, and summary responses now carry the exam slug resolved from the root collection's program and `BOARD_EXAM_REVIEW` level. Collection nouns show ALE, PNLE, LET, CPALE, or CELE Review Set terminology across profiles; library chrome stays profile-keyed.
+- **B:** Profile's Study Focus now offers a constrained exam picker alongside Change and Clear. It lists the server's valid exam definitions, allows switching, and clears subject focus when a goal is saved.
+- **CE:** V154 widens the catalog constraint and assigns `ce` to Civil Engineering, with a row-count guard. `ExamGoalConfig` names CELE and includes it in valid slugs. The optional Exam Hub page was deferred because it creates a new public SEO surface.
+
+Anti-drift for the implementation phase: additive only — no change to `ProfileType`, no
+recommendation-engine change, no certification/role catalog beyond the single `'ce'` slug, no
+backfill of existing Study Journeys' presentation, no touch to `resolvePlanPremiumExamMode`/
+`EXAM_MODES.md`. New DTO fields are additive (old clients ignore them; no field removed or renamed).
+
+**Delivery:** Codex-routed per `CLAUDE.md`'s task-routing table (new backend service logic +
+multi-system frontend/backend change). Claude Code designed the scope above and will write the
+Codex prompt; Codex implements; `/audit-diff` runs on the diff before commit.
+
+**Verification tier:** one scoped cold falsification agent on the diff (not the full three-agent
+tier — no money/quota/permission surface is touched, per `CLAUDE.md`'s gate), plus a real-request
+(`MockMvc`) test for the new/changed DTO fields, plus the standing Postgres migration harness for
+the Civil Engineering `CHECK`-constraint change.
+
+**Falsification pass results (2026-10-08, cold agent, 10 claims checked against live code, not the
+commit message):** all 10 confirmed — both audit fixes (privacy, N+1), the collision-guard test,
+the page-chrome/per-collection-noun split, the `EXAM_MODES.md`/`exam-mode-visibility.ts` exclusion
+(empty diff, verified), mutual-exclusivity in both directions, real transport-level tests for every
+new file, feature-doc accuracy, and 327 backend + 39 frontend tests passing. **Nothing found that
+blocks signoff.** Three non-blocking follow-ups logged rather than silently dropped:
+- No direct unit test pins `resolveWithoutInheritance` against a collection that itself has a
+  non-null `parentCollectionId` (currently only exercised indirectly via a parentless collection,
+  equivalent in effect, not in intent-signaling). Low priority — add if this area is touched again.
+- No test exercises `resolve()`'s cross-owner defensive branch (fails closed, currently
+  dead-from-a-coverage-perspective).
+- `NativeQueryPostgresIntegrationTest`'s V154 migration test was verified by reading source only in
+  this pass (the falsification run used `-Dnativequery.pg.skip=true`); it was run earlier in this
+  session with Docker and passed, but wasn't re-run live in the same pass as the other 9 claims.
+- Candidate B's "only 2 production users" figure is a production-state claim from the discovery
+  phase, not re-verified in this pass — same decay risk as any other prod-state claim per
+  `CLAUDE.md`; re-check before relying on it further rather than assuming it still holds.
+
+### Shipped
+
+- **Study Journey Purpose / Learner Goal — §11 question pass (2026-10-07/08).** Worked all 12 of
+  the discovery brief's §11 open questions, in order, as a companion decision file:
+  `docs/claude-plans/study-journey-purpose-learner-goal-discovery-decision.md`. Found and corrected
+  a stale half of the brief's own "premise verified against current code" line: `UserEntity.studyGoal` and
+  `course_programs.exam_goal_slug` already persist crude, shipped versions of Learner Goal and
+  Target Credential at the profile/catalog grain — the brief's "nothing already represents either
+  concept" claim held only at the Note/Collection grain it checked. Found a concrete,
+  code-reproducible gap (not a bug — Journey terminology and the terminal exam-mode CTA are keyed
+  solely to the viewer's `ProfileType`, never to the Journey itself, and catalog adoption is
+  verified unrestricted by profile), but confirmed the quiz-mode half of that gap sits against a
+  **locked** contract (`EXAM_MODES.md`'s audience-by-profile mapping), so any fix there is a product
+  decision, not a cheap rewire. Q1 (which problem to solve) is explicitly left to the owner with 3
+  evidenced candidate scopes, not picked unilaterally. One empirical question (whether published
+  Journeys sharing a `courseProgram` are already distinguishable without new metadata) is blocked on
+  a production read — Render MCP `CONNECT_TIMEOUT` all session — and left open rather than guessed.
+  `ROADMAP.md`'s Backlog Index row for the brief (`:701`) updated to summarize these findings and
+  point at the new decision file.
+- **Six `[CHECKPOINT — due 2026-10-07]` ROADMAP rows read** (the handoff note's count of five was
+  itself wrong — one row, the shared-quiz-promotion checkpoint, was missing from its list). One closed on its own kill criterion (archive
+  convention: `RELEASES.md` at 6 sections, `CLAUDE.md`'s `Current version:` block at 1,304 chars,
+  neither regrown — **but note `CLAUDE.md`'s total file size, 50,177 chars, remains over the
+  checkpoint's separate ~45,000-char observation**, unrelated to the kill criterion itself). One
+  partially advanced with a code-only finding (`generation_failure_reason` write path confirmed
+  live via `StudyPackService.java:1316-1338`, prod count still unread). The remaining four
+  (announcement fan-out pool saturation, `/notes/public` re-saturation, SEO `sort=recent`
+  engagement, shared-quiz promotion floor) are genuinely production-only reads and are marked
+  blocked rather than guessed at; none had their `Last reviewed` date advanced.
+- **Render MCP reconnected, 2026-10-08 — every blocked read above was run.** All read-only
+  `SELECT`s via `mcp__render__query_render_postgres` (self-wrapped in a read-only transaction) plus
+  two Render platform reads (`get_metrics`, `list_logs`); no write made or considered.
+  - **Study Journey Purpose's Q11 production read: RESOLVED (corrected once after an advisor pass
+    caught that `published_at IS NOT NULL` alone isn't "official root" — any user can publish their
+    own collection; re-run with an `owner.role` join).** Every published, curator-owned
+    (`role=ADMIN`) `courseProgram` root in production is the only one for its program today — no
+    academic/licensure-prep collision exists yet, so `courseProgram`/`exam_goal_slug` currently
+    disambiguates, though this is a point-in-time fact (it breaks the day a program publishes a
+    second root), not a structural guarantee. Sharper finding, also corrected once: Civil
+    Engineering's curator-owned, 2-adopter official root ("🏗️ CELE Comprehensive Review") has
+    `exam_goal_slug IS NULL` — but the goal-nudge *filter* itself still works for it via the
+    free-text fallback (checked against `ProgressReportService.filterGoalStudyPacks:446-448`); the
+    real gap is narrower — no Exam Hub discovery page, and `GOAL_TYPE_SUBJECT` framing instead of
+    the recognized-exam `GOAL_TYPE_EXAM` framing on the dashboard goal card. Decision file and
+    `ROADMAP.md:701` updated accordingly.
+  - **Announcement pool-starve checkpoint:** 419 active users (197 max in one `profile_type`), only
+    1 non-DRAFT announcement ever. Falls in the kill criterion's 200-500 advisory band, not a clean
+    pass — re-dated to `2026-11-07` (this pass's own judgment call on cadence) with interim guidance
+    to publish large announcements off-peak.
+  - **Failure-reason column checkpoint: CLOSED.** 9 notes carry a failure code (2 distinct codes),
+    and all 9 now sit at `status = GENERATED` while still carrying their failure reason — the
+    retry-survival guard this column exists for is confirmed in production.
+  - **`/notes/public` pool-saturation checkpoint: SUPERSEDED, not a clean close.** Postgres
+    `active_connections` holding flat at 20-22 for 30 days is uninformative (HikariCP keeps
+    `maximumPoolSize` connections open regardless of load). `list_logs` for the literal Hikari
+    phrase `"Connection leak detection"` (timed out once, succeeded on retry) found zero matches
+    2026-09-09 → 2026-10-01 and exactly two on 2026-10-04, neither naming `/notes/public`. Checked
+    whether these two (both resolving to `NoteCollectionService.adoptGoal`) were a bystander effect
+    of `/notes/public` DB saturation rather than their own thing: the existing incident's own
+    fingerprint (the same note's `PUBLIC_NOTE_VIEWED` ≥3 times inside either hold window) and
+    `server_failed`/`server_restarted` events both came back empty for that evening — negative on
+    both, so folded as a dated data point into the pool-exhaustion row's already-open
+    "connections held on unidentified blocking I/O" question (`ROADMAP.md`'s 2026-09-18 row)
+    rather than opened as a new finding. **But this row's own narrow instrument still cannot close
+    its real question: `/notes/public` saturation DID recur inside this same 30-day window** — 24
+    restarts since 2026-09-01, diagnosed 2026-10-01, fixed as `v0.165.0` Leg B — through DB CPU
+    exhaustion on an unbounded ranked-branch fan-out. A leak-detection trace names where a
+    connection was *acquired*, not what actually saturated the database, so it can't reliably
+    attribute a DB-wide slowdown to any one path either way. Superseded by the Leg B row and its
+    own post-fix checkpoint (clock from 2026-10-05), not an independent pass.
+  - **SEO `sort=recent` checkpoint: CLOSED, no material fall.** `PUBLIC_NOTE_VIEWED`/`pathType=seo`
+    (56,444 all-time, 32,037 in the last 30 days) shows no drop around the deploy week and both full
+    weeks after it are higher than any week before — though the deploy week itself (1,991) and the
+    week right after (6,476) bracket a lower week in between (2,838), so "grew every week" overstates
+    it; the honest read is "no material fall," not uninterrupted growth — a raw traffic count, not a
+    controlled comparison, but the kill criterion's own metric shows no fall.
+  - **Shared-quiz promotion-floor checkpoint: applied as written — promoted, floor unmet, hands to
+    an owner decision, not reclassified.** 1 share link from 1 generator against a 20-link/5-generator
+    floor; that one link was created 2026-09-05, a day *before* the promoting tip shipped (`v0.122.0`,
+    2026-09-06), so there have been zero links since promotion; the 1,245 tip impressions are 7
+    distinct users (6 learners, 1 admin), not 1,245 people — and 1,245 ÷ 7 ≈ 178 firings per user for
+    a tip documented as one-time, recorded as a separate over-firing observation, not fixed. An
+    earlier draft of this read reclassified the unmet floor as "not really promoted" to avoid the
+    owner-decision branch; withdrawn as fitting the criterion to the data after the fact. The row now
+    states the facts (near-zero reach, zero post-promotion links) and leaves the call to the owner.
+  - **`INACTIVITY` retention-email checkpoint (separately tracked, `due 2026-10-08`): RE-DATED to
+    `2026-11-23`, not a kill-criterion fire.** Went through two wrong conclusions before landing on
+    the right one, kept in the row as the record: first read all-time `email_log` (5,003 sent, 0
+    clicked) and read it as the kill criterion firing; corrected after an advisor pass to check
+    whether click tracking was globally broken (it wasn't — `DUE_CONCEPTS_DIGEST` recorded real
+    clicks, confirmed via `email_log` and `email_open_daily_counts`); corrected again on finding the
+    actual error — tracking is Stage 1a instrumentation (`V149`, installed 2026-09-24), not
+    `INACTIVITY`'s lifetime history, and re-anchored to that deploy, `INACTIVITY` sent only 537 (not
+    5,003) with 0 clicks, meeting neither leg of the row's own 30-click-or-2,000-send floor. An
+    unmet floor is a re-date per the row's own rule, not a verdict either way — re-dated to the
+    doctrine's own pre-specified 60-day backstop from the `V149` deploy, not a fresh interval.
