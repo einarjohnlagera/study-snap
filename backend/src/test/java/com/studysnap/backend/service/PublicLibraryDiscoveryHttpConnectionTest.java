@@ -4,6 +4,11 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.studysnap.backend.repository.NoteRepository;
 import com.studysnap.backend.repository.PublicLibraryRepository;
+import com.studysnap.backend.repository.UserRepository;
+import com.studysnap.backend.entity.UserEntity;
+import com.studysnap.backend.entity.UserRole;
+import com.studysnap.backend.entity.UserStatus;
+import com.studysnap.backend.security.JwtService;
 import com.zaxxer.hikari.HikariDataSource;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -16,6 +21,8 @@ import org.springframework.web.client.RestClient;
 
 import java.time.Duration;
 import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -39,7 +46,9 @@ class PublicLibraryDiscoveryHttpConnectionTest {
     @Autowired private PublicLibraryDiscoveryRankingCache cache;
     @Autowired private ObjectMapper objectMapper;
     @Autowired private JdbcTemplate jdbcTemplate;
+    @Autowired private JwtService jwtService;
     @MockitoSpyBean private NoteRepository noteRepository;
+    @MockitoSpyBean private UserRepository userRepository;
 
     @Test
     void concurrentHttpDiscoveryWaitersDoNotHoldJdbcConnections() throws Exception {
@@ -55,20 +64,35 @@ class PublicLibraryDiscoveryHttpConnectionTest {
         doReturn(List.of()).when(noteRepository)
                 .findPublicLibraryRankedPageIds(any(), any(), any(), any(), anyInt(), anyInt());
         doReturn(List.of()).when(noteRepository).findPublicLibraryListItemProjectionsByIdIn(any());
+        UserEntity viewer = new UserEntity();
+        viewer.setId(UUID.randomUUID());
+        viewer.setRole(UserRole.USER);
+        viewer.setStatus(UserStatus.ACTIVE);
+        viewer.setTokenVersion(0);
+        doAnswer(invocation -> {
+            jdbcTemplate.queryForObject("select 1", Integer.class);
+            return Optional.of(viewer);
+        }).when(userRepository).findById(viewer.getId());
+        String accessToken = jwtService.generateAccessToken(viewer);
         RestClient client = RestClient.create("http://localhost:" + port);
         try (ExecutorService callers = Executors.newFixedThreadPool(CALLERS)) {
+            long hitsBefore = cache.stats().hitCount();
             List<CompletableFuture<ResponseEntity<String>>> responses = java.util.stream.IntStream.range(0, CALLERS)
-                    .mapToObj(index -> CompletableFuture.supplyAsync(() -> client.get()
-                            .uri("/api/notes/public/discovery-sections")
-                            .retrieve().toEntity(String.class), callers))
+                    .mapToObj(index -> CompletableFuture.supplyAsync(() -> {
+                        var request = client.get().uri("/api/notes/public/discovery-sections");
+                        if (index == 0) {
+                            request.header("Authorization", "Bearer " + accessToken);
+                        }
+                        return request.retrieve().toEntity(String.class);
+                    }, callers))
                     .toList();
             try {
                 assertThat(rankingEntered.await(10, TimeUnit.SECONDS)).isTrue();
                 long deadline = System.nanoTime() + Duration.ofSeconds(10).toNanos();
-                while (cache.stats().hitCount() < CALLERS - 1 && System.nanoTime() < deadline) {
+                while (cache.stats().hitCount() - hitsBefore < CALLERS - 1 && System.nanoTime() < deadline) {
                     Thread.onSpinWait();
                 }
-                assertThat(cache.stats().hitCount()).isGreaterThanOrEqualTo(CALLERS - 1);
+                assertThat(cache.stats().hitCount() - hitsBefore).isGreaterThanOrEqualTo(CALLERS - 1);
                 assertThat(dataSource.getHikariPoolMXBean().getActiveConnections())
                         .as("Only the ranking worker may hold a connection while HTTP requests wait")
                         .isEqualTo(1);
@@ -91,6 +115,7 @@ class PublicLibraryDiscoveryHttpConnectionTest {
             });
             assertThat(bodies).containsOnly(bodies.getFirst());
             verify(noteRepository, times(1)).findPublicLibraryFeaturedAndPopularIds(any(), any(), anyInt());
+            verify(userRepository, times(1)).findById(viewer.getId());
         } finally {
             cache.invalidateAll();
         }
