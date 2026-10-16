@@ -2,7 +2,7 @@
 
 ## v0.173.0 - Cached Catalog
 
-**Status: In Progress** (kicked off 2026-10-15 on `releases/v0.173.0`, cut from `docs/v0.172.0-deploy-stamp`
+**Status: Released** (signed off 2026-10-16; **merge to `main` HELD for the 2026-10-22 gate, so NOT yet deployed**. Kicked off 2026-10-15 on `releases/v0.173.0`, cut from `docs/v0.172.0-deploy-stamp`
 (`3961383e`), which is `main` after `v0.172.0` merged as #1501 plus one docs commit.)
 
 Theme: take the remaining repeat load off the production database's Explore discovery reads by
@@ -213,6 +213,40 @@ Anti-drift:
      had no sessions.
    - Not repaired, by design: the APGAR, percentage-tax and grain-size candidates were re-derived as
      correctly keyed (false positives).
+
+### Signoff (2026-10-16)
+
+- **Signed off ahead of the merge, owner decision 2026-10-16**, so `v0.174.0` can be cut from this
+  branch. The merge gate is unchanged: the release PR merges to `main` only after the
+  `[CHECKPOINT — due 2026-10-22]` signal-9 read (by 2026-10-29 at the latest). If that read shows
+  ≥ 5 kills, the owner decides whether this release still ships, and any change made here is merged
+  forward into `v0.174.0`.
+- **Interim reads at signoff (read-only, NOT the verdict):**
+  - 0 `terminated by signal 9` lines from 2026-10-15T07:09:09Z to 2026-10-16T03:14Z. The filter was
+    checked against the known 07:08:54Z kill.
+  - 1 `Apparent connection leak` trace since the `v0.172.0` deploy: 2026-10-15T14:25:32Z on
+    `PublicProfileController.getByUsername`, returned to the pool about 70 s after acquire. That is a
+    `v0.166.0` method, not discovery, and is recorded on its checkpoint row.
+- **Scope completeness:**
+  - Item 1 shipped: #1503 plus the #1504 hardening, file:line anchors under Shipped.
+  - Item 2 shipped: the carried deploy-time stamp `3961383e` is on this branch.
+  - Item 3 is an owner action, done and verified.
+  - Nothing was planned and left unbuilt.
+- **Pressure test:** one scoped cold falsification agent (Opus, read-only), Tier H for concurrency.
+  It found no blockers; every finding is fixed or listed as a known limitation under item 2.
+- **Feature-doc drift:** `docs/features/public-library.md`'s cache paragraph was re-read against the
+  final `PublicLibraryDiscoveryRankingCache`. These all match:
+  - the 50 s / 55 s bounds (`:40-41`);
+  - a failure is not cached;
+  - immediate rejection when the queue is full;
+  - no viewer id;
+  - no backfill;
+  - the log and counter semantics.
+- **Backlog:**
+  - The "Production DB memory ceiling" and discovery long-hold `[DECISION]` rows are updated: cache
+    built, deploy held.
+  - The `v0.166.0` Hikari checkpoint row carries the `getByUsername` recurrence.
+  - A new `[CHECKPOINT]` row covers the cache itself, dated from its deploy.
 
 ## v0.172.0 - Headroom
 
