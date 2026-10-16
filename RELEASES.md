@@ -186,6 +186,34 @@ Anti-drift:
      - The HTTP test's identical-body check is still trivial.
      - **C11:** the doc-wording notes were folded into `docs/features/public-library.md`.
 
+3. **Owner action: four residual pre-H4 answer-key defects repaired in `study_packs.quiz`** — 2026-10-16,
+   run by the owner with psql.
+   - Source: `docs/claude-findings/2026-10-15-quiz-quality-retention-llm-cost-production-read.md` §2
+     (Feature Planner / Prod Investigator).
+   - Script: `docs/claude-plans/done/2026-10-16-study-packs-residual-answer-key-defects-repair-tightened.sql`.
+     It is the Release Implementor's tightened copy of the Prod Investigator's
+     `done/2026-10-15-…-repair.sql`. It adds a question-text match (D3's choices are generic), keeps array
+     order (`WITH ORDINALITY … ORDER BY`), and runs as one transaction with checks that abort it.
+     Before production, it was tested in a throwaway local Postgres, with a decoy question sharing
+     D3's choices and wrong index.
+   - Corrections:
+     - D1 audit detection risk: 0.06/(0.4×0.5) = 0.3, so idx 3 → 0.
+     - D2 labor efficiency variance: (120−100)×$15 = $300 unfavorable, so idx 0 → 2.
+     - D3 weighted average cost: $10,000/500 = $20, so idx 2 → 1.
+     - D4 straight-line depreciation: ($50,000−$5,000)/9 = $5,000, so idx 3 → 0, on the source and
+       both public-note copies.
+   - Owner run: `UPDATE 1/1/1/3`, the check block passed ("6 packs corrected"), and `COMMIT`.
+   - **Verified read-only by Release Implementor, after commit:**
+     - In each of the 6 packs, only the targeted question's `correctIndex` changed, compared with a
+       per-question read taken before the repair.
+     - Question order is unchanged, and every quiz still has 5 questions.
+     - `quiz_stamp` (0) and `updated_at` are unchanged, so no Quick Review mastery was reset.
+     - A whole-table recount finds 0 wrong keys for all four defects, and 3 corrected D4 copies.
+   - Exposure: one incomplete owner test session existed on these packs. The real learner's D4 copy
+     had no sessions.
+   - Not repaired, by design: the APGAR, percentage-tax and grain-size candidates were re-derived as
+     correctly keyed (false positives).
+
 ## v0.172.0 - Headroom
 
 **Status: Released** (signed off 2026-10-15 on `releases/v0.172.0`; kicked off 2026-10-14, cut from
