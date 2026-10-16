@@ -74,8 +74,6 @@ class NoteServicePublicLibraryPaginationIntegrationTest {
     private EntityManager entityManager;
     @Autowired
     private PlatformTransactionManager transactionManager;
-    @Autowired
-    private PublicLibraryDiscoveryRankingCache applicationDiscoveryRankingCache;
 
     private final Map<UUID, Long> likeCounts = new HashMap<>();
     private final Map<UUID, Long> shareCounts = new HashMap<>();
@@ -88,7 +86,6 @@ class NoteServicePublicLibraryPaginationIntegrationTest {
 
     @BeforeEach
     void initSchema() {
-        applicationDiscoveryRankingCache.invalidateAll();
         createSchema();
         jdbcTemplate.execute("delete from analytics_events");
         jdbcTemplate.execute("delete from public_note_likes");
@@ -749,7 +746,7 @@ class NoteServicePublicLibraryPaginationIntegrationTest {
     @Test
     void discoveryCacheHitDropsPrivateNoteWithoutBackfillOrReranking() {
         UUID ownerId = insertUser("visibilityowner", UserRole.USER);
-        for (int index = 0; index < 6; index++) {
+        for (int index = 0; index < 7; index++) {
             saveNote(ownerId, "Recent " + index, "Science", null, new String[]{"recent"},
                     NoteStatus.DRAFT, NoteVisibility.PUBLIC, NoteTargetProfileType.STUDENT, index);
         }
@@ -768,6 +765,7 @@ class NoteServicePublicLibraryPaginationIntegrationTest {
                 .filter(sql -> sql.contains("rank_view") || sql.contains("rank_copy_n"))).isEmpty();
         assertThat(SqlCaptureStatementInspector.statements().stream()
                 .filter(sql -> sql.contains("n.visibility = 'PUBLIC'"))).isNotEmpty();
+        assertThat(discoveryRankingCache.shortSectionResponses()).isEqualTo(1);
     }
 
     @Test

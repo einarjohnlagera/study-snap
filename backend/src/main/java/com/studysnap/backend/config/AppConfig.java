@@ -32,13 +32,14 @@ public class AppConfig {
     }
 
     @Bean
-    public AsyncTaskExecutor discoveryRankingTaskExecutor() {
+    public AsyncTaskExecutor discoveryRankingTaskExecutor(InFlightThreadRegisteringTaskDecorator taskDecorator) {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
         executor.setThreadNamePrefix("discovery-ranking-");
         executor.setCorePoolSize(1);
         executor.setMaxPoolSize(1);
         executor.setQueueCapacity(16);
         executor.setRejectedExecutionHandler(new ThreadPoolExecutor.AbortPolicy());
+        executor.setTaskDecorator(taskDecorator);
         executor.initialize();
         return executor;
     }
