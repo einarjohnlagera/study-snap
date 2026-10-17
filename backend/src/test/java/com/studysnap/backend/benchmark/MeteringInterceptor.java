@@ -2,6 +2,7 @@ package com.studysnap.backend.benchmark;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -23,7 +24,7 @@ final class MeteringInterceptor implements ClientHttpRequestInterceptor {
     record Call(String generationId, String leg, int attempt, long latencyMs, int status,
                 JsonNode usage, int outputItems, List<String> outputTypes, int outputTextItems, boolean topLevelOutputText,
                 long inputTokens, long outputTokens, long reasoningTokens,
-                BigDecimal conservativeUsd, BigDecimal nonAdditiveUsd, String errorMessage) {}
+                BigDecimal conservativeUsd, BigDecimal nonAdditiveUsd, String errorMessage, boolean timeout) {}
 
     private final ObjectMapper mapper;
     private final Path rawDir;
@@ -39,6 +40,7 @@ final class MeteringInterceptor implements ClientHttpRequestInterceptor {
     private int attempt;
     private boolean stopped;
     private boolean unmetered;
+    private boolean lowEffort;
 
     MeteringInterceptor(ObjectMapper mapper, Path outDir, String model, BigDecimal inPrice,
                         BigDecimal outPrice, BigDecimal spendStop, int maxCalls) throws IOException {
@@ -53,9 +55,14 @@ final class MeteringInterceptor implements ClientHttpRequestInterceptor {
     }
 
     void begin(String id, String leg) {
+        begin(id, leg, false);
+    }
+
+    void begin(String id, String leg, boolean lowEffort) {
         this.generationId = id;
         this.leg = leg;
         this.attempt = 0;
+        this.lowEffort = lowEffort;
     }
 
     List<Call> calls() { return List.copyOf(calls); }
@@ -69,6 +76,12 @@ final class MeteringInterceptor implements ClientHttpRequestInterceptor {
         if (unmetered) { stopped = true; throw new SpendStop("Successful response had no usable token counts"); }
         if (calls.size() >= maxCalls) { stopped = true; throw new SpendStop("maxCalls reached: " + maxCalls); }
         if (total.compareTo(spendStop) >= 0) { stopped = true; throw new SpendStop("spendStopUsd reached: " + spendStop); }
+        if (lowEffort) {
+            ObjectNode requestBody = (ObjectNode) mapper.readTree(body);
+            requestBody.putObject("reasoning").put("effort", "low");
+            body = mapper.writeValueAsBytes(requestBody);
+            request.getHeaders().setContentLength(body.length);
+        }
         int thisAttempt = ++attempt;
         long start = System.nanoTime();
         // The wrapper is never serialized or logged. Authorization remains only in the outgoing request.
@@ -80,7 +93,8 @@ final class MeteringInterceptor implements ClientHttpRequestInterceptor {
         } catch (IOException ex) {
             long elapsed = (System.nanoTime() - start) / 1_000_000;
             Call failed = new Call(generationId, leg, thisAttempt, elapsed, 0, null, 0, List.of(), 0, false,
-                    0, 0, 0, BigDecimal.ZERO, BigDecimal.ZERO, ex.getClass().getSimpleName());
+                    0, 0, 0, BigDecimal.ZERO, BigDecimal.ZERO, ex.getClass().getSimpleName(),
+                    ex instanceof java.net.SocketTimeoutException || ex instanceof java.net.http.HttpTimeoutException);
             calls.add(failed);
             System.out.printf("model=%s leg=%s generation=%s attempt=%d latencyMs=%d costUsd=0 runningConservativeUsd=%s%n",
                     model, leg, generationId, thisAttempt, elapsed, total);
@@ -113,7 +127,7 @@ final class MeteringInterceptor implements ClientHttpRequestInterceptor {
         Files.write(rawDir.resolve(safeId + "-" + thisAttempt + ".json"), bytes);
         Call call = new Call(generationId, leg, thisAttempt, elapsed, response.getStatusCode().value(),
                 usage.isMissingNode() ? null : usage.deepCopy(), items.isArray() ? items.size() : 0,
-                List.copyOf(types), texts, json.path("output_text").isTextual(), input, output, reasoning, conservative, nonAdditive, error);
+                List.copyOf(types), texts, json.path("output_text").isTextual(), input, output, reasoning, conservative, nonAdditive, error, false);
         calls.add(call);
         System.out.printf("model=%s leg=%s generation=%s attempt=%d latencyMs=%d costUsd=%s runningConservativeUsd=%s%n",
                 model, leg, generationId, thisAttempt, elapsed, conservative, total);
