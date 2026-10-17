@@ -162,8 +162,11 @@ ADMIN carve-out.
     quality claim.
   - Cost per generation: mini $0.0033, Luna $0.0015, Sol $0.0272.
   - Recommendation: both candidates pass the pre-stated rule; Sol's cost is accepted under the execution
-    plan's own clause. Caveat for items 2 and 3: Challenge's synchronous generate-more took 6–9 s on mini,
-    20–31 s on Luna and 38–55 s on Sol; Sol's single-call Long Exam took up to 126 s against the 180 s timeout.
+    plan's own clause. Caveat for items 2 and 3: STARTING a Challenge Quiz waits in the foreground for 10–15
+    live questions whenever the learner's bank and the Official template fall short (33 starts by 29 of
+    34 learners since 2026-07-24). That wait is already p50 30 s / p90 62 s on mini, and projects to about
+    55–90 s on Luna and 90–175 s on Sol, near the 180 s timeout. "+5" is almost always served from the
+    bank (2 live batches for learners). Sent to Product UX; Sol's single-call Long Exam took up to 126 s against the 180 s timeout.
 
 ## v0.173.0 - Cached Catalog
 

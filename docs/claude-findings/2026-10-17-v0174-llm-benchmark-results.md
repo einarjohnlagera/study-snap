@@ -108,13 +108,44 @@ Leg B by method (8 each):
 
 ## Caveats the owner should weigh before item 3
 
-1. **User-facing wait, on BOTH candidates.** `ChallengeQuizService.generateMoreQuestions` (`:1105`) calls the model
-   synchronously when the question bank is short. A 5-question Challenge batch took 6–9 s on mini (p50 6.6 s),
-   **20–31 s on Luna (p50 25.4 s)**, so FREE users wait about 4× longer too, and 38–55 s on Sol (p50 43.4 s).
-   Routing that path to the free model no longer avoids the wait once FREE is Luna. Options: accept it with a
-   clear loading state, keep the bank topped up ahead of demand, or lower reasoning effort on that path
-   (a separate, owner-approved run). Check the frontend's wait for that request before item 3 ships.
-   This needs an owner decision, not a code read alone.
+1. **User-facing wait: STARTING a Challenge Quiz, not "+5 Questions". Corrected twice on 2026-10-17 after
+   production reads; an earlier draft blamed "+5" and was wrong.**
+   - **How both paths work** (`ChallengeQuizService`): start (`:425-470`) and "+5" (`generateMoreQuestions`,
+     `:1105`) both claim from the learner's own bank for that pack, then copy from an Official template, and
+     call the model live **only for the shortfall**, while the learner waits. **A start asks for 10, 12 or 15
+     questions, set by the learner's last Quick Review score on the pack (18 for multi-note;
+     `resolveGenerationProfile` `:1364`, `:160-178`, `:267`), not 5,** and the leftovers are banked, so
+     a later "+5" is almost always served from the bank.
+   - **Production, Challenge sessions since the bank shipped (2026-07-24 → 2026-10-17), read-only:**
+
+     | | USER accounts | ADMIN |
+     |---|---|---|
+     | Sessions / accounts | 68 / 34 | 11 / 1 |
+     | **Starts that called the model live** | **33 sessions, 29 learners** | 2 |
+     | New questions generated per live start | 12.2 on average | 8.5 |
+     | **Live start wait today, on `gpt-4.1-mini`** | **p50 29.9 s, p90 61.7 s, max 147.3 s** | p50 31.9 s |
+     | "+5" batches that called the model live | **2** | 2 |
+     | "+5" batches copied from a template | 4 | 0 |
+
+     Only 23 Challenge sessions in the last 30 days, so read the shape, not the precision.
+     Method: bank rows grouped by `(origin_session_id, generated_at)`; a session's first batch is its start,
+     later ones are "+5"; a batch counts as live unless every question key already existed in another
+     account's bank (templates live in the bank under the Official author). Wait = `generated_at` minus the
+     session's `created_at`. Checked: no Board Exam rows sit in these sessions, and timing alone does not
+     separate start from "+5" (starts land 10-147 s after the session row), which is what the first draft got wrong.
+   - **What the learner sees at start:** a "Generating your quiz..." overlay (`frontend/app/study-packs/[id]/challenge-quiz/page.tsx:1874`).
+     **The quiz timer starts only when the questions are ready** (`markSessionReady`, `:2621`), so the start
+     wait costs no quiz time.
+   - **What the new models do to it:** the benchmark's Challenge leg ran only 5 questions (the harness picked
+     `INITIAL_CHALLENGE_QUIZ_COUNT`, a time-limit constant, not the start size), so it understates start. The
+     nearest measured size is the 12-question Board Exam method: p50 11.9 s mini, **36.4 s Luna, 69.9 s Sol**
+     (max 26 / 50 / 89 s). Production's start already runs about 18 s slower than that benchmark p50 on mini.
+     **Rough projection for a 12-question live start: Luna about 55-90 s, Sol about 90-175 s,** and Sol's tail
+     could reach the 180 s read timeout, which fails the start. This is an estimate, not a measurement.
+   - **"+5", for completeness:** while it waits, the button reads "Adding...", answers are disabled, and the
+     countdown keeps running (`:1369-1381`; the 450 s it adds arrives with the response; at zero it
+     auto-submits). That is a real but small issue: it went live only 2 times for learners in nearly three months.
+   - **This is a product decision, sent to Product UX** (`docs/claude-plans/2026-10-17-challenge-quiz-wait-product-ux-consultation-prompt.md`).
 2. **Long Exam headroom on Sol:** 126 s max against the 180 s read timeout, on the single-call method.
    Production uses the parallel variant, so per-call output is smaller; still, record it.
 3. **Sample limits:** Leg B fed every model the same existing `gpt-4.1-mini` Study Packs as input; context
