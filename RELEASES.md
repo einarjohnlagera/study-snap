@@ -128,7 +128,42 @@ ADMIN carve-out.
 
 ### Shipped
 
-_(nothing yet)_
+- **Item 1, part 1: the benchmark harness (PR #1506, `8d417a35`, test scope only). No API call made
+  and nothing spent yet; the owner runs the paid smoke and full runs.**
+  - `backend/src/test/java/com/studysnap/backend/benchmark/`. `LlmModelBenchmark` runs the real
+    `OpenAiLlmStudyPackService` and production prompts on one candidate model. It is skipped unless
+    `-Dllm.benchmark=true`, so a normal build and CI never run it. No file under `backend/src/main`
+    changed.
+  - `MeteringInterceptor` meters every HTTP call, including the service's own retries. It stops
+    before the next call at `spendStopUsd` (hard max $10) or `maxCalls`, and records raw `usage`
+    including reasoning tokens. It never saves the request or its headers.
+  - The README sets explicit per-model stops totalling $9.25 under the $10 cap: smoke $0.25 × 3,
+    then full runs at mini $1.50, Luna $0.75, Sol $7.00. Without them, the $8 per-command default
+    would have allowed up to $24.
+  - `sample-query.sql` is one read-only `SELECT` producing 81 public-note lines (A 40, B 32, C 5,
+    D 4). Its output holds note text, stays under `backend/target/`, and is never committed.
+  - Codex review P2, fixed with a regression test that fails without the fix: a transport failure
+    was classified `EMPTY`, which distorted that metric and bypassed the 3-consecutive-errors stop.
+  - Verification: full `./mvnw clean install` with Docker, 2,713 tests, 0 failures, before the
+    test-only P2 fix; `LlmModelBenchmarkTest` 12/12 after it.
+  - **Results caveat:** Leg B reuses each note's existing `gpt-4.1-mini` Study Pack as identical
+    input for all three models; the context fields approximate `StudyPackGenerationContextResolver`.
+  - Findings for item 2/4: `LlmResponseUtils` takes the first `output_text` and skips reasoning
+    items, so a second `output_text` is silently ignored; `extractUsageMetadata` does not record
+    reasoning tokens, which item 4's cost monitor needs.
+- **Item 1, part 2: benchmark run and results (2026-10-17). COMPLETE; item 3 is the owner's decision.**
+  Results and recommendation: `docs/claude-findings/2026-10-17-v0174-llm-benchmark-results.md`.
+  - The owner ran the smoke run and the three full runs: about **$2.62** of the $10 cap. Billed cost
+    is lower: `output_tokens` already includes reasoning, and cached input is billed below list price.
+  - Generations succeeded: `gpt-4.1-mini` 77/81 (3 timeouts at 180 s, 1 invalid Long Exam format),
+    `gpt-6-luna` 81/81, `gpt-6.1-sol` 81/81. No multi-output responses and no H4 flags on any model.
+  - Blind tier, 20 items per model, scored by a fresh agent: no regression detected for either
+    candidate. Differences between the means are within noise and are not evidence for an "Enhanced"
+    quality claim.
+  - Cost per generation: mini $0.0033, Luna $0.0015, Sol $0.0272.
+  - Recommendation: both candidates pass the pre-stated rule; Sol's cost is accepted under the execution
+    plan's own clause. Caveat for items 2 and 3: Challenge's synchronous generate-more took 6–9 s on mini,
+    20–31 s on Luna and 38–55 s on Sol; Sol's single-call Long Exam took up to 126 s against the 180 s timeout.
 
 ## v0.173.0 - Cached Catalog
 
