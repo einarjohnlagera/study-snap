@@ -90,6 +90,34 @@ the admin account's subscription tier, all before `gpt-4.1` retires on 2027-01-1
    - No dollar cost is stored anywhere today (`study_packs.estimated_cost` is NULL on every row).
    - **Owed from the owner before the brief:** the monthly threshold.
 
+**Owner decision on the benchmark (2026-10-17, verbatim in
+`docs/claude-plans/2026-10-17-owner-conditional-approval-challenge-quiz-ux.md`). Conditional approval of the strategy,
+not approval to deploy.**
+- **APPROVED:** FREE → `gpt-6-luna`.
+- **CONDITIONALLY APPROVED:** Plus/Pro → `gpt-6.1-sol`, and official curation → Sol regardless of the admin
+  account's plan, within the agreed cost caps and monitoring.
+- **Condition: Challenge Quiz start latency is a product UX issue this release must address, not an accepted
+  caveat.** Do not treat the 5-question benchmark leg as a proxy for the real 10/12/15-question and multi-note
+  starts.
+- Ten deliverables are owed before final rollout approval:
+  1. the updated v0.174.0 scope;
+  2. the model-routing matrix for FREE, Plus, Pro and curation;
+  3. the start-latency root cause;
+  4. a recommended UX solution;
+  5. a comparison of solutions;
+  6. a targeted-benchmark proposal for the real start sizes, needing owner approval before any paid call;
+  7. Board Exam and Long Exam validation on the production paths, including the parallel Long Exam variant;
+  8. a monitoring and rollback plan;
+  9. the split between v0.174.0 and future releases;
+  10. the remaining decisions.
+- Split by role (agreed between sessions 2026-10-17): **Feature Planner** owns 3, 4 and 5; **Release
+  Implementor** owns 1, 2, 6, 7, 8, 9 and 10.
+- The decision supersedes the separate Product UX consultation: Feature Planner's deliverables 3–5 answer the
+  prompt's questions. The prompt stays as input.
+- Item 3's `application.yaml` default for `LLM_MODEL_PREMIUM` and the item 2 brief wait on these deliverables.
+  So does any Challenge-specific routing: deliverable 4 may propose one, and it would be a third destination
+  needing an explicit owner decision.
+
 **Anti-drift:**
 - No change to Plus/Pro entitlements, `FeatureGateService` quotas or `UserUsageEntity`.
 - No pricing, plan copy or announcement. If customer-facing copy is ever needed, it says "Enhanced
@@ -166,7 +194,7 @@ ADMIN carve-out.
     live questions whenever the learner's bank and the Official template fall short (33 starts by 29 of
     34 learners since 2026-07-24). That wait is already p50 30 s / p90 62 s on mini, and projects to about
     55–90 s on Luna and 90–175 s on Sol, near the 180 s timeout. "+5" is almost always served from the
-    bank (2 live batches for learners). Sent to Product UX; Sol's single-call Long Exam took up to 126 s against the 180 s timeout.
+    bank (2 live batches for learners). The owner made it a release condition on 2026-10-17 (see Planned Scope); Sol's single-call Long Exam took up to 126 s against the 180 s timeout.
 
 ## v0.173.0 - Cached Catalog
 

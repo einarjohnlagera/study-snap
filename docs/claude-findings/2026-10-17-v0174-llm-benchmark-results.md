@@ -133,6 +133,31 @@ Leg B by method (8 each):
      account's bank (templates live in the bank under the Official author). Wait = `generated_at` minus the
      session's `created_at`. Checked: no Board Exam rows sit in these sessions, and timing alone does not
      separate start from "+5" (starts land 10-147 s after the session row), which is what the first draft got wrong.
+   - **Third read, 2026-10-17 (after the owner's conditional approval): why those starts went live. Most of
+     the 33/68 comes from the period before the Official templates existed.** Read-only; this run counts 34
+     live starts, all `USER` accounts. The 33 versus 34 gap is not reconciled; the shape is the same.
+     - 10 starts were on the learner's own notes, which never have a template.
+     - 10 were on adopted Official packs that still have **no template today**.
+     - 14 were on adopted packs whose template was seeded **after** the session. Every template in this
+       sample was first seeded 2026-09-02 → 09-11. `seedTemplateAsync` writes only when the pack has no
+       template rows (`OfficialChallengeQuizTemplateService.java:282,313`), so the earliest row is the seed.
+     - **0 starts went live because a learner had used up a template**, and 31 of 34 were the learner's
+       first Challenge session on that pack. `copyTemplateQuestions` (`:195-235`) skips only keys already
+       in the learner's bank and does not filter by level or difficulty.
+   - **Since 2026-09-12: 4 live starts in 26 learner Challenge sessions.** 3 were on adopted packs with no
+     template, 1 on the learner's own notes; 8 starts were served from a template.
+     - Of the 14 sessions that wrote no bank rows, 9 completed, 4 were forfeited and 1 failed. They were
+       probably served from the learner's own bank, but this data cannot confirm it.
+     - The 2026-09-12 boundary is read from the seed dates, not from a deploy record.
+   - **Official template coverage today:** of 1,997 public Official Study Packs, 1,554 hold the full
+     20-question template, 11 hold 10–32 questions, and **432 hold none**.
+     - Filling those 432 would be paid generation (on Sol once item 2 lands) and a production write by a
+       job, so it is an owner decision. It also sits near the release's "no mass regeneration of question
+       pools" rule.
+   - **Today's wait depends on start size.** A 15-question live start takes p50 35.7 s / p90 72.6 s
+       (n = 21) and a 12-question start 34.4 / 42.0 s (n = 4). The 9 five-question starts (p50 11.7 s) are
+       from late July and pull the blended p50 of 30 s down.
+     - So the Luna and Sol projection above, which starts from 30 s, is optimistic for 15-question starts.
    - **What the learner sees at start:** a "Generating your quiz..." overlay (`frontend/app/study-packs/[id]/challenge-quiz/page.tsx:1874`).
      **The quiz timer starts only when the questions are ready** (`markSessionReady`, `:2621`), so the start
      wait costs no quiz time.
