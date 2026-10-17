@@ -1,7 +1,7 @@
 # v0.174.0 — targeted Challenge Quiz start benchmark: proposal (deliverable 6)
 
-**Status: PROPOSAL — awaiting owner approval. No paid call has been made, and none may be made until the
-owner approves a budget below.** Written 2026-10-17 by Release Implementor for the owner's conditional
+**Status: APPROVED 2026-10-17, option A ($4.50 hard stop, smoke included). The Long Exam pool is lowered
+to 30 instead of running L26, and L30 and V-fan are out. No paid call yet; next is the harness PR.** Written 2026-10-17 by Release Implementor for the owner's conditional
 approval (`docs/claude-plans/2026-10-17-owner-conditional-approval-challenge-quiz-ux.md` §3).
 
 The owner runs every paid call, as in the first benchmark. The API key never enters a prompt, a repo file
@@ -32,7 +32,12 @@ or a Claude session. No production write.
 ## Method
 
 - Every cell calls the **real `OpenAiLlmStudyPackService` method production uses, with production's
-  question count, difficulty and disallowed-question list** (the pack's saved quiz texts).
+  question count, difficulty and disallowed-question list.**
+  - **Single-note:** the pack's saved quiz texts, then dedup against their keys
+    (`ChallengeQuizService:396,463`).
+  - **Multi-note:** each source gets its own context. The list starts **empty** and accumulates the
+    questions generated for earlier sources (`:1837-1860`). A failed source fails the whole start, as in
+    production.
 - It reuses the existing harness, metering and spend stop (PR #1506), and the same public-note sample,
   which is never committed.
 - **Paired design:** within a cell, every model runs on the **same Study Packs**, so pack-to-pack variation
@@ -61,7 +66,7 @@ n = runs per cell.
 | **1** | **S15** | Single-note start, 15 q, `hard` | 10 | 10 | 10 | $0.74 | Worst single-note start; mini anchors the harness against production |
 | **1** | **M-6×3** | Multi-note, 6 sources × 3 q, sequential (Plus/Pro max) | — | 6 runs (36 calls) | — | $0.66 | Longest wait in the product; whether multi-note needs parallel per-source calls |
 | **1** | **S10** | Single-note start, 10 q, `easy` | 10 | 10 | — | $0.49 | Start sizes, low Quick Review score |
-| **1** | **S12** | Single-note start, 12 q, `mixed` | 10 | 10 | — | $0.56 | Start sizes, middle score or none |
+| **1** | **S12** | Single-note start, 12 q, `medium` (`DEFAULT_SELECTED_DIFFICULTY`, `ChallengeQuizService:190`) | 10 | 10 | — | $0.56 | Start sizes, middle score or none |
 | **1** | **M-3×6** | Multi-note, 3 sources × 6 q, sequential (FREE max; Plus/Pro with 3 notes) | 6 runs | 4 runs | — | $0.39 | Multi-note on both tiers |
 | **2** | **V-low** | S15 with `reasoning.effort: "low"`, injected by the harness interceptor (test scope only) | 10 | 10 | — | $0.69 | Whether a lower-effort Challenge setting is worth a decision |
 | **2** | **V-fan** | S15 as 2 parallel calls of 10 (⌈15/2⌉ + 2, as `generateLongExamParallel` does) on a harness-owned 2-thread pool, merged with production's dedup | 10 runs | 10 runs | — | $0.96 | Feature Planner's fan-out option (expected 25–35% cut) |
@@ -87,8 +92,10 @@ How the costs are priced, at list price:
 | B. Full | Tiers 1–3 | $5.37 | about $0.75 | $6.50 | $9.12 |
 | C. Minimum | Tier 1 only | $2.84 | about $0.35 | $3.50 | $6.12 |
 
-- **The smoke counts inside the hard stop.** Smoke = 1 run per cell, so about 15 calls for A. Multi-note
-  cells are 3–6 calls per run.
+- **The smoke counts inside the hard stop, and its results count toward n.** Smoke is run 1 of each cell;
+  the full run starts at run 2.
+- **The spend stop meters the conservative figure,** which counts reasoning twice. That reads about 10%
+  above list on Sol and about 30% on Luna, so A's $3.53 meters at about $3.90 against the $4.50 stop.
 - **Recommendation A is the option without V-fan or the Long Exam cells.**
   - V-fan costs most and is expected to cut only 25–35%. Multi-note's per-call data already bounds a
     parallel approach.

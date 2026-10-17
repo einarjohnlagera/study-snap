@@ -114,6 +114,26 @@ not approval to deploy.**
   Implementor** owns 1, 2, 6, 7, 8, 9 and 10.
 - The decision supersedes the separate Product UX consultation: Feature Planner's deliverables 3–5 answer the
   prompt's questions. The prompt stays as input.
+- **Owner decisions, 2026-10-17 (later):**
+  - **Targeted benchmark: option A approved.** It runs Tier 1 (10/12/15-question starts and multi-note
+    3×6 and 6×3) plus the lower-reasoning-effort variant, under a **$4.50 hard stop** that includes the smoke
+    run (`docs/claude-plans/2026-10-17-v0174-targeted-challenge-start-benchmark-proposal.md`).
+    - The harness change is test scope only and goes to Codex on its own PR.
+    - The owner runs the paid calls.
+  - **Long Exam pool: lower it rather than benchmark the 26-question pool call (owner).** The owner chose to
+    lower it; **Release Implementor chose 30** (`long-exam-pool-size`, `application.yaml:249`;
+    `StudySnapProperties:169`).
+    - **Trade-off:** at 30 a pool serves one exam and is then refreshed (`ExamQuestionPoolService:134`), so
+      reuse across sessions effectively ends. No learner uses Long Exam today.
+    - Item 3 checks that no validator or test assumes the pool is larger than the exam (`examSizeForMode`).
+    - 30 is the floor: a pool must hold at least one whole exam (`ExamQuestionPoolService:116-123`), and
+      the largest Long Exam is 30 questions (`StudySnapProperties:168`).
+    - At 30 the pool generates as two calls of 17, the same size a session already sends.
+    - It lands with item 3's `application.yaml` defaults. Existing pools are untouched, since none has been
+      served and no regeneration is allowed. If `LONG_EXAM_POOL_SIZE` is set on Render, changing it is an
+      owner action.
+  - Still owed: the acceptable Challenge start wait, for FREE and for Plus/Pro. The benchmark results are
+    read against it.
 - Item 3's `application.yaml` default for `LLM_MODEL_PREMIUM` and the item 2 brief wait on these deliverables.
   So does any Challenge-specific routing: deliverable 4 may propose one, and it would be a third destination
   needing an explicit owner decision.
