@@ -1,6 +1,8 @@
 # v0.174.0 and v0.175.0 — consolidated implementation plan (for owner review)
 
-**Status: FOR OWNER REVIEW. Not authorization to implement, deploy or make paid calls.** Consolidated
+**Status: v0.174.0 decisions A1–A7 ANSWERED 2026-10-19** (verbatim:
+`docs/claude-plans/2026-10-19-owner-final-decisions-v0174-a1-a7.md`). **The item 2 brief awaits owner approval.
+v0.175.0 decisions B1–B7 are open** (with Product UX). Not authorization to implement, deploy or make paid calls. Consolidated
 2026-10-19 by Release Implementor from:
 - the owner's decisions, verbatim (`docs/claude-plans/2026-10-19-owner-decisions-v0174-split-and-challenge-preparation-ux.md`;
   Set 2, the hybrid preparation UX, is authoritative where it refines Set 1);
@@ -21,6 +23,58 @@ This document carries the decisions, conflicts and dependencies. The two halves 
 - **Future implementation:** everything below, all unbuilt.
 
 ---
+
+## Part A0 — The owner's answers to A1–A7 (2026-10-19), and what was verified
+
+| | Decision | Verified against code or production |
+|---|---|---|
+| A1 | The Study Pack family is routed by tier (FREE Luna; Plus/Pro and ADMIN Sol). Interactive quiz and practice paths are pinned to today's models. Challenge routing and the hybrid UX go to v0.175.0 | The routing table was re-checked by a cold Opus pass (2026-10-19). Every call site and every foreground/background classification is confirmed; four corrections were applied in the routing plan |
+| A2 | `LLM_MODEL_PAID_INTERACTIVE` = `gpt-4.1` for Interview Practice quiz and the companion; `LLM_MODEL_CRITIQUE` unchanged; every pin must be replaced before 2027-01-14, and v0.175.0 does not cover them all | Production `LLM_MODEL_PREMIUM` = `gpt-4.1` (owner verified on Render). The pins are tracked by a new `[CHECKPOINT — due 2026-12-15]` row in `ROADMAP.md`, which lists the paths no plan covers yet |
+| A3 | The repair job uses the pack owner's **current effective** tier. Stale `model_used` / `model_tier` is documented | The repair rewrites only `quiz` (`AdminStudyPackTransactionHelper:139`), so the metadata stays as it was. Nothing new is written that would mislead |
+| A4 | The Long Exam pool stays at its current size in v0.174.0; the reduction moves to v0.175.0 | **Effective value is 48:** `application.yaml:249` `${LONG_EXAM_POOL_SIZE:48}`; Java default `StudySnapProperties:169` = 48; no override in `application-prod.yaml`; no Render override (owner). All 626 production Long Exam pools have `pool_size` 48. Spring would also bind a relaxed-name variable `STUDYSNAP_PRICING_LONGEXAMPOOLSIZE`; the owner checked only the named variable, but the data shows 48 was in effect |
+| A5 | Synchronous `/study` is accepted temporarily, with loading feedback, a duplicate guard, an actionable error and retry, no time promise, and no new automatic retry | **Exists:** the loading spinner and copy (`study-input-card.tsx:172`, `confirm-text-card.tsx:49`); the duplicate-submit guard (`use-study-pack.ts:191`) plus disabled buttons. **Missing:** a retry action in the error card (`study-page-client.tsx:156-162`), which goes in the brief. The service's existing `retryOnceOnInvalidOutput` (malformed output, within one request) is pre-existing, not a new blind retry |
+| A6 | $10 per calendar month; alert only, never block; deduplicated per month; scope stated as partial | `NotificationService.deliver` enforces one notification per `(recipient, dedupKey)`; a per-month key gives one alert per month. `notifications.type` is `VARCHAR(64)` with no check constraint (`V139:4`), so a new `NotificationType` needs no migration. `study_packs` stores `cached_input_tokens` (confirmed in production) |
+| A7 | `LLM_MODEL_PREMIUM` = `gpt-4.1`; no `LONG_EXAM_POOL_SIZE` override | See A2 and A4 |
+
+**Remaining blockers and contradictions after A1–A7:**
+1. **None blocking.** The item 2 brief can go to Codex once the owner approves it.
+2. **The same gap as A5, in a second place (not blocking, folded into the brief):** single note-from-topic
+   is also synchronous and foreground (`NoteGenerationService:92`), used in onboarding and the note editor.
+   - On Sol (paid, note editor) it takes about 20–28 s.
+   - **The brief applies A5's conditions there too:** verify the loading and error-and-retry states exist,
+     and add a retry only where it is missing.
+3. **A6 needs one price the plan does not have:** Sol's cached-input rate. The brief makes all rates
+   configuration.
+   - It defaults the cached rate to the full input rate, which **overstates** cost, so the alert fires
+     early, never late, until the owner supplies the published cached rate.
+   - Overstating is the safe direction for an alert.
+4. **"Prevent accidental duplicate submissions" (A5)** is met by the client guard: a double click cannot
+   submit twice.
+   - A deliberate reload-and-resubmit can still create a second pack, because the server has no
+     idempotency key.
+   - That is accepted as outside "accidental"; the v0.175.0 async rework would close it.
+5. **Merge gate unchanged:** #1505 must merge after the 2026-10-22 read, plus the cache deploy + 7 days read.
+   The RC-3 checkpoint is due 2026-10-21.
+6. **The rollout trigger depends on which env vars are set on Render (owner check; not blocking the
+   briefs).**
+   - The briefs change the `application.yaml` defaults of `LLM_MODEL_FREE` / `LLM_MODEL_PREMIUM`.
+     `LLM_MODEL_PREMIUM` is set on Render (`gpt-4.1`, A7), so Plus/Pro and ADMIN move to Sol only when the
+     owner changes that variable.
+   - **If `LLM_MODEL_FREE` is NOT set on Render, the merge deploy itself moves FREE Study Packs to Luna.**
+     If it is set, the owner's env-var change does.
+   - The new pin keys are unset, so they fall back to today's models, which is correct.
+   - **Answered by the owner 2026-10-19:** `LLM_MODEL_FREE` **is set** on Render (`gpt-4.1-mini`);
+     `LLM_MODEL_CRITIQUE` is **not set**.
+     - **So the merge deploy changes no model.** FREE stays on mini and Plus/Pro and ADMIN stay on `gpt-4.1`
+       until the owner changes the env vars.
+     - The critique paths keep the YAML default `gpt-4.1-mini`, which the briefs do not touch.
+     - **Rollout:** merge, then the owner sets `LLM_MODEL_FREE=gpt-6-luna` and
+       `LLM_MODEL_PREMIUM=gpt-6.1-sol` in one Render change (one redeploy), under the merge gate.
+     - **Rollback:** set them back.
+7. **A deleted or missing pack owner in the repair job** routes as FREE and logs a warning (brief 2a). It
+   applies A3's "current effective tier" to an owner who no longer has one.
+8. **Delivery is split into three pieces** for proportionate verification: 2a routing (Tier H), 2b the cost
+   alert (Tier N), 2c the `/study` and note-editor retry (Tier S, inline).
 
 ## Part A — v0.174.0: model migration and safe routing
 
@@ -188,7 +242,7 @@ test.
 
 ## Part D — Decisions requiring the owner
 
-**For v0.174.0 (needed before the item 2 Codex brief):**
+**For v0.174.0: ALL ANSWERED 2026-10-19; see Part A0. The questions are kept below as asked.**
 - **A1.** Confirm "relevant routing defects" means the Study Pack family; Challenge's routing moves to
   v0.175.0 (Part C1).
 - **A2.** Interview Practice and the companion: **pin to `gpt-4.1`** (proposed: no change, no regression),

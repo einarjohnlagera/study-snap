@@ -45,50 +45,84 @@ the admin account's subscription tier, all before `gpt-4.1` retires on 2027-01-1
      where the API key lives, the per-run cost estimate) goes to the owner before any spend. No
      production writes.
    - It also verifies API compatibility of both new models with the current request shape.
-2. **Plan-tier-aware model routing (backend, Tier H, Codex at high effort under D10).**
-   - Thread a tier into all nine `LlmStudyPackService` methods and their callers across
-     `StudyPackService`, `AdminStudyPackTransactionHelper`, `ChallengeQuizService`,
-     `ExamQuestionPoolService`, `QuickReviewAdaptivePracticeService`,
-     `OfficialChallengeQuizTemplateService` and `LongExamService`, so FREE resolves to the free
-     model and Plus/Pro to the premium model.
-   - **Official curation:** generation by a `UserRole.ADMIN` account resolves to the premium
-     model **regardless of its plan** (owner, 2026-10-16). Do NOT use
-     `CuratorAuthoringPredicate.isCurator()`: it also matches TEACHER profiles and would route
-     teachers' personal notes to Sol.
-   - **Two separate checks, one destination (Feature Planner, 2026-10-16):** Plus/Pro reach the
-     premium model through the plan tier; ADMIN curation reaches it through its own `UserRole.ADMIN`
-     check.
-     - Do not fold curation into a shared `ModelTier` value. `model_tier` stays as it is:
-       `planType.isPaid()` at `StudyPackService.java:721`, which is `PLUS || PRO` only
-       (`PlanType.java:8-10`).
-     - So the admin's non-billable PRO grant is already tagged `PREMIUM` today. That is why 98% of
-       rows carry the tag.
-     - Item 4's monitor therefore identifies curation by the owner account's role plus
-       `model_used`, never by `model_tier`.
-     - The role check is what keeps curation on the premium model if the admin account's plan ever
-       changes.
-   - **Tier H triggers:**
-     - per-generation cost (money semantics);
-     - a shared-method change across 7 services;
-     - the Challenge Quiz and exam-pool routing defects that 5b confirmed.
-   - **Owed:** regression tests per quiz mode; plus one test per path that asserts the model each
-     plan tier actually sends, not just that a tier parameter exists.
-   - Interview Practice and the companion already use premium, and both are paid-gated
-     (`StudySnapProperties.java:308-317`; companion only while `FREE_MONTHLY_ASK_COMPANION_LIMIT`
-     stays 0). They stay as they are.
-3. **Model defaults to Luna / Sol (config + an OWNER env-var handoff). Gated on item 1's result.**
-   - Update the `LLM_MODEL_FREE` and `LLM_MODEL_PREMIUM` defaults in `application.yaml`, plus any
-     request-shape change the benchmark shows the new models need.
-   - The production values are Render env vars, and **changing them is an owner action**. Claude
-     writes the handoff and never calls the Render MCP's env-var update. They change only after
-     the merge gate above.
-   - `LLM_MODEL_CRITIQUE` is NOT changed here; see Deferred.
-4. **Curation cost monitoring (backend, Tier N).**
-   - A scheduled, read-only monthly sum of the ADMIN account's premium-model token use, priced at
-     configured per-token rates, logged against an owner-set threshold. **It alerts and never
-     blocks** (owner, 2026-10-16).
-   - No dollar cost is stored anywhere today (`study_packs.estimated_cost` is NULL on every row).
-   - **Owed from the owner before the brief:** the monthly threshold.
+2. **Tier routing for the Study Pack family, and pins for every interactive path.** Delivered as **three
+   pieces**, so each verification stays proportionate:
+   - **2a:** routing, pins, the log line and the `model_used` fix. Backend, Tier H, Codex at high effort;
+     brief `docs/codex-prompts/v0.174.0-item2a-tier-routing-and-pins.md`.
+   - **2b:** the cost alert (item 4). Tier N, Codex; brief `docs/codex-prompts/v0.174.0-item2b-curation-cost-alert.md`.
+   - **2c:** the `/study` and note-editor error-and-retry state. Frontend, Tier S, inline.
+
+   Both briefs await owner approval. **Revised 2026-10-19** by the owner's final decisions A1–A7,
+   verbatim in `docs/claude-plans/2026-10-19-owner-final-decisions-v0174-a1-a7.md`. Plan:
+   `docs/claude-plans/2026-10-19-v0174-v0175-consolidated-implementation-plan.md`.
+   - **Routed by tier** through one resolver that reads `SubscriptionService.resolvePlan` (expiry-aware):
+     FREE → `LLM_MODEL_FREE` (Luna); Plus/Pro → `LLM_MODEL_PREMIUM` (Sol); `UserRole.ADMIN` → Sol whatever
+     its plan (A1).
+     - Do NOT use `CuratorAuthoringPredicate.isCurator()`: it also matches TEACHER profiles.
+     - Two separate checks, one destination: `model_tier` stays `planType.isPaid()`
+       (`StudyPackService:721`).
+     - **Paths:**
+       - Study Pack generation: async, plus the synchronous `/study` routes;
+       - summary regeneration;
+       - note-from-topic, single and bulk;
+       - the Official template seed (its owner is the Official author, so Sol);
+       - the malformed-quiz repair, using **the pack owner's current effective tier** (A3), resolved inside
+         the async task. A missing or deleted owner routes as FREE and logs a warning.
+     - The tier is resolved once per generation, and that one snapshot sets both the model sent and the
+       `model_tier` label.
+     - The benchmark harness sets all four model keys, so every leg still sends the candidate model.
+   - **Pinned to today's model for every plan** (A1, A2):
+     - new `LLM_MODEL_INTERACTIVE_QUIZ` = `gpt-4.1-mini`: Challenge start, "+5" and multi-note; Adaptive
+       Practice; the Quick Review study tip; the teacher quiz; Board Exam and Long Exam, sessions and pools;
+     - new `LLM_MODEL_PAID_INTERACTIVE` = `gpt-4.1` (the production value of `LLM_MODEL_PREMIUM`, owner
+       verified, A7): Interview Practice quiz and the companion.
+     - `LLM_MODEL_CRITIQUE` is unchanged: Interview critique and Ask Companion.
+   - **The model is passed in by the caller.** Challenge start, "+5" and the template seed share
+     `generateChallengeQuizWithSchema`, and `generateStudyPack` is shared by learner routes and the repair.
+   - **`/study` conditions (A5):**
+     - keep the existing loading feedback and duplicate-submit guard (`use-study-pack.ts:191`);
+     - **add an actionable error-and-retry state** (the error card at `study-page-client.tsx:156-162` has no
+       retry action);
+     - no copy that promises a completion time;
+     - no new automatic retry.
+   - **Monitoring:**
+     - one structured log line per LLM call (data only, read by a Render log search);
+     - fix the Study Pack `model_used` fallback (`StudyPackService:722-723`), which records the free model
+       when a response lacks `model`;
+     - repaired packs keep their original `model_used` / `model_tier`. That is a documented known
+       limitation, not a rewrite (A3).
+   - **Owed:** a test per path asserting the model **actually sent** for FREE, Plus, Pro, ADMIN on a FREE
+     plan and a lapsed paid plan, on every routed and pinned row. Pinned paths must ignore changes to
+     `LLM_MODEL_FREE` / `LLM_MODEL_PREMIUM`.
+     - The test surface spans all 11 caller services, even though routing changes only the Study Pack
+       family.
+3. **Model defaults to Luna / Sol (config + an OWNER env-var handoff).** The benchmark is complete and
+   adoption is approved (2026-10-17, as amended 2026-10-19).
+   - `application.yaml`: `LLM_MODEL_FREE` = `gpt-6-luna`, `LLM_MODEL_PREMIUM` = `gpt-6.1-sol`, plus the two
+     new pin keys at today's models.
+   - **The production env vars are an owner action.** Claude never calls the Render MCP's env-var update.
+     They change only after the merge gate.
+   - **Owner-verified Render state (2026-10-19):** `LLM_MODEL_FREE=gpt-4.1-mini` and
+     `LLM_MODEL_PREMIUM=gpt-4.1` are set; `LLM_MODEL_CRITIQUE` is unset (YAML default `gpt-4.1-mini`).
+     - **So the merge itself changes no model.** The switch is the owner setting `LLM_MODEL_FREE=gpt-6-luna`
+       and `LLM_MODEL_PREMIUM=gpt-6.1-sol` together; rollback is setting them back.
+     - The two new pin keys stay unset and fall back to today's models.
+   - **The Long Exam pool stays at 48 in v0.174.0** (A4). Effective value confirmed 2026-10-19:
+     `application.yaml:249` `${LONG_EXAM_POOL_SIZE:48}`, the Java default `StudySnapProperties:169`, no
+     `application-prod.yaml` override, no Render override (owner, A7). All 626 production Long Exam pools
+     have `pool_size` 48. The reduction to 30 moves to v0.175.0.
+4. **Official curation cost alert (backend, Tier N, brief 2b).**
+   - **$10 per calendar month (A6). It alerts and never blocks.**
+   - The estimate is computed by a scheduled read-only job from **persisted** tokens on ADMIN-owned Study
+     Packs (`input_tokens`, `output_tokens`, `cached_input_tokens`), at configured per-token rates with the
+     cached-input discount.
+   - **It is labelled as partial, never as total curation spend.** Template seeding, summary regeneration
+     and repair persist no tokens, so their cost is reviewed on the OpenAI billing dashboard.
+   - **Delivery:** one in-app notification to the ADMIN account through `NotificationService.deliver`, with
+     a per-month dedup key, so a threshold crossing alerts once per month. `type` is a plain `VARCHAR(64)`
+     (`V139`), so a new `NotificationType` needs no migration.
+   - **The temporary pins expire:** `gpt-4.1` and `gpt-4.1-mini` shut down 2027-01-14. Every pinned path
+     needs its own replacement, not only Challenge (A2). Tracked by a `[CHECKPOINT]` row in `ROADMAP.md`.
 
 **Owner decision on the benchmark (2026-10-17, verbatim in
 `docs/claude-plans/2026-10-17-owner-conditional-approval-challenge-quiz-ux.md`). Conditional approval of the strategy,
@@ -120,7 +154,8 @@ not approval to deploy.**
     run (`docs/claude-plans/2026-10-17-v0174-targeted-challenge-start-benchmark-proposal.md`).
     - The harness change is test scope only and goes to Codex on its own PR.
     - The owner runs the paid calls.
-  - **Long Exam pool: lower it rather than benchmark the 26-question pool call (owner).** The owner chose to
+  - **[SUPERSEDED 2026-10-19 by A4: the pool stays 48 in v0.174.0; the reduction moves to v0.175.0.]**
+    **Long Exam pool: lower it rather than benchmark the 26-question pool call (owner).** The owner chose to
     lower it; **Release Implementor chose 30** (`long-exam-pool-size`, `application.yaml:249`;
     `StudySnapProperties:169`).
     - **Trade-off:** at 30 a pool serves one exam and is then refreshed (`ExamQuestionPoolService:134`), so
@@ -132,8 +167,8 @@ not approval to deploy.**
     - It lands with item 3's `application.yaml` defaults. Existing pools are untouched, since none has been
       served and no regeneration is allowed. If `LONG_EXAM_POOL_SIZE` is set on Render, changing it is an
       owner action.
-  - Still owed: the acceptable Challenge start wait, for FREE and for Plus/Pro. The benchmark results are
-    read against it.
+  - ~~Still owed: the acceptable Challenge start wait~~ **Answered 2026-10-19:** a 30 s target and a 60 s
+    maximum blocking wait (owner decisions, Set 1). The Challenge work is split out to v0.175.0.
 - Item 3's `application.yaml` default for `LLM_MODEL_PREMIUM` and the item 2 brief wait on these deliverables.
   So does any Challenge-specific routing: deliverable 4 may propose one, and it would be a third destination
   needing an explicit owner decision.
