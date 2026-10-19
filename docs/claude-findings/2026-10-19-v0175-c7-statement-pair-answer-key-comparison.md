@@ -87,3 +87,5 @@ The owner replied "approve all recommended".
 
 Small n: 17 to 58 items per model in quiz mode, so the rates are directional, not precise. One checker per
 item plus an independent re-check of the flags.
+
+**R2/R3 results:** `docs/claude-findings/2026-10-19-v0175-r2-statement-pair-answer-key-scan.md`. R3 there corrects the note above: the Graves note is a learner's public note, not Official.
