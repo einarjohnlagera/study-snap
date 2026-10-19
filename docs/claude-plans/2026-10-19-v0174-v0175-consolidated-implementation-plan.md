@@ -410,3 +410,16 @@ Release Implementor recommendation (the pre-screen) is the one approved.**
 | C6 | Board/Long Exam "press Start first" plus expiry sweep: separate PRs inside v0.175.0, or their own small follow-up release? | **Their own follow-up release right after v0.175.0** (B5: do not broaden v0.175.0) |
 | C7 | **(From B7, affects the v0.174.0 switch)** Run the free blind comparison of mini and Sol on the same "which statement is true" items, before switching FREE to Luna? | **Yes, before the switch.** Luna had wrong keys on 6 of 26 such items |
 | C8 | Where the B6 targeted backfill is built | **A small separate PR**, after the v0.174.0 switch, not inside the v0.175.0 Tier-H work |
+
+**C7 result and follow-ups (2026-10-19, owner approved R1–R3 as recommended):**
+`docs/claude-findings/2026-10-19-v0175-c7-statement-pair-answer-key-comparison.md`.
+- Study Pack quizzes had 0 wrong statement-pair keys on every model, so the v0.174.0 FREE → Luna switch is
+  unaffected.
+- Quiz-mode generation wrong-keys statement-pair items: mini about 12% (production today), Luna about 19%,
+  Sol 0%.
+- **R1 (added to v0.175.0 scope):** a statement-pair key guard (keyed option against the explanation's
+  per-statement verdicts, retry on mismatch) ships before or with FREE Challenge routing to Luna. Any prompt
+  or schema change needs the owner's sign-off on the exact change.
+- **R2:** a read-only scan of existing bank, template and Study Pack statement-pair keys, with a blind sample
+  check. Repairs are owner writes.
+- **R3:** two source-note errors go to the Note Strategist to draft and the owner to apply.

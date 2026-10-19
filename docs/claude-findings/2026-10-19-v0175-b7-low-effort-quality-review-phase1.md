@@ -75,6 +75,10 @@ Written 2026-10-19 by Release Implementor for owner-approved B7 Phase 1
   whether the keyed option's truth pattern matches the explanation's per-statement verdicts, and retry on a
   mismatch.
 
+**Follow-up (C7, same day):** `docs/claude-findings/2026-10-19-v0175-c7-statement-pair-answer-key-comparison.md`.
+Study Pack quizzes had 0 wrong keys on every model, so the v0.174.0 Luna switch is unaffected. The defect
+is in quiz-mode generation: mini about 12% today, Luna about 19%, Sol 0%.
+
 ## Other observations (both arms)
 
 - **Difficulty is weak for `hard` on Luna:** mean 2.56. Many distractors are strawmen or absolutes, and some
