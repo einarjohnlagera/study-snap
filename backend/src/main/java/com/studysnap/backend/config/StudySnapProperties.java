@@ -48,8 +48,10 @@ public class StudySnapProperties {
         private int maxNotesChars = 12000;
         private long maxImageBytes = 5_000_000;
         private int quizQuestionsFree = 5;
-        private String modelFree = "gpt-4.1-mini";
-        private String modelPremium = "gpt-4.1";
+        private String modelFree = "gpt-6-luna";
+        private String modelPremium = "gpt-6.1-sol";
+        private String modelInteractiveQuiz = "gpt-4.1-mini";
+        private String modelPaidInteractive = "gpt-4.1";
         private String modelCritique = "gpt-4.1-mini";
         private String promptDir = "prompts/study-pack-v1";
     }

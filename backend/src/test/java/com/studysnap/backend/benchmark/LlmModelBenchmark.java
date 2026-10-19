@@ -13,6 +13,7 @@ import com.studysnap.backend.service.impl.OpenAiLlmStudyPackService;
 import com.studysnap.backend.service.ChallengeQuizService;
 import com.studysnap.backend.service.model.GeneratedStudyPackContent;
 import com.studysnap.backend.service.model.StudyPackGenerationContext;
+import com.studysnap.backend.service.model.LlmRouting;
 import com.studysnap.backend.util.QuizValidationUtils;
 import com.studysnap.backend.util.QuizDeduplicationUtils;
 import java.io.BufferedReader;
@@ -174,6 +175,8 @@ public class LlmModelBenchmark {
         properties.getLlm().getApi().setApiKey(config.key());
         properties.getSettings().setModelFree(config.model());
         properties.getSettings().setModelPremium(config.model());
+        properties.getSettings().setModelInteractiveQuiz(config.model());
+        properties.getSettings().setModelPaidInteractive(config.model());
         SimpleClientHttpRequestFactory productionFactory = new SimpleClientHttpRequestFactory();
         productionFactory.setConnectTimeout(java.time.Duration.ofSeconds(properties.getLlm().getApi().getConnectTimeoutSeconds()));
         productionFactory.setReadTimeout(java.time.Duration.ofSeconds(properties.getLlm().getApi().getReadTimeoutSeconds()));
@@ -185,7 +188,8 @@ public class LlmModelBenchmark {
                 .requestInterceptor(meter).build();
         OpenAiLlmConfig productionConfig = new OpenAiLlmConfig();
         OpenAiLlmStudyPackService service = new OpenAiLlmStudyPackService(properties, mapper, client,
-                productionConfig.openAiPromptResources(mapper, properties));
+                productionConfig.openAiPromptResources(mapper, properties),
+                new com.studysnap.backend.service.LlmModelRouter(properties, null, null));
         List<Map<String, Object>> results = new ArrayList<>();
         Map<String, Integer> malformed = new HashMap<>();
         EFilter eFilter = config.legs().contains(Leg.E) ? EFilter.system() : null;
@@ -380,7 +384,8 @@ public class LlmModelBenchmark {
         return new StudyPackGenerationContext(
                 enumOrNull(input,"learnerLevel",LearnerLevel.class), textOrNull(input,"courseProgram"),
                 textOrNull(input,"subject"), strings(input,"tags"),
-                enumOrNull(input,"domainContext",DomainContext.class), enumOrNull(input,"noteLearnerLevel",LearnerLevel.class));
+                enumOrNull(input,"domainContext",DomainContext.class), enumOrNull(input,"noteLearnerLevel",LearnerLevel.class))
+                .withRouting(LlmRouting.tiered(null));
     }
     private static String textOrNull(JsonNode n, String field) { return n.path(field).isTextual() ? n.path(field).asText() : null; }
     private static <E extends Enum<E>> E enumOrNull(JsonNode n, String field, Class<E> type) { return n.hasNonNull(field) ? Enum.valueOf(type,n.path(field).asText()) : null; }

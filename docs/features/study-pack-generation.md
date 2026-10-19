@@ -639,3 +639,7 @@ Adaptive quiz generation is a separate follow-up flow:
 - generated from weak concepts in the latest completed Quick Review session
 - returns a new short practice set (3-5 questions) with concept labels and explanations
 - does not modify the original baseline Study Pack quiz
+
+# Model routing (v0.174.0)
+
+`LlmModelRouter` resolves one tier snapshot for each generation. FREE and expired paid subscriptions use `LLM_MODEL_FREE` (default `gpt-6-luna`); active PLUS/PRO subscriptions use `LLM_MODEL_PREMIUM` (default `gpt-6.1-sol`). A user with the `ADMIN` role uses the premium model even on a FREE plan, while the stored `model_tier` still reflects whether that user's subscription is paid. A missing or deleted owner routes to FREE with a warning. The same snapshot supplies both the request model and the stored tier; when the provider omits `model`, `model_used` falls back to the model sent. Existing Study Packs are not rewritten.

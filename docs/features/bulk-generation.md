@@ -209,3 +209,7 @@ Help includes a deep-linkable `Bulk Generation` guide at `/help#bulk-generate` c
 - async quiz generation
 
 No new analytics event was added for v0.29.1.
+
+# Generation model routing (v0.174.0)
+
+Bulk admin note-from-topic generation uses the admin requester's tier. The `ADMIN` role selects `LLM_MODEL_PREMIUM` even if the account's subscription is FREE. Single note-from-topic generation uses its own requester in the same resolver.

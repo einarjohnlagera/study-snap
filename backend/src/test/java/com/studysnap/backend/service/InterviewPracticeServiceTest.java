@@ -185,6 +185,10 @@ class InterviewPracticeServiceTest {
         assertThat(response.questionCount()).isEqualTo(5);
         assertThat(response.question()).isNotNull();
         assertThat(response.sourceNoteRefs()).isEmpty();
+        verify(quizGenerationService).generateInterviewPracticeQuiz(
+                eq(studyPack.getTitle()), eq(studyPack.getSummary()), eq(studyPack.getKeyConcepts()),
+                eq(List.of("Existing question")), eq(5), org.mockito.ArgumentMatchers.argThat(context ->
+                        com.studysnap.backend.service.model.LlmRouting.paidInteractive().equals(context.routing())));
         ArgumentCaptor<QuickReviewSessionEntity> sessionCaptor =
                 ArgumentCaptor.forClass(QuickReviewSessionEntity.class);
         verify(quickReviewSessionRepository, times(2)).save(sessionCaptor.capture());

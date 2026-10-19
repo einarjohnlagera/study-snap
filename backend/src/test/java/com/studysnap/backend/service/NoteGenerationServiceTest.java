@@ -136,6 +136,8 @@ class NoteGenerationServiceTest {
         assertThat(contextCaptor.getValue().tags()).isEmpty();
         assertThat(contextCaptor.getValue().domainContext()).isNull();
         assertThat(contextCaptor.getValue().noteLearnerLevel()).isNull();
+        assertThat(contextCaptor.getValue().routing()).isEqualTo(
+                com.studysnap.backend.service.model.LlmRouting.tiered(userId));
     }
 
     @Test

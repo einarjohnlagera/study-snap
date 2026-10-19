@@ -163,3 +163,7 @@ Reuse existing data sources where possible:
 - Admin note-authoring surfaces use the shared Note Editor and Bulk Generate forms, plus Note Detail's inline metadata panel for notes that already have a Study Pack. All three expose optional Domain Context and Authored Depth selects; the values apply to the saved note or every note in the batch and drive generation through `StudyPackGenerationContextResolver`.
 - Revenue numbers are estimates for internal monitoring, not accounting-grade reporting.
 - Admin Dashboard should support dark mode and remain usable on smaller screens, but it is primarily desktop-oriented.
+
+# Generation model routing (v0.174.0)
+
+Admin summary regeneration uses the note/pack owner's current tier. Malformed-quiz repair resolves the pack owner's current tier inside the async repair task, with FREE fallback if that owner is missing. Repair replaces only the quiz: the pack keeps its original `model_used` and `model_tier`, a known limitation.

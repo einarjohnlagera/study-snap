@@ -13,11 +13,24 @@ import com.studysnap.backend.dto.CompanionSection;
 import com.studysnap.backend.dto.QuizItem;
 import com.studysnap.backend.entity.DomainContext;
 import com.studysnap.backend.entity.LearnerLevel;
+import com.studysnap.backend.entity.ModelTier;
+import com.studysnap.backend.entity.PlanType;
+import com.studysnap.backend.entity.UserEntity;
+import com.studysnap.backend.entity.UserRole;
+import com.studysnap.backend.entity.SubscriptionEntity;
+import com.studysnap.backend.entity.SubscriptionStatus;
 import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
 import com.studysnap.backend.exception.AppException;
+import com.studysnap.backend.exception.UserNotFoundException;
+import com.studysnap.backend.service.LlmModelRouter;
+import com.studysnap.backend.service.SubscriptionService;
+import com.studysnap.backend.service.AnalyticsService;
+import com.studysnap.backend.repository.SubscriptionRepository;
+import com.studysnap.backend.repository.UserRepository;
+import com.studysnap.backend.service.model.LlmRouting;
 import com.studysnap.backend.service.model.GeneratedChallengeQuizContent;
 import com.studysnap.backend.service.model.GeneratedStudyPackContent;
 import com.studysnap.backend.service.model.CompanionGenerationContext;
@@ -27,6 +40,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mock;
 import org.mockito.ArgumentCaptor;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -36,9 +50,11 @@ import org.springframework.core.task.AsyncTaskExecutor;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.client.HttpServerErrorException;
+import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
 
 import java.io.IOException;
+import java.net.SocketTimeoutException;
 import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.Callable;
@@ -47,6 +63,10 @@ import java.util.concurrent.Future;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
+import java.util.Optional;
+import java.util.UUID;
+import java.time.Clock;
+import java.time.OffsetDateTime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -55,9 +75,22 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.mock;
 
 @ExtendWith(MockitoExtension.class)
 class OpenAiLlmStudyPackServiceTest {
+    private static final String CHANGED_FREE_MODEL = "changed-free";
+    private static final String CHANGED_PREMIUM_MODEL = "changed-premium";
+    private static final String PINNED_QUIZ_MODEL = "pinned-quiz";
+    private static final String PINNED_PAID_MODEL = "pinned-paid";
+    private static final String CONNECTION_REFUSED = "connection refused";
+    private static final String INTERVIEW_METHOD = "interview";
+    private static final String PIN_TEST_TITLE = "title";
+    private static final String PIN_TEST_SUMMARY = "summary";
+    private static final String PIN_TEST_DIFFICULTY = "medium";
+    private static final String PIN_TEST_CONCEPT = "Concept";
+    private static final String SECRET_PROMPT_TEXT = "SECRET_PROMPT_TEXT";
+    private static final String READ_TIMEOUT_MESSAGE = "read timed out";
     private static final String COLLEGE_CURRICULUM_LINE = "Curriculum level: College";
     private static final String DOMAIN_LINE_PREFIX = "Domain:";
     private static final String CURRICULUM_LINE_PREFIX = "Curriculum level:";
@@ -74,6 +107,12 @@ class OpenAiLlmStudyPackServiceTest {
     @Mock
     private RestClient.ResponseSpec responseSpec;
 
+    @Mock
+    private SubscriptionService subscriptionService;
+
+    @Mock
+    private UserRepository userRepository;
+
     private StudySnapProperties properties;
     private ObjectMapper objectMapper;
     private OpenAiLlmStudyPackService service;
@@ -82,8 +121,8 @@ class OpenAiLlmStudyPackServiceTest {
     void setUp() {
         properties = new StudySnapProperties();
         properties.getLlm().getApi().setApiKey("test-api-key");
-        properties.getSettings().setModelFree("gpt-4.1-mini");
-        properties.getSettings().setModelPremium("gpt-4.1");
+        properties.getSettings().setModelFree("gpt-6-luna");
+        properties.getSettings().setModelPremium("gpt-6.1-sol");
 
         objectMapper = new ObjectMapper();
         service = new OpenAiLlmStudyPackService(
@@ -114,7 +153,8 @@ class OpenAiLlmStudyPackServiceTest {
                 "Ask Companion developer prompt {COMPANION_CONTENT}",
                 "Long exam system prompt",
                 "Long exam developer prompt for {QUESTION_COUNT}. {BATCH_HINT} at {DIFFICULTY} for {LEARNER_LEVEL}. {LEARNER_LEVEL_GUIDANCE} {TRUE_FALSE_GUIDANCE} {COMPUTATION_GUIDANCE} {TIME_EXPECTATION}"
-            )
+            ),
+            new LlmModelRouter(properties, subscriptionService, userRepository)
         );
 
     }
@@ -997,6 +1037,448 @@ class OpenAiLlmStudyPackServiceTest {
         return values;
     }
 
+    @ParameterizedTest
+    @EnumSource(value = PlanType.class, names = {"FREE", "PLUS", "PRO"})
+    void tieredStudyPackSendsModelForEffectivePlan(PlanType plan) throws Exception {
+        UUID owner = UUID.randomUUID();
+        stubTier(owner, UserRole.USER, plan);
+        stubResponsesCall();
+        when(responseSpec.body(String.class)).thenReturn(studyPackResponseJson(buildValidStudyPackPayload()));
+
+        GeneratedStudyPackContent generated = service.generateStudyPack("Cell respiration notes",
+                generationContext().withRouting(LlmRouting.tiered(owner)));
+
+        assertSentModel(plan.isPaid() ? "gpt-6.1-sol" : "gpt-6-luna");
+        assertThat(generated.resolvedModelTier()).isEqualTo(plan.isPaid() ? ModelTier.PREMIUM : ModelTier.FREE);
+    }
+
+    @Test
+    void tieredAdminOnFreePlanSendsPremiumButKeepsFreeTierSnapshot() throws Exception {
+        UUID owner = UUID.randomUUID();
+        stubTier(owner, UserRole.ADMIN, PlanType.FREE);
+        stubResponsesCall();
+        when(responseSpec.body(String.class)).thenReturn(studyPackResponseJson(buildValidStudyPackPayload()));
+
+        GeneratedStudyPackContent generated = service.generateStudyPack("Cell respiration notes",
+                generationContext().withRouting(LlmRouting.tiered(owner)));
+
+        assertSentModel("gpt-6.1-sol");
+        assertThat(generated.resolvedModelTier()).isEqualTo(ModelTier.FREE);
+    }
+
+    @Test
+    void tieredLapsedProSendsFreeModelFromEffectiveSnapshot() throws Exception {
+        UUID owner = UUID.randomUUID();
+        UserEntity user = mock(UserEntity.class);
+        when(user.getRole()).thenReturn(UserRole.USER);
+        when(userRepository.findById(owner)).thenReturn(Optional.of(user));
+        SubscriptionEntity lapsed = new SubscriptionEntity();
+        lapsed.setPlanType(PlanType.PRO);
+        lapsed.setStatus(SubscriptionStatus.ACTIVE);
+        lapsed.setStartAt(OffsetDateTime.now().minusDays(40));
+        lapsed.setEndAt(OffsetDateTime.now().minusDays(1));
+        SubscriptionRepository subscriptionRepository = mock(SubscriptionRepository.class);
+        when(subscriptionRepository.findByUser_IdAndStatusOrderByUpdatedAtDesc(owner, SubscriptionStatus.ACTIVE))
+                .thenReturn(List.of(lapsed));
+        SubscriptionService realSubscriptions = new SubscriptionService(subscriptionRepository,
+                userRepository, mock(AnalyticsService.class), Clock.systemUTC());
+        ReflectionTestUtils.setField(service, "modelRouter",
+                new LlmModelRouter(properties, realSubscriptions, userRepository));
+        stubResponsesCall();
+        when(responseSpec.body(String.class)).thenReturn(studyPackResponseJson(buildValidStudyPackPayload()));
+
+        service.generateStudyPack("Cell respiration notes", generationContext().withRouting(LlmRouting.tiered(owner)));
+
+        assertSentModel("gpt-6-luna");
+        verify(subscriptionRepository).findByUser_IdAndStatusOrderByUpdatedAtDesc(owner, SubscriptionStatus.ACTIVE);
+    }
+
+    @Test
+    void missingTierOwnerFallsBackToFreeWithoutThrowing() throws Exception {
+        UUID owner = UUID.randomUUID();
+        stubResponsesCall();
+        when(responseSpec.body(String.class)).thenReturn(studyPackResponseJson(buildValidStudyPackPayload()));
+
+        service.generateStudyPack("Cell respiration notes", generationContext().withRouting(LlmRouting.tiered(owner)));
+
+        assertSentModel("gpt-6-luna");
+    }
+
+    @Test
+    void deletedTierOwnerBetweenLookupAndSnapshotFallsBackToFreeWithWarning() throws Exception {
+        UUID owner = UUID.randomUUID();
+        UserEntity user = mock(UserEntity.class);
+        when(user.getRole()).thenReturn(UserRole.USER);
+        when(userRepository.findById(owner)).thenReturn(Optional.of(user));
+        when(subscriptionService.getPlanSnapshot(owner)).thenThrow(new UserNotFoundException());
+        Logger routerLogger = (Logger) org.slf4j.LoggerFactory.getLogger(LlmModelRouter.class);
+        ListAppender<ILoggingEvent> appender = new ListAppender<>();
+        appender.start();
+        routerLogger.addAppender(appender);
+        try {
+            stubResponsesCall();
+            when(responseSpec.body(String.class)).thenReturn(studyPackResponseJson(buildValidStudyPackPayload()));
+
+            service.generateStudyPack("Cell respiration notes",
+                    generationContext().withRouting(LlmRouting.tiered(owner)));
+
+            assertSentModel("gpt-6-luna");
+            assertThat(appender.list).extracting(ILoggingEvent::getFormattedMessage)
+                    .anySatisfy(line -> assertThat(line).contains("routing to FREE", owner.toString()));
+        } finally {
+            routerLogger.detachAppender(appender);
+        }
+    }
+
+    @Test
+    void studyPackWithoutResponseModelUsesTheSentModel() throws Exception {
+        UUID owner = UUID.randomUUID();
+        stubTier(owner, UserRole.USER, PlanType.PLUS);
+        ObjectNode response = (ObjectNode) objectMapper.readTree(studyPackResponseJson(buildValidStudyPackPayload()));
+        response.remove("model");
+        stubResponsesCall();
+        when(responseSpec.body(String.class)).thenReturn(objectMapper.writeValueAsString(response));
+
+        GeneratedStudyPackContent generated = service.generateStudyPack("Cell respiration notes",
+                generationContext().withRouting(LlmRouting.tiered(owner)));
+
+        assertSentModel("gpt-6.1-sol");
+        assertThat(generated.modelUsed()).isEqualTo("gpt-6.1-sol");
+        assertThat(generated.modelSent()).isEqualTo("gpt-6.1-sol");
+    }
+
+    @Test
+    void interactivePinsIgnoreTierKeyChanges() throws Exception {
+        properties.getSettings().setModelFree(CHANGED_FREE_MODEL);
+        properties.getSettings().setModelPremium(CHANGED_PREMIUM_MODEL);
+        properties.getSettings().setModelInteractiveQuiz(PINNED_QUIZ_MODEL);
+        properties.getSettings().setModelPaidInteractive(PINNED_PAID_MODEL);
+        stubResponsesCall();
+        when(responseSpec.body(String.class)).thenReturn(
+                generatedQuizResponseJson(objectMapper.createObjectNode().put("tip", "Review ATP.")),
+                generatedQuizResponseJson(buildCompanionPayload()));
+
+        service.generateQuickReviewStudyTip(List.of("ATP"), LlmRouting.interactiveQuiz());
+        service.generateCompanion(companionContext().withRouting(LlmRouting.paidInteractive()),
+                Set.of(CompanionSection.OVERVIEW));
+
+        ArgumentCaptor<String> bodies = ArgumentCaptor.forClass(String.class);
+        verify(requestSpec, times(2)).body(bodies.capture());
+        assertThat(objectMapper.readTree(bodies.getAllValues().get(0)).path("model").asText()).isEqualTo(PINNED_QUIZ_MODEL);
+        assertThat(objectMapper.readTree(bodies.getAllValues().get(1)).path("model").asText()).isEqualTo(PINNED_PAID_MODEL);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"challenge", "more", "board", "adaptive", "teacher", "long", INTERVIEW_METHOD})
+    void everyInteractiveQuizImplementationSendsItsPin(String method) throws Exception {
+        properties.getSettings().setModelFree(CHANGED_FREE_MODEL);
+        properties.getSettings().setModelPremium(CHANGED_PREMIUM_MODEL);
+        properties.getSettings().setModelInteractiveQuiz(PINNED_QUIZ_MODEL);
+        properties.getSettings().setModelPaidInteractive(PINNED_PAID_MODEL);
+        stubResponsesCall();
+        when(responseSpec.body(String.class)).thenReturn(generatedQuizResponseJson(buildGeneratedQuizPayload()));
+        StudyPackGenerationContext context = generationContext().withRouting(
+                INTERVIEW_METHOD.equals(method) ? LlmRouting.paidInteractive() : LlmRouting.interactiveQuiz());
+        List<String> concepts = List.of("ATP production", "Glycolysis");
+        switch (method) {
+            case "challenge" -> service.generateChallengeQuiz(PIN_TEST_TITLE, PIN_TEST_SUMMARY, concepts, List.of(), 2, PIN_TEST_DIFFICULTY, context);
+            case "more" -> service.generateMoreChallengeQuiz(PIN_TEST_TITLE, PIN_TEST_SUMMARY, concepts, List.of(), List.of(), 2, PIN_TEST_DIFFICULTY, context);
+            case "board" -> service.generateBoardExamQuiz(PIN_TEST_TITLE, PIN_TEST_SUMMARY, concepts, List.of(), 2, PIN_TEST_DIFFICULTY, context);
+            case "adaptive" -> service.generateAdaptivePracticeQuiz(PIN_TEST_TITLE, PIN_TEST_SUMMARY, concepts, concepts, List.of(), 2, context);
+            case "teacher" -> service.generateTeacherQuiz(PIN_TEST_TITLE, "notes", List.of(), 2, context);
+            case "long" -> service.generateLongExam(PIN_TEST_TITLE, PIN_TEST_SUMMARY, concepts, List.of(), 2, PIN_TEST_DIFFICULTY, context);
+            case INTERVIEW_METHOD -> service.generateInterviewPracticeQuiz(PIN_TEST_TITLE, PIN_TEST_SUMMARY, concepts, List.of(), 2, context);
+            default -> throw new IllegalArgumentException(method);
+        }
+
+        assertAllSentModels(1, INTERVIEW_METHOD.equals(method) ? PINNED_PAID_MODEL : PINNED_QUIZ_MODEL);
+    }
+
+    @Test
+    void parallelLongExamSendsInteractivePinForBothHalves() throws Exception {
+        setDistinctInteractivePins();
+        stubResponsesCall();
+        when(responseSpec.body(String.class)).thenReturn(
+                generatedQuizResponseJson(buildGeneratedQuizPayload("First", 9)),
+                generatedQuizResponseJson(buildGeneratedQuizPayload("Second", 9)));
+
+        service.generateLongExamParallel(PIN_TEST_TITLE, PIN_TEST_SUMMARY, List.of(PIN_TEST_CONCEPT), List.of(), 14,
+                PIN_TEST_DIFFICULTY, generationContext().withRouting(LlmRouting.interactiveQuiz()), new DirectAsyncTaskExecutor());
+
+        assertAllSentModels(2, PINNED_QUIZ_MODEL);
+    }
+
+    @Test
+    void parallelLongExamSalvageSendsInteractivePinForEveryRequest() throws Exception {
+        setDistinctInteractivePins();
+        stubResponsesCall();
+        when(responseSpec.body(String.class)).thenThrow(new ResourceAccessException(CONNECTION_REFUSED))
+                .thenReturn(generatedQuizResponseJson(buildGeneratedQuizPayload("Second", 9)))
+                .thenReturn(generatedQuizResponseJson(buildGeneratedQuizPayload("Salvage", 5)));
+
+        service.generateLongExamParallel(PIN_TEST_TITLE, PIN_TEST_SUMMARY, List.of(PIN_TEST_CONCEPT), List.of(), 14,
+                PIN_TEST_DIFFICULTY, generationContext().withRouting(LlmRouting.interactiveQuiz()), new DirectAsyncTaskExecutor());
+
+        assertAllSentModels(3, PINNED_QUIZ_MODEL);
+    }
+
+    @Test
+    void parallelLongExamFullSequentialFallbackSendsInteractivePinForEveryRequest() throws Exception {
+        setDistinctInteractivePins();
+        stubResponsesCall();
+        when(responseSpec.body(String.class)).thenThrow(new ResourceAccessException(CONNECTION_REFUSED))
+                .thenThrow(new ResourceAccessException(CONNECTION_REFUSED))
+                .thenReturn(generatedQuizResponseJson(buildGeneratedQuizPayload("Fallback", 14)));
+
+        service.generateLongExamParallel(PIN_TEST_TITLE, PIN_TEST_SUMMARY, List.of(PIN_TEST_CONCEPT), List.of(), 14,
+                PIN_TEST_DIFFICULTY, generationContext().withRouting(LlmRouting.interactiveQuiz()), new DirectAsyncTaskExecutor());
+
+        assertAllSentModels(3, PINNED_QUIZ_MODEL);
+    }
+
+    @Test
+    void consistencyRetrySendsInteractivePinOnBothRequests() throws Exception {
+        setDistinctInteractivePins();
+        stubResponsesCall();
+        stubInconsistentQuestionThenReplacement("Replacement");
+
+        service.generateChallengeQuiz(PIN_TEST_TITLE, PIN_TEST_SUMMARY, List.of("Percent change"), List.of(),
+                1, PIN_TEST_DIFFICULTY, generationContext().withRouting(LlmRouting.interactiveQuiz()));
+
+        assertAllSentModels(2, PINNED_QUIZ_MODEL);
+    }
+
+    private void setDistinctInteractivePins() {
+        properties.getSettings().setModelFree(CHANGED_FREE_MODEL);
+        properties.getSettings().setModelPremium(CHANGED_PREMIUM_MODEL);
+        properties.getSettings().setModelInteractiveQuiz(PINNED_QUIZ_MODEL);
+    }
+
+    private void assertAllSentModels(int requestCount, String expectedModel) throws Exception {
+        ArgumentCaptor<String> bodies = ArgumentCaptor.forClass(String.class);
+        verify(requestSpec, times(requestCount)).body(bodies.capture());
+        assertThat(bodies.getAllValues()).hasSize(requestCount);
+        for (String body : bodies.getAllValues()) {
+            assertThat(objectMapper.readTree(body).path("model").asText()).isEqualTo(expectedModel);
+        }
+    }
+
+    @Test
+    void missingRouteFailsForEachTieredGenerationEntryPoint() {
+        StudyPackGenerationContext withoutRoute = generationContext().withRouting(null);
+
+        assertThatThrownBy(() -> service.generateStudyPack("notes", withoutRoute))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("explicit LLM route");
+        assertThatThrownBy(() -> service.regenerateSummary("notes", withoutRoute))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("explicit LLM route");
+        assertThatThrownBy(() -> service.generateNoteFromTopic("topic", withoutRoute))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("explicit LLM route");
+        verifyNoInteractions(restClient);
+    }
+
+    @Test
+    void interviewCritiqueStillSendsCritiqueModel() throws Exception {
+        properties.getSettings().setModelCritique("critique-pin");
+        stubResponsesCall();
+        when(responseSpec.body(String.class)).thenReturn(generatedQuizResponseJson(
+                objectMapper.createObjectNode().put("verdict", "STRONG")
+                        .put("rationale", "The answer follows the explanation.")
+                        .put("followUp", "What would change the result?")));
+
+        service.generateInterviewCritique(new QuizItem("What is ATP?", List.of("A", "B", "C", "D"),
+                0, "ATP", "ATP transfers energy."), 0);
+
+        assertSentModel("critique-pin");
+    }
+
+    private void stubTier(UUID owner, UserRole role, PlanType plan) {
+        UserEntity user = mock(UserEntity.class);
+        when(user.getRole()).thenReturn(role);
+        when(userRepository.findById(owner)).thenReturn(Optional.of(user));
+        when(subscriptionService.getPlanSnapshot(owner))
+                .thenReturn(new SubscriptionService.PlanSnapshot(plan, false, null, null));
+    }
+
+    private void assertSentModel(String expected) throws Exception {
+        ArgumentCaptor<String> body = ArgumentCaptor.forClass(String.class);
+        verify(requestSpec).body(body.capture());
+        assertThat(objectMapper.readTree(body.getValue()).path("model").asText()).isEqualTo(expected);
+    }
+
+    @Test
+    void structuredLlmCallLogIncludesUsageAndExcludesSecrets() throws Exception {
+        Logger logger = (Logger) org.slf4j.LoggerFactory.getLogger(OpenAiLlmStudyPackService.class);
+        ListAppender<ILoggingEvent> appender = new ListAppender<>();
+        appender.start();
+        logger.addAppender(appender);
+        Level previousLevel = logger.getLevel();
+        logger.setLevel(Level.INFO);
+        try {
+            stubResponsesCall();
+            ObjectNode response = (ObjectNode) objectMapper.readTree(
+                    generatedQuizResponseJsonWithUsage(objectMapper.createObjectNode().put("tip", "Review ATP.")));
+            ((ObjectNode) response.path("usage")).putObject("output_tokens_details").put("reasoning_tokens", 9);
+            when(responseSpec.body(String.class)).thenReturn(objectMapper.writeValueAsString(response));
+
+            service.generateQuickReviewStudyTip(List.of(SECRET_PROMPT_TEXT), LlmRouting.interactiveQuiz());
+
+            List<String> lines = llmCallLines(appender);
+            assertThat(lines).hasSize(1);
+            assertThat(lines.getFirst()).contains("operation=note_lib_study_tip", "route=INTERACTIVE_QUIZ",
+                    "model=gpt-4.1-mini", "tier=n/a", "latency_ms=", "attempt=1", "outcome=SUCCESS",
+                    "input_tokens=42", "output_tokens=84", "cached_tokens=7", "reasoning_tokens=9")
+                    .doesNotContain(SECRET_PROMPT_TEXT, "test-api-key", "Authorization");
+        } finally {
+            logger.setLevel(previousLevel);
+            logger.detachAppender(appender);
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"HTTP_ERROR", "TIMEOUT", "SCHEMA_OR_PARSE"})
+    void structuredLlmCallLogEmitsOncePerFailedHttpAttempt(String outcome) {
+        Logger logger = (Logger) org.slf4j.LoggerFactory.getLogger(OpenAiLlmStudyPackService.class);
+        ListAppender<ILoggingEvent> appender = new ListAppender<>();
+        appender.start();
+        logger.addAppender(appender);
+        Level previousLevel = logger.getLevel();
+        logger.setLevel(Level.INFO);
+        try {
+            stubResponsesCall();
+            switch (outcome) {
+                case "HTTP_ERROR" -> when(responseSpec.body(String.class)).thenThrow(HttpServerErrorException.create(
+                        HttpStatus.BAD_GATEWAY, "Bad Gateway", HttpHeaders.EMPTY,
+                        "secret upstream response".getBytes(StandardCharsets.UTF_8), StandardCharsets.UTF_8));
+                case "TIMEOUT" -> when(responseSpec.body(String.class)).thenThrow(
+                        new ResourceAccessException(READ_TIMEOUT_MESSAGE, new SocketTimeoutException(READ_TIMEOUT_MESSAGE)));
+                default -> when(responseSpec.body(String.class)).thenReturn("{broken response");
+            }
+            List<String> summaries = List.of(SECRET_PROMPT_TEXT);
+            LlmRouting routing = LlmRouting.interactiveQuiz();
+
+            assertThatThrownBy(() -> service.generateQuickReviewStudyTip(summaries, routing))
+                    .isInstanceOf(AppException.class);
+
+            List<String> lines = llmCallLines(appender);
+            int expectedAttempts = 1;
+            assertThat(lines).hasSize(expectedAttempts);
+            for (int attempt = 1; attempt <= expectedAttempts; attempt++) {
+                assertThat(lines.get(attempt - 1)).contains("operation=note_lib_study_tip",
+                        "route=INTERACTIVE_QUIZ", "model=gpt-4.1-mini", "tier=n/a", "latency_ms=",
+                        "attempt=" + attempt, "outcome=" + outcome, "input_tokens=null", "output_tokens=null",
+                        "cached_tokens=null", "reasoning_tokens=null")
+                        .doesNotContain(SECRET_PROMPT_TEXT, "test-api-key", "Authorization", "secret upstream response");
+            }
+        } finally {
+            logger.setLevel(previousLevel);
+            logger.detachAppender(appender);
+        }
+    }
+
+    private List<String> llmCallLines(ListAppender<ILoggingEvent> appender) {
+        return appender.list.stream().map(ILoggingEvent::getFormattedMessage)
+                .filter(line -> line.startsWith("action=llm_call ")).toList();
+    }
+
+    @Test
+    void structuredLlmCallLogNumbersParseRetryAttempts() throws Exception {
+        Logger logger = (Logger) org.slf4j.LoggerFactory.getLogger(OpenAiLlmStudyPackService.class);
+        ListAppender<ILoggingEvent> appender = new ListAppender<>();
+        appender.start();
+        logger.addAppender(appender);
+        Level previousLevel = logger.getLevel();
+        logger.setLevel(Level.INFO);
+        try {
+            stubResponsesCall();
+            when(responseSpec.body(String.class)).thenReturn("{broken response",
+                    studyPackResponseJson(buildValidStudyPackPayload()));
+
+            service.generateStudyPack("Cell respiration notes", generationContext().withRouting(LlmRouting.tiered(null)));
+
+            assertThat(llmCallLines(appender)).hasSize(2);
+            assertThat(llmCallLines(appender).get(0)).contains("attempt=1", "outcome=SCHEMA_OR_PARSE");
+            assertThat(llmCallLines(appender).get(1)).contains("attempt=2", "outcome=SUCCESS");
+        } finally {
+            logger.setLevel(previousLevel);
+            logger.detachAppender(appender);
+        }
+    }
+
+    @Test
+    void structuredLlmCallLogMarksSemanticRejectionBeforeSuccessfulRetry() throws Exception {
+        Logger logger = (Logger) org.slf4j.LoggerFactory.getLogger(OpenAiLlmStudyPackService.class);
+        ListAppender<ILoggingEvent> appender = new ListAppender<>();
+        appender.start();
+        logger.addAppender(appender);
+        try {
+            ObjectNode invalid = buildValidStudyPackPayload();
+            ((ArrayNode) invalid.get("quiz")).remove(4);
+            stubResponsesCall();
+            when(responseSpec.body(String.class)).thenReturn(studyPackResponseJson(invalid),
+                    studyPackResponseJson(buildValidStudyPackPayload()));
+
+            service.generateStudyPack("notes", generationContext().withRouting(LlmRouting.tiered(null)));
+
+            assertThat(llmCallLines(appender)).hasSize(2);
+            assertThat(llmCallLines(appender).get(0)).contains("attempt=1", "outcome=SCHEMA_OR_PARSE");
+            assertThat(llmCallLines(appender).get(1)).contains("attempt=2", "outcome=SUCCESS");
+        } finally {
+            logger.detachAppender(appender);
+        }
+    }
+
+    @Test
+    void connectionErrorIsNotLoggedAsTimeout() {
+        Logger logger = (Logger) org.slf4j.LoggerFactory.getLogger(OpenAiLlmStudyPackService.class);
+        ListAppender<ILoggingEvent> appender = new ListAppender<>();
+        appender.start();
+        logger.addAppender(appender);
+        try {
+            stubResponsesCall();
+            when(responseSpec.body(String.class)).thenThrow(new ResourceAccessException(CONNECTION_REFUSED));
+            List<String> summaries = List.of("secret prompt");
+            LlmRouting routing = LlmRouting.interactiveQuiz();
+
+            assertThatThrownBy(() -> service.generateQuickReviewStudyTip(summaries, routing))
+                    .isInstanceOf(AppException.class);
+
+            assertThat(llmCallLines(appender)).hasSize(1);
+            assertThat(llmCallLines(appender).getFirst()).contains("outcome=HTTP_ERROR").doesNotContain("outcome=TIMEOUT");
+        } finally {
+            logger.detachAppender(appender);
+        }
+    }
+
+    @Test
+    void upstreamHttpWarningIncludesErrorDetailWithoutRequestSecrets() {
+        Logger logger = (Logger) org.slf4j.LoggerFactory.getLogger(OpenAiLlmStudyPackService.class);
+        ListAppender<ILoggingEvent> appender = new ListAppender<>();
+        appender.start();
+        logger.addAppender(appender);
+        try {
+            stubResponsesCall();
+            String errorBody = "{\"error\":{\"message\":\"unknown model pinned-quiz\",\"code\":\"model_not_found\"}}";
+            when(responseSpec.body(String.class)).thenThrow(HttpServerErrorException.create(
+                    HttpStatus.BAD_REQUEST, "Bad Request", HttpHeaders.EMPTY,
+                    errorBody.getBytes(StandardCharsets.UTF_8), StandardCharsets.UTF_8));
+            List<String> summaries = List.of(SECRET_PROMPT_TEXT);
+            LlmRouting routing = LlmRouting.interactiveQuiz();
+
+            assertThatThrownBy(() -> service.generateQuickReviewStudyTip(summaries, routing))
+                    .isInstanceOf(AppException.class);
+
+            assertThat(appender.list).extracting(ILoggingEvent::getFormattedMessage)
+                    .anySatisfy(line -> assertThat(line).contains("upstreamMessage=unknown model pinned-quiz"));
+            assertThat(appender.list).extracting(ILoggingEvent::getFormattedMessage)
+                    .allSatisfy(line -> assertThat(line).doesNotContain(SECRET_PROMPT_TEXT, "Authorization", "test-api-key"));
+        } finally {
+            logger.detachAppender(appender);
+        }
+    }
+
     @Test
     void generateStudyPack_returnsValidatedContentAndUsage() throws JsonProcessingException {
         stubResponsesCall();
@@ -1009,7 +1491,7 @@ class OpenAiLlmStudyPackServiceTest {
                 "Biology",
                 "Biology",
                 List.of("cells", "respiration")
-            )
+            ).withRouting(LlmRouting.tiered(null))
         );
 
         assertThat(content.title()).isEqualTo("Cell Respiration Review");
@@ -1059,7 +1541,7 @@ class OpenAiLlmStudyPackServiceTest {
 
         GeneratedStudyPackContent content = service.generateStudyPack(
                 "Percentage notes",
-                new StudyPackGenerationContext(LearnerLevel.COLLEGE, "Mathematics", "Percentages", List.of())
+                new StudyPackGenerationContext(LearnerLevel.COLLEGE, "Mathematics", "Percentages", List.of()).withRouting(LlmRouting.tiered(null))
         );
 
         assertThat(content.quiz()).hasSize(5);
@@ -1087,7 +1569,7 @@ class OpenAiLlmStudyPackServiceTest {
 
         GeneratedStudyPackContent content = service.generateStudyPack(
                 "Percentage notes",
-                new StudyPackGenerationContext(LearnerLevel.COLLEGE, "Mathematics", "Percentages", List.of())
+                new StudyPackGenerationContext(LearnerLevel.COLLEGE, "Mathematics", "Percentages", List.of()).withRouting(LlmRouting.tiered(null))
         );
 
         assertThat(content.quiz()).isEmpty();
@@ -1170,7 +1652,7 @@ class OpenAiLlmStudyPackServiceTest {
                         "Biology",
                         "Biology",
                         List.of("cells", "respiration")
-                )
+                ).withRouting(LlmRouting.tiered(null))
         );
 
         assertThat(content.keyConcepts()).contains("Glycolysis");
@@ -1193,7 +1675,7 @@ class OpenAiLlmStudyPackServiceTest {
 
         GeneratedStudyPackContent content = service.generateStudyPack(
                 "Fluid mechanics notes",
-                new StudyPackGenerationContext(LearnerLevel.COLLEGE, "Engineering", "Physics", List.of())
+                new StudyPackGenerationContext(LearnerLevel.COLLEGE, "Engineering", "Physics", List.of()).withRouting(LlmRouting.tiered(null))
         );
 
         assertThat(content.quiz().get(0).questionFormat()).isEqualTo("MATCHING");
@@ -1212,7 +1694,7 @@ class OpenAiLlmStudyPackServiceTest {
 
         GeneratedStudyPackContent content = service.generateStudyPack(
                 "Cell respiration notes",
-                new StudyPackGenerationContext(LearnerLevel.COLLEGE, "Biology", "Biology", List.of())
+                new StudyPackGenerationContext(LearnerLevel.COLLEGE, "Biology", "Biology", List.of()).withRouting(LlmRouting.tiered(null))
         );
 
         assertThat(content.quiz().get(0).questionFormat()).isEqualTo("MCQ");
@@ -1231,7 +1713,7 @@ class OpenAiLlmStudyPackServiceTest {
 
         GeneratedStudyPackContent content = service.generateStudyPack(
                 "Cell respiration notes",
-                new StudyPackGenerationContext(LearnerLevel.COLLEGE, "Biology", "Biology", List.of())
+                new StudyPackGenerationContext(LearnerLevel.COLLEGE, "Biology", "Biology", List.of()).withRouting(LlmRouting.tiered(null))
         );
 
         assertThat(content.quiz().getFirst().questionFormat()).isEqualTo("MCQ");
@@ -1278,7 +1760,7 @@ class OpenAiLlmStudyPackServiceTest {
 
         GeneratedStudyPackContent content = service.generateStudyPack(
                 "Fluid mechanics notes",
-                new StudyPackGenerationContext(LearnerLevel.COLLEGE, "Engineering", "Physics", List.of())
+                new StudyPackGenerationContext(LearnerLevel.COLLEGE, "Engineering", "Physics", List.of()).withRouting(LlmRouting.tiered(null))
         );
 
         assertThat(content.quiz().get(0).questionFormat()).isEqualTo("MCQ");
@@ -1300,7 +1782,7 @@ class OpenAiLlmStudyPackServiceTest {
                 List.of("beams", "load"),
                 DomainContext.CIVIL_ENGINEERING,
                 LearnerLevel.BOARD_EXAM_REVIEW
-            )
+            ).withRouting(LlmRouting.tiered(null))
         );
 
         ArgumentCaptor<String> requestCaptor = ArgumentCaptor.forClass(String.class);
@@ -1344,7 +1826,7 @@ class OpenAiLlmStudyPackServiceTest {
                 List.of("antibiotics"),
                 DomainContext.BASIC_MEDICAL_SCIENCES,
                 LearnerLevel.COLLEGE
-            )
+            ).withRouting(LlmRouting.tiered(null))
         );
 
         ArgumentCaptor<String> requestCaptor = ArgumentCaptor.forClass(String.class);
@@ -1374,7 +1856,7 @@ class OpenAiLlmStudyPackServiceTest {
                 List.of("beams", "load"),
                 DomainContext.CIVIL_ENGINEERING,
                 null
-            )
+            ).withRouting(LlmRouting.tiered(null))
         );
 
         ArgumentCaptor<String> requestCaptor = ArgumentCaptor.forClass(String.class);
@@ -1409,7 +1891,7 @@ class OpenAiLlmStudyPackServiceTest {
                         List.of("algebra"),
                         DomainContext.ENGINEERING_MATHEMATICS,
                         LearnerLevel.COLLEGE
-                )
+                ).withRouting(LlmRouting.tiered(null))
         );
 
         ArgumentCaptor<String> requestCaptor = ArgumentCaptor.forClass(String.class);
@@ -1443,7 +1925,7 @@ class OpenAiLlmStudyPackServiceTest {
                         List.of(),
                         DomainContext.GENERAL_EDUCATION,
                         LearnerLevel.JUNIOR_HIGH
-                )
+                ).withRouting(LlmRouting.tiered(null))
         );
 
         ArgumentCaptor<String> requestCaptor = ArgumentCaptor.forClass(String.class);
@@ -1470,7 +1952,7 @@ class OpenAiLlmStudyPackServiceTest {
                 "Law",
                 null,
                 List.of("criminal law")
-            )
+            ).withRouting(LlmRouting.tiered(null))
         );
 
         // Subtopic stripped — domain only
@@ -1487,7 +1969,7 @@ class OpenAiLlmStudyPackServiceTest {
 
             GeneratedStudyPackContent content = service.generateStudyPack(
                 "Domain notes",
-                new StudyPackGenerationContext(LearnerLevel.COLLEGE, null, null, List.of())
+                new StudyPackGenerationContext(LearnerLevel.COLLEGE, null, null, List.of()).withRouting(LlmRouting.tiered(null))
             );
 
             assertThat(content.subject()).isNull();
@@ -1500,7 +1982,7 @@ class OpenAiLlmStudyPackServiceTest {
     void generateStudyPack_throwsConfigurationErrorWhenApiKeyIsMissing() {
         properties.getLlm().getApi().setApiKey(" ");
 
-        StudyPackGenerationContext context = new StudyPackGenerationContext(null, null, null, List.of());
+        StudyPackGenerationContext context = new StudyPackGenerationContext(null, null, null, List.of()).withRouting(LlmRouting.tiered(null));
         assertThatThrownBy(() -> service.generateStudyPack(
             "Cell respiration notes",
             context
@@ -1525,7 +2007,7 @@ class OpenAiLlmStudyPackServiceTest {
             StandardCharsets.UTF_8
         ));
 
-        StudyPackGenerationContext context = new StudyPackGenerationContext(null, null, null, List.of());
+        StudyPackGenerationContext context = new StudyPackGenerationContext(null, null, null, List.of()).withRouting(LlmRouting.tiered(null));
         assertThatThrownBy(() -> service.generateStudyPack(
             "Cell respiration notes",
             context
@@ -1557,7 +2039,7 @@ class OpenAiLlmStudyPackServiceTest {
 
         String content = service.generateNoteFromTopic(
                 "Weirs",
-                new StudyPackGenerationContext(null, "Civil Engineering", null, List.of("hydraulics"))
+                new StudyPackGenerationContext(null, "Civil Engineering", null, List.of("hydraulics")).withRouting(LlmRouting.tiered(null))
         );
 
         assertThat(content).startsWith("Discharge Over Sharp-Crested Weirs\n\n📘 Overview\n");
@@ -1577,7 +2059,7 @@ class OpenAiLlmStudyPackServiceTest {
 
         assertThatThrownBy(() -> service.generateNoteFromTopic(
                 "Weirs",
-                new StudyPackGenerationContext(null, "Civil Engineering", null, List.of("hydraulics"))
+                new StudyPackGenerationContext(null, "Civil Engineering", null, List.of("hydraulics")).withRouting(LlmRouting.tiered(null))
         )).hasMessageContaining("invalid quick recall content");
     }
 
@@ -1600,7 +2082,7 @@ class OpenAiLlmStudyPackServiceTest {
 
         assertThatThrownBy(() -> service.generateNoteFromTopic(
                 "Weirs",
-                new StudyPackGenerationContext(null, "Civil Engineering", null, List.of("hydraulics"))
+                new StudyPackGenerationContext(null, "Civil Engineering", null, List.of("hydraulics")).withRouting(LlmRouting.tiered(null))
         )).hasMessageContaining("invalid core details");
     }
 
@@ -1628,7 +2110,7 @@ class OpenAiLlmStudyPackServiceTest {
 
         String content = service.generateNoteFromTopic(
                 "Compound Interest",
-                new StudyPackGenerationContext(null, "Civil Engineering", null, List.of("engineering economics"))
+                new StudyPackGenerationContext(null, "Civil Engineering", null, List.of("engineering economics")).withRouting(LlmRouting.tiered(null))
         );
 
         assertThat(content).contains("compound interest is calculated by");
@@ -1652,7 +2134,7 @@ class OpenAiLlmStudyPackServiceTest {
 
         String content = service.generateNoteFromTopic(
                 "Compound Interest",
-                new StudyPackGenerationContext(null, "Civil Engineering", null, List.of("engineering economics"))
+                new StudyPackGenerationContext(null, "Civil Engineering", null, List.of("engineering economics")).withRouting(LlmRouting.tiered(null))
         );
 
         assertThat(content).contains("how much a borrower pays over time");
@@ -1669,7 +2151,7 @@ class OpenAiLlmStudyPackServiceTest {
 
         service.generateNoteFromTopic(
                 "Weirs",
-                new StudyPackGenerationContext(null, "Civil Engineering", null, List.of("hydraulics"))
+                new StudyPackGenerationContext(null, "Civil Engineering", null, List.of("hydraulics")).withRouting(LlmRouting.tiered(null))
         );
 
         ArgumentCaptor<String> requestCaptor = ArgumentCaptor.forClass(String.class);
@@ -1715,7 +2197,7 @@ class OpenAiLlmStudyPackServiceTest {
 
         service.generateNoteFromTopic(
                 "Weirs",
-                new StudyPackGenerationContext(null, "Civil Engineering", null, List.of("hydraulics"))
+                new StudyPackGenerationContext(null, "Civil Engineering", null, List.of("hydraulics")).withRouting(LlmRouting.tiered(null))
         );
 
         ArgumentCaptor<String> requestCaptor = ArgumentCaptor.forClass(String.class);
@@ -1767,7 +2249,7 @@ class OpenAiLlmStudyPackServiceTest {
 
             assertThatThrownBy(() -> service.generateNoteFromTopic(
                     "Weirs",
-                    new StudyPackGenerationContext(null, "Civil Engineering", null, List.of("hydraulics"))
+                    new StudyPackGenerationContext(null, "Civil Engineering", null, List.of("hydraulics")).withRouting(LlmRouting.tiered(null))
             )).isInstanceOf(AppException.class);
 
             String rejection = appender.list.stream()
@@ -1813,7 +2295,7 @@ class OpenAiLlmStudyPackServiceTest {
 
             assertThatThrownBy(() -> service.generateNoteFromTopic(
                     "Weirs",
-                    new StudyPackGenerationContext(null, "Civil Engineering", null, List.of("hydraulics"))
+                    new StudyPackGenerationContext(null, "Civil Engineering", null, List.of("hydraulics")).withRouting(LlmRouting.tiered(null))
             )).isInstanceOf(AppException.class);
 
             assertThat(appender.list.stream()
@@ -1858,7 +2340,7 @@ class OpenAiLlmStudyPackServiceTest {
         for (String productionTitle : productionTitles) {
             String content = service.generateNoteFromTopic(
                     "Philippine Education",
-                    new StudyPackGenerationContext(null, "Education", null, List.of("teaching"))
+                    new StudyPackGenerationContext(null, "Education", null, List.of("teaching")).withRouting(LlmRouting.tiered(null))
             );
 
             assertThat(content)
@@ -1919,7 +2401,7 @@ class OpenAiLlmStudyPackServiceTest {
                         "Senior High – STEM",
                         null,
                         List.of("physics")
-                )
+                ).withRouting(LlmRouting.tiered(null))
         );
 
         assertThat(content)
@@ -2039,7 +2521,7 @@ class OpenAiLlmStudyPackServiceTest {
         ((ObjectNode) quiz.get(1)).put("question", "What is the main goal of cell respiration?");
         when(responseSpec.body(String.class)).thenReturn(studyPackResponseJson(payload));
 
-        StudyPackGenerationContext context = new StudyPackGenerationContext(null, null, null, List.of());
+        StudyPackGenerationContext context = new StudyPackGenerationContext(null, null, null, List.of()).withRouting(LlmRouting.tiered(null));
         assertThatThrownBy(() -> service.generateStudyPack(
             "Cell respiration notes",
             context
@@ -2066,7 +2548,7 @@ class OpenAiLlmStudyPackServiceTest {
 
         GeneratedStudyPackContent content = service.generateStudyPack(
                 "Cell respiration notes",
-                new StudyPackGenerationContext(LearnerLevel.COLLEGE, null, "Biology", List.of())
+                new StudyPackGenerationContext(LearnerLevel.COLLEGE, null, "Biology", List.of()).withRouting(LlmRouting.tiered(null))
         );
 
         assertThat(content.quiz()).hasSize(5);
@@ -2084,7 +2566,7 @@ class OpenAiLlmStudyPackServiceTest {
 
         GeneratedStudyPackContent content = service.generateStudyPack(
             "Physics notes on electricity",
-            new StudyPackGenerationContext(LearnerLevel.COLLEGE, null, null, List.of())
+            new StudyPackGenerationContext(LearnerLevel.COLLEGE, null, null, List.of()).withRouting(LlmRouting.tiered(null))
         );
 
         assertThat(content.quiz().getFirst().concept()).isEqualTo("voltage and current");
@@ -2099,7 +2581,7 @@ class OpenAiLlmStudyPackServiceTest {
 
         GeneratedStudyPackContent content = service.generateStudyPack(
             "Ohm's Law notes",
-            new StudyPackGenerationContext(LearnerLevel.COLLEGE, null, null, List.of())
+            new StudyPackGenerationContext(LearnerLevel.COLLEGE, null, null, List.of()).withRouting(LlmRouting.tiered(null))
         );
 
         assertThat(content.quiz().getFirst().concept()).isEqualTo("Electrical power using Ohms");
@@ -2112,7 +2594,7 @@ class OpenAiLlmStudyPackServiceTest {
         ((ObjectNode) payload.get("quiz").get(0)).putNull("concept");
         when(responseSpec.body(String.class)).thenReturn(studyPackResponseJson(payload));
 
-        StudyPackGenerationContext context = new StudyPackGenerationContext(null, null, null, List.of());
+        StudyPackGenerationContext context = new StudyPackGenerationContext(null, null, null, List.of()).withRouting(LlmRouting.tiered(null));
         assertThatThrownBy(() -> service.generateStudyPack(
             "Cell respiration notes",
             context
@@ -2129,7 +2611,7 @@ class OpenAiLlmStudyPackServiceTest {
         ((ObjectNode) payload.get("quiz").get(0)).put("concept", "   ");
         when(responseSpec.body(String.class)).thenReturn(studyPackResponseJson(payload));
 
-        StudyPackGenerationContext context = new StudyPackGenerationContext(null, null, null, List.of());
+        StudyPackGenerationContext context = new StudyPackGenerationContext(null, null, null, List.of()).withRouting(LlmRouting.tiered(null));
         assertThatThrownBy(() -> service.generateStudyPack(
             "Cell respiration notes",
             context
@@ -2148,7 +2630,7 @@ class OpenAiLlmStudyPackServiceTest {
 
         GeneratedStudyPackContent content = service.generateStudyPack(
             "Cell respiration notes",
-            new StudyPackGenerationContext(LearnerLevel.COLLEGE, null, null, List.of())
+            new StudyPackGenerationContext(LearnerLevel.COLLEGE, null, null, List.of()).withRouting(LlmRouting.tiered(null))
         );
 
         assertThat(content.quiz().getFirst().concept()).isEqualTo("ATP production");
@@ -2163,7 +2645,7 @@ class OpenAiLlmStudyPackServiceTest {
 
         GeneratedStudyPackContent content = service.generateStudyPack(
             "Electrical circuit notes",
-            new StudyPackGenerationContext(LearnerLevel.COLLEGE, null, null, List.of())
+            new StudyPackGenerationContext(LearnerLevel.COLLEGE, null, null, List.of()).withRouting(LlmRouting.tiered(null))
         );
 
         assertThat(content.quiz().getFirst().concept()).isEqualTo("Ohm's Law");
@@ -2180,7 +2662,7 @@ class OpenAiLlmStudyPackServiceTest {
 
         GeneratedStudyPackContent content = service.generateStudyPack(
             "Electrical engineering notes",
-            new StudyPackGenerationContext(LearnerLevel.COLLEGE, null, null, List.of())
+            new StudyPackGenerationContext(LearnerLevel.COLLEGE, null, null, List.of()).withRouting(LlmRouting.tiered(null))
         );
 
         // Subtopic stripped — domain only
@@ -2196,7 +2678,7 @@ class OpenAiLlmStudyPackServiceTest {
 
         GeneratedStudyPackContent content = service.generateStudyPack(
             "Cell respiration notes",
-            new StudyPackGenerationContext(null, null, null, List.of())
+            new StudyPackGenerationContext(null, null, null, List.of()).withRouting(LlmRouting.tiered(null))
         );
 
         assertThat(content.subject()).isNull();
@@ -2211,7 +2693,7 @@ class OpenAiLlmStudyPackServiceTest {
 
         GeneratedStudyPackContent content = service.generateStudyPack(
             "Cell respiration notes",
-            new StudyPackGenerationContext(null, null, null, List.of())
+            new StudyPackGenerationContext(null, null, null, List.of()).withRouting(LlmRouting.tiered(null))
         );
 
         assertThat(content.subject()).isNull();
@@ -2226,7 +2708,7 @@ class OpenAiLlmStudyPackServiceTest {
 
         GeneratedStudyPackContent content = service.generateStudyPack(
             "Cell respiration notes",
-            new StudyPackGenerationContext(null, null, null, List.of())
+            new StudyPackGenerationContext(null, null, null, List.of()).withRouting(LlmRouting.tiered(null))
         );
 
         assertThat(content.subject()).isEqualTo("This Is A Very Long Unclear");
@@ -2241,7 +2723,7 @@ class OpenAiLlmStudyPackServiceTest {
 
         GeneratedStudyPackContent content = service.generateStudyPack(
             "Circuit notes",
-            new StudyPackGenerationContext(LearnerLevel.COLLEGE, "Engineering", null, List.of())
+            new StudyPackGenerationContext(LearnerLevel.COLLEGE, "Engineering", null, List.of()).withRouting(LlmRouting.tiered(null))
         );
 
         assertThat(content.subject()).isEqualTo("Electrical Engineering");
@@ -2262,7 +2744,7 @@ class OpenAiLlmStudyPackServiceTest {
 
         GeneratedStudyPackContent content = service.generateStudyPack(
             "Circuit notes",
-            new StudyPackGenerationContext(null, null, null, List.of())
+            new StudyPackGenerationContext(null, null, null, List.of()).withRouting(LlmRouting.tiered(null))
         );
 
         assertThat(content.tags()).containsExactly("circuits", "Ohm's Law");
@@ -2283,7 +2765,7 @@ class OpenAiLlmStudyPackServiceTest {
 
             GeneratedStudyPackContent content = service.generateStudyPack(
                 "Technical notes",
-                new StudyPackGenerationContext(LearnerLevel.COLLEGE, null, null, List.of())
+                new StudyPackGenerationContext(LearnerLevel.COLLEGE, null, null, List.of()).withRouting(LlmRouting.tiered(null))
             );
 
             assertThat(content.subject()).isEqualTo(pair[1]);
@@ -2318,7 +2800,7 @@ class OpenAiLlmStudyPackServiceTest {
                 "Electrical Engineering",
                 "Electrical Engineering – Ohm's Law",
                 List.of("voltage", "current", "resistance")
-            )
+            ).withRouting(LlmRouting.tiered(null))
         );
 
         // Subtopic stripped — "Electrical Engineering – Ohm's Law" → "Electrical Engineering"
@@ -2345,7 +2827,7 @@ class OpenAiLlmStudyPackServiceTest {
                 "Biology",
                 "Biology",
                 List.of("cells", "respiration")
-            )
+            ).withRouting(LlmRouting.tiered(null))
         );
         List<QuizItem> quizItems = generated.quizItems();
 
@@ -2384,7 +2866,7 @@ class OpenAiLlmStudyPackServiceTest {
                 List.of(),
                 2,
                 "hard",
-                new StudyPackGenerationContext(LearnerLevel.COLLEGE, "Biology", "Biology", List.of())
+                new StudyPackGenerationContext(LearnerLevel.COLLEGE, "Biology", "Biology", List.of()).withRouting(LlmRouting.tiered(null))
         );
 
         assertThat(generated.quizItems()).hasSize(2);
@@ -2417,7 +2899,7 @@ class OpenAiLlmStudyPackServiceTest {
                 List.of(),
                 1,
                 "medium",
-                new StudyPackGenerationContext(LearnerLevel.COLLEGE, "Electrical Engineering", "Physics", List.of())
+                new StudyPackGenerationContext(LearnerLevel.COLLEGE, "Electrical Engineering", "Physics", List.of()).withRouting(LlmRouting.tiered(null))
         ).quizItems();
 
         assertThat(quizItems).hasSize(1);
@@ -2438,7 +2920,7 @@ class OpenAiLlmStudyPackServiceTest {
             List.of("What is the main goal of cell respiration?"),
             2,
             "mixed",
-            new StudyPackGenerationContext(LearnerLevel.BOARD_EXAM_REVIEW, "Biology", "Biology", List.of())
+            new StudyPackGenerationContext(LearnerLevel.BOARD_EXAM_REVIEW, "Biology", "Biology", List.of()).withRouting(LlmRouting.tiered(null))
         );
 
         ArgumentCaptor<String> requestCaptor = ArgumentCaptor.forClass(String.class);
@@ -2469,7 +2951,7 @@ class OpenAiLlmStudyPackServiceTest {
             List.of(),
             2,
             "mixed",
-            new StudyPackGenerationContext(LearnerLevel.BOARD_EXAM_REVIEW, "Biology", "Biology", List.of())
+            new StudyPackGenerationContext(LearnerLevel.BOARD_EXAM_REVIEW, "Biology", "Biology", List.of()).withRouting(LlmRouting.tiered(null))
         );
 
         ArgumentCaptor<String> requestCaptor = ArgumentCaptor.forClass(String.class);
@@ -2508,7 +2990,7 @@ class OpenAiLlmStudyPackServiceTest {
             "Cell respiration notes",
             List.of(),
             30,
-            new StudyPackGenerationContext(LearnerLevel.COLLEGE, "Biology", "Biology", List.of("cells"))
+            new StudyPackGenerationContext(LearnerLevel.COLLEGE, "Biology", "Biology", List.of("cells")).withRouting(LlmRouting.tiered(null))
         );
 
         ArgumentCaptor<String> requestCaptor = ArgumentCaptor.forClass(String.class);
@@ -2539,7 +3021,7 @@ class OpenAiLlmStudyPackServiceTest {
                         List.of("algebra"),
                         DomainContext.ENGINEERING_MATHEMATICS,
                         LearnerLevel.SENIOR_HIGH
-                )
+                ).withRouting(LlmRouting.tiered(null))
         );
 
         ArgumentCaptor<String> requestCaptor = ArgumentCaptor.forClass(String.class);
@@ -2573,7 +3055,7 @@ class OpenAiLlmStudyPackServiceTest {
                 List.of(),
                 1,
                 "medium",
-                new StudyPackGenerationContext(LearnerLevel.COLLEGE, "Biology", "Biology", List.of())
+                new StudyPackGenerationContext(LearnerLevel.COLLEGE, "Biology", "Biology", List.of()).withRouting(LlmRouting.tiered(null))
         );
 
         ArgumentCaptor<String> requestCaptor = ArgumentCaptor.forClass(String.class);
@@ -2608,7 +3090,7 @@ class OpenAiLlmStudyPackServiceTest {
                 List.of("Concurrency controls"),
                 List.of(),
                 1,
-                new StudyPackGenerationContext(LearnerLevel.PROFESSIONAL, "Software Engineering", "Backend", List.of())
+                new StudyPackGenerationContext(LearnerLevel.PROFESSIONAL, "Software Engineering", "Backend", List.of()).withRouting(LlmRouting.tiered(null))
         );
 
         assertThat(quizItems.getFirst().concept()).isEqualTo("Race-condition prevention");
@@ -2639,7 +3121,7 @@ class OpenAiLlmStudyPackServiceTest {
             List.of(),
             14,
             "medium",
-            new StudyPackGenerationContext(LearnerLevel.COLLEGE, "Biology", "Biology", List.of()),
+            new StudyPackGenerationContext(LearnerLevel.COLLEGE, "Biology", "Biology", List.of()).withRouting(LlmRouting.tiered(null)),
             new DirectAsyncTaskExecutor()
         );
 
@@ -2669,7 +3151,7 @@ class OpenAiLlmStudyPackServiceTest {
             List.of(),
             14,
             "medium",
-            new StudyPackGenerationContext(LearnerLevel.COLLEGE, "Biology", "Biology", List.of()),
+            new StudyPackGenerationContext(LearnerLevel.COLLEGE, "Biology", "Biology", List.of()).withRouting(LlmRouting.tiered(null)),
             new DirectAsyncTaskExecutor()
         );
 
@@ -2704,7 +3186,7 @@ class OpenAiLlmStudyPackServiceTest {
                 "Engineering",
                 "Calculus",
                 List.of("derivatives")
-            )
+            ).withRouting(LlmRouting.tiered(null))
         ).quizItems();
 
         assertThat(quizItems).hasSize(2);
@@ -2736,7 +3218,7 @@ class OpenAiLlmStudyPackServiceTest {
             List.of(),
             2,
             "medium",
-            new StudyPackGenerationContext(LearnerLevel.COLLEGE, null, "Calculus", List.of("derivatives"))
+            new StudyPackGenerationContext(LearnerLevel.COLLEGE, null, "Calculus", List.of("derivatives")).withRouting(LlmRouting.tiered(null))
         ).quizItems();
 
         assertThat(quizItems).hasSize(2);
@@ -2769,7 +3251,7 @@ class OpenAiLlmStudyPackServiceTest {
                 List.of(),
                 2,
                 "medium",
-            new StudyPackGenerationContext(LearnerLevel.COLLEGE, null, "Biology", List.of("cells"))
+            new StudyPackGenerationContext(LearnerLevel.COLLEGE, null, "Biology", List.of("cells")).withRouting(LlmRouting.tiered(null))
         ).quizItems();
 
         assertThat(quizItems).hasSize(2);
@@ -2798,7 +3280,7 @@ class OpenAiLlmStudyPackServiceTest {
         StudyPackGenerationContext context = new StudyPackGenerationContext(LearnerLevel.COLLEGE,
             null,
             "Calculus",
-            List.of("derivatives"));
+            List.of("derivatives")).withRouting(LlmRouting.tiered(null));
         assertThatThrownBy(() -> service.generateChallengeQuiz(
             "Calculus Review",
             "Derivative rules",
@@ -2840,7 +3322,7 @@ class OpenAiLlmStudyPackServiceTest {
         StudyPackGenerationContext context = new StudyPackGenerationContext(LearnerLevel.COLLEGE,
             null,
             "Calculus",
-            List.of("derivatives"));
+            List.of("derivatives")).withRouting(LlmRouting.tiered(null));
         assertThatThrownBy(() -> service.generateChallengeQuiz(
             "Calculus Review",
             "Derivative rules",
@@ -2871,7 +3353,7 @@ class OpenAiLlmStudyPackServiceTest {
         StudyPackGenerationContext context = new StudyPackGenerationContext(LearnerLevel.COLLEGE,
             null,
             "Biology",
-            List.of("cells"));
+            List.of("cells")).withRouting(LlmRouting.tiered(null));
         assertThatThrownBy(() -> service.generateChallengeQuiz(
             "Cell Respiration Review",
             "Cell respiration summary",
@@ -2902,7 +3384,7 @@ class OpenAiLlmStudyPackServiceTest {
         StudyPackGenerationContext context = new StudyPackGenerationContext(LearnerLevel.COLLEGE,
             null,
             "Biology",
-            List.of("cells"));
+            List.of("cells")).withRouting(LlmRouting.tiered(null));
         assertThatThrownBy(() -> service.generateChallengeQuiz(
             "Cell Respiration Review",
             "Cell respiration summary",
@@ -2933,7 +3415,7 @@ class OpenAiLlmStudyPackServiceTest {
         StudyPackGenerationContext context = new StudyPackGenerationContext(LearnerLevel.COLLEGE,
             null,
             "Biology",
-            List.of("cells"));
+            List.of("cells")).withRouting(LlmRouting.tiered(null));
         assertThatThrownBy(() -> service.generateChallengeQuiz(
             "Cell Respiration Review",
             "Cell respiration summary",
@@ -3063,7 +3545,7 @@ class OpenAiLlmStudyPackServiceTest {
                         "Organelles and membranes"
                 )),
                 List.of()
-        );
+        ).withRouting(LlmRouting.paidInteractive());
     }
 
     private ObjectNode buildGeneratedQuizPayload() {
@@ -3150,7 +3632,7 @@ class OpenAiLlmStudyPackServiceTest {
                 "Mathematics",
                 "Percentages",
                 List.of("percent change")
-        );
+        ).withRouting(LlmRouting.tiered(null));
     }
 
     private ObjectNode promptQuizItem(String question, List<String> choices, String answer, String concept) {
@@ -3318,7 +3800,7 @@ class OpenAiLlmStudyPackServiceTest {
                 List.of(),
                 2,
                 "medium",
-                new StudyPackGenerationContext(LearnerLevel.COLLEGE, "Civil Engineering", "Mathematics", List.of())
+                new StudyPackGenerationContext(LearnerLevel.COLLEGE, "Civil Engineering", "Mathematics", List.of()).withRouting(LlmRouting.tiered(null))
         );
 
         ArgumentCaptor<String> requestCaptor = ArgumentCaptor.forClass(String.class);

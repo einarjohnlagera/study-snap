@@ -1,5 +1,6 @@
 package com.studysnap.backend.service;
 
+import com.studysnap.backend.service.model.LlmRouting;
 import com.studysnap.backend.config.StudySnapProperties;
 import com.studysnap.backend.dto.QuickReviewIncorrectQuestionRequest;
 import com.studysnap.backend.dto.QuickReviewStudyTipRequest;
@@ -63,7 +64,7 @@ public class QuickReviewStudyTipService {
         }
 
         try {
-            String tip = llmStudyPackService.generateQuickReviewStudyTip(incorrectQuestionSummaries);
+            String tip = llmStudyPackService.generateQuickReviewStudyTip(incorrectQuestionSummaries, LlmRouting.interactiveQuiz());
             return new QuickReviewStudyTipResponse(tip);
         } catch (Exception ex) {
             log.warn(

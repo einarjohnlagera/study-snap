@@ -1513,6 +1513,8 @@ class NoteCollectionServiceTest {
         ArgumentCaptor<com.studysnap.backend.service.model.CompanionGenerationContext> contextCaptor =
                 ArgumentCaptor.forClass(com.studysnap.backend.service.model.CompanionGenerationContext.class);
         verify(llmStudyPackService).generateCompanion(contextCaptor.capture(), eq(Set.of(CompanionSection.OVERVIEW)));
+        assertThat(contextCaptor.getValue().routing()).isEqualTo(
+                com.studysnap.backend.service.model.LlmRouting.paidInteractive());
         assertThat(contextCaptor.getValue().subjectPlans())
                 .extracting(com.studysnap.backend.service.model.CompanionGenerationContext.CompanionContextItem::title)
                 .containsExactly("Professional Education");

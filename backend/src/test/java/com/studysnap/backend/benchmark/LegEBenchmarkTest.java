@@ -65,6 +65,14 @@ class LegEBenchmarkTest {
         }
     }
 
+    @Test void legERequestUsesCandidateModel() throws Exception {
+        List<MockClientHttpRequest> requests = run(List.of(line("S15", 1, 1)),
+                List.of(response(payload("candidate", 15))));
+        assertThat(requests).hasSize(1);
+        assertThat(mapper.readTree(requests.getFirst().getBodyAsBytes()).path("model").asText())
+                .isEqualTo("test");
+    }
+
     @Test void singleNoteUsesSavedQuizAvoidListAndDeduplicates() throws Exception {
         ObjectNode line = line("S15",1,1);
         ObjectNode payload = payload("single",15);

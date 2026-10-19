@@ -1,5 +1,6 @@
 package com.studysnap.backend.service;
 
+import com.studysnap.backend.service.model.LlmRouting;
 import com.studysnap.backend.dto.GenerateNoteFromTopicRequest;
 import com.studysnap.backend.dto.GenerateNoteFromTopicResponse;
 import com.studysnap.backend.entity.DomainContext;
@@ -108,7 +109,7 @@ public class NoteGenerationService {
         StudyPackGenerationContext context = resolvedContext == null
                 ? resolveAuthoringContext(request, user)
                 : resolvedContext;
-        String generatedContent = llmStudyPackService.generateNoteFromTopic(normalizedTopic, context);
+        String generatedContent = llmStudyPackService.generateNoteFromTopic(normalizedTopic, context.withRouting(LlmRouting.tiered(userId)));
         if (recordUsage && enforceQuota) {
             noteGenerationUsageProtectionService.recordUsage(userId, OffsetDateTime.now(ZoneOffset.UTC));
         }
