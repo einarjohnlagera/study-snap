@@ -65,8 +65,16 @@ This document carries the decisions, conflicts and dependencies. The two halves 
    - The new pin keys are unset, so they fall back to today's models, which is correct.
    - **Answered by the owner 2026-10-19:** `LLM_MODEL_FREE` **is set** on Render (`gpt-4.1-mini`);
      `LLM_MODEL_CRITIQUE` is **not set**.
-     - **So the merge deploy changes no model.** FREE stays on mini and Plus/Pro and ADMIN stay on `gpt-4.1`
-       until the owner changes the env vars.
+     - **[CORRECTED 2026-10-19, pre-signoff falsification]** The earlier "the merge changes no model" claim was
+       WRONG. Before this release, every Study Pack path read `LLM_MODEL_FREE` (`gpt-4.1-mini` on Render) for
+       every plan. After it, Plus/Pro and ADMIN read `LLM_MODEL_PREMIUM`, which Render sets to `gpt-4.1`.
+       - **So merging to `main` with today's Render values moves Plus/Pro and all official curation from
+         `gpt-4.1-mini` to `gpt-4.1`**, at about 5× the per-token price. That covers Study Pack generation, summary
+         regeneration, repair, note-from-topic and the template seed.
+       - FREE and every pinned path are unchanged.
+       - **Rollback to today's behaviour** is `LLM_MODEL_PREMIUM=gpt-4.1-mini`, not "back to its current value".
+         Interview Practice and the companion are now pinned separately (`LLM_MODEL_PAID_INTERACTIVE`).
+       - The rollout sequence is an owner decision; see the consolidated plan, Part A0 item 6.
      - The critique paths keep the YAML default `gpt-4.1-mini`, which the briefs do not touch.
      - **Rollout:** merge, then the owner sets `LLM_MODEL_FREE=gpt-6-luna` and
        `LLM_MODEL_PREMIUM=gpt-6.1-sol` in one Render change (one redeploy), under the merge gate.

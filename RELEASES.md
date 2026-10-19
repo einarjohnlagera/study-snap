@@ -2,8 +2,10 @@
 
 ## v0.174.0 - Enhanced Generation
 
-**Status: In Progress** (kicked off 2026-10-16 on `releases/v0.174.0`, **cut from `releases/v0.173.0`
-(`7d1407a1`, signed off, NOT yet on `main`)** — owner decision 2026-10-16, the same pattern `v0.111.0`
+**Status: Released** (signed off 2026-10-19; **merge to `main` HELD behind the v0.173.0 gates, so NOT yet
+deployed, and the new models go live only with the owner's post-merge Render switch**; see the merge-day
+handoff in the signoff record below. Kicked off 2026-10-16 on `releases/v0.174.0`, **cut from
+`releases/v0.173.0` (`7d1407a1`, signed off, NOT yet on `main`)** — owner decision 2026-10-16, the same pattern `v0.111.0`
 and `v0.120.0` used. Anything that changes on `releases/v0.173.0` after this cut is merged forward.)
 
 Theme: paid plans get the stronger model they were always tagged for. FREE moves to a newer model,
@@ -52,7 +54,8 @@ the admin account's subscription tier, all before `gpt-4.1` retires on 2027-01-1
    - **2b:** the cost alert (item 4). Tier N, Codex; brief `docs/codex-prompts/v0.174.0-item2b-curation-cost-alert.md`.
    - **2c:** the `/study` and note-editor error-and-retry state. Frontend, Tier S, inline.
 
-   Both briefs await owner approval. **Revised 2026-10-19** by the owner's final decisions A1–A7,
+   Both briefs were approved 2026-10-19 and shipped: #1508 (2b), #1509 (2a), #1510 (2c), plus the
+   pre-signoff fixes in #1511. **Revised 2026-10-19** by the owner's final decisions A1–A7,
    verbatim in `docs/claude-plans/2026-10-19-owner-final-decisions-v0174-a1-a7.md`. Plan:
    `docs/claude-plans/2026-10-19-v0174-v0175-consolidated-implementation-plan.md`.
    - **Routed by tier** through one resolver that reads `SubscriptionService.resolvePlan` (expiry-aware):
@@ -91,7 +94,7 @@ the admin account's subscription tier, all before `gpt-4.1` retires on 2027-01-1
        when a response lacks `model`;
      - repaired packs keep their original `model_used` / `model_tier`. That is a documented known
        limitation, not a rewrite (A3).
-   - **Owed:** a test per path asserting the model **actually sent** for FREE, Plus, Pro, ADMIN on a FREE
+   - **Shipped in #1509:** a test per path asserting the model **actually sent** for FREE, Plus, Pro, ADMIN on a FREE
      plan and a lapsed paid plan, on every routed and pinned row. Pinned paths must ignore changes to
      `LLM_MODEL_FREE` / `LLM_MODEL_PREMIUM`.
      - The test surface spans all 11 caller services, even though routing changes only the Study Pack
@@ -104,8 +107,18 @@ the admin account's subscription tier, all before `gpt-4.1` retires on 2027-01-1
      They change only after the merge gate.
    - **Owner-verified Render state (2026-10-19):** `LLM_MODEL_FREE=gpt-4.1-mini` and
      `LLM_MODEL_PREMIUM=gpt-4.1` are set; `LLM_MODEL_CRITIQUE` is unset (YAML default `gpt-4.1-mini`).
-     - **So the merge itself changes no model.** The switch is the owner setting `LLM_MODEL_FREE=gpt-6-luna`
-       and `LLM_MODEL_PREMIUM=gpt-6.1-sol` together; rollback is setting them back.
+     - **[CORRECTED 2026-10-19, pre-signoff falsification]** The earlier "the merge changes no model" claim was
+       WRONG. Before this release, every Study Pack path read `LLM_MODEL_FREE` (`gpt-4.1-mini` on Render) for
+       every plan. After it, Plus/Pro and ADMIN read `LLM_MODEL_PREMIUM`, which Render sets to `gpt-4.1`.
+       - **So merging to `main` with today's Render values moves Plus/Pro and all official curation from
+         `gpt-4.1-mini` to `gpt-4.1`**, at about 5× the per-token price. That covers Study Pack generation, summary
+         regeneration, repair, note-from-topic and the template seed.
+       - FREE and every pinned path are unchanged.
+       - **Rollback to today's behaviour** is `LLM_MODEL_PREMIUM=gpt-4.1-mini`, not "back to its current value".
+         Interview Practice and the companion are now pinned separately (`LLM_MODEL_PAID_INTERACTIVE`).
+       - **Owner decision 2026-10-19:** keep the Render overrides and change their values right after the
+         merge. Do not remove them, so that no future code default can switch production models on its own.
+         The steps are in the merge-day handoff in the signoff record.
      - The two new pin keys stay unset and fall back to today's models.
    - **The Long Exam pool stays at 48 in v0.174.0** (A4). Effective value confirmed 2026-10-19:
      `application.yaml:249` `${LONG_EXAM_POOL_SIZE:48}`, the Java default `StudySnapProperties:169`, no
@@ -116,8 +129,9 @@ the admin account's subscription tier, all before `gpt-4.1` retires on 2027-01-1
    - The estimate is computed by a scheduled read-only job from **persisted** tokens on ADMIN-owned Study
      Packs (`input_tokens`, `output_tokens`, `cached_input_tokens`), at configured per-token rates with the
      cached-input discount.
-   - **It is labelled as partial, never as total curation spend.** Template seeding, summary regeneration
-     and repair persist no tokens, so their cost is reviewed on the OpenAI billing dashboard.
+   - **It is labelled as partial, never as total curation spend.** Note generation from topics, template
+     seeding, summary regeneration and repair persist no tokens, so their cost is reviewed on the OpenAI
+     billing dashboard.
    - **Delivery:** one in-app notification to the ADMIN account through `NotificationService.deliver`, with
      a per-month dedup key, so a threshold crossing alerts once per month. `type` is a plain `VARCHAR(64)`
      (`V139`), so a new `NotificationType` needs no migration.
@@ -169,9 +183,9 @@ not approval to deploy.**
       owner action.
   - ~~Still owed: the acceptable Challenge start wait~~ **Answered 2026-10-19:** a 30 s target and a 60 s
     maximum blocking wait (owner decisions, Set 1). The Challenge work is split out to v0.175.0.
-- Item 3's `application.yaml` default for `LLM_MODEL_PREMIUM` and the item 2 brief wait on these deliverables.
-  So does any Challenge-specific routing: deliverable 4 may propose one, and it would be a third destination
-  needing an explicit owner decision.
+- ~~Item 3's default and the item 2 brief wait on these deliverables.~~ **Discharged 2026-10-19:** the
+  deliverables were returned, the owner decided A1–A7, and items 2 and 3 shipped. No Challenge-specific
+  routing destination was adopted; Challenge work moved to v0.175.0.
 
 **Anti-drift:**
 - No change to Plus/Pro entitlements, `FeatureGateService` quotas or `UserUsageEntity`.
@@ -279,14 +293,18 @@ ADMIN carve-out.
       one native aggregate query by `model_used`, at configured per-model rates.
     - At **USD 10** (owner A6) it delivers one in-app `CURATION_COST_ALERT` per ADMIN per month, deduplicated
       by a per-month key through `NotificationService.deliver`.
-  - The copy states its partial scope: Study Pack generation only, excluding template seeding, summary
-    regeneration and repair, with a pointer to the billing dashboard. No model is named.
+  - The copy states its partial scope: Study Pack generation only, excluding note generation from topics
+    (added in #1511), template seeding, summary regeneration and repair, with a pointer to the billing
+    dashboard. No model is named.
   - The cached-input rate falls back to the input rate, which overstates cost. Reasoning tokens are not
     added, because `output_tokens` already includes them.
-  - **Known limits:**
-    - The window uses `updated_at`, so touching admin packs re-counts their original tokens. A bulk action
-      over about 2,000 Sol packs would read about $45, a false alert in the safe direction.
-    - A repair counts the original tokens.
+  - **Known limits (corrected by the pre-signoff pass; the earlier "$45 bulk regeneration" and "a repair
+    counts the original tokens" examples were wrong):**
+    - Summary regeneration and repair do **not** advance `updated_at`, so they are not counted at all.
+    - Share-link creation, owner reassignment, and title, subject and tag edits **do** advance it, and
+      re-count a pack's original tokens (over-count).
+    - An ADMIN remix copies the source pack's tokens into a new pack (over-count, with no LLM call behind it).
+    - Tokens from failed or retried attempts are never persisted (under-count).
     - The month is UTC.
   - Verified:
     - `CurationCostAlertJobTest` 8/8, plus the notification dedup integration test.
@@ -315,7 +333,9 @@ ADMIN carve-out.
   - **Logging:** a structured log line per HTTP attempt (route, model, tier, latency, attempt, outcome, tokens
     including reasoning). No prompt, body or headers.
   - **Defaults:** `application.yaml` now defaults to `gpt-6-luna` / `gpt-6.1-sol`. Render sets
-    `LLM_MODEL_FREE` / `LLM_MODEL_PREMIUM`, so **the merge changed no production model.**
+    `LLM_MODEL_FREE` / `LLM_MODEL_PREMIUM`. **[CORRECTED: the merge to `main` DOES change a model.** Plus/Pro
+    and ADMIN Study Pack paths move from `gpt-4.1-mini` to Render's `LLM_MODEL_PREMIUM=gpt-4.1`. See the
+    correction under Planned Scope item 3.]
   - **Verified:**
     - Tests assert the model in every outgoing request body, per route and for every pinned method (Long
       Exam halves, salvage, fallback and consistency retry included). Pins hold when the tier keys change.
@@ -328,6 +348,68 @@ ADMIN carve-out.
       116/116. Feature docs are updated; no migration.
   - **Known:** an email-only Official author would route FREE. In production that email is the single ADMIN
     account.
+- **Item 2c: Try again on the `/study` Study Pack error card (PR #1510, `f1a5c244`; owner A5).**
+  - A failed synchronous generation now offers a deliberate retry. It goes through the existing guarded
+    handler (disabled while loading or redirecting), never retries on its own, and makes no time promise.
+  - **The note-editor half of 2c needed no change.** Note-from-topic already meets A5: an inline error and a
+    toast, the topic kept, and "Generate Note" re-enabled (`note-editor-page-client.tsx` `handleGenerateNote`).
+  - Frontend suite 2,669 passed; tsc and eslint clean.
+- **Pre-signoff fixes (PR #1511, `fa474931`), from the cold falsification pass:**
+  - **Try again ran the wrong operation after a confirm-text failure.** It re-uploaded the image, spent OCR
+    quota and overwrote the learner's edited text.
+    - It now shows only after a retryable generation failure (a `retryable` flag in `useStudyPack`).
+    - It is hidden while confirmation is pending and after the signed-out error.
+    - Tests cover each case.
+  - The cost-alert copy now also excludes note generation from topics. The feature docs list every
+    over-count and under-count.
+  - `StudySnapPropertiesTest` binds the production YAML price map.
+  - Backend 2,771 tests with Docker; frontend 2,672.
+
+### Signoff record (2026-10-19)
+
+**Scope completeness, item by item:**
+1. **Benchmark: shipped**: #1506, #1507, and both owner-run runs (about $5.37 of the $10 cap).
+2. **Routing: shipped as CHANGED by owner A1.** Tier routing covers the Study Pack family only. Every
+   interactive path is pinned to today's model. Challenge routing moves to v0.175.0. Delivered as #1509,
+   #1510 and #1511.
+3. **Defaults: shipped in code** (`application.yaml`: Luna/Sol defaults plus two pins). **The production switch
+   is the owner's post-merge env change.** The Long Exam pool reduction is **deferred to v0.175.0** (A4).
+4. **Cost alert: shipped**: #1508 and #1511.
+
+**Verification:**
+- Tier H. Cold Opus falsification on 2a (five gaps, fixed). A release-wide cold pass at pre-signoff found
+  three confirmed issues, fixed in #1511, plus one wrong production-safety claim, corrected above.
+- Final backend build: 2,771 tests with Docker, 0 failures. Frontend: 2,672 passed.
+
+**Known limitations, recorded and not fixed:**
+- No test calls `CurationCostAlertJob.run()` through its `@Scheduled` entry or `findAdminUserIds` directly.
+  The cron and zone are asserted by `ScheduledJobCronContractTest`, and the job logic by `runAt`.
+- An email-only Official author would route FREE. Today that email is the single ADMIN account.
+- A repaired pack keeps its original `model_used` / `model_tier`.
+- The cost estimate's over-count and under-count cases are listed in item 4.
+
+**⚠️ MERGE-DAY HANDOFF. Every step is an owner action unless marked; follow it in order:**
+1. **#1505 (v0.173.0) merges with a merge commit, after its 2026-10-22 signal-9 read.** Then the v0.173.0
+   cache deploy + 7 days read.
+2. **Only then, open the `releases/v0.174.0` → `main` PR.** Opening it earlier would show v0.173.0's commits
+   in its diff.
+3. Merge it. Wait at least 5 minutes, then run `scripts/check-deploys.sh` (exit 0 = both platforms serve
+   `main`).
+   - **From this deploy until step 4, Plus/Pro and ADMIN Study Pack paths run on `gpt-4.1`** (Render's current
+     `LLM_MODEL_PREMIUM`).
+4. **Immediately set on Render: `LLM_MODEL_FREE=gpt-6-luna` and `LLM_MODEL_PREMIUM=gpt-6.1-sol`.** Do not
+   remove the overrides. This is a second redeploy: record both deploy times, because they matter for the
+   v0.173.0 memory-kill and cache reads. Wait, then run `check-deploys.sh` again.
+5. **First-use check** (read-only, Release Implementor can run it):
+   - the next ADMIN Study Pack's `model_used` starts with `gpt-6.1-sol`;
+   - the next FREE pack's starts with `gpt-6-luna`;
+   - a new Challenge session's `model_used` is still `gpt-4.1-mini`;
+   - Render logs show the structured per-call line.
+6. **Rollback to pre-release behaviour:** `LLM_MODEL_FREE=gpt-4.1-mini` and `LLM_MODEL_PREMIUM=gpt-4.1-mini`.
+   Interview Practice and the companion stay on their own pin. No data rewrite is needed.
+
+**Checkpoint:** `[CHECKPOINT — due env switch + 14 days]` in `ROADMAP.md`. The pin-retirement checkpoint is
+due 2026-12-15.
 ## v0.173.0 - Cached Catalog
 
 **Status: Released** (signed off 2026-10-16; **merge to `main` HELD for the 2026-10-22 gate, so NOT yet deployed**. Kicked off 2026-10-15 on `releases/v0.173.0`, cut from `docs/v0.172.0-deploy-stamp`

@@ -36,7 +36,17 @@ impossible.
 
 **NoteLib** (rebranded from StudySnap — db/package names still use `studysnap`) is a notes-first study workspace. Users capture notes, generate AI-powered Study Packs, and practice with quizzes. Database schema uses the old name; do not rename unless explicitly asked.
 
-Current version: **v0.174.0 — Enhanced Generation** (In Progress; kicked off 2026-10-16, base branch `releases/v0.174.0`, **cut from `releases/v0.173.0` (`7d1407a1`), which is signed off but NOT yet on `main`**: its PR #1505 is held for the `[CHECKPOINT — due 2026-10-22]` signal-9 read and must merge with a merge commit, not a squash. Anything that changes on `releases/v0.173.0` is merged forward into this branch.) Paid plans finally get the stronger model they are tagged for: every generation path ignores plan tier today (`ModelTier.PREMIUM` at `StudyPackService.java:721` is a label only, and nine `LlmStudyPackService` methods always use `LLM_MODEL_FREE`). **Scope:** (1) a read-only model benchmark (`gpt-4.1-mini` vs `gpt-6-luna` vs `gpt-6.1-sol`, owner-approved $10 MAXIMUM, execution plan to the owner before any spend), which runs first and gates (3); (2) plan-tier-aware routing through all nine methods and their callers in 7 services (Tier H, Codex at high effort), FREE → free model, Plus/Pro → premium, and **official curation = `UserRole.ADMIN` → premium regardless of plan; NOT `CuratorAuthoringPredicate.isCurator()`, which also matches TEACHER profiles**; (3) defaults to `gpt-6-luna` / `gpt-6.1-sol` in `application.yaml`; **the production Render env vars are an OWNER action**: write the handoff, never call the Render MCP env-var update; (4) curation cost monitoring that is read-only and alerts but never blocks (owner sets the monthly threshold). **⚠️ MERGE GATE: this release's PR merges to `main` only after #1505 has merged AND the `[CHECKPOINT — due cache deploy + 7 days]` read.** Any `main` merge or env-var change redeploys, and a deploy's double-pool overlap is a known kill mechanism. The env-var change is held to the same gate. **Anti-drift:** no Plus/Pro entitlement, quota or pricing change; no announcement, and customer copy (if any) says "Enhanced Study Pack Generation" and never names a model; no mass regeneration and no historical `model_tier`/`model_used` rewrite; no prompt-content change beyond model compatibility; no `LLM_MODEL_CRITIQUE` change (deferred, its own assessment, but it must also land before 2027-01-14); no migration, checkout path or Hikari change. Full scope in `RELEASES.md`.
+Current version: **v0.174.0 — Enhanced Generation** (Released 2026-10-19, **merge to `main` HELD, not yet deployed**. It merges only after `v0.173.0`'s PR #1505 has merged with a merge commit, after its `[CHECKPOINT — due 2026-10-22]` signal-9 read, and after the `[CHECKPOINT — due cache deploy + 7 days]` read. Base branch `releases/v0.174.0`, cut from `releases/v0.173.0` (`7d1407a1`).)
+
+**What shipped:**
+- `LlmModelRouter` routes the **Study Pack family** by tier: Study Pack generation (async and the synchronous `/study` routes), summary regeneration, the malformed-quiz repair, note-from-topic and the Official template seed. FREE → `LLM_MODEL_FREE`; Plus/Pro (`SubscriptionService`, expiry-aware) and `UserRole.ADMIN` → `LLM_MODEL_PREMIUM`.
+- **Every interactive quiz and practice path is pinned to today's model for every plan:** Challenge (start, +5, multi-note), Board Exam, Long Exam, Adaptive, study tip, teacher quiz (`LLM_MODEL_INTERACTIVE_QUIZ`); Interview quiz and companion (`LLM_MODEL_PAID_INTERACTIVE`). Challenge tier routing and the hybrid preparation UX are `v0.175.0`.
+- A $10/month partial curation cost alert (`CurationCostAlertJob`, alert only).
+- `/study` Try again.
+
+**⚠️ THE NEW MODELS GO LIVE ONLY WITH THE OWNER'S POST-MERGE RENDER SWITCH** (`LLM_MODEL_FREE=gpt-6-luna`, `LLM_MODEL_PREMIUM=gpt-6.1-sol`). Until that switch, after the merge, Plus/Pro and ADMIN Study Pack paths run on Render's `gpt-4.1`. The merge-day handoff and rollback values are in the `RELEASES.md` v0.174.0 signoff record. **Never call the Render MCP's env-var update.**
+
+**Anti-drift:** no Plus/Pro entitlement, quota or pricing change; no announcement, and customer copy (if any) says "Enhanced Study Pack Generation" and never names a model; no mass regeneration and no historical `model_tier`/`model_used` rewrite; no prompt-content change; no `LLM_MODEL_CRITIQUE` change (its own assessment, before 2027-01-14); no migration. Full record in `RELEASES.md`.
 
 ## Source-of-truth docs (read before implementing anything)
 
@@ -118,7 +128,13 @@ Required env vars (put in `backend/.env`):
 - `LLM_API_KEY` (OpenAI key)
 - `JWT_SECRET`
 
-LLM models are config-driven: `LLM_MODEL_FREE` (default: `gpt-4.1-mini`), `LLM_MODEL_PREMIUM` (default: `gpt-4.1`), and `LLM_MODEL_CRITIQUE` (default: `gpt-4.1-mini` for short Interview Practice feedback).
+LLM models are config-driven and routed by `LlmModelRouter` (v0.174.0); every caller passes an explicit route:
+- **Study Pack family, routed by tier:** `LLM_MODEL_FREE` (default `gpt-6-luna`) for FREE; `LLM_MODEL_PREMIUM` (default `gpt-6.1-sol`) for Plus/Pro and for `UserRole.ADMIN` on any plan.
+- **Interactive quiz and practice, pinned for every plan:** `LLM_MODEL_INTERACTIVE_QUIZ` (default `gpt-4.1-mini`).
+- **Interview Practice quiz and the companion:** `LLM_MODEL_PAID_INTERACTIVE` (default `gpt-4.1`).
+- **Interview critique and Ask Companion:** `LLM_MODEL_CRITIQUE` (default `gpt-4.1-mini`).
+
+**⚠️ Production Render sets `LLM_MODEL_FREE` / `LLM_MODEL_PREMIUM` explicitly, and the owner switches them; never change them yourself.** `gpt-4.1` and `gpt-4.1-mini` shut down on 2027-01-14 (pin checkpoint due 2026-12-15).
 
 ### Frontend (Next.js)
 
