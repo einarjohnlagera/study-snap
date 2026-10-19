@@ -216,6 +216,28 @@ ADMIN carve-out.
     55–90 s on Luna and 90–175 s on Sol, near the 180 s timeout. "+5" is almost always served from the
     bank (2 live batches for learners). The owner made it a release condition on 2026-10-17 (see Planned Scope); Sol's single-call Long Exam took up to 126 s against the 180 s timeout.
 
+- **Item 1, part 3: the Leg E harness for the targeted Challenge start benchmark (PR #1507, `5dffd5e6`,
+  test scope only). Nothing spent yet; the owner runs the paid calls.**
+  - `backend/src/test/java/com/studysnap/backend/benchmark/` gains cells S15 / S10 / S12 (15 `hard`,
+    10 `easy`, 12 `medium`, read from the `ChallengeQuizService` constants), M6x3 and M3x6 (multi-note
+    starts as sequential per-source calls), and VLOW (S15 with `reasoning.effort: "low"`, injected by the
+    interceptor on every attempt).
+  - It mirrors production's avoid-lists. Single-note uses the pack's saved quiz (`:396,463`). Multi-note
+    starts empty, accumulates, aborts on a failed source, and dedups the final set against the primary
+    pack's quiz (`:421,1831-1860`).
+  - It records accepted vs requested questions, the sequential start latency, the slowest source call, the
+    failed source index and timeouts. The summary excludes spend-stopped runs.
+  - The pre-flight fails the command before any HTTP call. `sample-query-e.sql` is one read-only `SELECT`;
+    a count-only version run against production returned all 52 paired lines.
+  - Run sheet: ten commands with explicit stops totalling $4.10, about $4.45 worst case with a one-call
+    overshoot per command, under the approved $4.50.
+  - Release Implementor fixed two issues after Codex, each with an assertion mutation-checked to fail
+    without its fix: a malformed line no longer passes silently, and spend-stopped runs no longer skew the
+    latency summary.
+  - Verification: `./mvnw install` with Docker, 2,723 tests, 0 failures, including
+    `NativeQueryPostgresIntegrationTest` (115). No file under `backend/src/main` changed.
+  - Known difference from production: multi-note cells use `medium`, but a learner's last Quick Review
+    score can make it `easy` or `hard`.
 ## v0.173.0 - Cached Catalog
 
 **Status: Released** (signed off 2026-10-16; **merge to `main` HELD for the 2026-10-22 gate, so NOT yet deployed**. Kicked off 2026-10-15 on `releases/v0.173.0`, cut from `docs/v0.172.0-deploy-stamp`
