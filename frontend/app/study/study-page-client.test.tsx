@@ -55,6 +55,27 @@ describe("StudyPageClient", () => {
     (getCurrentUserId as jest.Mock).mockReturnValue("user-1");
   });
 
+  it("offers an actionable retry after generation fails, and retries only when clicked", async () => {
+    (createStudyPackFromText as jest.Mock)
+      .mockRejectedValueOnce(new Error("Study Pack generation timed out. Please try again."))
+      .mockReturnValueOnce(new Promise(() => {}));
+
+    render(<StudyPageClient />);
+
+    fireEvent.change(screen.getByLabelText("Study Notes"), { target: { value: "Photosynthesis notes" } });
+    fireEvent.click(screen.getByRole("button", { name: "Generate Study Pack" }));
+
+    expect(await screen.findByText("Couldn't Generate Study Pack")).toBeInTheDocument();
+    expect(createStudyPackFromText).toHaveBeenCalledTimes(1);
+    const retry = screen.getByRole("button", { name: "Try again" });
+
+    fireEvent.click(retry);
+    fireEvent.click(retry);
+
+    await waitFor(() => expect(createStudyPackFromText).toHaveBeenCalledTimes(2));
+    expect(screen.queryByRole("button", { name: "Try again" })).not.toBeInTheDocument();
+  });
+
   it("renders the OCR disabled notice for photo-to-Study-Pack capture", async () => {
     (createStudyPackFromImage as jest.Mock).mockRejectedValue(
       Object.assign(

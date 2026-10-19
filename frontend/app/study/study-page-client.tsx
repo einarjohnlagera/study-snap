@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
 import { getSampleNotePreset } from "@/lib/sample-notes";
 import { createNote, trackAnalyticsEvent } from "@/lib/api";
@@ -159,6 +160,21 @@ export default function StudyPageClient({ forcedDemoMode = false }: StudyPageCli
             {ocrFlowState === "failure" ? "Couldn't Process Notes Image" : "Couldn't Generate Study Pack"}
           </CardTitle>
           <CardDescription>{errorMessage}</CardDescription>
+          {canGenerate ? (
+            // A deliberate retry through the same guarded handler: it never fires on its own and is
+            // disabled while a request is in flight, so it cannot double-submit (v0.174.0, owner A5).
+            <Button
+              type="button"
+              variant="outline"
+              className="mt-4"
+              disabled={loading || redirecting}
+              onClick={() => {
+                void handleGenerate();
+              }}
+            >
+              Try again
+            </Button>
+          ) : null}
         </Card>
       ) : null}
 
