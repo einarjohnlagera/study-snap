@@ -8,7 +8,7 @@
 
 The part below the rule stands on its own.
 
-**Why it exists:** the owner wants Product UX's view on the open decisions in Part D of
+**Why it exists (updated 2026-10-19, after the owner decided A1–A7):** the owner wants Product UX's view on the open v0.175.0 decisions (B1–B7) in Part D of
 `docs/claude-plans/2026-10-19-v0174-v0175-consolidated-implementation-plan.md` before answering them.
 
 **Left out on purpose, because only the owner can answer them:**
@@ -83,28 +83,16 @@ to do.
 
 ## Decisions I need your view on
 
-**Answer each one: agree, disagree or change it, with your reasoning.**
+**Answer each of questions 4–10: agree, disagree or change it, with your reasoning.**
 
-### For v0.174.0 (soon)
+### Already decided by the owner for v0.174.0 (context only; no answer needed)
 
-**1. Quizzes stay on today's model in v0.174.0, for every plan.**
-- **Proposed:** yes. Plus/Pro learners get Sol for Study Packs now and for quizzes in v0.175.0.
-- **The risk:** a Plus/Pro learner could notice Study Packs feel different while quizzes do not.
-- Nothing is announced, and plan copy promises only quantities (number of Study Packs, quizzes, share
-  links), never quality or speed.
-- **Is that acceptable for roughly one release?**
-
-**2. Interview Practice and the Ask/companion features (paid) stay on today's model.**
-- **Proposed:** yes, until they can be tested, rather than moving them to Sol untested, which may be slower.
-- **Agree?**
-
-**3. Creating a Study Pack on the `/study` page makes the learner wait.** Unlike the main flow, this older
-page generates the Study Pack while the learner watches.
-- **On Sol:** about 27–34 seconds plus production overhead. That is within the 60 s maximum but over the 30 s
-  target, and with no automatic retry if it times out.
-- Today only the owner's admin account would ever see this.
-- **Proposed:** accept for v0.174.0, and give it the retry and recovery behaviour in v0.175.0. **Agree? Is
-  anything needed on that page now**, such as a waiting message?
+- **Quizzes stay on today's model for every plan until v0.175.0.** Only Study Pack generation changes model.
+  Plan copy promises quantities only, so this conflicts with no customer claim.
+- **Interview Practice and the companion stay on today's model** until they can be tested.
+- **The older `/study` page** keeps its on-screen Study Pack generation for now, with a new "Try again"
+  button on failure. The background version comes with v0.175.0.
+- v0.174.0 is signed off. It ships to production after the previous release's checks, around late October.
 
 ### For v0.175.0 (before it starts)
 

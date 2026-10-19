@@ -342,3 +342,71 @@ test.
 2. **The item 2 Codex brief:** `advisor()` first, then Codex at high effort. It needs A1–A3; item 4 also needs
    A6.
 3. **v0.175.0** is kicked off after v0.174.0 signs off, with B1–B7 answered.
+
+---
+
+## Part G — v0.175.0 after the owner's B1–B7 (2026-10-19)
+
+**Sources:**
+- the owner's decisions, verbatim: `docs/claude-plans/2026-10-19-owner-decisions-v0175-b1-b7.md`;
+- the full plan: `docs/claude-plans/2026-10-19-v0175-challenge-quiz-preparation-plan.md` (Feature Planner;
+  §1 journey, §3 conflicts, §5 lifecycle, §6 Board/Long Exam, §8 acceptance criteria);
+- B6: `docs/claude-plans/2026-10-19-v0175-b6-official-template-coverage-proposal.md` (owner approved batch A);
+- B7: `docs/claude-findings/2026-10-19-v0175-b7-low-effort-quality-review-phase1.md` (Phase 1 done; low effort
+  NOT adopted).
+
+**The learner journey** (plan §1, with B4 copy):
+1. **"Prepare Quiz"** runs the readiness check: bank, then template, then shortfall.
+2. If generation is needed, **"Getting your quiz ready"** appears, with a progress indicator and
+   **"Continue reviewing"**.
+3. When ready, **"Your quiz is ready!"** appears, with **"Start Quiz"**. The timer starts only here.
+4. Leaving by any route keeps preparation running. One in-app notification, **"Your quiz is ready! Pick up
+   where you left off."**, deep-links to that quiz's pre-screen. It is marked read if the learner stayed and
+   saw the pre-screen.
+5. **Failure:** "We couldn't finish preparing your quiz", with Try Again and Continue Reviewing. Retry
+   happens only after a lock-and-recheck of job state.
+6. **Expiry after 7 days:** "This prepared quiz has expired", with Prepare New Quiz. There is no automatic
+   replacement, and the questions return to the bank.
+
+**What B1–B7 settled:** the blocking-wait reading (B1); the notification for any way of leaving (B2); the
+7-day expiry (B3); distinct copy (B4); Board/Long Exam as a follow-up (B5); targeted template coverage
+(B6); and low effort, validated and not rolled out (B7).
+
+**New facts found while tightening (plan §3, §5, §6, §10):**
+- **Board Exam's "press Start first" fix needs an expiry sweep shipped with it.** Today
+  `isSessionExpired` (`ChallengeQuizService:1489-1496`) returns false when the timer has never been stamped.
+  An unstarted Board Exam would never expire, and it shares `session_mode='CHALLENGE'`, so it would block
+  ordinary Challenge requests on that note.
+- **There is no Challenge quota refund.** `UserUsageService` has
+  `decrementLongExamUsageNotBelowZero` / `decrementBoardExamUsageNotBelowZero`, and no Challenge
+  equivalent. Try Again and 7-day expiry need one, or they double-charge.
+- **A ready session can last up to 7 days.** Because of the partial unique index
+  (`WHERE status='IN_PROGRESS'`) and the shared lookup, it can collide with a later Board Exam, a retaken
+  Quick Review or a redo-missed request on the same pack.
+- **Paths that call `markSessionReady` directly:**
+  - bank-served starts;
+  - Board Exam's pooled path (`:337`);
+  - redo-missed (`:773`).
+
+  Each needs an explicit choice once ready and started are split.
+
+**Release size:** a full Tier-H release (a new session state, a split timer action, a notification producer,
+a deep-link route, multi-note parallel generation plus a floor, retry-once, a 7-day sweep and a quota
+refund). Board/Long Exam fixes and the B6 targeted backfill should **not** be folded in (B5: "do not silently
+broaden").
+
+### Decisions that block implementation (owner): ALL APPROVED AS RECOMMENDED 2026-10-19
+
+The owner replied "approve all recommended": C1–C8 are decided as in the Recommendation column. **For C2, the
+Release Implementor recommendation (the pre-screen) is the one approved.**
+
+| # | Decision | Recommendation |
+|---|---|---|
+| C1 | Remove the "Stay on this page" button, using a progress indicator plus "Continue reviewing" only. This amends B4 | **Remove** (plan §4: staying is not an action; the owner raised the same concern) |
+| C2 | **Bank-served starts:** when enough questions already exist, does "Prepare Quiz" go straight into the running timed quiz (today's behaviour), or show the "Your quiz is ready!" pre-screen? | **Pre-screen (Release Implementor).** A button labelled "Prepare Quiz" should not start a timer, and cross-cutting rule 6 says never auto-start. Feature Planner recommends keeping today's direct start, so it does not gate a case that never waits. **These two recommendations differ; the owner decides.** The same applies to redo-missed |
+| C3 | A ready session collides with another request on the same pack: resume it, replace it, or ask? | **Ask**, with "Resume your prepared quiz" as the primary choice and "Start something else" (which discards it and releases its questions) as the alternative |
+| C4 | Does an expired or failed unstarted quiz consume monthly quota? | **No.** Refund on failure and expiry, through a new `decrementChallengeUsageNotBelowZero`. A learner should not pay for a quiz they never got |
+| C5 | Under tier routing, does Plus/Pro "+5" inherit Sol or get pinned faster? | **Inherit Sol**, for consistency and no silent downgrade. Measured +5 on Sol: 55 s max for 5 questions |
+| C6 | Board/Long Exam "press Start first" plus expiry sweep: separate PRs inside v0.175.0, or their own small follow-up release? | **Their own follow-up release right after v0.175.0** (B5: do not broaden v0.175.0) |
+| C7 | **(From B7, affects the v0.174.0 switch)** Run the free blind comparison of mini and Sol on the same "which statement is true" items, before switching FREE to Luna? | **Yes, before the switch.** Luna had wrong keys on 6 of 26 such items |
+| C8 | Where the B6 targeted backfill is built | **A small separate PR**, after the v0.174.0 switch, not inside the v0.175.0 Tier-H work |
