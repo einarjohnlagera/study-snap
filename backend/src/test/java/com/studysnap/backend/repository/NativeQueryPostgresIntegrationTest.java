@@ -161,6 +161,53 @@ import static org.mockito.Mockito.verify;
 @ExtendWith(NativeQueryPostgresIntegrationTest.DockerRequiredUnlessOptedOut.class)
 @Import(LinkedLearnerRequestExpiryWorker.class)
 class NativeQueryPostgresIntegrationTest {
+    private static final String CURATION_STANDARD_MODEL = "gpt-4.1";
+    private static final String CURATION_LUNA_MODEL = "gpt-6-luna";
+
+    @Test
+    void monthlyCurationAggregateIncludesOnlyAdminPacksUpdatedInUtcMonthAndGroupsByModel() {
+        UUID admin = seedCuratorUser("curation-aggregate-admin");
+        UUID learner = seedUser("curation-aggregate-user");
+        // A past month: other tests in this shared database seed ADMIN packs stamped now(), which would
+        // otherwise fall inside the window and break the exact-model assertion.
+        OffsetDateTime monthStart = OffsetDateTime.parse("2020-03-01T00:00:00Z");
+        UUID first = seedCurationPack(admin, "Curation first");
+        UUID second = seedCurationPack(admin, "Curation second");
+        UUID anotherModel = seedCurationPack(admin, "Curation another model");
+        UUID priorMonth = seedCurationPack(admin, "Curation previous month");
+        UUID nonAdmin = seedCurationPack(learner, "Learner pack");
+
+        setCurationTokenFacts(first, CURATION_STANDARD_MODEL, 100, 20, 30, monthStart);
+        setCurationTokenFacts(second, CURATION_STANDARD_MODEL, 200, 40, 60, monthStart.plusDays(2));
+        setCurationTokenFacts(anotherModel, CURATION_LUNA_MODEL, 50, 10, 15, monthStart.plusDays(3));
+        setCurationTokenFacts(priorMonth, CURATION_STANDARD_MODEL, 999, 999, 999, monthStart.minusNanos(1000));
+        setCurationTokenFacts(nonAdmin, CURATION_STANDARD_MODEL, 999, 999, 999, monthStart.plusDays(1));
+
+        var rows = studyPackRepository.sumAdminGenerationTokensByModel(monthStart, monthStart.plusMonths(1));
+        assertThat(rows).extracting(StudyPackRepository.MonthlyCurationTokens::getModelUsed)
+                .containsExactlyInAnyOrder(CURATION_STANDARD_MODEL, CURATION_LUNA_MODEL);
+        var standard = rows.stream().filter(row -> row.getModelUsed().equals(CURATION_STANDARD_MODEL)).findFirst().orElseThrow();
+        assertThat(standard.getInputTokens()).isEqualTo(300L);
+        assertThat(standard.getCachedInputTokens()).isEqualTo(60L);
+        assertThat(standard.getOutputTokens()).isEqualTo(90L);
+        var luna = rows.stream().filter(row -> row.getModelUsed().equals(CURATION_LUNA_MODEL)).findFirst().orElseThrow();
+        assertThat(luna.getInputTokens()).isEqualTo(50L);
+        assertThat(luna.getCachedInputTokens()).isEqualTo(10L);
+        assertThat(luna.getOutputTokens()).isEqualTo(15L);
+    }
+
+    /** study_packs.note_id is NOT NULL, so every fixture pack needs its own note. */
+    private UUID seedCurationPack(UUID ownerId, String title) {
+        return seedStudyPack(ownerId, seedPublicNote(ownerId, title + " note", new String[] {}), title);
+    }
+
+    private void setCurationTokenFacts(UUID packId, String model, int input, int cached, int output,
+                                       OffsetDateTime updatedAt) {
+        jdbcTemplate.update("update study_packs set model_used = ?, input_tokens = ?,"
+                        + " cached_input_tokens = ?, output_tokens = ?, updated_at = ? where id = ?",
+                model, input, cached, output, updatedAt, packId);
+    }
+
     @Test
     void civilEngineeringExamGoalMigrationSeedsTheExistingRow() {
         assertThat(jdbcTemplate.queryForObject(
@@ -180,7 +227,7 @@ class NativeQueryPostgresIntegrationTest {
      * v0.93.0 pressure test: at 25 against an actual 31, the reflective scan could silently degrade by
      * six queries and stay green, which is the same false comfort the harness exists to remove.
      */
-    private static final int EXPECTED_NATIVE_QUERIES = 47;
+    private static final int EXPECTED_NATIVE_QUERIES = 48;
     private static final String REPOSITORY_CLASSES =
             "classpath*:com/studysnap/backend/repository/**/*.class";
 

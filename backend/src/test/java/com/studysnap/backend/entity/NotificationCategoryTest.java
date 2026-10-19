@@ -73,6 +73,7 @@ class NotificationCategoryTest {
     void reviewSetUpdatesAreActionableAndAnnouncementsRemainNonActionable() {
         assertThat(NotificationType.actionableTypes()).containsExactlyInAnyOrder(
                 NotificationType.REVIEW_SET_UPDATE,
+                NotificationType.CURATION_COST_ALERT,
                 NotificationType.BULK_GENERATION_INCOMPLETE,
                 NotificationType.BULK_REGENERATION_COMPLETE
         );

@@ -20,8 +20,9 @@ or alter any product state. It hides the row from the inbox and nothing more.
 `notifications` carries a **UNIQUE index on `(recipient_user_id, dedup_key)`** (`V139`). That index
 **is** the delivery guarantee.
 
-`dedup_key` is deterministic and built by one helper — `NotificationService.dedupKey(type, discriminator)`
-— producing **`"<TYPE>:<discriminator>"`**, e.g. `ANNOUNCEMENT:9f3c…`.
+Most `dedup_key` values are deterministic and built by `NotificationService.dedupKey(type, discriminator)`
+— producing **`"<TYPE>:<discriminator>"`**, e.g. `ANNOUNCEMENT:9f3c…`. The curation cost alert has
+the explicit lowercase key format documented below and uses the same unique index.
 
 **⚠️ The discriminator is a `String`, widened from `UUID` in `v0.134.0`** so a producer whose event
 identity is not a bare entity id can express it. **The format did not change** — announcements still
@@ -47,6 +48,7 @@ The shipped mappings are exactly:
 
 - `ANNOUNCEMENT` → `ANNOUNCEMENT(false, true)` — visible, non-badging, retention-expirable.
 - `REVIEW_SET_UPDATE` → `LEARNING_SYSTEM(true, false)` — badge-eligible and retained while unread.
+- `CURATION_COST_ALERT` → `LEARNING_SYSTEM(true, false)` — an ADMIN alert for the tracked monthly Official Study Pack generation estimate.
 - `BULK_GENERATION_INCOMPLETE` and `BULK_REGENERATION_COMPLETE` → `ASYNC_RESULT(true, true)` — badge-eligible and retention-expirable.
 
 **`ACTION_REQUIRED` is gone.** It was a transitional producerless placeholder and was removed in
@@ -61,6 +63,26 @@ on would otherwise leave a permanent count on the bell, which trains people to i
 the actionable half the badge exists for.
 
 **⚠️ Never render a literal `0`** — at zero there is no badge element at all, not an empty circle.
+
+## Official curation cost alert
+
+An hourly UTC job sums the latest persisted token counts on ADMIN-owned Study Packs whose `updated_at`
+falls in the current UTC calendar month. The estimate covers Study Pack generation only. Template
+seeding, summary regeneration and malformed-quiz repair do not persist tokens and require manual review
+on the OpenAI billing dashboard. In-place regeneration overwrites token counts, so repeat generations
+can be undercounted. Metadata and tag edits also advance `updated_at`, so an older generation can
+appear in the current month's estimate. The alert never blocks generation.
+
+At or above the configured USD threshold (initially $10.00), each ADMIN receives one
+`CURATION_COST_ALERT` with dedup key `curation-cost-alert:<yyyy-MM>:<threshold>`. The copied body names
+the partial scope and directs the admin to the billing dashboard for total spend. The dedup key is an
+explicit producer format passed to `NotificationService.deliver`; its recipient/key unique index still
+enforces one row per month and threshold.
+
+Prices are configurable per model prefix, per million uncached input, cached input and output tokens.
+If a cached-input rate is absent, input pricing is used, which overstates that component and can make
+the alert fire early. Unknown models use the highest configured rates and are logged. Output tokens
+already include reasoning tokens.
 
 ## Bulk-operation result producer
 
