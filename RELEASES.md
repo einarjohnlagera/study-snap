@@ -273,6 +273,61 @@ ADMIN carve-out.
     `NativeQueryPostgresIntegrationTest` (115). No file under `backend/src/main` changed.
   - Known difference from production: multi-note cells use `medium`, but a learner's last Quick Review
     score can make it `easy` or `hard`.
+- **Item 4: the Official curation cost alert (brief 2b, PR #1508, `c1a28305`). Alert only; never blocks.**
+  - `CurationCostAlertJob` runs hourly in UTC.
+    - It estimates the month's **tracked** cost of ADMIN-owned Study Pack generation from persisted tokens:
+      one native aggregate query by `model_used`, at configured per-model rates.
+    - At **USD 10** (owner A6) it delivers one in-app `CURATION_COST_ALERT` per ADMIN per month, deduplicated
+      by a per-month key through `NotificationService.deliver`.
+  - The copy states its partial scope: Study Pack generation only, excluding template seeding, summary
+    regeneration and repair, with a pointer to the billing dashboard. No model is named.
+  - The cached-input rate falls back to the input rate, which overstates cost. Reasoning tokens are not
+    added, because `output_tokens` already includes them.
+  - **Known limits:**
+    - The window uses `updated_at`, so touching admin packs re-counts their original tokens. A bulk action
+      over about 2,000 Sol packs would read about $45, a false alert in the safe direction.
+    - A repair counts the original tokens.
+    - The month is UTC.
+  - Verified:
+    - `CurationCostAlertJobTest` 8/8, plus the notification dedup integration test.
+    - The full suite with Docker. The 7 Docker-dependent classes failed during a disk-full Docker outage
+      and all passed on rerun, including `NativeQueryPostgresIntegrationTest` at 116/116.
+    - The query, run read-only against production, returned 10 admin packs this month.
+  - Release Implementor fixed the new native test's fixture: notes for the fixture packs, and a past-month
+    window for isolation. No migration, and no frontend change (notification `type` is a plain string).
+- **Item 2a: tier routing for Study Pack generation and pins for every interactive path (PR #1509,
+  `96a46d78`; owner A1–A3).**
+  - `LlmModelRouter` resolves the model from an explicit route; a missing route throws.
+    - **TIERED:** FREE → `LLM_MODEL_FREE`; Plus/Pro → `LLM_MODEL_PREMIUM`, from the expiry-aware
+      `SubscriptionService` snapshot; `UserRole.ADMIN` on any plan → premium. A missing or deleted tier user
+      routes as FREE with a warning.
+    - **Routed paths:** Study Pack async and synchronous (requester); summary regeneration and the
+      malformed-quiz repair (pack owner, resolved at repair time); note-from-topic, single and bulk; the
+      Official template seed (note owner).
+  - **Pinned for every plan:**
+    - `LLM_MODEL_INTERACTIVE_QUIZ` (`gpt-4.1-mini`): Challenge start, +5, multi-note, Board Exam, Adaptive,
+      study tip, teacher quiz, Long Exam and the exam pools.
+    - `LLM_MODEL_PAID_INTERACTIVE` (`gpt-4.1`): Interview quiz and the companion.
+    - `LLM_MODEL_CRITIQUE` is untouched.
+  - **Metadata:** one tier snapshot per generation sets the model sent and `model_tier`, keeping the
+    PLUS||PRO rule. `model_used` falls back to the model sent. A repair keeps the original metadata (known
+    limitation).
+  - **Logging:** a structured log line per HTTP attempt (route, model, tier, latency, attempt, outcome, tokens
+    including reasoning). No prompt, body or headers.
+  - **Defaults:** `application.yaml` now defaults to `gpt-6-luna` / `gpt-6.1-sol`. Render sets
+    `LLM_MODEL_FREE` / `LLM_MODEL_PREMIUM`, so **the merge changed no production model.**
+  - **Verified:**
+    - Tests assert the model in every outgoing request body, per route and for every pinned method (Long
+      Exam halves, salvage, fallback and consistency retry included). Pins hold when the tier keys change.
+      Each caller's route is tested.
+    - A cold Opus falsification pass found no claim wrong. It found five gaps, which Codex fixed and Release
+      Implementor verified in the code: the null-route fallback, the Board Exam route test, body-level pin
+      tests, log outcome labels, and upstream error detail. Release Implementor also added a safeguard so a
+      deferred log line cannot be overwritten.
+    - `./mvnw install` with Docker: 2,770 tests, 0 failures, including `NativeQueryPostgresIntegrationTest`
+      116/116. Feature docs are updated; no migration.
+  - **Known:** an email-only Official author would route FREE. In production that email is the single ADMIN
+    account.
 ## v0.173.0 - Cached Catalog
 
 **Status: Released** (signed off 2026-10-16; **merge to `main` HELD for the 2026-10-22 gate, so NOT yet deployed**. Kicked off 2026-10-15 on `releases/v0.173.0`, cut from `docs/v0.172.0-deploy-stamp`
