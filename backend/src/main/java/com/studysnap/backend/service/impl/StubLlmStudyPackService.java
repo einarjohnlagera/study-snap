@@ -12,6 +12,7 @@ import com.studysnap.backend.service.model.GeneratedChallengeQuizContent;
 import com.studysnap.backend.service.model.GeneratedStudyPackContent;
 import com.studysnap.backend.service.model.InterviewPracticeCritique;
 import com.studysnap.backend.service.model.StudyPackGenerationContext;
+import com.studysnap.backend.service.model.LlmRouting;
 import com.studysnap.backend.util.MockQuizGenerationUtils;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.core.task.AsyncTaskExecutor;
@@ -135,6 +136,11 @@ public class StubLlmStudyPackService implements LlmStudyPackService {
         }
         String first = incorrectQuestionSummaries.getFirst();
         return "Review this concept again: " + first;
+    }
+
+    @Override
+    public String generateQuickReviewStudyTip(List<String> incorrectQuestionSummaries, LlmRouting routing) {
+        return generateQuickReviewStudyTip(incorrectQuestionSummaries);
     }
 
     @Override

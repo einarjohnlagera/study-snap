@@ -32,6 +32,7 @@ import com.studysnap.backend.repository.BulkGenerationResultRepository;
 import com.studysnap.backend.repository.UserRepository;
 import com.studysnap.backend.repository.CourseProgramCatalogRepository;
 import com.studysnap.backend.service.model.StudyPackGenerationContext;
+import com.studysnap.backend.service.model.LlmRouting;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -218,7 +219,8 @@ class NoteBulkGenerationServiceTest {
         when(generationContextResolver.resolveForBulkGeneration(
                 userId, List.of(CATALOG_PROGRAM_ID), null, SUBJECT, null, null
         )).thenReturn(context);
-        when(llmStudyPackService.generateNoteFromTopic(anyString(), eq(context)))
+        when(llmStudyPackService.generateNoteFromTopic(anyString(),
+                eq(context.withRouting(LlmRouting.tiered(userId)))))
                 .thenReturn("First content")
                 .thenThrow(new RuntimeException("generation failed"))
                 .thenReturn("Third content");
@@ -247,7 +249,7 @@ class NoteBulkGenerationServiceTest {
         when(generationContextResolver.resolveForBulkGeneration(
                 userId, List.of(CATALOG_PROGRAM_ID), null, SUBJECT, null, null
         )).thenReturn(context);
-        when(llmStudyPackService.generateNoteFromTopic(anyString(), eq(context))).thenReturn("First content");
+        when(llmStudyPackService.generateNoteFromTopic(anyString(), eq(context.withRouting(LlmRouting.tiered(userId))))).thenReturn("First content");
         when(noteService.create(any(UpsertNoteRequest.class), eq(userId)))
                 .thenReturn(noteResponse(firstNoteId.toString()));
         NoteBulkGenerationService throttledService = new NoteBulkGenerationService(
@@ -283,7 +285,7 @@ class NoteBulkGenerationServiceTest {
         when(generationContextResolver.resolveForBulkGeneration(
                 userId, List.of(CATALOG_PROGRAM_ID), null, SUBJECT, null, null
         )).thenReturn(context);
-        when(llmStudyPackService.generateNoteFromTopic("Topic", context)).thenReturn("Content");
+        when(llmStudyPackService.generateNoteFromTopic("Topic", context.withRouting(LlmRouting.tiered(userId)))).thenReturn("Content");
         when(noteService.create(any(UpsertNoteRequest.class), eq(userId))).thenReturn(noteResponse(noteId.toString()));
 
         service.queueBatch(request, userId, false);
@@ -302,7 +304,7 @@ class NoteBulkGenerationServiceTest {
         when(generationContextResolver.resolveForBulkGeneration(
                 userId, List.of(CATALOG_PROGRAM_ID), null, SUBJECT, null, null
         )).thenReturn(context);
-        when(llmStudyPackService.generateNoteFromTopic("Topic", context)).thenReturn("Content");
+        when(llmStudyPackService.generateNoteFromTopic("Topic", context.withRouting(LlmRouting.tiered(userId)))).thenReturn("Content");
         when(noteService.create(any(UpsertNoteRequest.class), eq(userId))).thenReturn(noteResponse(noteId.toString()));
 
         service.queueBatch(request, userId, false);
@@ -321,7 +323,7 @@ class NoteBulkGenerationServiceTest {
         when(generationContextResolver.resolveForBulkGeneration(
                 userId, List.of(CATALOG_PROGRAM_ID), null, SUBJECT, null, null
         )).thenReturn(context);
-        when(llmStudyPackService.generateNoteFromTopic("Topic", context)).thenReturn("Content");
+        when(llmStudyPackService.generateNoteFromTopic("Topic", context.withRouting(LlmRouting.tiered(userId)))).thenReturn("Content");
         when(noteService.create(any(UpsertNoteRequest.class), eq(userId))).thenReturn(noteResponse(noteId.toString()));
         doThrow(new CollectionNotFoundException()).when(noteCollectionService).addGeneratedItems(
                 collectionId,
@@ -370,7 +372,7 @@ class NoteBulkGenerationServiceTest {
                 DomainContext.NURSING,
                 LearnerLevel.BOARD_EXAM_REVIEW
         )).thenReturn(context);
-        when(llmStudyPackService.generateNoteFromTopic(anyString(), eq(context)))
+        when(llmStudyPackService.generateNoteFromTopic(anyString(), eq(context.withRouting(LlmRouting.tiered(userId)))))
                 .thenAnswer(invocation -> "Generated content for " + invocation.getArgument(0));
         when(noteService.create(any(UpsertNoteRequest.class), eq(userId)))
                 .thenReturn(noteResponse("note-1"), noteResponse("note-2"));
@@ -528,7 +530,7 @@ class NoteBulkGenerationServiceTest {
             when(generationContextResolver.resolveForBulkGeneration(
                     userId, List.of(CATALOG_PROGRAM_ID), null, SUBJECT, null, null))
                     .thenReturn(context);
-            when(llmStudyPackService.generateNoteFromTopic(topic, context)).thenReturn(generatedContent);
+            when(llmStudyPackService.generateNoteFromTopic(topic, context.withRouting(LlmRouting.tiered(userId)))).thenReturn(generatedContent);
         }
         when(noteService.create(any(UpsertNoteRequest.class), eq(userId)))
                 .thenReturn(noteResponse("note-1"));
@@ -577,7 +579,7 @@ class NoteBulkGenerationServiceTest {
         when(generationContextResolver.resolveForBulkGeneration(
                 userId, List.of(CATALOG_PROGRAM_ID), null, SUBJECT, null, null
         )).thenReturn(context);
-        when(llmStudyPackService.generateNoteFromTopic("Failed Topic", context))
+        when(llmStudyPackService.generateNoteFromTopic("Failed Topic", context.withRouting(LlmRouting.tiered(userId))))
                 .thenThrow(new IllegalStateException("generation failed"));
         doThrow(new IllegalStateException("notification failed"))
                 .when(bulkOperationNotificationService)
@@ -606,7 +608,7 @@ class NoteBulkGenerationServiceTest {
         StudyPackGenerationContext context = context(LearnerLevel.COLLEGE, COURSE_PROGRAM);
         when(generationContextResolver.resolveForBulkGeneration(userId, List.of(CATALOG_PROGRAM_ID), null, SUBJECT, null, null))
                 .thenReturn(context);
-        when(llmStudyPackService.generateNoteFromTopic(anyString(), eq(context)))
+        when(llmStudyPackService.generateNoteFromTopic(anyString(), eq(context.withRouting(LlmRouting.tiered(userId)))))
                 .thenReturn("Generated content");
         when(noteService.create(any(UpsertNoteRequest.class), eq(userId)))
                 .thenReturn(noteResponse("note-1"), noteResponse("note-2"), noteResponse("note-3"));
@@ -638,7 +640,7 @@ class NoteBulkGenerationServiceTest {
                 null,
                 null
         )).thenReturn(context);
-        when(llmStudyPackService.generateNoteFromTopic("Classroom Assessment", context)).thenReturn("Content");
+        when(llmStudyPackService.generateNoteFromTopic("Classroom Assessment", context.withRouting(LlmRouting.tiered(userId)))).thenReturn("Content");
         when(noteService.create(any(UpsertNoteRequest.class), eq(userId))).thenReturn(noteResponse("note-1"));
 
         service.queueBatch(request, userId, false);
@@ -683,7 +685,8 @@ class NoteBulkGenerationServiceTest {
                 DomainContext.PROFESSIONAL_PRACTICE_AND_REGULATION,
                 LearnerLevel.BOARD_EXAM_REVIEW
         )).thenReturn(context);
-        when(llmStudyPackService.generateNoteFromTopic("Licensure Review", context)).thenReturn("Content");
+        when(llmStudyPackService.generateNoteFromTopic("Licensure Review",
+                context.withRouting(LlmRouting.tiered(userId)))).thenReturn("Content");
         when(noteService.create(any(UpsertNoteRequest.class), eq(userId))).thenReturn(noteResponse("note-1"));
 
         service.queueBatch(request, userId, false);
@@ -757,9 +760,9 @@ class NoteBulkGenerationServiceTest {
                 null,
                 null
         )).thenReturn(context);
-        when(llmStudyPackService.generateNoteFromTopic("Rejected Topic", context))
+        when(llmStudyPackService.generateNoteFromTopic("Rejected Topic", context.withRouting(LlmRouting.tiered(userId))))
                 .thenThrow(new RuntimeException("moderation rejected"));
-        when(llmStudyPackService.generateNoteFromTopic("Healthy Topic", context)).thenReturn("Healthy content");
+        when(llmStudyPackService.generateNoteFromTopic("Healthy Topic", context.withRouting(LlmRouting.tiered(userId)))).thenReturn("Healthy content");
         when(noteService.create(any(UpsertNoteRequest.class), eq(userId))).thenReturn(noteResponse("note-healthy"));
 
         BulkGenerateNotesResponse response = service.queueBatch(request, userId, false);
@@ -798,7 +801,7 @@ class NoteBulkGenerationServiceTest {
         when(generationContextResolver.resolveForBulkGeneration(
                 userId, List.of(CATALOG_PROGRAM_ID), null, SUBJECT, null, null
         )).thenReturn(context);
-        when(llmStudyPackService.generateNoteFromTopic("Invalid Overview", context))
+        when(llmStudyPackService.generateNoteFromTopic("Invalid Overview", context.withRouting(LlmRouting.tiered(userId))))
                 .thenThrow(new TestLlmInvalidOutputException());
 
         service.queueBatch(request, userId, false);
@@ -822,7 +825,7 @@ class NoteBulkGenerationServiceTest {
         when(generationContextResolver.resolveForBulkGeneration(
                 userId, List.of(CATALOG_PROGRAM_ID), null, SUBJECT, null, null
         )).thenReturn(context);
-        when(llmStudyPackService.generateNoteFromTopic("Bounded Topic", context)).thenReturn("Generated content");
+        when(llmStudyPackService.generateNoteFromTopic("Bounded Topic", context.withRouting(LlmRouting.tiered(userId)))).thenReturn("Generated content");
         when(noteService.create(any(UpsertNoteRequest.class), eq(userId))).thenThrow(new SubjectTooLongException());
 
         service.queueBatch(request, userId, false);
@@ -846,7 +849,7 @@ class NoteBulkGenerationServiceTest {
         when(generationContextResolver.resolveForBulkGeneration(
                 userId, List.of(CATALOG_PROGRAM_ID), null, SUBJECT, null, null
         )).thenReturn(context);
-        when(llmStudyPackService.generateNoteFromTopic("Provider Failure", context))
+        when(llmStudyPackService.generateNoteFromTopic("Provider Failure", context.withRouting(LlmRouting.tiered(userId))))
                 .thenThrow(new IllegalStateException(sensitiveMessage));
 
         service.queueBatch(request, userId, false);
@@ -871,7 +874,7 @@ class NoteBulkGenerationServiceTest {
         when(generationContextResolver.resolveForBulkGeneration(
                 userId, List.of(CATALOG_PROGRAM_ID), null, SUBJECT, null, null
         )).thenReturn(context);
-        when(llmStudyPackService.generateNoteFromTopic(anyString(), eq(context)))
+        when(llmStudyPackService.generateNoteFromTopic(anyString(), eq(context.withRouting(LlmRouting.tiered(userId)))))
                 .thenThrow(new IllegalStateException("first"), new IllegalArgumentException("second"));
 
         service.queueBatch(request, userId, false);
@@ -946,7 +949,7 @@ class NoteBulkGenerationServiceTest {
         when(generationContextResolver.resolveForBulkGeneration(
                 userId, List.of(CATALOG_PROGRAM_ID), null, SUBJECT, null, null
         )).thenReturn(context);
-        when(llmStudyPackService.generateNoteFromTopic(anyString(), eq(context)))
+        when(llmStudyPackService.generateNoteFromTopic(anyString(), eq(context.withRouting(LlmRouting.tiered(userId)))))
                 .thenThrow(new IllegalStateException("original failure"), new TestLlmInvalidOutputException());
         doThrow(new IllegalStateException("normalizer failed"))
                 .doCallRealMethod()
@@ -981,7 +984,7 @@ class NoteBulkGenerationServiceTest {
         StudyPackGenerationContext context = context(LearnerLevel.COLLEGE, COURSE_PROGRAM);
         when(generationContextResolver.resolveForBulkGeneration(userId, List.of(CATALOG_PROGRAM_ID), null, SUBJECT, null, null))
                 .thenReturn(context);
-        when(llmStudyPackService.generateNoteFromTopic("Healthy Topic", context)).thenReturn("Healthy content");
+        when(llmStudyPackService.generateNoteFromTopic("Healthy Topic", context.withRouting(LlmRouting.tiered(userId)))).thenReturn("Healthy content");
         when(noteService.create(any(UpsertNoteRequest.class), eq(userId))).thenReturn(noteResponse("note-healthy"));
         doThrow(new RuntimeException("pack generation failed")).when(studyPackService)
                 .startAsyncGenerationFromNote("note-healthy", userId, false, false, context, SUBJECT);
@@ -1124,7 +1127,8 @@ class NoteBulkGenerationServiceTest {
         when(generationContextResolver.resolveForBulkGeneration(
                 adminId, COURSE_PROGRAM, SUBJECT, null, null
         )).thenReturn(context);
-        when(llmStudyPackService.generateNoteFromTopic("Topic", context)).thenReturn("Content");
+        when(llmStudyPackService.generateNoteFromTopic("Topic",
+                context.withRouting(LlmRouting.tiered(adminId)))).thenReturn("Content");
         when(noteService.create(any(UpsertNoteRequest.class), eq(adminId))).thenReturn(noteResponse("note-1"));
 
         service.queueBatch(requestWithoutCatalogIds, adminId, false);
@@ -1148,7 +1152,7 @@ class NoteBulkGenerationServiceTest {
         when(generationContextResolver.resolveForBulkGeneration(
                 adminId, List.of(CATALOG_PROGRAM_ID), null, SUBJECT, null, null
         )).thenReturn(context);
-        when(llmStudyPackService.generateNoteFromTopic("Topic", context)).thenReturn("Content");
+        when(llmStudyPackService.generateNoteFromTopic("Topic", context.withRouting(LlmRouting.tiered(adminId)))).thenReturn("Content");
         when(noteService.create(any(UpsertNoteRequest.class), eq(adminId))).thenReturn(noteResponse("note-1"));
 
         service.queueBatch(request, adminId, false);
@@ -1169,7 +1173,7 @@ class NoteBulkGenerationServiceTest {
         StudyPackGenerationContext context = context(null, COURSE_PROGRAM);
         when(generationContextResolver.resolveForBulkGeneration(userId, List.of(CATALOG_PROGRAM_ID), null, SUBJECT, null, null))
                 .thenReturn(context);
-        when(llmStudyPackService.generateNoteFromTopic("Topic", context)).thenReturn("Content");
+        when(llmStudyPackService.generateNoteFromTopic("Topic", context.withRouting(LlmRouting.tiered(userId)))).thenReturn("Content");
         when(noteService.create(any(UpsertNoteRequest.class), eq(userId))).thenReturn(noteResponse("note-1"));
 
         service.queueBatch(request, userId, false);

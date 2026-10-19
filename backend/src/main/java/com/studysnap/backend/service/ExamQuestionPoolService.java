@@ -1,5 +1,6 @@
 package com.studysnap.backend.service;
 
+import com.studysnap.backend.service.model.LlmRouting;
 import com.studysnap.backend.config.StudySnapProperties;
 import com.studysnap.backend.dto.QuizItem;
 import com.studysnap.backend.entity.ExamQuestionPoolEntity;
@@ -291,7 +292,7 @@ public class ExamQuestionPoolService {
                             answerKeyQuestionTexts,
                             expectedPoolSize,
                             DIFFICULTY_MIXED,
-                            target.context(),
+                            target.context().withRouting(LlmRouting.interactiveQuiz()),
                             llmParallelTaskExecutor
                     ),
                     new LinkedHashSet<>(answerKeyQuestionKeys)
@@ -320,7 +321,7 @@ public class ExamQuestionPoolService {
                 answerKeyQuestionTexts,
                 BOARD_EXAM_SESSION_QUESTION_COUNT,
                 DIFFICULTY_MIXED,
-                target.context()
+                target.context().withRouting(LlmRouting.interactiveQuiz())
         );
         List<QuizItem> secondBatch = quizGenerationService.generateBoardExamQuiz(
                 target.studyPack().getTitle(),
@@ -329,7 +330,7 @@ public class ExamQuestionPoolService {
                 answerKeyQuestionTexts,
                 BOARD_EXAM_SESSION_QUESTION_COUNT,
                 DIFFICULTY_MIXED,
-                target.context()
+                target.context().withRouting(LlmRouting.interactiveQuiz())
         );
         List<QuizItem> combined = new ArrayList<>(firstBatch);
         combined.addAll(secondBatch);

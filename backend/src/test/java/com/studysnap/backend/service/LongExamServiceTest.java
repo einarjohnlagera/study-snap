@@ -200,7 +200,7 @@ class LongExamServiceTest {
             eq(List.of("Existing question")),
             eq(25),
             eq(DEFAULT_DIFFICULTY),
-            eq(context),
+            eq(context.withRouting(com.studysnap.backend.service.model.LlmRouting.interactiveQuiz())),
             any()
         )).thenReturn(generatedQuiz);
         when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))

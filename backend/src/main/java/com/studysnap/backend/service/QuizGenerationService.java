@@ -30,6 +30,15 @@ public class QuizGenerationService {
     private final LlmStudyPackService llmStudyPackService;
     private final StudySnapProperties properties;
 
+    // Preserve the caller's route through every real-LLM wrapper. Mock mode uses the same
+    // prompt context without making a model-selection decision.
+    private StudyPackGenerationContext routed(StudyPackGenerationContext context) {
+        if (context == null || context.routing() == null) {
+            throw new IllegalArgumentException("Quiz generation requires an explicit LLM route");
+        }
+        return context;
+    }
+
     public GeneratedChallengeQuizContent generateChallengeQuiz(
             String studyPackTitle,
             String studyPackSummary,
@@ -47,7 +56,7 @@ public class QuizGenerationService {
                     disallowedQuestions,
                     questionCount,
                     difficulty,
-                    context
+                    routed(context)
             );
         }
 
@@ -84,7 +93,7 @@ public class QuizGenerationService {
                     existingConcepts,
                     questionCount,
                     difficulty,
-                    context
+                    routed(context)
             );
         }
 
@@ -119,7 +128,7 @@ public class QuizGenerationService {
                     disallowedQuestions,
                     questionCount,
                     difficulty,
-                    context
+                    routed(context)
             );
         }
 
@@ -152,7 +161,7 @@ public class QuizGenerationService {
                     disallowedQuestions,
                     questionCount,
                     difficulty,
-                    context
+                    routed(context)
             );
         }
 
@@ -186,7 +195,7 @@ public class QuizGenerationService {
                     disallowedQuestions,
                     totalQuestions,
                     difficulty,
-                    context,
+                    routed(context),
                     taskExecutor
             );
         }
@@ -220,7 +229,7 @@ public class QuizGenerationService {
                     weakConcepts,
                     disallowedQuestions,
                     questionCount,
-                    context
+                    routed(context)
             );
         }
 
@@ -250,7 +259,7 @@ public class QuizGenerationService {
                     keyConcepts,
                     disallowedQuestions,
                     questionCount,
-                    context
+                    routed(context)
             );
         }
 
@@ -290,7 +299,7 @@ public class QuizGenerationService {
                     noteContent,
                     disallowedQuestions,
                     questionCount,
-                    context
+                    routed(context)
             );
         }
 

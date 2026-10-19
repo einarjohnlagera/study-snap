@@ -8,6 +8,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -15,6 +16,7 @@ import static org.mockito.Mockito.when;
 
 import com.studysnap.backend.config.StudySnapProperties;
 import com.studysnap.backend.dto.CreateStudyPackRequest;
+import com.studysnap.backend.dto.ConfirmTextRequest;
 import com.studysnap.backend.dto.GenerateNoteFromTopicRequest;
 import com.studysnap.backend.dto.GenerateNoteFromTopicResponse;
 import com.studysnap.backend.dto.QuizItem;
@@ -22,6 +24,7 @@ import com.studysnap.backend.dto.StudyPackListPageResponse;
 import com.studysnap.backend.dto.StudyPackResponse;
 import com.studysnap.backend.entity.AnalyticsEventType;
 import com.studysnap.backend.entity.LearnerLevel;
+import com.studysnap.backend.entity.ModelTier;
 import com.studysnap.backend.entity.NoteEntity;
 import com.studysnap.backend.entity.NoteStatus;
 import com.studysnap.backend.entity.UserEntity;
@@ -30,6 +33,7 @@ import com.studysnap.backend.entity.NoteTargetProfileType;
 import com.studysnap.backend.entity.NoteVisibility;
 import com.studysnap.backend.entity.PlanType;
 import com.studysnap.backend.entity.StudyPackEntity;
+import com.studysnap.backend.entity.StudyPackDraftEntity;
 import com.studysnap.backend.entity.StudyPackStatus;
 import com.studysnap.backend.exception.AppException;
 import com.studysnap.backend.exception.OcrDisabledException;
@@ -49,6 +53,7 @@ import com.studysnap.backend.security.AiRateLimitService;
 import com.studysnap.backend.security.OcrRateLimitService;
 import com.studysnap.backend.service.model.GeneratedStudyPackContent;
 import com.studysnap.backend.service.model.StudyPackGenerationContext;
+import com.studysnap.backend.service.model.OcrResult;
 import com.studysnap.backend.util.CreatedAtIdCursorUtils;
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
@@ -370,6 +375,8 @@ class StudyPackServiceTest {
         assertThat(contextCaptor.getValue().courseProgram()).isEqualTo("Biology");
         assertThat(contextCaptor.getValue().subject()).isEqualTo("Subject");
         assertThat(contextCaptor.getValue().tags()).containsExactly("draft");
+        assertThat(contextCaptor.getValue().routing()).isEqualTo(
+                com.studysnap.backend.service.model.LlmRouting.tiered(userId));
 
         verify(userUsageService).incrementStudyPackGeneration(eq(userId), any(OffsetDateTime.class));
         verify(analyticsService).trackEvent(eq(userId), eq(AnalyticsEventType.STUDY_PACK_GENERATED), eq(savedStudyPack.getId()), any());
@@ -458,6 +465,30 @@ class StudyPackServiceTest {
         stubTextGeneration(userId, owner, "Biology");
     }
 
+    @Test
+    void createFromText_persistsModelAndTierFromOneGenerationSnapshot() {
+        UUID userId = UUID.randomUUID();
+        stubTextGeneration(userId, null);
+        GeneratedStudyPackContent generated = new GeneratedStudyPackContent(
+                "Generated title", "Generated summary", "Biology", List.of("cells"),
+                List.of("Cell membrane"), List.of(new QuizItem("What powers the cell?",
+                        List.of("Nucleus", "Mitochondria", "Ribosome", "Golgi body"),
+                        "Mitochondria", "Cell biology", "Mitochondria generate ATP.")),
+                null, 100, 220, 0, null, ModelTier.PREMIUM, "selected-premium-model");
+        doReturn(generated).when(llmStudyPackService).generateStudyPack(
+                eq("pasted notes"), any(StudyPackGenerationContext.class));
+
+        studyPackService.createFromText(new CreateStudyPackRequest("pasted notes", null), userId);
+
+        ArgumentCaptor<StudyPackEntity> saved = ArgumentCaptor.forClass(StudyPackEntity.class);
+        verify(studyPackRepository).save(saved.capture());
+        assertThat(saved.getValue().getModelTier()).isEqualTo(ModelTier.PREMIUM);
+        assertThat(saved.getValue().getModelUsed()).isEqualTo("selected-premium-model");
+        verify(llmStudyPackService).generateStudyPack(eq("pasted notes"),
+                org.mockito.ArgumentMatchers.argThat(context ->
+                        com.studysnap.backend.service.model.LlmRouting.tiered(userId).equals(context.routing())));
+    }
+
     private void stubTextGeneration(UUID userId, UserEntity owner, String generatedSubject) {
         when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.FREE);
         when(studyPackUsageService.resolveUsage(eq(userId), any(OffsetDateTime.class)))
@@ -469,7 +500,7 @@ class StudyPackServiceTest {
         when(generationContextResolver.resolve(userId, null)).thenReturn(
                 new StudyPackGenerationContext(LearnerLevel.COLLEGE, "Biology", "Subject", List.of())
         );
-        when(llmStudyPackService.generateStudyPack(eq("pasted notes"), any(StudyPackGenerationContext.class)))
+        lenient().when(llmStudyPackService.generateStudyPack(eq("pasted notes"), any(StudyPackGenerationContext.class)))
                 .thenReturn(new GeneratedStudyPackContent(
                         "Generated title",
                         "Generated summary",
@@ -706,6 +737,39 @@ class StudyPackServiceTest {
 
         verify(ocrService, never()).extractText(any(MultipartFile.class));
         verify(subscriptionService, never()).resolvePlan(any(UUID.class));
+    }
+
+    @Test
+    void createFromImage_passesRequesterTierRoute() {
+        UUID userId = UUID.randomUUID();
+        MockMultipartFile image = new MockMultipartFile("image", "note.png", "image/png", "fake-image".getBytes());
+        stubTextGeneration(userId, null);
+        when(ocrService.extractText(image)).thenReturn(new OcrResult("pasted notes", 0.99));
+
+        studyPackService.createFromImage(image, null, userId);
+
+        verify(llmStudyPackService).generateStudyPack(eq("pasted notes"),
+                org.mockito.ArgumentMatchers.argThat(context ->
+                        com.studysnap.backend.service.model.LlmRouting.tiered(userId).equals(context.routing())));
+    }
+
+    @Test
+    void confirmExtractedText_passesRequesterTierRoute() {
+        UUID userId = UUID.randomUUID();
+        UUID draftId = UUID.randomUUID();
+        StudyPackDraftEntity draft = new StudyPackDraftEntity();
+        draft.setId(draftId);
+        draft.setOwnerUserId(userId);
+        draft.setExpiresAt(OffsetDateTime.now().plusHours(1));
+        draft.setOcrConfidence(0.5);
+        stubTextGeneration(userId, null);
+        when(studyPackDraftRepository.findById(draftId)).thenReturn(Optional.of(draft));
+
+        studyPackService.confirmExtractedText(new ConfirmTextRequest(draftId.toString(), "pasted notes"), userId);
+
+        verify(llmStudyPackService).generateStudyPack(eq("pasted notes"),
+                org.mockito.ArgumentMatchers.argThat(context ->
+                        com.studysnap.backend.service.model.LlmRouting.tiered(userId).equals(context.routing())));
     }
 
     @Test
@@ -1020,6 +1084,9 @@ class StudyPackServiceTest {
         assertThat(draftNote.getStatus()).isEqualTo(NoteStatus.FAILED);
         verify(userUsageService, never()).incrementStudyPackGeneration(any(UUID.class), any(OffsetDateTime.class));
         verify(studyPackRepository, never()).save(any(StudyPackEntity.class));
+        verify(llmStudyPackService).generateStudyPack(eq("draft note content"),
+                org.mockito.ArgumentMatchers.argThat(context ->
+                        com.studysnap.backend.service.model.LlmRouting.tiered(userId).equals(context.routing())));
     }
 
     @Test
@@ -1285,7 +1352,8 @@ class StudyPackServiceTest {
         when(noteRepository.findByIdAndOwnerUserId(noteId, userId)).thenReturn(Optional.of(draftNote));
         when(studyPackRepository.findByOwnerUserIdAndNoteId(userId, noteId)).thenReturn(Optional.empty());
         when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.FREE);
-        when(llmStudyPackService.generateStudyPack("draft note content", context)).thenReturn(generated);
+        when(llmStudyPackService.generateStudyPack("draft note content", context.withRouting(
+                com.studysnap.backend.service.model.LlmRouting.tiered(userId)))).thenReturn(generated);
 
         studyPackService.startAsyncGenerationFromNote(
                 noteId.toString(),

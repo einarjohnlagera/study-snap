@@ -11,6 +11,7 @@ import com.studysnap.backend.repository.QuickReviewSessionRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
 import com.studysnap.backend.service.model.GeneratedStudyPackContent;
 import com.studysnap.backend.service.model.StudyPackGenerationContext;
+import com.studysnap.backend.service.model.LlmRouting;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -160,6 +161,9 @@ class AdminStudyPackTransactionHelperTest {
         when(studyPackRepository.save(same(pack))).thenReturn(pack);
 
         assertThat(transactionHelper.regenerateOnePack(pack)).isTrue();
+        verify(llmStudyPackService).regenerateSummary(eq(note.getContent()),
+                eq(new StudyPackGenerationContext(null, null, null, List.of())
+                        .withRouting(LlmRouting.tiered(pack.getOwnerUserId()))));
 
         assertThat(pack.getSummary()).isEqualTo("Regenerated summary with no marker");
         assertThat(pack.getGenerationStamp()).isEqualTo(1L);
@@ -210,6 +214,9 @@ class AdminStudyPackTransactionHelperTest {
         when(studyPackRepository.save(same(pack))).thenReturn(pack);
 
         transactionHelper.repairMalformedQuiz(pack);
+        verify(llmStudyPackService).generateStudyPack(eq(note.getContent()),
+                eq(new StudyPackGenerationContext(null, null, null, List.of())
+                        .withRouting(LlmRouting.tiered(pack.getOwnerUserId()))));
 
         assertThat(pack.getQuiz()).isEqualTo(regeneratedQuiz);
         assertThat(pack.getSummary()).isEqualTo(ORIGINAL_SUMMARY);

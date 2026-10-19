@@ -36,6 +36,8 @@ import com.studysnap.backend.exception.MatchingQuestionGroupSourceMismatchExcept
 import com.studysnap.backend.exception.MultiNoteChallengeQuizSourceNotAllowedException;
 import com.studysnap.backend.service.model.GeneratedChallengeQuizContent;
 import com.studysnap.backend.service.model.StudyPackGenerationContext;
+import com.studysnap.backend.service.model.LlmRouting;
+import com.studysnap.backend.service.model.LlmRoute;
 import com.studysnap.backend.service.model.StudyPackQuizMastery;
 import com.studysnap.backend.repository.QuickReviewSessionRepository;
 import com.studysnap.backend.repository.NoteRepository;
@@ -1042,7 +1044,7 @@ class ChallengeQuizServiceTest {
                 any(),
                 eq(DEFAULT_ADAPTIVE_QUESTION_COUNT - 3),
                 any(),
-                eq(generationContext)
+                eq(generationContext.withRouting(LlmRouting.interactiveQuiz()))
         )).thenReturn(GeneratedChallengeQuizContent.withoutUsage(generatedQuiz));
         when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
                 .thenAnswer(invocation -> recordSession(invocation.getArgument(0)));
@@ -1158,7 +1160,7 @@ class ChallengeQuizServiceTest {
                 List.of("Practice?"),
                 expectedQuestionCount,
                 expectedDifficulty,
-                generationContext
+                generationContext.withRouting(LlmRouting.interactiveQuiz())
         )).thenReturn(new GeneratedChallengeQuizContent(
                 buildQuizWithPrefix("Adaptive", expectedQuestionCount),
                 "gpt-4.1-mini",
@@ -1255,7 +1257,7 @@ class ChallengeQuizServiceTest {
                 List.of("Practice?"),
                 DEFAULT_ADAPTIVE_QUESTION_COUNT,
                 "medium",
-                generationContext
+                generationContext.withRouting(LlmRouting.interactiveQuiz())
         )).thenReturn(GeneratedChallengeQuizContent.withoutUsage(generatedQuiz));
         when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
                 .thenAnswer(invocation -> recordSession(invocation.getArgument(0)));
@@ -1561,6 +1563,13 @@ class ChallengeQuizServiceTest {
 
         QuickReviewSessionEntity persisted = completeDispatchedBoardExam(response);
         List<QuizItem> quiz = persistedQuiz(persisted);
+
+        ArgumentCaptor<StudyPackGenerationContext> generationContexts =
+                ArgumentCaptor.forClass(StudyPackGenerationContext.class);
+        verify(quizGenerationService, org.mockito.Mockito.times(3)).generateBoardExamQuiz(
+                any(), any(), any(), any(), anyInt(), any(), generationContexts.capture());
+        assertThat(generationContexts.getAllValues())
+                .allSatisfy(context -> assertThat(context.routing().route()).isEqualTo(LlmRoute.INTERACTIVE_QUIZ));
 
         assertThat(persisted.getStatus()).isEqualTo(QuickReviewSessionStatus.IN_PROGRESS);
         assertThat(quiz).hasSize(30);
@@ -2190,6 +2199,10 @@ class ChallengeQuizServiceTest {
         assertThat(response.quiz()).hasSize(18);
         assertThat(response.maxSourceNotes()).isEqualTo(3);
         assertThat(response.mode()).isEqualTo("challenge");
+        verify(quizGenerationService, atLeastOnce()).generateChallengeQuiz(
+                any(), any(), any(), any(), eq(9), any(),
+                org.mockito.ArgumentMatchers.argThat(context ->
+                        LlmRouting.interactiveQuiz().equals(context.routing())));
         assertThat(dispatchedTask).as("a Challenge Quiz must never dispatch asynchronous generation").isNull();
         verify(studyPackGenerationTaskDispatcher, never()).execute(any(Runnable.class));
         // The Review Set walk is Board Exam's alone; Challenge keeps the plan-membership verifier.
@@ -3455,6 +3468,10 @@ class ChallengeQuizServiceTest {
         GenerateMoreChallengeQuizResponse response = challengeQuizService.generateMoreQuestions(sessionId.toString(), userId);
 
         assertThat(response.newQuestions()).hasSize(5);
+        verify(quizGenerationService).generateMoreChallengeQuiz(
+                any(), any(), any(), any(), any(), eq(5), eq("medium"),
+                org.mockito.ArgumentMatchers.argThat(context ->
+                        LlmRouting.interactiveQuiz().equals(context.routing())));
         verify(generationContextResolver).resolveForStudyPack(userId, studyPack);
         assertThat(response.totalQuestions()).isEqualTo(10);
         assertThat(session.getTotalQuestions()).isEqualTo(10);
@@ -4048,7 +4065,7 @@ class ChallengeQuizServiceTest {
         UUID primaryStudyPackId = UUID.randomUUID();
         StudyPackEntity primary = buildStudyPack(primaryStudyPackId, UUID.randomUUID(), userId);
         stubChallengeStartDependencies(userId, primaryStudyPackId, primary, PlanType.PLUS);
-        when(quizGenerationService.generateChallengeQuiz(any(), any(), any(), any(), anyInt(), any(), any()))
+        lenient().when(quizGenerationService.generateChallengeQuiz(any(), any(), any(), any(), anyInt(), any(), any()))
                 .thenReturn(GeneratedChallengeQuizContent.withoutUsage(buildQuizWithPrefix("Single", 12)));
 
         challengeQuizService.startSession(primaryStudyPackId.toString(), userId,
@@ -4072,7 +4089,7 @@ class ChallengeQuizServiceTest {
         stubMultiNoteChallengeStart(userId, primaryStudyPackId, primary, additionalStudyPackId, additional, PlanType.PLUS);
         when(planSourcedExamVerifier.resolvePlanMemberNoteIds(eq(collectionId.toString()), eq(userId), any()))
                 .thenReturn(new java.util.LinkedHashSet<>(List.of(primaryNoteId, additionalNoteId)));
-        when(quizGenerationService.generateChallengeQuiz(any(), any(), any(), any(), eq(9), any(), any()))
+        lenient().when(quizGenerationService.generateChallengeQuiz(any(), any(), any(), any(), eq(9), any(), any()))
                 .thenReturn(GeneratedChallengeQuizContent.withoutUsage(buildQuizWithPrefix("Primary", 9)))
                 .thenReturn(GeneratedChallengeQuizContent.withoutUsage(buildQuizWithPrefix("Additional", 9)));
         when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
@@ -4386,7 +4403,9 @@ class ChallengeQuizServiceTest {
         // for 15, well over the floor of 10. A FAILED session holds no quiz, so the ask is the evidence.
         ArgumentCaptor<Integer> perSourceCount = ArgumentCaptor.forClass(Integer.class);
         verify(quizGenerationService, atLeastOnce()).generateBoardExamQuiz(
-                any(), any(), any(), any(), perSourceCount.capture(), any(), any(StudyPackGenerationContext.class));
+                any(), any(), any(), any(), perSourceCount.capture(), any(),
+                org.mockito.ArgumentMatchers.argThat(context ->
+                        LlmRouting.interactiveQuiz().equals(context.routing())));
         assertThat(perSourceCount.getAllValues().get(0)).isGreaterThanOrEqualTo(10);
 
         QuickReviewSessionEntity persisted = savedSessionsById.get(UUID.fromString(response.sessionId()));

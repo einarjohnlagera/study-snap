@@ -11,14 +11,27 @@ public record StudyPackGenerationContext(
         String subject,
         List<String> tags,
         DomainContext domainContext,
-        LearnerLevel noteLearnerLevel
+        LearnerLevel noteLearnerLevel,
+        LlmRouting routing
 ) {
+    public StudyPackGenerationContext(
+            LearnerLevel learnerLevel, String courseProgram, String subject, List<String> tags,
+            DomainContext domainContext, LearnerLevel noteLearnerLevel
+    ) {
+        this(learnerLevel, courseProgram, subject, tags, domainContext, noteLearnerLevel, null);
+    }
+
+    public StudyPackGenerationContext withRouting(LlmRouting value) {
+        return new StudyPackGenerationContext(learnerLevel, courseProgram, subject, tags,
+                domainContext, noteLearnerLevel, value);
+    }
+
     public StudyPackGenerationContext(
             LearnerLevel learnerLevel,
             String courseProgram,
             String subject,
             List<String> tags
     ) {
-        this(learnerLevel, courseProgram, subject, tags, null, null);
+        this(learnerLevel, courseProgram, subject, tags, null, null, null);
     }
 }
