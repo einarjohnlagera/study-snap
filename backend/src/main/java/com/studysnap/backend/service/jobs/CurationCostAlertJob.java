@@ -26,7 +26,7 @@ public class CurationCostAlertJob {
     private static final String DEDUP_PREFIX = "curation-cost-alert:";
     private static final String TITLE = "Official Study Pack cost alert";
     private static final String SCOPE = "This estimate covers Study Pack generation only. "
-            + "It excludes template seeding, summary regeneration and quiz repair. "
+            + "It excludes note generation from topics, template seeding, summary regeneration and quiz repair. "
             + "Check the OpenAI billing dashboard for total spend.";
 
     private final StudyPackRepository studyPackRepository;

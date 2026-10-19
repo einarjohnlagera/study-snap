@@ -24,8 +24,16 @@ Provide an internal, mostly read-only Admin Dashboard for monitoring product usa
 
 ADMIN accounts receive a monthly in-app alert when the tracked Official Study Pack generation estimate
 reaches its configured threshold (default USD $10.00). This is a read-only monitoring signal, not a
-spending cap. It covers persisted Study Pack generation tokens only; admins check the OpenAI billing
-dashboard for total spend, including template seeding, summary regeneration and quiz repair.
+spending cap. The alert says: "This estimate covers Study Pack generation only. It excludes note
+generation from topics, template seeding, summary regeneration and quiz repair. Check the OpenAI billing
+dashboard for total spend." ADMIN note-from-topic generation, both single and bulk, routes to premium
+and persists no tokens.
+
+Known limits: share-link creation, owner reassignment, and title, subject and tag edits advance
+`updated_at` and re-count a pack's original tokens (over-count). An ADMIN remix copies the source
+pack's tokens into a new pack without an LLM call (over-count). Tokens from failed or retried attempts
+are not persisted (under-count). A repair or summary regeneration does not advance `updated_at`, so it
+is not counted at all.
 
 ## Admin v1 Scope
 

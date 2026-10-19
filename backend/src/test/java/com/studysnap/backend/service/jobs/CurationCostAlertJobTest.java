@@ -107,7 +107,7 @@ class CurationCostAlertJobTest {
         assertThat(deliveries.getAllValues()).allSatisfy(delivery -> {
             assertThat(delivery.type()).isEqualTo(NotificationType.CURATION_COST_ALERT);
             assertThat(delivery.body()).contains("This estimate covers Study Pack generation only.")
-                    .contains("It excludes template seeding, summary regeneration and quiz repair.")
+                    .contains("It excludes note generation from topics, template seeding, summary regeneration and quiz repair.")
                     .contains("Check the OpenAI billing dashboard for total spend.")
                     .doesNotContain("gpt-6.1-sol");
         });

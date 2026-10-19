@@ -26,6 +26,7 @@ type UseStudyPackResult = {
   imageInputKey: number;
   loading: boolean;
   errorMessage: string | null;
+  retryable: boolean;
   studyPackResult: StudyPackResponse | null;
   needsConfirmation: NeedsTextConfirmationResponse | null;
   confirmedText: string;
@@ -46,6 +47,8 @@ type UseStudyPackResult = {
 
 const ALLOWED_IMAGE_TYPES = ["image/png", "image/jpeg", "image/webp"];
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+const SIGNED_OUT_ERROR = "Sign up and log in to start generating your Study Pack.";
+const GENERATION_ERROR = "We could not generate your study pack right now. Please try again.";
 
 function toFriendlyOcrErrorMessage(message: string) {
   const normalized = message.toLowerCase();
@@ -80,6 +83,7 @@ export function useStudyPack(demoMode: boolean, initialNotesText = ""): UseStudy
   const [imageInputKey, setImageInputKey] = useState(0);
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [retryable, setRetryable] = useState(false);
   const [studyPackResult, setStudyPackResult] = useState<StudyPackResponse | null>(null);
   const [generatedAt, setGeneratedAt] = useState<Date | null>(null);
   const [needsConfirmation, setNeedsConfirmation] =
@@ -156,6 +160,7 @@ export function useStudyPack(demoMode: boolean, initialNotesText = ""): UseStudy
 
   const setImageFileWithValidation = (file: File | null) => {
     setErrorMessage(null);
+    setRetryable(false);
     setOcrDisabledMessage(null);
 
     if (!file) {
@@ -198,7 +203,8 @@ export function useStudyPack(demoMode: boolean, initialNotesText = ""): UseStudy
       return DEMO_STUDY_PACK_RESULT;
     }
     if (!getCurrentUserId()) {
-      setErrorMessage("Sign up and log in to start generating your Study Pack.");
+      setErrorMessage(SIGNED_OUT_ERROR);
+      setRetryable(false);
       if (imageFile) {
         setOcrFlowState("failure");
         setOcrStatusMessage("Sign in first, then upload and extract text from your image.");
@@ -213,6 +219,7 @@ export function useStudyPack(demoMode: boolean, initialNotesText = ""): UseStudy
     }
     setLoading(true);
     setErrorMessage(null);
+    setRetryable(false);
     setOcrDisabledMessage(null);
     setStudyPackResult(null);
     setNeedsConfirmation(null);
@@ -266,7 +273,8 @@ export function useStudyPack(demoMode: boolean, initialNotesText = ""): UseStudy
       const message =
         error instanceof Error
           ? error.message
-          : "We could not generate your study pack right now. Please try again.";
+          : GENERATION_ERROR;
+      setRetryable(true);
       if (imageFile) {
         const friendlyMessage = toFriendlyOcrErrorMessage(message);
         setOcrFlowState("failure");
@@ -292,7 +300,8 @@ export function useStudyPack(demoMode: boolean, initialNotesText = ""): UseStudy
       return null;
     }
     if (!getCurrentUserId()) {
-      setErrorMessage("Sign up and log in to start generating your Study Pack.");
+      setErrorMessage(SIGNED_OUT_ERROR);
+      setRetryable(false);
       return null;
     }
     const authUser = getAuthUser();
@@ -303,6 +312,7 @@ export function useStudyPack(demoMode: boolean, initialNotesText = ""): UseStudy
     }
     setLoading(true);
     setErrorMessage(null);
+    setRetryable(false);
     setOcrDisabledMessage(null);
     setStudyPackResult(null);
     setOcrFlowState("extracting");
@@ -326,7 +336,7 @@ export function useStudyPack(demoMode: boolean, initialNotesText = ""): UseStudy
       const message =
         error instanceof Error
           ? error.message
-          : "We could not generate your study pack right now. Please try again.";
+          : GENERATION_ERROR;
       setOcrFlowState("failure");
       setOcrStatusMessage("Could not continue with edited text. Update the text and try again.");
       setErrorMessage(message);
@@ -349,6 +359,7 @@ export function useStudyPack(demoMode: boolean, initialNotesText = ""): UseStudy
     setNeedsConfirmation(null);
     setConfirmedText("");
     setErrorMessage(null);
+    setRetryable(false);
     setOcrDisabledMessage(null);
     setGeneratedAt(null);
     setLoading(false);
@@ -390,6 +401,7 @@ export function useStudyPack(demoMode: boolean, initialNotesText = ""): UseStudy
     imageInputKey,
     loading,
     errorMessage,
+    retryable,
     studyPackResult,
     needsConfirmation,
     confirmedText,
