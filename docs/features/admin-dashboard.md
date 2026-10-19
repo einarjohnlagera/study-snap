@@ -20,6 +20,13 @@ Provide an internal, mostly read-only Admin Dashboard for monitoring product usa
 - Non-admin users must not be able to use admin endpoints.
 - Frontend should redirect authenticated non-admin users away from `/admin`.
 
+## Official curation cost monitoring
+
+ADMIN accounts receive a monthly in-app alert when the tracked Official Study Pack generation estimate
+reaches its configured threshold (default USD $10.00). This is a read-only monitoring signal, not a
+spending cap. It covers persisted Study Pack generation tokens only; admins check the OpenAI billing
+dashboard for total spend, including template seeding, summary regeneration and quiz repair.
+
 ## Admin v1 Scope
 
 Keep Admin v1 simple and internal:
