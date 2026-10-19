@@ -36,6 +36,7 @@ export default function StudyPageClient({ forcedDemoMode = false }: StudyPageCli
     imageInputKey,
     loading,
     errorMessage,
+    retryable,
     studyPackResult,
     needsConfirmation,
     confirmedText,
@@ -160,7 +161,7 @@ export default function StudyPageClient({ forcedDemoMode = false }: StudyPageCli
             {ocrFlowState === "failure" ? "Couldn't Process Notes Image" : "Couldn't Generate Study Pack"}
           </CardTitle>
           <CardDescription>{errorMessage}</CardDescription>
-          {canGenerate ? (
+          {canGenerate && retryable && !needsConfirmation ? (
             // A deliberate retry through the same guarded handler: it never fires on its own and is
             // disabled while a request is in flight, so it cannot double-submit (v0.174.0, owner A5).
             <Button

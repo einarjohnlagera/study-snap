@@ -67,11 +67,16 @@ the actionable half the badge exists for.
 ## Official curation cost alert
 
 An hourly UTC job sums the latest persisted token counts on ADMIN-owned Study Packs whose `updated_at`
-falls in the current UTC calendar month. The estimate covers Study Pack generation only. Template
-seeding, summary regeneration and malformed-quiz repair do not persist tokens and require manual review
-on the OpenAI billing dashboard. In-place regeneration overwrites token counts, so repeat generations
-can be undercounted. Metadata and tag edits also advance `updated_at`, so an older generation can
-appear in the current month's estimate. The alert never blocks generation.
+falls in the current UTC calendar month. The alert says: "This estimate covers Study Pack generation
+only. It excludes note generation from topics, template seeding, summary regeneration and quiz repair.
+Check the OpenAI billing dashboard for total spend." ADMIN note-from-topic generation, both single and
+bulk, routes to premium and persists no tokens. The alert never blocks generation.
+
+Known limits: share-link creation, owner reassignment, and title, subject and tag edits advance
+`updated_at` and re-count a pack's original tokens (over-count). An ADMIN remix copies the source
+pack's tokens into a new pack without an LLM call (over-count). Tokens from failed or retried attempts
+are not persisted (under-count). A repair or summary regeneration does not advance `updated_at`, so it
+is not counted at all.
 
 At or above the configured USD threshold (initially $10.00), each ADMIN receives one
 `CURATION_COST_ALERT` with dedup key `curation-cost-alert:<yyyy-MM>:<threshold>`. The copied body names
