@@ -686,3 +686,49 @@ cd ~/IdeaProjects/study-snap/backend
 
 **If the re-run fails S-A4b again,** tuning stops and the independent-leg fallback (Part 10, item 4) comes back to
 the owner.
+
+## Part 12. Stage 1 re-run result (owner-run, 2026-10-20): PASS, as a smoke test
+
+**Runs:**
+- Both runs complete: 136 calls each, 0 failed, 0 invalid.
+- `promptVersion` `5da5423e…`, gold `c883705d…`, N = 77, thresholds the floor of the signed rates.
+- **Spend: $1.15 on the meter** (Sol $1.076, Luna $0.073), under the $2.20 cap.
+- **Verifier evaluation total, both runs: $2.23.**
+
+| Criterion | Result | Class |
+|---|---|---|
+| S-A1: mini's three errors, F | r1-04 3/3 (its classification is arguable), r1-06 3/3, r1-07 3/3 | PASS |
+| S-A2 / S-A3: constructed and unseen positives | 20/20, 20/20 | PASS |
+| S-A4a: each checker alone (N = 77) | Sol 3/77, Luna 3/77 | PASS, **at the limit (≤ 3)** |
+| S-A4b: F union | 4/77 (5.2%) | PASS (≤ 6) |
+| S-A4c: constructed controls | 2/20 | PASS, **at the limit (≤ 2)** |
+| P_ADJUDICATED (r1-30) | rejected, 1/1 | REPORT |
+| S-A5: joint miss | 0/40 | PASS |
+| S-A6: ambiguous rejected | 6/6. SILENT on 73 of 308 judgments; accuracy when SILENT 70/73 | PASS |
+| S-A7: failed calls | 0/136 per model | PASS |
+| S-A8: unverified quotes | Sol 0/207, Luna 3/197 (down from 9) | PASS |
+| S-A9: each leg alone | Sol and Luna each 20/20 detection, within S-A4a | PASS |
+| S-A10: underfill projection | one short 0.9%, failed under 0.001% | PASS |
+| S-A11: latency p90 | 13.6 s | PASS |
+| S-A12: cost p90 per batch | $0.012 | PASS |
+
+**The four F rejections in N:**
+- Three are the absolute-word items whose labels the tie-break kept: r1-05 (both checkers), r1-23 (both), and
+  r1-08 (Sol, self-contradictory).
+- One is a Luna paraphrased quote: S-17.
+- r1-02 was not rejected this time.
+- The two control rejections are one per checker.
+
+**What this pass means (owner clarification 3):**
+- It is **a smoke test, not proof of broader reliability.**
+- Two criteria pass exactly at their limit, so a single extra rejection would have made them GRAY.
+- The reporting limitations still apply:
+  - N is agreement between the generator and one reviewer, from 10 distinct notes;
+  - the constructed items came from a single model family;
+  - P_UNSEEN is entirely the index class.
+- **It licenses proposing activation for Official question-set creation only**, with the production checkpoints in
+  §4.5, including the wrong-key trigger.
+- **It does not license:**
+  - live-start verification, which waits for items 2 and 5;
+  - Stage 2 (the +5 rule and replacements), which is separately gated;
+  - any production code, which needs an implementation approval.
