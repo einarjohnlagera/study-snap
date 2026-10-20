@@ -31,7 +31,8 @@ held behind `v0.173.0`'s #1505 and two checkpoints).
 Order matters: item 1 ships before item 6. Items 2–4 form one learner journey and are briefed together, but
 delivered as separate PRs where the seams allow.
 
-1. **R1: statement-pair answer-key guard. Tier N. FIRST. `[queued — wording needs owner sign-off]`**
+1. **R1: statement-pair answer-key guard. Tier N. FIRST. `[with-Codex]`** Wording signed off 2026-10-20: `docs/claude-plans/2026-10-20-v0175-r1-statement-pair-guard-wording.md`. Worktree `../study-snap-item-r1`, branch `feat/v0.175.0-r1-statement-pair-guard`.
+   - **Owner additions (2026-10-20):** a start minimum (single-note at most one short; multi-note fails at zero), with a failed start charging no quota and releasing its claims. Multi-note underfill (1–17 of 18) stays a high-priority issue for items 2 and 5.
    - Generation records a true/false verdict for each statement in a "Statement 1 / Statement 2" item.
    - The validator checks the keyed choice against those verdicts and retries on a mismatch.
    - An explanation-only check is not enough: R2 measured about 40% recall.
