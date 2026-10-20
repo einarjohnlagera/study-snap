@@ -4,7 +4,7 @@
 
 This document records **why** Challenge Quiz is promoted where it is, and what was deliberately decided about growing its adoption. The shipped *behavior* lives in `docs/features/quick-review.md` (post-session next-step rules) and `docs/features/challenge-quiz.md`; this document is the decision and its reasoning, which those feature docs do not carry.
 
-**Provenance.** Originally section "Challenge Quiz Adoption Problem" of `docs/product/notelib-facebook-group-marketing-playbook.md`, which was superseded by `docs/gpt-contexts/NoteLib_Marketing_Strategist_Context_v2.md` on 2026-08-03. v2 is a GPT strategist role prompt and dropped this section, so it was restored here rather than left in git history — it is a product decision, not marketing copy, and the validation items below were never closed.
+**Provenance.** Originally section "Challenge Quiz Adoption Problem" of `docs/product/notelib-facebook-group-marketing-playbook.md`, which was superseded by `docs/gpt-contexts/NoteLib_Marketing_Strategist_Context_v2.md` on 2026-08-03. v2 is a GPT strategist role prompt and dropped this section, so it was restored here rather than left in git history — it is a product decision, not marketing copy, and the validation items below were never closed. **v2 was itself retired and consolidated into `docs/agents/gpt/NoteLib Marketing.md` on 2026-10-20** — that document deliberately does not re-import this page's Challenge-Quiz-education technique, since its own load-bearing hypothesis is unconfirmed (see this file's own status section below, and `NoteLib Marketing.md` §1f).
 
 ---
 
