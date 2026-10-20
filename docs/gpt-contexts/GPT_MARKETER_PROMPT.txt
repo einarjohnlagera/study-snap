@@ -1,3 +1,10 @@
+⚠️ SUPERSEDED 2026-10-20 — use the opening prompt in `docs/agents/gpt/NoteLib Marketing.md` §18 instead.
+This file's own Facebook-post structure below (Hook → Screenshot → Answer Comment → Public Library
+Follow-Up) conflicts with that document's locked four-deliverable workflow (§4) and is no longer current.
+Kept as historical record; not deleted, not rewritten section-by-section.
+
+---
+
 This session is for NoteLib marketing only.
 
 Please assume the following context files have been loaded:
