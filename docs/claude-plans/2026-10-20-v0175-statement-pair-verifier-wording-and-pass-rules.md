@@ -512,3 +512,98 @@ Run from `backend/` in the owner's own terminal, with `LLM_API_KEY` set there. R
 - **Time:** Sol runs sequentially, about 136 × 10–30 s, so roughly 25–70 minutes. Luna is faster.
 
 **Stage 2 stays separately gated.**
+
+## Part 10. Stage 1 result (owner-run, 2026-10-20) and revised proposal
+
+### The result: KILL on S-A4b. Recorded as measured; no threshold is relaxed
+
+**Both runs were complete:**
+- 136 calls each, 0 failed, 0 invalid.
+- Signed `promptVersion` `c3e373ac…`, gold `d36bf4f5…`.
+- **Spend: $1.08 on the meter** (Sol $1.015, Luna $0.069), against the $3.20 cap.
+
+| Criterion | Result | Class |
+|---|---|---|
+| S-A1: mini's three errors, under F | r1-04 3/3, r1-06 3/3, r1-07 3/3 rejected (r1-04's classification is arguable) | PASS |
+| S-A2: constructed false items | 20/20 | PASS |
+| S-A3: unseen Official wrong keys | 20/20 | PASS |
+| S-A4a: false rejection, each checker alone (N, 78) | Sol 5/78, Luna 7/78 | GRAY, GRAY |
+| **S-A4b: false rejection, F union (N, 78)** | **10/78 (12.8%)** | **KILL (> 9)** |
+| S-A4c: constructed controls | 1/20 | PASS |
+| S-A5: joint miss | 0/40 | PASS |
+| S-A6: ambiguous rejected | 6/6. SILENT on 79 of 312 statement judgments; accuracy when SILENT 73/79 (92%) | PASS |
+| S-A7: failed or invalid calls | 0/136 per model | PASS |
+| S-A8: unverified quotes | Sol 1/207, Luna 9/199 | PASS |
+| S-A9: each leg alone | Sol 20/20, Luna 20/20 detection, but S-A4a is gray | GRAY |
+| S-A10: underfill projection | one short 1.8%, failed under 0.01% | PASS |
+| S-A11: latency p90 | 14.2 s | PASS |
+| S-A12: cost p90 per batch | $0.011 | PASS |
+
+**Reporting limitations:**
+- Stratum N's "correct" label is agreement between the generator and one blind Opus reviewer.
+- N and the constructed items come from 10 distinct notes.
+- The constructed items were written and confirmed by the same model family.
+
+### What the 10 "false rejections" are (analysis after the result; it changes no threshold)
+
+**Group 1: evidence-quote artifacts, 5 items, all Luna-only (r1-01, r1-17, r1-20, L-16, S-11).**
+- **Luna's verdicts matched the key on all five.** The rejection came from rule 3 of §3.5: the quote did not match
+  the note exactly.
+- Counterfactual, information only, over all of Luna's 9 unverified quotes:
+  - stripping wrapper quotation marks recovers 2;
+  - also accepting `;`-joined fragments **only when every fragment appears exactly in the note** recovers 5 in
+    total;
+  - the other 4 are genuine paraphrases, which the rule correctly refuses.
+
+**Group 2: absolute or necessity words, 5 items, all mini-generated (r1-02, r1-05, r1-08, r1-23, r1-30).**
+- The rejecting checkers judged a "must / necessary / only if / ultimately" statement false and cited a specific
+  established exception.
+- **A blind Codex adjudication**, under D11 §11 (read-only, high effort, statements and notes only; mini is R2's
+  measured pairing), **sided with the checkers on all 5.** It disagreed with the test-set label each time:
+
+| Item | Test-set label | Codex | Codex's reason |
+|---|---|---|---|
+| r1-30 | T,T | F,T | Statutory endorsement warranties create liability without dishonor |
+| r1-02 | T,F | F,F | Established clinical decision rules clear low-risk patients without imaging |
+| r1-23 | T,F | F,F | Thrombolysis only for eligible patients; contraindications apply |
+| r1-05 | T,F | F,F | Independent checks can manage cumulative error without supplementary control points |
+| r1-08 | T,T | F,T | Under the Negotiable Instruments Law, the drawer may expressly limit liability |
+
+- **What this means:** these five look like **real mini errors the original single-reviewer check missed**, which
+  the checkers then caught correctly.
+- **The caveat:**
+  - Codex, Sol and Luna are all OpenAI-family models, and the original reviewer was Claude Opus.
+  - On r1-23 and r1-30, Sol, Luna and Codex agree independently; r1-02, r1-05 and r1-08 rest on Sol plus Codex.
+- **If confirmed, the R1 mini finding becomes about 8 of 32 wrong statement-pair keys, not 3 of 32.** Every one is
+  a factual-verdict error. Luna's and Sol's arms are unaffected: none of their N items was rejected on judgment.
+
+### Revised proposal (each item needs owner approval; nothing is run or changed)
+
+1. **Gold correction, an owner decision.**
+   - Move r1-02, r1-05, r1-08, r1-23 and r1-30 from N to a new positive stratum, `P_ADJUDICATED`, using Codex's
+     pairs.
+   - This changes the gold after seeing results, which is why it needs explicit approval and is recorded here.
+   - Optional cross-family tie-break before deciding: one fresh blind Opus check of the same 5 items under the signed
+     absolute-word rule, about 25k Claude tokens. That covers the same-family caveat above.
+2. **Evidence-quote fix, for sign-off.**
+   - **Prompt, §3.2 step 2, replacing the current line:**
+     > 2. evidenceQuote — if SUPPORTED or CONTRADICTED, copy the shortest phrase from the source note (at most 25
+     > words) that decides it, exactly as written in the note, character for character. Do not add quotation marks.
+     > Do not paraphrase. If two places in the note decide it, copy both, separated by " ; ". If SILENT, use null.
+   - **Server rule 3:** strip enclosing quotation marks. Split on ` ; `, and verify **every** fragment exactly as
+     before. A paraphrase still fails, so the rule stays strict.
+   - This is a harness change (test scope) and becomes the production rule later.
+3. **Fresh Stage 1 re-run, same thresholds as rates.**
+   - It uses the revised prompt (a new `promptVersion`) and the corrected gold, if item 1 is approved.
+   - With N at 73, the signed percentages become these counts:
+     - each checker alone: pass ≤ 3, kill > 7;
+     - F union: pass ≤ 5, kill > 8.
+   - Converting rates to counts is arithmetic, not a relaxation. It is stated here for sign-off.
+   - The scorer hard-codes the N sizes (78 and 88), so it needs a matching test-scope change, with its own tests.
+   - **Expected spend about $1.10; requested cap $2.20** (Sol $2.00, Luna $0.20).
+4. **If the re-run still fails S-A4b, no further tuning:**
+   - The fallback is to require only the independent leg to reject: Sol for Luna- or mini-generated items, Luna for
+     Sol-generated items.
+   - That is a change to owner decision 1 (Option F) and comes back to the owner, with measured results, first.
+
+**R1 (merged) is unaffected. Item 2 continues and does not wait for any of this.**
