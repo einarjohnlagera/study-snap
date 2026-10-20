@@ -79,6 +79,8 @@ You are an independent fact checker for exam questions written for Philippine bo
 
 ### 3.2 Developer message
 
+*(Step 2 revised 2026-10-20, owner-approved in Part 10, item 2.)*
+
 ```
 TASK:
 For each item, judge Statement 1 and Statement 2 independently, using the source note as your primary reference.
@@ -90,7 +92,7 @@ FOR EACH STATEMENT, IN THIS ORDER:
    - SUPPORTED: the note states, or directly implies, that the statement is true.
    - CONTRADICTED: the note states, or directly implies, that the statement is false.
    - SILENT: the note does not address the statement.
-2. evidenceQuote — if SUPPORTED or CONTRADICTED, copy the shortest exact phrase from the source note (at most 25 words) that decides it. If SILENT, use null.
+2. evidenceQuote — if SUPPORTED or CONTRADICTED, copy the shortest phrase from the source note (at most 25 words) that decides it, exactly as written in the note, character for character. Do not add quotation marks. Do not paraphrase. If two places in the note decide it, copy both, separated by " ; ". If SILENT, use null.
 3. reason — one sentence, at most 40 words. If SILENT, name the established principle of the field you relied on.
 4. noteConflictsWithStandardKnowledge — true only if the source note itself states something that contradicts standard, established knowledge of the field.
 5. verdict — TRUE, FALSE or UNCERTAIN:
@@ -607,3 +609,80 @@ Run from `backend/` in the owner's own terminal, with `LLM_API_KEY` set there. R
    - That is a change to owner decision 1 (Option F) and comes back to the owner, with measured results, first.
 
 **R1 (merged) is unaffected. Item 2 continues and does not wait for any of this.**
+
+## Part 11. Owner approvals (2026-10-20) and the re-run plan (NOT yet run)
+
+**The owner approved all four Part 10 items, with the Opus tie-break first:** "approve all four, with the Opus
+tie-break first".
+
+### Opus tie-break
+
+**The rule, stated before the result:** an item is relabeled only if a fresh blind Opus reviewer also judges the
+disputed statement false. Otherwise it keeps its original N label, which is the stricter outcome for the checkers.
+
+**Method:** the same blind input Codex saw. A cold Opus agent got statements and notes only, under the signed
+absolute-word rule.
+
+| Item | Codex | Opus | Outcome |
+|---|---|---|---|
+| r1-30 (endorser "only if" dishonored) | F,T | **F,T** (NIL Secs. 65–66 warranties) | **Relabeled to `P_ADJUDICATED`, gold F,T** |
+| r1-02 (immobilize "until imaging") | F,F | T,F | Stays N, original label |
+| r1-23 (thrombolysis "must be given") | F,F | T,F | Stays N, original label |
+| r1-05 (supplementary control "necessary") | F,F | A,F | Stays N: ambiguous is not false |
+| r1-08 (drawer "ultimately responsible") | F,T | T,T | Stays N, original label |
+
+**What follows:**
+- **The R1 mini finding becomes 4 of 32 wrong statement-pair keys, not 3 of 32.** The 8 of 32 that Part 10
+  raised is not confirmed.
+- Four absolute-word items remain genuinely disputed across model families, and they still count against the
+  checkers if rejected again.
+
+### Corrected gold
+
+The corrected gold is `backend/target/llm-benchmark/verifier/gold-stage1b.jsonl`, with the same notes file.
+- SHA-256 `c883705dd0b90450f25084e413dd20bc6e17fb360042d34b918d8d3da5465c71`.
+- 157 items: **N 77**, N_CAVEAT 10, P_SEEN 3, P_UNSEEN 20, P_CONSTRUCTED 20, P_CONSTRUCTED_CONTROL 20,
+  **P_ADJUDICATED 1**, U 6.
+
+**The N = 77 thresholds** use the floor of the signed rates, the approved method:
+
+| | Pass | Kill |
+|---|---|---|
+| Each checker alone (5% / 10%) | ≤ 3 | > 7 |
+| F union (8% / 12%) | ≤ 6 | > 9 |
+
+- Part 10 quoted counts for N = 73, which assumed five relabels. The same floor rule at 77 gives these.
+- `P_ADJUDICATED` is reported separately and is not part of S-A5's signed set of 40.
+
+### Harness changes (test scope, branch `feat/v0.175.0-verifier-rerun`, awaiting "commit")
+
+- **The quote rule:**
+  - Enclosing quotation marks are stripped.
+  - A quote may join two exact fragments with ` ; `.
+  - **Every fragment must appear exactly**, so a paraphrase still fails.
+- **The scorer:**
+  - Takes the N size from the gold file and applies the thresholds above; 78 keeps the signed counts.
+  - Takes the S-A10 natural count from the gold file.
+  - Adds the `P_ADJUDICATED` stratum.
+- **The prompt:** §3.2 step 2 is replaced with the approved wording, and the other three files are unchanged.
+  - New `promptVersion` `5da5423e503a34d1138e4cefc78c2820cceb812be96bf9ca677b4b9c048b7100`.
+  - The signed copy is in `backend/target/llm-benchmark/verifier/prompt-signed-v2/`.
+- **Tests:** a test for each change. A local dry run on the corrected gold (stub, no network) gave 136 calls per
+  model, complete runs, blindness holding, and a scorer report with `nSize` 77. The dry-run file was deleted.
+
+### Re-run commands
+
+- **When:** after the branch merges into `releases/v0.175.0`, since the owner runs from the main checkout.
+- **How:** in the owner's own terminal, with `LLM_API_KEY` set there.
+- **Cap:** **$2.20** (Sol $2.00, Luna $0.20). Expected spend is about $1.10, based on Stage 1's $1.08.
+
+```sh
+cd ~/IdeaProjects/study-snap/backend
+./mvnw test -Dtest=StatementPairVerifierBenchmark -Dnativequery.pg.skip=true -Dllm.verifier=true -Dllm.verifier.model=gpt-6.1-sol -Dllm.verifier.gold=target/llm-benchmark/verifier/gold-stage1b.jsonl -Dllm.verifier.notes=target/llm-benchmark/verifier/notes-stage1.json -Dllm.verifier.outDir=target/llm-benchmark/verifier/rerun-sol -Dllm.verifier.promptDir=target/llm-benchmark/verifier/prompt-signed-v2 -Dllm.verifier.repeats=3 -Dllm.verifier.maxCalls=300 -Dllm.verifier.priceInPerM=2.00 -Dllm.verifier.priceOutPerM=10.00 -Dllm.verifier.spendStopUsd=2.00 > target/llm-benchmark/verifier/rerun-sol.log 2>&1; echo exit=$?
+./mvnw test -Dtest=StatementPairVerifierBenchmark -Dnativequery.pg.skip=true -Dllm.verifier=true -Dllm.verifier.model=gpt-6-luna -Dllm.verifier.gold=target/llm-benchmark/verifier/gold-stage1b.jsonl -Dllm.verifier.notes=target/llm-benchmark/verifier/notes-stage1.json -Dllm.verifier.outDir=target/llm-benchmark/verifier/rerun-luna -Dllm.verifier.promptDir=target/llm-benchmark/verifier/prompt-signed-v2 -Dllm.verifier.repeats=3 -Dllm.verifier.maxCalls=300 -Dllm.verifier.priceInPerM=0.10 -Dllm.verifier.priceOutPerM=0.50 -Dllm.verifier.spendStopUsd=0.20 > target/llm-benchmark/verifier/rerun-luna.log 2>&1; echo exit=$?
+```
+
+**Release Implementor runs the scorer.** It makes no API calls.
+
+**If the re-run fails S-A4b again,** tuning stops and the independent-leg fallback (Part 10, item 4) comes back to
+the owner.
