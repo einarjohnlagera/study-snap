@@ -1,7 +1,7 @@
-# v0.175.0 R1 acceptance run: statement-pair guard on `gpt-4.1-mini`
+# v0.175.0 R1 acceptance run: statement-pair guard on `gpt-4.1-mini` and `gpt-6-luna`
 
-**Result: the pre-stated pass rule FAILS.** Blind checkers judged 3 of 32 delivered statement-pair keys wrong: 2
-clearly, 1 arguably.
+**Result: mini FAILS the pre-stated pass rule; Luna PASSES it as a smoke test (31 of 31, see the Luna arm
+section).** On mini, blind checkers judged 3 of 32 delivered statement-pair keys wrong: 2 clearly, 1 arguably.
 These are not the error class R1 targets. In all three, the model's own verdicts, its explanation and its
 key agree with each other, and the verdict itself is factually wrong. The wording doc (§2) and owner
 requirement B anticipated exactly this.
@@ -79,18 +79,63 @@ choices in standard order.
 
 ## Options for the owner (not decided)
 
-1. **Accept R1 as merged** and record factual-verdict errors as a known limitation. Item 6 then moves Plus/Pro
-   Challenge to Sol (0 of 42 in C7) **and FREE Challenge to Luna, which is untested with R1.** Luna had about
-   19% wrong statement keys before R1, and R1 was approved as the gate for that switch.
-   - **Proposed next check, whatever the choice below:** a Luna arm of this same run. Same three cells, fresh
-     output folder, independent blind check, about $0.10. About $0.82 of the $1.00 cap remains. It needs the
-     owner's go-ahead, because it is a different model from the approved mini run.
+1. **Accept R1 as merged** and record mini's factual-verdict errors as a known limitation.
+   - Item 6 then moves FREE Challenge to Luna, which **now passes with R1** (Luna arm below), and Plus/Pro
+     Challenge to Sol.
+   - **Sol is untested with R1.** Its 0 of 42 in C7 predates R1's schema change, which applies to every model.
+     A Sol arm of this run is available on request; it needs separate paid approval.
+   - **What stays on mini after item 6:** multi-note starts stay pinned until item 5 ships (`RELEASES.md`
+     item 6 seam), along with every other quiz mode. Mini's factual-verdict errors therefore remain live on
+     multi-note Challenge, and in today's production, until then.
 2. **Add a prompt rule:** when judging a statement, a standard exception to an absolute word ("always",
    "never", "only", "eliminates", "ensures") makes the statement false. This is a prompt change, so it needs
    owner sign-off on the exact text. A comparable paid re-run (about $0.18) would check it, with the same
    smoke-test framing.
 3. **Add a verifier call** for statement-pair items. This adds latency and cost to a blocking start, against the
    owner's performance rule; it fits item 2's background preparation better.
+
+## Luna arm (owner-approved follow-up, 2026-10-20)
+
+**Result: the pass rule PASSES on Luna, as a smoke test only (requirement E).** Blind checkers agreed with
+31 of 31 delivered statement-pair keys.
+
+- **What ran:** the same 30 single-note starts (S15, S12, S10, runs 1–10), on `gpt-6-luna` through the real
+  `generateChallengeQuiz` path. Output is in `backend/target/llm-benchmark/r1-luna/`.
+- **Cost:** $0.0996 (conservative meter). The total across all R1 acceptance runs is about $0.28 of the $1.00
+  cap.
+
+| | Value |
+|---|---|
+| Requested | 370 questions across 30 starts |
+| Delivered | **370 of 370**; every start was full on attempt 1 |
+| Statement-pair rejections | 0 |
+| H4 rejections | 0 |
+| Whole-call retries | 0 |
+| Statement-pair items | 31: 14 "Both", 10 "Only Statement 1", 7 "Only Statement 2", 0 "Neither"; all four standard choices in standard order |
+| Call latency | median 45.6 s, p95 63.9 s, max 69.3 s (one call per start) |
+
+- **Blind check:**
+  - Same method and the same reviewer prompt as the mini arm: two cold Opus reviewers, 16 and 15 items,
+    shuffled with seed 1513, no key, verdicts or explanations shown.
+  - The result was 31 of 31 agreed, and no item was marked ambiguous.
+  - The reviewers raised wording caveats on three items, all still judged as keyed:
+    - L-13: international recognition of the 1898 declaration.
+    - L-17 and L-20: July 4 described as "autonomy" rather than independence.
+- **Explanations:** the release implementor read all 31 (this read is not blind). None contradicts its key.
+- **What it means:**
+  - Before R1, Luna had 11 of 58 wrong statement keys (about 19%). That baseline comes from C7 plus B7 Phase 1:
+    blind Opus factual checks of quiz-mode items, 26 of them from Challenge starts.
+  - At that rate, seeing 0 of 31 would be about a 0.15% event. Even at a pessimistic 10% baseline it would be
+    about 4%. This is strong evidence the rate dropped.
+  - It does not show the rate is zero. The 95% upper bound for 0 of 31 is about 9%, which overlaps mini's 3 of
+    32.
+  - The absence of "Neither" keys is noted but not assessed.
+- **Latency, compared start to start:**
+  - Luna start p50 by cell: 45.0 s (S15), 52.1 s (S12), 36.9 s (S10). The worst start was 69.3 s.
+  - Mini start p50 by cell: 18.0, 14.1 and 10.4 s. Mini's worst start was 40.0 s.
+  - **This confirms the earlier figure; it is not new.** The 2026-10-19 targeted start benchmark measured Luna
+    at a 46–49 s p50 on the same sizes, which is why item 6 is queued after item 2's background preparation.
+  - **R1 added no measurable latency on Luna:** zero retries fired.
 
 **Nothing has reached learners.** R1 is merged into `releases/v0.175.0` only, which cannot reach `main` until
 after v0.174.0's #1512.

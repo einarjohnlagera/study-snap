@@ -31,7 +31,7 @@ held behind `v0.173.0`'s #1505 and two checkpoints).
 Order matters: item 1 ships before item 6. Items 2–4 form one learner journey and are briefed together, but
 delivered as separate PRs where the seams allow.
 
-1. **R1: statement-pair answer-key guard. Tier N, raised to one cold falsification review by the start minimum. FIRST. `[merged-to-release]`** PR #1513, merged 2026-10-20 (`7b9ae007`). Wording signed off 2026-10-20: `docs/claude-plans/2026-10-20-v0175-r1-statement-pair-guard-wording.md`. **Acceptance run (mini, 2026-10-20, about $0.18): the smoke-test rule FAILED.** 3 of 32 delivered statement-pair keys were wrong (2 clear, 1 arguable). All three are factual-verdict errors, which the check cannot catch; none is the index class R1 targets. Findings: `docs/claude-findings/2026-10-20-v0175-r1-acceptance-run.md`. Owner decision pending; a Luna arm is proposed before item 6.
+1. **R1: statement-pair answer-key guard. Tier N, raised to one cold falsification review by the start minimum. FIRST. `[merged-to-release]`** PR #1513, merged 2026-10-20 (`7b9ae007`). Wording signed off 2026-10-20: `docs/claude-plans/2026-10-20-v0175-r1-statement-pair-guard-wording.md`. **Acceptance run (mini, 2026-10-20, about $0.18): the smoke-test rule FAILED.** 3 of 32 delivered statement-pair keys were wrong (2 clear, 1 arguable). All three are factual-verdict errors, which the check cannot catch; none is the index class R1 targets. Findings: `docs/claude-findings/2026-10-20-v0175-r1-acceptance-run.md`. **Luna arm (2026-10-20, about $0.10): the smoke-test rule PASSED.** 31 of 31 statement-pair keys agreed in the blind check, 370 of 370 questions were delivered, and there were zero rejections. The pre-R1 Luna rate was about 19%. Luna starts take a median of 45 s and up to 69 s, versus mini's 15 s, so item 6 stays behind item 2. Sol is untested with R1 (its C7 0 of 42 predates the schema change). Owner decision pending on mini's factual-verdict errors, which stay live on multi-note Challenge until item 5.
    - **Owner additions (2026-10-20):** a start minimum (single-note at most one short; multi-note fails at zero), with a failed start charging no quota and releasing its claims. Multi-note underfill (1–17 of 18) stays a high-priority issue for items 2 and 5.
    - Generation records a true/false verdict for each statement in a "Statement 1 / Statement 2" item.
    - The validator checks the keyed choice against those verdicts and retries on a mismatch.
@@ -156,7 +156,7 @@ never edit this file.
     - A statement-pair item emitted as TRUE_FALSE now takes the one-question retry instead of a whole-batch
       retry.
     - **Factual-verdict errors are not caught.** The model can judge a statement wrongly and key it
-      consistently. The acceptance run found 3 of 32 such keys on mini.
+      consistently. The acceptance run found 3 of 32 such keys on mini and 0 of 31 on Luna.
     - A start whose database write fails mid-transaction returns a server error instead of "Try again". This
       is pre-existing and loses no quota (item 2).
 
