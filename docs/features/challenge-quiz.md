@@ -150,6 +150,16 @@ Challenge Quiz can generate:
 
 `ENUMERATION` is a multi-slot free-text format (2-5 required items) scored all-or-nothing via exhaustive bipartite matching against `acceptableAnswerGroups[]`. Same Challenge Quiz-only scope and no per-submission LLM call. See `docs/features/enumeration.md`.
 
+## Statement-pair answer-key guard and start minimum
+
+Challenge Quiz generation asks the model to judge Statement 1 and Statement 2 separately before choosing an answer. For a stem containing both statements, the server checks that the four choices map uniquely to both, only Statement 1, only Statement 2, and neither, and that the keyed choice matches the verdicts. A missing verdict, ambiguous choices, or a wrong key triggers one correction request; a failed replacement is omitted. The guard applies only to newly generated Challenge questions, including starts, `+5`, and Official template seeds. Existing bank and session questions are not rewritten. Board Exam, Long Exam, Adaptive Practice, teacher quizzes, and Study Pack generation do not use this guard.
+
+A single-note start must deliver at least one fewer than its requested 10, 12, or 15 questions after bank, template, and generated questions are deduplicated. A multi-note start must deliver at least one question. A start below its floor becomes FAILED before the quota increment, releases its bank claims, and does not consume a Challenge attempt. The LLM layer logs `challenge_quiz_generation_counts` for each generation attempt (including retry time), and the session layer logs `challenge_quiz_delivery_counts` after assembly for starts and `+5`.
+
+### Known limitations
+
+A multi-note start can open with 1–17 of 18 questions, and a single-note start can open one question short. v0.175.0 items 2 and 5 own preparation and shortfall recovery.
+
 ## Progressive Quiz Generation (Challenge mode only)
 
 Challenge mode supports on-demand question batching within a live session:

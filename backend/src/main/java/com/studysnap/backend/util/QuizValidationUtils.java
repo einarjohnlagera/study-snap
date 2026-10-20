@@ -33,6 +33,64 @@ public class QuizValidationUtils {
     private static final Pattern LATEX_TEXT_WRAPPER_PATTERN = Pattern.compile("\\\\text\\s*\\{([^{}]*)}");
     private static final Pattern NUMBER_PATTERN = Pattern.compile("[-+]?\\d+(?:\\.\\d+)?");
     private static final Pattern WHITESPACE_PATTERN = Pattern.compile("\\s+");
+    private static final Pattern PAIR_ONE = Pattern.compile("statement\\s*(1|i)\\s*:", Pattern.CASE_INSENSITIVE);
+    private static final Pattern PAIR_TWO = Pattern.compile("statement\\s*(2|ii)\\s*:", Pattern.CASE_INSENSITIVE);
+    private static final Pattern NEGATED_CHOICE = Pattern.compile("\\b(incorrect|false|wrong|not)\\b", Pattern.CASE_INSENSITIVE);
+    private static final Pattern[] PAIR_CHOICES = {
+            Pattern.compile("^([a-d][:.)]\\s*)?both\\b", Pattern.CASE_INSENSITIVE),
+            Pattern.compile("\\bonly statement\\s*(1|i)\\b", Pattern.CASE_INSENSITIVE),
+            Pattern.compile("\\bonly statement\\s*(2|ii)\\b", Pattern.CASE_INSENSITIVE),
+            Pattern.compile("^([a-d][:.)]\\s*)?neither\\b", Pattern.CASE_INSENSITIVE)
+    };
+
+    public enum StatementPairResult {
+        NOT_STATEMENT_PAIR, OK, MISSING_VERDICTS, UNCLASSIFIED_CHOICES, KEY_MISMATCH
+    }
+
+    public boolean isStatementPair(String question) {
+        return question != null && PAIR_ONE.matcher(question).find() && PAIR_TWO.matcher(question).find();
+    }
+
+    public StatementPairResult checkStatementPair(
+            String question, List<String> choices, Integer answerIndex,
+            String questionFormat, Boolean statement1Correct, Boolean statement2Correct
+    ) {
+        if (!isStatementPair(question)) {
+            return StatementPairResult.NOT_STATEMENT_PAIR;
+        }
+        if (questionFormat != null && !MCQ_FORMAT.equals(questionFormat)) {
+            return StatementPairResult.UNCLASSIFIED_CHOICES;
+        }
+        if (statement1Correct == null || statement2Correct == null) {
+            return StatementPairResult.MISSING_VERDICTS;
+        }
+        if (choices == null || choices.size() != MCQ_CHOICE_COUNT || answerIndex == null) {
+            return StatementPairResult.UNCLASSIFIED_CHOICES;
+        }
+        int[] mappedIndices = {-1, -1, -1, -1};
+        for (int index = 0; index < choices.size(); index++) {
+            String choice = choices.get(index);
+            if (choice == null || NEGATED_CHOICE.matcher(choice).find()) {
+                return StatementPairResult.UNCLASSIFIED_CHOICES;
+            }
+            int match = -1;
+            for (int kind = 0; kind < PAIR_CHOICES.length; kind++) {
+                if (PAIR_CHOICES[kind].matcher(choice.trim()).find()) {
+                    if (match != -1 || mappedIndices[kind] != -1) {
+                        return StatementPairResult.UNCLASSIFIED_CHOICES;
+                    }
+                    match = kind;
+                }
+            }
+            if (match == -1) {
+                return StatementPairResult.UNCLASSIFIED_CHOICES;
+            }
+            mappedIndices[match] = index;
+        }
+        int expected = statement1Correct ? (statement2Correct ? 0 : 1) : (statement2Correct ? 2 : 3);
+        return mappedIndices[expected] == answerIndex
+                ? StatementPairResult.OK : StatementPairResult.KEY_MISMATCH;
+    }
     /**
      * An IDENTIFICATION answer is graded by exact normalized string equality, so it must be a term, name or
      * label a learner can type unambiguously in words. A stem asking for the *notation itself* — an

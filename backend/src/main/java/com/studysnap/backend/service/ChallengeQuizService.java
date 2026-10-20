@@ -405,6 +405,9 @@ public class ChallengeQuizService {
         );
         try {
             List<QuizItem> challengeQuiz;
+            int bankedCount = 0;
+            int templateCount = 0;
+            int generatedCount = 0;
             // ⚠️ TRIPWIRE, NOT DEAD-CODE PADDING. Every board_exam start returns above, into the async
             // resilient path. The synchronous branch that used to live here — and the
             // generateBoardExamQuizForSources helper it called — were deleted because they were not merely
@@ -423,6 +426,7 @@ public class ChallengeQuizService {
                         generateChallengeQuizForSources(userId, sourceNoteRefs, profile.difficulty()),
                         disallowedQuestionKeys
                 );
+                generatedCount = challengeQuiz.size();
             } else {
                 List<QuizItem> bankedQuestions = challengeQuizQuestionBankService.claimEligibleQuestions(
                         userId,
@@ -441,6 +445,8 @@ public class ChallengeQuizService {
                         disallowedQuestionKeys,
                         quizCount - bankedQuestions.size()
                 );
+                bankedCount = bankedQuestions.size();
+                templateCount = templateQuestions.size();
                 bankedQuestions = new ArrayList<>(bankedQuestions);
                 bankedQuestions.addAll(templateQuestions);
                 Set<String> combinedQuestionKeys = new LinkedHashSet<>(disallowedQuestionKeys);
@@ -464,6 +470,7 @@ public class ChallengeQuizService {
                 List<QuizItem> uniqueGeneratedQuiz = QuizDeduplicationUtils.uniqueQuestions(generatedQuiz, combinedQuestionKeys);
                 challengeQuiz = new ArrayList<>(bankedQuestions);
                 challengeQuiz.addAll(uniqueGeneratedQuiz);
+                generatedCount = uniqueGeneratedQuiz.size();
                 if (!uniqueGeneratedQuiz.isEmpty()) {
                     challengeQuizQuestionBankService.persistGeneratedQuestions(
                             userId,
@@ -486,6 +493,12 @@ public class ChallengeQuizService {
                 challengeQuiz = shuffleQuestionOrderPreservingMatchingGroups(challengeQuiz);
             }
 
+            log.info("action=challenge_quiz_delivery_counts path={} requested={} banked={} template={} generated={} delivered={}",
+                    multiNoteChallenge ? "start_multi_note" : "start", quizCount,
+                    bankedCount, templateCount, generatedCount, challengeQuiz.size());
+            if (challengeQuiz.size() < (multiNoteChallenge ? 1 : quizCount - 1)) {
+                throw new ChallengeQuizGenerationFailedException();
+            }
             markSessionReady(session, challengeQuiz, profile.difficulty());
             QuickReviewSessionEntity saved = quickReviewSessionRepository.save(session);
             userUsageService.incrementChallengeQuizGeneration(userId, saved.getCreatedAt());
@@ -1190,6 +1203,9 @@ public class ChallengeQuizService {
             unique = new ArrayList<>(stampQuestionsWithSourceStudyPack(bankedQuestions, session.getStudyPackId()));
             unique.addAll(uniqueGenerated);
             unique = shuffleQuestionOrderPreservingMatchingGroups(unique);
+            log.info("action=challenge_quiz_delivery_counts path=generate_more requested={} banked={} template={} generated={} delivered={}",
+                    batchSize, bankedQuestions.size() - templateQuestions.size(), templateQuestions.size(),
+                    uniqueGenerated.size(), unique.size());
 
             if (unique.size() < MIN_NEW_QUESTIONS_AFTER_DEDUP) {
                 throw new NotEnoughNewQuestionsException();

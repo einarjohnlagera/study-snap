@@ -554,6 +554,56 @@ class ChallengeQuizBankConcurrencyIntegrationTest {
 
     @Test
     @Timeout(15)
+    void emptyStartCommitsFailedWithoutCharging() {
+        assertBelowFloorStartFailsAndReleasesGenerated(0);
+    }
+
+    @Test
+    @Timeout(15)
+    void belowFloorStartCommitsFailedAndReleasesGeneratedForNextSession() {
+        assertBelowFloorStartFailsAndReleasesGenerated(10);
+    }
+
+    private void assertBelowFloorStartFailsAndReleasesGenerated(int generatedCount) {
+        Fixture fixture = seed(false);
+        jdbc.update("update quick_review_sessions set status = 'COMPLETED', completed_at = now() where id = ?",
+                fixture.sessionId);
+        jdbc.update("delete from challenge_quiz_question_bank where study_pack_id = ?", fixture.packId);
+        int countedBefore = jdbc.queryForObject("""
+                select count(*) from quick_review_sessions where user_id = ?
+                and session_mode = 'CHALLENGE' and status in ('IN_PROGRESS', 'COMPLETED', 'FORFEITED')
+                """, Integer.class, fixture.userId);
+        List<QuizItem> generated = java.util.stream.IntStream.range(0, generatedCount)
+                .mapToObj(index -> question("Below floor " + index)).toList();
+        when(quizGenerationService.generateChallengeQuiz(any(), any(), any(), any(),
+                any(Integer.class), any(), any())).thenReturn(GeneratedChallengeQuizContent.withoutUsage(generated));
+
+        var response = challengeQuizService.startSession(fixture.packId.toString(), fixture.userId, null);
+
+        assertThat(response.status().name()).isEqualTo("FAILED");
+        org.mockito.Mockito.verify(userUsageService, org.mockito.Mockito.never())
+                .incrementChallengeQuizGeneration(any(), any());
+        org.mockito.Mockito.verify(userUsageService, org.mockito.Mockito.never())
+                .incrementMultiNoteGeneration(any(), any());
+        int countedAfter = jdbc.queryForObject("""
+                select count(*) from quick_review_sessions where user_id = ?
+                and session_mode = 'CHALLENGE' and status in ('IN_PROGRESS', 'COMPLETED', 'FORFEITED')
+                """, Integer.class, fixture.userId);
+        assertThat(countedAfter).isEqualTo(countedBefore);
+        assertThat(jdbc.queryForObject("""
+                select count(*) from challenge_quiz_question_bank
+                where study_pack_id = ? and claimed_session_id is not null
+                """, Integer.class, fixture.packId)).isZero();
+        if (generatedCount > 0) {
+            List<QuizItem> nextClaim = new TransactionTemplate(transactionManager).execute(status ->
+                    bankService.claimEligibleQuestions(fixture.userId, fixture.packId, LearnerLevel.COLLEGE,
+                            fixture.sessionId, java.util.Set.of(), generatedCount));
+            assertThat(nextClaim).hasSize(generatedCount);
+        }
+    }
+
+    @Test
+    @Timeout(15)
     void startSessionFlushesItsNewSessionBeforeBankInserts() {
         Fixture fixture = seed(false);
         jdbc.update("update quick_review_sessions set status = 'COMPLETED', completed_at = now() where id = ?",
