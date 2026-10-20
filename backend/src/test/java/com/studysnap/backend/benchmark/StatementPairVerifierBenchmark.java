@@ -27,7 +27,7 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 /** Opt-in, local verifier leg. No Spring context or database. */
 public class StatementPairVerifierBenchmark {
     static final String VERSION = "v0.175.0-draft-1";
-    static final Set<String> STRATA = Set.of("N","N_CAVEAT","P_SEEN","P_UNSEEN","P_CONSTRUCTED","P_CONSTRUCTED_CONTROL","U");
+    static final Set<String> STRATA = Set.of("N","N_CAVEAT","P_SEEN","P_UNSEEN","P_CONSTRUCTED","P_CONSTRUCTED_CONTROL","P_ADJUDICATED","U");
     record Item(String id,String stratum,String batchId,String noteId,String provenance,
                 JsonNode keyedPair,JsonNode goldPair,StatementPairExtractor.Pair pair) {}
     record Config(String model,Path gold,Path notes,Path outDir,Path promptDir,int repeats,int maxCalls,

@@ -52,11 +52,13 @@ class VerifierScorerTest {
         assertThat(kill.path("overall").asText()).isEqualTo("KILL");
     }
     private Fixture completeFixture() throws Exception { return completeFixture(6); }
-    private Fixture completeFixture(int ambiguous) throws Exception {
+    private Fixture completeFixture(int ambiguous) throws Exception { return completeFixture(ambiguous,78,0); }
+    private Fixture completeFixture(int ambiguous,int normal,int adjudicated) throws Exception {
         Path gold=temp.resolve("complete-gold.jsonl"),sol=temp.resolve("complete-sol"),luna=temp.resolve("complete-luna");
         Files.createDirectories(sol);Files.createDirectories(luna);
         StringBuilder g=new StringBuilder(),s=new StringBuilder(),l=new StringBuilder();
-        for(int i=0;i<78;i++)add(g,s,l,"n"+i,"N","n-start"+(i/2),true,true,true,1);
+        for(int i=0;i<normal;i++)add(g,s,l,"n"+i,"N","n-start"+(i/2),true,true,true,1);
+        for(int i=0;i<adjudicated;i++)add(g,s,l,"adj"+i,"P_ADJUDICATED","adj"+i,false,false,false,1);
         for(int i=0;i<10;i++)add(g,s,l,"c"+i,"N_CAVEAT","c-start"+(i/2),true,true,true,1);
         for(int i=0;i<20;i++)add(g,s,l,"p"+i,"P_CONSTRUCTED","p"+i,false,false,false,1);
         for(int i=0;i<20;i++)add(g,s,l,"u"+i,"P_UNSEEN","u"+i,false,false,false,1);
@@ -112,6 +114,24 @@ class VerifierScorerTest {
         StringBuilder lines=new StringBuilder();
         for(String line:Files.readAllLines(file)){ObjectNode row=(ObjectNode)mapper.readTree(line);change.accept(row);lines.append(mapper.writeValueAsString(row)).append('\n');}
         Files.writeString(file,lines.toString());
+    }
+    @Test void nThresholdsKeepSignedCountsAt78AndFloorRatesOtherwise() {
+        assertThat(VerifierScorer.nThresholds(78)).containsExactly(4,8,6,9);
+        assertThat(VerifierScorer.nThresholds(77)).containsExactly(3,7,6,9);
+        assertThat(VerifierScorer.nThresholds(73)).containsExactly(3,7,5,8);
+    }
+    @Test void correctedGoldWith77NormalsAndAnAdjudicatedPositiveScores() throws Exception {
+        JsonNode clean=VerifierScorer.score(config(completeFixture(6,77,1),true));
+        assertThat(clean.path("nSize").asInt()).isEqualTo(77);
+        assertThat(clean.path("metrics").path("P_ADJUDICATED rejected (F)").path("classification").asText()).isEqualTo("REPORT");
+        assertThat(clean.path("metrics").path("P_ADJUDICATED rejected (F)").path("numerator").asInt()).isEqualTo(1);
+        assertThat(clean.path("overall").asText()).isEqualTo("PASS");
+        // Four Sol-only false rejections: 4 > floor(5% of 77) = 3, so S-A4a Sol is GRAY, not PASS.
+        Fixture f=completeFixture(6,77,1);
+        for(int i=0;i<4;i++) reject(f,i,"sol");
+        JsonNode gray=VerifierScorer.score(config(f,true));
+        assertThat(gray.path("metrics").path("S-A4a Sol").path("classification").asText()).isEqualTo("GRAY");
+        assertThat(gray.path("overall").asText()).isEqualTo("GRAY");
     }
     private void acceptForAllRepeats(Fixture f,String id,String model) throws Exception {
         Path file=(model.equals("sol")?f.sol():f.luna()).resolve("results.jsonl");
