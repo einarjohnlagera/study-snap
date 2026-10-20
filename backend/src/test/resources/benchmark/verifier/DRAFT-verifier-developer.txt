@@ -8,7 +8,7 @@ FOR EACH STATEMENT, IN THIS ORDER:
    - SUPPORTED: the note states, or directly implies, that the statement is true.
    - CONTRADICTED: the note states, or directly implies, that the statement is false.
    - SILENT: the note does not address the statement.
-2. evidenceQuote — if SUPPORTED or CONTRADICTED, copy the shortest exact phrase from the source note (at most 25 words) that decides it. If SILENT, use null.
+2. evidenceQuote — if SUPPORTED or CONTRADICTED, copy the shortest phrase from the source note (at most 25 words) that decides it, exactly as written in the note, character for character. Do not add quotation marks. Do not paraphrase. If two places in the note decide it, copy both, separated by " ; ". If SILENT, use null.
 3. reason — one sentence, at most 40 words. If SILENT, name the established principle of the field you relied on.
 4. noteConflictsWithStandardKnowledge — true only if the source note itself states something that contradicts standard, established knowledge of the field.
 5. verdict — TRUE, FALSE or UNCERTAIN:

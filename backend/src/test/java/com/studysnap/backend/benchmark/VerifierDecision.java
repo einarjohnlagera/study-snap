@@ -21,17 +21,25 @@ final class VerifierDecision {
         if (("SUPPORTED".equals(support) && "FALSE".equals(verdict)) ||
                 ("CONTRADICTED".equals(support) && "TRUE".equals(verdict)))
             return new Normalized("UNCERTAIN","SELF_CONTRADICTORY");
-        if (!"SILENT".equals(support) && (judgment.path("evidenceQuote").isNull() ||
-                !canonical(note).contains(canonical(judgment.path("evidenceQuote").asText())) ||
-                canonical(judgment.path("evidenceQuote").asText()).isEmpty()))
+        if (!"SILENT".equals(support) && !quoteFound(judgment,note))
             return new Normalized("UNCERTAIN","UNVERIFIED_EVIDENCE");
         return new Normalized(verdict,null);
     }
+    // Owner-approved rule (wording doc Part 10, item 2): enclosing quotation marks are stripped, and a quote may
+    // carry two places from the note separated by " ; ". EVERY fragment must still appear exactly in the note,
+    // so a paraphrase fails as before.
+    private static final java.util.regex.Pattern FRAGMENT_SEPARATOR=java.util.regex.Pattern.compile("\\s;\\s");
+    private static final java.util.regex.Pattern ENCLOSING_QUOTES=java.util.regex.Pattern.compile("^[\\s\"'“”‘’]+|[\\s\"'“”‘’]+$");
     static boolean quoteFound(JsonNode judgment,String note) {
         JsonNode quote=judgment.path("evidenceQuote");
         if (!quote.isTextual()) return false;
-        String canonicalQuote=canonical(quote.asText());
-        return !canonicalQuote.isEmpty() && canonical(note).contains(canonicalQuote);
+        String canonicalNote=canonical(note);
+        String[] fragments=FRAGMENT_SEPARATOR.split(quote.asText());
+        for (String fragment:fragments) {
+            String canonicalFragment=canonical(ENCLOSING_QUOTES.matcher(fragment).replaceAll(""));
+            if (canonicalFragment.isEmpty() || !canonicalNote.contains(canonicalFragment)) return false;
+        }
+        return fragments.length>0;
     }
     private static String canonical(String text) {
         return Normalizer.normalize(text, Normalizer.Form.NFKC).toLowerCase(Locale.ROOT)

@@ -36,6 +36,15 @@ class StatementPairVerifierTest {
         assertThat(pair.statement1()).isEqualTo("Alpha holds.");
         assertThat(pair.statement2()).isEqualTo("Beta holds.");
     }
+    @Test void quoteRuleStripsEnclosingMarksAndVerifiesEveryFragment() throws Exception {
+        String note="Officials must uphold trust in public institutions. They support transparent and accountable governance.";
+        var m=new com.fasterxml.jackson.databind.ObjectMapper();
+        assertThat(VerifierDecision.quoteFound(m.readTree("{\"evidenceQuote\":\"“uphold trust in public institutions”\"}"),note)).isTrue();
+        assertThat(VerifierDecision.quoteFound(m.readTree("{\"evidenceQuote\":\"“uphold trust in public institutions” ; “transparent and accountable governance”\"}"),note)).isTrue();
+        assertThat(VerifierDecision.quoteFound(m.readTree("{\"evidenceQuote\":\"uphold trust in public institutions ; promotes open data\"}"),note)).isFalse();
+        assertThat(VerifierDecision.quoteFound(m.readTree("{\"evidenceQuote\":\"upholds public trust in institutions\"}"),note)).isFalse();
+        assertThat(VerifierDecision.quoteFound(m.readTree("{\"evidenceQuote\":\" ; \"}"),note)).isFalse();
+    }
     @Test void normalizesInRuleOrderAndQuotes() throws Exception {
         String note="The ‘crystal’ – phase uses  two steps.";
         assertThat(VerifierDecision.normalize(j("SUPPORTED","TRUE",false,"the 'CRYSTAL' - phase uses two steps."),note).verdict()).isEqualTo("TRUE");

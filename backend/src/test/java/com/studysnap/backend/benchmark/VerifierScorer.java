@@ -72,11 +72,17 @@ public class VerifierScorer {
                 put(metrics,markdown,classifications,"S-A1 "+caseId+" "+leg,rejected,cases.size(),classification);
             }
         }
-        metricRate(rows,metrics,markdown,classifications,"S-A2", "P_CONSTRUCTED","F",true,18,16);
-        metricRate(rows,metrics,markdown,classifications,"S-A3", "P_UNSEEN","F",true,18,16);
-        for (String leg:List.of("Sol","Luna")) metricRate(rows,metrics,markdown,classifications,"S-A4a "+leg,"N",leg,false,4,8);
-        metricRate(rows,metrics,markdown,classifications,"S-A4b","N","F",false,6,9);
-        metricRate(rows,metrics,markdown,classifications,"S-A4c","P_CONSTRUCTED_CONTROL","F",false,2,4);
+        metricRate(rows,metrics,markdown,classifications,"S-A2", "P_CONSTRUCTED","F",true,18,16,20);
+        metricRate(rows,metrics,markdown,classifications,"S-A3", "P_UNSEEN","F",true,18,16,20);
+        int nSize=(int)gold.stream().filter(g->"N".equals(g.path("stratum").asText())).count();
+        int[] nt=nThresholds(nSize);
+        output.put("nSize",nSize).put("nThresholdRule",nSize==78?"signed counts":"floor of signed rates (Part 10, item 3)");
+        for (String leg:List.of("Sol","Luna")) metricRate(rows,metrics,markdown,classifications,"S-A4a "+leg,"N",leg,false,nt[0],nt[1],nSize);
+        metricRate(rows,metrics,markdown,classifications,"S-A4b","N","F",false,nt[2],nt[3],nSize);
+        metricRate(rows,metrics,markdown,classifications,"S-A4c","P_CONSTRUCTED_CONTROL","F",false,2,4,20);
+        List<Row> adjudicated=stratum(rows,"P_ADJUDICATED");
+        if (!adjudicated.isEmpty()) put(metrics,markdown,classifications,"P_ADJUDICATED rejected (F)",
+                adjudicated.stream().filter(r->!r.fAccept()).count(),adjudicated.size(),"REPORT");
         List<Row> positives=rows.stream().filter(r->Set.of("P_CONSTRUCTED","P_UNSEEN").contains(r.stratum()) &&
                 !r.gold().path("keyedPair").equals(r.gold().path("goldPair"))).toList();
         long misses=positives.stream().filter(Row::fAccept).count();
@@ -119,7 +125,7 @@ public class VerifierScorer {
             boolean clearPass=clear.size()==6 && clear.stream().noneMatch(r->accepted(r,leg));
             List<Row> constructed=stratum(rows,"P_CONSTRUCTED"); long detected=constructed.stream().filter(r->!accepted(r,leg)).count();
             List<Row> normals=stratum(rows,"N"); long falseReject=normals.stream().filter(r->!accepted(r,leg)).count();
-            String classification=!clearPass || falseReject>8?"KILL":constructed.size()==20 && normals.size()==78 && detected>=18 && falseReject<=4?"PASS":"GRAY";
+            String classification=!clearPass || falseReject>nt[1]?"KILL":constructed.size()==20 && normals.size()==nSize && detected>=18 && falseReject<=nt[0]?"PASS":"GRAY";
             put(metrics,markdown,classifications,"S-A9 "+leg,detected,constructed.size(),classification);
         }
         List<Row> natural=rows.stream().filter(r->Set.of("N","N_CAVEAT").contains(r.stratum())).toList();
@@ -131,7 +137,8 @@ public class VerifierScorer {
         if (!starts.isEmpty()) { one/=starts.size(); failed/=starts.size(); }
         ObjectNode projection=metrics.putObject("S-A10"); projection.put("naturalRejected",naturalReject).put("naturalItems",natural.size())
                 .put("starts",starts.size()).put("replacementFailure",c.replacementFailure()).put("pOneShort",one).put("pFailed",failed);
-        String a10=natural.size()!=88?"GRAY":one<=.03 && failed<=.005?"PASS":failed>.01?"KILL":"GRAY";
+        long naturalExpected=gold.stream().filter(g->Set.of("N","N_CAVEAT").contains(g.path("stratum").asText())).count();
+        String a10=natural.size()!=naturalExpected?"GRAY":one<=.03 && failed<=.005?"PASS":failed>.01?"KILL":"GRAY";
         projection.put("classification",a10); classifications.add(a10);
         markdown.add("| S-A10 | "+naturalReject+" / "+natural.size()+"; one short "+one+"; failed "+failed+" | "+a10+" |");
         // One latency per start (call pair), not per item: a batch's items all repeat its call latency, so
@@ -181,9 +188,14 @@ public class VerifierScorer {
     private static boolean contains(JsonNode array,String value){for(JsonNode n:array)if(value.equals(n.asText()))return true;return false;}
     static String lower(long value,long pass,long kill){return value<=pass?"PASS":value>kill?"KILL":"GRAY";}
     static String rateClass(long value,long total,double pass,double kill){return total==0?"GRAY":value/(double)total<=pass?"PASS":value/(double)total>kill?"KILL":"GRAY";}
-    private static void metricRate(List<Row> rows,ObjectNode metrics,List<String> markdown,List<String> classes,String name,String stratum,String leg,boolean detection,int pass,int kill) {
+    /** {alone pass, alone kill, union pass, union kill} for N. 78 keeps the signed counts; any other size uses the
+     *  owner-approved floor of the signed rates 5%, 10%, 8% and 12% (wording doc Part 10, item 3). */
+    static int[] nThresholds(int n) {
+        if (n==78) return new int[]{4,8,6,9};
+        return new int[]{(int)Math.floor(.05*n),(int)Math.floor(.10*n),(int)Math.floor(.08*n),(int)Math.floor(.12*n)};
+    }
+    private static void metricRate(List<Row> rows,ObjectNode metrics,List<String> markdown,List<String> classes,String name,String stratum,String leg,boolean detection,int pass,int kill,int expected) {
         List<Row> group=stratum(rows,stratum);long count=group.stream().filter(r->!accepted(r,leg)).count();
-        int expected="N".equals(stratum)?78:20;
         String clazz=group.size()!=expected?"GRAY":detection?(count>=pass?"PASS":count<kill?"KILL":"GRAY"):lower(count,pass,kill);
         put(metrics,markdown,classes,name,count,group.size(),clazz);
     }
