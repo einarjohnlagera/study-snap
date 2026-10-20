@@ -71,6 +71,8 @@ cross-index overwrite that could erase a stored critique and reopen an answered 
 - immediate answer feedback
 - one retry round for incorrect questions
 
+The statement-pair answer-key guard applies only to newly generated Challenge Quiz questions; other quiz modes do not check statement-pair verdicts.
+
 ### Challenge Quiz
 
 - timed quiz mode

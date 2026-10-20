@@ -565,6 +565,91 @@ class ChallengeQuizServiceTest {
     }
 
     @Test
+    void startSession_zeroQuestionsFailsWithoutQuotaCharge() {
+        UUID userId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        StudyPackEntity studyPack = buildStudyPack(studyPackId, UUID.randomUUID(), userId);
+        when(studyPackRepository.findByIdAndOwnerUserIdForUpdate(studyPackId, userId)).thenReturn(Optional.of(studyPack));
+        when(quickReviewSessionRepository.findTopByUserIdAndStudyPackIdAndSessionModeAndStatusInOrderByCreatedAtDesc(
+                eq(userId), eq(studyPackId), eq(QuickReviewSessionMode.CHALLENGE), any()
+        )).thenReturn(Optional.empty());
+        when(billingUsagePeriodService.resolveUsagePeriod(eq(userId), any(OffsetDateTime.class)))
+                .thenReturn(new BillingUsagePeriodService.UsagePeriod(
+                        PlanType.FREE, BillingCycle.MONTHLY, OffsetDateTime.now().minusDays(5), OffsetDateTime.now().plusDays(25), 2026, 3
+                ));
+        when(userUsageService.getMonthlyUsage(eq(userId), any(OffsetDateTime.class))).thenReturn(UserUsageService.MonthlyUsage.zero());
+        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.FREE);
+        when(generationContextResolver.resolveForStudyPack(eq(userId), eq(studyPack))).thenReturn(
+                new StudyPackGenerationContext(LearnerLevel.COLLEGE, "Engineering", studyPack.getSubject(), List.of())
+        );
+        when(quizGenerationService.generateChallengeQuiz(any(), any(), any(), any(), anyInt(), any(), any()))
+                .thenReturn(GeneratedChallengeQuizContent.withoutUsage(List.of()));
+        when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
+                .thenAnswer(invocation -> recordSession(invocation.getArgument(0)));
+
+        ChallengeQuizStartResponse response = challengeQuizService.startSession(studyPackId.toString(), userId, null);
+
+        assertThat(response.status()).isEqualTo(QuickReviewSessionStatus.FAILED);
+        verify(userUsageService, never()).incrementChallengeQuizGeneration(any(UUID.class), any(OffsetDateTime.class));
+        verify(challengeQuizQuestionBankService).releaseClaims(eq(userId), eq(studyPackId), any(UUID.class));
+    }
+
+    @ParameterizedTest
+    @CsvSource({"11, IN_PROGRESS", "10, FAILED", "0, FAILED"})
+    void startSession_singleNoteEnforcesOneShortFloor(int delivered, QuickReviewSessionStatus expected) {
+        UUID userId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        StudyPackEntity pack = buildStudyPack(studyPackId, UUID.randomUUID(), userId);
+        stubChallengeStartDependencies(userId, studyPackId, pack, PlanType.FREE);
+        when(generationContextResolver.resolveForStudyPack(userId, pack)).thenReturn(
+                new StudyPackGenerationContext(LearnerLevel.COLLEGE, "Engineering", pack.getSubject(), List.of()));
+        when(quizGenerationService.generateChallengeQuiz(any(), any(), any(), any(), anyInt(), any(), any()))
+                .thenReturn(GeneratedChallengeQuizContent.withoutUsage(buildQuizWithPrefix("Generated", delivered)));
+
+        ChallengeQuizStartResponse response = challengeQuizService.startSession(studyPackId.toString(), userId, null);
+
+        assertThat(response.status()).isEqualTo(expected);
+        if (expected == QuickReviewSessionStatus.FAILED) {
+            verify(userUsageService, never()).incrementChallengeQuizGeneration(any(), any());
+            verify(userUsageService, never()).incrementMultiNoteGeneration(any(), any());
+            verify(challengeQuizQuestionBankService).releaseClaims(eq(userId), eq(studyPackId), any(UUID.class));
+        } else {
+            verify(userUsageService).incrementChallengeQuizGeneration(eq(userId), any());
+        }
+    }
+
+    @ParameterizedTest
+    @CsvSource({"0, FAILED", "1, IN_PROGRESS"})
+    void startSession_multiNoteOnlyRejectsEmptyQuiz(int delivered, QuickReviewSessionStatus expected) {
+        UUID userId = UUID.randomUUID();
+        UUID primaryId = UUID.randomUUID();
+        UUID secondaryId = UUID.randomUUID();
+        StudyPackEntity primary = buildStudyPack(primaryId, UUID.randomUUID(), userId);
+        StudyPackEntity secondary = buildStudyPack(secondaryId, UUID.randomUUID(), userId);
+        stubMultiNoteChallengeStart(userId, primaryId, primary, secondaryId, secondary, PlanType.FREE);
+        when(generationContextResolver.resolveForStudyPack(eq(userId), any(StudyPackEntity.class))).thenReturn(
+                new StudyPackGenerationContext(LearnerLevel.COLLEGE, "Engineering", primary.getSubject(), List.of()));
+        when(quizGenerationService.generateChallengeQuiz(any(), any(), any(), any(), eq(9), any(), any()))
+                .thenReturn(GeneratedChallengeQuizContent.withoutUsage(buildQuizWithPrefix("Generated", delivered)))
+                .thenReturn(GeneratedChallengeQuizContent.withoutUsage(List.of()));
+        when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
+                .thenAnswer(invocation -> recordSession(invocation.getArgument(0)));
+
+        ChallengeQuizStartResponse response = challengeQuizService.startSession(primaryId.toString(), userId,
+                new ChallengeQuizStartRequest("challenge", List.of(secondaryId.toString()), null));
+
+        assertThat(response.status()).isEqualTo(expected);
+        if (expected == QuickReviewSessionStatus.FAILED) {
+            verify(userUsageService, never()).incrementChallengeQuizGeneration(any(), any());
+            verify(userUsageService, never()).incrementMultiNoteGeneration(any(), any());
+            verify(challengeQuizQuestionBankService).releaseClaims(eq(userId), eq(primaryId), any(UUID.class));
+        } else {
+            verify(userUsageService).incrementChallengeQuizGeneration(eq(userId), any());
+            verify(userUsageService).incrementMultiNoteGeneration(eq(userId), any());
+        }
+    }
+
+    @Test
     void startSession_reusesEligibleBankedQuestionsBeforeCallingLlm() {
         UUID userId = UUID.randomUUID();
         UUID studyPackId = UUID.randomUUID();
