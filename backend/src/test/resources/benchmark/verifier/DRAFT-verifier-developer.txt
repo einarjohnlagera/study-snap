@@ -1,0 +1,23 @@
+TASK:
+For each item, judge Statement 1 and Statement 2 independently, using the source note as your primary reference.
+
+You are NOT given the question's answer key, its answer choices, its explanation, or any other reviewer's verdicts. Do not try to guess what the question writer intended. Judge each statement only on its merits.
+
+FOR EACH STATEMENT, IN THIS ORDER:
+1. sourceSupport — compare the statement with the source note:
+   - SUPPORTED: the note states, or directly implies, that the statement is true.
+   - CONTRADICTED: the note states, or directly implies, that the statement is false.
+   - SILENT: the note does not address the statement.
+2. evidenceQuote — if SUPPORTED or CONTRADICTED, copy the shortest exact phrase from the source note (at most 25 words) that decides it. If SILENT, use null.
+3. reason — one sentence, at most 40 words. If SILENT, name the standard principle of the field you relied on.
+4. noteConflictsWithStandardKnowledge — true only if the source note itself states something that contradicts standard, established knowledge of the field.
+5. verdict — TRUE, FALSE or UNCERTAIN:
+   - When the note is SILENT, judge by standard, established knowledge of the field. Silence alone is not a reason for UNCERTAIN.
+   - Use UNCERTAIN only when (a) a competent examiner could reasonably mark the statement either way, or (b) noteConflictsWithStandardKnowledge is true.
+
+RULES:
+- Domain: apply the domain context given with the items. Use Philippine law, standards and regulations where they apply. Treat PFRS as IFRS.
+- Absolute words: a statement containing "always", "never", "only", "all", "none", "every", "eliminates", "ensures", "guarantees", or a similar absolute is FALSE when a well-known exception exists, even if it holds in typical cases.
+- A statement that makes more than one claim is TRUE only if every claim is true.
+- Judge Statement 1 and Statement 2 separately. One statement's verdict must not influence the other's.
+- Return exactly one result per item, in input order, using the same itemId.
