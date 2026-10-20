@@ -28,6 +28,27 @@ Additional requirements:
 - **E. Zero wrong delivered statement-pair keys in the small acceptance sample is a smoke-test pass, not
   statistical proof** that the problem is gone.
 
+**Underfill decision (owner, 2026-10-20): option (a), narrow.**
+- **Rule:** a learner must never lose a quiz attempt or quota because the system failed to prepare a usable
+  quiz.
+- **Single-note start:** the owner's wording was "4 of 5". That rested on the release implementor's wrong
+  statement that starts request 5; they request 10, 12 or 15 (`ChallengeQuizService:161-163`). **The owner chose
+  "at most one short" (2026-10-20): 9/10, 11/12, 14/15.** The 80% reading was declined.
+  - **Production read (read-only, 2026-10-20):** since 2026-08-01, 53 single-note Challenge starts that
+    opened all had a full count (12 or 15; the 17 and 20 counts are +5 growth). None opened short, so
+    neither floor would have failed any of them before R1. 3 starts since July are FAILED with 0 questions.
+- **Frontend:** a FAILED start already shows "We couldn't generate the Challenge Quiz this time. Try again."
+  and returns to the pre-start screen (`challenge-quiz/page.tsx:714-730`).
+- **Multi-note start:** zero fails.
+- **When either check fails:** the start goes through the existing failure path, with no quota charge and
+  claims released, and tests prove it.
+- **No new generation call to fill a shortfall.** The existing one-retry guard is kept, and its latency is
+  reported.
+- **Multi-note underfill (1–17 of 18) is a high-priority issue for v0.175.0 item 2 and item 5,** which own the
+  minimum and the shortfall recovery for both kinds of start.
+- **Stop rule:** if the transaction structure cannot guarantee no charge on a failed start, the work stops and
+  is reported.
+
 Implementation, deployment, production data changes and paid API calls each need separate approval.
 
 Written 2026-10-20 by Release Implementor for `RELEASES.md` v0.175.0 item 1.
