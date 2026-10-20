@@ -235,3 +235,30 @@ handoffs.
 **All 1,389 template statement-pair items have now been checked by at least one independent reviewer.**
 The template side of R2 is closed once the owner runs the three handoffs. Learner-original content was out of
 scope and remains unread.
+
+## Post-repair check (2026-10-20, read-only)
+
+The owner applied all three handoffs on 2026-10-20.
+- **The first attempt at handoff 2 was blocked**, and nothing in it was saved. An IntelliJ database console
+  had been left idle in an open transaction for about 67 minutes, holding row locks. Three psql runs queued
+  behind it. The owner rolled it back and re-ran from psql. **Lesson for future handoffs: run them from
+  psql, not an IDE console in manual-transaction mode.** An error there leaves the transaction open and
+  holding locks.
+- **State after the repair:**
+  - no open transactions and no lock waits;
+  - 1,334 statement-pair template rows remain (1,389 − 55);
+  - both learner copies carry the corrected key.
+- **The pre-screen now flags 5 rows, down from 170.** Four are the rows kept on purpose: `e675be88` (key
+  right, explanation wrong), and `02bd2524`, `8cbb943f` and `a2a56622` (ambiguous, kept as keyed).
+- **The fifth, `2a48c6af-8837-4069-bb5d-7241f8eddc86`, was misfiled by the re-check.** Its corrected key is
+  right, but its explanation opens with "Both statements are correct." That is the "explanation also wrong"
+  case, so it should have been a delete.
+  - Fourth handoff: `docs/claude-plans/2026-10-20-v0175-r2-template-answer-key-repair-4.sql`, a guarded
+    one-row delete.
+  - Preview: 1 found, 1 deletable, 0 learner copies.
+- **Limit:** the screen sees only explanations that state an explicit verdict. Among the 315 key-fixed rows,
+  this is the only one whose explanation states a verdict against the new key. A fixed row whose explanation
+  contradicts its new key in words the screen cannot parse would not show up here.
+- **Handoff 4 was applied by the owner on 2026-10-20. Verified read-only:** the row is gone, 1,333
+  statement-pair template rows remain, and there are no open transactions or lock waits. **The template side
+  of R2 is closed.**
