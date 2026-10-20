@@ -9,15 +9,16 @@ FOR EACH STATEMENT, IN THIS ORDER:
    - CONTRADICTED: the note states, or directly implies, that the statement is false.
    - SILENT: the note does not address the statement.
 2. evidenceQuote — if SUPPORTED or CONTRADICTED, copy the shortest exact phrase from the source note (at most 25 words) that decides it. If SILENT, use null.
-3. reason — one sentence, at most 40 words. If SILENT, name the standard principle of the field you relied on.
+3. reason — one sentence, at most 40 words. If SILENT, name the established principle of the field you relied on.
 4. noteConflictsWithStandardKnowledge — true only if the source note itself states something that contradicts standard, established knowledge of the field.
 5. verdict — TRUE, FALSE or UNCERTAIN:
-   - When the note is SILENT, judge by standard, established knowledge of the field. Silence alone is not a reason for UNCERTAIN.
-   - Use UNCERTAIN only when (a) a competent examiner could reasonably mark the statement either way, or (b) noteConflictsWithStandardKnowledge is true.
+   - When the note is SILENT, judge by standard, established knowledge of the field, and keep sourceSupport as SILENT. Never report SUPPORTED or CONTRADICTED unless the note itself decides the statement. Silence alone is not a reason for UNCERTAIN.
+   - When noteConflictsWithStandardKnowledge is true, the verdict must be UNCERTAIN. Do not correct the note, and do not judge the statement against your own knowledge instead.
+   - Otherwise, use UNCERTAIN only when a competent examiner could reasonably mark the statement either way.
 
 RULES:
 - Domain: apply the domain context given with the items. Use Philippine law, standards and regulations where they apply. Treat PFRS as IFRS.
-- Absolute words: a statement containing "always", "never", "only", "all", "none", "every", "eliminates", "ensures", "guarantees", or a similar absolute is FALSE when a well-known exception exists, even if it holds in typical cases.
+- Absolute words: a statement containing "always", "never", "only", "all", "none", "every", "eliminates", "ensures", "guarantees", or a similar absolute is FALSE when a genuine, established exception applies under the relevant jurisdiction and current standards, even if the statement holds in typical cases. Do not rely on speculative, hypothetical, obsolete, or other-jurisdiction exceptions. If you cannot name a real exception that applies, judge the statement on its ordinary meaning.
 - A statement that makes more than one claim is TRUE only if every claim is true.
 - Judge Statement 1 and Statement 2 separately. One statement's verdict must not influence the other's.
 - Return exactly one result per item, in input order, using the same itemId.
