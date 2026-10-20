@@ -182,3 +182,56 @@ The owner replied "approve all recommended".
      owner-confirmed regeneration of its Study Pack summary. The learner's private copy is untouched.
    - Graves note: left as is. It is a learner's own public note with no copies, and its Study Pack does not
      repeat the error.
+
+## Second handoff (decisions 2 and 4)
+
+`docs/claude-plans/2026-10-19-v0175-r2-template-answer-key-repair-2.sql`. It is independent of the first
+handoff, so the two can run in either order.
+- **The 25 held rows were re-checked** by a fresh cold Opus agent, together with the answered learner copy.
+  - **13 template rows plus the learner copy: key fix.** The explanation supports the correct answer.
+  - **12 template rows: delete.**
+    - 10 have an explanation that is also wrong.
+    - `2481bb98-…` is defensible as keyed but contradicts its own explanation.
+    - `c39cbef2-…` would have a right key after the fix, but its explanation names the wrong occupancy
+      group. Rewriting content is out of scope (decision 2).
+  - All 12 deletes are ADMIN-owned, unclaimed, and have no learner copies. No foreign key references the
+    table.
+- **Read-only preview, run 2026-10-19, statements as written:**
+  - template fixes: 13 found, 13 would change;
+  - learner fix: 1 found, 1 would change;
+  - deletes: 12 found, 12 deletable.
+
+## Third handoff (decision 3): the full check of the remaining 1,119
+
+`docs/claude-plans/2026-10-19-v0175-r2-template-answer-key-repair-3.sql`. It is independent of the first two
+handoffs.
+- **Export:** 1,119 rows, by read-only `SELECT`, to a git-ignored scratchpad file. 18 rows had been
+  hand-copied, so the last page was hash-checked against production: 19 of 19 matched.
+- **Codex first pass** (high reasoning effort, no database or network access): **221 wrong, 8 ambiguous,
+  890 right.** Each flag carries its own item-specific reason, and the log shows no scripted judging.
+- **Opus re-check**, by fresh cold agents blind to Codex's verdicts:
+  - Of the 229 Codex flags, **185 are wrong keys**: 142 key fixes and 43 deletes. The other 44 are left as
+    keyed, because the key is right or the item is ambiguous with an explanation that agrees with the key.
+    Codex's flags are about 81% confirmed.
+  - **Codex misses:** of 60 random Codex passes, Opus found 0 wrong keys.
+- **One learner copy** (`e4a1421e-…`, answered 2026-09-05) of a fixed template (`cdc9879d-…`) gets the same
+  key fix. Its outcome is left as history (decision 4). The 43 deletes have no learner copies.
+- **Read-only preview, run 2026-10-19, statements as written:**
+  - fixes: 142 found, 142 would change;
+  - learner fix: 1 found, 1 would change;
+  - deletes: 43 found, 43 deletable, 0 learner copies.
+
+## Totals across the three handoffs
+
+| | Rows |
+|---|---|
+| Statement-pair items on Official templates | 1,389 |
+| **Confirmed wrong keys** | **370 (26.6%)**: 166 flagged by the screen + 19 from samples + 185 from the full check |
+| Key fixes (template rows) | 315 (160 + 13 + 142) |
+| Deletes (template rows) | 55 (12 + 43) |
+| Learner-copy key fixes | 2 |
+| Left as keyed after review (ambiguous, explanation agrees) | about 50, plus every row judged right |
+
+**All 1,389 template statement-pair items have now been checked by at least one independent reviewer.**
+The template side of R2 is closed once the owner runs the three handoffs. Learner-original content was out of
+scope and remains unread.
