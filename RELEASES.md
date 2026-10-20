@@ -31,7 +31,7 @@ held behind `v0.173.0`'s #1505 and two checkpoints).
 Order matters: item 1 ships before item 6. Items 2–4 form one learner journey and are briefed together, but
 delivered as separate PRs where the seams allow.
 
-1. **R1: statement-pair answer-key guard. Tier N. FIRST. `[with-Codex]`** Wording signed off 2026-10-20: `docs/claude-plans/2026-10-20-v0175-r1-statement-pair-guard-wording.md`. Worktree `../study-snap-item-r1`, branch `feat/v0.175.0-r1-statement-pair-guard`.
+1. **R1: statement-pair answer-key guard. Tier N, raised to one cold falsification review by the start minimum. FIRST. `[merged-to-release]`** PR #1513, merged 2026-10-20 (`7b9ae007`). Wording signed off 2026-10-20: `docs/claude-plans/2026-10-20-v0175-r1-statement-pair-guard-wording.md`. **Acceptance run (mini, 2026-10-20, about $0.18): the smoke-test rule FAILED.** 3 of 32 delivered statement-pair keys were wrong (2 clear, 1 arguable). All three are factual-verdict errors, which the check cannot catch; none is the index class R1 targets. Findings: `docs/claude-findings/2026-10-20-v0175-r1-acceptance-run.md`. Owner decision pending; a Luna arm is proposed before item 6.
    - **Owner additions (2026-10-20):** a start minimum (single-note at most one short; multi-note fails at zero), with a failed start charging no quota and releasing its claims. Multi-note underfill (1–17 of 18) stays a high-priority issue for items 2 and 5.
    - Generation records a true/false verdict for each statement in a "Statement 1 / Statement 2" item.
    - The validator checks the keyed choice against those verdicts and retries on a mismatch.
@@ -134,7 +134,31 @@ never edit this file.
 
 ### Shipped
 
-_(nothing yet)_
+- **R1: statement-pair answer-key guard and Challenge start minimum** (PR #1513, `7b9ae007`).
+  - **The guard.** Challenge generation records a true/false verdict for each statement before it picks the
+    answer. The server rejects a key that contradicts those verdicts, retries the question once, and then omits
+    it.
+  - **Scope.** It covers Challenge start (single and multi-note), +5 and the Official template seed. Board,
+    Long Exam, Adaptive, teacher quiz and Study Pack generation are unchanged.
+  - **Field order.** The Challenge item order is now question, choices, statementVerdicts, answer, explanation.
+  - **Start minimum.** A single-note start may be at most one question short; a multi-note start fails at zero.
+    A start below its minimum ends FAILED before quota is charged, and its claims are released.
+  - **The old 0-question path is fixed.** It charged quota for a failed start; Codex's pre-fix test showed this.
+    A read-only check found that the 3 production 0-question failures failed before the charge, so no refund is
+    owed.
+  - **Count logs.** `challenge_quiz_generation_counts` and `challenge_quiz_delivery_counts`.
+  - **Verification.** `./mvnw clean install`: 2,789 tests, 0 failures, including the real-transaction floor
+    tests. Codex review found nothing. A cold Sonnet falsification review of 10 claims disproved none.
+  - **Known limitations:**
+    - A multi-note start can open with 1–17 of 18 questions, and a single-note start one short (items 2 and 5).
+    - A stem without "Statement 1:" with a colon is not checked.
+    - A choice like "Only Statement 1 and 2 are correct" would misclassify. Neither appears in stored data.
+    - A statement-pair item emitted as TRUE_FALSE now takes the one-question retry instead of a whole-batch
+      retry.
+    - **Factual-verdict errors are not caught.** The model can judge a statement wrongly and key it
+      consistently. The acceptance run found 3 of 32 such keys on mini.
+    - A start whose database write fails mid-transaction returns a server error instead of "Try again". This
+      is pre-existing and loses no quota (item 2).
 
 ## v0.174.0 - Enhanced Generation
 
