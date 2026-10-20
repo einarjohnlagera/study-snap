@@ -36,17 +36,13 @@ impossible.
 
 **NoteLib** (rebranded from StudySnap — db/package names still use `studysnap`) is a notes-first study workspace. Users capture notes, generate AI-powered Study Packs, and practice with quizzes. Database schema uses the old name; do not rename unless explicitly asked.
 
-Current version: **v0.174.0 — Enhanced Generation** (Released 2026-10-19, **merge to `main` HELD, not yet deployed**. It merges only after `v0.173.0`'s PR #1505 has merged with a merge commit, after its `[CHECKPOINT — due 2026-10-22]` signal-9 read, and after the `[CHECKPOINT — due cache deploy + 7 days]` read. Base branch `releases/v0.174.0`, cut from `releases/v0.173.0` (`7d1407a1`).)
+Current version: **v0.175.0 — Quiz Ready** (In Progress, kicked off 2026-10-20 on `releases/v0.175.0`, **cut from `releases/v0.174.0` (`e539b045`, signed off, NOT yet on `main`)**. It merges only after `v0.174.0`'s PR #1512 has merged.)
 
-**What shipped:**
-- `LlmModelRouter` routes the **Study Pack family** by tier: Study Pack generation (async and the synchronous `/study` routes), summary regeneration, the malformed-quiz repair, note-from-topic and the Official template seed. FREE → `LLM_MODEL_FREE`; Plus/Pro (`SubscriptionService`, expiry-aware) and `UserRole.ADMIN` → `LLM_MODEL_PREMIUM`.
-- **Every interactive quiz and practice path is pinned to today's model for every plan:** Challenge (start, +5, multi-note), Board Exam, Long Exam, Adaptive, study tip, teacher quiz (`LLM_MODEL_INTERACTIVE_QUIZ`); Interview quiz and companion (`LLM_MODEL_PAID_INTERACTIVE`). Challenge tier routing and the hybrid preparation UX are `v0.175.0`.
-- A $10/month partial curation cost alert (`CurationCostAlertJob`, alert only).
-- `/study` Try again.
+**Scope:** Challenge Quiz is prepared in the background, lands on a "Your quiz is ready!" pre-screen, and starts its timer only on **Start Quiz**; a readiness notification deep-links back; multi-note generation runs in parallel with a floor; Challenge is routed by tier; and a statement-pair answer-key guard (R1, Challenge generation path only) ships **first**. Tier routing waits for R1 **and** the preparation flow. Item list, tiers and order: `RELEASES.md` v0.175.0. Plans: `docs/claude-plans/2026-10-19-v0175-challenge-quiz-preparation-plan.md` and Part G of `docs/claude-plans/2026-10-19-v0174-v0175-consolidated-implementation-plan.md` (C1–C8, R1–R3 owner-approved).
 
-**⚠️ THE NEW MODELS GO LIVE ONLY WITH THE OWNER'S POST-MERGE RENDER SWITCH** (`LLM_MODEL_FREE=gpt-6-luna`, `LLM_MODEL_PREMIUM=gpt-6.1-sol`). Until that switch, after the merge, Plus/Pro and ADMIN Study Pack paths run on Render's `gpt-4.1`. The merge-day handoff and rollback values are in the `RELEASES.md` v0.174.0 signoff record. **Never call the Render MCP's env-var update.**
+**Previous release still undeployed:** `v0.174.0 — Enhanced Generation` is Released with its merge HELD behind `v0.173.0`'s #1505 and two checkpoints. **Its new models go live only with the owner's post-merge Render switch** (`LLM_MODEL_FREE=gpt-6-luna`, `LLM_MODEL_PREMIUM=gpt-6.1-sol`); handoff and rollback values are in the `RELEASES.md` v0.174.0 signoff record. **Never call the Render MCP's env-var update.**
 
-**Anti-drift:** no Plus/Pro entitlement, quota or pricing change; no announcement, and customer copy (if any) says "Enhanced Study Pack Generation" and never names a model; no mass regeneration and no historical `model_tier`/`model_used` rewrite; no prompt-content change; no `LLM_MODEL_CRITIQUE` change (its own assessment, before 2027-01-14); no migration. Full record in `RELEASES.md`.
+**Anti-drift:** no pricing, entitlement or quota-limit change (**the only quota changes are charging Challenge at session creation and the C4 refund on failure or expiry**); customer copy never names a model and implies no FREE/paid quality difference; no email or push channel; **no timer starts before Start Quiz**; no Luna fallback for Plus/Pro; **Board Exam and Long Exam are untouched** (their own follow-up release, C6); no B6 backfill here (C8); no low reasoning effort (B7); **no prompt or schema change beyond R1's wording, which the owner signs off first**; no `LLM_MODEL_CRITIQUE` change; no mass regeneration. Full record in `RELEASES.md`.
 
 ## Source-of-truth docs (read before implementing anything)
 

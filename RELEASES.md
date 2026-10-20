@@ -1,5 +1,140 @@
 # RELEASES.md - NoteLib
 
+## v0.175.0 - Quiz Ready
+
+**Status: In Progress** (kicked off 2026-10-20 on `releases/v0.175.0`, **cut from `releases/v0.174.0`
+(`e539b045`, signed off, NOT yet on `main`)**, the same stacking pattern `v0.174.0` used on `v0.173.0`.
+Anything that changes on `releases/v0.174.0` after this cut is merged forward.)
+
+Theme: a learner who starts a Challenge Quiz is never stuck watching a spinner or racing a timer that
+started without them. The quiz is prepared in the background, waits on a "Your quiz is ready!" screen, and
+starts only when they press Start Quiz. Challenge also moves to each plan's model, behind a guard that
+catches wrong answer keys.
+
+**⚠️ MERGE GATE:** this release's PR merges to `main` only after `v0.174.0`'s PR #1512 has merged (itself
+held behind `v0.173.0`'s #1505 and two checkpoints).
+
+**Sources, all owner-approved:**
+- plan: `docs/claude-plans/2026-10-19-v0175-challenge-quiz-preparation-plan.md` (Feature Planner; §1
+  journey, §5 lifecycle, §7 retry, §8 acceptance criteria, §9 items 1–17);
+- decisions: B1–B7 (`docs/claude-plans/2026-10-19-owner-decisions-v0175-b1-b7.md`), and C1–C8 plus the C7
+  follow-ups R1–R3 (consolidated plan, Part G);
+- R1 evidence: `docs/claude-findings/2026-10-19-v0175-c7-statement-pair-answer-key-comparison.md` and
+  `docs/claude-findings/2026-10-19-v0175-r2-statement-pair-answer-key-scan.md`.
+  - 370 of 1,389 Official template statement-pair items (26.6%) had a wrong key on today's model.
+  - The owner repaired them on 2026-10-20.
+- **Plan §10's five open decisions are all closed:** C1 (no "Stay" button), C6 (Board/Long Exam follow-up
+  release), C3 (collision asks), C4 (refund) and C5 (+5 inherits Sol).
+
+### Planned Scope
+
+Order matters: item 1 ships before item 6. Items 2–4 form one learner journey and are briefed together, but
+delivered as separate PRs where the seams allow.
+
+1. **R1: statement-pair answer-key guard. Tier N. FIRST. `[queued — wording needs owner sign-off]`**
+   - Generation records a true/false verdict for each statement in a "Statement 1 / Statement 2" item.
+   - The validator checks the keyed choice against those verdicts and retries on a mismatch.
+   - An explanation-only check is not enough: R2 measured about 40% recall.
+   - **Scope: the Challenge generation path only, on every model, including today's pinned mini.**
+     Challenge start (single and multi-note, `ChallengeQuizService.generateChallengeQuizForSources:1832`),
+     +5 (`OpenAiLlmStudyPackService.generateMoreChallengeQuiz:2031`) and the Official template seed
+     (`OfficialChallengeQuizTemplateService:301`) all go through `generateChallengeQuizWithSchema`
+     (`OpenAiLlmStudyPackService.java:2305`).
+   - **Board Exam, Long Exam, Adaptive, teacher quiz and Study Pack generation share the prompt rule but are
+     NOT in scope.** Board and Long Exam are untouched in this release (C6), and R2 found no defect in Study
+     Pack quizzes. Extending the guard to them is a separate owner question.
+   - **It changes the prompt and the response schema, so the exact wording goes to the owner before the
+     brief.**
+2. **Preparation state machine (backend). Tier H. `[queued]`** Plan items 2–4 and 9–11.
+   - Single-note async dispatch.
+   - A ready-not-started state: plan §5 leans to a flag on `IN_PROGRESS`, to keep the partial unique index.
+   - `markSessionReady` is split from an explicit **Start Quiz** action, **for Challenge sessions only**.
+     There the timer is stamped only on Start Quiz.
+   - **Board Exam's callers keep "ready" and "started" as one step until the C6 follow-up** (the pooled
+     path, `ChallengeQuizService:338`, and `generateBoardExamAsync`, `:638`). An unstamped Board Exam never expires (`isSessionExpired`,
+     `:1489-1496`), and it shares `session_mode='CHALLENGE'`, so it would block Challenge requests on that
+     note.
+   - Quota is charged at session creation. **A new `decrementChallengeUsageNotBelowZero` refunds it on
+     failure and on expiry (C4).**
+   - Retry once, only after a lock-and-recheck (`generateBoardExamAsync:626-633` pattern). **No Luna fallback
+     for Plus/Pro.**
+   - Recovery-sweep entries for stuck generating and ready sessions.
+   - **A 7-day expiry sweep** returns the questions to the bank (B3).
+   - **A collision with a ready session asks the learner (C3).**
+   - **Bank-served starts and redo-missed land on the pre-screen (C2).**
+3. **Preparation screens (frontend). Tier N. `[queued]`** Plan items 12–13.
+   - "Getting your quiz ready" shows progress and **Continue reviewing** only, with no "Stay" button (C1).
+   - "Your quiz is ready!" has **Start Quiz**.
+   - Failure recovery offers Try Again and Continue Reviewing; the expired state offers Prepare New Quiz;
+     and there is the collision prompt.
+   - B4 copy. No model names.
+4. **Readiness notification and deep link. Tier N. `[queued]`** Plan items 14–15.
+   - One in-app `ASYNC_RESULT` notification through `NotificationService.deliver`, deduplicated per
+     session, sent for any way of leaving (B2).
+   - It is marked read if the learner stayed and saw the pre-screen.
+   - The deep link handles four cases: ready, already started, expired or forfeited, and not owned.
+   - A real-request test is owed for any new endpoint.
+5. **Multi-note preparation. Tier H. `[queued]`** Plan items 5–8.
+   - Async dispatch through the same journey.
+   - Per-source calls run in parallel on `llmParallelTaskExecutor` (measured 4–5× faster).
+   - A per-source failure no longer fails the start: it continues if enough questions survive (the floor).
+   - Token usage is recorded.
+6. **Challenge tier routing. Tier N. `[queued — after items 1 AND 2 merge]`** Plan item 17.
+   - **Gated on item 2 as well as item 1.** Routing Plus/Pro to Sol before the preparation flow exists
+     brings back the blocking start of about 107 s, which is why v0.174.0 pinned Challenge.
+   - **Multi-note starts stay pinned until item 5 ships.** Sequential Sol generation takes about 3.5–4
+     minutes. If Sol's benchmark rate of about 1 timeout in 40 calls holds per source call, a 6-note start
+     fails roughly 1 time in 7.
+   - Challenge start, +5 and multi-note move from `LLM_MODEL_INTERACTIVE_QUIZ` to the `TIERED` route:
+     FREE → `LLM_MODEL_FREE`; Plus/Pro and ADMIN → `LLM_MODEL_PREMIUM`.
+   - **+5 inherits (C5).**
+   - `model_used` is recorded on the session for the checkpoint read.
+   - Live models still depend on the owner's v0.174.0 Render switch.
+
+**Not in this release:**
+- Board Exam / Long Exam "press Start first" plus their expiry sweep: their own follow-up release right
+  after this one (C6).
+- The B6 targeted template backfill: a separate small PR after the v0.174.0 switch (C8).
+- Low reasoning effort (B7, not adopted).
+- A scan of learner-original statement-pair content.
+- The R3 impairment-note correction (Note Strategist and owner).
+
+**Verification tier: full Tier H.**
+- It touches quota semantics (a charge moves to creation, plus a new refund), adds a new session state and
+  a concurrency surface (the sweep against Start, the retry lock), and two or more items touch
+  `ChallengeQuizService`'s session lifecycle.
+- **Six items is above the three-to-four-item size guidance.** Expect the full pre-signoff pressure test,
+  not a single scoped agent.
+- If the owner wants a smaller first release, the clean seam is: items 1–4 plus 6 here, with item 5
+  (multi-note) as its own release. **Item 6 then routes single-note starts and +5 only, and multi-note
+  stays pinned until item 5 ships.**
+
+**Kickoff scan (2026-10-20):**
+- **14 live planning files had no Backlog row.** They are the `v0.174.0`/`v0.175.0` package: benchmark,
+  latency, Product UX, the A1–A7 decisions, routing plans, the B6/B7 proposals and the four R2 `.sql`
+  handoffs. Each is now named in the `v0.174.0` or `v0.175.0` Backlog row. None was moved to `done/`.
+- The `v0.175.0` row's title still described the removed "Stay on this page" button. Corrected (C1).
+- **Overdue `[CHECKPOINT]` rows are carried unread, not actioned at this kickoff.**
+  - A crude filter (a Gate cell with a past due date and no "closed" or "✅" in the first 300 characters
+    of Status) returns 39 rows. That overcounts, because several are struck through or resolved in their
+    title. `v0.174.0`'s kickoff recorded 16.
+  - Due inside this release: RC-3's reminder timing (2026-10-21), the `v0.166.0` Hikari backstop
+    (2026-10-21), and `v0.173.0`'s signal-9 read (2026-10-22), which gates #1505 and so this release's
+    merge chain.
+- `v0.169.0` was archived from `RELEASES.md` and the ROADMAP baseline. Both files were rebuilt from the
+  archives and compared byte-for-byte against the pre-move copies: identical.
+
+Anti-drift: no pricing, entitlement or quota-limit change. **The only quota changes are charging Challenge
+at session creation and the C4 refund on failure or expiry**;
+customer copy never names a model and implies no FREE/paid quality difference; no email or push; **no timer
+starts before Start Quiz**; no Luna fallback for Plus/Pro; Board/Long Exam untouched; **no prompt or schema
+change beyond R1's owner-signed wording**; no `LLM_MODEL_CRITIQUE` change; no mass regeneration; feature PRs
+never edit this file.
+
+### Shipped
+
+_(nothing yet)_
+
 ## v0.174.0 - Enhanced Generation
 
 **Status: Released** (signed off 2026-10-19; **merge to `main` HELD behind the v0.173.0 gates, so NOT yet
@@ -1116,109 +1251,6 @@ pending real adopters. Neither is "Study Journey" work this release can close by
   should be cross-checked against the actual Vercel dashboard before anyone acts on it. Comment-only
   change to the script; no logic changed.
 
-## v0.169.0 - Study Journey, Continued
-
-**Status: Released** (signed off 2026-10-12; commit `3200c773` on `releases/v0.169.0`)
-
-Theme: continue the Study Journey Purpose / Learner Goal architecture by shipping the one piece
-that's actually ready — after an `advisor()` pass caught that the original 3-item plan had
-sequencing and decision gaps, and the owner then explicitly chose to close this release on that
-one piece rather than fold in the others.
-
-### Planned Scope
-
-- **Civil Engineering Exam Hub page.** Adds a discovery page for CE alongside the four that already
-  exist (ALE, PNLE, LET, CPALE) in `frontend/lib/exam-hub-config.ts`. **Owner override of Product
-  UX's earlier "defer pending adoption evidence" call** — no new evidence arrived; this is a
-  deliberate reversal, recorded as such. Codex prompt: `docs/codex-prompts/v0.169.0-ce-exam-hub.md`.
-  Found during scoping, not assumed: 4 files (not just the config) hardcode the 4 existing slugs by
-  name, including one (`exam-hubs-guide.tsx`) already independently stale (missing CPALE) before
-  this task touched it — fixed as one move, deriving all of them from the shared config instead of
-  a 3rd/4th/5th duplicate list. Production size checked directly: CE's 113 public notes sit between
-  the smallest (ALE, 90) and largest (CPALE, 154) already-live hubs — no new bound needed.
-
-### Multi-goal exam support — owner direction recorded 2026-10-10, explicitly NOT authorized to implement
-
-The 5 batched questions got real answers, but **the owner was explicit these are product-direction
-preferences, not technical authorization** — before any Codex prompt, Feature Planner is to validate
-the storage migration, state transitions, onboarding semantics, cost, and acceptance criteria against
-the current code. No multi-goal implementation prompt exists, and none should until that validation
-and a separate go-ahead happen. Recorded here so the direction isn't re-litigated or lost before that
-validation happens:
-
-1. **Storage — a normalized join table**, one row per (user, exam goal), with one goal flagged
-   active per user. No redundant active-state storage (e.g. not a separate "active goal" column
-   that can drift from the join rows). Existing single `studyGoal` values migrate losslessly;
-   current users keep their existing goal, now active.
-2. **Dashboard & nudges — the active goal only** drives general dashboard nudges; other goals stay
-   visible/accessible but don't compete for nudge real estate. **Exception:** post-session next
-   steps must reflect the actual session/Study Journey context even when it differs from the active
-   goal — a session on a non-active goal's material must not get nudged toward the active goal
-   instead.
-3. **EXAM/SUBJECT exclusivity — unchanged.** Multiple exam goals may coexist with each other; a
-   subject focus still can't coexist with any exam goal. This is a profile-preference rule only —
-   it has never restricted which Notes/Study Plans are reachable, and broadening subject/exam
-   coexistence needs its own separate decision, not an inference from this one.
-4. **Exam-hub signup intent — add and activate**, never silently replace other exam goals. For a
-   learner who currently has subject focus (not an exam goal), the existing exclusivity contract
-   still requires clear disclosure before the intent flow overwrites it. Signing up via an Exam Hub
-   must NOT auto-adopt any Review Set — goal-setting and content-adoption stay separate actions.
-5. **Picker — a real goal-management surface** in Profile's Study Focus (add/remove/set-active),
-   not a single-select-to-multi-select conversion with no active-goal concept. Removing a goal must
-   never delete adopted content or assessment history — it only changes which goal drives nudges.
-
-**Release boundary:** multi-goal stays out of `v0.169.0` entirely. It remains additionally gated on
-the `[CHECKPOINT — due 2026-12-07]` population read (still 2 users as of 2026-10-09) and
-prioritization against the product-health release plan — neither is resolved by this direction
-record.
-
-### Deferred out of this release (sequencing, not scope changes)
-
-- **Public Note → Study Journey discovery — moved to `v0.170.0`.** Two problems caught by
-  `advisor()`: (1) it already has a design — Feature Planner's RC-5 in
-  `docs/claude-plans/2026-10-09-product-health-release-plan.md` §3 ("Part of Official Review Set
-  X") — so this release does not need to design it from scratch, only reuse that spec; (2) RC-5's
-  own stated gate is the two active stability checkpoints (`v0.165.0`'s discovery-rail fix, due
-  2026-10-12, and `v0.166.0`'s Hikari long-hold fix, due 2026-10-14) — a new per-request lookup on
-  public Note pages, shipped before those read out, makes both checkpoints' kill criteria
-  uninterpretable (the same contamination pattern already recorded for Learning Connections).
-  Sequencing this after 10-14 roughly lines up with the Claude budget reset on 10-12 anyway.
-
-Anti-drift carried over from the original discovery brief, still binding for everything in this
-release: no `ProfileType` change, no recommendation-engine change beyond the explicitly-decided
-Public Note link, no Degree Journey / Academic Term / ConceptHealth change, no change to
-`resolvePlanPremiumExamMode`/`EXAM_MODES.md`.
-
-**Explicitly excluded — the one piece NOT in this release:** the Degree Journey catalog (Phase C).
-Re-checked 2026-10-09: its own stated dependency ("≥2 published Years") is unmet — exactly one BSCS
-Year exists and it's unpublished. This is a content-authoring gap, not a code gap, and no decision
-override removes it. A separate, unmerged curriculum-authoring branch
-(`docs/bscs-year1-curriculum-shaping`) exists with planning material for completing that one Year,
-but it predates `v0.167.0`/`v0.168.0` (merging it as-is would roll both back) and even once rebased
-and authored, completes only the existing Year — not a second one. Tracked separately; not part of
-this release.
-
-**Delivery:** all three items are new backend/multi-system work — Codex-routed per `CLAUDE.md`'s
-task-routing table, one prompt per item. **Budget note:** the owner's Claude usage resets 2026-10-12;
-implementation is deliberately routed through Codex rather than done inline to conserve it, with
-Claude Code's role limited to scoping, prompt-writing, and post-delivery audit.
-
-**Verification tier:** three separate Codex deliveries folding into one release raises verification
-cost per `CLAUDE.md`'s own size-vs-cost rule. None of the three trigger the full three-agent tier
-(no money/quota/permission-substrate change, no first-of-kind cross-user read). Default to one
-`advisor()` pass per item after its audit, escalating to one scoped cold agent only if a trigger
-fires during implementation (e.g. two items touching the same shared method, or a defect found and
-fixed in the same session).
-
-### Shipped
-
-- **Civil Engineering Exam Hub (CELE) — PR #1485, commit `3200c773`.** Added `/exam/ce` and all 5
-  consuming surfaces (index page, Help Center guide and card, server-side course-program resolution).
-  Fixed `EXAM_HUB_ICONS` duplication along the way — moved into `exam-hub-config.ts` as the single
-  source of truth, which also fixed `exam-hubs-guide.tsx`'s pre-existing CPALE omission. Implemented
-  via Codex, independently re-verified (tests, `tsc --noEmit`, `npm run build` all re-run fresh, not
-  trusted from the delivery report alone).
-
 ## Archived releases
 
 - `v0.163.0 — No Peeking` (Released) — archived to `docs/archive/RELEASES_ARCHIVE.md`.
@@ -1230,3 +1262,4 @@ fixed in the same session).
 - `v0.166.0 — Measured Twice` (Released) — archived to `docs/archive/RELEASES_ARCHIVE.md`. Moved at the `v0.172.0` kickoff.
 - `v0.167.0 — Study Journey Purpose` (Released) — archived to `docs/archive/RELEASES_ARCHIVE.md`. Moved at the `v0.173.0` kickoff.
 - `v0.168.0 — Free Quota, Fairly Metered` (Released) — archived to `docs/archive/RELEASES_ARCHIVE.md`. Moved at the `v0.174.0` kickoff.
+- `v0.169.0 — Study Journey, Continued` (Released) — archived to `docs/archive/RELEASES_ARCHIVE.md`. Moved at the `v0.175.0` kickoff.

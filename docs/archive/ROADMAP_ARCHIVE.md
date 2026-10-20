@@ -5418,3 +5418,18 @@ the audit's abstract token figure; owner decided to ship uncapped. **Falsificati
 (`codex exec`, owner request) against an isolated clone, 7/8 claims confirmed, 1 refuted and fixed**
 (PR #1483, `ad6caa8c`): a regression-guard test's name overclaimed what it verified; corrected to
 document the real (structural, not runtime) guarantee. Full scope in `RELEASES.md`.
+
+**Kicked off 2026-10-10, signed off 2026-10-12.** `v0.169.0 — Study Journey, Continued` is
+**Released** on `releases/v0.169.0`, cut from `main` after `v0.168.0` merged as #1484 and tagged.
+**Narrowed from an initial 3-item scope to 1, after `advisor()` caught sequencing and decision gaps
+in the other two, then an explicit owner decision to close on the one ready piece.** Shipped: **Civil
+Engineering Exam Hub page** (PR #1485, commit `3200c773`) — owner override of Product UX's "defer
+pending adoption evidence" call, no new evidence arrived; owes a `[CHECKPOINT — due deploy + 30
+days]` on whether that override paid off, added at this signoff. **Multi-goal exam support stays
+OUT of this release** — 5 product-direction preferences recorded 2026-10-10, explicitly not
+implementation authorization; handed to Feature Planner to validate against current code before
+any Codex prompt. **Moved to `v0.170.0`:** Public Note → Study Journey discovery — already designed
+(Feature Planner's RC-5), gated on two active stability checkpoints (due 2026-10-12, 2026-10-14)
+a new public-note lookup would contaminate if shipped first. **Still excluded:** Degree Journey
+catalog (Phase C) — its own dependency (≥2 published Years) is a content-authoring gap no decision
+overrides; exactly one BSCS Year exists, unpublished. Full scope in `RELEASES.md`.
