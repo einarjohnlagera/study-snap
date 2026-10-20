@@ -7,6 +7,7 @@ import com.studysnap.backend.service.model.GeneratedChallengeQuizContent;
 import com.studysnap.backend.service.model.GeneratedStudyPackContent;
 import com.studysnap.backend.service.model.InterviewPracticeCritique;
 import com.studysnap.backend.service.model.StudyPackGenerationContext;
+import com.studysnap.backend.service.model.LlmRouting;
 import com.studysnap.backend.dto.QuizItem;
 import org.springframework.core.task.AsyncTaskExecutor;
 
@@ -23,6 +24,10 @@ public interface LlmStudyPackService {
 	CompanionContent generateCompanion(CompanionGenerationContext context, Set<CompanionSection> sections);
 
 	String generateQuickReviewStudyTip(List<String> incorrectQuestionSummaries);
+
+	default String generateQuickReviewStudyTip(List<String> incorrectQuestionSummaries, LlmRouting routing) {
+		return generateQuickReviewStudyTip(incorrectQuestionSummaries);
+	}
 
 	List<QuizItem> generateAdaptivePracticeQuiz(
 			String studyPackTitle,

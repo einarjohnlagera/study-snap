@@ -1,5 +1,6 @@
 package com.studysnap.backend.service;
 
+import com.studysnap.backend.service.model.LlmRouting;
 import com.studysnap.backend.dto.AdminSeedOfficialChallengeQuizTemplatesResponse;
 import com.studysnap.backend.dto.QuizItem;
 import com.studysnap.backend.entity.ChallengeQuizQuestionBankEntity;
@@ -304,7 +305,7 @@ public class OfficialChallengeQuizTemplateService {
                     List.of(),
                     ChallengeQuizService.MAX_CHALLENGE_QUIZ_QUESTIONS,
                     TEMPLATE_DIFFICULTY,
-                    target.context()
+                    target.context().withRouting(LlmRouting.tiered(target.ownerUserId()))
             ).quizItems();
             studyPackGenerationTransactionOperations.execute(status -> {
                 NoteEntity note = noteRepository.findById(noteId).orElse(null);

@@ -5,6 +5,8 @@ import com.studysnap.backend.dto.QuizItem;
 import com.studysnap.backend.entity.LearnerLevel;
 import com.studysnap.backend.service.model.GeneratedChallengeQuizContent;
 import com.studysnap.backend.service.model.StudyPackGenerationContext;
+import com.studysnap.backend.service.model.LlmRouting;
+import org.springframework.core.task.AsyncTaskExecutor;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -24,6 +26,34 @@ class QuizGenerationServiceTest {
     private LlmStudyPackService llmStudyPackService;
 
     @Test
+    void everyRealQuizWrapperPreservesItsCallerRoute() {
+        QuizGenerationService service = new QuizGenerationService(llmStudyPackService, new StudySnapProperties());
+        StudyPackGenerationContext interactive = new StudyPackGenerationContext(
+                LearnerLevel.COLLEGE, "Engineering", "Physics", List.of())
+                .withRouting(LlmRouting.interactiveQuiz());
+        StudyPackGenerationContext paid = interactive.withRouting(LlmRouting.paidInteractive());
+        AsyncTaskExecutor executor = Runnable::run;
+
+        service.generateChallengeQuiz("Title", "Summary", List.of(), List.of(), 5, "medium", interactive);
+        service.generateMoreChallengeQuiz("Title", "Summary", List.of(), List.of(), List.of(), 5, "medium", interactive);
+        service.generateBoardExamQuiz("Title", "Summary", List.of(), List.of(), 5, "medium", interactive);
+        service.generateLongExam("Title", "Summary", List.of(), List.of(), 5, "medium", interactive);
+        service.generateLongExamParallel("Title", "Summary", List.of(), List.of(), 5, "medium", interactive, executor);
+        service.generateAdaptivePracticeQuiz("Title", "Summary", List.of(), List.of(), List.of(), 5, interactive);
+        service.generateTeacherQuiz("Title", "Notes", List.of(), 5, interactive);
+        service.generateInterviewPracticeQuiz("Title", "Summary", List.of(), List.of(), 5, paid);
+
+        verify(llmStudyPackService).generateChallengeQuiz("Title", "Summary", List.of(), List.of(), 5, "medium", interactive);
+        verify(llmStudyPackService).generateMoreChallengeQuiz("Title", "Summary", List.of(), List.of(), List.of(), 5, "medium", interactive);
+        verify(llmStudyPackService).generateBoardExamQuiz("Title", "Summary", List.of(), List.of(), 5, "medium", interactive);
+        verify(llmStudyPackService).generateLongExam("Title", "Summary", List.of(), List.of(), 5, "medium", interactive);
+        verify(llmStudyPackService).generateLongExamParallel("Title", "Summary", List.of(), List.of(), 5, "medium", interactive, executor);
+        verify(llmStudyPackService).generateAdaptivePracticeQuiz("Title", "Summary", List.of(), List.of(), List.of(), 5, interactive);
+        verify(llmStudyPackService).generateTeacherQuiz("Title", "Notes", List.of(), 5, interactive);
+        verify(llmStudyPackService).generateInterviewPracticeQuiz("Title", "Summary", List.of(), List.of(), 5, paid);
+    }
+
+    @Test
     void generateChallengeQuiz_defaultsToRealProviderUntilMockModeIsExplicitlyEnabled() {
         StudySnapProperties properties = new StudySnapProperties();
         QuizGenerationService service = new QuizGenerationService(llmStudyPackService, properties);
@@ -32,7 +62,7 @@ class QuizGenerationServiceTest {
                 "Engineering",
                 "Physics",
                 List.of("Ohm's Law")
-        );
+        ).withRouting(LlmRouting.interactiveQuiz());
         GeneratedChallengeQuizContent llmQuiz = new GeneratedChallengeQuizContent(
                 List.of(new QuizItem("Q1", List.of("A", "B", "C", "D"), 0, "Concept", "Explanation")),
                 "gpt-4.1-mini",
@@ -82,7 +112,7 @@ class QuizGenerationServiceTest {
                 "Nursing",
                 "Medical-Surgical Nursing",
                 List.of("Electrolytes")
-        );
+        ).withRouting(LlmRouting.interactiveQuiz());
         List<QuizItem> llmQuiz = List.of(
                 new QuizItem("Q1", List.of("A", "B", "C", "D"), 0, "Concept", "Explanation")
         );

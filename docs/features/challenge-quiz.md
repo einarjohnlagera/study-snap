@@ -333,3 +333,7 @@ Explanations should sound like a tutor, explain why the correct answer is correc
 - With unanswered questions, an `AppModal` names the unanswered count and lets the learner go back to the first unanswered question or submit anyway with the existing incomplete-answer scoring behavior.
 - This is a submit-time guard, separate from the navigation-away leave guard.
 - Timer-triggered auto-submit bypasses this confirmation and continues to finalize immediately.
+
+# Model routing (v0.174.0)
+
+Challenge start, `+5 Questions`, and multi-note generation use `LLM_MODEL_INTERACTIVE_QUIZ` (default `gpt-4.1-mini`) for every plan. Board Exam, Long Exam, Adaptive Practice, teacher quizzes, and study tips share this pin. The Official template seed instead uses the note owner's tier through `LlmModelRouter`; an ADMIN author receives the premium model. Template questions may later be served to learners on any plan.

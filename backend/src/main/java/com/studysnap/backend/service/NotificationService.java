@@ -30,7 +30,11 @@ public class NotificationService {
      * this insert: two concurrent deliveries could both pass it and still create duplicate awareness.
      */
     public NotificationResponse deliver(NotificationDelivery delivery) {
-        String dedupKey = dedupKey(delivery.type(), delivery.dedupDiscriminator());
+        return deliver(delivery, dedupKey(delivery.type(), delivery.dedupDiscriminator()));
+    }
+
+    /** Allows a producer with a documented external key format to use the same unique-index guarantee. */
+    public NotificationResponse deliver(NotificationDelivery delivery, String dedupKey) {
         NotificationEntity notification = new NotificationEntity();
         notification.setId(UUID.randomUUID());
         notification.setRecipientUserId(delivery.recipientUserId());

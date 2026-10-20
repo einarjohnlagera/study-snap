@@ -972,6 +972,18 @@ class NoteControllerTest {
     }
 
     @Test
+    void publicDiscoveryRankingFailureKeepsExistingInternalErrorResponse() throws Exception {
+        MockMvc mockMvc = buildMockMvc(null);
+        when(noteService.getPublicLibraryDiscoverySections(null))
+                .thenThrow(new java.util.concurrent.CompletionException(
+                        new IllegalStateException("repository failed")));
+
+        mockMvc.perform(get("/notes/public/discovery-sections"))
+                .andExpect(status().isInternalServerError())
+                .andExpect(jsonPath("$.error.code").value("INTERNAL_ERROR"));
+    }
+
+    @Test
     void publicRouteAcceptsSlugShapedAuthoredDepthAndStillIgnoresGarbage() throws Exception {
         // ?subject= and ?courseProgram= are slug-shaped; ?level= now matches them via
         // LearnerLevel.fromSlug. Garbage must still degrade to an unfiltered library, never a 400.

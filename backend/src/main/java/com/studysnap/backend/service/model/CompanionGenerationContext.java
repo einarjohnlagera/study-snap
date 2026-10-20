@@ -7,8 +7,17 @@ public record CompanionGenerationContext(
         String description,
         String courseProgram,
         List<CompanionContextItem> subjectPlans,
-        List<CompanionContextItem> notes
+        List<CompanionContextItem> notes,
+        LlmRouting routing
 ) {
+    public CompanionGenerationContext(String title, String description, String courseProgram,
+            List<CompanionContextItem> subjectPlans, List<CompanionContextItem> notes) {
+        this(title, description, courseProgram, subjectPlans, notes, null);
+    }
+
+    public CompanionGenerationContext withRouting(LlmRouting value) {
+        return new CompanionGenerationContext(title, description, courseProgram, subjectPlans, notes, value);
+    }
     public CompanionGenerationContext {
         subjectPlans = subjectPlans == null ? List.of() : List.copyOf(subjectPlans);
         notes = notes == null ? List.of() : List.copyOf(notes);

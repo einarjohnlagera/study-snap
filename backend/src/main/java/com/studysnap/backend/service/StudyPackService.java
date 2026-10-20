@@ -1,5 +1,6 @@
 package com.studysnap.backend.service;
 
+import com.studysnap.backend.service.model.LlmRouting;
 import com.studysnap.backend.config.StudySnapProperties;
 import com.studysnap.backend.dto.BulkGenerationFailureReason;
 import com.studysnap.backend.dto.ConfirmTextRequest;
@@ -139,7 +140,7 @@ public class StudyPackService {
         StudyPackGenerationContext generationContext = generationContextResolver.resolve(ownerUserId, requestedSourceNote);
         GeneratedStudyPackContent generated = llmStudyPackService.generateStudyPack(
                 normalizedText,
-                generationContext
+                generationContext.withRouting(LlmRouting.tiered(ownerUserId))
         );
         NoteEntity sourceNote = requestedSourceNote == null
                 ? createGeneratedNote(ownerUserId, normalizedText, generated, generationContext.courseProgram())
@@ -395,7 +396,7 @@ public class StudyPackService {
         StudyPackGenerationContext generationContext = generationContextResolver.resolve(ownerUserId, null);
         GeneratedStudyPackContent generated = llmStudyPackService.generateStudyPack(
                 normalizedText,
-                generationContext
+                generationContext.withRouting(LlmRouting.tiered(ownerUserId))
         );
         NoteEntity generatedNote = createGeneratedNote(ownerUserId, normalizedText, generated, generationContext.courseProgram());
         StudyPackEntity saved = saveStudyPack(
@@ -447,7 +448,7 @@ public class StudyPackService {
         StudyPackGenerationContext generationContext = generationContextResolver.resolve(ownerUserId, null);
         GeneratedStudyPackContent generated = llmStudyPackService.generateStudyPack(
                 normalizedText,
-                generationContext
+                generationContext.withRouting(LlmRouting.tiered(ownerUserId))
         );
         NoteEntity generatedNote = createGeneratedNote(ownerUserId, normalizedText, generated, generationContext.courseProgram());
         StudyPackEntity saved = saveStudyPack(
@@ -718,9 +719,10 @@ public class StudyPackService {
         entity.setKeyConcepts(generated.keyConcepts());
         entity.setQuiz(generated.quiz());
         entity.setOcrConfidence(ocrConfidence);
-        entity.setModelTier(planType != null && planType.isPaid() ? ModelTier.PREMIUM : ModelTier.FREE);
-        entity.setModelUsed(Optional.ofNullable(generated.modelUsed())
-                .orElse(properties.getSettings().getModelFree()));
+        entity.setModelTier(generated.resolvedModelTier() != null
+                ? generated.resolvedModelTier()
+                : planType != null && planType.isPaid() ? ModelTier.PREMIUM : ModelTier.FREE);
+        entity.setModelUsed(Optional.ofNullable(generated.modelUsed()).orElse(generated.modelSent()));
         entity.setInputTokens(generated.inputTokens());
         entity.setOutputTokens(generated.outputTokens());
         entity.setCachedInputTokens(generated.cachedInputTokens());
@@ -861,7 +863,7 @@ public class StudyPackService {
             // has been persisted yet, which is what makes "new content beside an old pack" unreachable.
             GeneratedStudyPackContent generated = llmStudyPackService.generateStudyPack(
                     sourceText,
-                    generationContext
+                    generationContext.withRouting(LlmRouting.tiered(ownerUserId))
             );
             StudyPackEntity saved = studyPackGenerationTransactionOperations.execute(status -> {
                 NoteEntity sourceNote = noteRepository.findByIdAndOwnerUserId(noteId, ownerUserId)

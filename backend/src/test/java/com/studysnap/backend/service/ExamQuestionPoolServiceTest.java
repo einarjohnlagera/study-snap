@@ -8,6 +8,7 @@ import com.studysnap.backend.entity.StudyPackEntity;
 import com.studysnap.backend.repository.ExamQuestionPoolRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
 import com.studysnap.backend.service.model.StudyPackGenerationContext;
+import com.studysnap.backend.service.model.LlmRouting;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -516,7 +517,7 @@ class ExamQuestionPoolServiceTest {
                 any(),
                 anyInt(),
                 anyString(),
-                eq(context),
+                eq(context.withRouting(LlmRouting.interactiveQuiz())),
                 any()
         )).thenReturn(buildQuiz(poolSize));
 
@@ -559,7 +560,7 @@ class ExamQuestionPoolServiceTest {
         when(studyPackRepository.findById(studyPackId)).thenReturn(Optional.of(studyPack));
         when(generationContextResolver.resolveForStudyPack(userId, studyPack)).thenReturn(context);
         when(quizGenerationService.generateLongExamParallel(
-                anyString(), anyString(), any(), any(), anyInt(), anyString(), eq(context), any()))
+                anyString(), anyString(), any(), any(), anyInt(), anyString(), eq(context.withRouting(LlmRouting.interactiveQuiz())), any()))
                 .thenReturn(buildQuiz(properties.getPricing().getLongExamPoolSize()));
 
         service.generatePoolAsync(poolId);
@@ -616,7 +617,7 @@ class ExamQuestionPoolServiceTest {
         when(studyPackRepository.findById(studyPackId)).thenReturn(Optional.of(studyPack));
         when(generationContextResolver.resolveForStudyPack(userId, studyPack)).thenReturn(context);
         when(quizGenerationService.generateLongExamParallel(
-                anyString(), anyString(), any(), any(), anyInt(), anyString(), eq(context), any()))
+                anyString(), anyString(), any(), any(), anyInt(), anyString(), eq(context.withRouting(LlmRouting.interactiveQuiz())), any()))
                 .thenReturn(buildQuiz(properties.getPricing().getLongExamPoolSize()));
 
         service.generatePoolAsync(poolId);
@@ -749,14 +750,14 @@ class ExamQuestionPoolServiceTest {
         when(studyPackRepository.findById(studyPackId)).thenReturn(Optional.of(studyPack));
         when(generationContextResolver.resolveForStudyPack(userId, studyPack)).thenReturn(context);
         when(quizGenerationService.generateBoardExamQuiz(
-                anyString(), anyString(), any(), any(), anyInt(), anyString(), eq(context)
+                anyString(), anyString(), any(), any(), anyInt(), anyString(), eq(context.withRouting(LlmRouting.interactiveQuiz()))
         )).thenReturn(buildQuiz(12));
 
         service.generatePoolAsync(poolId);
 
         ArgumentCaptor<List<String>> disallowed = ArgumentCaptor.forClass(List.class);
         verify(quizGenerationService, org.mockito.Mockito.times(2)).generateBoardExamQuiz(
-                anyString(), anyString(), any(), disallowed.capture(), anyInt(), anyString(), eq(context));
+                anyString(), anyString(), any(), disallowed.capture(), anyInt(), anyString(), eq(context.withRouting(LlmRouting.interactiveQuiz())));
         assertThat(disallowed.getAllValues()).hasSize(2);
         assertThat(disallowed.getAllValues())
                 .allSatisfy(batch -> assertThat(batch).contains("What is the moment arm?"));

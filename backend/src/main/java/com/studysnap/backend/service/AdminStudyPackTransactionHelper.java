@@ -1,5 +1,6 @@
 package com.studysnap.backend.service;
 
+import com.studysnap.backend.service.model.LlmRouting;
 import com.studysnap.backend.dto.QuizItem;
 import com.studysnap.backend.entity.NoteEntity;
 import com.studysnap.backend.entity.QuickReviewSessionMode;
@@ -65,7 +66,7 @@ public class AdminStudyPackTransactionHelper {
 
             generationContextResolver.assertGenerationReady(note);
             StudyPackGenerationContext context = buildContext(note);
-            String newSummary = llmStudyPackService.regenerateSummary(note.getContent(), context);
+            String newSummary = llmStudyPackService.regenerateSummary(note.getContent(), context.withRouting(LlmRouting.tiered(currentPack.getOwnerUserId())));
             currentPack.setSummary(newSummary);
             currentPack.setGenerationStamp(currentPack.getGenerationStamp() + 1);
             studyPackRepository.save(currentPack);
@@ -135,7 +136,7 @@ public class AdminStudyPackTransactionHelper {
 
             generationContextResolver.assertGenerationReady(note);
             StudyPackGenerationContext context = buildContext(note);
-            GeneratedStudyPackContent generated = llmStudyPackService.generateStudyPack(note.getContent(), context);
+            GeneratedStudyPackContent generated = llmStudyPackService.generateStudyPack(note.getContent(), context.withRouting(LlmRouting.tiered(currentPack.getOwnerUserId())));
             currentPack.setQuiz(generated.quiz());
             studyPackRepository.save(currentPack);
             // Atomic — see StudyPackRepository.bumpQuizStamp's Javadoc.

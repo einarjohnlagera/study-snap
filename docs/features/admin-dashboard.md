@@ -20,6 +20,21 @@ Provide an internal, mostly read-only Admin Dashboard for monitoring product usa
 - Non-admin users must not be able to use admin endpoints.
 - Frontend should redirect authenticated non-admin users away from `/admin`.
 
+## Official curation cost monitoring
+
+ADMIN accounts receive a monthly in-app alert when the tracked Official Study Pack generation estimate
+reaches its configured threshold (default USD $10.00). This is a read-only monitoring signal, not a
+spending cap. The alert says: "This estimate covers Study Pack generation only. It excludes note
+generation from topics, template seeding, summary regeneration and quiz repair. Check the OpenAI billing
+dashboard for total spend." ADMIN note-from-topic generation, both single and bulk, routes to premium
+and persists no tokens.
+
+Known limits: share-link creation, owner reassignment, and title, subject and tag edits advance
+`updated_at` and re-count a pack's original tokens (over-count). An ADMIN remix copies the source
+pack's tokens into a new pack without an LLM call (over-count). Tokens from failed or retried attempts
+are not persisted (under-count). A repair or summary regeneration does not advance `updated_at`, so it
+is not counted at all.
+
 ## Admin v1 Scope
 
 Keep Admin v1 simple and internal:
@@ -156,3 +171,7 @@ Reuse existing data sources where possible:
 - Admin note-authoring surfaces use the shared Note Editor and Bulk Generate forms, plus Note Detail's inline metadata panel for notes that already have a Study Pack. All three expose optional Domain Context and Authored Depth selects; the values apply to the saved note or every note in the batch and drive generation through `StudyPackGenerationContextResolver`.
 - Revenue numbers are estimates for internal monitoring, not accounting-grade reporting.
 - Admin Dashboard should support dark mode and remain usable on smaller screens, but it is primarily desktop-oriented.
+
+# Generation model routing (v0.174.0)
+
+Admin summary regeneration uses the note/pack owner's current tier. Malformed-quiz repair resolves the pack owner's current tier inside the async repair task, with FREE fallback if that owner is missing. Repair replaces only the quiz: the pack keeps its original `model_used` and `model_tier`, a known limitation.

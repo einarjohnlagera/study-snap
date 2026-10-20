@@ -20,6 +20,31 @@ import java.util.Optional;
 import java.util.UUID;
 
 public interface StudyPackRepository extends JpaRepository<StudyPackEntity, UUID> {
+    interface MonthlyCurationTokens {
+        String getModelUsed();
+        Long getInputTokens();
+        Long getCachedInputTokens();
+        Long getOutputTokens();
+    }
+
+    /** updated_at is set with the token columns on both initial generation and in-place regeneration. */
+    @Query(value = """
+            select sp.model_used as "modelUsed",
+                   coalesce(sum(sp.input_tokens), 0) as "inputTokens",
+                   coalesce(sum(sp.cached_input_tokens), 0) as "cachedInputTokens",
+                   coalesce(sum(sp.output_tokens), 0) as "outputTokens"
+            from study_packs sp
+            join users u on u.id = sp.owner_user_id
+            where u.role = 'ADMIN'
+              and sp.updated_at >= :monthStart
+              and sp.updated_at < :nextMonthStart
+              and sp.status = 'DONE'
+            group by sp.model_used
+            """, nativeQuery = true)
+    List<MonthlyCurationTokens> sumAdminGenerationTokensByModel(
+            @Param("monthStart") OffsetDateTime monthStart,
+            @Param("nextMonthStart") OffsetDateTime nextMonthStart);
+
     interface NoteSummary {
         UUID getNoteId();
         String getSummary();

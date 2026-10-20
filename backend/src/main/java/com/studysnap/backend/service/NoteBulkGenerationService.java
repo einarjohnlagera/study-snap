@@ -1,5 +1,6 @@
 package com.studysnap.backend.service;
 
+import com.studysnap.backend.service.model.LlmRouting;
 import com.studysnap.backend.dto.BulkGenerateNotesRequest;
 import com.studysnap.backend.dto.BulkGenerateNotesResponse;
 import com.studysnap.backend.dto.AddNoteCollectionItemsRequest;
@@ -355,7 +356,7 @@ public class NoteBulkGenerationService {
                         ownerUserId,
                         context
                 ).content()
-                : generateAdminContent(item.topic(), context);
+                : generateAdminContent(item.topic(), context, ownerUserId);
         content = replaceGeneratedHeading(content, item.topic());
 
         NoteResponse note = noteService.create(
@@ -436,9 +437,9 @@ public class NoteBulkGenerationService {
         }
     }
 
-    private String generateAdminContent(String topic, StudyPackGenerationContext context) {
+    private String generateAdminContent(String topic, StudyPackGenerationContext context, UUID ownerUserId) {
         contentModerationService.validateOrThrow(topic);
-        return llmStudyPackService.generateNoteFromTopic(topic, context);
+        return llmStudyPackService.generateNoteFromTopic(topic, context.withRouting(LlmRouting.tiered(ownerUserId)));
     }
 
     private String replaceGeneratedHeading(String content, String topic) {

@@ -339,7 +339,8 @@ class QuickReviewAdaptivePracticeServiceTest {
                 eq(List.of("Old Concept")),
                 any(),
                 eq(5),
-                any()
+                org.mockito.ArgumentMatchers.argThat(context ->
+                        com.studysnap.backend.service.model.LlmRouting.interactiveQuiz().equals(context.routing()))
         );
     }
 
@@ -1129,6 +1130,12 @@ class QuickReviewAdaptivePracticeServiceTest {
                 f.collectionId.toString(), f.userId, "collection-detail");
 
         verify(userUsageService, times(1)).incrementAdaptiveQuizGeneration(eq(f.userId), any());
+        ArgumentCaptor<StudyPackGenerationContext> routedContexts =
+                ArgumentCaptor.forClass(StudyPackGenerationContext.class);
+        verify(quizGenerationService, times(3)).generateAdaptivePracticeQuiz(
+                any(), any(), any(), any(), any(), anyInt(), routedContexts.capture());
+        assertThat(routedContexts.getAllValues()).allSatisfy(context -> assertThat(context.routing())
+                .isEqualTo(com.studysnap.backend.service.model.LlmRouting.interactiveQuiz()));
     }
 
     @Test
@@ -1961,6 +1968,11 @@ class QuickReviewAdaptivePracticeServiceTest {
                     Collection<UUID> requested = invocation.getArgument(1);
                     return packs.stream().filter(pack -> requested.contains(pack.getNoteId())).toList();
                 });
+        for (StudyPackEntity pack : packs) {
+            lenient().when(generationContextResolver.resolveForStudyPack(userId, pack))
+                    .thenReturn(new StudyPackGenerationContext(
+                            LearnerLevel.COLLEGE, "Engineering", pack.getSubject(), List.of()));
+        }
         lenient().when(quickReviewSessionRepository.findByUserIdAndSessionModeAndStatusInOrderByCreatedAtDesc(
                         eq(userId), eq(QuickReviewSessionMode.ADAPTIVE), any()))
                 .thenReturn(List.of());

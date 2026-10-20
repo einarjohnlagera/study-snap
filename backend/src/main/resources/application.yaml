@@ -166,8 +166,10 @@ studysnap:
     max-notes-chars: ${MAX_NOTES_CHARS_FREE:12000}
     max-image-bytes: ${MAX_IMAGE_BYTES:5000000}
     quiz-questions-free: ${QUIZ_QUESTIONS_FREE:5}
-    model-free: ${LLM_MODEL_FREE:gpt-4.1-mini}
-    model-premium: ${LLM_MODEL_PREMIUM:gpt-4.1}
+    model-free: ${LLM_MODEL_FREE:gpt-6-luna}
+    model-premium: ${LLM_MODEL_PREMIUM:gpt-6.1-sol}
+    model-interactive-quiz: ${LLM_MODEL_INTERACTIVE_QUIZ:gpt-4.1-mini}
+    model-paid-interactive: ${LLM_MODEL_PAID_INTERACTIVE:gpt-4.1}
     model-critique: ${LLM_MODEL_CRITIQUE:gpt-4.1-mini}
     prompt-dir: ${LLM_PROMPT_DIR:prompts/study-pack-v1}
   ocr:
@@ -574,6 +576,23 @@ studysnap:
   notifications:
     cleanup-cron: ${NOTIFICATION_CLEANUP_CRON:0 15 * * * *}
     retention-days: ${NOTIFICATION_RETENTION_DAYS:90}
+  curation-cost-alert:
+    enabled: ${CURATION_COST_ALERT_ENABLED:true}
+    threshold-usd: ${CURATION_COST_ALERT_THRESHOLD_USD:10.00}
+    schedule-cron: ${CURATION_COST_ALERT_CRON:0 30 * * * *}
+    model-prices:
+      "[gpt-6.1-sol]":
+        input: 2.00
+        output: 10.00
+      "[gpt-6-luna]":
+        input: 0.10
+        output: 0.50
+      "[gpt-4.1]":
+        input: 2.00
+        output: 8.00
+      "[gpt-4.1-mini]":
+        input: 0.40
+        output: 1.60
   security:
     google:
       client-id: ${GOOGLE_CLIENT_ID:}

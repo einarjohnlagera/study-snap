@@ -5377,3 +5377,44 @@ change; the profile-load fix is backend-only. Both audited (direct trace + a col
 for the Goal-adoption fix) before merging. A `[CHECKPOINT — due Render deploy + 7 days]` on whether
 the fixes actually stop the Hikari long-hold traces is tracked in `ROADMAP.md`'s Backlog Index, not
 yet readable (not yet merged to `main`). Full scope in `RELEASES.md`.
+
+**Kicked off 2026-10-07, signed off 2026-10-08.** `v0.167.0 — Study Journey Purpose` is **Released** on
+`releases/v0.167.0`, cut from `main` after `v0.166.0` merged as #1479 and tagged. **Activated the
+parked "Study Journey Purpose / Learner Goal" architecture discovery**
+(`docs/claude-plans/study-journey-purpose-learner-goal-discovery-brief.md`) — owner-confirmed as the
+next release candidate 2026-10-07. **Scope expanded 2026-10-08, owner decision, after the
+investigation (§11, all 12 questions, companion decision file
+`docs/claude-plans/study-journey-purpose-learner-goal-discovery-decision.md`) completed.** Q1 is
+resolved as **Candidate A (Journey terminology keyed to the Journey's own nature, not the viewer's
+`ProfileType` — labeling only; `resolvePlanPremiumExamMode`/`EXAM_MODES.md` stay untouched, since
+changing the terminal-mode CTA would violate the locked per-mode audience contract) + Candidate B
+(a missing exam-goal picker; true multi-goal support explicitly deferred — only 2 production users
+show the pattern it would serve) + a Civil Engineering `exam_goal_slug` fold-in (owner-confirmed)**.
+Shipped via Codex prompt + inline audit (commits `22584379`, `1dd1c80c`), found and fixed a real
+pre-ship privacy leak (public collection page inheriting a private parent's classification) and an
+N+1 query during the pre-commit audit. **A one-scoped-cold-agent falsification pass ran before
+signoff (two independent triggers fired: an authorization/privacy boundary moved, and a defect was
+found-and-fixed in the same session) and confirmed all 10 checked claims, including both audit
+fixes — nothing found that blocks the release.** Full scope and the falsification pass's non-blocking
+follow-ups in `RELEASES.md`.
+
+**Kicked off 2026-10-09, signed off 2026-10-09.** `v0.168.0 — Free Quota, Fairly Metered` is
+**Released** on `releases/v0.168.0`, cut from `main` after `v0.167.0` merged as #1481 and tagged.
+**Fixed a confirmed production defect**, found by a same-day product health audit
+(`docs/claude-findings/2026-10-08-product-health-funnel-audit.md`) and independently confirmed by a
+concurrent session: `StudyPackUsageService.resolveUsage`'s `max()` floor counted free note
+copies/remixes the same as paid Study Pack generations, incorrectly blocking 76 real users' real
+generation quota. **The owner initially wanted the full remaining Study Journey Purpose architecture
+(Degree catalog, multi-goal, Exam Hubs, Public Note discovery) in this release; each was checked live
+against production and found not ready** — Degree Journey Phase C needs 2 published Years (0 exist),
+multi-goal's checkpoint population is unchanged at 2 users, CE's Exam Hub stays Product-UX-deferred,
+and Public Note discovery needs its own fresh decision per the original brief's anti-drift. **Scope
+narrowed to the quota fix alone, by owner decision 2026-10-09, after the sequencing argument that
+every one of those four items would drive MORE adoption — the exact behavior that trips this same
+bug.** Fix (PR #1482, `0ce371a3`): drop the floor, trust the tracked generation counter alone
+(verified safe by enumerating all 3 `StudyPackEntity` construction sites in the backend). Spend
+exposure derived from real production token averages (~$2.08/month at full utilization) rather than
+the audit's abstract token figure; owner decided to ship uncapped. **Falsification pass run via Codex
+(`codex exec`, owner request) against an isolated clone, 7/8 claims confirmed, 1 refuted and fixed**
+(PR #1483, `ad6caa8c`): a regression-guard test's name overclaimed what it verified; corrected to
+document the real (structural, not runtime) guarantee. Full scope in `RELEASES.md`.

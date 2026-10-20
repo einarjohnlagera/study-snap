@@ -1,5 +1,6 @@
 package com.studysnap.backend.service;
 
+import com.studysnap.backend.service.model.LlmRouting;
 import com.studysnap.backend.config.StudySnapProperties;
 import com.studysnap.backend.dto.GeneratedQuizResponse;
 import com.studysnap.backend.dto.MultiNoteQuizDocxExportRequest;
@@ -128,7 +129,7 @@ public class GeneratedQuizService {
                     note.getContent(),
                     disallowedQuestions,
                     questionCount,
-                    generationContext
+                    generationContext.withRouting(LlmRouting.interactiveQuiz())
             );
             List<QuizItem> uniqueQuestions = QuizDeduplicationUtils.uniqueQuestions(
                     generatedQuestions,

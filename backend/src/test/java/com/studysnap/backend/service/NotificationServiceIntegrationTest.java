@@ -90,6 +90,27 @@ class NotificationServiceIntegrationTest {
     }
 
     @Test
+    void curationAlertCustomKeyDeduplicatesAcrossRunsButAllowsTheNextMonth() {
+        UUID recipientId = UUID.randomUUID();
+        NotificationService.NotificationDelivery delivery = new NotificationService.NotificationDelivery(
+                recipientId, NotificationType.CURATION_COST_ALERT, "unused", "Cost alert", "Tracked scope",
+                null, null, null);
+        String octoberKey = "curation-cost-alert:2026-10:10.00";
+        String novemberKey = "curation-cost-alert:2026-11:10.00";
+
+        notificationService.deliver(delivery, octoberKey);
+        notificationService.deliver(delivery, octoberKey);
+        notificationService.deliver(delivery, novemberKey);
+
+        assertThat(jdbcTemplate.queryForObject(
+                "select count(*) from notifications where recipient_user_id = ?", Integer.class, recipientId))
+                .isEqualTo(2);
+        assertThat(jdbcTemplate.queryForList(
+                "select dedup_key from notifications where recipient_user_id = ?", String.class, recipientId))
+                .containsExactlyInAnyOrder(octoberKey, novemberKey);
+    }
+
+    @Test
     void deliveryMetersDistinguishFreshRowsFromDedupConflicts() {
         SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
         NotificationService meteredService = new NotificationService(notificationRepository, meterRegistry);

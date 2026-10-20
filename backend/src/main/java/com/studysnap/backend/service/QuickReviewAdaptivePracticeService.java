@@ -1,5 +1,6 @@
 package com.studysnap.backend.service;
 
+import com.studysnap.backend.service.model.LlmRouting;
 import com.studysnap.backend.config.StudySnapProperties;
 import com.studysnap.backend.dto.AdaptivePracticeAnswerRequest;
 import com.studysnap.backend.dto.AdaptivePracticeAnswerResponse;
@@ -249,7 +250,7 @@ public class QuickReviewAdaptivePracticeService {
                 focusConcepts,
                 disallowedQuestions,
                 questionCount,
-                generationContext
+                generationContext.withRouting(LlmRouting.interactiveQuiz())
             );
             List<QuizItem> adaptiveQuiz = QuizDeduplicationUtils.uniqueQuestions(
                 generatedQuiz,
@@ -515,7 +516,7 @@ public class QuickReviewAdaptivePracticeService {
             disallowed.addAll(QuizDeduplicationUtils.toNormalizedQuestionSetFromStrings(excludedForSource));
             List<QuizItem> generated = quizGenerationService.generateAdaptivePracticeQuiz(
                     pack.getTitle(), pack.getSummary(), getKeyConcepts(pack), concepts, excludedForSource,
-                    base + (index < remainder ? 1 : 0), buildQuizGenerationContext(userId, pack));
+                    base + (index < remainder ? 1 : 0), buildQuizGenerationContext(userId, pack).withRouting(LlmRouting.interactiveQuiz()));
             List<QuizItem> unique = QuizDeduplicationUtils.uniqueQuestions(generated, disallowed).stream()
                     .map(item -> item.withSourceStudyPackId(pack.getId().toString()))
                     .toList();

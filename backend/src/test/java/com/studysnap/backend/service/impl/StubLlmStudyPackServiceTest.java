@@ -5,6 +5,7 @@ import com.studysnap.backend.dto.CompanionSection;
 import com.studysnap.backend.dto.QuizItem;
 import com.studysnap.backend.service.model.CompanionGenerationContext;
 import com.studysnap.backend.service.model.GeneratedChallengeQuizContent;
+import com.studysnap.backend.service.model.LlmRouting;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -15,6 +16,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 class StubLlmStudyPackServiceTest {
 
     private final StubLlmStudyPackService service = new StubLlmStudyPackService();
+
+    @Test
+    void studyTipAcceptsExplicitInteractiveRoute() {
+        assertThat(service.generateQuickReviewStudyTip(List.of("ATP"), LlmRouting.interactiveQuiz()))
+                .isEqualTo(service.generateQuickReviewStudyTip(List.of("ATP")));
+    }
 
     @Test
     void generateCompanion_returnsOnlyRequestedSections() {

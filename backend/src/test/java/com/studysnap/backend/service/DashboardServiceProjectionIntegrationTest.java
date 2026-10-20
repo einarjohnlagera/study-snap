@@ -543,7 +543,8 @@ class DashboardServiceProjectionIntegrationTest {
                 mock(com.studysnap.backend.repository.NoteCollectionItemRepository.class),
                 mock(com.studysnap.backend.repository.CourseProgramCatalogRepository.class),
                 mock(StudyPackQuizMasteryService.class),
-                mock(StudyPackGenerationContextResolver.class)
+                mock(StudyPackGenerationContextResolver.class),
+                org.mockito.Mockito.mock(com.studysnap.backend.service.PublicLibraryDiscoveryRankingCache.class)
         );
     }
 

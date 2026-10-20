@@ -1,5 +1,6 @@
 package com.studysnap.backend.service;
 
+import com.studysnap.backend.service.model.LlmRouting;
 import com.studysnap.backend.config.StudySnapProperties;
 import com.studysnap.backend.dto.LongExamCompleteRequest;
 import com.studysnap.backend.dto.LongExamMasteryReportResponse;
@@ -1163,7 +1164,7 @@ public class LongExamService {
                         sourceDisallowedQuestions,
                         sourceNoteRef.questionCount(),
                         difficulty,
-                        generationContext,
+                        generationContext.withRouting(LlmRouting.interactiveQuiz()),
                         llmParallelTaskExecutor
                 );
                 List<QuizItem> uniqueGeneratedQuiz = QuizDeduplicationUtils.uniqueQuestions(generatedQuiz, disallowedQuestions);
