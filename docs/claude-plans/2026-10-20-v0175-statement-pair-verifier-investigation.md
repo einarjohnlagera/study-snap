@@ -397,6 +397,13 @@ checker. In that case the cross-provider option (decision 4, future) becomes the
 
 ### 10.2 Acceptance criteria and evaluation cost (follow-up 2)
 
+**Superseded (2026-10-20):** the criteria below are replaced by Part 4 of `docs/claude-plans/2026-10-20-v0175-statement-pair-verifier-wording-and-pass-rules.md`.
+- It counts against the 78 non-caveat items.
+- It adds a gray-zone rule.
+- It splits the evaluation into two stages.
+
+The cost table here still stands.
+
 **Criteria.** §7's A1–A9 stand. A4 is now split, and three new groups are added for the +5 rule and
 replacements. **All are stated before any run:**
 
@@ -418,12 +425,14 @@ replacements. **All are stated before any run:**
 | V: verifier, Sol and Luna, about 160 items plus 3 repeats of the hard cases | about 80 per model | Sol $1.2–1.8; Luna about $0.10 |
 | P: +5 batches, 40 per model with the rule, plus 10 per model baseline | 100 | Sol about $0.85 (5 questions is about 1/3 of a $0.05 start); Luna about $0.07 |
 | R: replacements, about 40 per generator model, triggered from the eval's rejected items | 80 | Sol about $0.40; Luna about $0.02 |
-| **Total** | | **about $2.6–3.2. Requested cap: $3.50,** with one owner-run command per leg, each with its own stop |
+| **Total** | | ~~about $2.6–3.2, cap $3.50~~ **Superseded:** the real gold set batches 1–2 items per call. Stage 1 alone is $1.0–3.0 (cap request $3.20) and both stages about $2.4–4.4. See Part 7 of the wording doc |
 
 The blind quality reviews (P3, R1r) use cold Claude agents, at no OpenAI cost. As before, the raw items stay
 in git-ignored folders.
 
 ### 10.3 The exact +5 prompt change, for review (follow-up 3)
+
+**Superseded (2026-10-20):** the wording to approve is in Parts 1–2 of `docs/claude-plans/2026-10-20-v0175-statement-pair-verifier-wording-and-pass-rules.md`. Part 2 batches every rejected item into one replacement call, rather than one call per item.
 
 **Where it goes:**
 - It's a second `developer` message, added **only** in `generateMoreChallengeQuiz` (+5), after the standard
@@ -451,6 +460,8 @@ in git-ignored folders.
 one-constant revert.
 
 ### 10.4 How replacements preserve the learning objective and difficulty (follow-up 4)
+
+**Superseded (2026-10-20):** the wording to approve is in Parts 1–2 of `docs/claude-plans/2026-10-20-v0175-statement-pair-verifier-wording-and-pass-rules.md`. Part 2 batches every rejected item into one replacement call, rather than one call per item.
 
 **Context it gets:** the replacement call reuses the original batch's full context (`retryInternallyInconsistentQuestion`,
 `OpenAiLlmStudyPackService:2600`, which deep-copies the batch's input messages): the same summary, key
