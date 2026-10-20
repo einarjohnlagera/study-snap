@@ -1,7 +1,7 @@
-# v0.175.0 R1 acceptance run: statement-pair guard on `gpt-4.1-mini` and `gpt-6-luna`
+# v0.175.0 R1 acceptance run: statement-pair guard on `gpt-4.1-mini`, `gpt-6-luna` and `gpt-6.1-sol`
 
-**Result: mini FAILS the pre-stated pass rule; Luna PASSES it as a smoke test (31 of 31, see the Luna arm
-section).** On mini, blind checkers judged 3 of 32 delivered statement-pair keys wrong: 2 clearly, 1 arguably.
+**Result: mini FAILS the pre-stated pass rule; Luna (31 of 31) and Sol (28 of 28) PASS it as smoke tests (see
+their arm sections).** On mini, blind checkers judged 3 of 32 delivered statement-pair keys wrong: 2 clearly, 1 arguably.
 These are not the error class R1 targets. In all three, the model's own verdicts, its explanation and its
 key agree with each other, and the verdict itself is factually wrong. The wording doc (§2) and owner
 requirement B anticipated exactly this.
@@ -82,8 +82,7 @@ choices in standard order.
 1. **Accept R1 as merged** and record mini's factual-verdict errors as a known limitation.
    - Item 6 then moves FREE Challenge to Luna, which **now passes with R1** (Luna arm below), and Plus/Pro
      Challenge to Sol.
-   - **Sol is untested with R1.** Its 0 of 42 in C7 predates R1's schema change, which applies to every model.
-     A Sol arm of this run is available on request; it needs separate paid approval.
+   - **Sol now passes with R1** (Sol arm below). Its C7 result of 0 of 42 predated R1's schema change.
    - **What stays on mini after item 6:** multi-note starts stay pinned until item 5 ships (`RELEASES.md`
      item 6 seam), along with every other quiz mode. Mini's factual-verdict errors therefore remain live on
      multi-note Challenge, and in today's production, until then.
@@ -136,6 +135,46 @@ choices in standard order.
   - **This confirms the earlier figure; it is not new.** The 2026-10-19 targeted start benchmark measured Luna
     at a 46–49 s p50 on the same sizes, which is why item 6 is queued after item 2's background preparation.
   - **R1 added no measurable latency on Luna:** zero retries fired.
+
+## Sol arm (owner-approved, cap raised to about $1.75, 2026-10-20)
+
+**Result: the pass rule PASSES on Sol, as a smoke test only (requirement E).** Blind checkers agreed with 28
+of 28 delivered statement-pair keys.
+
+- **What ran:** the same 30 single-note starts on `gpt-6.1-sol`, through the real path. Output is in
+  `backend/target/llm-benchmark/r1-sol/`.
+- **Cost:** $1.448 (conservative meter; the stop was $1.40, overshot by one call). The meter total across all
+  three arms is about $1.73, inside the raised cap. The billed amount is expected to be lower, as in earlier
+  runs.
+
+| | Value |
+|---|---|
+| Starts | 30 run, 28 delivered |
+| Spend-stopped | 1 (S12 run 10): not a real start, excluded |
+| Failed starts | 1 (S10 run 7): `HTTP_ERROR`, a network-level "Operation timed out" after 19 s, not the 180 s read timeout. In production this start fails with no quota charge, per R1's start minimum |
+| Delivered | **348 of 348** requested on the 28 completed starts |
+| Rejections | statement-pair 0, H4 0 |
+| Whole-call retries | 0 |
+| Statement-pair items | 28: 15 "Only Statement 1", 6 "Only Statement 2", 5 "Both", 2 "Neither"; all in standard choice order |
+| Start latency, p50 by cell | 104.6 s (S15), 70.0 s (S12), 54.8 s (S10) |
+| Start latency, worst | 150.2 s; the S15 p90 was 146.7 s |
+
+- **Blind check:**
+  - Same method and the same reviewer prompt: two cold Opus reviewers, 14 items each, seed 1513, key withheld.
+  - The result was 28 of 28 agreed, and no item was marked ambiguous.
+  - The reviewers noted caveats on five items, all still judged as keyed:
+    - S-13: near-ambiguous on open-traverse accuracy.
+    - S-14 and S-18: the source note is silent.
+    - S-10: July 4 wording.
+    - S-21: the note's Golden Ratio claim is debated by scholars.
+- **Explanations:** the release implementor read all 28 (not blind). None contradicts its key.
+- **What it means:**
+  - This is consistent with C7's 0 of 42 for Sol before R1, so R1's schema change did not break Sol's keys.
+  - Combined with C7, Sol stands at 0 of 70. That is still a smoke test: the 95% upper bound for 0 of 28 alone
+    is about 10%.
+- **Latency:** this matches the 2026-10-19 targeted start benchmark (Sol S15 p50 106.7 s, max 160.5 s, with
+  one 180 s timeout then). Plus/Pro starts on Sol take one to two and a half minutes, which only item 2's
+  background preparation makes acceptable.
 
 **Nothing has reached learners.** R1 is merged into `releases/v0.175.0` only, which cannot reach `main` until
 after v0.174.0's #1512.
