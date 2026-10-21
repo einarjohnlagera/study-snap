@@ -9,6 +9,7 @@ import { useEffect } from "react";
 import { CheckCircle2, Sparkles, TrendingUp, Trophy } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { ResponsiveActionLink, type ActionIconName } from "@/components/ui/action-button";
+import { CHALLENGE_PREPARATION_COPY } from "@/lib/challenge-quiz-preparation-copy";
 import {
   trackAnalyticsEvent,
   type ContinueStudyingResponse,
@@ -182,7 +183,9 @@ export function ContinueSpotlight({ recommendation, profileType }: Readonly<Cont
   const cardTone = getCardTone(recommendation);
   const ToneIcon = cardTone.icon;
   const resumePresentation = resolveResumePresentation(recommendation.resumeType, profileType);
-  const actionLabel = recommendation.reason === "SUGGESTED_CHALLENGE"
+  const actionLabel = recommendation.resumeType === "CHALLENGE" && recommendation.preparedNotStarted
+    ? CHALLENGE_PREPARATION_COPY.dashboardLabel
+    : recommendation.reason === "SUGGESTED_CHALLENGE"
     ? "Try Challenge Quiz"
     : resumePresentation.label;
   const noteTitle = recommendation.noteTitle?.trim() || "Untitled note";

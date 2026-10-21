@@ -429,7 +429,7 @@ class ChallengeQuizBankConcurrencyIntegrationTest {
             releaseSweep.countDown();
             sweep.get(8, TimeUnit.SECONDS);
             org.assertj.core.api.Assertions.assertThatThrownBy(() -> start.get(8, TimeUnit.SECONDS))
-                    .hasCauseInstanceOf(com.studysnap.backend.exception.ChallengeQuizSessionNotInProgressException.class);
+                    .hasCauseInstanceOf(com.studysnap.backend.exception.PreparedChallengeExpiredException.class);
         } finally {
             releaseSweep.countDown();
             ((Advised) studyPackRepository).removeAdvice(pauseSweepAfterPackLock);

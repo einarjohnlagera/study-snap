@@ -12,6 +12,8 @@ import com.studysnap.backend.dto.LongExamSourceNoteRef;
 import com.studysnap.backend.dto.QuizItem;
 import com.studysnap.backend.exception.AppException;
 import com.studysnap.backend.exception.ChallengeQuizSessionNotInProgressException;
+import com.studysnap.backend.exception.ChallengePreparationInProgressException;
+import com.studysnap.backend.exception.ChallengePreparationFailedException;
 import com.studysnap.backend.exception.InvalidPreparedChallengeDiscardException;
 import com.studysnap.backend.exception.PreparedChallengeExpiredException;
 import com.studysnap.backend.exception.InvalidBoardExamSourceException;
@@ -439,6 +441,55 @@ class ChallengeQuizServiceTest {
         assertThat(row.getStatus()).isEqualTo(QuickReviewSessionStatus.FORFEITED);
         assertThat(row.isQuotaExempt()).isTrue();
         verify(userUsageService, never()).incrementChallengeQuizGeneration(any(), any());
+    }
+
+    @Test
+    void startQuizGeneratingReturnsPreparationInProgressWithoutWriting() {
+        assertStartQuizStatusRejectedWithoutWrite(QuickReviewSessionStatus.GENERATING, true,
+                ChallengePreparationInProgressException.class);
+    }
+
+    @Test
+    void startQuizFailedReturnsPreparationFailedWithoutWriting() {
+        assertStartQuizStatusRejectedWithoutWrite(QuickReviewSessionStatus.FAILED, true,
+                ChallengePreparationFailedException.class);
+    }
+
+    @Test
+    void startQuizForfeitedUnstartedReturnsExpiredWithoutWriting() {
+        assertStartQuizStatusRejectedWithoutWrite(QuickReviewSessionStatus.FORFEITED, true,
+                PreparedChallengeExpiredException.class);
+    }
+
+    @Test
+    void startQuizCompletedReturnsExistingNotInProgressWithoutWriting() {
+        assertStartQuizStatusRejectedWithoutWrite(QuickReviewSessionStatus.COMPLETED, false,
+                ChallengeQuizSessionNotInProgressException.class);
+    }
+
+    @Test
+    void startQuizForfeitedAfterStartReturnsExistingNotInProgressWithoutWriting() {
+        assertStartQuizStatusRejectedWithoutWrite(QuickReviewSessionStatus.FORFEITED, false,
+                ChallengeQuizSessionNotInProgressException.class);
+    }
+
+    private void assertStartQuizStatusRejectedWithoutWrite(QuickReviewSessionStatus status, boolean prepared,
+            Class<? extends RuntimeException> expected) {
+        UUID userId = UUID.randomUUID();
+        StudyPackEntity pack = buildStudyPack(UUID.randomUUID(), UUID.randomUUID(), userId);
+        ChallengeQuizStartResponse response = prepareFullyBankedQuiz(userId, pack);
+        QuickReviewSessionEntity row = savedSessionsById.get(UUID.fromString(response.sessionId()));
+        row.setStatus(status);
+        row.setSessionState(QuizSessionStateUtils.withPreparedNotStarted(row.getSessionState(), prepared));
+        Map<String, Object> originalState = new LinkedHashMap<>(row.getSessionState());
+
+        assertThatThrownBy(() -> challengeQuizService.startQuiz(response.sessionId(), userId))
+                .isInstanceOf(expected);
+        assertThat(row.getStatus()).isEqualTo(status);
+        assertThat(row.getSessionState()).isEqualTo(originalState);
+        assertThat(row.isQuotaExempt()).isTrue();
+        verify(userUsageService, never()).incrementChallengeQuizGeneration(any(), any());
+        verify(userUsageService, never()).incrementMultiNoteGeneration(any(), any());
     }
 
     @Test

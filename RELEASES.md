@@ -182,8 +182,8 @@ never edit this file.
   - **Known limitation:** regeneration of an additional source note in a multi-note quiz is not caught
     before Start (item 5).
 
-- **Item 2b: prepared-quiz expiry, stuck-preparation sweep and collision choice** (branch
-  `feat/v0.175.0-item2b-sweeps-and-collision`).
+- **Item 2b: prepared-quiz expiry, stuck-preparation sweep and collision choice** (PR #1519, merged as
+  `f086851f`).
   - **7-day expiry of an unstarted quiz.** It is enforced three ways: lazily (forfeit and proceed), by a
     sweep, and under lock in `startQuiz`, which returns 409 `PREPARED_CHALLENGE_EXPIRED`. Claims are released
     and quota is untouched. A reload never shows an expired quiz as ready. The sweep selects candidates by
@@ -201,13 +201,50 @@ never edit this file.
     the frontend collision handling, which is item 3's.
   - **⚠️ Release dependency: the client does not yet act on `collision`.** Until item 3 lands, a learner
     with an unstarted Challenge cannot reach Board Exam or Redo Missed on that note. **v0.175.0 must not merge
-    to `main` without item 3.**
+    to `main` without item 3.** ✅ Satisfied by item 3 (Challenge preparation screens).
   - **Known limitations:**
     - The 20-minute stuck bound counts from `createdAt`, so a preparation queued under heavy load can be
       failed. That costs no quota.
     - A double-submitted Board Exam discard gets a 409 on the second request.
     - Claim release is scoped to the session's primary pack. That is correct today, because multi-note
       starts do not claim from the bank; item 5 replaces it with a session-scoped release.
+
+- **Item 3: Challenge preparation screens, with Part B folded in** (branch
+  `feat/v0.175.0-item3-preparation-screens`).
+  - **The learner flow.** The ordinary Challenge setup button reads **Prepare Quiz**. It leads to "Getting
+    your quiz ready" (with Continue reviewing and no Stay button), which moves to "Your quiz is ready!" on
+    its own, and the timer starts only on **Start Quiz**.
+  - **The other screens.** Preparation failed (Try Again), expired (Prepare New Quiz, which creates nothing
+    until clicked) and the collision choice (Resume, or Start something else, which re-sends the original
+    request with `discardPreparedSessionId`).
+  - **Every route in lands on the right screen.** Reload, the dashboard card ("Open your prepared quiz"),
+    mode selection and Redo Missed all do, and no path reaches running without a successful `start-quiz`.
+  - **Board Exam is unchanged,** with regression tests.
+  - **Part B** (the 2026-10-21 plan): `startQuiz` now returns a separate code per case:
+    - 409 `PREPARATION_IN_PROGRESS` while generating;
+    - 409 `PREPARATION_FAILED`;
+    - 409 `PREPARED_CHALLENGE_EXPIRED` for a quiz forfeited before it started.
+
+    A completed or started quiz keeps `SESSION_NOT_IN_PROGRESS`. The page maps the first two to the
+    preparation and failure screens.
+  - **Copy:** "Counts toward your monthly quiz limit when you press Start Quiz. Leaving before you start
+    doesn't use an attempt." (ordinary Challenge only), plus the collision and dashboard strings. **New
+    strings are pending owner sign-off.**
+  - **Verification.**
+    - Backend `./mvnw clean install`: 2,860 tests, 0 failures, including a MockMvc 409 test.
+    - Frontend: 2,723 tests; `tsc`, lint and `next build` clean.
+    - The new `lib/api-challenge-quiz.test.ts` pins the request shapes.
+    - Three Codex reviews and three fix rounds; 9 findings fixed and 1 dismissed. The last fix round had
+      full checks but no further review.
+  - **Known limitations:**
+    - During an API outage the preparation screen keeps polling and shows no error. Continue reviewing
+      always works.
+    - Multi-note Prepare Quiz is still one synchronous request (item 5).
+  - **⚠️ Deploy ordering.** The new frontend calls `start-quiz` and the new codes, and the old frontend
+    cannot drive prepared sessions. Backend and frontend must ship together in the release merge; that
+    statement is owed at signoff.
+  - **Review note.** `startQuiz` has now been edited by 2a, 2b and item 3, with item 5 to come. It is a
+    named input to the scoped cold review at signoff.
 
 ## v0.174.0 - Enhanced Generation
 
