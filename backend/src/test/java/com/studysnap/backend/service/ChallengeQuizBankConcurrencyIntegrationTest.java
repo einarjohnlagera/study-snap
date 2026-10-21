@@ -1305,7 +1305,7 @@ class ChallengeQuizBankConcurrencyIntegrationTest {
         var generated = java.util.stream.IntStream.range(0, 12)
                 .mapToObj(index -> question("Ready notification " + index)).toList();
         when(quizGenerationService.generateChallengeQuiz(any(), any(), any(), any(),
-                any(Integer.class), any(), any()))
+                any(Integer.class), any(), any(), any(), any()))
                 .thenReturn(GeneratedChallengeQuizContent.withoutUsage(generated));
 
         var response = challengeQuizService.startSession(fixture.packId.toString(), fixture.userId, null);

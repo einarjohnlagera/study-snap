@@ -383,9 +383,9 @@ never edit this file.
     replacement round; anything still rejected is omitted. Every failure is closed: a timeout, a rejected
     submission, a missing verdict, an unparseable pair or blank note text rejects the question, and no
     paid attempt starts after the shared deadline.
-  - **Two switches, both default false:** `STATEMENT_PAIR_VERIFIER_TEMPLATE_SEED_ENABLED` (Official template
-    seeding) and `STATEMENT_PAIR_VERIFIER_LIVE_START_ENABLED` (single-note Challenge preparation). Production
-    behaviour is unchanged until the owner turns one on.
+  - **Three switches, all default false:** `STATEMENT_PAIR_VERIFIER_TEMPLATE_SEED_ENABLED` (Official template
+    seeding), `STATEMENT_PAIR_VERIFIER_LIVE_START_ENABLED` (single-note Challenge preparation), and
+    `STATEMENT_PAIR_PLUS5_EXCLUSION_ENABLED` (+5 exclusion rule). Production behavior is unchanged on merge.
   - **Prompts.** The signed verifier prompts are byte-identical to the Stage 1 harness, and a parity test
     guards them. Template fields are filled in one pass, so note text is inserted literally.
   - **Verification.** `./mvnw clean install`: 2,870 tests, 0 failures. Seven Codex reviews and six fix
@@ -397,8 +397,11 @@ never edit this file.
     - placeholder expansion;
     - the +5 leak count including retries;
     - replacement questions with a single statement marker.
-  - **⚠️ Merge gate:** this merges only after the owner-approved Stage 2 paid run passes (cap of $3.50 or
-    less). Stage 1 licenses proposing activation for Official question-set creation only.
+  - **Merge gate (owner update, 2026-10-21):** #1520 may merge with all three switches OFF after code review
+    and release checks. No checker activation is authorized; the +5 exclusion switch remains OFF.
+  - **Stage 2 record:** Part 15 of `docs/claude-plans/2026-10-20-v0175-statement-pair-verifier-wording-and-pass-rules.md`
+    records P1 pass; P2 KILL as computed with the timeout confound; an inconclusive paired diagnostic;
+    R1r concept GRAY at 82.5%; and R3r pass.
   - **Activation scope:** multi-note Challenge starts are not checked (`ChallengeVerifierPath.NONE`) until
     item 5 moves them to background preparation with a question-count floor.
   - **Known limitation:** verifier calls are logged under the `CRITIQUE` route, and cost attribution uses

@@ -201,6 +201,7 @@ studysnap:
     statement-pair-verifier:
       template-seed-enabled: ${STATEMENT_PAIR_VERIFIER_TEMPLATE_SEED_ENABLED:false}
       live-start-enabled: ${STATEMENT_PAIR_VERIFIER_LIVE_START_ENABLED:false}
+      plus5-exclusion-enabled: ${STATEMENT_PAIR_PLUS5_EXCLUSION_ENABLED:false}
       primary-model: ${STATEMENT_PAIR_VERIFIER_PRIMARY_MODEL:gpt-6.1-sol}
       secondary-model: ${STATEMENT_PAIR_VERIFIER_SECONDARY_MODEL:gpt-6-luna}
       wait-timeout-seconds: ${STATEMENT_PAIR_VERIFIER_WAIT_TIMEOUT_SECONDS:390}

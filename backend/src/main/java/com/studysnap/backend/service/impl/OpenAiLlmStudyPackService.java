@@ -1024,7 +1024,8 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
                 .replace("{COMPUTATION_GUIDANCE}", buildComputationGuidance(quantitativeContext, QuizMode.CHALLENGE))
                 .replace("{TIME_EXPECTATION}", buildTimeExpectation(QuizMode.CHALLENGE));
         input.add(buildTextMessage("developer", challengeQuizDeveloperPrompt));
-        if (more && promptResources.challengeMoreNoStatementPairDeveloperPrompt() != null
+        if (more && properties.getLlm().getStatementPairVerifier().isPlus5ExclusionEnabled()
+                && promptResources.challengeMoreNoStatementPairDeveloperPrompt() != null
                 && !promptResources.challengeMoreNoStatementPairDeveloperPrompt().isBlank()) {
             input.add(buildTextMessage("developer", promptResources.challengeMoreNoStatementPairDeveloperPrompt()));
         }

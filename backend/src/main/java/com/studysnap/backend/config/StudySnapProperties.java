@@ -103,6 +103,7 @@ public class StudySnapProperties {
     public static class StatementPairVerifier {
         private boolean templateSeedEnabled = false;
         private boolean liveStartEnabled = false;
+        private boolean plus5ExclusionEnabled = false;
         private String primaryModel = "gpt-6.1-sol";
         private String secondaryModel = "gpt-6-luna";
         // Two 180 s read-timeout attempts plus a 30 s margin.

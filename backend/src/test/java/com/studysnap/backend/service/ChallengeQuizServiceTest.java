@@ -1343,6 +1343,10 @@ class ChallengeQuizServiceTest {
                 verify(challengeQuizQuestionBankService).persistGeneratedQuestionsUnclaimed(
                         eq(userId), eq(studyPackId), any(UUID.class), eq(LearnerLevel.COLLEGE), eq(0L), any());
             }
+        } else {
+            verify(analyticsService).trackEvent(userId,
+                    AnalyticsEventType.CHALLENGE_QUIZ_PREPARATION_READY, studyPackId, Map.of(
+                            "sessionId", prepared.getId().toString(), "mode", "challenge"));
         }
     }
 

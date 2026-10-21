@@ -136,7 +136,7 @@ class StatementPairStage2Benchmark {
                             generatorCalls, results, blind, blindKey, appender);
                     if (meter.stopped()) break;
                     if (i < config.baselineBatches()) {
-                        runP(config, sample, "baseline", withoutMoreRule(prompts), properties, client, meter,
+                        runP(config, sample, "baseline", prompts, properties, client, meter,
                                 generatorCalls, results, blind, blindKey, appender);
                     }
                 } else {
@@ -196,6 +196,7 @@ class StatementPairStage2Benchmark {
             StudySnapProperties properties, RestClient client, MeteringInterceptor meter,
             AtomicInteger generatorCalls, List<ObjectNode> results, List<ObjectNode> blind,
             List<ObjectNode> blindKey, ListAppender<ILoggingEvent> appender) {
+        properties.getLlm().getStatementPairVerifier().setPlus5ExclusionEnabled("rule".equals(arm));
         String id = sample.id() + "-" + arm;
         meter.begin(id, "P");
         int beforeCalls = generatorCalls.get();
@@ -284,22 +285,6 @@ class StatementPairStage2Benchmark {
         return new OpenAiLlmStudyPackService(properties, MAPPER, client, prompts,
                 new LlmModelRouter(properties, mock(SubscriptionService.class), mock(UserRepository.class)),
                 new SimpleAsyncTaskExecutor("stage2-verifier-stub-"));
-    }
-
-    private static OpenAiPromptResources withoutMoreRule(OpenAiPromptResources p) {
-        return new OpenAiPromptResources(p.systemPrompt(), p.developerPromptTemplate(), p.responseSchema(),
-                p.noteGenerationSystemPrompt(), p.noteGenerationDeveloperPromptTemplate(),
-                p.companionSystemPrompt(), p.companionDeveloperPromptTemplate(), p.challengeQuizSystemPrompt(),
-                p.challengeQuizDeveloperPromptTemplate(), p.boardExamSystemPrompt(), p.boardExamDeveloperPromptTemplate(),
-                p.teacherQuizSystemPrompt(), p.teacherQuizDeveloperPromptTemplate(),
-                p.adaptivePracticeSystemPrompt(), p.adaptivePracticeDeveloperPromptTemplate(),
-                p.interviewPracticeSystemPrompt(), p.interviewPracticeDeveloperPromptTemplate(),
-                p.interviewCritiqueSystemPrompt(), p.interviewCritiqueDeveloperPromptTemplate(),
-                p.askCompanionSystemPrompt(), p.askCompanionDeveloperPromptTemplate(),
-                p.longExamSystemPrompt(), p.longExamDeveloperPromptTemplate(),
-                p.statementPairVerifierSystemPrompt(), p.statementPairVerifierDeveloperPrompt(),
-                p.statementPairVerifierUserPrompt(), p.statementPairVerifierSchema(),
-                p.statementPairReplacementDeveloperPrompt(), p.statementPairReplacementUserPrompt(), "");
     }
 
     private static ObjectNode initialQuestions(Case sample) {

@@ -47,12 +47,16 @@ class StatementPairStage2BenchmarkTest {
         Path out = Files.createTempDirectory(ROOT, "p-stage2-out-");
         Files.writeString(input, caseLine(false));
         AtomicInteger calls = new AtomicInteger();
-        ClientHttpRequestFactory factory = stubFactory(5, calls);
+        List<MockClientHttpRequest> requests = new ArrayList<>();
+        ClientHttpRequestFactory factory = stubFactory(5, calls, requests);
         StatementPairStage2Benchmark.run(config("P", input, out, BigDecimal.ONE), factory);
         JsonNode summary = mapper.readTree(Files.readString(out.resolve("summary.json")));
         assertThat(summary.path("rows").asInt()).isEqualTo(2);
         assertThat(summary.path("meteredCalls").asInt()).isEqualTo(2);
         assertThat(calls).hasValue(2);
+        assertThat(requests).hasSize(2);
+        assertThat(requests.get(0).getBodyAsString()).contains("For this batch only");
+        assertThat(requests.get(1).getBodyAsString()).doesNotContain("For this batch only");
         List<String> resultLines = Files.readAllLines(out.resolve("results.jsonl"));
         assertThat(resultLines).hasSize(2);
         assertThat(mapper.readTree(resultLines.getFirst()).path("returned").asInt()).isEqualTo(5);
@@ -124,6 +128,11 @@ class StatementPairStage2BenchmarkTest {
     }
 
     private ClientHttpRequestFactory stubFactory(int count, AtomicInteger calls) throws Exception {
+        return stubFactory(count, calls, new ArrayList<>());
+    }
+
+    private ClientHttpRequestFactory stubFactory(int count, AtomicInteger calls,
+            List<MockClientHttpRequest> requests) throws Exception {
         ObjectNode payload = mapper.createObjectNode();
         for (int i = 0; i < count; i++) {
             payload.withArray("questions").addObject().put("question", "What happens when water freezes? " + i)
@@ -138,6 +147,7 @@ class StatementPairStage2BenchmarkTest {
         return (uri, method) -> {
             calls.incrementAndGet();
             MockClientHttpRequest request = new MockClientHttpRequest(method, uri);
+            requests.add(request);
             request.setResponse(new MockClientHttpResponse(bytes, HttpStatus.OK));
             return request;
         };

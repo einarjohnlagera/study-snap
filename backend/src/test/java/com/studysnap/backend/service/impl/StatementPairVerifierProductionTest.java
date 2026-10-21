@@ -60,6 +60,7 @@ class StatementPairVerifierProductionTest {
         OpenAiLlmStudyPackService service = service(body -> response(generated(pair()), HttpStatus.OK));
         assertThat(properties.getLlm().getStatementPairVerifier().isLiveStartEnabled()).isFalse();
         assertThat(properties.getLlm().getStatementPairVerifier().isTemplateSeedEnabled()).isFalse();
+        assertThat(properties.getLlm().getStatementPairVerifier().isPlus5ExclusionEnabled()).isFalse();
         assertThat(properties.getLlm().getStatementPairVerifier().getWaitTimeoutSeconds()).isEqualTo(390);
         List<QuizItem> result = start(service);
         List<QuizItem> template = service.generateChallengeQuiz("Water", "Water summary", List.of("Water"),
@@ -664,7 +665,7 @@ class StatementPairVerifierProductionTest {
     }
 
     @Test
-    void moreHasExclusionOnlyAndNeverCallsVerifierEvenWithSwitchesOn() throws Exception {
+    void moreWithoutExclusionStillCountsLeaksAndNeverCallsVerifier() throws Exception {
         properties.getLlm().getStatementPairVerifier().setLiveStartEnabled(true);
         properties.getLlm().getStatementPairVerifier().setTemplateSeedEnabled(true);
         OpenAiLlmStudyPackService service = service(body -> response(generated(pair()), HttpStatus.OK));
@@ -679,7 +680,7 @@ class StatementPairVerifierProductionTest {
                     List.of(), List.of(), 1, "medium", context()).quizItems();
             assertThat(result).hasSize(1);
             assertThat(requests).hasSize(1);
-            assertThat(requests.getFirst().path("input").toString()).contains("For this batch only");
+            assertThat(requests.getFirst().path("input").toString()).doesNotContain("For this batch only");
             assertThat(appender.list).extracting(ILoggingEvent::getFormattedMessage)
                     .anySatisfy(message -> assertThat(message).contains("statementPairLeaked=1"));
         } finally {
@@ -687,6 +688,18 @@ class StatementPairVerifierProductionTest {
             logger.setLevel(priorLevel);
             appender.stop();
         }
+    }
+
+    @Test
+    void moreWithExclusionSwitchSendsRule() throws Exception {
+        properties.getLlm().getStatementPairVerifier().setPlus5ExclusionEnabled(true);
+        OpenAiLlmStudyPackService service = service(body -> response(generated(pair()), HttpStatus.OK));
+
+        service.generateMoreChallengeQuiz("Water", "Water summary", List.of("Water"),
+                List.of(), List.of(), 1, "medium", context());
+
+        assertThat(requests).hasSize(1);
+        assertThat(requests.getFirst().path("input").toString()).contains("For this batch only");
     }
 
     @Test
