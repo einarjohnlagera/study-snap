@@ -1,10 +1,11 @@
-/** Pending owner sign-off for the new collision, dashboard and monthly-limit wording. */
+/** Owner-approved wording, 2026-10-21 (docs/claude-plans/2026-10-21-owner-decisions-v0175-open-questions-and-priorities.md, Q4). */
 export const CHALLENGE_PREPARATION_COPY = {
   collisionTitle: "You already have a quiz ready",
-  collisionGeneratingTitle: "You already have a quiz being prepared",
-  collisionBody: "Resume it, or start something else instead. Starting something else discards the prepared quiz, and it won't count toward your monthly quiz limit.",
+  collisionGeneratingTitle: "Your quiz is still being prepared",
+  collisionBody: "You can return to your quiz or start something else. If you start something else, your unstarted quiz will be discarded without using a monthly attempt.",
   collisionResume: "Resume your prepared quiz",
   collisionReplace: "Start something else",
   dashboardLabel: "Open your prepared quiz",
-  monthlyLimit: "Counts toward your monthly quiz limit when you press Start Quiz. Leaving before you start doesn't use an attempt.",
+  monthlyLimit: "This quiz counts toward your monthly limit only when you press Start Quiz. Leaving before you start won't use an attempt.",
+  redoMissedMonthlyLimit: "Redo Missed Questions doesn't count toward your monthly quiz limit.",
 } as const;

@@ -2464,7 +2464,7 @@ export default function ChallengeQuizPage() {
                 </div>
                 <div className="space-y-1">
                   <p className="font-medium text-foreground">Monthly limit</p>
-                  <p>{hasRedoMissedEntryQuery ? "Counts toward your monthly quiz limit." : PREPARATION_COPY.monthlyLimit}</p>
+                  <p>{hasRedoMissedEntryQuery ? PREPARATION_COPY.redoMissedMonthlyLimit : PREPARATION_COPY.monthlyLimit}</p>
                 </div>
               </div>
             </div>
