@@ -724,7 +724,7 @@ class ChallengeQuizBankConcurrencyIntegrationTest {
         CountDownLatch inGeneration = new CountDownLatch(1);
         CountDownLatch releaseGeneration = new CountDownLatch(1);
         when(quizGenerationService.generateChallengeQuiz(any(), any(), any(), any(),
-                any(Integer.class), any(), any())).thenAnswer(invocation -> {
+                any(Integer.class), any(), any(), any(), any())).thenAnswer(invocation -> {
             inGeneration.countDown();
             assertThat(releaseGeneration.await(8, TimeUnit.SECONDS)).isTrue();
             return GeneratedChallengeQuizContent.withoutUsage(java.util.stream.IntStream.range(0, 12)

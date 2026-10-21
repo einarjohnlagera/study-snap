@@ -653,7 +653,7 @@ class ChallengeQuizServiceTest {
         stubChallengeStartDependencies(userId, pack.getId(), pack, PlanType.FREE);
         when(generationContextResolver.resolveForStudyPack(userId, pack)).thenReturn(
                 new StudyPackGenerationContext(LearnerLevel.COLLEGE, "Engineering", pack.getSubject(), List.of()));
-        when(quizGenerationService.generateChallengeQuiz(any(), any(), any(), any(), anyInt(), any(), any()))
+        when(quizGenerationService.generateChallengeQuiz(any(), any(), any(), any(), anyInt(), any(), any(), any(), any()))
                 .thenAnswer(invocation -> {
                     QuickReviewSessionEntity old = savedSessionsById.values().iterator().next();
                     challengeQuizService.startRedoMissedSession(pack.getId().toString(), userId, old.getId().toString());
@@ -3406,6 +3406,7 @@ class ChallengeQuizServiceTest {
         assertThat(persisted.getStatus()).isEqualTo(QuickReviewSessionStatus.IN_PROGRESS);
         assertThat(persistedQuiz(persisted)).hasSize(12);
         verify(llmStudyPackService, never()).generateChallengeQuiz(any(), any(), any(), any(), anyInt(), any(), any());
+        verify(llmStudyPackService, never()).generateChallengeQuiz(any(), any(), any(), any(), anyInt(), any(), any(), any(), any());
     }
 
     @Test
