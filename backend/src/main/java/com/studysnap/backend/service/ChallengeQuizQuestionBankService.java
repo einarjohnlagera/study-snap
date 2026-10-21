@@ -1,6 +1,7 @@
 package com.studysnap.backend.service;
 
 import com.studysnap.backend.dto.QuizItem;
+import com.studysnap.backend.config.StudySnapProperties;
 import com.studysnap.backend.entity.ChallengeQuizQuestionBankEntity;
 import com.studysnap.backend.entity.LearnerLevel;
 import com.studysnap.backend.exception.ChallengeQuizQuestionBankUnavailableException;
@@ -8,6 +9,7 @@ import com.studysnap.backend.exception.NotEnoughMissedChallengeQuestionsExceptio
 import com.studysnap.backend.repository.ChallengeQuizQuestionBankRepository;
 import com.studysnap.backend.util.QuizDeduplicationUtils;
 import com.studysnap.backend.util.QuizSessionReviewUtils;
+import com.studysnap.backend.util.QuizValidationUtils;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
@@ -31,6 +33,8 @@ public class ChallengeQuizQuestionBankService {
     private static final String OUTCOME_INCORRECT = "INCORRECT";
 
     private final ChallengeQuizQuestionBankRepository challengeQuizQuestionBankRepository;
+    private final OfficialChallengeQuizTemplateResolver templateResolver;
+    private final StudySnapProperties properties;
 
     public void invalidateForStudyPack(UUID studyPackId) {
         challengeQuizQuestionBankRepository.bulkDeleteAllForStudyPack(studyPackId);
@@ -63,20 +67,27 @@ public class ChallengeQuizQuestionBankService {
                     sessionId
             );
             List<QuizItem> claimed = new ArrayList<>(count);
+            List<ChallengeQuizQuestionBankEntity> claimedRows = new ArrayList<>(count);
+            Set<String> templateKeys = templateResolver.templateQuestionKeys(studyPackId);
+            OffsetDateTime cutoff = properties.getChallengeQuiz().getStatementPairLegacyCutoff();
             Set<String> selectedKeys = new LinkedHashSet<>(excluded);
             for (ChallengeQuizQuestionBankEntity candidate : candidates) {
+                if (isExcludedLegacyStatementPair(candidate, templateKeys, cutoff)) {
+                    continue;
+                }
                 String questionKey = candidate.getQuestionKey();
                 if (questionKey == null || questionKey.isBlank() || !selectedKeys.add(questionKey)) {
                     continue;
                 }
                 candidate.setClaimedSessionId(sessionId);
+                claimedRows.add(candidate);
                 claimed.add(candidate.getQuestion());
                 if (claimed.size() == count) {
                     break;
                 }
             }
             if (!claimed.isEmpty()) {
-                challengeQuizQuestionBankRepository.saveAll(candidates);
+                challengeQuizQuestionBankRepository.saveAll(claimedRows);
             }
             return List.copyOf(claimed);
         } catch (RuntimeException exception) {
@@ -161,12 +172,14 @@ public class ChallengeQuizQuestionBankService {
             LearnerLevel effectiveCurriculumLevel
     ) {
         try {
-            return challengeQuizQuestionBankRepository.countIncorrectEligibleQuestions(
+            Set<String> templateKeys = templateResolver.templateQuestionKeys(studyPackId);
+            OffsetDateTime cutoff = properties.getChallengeQuiz().getStatementPairLegacyCutoff();
+            return challengeQuizQuestionBankRepository.findIncorrectClaimable(
                     userId,
                     studyPackId,
                     learnerLevelName(effectiveCurriculumLevel),
                     OUTCOME_INCORRECT
-            );
+            ).stream().filter(row -> !isExcludedLegacyStatementPair(row, templateKeys, cutoff)).count();
         } catch (RuntimeException exception) {
             log.warn("Challenge Quiz missed-question count failed for userId={}, studyPackId={}", userId, studyPackId, exception);
             return 0L;
@@ -186,13 +199,15 @@ public class ChallengeQuizQuestionBankService {
             int minimumCount
     ) {
         try {
+            Set<String> templateKeys = templateResolver.templateQuestionKeys(studyPackId);
+            OffsetDateTime cutoff = properties.getChallengeQuiz().getStatementPairLegacyCutoff();
             List<ChallengeQuizQuestionBankEntity> candidates = challengeQuizQuestionBankRepository
                     .findIncorrectClaimableForUpdate(
                             userId,
                             studyPackId,
                             learnerLevelName(effectiveCurriculumLevel),
                             OUTCOME_INCORRECT
-                    );
+                    ).stream().filter(row -> !isExcludedLegacyStatementPair(row, templateKeys, cutoff)).toList();
             int claimCount = Math.min(count, candidates.size());
             if (claimCount < minimumCount) {
                 throw new NotEnoughMissedChallengeQuestionsException();
@@ -213,9 +228,17 @@ public class ChallengeQuizQuestionBankService {
         }
     }
 
+    static boolean isExcludedLegacyStatementPair(
+            ChallengeQuizQuestionBankEntity row, Set<String> templateKeys, OffsetDateTime cutoff
+    ) {
+        return row.getQuestion() != null
+                && QuizValidationUtils.isStatementPair(row.getQuestion().question())
+                && !templateKeys.contains(row.getQuestionKey())
+                && (cutoff == null || (row.getGeneratedAt() != null && row.getGeneratedAt().isBefore(cutoff)));
+    }
+
     public void updateOutcomesAndReleaseClaims(
             UUID userId,
-            UUID studyPackId,
             UUID sessionId,
             List<QuizItem> quiz,
             Map<Integer, Integer> selectedChoices,
@@ -225,7 +248,7 @@ public class ChallengeQuizQuestionBankService {
     ) {
         try {
             List<ChallengeQuizQuestionBankEntity> claimed = challengeQuizQuestionBankRepository
-                    .findByUserIdAndStudyPackIdAndClaimedSessionId(userId, studyPackId, sessionId);
+                    .findByUserIdAndClaimedSessionId(userId, sessionId);
             if (claimed.isEmpty()) {
                 return;
             }
@@ -257,12 +280,12 @@ public class ChallengeQuizQuestionBankService {
         }
     }
 
-    public void releaseClaims(UUID userId, UUID studyPackId, UUID sessionId) {
+    public void releaseClaims(UUID userId, UUID sessionId) {
         try {
             // Run on the caller's connection: a failed generate-more rolls back its own claim write,
             // while a failed start can see and release its still-uncommitted claim immediately.
             // A concurrent bank delete simply makes this targeted UPDATE affect zero rows.
-            challengeQuizQuestionBankRepository.releaseClaims(userId, studyPackId, sessionId);
+            challengeQuizQuestionBankRepository.releaseClaims(userId, sessionId);
         } catch (RuntimeException exception) {
             log.warn("Challenge Quiz question-bank claim release failed for sessionId={}", sessionId, exception);
         }

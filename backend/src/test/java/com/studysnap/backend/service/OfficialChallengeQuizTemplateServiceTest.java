@@ -445,6 +445,8 @@ class OfficialChallengeQuizTemplateServiceTest {
         return new OfficialChallengeQuizTemplateService(
                 questionBankRepository,
                 questionBankService,
+                new OfficialChallengeQuizTemplateResolver(noteRepository, studyPackRepository,
+                        userRepository, questionBankRepository),
                 noteRepository,
                 studyPackRepository,
                 userRepository,

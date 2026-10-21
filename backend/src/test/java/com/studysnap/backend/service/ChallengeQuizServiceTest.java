@@ -344,7 +344,7 @@ class ChallengeQuizServiceTest {
         assertThat(row.getStatus()).isEqualTo(QuickReviewSessionStatus.FAILED);
         assertThat(row.isQuotaExempt()).isTrue();
         verify(challengePreparationFailureHandler).fail(row.getId());
-        verify(challengeQuizQuestionBankService).releaseClaims(userId, packId, row.getId());
+        verify(challengeQuizQuestionBankService).releaseClaims(userId, row.getId());
         verify(userUsageService, never()).incrementChallengeQuizGeneration(any(), any());
     }
 
@@ -363,7 +363,7 @@ class ChallengeQuizServiceTest {
         QuickReviewSessionEntity failed = finishDispatchedChallenge(response);
         assertThat(failed.getStatus()).isEqualTo(QuickReviewSessionStatus.FAILED);
         verify(quizGenerationService).generateChallengeQuiz(any(), any(), any(), any(), anyInt(), any(), any());
-        verify(challengeQuizQuestionBankService).releaseClaims(eq(userId), eq(packId), any());
+        verify(challengeQuizQuestionBankService).releaseClaims(eq(userId), any());
         verify(userUsageService, never()).incrementChallengeQuizGeneration(any(), any());
     }
 
@@ -384,7 +384,7 @@ class ChallengeQuizServiceTest {
         assertThat(failed.getStatus()).isEqualTo(QuickReviewSessionStatus.FAILED);
         assertThat(failed.isQuotaExempt()).isTrue();
         verify(quizGenerationService, times(2)).generateChallengeQuiz(any(), any(), any(), any(), anyInt(), any(), any());
-        verify(challengeQuizQuestionBankService).releaseClaims(eq(userId), eq(packId), any());
+        verify(challengeQuizQuestionBankService).releaseClaims(eq(userId), any());
         verify(userUsageService, never()).incrementChallengeQuizGeneration(any(), any());
     }
 
@@ -423,7 +423,7 @@ class ChallengeQuizServiceTest {
         assertThat(row.isQuotaExempt()).isTrue();
         assertThat(savedSessionsById).hasSize(2);
         assertThat(later.sessionId()).isNotEqualTo(prepared.sessionId());
-        verify(challengeQuizQuestionBankService).releaseClaims(userId, pack.getId(), row.getId());
+        verify(challengeQuizQuestionBankService).releaseClaims(userId, row.getId());
         verify(userUsageService, never()).incrementChallengeQuizGeneration(any(), any());
         verify(analyticsService).trackEvent(eq(userId), eq(AnalyticsEventType.CHALLENGE_QUIZ_PREPARATION_ABANDONED),
                 eq(pack.getId()), org.mockito.ArgumentMatchers.argThat(metadata -> "EXPIRED".equals(metadata.get("reason"))));
@@ -527,7 +527,7 @@ class ChallengeQuizServiceTest {
 
         assertThat(row.getStatus()).isEqualTo(QuickReviewSessionStatus.COMPLETED);
         assertThat(next.sessionId()).isNotEqualTo(previous.sessionId());
-        verify(challengeQuizQuestionBankService, never()).releaseClaims(userId, pack.getId(), row.getId());
+        verify(challengeQuizQuestionBankService, never()).releaseClaims(userId, row.getId());
     }
 
     @Test
@@ -563,7 +563,7 @@ class ChallengeQuizServiceTest {
         assertThat(replacement.sessionId()).isNotEqualTo(prepared.sessionId());
         assertThat(row.getStatus()).isEqualTo(QuickReviewSessionStatus.FORFEITED);
         assertThat(row.isQuotaExempt()).isTrue();
-        verify(challengeQuizQuestionBankService).releaseClaims(userId, pack.getId(), row.getId());
+        verify(challengeQuizQuestionBankService).releaseClaims(userId, row.getId());
         verify(analyticsService).trackEvent(eq(userId), eq(AnalyticsEventType.CHALLENGE_QUIZ_PREPARATION_ABANDONED),
                 eq(pack.getId()), org.mockito.ArgumentMatchers.argThat(metadata -> "DISCARDED".equals(metadata.get("reason"))));
         verify(userUsageService, never()).incrementChallengeQuizGeneration(any(), any());
@@ -602,7 +602,7 @@ class ChallengeQuizServiceTest {
         assertThat(started.sessionId()).isNotEqualTo(prepared.sessionId());
         assertThat(row.getStatus()).isEqualTo(QuickReviewSessionStatus.FORFEITED);
         assertThat(row.isQuotaExempt()).isTrue();
-        verify(challengeQuizQuestionBankService).releaseClaims(userId, pack.getId(), row.getId());
+        verify(challengeQuizQuestionBankService).releaseClaims(userId, row.getId());
         verify(analyticsService).trackEvent(eq(userId),
                 eq(AnalyticsEventType.CHALLENGE_QUIZ_PREPARATION_ABANDONED), eq(pack.getId()),
                 org.mockito.ArgumentMatchers.argThat(metadata -> "DISCARDED".equals(metadata.get("reason"))));
@@ -631,7 +631,7 @@ class ChallengeQuizServiceTest {
         assertThat(redo.sessionId()).isNotEqualTo(prepared.sessionId());
         assertThat(redo.collision()).isNull();
         assertThat(row.getStatus()).isEqualTo(QuickReviewSessionStatus.FORFEITED);
-        verify(challengeQuizQuestionBankService).releaseClaims(userId, pack.getId(), row.getId());
+        verify(challengeQuizQuestionBankService).releaseClaims(userId, row.getId());
         verify(analyticsService).trackEvent(eq(userId),
                 eq(AnalyticsEventType.CHALLENGE_QUIZ_PREPARATION_ABANDONED), eq(pack.getId()),
                 org.mockito.ArgumentMatchers.argThat(metadata -> reason.equals(metadata.get("reason"))));
@@ -666,7 +666,7 @@ class ChallengeQuizServiceTest {
         assertThat(old.isQuotaExempt()).isTrue();
         verify(challengeQuizQuestionBankService).persistGeneratedQuestionsUnclaimed(eq(userId),
                 eq(pack.getId()), eq(old.getId()), any(), any(), any());
-        verify(challengeQuizQuestionBankService, times(2)).releaseClaims(userId, pack.getId(), old.getId());
+        verify(challengeQuizQuestionBankService, times(2)).releaseClaims(userId, old.getId());
         verify(userUsageService, never()).incrementChallengeQuizGeneration(any(), any());
     }
 
@@ -683,7 +683,7 @@ class ChallengeQuizServiceTest {
         QuickReviewSessionEntity row = savedSessionsById.get(UUID.fromString(prepared.sessionId()));
         assertThat(row.getStatus()).isEqualTo(QuickReviewSessionStatus.FORFEITED);
         assertThat(row.isQuotaExempt()).isTrue();
-        verify(challengeQuizQuestionBankService).releaseClaims(userId, pack.getId(), row.getId());
+        verify(challengeQuizQuestionBankService).releaseClaims(userId, row.getId());
         verify(analyticsService).trackEvent(eq(userId), eq(AnalyticsEventType.CHALLENGE_QUIZ_PREPARATION_ABANDONED),
                 eq(pack.getId()), org.mockito.ArgumentMatchers.argThat(metadata -> "STALE".equals(metadata.get("reason"))));
         verify(userUsageService, never()).incrementChallengeQuizGeneration(any(), any());
@@ -725,7 +725,7 @@ class ChallengeQuizServiceTest {
         assertThat(stale.getStatus()).isEqualTo(QuickReviewSessionStatus.FORFEITED);
         assertThat(stale.isQuotaExempt()).isTrue();
         assertThat(next.sessionId()).isNotEqualTo(first.sessionId());
-        verify(challengeQuizQuestionBankService).releaseClaims(userId, pack.getId(), stale.getId());
+        verify(challengeQuizQuestionBankService).releaseClaims(userId, stale.getId());
         verify(analyticsService).trackEvent(eq(userId), eq(AnalyticsEventType.CHALLENGE_QUIZ_PREPARATION_ABANDONED),
                 eq(pack.getId()), org.mockito.ArgumentMatchers.argThat(metadata -> "STALE".equals(metadata.get("reason"))));
     }
@@ -762,7 +762,7 @@ class ChallengeQuizServiceTest {
         assertThat(row.getStatus()).isEqualTo(QuickReviewSessionStatus.FORFEITED);
         assertThat(row.isQuotaExempt()).isTrue();
         assertThat(row.getSessionState()).doesNotContainKey("timerStartedAtEpochSeconds");
-        verify(challengeQuizQuestionBankService).releaseClaims(userId, pack.getId(), row.getId());
+        verify(challengeQuizQuestionBankService).releaseClaims(userId, row.getId());
         verify(analyticsService).trackEvent(eq(userId),
                 eq(AnalyticsEventType.CHALLENGE_QUIZ_PREPARATION_ABANDONED), eq(pack.getId()),
                 org.mockito.ArgumentMatchers.argThat(metadata -> "DISCARDED".equals(metadata.get("reason"))
@@ -785,7 +785,7 @@ class ChallengeQuizServiceTest {
         assertThat(reloaded.sessionId()).isNull();
         assertThat(reloaded.status()).isNull();
         assertThat(row.getStatus()).isEqualTo(QuickReviewSessionStatus.IN_PROGRESS);
-        verify(challengeQuizQuestionBankService, never()).releaseClaims(userId, pack.getId(), row.getId());
+        verify(challengeQuizQuestionBankService, never()).releaseClaims(userId, row.getId());
         verify(analyticsService, never()).trackEvent(eq(userId),
                 eq(AnalyticsEventType.CHALLENGE_QUIZ_PREPARATION_ABANDONED), eq(pack.getId()), any());
     }
@@ -1155,7 +1155,7 @@ class ChallengeQuizServiceTest {
         assertThat(preparedQuiz(response)).containsExactlyInAnyOrderElementsOf(
                 withoutAnswerKeys(withSourceStudyPackId(freshQuiz, studyPackId))
         );
-        verify(challengeQuizQuestionBankService).releaseClaims(userId, studyPackId, expiredSessionId);
+        verify(challengeQuizQuestionBankService).releaseClaims(userId, expiredSessionId);
     }
 
     @ParameterizedTest
@@ -1187,7 +1187,7 @@ class ChallengeQuizServiceTest {
         assertThat(resolved).isEmpty();
         assertThat(completed.getStatus()).isEqualTo(QuickReviewSessionStatus.COMPLETED);
         verify(quickReviewSessionRepository, never()).save(completed);
-        verify(challengeQuizQuestionBankService, never()).releaseClaims(userId, studyPackId, sessionId);
+        verify(challengeQuizQuestionBankService, never()).releaseClaims(userId, sessionId);
     }
 
     @Test
@@ -1288,7 +1288,7 @@ class ChallengeQuizServiceTest {
         QuickReviewSessionEntity failed = finishDispatchedChallenge(response);
         assertThat(failed.getStatus()).isEqualTo(QuickReviewSessionStatus.FAILED);
         verify(userUsageService, never()).incrementChallengeQuizGeneration(any(UUID.class), any(OffsetDateTime.class));
-        verify(challengeQuizQuestionBankService).releaseClaims(eq(userId), eq(studyPackId), any(UUID.class));
+        verify(challengeQuizQuestionBankService).releaseClaims(eq(userId), any(UUID.class));
     }
 
     @ParameterizedTest
@@ -1312,7 +1312,7 @@ class ChallengeQuizServiceTest {
         verify(userUsageService, never()).incrementChallengeQuizGeneration(any(), any());
         verify(userUsageService, never()).incrementMultiNoteGeneration(any(), any());
         if (expected == QuickReviewSessionStatus.FAILED) {
-            verify(challengeQuizQuestionBankService).releaseClaims(eq(userId), eq(studyPackId), any(UUID.class));
+            verify(challengeQuizQuestionBankService).releaseClaims(eq(userId), any(UUID.class));
             if (delivered > 0) {
                 verify(challengeQuizQuestionBankService).persistGeneratedQuestionsUnclaimed(
                         eq(userId), eq(studyPackId), any(UUID.class), eq(LearnerLevel.COLLEGE), eq(0L), any());
@@ -1344,7 +1344,7 @@ class ChallengeQuizServiceTest {
         if (expected == QuickReviewSessionStatus.FAILED) {
             verify(userUsageService, never()).incrementChallengeQuizGeneration(any(), any());
             verify(userUsageService, never()).incrementMultiNoteGeneration(any(), any());
-            verify(challengeQuizQuestionBankService).releaseClaims(eq(userId), eq(primaryId), any(UUID.class));
+            verify(challengeQuizQuestionBankService).releaseClaims(eq(userId), any(UUID.class));
         } else {
             assertThat(response.preparedNotStarted()).isTrue();
             verify(userUsageService, never()).incrementChallengeQuizGeneration(any(), any());
@@ -1688,7 +1688,7 @@ class ChallengeQuizServiceTest {
         assertThat(response.status()).isEqualTo(QuickReviewSessionStatus.GENERATING);
         assertThat(generating.getStatus()).isEqualTo(QuickReviewSessionStatus.GENERATING);
         verify(challengeQuizQuestionBankService, never()).claimIncorrectQuestions(any(), any(), any(), any(), anyInt(), anyInt());
-        verify(challengeQuizQuestionBankService, never()).releaseClaims(any(), any(), any());
+        verify(challengeQuizQuestionBankService, never()).releaseClaims(any(), any());
         verify(quickReviewSessionRepository, never()).save(any(QuickReviewSessionEntity.class));
     }
 
@@ -1744,7 +1744,7 @@ class ChallengeQuizServiceTest {
                 withoutAnswerKeys(withSourceStudyPackId(missedQuestions, studyPackId))
         );
         verify(quickReviewSessionRepository).save(staleOrdinarySession);
-        verify(challengeQuizQuestionBankService).releaseClaims(userId, studyPackId, staleSessionId);
+        verify(challengeQuizQuestionBankService).releaseClaims(userId, staleSessionId);
     }
 
     @Test
@@ -1802,7 +1802,7 @@ class ChallengeQuizServiceTest {
         assertThat(preparedQuiz(response)).containsExactlyInAnyOrderElementsOf(
                 withoutAnswerKeys(withSourceStudyPackId(missedQuestions, studyPackId))
         );
-        verify(challengeQuizQuestionBankService).releaseClaims(userId, studyPackId, staleSessionId);
+        verify(challengeQuizQuestionBankService).releaseClaims(userId, staleSessionId);
     }
 
     @Test
@@ -3562,7 +3562,7 @@ class ChallengeQuizServiceTest {
 
         verify(activityTrackingService).recordActivity(userId, ActivityType.COMPLETED_CHALLENGE_QUIZ, studyPackId);
         verify(challengeQuizQuestionBankService).updateOutcomesAndReleaseClaims(
-                eq(userId), eq(studyPackId), eq(sessionId), any(), any(), any(), any(), any()
+                eq(userId), eq(sessionId), any(), any(), any(), any(), any()
         );
     }
 
@@ -3794,7 +3794,7 @@ class ChallengeQuizServiceTest {
 
         assertThat(response.twiceMissedConcepts()).isEmpty();
         verify(challengeQuizQuestionBankService, never()).updateOutcomesAndReleaseClaims(
-                any(), any(), any(), any(), any(), any(), any(), any()
+                any(), any(), any(), any(), any(), any(), any()
         );
     }
 
@@ -4518,7 +4518,7 @@ class ChallengeQuizServiceTest {
                 .isInstanceOf(ChallengeQuizSessionNotInProgressException.class);
 
         assertThat(session.getStatus()).isEqualTo(QuickReviewSessionStatus.FORFEITED);
-        verify(challengeQuizQuestionBankService).releaseClaims(userId, studyPackId, sessionId);
+        verify(challengeQuizQuestionBankService).releaseClaims(userId, sessionId);
         verify(quizGenerationService, never()).generateMoreChallengeQuiz(any(), any(), any(), any(), any(), anyInt(), any(), any());
     }
 

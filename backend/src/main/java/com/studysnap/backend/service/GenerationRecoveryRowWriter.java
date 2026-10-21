@@ -79,7 +79,7 @@ public class GenerationRecoveryRowWriter {
                 .map(session -> {
                     OffsetDateTime staleSince = PreparedChallengeExpiry.preparedAt(session);
                     session.setStatus(QuickReviewSessionStatus.FORFEITED);
-                    challengeQuizQuestionBankService.releaseClaims(session.getUserId(), session.getStudyPackId(), sessionId);
+                    challengeQuizQuestionBankService.releaseClaims(session.getUserId(), sessionId);
                     quickReviewSessionRepository.save(session);
                     try {
                         analyticsService.trackEvent(session.getUserId(),
@@ -129,7 +129,7 @@ public class GenerationRecoveryRowWriter {
                     session.setStatus(QuickReviewSessionStatus.FAILED);
                     session.setSessionState(QuizSessionStateUtils.withoutPreparationInputs(session.getSessionState()));
                     challengeQuizQuestionBankService.releaseClaims(
-                            session.getUserId(), session.getStudyPackId(), session.getId());
+                            session.getUserId(), session.getId());
                     quickReviewSessionRepository.save(session);
                 });
     }

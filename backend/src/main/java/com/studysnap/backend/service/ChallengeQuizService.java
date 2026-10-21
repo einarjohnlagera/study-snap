@@ -465,7 +465,7 @@ public class ChallengeQuizService {
             trackPreparationEvent(userId, saved, AnalyticsEventType.CHALLENGE_QUIZ_PREPARATION_READY);
             return toStartResponse(saved, studyPack, usedThisMonth, planType);
         } catch (Exception ex) {
-            challengeQuizQuestionBankService.releaseClaims(userId, studyPackId, session.getId());
+            challengeQuizQuestionBankService.releaseClaims(userId, session.getId());
             markSessionFailed(session);
             QuickReviewSessionEntity failed = quickReviewSessionRepository.save(session);
             return toStartResponse(failed, studyPack, usedThisMonth, planType);
@@ -656,7 +656,7 @@ public class ChallengeQuizService {
             }
         }
         if (session.getStatus() != QuickReviewSessionStatus.GENERATING) {
-            challengeQuizQuestionBankService.releaseClaims(preparation.userId(), preparation.studyPackId(), sessionId);
+            challengeQuizQuestionBankService.releaseClaims(preparation.userId(), sessionId);
             return false;
         }
         if (!unchanged || !validCount) {
@@ -1209,7 +1209,6 @@ public class ChallengeQuizService {
         if (MODE_CHALLENGE.equals(extractMode(saved.getSessionState()))) {
             challengeQuizQuestionBankService.updateOutcomesAndReleaseClaims(
                     userId,
-                    saved.getStudyPackId(),
                     saved.getId(),
                     quiz,
                     selectedChoices,
@@ -1358,7 +1357,7 @@ public class ChallengeQuizService {
             markSessionForfeited(session);
             quickReviewSessionRepository.save(session);
             if (MODE_CHALLENGE.equals(extractMode(session.getSessionState()))) {
-                challengeQuizQuestionBankService.releaseClaims(userId, session.getStudyPackId(), session.getId());
+                challengeQuizQuestionBankService.releaseClaims(userId, session.getId());
             }
         }
         return new SimpleMessageResponse(CHALLENGE_QUIZ_SESSION_FORFEITED_MESSAGE);
@@ -1469,7 +1468,7 @@ public class ChallengeQuizService {
                 );
             }
         } catch (RuntimeException exception) {
-            challengeQuizQuestionBankService.releaseClaims(userId, session.getStudyPackId(), session.getId());
+            challengeQuizQuestionBankService.releaseClaims(userId, session.getId());
             throw exception;
         }
 
@@ -1780,7 +1779,7 @@ public class ChallengeQuizService {
 
     private void forfeitPreparedSession(QuickReviewSessionEntity session, UUID userId, String reason) {
         markSessionForfeited(session);
-        challengeQuizQuestionBankService.releaseClaims(userId, session.getStudyPackId(), session.getId());
+        challengeQuizQuestionBankService.releaseClaims(userId, session.getId());
         quickReviewSessionRepository.save(session);
         try {
             analyticsService.trackEvent(userId, AnalyticsEventType.CHALLENGE_QUIZ_PREPARATION_ABANDONED,
@@ -1799,7 +1798,7 @@ public class ChallengeQuizService {
             log.warn("Could not persist stale Challenge Quiz session forfeit for session {}.", session.getId(), exception);
         }
         try {
-            challengeQuizQuestionBankService.releaseClaims(userId, session.getStudyPackId(), session.getId());
+            challengeQuizQuestionBankService.releaseClaims(userId, session.getId());
         } catch (RuntimeException exception) {
             log.warn("Could not release Challenge Quiz claims for stale session {}.", session.getId(), exception);
         }
@@ -1825,7 +1824,7 @@ public class ChallengeQuizService {
             return;
         }
         try {
-            challengeQuizQuestionBankService.releaseClaims(userId, session.getStudyPackId(), session.getId());
+            challengeQuizQuestionBankService.releaseClaims(userId, session.getId());
         } catch (RuntimeException exception) {
             log.warn("Could not release Challenge Quiz claims for expired session {}.", session.getId(), exception);
         }
