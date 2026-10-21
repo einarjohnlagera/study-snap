@@ -916,7 +916,7 @@ describe("ChallengeQuizPage", () => {
       },
     });
     render(<ChallengeQuizPage />);
-    expect(await screen.findByRole("heading", { name: "You already have a quiz being prepared" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Your quiz is still being prepared" })).toBeInTheDocument();
     expect(startRedoMissedChallengeQuizSession).toHaveBeenCalledTimes(1);
     expect(startRedoMissedChallengeQuizSession).toHaveBeenCalledWith("note-1");
   });
@@ -986,7 +986,7 @@ describe("ChallengeQuizPage", () => {
     (getInProgressChallengeQuizSession as jest.Mock).mockResolvedValue(preparationSession("GENERATING"));
     render(<ChallengeQuizPage />);
     expect(await screen.findByRole("heading", { name: "Choose your quiz mode" })).toBeInTheDocument();
-    expect(screen.getByText("You already have a quiz being prepared")).toBeInTheDocument();
+    expect(screen.getByText("Your quiz is still being prepared")).toBeInTheDocument();
     expect(screen.getByText(/Your quiz is being prepared/)).toBeInTheDocument();
     expect(await getModeCard("Board Exam Mode")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Resume" }));
@@ -1019,7 +1019,7 @@ describe("ChallengeQuizPage", () => {
     fireEvent.click(await getModeCard("Board Exam Mode"));
     fireEvent.click(await screen.findByRole("button", { name: /Begin Board Exam/i }));
     fireEvent.click(await screen.findByRole("button", { name: "Start Exam" }));
-    expect(await screen.findByRole("heading", { name: "You already have a quiz being prepared" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Your quiz is still being prepared" })).toBeInTheDocument();
     expect(startChallengeQuizSession).toHaveBeenCalledWith("note-1", { mode: "board_exam" });
   });
 
@@ -1342,7 +1342,7 @@ describe("ChallengeQuizPage", () => {
     expect(await screen.findByRole("heading", { name: "Challenge Quiz Setup" })).toBeInTheDocument();
     expect(screen.getByText("10 minutes. Timer runs until submission or expiration.")).toBeInTheDocument();
     expect(screen.getByText("Recommended based on your recent performance.")).toBeInTheDocument();
-    expect(screen.getByText("Counts toward your monthly quiz limit when you press Start Quiz. Leaving before you start doesn't use an attempt.")).toBeInTheDocument();
+    expect(screen.getByText("This quiz counts toward your monthly limit only when you press Start Quiz. Leaving before you start won't use an attempt.")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "easy" })).not.toBeInTheDocument();
     expect(startChallengeQuizSession).not.toHaveBeenCalled();
   });
