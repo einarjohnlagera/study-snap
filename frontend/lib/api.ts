@@ -4578,6 +4578,39 @@ export async function startPreparedChallengeQuiz(sessionId: string): Promise<Cha
   return parseApiResponse<ChallengeQuizStartResponse>(response, "Could not start Challenge Quiz.");
 }
 
+export type ChallengeQuizSessionStatusResponse = {
+  sessionId: string;
+  studyPackId: string;
+  status: QuizSessionStatus;
+  preparedNotStarted: boolean;
+  mode: ChallengeQuizMode;
+  expired: boolean;
+};
+
+export async function markChallengeQuizReadySeen(sessionId: string): Promise<void> {
+  const response = await fetchWithAuth(
+    `/challenge-quiz/sessions/${sessionId}/ready-seen`,
+    { method: "POST", headers: buildAuthHeaders() }, true,
+  );
+  if (!response.ok) await parseApiResponse(response, "Could not mark quiz notification read.");
+}
+
+export async function getChallengeQuizSessionStatus(sessionId: string): Promise<ChallengeQuizSessionStatusResponse> {
+  const response = await fetchWithAuth(
+    `/challenge-quiz/sessions/${sessionId}/status`,
+    { method: "GET", headers: buildAuthHeaders() }, true,
+  );
+  return parseApiResponse<ChallengeQuizSessionStatusResponse>(response, "Could not load Challenge Quiz status.");
+}
+
+export async function getChallengeQuizSession(sessionId: string): Promise<ChallengeQuizStartResponse> {
+  const response = await fetchWithAuth(
+    `/challenge-quiz/sessions/${sessionId}`,
+    { method: "GET", headers: buildAuthHeaders() }, true,
+  );
+  return parseApiResponse<ChallengeQuizStartResponse>(response, "Could not load Challenge Quiz session.");
+}
+
 export async function getInProgressChallengeQuizSession(
   noteId: string,
 ): Promise<ChallengeQuizStartResponse> {

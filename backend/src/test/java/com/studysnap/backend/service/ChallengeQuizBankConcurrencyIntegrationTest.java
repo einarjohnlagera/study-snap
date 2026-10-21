@@ -43,6 +43,8 @@ import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.BeforeEach;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
+import com.studysnap.backend.service.event.ChallengeQuizReadyEvent;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.data.domain.PageRequest;
@@ -78,6 +80,7 @@ class ChallengeQuizBankConcurrencyIntegrationTest {
     static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:18");
 
     @Autowired JdbcTemplate jdbc;
+    @Autowired ApplicationEventPublisher eventPublisher;
     @Autowired ChallengeQuizService challengeQuizService;
     @Autowired QuickReviewSessionService quickReviewSessionService;
     @Autowired InterviewPracticeService interviewPracticeService;
@@ -1018,6 +1021,105 @@ class ChallengeQuizBankConcurrencyIntegrationTest {
                 where bank.study_pack_id = ? and bank.origin_session_id = session.id
                   and session.status = 'IN_PROGRESS'
                 """, Integer.class, fixture.packId)).isEqualTo(generated.size());
+    }
+
+    @Test
+    @Timeout(15)
+    void asyncReadyNotificationIsCommittedAndDeduplicatedAfterCommit() throws Exception {
+        Fixture fixture = seed(false);
+        jdbc.update("update quick_review_sessions set status = 'COMPLETED', completed_at = now() where id = ?",
+                fixture.sessionId);
+        jdbc.update("delete from challenge_quiz_question_bank where study_pack_id = ?", fixture.packId);
+        var generated = java.util.stream.IntStream.range(0, 12)
+                .mapToObj(index -> question("Ready notification " + index)).toList();
+        when(quizGenerationService.generateChallengeQuiz(any(), any(), any(), any(),
+                any(Integer.class), any(), any()))
+                .thenReturn(GeneratedChallengeQuizContent.withoutUsage(generated));
+
+        var response = challengeQuizService.startSession(fixture.packId.toString(), fixture.userId, null);
+        assertThat(response.status()).isEqualTo(com.studysnap.backend.entity.QuickReviewSessionStatus.GENERATING);
+        runDispatchedChallengeJob();
+        UUID readySessionId = UUID.fromString(response.sessionId());
+        awaitNotification(fixture.userId, readySessionId);
+        assertThat(jdbc.queryForObject("select type from notifications where recipient_user_id = ? and dedup_key = ?",
+                String.class, fixture.userId, "CHALLENGE_QUIZ_READY:" + readySessionId))
+                .isEqualTo("CHALLENGE_QUIZ_READY");
+
+        // Re-run the same completion task: its status guard must leave the ready row intact.
+        runDispatchedChallengeJob();
+        assertThat(jdbc.queryForObject("select status from quick_review_sessions where id = ?",
+                String.class, readySessionId)).isEqualTo("IN_PROGRESS");
+
+        UUID noteId = jdbc.queryForObject("select note_id from study_packs where id = ?", UUID.class, fixture.packId);
+        eventPublisher.publishEvent(new ChallengeQuizReadyEvent(fixture.userId, noteId, readySessionId));
+        challengeQuizService.markReadySeen(readySessionId.toString(), fixture.userId);
+        awaitNotification(fixture.userId, readySessionId);
+        assertThat(jdbc.queryForObject("select count(*) from notifications where recipient_user_id = ? and dedup_key = ?",
+                Integer.class, fixture.userId, "CHALLENGE_QUIZ_READY:" + readySessionId)).isEqualTo(1);
+        assertThat(jdbc.queryForObject("select read_at is not null from notifications where recipient_user_id = ? and dedup_key = ?",
+                Boolean.class, fixture.userId, "CHALLENGE_QUIZ_READY:" + readySessionId)).isTrue();
+    }
+
+    @Test
+    @Timeout(15)
+    void readySeenFirstLeavesOneReadRowAndNeverWritesTheSession() throws Exception {
+        Fixture fixture = seed(false);
+        jdbc.update("update quick_review_sessions set session_state = "
+                + "'{\"mode\":\"challenge\",\"preparedNotStarted\":true,\"preparedAtEpochSeconds\":1800000000}'::jsonb where id = ?",
+                fixture.sessionId);
+        String before = jdbc.queryForObject("select session_state::text from quick_review_sessions where id = ?",
+                String.class, fixture.sessionId);
+        challengeQuizService.markReadySeen(fixture.sessionId.toString(), fixture.userId);
+        assertThat(jdbc.queryForObject("select session_state::text from quick_review_sessions where id = ?",
+                String.class, fixture.sessionId)).isEqualTo(before);
+        UUID noteId = jdbc.queryForObject("select note_id from study_packs where id = ?", UUID.class, fixture.packId);
+        eventPublisher.publishEvent(new ChallengeQuizReadyEvent(fixture.userId, noteId, fixture.sessionId));
+        awaitNotification(fixture.userId, fixture.sessionId);
+        assertThat(jdbc.queryForObject("select count(*) from notifications where recipient_user_id = ? and dedup_key = ?",
+                Integer.class, fixture.userId, "CHALLENGE_QUIZ_READY:" + fixture.sessionId)).isEqualTo(1);
+        assertThat(jdbc.queryForObject("select read_at is not null from notifications where recipient_user_id = ? and dedup_key = ?",
+                Boolean.class, fixture.userId, "CHALLENGE_QUIZ_READY:" + fixture.sessionId)).isTrue();
+    }
+
+    @Test
+    @Timeout(15)
+    void rolledBackReadyEventNeverDelivers() throws Exception {
+        Fixture fixture = seed(false);
+        UUID noteId = jdbc.queryForObject("select note_id from study_packs where id = ?", UUID.class, fixture.packId);
+        new TransactionTemplate(transactionManager).execute(status -> {
+            eventPublisher.publishEvent(new ChallengeQuizReadyEvent(fixture.userId, noteId, fixture.sessionId));
+            status.setRollbackOnly();
+            return null;
+        });
+        Thread.sleep(100);
+        assertThat(jdbc.queryForObject("select count(*) from notifications where recipient_user_id = ? and dedup_key = ?",
+                Integer.class, fixture.userId, "CHALLENGE_QUIZ_READY:" + fixture.sessionId)).isZero();
+    }
+
+    @Test
+    @Timeout(15)
+    void statusAndReadySeenRejectAnotherOwnerWithoutChangingTheSession() {
+        Fixture fixture = seed(false);
+        UUID stranger = UUID.randomUUID();
+        org.assertj.core.api.Assertions.assertThatThrownBy(() ->
+                challengeQuizService.getSessionStatus(fixture.sessionId.toString(), stranger))
+                .isInstanceOf(com.studysnap.backend.exception.ChallengeQuizSessionNotFoundException.class);
+        org.assertj.core.api.Assertions.assertThatThrownBy(() ->
+                challengeQuizService.markReadySeen(fixture.sessionId.toString(), stranger))
+                .isInstanceOf(com.studysnap.backend.exception.ChallengeQuizSessionNotFoundException.class);
+        assertThat(jdbc.queryForObject("select count(*) from notifications where recipient_user_id = ?",
+                Integer.class, stranger)).isZero();
+    }
+
+    private void awaitNotification(UUID userId, UUID sessionId) throws InterruptedException {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+        while (System.nanoTime() < deadline) {
+            Integer count = jdbc.queryForObject("select count(*) from notifications where recipient_user_id = ? and dedup_key = ?",
+                    Integer.class, userId, "CHALLENGE_QUIZ_READY:" + sessionId);
+            if (count != null && count > 0) return;
+            Thread.sleep(20);
+        }
+        org.junit.jupiter.api.Assertions.fail("ready notification did not commit");
     }
 
     @Test

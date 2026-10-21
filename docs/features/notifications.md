@@ -49,7 +49,12 @@ The shipped mappings are exactly:
 - `ANNOUNCEMENT` → `ANNOUNCEMENT(false, true)` — visible, non-badging, retention-expirable.
 - `REVIEW_SET_UPDATE` → `LEARNING_SYSTEM(true, false)` — badge-eligible and retained while unread.
 - `CURATION_COST_ALERT` → `LEARNING_SYSTEM(true, false)` — an ADMIN alert for the tracked monthly Official Study Pack generation estimate.
-- `BULK_GENERATION_INCOMPLETE` and `BULK_REGENERATION_COMPLETE` → `ASYNC_RESULT(true, true)` — badge-eligible and retention-expirable.
+- `BULK_GENERATION_INCOMPLETE`, `BULK_REGENERATION_COMPLETE`, and `CHALLENGE_QUIZ_READY` → `ASYNC_RESULT(true, true)` — badge-eligible and retention-expirable.
+
+An ordinary Challenge preparation delivers `CHALLENGE_QUIZ_READY:<sessionId>` after commit, using
+title “Your quiz is ready!”, body “Pick up where you left off.”, and CTA “Open your prepared quiz”.
+The CTA points to the exact session on the note’s Challenge Quiz page. Viewing that session’s ready
+screen creates or finds the row and marks it read; Board Exam never produces this type.
 
 **`ACTION_REQUIRED` is gone.** It was a transitional producerless placeholder and was removed in
 `v0.135.0` while production still had zero notification rows, rather than preserving a category with no

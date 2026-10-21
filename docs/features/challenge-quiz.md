@@ -98,6 +98,22 @@ with a progress indicator and a Continue reviewing link. The page polls every tw
 the same ready screen. Questions and the timer appear only after the learner presses **Start Quiz**.
 Reloading restores generating, ready, failed, or running sessions without starting the timer.
 
+Every ordinary Challenge transition to a prepared, unstarted quiz publishes one in-app
+`CHALLENGE_QUIZ_READY` notification after the session commit. Its `CHALLENGE_QUIZ_READY:<sessionId>`
+dedup key makes bank hits, redo, multi-note preparation, and async completion converge on one row.
+Board Exam has no readiness notification. A learner who sees the ready screen calls the bodyless
+`POST /challenge-quiz/sessions/{sessionId}/ready-seen`; this creates or finds that same row and
+marks it read without changing the session, quota, or timer. Notification delivery failures do not
+change preparation.
+
+The notification links to `/notes/{noteId}/challenge-quiz?session={sessionId}`. The page first
+reads `GET /challenge-quiz/sessions/{sessionId}/status`, then loads that exact session through the
+read-only `GET /challenge-quiz/sessions/{sessionId}` when it can resume. Generating, ready, and
+started sessions retain their own state even when a newer session exists. Expired or unstarted
+forfeited sessions show the expiry screen; failed sessions show preparation failure; completed or
+started-then-forfeited sessions return to setup. A not-owned session returns 404 and setup. These
+reads never call Start Quiz, forfeit a session, or start the timer.
+
 Failed preparation shows **Try Again** and **Continue Reviewing**. An expired or stale prepared quiz
 shows **Prepare New Quiz**, which returns to setup without creating a replacement. A conflicting intent
 shows the existing prepared quiz and lets the learner resume it or discard it by resending the original

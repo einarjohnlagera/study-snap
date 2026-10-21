@@ -168,7 +168,9 @@ class ChallengeQuizControllerTest {
                 noteCollectionRepository,
                 noteCollectionItemRepository,
                 new LongExamPlanSourceSampler(),
-                mock(jakarta.persistence.EntityManager.class)
+                mock(jakarta.persistence.EntityManager.class),
+                mock(org.springframework.context.ApplicationEventPublisher.class),
+                mock(com.studysnap.backend.service.NotificationService.class)
         );
         AuthenticatedUser authenticatedUser = new AuthenticatedUser(userId, UserRole.USER, true, 1);
         HandlerMethodArgumentResolver argumentResolver = authenticatedUserResolver(authenticatedUser);

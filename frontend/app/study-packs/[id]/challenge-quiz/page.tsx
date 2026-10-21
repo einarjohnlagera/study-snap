@@ -49,6 +49,9 @@ import {
   getCollection,
   getCollectionGoal,
   getInProgressChallengeQuizSession,
+  getChallengeQuizSessionStatus,
+  getChallengeQuizSession,
+  markChallengeQuizReadySeen,
   getMe,
   getMyStudyPack,
   getNote,
@@ -302,6 +305,7 @@ export default function ChallengeQuizPage() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const sessionQuery = searchParams.get("session");
   const params = useParams<{ id: string }>();
   const progressRef = useRef<{
     currentIndex: number;
@@ -340,6 +344,12 @@ export default function ChallengeQuizPage() {
   const weakConceptsRef = useRef<HTMLDivElement | null>(null);
   const legacyRedirectTargetRef = useRef<string | null>(null);
   const redoMissedStartRequestedRef = useRef(false);
+  const sessionEntryQueryRef = useRef(sessionQuery);
+  const lastSessionQueryRef = useRef(sessionQuery);
+  const processedSessionIdsRef = useRef(new Set<string>());
+  const linkedPollSessionIdRef = useRef<string | null>(null);
+  const readySeenSessionIdsRef = useRef(new Set<string>());
+  const readySeenInFlightSessionIdsRef = useRef(new Set<string>());
   const [note, setNote] = useState<NoteResponse | null>(null);
   const [challengeSession, setChallengeSession] = useState<ChallengeQuizStartResponse | null>(null);
   const [resumeCandidate, setResumeCandidate] = useState<ChallengeQuizStartResponse | null>(null);
@@ -548,6 +558,23 @@ export default function ChallengeQuizPage() {
     nextSearchParams.delete(CHALLENGE_QUIZ_ENTRY_QUERY_PARAM);
     router.replace(nextSearchParams.size > 0 ? `${pathname}?${nextSearchParams.toString()}` : pathname, { scroll: false });
   }, [hasRedoMissedEntryQuery, pathname, router, searchParams]);
+
+  useEffect(() => {
+    if (!searchParams.has("session")) return;
+    const next = new URLSearchParams(searchParams.toString());
+    next.delete("session");
+    router.replace(next.size > 0 ? `${pathname}?${next.toString()}` : pathname, { scroll: false });
+  }, [pathname, router, searchParams]);
+
+  useEffect(() => {
+    const sessionId = phase === "ready" ? challengeSession?.sessionId : null;
+    if (!sessionId || readySeenSessionIdsRef.current.has(sessionId) || readySeenInFlightSessionIdsRef.current.has(sessionId)) return;
+    readySeenInFlightSessionIdsRef.current.add(sessionId);
+    void markChallengeQuizReadySeen(sessionId)
+      .then(() => { readySeenSessionIdsRef.current.add(sessionId); })
+      .catch(() => {})
+      .finally(() => { readySeenInFlightSessionIdsRef.current.delete(sessionId); });
+  });
 
   useEffect(() => {
     if (!sharedModeSelectionEntryRequested || phase !== "prestart" || challengeSession?.sessionId || resumeCandidate) {
@@ -812,6 +839,62 @@ export default function ChallengeQuizPage() {
     setPhase((forceRunning || Boolean(started.sessionId)) && started.preparedNotStarted !== true ? "running" : "prestart");
   }, [syncProgressRef]);
 
+  const resolveLinkedSession = useCallback(async (linkedSessionId: string, detail: NoteResponse) => {
+    if (processedSessionIdsRef.current.has(linkedSessionId)) return true;
+    processedSessionIdsRef.current.add(linkedSessionId);
+    const authUser = getAuthUser();
+    const preferredMode = resolvePreferredChallengeMode(authUser?.profileType);
+    const collectionStartsWithChallenge = collectionId !== null
+      && resolvePlanPremiumExamMode(
+        (authUser?.profileType as ProfileType | undefined) ?? null,
+        authUser?.planType === "FREE" || authUser?.planType === "PLUS" || authUser?.planType === "PRO" ? authUser.planType : null,
+      ) === "challenge";
+    const requestedPrestartMode = collectionStartsWithChallenge ? CHALLENGE_MODE : collectionId ? BOARD_EXAM_MODE : preferredMode;
+    const requestedPrestartStep: ChallengePrestartStep = collectionStartsWithChallenge
+      ? "challenge-setup"
+      : collectionId ? "board-exam-setup" : resolveInitialPrestartStep(authUser?.profileType);
+    try {
+      const linkedStatus = await getChallengeQuizSessionStatus(linkedSessionId);
+      if (detail.studyPackId !== linkedStatus.studyPackId) {
+        setChallengeSession(null);
+        setPhase("prestart");
+        return true;
+      }
+      if (linkedStatus.status === "FAILED") {
+        const linked = await getChallengeQuizSession(linkedSessionId);
+        linkedPollSessionIdRef.current = null;
+        applyStartedSession(linked, true);
+        return true;
+      }
+      if (linkedStatus.expired || (linkedStatus.status === "FORFEITED" && linkedStatus.preparedNotStarted)) {
+        setChallengeSession(null);
+        setPhase("expired");
+        return true;
+      }
+      if (linkedStatus.status === "GENERATING" || linkedStatus.status === "IN_PROGRESS") {
+        const linked = await getChallengeQuizSession(linkedSessionId);
+        linkedPollSessionIdRef.current = linked.status === "GENERATING" ? linkedSessionId : null;
+        applyStartedSession(linked, true);
+        return true;
+      }
+      setChallengeSession(null);
+      setSelectedMode(requestedPrestartMode);
+      setPrestartStep(requestedPrestartStep);
+      setPhase("prestart");
+      return true;
+    } catch (linkedError) {
+      if (linkedError instanceof ApiRequestError && linkedError.status === 404) {
+        setChallengeSession(null);
+        setSelectedMode(requestedPrestartMode);
+        setPrestartStep(requestedPrestartStep);
+        setPhase("prestart");
+        return true;
+      }
+      // An unavailable status read leaves the ordinary load-on-refresh path intact.
+      return false;
+    }
+  }, [applyStartedSession, collectionId]);
+
   const resetToPrestart = useCallback((mode = challengeSession?.mode ?? selectedMode) => {
     timeoutAutoSubmitRequestedRef.current = false;
     // Otherwise a hung progress write for the PRIOR session would keep blocking every progress write
@@ -1057,6 +1140,12 @@ export default function ChallengeQuizPage() {
         return;
       }
 
+      const linkedSessionId = sessionEntryQueryRef.current;
+      if (linkedSessionId) {
+        sessionEntryQueryRef.current = null;
+        if (await resolveLinkedSession(linkedSessionId, detail)) return;
+      }
+
       const inProgress = await getInProgressChallengeQuizSession(detail.id);
       if (inProgress.collision) {
         throw new Error("In-progress lookup must not return a collision.");
@@ -1172,11 +1261,22 @@ export default function ChallengeQuizPage() {
     } finally {
       setLoading(false);
     }
-  }, [applyStartedSession, collectionId, noteId, pathname, refreshBoardExamSourceNotes, router, sharedModeSelectionEntryRequested, syncProgressRef]);
+  }, [applyStartedSession, collectionId, noteId, pathname, refreshBoardExamSourceNotes, resolveLinkedSession, router, sharedModeSelectionEntryRequested, syncProgressRef]);
 
   useEffect(() => {
     void loadNote();
   }, [loadNote]);
+
+  useEffect(() => {
+    if (sessionQuery === lastSessionQueryRef.current) return;
+    lastSessionQueryRef.current = sessionQuery;
+    if (!sessionQuery || processedSessionIdsRef.current.has(sessionQuery)) return;
+    if (!note || note.id !== noteId || !isEmailVerified) {
+      sessionEntryQueryRef.current = sessionQuery;
+      return;
+    }
+    void resolveLinkedSession(sessionQuery, note);
+  }, [isEmailVerified, note, noteId, resolveLinkedSession, sessionQuery]);
 
   const quiz = useMemo(() => challengeSession?.quiz ?? [], [challengeSession]);
   const totalQuestions = quiz.length;
@@ -1452,7 +1552,9 @@ export default function ChallengeQuizPage() {
     let isMounted = true;
     const pollGenerationStatus = async () => {
       try {
-        const nextSession = await getInProgressChallengeQuizSession(note.id);
+        const nextSession = linkedPollSessionIdRef.current
+          ? await getChallengeQuizSession(linkedPollSessionIdRef.current)
+          : await getInProgressChallengeQuizSession(note.id);
         if (!isMounted) {
           return;
         }
@@ -1463,6 +1565,7 @@ export default function ChallengeQuizPage() {
           setChallengeSession(nextSession);
           return;
         }
+        linkedPollSessionIdRef.current = null;
         if (!nextSession.sessionId && challengeSessionRef.current?.mode !== BOARD_EXAM_MODE) {
           setPhase("preparation-failed");
           return;

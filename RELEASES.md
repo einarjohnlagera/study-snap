@@ -209,8 +209,7 @@ never edit this file.
     - Claim release is scoped to the session's primary pack. That is correct today, because multi-note
       starts do not claim from the bank; item 5 replaces it with a session-scoped release.
 
-- **Item 3: Challenge preparation screens, with Part B folded in** (branch
-  `feat/v0.175.0-item3-preparation-screens`).
+- **Item 3: Challenge preparation screens, with Part B folded in** (PR #1521, merged as `9951f4e6`).
   - **The learner flow.** The ordinary Challenge setup button reads **Prepare Quiz**. It leads to "Getting
     your quiz ready" (with Continue reviewing and no Stay button), which moves to "Your quiz is ready!" on
     its own, and the timer starts only on **Start Quiz**.
@@ -245,6 +244,37 @@ never edit this file.
     statement is owed at signoff.
   - **Review note.** `startQuiz` has now been edited by 2a, 2b and item 3, with item 5 to come. It is a
     named input to the scoped cold review at signoff.
+
+- **Item 4: readiness notification and deep link** (branch `feat/v0.175.0-item4-readiness-notification`).
+  - **One in-app notification per ready session** (`CHALLENGE_QUIZ_READY`, `ASYNC_RESULT`). It is sent on every
+    ordinary-Challenge transition into ready, through one shared hook that item 5 inherits:
+    - the async single-note finish;
+    - a full bank or template hit;
+    - Redo Missed;
+    - a multi-note start.
+
+    It is published inside the transaction and delivered after commit on `notificationFanOutExecutor`, so it
+    runs outside any transaction. Dedup is the existing `(recipient, dedupKey)` index, keyed by session. A
+    delivery failure never changes the session. Board Exam never notifies.
+  - **Copy (pending owner sign-off):** "Your quiz is ready!" / "Pick up where you left off." / "Open your
+    prepared quiz". The link goes to `/notes/{noteId}/challenge-quiz?session=<id>`.
+  - **Marked read when seen:** `POST /challenge-quiz/sessions/{id}/ready-seen`. It never writes the session, so
+    it cannot race `start-quiz`. It delivers with the same dedup key and marks the row read, so both orders end
+    with one read row.
+  - **Deep link:**
+    - `GET /challenge-quiz/sessions/{id}/status` and `GET /challenge-quiz/sessions/{id}`, both owner only, 404
+      for anyone else, read-only, and redacted while unstarted;
+    - the page lands on generating, ready, running, expired, failed or setup, and never calls `start-quiz`;
+    - a link opened while the page is already mounted also resolves.
+  - **Verification.**
+    - Backend `./mvnw clean install`: 2,868 tests, 0 failures. That includes 4 real-PostgreSQL tests:
+      committed and deduplicated after commit, a rollback delivers nothing, ready-seen-first leaves one read row,
+      and another owner gets 404.
+    - MockMvc tests for the three endpoints.
+    - Frontend: 2,739 tests; `tsc`, lint and `next build` clean.
+    - One Codex review and one fix round, with 3 findings fixed.
+  - **Review note.** `ChallengeQuizService` readiness paths are a named input to the scoped cold review at
+    signoff.
 
 ## v0.174.0 - Enhanced Generation
 
