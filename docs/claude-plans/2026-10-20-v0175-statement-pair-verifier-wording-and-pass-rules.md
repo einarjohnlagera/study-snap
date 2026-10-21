@@ -732,3 +732,85 @@ the owner.
   - live-start verification, which waits for items 2 and 5;
   - Stage 2 (the +5 rule and replacements), which is separately gated;
   - any production code, which needs an implementation approval.
+
+## Part 13. Stage 2 package (legs P and R): for owner approval, NOT run
+
+**Status:** prepared 2026-10-21 by Release Implementor. **Owner approved the $4.60 total cap on 2026-10-21**,
+after seeing this package. Not yet run. The owner runs the four commands below.
+
+### What runs
+- **The production code under test:** branch `feat/v0.175.0-statement-pair-verifier` (draft PR #1520), at the
+  SHA named in the commands. It is run from the verifier worktree, because the code is not on the release
+  branch yet.
+- **Leg P** (the +5 rule): the real `generateMoreChallengeQuiz` path. Per model it runs 40 batches with the rule
+  and 10 baseline batches without it.
+- **Leg R** (replacement): one R1-consistent gold item per case, with both checkers stubbed to reject it, then
+  the real production replacement call.
+- **Both models,** `gpt-6.1-sol` and `gpt-6-luna`, so 4 commands in all.
+
+### Inputs (local, git-ignored, built without any production read)
+- **`stage2-p.jsonl`** (sha256 `832a99face35…`): 40 cases, **40 distinct notes**. They were chosen in md5 order from
+  the 76 local notes that have a Study Pack summary and key concepts: v0.174.0 Leg E sources plus `full.jsonl`.
+- **`stage2-r.jsonl`** (sha256 `6e4966806122…`): 40 stratum-N gold items, in md5 order of the 77. Each comes with
+  its own case context, its R1 concept and its gold verdicts.
+  - **Limitation: these 40 items span only 10 distinct notes**, the same notes as Stage 1's N.
+- **Data handling** is as in Part 6. All of these are public original notes already sent to OpenAI in v0.174.0
+  and Stage 1. No private note is used, and nothing is committed.
+- The master copies are in the main tree at `backend/target/llm-benchmark/verifier/stage2/`. The commands copy
+  them into the worktree, because the harness only reads under its own `target/`.
+
+### Cost: the earlier "about $1.35" estimate was too low
+Measured R1 Challenge calls average about 3.5k input and 3.8k output tokens, including reasoning.
+
+| Run | Calls (approx.) | Expected | Spend stop |
+|---|---|---|---|
+| P, Sol | 50, plus retries | about $2.30 | **$2.80** |
+| R, Sol | 40 | about $1.10 | **$1.40** |
+| P, Luna | 50, plus retries | about $0.12 | **$0.25** |
+| R, Luna | 40 | about $0.06 | **$0.15** |
+| **Total** | | **about $3.60** | **$4.60** |
+
+**The owner approved the $4.60 total cap (2026-10-21).** Each stop is under the README's per-command
+ceiling of $3.50. The meter stops each command at its own limit, and a stopped run is incomplete, so it is
+not a pass. Run Luna first: it is cheap and shows any setup problem before Sol spends.
+
+### Pass and fail criteria (§4.4, verbatim, fixed before any result)
+| # | Pass | Fallback or kill |
+|---|---|---|
+| P1 | ≤ 1 leaked item in 40 batches, per model (Luna and Sol) | ≥ 3 in 40 on either model → fallback (b) |
+| P2 | 5 of 5 in ≥ 95% of batches; H4 rejections and invalid-output retries no higher than the 10-batch baseline arm | < 90% → remove the rule |
+| P3 | Blind reviewers rate batches with the rule comparable to or harder than baseline batches, on difficulty and concept coverage, in ≥ 80% of pairs | < 65% → remove the rule |
+| R1r | 0 assertion-style; ≥ 90% test the rejected item's concept; ≥ 80% rated comparable or harder, blind; ≤ 1 wrong key in about 40, blind-checked | Any wrong key in 20, or < 70% comparable |
+| R2r | Question-type mix of replacements: reported | — |
+| R3r | Replacement failure q measured, then S-A10 re-run with it | Projected failed starts > 1% |
+
+**The gray-zone rule applies:** any result between the pass and kill columns is not a pass. It returns for owner
+review, and no criterion is relaxed after the results are seen.
+
+### After the paid runs (Release Implementor; no paid API)
+1. Copy every output directory to the main tree **before any `clean` in the worktree**.
+2. Compute P1, P2, R2r and q from `summary.json` and the logs.
+3. **Blind reviews for P3 and R1r** run as read-only Codex blind checkers (D11), on the blind exports only, with
+   the arm key held back. Wrong keys in R1r are judged against the source note.
+4. **R3r:** re-run the local S-A10 scorer with `-Dllm.verifier.replacementFailure=<measured q>`.
+5. Report every criterion as PASS, GRAY or KILL. #1520 merges only on all PASS.
+
+### Owner commands (your terminal, with `LLM_API_KEY` set there only)
+```sh
+cd ~/IdeaProjects/study-snap-verifier/backend
+git rev-parse --short HEAD          # must print c554637b
+mkdir -p target/llm-benchmark/verifier
+cp ~/IdeaProjects/study-snap/backend/target/llm-benchmark/verifier/stage2/stage2-p.jsonl ~/IdeaProjects/study-snap/backend/target/llm-benchmark/verifier/stage2/stage2-r.jsonl target/llm-benchmark/verifier/
+B="-Dtest=StatementPairStage2Benchmark -Dnativequery.pg.skip=true -Dllm.stage2=true"
+# 1. Luna, leg P (stop $0.25)
+./mvnw test $B -Dllm.stage2.leg=P -Dllm.stage2.model=gpt-6-luna -Dllm.stage2.input=target/llm-benchmark/verifier/stage2-p.jsonl -Dllm.stage2.outDir=target/llm-benchmark/verifier/p-luna -Dllm.stage2.batches=40 -Dllm.stage2.baselineBatches=10 -Dllm.stage2.maxCalls=200 -Dllm.stage2.priceInPerM=0.10 -Dllm.stage2.priceOutPerM=0.50 -Dllm.stage2.spendStopUsd=0.25 > target/llm-benchmark/verifier/p-luna.log 2>&1; echo exit=$?
+# 2. Luna, leg R (stop $0.15)
+./mvnw test $B -Dllm.stage2.leg=R -Dllm.stage2.model=gpt-6-luna -Dllm.stage2.input=target/llm-benchmark/verifier/stage2-r.jsonl -Dllm.stage2.outDir=target/llm-benchmark/verifier/r-luna -Dllm.stage2.batches=40 -Dllm.stage2.baselineBatches=0 -Dllm.stage2.maxCalls=80 -Dllm.stage2.priceInPerM=0.10 -Dllm.stage2.priceOutPerM=0.50 -Dllm.stage2.spendStopUsd=0.15 > target/llm-benchmark/verifier/r-luna.log 2>&1; echo exit=$?
+# 3. Sol, leg P (stop $2.80)
+./mvnw test $B -Dllm.stage2.leg=P -Dllm.stage2.model=gpt-6.1-sol -Dllm.stage2.input=target/llm-benchmark/verifier/stage2-p.jsonl -Dllm.stage2.outDir=target/llm-benchmark/verifier/p-sol -Dllm.stage2.batches=40 -Dllm.stage2.baselineBatches=10 -Dllm.stage2.maxCalls=200 -Dllm.stage2.priceInPerM=2.00 -Dllm.stage2.priceOutPerM=10.00 -Dllm.stage2.spendStopUsd=2.80 > target/llm-benchmark/verifier/p-sol.log 2>&1; echo exit=$?
+# 4. Sol, leg R (stop $1.40)
+./mvnw test $B -Dllm.stage2.leg=R -Dllm.stage2.model=gpt-6.1-sol -Dllm.stage2.input=target/llm-benchmark/verifier/stage2-r.jsonl -Dllm.stage2.outDir=target/llm-benchmark/verifier/r-sol -Dllm.stage2.batches=40 -Dllm.stage2.baselineBatches=0 -Dllm.stage2.maxCalls=80 -Dllm.stage2.priceInPerM=2.00 -Dllm.stage2.priceOutPerM=10.00 -Dllm.stage2.spendStopUsd=1.40 > target/llm-benchmark/verifier/r-sol.log 2>&1; echo exit=$?
+# 5. Save the outputs to the main tree right away
+cp -R target/llm-benchmark/verifier/p-luna target/llm-benchmark/verifier/r-luna target/llm-benchmark/verifier/p-sol target/llm-benchmark/verifier/r-sol target/llm-benchmark/verifier/*.log ~/IdeaProjects/study-snap/backend/target/llm-benchmark/verifier/stage2/
+```
+Stop after any `exit` other than 0 and tell Release Implementor before running the next command.
