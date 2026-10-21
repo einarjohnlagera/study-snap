@@ -32,11 +32,35 @@ class GenerationRecoveryRowWriterTest {
     @Mock private NoteRepository noteRepository;
     @Mock private StudyPackService studyPackService;
     @Mock private UserUsageService userUsageService;
+    @Mock private ChallengeQuizQuestionBankService challengeQuizQuestionBankService;
     private GenerationRecoveryRowWriter writer;
 
     @BeforeEach
     void setUp() {
-        writer = new GenerationRecoveryRowWriter(poolRepository, sessionRepository, noteRepository, studyPackService, userUsageService);
+        writer = new GenerationRecoveryRowWriter(poolRepository, sessionRepository, noteRepository,
+                studyPackService, userUsageService, challengeQuizQuestionBankService);
+    }
+
+    @Test
+    void failChallengeSessionReleasesClaimsWithoutChargingAndIsIdempotent() {
+        QuickReviewSessionEntity session = new QuickReviewSessionEntity();
+        session.setId(UUID.randomUUID());
+        session.setUserId(UUID.randomUUID());
+        session.setStudyPackId(UUID.randomUUID());
+        session.setSessionMode(QuickReviewSessionMode.CHALLENGE);
+        session.setStatus(QuickReviewSessionStatus.GENERATING);
+        session.setQuotaExempt(true);
+        session.setSessionState(Map.of(ChallengeQuizService.SESSION_STATE_MODE, "challenge"));
+        when(sessionRepository.findByIdForUpdate(session.getId())).thenReturn(Optional.of(session));
+
+        writer.failChallengeSession(session.getId());
+        writer.failChallengeSession(session.getId());
+
+        assertThat(session.getStatus()).isEqualTo(QuickReviewSessionStatus.FAILED);
+        assertThat(session.isQuotaExempt()).isTrue();
+        verify(challengeQuizQuestionBankService).releaseClaims(
+                session.getUserId(), session.getStudyPackId(), session.getId());
+        verify(userUsageService, never()).incrementChallengeQuizGeneration(any(), any());
     }
 
     @Test

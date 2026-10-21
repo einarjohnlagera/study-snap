@@ -43,6 +43,8 @@ import com.studysnap.backend.service.AnalyticsService;
 import com.studysnap.backend.service.AuthService;
 import com.studysnap.backend.service.BillingUsagePeriodService;
 import com.studysnap.backend.service.ChallengeQuizQuestionBankService;
+import com.studysnap.backend.service.ChallengeQuizService;
+import com.studysnap.backend.service.GenerationRecoveryRowWriter;
 import com.studysnap.backend.service.ConceptHealthService;
 import com.studysnap.backend.service.ContentModerationService;
 import com.studysnap.backend.service.EmailService;
@@ -227,7 +229,51 @@ class NativeQueryPostgresIntegrationTest {
      * v0.93.0 pressure test: at 25 against an actual 31, the reflective scan could silently degrade by
      * six queries and stay green, which is the same false comfort the harness exists to remove.
      */
-    private static final int EXPECTED_NATIVE_QUERIES = 48;
+    private static final int EXPECTED_NATIVE_QUERIES = 49;
+
+    @Test
+    void staleBoardExamCandidateSurvivesAnOlderPageOfOrdinaryChallengeJobs() {
+        UUID owner = seedUser("board-recovery-candidate");
+        OffsetDateTime cutoff = OffsetDateTime.now().minusMinutes(30);
+        // Mutant: selecting all GENERATING CHALLENGE rows before LIMIT fills this three-row
+        // page with ordinary preparations and never reaches the Board Exam refund candidate.
+        for (int index = 0; index < 4; index++) {
+            seedGeneratingChallengeCandidate(owner, "challenge", cutoff.minusMinutes(10 + index));
+        }
+        UUID board = seedGeneratingChallengeCandidate(owner, "board_exam", cutoff.minusMinutes(1));
+
+        List<UUID> candidates = quickReviewSessionRepository.findStaleBoardExamSessionIds(
+                cutoff, PageRequest.of(0, 3));
+        assertThat(candidates).containsExactly(board);
+        UserUsageService usage = mock(UserUsageService.class);
+        GenerationRecoveryRowWriter rowWriter = new GenerationRecoveryRowWriter(
+                mock(ExamQuestionPoolRepository.class), quickReviewSessionRepository,
+                mock(NoteRepository.class), mock(StudyPackService.class), usage,
+                mock(ChallengeQuizQuestionBankService.class));
+        candidates.forEach(id -> rowWriter.recoverBoardExamSession(id, cutoff));
+        quickReviewSessionRepository.flush();
+        assertThat(jdbcTemplate.queryForObject(
+                "select status from quick_review_sessions where id = ?", String.class, board))
+                .isEqualTo("FAILED");
+        org.mockito.Mockito.verify(usage).reverseBoardExamGenerationBy(
+                org.mockito.ArgumentMatchers.eq(owner),
+                org.mockito.ArgumentMatchers.eq(ChallengeQuizService.BOARD_EXAM_QUOTA_UNITS_PER_SESSION),
+                org.mockito.ArgumentMatchers.any());
+    }
+
+    private UUID seedGeneratingChallengeCandidate(UUID owner, String mode, OffsetDateTime createdAt) {
+        UUID note = seedPublicNote(owner, "Recovery " + UUID.randomUUID(), new String[] {});
+        UUID pack = seedStudyPack(owner, note, "Recovery pack");
+        UUID session = UUID.randomUUID();
+        jdbcTemplate.update("insert into quick_review_sessions"
+                        + " (id, user_id, study_pack_id, note_id, session_mode, status, current_round,"
+                        + " current_question_index, total_questions, session_state, created_at)"
+                        + " values (?, ?, ?, ?, 'CHALLENGE', 'GENERATING', 'INITIAL', 0, 0,"
+                        + " cast(? as jsonb), ?)",
+                session, owner, pack, note,
+                "{\"mode\":\"" + mode + "\",\"boardExamQuotaReserved\":true}", createdAt);
+        return session;
+    }
     private static final String REPOSITORY_CLASSES =
             "classpath*:com/studysnap/backend/repository/**/*.class";
 

@@ -155,6 +155,25 @@ public class AppConfig {
     }
 
     /**
+     * Challenge preparation must not wait behind multi-minute Study Pack generation jobs.
+     * Keep its bounded queue and threads separate so a learner can poll readiness promptly.
+     */
+    @Bean
+    public AsyncTaskExecutor challengePreparationTaskExecutor(
+            InFlightThreadRegisteringTaskDecorator taskDecorator
+    ) {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setThreadNamePrefix("challenge-preparation-");
+        executor.setCorePoolSize(4);
+        executor.setMaxPoolSize(4);
+        executor.setQueueCapacity(100);
+        executor.setRejectedExecutionHandler(new ThreadPoolExecutor.AbortPolicy());
+        executor.setTaskDecorator(taskDecorator);
+        executor.initialize();
+        return executor;
+    }
+
+    /**
      * ⚠️ THE BULK REGENERATION DRIVER GETS ITS OWN POOL, AND THAT IS THE WHOLE FIX FOR A MEASURED
      * STARVATION. Bulk *generation* dispatches its batch loop onto
      * {@link #studyPackGenerationTaskExecutor(InFlightThreadRegisteringTaskDecorator)}, so the loop

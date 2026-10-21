@@ -606,7 +606,8 @@ public class DashboardService {
                     resumeState,
                     resolveResumeType(session),
                     session.getId().toString()
-            ));
+            ).withPreparedNotStarted(session.getSessionMode() == QuickReviewSessionMode.CHALLENGE
+                    && QuizSessionStateUtils.extractPreparedNotStarted(session.getSessionState())));
         }
         return Optional.empty();
     }
@@ -768,8 +769,12 @@ public class DashboardService {
                         usagePeriod.periodStart(),
                         usagePeriod.periodEnd()
                 );
+        long exemptSessions = quickReviewSessionRepository
+                .countByUserIdAndSessionModeAndStatusInAndQuotaExemptTrueAndCreatedAtGreaterThanEqualAndCreatedAtLessThan(
+                        userId, QuickReviewSessionMode.CHALLENGE, CHALLENGE_USAGE_COUNTED_STATUSES,
+                        usagePeriod.periodStart(), usagePeriod.periodEnd());
         long usedFromUsage = userUsageService.getMonthlyUsage(userId, now).challengeQuizGenerations();
-        return Math.max(usedFromCountedSessions, usedFromUsage);
+        return Math.max(Math.max(0L, usedFromCountedSessions - exemptSessions), usedFromUsage);
     }
 
     private Optional<StudyPackEntity> findSuggestedChallengeStudyPack(UUID userId) {

@@ -33,6 +33,14 @@ import java.util.UUID;
 public class ChallengeQuizController {
     private final ChallengeQuizService challengeQuizService;
 
+    @PostMapping("/sessions/{sessionId}/start-quiz")
+    public ChallengeQuizStartResponse startPreparedQuiz(
+            @PathVariable String sessionId,
+            @AuthenticationPrincipal AuthenticatedUser user
+    ) {
+        return challengeQuizService.startQuiz(sessionId, user.userId());
+    }
+
     @PostMapping("/study-packs/{studyPackId}/start")
     @Deprecated
     public ChallengeQuizStartResponse startChallengeQuiz(

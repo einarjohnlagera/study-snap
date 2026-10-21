@@ -162,6 +162,7 @@ class ChallengeQuizControllerTest {
                 conceptHealthService,
                 studyPackQuizMasteryService,
                 taskDispatcher,
+                mock(com.studysnap.backend.service.ChallengePreparationFailureHandler.class),
                 transactionOperations,
                 recoveryRowWriter,
                 noteCollectionRepository,

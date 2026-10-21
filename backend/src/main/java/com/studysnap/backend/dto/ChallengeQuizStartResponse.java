@@ -22,6 +22,7 @@ public record ChallengeQuizStartResponse(
         int currentQuestionIndex,
         Map<String, Object> sessionState,
         List<LongExamSourceNoteRef> sourceNoteRefs,
-        int maxSourceNotes
+        int maxSourceNotes,
+        boolean preparedNotStarted
 ) {
 }

@@ -68,7 +68,8 @@ class GenerationRecoveryServiceTest {
                 quickReviewSessionRepository,
                 noteRepository,
                 studyPackService,
-                userUsageService
+                userUsageService,
+                org.mockito.Mockito.mock(ChallengeQuizQuestionBankService.class)
         );
         service = new GenerationRecoveryService(
                 examQuestionPoolRepository,
@@ -238,7 +239,7 @@ class GenerationRecoveryServiceTest {
     @Test
     void recoverStaleBoardExamSessions_sweepsAStaleBoardExamAndRefundsBothMeters() {
         QuickReviewSessionEntity session = boardExamSession(OffsetDateTime.now().minusHours(1));
-        when(quickReviewSessionRepository.findStaleSessionIds(any(), any(), any(), any()))
+        when(quickReviewSessionRepository.findStaleBoardExamSessionIds(any(), any()))
                 .thenReturn(List.of(session.getId()));
         when(quickReviewSessionRepository.findByIdForUpdate(session.getId())).thenReturn(Optional.of(session));
 
@@ -253,40 +254,30 @@ class GenerationRecoveryServiceTest {
 
     @Test
     void recoverStaleBoardExamSessions_selectsGeneratingChallengeRowsOlderThanTheCutoff() {
-        // ⚠️ THE CANDIDATE QUERY'S OWN ARGUMENTS WERE NEVER ASSERTED. Every other Board Exam sweep test
-        // stubs findStaleSessionIds(any(), any(), any(), any()), so switching the mode to LONG_EXAM left
-        // the whole suite green — the row-level filter then rejects every candidate and the refund-on-crash
-        // path silently recovers NOTHING. The guarantee that a crashed Board Exam is ever refunded rests
-        // entirely on these four arguments, so they are pinned here.
+        // The repository query itself pins GENERATING, CHALLENGE and board_exam; this verifies
+        // the service passes a cutoff and a bounded page to that query.
         QuickReviewSessionEntity session = boardExamSession(OffsetDateTime.now().minusHours(1));
-        when(quickReviewSessionRepository.findStaleSessionIds(any(), any(), any(), any()))
+        when(quickReviewSessionRepository.findStaleBoardExamSessionIds(any(), any()))
                 .thenReturn(List.of(session.getId()));
         when(quickReviewSessionRepository.findByIdForUpdate(session.getId())).thenReturn(Optional.of(session));
 
         service.recoverStaleBoardExamSessions();
 
-        ArgumentCaptor<QuickReviewSessionStatus> status = ArgumentCaptor.forClass(QuickReviewSessionStatus.class);
-        ArgumentCaptor<QuickReviewSessionMode> mode = ArgumentCaptor.forClass(QuickReviewSessionMode.class);
         ArgumentCaptor<OffsetDateTime> cutoff = ArgumentCaptor.forClass(OffsetDateTime.class);
-        verify(quickReviewSessionRepository).findStaleSessionIds(
-                status.capture(), mode.capture(), cutoff.capture(), any());
+        verify(quickReviewSessionRepository).findStaleBoardExamSessionIds(
+                cutoff.capture(), any());
 
-        // Board Exam IS a CHALLENGE row — selecting LONG_EXAM here would sweep nothing at all.
-        assertThat(mode.getValue()).isEqualTo(QuickReviewSessionMode.CHALLENGE);
-        assertThat(status.getValue()).isEqualTo(QuickReviewSessionStatus.GENERATING);
         // The cutoff must be in the past, or a freshly started exam would be swept mid-generation.
         assertThat(cutoff.getValue()).isBefore(OffsetDateTime.now());
     }
 
     @Test
     void recoverStaleBoardExamSessions_leavesAnOrdinaryChallengeSessionAlone() {
-        // ⚠️ THE CANDIDATE QUERY CANNOT TELL THESE APART — Board Exam IS a CHALLENGE session — so the
-        // discrimination happens under the row lock. Without it, the sweep would fail every learner's
-        // in-flight Challenge Quiz and refund a Board Exam meter they never spent.
+        // Defense in depth: a candidate returned incorrectly must still be rejected under the row lock.
         QuickReviewSessionEntity boardExam = boardExamSession(OffsetDateTime.now().minusHours(1));
         QuickReviewSessionEntity challenge = session(QuickReviewSessionMode.CHALLENGE, OffsetDateTime.now().minusHours(1));
         challenge.setSessionState(java.util.Map.of(ChallengeQuizService.SESSION_STATE_MODE, "challenge"));
-        when(quickReviewSessionRepository.findStaleSessionIds(any(), any(), any(), any()))
+        when(quickReviewSessionRepository.findStaleBoardExamSessionIds(any(), any()))
                 .thenReturn(List.of(boardExam.getId(), challenge.getId()));
         when(quickReviewSessionRepository.findByIdForUpdate(boardExam.getId())).thenReturn(Optional.of(boardExam));
         when(quickReviewSessionRepository.findByIdForUpdate(challenge.getId())).thenReturn(Optional.of(challenge));
@@ -302,7 +293,7 @@ class GenerationRecoveryServiceTest {
     @Test
     void recoverStaleBoardExamSessions_withinBoundRemainsGenerating() {
         QuickReviewSessionEntity session = boardExamSession(OffsetDateTime.now().minusMinutes(5));
-        when(quickReviewSessionRepository.findStaleSessionIds(any(), any(), any(), any()))
+        when(quickReviewSessionRepository.findStaleBoardExamSessionIds(any(), any()))
                 .thenReturn(List.of(session.getId()));
         when(quickReviewSessionRepository.findByIdForUpdate(session.getId())).thenReturn(Optional.of(session));
 
