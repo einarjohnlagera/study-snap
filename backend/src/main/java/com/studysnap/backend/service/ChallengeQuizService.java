@@ -16,6 +16,7 @@ import com.studysnap.backend.dto.ChallengeQuizSessionSummaryResponse;
 import com.studysnap.backend.dto.ChallengeQuizStartRequest;
 import com.studysnap.backend.dto.ChallengeQuizCollision;
 import com.studysnap.backend.dto.ChallengeQuizStartResponse;
+import com.studysnap.backend.dto.ChallengeQuizSessionStatusResponse;
 import com.studysnap.backend.dto.LongExamSourceNoteRef;
 import com.studysnap.backend.dto.QuizItem;
 import com.studysnap.backend.dto.QuizSessionReviewResponse;
@@ -28,6 +29,7 @@ import com.studysnap.backend.entity.QuickReviewRound;
 import com.studysnap.backend.entity.QuickReviewSessionEntity;
 import com.studysnap.backend.entity.QuickReviewSessionMode;
 import com.studysnap.backend.entity.QuickReviewSessionStatus;
+import com.studysnap.backend.service.event.ChallengeQuizReadyEvent;
 import com.studysnap.backend.entity.StudyPackEntity;
 import com.studysnap.backend.entity.StudyPackStatus;
 import com.studysnap.backend.exception.AppException;
@@ -66,6 +68,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.QueryTimeoutException;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
@@ -227,6 +231,8 @@ public class ChallengeQuizService {
     private final NoteCollectionItemRepository noteCollectionItemRepository;
     private final LongExamPlanSourceSampler longExamPlanSourceSampler;
     private final jakarta.persistence.EntityManager entityManager;
+    private final ApplicationEventPublisher eventPublisher;
+    private final NotificationService notificationService;
 
     @Transactional
     public ChallengeQuizStartResponse startSession(String studyPackIdRaw, UUID userId, ChallengeQuizStartRequest request) {
@@ -993,6 +999,37 @@ public class ChallengeQuizService {
             trackChallengeLaunchMasterySplit(userId, pack, saved);
         }
         return toStartResponse(saved, pack, resolveUsedThisMonthForResponse(userId, saved), planType);
+    }
+
+    /** The acknowledgement cannot enclose deliver in this service's class-level transaction. */
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public void markReadySeen(String sessionIdRaw, UUID userId) {
+        QuickReviewSessionEntity session = findChallengeSessionOrThrow(parseSessionId(sessionIdRaw), userId);
+        if (MODE_BOARD_EXAM.equals(extractMode(session.getSessionState()))
+                || QuizSessionStateUtils.extractPreparedAtEpochSeconds(session.getSessionState()) <= 0) {
+            return;
+        }
+        var notification = notificationService.deliver(ChallengeQuizReadyNotifications.delivery(
+                userId, session.getNoteId(), session.getId()));
+        notificationService.markRead(userId, notification.id());
+    }
+
+    @Transactional(readOnly = true)
+    public ChallengeQuizSessionStatusResponse getSessionStatus(String sessionIdRaw, UUID userId) {
+        QuickReviewSessionEntity session = findChallengeSessionOrThrow(parseSessionId(sessionIdRaw), userId);
+        return new ChallengeQuizSessionStatusResponse(session.getId().toString(),
+                session.getStudyPackId().toString(), session.getStatus(),
+                QuizSessionStateUtils.extractPreparedNotStarted(session.getSessionState()),
+                extractMode(session.getSessionState()), PreparedChallengeExpiry.expired(session, preparedCutoff()));
+    }
+
+    /** Exact-session read for a deep link; never starts its timer or changes the row. */
+    @Transactional(readOnly = true)
+    public ChallengeQuizStartResponse getSession(String sessionIdRaw, UUID userId) {
+        QuickReviewSessionEntity session = findChallengeSessionOrThrow(parseSessionId(sessionIdRaw), userId);
+        StudyPackEntity pack = findOwnedStudyPackOrThrow(session.getStudyPackId(), userId);
+        return toStartResponse(session, pack, resolveUsedThisMonthForResponse(userId, session),
+                subscriptionService.resolvePlan(userId));
     }
 
     @Transactional(readOnly = true)
@@ -2907,6 +2944,16 @@ public class ChallengeQuizService {
             QuickReviewSessionEntity session, List<QuizItem> challengeQuiz, String difficulty, long generationStamp
     ) {
         writeReadySession(session, challengeQuiz, difficulty, false, generationStamp);
+        publishChallengeReady(session);
+    }
+
+    private void publishChallengeReady(QuickReviewSessionEntity session) {
+        if (MODE_CHALLENGE.equals(extractMode(session.getSessionState()))
+                && session.getStatus() == QuickReviewSessionStatus.IN_PROGRESS
+                && QuizSessionStateUtils.extractPreparedNotStarted(session.getSessionState())) {
+            eventPublisher.publishEvent(new ChallengeQuizReadyEvent(
+                    session.getUserId(), session.getNoteId(), session.getId()));
+        }
     }
 
     private void writeReadySession(

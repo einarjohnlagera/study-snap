@@ -129,6 +129,10 @@ class ChallengeQuizServiceTest {
     @Mock
     private AnalyticsService analyticsService;
     @Mock
+    private org.springframework.context.ApplicationEventPublisher eventPublisher;
+    @Mock
+    private NotificationService notificationService;
+    @Mock
     private AiRateLimitService aiRateLimitService;
     @Mock
     private ActivityTrackingService activityTrackingService;
@@ -970,8 +974,30 @@ class ChallengeQuizServiceTest {
                 noteCollectionRepository,
                 noteCollectionItemRepository,
                 longExamPlanSourceSampler,
-                entityManager
+                entityManager,
+                eventPublisher,
+                notificationService
         );
+    }
+
+    @Test
+    void readySeenIgnoresBoardExamAndNeverPreparedSessions() {
+        UUID userId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+        QuickReviewSessionEntity session = new QuickReviewSessionEntity();
+        session.setId(sessionId);
+        session.setUserId(userId);
+        session.setSessionMode(QuickReviewSessionMode.CHALLENGE);
+        session.setSessionState(Map.of("mode", "board_exam", "preparedAtEpochSeconds", 123L));
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(
+                sessionId, userId, QuickReviewSessionMode.CHALLENGE)).thenReturn(Optional.of(session));
+
+        challengeQuizService.markReadySeen(sessionId.toString(), userId);
+        session.setSessionState(Map.of("mode", "challenge"));
+        challengeQuizService.markReadySeen(sessionId.toString(), userId);
+
+        org.mockito.Mockito.verifyNoInteractions(notificationService);
+        verify(quickReviewSessionRepository, never()).save(any());
     }
 
     @Test
@@ -1366,6 +1392,8 @@ class ChallengeQuizServiceTest {
         assertThat(preparedQuiz(response)).containsExactlyInAnyOrderElementsOf(
                 withoutAnswerKeys(withSourceStudyPackId(bankedQuiz, studyPackId))
         );
+        verify(eventPublisher).publishEvent(new com.studysnap.backend.service.event.ChallengeQuizReadyEvent(
+                userId, noteId, UUID.fromString(response.sessionId())));
         verify(quizGenerationService, never()).generateChallengeQuiz(any(), any(), any(), any(), anyInt(), any(), any());
         verify(aiRateLimitService, never()).assertAllowed(any(), any(), any());
         verify(challengeQuizQuestionBankService, never()).persistGeneratedQuestions(any(), any(), any(), any(), any(), any());
@@ -1412,6 +1440,8 @@ class ChallengeQuizServiceTest {
         assertThat(preparedQuiz(response)).containsExactlyInAnyOrderElementsOf(
                 withoutAnswerKeys(withSourceStudyPackId(templateQuiz, studyPackId))
         );
+        verify(eventPublisher).publishEvent(new com.studysnap.backend.service.event.ChallengeQuizReadyEvent(
+                userId, noteId, UUID.fromString(response.sessionId())));
         ArgumentCaptor<QuickReviewSessionEntity> sessionCaptor = ArgumentCaptor.forClass(QuickReviewSessionEntity.class);
         verify(quickReviewSessionRepository, atLeastOnce()).save(sessionCaptor.capture());
         QuickReviewSessionEntity savedSession = sessionCaptor.getAllValues().getLast();
@@ -1531,6 +1561,8 @@ class ChallengeQuizServiceTest {
 
         assertThat(response.mode()).isEqualTo("challenge");
         assertThat(response.preparedNotStarted()).isTrue();
+        verify(eventPublisher).publishEvent(new com.studysnap.backend.service.event.ChallengeQuizReadyEvent(
+                userId, noteId, UUID.fromString(response.sessionId())));
         assertThat(savedSessionsById.get(UUID.fromString(response.sessionId())).getSessionState())
                 .doesNotContainKey("timerStartedAtEpochSeconds");
         assertThat(preparedQuiz(response)).containsExactlyInAnyOrderElementsOf(
@@ -2211,6 +2243,7 @@ class ChallengeQuizServiceTest {
         verify(quizGenerationService, never()).generateChallengeQuiz(any(), any(), any(), any(), anyInt(), any(), any());
         verify(userUsageService).incrementChallengeQuizGeneration(eq(userId), any(OffsetDateTime.class));
         verify(userUsageService).incrementBoardExamGenerationBy(eq(userId), eq(1), any(OffsetDateTime.class));
+        verify(eventPublisher, never()).publishEvent(any());
     }
 
     @Test
@@ -2275,6 +2308,7 @@ class ChallengeQuizServiceTest {
         assertThat(response.preparedNotStarted()).isFalse();
         assertThat(savedSessionsById.get(UUID.fromString(response.sessionId())).getSessionState())
                 .containsKey("timerStartedAtEpochSeconds");
+        verify(eventPublisher, never()).publishEvent(any());
         verify(aiRateLimitService, never()).assertAllowed(any(), any(), any());
         verify(quizGenerationService, never()).generateBoardExamQuiz(any(), any(), any(), any(), anyInt(), any(), any());
         verify(userUsageService).incrementChallengeQuizGeneration(eq(userId), any(OffsetDateTime.class));
@@ -2976,6 +3010,8 @@ class ChallengeQuizServiceTest {
         assertThat(preparedQuiz(response)).hasSize(18);
         assertThat(response.maxSourceNotes()).isEqualTo(3);
         assertThat(response.mode()).isEqualTo("challenge");
+        verify(eventPublisher).publishEvent(new com.studysnap.backend.service.event.ChallengeQuizReadyEvent(
+                userId, primaryNoteId, UUID.fromString(response.sessionId())));
         verify(quizGenerationService, atLeastOnce()).generateChallengeQuiz(
                 any(), any(), any(), any(), eq(9), any(),
                 org.mockito.ArgumentMatchers.argThat(context ->
@@ -3282,7 +3318,9 @@ class ChallengeQuizServiceTest {
                 noteCollectionRepository,
                 noteCollectionItemRepository,
                 longExamPlanSourceSampler,
-                entityManager
+                entityManager,
+                org.mockito.Mockito.mock(org.springframework.context.ApplicationEventPublisher.class),
+                org.mockito.Mockito.mock(com.studysnap.backend.service.NotificationService.class)
         );
 
         when(studyPackRepository.findByIdAndOwnerUserIdForUpdate(studyPackId, userId)).thenReturn(Optional.of(studyPack));

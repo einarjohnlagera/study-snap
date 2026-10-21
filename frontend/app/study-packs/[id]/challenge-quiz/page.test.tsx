@@ -9,6 +9,9 @@ import {
   getCollection,
   getCollectionGoal,
   getInProgressChallengeQuizSession,
+  getChallengeQuizSessionStatus,
+  getChallengeQuizSession,
+  markChallengeQuizReadySeen,
   getMe,
   getNote,
   getPostSessionNextStep,
@@ -67,9 +70,11 @@ jest.mock("@/hooks/use-billing-usage-summary", () => ({
 jest.mock("@/lib/api", () => ({
   ApiRequestError: class ApiRequestError extends Error {
     code: string | null;
-    constructor(message: string, options: { code?: string | null }) {
+    status: number;
+    constructor(message: string, options: { code?: string | null; status?: number }) {
       super(message);
       this.code = options.code ?? null;
+      this.status = options.status ?? 0;
     }
   },
   completeChallengeQuizSession: jest.fn(),
@@ -78,6 +83,9 @@ jest.mock("@/lib/api", () => ({
   getCollection: jest.fn(),
   getCollectionGoal: jest.fn(),
   getInProgressChallengeQuizSession: jest.fn(),
+  getChallengeQuizSessionStatus: jest.fn(),
+  getChallengeQuizSession: jest.fn(),
+  markChallengeQuizReadySeen: jest.fn().mockResolvedValue(undefined),
   getMe: jest.fn().mockResolvedValue({ learnerLevel: "COLLEGE" }),
   getMyStudyPack: jest.fn(),
   getNote: jest.fn(),
@@ -142,6 +150,9 @@ describe("ChallengeQuizPage", () => {
     (listNotes as jest.Mock).mockReset();
     (listNotes as jest.Mock).mockResolvedValue([]);
     (getInProgressChallengeQuizSession as jest.Mock).mockReset();
+    (getChallengeQuizSessionStatus as jest.Mock).mockReset();
+    (getChallengeQuizSession as jest.Mock).mockReset();
+    (markChallengeQuizReadySeen as jest.Mock).mockClear();
     (completeChallengeQuizSession as jest.Mock).mockReset();
     (forfeitChallengeQuizSession as jest.Mock).mockReset();
     (forfeitChallengeQuizSession as jest.Mock).mockResolvedValue({ message: "Challenge Quiz session forfeited." });
@@ -438,6 +449,141 @@ describe("ChallengeQuizPage", () => {
     return { ...preparationSession(), quiz: twoQuestionChallengeQuiz(), totalQuestions: 2,
       preparedNotStarted: false, sessionState: { timerStartedAtEpochSeconds: Math.floor(Date.now() / 1000) } };
   }
+
+  it.each([
+    ["GENERATING", true, false, "Getting your quiz ready"],
+    ["IN_PROGRESS", true, false, "Your quiz is ready!"],
+    ["IN_PROGRESS", false, false, null],
+    ["IN_PROGRESS", true, true, "This prepared quiz has expired"],
+    ["FORFEITED", true, false, "This prepared quiz has expired"],
+    ["FAILED", true, false, "We couldn't finish preparing your quiz"],
+    ["COMPLETED", false, false, null],
+    ["FORFEITED", false, false, null],
+  ] as const)("deep link %s prepared=%s expired=%s resolves exact session", async (status, prepared, expired, heading) => {
+    searchParamsMock = new URLSearchParams("session=linked-1");
+    setupChallengePrestart();
+    (getChallengeQuizSessionStatus as jest.Mock).mockResolvedValue({
+      sessionId: "linked-1", studyPackId: "sp-1", status, preparedNotStarted: prepared,
+      mode: "challenge", expired,
+    });
+    (getChallengeQuizSession as jest.Mock).mockResolvedValue({
+      ...preparationSession(status === "COMPLETED" || status === "FORFEITED" ? "IN_PROGRESS" : status),
+      sessionId: "linked-1", preparedNotStarted: prepared,
+      quiz: prepared ? [] : twoQuestionChallengeQuiz(),
+      sessionState: prepared ? null : { timerStartedAtEpochSeconds: Math.floor(Date.now() / 1000) },
+    });
+    render(<ChallengeQuizPage />);
+    await waitFor(() => expect(getChallengeQuizSessionStatus).toHaveBeenCalledWith("linked-1"));
+    if (heading) expect(await screen.findByRole("heading", { name: heading })).toBeInTheDocument();
+    if (status === "IN_PROGRESS" && !prepared) {
+      expect(await screen.findByText(/What powers the cell\?/)).toBeInTheDocument();
+    }
+    if (status === "IN_PROGRESS" && prepared && !expired) {
+      await waitFor(() => expect(markChallengeQuizReadySeen).toHaveBeenCalledWith("linked-1"));
+      expect(screen.queryByTestId("challenge-quiz-timer")).not.toBeInTheDocument();
+    } else {
+      expect(markChallengeQuizReadySeen).not.toHaveBeenCalled();
+    }
+    expect(startPreparedChallengeQuiz).not.toHaveBeenCalled();
+    expect(replaceMock).toHaveBeenCalledWith("/notes/note-1/challenge-quiz", { scroll: false });
+    expect(getInProgressChallengeQuizSession).not.toHaveBeenCalled();
+    if (status === "GENERATING" || (status === "IN_PROGRESS" && !expired) || status === "FAILED") {
+      expect(getChallengeQuizSession).toHaveBeenCalledWith("linked-1");
+    }
+  });
+
+  it("a not-owned deep link returns to setup without naming the session", async () => {
+    searchParamsMock = new URLSearchParams("session=other-1");
+    setupChallengePrestart();
+    (getChallengeQuizSessionStatus as jest.Mock).mockRejectedValue(new ApiRequestError("missing", { status: 404 }));
+    render(<ChallengeQuizPage />);
+    expect(await screen.findByRole("heading", { name: "Choose your quiz mode" })).toBeInTheDocument();
+    expect(getInProgressChallengeQuizSession).not.toHaveBeenCalled();
+    expect(screen.queryByText("other-1")).not.toBeInTheDocument();
+  });
+
+  it("acknowledges a ready deep link once without reloading after URL cleanup", async () => {
+    searchParamsMock = new URLSearchParams("session=linked-1");
+    setupChallengePrestart();
+    (getChallengeQuizSessionStatus as jest.Mock).mockResolvedValue({
+      sessionId: "linked-1", studyPackId: "sp-1", status: "IN_PROGRESS",
+      preparedNotStarted: true, mode: "challenge", expired: false,
+    });
+    (getChallengeQuizSession as jest.Mock).mockResolvedValue({ ...preparationSession(), sessionId: "linked-1" });
+    const { rerender } = render(<ChallengeQuizPage />);
+    expect(await screen.findByRole("heading", { name: "Your quiz is ready!" })).toBeInTheDocument();
+    await waitFor(() => expect(markChallengeQuizReadySeen).toHaveBeenCalledTimes(1));
+    searchParamsMock = new URLSearchParams();
+    rerender(<ChallengeQuizPage />);
+    expect(getNote).toHaveBeenCalledTimes(1);
+    expect(markChallengeQuizReadySeen).toHaveBeenCalledTimes(1);
+  });
+
+  it("opens a second ready session query on the mounted page without reloading the note", async () => {
+    searchParamsMock = new URLSearchParams("session=linked-a");
+    setupChallengePrestart();
+    (getChallengeQuizSessionStatus as jest.Mock).mockImplementation(async (sessionId: string) => ({
+      sessionId, studyPackId: "sp-1", status: "IN_PROGRESS", preparedNotStarted: true,
+      mode: "challenge", expired: false,
+    }));
+    (getChallengeQuizSession as jest.Mock).mockImplementation(async (sessionId: string) => ({
+      ...preparationSession(), sessionId,
+    }));
+    const page = render(<ChallengeQuizPage />);
+    await waitFor(() => expect(markChallengeQuizReadySeen).toHaveBeenCalledWith("linked-a"));
+
+    searchParamsMock = new URLSearchParams("session=linked-b");
+    page.rerender(<ChallengeQuizPage />);
+    await waitFor(() => expect(markChallengeQuizReadySeen).toHaveBeenCalledWith("linked-b"));
+    expect(screen.getByRole("heading", { name: "Your quiz is ready!" })).toBeInTheDocument();
+    expect(getChallengeQuizSession).toHaveBeenLastCalledWith("linked-b");
+    expect(getNote).toHaveBeenCalledTimes(1);
+    page.rerender(<ChallengeQuizPage />);
+    expect(getChallengeQuizSessionStatus).toHaveBeenCalledTimes(2);
+  });
+
+  it("clears a linked poll target when the exact read is ready before the next preparation", async () => {
+    searchParamsMock = new URLSearchParams("session=linked-a");
+    setupChallengePrestart();
+    (getChallengeQuizSessionStatus as jest.Mock).mockImplementation(async (sessionId: string) => ({
+      sessionId, studyPackId: "sp-1", status: sessionId === "linked-a" ? "GENERATING" : "COMPLETED",
+      preparedNotStarted: sessionId === "linked-a", mode: "challenge", expired: false,
+    }));
+    (getChallengeQuizSession as jest.Mock).mockResolvedValue({ ...preparationSession(), sessionId: "linked-a" });
+    (startChallengeQuizSession as jest.Mock).mockResolvedValue({ ...preparationSession("GENERATING"), sessionId: "new-prep" });
+    (getInProgressChallengeQuizSession as jest.Mock).mockResolvedValue({ ...preparationSession(), sessionId: "new-prep" });
+    const page = render(<ChallengeQuizPage />);
+    expect(await screen.findByRole("heading", { name: "Your quiz is ready!" })).toBeInTheDocument();
+
+    searchParamsMock = new URLSearchParams("session=completed-link");
+    page.rerender(<ChallengeQuizPage />);
+    expect(await screen.findByRole("heading", { name: "Choose your quiz mode" })).toBeInTheDocument();
+    fireEvent.click(await getModeCard("Challenge Quiz"));
+    fireEvent.click(await screen.findByRole("button", { name: "Prepare Quiz" }));
+    await waitFor(() => expect(getInProgressChallengeQuizSession).toHaveBeenCalledWith("note-1"));
+    expect(getChallengeQuizSession).toHaveBeenCalledTimes(1);
+    expect(getNote).toHaveBeenCalledTimes(1);
+  });
+
+  it("retries a failed ready-seen acknowledgement and stops after success", async () => {
+    searchParamsMock = new URLSearchParams("session=linked-1");
+    setupChallengePrestart();
+    (getChallengeQuizSessionStatus as jest.Mock).mockResolvedValue({
+      sessionId: "linked-1", studyPackId: "sp-1", status: "IN_PROGRESS",
+      preparedNotStarted: true, mode: "challenge", expired: false,
+    });
+    (getChallengeQuizSession as jest.Mock).mockResolvedValue({ ...preparationSession(), sessionId: "linked-1" });
+    (markChallengeQuizReadySeen as jest.Mock).mockRejectedValueOnce(new Error("unavailable"));
+    const page = render(<ChallengeQuizPage />);
+    expect(await screen.findByRole("heading", { name: "Your quiz is ready!" })).toBeInTheDocument();
+    await waitFor(() => expect(markChallengeQuizReadySeen).toHaveBeenCalledTimes(1));
+    await act(async () => { await Promise.resolve(); });
+    page.rerender(<ChallengeQuizPage />);
+    await waitFor(() => expect(markChallengeQuizReadySeen).toHaveBeenCalledTimes(2));
+    await act(async () => { await Promise.resolve(); });
+    page.rerender(<ChallengeQuizPage />);
+    expect(markChallengeQuizReadySeen).toHaveBeenCalledTimes(2);
+  });
 
   it.each([
     ["GENERATING", "Getting your quiz ready"],

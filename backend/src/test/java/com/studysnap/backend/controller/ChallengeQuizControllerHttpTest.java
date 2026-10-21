@@ -1,6 +1,8 @@
 package com.studysnap.backend.controller;
 
 import com.studysnap.backend.dto.ChallengeQuizStartResponse;
+import com.studysnap.backend.dto.ChallengeQuizSessionStatusResponse;
+import com.studysnap.backend.exception.ChallengeQuizSessionNotFoundException;
 import com.studysnap.backend.exception.ChallengePreparationInProgressException;
 import com.studysnap.backend.exception.GlobalExceptionHandler;
 import com.studysnap.backend.entity.QuickReviewSessionStatus;
@@ -23,11 +25,60 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.springframework.test.web.servlet.setup.MockMvcBuilders.standaloneSetup;
 
 class ChallengeQuizControllerHttpTest {
+    @Test
+    void readySeenAndStatusRouteRealRequestsAndHideOtherOwners() throws Exception {
+        ChallengeQuizService service = mock(ChallengeQuizService.class);
+        UUID userId = UUID.randomUUID();
+        UUID own = UUID.randomUUID();
+        UUID other = UUID.randomUUID();
+        UUID pack = UUID.randomUUID();
+        AuthenticatedUser user = new AuthenticatedUser(userId, UserRole.USER, true, 1);
+        when(service.getSessionStatus(own.toString(), userId)).thenReturn(
+                new ChallengeQuizSessionStatusResponse(own.toString(), pack.toString(),
+                        QuickReviewSessionStatus.IN_PROGRESS, true, "challenge", false));
+        when(service.getSessionStatus(other.toString(), userId))
+                .thenThrow(new ChallengeQuizSessionNotFoundException());
+        when(service.getSession(own.toString(), userId)).thenReturn(new ChallengeQuizStartResponse(
+                own.toString(), QuickReviewSessionStatus.IN_PROGRESS, pack.toString(), "Pack", 0, 90,
+                0, 5, 0, 10, "challenge", "medium", List.of(), 0, Map.of(), List.of(), 1, true));
+        org.mockito.Mockito.doThrow(new ChallengeQuizSessionNotFoundException())
+                .when(service).markReadySeen(other.toString(), userId);
+        var mvc = standaloneSetup(new ChallengeQuizController(service))
+                .setControllerAdvice(new GlobalExceptionHandler(DataSize.ofMegabytes(10)))
+                .setCustomArgumentResolvers(new HandlerMethodArgumentResolver() {
+                    @Override public boolean supportsParameter(MethodParameter parameter) {
+                        return parameter.getParameterType() == AuthenticatedUser.class;
+                    }
+                    @Override public Object resolveArgument(MethodParameter parameter, ModelAndViewContainer container,
+                            NativeWebRequest request, WebDataBinderFactory binderFactory) { return user; }
+                }).build();
+
+        mvc.perform(post("/challenge-quiz/sessions/" + own + "/ready-seen"))
+                .andExpect(status().isNoContent());
+        verify(service).markReadySeen(own.toString(), userId);
+        mvc.perform(get("/challenge-quiz/sessions/" + own + "/status"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.sessionId").value(own.toString()))
+                .andExpect(jsonPath("$.studyPackId").value(pack.toString()))
+                .andExpect(jsonPath("$.status").value("IN_PROGRESS"))
+                .andExpect(jsonPath("$.preparedNotStarted").value(true))
+                .andExpect(jsonPath("$.mode").value("challenge"))
+                .andExpect(jsonPath("$.expired").value(false));
+        mvc.perform(get("/challenge-quiz/sessions/" + own))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.sessionId").value(own.toString()))
+                .andExpect(jsonPath("$.preparedNotStarted").value(true));
+        mvc.perform(post("/challenge-quiz/sessions/" + other + "/ready-seen"))
+                .andExpect(status().isNotFound());
+        mvc.perform(get("/challenge-quiz/sessions/" + other + "/status"))
+                .andExpect(status().isNotFound());
+    }
     @Test
     void startQuizWhileGeneratingReturnsPreparationInProgressCode() throws Exception {
         ChallengeQuizService service = mock(ChallengeQuizService.class);

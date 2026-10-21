@@ -8,6 +8,7 @@ public enum NotificationType {
     ANNOUNCEMENT(NotificationCategory.ANNOUNCEMENT),
     REVIEW_SET_UPDATE(NotificationCategory.LEARNING_SYSTEM),
     CURATION_COST_ALERT(NotificationCategory.LEARNING_SYSTEM),
+    CHALLENGE_QUIZ_READY(NotificationCategory.ASYNC_RESULT),
     BULK_GENERATION_INCOMPLETE(NotificationCategory.ASYNC_RESULT),
     BULK_REGENERATION_COMPLETE(NotificationCategory.ASYNC_RESULT);
 
