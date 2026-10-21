@@ -55,8 +55,12 @@ delivered as separate PRs where the seams allow.
      path, `ChallengeQuizService:338`, and `generateBoardExamAsync`, `:638`). An unstamped Board Exam never expires (`isSessionExpired`,
      `:1489-1496`), and it shares `session_mode='CHALLENGE'`, so it would block Challenge requests on that
      note.
-   - Quota is charged at session creation. **A new `decrementChallengeUsageNotBelowZero` refunds it on
-     failure and on expiry (C4).**
+   - **Quota is charged only when Start Quiz succeeds** (owner decision 2026-10-20, superseding C4's
+     charge-at-creation; `docs/claude-plans/2026-10-20-owner-decisions-v0175-analytics-and-quota-at-start.md`).
+     Preparation, failure, discard and expiry never consume quota, so no refund path is needed. Prepared,
+     unstarted sessions are `quotaExempt` until Start.
+   - `CHALLENGE_QUIZ_STARTED` fires once, at a successful Start Quiz (owner decision 1, same file).
+     Preparation-requested, ready and abandoned events are new.
    - Retry once, only after a lock-and-recheck (`generateBoardExamAsync:626-633` pattern). **No Luna fallback
      for Plus/Pro.**
    - Recovery-sweep entries for stuck generating and ready sessions.
@@ -125,8 +129,9 @@ delivered as separate PRs where the seams allow.
 - `v0.169.0` was archived from `RELEASES.md` and the ROADMAP baseline. Both files were rebuilt from the
   archives and compared byte-for-byte against the pre-move copies: identical.
 
-Anti-drift: no pricing, entitlement or quota-limit change. **The only quota changes are charging Challenge
-at session creation and the C4 refund on failure or expiry**;
+Anti-drift: no pricing, entitlement or quota-limit change. **The only quota change is charging Challenge
+when Start Quiz succeeds, never during preparation** (owner, 2026-10-20, superseding the charge-at-creation
+plan);
 customer copy never names a model and implies no FREE/paid quality difference; no email or push; **no timer
 starts before Start Quiz**; no Luna fallback for Plus/Pro; Board/Long Exam untouched; **no prompt or schema
 change beyond R1's owner-signed wording**; no `LLM_MODEL_CRITIQUE` change; no mass regeneration; feature PRs
@@ -159,6 +164,23 @@ never edit this file.
       consistently. The acceptance run found 3 of 32 such keys on mini, 0 of 31 on Luna and 0 of 28 on Sol.
     - A start whose database write fails mid-transaction returns a server error instead of "Try again". This
       is pre-existing and loses no quota (item 2).
+
+- **Item 2a: Challenge preparation state and charge at Start Quiz** (PR #1518, `d5362a44`, open for merge).
+  - **No timer before Start Quiz.** Every ordinary Challenge start lands on `preparedNotStarted`. The new
+    `POST /challenge-quiz/sessions/{id}/start-quiz` is the only thing that starts the timer, and it is
+    idempotent. Board Exam is unchanged.
+  - **Quota at Start only** (owner decision 2026-10-20). It is re-checked under the user-row lock.
+    Preparation, failure and expiry never charge.
+  - **Async preparation.** Single-note generation runs on a dedicated executor with no transaction across the
+    model call. Failed preparations keep their questions in the bank and release claims.
+  - **Analytics.** `CHALLENGE_QUIZ_STARTED` fires at Start, redo-missed included. There are three new
+    preparation events.
+  - **Verification.** `./mvnw clean install`: 2,829 tests, 0 failures. A cold falsification review found
+    2 P2 and 5 P3 defects; all are fixed with tests.
+  - **Not done yet, by design:** the frontend Start Quiz wiring (item 3; **items 2 and 3 deploy together**)
+    and the expiry and stuck-preparation sweeps (2b).
+  - **Known limitation:** regeneration of an additional source note in a multi-note quiz is not caught
+    before Start (item 5).
 
 ## v0.174.0 - Enhanced Generation
 
