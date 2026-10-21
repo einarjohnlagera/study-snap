@@ -14,6 +14,7 @@ import com.studysnap.backend.dto.ChallengeQuizProgressRequest;
 import com.studysnap.backend.dto.ChallengeQuizSessionResponse;
 import com.studysnap.backend.dto.ChallengeQuizSessionSummaryResponse;
 import com.studysnap.backend.dto.ChallengeQuizStartRequest;
+import com.studysnap.backend.dto.ChallengeQuizCollision;
 import com.studysnap.backend.dto.ChallengeQuizStartResponse;
 import com.studysnap.backend.dto.LongExamSourceNoteRef;
 import com.studysnap.backend.dto.QuizItem;
@@ -34,6 +35,8 @@ import com.studysnap.backend.exception.ChallengeQuizGenerationFailedException;
 import com.studysnap.backend.exception.ChallengeQuizNotAvailableException;
 import com.studysnap.backend.exception.ChallengeQuizSessionNotFoundException;
 import com.studysnap.backend.exception.ChallengeQuizSessionNotInProgressException;
+import com.studysnap.backend.exception.InvalidPreparedChallengeDiscardException;
+import com.studysnap.backend.exception.PreparedChallengeExpiredException;
 import com.studysnap.backend.exception.InvalidBoardExamSourceException;
 import com.studysnap.backend.exception.BoardExamInsufficientEligibleSourcesException;
 import com.studysnap.backend.exception.InvalidChallengeQuizModeException;
@@ -240,7 +243,10 @@ public class ChallengeQuizService {
                 userId,
                 studyPackId,
                 studyPack,
-                planType
+                planType,
+                selectedMode,
+                false,
+                request == null ? null : request.discardPreparedSessionId()
         );
         if (existingSession.isPresent()) {
             return existingSession.get();
@@ -851,6 +857,11 @@ public class ChallengeQuizService {
      */
     @Transactional
     public ChallengeQuizStartResponse startRedoMissedSession(String studyPackIdRaw, UUID userId) {
+        return startRedoMissedSession(studyPackIdRaw, userId, null);
+    }
+
+    @Transactional
+    public ChallengeQuizStartResponse startRedoMissedSession(String studyPackIdRaw, UUID userId, String discardPreparedSessionId) {
         authService.requireEmailVerified(userId);
         UUID studyPackId = parseStudyPackId(studyPackIdRaw);
         StudyPackEntity studyPack = findOwnedStudyPackForGenerationOrThrow(studyPackId, userId);
@@ -860,7 +871,9 @@ public class ChallengeQuizService {
                 studyPackId,
                 studyPack,
                 planType,
-                true
+                MODE_CHALLENGE,
+                true,
+                discardPreparedSessionId
         );
         if (existingSession.isPresent()) {
             return existingSession.get();
@@ -902,7 +915,7 @@ public class ChallengeQuizService {
         return toStartResponse(saved, studyPack, resolveUsedThisMonthForResponse(userId, saved), planType);
     }
 
-    @Transactional(noRollbackFor = ChallengeQuizSessionNotInProgressException.class)
+    @Transactional(noRollbackFor = {ChallengeQuizSessionNotInProgressException.class, PreparedChallengeExpiredException.class})
     public ChallengeQuizStartResponse startQuiz(String sessionIdRaw, UUID userId) {
         UUID sessionId = parseSessionId(sessionIdRaw);
         QuickReviewSessionEntity observed = quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(
@@ -921,10 +934,12 @@ public class ChallengeQuizService {
         if (!QuizSessionStateUtils.extractPreparedNotStarted(session.getSessionState())) {
             return toStartResponse(session, pack, resolveUsedThisMonthForResponse(userId, session), planType);
         }
+        if (PreparedChallengeExpiry.expired(session, preparedCutoff())) {
+            forfeitPreparedSession(session, userId, "EXPIRED");
+            throw new PreparedChallengeExpiredException();
+        }
         if (pack.getGenerationStamp() != QuizSessionStateUtils.extractPreparedGenerationStamp(session.getSessionState())) {
-            markSessionForfeited(session);
-            challengeQuizQuestionBankService.releaseClaims(userId, session.getStudyPackId(), session.getId());
-            quickReviewSessionRepository.save(session);
+            forfeitPreparedSession(session, userId, "STALE");
             throw new ChallengeQuizSessionNotInProgressException();
         }
         // Only the primary pack stamp is checked here. A regenerated additional source is not
@@ -981,6 +996,8 @@ public class ChallengeQuizService {
                         QuickReviewSessionMode.CHALLENGE,
                         OBSERVABLE_STATUSES
                 )
+                .filter(session -> MODE_BOARD_EXAM.equals(extractMode(session.getSessionState()))
+                        || !PreparedChallengeExpiry.expired(session, preparedCutoff()))
                 .map(session -> toStartResponse(
                         session,
                         studyPack,
@@ -1285,10 +1302,15 @@ public class ChallengeQuizService {
             return new SimpleMessageResponse(CHALLENGE_QUIZ_SESSION_ALREADY_ENDED_MESSAGE);
         }
 
-        markSessionForfeited(session);
-        quickReviewSessionRepository.save(session);
-        if (MODE_CHALLENGE.equals(extractMode(session.getSessionState()))) {
-            challengeQuizQuestionBankService.releaseClaims(userId, session.getStudyPackId(), session.getId());
+        if (MODE_CHALLENGE.equals(extractMode(session.getSessionState()))
+                && QuizSessionStateUtils.extractPreparedNotStarted(session.getSessionState())) {
+            forfeitPreparedSession(session, userId, "DISCARDED");
+        } else {
+            markSessionForfeited(session);
+            quickReviewSessionRepository.save(session);
+            if (MODE_CHALLENGE.equals(extractMode(session.getSessionState()))) {
+                challengeQuizQuestionBankService.releaseClaims(userId, session.getStudyPackId(), session.getId());
+            }
         }
         return new SimpleMessageResponse(CHALLENGE_QUIZ_SESSION_FORFEITED_MESSAGE);
     }
@@ -1592,12 +1614,10 @@ public class ChallengeQuizService {
     }
 
     private Optional<ChallengeQuizStartResponse> resolveExistingChallengeSession(
-            UUID userId,
-            UUID studyPackId,
-            StudyPackEntity studyPack,
-            PlanType planType
+            UUID userId, UUID studyPackId, StudyPackEntity studyPack, PlanType planType
     ) {
-        return resolveExistingChallengeSession(userId, studyPackId, studyPack, planType, false);
+        return resolveExistingChallengeSession(userId, studyPackId, studyPack, planType,
+                MODE_CHALLENGE, false, null);
     }
 
     private Optional<ChallengeQuizStartResponse> resolveExistingChallengeSession(
@@ -1605,7 +1625,9 @@ public class ChallengeQuizService {
             UUID studyPackId,
             StudyPackEntity studyPack,
             PlanType planType,
-            boolean requireRedoMissedSource
+            String requestedMode,
+            boolean requireRedoMissedSource,
+            String discardPreparedSessionId
     ) {
         QuickReviewSessionEntity existing = quickReviewSessionRepository
                 .findTopByUserIdAndStudyPackIdAndSessionModeAndStatusInOrderByCreatedAtDesc(
@@ -1633,6 +1655,41 @@ public class ChallengeQuizService {
         if (lockedExisting == null || lockedExisting.getStatus() != observedStatus) {
             return Optional.empty();
         }
+        boolean ordinary = !MODE_BOARD_EXAM.equals(extractMode(lockedExisting.getSessionState()));
+        boolean unstarted = lockedExisting.getStatus() == QuickReviewSessionStatus.GENERATING
+                || QuizSessionStateUtils.extractPreparedNotStarted(lockedExisting.getSessionState());
+        if (ordinary && lockedExisting.getStatus() == QuickReviewSessionStatus.IN_PROGRESS
+                && PreparedChallengeExpiry.expired(lockedExisting, preparedCutoff())) {
+            forfeitPreparedSession(lockedExisting, userId, "EXPIRED");
+            return Optional.empty();
+        }
+        if (ordinary && lockedExisting.getStatus() == QuickReviewSessionStatus.IN_PROGRESS
+                && QuizSessionStateUtils.extractPreparedNotStarted(lockedExisting.getSessionState())
+                && QuizSessionStateUtils.extractPreparedGenerationStamp(lockedExisting.getSessionState())
+                != studyPack.getGenerationStamp()) {
+            forfeitPreparedSession(lockedExisting, userId, "STALE");
+            return Optional.empty();
+        }
+        boolean collision = ordinary && unstarted &&
+                (MODE_BOARD_EXAM.equals(requestedMode)
+                        || requireRedoMissedSource != QuizSessionStateUtils.extractRedoMissedSource(
+                                lockedExisting.getSessionState()));
+        if (discardPreparedSessionId != null) {
+            if (!collision || !lockedExisting.getId().toString().equals(discardPreparedSessionId)) {
+                throw new InvalidPreparedChallengeDiscardException();
+            }
+            forfeitPreparedSession(lockedExisting, userId, "DISCARDED");
+            return Optional.empty();
+        }
+        if (collision) {
+            String existingIntent = QuizSessionStateUtils.extractRedoMissedSource(lockedExisting.getSessionState())
+                    ? "redo_missed" : MODE_CHALLENGE;
+            String requestedIntent = requireRedoMissedSource ? "redo_missed" : requestedMode;
+            return Optional.of(toStartResponse(lockedExisting, studyPack,
+                    resolveUsedThisMonthForResponse(userId, lockedExisting), planType)
+                    .withCollision(new ChallengeQuizCollision(lockedExisting.getId().toString(),
+                            existingIntent, requestedIntent)));
+        }
         if (lockedExisting.getStatus() == QuickReviewSessionStatus.GENERATING) {
             if (requireRedoMissedSource
                     && !QuizSessionStateUtils.extractRedoMissedSource(lockedExisting.getSessionState())) {
@@ -1656,12 +1713,6 @@ public class ChallengeQuizService {
                 forfeitExpiredSession(lockedExisting, userId);
                 return Optional.empty();
             }
-            if (QuizSessionStateUtils.extractPreparedNotStarted(lockedExisting.getSessionState())
-                    && QuizSessionStateUtils.extractPreparedGenerationStamp(lockedExisting.getSessionState())
-                    != studyPack.getGenerationStamp()) {
-                forfeitStaleOrdinarySession(lockedExisting, userId);
-                return Optional.empty();
-            }
             return Optional.of(toStartResponse(
                     lockedExisting,
                     studyPack,
@@ -1672,6 +1723,23 @@ public class ChallengeQuizService {
         markSessionForfeited(lockedExisting);
         quickReviewSessionRepository.save(lockedExisting);
         return Optional.empty();
+    }
+
+    private OffsetDateTime preparedCutoff() {
+        return OffsetDateTime.now(ZoneOffset.UTC).minusDays(properties.getGeneration().getChallengePreparedExpiryDays());
+    }
+
+    private void forfeitPreparedSession(QuickReviewSessionEntity session, UUID userId, String reason) {
+        markSessionForfeited(session);
+        challengeQuizQuestionBankService.releaseClaims(userId, session.getStudyPackId(), session.getId());
+        quickReviewSessionRepository.save(session);
+        try {
+            analyticsService.trackEvent(userId, AnalyticsEventType.CHALLENGE_QUIZ_PREPARATION_ABANDONED,
+                    session.getStudyPackId(), Map.of(ANALYTICS_METADATA_SESSION_ID, session.getId().toString(),
+                            ANALYTICS_METADATA_MODE, MODE_CHALLENGE, "reason", reason));
+        } catch (RuntimeException ignored) {
+            // Analytics cannot affect the session transition.
+        }
     }
 
     private void forfeitStaleOrdinarySession(QuickReviewSessionEntity session, UUID userId) {

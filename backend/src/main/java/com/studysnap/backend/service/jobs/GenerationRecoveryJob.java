@@ -25,18 +25,42 @@ public class GenerationRecoveryJob {
         SurfaceRecoveryResult pools = recoverPools();
         SurfaceRecoveryResult longExamSessions = recoverLongExamSessions();
         SurfaceRecoveryResult boardExamSessions = recoverBoardExamSessions();
+        SurfaceRecoveryResult preparedChallenges = recoverPreparedChallenges();
+        SurfaceRecoveryResult stuckChallenges = recoverStuckChallenges();
         SurfaceRecoveryResult notes = recoverNotes();
         log.info(
-                "generation.recovery completed pools={} poolsMaxAgeMinutes={} longExamSessions={} longExamSessionsMaxAgeMinutes={} boardExamSessions={} boardExamSessionsMaxAgeMinutes={} notes={} notesMaxAgeMinutes={}",
+                "generation.recovery completed pools={} poolsMaxAgeMinutes={} longExamSessions={} longExamSessionsMaxAgeMinutes={} boardExamSessions={} boardExamSessionsMaxAgeMinutes={} preparedChallenges={} preparedChallengesMaxAgeMinutes={} stuckChallenges={} stuckChallengesMaxAgeMinutes={} notes={} notesMaxAgeMinutes={}",
                 pools.recoveredCount(),
                 pools.maxRecoveredAge().toMinutes(),
                 longExamSessions.recoveredCount(),
                 longExamSessions.maxRecoveredAge().toMinutes(),
                 boardExamSessions.recoveredCount(),
                 boardExamSessions.maxRecoveredAge().toMinutes(),
+                preparedChallenges.recoveredCount(),
+                preparedChallenges.maxRecoveredAge().toMinutes(),
+                stuckChallenges.recoveredCount(),
+                stuckChallenges.maxRecoveredAge().toMinutes(),
                 notes.recoveredCount(),
                 notes.maxRecoveredAge().toMinutes()
         );
+    }
+
+    private SurfaceRecoveryResult recoverPreparedChallenges() {
+        try {
+            return generationRecoveryService.recoverExpiredPreparedChallengeSessions();
+        } catch (RuntimeException ex) {
+            log.warn("generation.recovery prepared-challenge sweep failed", ex);
+            return SurfaceRecoveryResult.empty();
+        }
+    }
+
+    private SurfaceRecoveryResult recoverStuckChallenges() {
+        try {
+            return generationRecoveryService.recoverStuckChallengeGenerations();
+        } catch (RuntimeException ex) {
+            log.warn("generation.recovery stuck-challenge sweep failed", ex);
+            return SurfaceRecoveryResult.empty();
+        }
     }
 
     private SurfaceRecoveryResult recoverPools() {

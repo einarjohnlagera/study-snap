@@ -14,6 +14,7 @@ import com.studysnap.backend.dto.NoteRegenerationPreflightResponse;
 import com.studysnap.backend.dto.NoteBulkRegenerationReceiptResponse;
 import com.studysnap.backend.dto.NoteListItemResponse;
 import com.studysnap.backend.dto.NoteResponse;
+import com.studysnap.backend.dto.ChallengeQuizStartRequest;
 import com.studysnap.backend.dto.NoteStatusResponse;
 import com.studysnap.backend.dto.NotesLibraryFilterOptionsResponse;
 import com.studysnap.backend.dto.NotesLibraryIdsResponse;
@@ -1435,6 +1436,43 @@ class NoteControllerTest {
                         .content("{}"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.error.code").value("QUICK_REVIEW_NOT_AVAILABLE"));
+    }
+
+    @Test
+    void challengeStartAcceptsDiscardIdInARealJsonBody() throws Exception {
+        AuthenticatedUser routeUser = new AuthenticatedUser(UUID.randomUUID(), UserRole.USER, true, 1);
+        UUID noteId = UUID.randomUUID();
+        UUID discardId = UUID.randomUUID();
+        String packId = UUID.randomUUID().toString();
+        when(noteService.getOwnedStudyPackIdOrThrow(noteId.toString(), routeUser.userId())).thenReturn(packId);
+
+        buildMockMvc(routeUser).perform(post("/notes/" + noteId + "/challenge-quiz/start")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"mode\":\"challenge\",\"discardPreparedSessionId\":\"" + discardId + "\"}"))
+                .andExpect(status().isOk());
+
+        ArgumentCaptor<ChallengeQuizStartRequest> request = ArgumentCaptor.forClass(ChallengeQuizStartRequest.class);
+        verify(challengeQuizService).startSession(eq(packId), eq(routeUser.userId()), request.capture());
+        assertThat(request.getValue().discardPreparedSessionId()).isEqualTo(discardId.toString());
+    }
+
+    @Test
+    void redoMissedAcceptsOptionalDiscardBodyAndBodylessCall() throws Exception {
+        AuthenticatedUser routeUser = new AuthenticatedUser(UUID.randomUUID(), UserRole.USER, true, 1);
+        UUID noteId = UUID.randomUUID();
+        UUID discardId = UUID.randomUUID();
+        String packId = UUID.randomUUID().toString();
+        when(noteService.getOwnedStudyPackIdOrThrow(noteId.toString(), routeUser.userId())).thenReturn(packId);
+        MockMvc mvc = buildMockMvc(routeUser);
+
+        mvc.perform(post("/notes/" + noteId + "/challenge-quiz/redo-missed"))
+                .andExpect(status().isOk());
+        mvc.perform(post("/notes/" + noteId + "/challenge-quiz/redo-missed")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"discardPreparedSessionId\":\"" + discardId + "\"}"))
+                .andExpect(status().isOk());
+        verify(challengeQuizService).startRedoMissedSession(packId, routeUser.userId(), null);
+        verify(challengeQuizService).startRedoMissedSession(packId, routeUser.userId(), discardId.toString());
     }
 
     @Test

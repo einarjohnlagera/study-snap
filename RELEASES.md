@@ -165,7 +165,7 @@ never edit this file.
     - A start whose database write fails mid-transaction returns a server error instead of "Try again". This
       is pre-existing and loses no quota (item 2).
 
-- **Item 2a: Challenge preparation state and charge at Start Quiz** (PR #1518, `d5362a44`, open for merge).
+- **Item 2a: Challenge preparation state and charge at Start Quiz** (PR #1518, merged as `5c80f809`).
   - **No timer before Start Quiz.** Every ordinary Challenge start lands on `preparedNotStarted`. The new
     `POST /challenge-quiz/sessions/{id}/start-quiz` is the only thing that starts the timer, and it is
     idempotent. Board Exam is unchanged.
@@ -181,6 +181,33 @@ never edit this file.
     and the expiry and stuck-preparation sweeps (2b).
   - **Known limitation:** regeneration of an additional source note in a multi-note quiz is not caught
     before Start (item 5).
+
+- **Item 2b: prepared-quiz expiry, stuck-preparation sweep and collision choice** (branch
+  `feat/v0.175.0-item2b-sweeps-and-collision`).
+  - **7-day expiry of an unstarted quiz.** It is enforced three ways: lazily (forfeit and proceed), by a
+    sweep, and under lock in `startQuiz`, which returns 409 `PREPARED_CHALLENGE_EXPIRED`. Claims are released
+    and quota is untouched. A reload never shows an expired quiz as ready. The sweep selects candidates by
+    preparation time.
+  - **A preparation stuck for 20 minutes is marked FAILED** by the recovery job (ordinary Challenge only),
+    with claims released and no quota effect.
+  - **Collision instead of silent reuse.** A Board Exam or Redo Missed request against an unstarted
+    ordinary Challenge on the same note returns `collision`. Re-sending with `discardPreparedSessionId`
+    forfeits it (`DISCARDED`) and proceeds; a mismatched id returns 409 `INVALID_PREPARED_CHALLENGE_DISCARD`.
+  - **Analytics.** `CHALLENGE_QUIZ_PREPARATION_ABANDONED` carries the reason EXPIRED, DISCARDED or STALE. An
+    explicit forfeit of an unstarted quiz fires DISCARDED.
+  - **Verification.** `./mvnw clean install`: 2,854 tests, 0 failures. That includes real-PostgreSQL tests of
+    both sweep row writers, the expiry-sweep versus Start race and the stuck-sweep versus preparation-finish
+    race. A cold falsification review disproved none of 9 claims. Codex review findings are fixed, except
+    the frontend collision handling, which is item 3's.
+  - **⚠️ Release dependency: the client does not yet act on `collision`.** Until item 3 lands, a learner
+    with an unstarted Challenge cannot reach Board Exam or Redo Missed on that note. **v0.175.0 must not merge
+    to `main` without item 3.**
+  - **Known limitations:**
+    - The 20-minute stuck bound counts from `createdAt`, so a preparation queued under heavy load can be
+      failed. That costs no quota.
+    - A double-submitted Board Exam discard gets a 409 on the second request.
+    - Claim release is scoped to the session's primary pack. That is correct today, because multi-note
+      starts do not claim from the bank; item 5 replaces it with a session-scoped release.
 
 ## v0.174.0 - Enhanced Generation
 

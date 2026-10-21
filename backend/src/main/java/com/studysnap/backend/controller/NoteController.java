@@ -41,6 +41,7 @@ import com.studysnap.backend.dto.SimpleMessageResponse;
 import com.studysnap.backend.dto.ChallengeQuizPerformanceSummaryResponse;
 import com.studysnap.backend.dto.ChallengeQuizSessionSummaryResponse;
 import com.studysnap.backend.dto.ChallengeQuizStartRequest;
+import com.studysnap.backend.dto.ChallengeQuizRedoMissedRequest;
 import com.studysnap.backend.dto.ChallengeQuizStartResponse;
 import com.studysnap.backend.dto.CopyOnSignupRequest;
 import com.studysnap.backend.dto.CopyOnSignupResponse;
@@ -589,12 +590,14 @@ public class NoteController {
     @PreAuthorize("hasAnyRole('USER','ADMIN')")
     public ChallengeQuizStartResponse startRedoMissedChallengeQuiz(
             @PathVariable String id,
+            @RequestBody(required = false) ChallengeQuizRedoMissedRequest request,
             @AuthenticationPrincipal AuthenticatedUser user
     ) {
         UUID userId = user.userId();
         authService.requireEmailVerified(userId);
         String studyPackId = noteService.getOwnedStudyPackIdOrThrow(id, userId);
-        return challengeQuizService.startRedoMissedSession(studyPackId, userId);
+        return challengeQuizService.startRedoMissedSession(studyPackId, userId,
+                request == null ? null : request.discardPreparedSessionId());
     }
 
     @GetMapping("/{id}/challenge-quiz/in-progress")

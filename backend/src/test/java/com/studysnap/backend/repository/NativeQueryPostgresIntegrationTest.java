@@ -229,7 +229,39 @@ class NativeQueryPostgresIntegrationTest {
      * v0.93.0 pressure test: at 25 against an actual 31, the reflective scan could silently degrade by
      * six queries and stay green, which is the same false comfort the harness exists to remove.
      */
-    private static final int EXPECTED_NATIVE_QUERIES = 49;
+    private static final int EXPECTED_NATIVE_QUERIES = 51;
+
+    @Test
+    void challengeRecoveryCandidatesFilterModeAndStatusBeforeThePageLimit() {
+        UUID owner = seedUser("challenge-recovery-candidates");
+        OffsetDateTime cutoff = OffsetDateTime.now().minusDays(7);
+        // Mutant: dropping the mode predicate lets older Board rows fill the limited page.
+        for (int index = 0; index < 4; index++) {
+            seedGeneratingChallengeCandidate(owner, "board_exam", cutoff.minusDays(1 + index));
+        }
+        UUID generating = seedGeneratingChallengeCandidate(owner, "challenge", cutoff.minusMinutes(1));
+        UUID legacyGenerating = seedGeneratingChallengeCandidate(owner, "challenge", cutoff.minusMinutes(2));
+        jdbcTemplate.update("update quick_review_sessions set session_state = '{}'::jsonb where id=?",
+                legacyGenerating);
+        assertThat(quickReviewSessionRepository.findStuckChallengeGenerationIds(
+                cutoff, PageRequest.of(0, 2))).containsExactly(legacyGenerating, generating);
+
+        UUID prepared = seedGeneratingChallengeCandidate(owner, "challenge", cutoff.minusMinutes(2));
+        jdbcTemplate.update("update quick_review_sessions set status='IN_PROGRESS', "
+                + "session_state = cast(? as jsonb) where id=?",
+                "{\"mode\":\"challenge\",\"preparedNotStarted\":true}", prepared);
+        UUID boardPrepared = seedGeneratingChallengeCandidate(owner, "board_exam", cutoff.minusMinutes(3));
+        jdbcTemplate.update("update quick_review_sessions set status='IN_PROGRESS' where id=?", boardPrepared);
+        // Mutant: without preparedNotStarted in SQL, older started rows fill the page.
+        for (int index = 0; index < 4; index++) {
+            UUID started = seedGeneratingChallengeCandidate(owner, "challenge", cutoff.minusDays(2 + index));
+            jdbcTemplate.update("update quick_review_sessions set status='IN_PROGRESS', "
+                    + "session_state = cast(? as jsonb) where id=?",
+                    "{\"mode\":\"challenge\",\"preparedNotStarted\":false}", started);
+        }
+        assertThat(quickReviewSessionRepository.findExpiredPreparedChallengeCandidateIds(
+                cutoff, PageRequest.of(0, 2))).containsExactly(prepared);
+    }
 
     @Test
     void staleBoardExamCandidateSurvivesAnOlderPageOfOrdinaryChallengeJobs() {
@@ -249,7 +281,9 @@ class NativeQueryPostgresIntegrationTest {
         GenerationRecoveryRowWriter rowWriter = new GenerationRecoveryRowWriter(
                 mock(ExamQuestionPoolRepository.class), quickReviewSessionRepository,
                 mock(NoteRepository.class), mock(StudyPackService.class), usage,
-                mock(ChallengeQuizQuestionBankService.class));
+                mock(ChallengeQuizQuestionBankService.class),
+                mock(StudyPackRepository.class), mock(AnalyticsService.class),
+                mock(jakarta.persistence.EntityManager.class));
         candidates.forEach(id -> rowWriter.recoverBoardExamSession(id, cutoff));
         quickReviewSessionRepository.flush();
         assertThat(jdbcTemplate.queryForObject(

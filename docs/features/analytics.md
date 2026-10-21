@@ -65,8 +65,10 @@ Core usage and business events:
   contains `sessionId` and `mode`.
 - `CHALLENGE_QUIZ_PREPARATION_READY` — the ordinary Challenge session became ready for Start Quiz;
   metadata contains `sessionId` and `mode`.
-- `CHALLENGE_QUIZ_PREPARATION_ABANDONED` — reserved for the v0.175.0 item 2b discard and expiry paths;
-  metadata will contain `sessionId` and `mode`.
+- `CHALLENGE_QUIZ_PREPARATION_ABANDONED` — an unstarted ordinary Challenge was expired, discarded
+  through a collision or the explicit forfeit endpoint, or forfeited after a Study Pack stamp change;
+  metadata contains `sessionId`, `mode`, and
+  `reason` (`EXPIRED`, `DISCARDED`, or `STALE`). Failed preparation does not fire this event.
 - `ADAPTIVE_PRACTICE_STARTED`
 - `PAYWALL_VIEWED`
 - `UPGRADE_CLICKED`

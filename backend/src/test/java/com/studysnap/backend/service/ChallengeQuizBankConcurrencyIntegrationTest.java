@@ -2,6 +2,7 @@ package com.studysnap.backend.service;
 
 import com.studysnap.backend.dto.ChallengeQuizCompleteRequest;
 import com.studysnap.backend.dto.ChallengeQuizStartResponse;
+import com.studysnap.backend.dto.ChallengeQuizStartRequest;
 import com.studysnap.backend.dto.ChallengeQuizProgressRequest;
 import com.studysnap.backend.dto.LongExamProgressRequest;
 import com.studysnap.backend.dto.LongExamCompleteRequest;
@@ -16,6 +17,7 @@ import com.studysnap.backend.entity.QuickReviewRound;
 import com.studysnap.backend.entity.QuickReviewConfidenceLevel;
 import com.studysnap.backend.exception.QuickReviewSessionStaleException;
 import com.studysnap.backend.exception.MonthlyChallengeQuizLimitReachedException;
+import com.studysnap.backend.exception.PreparedChallengeExpiredException;
 import com.studysnap.backend.exception.InterviewPracticeAnswerAlreadyRecordedException;
 import com.studysnap.backend.entity.LearnerLevel;
 import com.studysnap.backend.repository.ChallengeQuizQuestionBankOwnerProjection;
@@ -43,10 +45,14 @@ import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -84,6 +90,7 @@ class ChallengeQuizBankConcurrencyIntegrationTest {
     @Autowired StudyPackRepository studyPackRepository;
     @Autowired PlatformTransactionManager transactionManager;
     @Autowired ChallengeQuizQuestionBankRepository bankRepository;
+    @Autowired GenerationRecoveryRowWriter generationRecoveryRowWriter;
     @Autowired jakarta.persistence.EntityManagerFactory entityManagerFactory;
 
     @MockitoBean AuthService authService;
@@ -216,7 +223,7 @@ class ChallengeQuizBankConcurrencyIntegrationTest {
         String readyState = "{\"mode\":\"challenge\",\"difficulty\":\"medium\","
                 + "\"quiz\":[{\"question\":\"Ready question\",\"choices\":[\"A\",\"B\"],\"correctIndex\":0}],"
                 + "\"timeLimitSeconds\":90,\"preparedNotStarted\":true,\"preparedGenerationStamp\":0,"
-                + "\"preparedAtEpochSeconds\":1}";
+                + "\"preparedAtEpochSeconds\":" + OffsetDateTime.now(ZoneOffset.UTC).toEpochSecond() + "}";
         jdbc.update("update quick_review_sessions set session_state = ?::jsonb, quota_exempt = true where id = ?",
                 readyState, first.sessionId);
         jdbc.update("insert into notes (id, owner_user_id, title, content, visibility, tags, target_profile_type, created_at, updated_at)"
@@ -267,7 +274,7 @@ class ChallengeQuizBankConcurrencyIntegrationTest {
         String readyState = "{\"mode\":\"challenge\",\"difficulty\":\"medium\","
                 + "\"quiz\":[{\"question\":\"Bank question\",\"choices\":[\"A\",\"B\"],\"correctIndex\":0}],"
                 + "\"timeLimitSeconds\":90,\"preparedNotStarted\":true,\"preparedGenerationStamp\":0,"
-                + "\"preparedAtEpochSeconds\":1}";
+                + "\"preparedAtEpochSeconds\":" + OffsetDateTime.now(ZoneOffset.UTC).toEpochSecond() + "}";
         jdbc.update("update quick_review_sessions set session_state = ?::jsonb, quota_exempt = true where id = ?",
                 readyState, fixture.sessionId);
         jdbc.update("update study_packs set generation_stamp = 1 where id = ?", fixture.packId);
@@ -282,6 +289,267 @@ class ChallengeQuizBankConcurrencyIntegrationTest {
                 fixture.sessionId)).isTrue();
         assertThat(jdbc.queryForObject("select count(*) from challenge_quiz_question_bank where claimed_session_id = ?",
                 Integer.class, fixture.sessionId)).isZero();
+    }
+
+    @Test
+    void expiredPreparedStartCommitsForfeitAndClaimReleaseDespiteExpiryError() {
+        Fixture fixture = seed(false);
+        String readyState = "{\"mode\":\"challenge\",\"difficulty\":\"medium\","
+                + "\"quiz\":[{\"question\":\"Bank question\",\"choices\":[\"A\",\"B\"],\"correctIndex\":0}],"
+                + "\"timeLimitSeconds\":90,\"preparedNotStarted\":true,\"preparedGenerationStamp\":0,"
+                + "\"preparedAtEpochSeconds\":" + OffsetDateTime.now(ZoneOffset.UTC).minusDays(8).toEpochSecond() + "}";
+        jdbc.update("update quick_review_sessions set session_state = ?::jsonb, quota_exempt = true where id = ?",
+                readyState, fixture.sessionId);
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                () -> challengeQuizService.startQuiz(fixture.sessionId.toString(), fixture.userId))
+                .isInstanceOf(PreparedChallengeExpiredException.class);
+
+        assertThat(jdbc.queryForObject("select status from quick_review_sessions where id = ?", String.class,
+                fixture.sessionId)).isEqualTo("FORFEITED");
+        assertThat(jdbc.queryForObject("select quota_exempt from quick_review_sessions where id = ?", Boolean.class,
+                fixture.sessionId)).isTrue();
+        assertThat(jdbc.queryForObject("select count(*) from challenge_quiz_question_bank where claimed_session_id = ?",
+                Integer.class, fixture.sessionId)).isZero();
+    }
+
+    @Test
+    void expiredPreparationRowWriterCommitsForfeitAndSkipsStartedYoungAndBoardRows() {
+        Fixture expired = seed(false);
+        Fixture started = seed(false);
+        Fixture young = seed(false);
+        Fixture board = seed(false);
+        setPrepared(expired, "challenge", OffsetDateTime.now(ZoneOffset.UTC).minusDays(8));
+        setPrepared(young, "challenge", OffsetDateTime.now(ZoneOffset.UTC).minusDays(1));
+        setPrepared(board, "board_exam", OffsetDateTime.now(ZoneOffset.UTC).minusDays(8));
+        jdbc.update("update quick_review_sessions set created_at = now() - interval '8 days', quota_exempt = true where id = ?",
+                started.sessionId);
+        OffsetDateTime cutoff = OffsetDateTime.now(ZoneOffset.UTC).minusDays(7);
+
+        assertThat(generationRecoveryRowWriter.recoverExpiredPreparedChallengeSession(expired.sessionId, cutoff)).isPresent();
+        assertThat(generationRecoveryRowWriter.recoverExpiredPreparedChallengeSession(started.sessionId, cutoff)).isEmpty();
+        assertThat(generationRecoveryRowWriter.recoverExpiredPreparedChallengeSession(young.sessionId, cutoff)).isEmpty();
+        assertThat(generationRecoveryRowWriter.recoverExpiredPreparedChallengeSession(board.sessionId, cutoff)).isEmpty();
+
+        assertRecovered(expired, "FORFEITED");
+        assertUntouched(started, "IN_PROGRESS");
+        assertUntouched(young, "IN_PROGRESS");
+        assertUntouched(board, "IN_PROGRESS");
+        org.mockito.Mockito.verify(userUsageService, org.mockito.Mockito.never())
+                .incrementChallengeQuizGeneration(any(), any());
+    }
+
+    @Test
+    void expiredPreparationCandidatesUsePreparationTimeForFilteringAndPaging() {
+        OffsetDateTime cutoff = OffsetDateTime.parse("1980-01-10T00:00:00Z");
+        Fixture youngPreparation = seed(false);
+        Fixture expired = seed(false);
+        setPrepared(youngPreparation, "challenge", cutoff.plusDays(1));
+        setPrepared(expired, "challenge", cutoff.minusDays(2));
+        jdbc.update("update quick_review_sessions set created_at = ? where id = ?",
+                cutoff.minusDays(9), youngPreparation.sessionId);
+        jdbc.update("update quick_review_sessions set created_at = ? where id = ?",
+                cutoff.minusDays(8), expired.sessionId);
+
+        // Mutant: created_at-only filtering lets the young preparation fill this one-row page.
+        assertThat(sessionRepository.findExpiredPreparedChallengeCandidateIds(cutoff, PageRequest.of(0, 1)))
+                .containsExactly(expired.sessionId);
+
+        Fixture missingStamp = seed(false);
+        Fixture malformedStamp = seed(false);
+        setPrepared(missingStamp, "challenge", cutoff.minusDays(6));
+        setPrepared(malformedStamp, "challenge", cutoff.minusDays(5));
+        jdbc.update("update quick_review_sessions set session_state = session_state - 'preparedAtEpochSeconds' "
+                + "where id = ?", missingStamp.sessionId);
+        jdbc.update("update quick_review_sessions set session_state = "
+                + "jsonb_set(session_state, '{preparedAtEpochSeconds}', '\"abc\"'::jsonb) where id = ?",
+                malformedStamp.sessionId);
+
+        // Missing and malformed stamps use creation time; ordering must use preparation time too.
+        assertThat(sessionRepository.findExpiredPreparedChallengeCandidateIds(cutoff, PageRequest.of(0, 3)))
+                .containsExactly(missingStamp.sessionId, malformedStamp.sessionId, expired.sessionId);
+    }
+
+    @Test
+    void stuckGenerationRowWriterCommitsFailureAndSkipsStartedYoungAndBoardRows() {
+        Fixture stuck = seed(false);
+        Fixture started = seed(false);
+        Fixture young = seed(false);
+        Fixture board = seed(false);
+        setGenerating(stuck, "challenge", true);
+        setGenerating(young, "challenge", false);
+        setGenerating(board, "board_exam", true);
+        jdbc.update("update quick_review_sessions set created_at = now() - interval '1 hour', quota_exempt = true where id = ?",
+                started.sessionId);
+        OffsetDateTime cutoff = OffsetDateTime.now(ZoneOffset.UTC).minusMinutes(20);
+
+        assertThat(generationRecoveryRowWriter.recoverStuckChallengeGeneration(stuck.sessionId, cutoff)).isPresent();
+        assertThat(generationRecoveryRowWriter.recoverStuckChallengeGeneration(started.sessionId, cutoff)).isEmpty();
+        assertThat(generationRecoveryRowWriter.recoverStuckChallengeGeneration(young.sessionId, cutoff)).isEmpty();
+        assertThat(generationRecoveryRowWriter.recoverStuckChallengeGeneration(board.sessionId, cutoff)).isEmpty();
+
+        assertRecovered(stuck, "FAILED");
+        assertUntouched(started, "IN_PROGRESS");
+        assertUntouched(young, "GENERATING");
+        assertUntouched(board, "GENERATING");
+        org.mockito.Mockito.verify(userUsageService, org.mockito.Mockito.never())
+                .incrementChallengeQuizGeneration(any(), any());
+    }
+
+    @Test
+    @Timeout(15)
+    void expirySweepRacingStartQuizCannotStartOrChargeExpiredPreparation() throws Exception {
+        Fixture fixture = seed(false);
+        setPrepared(fixture, "challenge", OffsetDateTime.now(ZoneOffset.UTC).minusDays(8));
+        CountDownLatch sweepLockedPack = new CountDownLatch(1);
+        CountDownLatch releaseSweep = new CountDownLatch(1);
+        CountDownLatch startInvoked = new CountDownLatch(1);
+        MethodInterceptor pauseSweepAfterPackLock = invocation -> {
+            Object result = invocation.proceed();
+            if (Thread.currentThread().getName().startsWith("expiry-sweep")
+                    && invocation.getMethod().getName().equals("findByIdAndOwnerUserIdForUpdate")) {
+                sweepLockedPack.countDown();
+                assertThat(releaseSweep.await(8, TimeUnit.SECONDS)).isTrue();
+            }
+            return result;
+        };
+        ((Advised) studyPackRepository).addAdvice(0, pauseSweepAfterPackLock);
+        try (var executor = Executors.newFixedThreadPool(2)) {
+            Future<?> sweep = executor.submit(() -> {
+                Thread.currentThread().setName("expiry-sweep-row-writer");
+                return generationRecoveryRowWriter.recoverExpiredPreparedChallengeSession(
+                        fixture.sessionId, OffsetDateTime.now(ZoneOffset.UTC).minusDays(7));
+            });
+            assertThat(sweepLockedPack.await(8, TimeUnit.SECONDS)).isTrue();
+            Future<?> start = executor.submit(() -> {
+                startInvoked.countDown();
+                return challengeQuizService.startQuiz(fixture.sessionId.toString(), fixture.userId);
+            });
+            assertThat(startInvoked.await(8, TimeUnit.SECONDS)).isTrue();
+            releaseSweep.countDown();
+            sweep.get(8, TimeUnit.SECONDS);
+            org.assertj.core.api.Assertions.assertThatThrownBy(() -> start.get(8, TimeUnit.SECONDS))
+                    .hasCauseInstanceOf(com.studysnap.backend.exception.ChallengeQuizSessionNotInProgressException.class);
+        } finally {
+            releaseSweep.countDown();
+            ((Advised) studyPackRepository).removeAdvice(pauseSweepAfterPackLock);
+        }
+        assertRecovered(fixture, "FORFEITED");
+        org.mockito.Mockito.verify(userUsageService, org.mockito.Mockito.never())
+                .incrementChallengeQuizGeneration(any(), any());
+    }
+
+    @Test
+    @Timeout(15)
+    void stuckSweepRacingPreparationFinishLeavesGeneratedQuestionsUnclaimed() throws Exception {
+        Fixture fixture = seed(false);
+        jdbc.update("update quick_review_sessions set status = 'COMPLETED', completed_at = now() where id = ?",
+                fixture.sessionId);
+        jdbc.update("delete from challenge_quiz_question_bank where study_pack_id = ?", fixture.packId);
+        CountDownLatch inGeneration = new CountDownLatch(1);
+        CountDownLatch releaseGeneration = new CountDownLatch(1);
+        when(quizGenerationService.generateChallengeQuiz(any(), any(), any(), any(),
+                any(Integer.class), any(), any())).thenAnswer(invocation -> {
+            inGeneration.countDown();
+            assertThat(releaseGeneration.await(8, TimeUnit.SECONDS)).isTrue();
+            return GeneratedChallengeQuizContent.withoutUsage(java.util.stream.IntStream.range(0, 12)
+                    .mapToObj(index -> question("Recovered generation " + index)).toList());
+        });
+        ChallengeQuizStartResponse preparing = challengeQuizService.startSession(
+                fixture.packId.toString(), fixture.userId, null);
+        UUID preparingId = UUID.fromString(preparing.sessionId());
+        try (var executor = Executors.newSingleThreadExecutor()) {
+            Future<?> finish = executor.submit(() -> runDispatchedChallengeJob());
+            assertThat(inGeneration.await(8, TimeUnit.SECONDS)).isTrue();
+            assertThat(generationRecoveryRowWriter.recoverStuckChallengeGeneration(
+                    preparingId, OffsetDateTime.now(ZoneOffset.UTC).plusMinutes(1))).isPresent();
+            releaseGeneration.countDown();
+            finish.get(8, TimeUnit.SECONDS);
+        } finally {
+            releaseGeneration.countDown();
+        }
+        assertThat(jdbc.queryForObject("select status from quick_review_sessions where id = ?", String.class,
+                preparingId)).isEqualTo("FAILED");
+        assertThat(jdbc.queryForObject("select session_state ->> 'preparedNotStarted' from quick_review_sessions where id = ?",
+                String.class, preparingId)).isNull();
+        assertThat(jdbc.queryForObject("select count(*) from challenge_quiz_question_bank where origin_session_id = ?",
+                Integer.class, preparingId)).isEqualTo(12);
+        assertThat(jdbc.queryForObject("select count(*) from challenge_quiz_question_bank where claimed_session_id = ?",
+                Integer.class, preparingId)).isZero();
+        assertThat(jdbc.queryForObject("select quota_exempt from quick_review_sessions where id = ?",
+                Boolean.class, preparingId)).isTrue();
+        org.mockito.Mockito.verify(userUsageService, org.mockito.Mockito.never())
+                .incrementChallengeQuizGeneration(any(), any());
+    }
+
+    @Test
+    void discardThenQuotaFailureRollsBackForfeitClaimsAndAbandonedEvent() {
+        Fixture fixture = seed(false);
+        setPrepared(fixture, "challenge", OffsetDateTime.now(ZoneOffset.UTC));
+        when(userUsageService.getMonthlyUsage(eq(fixture.userId), any())).thenReturn(
+                new UserUsageService.MonthlyUsage(null, null, 0, 20, 0, 0, 0, 0, 0, 0, 0, 0, 0));
+        AtomicInteger committedAbandonments = new AtomicInteger();
+        org.mockito.Mockito.doAnswer(invocation -> {
+            if (invocation.getArgument(1) == com.studysnap.backend.entity.AnalyticsEventType.CHALLENGE_QUIZ_PREPARATION_ABANDONED) {
+                TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                    @Override public void afterCommit() { committedAbandonments.incrementAndGet(); }
+                });
+            }
+            return null;
+        }).when(analyticsService).trackEvent(any(), any(), any(), any());
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> challengeQuizService.startSession(
+                fixture.packId.toString(), fixture.userId,
+                new ChallengeQuizStartRequest("board_exam", null, null, fixture.sessionId.toString())))
+                .isInstanceOf(MonthlyChallengeQuizLimitReachedException.class);
+
+        assertThat(jdbc.queryForObject("select status from quick_review_sessions where id = ?", String.class,
+                fixture.sessionId)).isEqualTo("IN_PROGRESS");
+        assertThat(jdbc.queryForObject("select count(*) from challenge_quiz_question_bank where claimed_session_id = ?",
+                Integer.class, fixture.sessionId)).isEqualTo(1);
+        assertThat(jdbc.queryForObject("select quota_exempt from quick_review_sessions where id = ?",
+                Boolean.class, fixture.sessionId)).isTrue();
+        verify(analyticsService).trackEvent(eq(fixture.userId),
+                eq(com.studysnap.backend.entity.AnalyticsEventType.CHALLENGE_QUIZ_PREPARATION_ABANDONED),
+                eq(fixture.packId), org.mockito.ArgumentMatchers.argThat(metadata ->
+                        "DISCARDED".equals(metadata.get("reason"))));
+        assertThat(committedAbandonments).hasValue(0);
+        org.mockito.Mockito.verify(userUsageService, org.mockito.Mockito.never())
+                .incrementChallengeQuizGeneration(any(), any());
+    }
+
+    private void setPrepared(Fixture fixture, String mode, OffsetDateTime preparedAt) {
+        String state = "{\"mode\":\"" + mode + "\",\"difficulty\":\"medium\","
+                + "\"quiz\":[{\"question\":\"Bank question\",\"choices\":[\"A\",\"B\"],\"correctIndex\":0}],"
+                + "\"timeLimitSeconds\":90,\"preparedNotStarted\":true,\"preparedGenerationStamp\":0,"
+                + "\"preparedAtEpochSeconds\":" + preparedAt.toEpochSecond() + "}";
+        jdbc.update("update quick_review_sessions set session_state = ?::jsonb, quota_exempt = true, "
+                        + "created_at = ? where id = ?", state, preparedAt, fixture.sessionId);
+    }
+
+    private void setGenerating(Fixture fixture, String mode, boolean old) {
+        jdbc.update("update quick_review_sessions set status = 'GENERATING', session_state = ?::jsonb, "
+                        + "quota_exempt = true, created_at = ? where id = ?",
+                "{\"mode\":\"" + mode + "\"}",
+                OffsetDateTime.now(ZoneOffset.UTC).minusMinutes(old ? 30 : 1), fixture.sessionId);
+    }
+
+    private void assertRecovered(Fixture fixture, String status) {
+        assertThat(jdbc.queryForObject("select status from quick_review_sessions where id = ?", String.class,
+                fixture.sessionId)).isEqualTo(status);
+        assertThat(jdbc.queryForObject("select quota_exempt from quick_review_sessions where id = ?", Boolean.class,
+                fixture.sessionId)).isTrue();
+        assertThat(jdbc.queryForObject("select count(*) from challenge_quiz_question_bank where claimed_session_id = ?",
+                Integer.class, fixture.sessionId)).isZero();
+    }
+
+    private void assertUntouched(Fixture fixture, String status) {
+        assertThat(jdbc.queryForObject("select status from quick_review_sessions where id = ?", String.class,
+                fixture.sessionId)).isEqualTo(status);
+        assertThat(jdbc.queryForObject("select count(*) from challenge_quiz_question_bank where claimed_session_id = ?",
+                Integer.class, fixture.sessionId)).isEqualTo(1);
+        assertThat(jdbc.queryForObject("select quota_exempt from quick_review_sessions where id = ?", Boolean.class,
+                fixture.sessionId)).isTrue();
     }
 
     private int insertBankRow(Fixture fixture, String key, String level) {
