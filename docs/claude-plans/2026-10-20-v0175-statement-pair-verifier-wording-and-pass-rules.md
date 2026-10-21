@@ -736,7 +736,8 @@ the owner.
 ## Part 13. Stage 2 package (legs P and R): for owner approval, NOT run
 
 **Status:** prepared 2026-10-21 by Release Implementor. **Owner approved the $4.60 total cap on 2026-10-21**,
-after seeing this package. Not yet run. The owner runs the four commands below.
+after seeing this package. **In progress:** Luna legs P and R are done. Sol leg R is next. **Sol leg P is held**
+pending the owner's P2 decision (see "Results so far").
 
 ### What runs
 - **The production code under test:** branch `feat/v0.175.0-statement-pair-verifier` (draft PR #1520), at the
@@ -751,7 +752,7 @@ after seeing this package. Not yet run. The owner runs the four commands below.
 ### Inputs (local, git-ignored, built without any production read)
 - **`stage2-p.jsonl`** (sha256 `832a99face35…`): 40 cases, **40 distinct notes**. They were chosen in md5 order from
   the 76 local notes that have a Study Pack summary and key concepts: v0.174.0 Leg E sources plus `full.jsonl`.
-- **`stage2-r.jsonl`** (sha256 `6e4966806122…`): 40 stratum-N gold items, in md5 order of the 77. Each comes with
+- **`stage2-r.jsonl`** (sha256 `2b07d1dbc0c7…`, rebuilt once; see the run log): 40 stratum-N gold items, in md5 order of the 77. Each comes with
   its own case context, its R1 concept and its gold verdicts.
   - **Limitation: these 40 items span only 10 distinct notes**, the same notes as Stage 1's N.
 - **Data handling** is as in Part 6. All of these are public original notes already sent to OpenAI in v0.174.0
@@ -796,21 +797,172 @@ review, and no criterion is relaxed after the results are seen.
 5. Report every criterion as PASS, GRAY or KILL. #1520 merges only on all PASS.
 
 ### Owner commands (your terminal, with `LLM_API_KEY` set there only)
+Every flag is written out in full. **Do not put the shared flags in a shell variable:** zsh does not word-split an
+unquoted `$B`, so Maven receives one bogus test name (see the run log).
 ```sh
 cd ~/IdeaProjects/study-snap-verifier/backend
 git rev-parse --short HEAD          # must print c554637b
 mkdir -p target/llm-benchmark/verifier
 cp ~/IdeaProjects/study-snap/backend/target/llm-benchmark/verifier/stage2/stage2-p.jsonl ~/IdeaProjects/study-snap/backend/target/llm-benchmark/verifier/stage2/stage2-r.jsonl target/llm-benchmark/verifier/
-B="-Dtest=StatementPairStage2Benchmark -Dnativequery.pg.skip=true -Dllm.stage2=true"
-# 1. Luna, leg P (stop $0.25)
-./mvnw test $B -Dllm.stage2.leg=P -Dllm.stage2.model=gpt-6-luna -Dllm.stage2.input=target/llm-benchmark/verifier/stage2-p.jsonl -Dllm.stage2.outDir=target/llm-benchmark/verifier/p-luna -Dllm.stage2.batches=40 -Dllm.stage2.baselineBatches=10 -Dllm.stage2.maxCalls=200 -Dllm.stage2.priceInPerM=0.10 -Dllm.stage2.priceOutPerM=0.50 -Dllm.stage2.spendStopUsd=0.25 > target/llm-benchmark/verifier/p-luna.log 2>&1; echo exit=$?
+# 1. Luna, leg P (stop $0.25); its scored output is p-luna2, see the run log
+./mvnw test -Dtest=StatementPairStage2Benchmark -Dnativequery.pg.skip=true -Dllm.stage2=true -Dllm.stage2.leg=P -Dllm.stage2.model=gpt-6-luna -Dllm.stage2.input=target/llm-benchmark/verifier/stage2-p.jsonl -Dllm.stage2.outDir=target/llm-benchmark/verifier/p-luna2 -Dllm.stage2.batches=40 -Dllm.stage2.baselineBatches=10 -Dllm.stage2.maxCalls=200 -Dllm.stage2.priceInPerM=0.10 -Dllm.stage2.priceOutPerM=0.50 -Dllm.stage2.spendStopUsd=0.25 > target/llm-benchmark/verifier/p-luna2.log 2>&1; echo exit=$?
 # 2. Luna, leg R (stop $0.15)
-./mvnw test $B -Dllm.stage2.leg=R -Dllm.stage2.model=gpt-6-luna -Dllm.stage2.input=target/llm-benchmark/verifier/stage2-r.jsonl -Dllm.stage2.outDir=target/llm-benchmark/verifier/r-luna -Dllm.stage2.batches=40 -Dllm.stage2.baselineBatches=0 -Dllm.stage2.maxCalls=80 -Dllm.stage2.priceInPerM=0.10 -Dllm.stage2.priceOutPerM=0.50 -Dllm.stage2.spendStopUsd=0.15 > target/llm-benchmark/verifier/r-luna.log 2>&1; echo exit=$?
-# 3. Sol, leg P (stop $2.80)
-./mvnw test $B -Dllm.stage2.leg=P -Dllm.stage2.model=gpt-6.1-sol -Dllm.stage2.input=target/llm-benchmark/verifier/stage2-p.jsonl -Dllm.stage2.outDir=target/llm-benchmark/verifier/p-sol -Dllm.stage2.batches=40 -Dllm.stage2.baselineBatches=10 -Dllm.stage2.maxCalls=200 -Dllm.stage2.priceInPerM=2.00 -Dllm.stage2.priceOutPerM=10.00 -Dllm.stage2.spendStopUsd=2.80 > target/llm-benchmark/verifier/p-sol.log 2>&1; echo exit=$?
+./mvnw test -Dtest=StatementPairStage2Benchmark -Dnativequery.pg.skip=true -Dllm.stage2=true -Dllm.stage2.leg=R -Dllm.stage2.model=gpt-6-luna -Dllm.stage2.input=target/llm-benchmark/verifier/stage2-r.jsonl -Dllm.stage2.outDir=target/llm-benchmark/verifier/r-luna -Dllm.stage2.batches=40 -Dllm.stage2.baselineBatches=0 -Dllm.stage2.maxCalls=80 -Dllm.stage2.priceInPerM=0.10 -Dllm.stage2.priceOutPerM=0.50 -Dllm.stage2.spendStopUsd=0.15 > target/llm-benchmark/verifier/r-luna.log 2>&1; echo exit=$?
+# 3. Sol, leg P (stop $2.80); HELD until the owner decides P2
+./mvnw test -Dtest=StatementPairStage2Benchmark -Dnativequery.pg.skip=true -Dllm.stage2=true -Dllm.stage2.leg=P -Dllm.stage2.model=gpt-6.1-sol -Dllm.stage2.input=target/llm-benchmark/verifier/stage2-p.jsonl -Dllm.stage2.outDir=target/llm-benchmark/verifier/p-sol -Dllm.stage2.batches=40 -Dllm.stage2.baselineBatches=10 -Dllm.stage2.maxCalls=200 -Dllm.stage2.priceInPerM=2.00 -Dllm.stage2.priceOutPerM=10.00 -Dllm.stage2.spendStopUsd=2.80 > target/llm-benchmark/verifier/p-sol.log 2>&1; echo exit=$?
 # 4. Sol, leg R (stop $1.40)
-./mvnw test $B -Dllm.stage2.leg=R -Dllm.stage2.model=gpt-6.1-sol -Dllm.stage2.input=target/llm-benchmark/verifier/stage2-r.jsonl -Dllm.stage2.outDir=target/llm-benchmark/verifier/r-sol -Dllm.stage2.batches=40 -Dllm.stage2.baselineBatches=0 -Dllm.stage2.maxCalls=80 -Dllm.stage2.priceInPerM=2.00 -Dllm.stage2.priceOutPerM=10.00 -Dllm.stage2.spendStopUsd=1.40 > target/llm-benchmark/verifier/r-sol.log 2>&1; echo exit=$?
-# 5. Save the outputs to the main tree right away
-cp -R target/llm-benchmark/verifier/p-luna target/llm-benchmark/verifier/r-luna target/llm-benchmark/verifier/p-sol target/llm-benchmark/verifier/r-sol target/llm-benchmark/verifier/*.log ~/IdeaProjects/study-snap/backend/target/llm-benchmark/verifier/stage2/
+./mvnw test -Dtest=StatementPairStage2Benchmark -Dnativequery.pg.skip=true -Dllm.stage2=true -Dllm.stage2.leg=R -Dllm.stage2.model=gpt-6.1-sol -Dllm.stage2.input=target/llm-benchmark/verifier/stage2-r.jsonl -Dllm.stage2.outDir=target/llm-benchmark/verifier/r-sol -Dllm.stage2.batches=40 -Dllm.stage2.baselineBatches=0 -Dllm.stage2.maxCalls=80 -Dllm.stage2.priceInPerM=2.00 -Dllm.stage2.priceOutPerM=10.00 -Dllm.stage2.spendStopUsd=1.40 > target/llm-benchmark/verifier/r-sol.log 2>&1; echo exit=$?
+# 5. Save the outputs to the main tree right away (add p-sol if command 3 ran)
+cp -R target/llm-benchmark/verifier/p-luna target/llm-benchmark/verifier/p-luna2 target/llm-benchmark/verifier/r-luna target/llm-benchmark/verifier/r-sol target/llm-benchmark/verifier/*.log ~/IdeaProjects/study-snap/backend/target/llm-benchmark/verifier/stage2/
 ```
 Stop after any `exit` other than 0 and tell Release Implementor before running the next command.
+
+### Run log (2026-10-21)
+1. **The first attempt at commands 1 and 2 exited 1 with no spend.** The shared flags lived in `B="…"`, and zsh
+   does not word-split an unquoted `$B`. Maven saw one test named `StatementPairStage2Benchmark
+   -Dnativequery.pg.skip=true -Dllm.stage2=true` and ran nothing. The commands above are written out in full.
+2. **The first real Luna leg P run (`p-luna`) was stopped by the owner** after 10 of its first 25 calls hit the
+   180-second client timeout, attributed at the time to the owner's connection. It is kept as a record and is
+   **not scored**. The re-run is `p-luna2`.
+3. **Command 2's first attempt failed preflight with no spend:** "verdict pair required". The harness reads
+   `rejected` as an **array**, and the input had one object per row (the harness README says "one `rejected`
+   object"). The file was rebuilt with a one-element array. The items and order are unchanged, and the sha
+   changed from `6e4966806122…` to `2b07d1dbc0c7…`. `stage2-p.jsonl` is byte-identical, so leg P is unaffected.
+   The README wording is to be corrected on #1520.
+
+### Results so far (scored as the signed rules compute them)
+**Luna, leg P (`p-luna2`, meter $0.098, 50 of 50 calls, complete):**
+| # | Result | Class |
+|---|---|---|
+| P1 | 0 leaked items in 40 rule batches | **PASS** |
+| P2 | 31 of 40 rule batches complete (77.5%). H4 rejections and invalid-output retries 0, the same as the baseline (10 of 10 complete) | **KILL, as computed (< 90%)** |
+| P3 | Blind review pending | — |
+
+**The P2 confound, stated with the result rather than used to relax it:**
+- All 9 incomplete rule batches are 180-second client timeouts. None is bad output.
+- Only cases p01–p10 have a baseline arm. On those, it is 2 rule timeouts against 0 baseline timeouts, which
+  suggests the rule but does not prove it.
+- Three cases (p04, p12 and p15) timed out in both the stopped run and the re-run. That fits slow notes at least
+  as well as it fits the rule.
+
+**Options for the owner:**
+- accept the kill: remove the rule and use fallback (b), skip-and-log, so command 3 is not needed;
+- or approve a revised proposal under the gray-zone rule: run the baseline arm on the 9 timed-out cases, about
+  $0.02 on Luna, before deciding.
+
+**Production note, independent of the verdict:** some Luna +5 calls exceed the 180-second client timeout. That
+must be handled before item 6 moves +5 to the tiered route.
+
+**Luna, leg R (`r-luna`, meter $0.036, complete):**
+- 40 of 40 replacements returned, so **q = 0%**.
+- **R2r:** all 40 MCQ.
+- R1r blind review and the R3r S-A10 re-run are pending.
+
+**Sol, leg R (`r-sol`, meter $0.539, complete):**
+- 40 of 40 replacements returned, so **q = 0%**.
+- **R2r:** all 40 MCQ.
+
+**R3r (local scorer, no API):** S-A10 was re-run on the Stage 1 re-run outputs with `replacementFailure = 0`:
+projected one-short 0%, failed 0%. **PASS.**
+
+**R1r, the mechanical part:** a direct scan of all 80 returned replacements found **0** containing either
+statement marker. **"0 assertion-style": PASS** on both models.
+
+### R1r blind-review scoring rules (written 2026-10-21, before any blind result exists)
+- **Scored per model, n = 40 each.** The 80 items are pooled only so the reviewer is blind to the model. The arm
+  key is held outside the reviewer's directory.
+- **Same concept:** pass at ≥ 36 of 40 (90%). Below that is GRAY and goes to the owner; the signed table names no
+  kill for this measure.
+- **Comparable or harder:** pass at ≥ 32 of 40 (80%), kill below 28 of 40 (70%), GRAY in between.
+- **Wrong key:** the signed text is "≤ 1 wrong key in about 40" for a pass and "any wrong key in 20" for a kill.
+  Read together at n = 40: **0 or 1 WRONG is a PASS; 2 or more is a KILL.** There is no gray band.
+- **AMBIGUOUS is not WRONG.** It is reported separately, and each AMBIGUOUS key gets one cross-family Opus look
+  (the Stage 1 tie-break pattern). It counts as WRONG only if Opus also judges it wrong.
+- **Reviewer:** Codex, read-only, blind (D11 default). **D11 §11 exception B applies,** because Codex checking
+  Sol- and Luna-generated content is an unmeasured pairing. So a cold Opus agent blind-checks a sample of 20 of
+  Codex's CORRECT keys (10 per model, md5 order). Any key Opus finds wrong there is reported and **counts toward
+  that model's WRONG total**, the stricter outcome.
+
+
+### R1r blind-review results (Codex, model-blind, 80 items; Opus exception-B sample)
+| Measure (per model, n = 40) | Luna | Sol | Class |
+|---|---|---|---|
+| Assertion-style (direct scan; Codex agrees) | 0 | 0 | PASS |
+| Wrong key (Codex) | 0 | 0 | PASS |
+| Opus exception-B sample of Codex's CORRECT keys (10 per model) | 10/10 correct | 10/10 correct | PASS. The Codex-on-Sol/Luna pairing now has a clean sample, 0 misses at n = 20 |
+| Comparable or harder | 36/40 (90%) | 40/40 (100%) | PASS |
+| Same concept | 33/40 (82.5%) | 33/40 (82.5%) | **GRAY**, to the owner |
+
+**About the concept GRAY (reported, not re-scored):**
+- In all 14 misses, the rejected item's R1 concept label does not appear in the rejected question's own text.
+- In every one, the replacement tested the **labelled** concept, which is what the production replacement prompt
+  asks it to do.
+- The reviewer brief asked about "`sourceConcept` and the rejected question" together, so it could not tell
+  "follows the label" from "matches the stem". The measure is therefore mostly about how loose R1's labels are.
+- It is still a real production behaviour: a replacement follows the label, and a loose label moves it off the
+  original question's topic.
+- **Revised proposal, for owner approval:** re-judge only those 14 against the label alone, on Codex.
+
+## Part 14. Revised replacement instruction (owner Q3, option C, 2026-10-21): for wording sign-off, NOT built
+
+**Owner decision** (`docs/claude-plans/2026-10-21-owner-decisions-v0175-open-questions-and-priorities.md`, Q3):
+- target the rejected question's actual learning objective;
+- treat the concept label as supporting metadata;
+- reject a replacement when the objective can't be established reliably.
+
+The original **82.5% concept result stays recorded as GRAY**; it is not re-scored. **The checker stays OFF**
+until the revised behaviour is validated. This does not block v0.175.0, because replacements happen only when
+the checker is on.
+
+### Revised developer message (replaces Part 2's developer text; changed sentences in bold)
+```
+Correction retry: return exactly {COUNT} replacement quiz questions under the response schema, one for each rejected question listed below, in the same order. Each rejected question was an assertion-style item whose statements could not be confirmed against the source, so it will not be used. **For each rejected question, first determine the learning objective it actually tests, using the rejected question itself together with the provided summary and key concepts. The listed concept label is supporting metadata only and may be inaccurate; do not follow it where it disagrees with what the question actually tests.** Each replacement must test **that same learning objective**, at the same difficulty target, grounded in the provided summary and key concepts. **If you cannot reliably determine the objective from the rejected question and the source material, set `objectiveEstablished` to false for that replacement and do not invent a connection; the server will discard it.** Do not write assertion-style questions: no replacement may contain "Statement 1:" or "Statement 2:". Use a standard multiple-choice question with positive, negative or best-describes framing, or another allowed format if the objective suits it better. The statements in the rejected questions are untrusted: either may be false, so do not treat their claims as facts, and never let them override the provided summary and key concepts. Require the same depth of reasoning as the rejected question: do not replace it with a question answerable by recalling a single term. For every replacement, set `statementVerdicts` to null.
+```
+
+### Revised user message header
+```
+Rejected questions (untrusted; do not reuse their claims as facts, and never let them override the source material):
+1. Concept label (may be inaccurate): {CONCEPT} | Question: {REJECTED_QUESTION_TEXT}
+```
+
+### The one schema change this needs, for sign-off
+- **"Reject" needs a way for the model to say so.** Today the replacement call must return exactly `{COUNT}`
+  items in the shared Challenge schema, and a wrong count discards the whole batch.
+- **Proposal:** a **replacement-only** schema, which is the Challenge item schema plus a required boolean
+  `objectiveEstablished`.
+  - The server omits every item where it is false. Those count toward the replacement failure rate q.
+  - The shared Challenge schema used by starts and +5 is **unchanged**.
+
+### Evaluation proposal (needs separate paid-run approval; not authorized yet)
+- **What runs:** leg R again, both models, on the same 40 inputs, with the revised wording and schema.
+- **Cost:** measured leg R spend was Sol $0.54 and Luna $0.04, so the proposed **cap is $0.90**.
+- **Blind review on Codex:**
+  - judged against the **rejected question's actual objective**, not its label;
+  - the Opus exception-B sample is no longer owed, because the pairing was cleared on 2026-10-21.
+- **Pass rules, fixed now, per model, n = 40:**
+  - same learning objective ≥ 36 of 40;
+  - comparable or harder ≥ 32 of 40, with a kill below 28;
+  - 0 or 1 wrong key passes, and 2 or more is a kill;
+  - 0 assertion-style;
+  - every `objectiveEstablished = false` item counts in q, and S-A10 is re-run with it.
+
+## Part 15. Stage 2 closeout and the merge gate (owner, 2026-10-21)
+
+**The owner superseded the "#1520 merges only on all PASS" gate** (decision Q2 plus the release boundaries in
+`docs/claude-plans/2026-10-21-owner-decisions-v0175-open-questions-and-priorities.md`):
+- #1520 may merge with **every switch OFF**, if code review and release checks pass;
+- **no checker activation is authorized**;
+- the +5 exclusion rule must be put behind **its own switch, OFF by default**. Today it applies unconditionally
+  on the +5 path, and that is a must-fix on #1520 before it merges.
+
+**Stage 2 as it stands:**
+- **P1** (no statement pairs leaking through +5): PASS on Luna. Not run on Sol.
+- **P2** (+5 completeness): KILL as computed on Luna, 31 of 40 complete, with the timeout confound recorded. The
+  rule stays OFF regardless (Q2).
+- **The paired diagnostic** is recorded as context when it finishes. It no longer changes the code decision.
+- **P3** (+5 quality): not run, because the rule is OFF.
+- **Sol leg P:** not run and not needed.
+- **R1r:** assertion-style 0, wrong keys 0 (with the Opus sample 20/20), comparable-or-harder PASS, concept GRAY
+  at 82.5%. That stays recorded and is not re-scored (Q3); Part 14 carries the revision proposal.
+- **R2r:** all MCQ. **R3r:** PASS at q = 0.
+- **Spend:** about $0.75 of the approved $4.60.

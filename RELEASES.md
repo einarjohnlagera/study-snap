@@ -84,6 +84,20 @@ delivered as separate PRs where the seams allow.
    - Per-source calls run in parallel on `llmParallelTaskExecutor` (measured 4–5× faster).
    - A per-source failure no longer fails the start: it continues if enough questions survive (the floor).
    - Token usage is recorded.
+   - **Split into 5a and 5b (2026-10-21).**
+     - **5a** (PR #1523, merged) is the shared claim and release surface: claims are released per session, and
+       legacy statement-pair rows are excluded.
+     - **5b** is multi-note background preparation, plus Feature Planner's Part A (each source's own bank,
+       A.1 and A.2). Plan: `docs/claude-plans/2026-10-21-v0175-multinote-bank-and-start-while-generating-plan.md`.
+   - **Owner decisions, 2026-10-21:** `docs/claude-plans/2026-10-21-owner-decisions-v0175-open-questions-and-priorities.md`.
+     - **Q1, the multi-note floor:** at least 2/3 of the requested questions **and** at least 2/3 of the notes
+       with a positive allocation, both rounded up. A shorter ready quiz discloses "Your quiz is ready with X
+       of Y questions."
+     - **Q2:** the +5 exclusion rule sits behind its own switch, OFF.
+     - **Q3:** the replacement instruction is to be revised; the checker stays OFF.
+     - **Q4:** the copy is approved with edits (PR #1524).
+     - **Q5:** +5 direction is set (no silent downgrade; fix timer fairness first).
+     - **Final product priorities:** accuracy, correctness, reliability, smooth flow, fairness.
 6. **Challenge tier routing. Tier N. `[queued — after items 1 AND 2 merge]`** Plan item 17.
    - **Gated on item 2 as well as item 1.** Routing Plus/Pro to Sol before the preparation flow exists
      brings back the blocking start of about 107 s, which is why v0.174.0 pinned Challenge.
