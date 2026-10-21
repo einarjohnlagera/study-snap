@@ -65,7 +65,7 @@ class GenerationRecoveryRowWriterTest {
         assertThat(session.getStatus()).isEqualTo(QuickReviewSessionStatus.FAILED);
         assertThat(session.isQuotaExempt()).isTrue();
         verify(challengeQuizQuestionBankService).releaseClaims(
-                session.getUserId(), session.getStudyPackId(), session.getId());
+                session.getUserId(), session.getId());
         verify(userUsageService, never()).incrementChallengeQuizGeneration(any(), any());
     }
 
@@ -99,7 +99,7 @@ class GenerationRecoveryRowWriterTest {
         assertThat(writer.recoverExpiredPreparedChallengeSession(old.getId(), cutoff)).isPresent();
         assertThat(old.getStatus()).isEqualTo(QuickReviewSessionStatus.FORFEITED);
         assertThat(old.isQuotaExempt()).isTrue();
-        verify(challengeQuizQuestionBankService).releaseClaims(old.getUserId(), old.getStudyPackId(), old.getId());
+        verify(challengeQuizQuestionBankService).releaseClaims(old.getUserId(), old.getId());
         verify(analyticsService).trackEvent(org.mockito.ArgumentMatchers.eq(old.getUserId()),
                 org.mockito.ArgumentMatchers.eq(AnalyticsEventType.CHALLENGE_QUIZ_PREPARATION_ABANDONED),
                 org.mockito.ArgumentMatchers.eq(old.getStudyPackId()),
@@ -126,7 +126,7 @@ class GenerationRecoveryRowWriterTest {
         assertThat(writer.recoverStuckChallengeGeneration(ordinary.getId(), cutoff)).isPresent();
         assertThat(ordinary.getStatus()).isEqualTo(QuickReviewSessionStatus.FAILED);
         assertThat(ordinary.isQuotaExempt()).isTrue();
-        verify(challengeQuizQuestionBankService).releaseClaims(ordinary.getUserId(), ordinary.getStudyPackId(), ordinary.getId());
+        verify(challengeQuizQuestionBankService).releaseClaims(ordinary.getUserId(), ordinary.getId());
         QuickReviewSessionEntity board = recoveryChallenge(QuickReviewSessionStatus.GENERATING,
                 "board_exam", cutoff.minusMinutes(1), null);
         assertThat(writer.recoverStuckChallengeGeneration(board.getId(), cutoff)).isEmpty();

@@ -160,6 +160,8 @@ management:
 
 studysnap:
   app-name: NoteLib
+  challenge-quiz:
+    statement-pair-legacy-cutoff: ${CHALLENGE_QUIZ_STATEMENT_PAIR_LEGACY_CUTOFF:}
   pool-saturation:
     poll-interval-ms: ${STUDYSNAP_POOL_SATURATION_POLL_INTERVAL_MS:2000}
   settings:

@@ -245,7 +245,7 @@ never edit this file.
   - **Review note.** `startQuiz` has now been edited by 2a, 2b and item 3, with item 5 to come. It is a
     named input to the scoped cold review at signoff.
 
-- **Item 4: readiness notification and deep link** (branch `feat/v0.175.0-item4-readiness-notification`).
+- **Item 4: readiness notification and deep link** (PR #1522, merged as `5a6fc945`).
   - **One in-app notification per ready session** (`CHALLENGE_QUIZ_READY`, `ASYNC_RESULT`). It is sent on every
     ordinary-Challenge transition into ready, through one shared hook that item 5 inherits:
     - the async single-note finish;
@@ -275,6 +275,50 @@ never edit this file.
     - One Codex review and one fix round, with 3 findings fixed.
   - **Review note.** `ChallengeQuizService` readiness paths are a named input to the scoped cold review at
     signoff.
+
+- **Item 5a: question-bank integrity, the first half of item 5** (branch `feat/v0.175.0-item5a-bank-integrity`).
+  Item 5 is split: 5a is the shared claim/release surface; 5b is multi-note background preparation.
+  - **Claims release per session, not per pack (A.4).** Every release and outcome update is scoped to
+    `(userId, claimedSessionId)`; no pack-scoped call is left. Rerouted:
+    - `startSession`, `finishChallengePreparation`, `completeSession`, `forfeitSession`;
+    - `generateMoreQuestions`;
+    - `forfeitPreparedSession`, `forfeitStaleOrdinarySession`, `forfeitExpiredSession`;
+    - both `GenerationRecoveryRowWriter` sweeps.
+
+    Rows a session claims from several packs are all freed. This becomes reachable from multi-note in 5b.
+  - **Legacy statement-pair exclusion (A.3, Option A, owner-confirmed).** A bank row is excluded from claims when
+    it is a statement pair, **not** template-derived, and older than the cutoff. While the cutoff is unset,
+    every such row is excluded.
+    - One shared predicate is applied to the ordinary claim (single-note start and +5), the Redo Missed claim
+      (before its minimum check, so it still fails closed) and the Redo Missed count (a non-locking fetch).
+    - Template copies are exempt, by membership in the template's key set. That includes an Official note's
+      own seeded rows when the note was itself copied.
+    - Excluded rows are never written.
+    - **"Post-cutoff" means the row passed R1's consistency check, not that it is factually verified.**
+  - **⚠️ Behaviour change on paths already live:**
+    - single-note starts and +5 stop serving legacy learner-original statement-pair rows, which means a little
+      extra live generation until the cutoff is set;
+    - the Redo Missed CTA can appear less often, because its count and claim both filter.
+  - **⚠️ Owner post-deploy step (v0.175.0 signoff handoff).** Set `CHALLENGE_QUIZ_STATEMENT_PAIR_LEGACY_CUTOFF`
+    on Render to the moment the v0.175.0 backend is **confirmed live**, from `scripts/check-deploys.sh` or the
+    Render deploy record. Do not use the merge time.
+    - The format is ISO-8601 with an offset, for example `2026-10-28T09:00:00+08:00`.
+    - A malformed value fails startup.
+    - This is an owner action only.
+  - **Verification.**
+    - `./mvnw clean install`: 2,881 tests, 0 failures. That includes the A.4 lifecycle tests on real
+      PostgreSQL (completion, discard, expiry, failed preparation, stuck recovery, two-pack release,
+      idempotent release, session isolation, concurrent completion and discard), the filter tests on real rows,
+      and a startup test for a malformed cutoff.
+    - One Codex review, which found the copied-Official-note exemption gap (fixed), and two test-fixture fixes.
+  - **Known limitations:**
+    - Regenerating an Official template removes the exemption from adopters' older copies. That errs safe.
+    - An excluded legacy row blocks banking an identical regenerated question for the same learner, pack
+      and level, so that question is regenerated on each start.
+    - The template-key lookup's reads run inside the caller's transaction, which widens the documented
+      class of a failed read poisoning a PostgreSQL transaction.
+    - `templateQuestionKeys` loads whole bank rows to read their keys; switch it to the key-only query in 5b.
+  - **Review note.** The shared claim/release surface is a named input to the scoped cold review at signoff.
 
 ## v0.174.0 - Enhanced Generation
 

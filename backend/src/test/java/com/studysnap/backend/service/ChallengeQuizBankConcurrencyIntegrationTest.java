@@ -12,6 +12,7 @@ import com.studysnap.backend.dto.QuickReviewSessionCompleteRequest;
 import com.studysnap.backend.dto.QuickReviewSessionProgressRequest;
 import com.studysnap.backend.dto.QuizItem;
 import com.studysnap.backend.entity.ChallengeQuizQuestionBankEntity;
+import com.studysnap.backend.config.StudySnapProperties;
 import com.studysnap.backend.entity.PlanType;
 import com.studysnap.backend.entity.QuickReviewRound;
 import com.studysnap.backend.entity.QuickReviewConfidenceLevel;
@@ -88,6 +89,7 @@ class ChallengeQuizBankConcurrencyIntegrationTest {
     @Autowired QuickReviewAdaptivePracticeService adaptivePracticeService;
     @Autowired com.studysnap.backend.repository.QuickReviewSessionRepository sessionRepository;
     @Autowired ChallengeQuizQuestionBankService bankService;
+    @Autowired StudySnapProperties properties;
     @Autowired OfficialChallengeQuizTemplateService templateService;
     @Autowired AdminStudyPackTransactionHelper adminStudyPackTransactionHelper;
     @Autowired StudyPackRepository studyPackRepository;
@@ -177,6 +179,276 @@ class ChallengeQuizBankConcurrencyIntegrationTest {
         assertThat(reclaimed).containsExactlyElementsOf(generated);
         assertThat(jdbc.queryForObject("select claimed_session_id from challenge_quiz_question_bank where study_pack_id = ?",
                 UUID.class, fixture.packId)).isEqualTo(nextSessionId);
+    }
+
+    @Test
+    void completionRecordsOutcomesAndReleasesClaimsAcrossTwoPacks() {
+        Fixture fixture = seed(false);
+        UUID secondPackId = addSecondPackWithQuestion(fixture, "Second bank question");
+        // 5b will make cross-pack claims reachable from a multi-note start. Today this direct
+        // claim uses the production claim method and the same session id to test the release seam.
+        assertThat((List<QuizItem>) new TransactionTemplate(transactionManager).execute(status -> bankService.claimEligibleQuestions(
+                fixture.userId, secondPackId, LearnerLevel.COLLEGE, fixture.sessionId, Set.of(), 1)))
+                .extracting(QuizItem::question).containsExactly("Second bank question");
+        jdbc.update("""
+                update quick_review_sessions set total_questions = 2,
+                session_state = jsonb_set(session_state, '{quiz}',
+                    '[{"question":"Bank question","choices":["A","B"],"correctIndex":0,"keyConcept":"Concept"},
+                      {"question":"Second bank question","choices":["A","B"],"correctIndex":0,"keyConcept":"Concept"}]'::jsonb)
+                    || '{"selectedChoices":{"0":0}}'::jsonb
+                where id = ?
+                """, fixture.sessionId);
+
+        challengeQuizService.completeSession(fixture.sessionId.toString(), fixture.userId,
+                new ChallengeQuizCompleteRequest(1, 2, 10));
+
+        assertThat(jdbc.queryForObject("select count(*) from challenge_quiz_question_bank where claimed_session_id = ?",
+                Integer.class, fixture.sessionId)).isZero();
+        assertThat(jdbc.queryForObject("select last_known_outcome from challenge_quiz_question_bank where study_pack_id = ?",
+                String.class, fixture.packId)).isEqualTo("CORRECT");
+        assertThat(jdbc.queryForObject("select last_known_outcome from challenge_quiz_question_bank where study_pack_id = ?",
+                String.class, secondPackId)).isEqualTo("UNANSWERED");
+    }
+
+    @Test
+    void preparedDiscardReleasesClaimsAcrossTwoPacksAndSecondReleaseIsNoOp() {
+        Fixture fixture = seed(false);
+        UUID secondPackId = addSecondPackWithQuestion(fixture, "Second bank question");
+        // 5b will first cause this cross-pack state; claim through the real bank path now.
+        new TransactionTemplate(transactionManager).execute(status -> bankService.claimEligibleQuestions(
+                fixture.userId, secondPackId, LearnerLevel.COLLEGE, fixture.sessionId, Set.of(), 1));
+        setPrepared(fixture, "challenge", OffsetDateTime.now(ZoneOffset.UTC));
+
+        challengeQuizService.forfeitSession(fixture.sessionId.toString(), fixture.userId);
+        List<String> afterDiscard = jdbc.queryForList("""
+                select to_jsonb(bank)::text from challenge_quiz_question_bank bank
+                where study_pack_id in (?, ?) order by id
+                """, String.class, fixture.packId, secondPackId);
+        new TransactionTemplate(transactionManager).execute(status -> {
+            bankService.releaseClaims(fixture.userId, fixture.sessionId);
+            return null;
+        });
+
+        assertThat(jdbc.queryForList("""
+                select to_jsonb(bank)::text from challenge_quiz_question_bank bank
+                where study_pack_id in (?, ?) order by id
+                """, String.class, fixture.packId, secondPackId)).containsExactlyElementsOf(afterDiscard);
+        assertThat(jdbc.queryForObject("select status from quick_review_sessions where id = ?",
+                String.class, fixture.sessionId)).isEqualTo("FORFEITED");
+        assertThat(jdbc.queryForObject("select count(*) from challenge_quiz_question_bank where claimed_session_id = ?",
+                Integer.class, fixture.sessionId)).isZero();
+    }
+
+    @Test
+    void releaseOfSessionALeavesSessionBClaimsOnTheSamePackUntouched() {
+        Fixture fixture = seed(false);
+        UUID otherPackId = addSecondPackWithQuestion(fixture, "Primary bank question");
+        UUID otherSessionId = UUID.randomUUID();
+        jdbc.update("""
+                insert into quick_review_sessions
+                    (id, user_id, study_pack_id, note_id, session_mode, status,
+                     current_question_index, current_round, total_questions, session_state,
+                     quota_exempt, created_at)
+                select ?, session.user_id, pack.id, pack.note_id, 'CHALLENGE', 'IN_PROGRESS',
+                       0, 'INITIAL', 1,
+                       jsonb_set(session.session_state, '{quiz}',
+                           '[{"question":"Other bank question","choices":["A","B"],"correctIndex":0,"keyConcept":"Concept"}]'::jsonb),
+                       true, now()
+                from quick_review_sessions session
+                join study_packs pack on pack.id = ?
+                where session.id = ?
+                """, otherSessionId, otherPackId, fixture.sessionId);
+        UUID otherQuestionId = insertBankQuestion(fixture, "Other bank question", "UNANSWERED",
+                OffsetDateTime.now(ZoneOffset.UTC));
+        // Item 5b's multi-note Challenge shape claims pack P from a session anchored on pack Q.
+        assertThat((List<QuizItem>) new TransactionTemplate(transactionManager).execute(status -> bankService.claimEligibleQuestions(
+                fixture.userId, fixture.packId, LearnerLevel.COLLEGE, otherSessionId, Set.of(), 1)))
+                .extracting(QuizItem::question).containsExactly("Other bank question");
+
+        new TransactionTemplate(transactionManager).execute(status -> {
+            bankService.releaseClaims(fixture.userId, fixture.sessionId);
+            return null;
+        });
+
+        assertThat(jdbc.queryForObject("select claimed_session_id from challenge_quiz_question_bank where id = ?",
+                UUID.class, otherQuestionId)).isEqualTo(otherSessionId);
+        assertThat(jdbc.queryForObject("select count(*) from challenge_quiz_question_bank where claimed_session_id = ?",
+                Integer.class, fixture.sessionId)).isZero();
+
+        new TransactionTemplate(transactionManager).execute(status -> {
+            bankService.releaseClaims(fixture.userId, otherSessionId);
+            return null;
+        });
+        assertThat(jdbc.queryForObject("select claimed_session_id from challenge_quiz_question_bank where id = ?",
+                UUID.class, otherQuestionId)).isNull();
+    }
+
+    @Test
+    @Timeout(15)
+    void concurrentCompletionAndDiscardLeaveOneTerminalSessionAndNoClaims() throws Exception {
+        Fixture fixture = seed(false);
+        jdbc.update("""
+                update quick_review_sessions
+                set session_state = jsonb_set(session_state, '{selectedChoices}', '{"0":0}'::jsonb)
+                where id = ?
+                """, fixture.sessionId);
+        CountDownLatch start = new CountDownLatch(1);
+        try (var executor = Executors.newFixedThreadPool(2)) {
+            Future<Exception> completion = executor.submit(() -> {
+                start.await();
+                try {
+                    challengeQuizService.completeSession(fixture.sessionId.toString(), fixture.userId,
+                            new ChallengeQuizCompleteRequest(0, 1, 10));
+                    return null;
+                } catch (Exception exception) {
+                    return exception;
+                }
+            });
+            Future<Exception> discard = executor.submit(() -> {
+                start.await();
+                try {
+                    challengeQuizService.forfeitSession(fixture.sessionId.toString(), fixture.userId);
+                    return null;
+                } catch (Exception exception) {
+                    return exception;
+                }
+            });
+            start.countDown();
+            completion.get(10, TimeUnit.SECONDS);
+            discard.get(10, TimeUnit.SECONDS);
+        }
+
+        String status = jdbc.queryForObject("select status from quick_review_sessions where id = ?",
+                String.class, fixture.sessionId);
+        assertThat(status).isIn("COMPLETED", "FORFEITED");
+        assertThat(jdbc.queryForObject("select count(*) from challenge_quiz_question_bank where claimed_session_id = ?",
+                Integer.class, fixture.sessionId)).isZero();
+        assertThat(jdbc.queryForObject("select last_known_outcome from challenge_quiz_question_bank where study_pack_id = ?",
+                String.class, fixture.packId)).isEqualTo("COMPLETED".equals(status) ? "CORRECT" : "UNANSWERED");
+    }
+
+    @Test
+    void unsetCutoffExcludesStoredLearnerStatementPairsFromClaimCountAndRedo() {
+        Fixture fixture = seed(false);
+        OffsetDateTime generatedAt = OffsetDateTime.now(ZoneOffset.UTC);
+        jdbc.update("""
+                update challenge_quiz_question_bank
+                set claimed_session_id = null, last_known_outcome = 'INCORRECT', generated_at = ?
+                where study_pack_id = ?
+                """, generatedAt.minusDays(3), fixture.packId);
+        UUID excludedId = insertBankQuestion(fixture, "Statement 1: Alpha. Statement 2: Beta?",
+                "INCORRECT", generatedAt.minusDays(30));
+        insertBankQuestion(fixture, "Ordinary missed two", "INCORRECT", generatedAt.minusDays(2));
+        String before = bankRowJson(excludedId);
+
+        assertThat(bankService.countEligibleIncorrectQuestions(fixture.userId, fixture.packId,
+                LearnerLevel.COLLEGE)).isEqualTo(2);
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> new TransactionTemplate(transactionManager)
+                .execute(status -> bankService.claimIncorrectQuestions(fixture.userId, fixture.packId,
+                        LearnerLevel.COLLEGE, fixture.sessionId, 5, 3)))
+                .isInstanceOf(com.studysnap.backend.exception.NotEnoughMissedChallengeQuestionsException.class);
+        assertThat((List<QuizItem>) new TransactionTemplate(transactionManager).execute(status -> bankService.claimEligibleQuestions(
+                fixture.userId, fixture.packId, LearnerLevel.COLLEGE, fixture.sessionId, Set.of(), 2)))
+                .extracting(QuizItem::question).containsExactly("Bank question", "Ordinary missed two");
+        assertThat(bankRowJson(excludedId)).isEqualTo(before);
+    }
+
+    @Test
+    void cutoffExcludesOnlyEarlierLearnerStatementPairs() {
+        Fixture fixture = seed(false);
+        jdbc.update("delete from challenge_quiz_question_bank where study_pack_id = ?", fixture.packId);
+        OffsetDateTime cutoff = OffsetDateTime.now(ZoneOffset.UTC).minusDays(10);
+        UUID older = insertBankQuestion(fixture, "Statement 1: Old. Statement 2: Old?",
+                "INCORRECT", cutoff.minusDays(1));
+        UUID newer = insertBankQuestion(fixture, "Statement 1: New. Statement 2: New?",
+                "INCORRECT", cutoff.plusDays(1));
+        String olderBefore = bankRowJson(older);
+        properties.getChallengeQuiz().setStatementPairLegacyCutoff(cutoff);
+        try {
+            assertThat(bankService.countEligibleIncorrectQuestions(fixture.userId, fixture.packId,
+                    LearnerLevel.COLLEGE)).isEqualTo(1);
+            assertThat((List<QuizItem>) new TransactionTemplate(transactionManager).execute(status -> bankService.claimIncorrectQuestions(
+                    fixture.userId, fixture.packId, LearnerLevel.COLLEGE, fixture.sessionId, 1, 1)))
+                    .extracting(QuizItem::question).containsExactly("Statement 1: New. Statement 2: New?");
+            assertThat(bankRowJson(older)).isEqualTo(olderBefore);
+            new TransactionTemplate(transactionManager).execute(status -> {
+                bankService.releaseClaims(fixture.userId, fixture.sessionId);
+                return null;
+            });
+            assertThat((List<QuizItem>) new TransactionTemplate(transactionManager).execute(status -> bankService.claimEligibleQuestions(
+                    fixture.userId, fixture.packId, LearnerLevel.COLLEGE, fixture.sessionId, Set.of(), 2)))
+                    .extracting(QuizItem::question).containsExactly("Statement 1: New. Statement 2: New?");
+            assertThat(jdbc.queryForObject("select claimed_session_id from challenge_quiz_question_bank where id = ?",
+                    UUID.class, newer)).isEqualTo(fixture.sessionId);
+            assertThat(bankRowJson(older)).isEqualTo(olderBefore);
+        } finally {
+            properties.getChallengeQuiz().setStatementPairLegacyCutoff(null);
+        }
+    }
+
+    @Test
+    void oldOfficialTemplateCopyStaysEligibleForOrdinaryRedoCountAndRedoClaim() {
+        Fixture official = seed(false);
+        Fixture adopter = seed(false);
+        jdbc.update("update users set role = 'ADMIN' where id = ?", official.userId);
+        UUID officialNoteId = jdbc.queryForObject("select note_id from study_packs where id = ?",
+                UUID.class, official.packId);
+        jdbc.update("update notes set visibility = 'PUBLIC' where id = ?", officialNoteId);
+        UUID adopterNoteId = jdbc.queryForObject("select note_id from study_packs where id = ?",
+                UUID.class, adopter.packId);
+        jdbc.update("update notes set copied_from_note_id = ? where id = ?", officialNoteId, adopterNoteId);
+        String text = "Statement 1: Template. Statement 2: Source?";
+        insertBankQuestion(official, text, "INCORRECT", OffsetDateTime.now(ZoneOffset.UTC).minusDays(30));
+        UUID copyId = insertBankQuestion(adopter, text, "INCORRECT",
+                OffsetDateTime.now(ZoneOffset.UTC).minusDays(30));
+
+        assertThat(bankService.countEligibleIncorrectQuestions(adopter.userId, adopter.packId,
+                LearnerLevel.COLLEGE)).isEqualTo(1);
+        assertThat((List<QuizItem>) new TransactionTemplate(transactionManager).execute(status -> bankService.claimIncorrectQuestions(
+                adopter.userId, adopter.packId, LearnerLevel.COLLEGE, adopter.sessionId, 1, 1)))
+                .extracting(QuizItem::question).containsExactly(text);
+        new TransactionTemplate(transactionManager).execute(status -> {
+            bankService.releaseClaims(adopter.userId, adopter.sessionId);
+            return null;
+        });
+        assertThat((List<QuizItem>) new TransactionTemplate(transactionManager).execute(status -> bankService.claimEligibleQuestions(
+                adopter.userId, adopter.packId, LearnerLevel.COLLEGE, adopter.sessionId,
+                Set.of("bank question"), 1)))
+                .extracting(QuizItem::question).containsExactly(text);
+        assertThat(jdbc.queryForObject("select claimed_session_id from challenge_quiz_question_bank where id = ?",
+                UUID.class, copyId)).isEqualTo(adopter.sessionId);
+        // The owner resolves to its own Official rows, so it has the same exemption on every path.
+        assertThat(bankService.countEligibleIncorrectQuestions(official.userId, official.packId,
+                LearnerLevel.COLLEGE)).isEqualTo(1);
+        assertThat((List<QuizItem>) new TransactionTemplate(transactionManager).execute(status -> bankService.claimIncorrectQuestions(
+                official.userId, official.packId, LearnerLevel.COLLEGE, official.sessionId, 1, 1)))
+                .extracting(QuizItem::question).containsExactly(text);
+        new TransactionTemplate(transactionManager).execute(status -> {
+            bankService.releaseClaims(official.userId, official.sessionId);
+            return null;
+        });
+        assertThat((List<QuizItem>) new TransactionTemplate(transactionManager).execute(status -> bankService.claimEligibleQuestions(
+                official.userId, official.packId, LearnerLevel.COLLEGE, official.sessionId,
+                Set.of("bank question"), 1)))
+                .extracting(QuizItem::question).containsExactly(text);
+    }
+
+    @Test
+    void generateMoreSkipsExcludedStatementPairAndUsesLaterRows() {
+        Fixture fixture = seed(false);
+        UUID excludedId = insertBankQuestion(fixture, "Statement 1: Legacy. Statement 2: Legacy?",
+                "UNANSWERED", OffsetDateTime.now(ZoneOffset.UTC).minusDays(30));
+        String before = bankRowJson(excludedId);
+        for (int index = 0; index < 5; index++) {
+            insertBankQuestion(fixture, "Later bank " + index, "UNANSWERED",
+                    OffsetDateTime.now(ZoneOffset.UTC).minusDays(5).plusMinutes(index));
+        }
+
+        challengeQuizService.generateMoreQuestions(fixture.sessionId.toString(), fixture.userId);
+
+        assertThat(jdbc.queryForObject("select count(*) from challenge_quiz_question_bank where claimed_session_id = ?",
+                Integer.class, fixture.sessionId)).isEqualTo(6);
+        assertThat(bankRowJson(excludedId)).isEqualTo(before);
     }
 
     @Test
@@ -1360,7 +1632,7 @@ class ChallengeQuizBankConcurrencyIntegrationTest {
                 fixture.packId);
         jdbc.update("update study_packs set generation_stamp = 1 where id = ?", fixture.packId);
         new TransactionTemplate(transactionManager).execute(status -> {
-            bankService.releaseClaims(fixture.userId, fixture.packId, fixture.sessionId);
+            bankService.releaseClaims(fixture.userId, fixture.sessionId);
             return null;
         });
         assertThat(jdbc.queryForObject("select claimed_session_id from challenge_quiz_question_bank where study_pack_id = ?",
@@ -1420,7 +1692,7 @@ class ChallengeQuizBankConcurrencyIntegrationTest {
         CountDownLatch proceed = new CountDownLatch(1);
         MethodInterceptor pauseAfterLockedRead = invocation -> {
             Object result = invocation.proceed();
-            if (!invocation.getMethod().getName().equals("findByUserIdAndStudyPackIdAndClaimedSessionId")) {
+            if (!invocation.getMethod().getName().equals("findByUserIdAndClaimedSessionId")) {
                 return result;
             }
             @SuppressWarnings("unchecked")
@@ -1497,6 +1769,50 @@ class ChallengeQuizBankConcurrencyIntegrationTest {
                         + " values (?, ?, ?, ?, 'bank question', '{\"question\":\"Bank question\",\"choices\":[\"A\",\"B\"],\"correctIndex\":0,\"keyConcept\":\"Concept\"}'::jsonb, 'COLLEGE', 'UNANSWERED', ?, now())",
                 UUID.randomUUID(), userId, packId, sessionId, sessionId);
         return new Fixture(userId, packId, sessionId);
+    }
+
+    private UUID addSecondPackWithQuestion(Fixture fixture, String questionText) {
+        UUID noteId = UUID.randomUUID();
+        UUID packId = UUID.randomUUID();
+        jdbc.update("""
+                insert into notes (id, owner_user_id, title, content, visibility, tags,
+                                   target_profile_type, created_at, updated_at)
+                values (?, ?, 'Second bank', 'body', 'PRIVATE', ARRAY[]::text[], 'STUDENT', now(), now())
+                """, noteId, fixture.userId);
+        jdbc.update("""
+                insert into study_packs (id, owner_user_id, note_id, input_type, title, summary,
+                                         key_concepts, quiz, model_used, status, created_at, updated_at)
+                values (?, ?, ?, 'TEXT', 'Second bank', 'summary', '[]'::jsonb, '[]'::jsonb,
+                        'test', 'DONE', now(), now())
+                """, packId, fixture.userId, noteId);
+        jdbc.update("""
+                insert into challenge_quiz_question_bank
+                    (id, user_id, study_pack_id, origin_session_id, question_key, question,
+                     learner_level, last_known_outcome, claimed_session_id, generated_at)
+                values (?, ?, ?, ?, ?, ?::jsonb, 'COLLEGE', 'UNANSWERED', null, now())
+                """, UUID.randomUUID(), fixture.userId, packId, fixture.sessionId,
+                com.studysnap.backend.util.QuizDeduplicationUtils.normalizeQuestion(questionText),
+                "{\"question\":\"" + questionText + "\",\"choices\":[\"A\",\"B\"],\"correctIndex\":0,\"keyConcept\":\"Concept\"}");
+        return packId;
+    }
+
+    private UUID insertBankQuestion(Fixture fixture, String text, String outcome, OffsetDateTime generatedAt) {
+        UUID id = UUID.randomUUID();
+        jdbc.update("""
+                insert into challenge_quiz_question_bank
+                    (id, user_id, study_pack_id, origin_session_id, question_key, question,
+                     learner_level, last_known_outcome, claimed_session_id, generated_at)
+                values (?, ?, ?, ?, ?, ?::jsonb, 'COLLEGE', ?, null, ?)
+                """, id, fixture.userId, fixture.packId, fixture.sessionId,
+                com.studysnap.backend.util.QuizDeduplicationUtils.normalizeQuestion(text),
+                "{\"question\":\"" + text + "\",\"choices\":[\"A\",\"B\"],\"correctIndex\":0,\"keyConcept\":\"Concept\"}",
+                outcome, generatedAt);
+        return id;
+    }
+
+    private String bankRowJson(UUID id) {
+        return jdbc.queryForObject("select to_jsonb(bank)::text from challenge_quiz_question_bank bank where id = ?",
+                String.class, id);
     }
 
     private record Fixture(UUID userId, UUID packId, UUID sessionId) {}

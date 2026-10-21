@@ -43,6 +43,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -789,8 +790,11 @@ class PostSessionNextStepServiceTest {
                 bankedQuestion("Missed two"),
                 bankedQuestion("Missed three")
         );
+        OfficialChallengeQuizTemplateResolver templateResolver =
+                org.mockito.Mockito.mock(OfficialChallengeQuizTemplateResolver.class);
+        org.mockito.Mockito.when(templateResolver.templateQuestionKeys(studyPack.getId())).thenReturn(Set.of());
         ChallengeQuizQuestionBankService realQuestionBankService =
-                new ChallengeQuizQuestionBankService(challengeQuizQuestionBankRepository);
+                new ChallengeQuizQuestionBankService(challengeQuizQuestionBankRepository, templateResolver, properties);
         PostSessionNextStepService serviceWithRealBank = new PostSessionNextStepService(
                 studyPackRepository,
                 quickReviewSessionRepository,
@@ -815,12 +819,12 @@ class PostSessionNextStepServiceTest {
         stubLatestSession(userId, studyPack, QuickReviewSessionMode.CHALLENGE, List.of());
         stubConceptHealth(userId, studyPack, List.of());
         when(generationContextResolver.resolveForStudyPack(userId, studyPack)).thenReturn(context);
-        when(challengeQuizQuestionBankRepository.countIncorrectEligibleQuestions(
+        when(challengeQuizQuestionBankRepository.findIncorrectClaimable(
                 userId,
                 studyPack.getId(),
                 LearnerLevel.SENIOR_HIGH.name(),
                 OUTCOME_INCORRECT
-        )).thenReturn((long) missedQuestions.size());
+        )).thenReturn(missedQuestions);
         when(challengeQuizQuestionBankRepository.findIncorrectClaimableForUpdate(
                 userId,
                 studyPack.getId(),
@@ -845,7 +849,7 @@ class PostSessionNextStepServiceTest {
 
         assertThat(response.type()).isEqualTo(TodayFocusType.REDO_MISSED_QUESTIONS);
         assertThat(claimed).hasSize(Math.toIntExact(eligibleCount));
-        verify(challengeQuizQuestionBankRepository, org.mockito.Mockito.times(2)).countIncorrectEligibleQuestions(
+        verify(challengeQuizQuestionBankRepository, org.mockito.Mockito.times(2)).findIncorrectClaimable(
                 userId,
                 studyPack.getId(),
                 LearnerLevel.SENIOR_HIGH.name(),

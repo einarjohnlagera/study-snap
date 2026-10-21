@@ -2,6 +2,7 @@ package com.studysnap.backend.config;
 
 import com.studysnap.backend.entity.PlanType;
 import com.studysnap.backend.entity.ProfileType;
+import java.time.OffsetDateTime;
 import java.math.RoundingMode;
 import lombok.Getter;
 import lombok.Setter;
@@ -18,6 +19,13 @@ public class StudySnapProperties {
     private final Ocr ocr = new Ocr();
     private final Llm llm = new Llm();
     private final QuizGeneration quizGeneration = new QuizGeneration();
+    private final ChallengeQuiz challengeQuiz = new ChallengeQuiz();
+
+    @Getter
+    @Setter
+    public static class ChallengeQuiz {
+        private OffsetDateTime statementPairLegacyCutoff;
+    }
     private final QuickReview quickReview = new QuickReview();
     private final Pricing pricing = new Pricing();
     private final LinkedLearners linkedLearners = new LinkedLearners();
