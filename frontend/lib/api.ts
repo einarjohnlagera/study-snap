@@ -261,6 +261,7 @@ export type TodayFocusType =
   | "STUDY_SUGGESTION";
 
 export type ContinueStudyingResponse = {
+  preparedNotStarted?: boolean;
   studyPackId: string | null;
   noteId: string | null;
   noteTitle: string | null;
@@ -1524,6 +1525,7 @@ export type NotePerformanceSummaryResponse = {
 export type QuizStartSessionMode = "LEARNING" | "PREVIEW";
 
 export type ChallengeQuizStartRequest = {
+  discardPreparedSessionId?: string;
   mode?: ChallengeQuizMode;
   sessionMode?: QuizStartSessionMode;
   additionalStudyPackIds?: string[];
@@ -1536,7 +1538,15 @@ export type ChallengeQuizStartRequest = {
   sourceCollectionId?: string;
 };
 
+export type ChallengeQuizCollision = {
+  existingSessionId: string;
+  existingMode: "challenge" | "redo_missed";
+  requestedMode: "board_exam" | "redo_missed" | "challenge";
+};
+
 export type ChallengeQuizStartResponse = {
+  preparedNotStarted: boolean;
+  collision: ChallengeQuizCollision | null;
   sessionId: string | null;
   status: QuizSessionStatus | null;
   studyPackId: string;
@@ -4544,16 +4554,28 @@ export async function startChallengeQuizSession(
 
 export async function startRedoMissedChallengeQuizSession(
   noteId: string,
+  options?: { discardPreparedSessionId?: string },
 ): Promise<ChallengeQuizStartResponse> {
+  const hasDiscard = Boolean(options?.discardPreparedSessionId);
   const response = await fetchWithAuth(
     `/notes/${noteId}/challenge-quiz/redo-missed`,
     {
       method: "POST",
-      headers: buildAuthHeaders(),
+      headers: buildAuthHeaders(hasDiscard ? "application/json" : undefined),
+      ...(hasDiscard ? { body: JSON.stringify({ discardPreparedSessionId: options!.discardPreparedSessionId }) } : {}),
     },
     true,
   );
   return parseApiResponse<ChallengeQuizStartResponse>(response, "Could not start missed-question redo.");
+}
+
+export async function startPreparedChallengeQuiz(sessionId: string): Promise<ChallengeQuizStartResponse> {
+  const response = await fetchWithAuth(
+    `/challenge-quiz/sessions/${sessionId}/start-quiz`,
+    { method: "POST", headers: buildAuthHeaders() },
+    true,
+  );
+  return parseApiResponse<ChallengeQuizStartResponse>(response, "Could not start Challenge Quiz.");
 }
 
 export async function getInProgressChallengeQuizSession(
@@ -6511,6 +6533,26 @@ export function isNotEnoughNewQuestionsError(error: unknown): error is ApiReques
 
 export function isNotEnoughMissedChallengeQuestionsError(error: unknown): error is ApiRequestError {
   return error instanceof ApiRequestError && error.code === "NOT_ENOUGH_MISSED_CHALLENGE_QUESTIONS";
+}
+
+export function isPreparedChallengeExpiredError(error: unknown): error is ApiRequestError {
+  return error instanceof ApiRequestError && error.code === "PREPARED_CHALLENGE_EXPIRED";
+}
+
+export function isChallengeSessionNotInProgressError(error: unknown): error is ApiRequestError {
+  return error instanceof ApiRequestError && error.code === "SESSION_NOT_IN_PROGRESS";
+}
+
+export function isInvalidPreparedDiscardError(error: unknown): error is ApiRequestError {
+  return error instanceof ApiRequestError && error.code === "INVALID_PREPARED_CHALLENGE_DISCARD";
+}
+
+export function isChallengePreparationInProgressError(error: unknown): error is ApiRequestError {
+  return error instanceof ApiRequestError && error.code === "PREPARATION_IN_PROGRESS";
+}
+
+export function isChallengePreparationFailedError(error: unknown): error is ApiRequestError {
+  return error instanceof ApiRequestError && error.code === "PREPARATION_FAILED";
 }
 
 export async function updateNoteVisibility(noteId: string, visibility: NoteVisibility): Promise<NoteResponse> {

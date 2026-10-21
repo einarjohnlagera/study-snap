@@ -12,6 +12,19 @@ describe("ContinueSpotlight", () => {
     (trackAnalyticsEvent as jest.Mock).mockResolvedValue(undefined);
   });
 
+  it("opens a prepared Challenge with the prepared label and existing route", () => {
+    render(<ContinueSpotlight recommendation={{
+      studyPackId: "pack-1", noteId: "note-1", noteTitle: "Biology Review", subject: "Biology",
+      courseProgram: null, summaryPreview: null, resumeType: "CHALLENGE", reason: "RESUME_REVIEW",
+      preparedNotStarted: true, lastScorePercentage: null, lastReviewedAt: null, lastOpenedAt: null,
+      createdAt: null, currentQuestionIndex: 0, totalQuestions: 0, currentRound: null,
+      remainingQuestions: null, resumeState: "QUESTION_IN_PROGRESS",
+    }} />);
+
+    expect(screen.getByRole("link", { name: "Open your prepared quiz" }))
+      .toHaveAttribute("href", "/notes/note-1/challenge-quiz");
+  });
+
   it("shows the note title, metadata, and quick-review resume route", () => {
     render(
       <ContinueSpotlight

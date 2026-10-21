@@ -35,6 +35,8 @@ import com.studysnap.backend.exception.ChallengeQuizGenerationFailedException;
 import com.studysnap.backend.exception.ChallengeQuizNotAvailableException;
 import com.studysnap.backend.exception.ChallengeQuizSessionNotFoundException;
 import com.studysnap.backend.exception.ChallengeQuizSessionNotInProgressException;
+import com.studysnap.backend.exception.ChallengePreparationInProgressException;
+import com.studysnap.backend.exception.ChallengePreparationFailedException;
 import com.studysnap.backend.exception.InvalidPreparedChallengeDiscardException;
 import com.studysnap.backend.exception.PreparedChallengeExpiredException;
 import com.studysnap.backend.exception.InvalidBoardExamSourceException;
@@ -926,6 +928,16 @@ public class ChallengeQuizService {
         entityManager.refresh(session);
         if (MODE_BOARD_EXAM.equals(extractMode(session.getSessionState()))) {
             throw new ChallengeQuizSessionNotFoundException();
+        }
+        if (session.getStatus() == QuickReviewSessionStatus.GENERATING) {
+            throw new ChallengePreparationInProgressException();
+        }
+        if (session.getStatus() == QuickReviewSessionStatus.FAILED) {
+            throw new ChallengePreparationFailedException();
+        }
+        if (session.getStatus() == QuickReviewSessionStatus.FORFEITED
+                && QuizSessionStateUtils.extractPreparedNotStarted(session.getSessionState())) {
+            throw new PreparedChallengeExpiredException();
         }
         if (session.getStatus() != QuickReviewSessionStatus.IN_PROGRESS) {
             throw new ChallengeQuizSessionNotInProgressException();
