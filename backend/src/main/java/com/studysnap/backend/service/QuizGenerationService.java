@@ -74,6 +74,19 @@ public class QuizGenerationService {
         );
     }
 
+    public GeneratedChallengeQuizContent generateChallengeQuiz(
+            String title, String summary, List<String> keyConcepts, List<String> disallowedQuestions,
+            int questionCount, String difficulty, StudyPackGenerationContext context,
+            String noteText, LlmStudyPackService.ChallengeVerifierPath verifierPath
+    ) {
+        if (isMockModeEnabled()) {
+            return generateChallengeQuiz(title, summary, keyConcepts, disallowedQuestions,
+                    questionCount, difficulty, context);
+        }
+        return llmStudyPackService.generateChallengeQuiz(title, summary, keyConcepts,
+                disallowedQuestions, questionCount, difficulty, routed(context), noteText, verifierPath);
+    }
+
     public GeneratedChallengeQuizContent generateMoreChallengeQuiz(
             String studyPackTitle,
             String studyPackSummary,

@@ -91,9 +91,9 @@ Full pass (`runs=2-10`), after the smoke review and stop reset:
 ./mvnw test -Dtest=LlmModelBenchmark -Dllm.benchmark=true -Dnativequery.pg.skip=true -Dllm.benchmark.legs=E -Dllm.benchmark.input=target/llm-benchmark/e.jsonl -Dllm.benchmark.outDir=target/llm-benchmark/e-full-sol-vlow -Dllm.benchmark.model=gpt-6.1-sol -Dllm.benchmark.cells=VLOW -Dllm.benchmark.runs=2-10 -Dllm.benchmark.priceInPerM=2.00 -Dllm.benchmark.priceOutPerM=10.00 -Dllm.benchmark.spendStopUsd=0.66
 ```
 
-## Statement-pair verifier (v0.175.0, DRAFT)
+## Statement-pair verifier Stage 1 (v0.175.0, signed)
 
-This local, opt-in harness checks a proposed independent statement-pair verifier before any production implementation. The four prompt resources in `src/test/resources/benchmark/verifier/` are **DRAFT** until the owner signs off on their exact wording. The runner reads only local files and sends the note context plus extracted statements; it never queries or writes a database. The API key comes only from `LLM_API_KEY` in the owner's shell. No paid call occurs in the normal test suite.
+This local, opt-in harness checks a proposed independent statement-pair verifier before any production implementation. The four prompt resources in `src/test/resources/benchmark/verifier/` carry the owner-signed wording and are pinned to the production resources by a drift test. The runner reads only local files and sends the note context plus extracted statements; it never queries or writes a database. The API key comes only from `LLM_API_KEY` in the owner's shell. No paid call occurs in the normal test suite.
 
 Put gold and result files under the git-ignored `target/llm-benchmark/verifier/` directory. The gold file is JSONL, with one item per line: `id`, `stratum` (`N`, `N_CAVEAT`, `P_SEEN`, `P_UNSEEN`, `P_CONSTRUCTED`, `P_CONSTRUCTED_CONTROL`, or `U`), `batchId`, `noteId`, `question`, `keyedPair` (two booleans), `goldPair` (two booleans, or null only for `U`), and `provenance`. Items sharing `batchId` must share `noteId` and go in one call. The notes file is a JSON object keyed by `noteId`; each value has `noteText` and optional nullable `summary`, `domainContext`, `subject`, and `learnerLevel`. Do not commit real note text or questions. A malformed file fails preflight before any HTTP call. Each `outDir` must be fresh and must not contain `results.jsonl`.
 
@@ -106,3 +106,24 @@ From `backend/`, after preparing local gold and notes and setting `LLM_API_KEY` 
 ```
 
 The offline scorer also accepts `-Dllm.verifier.r104=report` and `-Dllm.verifier.replacementFailure=<fraction>`. It refuses incomplete or mismatched runs. `./mvnw clean` deletes local gold and results under `target/`; retain a separate local copy if needed.
+
+## Stage 2 statement-pair legs P and R (v0.175.0)
+
+`StatementPairStage2Benchmark` is opt-in and skips in the normal suite. Its P arm calls the real `generateMoreChallengeQuiz` path for 40 local cases per model, then a 10-case baseline with only the extra +5 rule removed. It writes per-batch leak, completeness, H4 rejection and generation-call counts, `summary.json`, raw metered responses, and a blind export with the arm key in a separate file. Blind reviewers use the export for P3 difficulty and concept-coverage comparisons; compare P1/P2 counts to the signed pass rules before merge. The R arm supplies one synthetic, R1-consistent gold statement-pair item per case, stubs both checkers to reject it, and makes the real production replacement call on the selected generator model. It reports omitted/replaced counts and replacement failure rate q, exports each replacement with source concept and question for blind R1r key, depth and comparability review, and records formats in the returned questions. The R input uses one rejected item per case so an omitted item cannot shift another item's blind mapping.
+
+Both arms preflight every selected JSONL row, all paths and the spending limit **before any HTTP call**. Only the owner runs paid commands. `MeteringInterceptor` stops at the configured spend or call limit; each command must set `spendStopUsd` at or below **3.50**, and the owner must keep cumulative Stage 2 spend within the separately approved budget. A stop marks the run incomplete. Use fresh output directories under `target/llm-benchmark/verifier/`. The key comes only from `LLM_API_KEY` in the owner's shell. No command below is run by the normal test suite.
+
+Input is JSONL under `target/llm-benchmark/verifier/`, one case per line with unique filename-safe `id`, nonblank `noteText`, `summary`, `subject`, `learnerLevel`, and nonempty `keyConcepts`. Optional fields are `courseProgram`, `domainContext` (enum), `difficulty` (default `medium`), `disallowedQuestions` and `existingConcepts`. Leg R also needs exactly one `rejected` object with `question`, `concept`, `statement1Correct` and `statement2Correct`; the question must contain both statement markers. Use the same ordered cases for Sol and Luna. Keep source notes and all exports git-ignored.
+
+From `backend/`, after owner approval and with the local fixture and `LLM_API_KEY` set, run each model and leg with its actual input/output prices and a fresh output directory. The placeholders below must be filled from the approved Stage 2 run sheet; no default price or spending amount is assumed:
+
+```sh
+./mvnw test -Dtest=StatementPairStage2Benchmark -Dnativequery.pg.skip=true -Dllm.stage2=true -Dllm.stage2.leg=P -Dllm.stage2.model=<model> -Dllm.stage2.input=target/llm-benchmark/verifier/stage2-p.jsonl -Dllm.stage2.outDir=target/llm-benchmark/verifier/p-<model> -Dllm.stage2.batches=40 -Dllm.stage2.baselineBatches=10 -Dllm.stage2.maxCalls=200 -Dllm.stage2.priceInPerM=<price> -Dllm.stage2.priceOutPerM=<price> -Dllm.stage2.spendStopUsd=<approved-stop>
+./mvnw test -Dtest=StatementPairStage2Benchmark -Dnativequery.pg.skip=true -Dllm.stage2=true -Dllm.stage2.leg=R -Dllm.stage2.model=<model> -Dllm.stage2.input=target/llm-benchmark/verifier/stage2-r.jsonl -Dllm.stage2.outDir=target/llm-benchmark/verifier/r-<model> -Dllm.stage2.batches=40 -Dllm.stage2.baselineBatches=0 -Dllm.stage2.maxCalls=80 -Dllm.stage2.priceInPerM=<price> -Dllm.stage2.priceOutPerM=<price> -Dllm.stage2.spendStopUsd=<approved-stop>
+```
+
+Offline safety and behavior tests:
+
+```sh
+./mvnw test -Dtest=StatementPairStage2BenchmarkTest,StatementPairProductionParityTest,StatementPairVerifierProductionTest -Dnativequery.pg.skip=true
+```

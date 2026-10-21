@@ -254,6 +254,17 @@ public class AppConfig {
     }
 
     @Bean
+    public AsyncTaskExecutor statementPairVerifierTaskExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setThreadNamePrefix("statement-pair-verifier-");
+        executor.setCorePoolSize(4);
+        executor.setMaxPoolSize(8);
+        executor.setQueueCapacity(20);
+        executor.initialize();
+        return executor;
+    }
+
+    @Bean
     public TransactionOperations studyPackGenerationTransactionOperations(
             PlatformTransactionManager transactionManager
     ) {

@@ -1,0 +1,34 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["results"],
+  "properties": {
+    "results": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["itemId", "statement1", "statement2"],
+        "properties": {
+          "itemId": { "type": "string" },
+          "statement1": { "$ref": "#/$defs/judgment" },
+          "statement2": { "$ref": "#/$defs/judgment" }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "judgment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sourceSupport", "evidenceQuote", "reason", "noteConflictsWithStandardKnowledge", "verdict"],
+      "properties": {
+        "sourceSupport": { "type": "string", "enum": ["SUPPORTED", "CONTRADICTED", "SILENT"] },
+        "evidenceQuote": { "type": ["string", "null"] },
+        "reason": { "type": "string" },
+        "noteConflictsWithStandardKnowledge": { "type": "boolean" },
+        "verdict": { "type": "string", "enum": ["TRUE", "FALSE", "UNCERTAIN"] }
+      }
+    }
+  }
+}

@@ -277,7 +277,7 @@ public class OfficialChallengeQuizTemplateService {
                 StudyPackGenerationContext context = generationContextResolver.resolveForStudyPack(
                         note.getOwnerUserId(), studyPack
                 );
-                return new OfficialTemplateSeedTarget(note.getOwnerUserId(), studyPack, context);
+                return new OfficialTemplateSeedTarget(note.getOwnerUserId(), studyPack, context, note.getContent());
             });
             if (target == null) {
                 return;
@@ -289,7 +289,8 @@ public class OfficialChallengeQuizTemplateService {
                     List.of(),
                     ChallengeQuizService.MAX_CHALLENGE_QUIZ_QUESTIONS,
                     TEMPLATE_DIFFICULTY,
-                    target.context().withRouting(LlmRouting.tiered(target.ownerUserId()))
+                    target.context().withRouting(LlmRouting.tiered(target.ownerUserId())),
+                    target.noteText(), LlmStudyPackService.ChallengeVerifierPath.TEMPLATE_SEED
             ).quizItems();
             studyPackGenerationTransactionOperations.execute(status -> {
                 NoteEntity note = noteRepository.findById(noteId).orElse(null);
@@ -415,7 +416,8 @@ public class OfficialChallengeQuizTemplateService {
     private record OfficialTemplateSeedTarget(
             UUID ownerUserId,
             StudyPackEntity studyPack,
-            StudyPackGenerationContext context
+            StudyPackGenerationContext context,
+            String noteText
     ) {
     }
 }

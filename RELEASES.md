@@ -376,6 +376,35 @@ never edit this file.
   - **Review note.** The shared start, Start Quiz and bank paths are named inputs to the scoped cold review at
     signoff.
 
+- **Statement-pair verifier in production code, switches off** (branch `feat/v0.175.0-statement-pair-verifier`).
+  - **What it does.** Before a statement-pair question is kept, two independent checkers (Sol and Luna, run
+    concurrently on their own `statementPairVerifierTaskExecutor`) judge each statement against the source
+    note. A question is kept only when both agree with its key. Rejected questions get one batched
+    replacement round; anything still rejected is omitted. Every failure is closed: a timeout, a rejected
+    submission, a missing verdict, an unparseable pair or blank note text rejects the question, and no
+    paid attempt starts after the shared deadline.
+  - **Two switches, both default false:** `STATEMENT_PAIR_VERIFIER_TEMPLATE_SEED_ENABLED` (Official template
+    seeding) and `STATEMENT_PAIR_VERIFIER_LIVE_START_ENABLED` (single-note Challenge preparation). Production
+    behaviour is unchanged until the owner turns one on.
+  - **Prompts.** The signed verifier prompts are byte-identical to the Stage 1 harness, and a parity test
+    guards them. Template fields are filled in one pass, so note text is inserted literally.
+  - **Verification.** `./mvnw clean install`: 2,870 tests, 0 failures. Seven Codex reviews and six fix
+    rounds covered:
+    - a shared-pool deadlock;
+    - one deadline for both checkers;
+    - item-ID gaps;
+    - closing-question stripping, checked against 1,607 real stems;
+    - placeholder expansion;
+    - the +5 leak count including retries;
+    - replacement questions with a single statement marker.
+  - **⚠️ Merge gate:** this merges only after the owner-approved Stage 2 paid run passes (cap of $3.50 or
+    less). Stage 1 licenses proposing activation for Official question-set creation only.
+  - **Activation scope:** multi-note Challenge starts are not checked (`ChallengeVerifierPath.NONE`) until
+    item 5 moves them to background preparation with a question-count floor.
+  - **Known limitation:** verifier calls are logged under the `CRITIQUE` route, and cost attribution uses
+    `action=statement_pair_verifier`. A dedicated `LlmRoute` value would also change model routing, so it
+    was left out.
+
 ## v0.174.0 - Enhanced Generation
 
 **Status: Released** (signed off 2026-10-19; **merge to `main` HELD behind the v0.173.0 gates, so NOT yet

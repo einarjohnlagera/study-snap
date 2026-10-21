@@ -95,6 +95,18 @@ public class StudySnapProperties {
     @Setter
     public static class Llm {
         private final Api api = new Api();
+        private final StatementPairVerifier statementPairVerifier = new StatementPairVerifier();
+    }
+
+    @Getter
+    @Setter
+    public static class StatementPairVerifier {
+        private boolean templateSeedEnabled = false;
+        private boolean liveStartEnabled = false;
+        private String primaryModel = "gpt-6.1-sol";
+        private String secondaryModel = "gpt-6-luna";
+        // Two 180 s read-timeout attempts plus a 30 s margin.
+        private int waitTimeoutSeconds = 390;
     }
 
     @Getter
