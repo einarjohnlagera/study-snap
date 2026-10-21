@@ -620,7 +620,7 @@ class DashboardServiceTest {
     }
 
     @Test
-    void getContinueStudyingRecommendation_includesNoteMetadataAndChallengeResumeType() {
+    void getContinueStudyingRecommendation_includesPreparedChallengeFlagAndNoteMetadata() {
         UUID userId = UUID.randomUUID();
         UUID noteId = UUID.randomUUID();
         UUID studyPackId = UUID.randomUUID();
@@ -638,6 +638,8 @@ class DashboardServiceTest {
                 now.minusMinutes(3)
         );
         inProgress.setSessionMode(QuickReviewSessionMode.CHALLENGE);
+        inProgress.setSessionState(com.studysnap.backend.util.QuizSessionStateUtils.withPreparedNotStarted(
+                inProgress.getSessionState(), true));
         inProgress.setRetryCount(0);
 
         stubLatestQuickReviewInProgressSession(userId, inProgress);
@@ -653,6 +655,7 @@ class DashboardServiceTest {
 
         assertThat(response.reason()).isEqualTo(ContinueStudyingReason.RESUME_REVIEW);
         assertThat(response.resumeType()).isEqualTo(ContinueStudyingResumeType.CHALLENGE);
+        assertThat(response.preparedNotStarted()).isTrue();
         assertThat(response.noteTitle()).isEqualTo("Statics Midterm Review");
         assertThat(response.subject()).isEqualTo("Engineering Mechanics");
         // Legacy-string path: no join rows, so the note's own string is the answer.

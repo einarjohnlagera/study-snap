@@ -82,13 +82,11 @@ public class GenerationRecoveryService {
         );
     }
 
-    /** Candidates are filtered under the row lock because Board Exam is a CHALLENGE session, not a mode. */
+    /** The candidate query filters Board Exam before batching; the row writer verifies under lock. */
     public SurfaceRecoveryResult recoverStaleBoardExamSessions() {
         OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
         OffsetDateTime cutoff = now.minusMinutes(properties.getGeneration().getLongExamSessionBoundMinutes());
-        List<UUID> candidateIds = quickReviewSessionRepository.findStaleSessionIds(
-                QuickReviewSessionStatus.GENERATING,
-                QuickReviewSessionMode.CHALLENGE,
+        List<UUID> candidateIds = quickReviewSessionRepository.findStaleBoardExamSessionIds(
                 cutoff,
                 PageRequest.of(0, normalizedBatchSize())
         );

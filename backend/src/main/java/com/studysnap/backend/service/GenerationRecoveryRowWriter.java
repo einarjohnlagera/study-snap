@@ -9,6 +9,7 @@ import com.studysnap.backend.entity.QuickReviewSessionStatus;
 import com.studysnap.backend.repository.ExamQuestionPoolRepository;
 import com.studysnap.backend.repository.NoteRepository;
 import com.studysnap.backend.repository.QuickReviewSessionRepository;
+import com.studysnap.backend.util.QuizSessionStateUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -49,6 +50,23 @@ public class GenerationRecoveryRowWriter {
     private final NoteRepository noteRepository;
     private final StudyPackService studyPackService;
     private final UserUsageService userUsageService;
+    private final ChallengeQuizQuestionBankService challengeQuizQuestionBankService;
+
+    /** A failed preparation never held a quota charge. Repeated recovery is harmless. */
+    @Transactional
+    public void failChallengeSession(UUID sessionId) {
+        quickReviewSessionRepository.findByIdForUpdate(sessionId)
+                .filter(session -> session.getSessionMode() == QuickReviewSessionMode.CHALLENGE)
+                .filter(session -> session.getStatus() == QuickReviewSessionStatus.GENERATING)
+                .filter(session -> !isBoardExamSession(session))
+                .ifPresent(session -> {
+                    session.setStatus(QuickReviewSessionStatus.FAILED);
+                    session.setSessionState(QuizSessionStateUtils.withoutPreparationInputs(session.getSessionState()));
+                    challengeQuizQuestionBankService.releaseClaims(
+                            session.getUserId(), session.getStudyPackId(), session.getId());
+                    quickReviewSessionRepository.save(session);
+                });
+    }
 
     /**
      * @return when recovered, the instant the row became stale, for the caller's age reporting

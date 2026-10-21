@@ -93,6 +93,20 @@ public class ChallengeQuizQuestionBankService {
             Long generationStamp,
             List<QuizItem> questions
     ) {
+        persistQuestions(userId, studyPackId, sessionId, effectiveCurriculumLevel, generationStamp, questions, sessionId);
+    }
+
+    public void persistGeneratedQuestionsUnclaimed(
+            UUID userId, UUID studyPackId, UUID sessionId, LearnerLevel effectiveCurriculumLevel,
+            Long generationStamp, List<QuizItem> questions
+    ) {
+        persistQuestions(userId, studyPackId, sessionId, effectiveCurriculumLevel, generationStamp, questions, null);
+    }
+
+    private void persistQuestions(
+            UUID userId, UUID studyPackId, UUID sessionId, LearnerLevel effectiveCurriculumLevel,
+            Long generationStamp, List<QuizItem> questions, UUID claimedSessionId
+    ) {
         Objects.requireNonNull(generationStamp, "generationStamp");
         if (questions == null || questions.isEmpty()) {
             return;
@@ -115,7 +129,7 @@ public class ChallengeQuizQuestionBankService {
             entry.setQuestion(question);
             entry.setLearnerLevel(learnerLevelName(effectiveCurriculumLevel));
             entry.setLastKnownOutcome(OUTCOME_UNANSWERED);
-            entry.setClaimedSessionId(sessionId);
+            entry.setClaimedSessionId(claimedSessionId);
             entry.setGeneratedAt(now);
             entries.add(entry);
         }

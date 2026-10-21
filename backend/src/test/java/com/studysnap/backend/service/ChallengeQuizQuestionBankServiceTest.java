@@ -246,6 +246,21 @@ class ChallengeQuizQuestionBankServiceTest {
                 LearnerLevel.JUNIOR_HIGH.name(), LearnerLevel.SENIOR_HIGH.name());
     }
 
+    @Test
+    void persistGeneratedQuestionsUnclaimedRetainsOriginAndLeavesClaimAvailable() {
+        UUID userId = UUID.randomUUID();
+        UUID packId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+        ChallengeQuizQuestionBankService service = new ChallengeQuizQuestionBankService(questionBankRepository);
+
+        service.persistGeneratedQuestionsUnclaimed(userId, packId, sessionId, LearnerLevel.COLLEGE, 7L,
+                List.of(quizItem("Saved after failed preparation")));
+
+        verify(questionBankRepository).insertIfAbsent(any(), eq(userId), eq(packId), eq(7L),
+                eq(sessionId), any(), any(), eq(LearnerLevel.COLLEGE.name()), eq("UNANSWERED"),
+                org.mockito.ArgumentMatchers.isNull(), any());
+    }
+
     private ChallengeQuizQuestionBankEntity bankedQuestion(String questionText) {
         ChallengeQuizQuestionBankEntity question = new ChallengeQuizQuestionBankEntity();
         question.setQuestionKey(questionText.toLowerCase());

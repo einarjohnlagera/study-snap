@@ -139,6 +139,18 @@ public interface QuickReviewSessionRepository extends JpaRepository<QuickReviewS
             Pageable pageable
     );
 
+    /** Filter Board Exam before LIMIT so ordinary Challenge jobs cannot starve its refund sweep. */
+    @Query(value = """
+            select id
+            from quick_review_sessions
+            where status = 'GENERATING'
+              and session_mode = 'CHALLENGE'
+              and session_state->>'mode' = 'board_exam'
+              and created_at < :cutoff
+            order by created_at asc
+            """, nativeQuery = true)
+    List<UUID> findStaleBoardExamSessionIds(@Param("cutoff") OffsetDateTime cutoff, Pageable pageable);
+
     boolean existsByUserIdAndStatusAndCompletedAtIsNotNull(UUID userId, QuickReviewSessionStatus status);
 
     long countByUserIdAndStatusAndCompletedAtIsNotNull(UUID userId, QuickReviewSessionStatus status);
