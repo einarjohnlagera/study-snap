@@ -568,6 +568,8 @@ studysnap:
     pool-pending-bound-minutes: ${GENERATION_POOL_PENDING_BOUND_MINUTES:60}
     pool-generating-bound-minutes: ${GENERATION_POOL_GENERATING_BOUND_MINUTES:60}
     long-exam-session-bound-minutes: ${GENERATION_LONG_EXAM_SESSION_BOUND_MINUTES:30}
+    challenge-prepared-expiry-days: ${GENERATION_CHALLENGE_PREPARED_EXPIRY_DAYS:7}
+    challenge-stuck-generation-minutes: ${GENERATION_CHALLENGE_STUCK_GENERATION_MINUTES:20}
     note-bound-minutes: ${GENERATION_NOTE_BOUND_MINUTES:120}
   goal-adoption:
     recovery-cron: ${GOAL_ADOPTION_RECOVERY_CRON:0 * * * * *}

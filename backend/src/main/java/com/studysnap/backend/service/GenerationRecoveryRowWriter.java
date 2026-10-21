@@ -6,9 +6,11 @@ import com.studysnap.backend.entity.NoteStatus;
 import com.studysnap.backend.entity.QuickReviewSessionEntity;
 import com.studysnap.backend.entity.QuickReviewSessionMode;
 import com.studysnap.backend.entity.QuickReviewSessionStatus;
+import com.studysnap.backend.entity.AnalyticsEventType;
 import com.studysnap.backend.repository.ExamQuestionPoolRepository;
 import com.studysnap.backend.repository.NoteRepository;
 import com.studysnap.backend.repository.QuickReviewSessionRepository;
+import com.studysnap.backend.repository.StudyPackRepository;
 import com.studysnap.backend.util.QuizSessionStateUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -51,6 +53,70 @@ public class GenerationRecoveryRowWriter {
     private final StudyPackService studyPackService;
     private final UserUsageService userUsageService;
     private final ChallengeQuizQuestionBankService challengeQuizQuestionBankService;
+    private final StudyPackRepository studyPackRepository;
+    private final AnalyticsService analyticsService;
+    private final jakarta.persistence.EntityManager entityManager;
+
+    /** Pack then session: the same order as Start Quiz and preparation completion. */
+    @Transactional
+    public Optional<OffsetDateTime> recoverExpiredPreparedChallengeSession(UUID sessionId, OffsetDateTime cutoff) {
+        QuickReviewSessionEntity observed = quickReviewSessionRepository.findById(sessionId).orElse(null);
+        if (observed == null) {
+            return Optional.empty();
+        }
+        if (studyPackRepository.findByIdAndOwnerUserIdForUpdate(observed.getStudyPackId(), observed.getUserId()).isEmpty()) {
+            return Optional.empty();
+        }
+        return quickReviewSessionRepository.findByIdForUpdate(sessionId)
+                .map(session -> {
+                    entityManager.refresh(session);
+                    return session;
+                })
+                .filter(session -> session.getSessionMode() == QuickReviewSessionMode.CHALLENGE)
+                .filter(session -> !isBoardExamSession(session))
+                .filter(session -> session.getStatus() == QuickReviewSessionStatus.IN_PROGRESS)
+                .filter(session -> PreparedChallengeExpiry.expired(session, cutoff))
+                .map(session -> {
+                    OffsetDateTime staleSince = PreparedChallengeExpiry.preparedAt(session);
+                    session.setStatus(QuickReviewSessionStatus.FORFEITED);
+                    challengeQuizQuestionBankService.releaseClaims(session.getUserId(), session.getStudyPackId(), sessionId);
+                    quickReviewSessionRepository.save(session);
+                    try {
+                        analyticsService.trackEvent(session.getUserId(),
+                                AnalyticsEventType.CHALLENGE_QUIZ_PREPARATION_ABANDONED,
+                                session.getStudyPackId(), Map.of("sessionId", sessionId.toString(),
+                                        "mode", "challenge", "reason", "EXPIRED"));
+                    } catch (RuntimeException ignored) {
+                        // Analytics is best effort.
+                    }
+                    return staleSince;
+                });
+    }
+
+    @Transactional
+    public Optional<OffsetDateTime> recoverStuckChallengeGeneration(UUID sessionId, OffsetDateTime cutoff) {
+        QuickReviewSessionEntity observed = quickReviewSessionRepository.findById(sessionId).orElse(null);
+        if (observed == null) {
+            return Optional.empty();
+        }
+        if (studyPackRepository.findByIdAndOwnerUserIdForUpdate(observed.getStudyPackId(), observed.getUserId()).isEmpty()) {
+            return Optional.empty();
+        }
+        return quickReviewSessionRepository.findByIdForUpdate(sessionId)
+                .map(session -> {
+                    entityManager.refresh(session);
+                    return session;
+                })
+                .filter(session -> session.getSessionMode() == QuickReviewSessionMode.CHALLENGE)
+                .filter(session -> !isBoardExamSession(session))
+                .filter(session -> session.getStatus() == QuickReviewSessionStatus.GENERATING)
+                .filter(session -> session.getCreatedAt() != null && session.getCreatedAt().isBefore(cutoff))
+                .map(session -> {
+                    OffsetDateTime staleSince = session.getCreatedAt();
+                    failChallengeSession(sessionId);
+                    return staleSince;
+                });
+    }
 
     /** A failed preparation never held a quota charge. Repeated recovery is harmless. */
     @Transactional
@@ -95,7 +161,7 @@ public class GenerationRecoveryRowWriter {
                 });
     }
 
-    /** Recovers only Board Exam CHALLENGE rows; ordinary Challenge sessions retain their existing path. */
+    /** Recovers only Board Exam CHALLENGE rows; ordinary Challenge has its own sweep. */
     @Transactional
     public Optional<OffsetDateTime> recoverBoardExamSession(UUID sessionId, OffsetDateTime cutoff) {
         return quickReviewSessionRepository.findByIdForUpdate(sessionId)

@@ -69,7 +69,10 @@ class GenerationRecoveryServiceTest {
                 noteRepository,
                 studyPackService,
                 userUsageService,
-                org.mockito.Mockito.mock(ChallengeQuizQuestionBankService.class)
+                org.mockito.Mockito.mock(ChallengeQuizQuestionBankService.class),
+                org.mockito.Mockito.mock(com.studysnap.backend.repository.StudyPackRepository.class),
+                org.mockito.Mockito.mock(AnalyticsService.class),
+                org.mockito.Mockito.mock(jakarta.persistence.EntityManager.class)
         );
         service = new GenerationRecoveryService(
                 examQuestionPoolRepository,
@@ -87,6 +90,24 @@ class GenerationRecoveryServiceTest {
             note.setStatus(NoteStatus.FAILED);
             return null;
         }).when(studyPackService).markNoteGenerationFailed(any(NoteEntity.class));
+    }
+
+    @Test
+    void expiredChallengeSweepContinuesAfterOneRowThrows() {
+        UUID bad = UUID.randomUUID();
+        UUID good = UUID.randomUUID();
+        GenerationRecoveryRowWriter writer = org.mockito.Mockito.mock(GenerationRecoveryRowWriter.class);
+        GenerationRecoveryService isolated = new GenerationRecoveryService(examQuestionPoolRepository,
+                quickReviewSessionRepository, noteRepository, writer, properties);
+        when(quickReviewSessionRepository.findExpiredPreparedChallengeCandidateIds(any(), any()))
+                .thenReturn(List.of(bad, good));
+        when(writer.recoverExpiredPreparedChallengeSession(eq(bad), any()))
+                .thenThrow(new IllegalStateException("bad row"));
+        when(writer.recoverExpiredPreparedChallengeSession(eq(good), any()))
+                .thenReturn(Optional.of(OffsetDateTime.now().minusDays(8)));
+
+        assertThat(isolated.recoverExpiredPreparedChallengeSessions().recoveredCount()).isEqualTo(1);
+        verify(writer).recoverExpiredPreparedChallengeSession(eq(good), any());
     }
 
     @Test

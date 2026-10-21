@@ -11,9 +11,14 @@ import java.util.List;
 public record ChallengeQuizStartRequest(
         String mode,
         List<String> additionalStudyPackIds,
-        String sourceCollectionId
+        String sourceCollectionId,
+        String discardPreparedSessionId
 ) {
+    public ChallengeQuizStartRequest(String mode, List<String> additionalStudyPackIds, String sourceCollectionId) {
+        this(mode, additionalStudyPackIds, sourceCollectionId, null);
+    }
+
     public ChallengeQuizStartRequest(String mode, List<String> additionalStudyPackIds) {
-        this(mode, additionalStudyPackIds, null);
+        this(mode, additionalStudyPackIds, null, null);
     }
 }

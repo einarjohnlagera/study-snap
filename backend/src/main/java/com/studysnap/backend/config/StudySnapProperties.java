@@ -519,6 +519,8 @@ public class StudySnapProperties {
         private int poolPendingBoundMinutes = 60;
         private int poolGeneratingBoundMinutes = 60;
         private int longExamSessionBoundMinutes = 30;
+        private int challengePreparedExpiryDays = 7;
+        private int challengeStuckGenerationMinutes = 20;
         private int noteBoundMinutes = 120;
     }
 

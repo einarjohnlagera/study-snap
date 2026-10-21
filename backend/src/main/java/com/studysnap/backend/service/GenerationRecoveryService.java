@@ -21,7 +21,7 @@ import java.util.UUID;
 import java.util.function.Function;
 
 /**
- * Finds rows stranded in a non-terminal generation status and hands each to
+ * Finds stranded generation rows and expired prepared Challenge sessions, then hands each to
  * {@link GenerationRecoveryRowWriter}, which commits them one at a time.
  *
  * <p><strong>These sweep methods are deliberately NOT {@code @Transactional}.</strong> The per-row
@@ -96,6 +96,24 @@ public class GenerationRecoveryService {
                 now,
                 "board-exam-session"
         );
+    }
+
+    public SurfaceRecoveryResult recoverExpiredPreparedChallengeSessions() {
+        OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
+        OffsetDateTime cutoff = now.minusDays(properties.getGeneration().getChallengePreparedExpiryDays());
+        List<UUID> ids = quickReviewSessionRepository.findExpiredPreparedChallengeCandidateIds(
+                cutoff, PageRequest.of(0, normalizedBatchSize()));
+        return sweep(ids, id -> rowWriter.recoverExpiredPreparedChallengeSession(id, cutoff),
+                now, "prepared-challenge-session");
+    }
+
+    public SurfaceRecoveryResult recoverStuckChallengeGenerations() {
+        OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
+        OffsetDateTime cutoff = now.minusMinutes(properties.getGeneration().getChallengeStuckGenerationMinutes());
+        List<UUID> ids = quickReviewSessionRepository.findStuckChallengeGenerationIds(
+                cutoff, PageRequest.of(0, normalizedBatchSize()));
+        return sweep(ids, id -> rowWriter.recoverStuckChallengeGeneration(id, cutoff),
+                now, "stuck-challenge-generation");
     }
 
     public SurfaceRecoveryResult recoverStaleNotes() {

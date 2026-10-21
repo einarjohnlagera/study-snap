@@ -12,6 +12,8 @@ import com.studysnap.backend.dto.LongExamSourceNoteRef;
 import com.studysnap.backend.dto.QuizItem;
 import com.studysnap.backend.exception.AppException;
 import com.studysnap.backend.exception.ChallengeQuizSessionNotInProgressException;
+import com.studysnap.backend.exception.InvalidPreparedChallengeDiscardException;
+import com.studysnap.backend.exception.PreparedChallengeExpiredException;
 import com.studysnap.backend.exception.InvalidBoardExamSourceException;
 import com.studysnap.backend.exception.NotEnoughNewQuestionsException;
 import com.studysnap.backend.exception.BoardExamInsufficientEligibleSourcesException;
@@ -391,6 +393,228 @@ class ChallengeQuizServiceTest {
         return challengeQuizService.startSession(packId.toString(), userId, null);
     }
 
+    private void findActive(QuickReviewSessionEntity row) {
+        when(quickReviewSessionRepository.findTopByUserIdAndStudyPackIdAndSessionModeAndStatusInOrderByCreatedAtDesc(
+                eq(row.getUserId()), eq(row.getStudyPackId()), eq(QuickReviewSessionMode.CHALLENGE), any()))
+                .thenReturn(Optional.of(row));
+    }
+
+    @ParameterizedTest
+    @CsvSource({"false", "true"})
+    void lazyExpiryForfeitsPreparedQuizAndHonorsCurrentStartRequest(boolean discardExpiredSession) {
+        UUID userId = UUID.randomUUID();
+        StudyPackEntity pack = buildStudyPack(UUID.randomUUID(), UUID.randomUUID(), userId);
+        ChallengeQuizStartResponse prepared = prepareFullyBankedQuiz(userId, pack);
+        QuickReviewSessionEntity row = savedSessionsById.get(UUID.fromString(prepared.sessionId()));
+        row.setSessionState(QuizSessionStateUtils.withPreparedAtEpochSeconds(
+                row.getSessionState(), OffsetDateTime.now(ZoneOffset.UTC).minusDays(8).toEpochSecond()));
+        findActive(row);
+
+        ChallengeQuizStartRequest request = discardExpiredSession
+                ? new ChallengeQuizStartRequest("challenge", null, null, prepared.sessionId()) : null;
+        ChallengeQuizStartResponse later = challengeQuizService.startSession(pack.getId().toString(), userId, request);
+        assertThat(row.getStatus()).isEqualTo(QuickReviewSessionStatus.FORFEITED);
+        assertThat(row.isQuotaExempt()).isTrue();
+        assertThat(savedSessionsById).hasSize(2);
+        assertThat(later.sessionId()).isNotEqualTo(prepared.sessionId());
+        verify(challengeQuizQuestionBankService).releaseClaims(userId, pack.getId(), row.getId());
+        verify(userUsageService, never()).incrementChallengeQuizGeneration(any(), any());
+        verify(analyticsService).trackEvent(eq(userId), eq(AnalyticsEventType.CHALLENGE_QUIZ_PREPARATION_ABANDONED),
+                eq(pack.getId()), org.mockito.ArgumentMatchers.argThat(metadata -> "EXPIRED".equals(metadata.get("reason"))));
+        challengeQuizService.startQuiz(later.sessionId(), userId);
+        verify(userUsageService).incrementChallengeQuizGeneration(eq(userId), any());
+    }
+
+    @Test
+    void startQuizRejectsExpiredPreparationUnderLockWithoutCharging() {
+        UUID userId = UUID.randomUUID();
+        StudyPackEntity pack = buildStudyPack(UUID.randomUUID(), UUID.randomUUID(), userId);
+        ChallengeQuizStartResponse prepared = prepareFullyBankedQuiz(userId, pack);
+        QuickReviewSessionEntity row = savedSessionsById.get(UUID.fromString(prepared.sessionId()));
+        row.setSessionState(QuizSessionStateUtils.withPreparedAtEpochSeconds(
+                row.getSessionState(), OffsetDateTime.now(ZoneOffset.UTC).minusDays(8).toEpochSecond()));
+
+        assertThatThrownBy(() -> challengeQuizService.startQuiz(prepared.sessionId(), userId))
+                .isInstanceOf(PreparedChallengeExpiredException.class);
+        assertThat(row.getStatus()).isEqualTo(QuickReviewSessionStatus.FORFEITED);
+        assertThat(row.isQuotaExempt()).isTrue();
+        verify(userUsageService, never()).incrementChallengeQuizGeneration(any(), any());
+    }
+
+    @Test
+    void discardOfAlreadyGonePreparationProceedsWithNewStart() {
+        UUID userId = UUID.randomUUID();
+        StudyPackEntity pack = buildStudyPack(UUID.randomUUID(), UUID.randomUUID(), userId);
+        ChallengeQuizStartResponse previous = prepareFullyBankedQuiz(userId, pack);
+        savedSessionsById.get(UUID.fromString(previous.sessionId())).setStatus(QuickReviewSessionStatus.FORFEITED);
+
+        ChallengeQuizStartResponse next = challengeQuizService.startSession(pack.getId().toString(), userId,
+                new ChallengeQuizStartRequest("challenge", null, null, previous.sessionId()));
+
+        assertThat(next.sessionId()).isNotEqualTo(previous.sessionId());
+        assertThat(savedSessionsById).hasSize(2);
+    }
+
+    @Test
+    void discardOfSessionCompletedWhileTakingLockProceedsWithNewStart() {
+        UUID userId = UUID.randomUUID();
+        StudyPackEntity pack = buildStudyPack(UUID.randomUUID(), UUID.randomUUID(), userId);
+        ChallengeQuizStartResponse previous = prepareFullyBankedQuiz(userId, pack);
+        QuickReviewSessionEntity row = savedSessionsById.get(UUID.fromString(previous.sessionId()));
+        findActive(row);
+        doAnswer(invocation -> {
+            row.setStatus(QuickReviewSessionStatus.COMPLETED);
+            return null;
+        }).when(entityManager).refresh(row);
+
+        ChallengeQuizStartResponse next = challengeQuizService.startSession(pack.getId().toString(), userId,
+                new ChallengeQuizStartRequest("challenge", null, null, previous.sessionId()));
+
+        assertThat(row.getStatus()).isEqualTo(QuickReviewSessionStatus.COMPLETED);
+        assertThat(next.sessionId()).isNotEqualTo(previous.sessionId());
+        verify(challengeQuizQuestionBankService, never()).releaseClaims(userId, pack.getId(), row.getId());
+    }
+
+    @Test
+    void mismatchedIntentAsksAndDiscardStartsNewPreparationWithoutCharging() {
+        UUID userId = UUID.randomUUID();
+        StudyPackEntity pack = buildStudyPack(UUID.randomUUID(), UUID.randomUUID(), userId);
+        ChallengeQuizStartResponse prepared = prepareFullyBankedQuiz(userId, pack);
+        QuickReviewSessionEntity row = savedSessionsById.get(UUID.fromString(prepared.sessionId()));
+        findActive(row);
+
+        ChallengeQuizStartResponse same = challengeQuizService.startSession(pack.getId().toString(), userId, null);
+        ChallengeQuizStartResponse boardCollision = challengeQuizService.startSession(pack.getId().toString(), userId,
+                new ChallengeQuizStartRequest("board_exam", null));
+        ChallengeQuizStartResponse redoCollision = challengeQuizService.startRedoMissedSession(pack.getId().toString(), userId);
+        assertThat(same.sessionId()).isEqualTo(prepared.sessionId());
+        assertThat(same.collision()).isNull();
+        assertThat(boardCollision.collision().requestedMode()).isEqualTo("board_exam");
+        assertThat(redoCollision.collision().requestedMode()).isEqualTo("redo_missed");
+        assertThat(row.getStatus()).isEqualTo(QuickReviewSessionStatus.IN_PROGRESS);
+
+        assertThatThrownBy(() -> challengeQuizService.startSession(pack.getId().toString(), userId,
+                new ChallengeQuizStartRequest("challenge", null, null, UUID.randomUUID().toString())))
+                .isInstanceOf(InvalidPreparedChallengeDiscardException.class);
+        assertThatThrownBy(() -> challengeQuizService.startRedoMissedSession(
+                pack.getId().toString(), userId, UUID.randomUUID().toString()))
+                .isInstanceOf(InvalidPreparedChallengeDiscardException.class);
+        assertThat(row.getStatus()).isEqualTo(QuickReviewSessionStatus.IN_PROGRESS);
+
+        lenient().when(challengeQuizQuestionBankService.claimIncorrectQuestions(any(), any(), any(), any(), anyInt(), anyInt()))
+                .thenReturn(buildQuizWithPrefix("Missed", REDO_MISSED_QUESTION_COUNT));
+        ChallengeQuizStartResponse replacement = challengeQuizService.startRedoMissedSession(
+                pack.getId().toString(), userId, prepared.sessionId());
+        assertThat(replacement.sessionId()).isNotEqualTo(prepared.sessionId());
+        assertThat(row.getStatus()).isEqualTo(QuickReviewSessionStatus.FORFEITED);
+        assertThat(row.isQuotaExempt()).isTrue();
+        verify(challengeQuizQuestionBankService).releaseClaims(userId, pack.getId(), row.getId());
+        verify(analyticsService).trackEvent(eq(userId), eq(AnalyticsEventType.CHALLENGE_QUIZ_PREPARATION_ABANDONED),
+                eq(pack.getId()), org.mockito.ArgumentMatchers.argThat(metadata -> "DISCARDED".equals(metadata.get("reason"))));
+        verify(userUsageService, never()).incrementChallengeQuizGeneration(any(), any());
+
+        QuickReviewSessionEntity redo = savedSessionsById.get(UUID.fromString(replacement.sessionId()));
+        findActive(redo);
+        ChallengeQuizStartResponse reverseCollision = challengeQuizService.startSession(pack.getId().toString(), userId, null);
+        assertThat(reverseCollision.collision().existingMode()).isEqualTo("redo_missed");
+        assertThat(reverseCollision.collision().requestedMode()).isEqualTo("challenge");
+        challengeQuizService.startQuiz(replacement.sessionId(), userId);
+        assertThatThrownBy(() -> challengeQuizService.startSession(pack.getId().toString(), userId,
+                new ChallengeQuizStartRequest("challenge", null, null, replacement.sessionId())))
+                .isInstanceOf(InvalidPreparedChallengeDiscardException.class);
+        assertThat(redo.getStatus()).isEqualTo(QuickReviewSessionStatus.IN_PROGRESS);
+    }
+
+    @Test
+    void boardExamDiscardForfeitsOrdinaryPreparationThenStartsBoardExam() {
+        UUID userId = UUID.randomUUID();
+        StudyPackEntity pack = buildStudyPack(UUID.randomUUID(), UUID.randomUUID(), userId);
+        ChallengeQuizStartResponse prepared = prepareFullyBankedQuiz(userId, pack);
+        QuickReviewSessionEntity row = savedSessionsById.get(UUID.fromString(prepared.sessionId()));
+        findActive(row);
+        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.PRO);
+        when(generationContextResolver.resolveForStudyPack(userId, pack)).thenReturn(
+                new StudyPackGenerationContext(LearnerLevel.COLLEGE, "Engineering", pack.getSubject(),
+                        List.of(), null, LearnerLevel.BOARD_EXAM_REVIEW));
+        when(examQuestionPoolService.sampleQuestions(pack.getId(),
+                ExamQuestionPoolService.MODE_BOARD_EXAM, 12, LearnerLevel.BOARD_EXAM_REVIEW))
+                .thenReturn(Optional.of(buildQuiz(12)));
+
+        ChallengeQuizStartResponse started = challengeQuizService.startSession(pack.getId().toString(), userId,
+                new ChallengeQuizStartRequest("board_exam", null, null, prepared.sessionId()));
+
+        assertThat(started.mode()).isEqualTo("board_exam");
+        assertThat(started.sessionId()).isNotEqualTo(prepared.sessionId());
+        assertThat(row.getStatus()).isEqualTo(QuickReviewSessionStatus.FORFEITED);
+        assertThat(row.isQuotaExempt()).isTrue();
+        verify(challengeQuizQuestionBankService).releaseClaims(userId, pack.getId(), row.getId());
+        verify(analyticsService).trackEvent(eq(userId),
+                eq(AnalyticsEventType.CHALLENGE_QUIZ_PREPARATION_ABANDONED), eq(pack.getId()),
+                org.mockito.ArgumentMatchers.argThat(metadata -> "DISCARDED".equals(metadata.get("reason"))));
+    }
+
+    @ParameterizedTest
+    @CsvSource({"EXPIRED", "STALE"})
+    void redoMissedLazyInvalidPreparationForfeitsThenPreparesFresh(String reason) {
+        UUID userId = UUID.randomUUID();
+        StudyPackEntity pack = buildStudyPack(UUID.randomUUID(), UUID.randomUUID(), userId);
+        ChallengeQuizStartResponse prepared = prepareFullyBankedQuiz(userId, pack);
+        QuickReviewSessionEntity row = savedSessionsById.get(UUID.fromString(prepared.sessionId()));
+        findActive(row);
+        if ("EXPIRED".equals(reason)) {
+            row.setSessionState(QuizSessionStateUtils.withPreparedAtEpochSeconds(
+                    row.getSessionState(), OffsetDateTime.now(ZoneOffset.UTC).minusDays(8).toEpochSecond()));
+        } else {
+            pack.setGenerationStamp(pack.getGenerationStamp() + 1);
+        }
+        when(challengeQuizQuestionBankService.claimIncorrectQuestions(any(), any(), any(), any(), anyInt(), anyInt()))
+                .thenReturn(buildQuizWithPrefix("Missed", REDO_MISSED_QUESTION_COUNT));
+
+        ChallengeQuizStartResponse redo = challengeQuizService.startRedoMissedSession(
+                pack.getId().toString(), userId, prepared.sessionId());
+
+        assertThat(redo.sessionId()).isNotEqualTo(prepared.sessionId());
+        assertThat(redo.collision()).isNull();
+        assertThat(row.getStatus()).isEqualTo(QuickReviewSessionStatus.FORFEITED);
+        verify(challengeQuizQuestionBankService).releaseClaims(userId, pack.getId(), row.getId());
+        verify(analyticsService).trackEvent(eq(userId),
+                eq(AnalyticsEventType.CHALLENGE_QUIZ_PREPARATION_ABANDONED), eq(pack.getId()),
+                org.mockito.ArgumentMatchers.argThat(metadata -> reason.equals(metadata.get("reason"))));
+    }
+
+    @Test
+    void discardingGeneratingPreparationLetsLateAsyncResultBankUnclaimed() {
+        UUID userId = UUID.randomUUID();
+        StudyPackEntity pack = buildStudyPack(UUID.randomUUID(), UUID.randomUUID(), userId);
+        stubChallengeStartDependencies(userId, pack.getId(), pack, PlanType.FREE);
+        when(generationContextResolver.resolveForStudyPack(userId, pack)).thenReturn(
+                new StudyPackGenerationContext(LearnerLevel.COLLEGE, "Engineering", pack.getSubject(), List.of()));
+        when(quizGenerationService.generateChallengeQuiz(any(), any(), any(), any(), anyInt(), any(), any()))
+                .thenAnswer(invocation -> {
+                    QuickReviewSessionEntity old = savedSessionsById.values().iterator().next();
+                    challengeQuizService.startRedoMissedSession(pack.getId().toString(), userId, old.getId().toString());
+                    return GeneratedChallengeQuizContent.withoutUsage(
+                            buildQuizWithPrefix("Generated", DEFAULT_ADAPTIVE_QUESTION_COUNT));
+                });
+        // The job reaches the model call before the learner discards the GENERATING session.
+        ChallengeQuizStartResponse preparing = challengeQuizService.startSession(pack.getId().toString(), userId, null);
+        QuickReviewSessionEntity old = savedSessionsById.get(UUID.fromString(preparing.sessionId()));
+        assertThat(old.getStatus()).isEqualTo(QuickReviewSessionStatus.GENERATING);
+        findActive(old);
+        when(challengeQuizQuestionBankService.claimIncorrectQuestions(any(), any(), any(), any(), anyInt(), anyInt()))
+                .thenReturn(buildQuizWithPrefix("Missed", REDO_MISSED_QUESTION_COUNT));
+        ChallengeQuizStartResponse collision = challengeQuizService.startRedoMissedSession(pack.getId().toString(), userId);
+        assertThat(collision.collision().existingSessionId()).isEqualTo(preparing.sessionId());
+        assertThat(old.getStatus()).isEqualTo(QuickReviewSessionStatus.GENERATING);
+        dispatchedTask.run();
+        assertThat(old.getStatus()).isEqualTo(QuickReviewSessionStatus.FORFEITED);
+        assertThat(old.isQuotaExempt()).isTrue();
+        verify(challengeQuizQuestionBankService).persistGeneratedQuestionsUnclaimed(eq(userId),
+                eq(pack.getId()), eq(old.getId()), any(), any(), any());
+        verify(challengeQuizQuestionBankService, times(2)).releaseClaims(userId, pack.getId(), old.getId());
+        verify(userUsageService, never()).incrementChallengeQuizGeneration(any(), any());
+    }
+
     @Test
     void startQuizForfeitsStalePreparedPackAndReleasesClaimsWithoutCharge() {
         UUID userId = UUID.randomUUID();
@@ -405,6 +629,8 @@ class ChallengeQuizServiceTest {
         assertThat(row.getStatus()).isEqualTo(QuickReviewSessionStatus.FORFEITED);
         assertThat(row.isQuotaExempt()).isTrue();
         verify(challengeQuizQuestionBankService).releaseClaims(userId, pack.getId(), row.getId());
+        verify(analyticsService).trackEvent(eq(userId), eq(AnalyticsEventType.CHALLENGE_QUIZ_PREPARATION_ABANDONED),
+                eq(pack.getId()), org.mockito.ArgumentMatchers.argThat(metadata -> "STALE".equals(metadata.get("reason"))));
         verify(userUsageService, never()).incrementChallengeQuizGeneration(any(), any());
     }
 
@@ -425,8 +651,9 @@ class ChallengeQuizServiceTest {
                 UUID.fromString(prepared.sessionId()), userId, QuickReviewSessionMode.CHALLENGE);
     }
 
-    @Test
-    void stalePreparedResumeForfeitsAndStartsFreshPreparation() {
+    @ParameterizedTest
+    @CsvSource({"false", "true"})
+    void stalePreparedResumeForfeitsAndStartsFreshPreparation(boolean discardStaleSession) {
         UUID userId = UUID.randomUUID();
         StudyPackEntity pack = buildStudyPack(UUID.randomUUID(), UUID.randomUUID(), userId);
         ChallengeQuizStartResponse first = prepareFullyBankedQuiz(userId, pack);
@@ -436,12 +663,16 @@ class ChallengeQuizServiceTest {
                 .thenReturn(Optional.of(stale));
         pack.setGenerationStamp(pack.getGenerationStamp() + 1);
 
-        ChallengeQuizStartResponse next = challengeQuizService.startSession(pack.getId().toString(), userId, null);
+        ChallengeQuizStartRequest request = discardStaleSession
+                ? new ChallengeQuizStartRequest("challenge", null, null, first.sessionId()) : null;
+        ChallengeQuizStartResponse next = challengeQuizService.startSession(pack.getId().toString(), userId, request);
 
         assertThat(stale.getStatus()).isEqualTo(QuickReviewSessionStatus.FORFEITED);
         assertThat(stale.isQuotaExempt()).isTrue();
         assertThat(next.sessionId()).isNotEqualTo(first.sessionId());
         verify(challengeQuizQuestionBankService).releaseClaims(userId, pack.getId(), stale.getId());
+        verify(analyticsService).trackEvent(eq(userId), eq(AnalyticsEventType.CHALLENGE_QUIZ_PREPARATION_ABANDONED),
+                eq(pack.getId()), org.mockito.ArgumentMatchers.argThat(metadata -> "STALE".equals(metadata.get("reason"))));
     }
 
     @Test
@@ -477,7 +708,31 @@ class ChallengeQuizServiceTest {
         assertThat(row.isQuotaExempt()).isTrue();
         assertThat(row.getSessionState()).doesNotContainKey("timerStartedAtEpochSeconds");
         verify(challengeQuizQuestionBankService).releaseClaims(userId, pack.getId(), row.getId());
+        verify(analyticsService).trackEvent(eq(userId),
+                eq(AnalyticsEventType.CHALLENGE_QUIZ_PREPARATION_ABANDONED), eq(pack.getId()),
+                org.mockito.ArgumentMatchers.argThat(metadata -> "DISCARDED".equals(metadata.get("reason"))
+                        && prepared.sessionId().equals(metadata.get("sessionId"))));
         verify(userUsageService, never()).incrementChallengeQuizGeneration(any(), any());
+    }
+
+    @Test
+    void expiredPreparedQuizIsAbsentOnReadOnlyReload() {
+        UUID userId = UUID.randomUUID();
+        StudyPackEntity pack = buildStudyPack(UUID.randomUUID(), UUID.randomUUID(), userId);
+        ChallengeQuizStartResponse prepared = prepareFullyBankedQuiz(userId, pack);
+        QuickReviewSessionEntity row = savedSessionsById.get(UUID.fromString(prepared.sessionId()));
+        row.setSessionState(QuizSessionStateUtils.withPreparedAtEpochSeconds(
+                row.getSessionState(), OffsetDateTime.now(ZoneOffset.UTC).minusDays(8).toEpochSecond()));
+        findActive(row);
+
+        ChallengeQuizStartResponse reloaded = challengeQuizService.getInProgressSession(pack.getId().toString(), userId);
+
+        assertThat(reloaded.sessionId()).isNull();
+        assertThat(reloaded.status()).isNull();
+        assertThat(row.getStatus()).isEqualTo(QuickReviewSessionStatus.IN_PROGRESS);
+        verify(challengeQuizQuestionBankService, never()).releaseClaims(userId, pack.getId(), row.getId());
+        verify(analyticsService, never()).trackEvent(eq(userId),
+                eq(AnalyticsEventType.CHALLENGE_QUIZ_PREPARATION_ABANDONED), eq(pack.getId()), any());
     }
 
     @Test
@@ -582,7 +837,10 @@ class ChallengeQuizServiceTest {
                 noteRepository,
                 mock(StudyPackService.class),
                 userUsageService,
-                challengeQuizQuestionBankService
+                challengeQuizQuestionBankService,
+                studyPackRepository,
+                analyticsService,
+                entityManager
         ));
         lenient().doAnswer(invocation -> {
             generationRecoveryRowWriter.failChallengeSession(invocation.getArgument(0));
