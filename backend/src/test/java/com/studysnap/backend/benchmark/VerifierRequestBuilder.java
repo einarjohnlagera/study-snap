@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.studysnap.backend.service.impl.StatementPairVerification;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
@@ -31,14 +32,10 @@ final class VerifierRequestBuilder {
             itemArray.addObject().put("itemId", String.valueOf(i + 1))
                     .put("statement1", pair.statement1()).put("statement2", pair.statement2());
         }
-        String user = new String(bytes[2], java.nio.charset.StandardCharsets.UTF_8);
-        String[][] fields = {{"DOMAIN_CONTEXT","domainContext"},{"SUBJECT","subject"},
-                {"LEARNER_LEVEL","learnerLevel"},{"NOTE_TEXT","noteText"},{"STUDY_PACK_SUMMARY","summary"}};
-        for (String[] field : fields) {
-            JsonNode value = note.get(field[1]);
-            user = user.replace("{" + field[0] + "}", value == null || value.isNull() ? "(not provided)" : value.asText());
-        }
-        user = user.replace("{ITEMS_JSON}", mapper.writeValueAsString(itemArray));
+        String user = StatementPairVerification.renderUserPrompt(
+                new String(bytes[2], java.nio.charset.StandardCharsets.UTF_8),
+                field(note, "domainContext"), field(note, "subject"), field(note, "learnerLevel"),
+                field(note, "noteText"), field(note, "summary"), mapper.writeValueAsString(itemArray));
         ObjectNode body = mapper.createObjectNode().put("model", model);
         ArrayNode input = body.putArray("input");
         addMessage(input,"system",new String(bytes[0],java.nio.charset.StandardCharsets.UTF_8));
@@ -48,6 +45,10 @@ final class VerifierRequestBuilder {
         format.put("type","json_schema").put("name","note_lib_statement_pair_verifier");
         format.set("schema", mapper.readTree(bytes[3])); format.put("strict",true);
         return body;
+    }
+    private static String field(JsonNode note, String name) {
+        JsonNode value = note.get(name);
+        return value == null || value.isNull() ? null : value.asText();
     }
     private static void addMessage(ArrayNode input,String role,String text) {
         input.addObject().put("role",role).putArray("content").addObject().put("type","input_text").put("text",text);

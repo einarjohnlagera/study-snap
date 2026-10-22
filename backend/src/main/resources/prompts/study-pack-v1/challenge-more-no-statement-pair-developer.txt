@@ -1,0 +1,1 @@
+For this batch only, do not write assertion-style questions: no question may contain "Statement 1:" and "Statement 2:". Give that share to the other framings — positive, negative, and best-describes — and keep the same difficulty target, curriculum level, and concept coverage. Every other rule above still applies. For every question in this batch, set `statementVerdicts` to null.

@@ -849,7 +849,7 @@ public class ChallengeQuizService {
     }
 
     private record ChallengePreparation(
-            UUID userId, UUID studyPackId, String title, String summary, List<String> keyConcepts,
+            UUID userId, UUID studyPackId, String title, String summary, String noteText, List<String> keyConcepts,
             List<String> disallowedQuestions, List<QuizItem> claimed, int requestedCount,
             String difficulty, StudyPackGenerationContext context, LearnerLevel curriculumLevel,
             long generationStamp
@@ -867,6 +867,7 @@ public class ChallengeQuizService {
             }
             StudyPackGenerationContext context = buildQuizGenerationContext(session.getUserId(), pack);
             return new ChallengePreparation(session.getUserId(), pack.getId(), pack.getTitle(), pack.getSummary(),
+                    noteRepository.findById(pack.getNoteId()).map(NoteEntity::getContent).orElse(null),
                     List.copyOf(getKeyConcepts(pack)), extractQuestionTexts(pack.getQuiz()),
                     QuizSessionStateUtils.extractPreparationQuiz(session.getSessionState()),
                     QuizSessionStateUtils.extractPreparationRequestedCount(session.getSessionState()),
@@ -897,7 +898,8 @@ public class ChallengeQuizService {
                             preparation.title(), preparation.summary(), preparation.keyConcepts(),
                             appendQuestionTexts(preparation.disallowedQuestions(), preparation.claimed()),
                             preparation.requestedCount() - preparation.claimed().size(),
-                            preparation.difficulty(), preparation.context());
+                            preparation.difficulty(), preparation.context(), preparation.noteText(),
+                            LlmStudyPackService.ChallengeVerifierPath.LIVE_START);
                     break;
                 } catch (AppException exception) {
                     if (attempt == 1 || !LLM_UNAVAILABLE_CODE.equals(exception.getCode())) {

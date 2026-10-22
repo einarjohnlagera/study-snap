@@ -724,7 +724,7 @@ class ChallengeQuizBankConcurrencyIntegrationTest {
         CountDownLatch inGeneration = new CountDownLatch(1);
         CountDownLatch releaseGeneration = new CountDownLatch(1);
         when(quizGenerationService.generateChallengeQuiz(any(), any(), any(), any(),
-                any(Integer.class), any(), any())).thenAnswer(invocation -> {
+                any(Integer.class), any(), any(), any(), any())).thenAnswer(invocation -> {
             inGeneration.countDown();
             assertThat(releaseGeneration.await(8, TimeUnit.SECONDS)).isTrue();
             return GeneratedChallengeQuizContent.withoutUsage(java.util.stream.IntStream.range(0, 12)
@@ -1194,7 +1194,7 @@ class ChallengeQuizBankConcurrencyIntegrationTest {
         jdbc.update("update challenge_quiz_question_bank set claimed_session_id = null where study_pack_id = ?",
                 fixture.packId);
         when(quizGenerationService.generateChallengeQuiz(any(), any(), any(), any(),
-                any(Integer.class), any(), any())).thenThrow(new IllegalStateException("LLM failure"));
+                any(Integer.class), any(), any(), any(), any())).thenThrow(new IllegalStateException("LLM failure"));
         var response = challengeQuizService.startSession(fixture.packId.toString(), fixture.userId, null);
         assertThat(response.status().name()).isEqualTo("GENERATING");
         runDispatchedChallengeJob();
@@ -1235,7 +1235,7 @@ class ChallengeQuizBankConcurrencyIntegrationTest {
         List<QuizItem> generated = java.util.stream.IntStream.range(0, generatedCount)
                 .mapToObj(index -> question("Below floor " + index)).toList();
         when(quizGenerationService.generateChallengeQuiz(any(), any(), any(), any(),
-                any(Integer.class), any(), any())).thenReturn(GeneratedChallengeQuizContent.withoutUsage(generated));
+                any(Integer.class), any(), any(), any(), any())).thenReturn(GeneratedChallengeQuizContent.withoutUsage(generated));
 
         var response = challengeQuizService.startSession(fixture.packId.toString(), fixture.userId, null);
         assertThat(response.status().name()).isEqualTo("GENERATING");
@@ -1279,7 +1279,7 @@ class ChallengeQuizBankConcurrencyIntegrationTest {
         List<QuizItem> generated = java.util.stream.IntStream.range(0, 12)
                 .mapToObj(index -> question("Started " + index)).toList();
         when(quizGenerationService.generateChallengeQuiz(any(), any(), any(), any(),
-                any(Integer.class), any(), any())).thenReturn(GeneratedChallengeQuizContent.withoutUsage(generated));
+                any(Integer.class), any(), any(), any(), any())).thenReturn(GeneratedChallengeQuizContent.withoutUsage(generated));
 
         var response = challengeQuizService.startSession(fixture.packId.toString(), fixture.userId, null);
         assertThat(response.status().name()).isEqualTo("GENERATING");
@@ -1305,7 +1305,7 @@ class ChallengeQuizBankConcurrencyIntegrationTest {
         var generated = java.util.stream.IntStream.range(0, 12)
                 .mapToObj(index -> question("Ready notification " + index)).toList();
         when(quizGenerationService.generateChallengeQuiz(any(), any(), any(), any(),
-                any(Integer.class), any(), any()))
+                any(Integer.class), any(), any(), any(), any()))
                 .thenReturn(GeneratedChallengeQuizContent.withoutUsage(generated));
 
         var response = challengeQuizService.startSession(fixture.packId.toString(), fixture.userId, null);
@@ -1404,7 +1404,7 @@ class ChallengeQuizBankConcurrencyIntegrationTest {
         jdbc.update("update notes set visibility = 'PUBLIC' where id = ?", officialNoteId);
         jdbc.update("delete from challenge_quiz_question_bank where study_pack_id = ?", official.packId);
         when(quizGenerationService.generateChallengeQuiz(any(), any(), any(), any(),
-                any(Integer.class), any(), any())).thenReturn(GeneratedChallengeQuizContent.withoutUsage(
+                any(Integer.class), any(), any(), any(), any())).thenReturn(GeneratedChallengeQuizContent.withoutUsage(
                 List.of(question("Official seeded question"))));
 
         templateService.seedTemplateAsync(officialNoteId, official.packId);
@@ -1456,7 +1456,7 @@ class ChallengeQuizBankConcurrencyIntegrationTest {
         };
         ((Advised) sessionRepository).addAdvice(0, pauseBetweenReads);
         when(quizGenerationService.generateChallengeQuiz(any(), any(), any(), any(),
-                any(Integer.class), any(), any())).thenThrow(new IllegalStateException("LLM failure"));
+                any(Integer.class), any(), any(), any(), any())).thenThrow(new IllegalStateException("LLM failure"));
         try (var executor = Executors.newFixedThreadPool(1)) {
             var start = executor.submit(() ->
                     challengeQuizService.startSession(fixture.packId.toString(), fixture.userId, null));

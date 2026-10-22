@@ -376,6 +376,38 @@ never edit this file.
   - **Review note.** The shared start, Start Quiz and bank paths are named inputs to the scoped cold review at
     signoff.
 
+- **Statement-pair verifier in production code, switches off** (branch `feat/v0.175.0-statement-pair-verifier`).
+  - **What it does.** Before a statement-pair question is kept, two independent checkers (Sol and Luna, run
+    concurrently on their own `statementPairVerifierTaskExecutor`) judge each statement against the source
+    note. A question is kept only when both agree with its key. Rejected questions get one batched
+    replacement round; anything still rejected is omitted. Every failure is closed: a timeout, a rejected
+    submission, a missing verdict, an unparseable pair or blank note text rejects the question, and no
+    paid attempt starts after the shared deadline.
+  - **Three switches, all default false:** `STATEMENT_PAIR_VERIFIER_TEMPLATE_SEED_ENABLED` (Official template
+    seeding), `STATEMENT_PAIR_VERIFIER_LIVE_START_ENABLED` (single-note Challenge preparation), and
+    `STATEMENT_PAIR_PLUS5_EXCLUSION_ENABLED` (+5 exclusion rule). Production behavior is unchanged on merge.
+  - **Prompts.** The signed verifier prompts are byte-identical to the Stage 1 harness, and a parity test
+    guards them. Template fields are filled in one pass, so note text is inserted literally.
+  - **Verification.** `./mvnw clean install`: 2,870 tests, 0 failures. Seven Codex reviews and six fix
+    rounds covered:
+    - a shared-pool deadlock;
+    - one deadline for both checkers;
+    - item-ID gaps;
+    - closing-question stripping, checked against 1,607 real stems;
+    - placeholder expansion;
+    - the +5 leak count including retries;
+    - replacement questions with a single statement marker.
+  - **Merge gate (owner update, 2026-10-21):** #1520 may merge with all three switches OFF after code review
+    and release checks. No checker activation is authorized; the +5 exclusion switch remains OFF.
+  - **Stage 2 record:** Part 15 of `docs/claude-plans/2026-10-20-v0175-statement-pair-verifier-wording-and-pass-rules.md`
+    records P1 pass; P2 KILL as computed with the timeout confound; an inconclusive paired diagnostic;
+    R1r concept GRAY at 82.5%; and R3r pass.
+  - **Activation scope:** multi-note Challenge starts are not checked (`ChallengeVerifierPath.NONE`) until
+    item 5 moves them to background preparation with a question-count floor.
+  - **Known limitation:** verifier calls are logged under the `CRITIQUE` route, and cost attribution uses
+    `action=statement_pair_verifier`. A dedicated `LlmRoute` value would also change model routing, so it
+    was left out.
+
 ## v0.174.0 - Enhanced Generation
 
 **Status: Released** (signed off 2026-10-19; **merge to `main` HELD behind the v0.173.0 gates, so NOT yet

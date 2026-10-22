@@ -79,7 +79,9 @@ class StatementPairVerifierTest {
             assertThatThrownBy(()->VerifierDecision.validate(invalid,1,mapper)).isInstanceOf(Exception.class);
     }
     @Test void blindnessBatchingAndRepeats() throws Exception {
-        var fixture=fixture(List.of(gold("SENTINEL_ID", "P_SEEN","batch","note", "SENTINEL_STEM Statement 1: Quartz is blue. Statement 2: Iron is red. Which is correct? A. CHOICE_SENTINEL B. other", "SENTINEL_PROVENANCE"),
+        ObjectNode withChoices=gold("SENTINEL_ID", "P_SEEN","batch","note", "SENTINEL_STEM Statement 1: Quartz is blue. Statement 2: Iron is red. Which is correct?", "SENTINEL_PROVENANCE");
+        withChoices.putArray("choices").add("CHOICE_SENTINEL").add("other");
+        var fixture=fixture(List.of(withChoices,
                 gold("N2","N","batch","note","Statement 1: Quartz is blue. Statement 2: Iron is red. Which is correct?","p")));
         List<MockClientHttpRequest> requests=new ArrayList<>();AtomicInteger calls=new AtomicInteger();
         run(fixture,3,requests,calls,List.of(payload(2),payload(1),payload(1)));

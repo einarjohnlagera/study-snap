@@ -63,6 +63,26 @@ public interface LlmStudyPackService {
 			StudyPackGenerationContext context
 	);
 
+	enum ChallengeVerifierPath { NONE, LIVE_START, TEMPLATE_SEED, MORE }
+
+	default GeneratedChallengeQuizContent generateChallengeQuiz(
+			String title, String summary, List<String> keyConcepts, List<String> disallowedQuestions,
+			int questionCount, String difficulty, StudyPackGenerationContext context,
+			String noteText, ChallengeVerifierPath verifierPath
+	) {
+		return generateChallengeQuiz(title, summary, keyConcepts, disallowedQuestions,
+				questionCount, difficulty, context);
+	}
+
+	default GeneratedChallengeQuizContent generateMoreChallengeQuiz(
+			String title, String summary, List<String> keyConcepts, List<String> disallowedQuestions,
+			List<String> existingConcepts, int questionCount, String difficulty,
+			StudyPackGenerationContext context, String noteText, ChallengeVerifierPath verifierPath
+	) {
+		return generateMoreChallengeQuiz(title, summary, keyConcepts, disallowedQuestions,
+				existingConcepts, questionCount, difficulty, context);
+	}
+
 	List<QuizItem> generateBoardExamQuiz(
 			String studyPackTitle,
 			String studyPackSummary,

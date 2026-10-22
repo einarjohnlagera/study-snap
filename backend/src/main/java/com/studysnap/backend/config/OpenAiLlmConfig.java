@@ -84,7 +84,14 @@ public class OpenAiLlmConfig {
                 askCompanionSystemPrompt,
                 askCompanionDeveloperPromptTemplate,
                 longExamSystemPrompt,
-                longExamDeveloperPromptTemplate
+                longExamDeveloperPromptTemplate,
+                readResourceAsString(promptDir + "/statement-pair-verifier-system.txt"),
+                readResourceAsString(promptDir + "/statement-pair-verifier-developer.txt"),
+                readResourceAsString(promptDir + "/statement-pair-verifier-user.txt"),
+                readResourceAsJson(promptDir + "/statement-pair-verifier-schema.json", objectMapper),
+                readResourceAsString(promptDir + "/statement-pair-replacement-developer.txt"),
+                readResourceAsString(promptDir + "/statement-pair-replacement-user.txt"),
+                readResourceAsString(promptDir + "/challenge-more-no-statement-pair-developer.txt")
         );
     }
 

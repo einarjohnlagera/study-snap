@@ -2362,6 +2362,7 @@ class OpenAiLlmStudyPackServiceTest {
     @Test
     void rejectedGeneratedTitleLogsWhichBoundFailedAndTheMeasuredCount() throws JsonProcessingException {
         Logger serviceLogger = (Logger) org.slf4j.LoggerFactory.getLogger(OpenAiLlmStudyPackService.class);
+        Level previousLevel = serviceLogger.getLevel();
         ListAppender<ILoggingEvent> appender = new ListAppender<>();
         appender.start();
         serviceLogger.addAppender(appender);
@@ -2396,6 +2397,7 @@ class OpenAiLlmStudyPackServiceTest {
                     .contains("max=12");
         } finally {
             serviceLogger.detachAppender(appender);
+            serviceLogger.setLevel(previousLevel);
         }
     }
 
@@ -2409,6 +2411,7 @@ class OpenAiLlmStudyPackServiceTest {
     @Test
     void rejectedGeneratedOverviewIsReportedUnderItsOwnFieldName() throws JsonProcessingException {
         Logger serviceLogger = (Logger) org.slf4j.LoggerFactory.getLogger(OpenAiLlmStudyPackService.class);
+        Level previousLevel = serviceLogger.getLevel();
         ListAppender<ILoggingEvent> appender = new ListAppender<>();
         appender.start();
         serviceLogger.addAppender(appender);
@@ -2440,6 +2443,7 @@ class OpenAiLlmStudyPackServiceTest {
                     .contains("max=90");
         } finally {
             serviceLogger.detachAppender(appender);
+            serviceLogger.setLevel(previousLevel);
         }
     }
 
