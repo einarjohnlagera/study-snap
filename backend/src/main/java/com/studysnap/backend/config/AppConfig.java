@@ -160,13 +160,14 @@ public class AppConfig {
      */
     @Bean
     public AsyncTaskExecutor challengePreparationTaskExecutor(
-            InFlightThreadRegisteringTaskDecorator taskDecorator
+            InFlightThreadRegisteringTaskDecorator taskDecorator, StudySnapProperties properties
     ) {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
         executor.setThreadNamePrefix("challenge-preparation-");
-        executor.setCorePoolSize(4);
-        executor.setMaxPoolSize(4);
-        executor.setQueueCapacity(100);
+        // Jobs take a Hikari connection only in short load/finish transactions, never during a model call.
+        executor.setCorePoolSize(properties.getChallengeQuiz().getChallengePreparationCoreThreads());
+        executor.setMaxPoolSize(properties.getChallengeQuiz().getChallengePreparationMaxThreads());
+        executor.setQueueCapacity(24);
         executor.setRejectedExecutionHandler(new ThreadPoolExecutor.AbortPolicy());
         executor.setTaskDecorator(taskDecorator);
         executor.initialize();

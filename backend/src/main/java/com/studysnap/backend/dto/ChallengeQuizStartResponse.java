@@ -4,6 +4,7 @@ import com.studysnap.backend.entity.QuickReviewSessionStatus;
 
 import java.util.List;
 import java.util.Map;
+import com.fasterxml.jackson.annotation.JsonProperty;
 
 public record ChallengeQuizStartResponse(
         String sessionId,
@@ -28,6 +29,22 @@ public record ChallengeQuizStartResponse(
         int requestedQuestionCount,
         boolean redoMissed
 ) {
+    @JsonProperty("morePending")
+    public boolean morePending() {
+        return com.studysnap.backend.util.QuizSessionStateUtils.extractMoreToken(sessionState) != null
+                && !com.studysnap.backend.util.QuizSessionStateUtils.extractMoreStopped(sessionState);
+    }
+
+    @JsonProperty("moreStopped")
+    public boolean moreStopped() {
+        return com.studysnap.backend.util.QuizSessionStateUtils.extractMoreStopped(sessionState)
+                && com.studysnap.backend.util.QuizSessionStateUtils.extractMoreToken(sessionState) != null;
+    }
+
+    @JsonProperty("moreFailed")
+    public boolean moreFailed() {
+        return com.studysnap.backend.util.QuizSessionStateUtils.extractMoreFailed(sessionState);
+    }
     public ChallengeQuizStartResponse(
             String sessionId, QuickReviewSessionStatus status, String studyPackId, String title,
             int totalQuestions, int timeLimitSeconds, int usedThisMonth, int monthlyLimit,

@@ -1546,6 +1546,9 @@ export type ChallengeQuizCollision = {
 
 export type ChallengeQuizStartResponse = {
   preparedNotStarted: boolean;
+  morePending?: boolean;
+  moreStopped?: boolean;
+  moreFailed?: boolean;
   requestedQuestionCount: number;
   redoMissed: boolean;
   collision: ChallengeQuizCollision | null;
@@ -1612,6 +1615,8 @@ export type ChallengeQuizSessionResponse = {
 };
 
 export type GenerateMoreChallengeQuizResponse = {
+  sessionId: string;
+  morePending: boolean;
   newQuestions: QuizItem[];
   totalQuestions: number;
   timeLimitSeconds: number;
@@ -4697,6 +4702,15 @@ export async function generateMoreChallengeQuizQuestions(
     response,
     "Could not generate more questions.",
   );
+}
+
+export async function stopAddingChallengeQuizQuestions(sessionId: string): Promise<void> {
+  const response = await fetchWithAuth(
+    `/challenge-quiz/sessions/${sessionId}/generate-more/stop`,
+    { method: "POST", headers: buildAuthHeaders() },
+    true,
+  );
+  if (!response.ok) await parseApiResponse(response, "Could not stop adding questions.");
 }
 
 export async function listRecentChallengeQuizSessions(

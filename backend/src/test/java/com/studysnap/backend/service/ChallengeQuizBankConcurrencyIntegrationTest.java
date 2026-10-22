@@ -211,6 +211,53 @@ class ChallengeQuizBankConcurrencyIntegrationTest {
     }
 
     @Test
+    @Timeout(15)
+    void completionReleasesUnservedGenerateMoreClaimWithoutErasingMissedOutcome() throws Exception {
+        Fixture fixture = seed(false);
+        UUID missed = insertBankQuestion(fixture, "Previously missed", "INCORRECT",
+                OffsetDateTime.now(ZoneOffset.UTC).minusDays(1));
+        var job = captureMoreJob();
+        CountDownLatch modelEntered = new CountDownLatch(1);
+        CountDownLatch releaseModel = new CountDownLatch(1);
+        when(quizGenerationService.generateMoreChallengeQuiz(any(), any(), any(), any(), any(), anyInt(), any(), any()))
+                .thenAnswer(invocation -> {
+                    modelEntered.countDown();
+                    assertThat(releaseModel.await(8, TimeUnit.SECONDS)).isTrue();
+                    return GeneratedChallengeQuizContent.withoutUsage(moreQuestions());
+                });
+
+        challengeQuizService.generateMoreQuestions(fixture.sessionId.toString(), fixture.userId);
+        try (var executor = Executors.newSingleThreadExecutor()) {
+            Future<?> running = executor.submit(job.get());
+            assertThat(modelEntered.await(8, TimeUnit.SECONDS)).isTrue();
+            assertThat(jdbc.queryForObject("select claimed_session_id from challenge_quiz_question_bank where id = ?",
+                    UUID.class, missed)).isEqualTo(fixture.sessionId);
+
+            challengeQuizService.completeSession(fixture.sessionId.toString(), fixture.userId,
+                    new ChallengeQuizCompleteRequest(0, 1, 10));
+            assertThat(jdbc.queryForObject("select claimed_session_id from challenge_quiz_question_bank where id = ?",
+                    UUID.class, missed)).isNull();
+            assertThat(jdbc.queryForObject("select last_known_outcome from challenge_quiz_question_bank where id = ?",
+                    String.class, missed)).isEqualTo("INCORRECT");
+            assertThat(bankService.countEligibleIncorrectQuestions(fixture.userId, fixture.packId,
+                    LearnerLevel.COLLEGE)).isEqualTo(1);
+
+            releaseModel.countDown();
+            running.get(8, TimeUnit.SECONDS);
+        } finally { releaseModel.countDown(); }
+        var saved = sessionRepository.findById(fixture.sessionId).orElseThrow();
+        assertThat(QuizSessionStateUtils.extractQuiz(saved.getSessionState())).hasSize(1);
+        assertThat(saved.getSessionState().get("timeLimitSeconds")).isEqualTo(900);
+        assertThat(QuizSessionStateUtils.extractMoreFailed(saved.getSessionState())).isFalse();
+        assertThat(jdbc.queryForObject("select last_known_outcome from challenge_quiz_question_bank where id = ?",
+                String.class, missed)).isEqualTo("INCORRECT");
+        assertThat(jdbc.queryForObject("""
+                select count(*) from challenge_quiz_question_bank
+                where study_pack_id = ? and question_key like 'fresh %' and claimed_session_id is null
+                """, Integer.class, fixture.packId)).isEqualTo(4);
+    }
+
+    @Test
     void preparedDiscardReleasesClaimsAcrossTwoPacksAndSecondReleaseIsNoOp() {
         Fixture fixture = seed(false);
         UUID secondPackId = addSecondPackWithQuestion(fixture, "Second bank question");
@@ -444,7 +491,9 @@ class ChallengeQuizBankConcurrencyIntegrationTest {
                     OffsetDateTime.now(ZoneOffset.UTC).minusDays(5).plusMinutes(index));
         }
 
+        var job = captureMoreJob();
         challengeQuizService.generateMoreQuestions(fixture.sessionId.toString(), fixture.userId);
+        job.get().run();
 
         assertThat(jdbc.queryForObject("select count(*) from challenge_quiz_question_bank where claimed_session_id = ?",
                 Integer.class, fixture.sessionId)).isEqualTo(6);
@@ -1161,12 +1210,15 @@ class ChallengeQuizBankConcurrencyIntegrationTest {
         when(quizGenerationService.generateMoreChallengeQuiz(any(), any(), any(), any(), any(),
                 any(Integer.class), any(), any())).thenThrow(new IllegalStateException("LLM failure"));
         long started = System.nanoTime();
-        org.assertj.core.api.Assertions.assertThatThrownBy(() -> challengeQuizService.generateMoreQuestions(
-                fixture.sessionId.toString(), fixture.userId)).isInstanceOf(RuntimeException.class);
+        var job = captureMoreJob();
+        challengeQuizService.generateMoreQuestions(fixture.sessionId.toString(), fixture.userId);
+        job.get().run();
+        assertThat(QuizSessionStateUtils.extractMoreFailed(
+                sessionRepository.findById(fixture.sessionId).orElseThrow().getSessionState())).isTrue();
         long elapsedMillis = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started);
         assertThat(elapsedMillis).isLessThan(1800);
         assertThat(jdbc.queryForObject("select claimed_session_id from challenge_quiz_question_bank where study_pack_id = ?",
-                UUID.class, fixture.packId)).isEqualTo(fixture.sessionId);
+                UUID.class, fixture.packId)).isNull();
         List<QuizItem> retryQuestions = new TransactionTemplate(transactionManager).execute(status ->
                 bankService.claimEligibleQuestions(fixture.userId, fixture.packId, LearnerLevel.COLLEGE,
                         fixture.sessionId, java.util.Set.of("bank question"), 1));
@@ -1500,9 +1552,10 @@ class ChallengeQuizBankConcurrencyIntegrationTest {
                             question("Old content three"), question("Old content four"),
                             question("Old content five")));
                 });
+        var job = captureMoreJob();
+        challengeQuizService.generateMoreQuestions(fixture.sessionId.toString(), fixture.userId);
         try (var executor = Executors.newSingleThreadExecutor()) {
-            var more = executor.submit(() -> challengeQuizService.generateMoreQuestions(
-                    fixture.sessionId.toString(), fixture.userId));
+            var more = executor.submit(job.get());
             assertThat(generating.await(8, TimeUnit.SECONDS)).isTrue();
             new TransactionTemplate(transactionManager).execute(status -> {
                 jdbc.update("update study_packs set summary = 'new summary', generation_stamp = generation_stamp + 1 where id = ?", fixture.packId);
@@ -1517,7 +1570,9 @@ class ChallengeQuizBankConcurrencyIntegrationTest {
                     .execute(status -> bankRepository.findClaimableForUpdate(fixture.userId, fixture.packId,
                             LearnerLevel.COLLEGE.name(), fixture.sessionId));
             assertThat(jdbc.queryForObject("select count(*) from challenge_quiz_question_bank where study_pack_id = ?",
-                    Integer.class, fixture.packId)).isEqualTo(5);
+                    Integer.class, fixture.packId)).isZero();
+            assertThat(QuizSessionStateUtils.extractQuiz(sessionRepository.findById(fixture.sessionId)
+                    .orElseThrow().getSessionState())).hasSize(1);
             assertThat(claimable).isEmpty();
         }
     }
@@ -1532,7 +1587,9 @@ class ChallengeQuizBankConcurrencyIntegrationTest {
                 question("Current one"), question("Current two"), question("Current three"),
                 question("Current four"), question("Current five"))));
 
+        var job = captureMoreJob();
         challengeQuizService.generateMoreQuestions(fixture.sessionId.toString(), fixture.userId);
+        job.get().run();
 
         assertThat(jdbc.queryForObject("select generation_stamp from study_packs where id = ?", Long.class,
                 fixture.packId)).isZero();
@@ -1564,7 +1621,9 @@ class ChallengeQuizBankConcurrencyIntegrationTest {
                 question("Duplicate generated"), question("New two"), question("New three"),
                 question("New four"), question("New five"))));
 
+        var job = captureMoreJob();
         challengeQuizService.generateMoreQuestions(fixture.sessionId.toString(), fixture.userId);
+        job.get().run();
 
         var session = sessionRepository.findById(fixture.sessionId).orElseThrow();
         assertThat(QuizSessionStateUtils.extractQuiz(session.getSessionState()))
@@ -2045,6 +2104,295 @@ class ChallengeQuizBankConcurrencyIntegrationTest {
         } finally {
             ((Advised) bankRepository).removeAdvice(pauseAfterLockedRead);
         }
+    }
+
+    private java.util.concurrent.atomic.AtomicReference<Runnable> captureMoreJob() {
+        var job = new java.util.concurrent.atomic.AtomicReference<Runnable>();
+        org.mockito.Mockito.doAnswer(invocation -> {
+            job.set(invocation.getArgument(0));
+            return null;
+        }).when(studyPackGenerationTaskDispatcher).executeChallengePreparation(any(Runnable.class));
+        return job;
+    }
+
+    private List<QuizItem> moreQuestions() {
+        return List.of(question("Fresh one"), question("Fresh two"), question("Fresh three"),
+                question("Fresh four"), question("Fresh five"));
+    }
+
+    @Test
+    void rejectedGenerateMoreDispatchCommitsFailureMarkerInFreshTransaction() {
+        Fixture fixture = seed(false);
+        org.mockito.Mockito.doThrow(new java.util.concurrent.RejectedExecutionException("full"))
+                .when(studyPackGenerationTaskDispatcher).executeChallengePreparation(any(Runnable.class));
+        assertThat(challengeQuizService.generateMoreQuestions(fixture.sessionId.toString(), fixture.userId)
+                .morePending()).isTrue();
+        var state = sessionRepository.findById(fixture.sessionId).orElseThrow().getSessionState();
+        assertThat(QuizSessionStateUtils.extractMoreToken(state)).isNull();
+        assertThat(QuizSessionStateUtils.extractMoreFailed(state)).isTrue();
+    }
+
+    private void stubMoreGeneration(List<QuizItem> questions) {
+        when(quizGenerationService.generateMoreChallengeQuiz(any(), any(), any(), any(), any(), anyInt(), any(), any()))
+                .thenReturn(GeneratedChallengeQuizContent.withoutUsage(questions));
+    }
+
+    @Test
+    @Timeout(15)
+    void generateMoreAndProgressSaveRaceOnRealSessionRowWithoutLosingEitherWrite() throws Exception {
+        Fixture fixture = seed(false);
+        var job = captureMoreJob();
+        CountDownLatch modelEntered = new CountDownLatch(1);
+        CountDownLatch releaseModel = new CountDownLatch(1);
+        when(quizGenerationService.generateMoreChallengeQuiz(any(), any(), any(), any(), any(), anyInt(), any(), any()))
+                .thenAnswer(invocation -> {
+                    modelEntered.countDown();
+                    assertThat(releaseModel.await(8, TimeUnit.SECONDS)).isTrue();
+                    return GeneratedChallengeQuizContent.withoutUsage(moreQuestions());
+                });
+        var response = challengeQuizService.generateMoreQuestions(fixture.sessionId.toString(), fixture.userId);
+        assertThat(response.morePending()).isTrue();
+        verify(quizGenerationService, org.mockito.Mockito.never()).generateMoreChallengeQuiz(
+                any(), any(), any(), any(), any(), anyInt(), any(), any());
+        CountDownLatch rowLocked = new CountDownLatch(1);
+        CountDownLatch releaseRow = new CountDownLatch(1);
+        CountDownLatch writersAtLock = new CountDownLatch(2);
+        MethodInterceptor observeBothWriters = invocation -> {
+            if (invocation.getMethod().getName().equals("findByIdAndUserIdAndSessionModeForUpdate")
+                    && fixture.sessionId.equals(invocation.getArguments()[0])) {
+                writersAtLock.countDown();
+            }
+            return invocation.proceed();
+        };
+        try (var executor = Executors.newFixedThreadPool(3)) {
+            Future<?> finish = executor.submit(job.get());
+            assertThat(modelEntered.await(8, TimeUnit.SECONDS)).isTrue();
+            // This save completes while the model is still in flight: the job holds no session lock.
+            challengeQuizService.updateSessionProgress(
+                    fixture.sessionId.toString(), fixture.userId,
+                    new ChallengeQuizProgressRequest(0, java.util.Map.of("selectedChoices", java.util.Map.of("0", 1))));
+            Future<?> lockHolder = executor.submit(() -> new TransactionTemplate(transactionManager).execute(status -> {
+                jdbc.queryForObject("select id from quick_review_sessions where id = ? for update",
+                        UUID.class, fixture.sessionId);
+                rowLocked.countDown();
+                try { assertThat(releaseRow.await(8, TimeUnit.SECONDS)).isTrue(); }
+                catch (InterruptedException interrupted) { Thread.currentThread().interrupt(); }
+                return null;
+            }));
+            assertThat(rowLocked.await(8, TimeUnit.SECONDS)).isTrue();
+            ((Advised) sessionRepository).addAdvice(0, observeBothWriters);
+            CountDownLatch progressStarted = new CountDownLatch(1);
+            Future<?> progress = executor.submit(() -> {
+                progressStarted.countDown();
+                challengeQuizService.updateSessionProgress(fixture.sessionId.toString(), fixture.userId,
+                        new ChallengeQuizProgressRequest(0,
+                                java.util.Map.of("selectedChoices", java.util.Map.of("0", 1))));
+            });
+            assertThat(progressStarted.await(8, TimeUnit.SECONDS)).isTrue();
+            releaseModel.countDown();
+            // Both whole-JSONB writers have reached the locked repository path before either may commit.
+            assertThat(writersAtLock.await(8, TimeUnit.SECONDS)).isTrue();
+            releaseRow.countDown();
+            lockHolder.get(8, TimeUnit.SECONDS);
+            progress.get(8, TimeUnit.SECONDS);
+            finish.get(8, TimeUnit.SECONDS);
+        } finally {
+            releaseModel.countDown();
+            releaseRow.countDown();
+            ((Advised) sessionRepository).removeAdvice(observeBothWriters);
+        }
+        var saved = sessionRepository.findById(fixture.sessionId).orElseThrow();
+        assertThat(QuizSessionStateUtils.extractQuiz(saved.getSessionState())).hasSize(6);
+        assertThat(QuizSessionStateUtils.extractSelectedChoiceIndexes(saved.getSessionState(),
+                QuizSessionStateUtils.extractQuiz(saved.getSessionState()))).containsEntry(0, 1);
+        assertThat(saved.getSessionState().get("timeLimitSeconds")).isEqualTo(1350);
+    }
+
+    @Test
+    void concurrentGenerateMoreRequestsReturnOnePendingAndOneMoreInProgress() throws Exception {
+        Fixture fixture = seed(false);
+        captureMoreJob();
+        CountDownLatch begin = new CountDownLatch(1);
+        try (var executor = Executors.newFixedThreadPool(2)) {
+            var calls = java.util.stream.IntStream.range(0, 2).mapToObj(index -> executor.submit(() -> {
+                begin.await();
+                try { return challengeQuizService.generateMoreQuestions(fixture.sessionId.toString(), fixture.userId).morePending()
+                        ? "PENDING" : "OTHER"; }
+                catch (com.studysnap.backend.exception.ChallengeMoreInProgressException expected) { return "MORE_IN_PROGRESS"; }
+            })).toList();
+            begin.countDown();
+            assertThat(List.of(calls.get(0).get(8, TimeUnit.SECONDS), calls.get(1).get(8, TimeUnit.SECONDS)))
+                    .containsExactlyInAnyOrder("PENDING", "MORE_IN_PROGRESS");
+        }
+    }
+
+    @Test
+    void stoppedGenerateMoreBanksGeneratedQuestionsUnclaimedAndDoesNotExtend() throws Exception {
+        Fixture fixture = seed(false);
+        var job = captureMoreJob();
+        CountDownLatch entered = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        when(quizGenerationService.generateMoreChallengeQuiz(any(), any(), any(), any(), any(), anyInt(), any(), any()))
+                .thenAnswer(invocation -> {
+                    entered.countDown();
+                    assertThat(release.await(8, TimeUnit.SECONDS)).isTrue();
+                    return GeneratedChallengeQuizContent.withoutUsage(moreQuestions());
+                });
+        challengeQuizService.generateMoreQuestions(fixture.sessionId.toString(), fixture.userId);
+        try (var executor = Executors.newSingleThreadExecutor()) {
+            Future<?> running = executor.submit(job.get());
+            assertThat(entered.await(8, TimeUnit.SECONDS)).isTrue();
+            challengeQuizService.stopGenerateMore(fixture.sessionId.toString(), fixture.userId);
+            release.countDown();
+            running.get(8, TimeUnit.SECONDS);
+        } finally { release.countDown(); }
+        var saved = sessionRepository.findById(fixture.sessionId).orElseThrow();
+        assertThat(QuizSessionStateUtils.extractQuiz(saved.getSessionState())).hasSize(1);
+        assertThat(saved.getSessionState().get("timeLimitSeconds")).isEqualTo(900);
+        assertThat(jdbc.queryForObject("select count(*) from challenge_quiz_question_bank where study_pack_id = ? and claimed_session_id is null",
+                Integer.class, fixture.packId)).isEqualTo(5);
+    }
+
+    @Test
+    @Timeout(15)
+    void stoppedJobCannotReleaseRetryClaimsOnRealBankRows() throws Exception {
+        Fixture fixture = seed(false);
+        insertBankQuestion(fixture, "Reusable one", "UNANSWERED", OffsetDateTime.now(ZoneOffset.UTC));
+        insertBankQuestion(fixture, "Reusable two", "UNANSWERED", OffsetDateTime.now(ZoneOffset.UTC));
+        var job = captureMoreJob();
+        CountDownLatch modelEntered = new CountDownLatch(1);
+        CountDownLatch releaseModel = new CountDownLatch(1);
+        when(quizGenerationService.generateMoreChallengeQuiz(any(), any(), any(), any(), any(), anyInt(), any(), any()))
+                .thenAnswer(invocation -> {
+                    modelEntered.countDown();
+                    assertThat(releaseModel.await(8, TimeUnit.SECONDS)).isTrue();
+                    return GeneratedChallengeQuizContent.withoutUsage(List.of(
+                            question("Generated one"), question("Generated two"), question("Generated three")));
+                });
+        challengeQuizService.generateMoreQuestions(fixture.sessionId.toString(), fixture.userId);
+        Runnable oldJob = job.get();
+        try (var executor = Executors.newSingleThreadExecutor()) {
+            Future<?> oldFinish = executor.submit(oldJob);
+            assertThat(modelEntered.await(8, TimeUnit.SECONDS)).isTrue();
+            challengeQuizService.stopGenerateMore(fixture.sessionId.toString(), fixture.userId);
+            assertThat(sessionRepository.findById(fixture.sessionId).orElseThrow().getSessionState())
+                    .satisfies(state -> {
+                        assertThat(QuizSessionStateUtils.extractMoreToken(state)).isNotNull();
+                        assertThat(QuizSessionStateUtils.extractMoreStopped(state)).isTrue();
+                    });
+            org.assertj.core.api.Assertions.assertThatThrownBy(() ->
+                    challengeQuizService.generateMoreQuestions(fixture.sessionId.toString(), fixture.userId))
+                    .isInstanceOf(com.studysnap.backend.exception.ChallengeMoreInProgressException.class);
+            releaseModel.countDown();
+            oldFinish.get(8, TimeUnit.SECONDS);
+        } finally { releaseModel.countDown(); }
+        assertThat(QuizSessionStateUtils.extractMoreToken(
+                sessionRepository.findById(fixture.sessionId).orElseThrow().getSessionState())).isNull();
+        challengeQuizService.generateMoreQuestions(fixture.sessionId.toString(), fixture.userId);
+        job.get().run();
+        var saved = sessionRepository.findById(fixture.sessionId).orElseThrow();
+        Set<String> quizKeys = com.studysnap.backend.util.QuizDeduplicationUtils.toNormalizedQuestionSet(
+                QuizSessionStateUtils.extractQuiz(saved.getSessionState()));
+        List<String> claimedKeys = jdbc.queryForList(
+                "select question_key from challenge_quiz_question_bank where claimed_session_id = ?",
+                String.class, fixture.sessionId);
+        assertThat(QuizSessionStateUtils.extractQuiz(saved.getSessionState())).hasSize(6);
+        assertThat(claimedKeys).isNotEmpty().allMatch(quizKeys::contains);
+    }
+
+    @Test
+    void staleStoppedMarkerReleasesOnlyUnappendedClaimsBeforeRetry() {
+        Fixture fixture = seed(false);
+        UUID unappended = insertBankQuestion(fixture, "Abandoned claim", "UNANSWERED",
+                OffsetDateTime.now(ZoneOffset.UTC));
+        jdbc.update("update challenge_quiz_question_bank set claimed_session_id = ? where id = ?",
+                fixture.sessionId, unappended);
+        jdbc.update("""
+                update quick_review_sessions set session_state = session_state ||
+                jsonb_build_object('moreToken', 'old-token', 'moreStopped', true,
+                                   'moreStartedAtEpochSeconds', 1)
+                where id = ?
+                """, fixture.sessionId);
+        captureMoreJob();
+        assertThat(challengeQuizService.generateMoreQuestions(fixture.sessionId.toString(), fixture.userId)
+                .morePending()).isTrue();
+        assertThat(jdbc.queryForObject("select claimed_session_id from challenge_quiz_question_bank where id = ?",
+                UUID.class, unappended)).isNull();
+        assertThat(jdbc.queryForObject("""
+                select claimed_session_id from challenge_quiz_question_bank
+                where study_pack_id = ? and question_key = 'bank question'
+                """, UUID.class, fixture.packId)).isEqualTo(fixture.sessionId);
+    }
+
+    @Test
+    void stalePendingMarkerWithoutWorkerReleasesOldClaimsAndAllowsNewGenerateMore() {
+        Fixture fixture = seed(false);
+        UUID abandoned = insertBankQuestion(fixture, "Abandoned missed question", "INCORRECT",
+                OffsetDateTime.now(ZoneOffset.UTC).minusDays(1));
+        jdbc.update("update challenge_quiz_question_bank set claimed_session_id = ? where id = ?",
+                fixture.sessionId, abandoned);
+        jdbc.update("""
+                update quick_review_sessions set session_state = session_state ||
+                jsonb_build_object('moreToken', 'lost-worker', 'moreStartedAtEpochSeconds', 1)
+                where id = ?
+                """, fixture.sessionId);
+        var job = captureMoreJob();
+        stubMoreGeneration(moreQuestions());
+
+        assertThat(challengeQuizService.generateMoreQuestions(fixture.sessionId.toString(), fixture.userId)
+                .morePending()).isTrue();
+        var pending = sessionRepository.findById(fixture.sessionId).orElseThrow().getSessionState();
+        assertThat(QuizSessionStateUtils.extractMoreToken(pending)).isNotEqualTo("lost-worker");
+        assertThat(QuizSessionStateUtils.extractMoreFailed(pending)).isFalse();
+        assertThat(jdbc.queryForObject("select claimed_session_id from challenge_quiz_question_bank where id = ?",
+                UUID.class, abandoned)).isNull();
+        assertThat(jdbc.queryForObject("select last_known_outcome from challenge_quiz_question_bank where id = ?",
+                String.class, abandoned)).isEqualTo("INCORRECT");
+        assertThat(jdbc.queryForObject("""
+                select claimed_session_id from challenge_quiz_question_bank
+                where study_pack_id = ? and question_key = 'bank question'
+                """, UUID.class, fixture.packId)).isEqualTo(fixture.sessionId);
+
+        job.get().run();
+        var saved = sessionRepository.findById(fixture.sessionId).orElseThrow();
+        assertThat(QuizSessionStateUtils.extractMoreToken(saved.getSessionState())).isNull();
+        assertThat(QuizSessionStateUtils.extractMoreFailed(saved.getSessionState())).isFalse();
+        assertThat(QuizSessionStateUtils.extractQuiz(saved.getSessionState())).hasSize(6);
+    }
+
+    @Test
+    void timerExpiringDuringGenerationPreventsAppendAndExtension() {
+        Fixture fixture = seed(false);
+        var job = captureMoreJob();
+        stubMoreGeneration(moreQuestions());
+        challengeQuizService.generateMoreQuestions(fixture.sessionId.toString(), fixture.userId);
+        // The worker has not loaded yet; make it expire after its short load instead via a model callback.
+        when(quizGenerationService.generateMoreChallengeQuiz(any(), any(), any(), any(), any(), anyInt(), any(), any()))
+                .thenAnswer(invocation -> {
+                    jdbc.update("update quick_review_sessions set session_state = jsonb_set(session_state, '{timerStartedAtEpochSeconds}', '1'::jsonb) where id = ?", fixture.sessionId);
+                    return GeneratedChallengeQuizContent.withoutUsage(moreQuestions());
+                });
+        job.get().run();
+        var saved = sessionRepository.findById(fixture.sessionId).orElseThrow();
+        assertThat(QuizSessionStateUtils.extractQuiz(saved.getSessionState())).hasSize(1);
+        assertThat(saved.getSessionState().get("timeLimitSeconds")).isEqualTo(900);
+    }
+
+    @Test
+    void regeneratedPackDuringGenerateMoreDoesNotAppendOrBankStaleQuestions() {
+        Fixture fixture = seed(false);
+        var job = captureMoreJob();
+        when(quizGenerationService.generateMoreChallengeQuiz(any(), any(), any(), any(), any(), anyInt(), any(), any()))
+                .thenAnswer(invocation -> {
+                    jdbc.update("update study_packs set generation_stamp = generation_stamp + 1 where id = ?", fixture.packId);
+                    return GeneratedChallengeQuizContent.withoutUsage(moreQuestions());
+                });
+        challengeQuizService.generateMoreQuestions(fixture.sessionId.toString(), fixture.userId);
+        job.get().run();
+        var saved = sessionRepository.findById(fixture.sessionId).orElseThrow();
+        assertThat(QuizSessionStateUtils.extractQuiz(saved.getSessionState())).hasSize(1);
+        assertThat(jdbc.queryForObject("select count(*) from challenge_quiz_question_bank where study_pack_id = ?",
+                Integer.class, fixture.packId)).isEqualTo(1);
     }
 
     private Fixture seed(boolean expired) {

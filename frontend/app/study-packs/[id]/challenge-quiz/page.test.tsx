@@ -6,6 +6,7 @@ import {
   completeChallengeQuizSession,
   forfeitChallengeQuizSession,
   generateMoreChallengeQuizQuestions,
+  stopAddingChallengeQuizQuestions,
   getCollection,
   getCollectionGoal,
   getInProgressChallengeQuizSession,
@@ -80,6 +81,7 @@ jest.mock("@/lib/api", () => ({
   completeChallengeQuizSession: jest.fn(),
   forfeitChallengeQuizSession: jest.fn(),
   generateMoreChallengeQuizQuestions: jest.fn(),
+  stopAddingChallengeQuizQuestions: jest.fn(),
   getCollection: jest.fn(),
   getCollectionGoal: jest.fn(),
   getInProgressChallengeQuizSession: jest.fn(),
@@ -157,6 +159,8 @@ describe("ChallengeQuizPage", () => {
     (forfeitChallengeQuizSession as jest.Mock).mockReset();
     (forfeitChallengeQuizSession as jest.Mock).mockResolvedValue({ message: "Challenge Quiz session forfeited." });
     (generateMoreChallengeQuizQuestions as jest.Mock).mockReset();
+    (stopAddingChallengeQuizQuestions as jest.Mock).mockReset();
+    (stopAddingChallengeQuizQuestions as jest.Mock).mockResolvedValue(undefined);
     (startChallengeQuizSession as jest.Mock).mockReset();
     (startPreparedChallengeQuiz as jest.Mock).mockReset();
     (startRedoMissedChallengeQuizSession as jest.Mock).mockReset();
@@ -267,6 +271,126 @@ describe("ChallengeQuizPage", () => {
       },
     });
   }
+
+  it("keeps an unsaved answer and index while a pending +5 poll appends questions", async () => {
+    setupInProgressChallengeQuiz();
+    const initial = await (getInProgressChallengeQuizSession as jest.Mock)();
+    let deliverPoll: ((value: unknown) => void) | undefined;
+    (getChallengeQuizSession as jest.Mock).mockImplementation(() => new Promise((resolve) => { deliverPoll = resolve; }));
+    (generateMoreChallengeQuizQuestions as jest.Mock).mockResolvedValue({ morePending: true,
+      newQuestions: [], totalQuestions: 1, timeLimitSeconds: 600,
+      timerStartedAtEpochSeconds: initial.sessionState.timerStartedAtEpochSeconds });
+    render(<ChallengeQuizPage />);
+    fireEvent.click(await screen.findByRole("button", { name: "+5 Questions" }));
+    expect(await screen.findByText("Adding questions…")).toBeInTheDocument();
+    await waitFor(() => expect(getChallengeQuizSession).toHaveBeenCalledWith("session-1"));
+    const answer = screen.getByRole("button", { name: /Mitochondria/i });
+    expect(answer).not.toBeDisabled();
+    fireEvent.click(answer);
+    expect(answer).toHaveAttribute("aria-pressed", "true");
+    await act(async () => { deliverPoll?.({ ...initial, morePending: false, moreFailed: false,
+      totalQuestions: 4, timeLimitSeconds: 870,
+      quiz: [...initial.quiz, ...["New one", "New two", "New three"].map((question) => ({
+        question, choices: ["A", "B"], correctIndex: 0, concept: "Concept", explanation: "Explanation",
+      }))] }); });
+    expect(await screen.findByText("3 questions added")).toBeInTheDocument();
+    expect(screen.getByText("Question 1 of 4")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Mitochondria/i })).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("resumes pending +5 on reload and offers Stop adding after 45 seconds", async () => {
+    jest.useFakeTimers();
+    setupInProgressChallengeQuiz();
+    const initial = await (getInProgressChallengeQuizSession as jest.Mock)();
+    (getInProgressChallengeQuizSession as jest.Mock).mockResolvedValue({ ...initial,
+      morePending: true, sessionState: { ...initial.sessionState,
+        moreStartedAtEpochSeconds: Math.floor(Date.now() / 1000) } });
+    (getChallengeQuizSession as jest.Mock).mockResolvedValue({ ...initial, morePending: true });
+    render(<ChallengeQuizPage />);
+    expect(await screen.findByText("Adding questions…")).toBeInTheDocument();
+    await act(async () => { jest.advanceTimersByTime(46_000); await Promise.resolve(); });
+    expect(screen.getByText("Still adding questions…")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Stop adding" }));
+    await waitFor(() => expect(stopAddingChallengeQuizQuestions).toHaveBeenCalledWith("session-1"));
+  });
+
+  it("reconciles questions and the extended deadline when the worker appends just before Stop", async () => {
+    setupInProgressChallengeQuiz();
+    const initial = await (getInProgressChallengeQuizSession as jest.Mock)();
+    const pending = { ...initial, morePending: true,
+      sessionState: { ...initial.sessionState, moreStartedAtEpochSeconds: Math.floor(Date.now() / 1000) - 46 } };
+    const appended = { ...pending, morePending: false, moreStopped: false,
+      totalQuestions: 4, timeLimitSeconds: 870,
+      quiz: [...initial.quiz, ...["Late one", "Late two", "Late three"].map((question) => ({
+        question, choices: ["A", "B"], correctIndex: 0, concept: "Concept", explanation: "Explanation",
+      }))] };
+    (getInProgressChallengeQuizSession as jest.Mock).mockResolvedValue(pending);
+    (getChallengeQuizSession as jest.Mock).mockResolvedValueOnce(pending).mockResolvedValue(appended);
+    render(<ChallengeQuizPage />);
+    await screen.findByRole("button", { name: "Stop adding" });
+    await waitFor(() => expect(getChallengeQuizSession).toHaveBeenCalledTimes(1));
+    fireEvent.click(screen.getByRole("button", { name: "Stop adding" }));
+    expect(await screen.findByText("Question 1 of 4")).toBeInTheDocument();
+    expect(screen.getByTestId("challenge-quiz-timer")).toHaveTextContent(/^14:2[5-9]$|^14:30$/);
+    expect(screen.getByText("3 questions added")).toBeInTheDocument();
+  });
+
+  it("shows the finishing notice on a post-Stop 409 and retries after the marker clears", async () => {
+    setupInProgressChallengeQuiz();
+    const initial = await (getInProgressChallengeQuizSession as jest.Mock)();
+    const pending = { ...initial, morePending: true,
+      sessionState: { ...initial.sessionState, moreStartedAtEpochSeconds: Math.floor(Date.now() / 1000) - 46 } };
+    const stopped = { ...initial, morePending: false, moreStopped: true };
+    const finishStoppedPolls: Array<(value: unknown) => void> = [];
+    (getInProgressChallengeQuizSession as jest.Mock).mockResolvedValue(pending);
+    (getChallengeQuizSession as jest.Mock).mockResolvedValueOnce(pending).mockResolvedValueOnce(stopped)
+      .mockImplementation(() => new Promise((resolve) => { finishStoppedPolls.push(resolve); }));
+    (generateMoreChallengeQuizQuestions as jest.Mock)
+      .mockRejectedValueOnce(new ApiRequestError("busy", { code: "MORE_IN_PROGRESS", status: 409 }))
+      .mockResolvedValue({ morePending: true });
+    render(<ChallengeQuizPage />);
+    fireEvent.click(await screen.findByRole("button", { name: "Stop adding" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "+5 Questions" })).toBeEnabled());
+    await waitFor(() => expect(finishStoppedPolls.length).toBeGreaterThan(0));
+    fireEvent.click(screen.getByRole("button", { name: "+5 Questions" }));
+    expect(await screen.findByText("Finishing the previous request…")).toBeInTheDocument();
+    await act(async () => { finishStoppedPolls.forEach((resolve) =>
+      resolve({ ...initial, morePending: false, moreStopped: false })); });
+    await waitFor(() => expect(generateMoreChallengeQuizQuestions).toHaveBeenCalledTimes(2));
+  });
+
+  it("reads the extended server deadline before timeout auto-submit while +5 is pending", async () => {
+    jest.useFakeTimers();
+    setupInProgressChallengeQuiz("challenge", Math.floor(Date.now() / 1000), { timeLimitSeconds: 3 });
+    const initial = await (getInProgressChallengeQuizSession as jest.Mock)();
+    (getInProgressChallengeQuizSession as jest.Mock).mockResolvedValue({ ...initial, morePending: true });
+    const startingTime = Date.now();
+    (getChallengeQuizSession as jest.Mock).mockImplementation(() => Promise.resolve(Date.now() - startingTime >= 3000
+      ? { ...initial, morePending: false, timeLimitSeconds: 273,
+          quiz: [...initial.quiz, { question: "Just added", choices: ["A", "B"], correctIndex: 0,
+            concept: "Concept", explanation: "Explanation" }], totalQuestions: 2 }
+      : { ...initial, morePending: true }));
+    render(<ChallengeQuizPage />);
+    expect(await screen.findByText("What powers the cell?")).toBeInTheDocument();
+    await act(async () => { jest.advanceTimersByTime(3000); await Promise.resolve(); });
+    expect(completeChallengeQuizSession).not.toHaveBeenCalled();
+    expect(screen.getByText("Question 1 of 2")).toBeInTheDocument();
+    expect(screen.getByTestId("challenge-quiz-timer")).toHaveTextContent("04:30");
+  });
+
+  it("offers Try again after a pending +5 fails", async () => {
+    setupInProgressChallengeQuiz();
+    const initial = await (getInProgressChallengeQuizSession as jest.Mock)();
+    (getInProgressChallengeQuizSession as jest.Mock).mockResolvedValue({ ...initial, moreFailed: true });
+    (generateMoreChallengeQuizQuestions as jest.Mock).mockResolvedValue({ morePending: true,
+      newQuestions: [], totalQuestions: 1, timeLimitSeconds: 600,
+      timerStartedAtEpochSeconds: initial.sessionState.timerStartedAtEpochSeconds });
+    (getChallengeQuizSession as jest.Mock).mockResolvedValue({ ...initial, morePending: true });
+    render(<ChallengeQuizPage />);
+    expect(await screen.findByText("Couldn't add questions")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    await waitFor(() => expect(generateMoreChallengeQuizQuestions).toHaveBeenCalledWith("session-1"));
+  });
 
   it.each([
     ["challenge", "GENERATING"],

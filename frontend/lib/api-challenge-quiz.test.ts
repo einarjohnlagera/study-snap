@@ -11,6 +11,7 @@ import {
   markChallengeQuizReadySeen,
   getChallengeQuizSessionStatus,
   getChallengeQuizSession,
+  stopAddingChallengeQuizQuestions,
 } from "./api";
 
 describe("Challenge Quiz preparation API", () => {
@@ -62,6 +63,17 @@ describe("Challenge Quiz preparation API", () => {
     expect(globalThis.fetch).toHaveBeenCalledWith(
       "http://localhost:8080/api/challenge-quiz/sessions/session-1",
       { method: "GET", headers: {} },
+    );
+  });
+
+  it("stops a pending add with a bodyless POST", async () => {
+    (globalThis.fetch as jest.Mock).mockResolvedValueOnce({
+      ok: true, status: 204,
+    } as Response);
+    await stopAddingChallengeQuizQuestions("session-1");
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      "http://localhost:8080/api/challenge-quiz/sessions/session-1/generate-more/stop",
+      { method: "POST", headers: {} },
     );
   });
 

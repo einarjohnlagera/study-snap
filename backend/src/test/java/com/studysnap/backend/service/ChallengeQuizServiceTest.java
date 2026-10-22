@@ -17,7 +17,6 @@ import com.studysnap.backend.exception.ChallengePreparationFailedException;
 import com.studysnap.backend.exception.InvalidPreparedChallengeDiscardException;
 import com.studysnap.backend.exception.PreparedChallengeExpiredException;
 import com.studysnap.backend.exception.InvalidBoardExamSourceException;
-import com.studysnap.backend.exception.NotEnoughNewQuestionsException;
 import com.studysnap.backend.exception.BoardExamInsufficientEligibleSourcesException;
 import com.studysnap.backend.entity.ActivityType;
 import com.studysnap.backend.entity.NoteCollectionEntity;
@@ -288,6 +287,8 @@ class ChallengeQuizServiceTest {
                             .isEqualTo("The source note used by the verifier.");
                     assertThat(invocation.getArgument(8, LlmStudyPackService.ChallengeVerifierPath.class))
                             .isEqualTo(LlmStudyPackService.ChallengeVerifierPath.LIVE_START);
+                    assertThat(invocation.getArgument(6, StudyPackGenerationContext.class).routing())
+                            .isEqualTo(LlmRouting.tiered(userId));
                     if (calls.incrementAndGet() == 1) {
                         throw new AppException("LLM_UNAVAILABLE", "timeout", org.springframework.http.HttpStatus.BAD_GATEWAY);
                     }
@@ -1877,7 +1878,7 @@ class ChallengeQuizServiceTest {
                 any(),
                 eq(DEFAULT_ADAPTIVE_QUESTION_COUNT - 3),
                 any(),
-                eq(generationContext.withRouting(LlmRouting.interactiveQuiz()))
+                eq(generationContext.withRouting(LlmRouting.tiered(userId)))
         , any(), any())).thenReturn(GeneratedChallengeQuizContent.withoutUsage(generatedQuiz));
         when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
                 .thenAnswer(invocation -> recordSession(invocation.getArgument(0)));
@@ -1994,7 +1995,7 @@ class ChallengeQuizServiceTest {
                 List.of("Practice?"),
                 expectedQuestionCount,
                 expectedDifficulty,
-                generationContext.withRouting(LlmRouting.interactiveQuiz())
+                generationContext.withRouting(LlmRouting.tiered(userId))
         , null, LlmStudyPackService.ChallengeVerifierPath.LIVE_START)).thenReturn(new GeneratedChallengeQuizContent(
                 buildQuizWithPrefix("Adaptive", expectedQuestionCount),
                 "gpt-4.1-mini",
@@ -2094,7 +2095,7 @@ class ChallengeQuizServiceTest {
                 List.of("Practice?"),
                 DEFAULT_ADAPTIVE_QUESTION_COUNT,
                 "medium",
-                generationContext.withRouting(LlmRouting.interactiveQuiz())
+                generationContext.withRouting(LlmRouting.tiered(userId))
         , null, LlmStudyPackService.ChallengeVerifierPath.LIVE_START)).thenReturn(GeneratedChallengeQuizContent.withoutUsage(generatedQuiz));
         when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
                 .thenAnswer(invocation -> recordSession(invocation.getArgument(0)));
@@ -3054,7 +3055,7 @@ class ChallengeQuizServiceTest {
         verify(quizGenerationService, atLeastOnce()).generateChallengeQuiz(
                 any(), any(), any(), any(), eq(9), any(),
                 org.mockito.ArgumentMatchers.argThat(context ->
-                        LlmRouting.interactiveQuiz().equals(context.routing())));
+                        LlmRouting.tiered(userId).equals(context.routing())));
         verify(studyPackGenerationTaskDispatcher, never()).execute(any(Runnable.class));
         verify(userRepository, never()).findByIdForUpdate(userId);
         // The Review Set walk is Board Exam's alone; Challenge keeps the plan-membership verifier.
@@ -4264,6 +4265,64 @@ class ChallengeQuizServiceTest {
         verify(activityTrackingService, never()).recordActivity(userId, ActivityType.COMPLETED_CHALLENGE_QUIZ, studyPackId);
     }
 
+    private GenerateMoreChallengeQuizResponse runBackgroundMore(QuickReviewSessionEntity session, UUID userId) {
+        GenerateMoreChallengeQuizResponse response = challengeQuizService.generateMoreQuestions(session.getId().toString(), userId);
+        assertThat(response.morePending()).isTrue();
+        assertThat(response.newQuestions()).isEmpty();
+        verify(quizGenerationService, never()).generateMoreChallengeQuiz(any(), any(), any(), any(), any(), anyInt(), any(), any());
+        StudyPackEntity pack = studyPackRepository.findByIdAndOwnerUserId(session.getStudyPackId(), userId).orElseThrow();
+        lenient().when(studyPackRepository.findByIdAndOwnerUserIdForUpdate(session.getStudyPackId(), userId))
+                .thenReturn(Optional.of(pack));
+        lenient().when(quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(
+                session.getId(), userId, QuickReviewSessionMode.CHALLENGE)).thenReturn(Optional.of(session));
+        assertThat(dispatchedTask).isNotNull();
+        Runnable job = dispatchedTask;
+        dispatchedTask = null;
+        job.run();
+        return response;
+    }
+
+    @ParameterizedTest
+    @CsvSource({"deadline", "stop"})
+    void generateMoreStopOrDeadlineBlocksTransportRetryOnTheSameTieredRoute(String interruption) {
+        UUID userId = UUID.randomUUID();
+        UUID packId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+        StudyPackEntity pack = buildStudyPack(packId, UUID.randomUUID(), userId);
+        QuickReviewSessionEntity session = new QuickReviewSessionEntity();
+        session.setId(sessionId);
+        session.setUserId(userId);
+        session.setStudyPackId(packId);
+        session.setSessionMode(QuickReviewSessionMode.CHALLENGE);
+        session.setStatus(QuickReviewSessionStatus.IN_PROGRESS);
+        session.setTotalQuestions(5);
+        session.setSessionState(QuizSessionStateUtils.withQuiz(buildQuizWithPrefix("Existing", 5),
+                Map.of("mode", "challenge", "difficulty", "medium", "timeLimitSeconds", 900)));
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionModeForUpdate(
+                sessionId, userId, QuickReviewSessionMode.CHALLENGE)).thenReturn(Optional.of(session));
+        when(studyPackRepository.findByIdAndOwnerUserId(packId, userId)).thenReturn(Optional.of(pack));
+        when(generationContextResolver.resolveForStudyPack(userId, pack)).thenReturn(
+                new StudyPackGenerationContext(LearnerLevel.COLLEGE, "Engineering", pack.getSubject(), List.of()));
+        if ("deadline".equals(interruption)) properties.getChallengeQuiz().setChallengeMoreWaitDeadlineSeconds(1);
+        when(quizGenerationService.generateMoreChallengeQuiz(any(), any(), any(), any(), any(), anyInt(), any(), any()))
+                .thenAnswer(invocation -> {
+                    assertThat(invocation.getArgument(7, StudyPackGenerationContext.class).routing())
+                            .isEqualTo(LlmRouting.tiered(userId));
+                    if ("stop".equals(interruption)) challengeQuizService.stopGenerateMore(sessionId.toString(), userId);
+                    else Thread.sleep(1100);
+                    throw new org.springframework.web.client.ResourceAccessException("transport timeout");
+                });
+        runBackgroundMore(session, userId);
+        verify(quizGenerationService, times(1)).generateMoreChallengeQuiz(
+                any(), any(), any(), any(), any(), anyInt(), any(), any());
+        assertThat(QuizSessionStateUtils.extractMoreFailed(session.getSessionState()))
+                .isEqualTo("deadline".equals(interruption));
+        if ("deadline".equals(interruption)) {
+            assertThat(session.getSessionState()).containsKeys("moreFailedToken", "moreFailedAtEpochSeconds");
+        }
+        assertThat(QuizSessionStateUtils.extractQuiz(session.getSessionState())).hasSize(5);
+    }
+
     @Test
     void generateMoreQuestions_appendsNewQuestionsToSession() {
         UUID userId = UUID.randomUUID();
@@ -4286,7 +4345,7 @@ class ChallengeQuizServiceTest {
         session.setSessionMode(QuickReviewSessionMode.CHALLENGE);
         session.setStatus(QuickReviewSessionStatus.IN_PROGRESS);
         session.setTotalQuestions(5);
-        session.setModelUsed("gpt-4.1-mini");
+        session.setModelUsed(null);
         session.setInputTokens(100);
         session.setOutputTokens(50);
         session.setCachedInputTokens(20);
@@ -4322,15 +4381,16 @@ class ChallengeQuizServiceTest {
         ));
         when(quickReviewSessionRepository.save(any())).thenAnswer(invocation -> recordSession(invocation.getArgument(0)));
 
-        GenerateMoreChallengeQuizResponse response = challengeQuizService.generateMoreQuestions(sessionId.toString(), userId);
+        GenerateMoreChallengeQuizResponse response = runBackgroundMore(session, userId);
 
-        assertThat(response.newQuestions()).hasSize(5);
+        assertThat(response.newQuestions()).isEmpty();
+        assertThat(QuizSessionStateUtils.extractQuiz(session.getSessionState())).hasSize(10);
         verify(quizGenerationService).generateMoreChallengeQuiz(
                 any(), any(), any(), any(), any(), eq(5), eq("medium"),
                 org.mockito.ArgumentMatchers.argThat(context ->
-                        LlmRouting.interactiveQuiz().equals(context.routing())));
+                        LlmRouting.tiered(userId).equals(context.routing())));
         verify(generationContextResolver).resolveForStudyPack(userId, studyPack);
-        assertThat(response.totalQuestions()).isEqualTo(10);
+        assertThat(session.getTotalQuestions()).isEqualTo(10);
         assertThat(session.getTotalQuestions()).isEqualTo(10);
         assertThat(session.getModelUsed()).isEqualTo("gpt-4.1-mini");
         assertThat(session.getInputTokens()).isEqualTo(140);
@@ -4381,7 +4441,7 @@ class ChallengeQuizServiceTest {
         )).thenReturn(GeneratedChallengeQuizContent.withoutUsage(generatedBatch));
         when(quickReviewSessionRepository.save(any())).thenAnswer(invocation -> recordSession(invocation.getArgument(0)));
 
-        challengeQuizService.generateMoreQuestions(sessionId.toString(), userId);
+        runBackgroundMore(session, userId);
 
         List<QuizItem> finalQuiz = QuizSessionStateUtils.extractQuiz(session.getSessionState());
         assertThat(finalQuiz).hasSize(10);
@@ -4430,12 +4490,12 @@ class ChallengeQuizServiceTest {
         )).thenReturn(bankedQuiz);
         when(quickReviewSessionRepository.save(any())).thenAnswer(invocation -> recordSession(invocation.getArgument(0)));
 
-        GenerateMoreChallengeQuizResponse response = challengeQuizService.generateMoreQuestions(sessionId.toString(), userId);
+        GenerateMoreChallengeQuizResponse response = runBackgroundMore(session, userId);
 
-        assertThat(response.newQuestions()).containsExactlyInAnyOrderElementsOf(
-                withoutAnswerKeys(withSourceStudyPackId(bankedQuiz, studyPackId))
+        assertThat(QuizSessionStateUtils.extractQuiz(session.getSessionState()).subList(5, 10)).containsExactlyInAnyOrderElementsOf(
+                withSourceStudyPackId(bankedQuiz, studyPackId)
         );
-        assertThat(response.totalQuestions()).isEqualTo(10);
+        assertThat(session.getTotalQuestions()).isEqualTo(10);
         verify(quizGenerationService, never()).generateMoreChallengeQuiz(any(), any(), any(), any(), any(), anyInt(), any(), any());
         verify(challengeQuizQuestionBankService, never()).persistGeneratedQuestions(
                 any(), any(), any(), any(), any(), any()
@@ -4475,12 +4535,12 @@ class ChallengeQuizServiceTest {
         )).thenReturn(templateQuiz);
         when(quickReviewSessionRepository.save(any())).thenAnswer(invocation -> recordSession(invocation.getArgument(0)));
 
-        GenerateMoreChallengeQuizResponse response = challengeQuizService.generateMoreQuestions(sessionId.toString(), userId);
+        GenerateMoreChallengeQuizResponse response = runBackgroundMore(session, userId);
 
-        assertThat(response.newQuestions()).containsExactlyInAnyOrderElementsOf(
-                withoutAnswerKeys(withSourceStudyPackId(templateQuiz, studyPackId))
+        assertThat(QuizSessionStateUtils.extractQuiz(session.getSessionState()).subList(5, 10)).containsExactlyInAnyOrderElementsOf(
+                withSourceStudyPackId(templateQuiz, studyPackId)
         );
-        assertThat(response.totalQuestions()).isEqualTo(10);
+        assertThat(session.getTotalQuestions()).isEqualTo(10);
         assertThat(session.getModelUsed()).isNull();
         assertThat(session.getInputTokens()).isNull();
         assertThat(session.getOutputTokens()).isNull();
@@ -4607,8 +4667,8 @@ class ChallengeQuizServiceTest {
         )));
 
         String id = sessionId.toString();
-        assertThatThrownBy(() -> challengeQuizService.generateMoreQuestions(id, userId))
-                .isInstanceOf(NotEnoughNewQuestionsException.class);
+        runBackgroundMore(session, userId);
+        assertThat(QuizSessionStateUtils.extractMoreFailed(session.getSessionState())).isTrue();
     }
 
     @Test

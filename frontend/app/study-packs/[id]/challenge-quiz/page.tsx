@@ -46,6 +46,7 @@ import {
   completeChallengeQuizSession,
   forfeitChallengeQuizSession,
   generateMoreChallengeQuizQuestions,
+  stopAddingChallengeQuizQuestions,
   getCollection,
   getCollectionGoal,
   getInProgressChallengeQuizSession,
@@ -336,6 +337,10 @@ export default function ChallengeQuizPage() {
   const progressLiveWriteRef = useRef<{ controller: AbortController; waiters: Array<() => void> } | null>(null);
   const remainingSecondsRef = useRef(0);
   const challengeSessionRef = useRef<ChallengeQuizStartResponse | null>(null);
+  const moreStopRequestedRef = useRef(false);
+  const moreStoppedAtRef = useRef<number | null>(null);
+  const retryMoreAfterStopRef = useRef(false);
+  const timeoutReconcileInFlightRef = useRef(false);
   const startInFlightRef = useRef(false);
   const phaseRef = useRef<ChallengePhase>("prestart");
   const preparedIntentRef = useRef<ChallengeStartIntent | null>(null);
@@ -362,6 +367,12 @@ export default function ChallengeQuizPage() {
   const [starting, setStarting] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [generatingMore, setGeneratingMore] = useState(false);
+  const [morePending, setMorePending] = useState(false);
+  const [moreStopped, setMoreStopped] = useState(false);
+  const [moreFinishingPrevious, setMoreFinishingPrevious] = useState(false);
+  const [moreFailed, setMoreFailed] = useState(false);
+  const [moreStartedAt, setMoreStartedAt] = useState<number | null>(null);
+  const [moreNow, setMoreNow] = useState(Date.now());
   const [noMoreQuestions, setNoMoreQuestions] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [remainingSeconds, setRemainingSeconds] = useState(0);
@@ -728,6 +739,7 @@ export default function ChallengeQuizPage() {
     if (started.collision) {
       throw new Error("A collision must be resolved before applying a session.");
     }
+    moreStopRequestedRef.current = false;
     timeoutAutoSubmitRequestedRef.current = false;
     redoMissedStartRequestedRef.current = false;
     setShowIncompleteSubmitModal(false);
@@ -811,6 +823,11 @@ export default function ChallengeQuizPage() {
       return;
     }
 
+    setMorePending(Boolean(started.morePending));
+    setMoreStopped(Boolean(started.moreStopped));
+    setMoreFailed(Boolean(started.moreFailed));
+    setMoreStartedAt(typeof started.sessionState?.moreStartedAtEpochSeconds === "number"
+      ? started.sessionState.moreStartedAtEpochSeconds * 1000 : null);
     const state = (started.sessionState ?? {}) as ChallengeSessionStatePayload;
     const restoredChoices = toSelectedChoiceIndexRecord(state.selectedChoices, started.quiz);
     const restoredMultiChoices = toSelectedMultiChoiceIndicesRecord(state.selectedMultiChoices, started.quiz);
@@ -1520,6 +1537,50 @@ export default function ChallengeQuizPage() {
     syncProgressRef,
   ]);
 
+  const reconcileMoreSession = useCallback((next: ChallengeQuizStartResponse) => {
+    const current = challengeSessionRef.current;
+    if (!current || current.sessionId !== next.sessionId) return null;
+    const previousCount = current.quiz.length;
+    if (next.quiz.length > previousCount) {
+      const appended = next.quiz.slice(previousCount);
+      const updated = { ...current, quiz: [...current.quiz, ...appended],
+        totalQuestions: next.totalQuestions, timeLimitSeconds: next.timeLimitSeconds,
+        morePending: next.morePending, moreStopped: next.moreStopped, moreFailed: next.moreFailed };
+      challengeSessionRef.current = updated;
+      setChallengeSession((value) => value?.sessionId === next.sessionId ? updated : value);
+      setGenerateMoreToast(PREPARATION_COPY.moreAdded(appended.length));
+      if (next.totalQuestions >= MAX_SESSION_QUESTIONS) setNoMoreQuestions(true);
+    }
+    const serverDeadline = resolveDeadlineEpochSeconds(next.timeLimitSeconds,
+      next.sessionState as ChallengeSessionStatePayload, getNowEpochSeconds());
+    setDeadlineEpochSeconds(serverDeadline);
+    setRemainingSeconds(resolveRemainingSecondsFromDeadline(serverDeadline, getNowEpochSeconds()));
+    setMorePending(Boolean(next.morePending));
+    setMoreStopped(Boolean(next.moreStopped));
+    setMoreFailed(Boolean(next.moreFailed));
+    if (!next.morePending) setMoreStartedAt(null);
+    return serverDeadline;
+  }, []);
+
+  const submitOnExpiredDeadline = useCallback(() => {
+    if (submitInFlightRef.current || timeoutAutoSubmitRequestedRef.current
+        || timeoutReconcileInFlightRef.current) return;
+    const sessionId = challengeSessionRef.current?.sessionId;
+    const recentStop = moreStoppedAtRef.current !== null && Date.now() - moreStoppedAtRef.current <= 2000;
+    if (!sessionId || (!morePending && !moreStopped && !generatingMore && !recentStop)) {
+      void handleSubmit(true);
+      return;
+    }
+    timeoutReconcileInFlightRef.current = true;
+    void getChallengeQuizSession(sessionId).then((next) => {
+      const serverDeadline = reconcileMoreSession(next);
+      if (serverDeadline === null || deadlineEpochSeconds === null
+          || serverDeadline <= deadlineEpochSeconds) void handleSubmit(true);
+    }).catch(() => { void handleSubmit(true); }).finally(() => {
+      timeoutReconcileInFlightRef.current = false;
+    });
+  }, [deadlineEpochSeconds, generatingMore, handleSubmit, morePending, moreStopped, reconcileMoreSession]);
+
   useEffect(() => {
     if (phase !== "running" || !challengeSession || submitting || deadlineEpochSeconds === null) {
       return;
@@ -1531,7 +1592,7 @@ export default function ChallengeQuizPage() {
       setRemainingSeconds(nextRemainingSeconds);
       if (nextRemainingSeconds <= 0) {
         if (!timeoutAutoSubmitRequestedRef.current) {
-          void handleSubmit(true);
+          submitOnExpiredDeadline();
         }
       }
     };
@@ -1542,7 +1603,7 @@ export default function ChallengeQuizPage() {
     return () => {
       globalThis.clearInterval(timer);
     };
-  }, [challengeSession, deadlineEpochSeconds, handleSubmit, phase, submitting]);
+  }, [challengeSession, deadlineEpochSeconds, phase, submitting, submitOnExpiredDeadline]);
 
   useEffect(() => {
     if (phase !== "generating" || !note) {
@@ -1601,7 +1662,7 @@ export default function ChallengeQuizPage() {
       remainingSecondsRef.current = nextRemainingSeconds;
       setRemainingSeconds(nextRemainingSeconds);
       if (nextRemainingSeconds <= 0 && !submitInFlightRef.current && !timeoutAutoSubmitRequestedRef.current) {
-        void handleSubmit(true);
+        submitOnExpiredDeadline();
       }
     };
 
@@ -1619,7 +1680,7 @@ export default function ChallengeQuizPage() {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       globalThis.removeEventListener("focus", syncVisibleTimerState);
     };
-  }, [deadlineEpochSeconds, handleSubmit, persistLatestProgressImmediately, phase]);
+  }, [deadlineEpochSeconds, persistLatestProgressImmediately, phase, submitOnExpiredDeadline]);
 
   const handleStartChallenge = useCallback(async (modeOverride?: ChallengeQuizMode, redoMissed = false, storedIntent?: ChallengeStartIntent, discardPreparedSessionId?: string) => {
     if (!note || startInFlightRef.current) {
@@ -1883,59 +1944,70 @@ export default function ChallengeQuizPage() {
   };
 
   const handleGenerateMore = useCallback(async () => {
-    if (phaseRef.current !== "running" || !challengeSession?.sessionId || generatingMore) {
-      return;
-    }
+    if (phaseRef.current !== "running" || !challengeSession?.sessionId || generatingMore || morePending) return;
     setGeneratingMore(true);
     setError(null);
     try {
       const response = await generateMoreChallengeQuizQuestions(challengeSession.sessionId);
-      setChallengeSession((prev) => {
-        if (!prev) {
-          return prev;
-        }
-        return {
-          ...prev,
-          quiz: [...prev.quiz, ...response.newQuestions],
-          totalQuestions: response.totalQuestions,
-        };
-      });
-      const nextDeadline = resolveDeadlineEpochSeconds(
-        response.timeLimitSeconds,
-        { timerStartedAtEpochSeconds: response.timerStartedAtEpochSeconds },
-        getNowEpochSeconds(),
-      );
-      const nextRemainingSeconds = resolveRemainingSecondsFromDeadline(nextDeadline, getNowEpochSeconds());
-      setDeadlineEpochSeconds(nextDeadline);
-      setRemainingSeconds(nextRemainingSeconds);
-      remainingSecondsRef.current = nextRemainingSeconds;
-      const nextIndex = challengeSession.quiz.length;
-      syncProgressRef(
-        nextIndex,
-        progressRef.current.selectedChoices,
-        progressRef.current.selectedMultiChoices,
-        progressRef.current.selectedIdentificationAnswers,
-        progressRef.current.selectedEnumerationAnswers,
-      );
-      setCurrentIndex(nextIndex);
-      setGenerateMoreToast(
-        response.totalQuestions >= MAX_SESSION_QUESTIONS
-          ? `Full challenge unlocked: ${MAX_SESSION_QUESTIONS} questions`
-          : `Challenge extended to ${response.totalQuestions} questions`,
-      );
-      if (challengeSession.quiz.length + response.newQuestions.length >= MAX_SESSION_QUESTIONS) {
-        setNoMoreQuestions(true);
-      }
+      moreStopRequestedRef.current = false;
+      retryMoreAfterStopRef.current = false;
+      setMoreFinishingPrevious(false);
+      setMoreStopped(false);
+      setMorePending(response.morePending);
+      setMoreFailed(false);
+      setMoreStartedAt(Date.now());
     } catch (err) {
-      if (isNotEnoughNewQuestionsError(err)) {
-        setNoMoreQuestions(true);
-      } else {
-        setError(err instanceof Error ? err.message : "Could not generate more questions.");
-      }
+      if (err instanceof ApiRequestError && err.code === "MORE_IN_PROGRESS"
+          && (moreStoppedAtRef.current !== null || moreStopped)) {
+        retryMoreAfterStopRef.current = true;
+        setMoreFinishingPrevious(true);
+        setMoreStopped(true);
+      } else if (isNotEnoughNewQuestionsError(err)) setNoMoreQuestions(true);
+      else setError(err instanceof Error ? err.message : "Could not generate more questions.");
     } finally {
       setGeneratingMore(false);
     }
-  }, [challengeSession, generatingMore, syncProgressRef]);
+  }, [challengeSession?.sessionId, generatingMore, morePending, moreStopped]);
+
+  const handleStopAdding = useCallback(async () => {
+    if (!challengeSession?.sessionId) return;
+    try {
+      moreStopRequestedRef.current = true;
+      moreStoppedAtRef.current = Date.now();
+      await stopAddingChallengeQuizQuestions(challengeSession.sessionId);
+      moreStoppedAtRef.current = Date.now();
+      const next = await getChallengeQuizSession(challengeSession.sessionId);
+      reconcileMoreSession(next);
+    } catch (err) {
+      moreStopRequestedRef.current = false;
+      setError(err instanceof Error ? err.message : "Could not stop adding questions.");
+    }
+  }, [challengeSession?.sessionId, reconcileMoreSession]);
+
+  useEffect(() => {
+    if (phase !== "running" || (!morePending && !moreStopped) || !challengeSession?.sessionId) return;
+    let active = true;
+    let reading = false;
+    const poll = async () => {
+      if (reading) return;
+      reading = true;
+      try {
+        const next = await getChallengeQuizSession(challengeSession.sessionId!);
+        if (!active || (moreStopRequestedRef.current && next.morePending)) return;
+        reconcileMoreSession(next);
+        if (!next.morePending && !next.moreStopped && retryMoreAfterStopRef.current) {
+          retryMoreAfterStopRef.current = false;
+          setMoreFinishingPrevious(false);
+          void handleGenerateMore();
+        }
+      } catch {
+        // The next poll or reload can recover the persisted marker.
+      } finally { reading = false; }
+    };
+    void poll();
+    const interval = globalThis.setInterval(() => { setMoreNow(Date.now()); void poll(); }, 2000);
+    return () => { active = false; globalThis.clearInterval(interval); };
+  }, [phase, morePending, moreStopped, challengeSession?.sessionId, handleGenerateMore, reconcileMoreSession]);
 
   const challengeGenerationLocked = starting || (phase === "generating" && challengeSession?.mode === BOARD_EXAM_MODE);
   const challengeQuizActive = phase === "running" && Boolean(challengeSession?.sessionId);
@@ -1963,7 +2035,7 @@ export default function ChallengeQuizPage() {
     }
     void exitBoardExamFullscreen();
   }, [isBoardExamMode, phase]);
-  const quizInteractionDisabled = submitting || generatingMore || boardExamTimerExpired;
+  const quizInteractionDisabled = submitting || boardExamTimerExpired;
   const quizModeLabel = isBoardExamMode ? "Board Exam Mode" : "Challenge Quiz";
   const quizResultLabel = isBoardExamMode ? "Exam Result" : "Challenge Quiz Result";
   const submitButtonLabel = isBoardExamMode ? "Submit Exam" : "Submit Challenge Quiz";
@@ -2991,16 +3063,32 @@ export default function ChallengeQuizPage() {
                         variant="outline"
                         className="flex-1 sm:w-auto sm:flex-none"
                         onClick={() => void handleGenerateMore()}
-                        disabled={generatingMore || submitting}
+                        disabled={generatingMore || morePending || moreFinishingPrevious || submitting}
                       >
-                        {generatingMore ? "Adding..." : "+5 Questions"}
+                        +5 Questions
                       </Button>
                     ) : null}
+                    {morePending ? <div role="status" className="flex items-center gap-2">
+                      <span>{moreStartedAt !== null && moreNow - moreStartedAt >= 45000
+                        ? PREPARATION_COPY.moreStillAdding : PREPARATION_COPY.moreAdding}</span>
+                      {moreStartedAt !== null && moreNow - moreStartedAt >= 45000 ? (
+                        <Button type="button" variant="outline" onClick={() => void handleStopAdding()}>
+                          {PREPARATION_COPY.moreStop}
+                        </Button>
+                      ) : null}
+                    </div> : null}
+                    {moreFinishingPrevious ? <div role="status">{PREPARATION_COPY.moreFinishingPrevious}</div> : null}
+                    {moreFailed ? <div role="status" className="flex items-center gap-2">
+                      <span>{PREPARATION_COPY.moreFailed}</span>
+                      <Button type="button" variant="outline" onClick={() => void handleGenerateMore()}>
+                        {PREPARATION_COPY.moreRetry}
+                      </Button>
+                    </div> : null}
                     <Button
                       type="button"
                       className="flex-1 sm:w-auto sm:flex-none"
                       onClick={handleManualSubmit}
-                      disabled={submitting || generatingMore}
+                      disabled={submitting}
                     >
                       {submitting ? "Submitting..." : "Complete Quiz"}
                     </Button>
