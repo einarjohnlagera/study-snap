@@ -1485,6 +1485,7 @@ Primary docs:
 
 - `README.md`
 - `docs/product/SPEC.md`
+- `docs/product/VOICE_AND_TONE.md` — **every learner-facing string follows it** (owner-approved 2026-10-22): sentence-case buttons, calm loading text with no time promises, reassuring and actionable errors, no gamified pressure.
 - `docs/product/ROADMAP.md`
 - `docs/architecture/ARCHITECTURE.md`
 - `docs/architecture/DATA_MODEL.md`

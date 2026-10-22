@@ -52,6 +52,7 @@ Current version: **v0.175.0 — Quiz Ready** (In Progress, kicked off 2026-10-20
 - `docs/product/ROADMAP.md` — what's in scope for the current release and future phases
 - `docs/product/SPEC.md` — canonical product behavior
 - `docs/product/EXAM_MODES.md` — quiz mode hierarchy (locked contract; exactly 5 modes)
+- `docs/product/VOICE_AND_TONE.md` — **the NoteLib voice for ALL learner-facing copy** (owner-approved 2026-10-22): a helpful study companion, "Ready when you are"; sentence-case buttons; calm loading text; reassuring, actionable errors. Read it before writing any copy, in a brief or in code.
 - `docs/features/<feature>.md` — per-feature behavior rules (48 files; **read before changing any feature, update after shipping any behavioral change** — updating `RELEASES.md` alone is not enough)
 - `RELEASES.md` — every completed and in-progress change; always update when shipping work
 - `docs/gpt-contexts/GPT_CONTEXT.md` — version-stamped snapshot of the full product state; useful to understand where things stand
