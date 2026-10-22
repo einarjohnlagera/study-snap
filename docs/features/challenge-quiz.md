@@ -98,6 +98,24 @@ with a progress indicator and a Continue reviewing link. The page polls every tw
 the same ready screen. Questions and the timer appear only after the learner presses **Start Quiz**.
 Reloading restores generating, ready, failed, or running sessions without starting the timer.
 
+Choosing Challenge Quiz from mode selection opens an existing exact-match, single-note preparation
+directly: generating goes to preparation and ready goes to the briefing. Merely landing on setup does
+not open or start it. Multi-note selection remains in setup. A prepared ordinary quiz matches only
+the same primary pack, additional pack set (order-independent), and Redo Missed intent. A different
+selection shows the existing collision choice; discarding requires the learner's explicit action.
+For a plan-scoped Challenge preparation, the saved collection identity and the learner's selected
+pack IDs determine retry identity. The server validates plan membership but does not choose these
+sources. A retry still opens after the plan's available sources or cap change because it compares
+before validating and locking additional packs. New preparation still validates and locks sources.
+
+The mode-selection continuation card for ordinary Challenge has one action: open a ready quiz, view
+preparation, or resume a started quiz. It does not offer Start Fresh; a started quiz can still be
+ended from its in-quiz leave guard. Board Exam retains its existing continuation controls. The ready
+briefing uses the session's real title, question count, time limit and multi-note coverage. It
+explains that only **Start quiz** begins the timer and monthly attempt. Where the response allows
+additional notes and the plan setup has another ready note to choose, **Want to study different notes?** returns to setup without discarding the
+prepared quiz; changing the selection then reaches the collision choice.
+
 Every ordinary Challenge transition to a prepared, unstarted quiz publishes one in-app
 `CHALLENGE_QUIZ_READY` notification after the session commit. Its `CHALLENGE_QUIZ_READY:<sessionId>`
 dedup key makes bank hits, redo, multi-note preparation, and async completion converge on one row.
