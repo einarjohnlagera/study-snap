@@ -48,6 +48,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.mockito.ArgumentCaptor;
 import org.springframework.core.MethodParameter;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
@@ -74,6 +75,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -177,6 +179,8 @@ class ChallengeQuizControllerTest {
         HandlerMethodArgumentResolver argumentResolver = authenticatedUserResolver(authenticatedUser);
         challengeQuizMockMvc = standaloneSetup(new ChallengeQuizController(service))
                 .setCustomArgumentResolvers(argumentResolver)
+                .setControllerAdvice(new com.studysnap.backend.exception.GlobalExceptionHandler(
+                        org.springframework.util.unit.DataSize.ofMegabytes(10)))
                 .build();
         deprecatedQuickReviewMockMvc = standaloneSetup(new QuickReviewSessionController(
                         mock(QuickReviewSessionService.class),
@@ -252,7 +256,12 @@ class ChallengeQuizControllerTest {
                 )
                 .andExpect(status().isOk())
                 .andReturn();
-        assertQuizIsRedacted(generateMoreResult, "newQuestions", 5);
+        JsonNode pending = objectMapper.readTree(generateMoreResult.getResponse().getContentAsString());
+        assertThat(pending.path("morePending").asBoolean()).isTrue();
+        assertThat(pending.path("newQuestions")).hasSize(0);
+        ArgumentCaptor<Runnable> job = ArgumentCaptor.forClass(Runnable.class);
+        verify(taskDispatcher).executeChallengePreparation(job.capture());
+        job.getValue().run();
 
         List<QuizItem> storedQuiz = QuizSessionStateUtils.extractQuiz(session.getSessionState());
         assertThat(storedQuiz).hasSize(10);
@@ -308,6 +317,27 @@ class ChallengeQuizControllerTest {
         assertThat(completion.path("selectedMultiChoices").path("1")).hasSize(2);
         assertThat(completion.path("selectedIdentificationAnswers").path("2").asText()).isEqualTo("Voltage");
         assertThat(completion.path("selectedEnumerationAnswers").path("3")).hasSize(2);
+    }
+
+    @Test
+    void generateMoreReturnsPendingThenConflictAndStopIsIdempotent() throws Exception {
+        QuickReviewSessionEntity session = buildSession("challenge");
+        configureOwnedStudyPack();
+        configureSessionLookups(session);
+        MvcResult accepted = challengeQuizMockMvc.perform(
+                post("/challenge-quiz/sessions/{id}/generate-more", session.getId()))
+                .andExpect(status().isOk()).andReturn();
+        assertThat(objectMapper.readTree(accepted.getResponse().getContentAsString())
+                .path("morePending").asBoolean()).isTrue();
+        MvcResult duplicate = challengeQuizMockMvc.perform(
+                post("/challenge-quiz/sessions/{id}/generate-more", session.getId()))
+                .andExpect(status().isConflict()).andReturn();
+        assertThat(objectMapper.readTree(duplicate.getResponse().getContentAsString())
+                .path("error").path("code").asText()).isEqualTo("MORE_IN_PROGRESS");
+        challengeQuizMockMvc.perform(post("/challenge-quiz/sessions/{id}/generate-more/stop", session.getId()))
+                .andExpect(status().isNoContent());
+        challengeQuizMockMvc.perform(post("/challenge-quiz/sessions/{id}/generate-more/stop", session.getId()))
+                .andExpect(status().isNoContent());
     }
 
     @ParameterizedTest

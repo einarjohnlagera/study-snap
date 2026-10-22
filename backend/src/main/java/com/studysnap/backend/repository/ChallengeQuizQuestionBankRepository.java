@@ -59,6 +59,11 @@ public interface ChallengeQuizQuestionBankRepository extends JpaRepository<Chall
             @Param("sessionId") UUID sessionId
     );
 
+    @Modifying
+    @Query("update ChallengeQuizQuestionBankEntity e set e.claimedSessionId = null where e.userId = :userId and e.claimedSessionId = :sessionId and e.questionKey in :keys")
+    int releaseSelectedClaims(@Param("userId") UUID userId, @Param("sessionId") UUID sessionId,
+            @Param("keys") Collection<String> keys);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("""
             select question

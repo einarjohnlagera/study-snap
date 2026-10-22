@@ -15,6 +15,7 @@ import com.studysnap.backend.util.QuizSessionStateUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.annotation.Propagation;
 
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -37,8 +38,10 @@ import java.util.UUID;
  * <p><strong>This is NOT the {@code REQUIRES_NEW} pattern reverted in v0.81.0.</strong> That failure
  * was a nested transaction opened <em>inside</em> an outer one: a second connection could not see the
  * uncommitted {@code quick_review_sessions} row, so every FK check failed. Here the caller holds no
- * transaction at all, so these methods open the only one — plain {@code REQUIRED} propagation, one
- * connection, nothing invisible. Do not "simplify" this back onto the sweep methods.
+ * transaction at all, so the sweep methods open the only one — plain {@code REQUIRED} propagation, one
+ * connection, nothing invisible. Do not "simplify" this back onto the sweep methods. The generate-more
+ * dispatch-rejection method below is different: its row has committed, but Spring has not yet unbound
+ * the request's resources, so it opens a fresh transaction for the failure marker.
  */
 @Service
 @RequiredArgsConstructor
@@ -56,6 +59,22 @@ public class GenerationRecoveryRowWriter {
     private final StudyPackRepository studyPackRepository;
     private final AnalyticsService analyticsService;
     private final jakarta.persistence.EntityManager entityManager;
+
+    /**
+     * Dispatch rejection is reported from an after-completion callback while request resources can
+     * still be bound. The session row is committed by then, so a fresh transaction is required.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void failChallengeMore(UUID sessionId, UUID userId, String token) {
+        QuickReviewSessionEntity session = quickReviewSessionRepository
+                .findByIdAndUserIdAndSessionModeForUpdate(sessionId, userId, QuickReviewSessionMode.CHALLENGE)
+                .orElse(null);
+        if (session == null) return;
+        entityManager.refresh(session);
+        if (!token.equals(QuizSessionStateUtils.extractMoreToken(session.getSessionState()))) return;
+        session.setSessionState(QuizSessionStateUtils.withoutMorePending(session.getSessionState(), token, true));
+        quickReviewSessionRepository.save(session);
+    }
 
     /** Pack then session: the same order as Start Quiz and preparation completion. */
     @Transactional

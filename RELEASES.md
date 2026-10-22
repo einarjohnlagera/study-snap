@@ -334,7 +334,7 @@ never edit this file.
     - `templateQuestionKeys` loads whole bank rows to read their keys; switch it to the key-only query in 5b.
   - **Review note.** The shared claim/release surface is a named input to the scoped cold review at signoff.
 
-- **Item 5b: multi-note preparation in the background** (branch `feat/v0.175.0-item5b-multinote-preparation`).
+- **Item 5b: multi-note preparation in the background** (PR #1525, merged as `aac57fc1`).
   - **Same journey as single-note.** A multi-note Prepare Quiz returns at once with `GENERATING` (or ready on a
     full bank hit) and shows "Getting your quiz ready", the readiness notification and Start Quiz. Nothing
     generates inside the request, which used to take 1–4 minutes.
@@ -375,6 +375,57 @@ never edit this file.
   - **Known limitation:** queue time within the dedicated pool counts against the shared deadline.
   - **Review note.** The shared start, Start Quiz and bank paths are named inputs to the scoped cold review at
     signoff.
+
+- **Item 6: Challenge tier routing plus background +5** (branch `feat/v0.175.0-item6-tier-routing`). Owner kept
+  it in v0.175.0 on 2026-10-21. The +5 design is the owner-approved proposal
+  `docs/claude-plans/2026-10-21-v0175-plus5-slower-models-proposal.md`.
+  - **Routing by plan.** Ordinary Challenge single-note preparation, multi-note source shortfalls and +5 use
+    `LlmRouting.tiered(userId)`: FREE uses `LLM_MODEL_FREE`; Plus, Pro and ADMIN use `LLM_MODEL_PREMIUM`.
+    - There is **no free fallback** for a paid learner, and a transport retry stays on the same route.
+    - Board Exam and Long Exam are unchanged (C6). Official template seeding was already tiered.
+    - `model_used` is recorded for every path.
+    - **Why it matters for correctness:** R1's arms found 0 wrong statement-pair keys on Luna (31/31) and Sol
+      (28/28), against about 4/32 on the interactive model.
+  - **Background +5.**
+    - **The request** records an in-flight marker under a short lock and returns HTTP 200 with
+      `morePending` at once. No model call happens in the request, and no lock or transaction is held across
+      one; before this, +5 held the session lock and a database connection for the whole model call.
+    - **One +5 per session:** a second request gets 409 `MORE_IN_PROGRESS`.
+    - **The job** runs on `challengePreparationTaskExecutor` with a 240-second deadline. No paid call starts
+      after the deadline or after Stop.
+    - **The append** happens only if the quiz is still running, the marker still matches and the timer has
+      not expired. It is append-only, the time is extended 90 seconds per question added, and it never
+      touches answers or progress.
+    - **Stop:** `POST …/generate-more/stop`. A retry waits until the stopped job has released its claims,
+      so a stopped job can never release a retry's claims.
+    - **Recovery:** a lost worker's stale marker recovers after the deadline plus a margin. Completion
+      releases unserved +5 claims and keeps their prior outcome, so Redo Missed eligibility is preserved.
+  - **The page.** Answering stays enabled during +5 and the timer is never paused.
+    - Copy: "Adding questions…", "{n} questions added", "Still adding questions…" / "Stop adding" after 45
+      seconds, and "Couldn't add questions" / "Try again" (owner-approved).
+    - The append never calls `applyStartedSession` and never overwrites unsaved answers or the current index.
+    - The page re-reads the server after Stop, and before a timeout auto-submit while +5 is pending.
+    - **New string pending owner sign-off:** "Finishing the previous request…", shown only on Try again right
+      after Stop.
+  - **Executor sizing.** `challengePreparationTaskExecutor` is now configurable, default 6 threads with a
+    24-task queue (it was 4). That keeps it within the 20-connection Hikari pool shared with 18 Tomcat
+    threads; production showed 20 open and all idle on 2026-10-22. Jobs hold a connection only for short
+    load and finish transactions.
+  - **Verification.**
+    - `./mvnw clean install`: 2,976 tests, 0 failures. That includes real-PostgreSQL tests for: the latched
+      race between append and a progress save; concurrent +5 requests; stop; stop then retry; timer expiry
+      mid-generation; regeneration; a stale pending marker; and completion during +5.
+    - MockMvc tests for 200 with `morePending`, 409, and stop 204.
+    - Frontend: 2,753 tests; `tsc`, lint and `next build` clean.
+    - Two Codex reviews and two fix rounds, with 5 race findings fixed.
+  - **⚠️ Deploy ordering.** The `generate-more` response contract changed, so the backend and frontend must
+    ship together in the release merge.
+  - **⚠️ Your Render switch now moves Challenge too.** The v0.174.0 Render switch (`LLM_MODEL_FREE`,
+    `LLM_MODEL_PREMIUM`) now also moves Challenge start, multi-note and +5, not only Study Packs. Rolling those
+    env vars back rolls Challenge back with them. This belongs in the v0.175.0 signoff handoff.
+  - **Review note.** It changes the running-quiz state and shares `startQuiz` and the bank paths, so it is a named
+    input to the signoff pressure test. This release changes quota semantics, so that is the **full**
+    three-agent test.
 
 - **Statement-pair verifier in production code, switches off** (branch `feat/v0.175.0-statement-pair-verifier`).
   - **What it does.** Before a statement-pair question is kept, two independent checkers (Sol and Luna, run

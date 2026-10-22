@@ -142,4 +142,11 @@ public class ChallengeQuizController {
         UUID userId = user.userId();
         return challengeQuizService.generateMoreQuestions(sessionId, userId);
     }
+
+    @PostMapping("/sessions/{sessionId}/generate-more/stop")
+    @ResponseStatus(org.springframework.http.HttpStatus.NO_CONTENT)
+    public void stopGenerateMore(@PathVariable String sessionId,
+            @AuthenticationPrincipal AuthenticatedUser user) {
+        challengeQuizService.stopGenerateMore(sessionId, user.userId());
+    }
 }

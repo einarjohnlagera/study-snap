@@ -114,6 +114,21 @@ public class ChallengeQuizQuestionBankService {
         persistQuestions(userId, studyPackId, sessionId, effectiveCurriculumLevel, generationStamp, questions, null);
     }
 
+    public void releaseSelectedClaims(UUID userId, UUID sessionId, List<QuizItem> questions) {
+        Set<String> keys = QuizDeduplicationUtils.toNormalizedQuestionSet(questions);
+        if (!keys.isEmpty()) challengeQuizQuestionBankRepository.releaseSelectedClaims(userId, sessionId, keys);
+    }
+
+    public void releaseUnappendedClaims(UUID userId, UUID sessionId, List<QuizItem> quiz) {
+        Set<String> appended = QuizDeduplicationUtils.toNormalizedQuestionSet(quiz);
+        List<String> unappended = challengeQuizQuestionBankRepository.findByUserIdAndClaimedSessionId(userId, sessionId)
+                .stream().map(ChallengeQuizQuestionBankEntity::getQuestionKey)
+                .filter(key -> !appended.contains(key)).toList();
+        if (!unappended.isEmpty()) {
+            challengeQuizQuestionBankRepository.releaseSelectedClaims(userId, sessionId, unappended);
+        }
+    }
+
     private void persistQuestions(
             UUID userId, UUID studyPackId, UUID sessionId, LearnerLevel effectiveCurriculumLevel,
             Long generationStamp, List<QuizItem> questions, UUID claimedSessionId
@@ -262,9 +277,8 @@ public class ChallengeQuizQuestionBankService {
             }
             for (ChallengeQuizQuestionBankEntity entry : claimed) {
                 Integer questionIndex = indexesByQuestionKey.get(entry.getQuestionKey());
-                entry.setLastKnownOutcome(questionIndex == null
-                        ? OUTCOME_UNANSWERED
-                        : resolveOutcome(
+                if (questionIndex != null) {
+                    entry.setLastKnownOutcome(resolveOutcome(
                                 quiz.get(questionIndex),
                                 questionIndex,
                                 selectedChoices,
@@ -272,6 +286,7 @@ public class ChallengeQuizQuestionBankService {
                                 selectedIdentificationAnswers,
                                 selectedEnumerationAnswers
                         ));
+                }
                 entry.setClaimedSessionId(null);
             }
             challengeQuizQuestionBankRepository.saveAll(claimed);

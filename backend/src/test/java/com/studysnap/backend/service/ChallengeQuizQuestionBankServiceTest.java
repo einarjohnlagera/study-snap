@@ -151,6 +151,27 @@ class ChallengeQuizQuestionBankServiceTest {
     }
 
     @Test
+    void updateOutcomesAndReleaseClaims_preservesUnservedMissedOutcomeAndMarksServedUnanswered() {
+        UUID userId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+        ChallengeQuizQuestionBankEntity served = bankedQuestion("Served question");
+        ChallengeQuizQuestionBankEntity unserved = bankedQuestion("Claimed by pending more");
+        served.setClaimedSessionId(sessionId);
+        unserved.setClaimedSessionId(sessionId);
+        unserved.setLastKnownOutcome("INCORRECT");
+        when(questionBankRepository.findByUserIdAndClaimedSessionId(userId, sessionId))
+                .thenReturn(List.of(served, unserved));
+
+        service().updateOutcomesAndReleaseClaims(userId, sessionId, List.of(served.getQuestion()),
+                Map.of(), Map.of(), Map.of(), Map.of());
+
+        assertThat(served.getLastKnownOutcome()).isEqualTo("UNANSWERED");
+        assertThat(unserved.getLastKnownOutcome()).isEqualTo("INCORRECT");
+        assertThat(served.getClaimedSessionId()).isNull();
+        assertThat(unserved.getClaimedSessionId()).isNull();
+    }
+
+    @Test
     void claimIncorrectQuestions_claimsOnlyIncorrectCurriculumLevelQuestions() {
         UUID userId = UUID.randomUUID();
         UUID studyPackId = UUID.randomUUID();

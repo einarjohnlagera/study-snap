@@ -1,4 +1,5 @@
-/** Owner-approved wording, 2026-10-21 (docs/claude-plans/2026-10-21-owner-decisions-v0175-open-questions-and-priorities.md, Q4). */
+/** Owner-approved wording: Q4 in the owner decisions doc and background +5 in
+ * docs/claude-plans/2026-10-21-v0175-plus5-slower-models-proposal.md. */
 export const CHALLENGE_PREPARATION_COPY = {
   collisionTitle: "You already have a quiz ready",
   collisionGeneratingTitle: "Your quiz is still being prepared",
@@ -8,7 +9,14 @@ export const CHALLENGE_PREPARATION_COPY = {
   dashboardLabel: "Open your prepared quiz",
   monthlyLimit: "This quiz counts toward your monthly limit only when you press Start Quiz. Leaving before you start won't use an attempt.",
   underfilledTitle: (delivered: number, requested: number) => `Your quiz is ready with ${delivered} of ${requested} questions.`,
-  // Provisional wording; pending owner sign-off.
+  // Owner-approved 2026-10-22: docs/claude-plans/2026-10-21-owner-decisions-v0175-open-questions-and-priorities.md.
   coverageLine: (contributing: number, selected: number) => `From ${contributing} of ${selected} notes`,
+  moreAdding: "Adding questions…",
+  moreStillAdding: "Still adding questions…",
+  moreStop: "Stop adding",
+  moreAdded: (count: number) => `${count} questions added`,
+  moreFailed: "Couldn't add questions",
+  moreRetry: "Try again",
+  moreFinishingPrevious: "Finishing the previous request…",
   redoMissedMonthlyLimit: "Redo Missed Questions doesn't count toward your monthly quiz limit.",
 } as const;

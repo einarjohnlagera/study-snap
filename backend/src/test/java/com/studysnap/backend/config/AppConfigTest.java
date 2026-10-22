@@ -21,6 +21,26 @@ import static org.assertj.core.api.Assertions.assertThat;
 class AppConfigTest {
 
     @Test
+    void challengePreparationExecutorDefaultsToSixAndBindsConfiguredSizes() {
+        StudySnapProperties properties = new StudySnapProperties();
+        ThreadPoolTaskExecutor defaults = asThreadPool(new AppConfig().challengePreparationTaskExecutor(
+                taskDecorator(new InFlightRequestRegistry()), properties));
+        try {
+            assertThat(defaults.getCorePoolSize()).isEqualTo(6);
+            assertThat(defaults.getMaxPoolSize()).isEqualTo(6);
+            assertThat(defaults.getQueueCapacity()).isEqualTo(24);
+        } finally { defaults.shutdown(); }
+        properties.getChallengeQuiz().setChallengePreparationCoreThreads(7);
+        properties.getChallengeQuiz().setChallengePreparationMaxThreads(8);
+        ThreadPoolTaskExecutor configured = asThreadPool(new AppConfig().challengePreparationTaskExecutor(
+                taskDecorator(new InFlightRequestRegistry()), properties));
+        try {
+            assertThat(configured.getCorePoolSize()).isEqualTo(7);
+            assertThat(configured.getMaxPoolSize()).isEqualTo(8);
+        } finally { configured.shutdown(); }
+    }
+
+    @Test
     void discoveryRankingExecutorIsBoundedAbortOnOverflowAndRegistered() throws Exception {
         InFlightRequestRegistry registry = new InFlightRequestRegistry();
         ThreadPoolTaskExecutor executor = asThreadPool(new AppConfig().discoveryRankingTaskExecutor(

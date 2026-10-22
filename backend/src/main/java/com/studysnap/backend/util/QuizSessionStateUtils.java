@@ -69,6 +69,61 @@ public class QuizSessionStateUtils {
     private static final String CHALLENGE_SOURCE_SCOPE = "challengeSourceScope";
     public static final String CHALLENGE_SOURCE_SCOPE_MANUAL = "manual";
     public static final String TIMER_STARTED_AT_EPOCH_SECONDS = "timerStartedAtEpochSeconds";
+    private static final String MORE_TOKEN = "moreToken";
+    private static final String MORE_STARTED_AT = "moreStartedAtEpochSeconds";
+    private static final String MORE_STOPPED = "moreStopped";
+    private static final String MORE_FAILED = "moreFailed";
+    private static final String MORE_FAILED_TOKEN = "moreFailedToken";
+    private static final String MORE_FAILED_AT = "moreFailedAtEpochSeconds";
+
+    public Map<String, Object> withMorePending(Map<String, Object> source, String token, long startedAt) {
+        Map<String, Object> state = new LinkedHashMap<>(source == null ? Map.of() : source);
+        state.put(MORE_TOKEN, token);
+        state.put(MORE_STARTED_AT, startedAt);
+        state.remove(MORE_STOPPED);
+        state.remove(MORE_FAILED);
+        state.remove(MORE_FAILED_TOKEN);
+        state.remove(MORE_FAILED_AT);
+        return state;
+    }
+
+    public String extractMoreToken(Map<String, Object> state) {
+        Object value = state == null ? null : state.get(MORE_TOKEN);
+        return value instanceof String token ? token : null;
+    }
+
+    public boolean extractMoreStopped(Map<String, Object> state) {
+        return state != null && Boolean.TRUE.equals(state.get(MORE_STOPPED));
+    }
+
+    public long extractMoreStartedAt(Map<String, Object> state) {
+        Object value = state == null ? null : state.get(MORE_STARTED_AT);
+        return value instanceof Number number ? number.longValue() : 0L;
+    }
+
+    public Map<String, Object> withMoreStopped(Map<String, Object> source, String token) {
+        Map<String, Object> state = new LinkedHashMap<>(source == null ? Map.of() : source);
+        if (Objects.equals(extractMoreToken(state), token)) state.put(MORE_STOPPED, true);
+        return state;
+    }
+
+    public boolean extractMoreFailed(Map<String, Object> state) {
+        return state != null && Boolean.TRUE.equals(state.get(MORE_FAILED));
+    }
+
+    public Map<String, Object> withoutMorePending(Map<String, Object> source, String token, boolean failed) {
+        Map<String, Object> state = new LinkedHashMap<>(source == null ? Map.of() : source);
+        if (!Objects.equals(extractMoreToken(state), token)) return state;
+        state.remove(MORE_TOKEN);
+        state.remove(MORE_STARTED_AT);
+        state.remove(MORE_STOPPED);
+        if (failed) {
+            state.put(MORE_FAILED, true);
+            state.put(MORE_FAILED_TOKEN, token);
+            state.put(MORE_FAILED_AT, java.time.OffsetDateTime.now(java.time.ZoneOffset.UTC).toEpochSecond());
+        }
+        return state;
+    }
 
     public Map<String, Object> withTimerStartedAtEpochSeconds(Map<String, Object> source, long value) {
         Map<String, Object> state = new LinkedHashMap<>(source == null ? Map.of() : source);

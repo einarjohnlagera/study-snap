@@ -32,6 +32,9 @@ public class StudySnapProperties {
         private int challengeMultiNoteMinimumCoverageDenominator = 3;
         private int challengeMultiNoteWaitDeadlineSeconds = 300;
         private int challengeMultiNoteSourceTaskThreads = 6;
+        private int challengePreparationCoreThreads = 6;
+        private int challengePreparationMaxThreads = 6;
+        private int challengeMoreWaitDeadlineSeconds = 240;
     }
     private final QuickReview quickReview = new QuickReview();
     private final Pricing pricing = new Pricing();
