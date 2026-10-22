@@ -4,6 +4,6 @@ import org.springframework.http.HttpStatus;
 
 public class ChallengePreparationFailedException extends AppException {
     public ChallengePreparationFailedException() {
-        super("PREPARATION_FAILED", "This Challenge Quiz could not be prepared.", HttpStatus.CONFLICT);
+        super("PREPARATION_FAILED", "We couldn't finish preparing this quiz. Please try again.", HttpStatus.CONFLICT);
     }
 }

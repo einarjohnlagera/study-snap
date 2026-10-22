@@ -281,7 +281,7 @@ describe("ChallengeQuizPage", () => {
       newQuestions: [], totalQuestions: 1, timeLimitSeconds: 600,
       timerStartedAtEpochSeconds: initial.sessionState.timerStartedAtEpochSeconds });
     render(<ChallengeQuizPage />);
-    fireEvent.click(await screen.findByRole("button", { name: "+5 Questions" }));
+    fireEvent.click(await screen.findByRole("button", { name: "+5 questions" }));
     expect(await screen.findByText("Adding questions…")).toBeInTheDocument();
     await waitFor(() => expect(getChallengeQuizSession).toHaveBeenCalledWith("session-1"));
     const answer = screen.getByRole("button", { name: /Mitochondria/i });
@@ -293,7 +293,7 @@ describe("ChallengeQuizPage", () => {
       quiz: [...initial.quiz, ...["New one", "New two", "New three"].map((question) => ({
         question, choices: ["A", "B"], correctIndex: 0, concept: "Concept", explanation: "Explanation",
       }))] }); });
-    expect(await screen.findByText("3 questions added")).toBeInTheDocument();
+    expect(await screen.findByText("Added 3 more questions.")).toBeInTheDocument();
     expect(screen.getByText("Question 1 of 4")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Mitochondria/i })).toHaveAttribute("aria-pressed", "true");
   });
@@ -332,7 +332,7 @@ describe("ChallengeQuizPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Stop adding" }));
     expect(await screen.findByText("Question 1 of 4")).toBeInTheDocument();
     expect(screen.getByTestId("challenge-quiz-timer")).toHaveTextContent(/^14:2[5-9]$|^14:30$/);
-    expect(screen.getByText("3 questions added")).toBeInTheDocument();
+    expect(screen.getByText("Added 3 more questions.")).toBeInTheDocument();
   });
 
   it("shows the finishing notice on a post-Stop 409 and retries after the marker clears", async () => {
@@ -350,10 +350,10 @@ describe("ChallengeQuizPage", () => {
       .mockResolvedValue({ morePending: true });
     render(<ChallengeQuizPage />);
     fireEvent.click(await screen.findByRole("button", { name: "Stop adding" }));
-    await waitFor(() => expect(screen.getByRole("button", { name: "+5 Questions" })).toBeEnabled());
+    await waitFor(() => expect(screen.getByRole("button", { name: "+5 questions" })).toBeEnabled());
     await waitFor(() => expect(finishStoppedPolls.length).toBeGreaterThan(0));
-    fireEvent.click(screen.getByRole("button", { name: "+5 Questions" }));
-    expect(await screen.findByText("Finishing the previous request…")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "+5 questions" }));
+    expect(await screen.findByText("Finishing up your last set of questions…")).toBeInTheDocument();
     await act(async () => { finishStoppedPolls.forEach((resolve) =>
       resolve({ ...initial, morePending: false, moreStopped: false })); });
     await waitFor(() => expect(generateMoreChallengeQuizQuestions).toHaveBeenCalledTimes(2));
@@ -387,7 +387,7 @@ describe("ChallengeQuizPage", () => {
       timerStartedAtEpochSeconds: initial.sessionState.timerStartedAtEpochSeconds });
     (getChallengeQuizSession as jest.Mock).mockResolvedValue({ ...initial, morePending: true });
     render(<ChallengeQuizPage />);
-    expect(await screen.findByText("Couldn't add questions")).toBeInTheDocument();
+    expect(await screen.findByText("We couldn't add more questions. Your answers are safe.")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Try again" }));
     await waitFor(() => expect(generateMoreChallengeQuizQuestions).toHaveBeenCalledWith("session-1"));
   });
@@ -640,7 +640,7 @@ describe("ChallengeQuizPage", () => {
     const source = await screen.findByRole("button", { name: /Plan Two/ });
     fireEvent.click(source);
     expect(source).toHaveAttribute("aria-pressed", "true");
-    fireEvent.click(await screen.findByRole("button", { name: "Prepare Quiz" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Prepare quiz" }));
     expect(startChallengeQuizSession).toHaveBeenCalledWith("note-1", {
       mode: "challenge", additionalStudyPackIds: ["sp-2"], sourceCollectionId: "collection-1",
     });
@@ -759,7 +759,7 @@ describe("ChallengeQuizPage", () => {
     page.rerender(<ChallengeQuizPage />);
     expect(await screen.findByRole("heading", { name: "Choose your quiz mode" })).toBeInTheDocument();
     fireEvent.click(await getModeCard("Challenge Quiz"));
-    fireEvent.click(await screen.findByRole("button", { name: "Prepare Quiz" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Prepare quiz" }));
     await waitFor(() => expect(getInProgressChallengeQuizSession).toHaveBeenCalledWith("note-1"));
     expect(getChallengeQuizSession).toHaveBeenCalledTimes(1);
     expect(getNote).toHaveBeenCalledTimes(1);
@@ -804,7 +804,7 @@ describe("ChallengeQuizPage", () => {
     (getInProgressChallengeQuizSession as jest.Mock).mockResolvedValue(preparationSession("GENERATING"));
     render(<ChallengeQuizPage />);
     expect(await screen.findByRole("heading", { name: "Getting your quiz ready" })).toBeInTheDocument();
-    expect(screen.getByRole("progressbar", { name: "Preparing quiz" })).toBeInTheDocument();
+    expect(screen.getByRole("progressbar", { name: "Preparing your quiz" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /stay/i })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Continue reviewing" }));
     expect(pushMock).toHaveBeenCalledWith("/notes/note-1");
@@ -888,7 +888,7 @@ describe("ChallengeQuizPage", () => {
     let finish!: (value: ReturnType<typeof startedFromPrepared>) => void;
     (startPreparedChallengeQuiz as jest.Mock).mockReturnValue(new Promise((resolve) => { finish = resolve; }));
     render(<ChallengeQuizPage />);
-    const start = await screen.findByRole("button", { name: "Start Quiz" });
+    const start = await screen.findByRole("button", { name: "Start quiz" });
     fireEvent.click(start);
     fireEvent.click(start);
     expect(startPreparedChallengeQuiz).toHaveBeenCalledTimes(1);
@@ -910,10 +910,10 @@ describe("ChallengeQuizPage", () => {
     (getInProgressChallengeQuizSession as jest.Mock).mockResolvedValue(preparationSession());
     (startPreparedChallengeQuiz as jest.Mock).mockRejectedValue(new ApiRequestError(code, { code, status: 429 }));
     render(<ChallengeQuizPage />);
-    fireEvent.click(await screen.findByRole("button", { name: "Start Quiz" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Start quiz" }));
     expect(await screen.findByRole("heading", { name: title })).toBeInTheDocument();
     if (code === "PREPARED_CHALLENGE_EXPIRED" || code === "SESSION_NOT_IN_PROGRESS") {
-      fireEvent.click(screen.getByRole("button", { name: "Prepare New Quiz" }));
+      fireEvent.click(screen.getByRole("button", { name: "Prepare a new quiz" }));
       expect(startChallengeQuizSession).not.toHaveBeenCalled();
       expect(await screen.findByRole("heading", { name: "Challenge Quiz Setup" })).toBeInTheDocument();
     }
@@ -927,7 +927,7 @@ describe("ChallengeQuizPage", () => {
       { code: "MONTHLY_MULTI_NOTE_LIMIT_REACHED", status: 429 },
     ));
     render(<ChallengeQuizPage />);
-    fireEvent.click(await screen.findByRole("button", { name: "Start Quiz" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Start quiz" }));
     expect(await screen.findByRole("dialog", { name: "You've reached your quiz limit" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Your quiz is ready!" })).toBeInTheDocument();
     expect(trackAnalyticsEvent).toHaveBeenCalledWith(expect.objectContaining({
@@ -942,7 +942,7 @@ describe("ChallengeQuizPage", () => {
       "Monthly challenge quiz limit reached", { code: "MONTHLY_CHALLENGE_QUIZ_LIMIT_REACHED", status: 429 },
     ));
     render(<ChallengeQuizPage />);
-    fireEvent.click(await screen.findByRole("button", { name: "Start Quiz" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Start quiz" }));
     expect(await screen.findByRole("heading", { name: "You’ve reached your quiz limit for this month" })).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Your quiz is ready!" })).not.toBeInTheDocument();
   });
@@ -954,7 +954,7 @@ describe("ChallengeQuizPage", () => {
       "Monthly challenge quiz limit reached", { code: "MONTHLY_CHALLENGE_QUIZ_LIMIT_REACHED", status: 429 },
     ));
     render(<ChallengeQuizPage />);
-    fireEvent.click(await screen.findByRole("button", { name: "Start Quiz" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Start quiz" }));
     expect(await screen.findByRole("dialog", { name: "You've reached your quiz limit" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Your quiz is ready!" })).toBeInTheDocument();
     expect(trackAnalyticsEvent).toHaveBeenCalledWith(expect.objectContaining({
@@ -971,7 +971,7 @@ describe("ChallengeQuizPage", () => {
       code: "PREPARATION_IN_PROGRESS",
     }));
     render(<ChallengeQuizPage />);
-    fireEvent.click(await screen.findByRole("button", { name: "Start Quiz" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Start quiz" }));
     expect(await screen.findByRole("heading", { name: "Getting your quiz ready" })).toBeInTheDocument();
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 2100)); });
     expect(await screen.findByRole("heading", { name: "Your quiz is ready!" })).toBeInTheDocument();
@@ -987,7 +987,7 @@ describe("ChallengeQuizPage", () => {
     (getInProgressChallengeQuizSession as jest.Mock).mockResolvedValue(failed);
     (startChallengeQuizSession as jest.Mock).mockResolvedValue(preparationSession());
     render(<ChallengeQuizPage />);
-    fireEvent.click(await screen.findByRole("button", { name: "Try Again" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Try again" }));
     await waitFor(() => expect(startChallengeQuizSession).toHaveBeenCalledWith("note-1", {
       mode: "challenge", additionalStudyPackIds: ["sp-2"], sourceCollectionId: "collection-1",
     }));
@@ -1003,7 +1003,7 @@ describe("ChallengeQuizPage", () => {
     });
     (startChallengeQuizSession as jest.Mock).mockResolvedValue(preparationSession());
     render(<ChallengeQuizPage />);
-    fireEvent.click(await screen.findByRole("button", { name: "Try Again" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Try again" }));
     await waitFor(() => expect(startChallengeQuizSession).toHaveBeenCalledWith("note-1", { mode: "challenge" }));
   });
 
@@ -1030,7 +1030,7 @@ describe("ChallengeQuizPage", () => {
       .mockResolvedValueOnce(preparationSession("FAILED"))
       .mockResolvedValueOnce(preparationSession());
     render(<ChallengeQuizPage />);
-    fireEvent.click(await screen.findByRole("button", { name: "Try Again" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Try again" }));
     await waitFor(() => expect(startRedoMissedChallengeQuizSession).toHaveBeenCalledTimes(2));
     expect(startChallengeQuizSession).not.toHaveBeenCalled();
   });
@@ -1059,14 +1059,14 @@ describe("ChallengeQuizPage", () => {
     }));
     (startChallengeQuizSession as jest.Mock).mockResolvedValue(preparationSession());
     render(<ChallengeQuizPage />);
-    fireEvent.click(await screen.findByRole("button", { name: "Start Quiz" }));
-    fireEvent.click(await screen.findByRole("button", { name: "Prepare New Quiz" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Start quiz" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Prepare a new quiz" }));
     expect(startChallengeQuizSession).not.toHaveBeenCalled();
     const selectedSource = await screen.findByRole("button", { name: /Plan Two/ });
     expect(selectedSource).toHaveAttribute("aria-pressed", "true");
     fireEvent.click(selectedSource);
     expect(selectedSource).toHaveAttribute("aria-pressed", "false");
-    fireEvent.click(screen.getByRole("button", { name: "Prepare Quiz" }));
+    fireEvent.click(screen.getByRole("button", { name: "Prepare quiz" }));
     await waitFor(() => expect(startChallengeQuizSession).toHaveBeenCalledWith("note-1", {
       mode: "challenge",
     }));
@@ -1187,7 +1187,7 @@ describe("ChallengeQuizPage", () => {
     render(<ChallengeQuizPage />);
     expect(await screen.findByRole("heading", { name: "Choose your quiz mode" })).toBeInTheDocument();
     expect(screen.getByText("Your quiz is still being prepared")).toBeInTheDocument();
-    expect(screen.getByText(/Your quiz is being prepared/)).toBeInTheDocument();
+    expect(screen.getByText(/We're still getting your quiz ready/)).toBeInTheDocument();
     expect(await getModeCard("Board Exam Mode")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Resume" }));
     expect(await screen.findByRole("heading", { name: "Getting your quiz ready" })).toBeInTheDocument();
@@ -1542,7 +1542,7 @@ describe("ChallengeQuizPage", () => {
     expect(await screen.findByRole("heading", { name: "Challenge Quiz Setup" })).toBeInTheDocument();
     expect(screen.getByText("10 minutes. Timer runs until submission or expiration.")).toBeInTheDocument();
     expect(screen.getByText("Recommended based on your recent performance.")).toBeInTheDocument();
-    expect(screen.getByText("This quiz counts toward your monthly limit only when you press Start Quiz. Leaving before you start won't use an attempt.")).toBeInTheDocument();
+    expect(screen.getByText("This quiz counts toward your monthly limit only once you start it. Leaving before you start won't use an attempt.")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "easy" })).not.toBeInTheDocument();
     expect(startChallengeQuizSession).not.toHaveBeenCalled();
   });
@@ -1568,7 +1568,7 @@ describe("ChallengeQuizPage", () => {
     render(<ChallengeQuizPage />);
 
     fireEvent.click(await getModeCard("Challenge Quiz"));
-    fireEvent.click(await screen.findByRole("button", { name: "Prepare Quiz" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Prepare quiz" }));
 
     await waitFor(() => {
       expect(startChallengeQuizSession).toHaveBeenCalledWith("note-1", { mode: "challenge" });
@@ -1745,7 +1745,7 @@ describe("ChallengeQuizPage", () => {
     render(<ChallengeQuizPage />);
 
     expect(await screen.findByText("Answer at least 3 Challenge Quiz questions incorrectly before redoing missed questions.")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Prepare Quiz" }));
+    fireEvent.click(screen.getByRole("button", { name: "Prepare quiz" }));
     await waitFor(() => expect(startChallengeQuizSession).toHaveBeenCalledWith("note-1", { mode: "challenge" }));
   });
 

@@ -1766,7 +1766,7 @@ export default function ChallengeQuizPage() {
             resetToPrestart(nextMode);
           }
         } catch (reloadError) {
-          setError(reloadError instanceof Error ? reloadError.message : "Could not load the current quiz.");
+          setError(reloadError instanceof Error ? reloadError.message : "We couldn't load your quiz. Please refresh the page to try again.");
         }
         return;
       }
@@ -1980,7 +1980,7 @@ export default function ChallengeQuizPage() {
       reconcileMoreSession(next);
     } catch (err) {
       moreStopRequestedRef.current = false;
-      setError(err instanceof Error ? err.message : "Could not stop adding questions.");
+      setError(err instanceof Error ? err.message : "We couldn't stop adding questions. Any new ones will appear when they're ready.");
     }
   }, [challengeSession?.sessionId, reconcileMoreSession]);
 
@@ -2271,7 +2271,7 @@ export default function ChallengeQuizPage() {
           <Card className="space-y-4 p-4 sm:p-6">
             <h1 className="text-xl font-semibold sm:text-2xl">Getting your quiz ready</h1>
             <p className="text-sm text-foreground/75">We&apos;re preparing your questions. You can stay here or continue reviewing while we finish.</p>
-            <div role="progressbar" aria-label="Preparing quiz" className="h-2 w-full overflow-hidden rounded-full bg-muted">
+            <div role="progressbar" aria-label="Preparing your quiz" className="h-2 w-full overflow-hidden rounded-full bg-muted">
               <div className="h-full w-1/2 animate-pulse rounded-full bg-primary" />
             </div>
             <Button type="button" variant="outline" className="w-full sm:w-auto" onClick={() => router.push(noteDetailHref)}>
@@ -2300,7 +2300,7 @@ export default function ChallengeQuizPage() {
           ) : null}
           {error ? <p className="text-sm text-red-600 dark:text-red-400">{error}</p> : null}
           <Button type="button" className="w-full sm:w-auto" disabled={starting} onClick={() => void handleStartPrepared()}>
-            Start Quiz
+            Start quiz
           </Button>
         </Card>
       ) : phase === "preparation-failed" ? (
@@ -2309,15 +2309,15 @@ export default function ChallengeQuizPage() {
           <p className="text-sm text-foreground/75">Your quiz isn&apos;t ready yet. You can try again or return to reviewing.</p>
           {error ? <p className="text-sm text-red-600 dark:text-red-400">{error}</p> : null}
           <div className="flex flex-col gap-2 sm:flex-row">
-            <Button type="button" disabled={starting} onClick={handleTryPreparationAgain}>Try Again</Button>
-            <Button type="button" variant="outline" onClick={() => router.push(noteDetailHref)}>Continue Reviewing</Button>
+            <Button type="button" disabled={starting} onClick={handleTryPreparationAgain}>Try again</Button>
+            <Button type="button" variant="outline" onClick={() => router.push(noteDetailHref)}>Continue reviewing</Button>
           </div>
         </Card>
       ) : phase === "expired" ? (
         <Card className="space-y-4 p-4 sm:p-6">
           <h1 className="text-xl font-semibold sm:text-2xl">This prepared quiz has expired</h1>
           <p className="text-sm text-foreground/75">Your prepared quiz is no longer available, but you can create a new one when you&apos;re ready.</p>
-          <Button type="button" onClick={handlePrepareNewQuiz}>Prepare New Quiz</Button>
+          <Button type="button" onClick={handlePrepareNewQuiz}>Prepare a new quiz</Button>
         </Card>
       ) : phase === "collision" && collisionContext ? (
         <Card className="space-y-4 p-4 sm:p-6">
@@ -2353,7 +2353,7 @@ export default function ChallengeQuizPage() {
                   </p>
                   <p className="text-sm text-foreground/70">
                     {resumeCandidate.status === "GENERATING"
-                      ? "Your quiz is being prepared. Resume to follow its progress, or choose another mode."
+                      ? "We're still getting your quiz ready. Resume to check on it, or choose another mode."
                       : resumeCandidate.preparedNotStarted
                       ? "Your questions are prepared. Start whenever you're ready."
                       : "Resume where you left off, or start fresh to forfeit this session and choose a new quiz mode."}
@@ -2624,7 +2624,7 @@ export default function ChallengeQuizPage() {
                 }}
                 disabled={challengeGenerationLocked}
               >
-                {challengeGenerationLocked ? "Preparing…" : "Prepare Quiz"}
+                {challengeGenerationLocked ? "Preparing…" : "Prepare quiz"}
               </Button>
             </div>
           </Card>
@@ -3065,7 +3065,7 @@ export default function ChallengeQuizPage() {
                         onClick={() => void handleGenerateMore()}
                         disabled={generatingMore || morePending || moreFinishingPrevious || submitting}
                       >
-                        +5 Questions
+                        +5 questions
                       </Button>
                     ) : null}
                     {morePending ? <div role="status" className="flex items-center gap-2">
