@@ -61,9 +61,8 @@ public class OfficialChallengeQuizTemplateResolver {
                     note.getOwnerUserId(), pack.getId()));
         }
         return Stream.concat(ownTemplate, resolveTemplate(studyPackId).stream())
-                .flatMap(template -> questionBankRepository.findByUserIdAndStudyPackIdOrderByGeneratedAtAsc(
+                .flatMap(template -> questionBankRepository.findQuestionKeysByUserIdAndStudyPackId(
                         template.ownerUserId(), template.studyPackId()).stream())
-                .map(row -> row.getQuestionKey())
                 .filter(key -> key != null && !key.isBlank())
                 .collect(Collectors.toUnmodifiableSet());
     }

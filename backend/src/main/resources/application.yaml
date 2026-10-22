@@ -162,6 +162,13 @@ studysnap:
   app-name: NoteLib
   challenge-quiz:
     statement-pair-legacy-cutoff: ${CHALLENGE_QUIZ_STATEMENT_PAIR_LEGACY_CUTOFF:}
+    # Owner-approved policy (2026-10-21). Changing these in production requires owner approval.
+    challenge-multi-note-minimum-question-numerator: ${CHALLENGE_MULTI_NOTE_MINIMUM_QUESTION_NUMERATOR:2}
+    challenge-multi-note-minimum-question-denominator: ${CHALLENGE_MULTI_NOTE_MINIMUM_QUESTION_DENOMINATOR:3}
+    challenge-multi-note-minimum-coverage-numerator: ${CHALLENGE_MULTI_NOTE_MINIMUM_COVERAGE_NUMERATOR:2}
+    challenge-multi-note-minimum-coverage-denominator: ${CHALLENGE_MULTI_NOTE_MINIMUM_COVERAGE_DENOMINATOR:3}
+    challenge-multi-note-wait-deadline-seconds: ${CHALLENGE_MULTI_NOTE_WAIT_DEADLINE_SECONDS:300}
+    challenge-multi-note-source-task-threads: ${CHALLENGE_MULTI_NOTE_SOURCE_TASK_THREADS:6}
   pool-saturation:
     poll-interval-ms: ${STUDYSNAP_POOL_SATURATION_POLL_INTERVAL_MS:2000}
   settings:

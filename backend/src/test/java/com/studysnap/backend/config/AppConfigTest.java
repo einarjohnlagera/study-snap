@@ -77,6 +77,37 @@ class AppConfigTest {
     }
 
     @Test
+    void challengeMultiNoteSourceExecutorStartsAllSixSourcesConcurrently() throws Exception {
+        StudySnapProperties properties = new StudySnapProperties();
+        ThreadPoolTaskExecutor executor = asThreadPool(
+                new AppConfig().challengeMultiNoteSourceTaskExecutor(properties));
+        CountDownLatch entered = new CountDownLatch(6);
+        CountDownLatch release = new CountDownLatch(1);
+        try {
+            assertThat(executor.getCorePoolSize()).isEqualTo(6);
+            assertThat(executor.getMaxPoolSize()).isEqualTo(6);
+            assertThat(executor.getQueueCapacity()).isEqualTo(12);
+            assertThat(executor.getThreadPoolExecutor().getRejectedExecutionHandler())
+                    .isInstanceOf(ThreadPoolExecutor.AbortPolicy.class);
+            List<? extends Future<?>> tasks = java.util.stream.IntStream.range(0, 6)
+                    .mapToObj(index -> executor.submit(() -> {
+                        entered.countDown();
+                        try {
+                            release.await();
+                        } catch (InterruptedException interrupted) {
+                            Thread.currentThread().interrupt();
+                        }
+                    })).toList();
+            assertThat(entered.await(3, TimeUnit.SECONDS)).isTrue();
+            release.countDown();
+            for (Future<?> task : tasks) task.get(3, TimeUnit.SECONDS);
+        } finally {
+            release.countDown();
+            executor.shutdown();
+        }
+    }
+
+    @Test
     void customSchedulerUsesTwoDistinctlyNamedThreads() {
         ThreadPoolTaskScheduler scheduler = (ThreadPoolTaskScheduler) new AppConfig().taskScheduler(
                 taskDecorator(new InFlightRequestRegistry())

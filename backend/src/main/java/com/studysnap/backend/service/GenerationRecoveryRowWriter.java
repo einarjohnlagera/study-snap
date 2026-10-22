@@ -131,6 +131,14 @@ public class GenerationRecoveryRowWriter {
                     challengeQuizQuestionBankService.releaseClaims(
                             session.getUserId(), session.getId());
                     quickReviewSessionRepository.save(session);
+                    try {
+                        analyticsService.trackEvent(session.getUserId(),
+                                AnalyticsEventType.CHALLENGE_QUIZ_PREPARATION_FAILED,
+                                session.getStudyPackId(), Map.of("sessionId", sessionId.toString(),
+                                        "mode", "challenge"));
+                    } catch (RuntimeException ignored) {
+                        // Analytics cannot prevent claim release or failure recovery.
+                    }
                 });
     }
 

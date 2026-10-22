@@ -2209,8 +2209,23 @@ export default function ChallengeQuizPage() {
         )
       ) : phase === "ready" ? (
         <Card className="space-y-4 p-4 sm:p-6">
-          <h1 className="text-xl font-semibold sm:text-2xl">Your quiz is ready!</h1>
+          <h1 className="text-xl font-semibold sm:text-2xl">
+            {challengeSession?.preparedNotStarted && challengeSession.totalQuestions < challengeSession.requestedQuestionCount
+              ? PREPARATION_COPY.underfilledTitle(challengeSession.totalQuestions, challengeSession.requestedQuestionCount)
+              : "Your quiz is ready!"}
+          </h1>
           <p className="text-sm text-foreground/75">Your questions are prepared. Start whenever you&apos;re ready.</p>
+          {(challengeSession?.sourceNoteRefs?.length ?? 0) > 1
+            && typeof challengeSession?.sessionState?.sourceContributionCount === "number" ? (
+            <p className="text-sm text-foreground/75">
+              {PREPARATION_COPY.coverageLine(
+                challengeSession.sessionState.sourceContributionCount,
+                challengeSession?.sourceNoteRefs?.length ?? 0)}
+            </p>
+          ) : null}
+          {challengeSession?.redoMissed ? (
+            <p className="text-sm text-foreground/75">{PREPARATION_COPY.redoMissedMonthlyLimit}</p>
+          ) : null}
           {error ? <p className="text-sm text-red-600 dark:text-red-400">{error}</p> : null}
           <Button type="button" className="w-full sm:w-auto" disabled={starting} onClick={() => void handleStartPrepared()}>
             Start Quiz

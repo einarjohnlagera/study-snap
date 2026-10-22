@@ -239,6 +239,20 @@ public class AppConfig {
         return executor;
     }
 
+    /** Runs all six sources of one multi-note preparation concurrently under its shared deadline. */
+    @Bean
+    public AsyncTaskExecutor challengeMultiNoteSourceTaskExecutor(StudySnapProperties properties) {
+        int threads = properties.getChallengeQuiz().getChallengeMultiNoteSourceTaskThreads();
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setThreadNamePrefix("challenge-multi-note-source-");
+        executor.setCorePoolSize(threads);
+        executor.setMaxPoolSize(threads);
+        executor.setQueueCapacity(12);
+        executor.setRejectedExecutionHandler(new ThreadPoolExecutor.AbortPolicy());
+        executor.initialize();
+        return executor;
+    }
+
     @Bean
     public TransactionOperations studyPackGenerationTransactionOperations(
             PlatformTransactionManager transactionManager

@@ -1670,6 +1670,307 @@ class ChallengeQuizBankConcurrencyIntegrationTest {
         task.getValue().run();
     }
 
+    private Fixture availableMultiNoteFixture() {
+        Fixture fixture = seed(false);
+        jdbc.update("update notes set subject = 'Nursing' where id = (select note_id from study_packs where id = ?)",
+                fixture.packId);
+        jdbc.update("update study_packs set subject = 'Nursing' where id = ?", fixture.packId);
+        jdbc.update("update quick_review_sessions set status = 'COMPLETED', completed_at = now() where id = ?",
+                fixture.sessionId);
+        new TransactionTemplate(transactionManager).execute(status -> {
+            bankService.releaseClaims(fixture.userId, fixture.sessionId);
+            return null;
+        });
+        when(generationContextResolver.resolveForStudyPack(any(), any()))
+                .thenReturn(new StudyPackGenerationContext(LearnerLevel.COLLEGE, null, null, List.of()));
+        return fixture;
+    }
+
+    private UUID addMultiPack(Fixture fixture, String questionText) {
+        UUID id = addSecondPackWithQuestion(fixture, questionText);
+        jdbc.update("update notes set subject = 'Nursing' where id = (select note_id from study_packs where id = ?)", id);
+        jdbc.update("update study_packs set subject = 'Nursing' where id = ?", id);
+        return id;
+    }
+
+    private void bankExtra(Fixture fixture, UUID packId, String prefix, int count,
+                           LearnerLevel level, long stamp) {
+        new TransactionTemplate(transactionManager).execute(status -> {
+            bankService.persistGeneratedQuestionsUnclaimed(fixture.userId, packId, fixture.sessionId,
+                    level, stamp, java.util.stream.IntStream.range(0, count)
+                            .mapToObj(index -> question(prefix + " " + index)).toList());
+            return null;
+        });
+    }
+
+    @Test
+    void multiNoteFullBankHitClaimsBothRealPacksWithoutDispatchOrModelCall() throws Exception {
+        Fixture fixture = availableMultiNoteFixture();
+        UUID secondary = addMultiPack(fixture, "Second bank question");
+        bankExtra(fixture, fixture.packId, "Primary extra", 8, LearnerLevel.COLLEGE, 0);
+        bankExtra(fixture, secondary, "Secondary extra", 8, LearnerLevel.COLLEGE, 0);
+
+        ChallengeQuizStartResponse response = challengeQuizService.startSession(fixture.packId.toString(),
+                fixture.userId, new ChallengeQuizStartRequest("challenge", List.of(secondary.toString())));
+
+        assertThat(response.status().name()).isEqualTo("IN_PROGRESS");
+        assertThat(response.preparedNotStarted()).isTrue();
+        assertThat(response.requestedQuestionCount()).isEqualTo(18);
+        assertThat(jdbc.queryForObject("select count(*) from challenge_quiz_question_bank where claimed_session_id = ?",
+                Integer.class, UUID.fromString(response.sessionId()))).isEqualTo(18);
+        assertThat(jdbc.queryForObject("select count(distinct study_pack_id) from challenge_quiz_question_bank where claimed_session_id = ?",
+                Integer.class, UUID.fromString(response.sessionId()))).isEqualTo(2);
+        org.mockito.Mockito.verify(quizGenerationService, org.mockito.Mockito.never())
+                .generateChallengeQuiz(any(), any(), any(), any(), anyInt(), any(), any());
+        org.mockito.Mockito.verify(studyPackGenerationTaskDispatcher, org.mockito.Mockito.never())
+                .executeChallengePreparation(any());
+        awaitNotification(fixture.userId, UUID.fromString(response.sessionId()));
+        challengeQuizService.getSession(response.sessionId(), fixture.userId);
+        assertThat(jdbc.queryForObject("select count(*) from notifications where recipient_user_id = ? and dedup_key = ?",
+                Integer.class, fixture.userId, "CHALLENGE_QUIZ_READY:" + response.sessionId())).isEqualTo(1);
+    }
+
+    @Test
+    void multiNoteShortfallWritesOnlySecondaryBankWithItsLevelStampAndClaim() {
+        Fixture fixture = availableMultiNoteFixture();
+        UUID secondary = addMultiPack(fixture, "Second bank question");
+        bankExtra(fixture, fixture.packId, "Primary extra", 8, LearnerLevel.COLLEGE, 0);
+        bankExtra(fixture, secondary, "Secondary extra", 5, LearnerLevel.PROFESSIONAL, 7);
+        jdbc.update("update study_packs set generation_stamp = 7 where id = ?", secondary);
+        jdbc.update("update challenge_quiz_question_bank set generation_stamp = 7, learner_level = 'PROFESSIONAL' where study_pack_id = ?", secondary);
+        when(generationContextResolver.resolveForStudyPack(any(), any())).thenAnswer(invocation ->
+                new StudyPackGenerationContext(
+                        ((com.studysnap.backend.entity.StudyPackEntity) invocation.getArgument(1)).getId().equals(secondary)
+                                ? LearnerLevel.PROFESSIONAL : LearnerLevel.COLLEGE,
+                        null, null, List.of()));
+        when(quizGenerationService.generateChallengeQuiz(eq("Second bank"), any(), any(), any(), eq(3), any(), any()))
+                .thenReturn(new GeneratedChallengeQuizContent(List.of(question("Secondary new 0"),
+                        question("Secondary new 1"), question("Secondary new 2")), "mini", 23, 11, 2));
+
+        ChallengeQuizStartResponse start = challengeQuizService.startSession(fixture.packId.toString(),
+                fixture.userId, new ChallengeQuizStartRequest("challenge", List.of(secondary.toString())));
+        assertThat(start.status().name()).isEqualTo("GENERATING");
+        org.mockito.Mockito.verify(quizGenerationService, org.mockito.Mockito.never())
+                .generateChallengeQuiz(any(), any(), any(), any(), anyInt(), any(), any());
+        runDispatchedChallengeJob();
+
+        UUID sessionId = UUID.fromString(start.sessionId());
+        assertThat(jdbc.queryForObject("select status from quick_review_sessions where id = ?", String.class,
+                sessionId)).isEqualTo("IN_PROGRESS");
+        assertThat(jdbc.queryForObject("select count(*) from challenge_quiz_question_bank where origin_session_id = ? and study_pack_id = ?",
+                Integer.class, sessionId, secondary)).isEqualTo(3);
+        assertThat(jdbc.queryForObject("select count(*) from challenge_quiz_question_bank where origin_session_id = ? and study_pack_id = ?",
+                Integer.class, sessionId, fixture.packId)).isZero();
+        assertThat(jdbc.queryForObject("select count(*) from challenge_quiz_question_bank where origin_session_id = ? and study_pack_id = ? and generation_stamp = 7 and learner_level = 'PROFESSIONAL' and claimed_session_id = ?",
+                Integer.class, sessionId, secondary, sessionId)).isEqualTo(3);
+        assertThat(jdbc.queryForObject("select input_tokens from quick_review_sessions where id = ?", Integer.class,
+                sessionId)).isEqualTo(23);
+        challengeQuizService.forfeitSession(start.sessionId(), fixture.userId);
+        assertThat(jdbc.queryForObject("select count(*) from challenge_quiz_question_bank where claimed_session_id = ?",
+                Integer.class, sessionId)).isZero();
+        ChallengeQuizStartResponse single = challengeQuizService.startSession(secondary.toString(), fixture.userId, null);
+        assertThat(single.status().name()).isEqualTo("GENERATING");
+        assertThat(QuizSessionStateUtils.extractPreparationQuiz(sessionRepository.findById(
+                UUID.fromString(single.sessionId())).orElseThrow().getSessionState()))
+                .extracting(QuizItem::question)
+                .contains("Secondary new 0", "Secondary new 1", "Secondary new 2");
+        assertThat(jdbc.queryForObject("""
+                select count(*) from challenge_quiz_question_bank
+                where origin_session_id = ? and study_pack_id = ? and claimed_session_id = ?
+                """, Integer.class, sessionId, secondary, UUID.fromString(single.sessionId()))).isEqualTo(3);
+    }
+
+    @Test
+    void regeneratedNonPrimaryBetweenReadyAndStartForfeitsAndReleasesBothPacks() {
+        Fixture fixture = availableMultiNoteFixture();
+        UUID secondary = addMultiPack(fixture, "Second bank question");
+        bankExtra(fixture, fixture.packId, "Primary extra", 8, LearnerLevel.COLLEGE, 0);
+        bankExtra(fixture, secondary, "Secondary extra", 8, LearnerLevel.COLLEGE, 0);
+        ChallengeQuizStartResponse ready = challengeQuizService.startSession(fixture.packId.toString(),
+                fixture.userId, new ChallengeQuizStartRequest("challenge", List.of(secondary.toString())));
+        assertThat(ready.status().name()).isEqualTo("IN_PROGRESS");
+        jdbc.update("update study_packs set generation_stamp = generation_stamp + 1 where id = ?", secondary);
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() ->
+                challengeQuizService.startQuiz(ready.sessionId(), fixture.userId))
+                .isInstanceOf(com.studysnap.backend.exception.ChallengeQuizSessionNotInProgressException.class);
+        UUID sessionId = UUID.fromString(ready.sessionId());
+        assertThat(jdbc.queryForObject("select status from quick_review_sessions where id = ?", String.class,
+                sessionId)).isEqualTo("FORFEITED");
+        assertThat(jdbc.queryForObject("select count(*) from challenge_quiz_question_bank where claimed_session_id = ?",
+                Integer.class, sessionId)).isZero();
+        org.mockito.Mockito.verify(userUsageService, org.mockito.Mockito.never())
+                .incrementChallengeQuizGeneration(any(), any());
+    }
+
+    @Test
+    @Timeout(20)
+    void parallelSourcesAndRegeneratedNonPrimaryFailWhileSalvagingUnchangedPack() throws Exception {
+        Fixture fixture = availableMultiNoteFixture();
+        UUID secondary = addMultiPack(fixture, "Second bank question");
+        bankExtra(fixture, fixture.packId, "Primary extra", 5, LearnerLevel.COLLEGE, 0);
+        bankExtra(fixture, secondary, "Secondary extra", 5, LearnerLevel.COLLEGE, 0);
+        CountDownLatch bothInModel = new CountDownLatch(2);
+        CountDownLatch releaseModel = new CountDownLatch(1);
+        when(quizGenerationService.generateChallengeQuiz(any(), any(), any(), any(), eq(3), any(), any()))
+                .thenAnswer(invocation -> {
+                    String title = invocation.getArgument(0);
+                    bothInModel.countDown();
+                    assertThat(releaseModel.await(8, TimeUnit.SECONDS)).isTrue();
+                    return GeneratedChallengeQuizContent.withoutUsage(List.of(
+                            question(title + " new 0"), question(title + " new 1"), question(title + " new 2")));
+                });
+        ChallengeQuizStartResponse preparing = challengeQuizService.startSession(fixture.packId.toString(),
+                fixture.userId, new ChallengeQuizStartRequest("challenge", List.of(secondary.toString())));
+        assertThat(preparing.status().name()).isEqualTo("GENERATING");
+
+        try (var executor = Executors.newSingleThreadExecutor()) {
+            Future<?> work = executor.submit(this::runDispatchedChallengeJob);
+            assertThat(bothInModel.await(8, TimeUnit.SECONDS))
+                    .as("two calls must enter the parallel executor before either returns").isTrue();
+            new TransactionTemplate(transactionManager).execute(status -> {
+                bankService.invalidateForStudyPack(secondary);
+                jdbc.update("update study_packs set generation_stamp = generation_stamp + 1 where id = ?", secondary);
+                return null;
+            });
+            releaseModel.countDown();
+            work.get(8, TimeUnit.SECONDS);
+        } finally {
+            releaseModel.countDown();
+        }
+        UUID sessionId = UUID.fromString(preparing.sessionId());
+        assertThat(jdbc.queryForObject("select status from quick_review_sessions where id = ?", String.class,
+                sessionId)).isEqualTo("FAILED");
+        assertThat(jdbc.queryForObject("select count(*) from challenge_quiz_question_bank where origin_session_id = ? and study_pack_id = ? and claimed_session_id is null",
+                Integer.class, sessionId, fixture.packId)).isEqualTo(3);
+        assertThat(jdbc.queryForObject("select count(*) from challenge_quiz_question_bank where origin_session_id = ? and study_pack_id = ?",
+                Integer.class, sessionId, secondary)).isZero();
+        assertThat(jdbc.queryForObject("select count(*) from challenge_quiz_question_bank where claimed_session_id = ?",
+                Integer.class, sessionId)).isZero();
+        org.mockito.Mockito.verify(userUsageService, org.mockito.Mockito.never())
+                .incrementChallengeQuizGeneration(any(), any());
+    }
+
+    @Test
+    void nonPrimarySavedQuizQuestionIsExcludedFromRealBankClaimAndDelivery() {
+        Fixture fixture = availableMultiNoteFixture();
+        UUID secondary = addMultiPack(fixture, "Second bank question");
+        bankExtra(fixture, fixture.packId, "Primary extra", 8, LearnerLevel.COLLEGE, 0);
+        bankExtra(fixture, secondary, "Secondary extra", 8, LearnerLevel.COLLEGE, 0);
+        jdbc.update("""
+                update study_packs set quiz =
+                '[{"question":"Second bank question","choices":["A","B"],"correctIndex":0}]'::jsonb
+                where id = ?
+                """, secondary);
+        when(quizGenerationService.generateChallengeQuiz(eq("Second bank"), any(), any(), any(), eq(1), any(), any()))
+                .thenReturn(GeneratedChallengeQuizContent.withoutUsage(List.of(question("Safe replacement"))));
+
+        ChallengeQuizStartResponse preparing = challengeQuizService.startSession(fixture.packId.toString(),
+                fixture.userId, new ChallengeQuizStartRequest("challenge", List.of(secondary.toString())));
+        assertThat(preparing.status().name()).isEqualTo("GENERATING");
+        assertThat(QuizSessionStateUtils.extractPreparationQuiz(sessionRepository.findById(
+                UUID.fromString(preparing.sessionId())).orElseThrow().getSessionState()))
+                .extracting(QuizItem::question).doesNotContain("Second bank question");
+        runDispatchedChallengeJob();
+        var ready = sessionRepository.findById(UUID.fromString(preparing.sessionId())).orElseThrow();
+        assertThat(ready.getStatus().name()).isEqualTo("IN_PROGRESS");
+        assertThat(QuizSessionStateUtils.extractQuiz(ready.getSessionState()))
+                .extracting(QuizItem::question).doesNotContain("Second bank question");
+        assertThat(jdbc.queryForObject("""
+                select count(*) from challenge_quiz_question_bank where study_pack_id = ?
+                and question_key = ? and claimed_session_id is null
+                """, Integer.class, secondary,
+                com.studysnap.backend.util.QuizDeduplicationUtils.normalizeQuestion("Second bank question")))
+                .isEqualTo(1);
+    }
+
+    @Test
+    void belowFloorFailureReleasesRealClaimsAndSalvagesValidGeneratedQuestionsUnclaimed() {
+        Fixture fixture = availableMultiNoteFixture();
+        UUID secondary = addMultiPack(fixture, "Second bank question");
+        bankExtra(fixture, fixture.packId, "Primary extra", 5, LearnerLevel.COLLEGE, 0);
+        jdbc.update("delete from challenge_quiz_question_bank where study_pack_id = ?", secondary);
+        when(quizGenerationService.generateChallengeQuiz(any(), any(), any(), any(), anyInt(), any(), any()))
+                .thenAnswer(invocation -> {
+                    String title = invocation.getArgument(0);
+                    if ("Second bank".equals(title)) throw new IllegalStateException("source unavailable");
+                    return GeneratedChallengeQuizContent.withoutUsage(List.of(question("Primary safe 0"),
+                            question("Primary safe 1"), question("Primary safe 2")));
+                });
+
+        ChallengeQuizStartResponse preparing = challengeQuizService.startSession(fixture.packId.toString(),
+                fixture.userId, new ChallengeQuizStartRequest("challenge", List.of(secondary.toString())));
+        runDispatchedChallengeJob();
+        UUID sessionId = UUID.fromString(preparing.sessionId());
+
+        assertThat(jdbc.queryForObject("select status from quick_review_sessions where id = ?", String.class,
+                sessionId)).isEqualTo("FAILED");
+        assertThat(jdbc.queryForObject("select quota_exempt from quick_review_sessions where id = ?", Boolean.class,
+                sessionId)).isTrue();
+        assertThat(jdbc.queryForObject("select count(*) from challenge_quiz_question_bank where claimed_session_id = ?",
+                Integer.class, sessionId)).isZero();
+        assertThat(jdbc.queryForObject("select count(*) from challenge_quiz_question_bank where origin_session_id = ? and study_pack_id = ? and claimed_session_id is null",
+                Integer.class, sessionId, fixture.packId)).isEqualTo(3);
+        org.mockito.Mockito.verify(userUsageService, org.mockito.Mockito.never())
+                .incrementChallengeQuizGeneration(any(), any());
+    }
+
+    @Test
+    void oneFailedSourceStillProducesUnderfilledReadyQuizWhenBothFloorsPass() {
+        Fixture fixture = availableMultiNoteFixture();
+        UUID second = addMultiPack(fixture, "Second bank question");
+        UUID failed = addMultiPack(fixture, "Failed bank question");
+        bankExtra(fixture, fixture.packId, "Primary extra", 5, LearnerLevel.COLLEGE, 0);
+        bankExtra(fixture, second, "Second extra", 5, LearnerLevel.COLLEGE, 0);
+        jdbc.update("delete from challenge_quiz_question_bank where study_pack_id = ?", failed);
+        when(quizGenerationService.generateChallengeQuiz(any(), any(), any(), any(), eq(6), any(), any()))
+                .thenThrow(new IllegalStateException("one source failed"));
+
+        ChallengeQuizStartResponse preparing = challengeQuizService.startSession(fixture.packId.toString(),
+                fixture.userId, new ChallengeQuizStartRequest("challenge",
+                        List.of(second.toString(), failed.toString())));
+        assertThat(preparing.status().name()).isEqualTo("GENERATING");
+        runDispatchedChallengeJob();
+        var ready = challengeQuizService.getSession(preparing.sessionId(), fixture.userId);
+
+        assertThat(ready.status().name()).isEqualTo("IN_PROGRESS");
+        assertThat(ready.totalQuestions()).isEqualTo(12);
+        assertThat(ready.requestedQuestionCount()).isEqualTo(18);
+        assertThat(ready.sessionState()).containsEntry("sourceContributionCount", 2);
+        assertThat(ready.preparedNotStarted()).isTrue();
+        org.mockito.Mockito.verify(userUsageService, org.mockito.Mockito.never())
+                .incrementChallengeQuizGeneration(any(), any());
+    }
+
+    @Test
+    @Timeout(15)
+    void overlappingMultiNoteStartsLockSharedPacksInSortedOrderWithoutDeadlock() throws Exception {
+        Fixture fixture = availableMultiNoteFixture();
+        UUID shared = addMultiPack(fixture, "Shared bank question");
+        UUID otherPrimary = addMultiPack(fixture, "Other primary bank question");
+        bankExtra(fixture, fixture.packId, "First primary extra", 8, LearnerLevel.COLLEGE, 0);
+        bankExtra(fixture, shared, "Shared extra", 8, LearnerLevel.COLLEGE, 0);
+        bankExtra(fixture, otherPrimary, "Other primary extra", 8, LearnerLevel.COLLEGE, 0);
+        CountDownLatch go = new CountDownLatch(1);
+        try (var executor = Executors.newFixedThreadPool(2)) {
+            Future<ChallengeQuizStartResponse> first = executor.submit(() -> {
+                go.await();
+                return challengeQuizService.startSession(fixture.packId.toString(), fixture.userId,
+                        new ChallengeQuizStartRequest("challenge", List.of(shared.toString())));
+            });
+            Future<ChallengeQuizStartResponse> second = executor.submit(() -> {
+                go.await();
+                return challengeQuizService.startSession(otherPrimary.toString(), fixture.userId,
+                        new ChallengeQuizStartRequest("challenge", List.of(shared.toString())));
+            });
+            go.countDown();
+            assertThat(first.get(8, TimeUnit.SECONDS).sessionId()).isNotBlank();
+            assertThat(second.get(8, TimeUnit.SECONDS).sessionId()).isNotBlank();
+        } finally {
+            go.countDown();
+        }
+    }
+
     private UUID insertGeneratingSession(Fixture fixture) {
         UUID sessionId = UUID.randomUUID();
         jdbc.update("""

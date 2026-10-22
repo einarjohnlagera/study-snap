@@ -7,5 +7,8 @@ export const CHALLENGE_PREPARATION_COPY = {
   collisionReplace: "Start something else",
   dashboardLabel: "Open your prepared quiz",
   monthlyLimit: "This quiz counts toward your monthly limit only when you press Start Quiz. Leaving before you start won't use an attempt.",
+  underfilledTitle: (delivered: number, requested: number) => `Your quiz is ready with ${delivered} of ${requested} questions.`,
+  // Provisional wording; pending owner sign-off.
+  coverageLine: (contributing: number, selected: number) => `From ${contributing} of ${selected} notes`,
   redoMissedMonthlyLimit: "Redo Missed Questions doesn't count toward your monthly quiz limit.",
 } as const;

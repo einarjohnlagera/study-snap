@@ -1546,6 +1546,8 @@ export type ChallengeQuizCollision = {
 
 export type ChallengeQuizStartResponse = {
   preparedNotStarted: boolean;
+  requestedQuestionCount: number;
+  redoMissed: boolean;
   collision: ChallengeQuizCollision | null;
   sessionId: string | null;
   status: QuizSessionStatus | null;

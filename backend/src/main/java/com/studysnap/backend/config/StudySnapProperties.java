@@ -25,6 +25,13 @@ public class StudySnapProperties {
     @Setter
     public static class ChallengeQuiz {
         private OffsetDateTime statementPairLegacyCutoff;
+        // Owner-approved policy (2026-10-21). Production changes require owner approval.
+        private int challengeMultiNoteMinimumQuestionNumerator = 2;
+        private int challengeMultiNoteMinimumQuestionDenominator = 3;
+        private int challengeMultiNoteMinimumCoverageNumerator = 2;
+        private int challengeMultiNoteMinimumCoverageDenominator = 3;
+        private int challengeMultiNoteWaitDeadlineSeconds = 300;
+        private int challengeMultiNoteSourceTaskThreads = 6;
     }
     private final QuickReview quickReview = new QuickReview();
     private final Pricing pricing = new Pricing();
