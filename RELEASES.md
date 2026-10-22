@@ -376,7 +376,7 @@ never edit this file.
   - **Review note.** The shared start, Start Quiz and bank paths are named inputs to the scoped cold review at
     signoff.
 
-- **Item 6: Challenge tier routing plus background +5** (branch `feat/v0.175.0-item6-tier-routing`). Owner kept
+- **Item 6: Challenge tier routing plus background +5** (PR #1526, merged as `a4555d42`). Owner kept
   it in v0.175.0 on 2026-10-21. The +5 design is the owner-approved proposal
   `docs/claude-plans/2026-10-21-v0175-plus5-slower-models-proposal.md`.
   - **Routing by plan.** Ordinary Challenge single-note preparation, multi-note source shortfalls and +5 use
@@ -426,6 +426,21 @@ never edit this file.
   - **Review note.** It changes the running-quiz state and shares `startQuiz` and the bank paths, so it is a named
     input to the signoff pressure test. This release changes quota semantics, so that is the **full**
     three-agent test.
+
+- **Voice copy for v0.175.0** (branch `feat/v0.175.0-voice-copy`). Owner-approved 2026-10-22 under the new
+  `docs/product/VOICE_AND_TONE.md`. It applies the 19-row copy diff in
+  `docs/claude-plans/2026-10-22-v0175-copy-review-product-ux-prompt.md`:
+  - sentence-case Challenge buttons ("Prepare quiz", "Start quiz", "Prepare a new quiz", "Try again", "Continue
+    reviewing", "+5 questions");
+  - the setup line "…counts toward your monthly limit only once you start it…";
+  - +5: "Added {n} more questions." and "We couldn't add more questions. Your answers are safe.";
+  - a warmer mode-selection line;
+  - the screen-reader label "Preparing your quiz";
+  - five reassuring server messages.
+
+  **Copy only:** no behaviour, rule or configuration change. Buttons shared with Board Exam ("Start Fresh",
+  "Resume", "Starting...") are unchanged (C6) and left for a later sweep. Backend 2,976 tests and frontend
+  2,753 tests pass; `tsc`, lint and `next build` are clean.
 
 - **Statement-pair verifier in production code, switches off** (branch `feat/v0.175.0-statement-pair-verifier`).
   - **What it does.** Before a statement-pair question is kept, two independent checkers (Sol and Luna, run
