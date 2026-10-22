@@ -1,6 +1,9 @@
 package com.studysnap.backend.service;
 
 import com.studysnap.backend.config.StudySnapProperties;
+import com.studysnap.backend.controller.ChallengeQuizController;
+import com.studysnap.backend.entity.UserRole;
+import com.studysnap.backend.security.AuthenticatedUser;
 import com.studysnap.backend.dto.ChallengeQuizCompleteRequest;
 import com.studysnap.backend.dto.ChallengeQuizProgressRequest;
 import com.studysnap.backend.dto.ChallengeQuizSessionResponse;
@@ -62,6 +65,14 @@ import org.mockito.Mock;
 import org.mockito.ArgumentCaptor;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.core.MethodParameter;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.util.unit.DataSize;
+import org.springframework.web.bind.support.WebDataBinderFactory;
+import org.springframework.web.context.request.NativeWebRequest;
+import org.springframework.web.method.support.HandlerMethodArgumentResolver;
+import org.springframework.web.method.support.ModelAndViewContainer;
+import com.studysnap.backend.exception.GlobalExceptionHandler;
 import org.springframework.transaction.support.TransactionOperations;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
@@ -96,6 +107,11 @@ import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.springframework.test.web.servlet.setup.MockMvcBuilders.standaloneSetup;
 
 @ExtendWith(MockitoExtension.class)
 class ChallengeQuizServiceTest {
@@ -413,6 +429,145 @@ class ChallengeQuizServiceTest {
         when(quickReviewSessionRepository.findTopByUserIdAndStudyPackIdAndSessionModeAndStatusInOrderByCreatedAtDesc(
                 eq(row.getUserId()), eq(row.getStudyPackId()), eq(QuickReviewSessionMode.CHALLENGE), any()))
                 .thenReturn(Optional.of(row));
+    }
+
+    @Test
+    void preparedChallengeSourceSetCollidesInBothDirectionsAndOrderDoesNotMatter() {
+        UUID userId = UUID.randomUUID();
+        StudyPackEntity primary = buildStudyPack(UUID.randomUUID(), UUID.randomUUID(), userId);
+        ChallengeQuizStartResponse prepared = prepareFullyBankedQuiz(userId, primary);
+        QuickReviewSessionEntity row = savedSessionsById.get(UUID.fromString(prepared.sessionId()));
+        findActive(row);
+        UUID second = UUID.randomUUID();
+        UUID third = UUID.randomUUID();
+        UUID other = UUID.randomUUID();
+        ChallengeQuizStartRequest multi = new ChallengeQuizStartRequest("challenge",
+                List.of(second.toString(), third.toString()), null, null);
+
+        // A single-note preparation cannot silently satisfy a multi-note request.
+        assertThat(challengeQuizService.startSession(primary.getId().toString(), userId, multi).collision()).isNotNull();
+        Map<String, Object> state = new LinkedHashMap<>(row.getSessionState());
+        state.put("sourceNoteRefs", List.of(
+                Map.of("studyPackId", primary.getId().toString(), "noteId", primary.getNoteId().toString(), "noteTitle", "Primary", "questionCount", 6),
+                Map.of("studyPackId", second.toString(), "noteId", UUID.randomUUID().toString(), "noteTitle", "Second", "questionCount", 6),
+                Map.of("studyPackId", third.toString(), "noteId", UUID.randomUUID().toString(), "noteTitle", "Third", "questionCount", 6)));
+        row.setSessionState(state);
+
+        assertThat(challengeQuizService.startSession(primary.getId().toString(), userId, null).collision()).isNotNull();
+        assertThat(challengeQuizService.startSession(primary.getId().toString(), userId,
+                new ChallengeQuizStartRequest("challenge", List.of(second.toString(), other.toString()), null, null))
+                .collision()).isNotNull();
+        ChallengeQuizStartResponse same = challengeQuizService.startSession(primary.getId().toString(), userId,
+                new ChallengeQuizStartRequest("challenge", List.of(third.toString(), second.toString(), second.toString()), null, null));
+        assertThat(same.sessionId()).isEqualTo(prepared.sessionId());
+        assertThat(same.collision()).isNull();
+        verify(studyPackRepository, never()).findByIdAndOwnerUserIdForUpdate(eq(second), eq(userId));
+    }
+
+    @Test
+    void preparedPlanChallengeRetryChecksCollectionAndSelectionWithoutRevalidating() {
+        UUID userId = UUID.randomUUID();
+        StudyPackEntity primary = buildStudyPack(UUID.randomUUID(), UUID.randomUUID(), userId);
+        ChallengeQuizStartResponse prepared = prepareFullyBankedQuiz(userId, primary);
+        QuickReviewSessionEntity row = savedSessionsById.get(UUID.fromString(prepared.sessionId()));
+        findActive(row);
+        UUID collectionId = UUID.randomUUID();
+        Map<String, Object> state = new LinkedHashMap<>(row.getSessionState());
+        state.put("sourceCollectionId", collectionId.toString());
+        UUID second = UUID.randomUUID();
+        state.put("sourceNoteRefs", List.of(
+                Map.of("studyPackId", primary.getId().toString(), "noteId", primary.getNoteId().toString(), "noteTitle", "Primary", "questionCount", 9),
+                Map.of("studyPackId", second.toString(), "noteId", UUID.randomUUID().toString(), "noteTitle", "Second", "questionCount", 9)));
+        row.setSessionState(state);
+
+        ChallengeQuizStartResponse retry = challengeQuizService.startSession(primary.getId().toString(), userId,
+                new ChallengeQuizStartRequest("challenge", List.of(second.toString()), collectionId.toString(), null));
+        assertThat(retry.sessionId()).isEqualTo(prepared.sessionId());
+        assertThat(retry.collision()).isNull();
+        verify(studyPackRepository, never()).findByIdAndOwnerUserIdForUpdate(eq(second), eq(userId));
+        ChallengeQuizStartResponse changedSelection = challengeQuizService.startSession(primary.getId().toString(), userId,
+                new ChallengeQuizStartRequest("challenge", List.of(UUID.randomUUID().toString()), collectionId.toString(), null));
+        assertThat(changedSelection.collision()).isNotNull();
+        ChallengeQuizStartResponse manual = challengeQuizService.startSession(primary.getId().toString(), userId,
+                new ChallengeQuizStartRequest("challenge", List.of(second.toString()), null, null));
+        assertThat(manual.collision()).isNotNull();
+    }
+
+    @Test
+    void preparedChallengeRetrySurvivesSourceCapDropAndDiscardPreparesRequestedSet() {
+        UUID userId = UUID.randomUUID();
+        StudyPackEntity primary = buildStudyPack(UUID.randomUUID(), UUID.randomUUID(), userId);
+        ChallengeQuizStartResponse prepared = prepareFullyBankedQuiz(userId, primary);
+        QuickReviewSessionEntity row = savedSessionsById.get(UUID.fromString(prepared.sessionId()));
+        findActive(row);
+        UUID second = UUID.randomUUID();
+        UUID third = UUID.randomUUID();
+        UUID fourth = UUID.randomUUID();
+        UUID collectionId = UUID.randomUUID();
+        Map<String, Object> state = new LinkedHashMap<>(row.getSessionState());
+        state.put("sourceCollectionId", collectionId.toString());
+        state.put("sourceNoteRefs", List.of(
+                Map.of("studyPackId", primary.getId().toString(), "noteId", primary.getNoteId().toString(), "noteTitle", "Primary", "questionCount", 5),
+                Map.of("studyPackId", second.toString(), "noteId", UUID.randomUUID().toString(), "noteTitle", "Second", "questionCount", 5),
+                Map.of("studyPackId", third.toString(), "noteId", UUID.randomUUID().toString(), "noteTitle", "Third", "questionCount", 5),
+                Map.of("studyPackId", fourth.toString(), "noteId", UUID.randomUUID().toString(), "noteTitle", "Fourth", "questionCount", 3)));
+        row.setSessionState(state);
+        ChallengeQuizStartRequest overCurrentCap = new ChallengeQuizStartRequest("challenge",
+                List.of(fourth.toString(), second.toString(), third.toString()), collectionId.toString(), null);
+
+        // FREE currently permits only three total sources. The saved four-source preparation still opens.
+        ChallengeQuizStartResponse retry = challengeQuizService.startSession(primary.getId().toString(), userId, overCurrentCap);
+        assertThat(retry.sessionId()).isEqualTo(prepared.sessionId());
+        assertThat(retry.collision()).isNull();
+        verify(studyPackRepository, never()).findByIdAndOwnerUserIdForUpdate(eq(second), eq(userId));
+
+        ChallengeQuizStartResponse collision = challengeQuizService.startSession(primary.getId().toString(), userId,
+                new ChallengeQuizStartRequest("challenge", null, null, null));
+        assertThat(collision.collision().existingSessionId()).isEqualTo(prepared.sessionId());
+        ChallengeQuizStartResponse replacement = challengeQuizService.startSession(primary.getId().toString(), userId,
+                new ChallengeQuizStartRequest("challenge", null, null, prepared.sessionId()));
+        assertThat(replacement.sessionId()).isNotEqualTo(prepared.sessionId());
+        assertThat(row.getStatus()).isEqualTo(QuickReviewSessionStatus.FORFEITED);
+        assertThat(replacement.collision()).isNull();
+    }
+
+    @Test
+    void preparedChallengeRealHttpRequestShowsSourceCollisionAndStoredReadyFacts() throws Exception {
+        UUID userId = UUID.randomUUID();
+        StudyPackEntity primary = buildStudyPack(UUID.randomUUID(), UUID.randomUUID(), userId);
+        ChallengeQuizStartResponse prepared = prepareFullyBankedQuiz(userId, primary);
+        QuickReviewSessionEntity row = savedSessionsById.get(UUID.fromString(prepared.sessionId()));
+        findActive(row);
+        int storedTimeLimit = ((Number) row.getSessionState().get("timeLimitSeconds")).intValue();
+        assertThat(storedTimeLimit).isNotEqualTo(5 * 90); // extractTimeLimitSeconds fallback
+        MockMvc mvc = challengeMvc(userId);
+
+        mvc.perform(get("/challenge-quiz/sessions/{id}", prepared.sessionId()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.preparedNotStarted").value(true))
+                .andExpect(jsonPath("$.totalQuestions").value(row.getTotalQuestions()))
+                .andExpect(jsonPath("$.timeLimitSeconds").value(storedTimeLimit))
+                .andExpect(jsonPath("$.quiz").isEmpty());
+        mvc.perform(post("/challenge-quiz/study-packs/{id}/start", primary.getId())
+                        .contentType("application/json")
+                        .content("{\"mode\":\"challenge\",\"additionalStudyPackIds\":[\"" + UUID.randomUUID() + "\"]}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.collision.existingSessionId").value(prepared.sessionId()))
+                .andExpect(jsonPath("$.collision.existingMode").value("challenge"))
+                .andExpect(jsonPath("$.collision.requestedMode").value("challenge"));
+    }
+
+    private MockMvc challengeMvc(UUID userId) {
+        AuthenticatedUser user = new AuthenticatedUser(userId, UserRole.USER, true, 1);
+        return standaloneSetup(new ChallengeQuizController(challengeQuizService))
+                .setControllerAdvice(new GlobalExceptionHandler(DataSize.ofMegabytes(10)))
+                .setCustomArgumentResolvers(new HandlerMethodArgumentResolver() {
+                    @Override public boolean supportsParameter(MethodParameter parameter) {
+                        return parameter.getParameterType() == AuthenticatedUser.class;
+                    }
+                    @Override public Object resolveArgument(MethodParameter parameter, ModelAndViewContainer container,
+                            NativeWebRequest request, WebDataBinderFactory binderFactory) { return user; }
+                }).build();
     }
 
     @ParameterizedTest
@@ -4860,7 +5015,11 @@ class ChallengeQuizServiceTest {
         assertThat(savedSessionsById.get(UUID.fromString(response.sessionId())).getSessionState())
                 .doesNotContainKey("timerStartedAtEpochSeconds");
         assertThat(response.status()).isEqualTo(QuickReviewSessionStatus.GENERATING);
+        assertThat(savedSessionsById.get(UUID.fromString(response.sessionId())).getSessionState())
+                .containsEntry("sourceCollectionId", collectionId.toString());
         dispatchedTask.run();
+        assertThat(savedSessionsById.get(UUID.fromString(response.sessionId())).getSessionState())
+                .containsEntry("sourceCollectionId", collectionId.toString());
         List<QuizItem> prepared = persistedQuiz(savedSessionsById.get(UUID.fromString(response.sessionId())));
         assertThat(prepared).filteredOn(item -> primaryStudyPackId.toString().equals(item.sourceStudyPackId())).hasSize(9);
         assertThat(prepared).filteredOn(item -> additionalStudyPackId.toString().equals(item.sourceStudyPackId())).hasSize(9);

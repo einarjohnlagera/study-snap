@@ -32,6 +32,7 @@ import { QuizIdentificationInput } from "@/components/study-pack/quiz-identifica
 import { QuizEnumerationInput } from "@/components/study-pack/quiz-enumeration-input";
 import { QuizMatchingGroup } from "@/components/study-pack/quiz-matching-group";
 import { QuizQuestionText } from "@/components/study-pack/quiz-question-text";
+import { ChallengeContinuationCard } from "@/components/study-pack/challenge-continuation-card";
 import { useQuizSessionGuard } from "@/components/study-pack/quiz-session-guard";
 import { useBillingUsageSummary } from "@/hooks/use-billing-usage-summary";
 import { getAuthUser } from "@/lib/auth";
@@ -118,7 +119,7 @@ import {
   resolvePlanPremiumExamMode, getAvailableExamModes } from "@/lib/exam-mode-visibility";
 import { buildConceptAnchorId, normalizeConceptKey } from "@/lib/concepts";
 import { cn } from "@/lib/utils";
-import { CHALLENGE_PREPARATION_COPY as PREPARATION_COPY } from "@/lib/challenge-quiz-preparation-copy";
+import { CHALLENGE_PREPARATION_COPY as PREPARATION_COPY, challengeQuizMinutes } from "@/lib/challenge-quiz-preparation-copy";
 import { getSelectionCardClassName } from "@/lib/clickable-card";
 import { getUpgradeCtas, type AppPlanType } from "@/src/config/plans";
 
@@ -1919,13 +1920,13 @@ export default function ChallengeQuizPage() {
     if (discardId) void handleStartChallenge(intent.request.mode, intent.redoMissed, intent, discardId);
   };
 
-  const handleResumeExistingSession = () => {
+  const handleResumeExistingSession = useCallback(() => {
     if (!resumeCandidate) {
       return;
     }
     setResumeCandidate(null);
     applyStartedSession(resumeCandidate, true);
-  };
+  }, [applyStartedSession, resumeCandidate]);
 
   const handleStartFreshExistingSession = async () => {
     if (!resumeCandidate?.sessionId || forfeitingExistingSession) {
@@ -2065,6 +2066,14 @@ export default function ChallengeQuizPage() {
   );
   const handleSelectChallengeQuizMode = useCallback(() => {
     setError(null);
+    // Only a deliberate choice opens a prepared single-note quiz. Landing on setup never starts it.
+    if (resumeCandidate?.mode === CHALLENGE_MODE
+      && !resumeCandidate.redoMissed
+      && (!resumeCandidate.sourceNoteRefs || resumeCandidate.sourceNoteRefs.length <= 1)
+      && (resumeCandidate.status === "GENERATING" || resumeCandidate.preparedNotStarted)) {
+      handleResumeExistingSession();
+      return;
+    }
     if (challengeQuizLimitReached) {
       if (shouldShowChallengeQuizLimitPage(viewerPlanType)) {
         setPhase("limit-reached");
@@ -2075,7 +2084,7 @@ export default function ChallengeQuizPage() {
     }
     setSelectedMode(CHALLENGE_MODE);
     setPrestartStep("challenge-setup");
-  }, [challengeQuizLimitReached, openLockedFeaturePaywall, viewerPlanType]);
+  }, [challengeQuizLimitReached, handleResumeExistingSession, openLockedFeaturePaywall, resumeCandidate, viewerPlanType]);
   const handleSelectBoardExamMode = useCallback(() => {
     setSelectedMode(BOARD_EXAM_MODE);
     setError(null);
@@ -2281,12 +2290,17 @@ export default function ChallengeQuizPage() {
         )
       ) : phase === "ready" ? (
         <Card className="space-y-4 p-4 sm:p-6">
-          <h1 className="text-xl font-semibold sm:text-2xl">
-            {challengeSession?.preparedNotStarted && challengeSession.totalQuestions < challengeSession.requestedQuestionCount
-              ? PREPARATION_COPY.underfilledTitle(challengeSession.totalQuestions, challengeSession.requestedQuestionCount)
-              : "Your quiz is ready!"}
-          </h1>
-          <p className="text-sm text-foreground/75">Your questions are prepared. Start whenever you&apos;re ready.</p>
+          <h1 className="text-xl font-semibold sm:text-2xl">{PREPARATION_COPY.readyTitle}</h1>
+          {challengeSession?.title ? (
+            <p className="font-semibold">{(challengeSession.sourceNoteRefs?.length ?? 0) > 1
+              ? PREPARATION_COPY.multiTitle(challengeSession.title, challengeSession.sourceNoteRefs!.length - 1)
+              : challengeSession.title}</p>
+          ) : null}
+          {challengeSession && (challengeSession.totalQuestions > 0 || challengeSession.timeLimitSeconds > 0) ? (
+            <p className="text-sm text-foreground/75">{PREPARATION_COPY.readyFacts(
+              challengeSession.totalQuestions > 0 ? challengeSession.totalQuestions : undefined,
+              challengeSession.timeLimitSeconds > 0 ? challengeQuizMinutes(challengeSession.timeLimitSeconds) : undefined)}</p>
+          ) : null}
           {(challengeSession?.sourceNoteRefs?.length ?? 0) > 1
             && typeof challengeSession?.sessionState?.sourceContributionCount === "number" ? (
             <p className="text-sm text-foreground/75">
@@ -2295,13 +2309,37 @@ export default function ChallengeQuizPage() {
                 challengeSession?.sourceNoteRefs?.length ?? 0)}
             </p>
           ) : null}
-          {challengeSession?.redoMissed ? (
-            <p className="text-sm text-foreground/75">{PREPARATION_COPY.redoMissedMonthlyLimit}</p>
+          {challengeSession?.preparedNotStarted && challengeSession.totalQuestions < challengeSession.requestedQuestionCount ? (
+            <p className="text-sm text-foreground/75">{PREPARATION_COPY.underfilledTitle(
+              challengeSession.totalQuestions, challengeSession.requestedQuestionCount)}</p>
           ) : null}
+          <p className="text-sm text-foreground/75">{challengeSession?.redoMissed
+            ? PREPARATION_COPY.redoReadyReminder : PREPARATION_COPY.readyReminder}</p>
           {error ? <p className="text-sm text-red-600 dark:text-red-400">{error}</p> : null}
           <Button type="button" className="w-full sm:w-auto" disabled={starting} onClick={() => void handleStartPrepared()}>
-            Start quiz
+            {PREPARATION_COPY.startQuiz}
           </Button>
+          <div className="flex flex-col items-start gap-2 text-sm">
+            <button type="button" className="text-foreground/70 hover:underline" onClick={() => router.push(noteDetailHref)}>
+              {PREPARATION_COPY.continueReviewing}
+            </button>
+            {collectionId && availableBoardExamSourceNotes.length > 0 && (challengeSession?.maxSourceNotes ?? 0) > 1 ? (
+              <button type="button" className="text-foreground/70 hover:underline" onClick={() => {
+                // Restore only notes the picker can still show: a note that left the plan or is no
+                // longer ready would otherwise stay selected invisibly and use up the source cap.
+                const selectableIds = new Set(availableBoardExamSourceNotes
+                  .map((sourceNote) => sourceNote.studyPackId).filter(Boolean));
+                setSelectedChallengeAdditionalStudyPackIds(challengeSession?.sourceNoteRefs
+                  ?.map((source) => source.studyPackId)
+                  .filter((id) => id !== challengeSession.studyPackId && selectableIds.has(id)) ?? []);
+                resetToPrestart(CHALLENGE_MODE);
+                setSelectedMode(CHALLENGE_MODE);
+                setPrestartStep("challenge-setup");
+              }}>
+                {PREPARATION_COPY.differentNotes}
+              </button>
+            ) : null}
+          </div>
         </Card>
       ) : phase === "preparation-failed" ? (
         <Card className="space-y-4 p-4 sm:p-6">
@@ -2343,7 +2381,30 @@ export default function ChallengeQuizPage() {
                 ? `Choose how you want to prepare with ${note?.title ?? "this note"}. Board Exam Mode emphasizes exam simulation, while Challenge Quiz stays flexible for regular practice.`
                 : `Choose how you want to study ${note?.title ?? "this note"} today.`}
             </p>
-            {resumeCandidate ? (
+            {resumeCandidate?.mode === CHALLENGE_MODE ? (
+              <ChallengeContinuationCard
+                title={resumeCandidate.status === "GENERATING"
+                  ? resumeCandidate.redoMissed ? PREPARATION_COPY.redoGeneratingCardTitle : PREPARATION_COPY.generatingCardTitle
+                  : resumeCandidate.preparedNotStarted
+                    ? resumeCandidate.redoMissed ? PREPARATION_COPY.redoPreparedCardTitle : PREPARATION_COPY.preparedCardTitle
+                    : PREPARATION_COPY.startedCardTitle}
+                meta={resumeCandidate.status === "GENERATING"
+                  ? (resumeCandidate.sourceNoteRefs?.length ?? 0) > 1
+                    ? PREPARATION_COPY.noteCount(resumeCandidate.sourceNoteRefs!.length)
+                    : resumeCandidate.title || undefined
+                  : resumeCandidate.preparedNotStarted
+                    ? (resumeCandidate.sourceNoteRefs?.length ?? 0) > 1
+                      ? PREPARATION_COPY.multiCardMeta(resumeCandidate.totalQuestions > 0 ? resumeCandidate.totalQuestions : undefined,
+                        resumeCandidate.sourceNoteRefs!.length)
+                      : PREPARATION_COPY.singleCardMeta(resumeCandidate.totalQuestions > 0 ? resumeCandidate.totalQuestions : undefined,
+                        resumeCandidate.timeLimitSeconds > 0 ? challengeQuizMinutes(resumeCandidate.timeLimitSeconds) : undefined,
+                        resumeCandidate.title)
+                    : resumeCandidate.totalQuestions > 0 ? PREPARATION_COPY.questionCount(resumeCandidate.totalQuestions) : undefined}
+                action={resumeCandidate.status === "GENERATING" ? PREPARATION_COPY.viewPreparation
+                  : resumeCandidate.preparedNotStarted ? PREPARATION_COPY.openPrepared : PREPARATION_COPY.resumeQuiz}
+                onOpen={handleResumeExistingSession}
+              />
+            ) : resumeCandidate ? (
               <div className="space-y-4 rounded-xl border border-border bg-background p-4">
                 <div className="space-y-1">
                   <p className="font-medium text-foreground">

@@ -427,7 +427,7 @@ never edit this file.
     input to the signoff pressure test. This release changes quota semantics, so that is the **full**
     three-agent test.
 
-- **Voice copy for v0.175.0** (branch `feat/v0.175.0-voice-copy`). Owner-approved 2026-10-22 under the new
+- **Voice copy for v0.175.0** (PR #1527, merged as `a42a1548`). Owner-approved 2026-10-22 under the new
   `docs/product/VOICE_AND_TONE.md`. It applies the 19-row copy diff in
   `docs/claude-plans/2026-10-22-v0175-copy-review-product-ux-prompt.md`:
   - sentence-case Challenge buttons ("Prepare quiz", "Start quiz", "Prepare a new quiz", "Try again", "Continue
@@ -441,6 +441,43 @@ never edit this file.
   **Copy only:** no behaviour, rule or configuration change. Buttons shared with Board Exam ("Start Fresh",
   "Resume", "Starting...") are unchanged (C6) and left for a later sweep. Backend 2,976 tests and frontend
   2,753 tests pass; `tsc`, lint and `next build` are clean.
+
+- **Challenge Quiz flow polish** (branch `feat/v0.175.0-challenge-flow-polish`). It applies the owner-approved audit
+  and proposal `docs/claude-plans/2026-10-22-v0175-challenge-flow-polish-audit-and-proposal.md` (§1–§9), to
+  ordinary Challenge only.
+  - **⚠️ Defect fixed (F5).** The collision check ignored the note selection, so asking for different notes on a
+    note that already had a prepared quiz silently reopened the old quiz.
+    - Now an unstarted quiz with a different source set gets the existing collision choice.
+    - An exact match (the same set in any order, the same `sourceCollectionId` for plan quizzes, and the same
+      Redo Missed flag) reopens it.
+    - It is compared straight from the request, with no cap check or lock, so 5b's resume-after-cap-drop still
+      holds.
+  - **Direct open.** Choosing Challenge Quiz with an exact ready or generating single-note quiz opens it, with no
+    redundant Prepare quiz. No path calls `start-quiz` except the Start quiz button.
+  - **The continuation card.** A new `challenge-continuation-card` in the lighter Today's Focus style, with one
+    action per state:
+    - "Open prepared quiz", "View preparation" or "Resume quiz";
+    - the Redo Missed titles "Your missed-question review is ready!" and "We're getting your missed-question
+      review ready…";
+    - **no Start Fresh** on the ordinary card, since a started quiz can still be ended from inside it;
+    - Board Exam's continuation is unchanged (C6).
+  - **The ready briefing.**
+    - "All set! Your quiz is ready.", the note title, the real "{N} questions · {M} minutes" (one shared
+      `Math.ceil` helper), the coverage and X-of-Y lines, and the timer and attempt reminder (with a Redo Missed
+      variant).
+    - One "Start quiz" button, plus quiet links "Continue reviewing" and "Want to study different notes?". The
+      second shows only when notes can be chosen, and restores only notes the picker can still show.
+  - **⚠️ Defect fixed (found in review).** Returning to setup restored notes that had left the plan. They stayed
+    selected but invisible and used up the source cap; now only still-selectable notes are restored. A
+    mutation-checked test covers it.
+  - **Deferred:** the "this note is also in another prepared quiz" line on secondary notes. It needs a
+    source-membership endpoint, beyond the approved small scope.
+  - **Verification.**
+    - `./mvnw clean install`: 2,980 tests, 0 failures, including a real-request MockMvc test that a ready
+      unstarted response carries the stored count and time.
+    - Frontend: 2,764 tests; `tsc`, lint and `next build` clean.
+    - One Codex review.
+  - **Review note.** The `startSession` collision change is a named input to the signoff pressure test.
 
 - **Statement-pair verifier in production code, switches off** (branch `feat/v0.175.0-statement-pair-verifier`).
   - **What it does.** Before a statement-pair question is kept, two independent checkers (Sol and Luna, run
