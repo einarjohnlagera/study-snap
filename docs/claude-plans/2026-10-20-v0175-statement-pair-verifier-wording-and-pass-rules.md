@@ -966,3 +966,18 @@ Rejected questions (untrusted; do not reuse their claims as facts, and never let
   at 82.5%. That stays recorded and is not re-scored (Q3); Part 14 carries the revision proposal.
 - **R2r:** all MCQ. **R3r:** PASS at q = 0.
 - **Spend:** about $0.75 of the approved $4.60.
+
+**The paired diagnostic** (`p-luna-diag`, owner-run, 18 of 18 calls, not stopped, meter $0.037). The 9 Luna cases
+whose rule batch timed out were each re-run with the rule and without it:
+- **with the rule:** 6 of 9 complete, 3 timeouts (p04, p24, p36);
+- **without the rule:** 9 of 9 complete, 0 timeouts, at 24–58 s.
+
+**Scored by the rule fixed before the result:**
+- "the rule causes it" needed 5 or more rule timeouts, and there were 3;
+- "the notes cause it" needed the baseline within 2 of the rule, and it was 0 against 3.
+
+**So the result is INCONCLUSIVE.** The direction points at the rule: on the same notes, the rule timed out 3
+times and the baseline never did. Across all runs, rule batches timed out 12 times in 49, and baseline batches 0
+in 19. Under owner Q2's inconclusive branch, **the rule stays OFF behind its switch and the uncertainty is
+recorded.** Re-enabling it needs validation on the model actually deployed. No further paid test is authorized.
+Stage 2 spend is now about **$0.79** of the $4.60.

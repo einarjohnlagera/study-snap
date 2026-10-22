@@ -359,8 +359,8 @@ never edit this file.
     Start Quiz or on resume, every source stamp is checked: a mismatch or a missing pack forfeits STALE and
     releases claims, and resume prepares fresh.
   - **Disclosure.** An underfilled ready quiz, single-note or multi-note, shows "Your quiz is ready with X of Y
-    questions." (owner Q4 wording). Multi-note also shows source coverage "From {n} of {m} notes", **wording
-    pending owner sign-off**. A Redo Missed ready quiz shows "Redo Missed Questions doesn't count toward your
+    questions." (owner Q4 wording). Multi-note also shows source coverage "From {n} of {m} notes" (owner-approved
+    2026-10-22). A Redo Missed ready quiz shows "Redo Missed Questions doesn't count toward your
     monthly quiz limit."
   - **Also:** `templateQuestionKeys` now uses the key-only query, which clears 5a's recorded limitation.
   - **Verification.**

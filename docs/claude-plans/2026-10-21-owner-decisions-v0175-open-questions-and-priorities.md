@@ -180,3 +180,11 @@ section of `RELEASES.md` points here.
 > Please keep the current approved release boundaries. Do not expand scope or execute paid tests, production deployments, or production data changes without the applicable approvals.
 >
 > I want the next report to focus on learner outcomes, remaining release-blocking risks, and a clear recommendation to proceed or hold—not another long list of implementation options.
+
+## 3. Later decisions (2026-10-21 and 2026-10-22, verbatim where quoted)
+
+- **Item 6 stays in v0.175.0:** "lets just include it this release since we're not in a hurry". Under Q5, the
+  approved +5 proposal comes first.
+- **+5 proposal approved:** "approve the proposal". That is background +5, the recommended option in
+  `docs/claude-plans/2026-10-21-v0175-plus5-slower-models-proposal.md`, including its learner-facing copy.
+- **Coverage line approved:** "coverage line is fine". The 5b ready-screen line is "From {n} of {m} notes".
