@@ -62,6 +62,10 @@ public class QuizSessionStateUtils {
     private static final String CHALLENGE_QUOTA_CHARGED = "challengeQuotaCharged";
     private static final String PREPARATION_QUIZ = "preparationQuiz";
     private static final String PREPARATION_REQUESTED_COUNT = "preparationRequestedCount";
+    private static final String PREPARATION_SOURCES = "preparationSources";
+    private static final String PREPARED_SOURCE_STAMPS = "preparedSourceStamps";
+    private static final String REQUESTED_QUESTION_COUNT = "requestedQuestionCount";
+    private static final String SOURCE_CONTRIBUTION_COUNT = "sourceContributionCount";
     private static final String CHALLENGE_SOURCE_SCOPE = "challengeSourceScope";
     public static final String CHALLENGE_SOURCE_SCOPE_MANUAL = "manual";
     public static final String TIMER_STARTED_AT_EPOCH_SECONDS = "timerStartedAtEpochSeconds";
@@ -144,10 +148,90 @@ public class QuizSessionStateUtils {
         return (int) extractLong(state, PREPARATION_REQUESTED_COUNT);
     }
 
+    public Map<String, Object> withRequestedQuestionCount(Map<String, Object> source, int count) {
+        Map<String, Object> state = new LinkedHashMap<>(source == null ? Map.of() : source);
+        state.put(REQUESTED_QUESTION_COUNT, count);
+        return state;
+    }
+
+    public int extractRequestedQuestionCount(Map<String, Object> state) {
+        int ready = (int) extractLong(state, REQUESTED_QUESTION_COUNT);
+        return ready > 0 ? ready : extractPreparationRequestedCount(state);
+    }
+
+    public Map<String, Object> withSourceContributionCount(Map<String, Object> source, int count) {
+        Map<String, Object> state = new LinkedHashMap<>(source == null ? Map.of() : source);
+        state.put(SOURCE_CONTRIBUTION_COUNT, count);
+        return state;
+    }
+
+    public record ChallengePreparationSource(String studyPackId, int requestedCount,
+                                             List<QuizItem> claimed, String curriculumLevel,
+                                             long generationStamp, int bankedCount, int templateCount) { }
+
+    public Map<String, Object> withChallengePreparationSources(
+            Map<String, Object> source, List<ChallengePreparationSource> sources) {
+        Map<String, Object> state = new LinkedHashMap<>(source == null ? Map.of() : source);
+        List<Map<String, Object>> values = new ArrayList<>();
+        for (ChallengePreparationSource item : sources) {
+            Map<String, Object> value = new LinkedHashMap<>();
+            value.put("studyPackId", item.studyPackId());
+            value.put("requestedCount", item.requestedCount());
+            value.put("claimed", serializeQuiz(item.claimed()));
+            value.put("curriculumLevel", item.curriculumLevel());
+            value.put("generationStamp", item.generationStamp());
+            value.put("bankedCount", item.bankedCount());
+            value.put("templateCount", item.templateCount());
+            values.add(value);
+        }
+        state.put(PREPARATION_SOURCES, values);
+        return state;
+    }
+
+    public List<ChallengePreparationSource> extractChallengePreparationSources(Map<String, Object> state) {
+        Object raw = state == null ? null : state.get(PREPARATION_SOURCES);
+        if (!(raw instanceof List<?> values)) return List.of();
+        List<ChallengePreparationSource> sources = new ArrayList<>();
+        for (Object value : values) {
+            if (!(value instanceof Map<?, ?> item) || !(item.get("studyPackId") instanceof String id)) continue;
+            Object claimed = item.get("claimed");
+            sources.add(new ChallengePreparationSource(id,
+                    number(item.get("requestedCount")),
+                    extractQuiz(Map.of(QUIZ_KEY, claimed instanceof List<?> ? claimed : List.of())),
+                    item.get("curriculumLevel") instanceof String level ? level : "",
+                    longNumber(item.get("generationStamp")),
+                    number(item.get("bankedCount")), number(item.get("templateCount"))));
+        }
+        return List.copyOf(sources);
+    }
+
+    private int number(Object value) { return value instanceof Number n ? n.intValue() : 0; }
+    private long longNumber(Object value) { return value instanceof Number n ? n.longValue() : 0L; }
+
+    public Map<String, Object> withPreparedSourceStamps(Map<String, Object> source,
+                                                          List<ChallengePreparationSource> sources) {
+        Map<String, Object> state = new LinkedHashMap<>(source == null ? Map.of() : source);
+        Map<String, Long> stamps = new LinkedHashMap<>();
+        for (ChallengePreparationSource item : sources) stamps.put(item.studyPackId(), item.generationStamp());
+        state.put(PREPARED_SOURCE_STAMPS, stamps);
+        return state;
+    }
+
+    public Map<String, Long> extractPreparedSourceStamps(Map<String, Object> state) {
+        Object raw = state == null ? null : state.get(PREPARED_SOURCE_STAMPS);
+        if (!(raw instanceof Map<?, ?> values)) return Map.of();
+        Map<String, Long> stamps = new LinkedHashMap<>();
+        values.forEach((key, value) -> {
+            if (key instanceof String id && value instanceof Number n) stamps.put(id, n.longValue());
+        });
+        return stamps;
+    }
+
     public Map<String, Object> withoutPreparationInputs(Map<String, Object> source) {
         Map<String, Object> state = new LinkedHashMap<>(source == null ? Map.of() : source);
         state.remove(PREPARATION_QUIZ);
         state.remove(PREPARATION_REQUESTED_COUNT);
+        state.remove(PREPARATION_SOURCES);
         return state;
     }
 

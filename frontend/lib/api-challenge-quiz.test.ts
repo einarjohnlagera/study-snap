@@ -32,6 +32,15 @@ describe("Challenge Quiz preparation API", () => {
     );
   });
 
+  it("preserves requested count and redo source in an ordinary start response", async () => {
+    (globalThis.fetch as jest.Mock).mockResolvedValueOnce({
+      ok: true, status: 200,
+      json: jest.fn().mockResolvedValue({ requestedQuestionCount: 18, redoMissed: false }),
+    } as unknown as Response);
+    const response = await startChallengeQuizSession("note-1", { mode: "challenge" });
+    expect(response).toEqual(expect.objectContaining({ requestedQuestionCount: 18, redoMissed: false }));
+  });
+
   it("marks the ready screen seen with a bodyless POST", async () => {
     await markChallengeQuizReadySeen("session-1");
     expect(globalThis.fetch).toHaveBeenCalledWith(

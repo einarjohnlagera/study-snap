@@ -131,6 +131,8 @@ class ChallengeQuizControllerHttpTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.sessionId").value(sessionId.toString()))
                 .andExpect(jsonPath("$.preparedNotStarted").value(false))
+                .andExpect(jsonPath("$.requestedQuestionCount").value(1))
+                .andExpect(jsonPath("$.redoMissed").value(false))
                 .andExpect(jsonPath("$.sessionState.timerStartedAtEpochSeconds").value(42));
         verify(service).startQuiz(sessionId.toString(), userId);
     }

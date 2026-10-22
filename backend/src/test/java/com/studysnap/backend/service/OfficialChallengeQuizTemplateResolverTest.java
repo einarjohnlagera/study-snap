@@ -50,10 +50,10 @@ class OfficialChallengeQuizTemplateResolverTest {
 
         ChallengeQuizQuestionBankEntity ownRow = statementPair("Own Official statement", "INCORRECT");
         ChallengeQuizQuestionBankEntity sourceRow = statementPair("Source Official statement", "INCORRECT");
-        when(questionBankRepository.findByUserIdAndStudyPackIdOrderByGeneratedAtAsc(ownerId, packId))
-                .thenReturn(List.of(ownRow));
-        when(questionBankRepository.findByUserIdAndStudyPackIdOrderByGeneratedAtAsc(sourceOwnerId, sourcePackId))
-                .thenReturn(List.of(sourceRow));
+        when(questionBankRepository.findQuestionKeysByUserIdAndStudyPackId(ownerId, packId))
+                .thenReturn(List.of(ownRow.getQuestionKey()));
+        when(questionBankRepository.findQuestionKeysByUserIdAndStudyPackId(sourceOwnerId, sourcePackId))
+                .thenReturn(List.of(sourceRow.getQuestionKey()));
         when(questionBankRepository.findClaimableForUpdate(ownerId, packId, LearnerLevel.COLLEGE.name(), packId))
                 .thenReturn(List.of(ownRow));
         when(questionBankRepository.findIncorrectClaimable(ownerId, packId, LearnerLevel.COLLEGE.name(), "INCORRECT"))
@@ -89,12 +89,12 @@ class OfficialChallengeQuizTemplateResolverTest {
         stubSource(sourcePackId, sourceNoteId, sourceOwnerId);
         when(userRepository.findById(learnerId)).thenReturn(Optional.of(author(learnerId, UserRole.USER)));
         ChallengeQuizQuestionBankEntity sourceRow = statementPair("Source statement", "INCORRECT");
-        when(questionBankRepository.findByUserIdAndStudyPackIdOrderByGeneratedAtAsc(sourceOwnerId, sourcePackId))
-                .thenReturn(List.of(sourceRow));
+        when(questionBankRepository.findQuestionKeysByUserIdAndStudyPackId(sourceOwnerId, sourcePackId))
+                .thenReturn(List.of(sourceRow.getQuestionKey()));
 
         assertThat(resolver().templateQuestionKeys(packId)).containsExactly(sourceRow.getQuestionKey());
         verify(questionBankRepository, never())
-                .findByUserIdAndStudyPackIdOrderByGeneratedAtAsc(learnerId, packId);
+                .findQuestionKeysByUserIdAndStudyPackId(learnerId, packId);
     }
 
     @Test

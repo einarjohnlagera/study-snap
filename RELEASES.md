@@ -169,7 +169,7 @@ never edit this file.
   - **Verification.** `./mvnw clean install`: 2,789 tests, 0 failures, including the real-transaction floor
     tests. Codex review found nothing. A cold Sonnet falsification review of 10 claims disproved none.
   - **Known limitations:**
-    - A multi-note start can open with 1–17 of 18 questions, and a single-note start one short (items 2 and 5).
+    - A single-note start can be one short (item 2). *(Superseded for multi-note by item 5b: a multi-note start below its two-thirds floors now fails with no charge, instead of opening with as few as 1 of 18.)*
     - A stem without "Statement 1:" with a colon is not checked.
     - A choice like "Only Statement 1 and 2 are correct" would misclassify. Neither appears in stored data.
     - A statement-pair item emitted as TRUE_FALSE now takes the one-question retry instead of a whole-batch
@@ -290,7 +290,7 @@ never edit this file.
   - **Review note.** `ChallengeQuizService` readiness paths are a named input to the scoped cold review at
     signoff.
 
-- **Item 5a: question-bank integrity, the first half of item 5** (branch `feat/v0.175.0-item5a-bank-integrity`).
+- **Item 5a: question-bank integrity, the first half of item 5** (PR #1523, merged as `14b14361`).
   Item 5 is split: 5a is the shared claim/release surface; 5b is multi-note background preparation.
   - **Claims release per session, not per pack (A.4).** Every release and outcome update is scoped to
     `(userId, claimedSessionId)`; no pack-scoped call is left. Rerouted:
@@ -333,6 +333,48 @@ never edit this file.
       class of a failed read poisoning a PostgreSQL transaction.
     - `templateQuestionKeys` loads whole bank rows to read their keys; switch it to the key-only query in 5b.
   - **Review note.** The shared claim/release surface is a named input to the scoped cold review at signoff.
+
+- **Item 5b: multi-note preparation in the background** (branch `feat/v0.175.0-item5b-multinote-preparation`).
+  - **Same journey as single-note.** A multi-note Prepare Quiz returns at once with `GENERATING` (or ready on a
+    full bank hit) and shows "Getting your quiz ready", the readiness notification and Start Quiz. Nothing
+    generates inside the request, which used to take 1–4 minutes.
+  - **Each source's own bank first (plan A.1, A.2).** Each source, in sorted pack order:
+    1. claims from its own bank;
+    2. copies from its Official template;
+    3. generates only its shortfall, with its own level, stamp and disallowed keys (including its own saved
+       quiz);
+    4. persists that shortfall back to its own bank.
+
+    So re-preparing the same set costs no model calls once its questions are banked, and multi-note and
+    single-note now feed each other.
+  - **Parallel, bounded generation.** Shortfalls run concurrently on a dedicated
+    `challengeMultiNoteSourceTaskExecutor` (six threads), with one shared 300-second deadline. No paid
+    attempt or retry starts after it. The job runs on `challengePreparationTaskExecutor`, so it never waits
+    on its own pool. Token usage is recorded for every source.
+  - **Owner-approved floors (Q1).** Ready requires at least `ceil(2/3 × requested)` questions **and** at least
+    `ceil(2/3 × sources)` contributing sources, in integer arithmetic (18 → 12, 6 sources → 4, 2 → 2). Below
+    either floor the session fails: no charge, Try Again offered, claims released, valid generated questions
+    salvaged unclaimed. The thresholds are configurable; changing them in production needs owner approval.
+  - **Stale protection.** If any source regenerates or is deleted during preparation, the session fails. At
+    Start Quiz or on resume, every source stamp is checked: a mismatch or a missing pack forfeits STALE and
+    releases claims, and resume prepares fresh.
+  - **Disclosure.** An underfilled ready quiz, single-note or multi-note, shows "Your quiz is ready with X of Y
+    questions." (owner Q4 wording). Multi-note also shows source coverage "From {n} of {m} notes", **wording
+    pending owner sign-off**. A Redo Missed ready quiz shows "Redo Missed Questions doesn't count toward your
+    monthly quiz limit."
+  - **Also:** `templateQuestionKeys` now uses the key-only query, which clears 5a's recorded limitation.
+  - **Verification.**
+    - `./mvnw clean install`: 2,913 tests, 0 failures, including real-PostgreSQL tests for: full and partial
+      bank hits; per-source banking with its own level and stamp; cross-pollination; non-primary release;
+      parallel and deadline behaviour; the floors; stale and deleted sources; and overlapping starts with no
+      deadlock.
+    - Frontend: 2,746 tests, `tsc`, lint and `next build` clean.
+    - Two Codex reviews and two fix rounds, with 5 findings fixed.
+  - **⚠️ Behaviour change:** a multi-note start below the floors now fails, instead of opening underfilled.
+    R1's limitation line is updated above.
+  - **Known limitation:** queue time within the dedicated pool counts against the shared deadline.
+  - **Review note.** The shared start, Start Quiz and bank paths are named inputs to the scoped cold review at
+    signoff.
 
 ## v0.174.0 - Enhanced Generation
 

@@ -442,6 +442,7 @@ describe("ChallengeQuizPage", () => {
       usedThisMonth: 0, monthlyLimit: 50, boardExamUsedThisMonth: 0, boardExamMonthlyLimit: 10,
       mode: "challenge", selectedDifficulty: "medium", quiz: [], currentQuestionIndex: 0,
       sessionState: null, preparedNotStarted: true, collision: null, maxSourceNotes: 6,
+      requestedQuestionCount: 1, redoMissed: false,
     };
   }
 
@@ -449,6 +450,81 @@ describe("ChallengeQuizPage", () => {
     return { ...preparationSession(), quiz: twoQuestionChallengeQuiz(), totalQuestions: 2,
       preparedNotStarted: false, sessionState: { timerStartedAtEpochSeconds: Math.floor(Date.now() / 1000) } };
   }
+
+  it.each([
+    ["single", 1, 2, false, "Your quiz is ready with 1 of 2 questions."],
+    ["multi", 12, 18, true, "Your quiz is ready with 12 of 18 questions."],
+    ["single", 2, 2, false, "Your quiz is ready!"],
+    ["multi", 18, 18, true, "Your quiz is ready!"],
+  ])("%s ready screen discloses %s of %s", async (_kind, delivered, requested, multi, title) => {
+    setupChallengePrestart();
+    const sourceNoteRefs = multi ? [
+      { studyPackId: "sp-1", noteId: "note-1", noteTitle: "One", questionCount: 9 },
+      { studyPackId: "sp-2", noteId: "note-2", noteTitle: "Two", questionCount: 9 },
+    ] : [];
+    (getInProgressChallengeQuizSession as jest.Mock).mockResolvedValue({
+      ...preparationSession(), totalQuestions: delivered, requestedQuestionCount: requested,
+      sourceNoteRefs, sessionState: multi ? { sourceContributionCount: 1 } : null,
+    });
+    render(<ChallengeQuizPage />);
+    expect(await screen.findByRole("heading", { name: title })).toBeInTheDocument();
+    if (multi) expect(screen.getByText("From 1 of 2 notes")).toBeInTheDocument();
+    else expect(screen.queryByText(/From .* notes/)).not.toBeInTheDocument();
+  });
+
+  it("shows the monthly-limit exemption only for Redo Missed", async () => {
+    setupChallengePrestart();
+    (getInProgressChallengeQuizSession as jest.Mock).mockResolvedValue({
+      ...preparationSession(), redoMissed: true,
+    });
+    const page = render(<ChallengeQuizPage />);
+    expect(await screen.findByText("Redo Missed Questions doesn't count toward your monthly quiz limit.")).toBeInTheDocument();
+    (getInProgressChallengeQuizSession as jest.Mock).mockResolvedValue(preparationSession());
+    page.unmount();
+    render(<ChallengeQuizPage />);
+    expect(await screen.findByRole("heading", { name: "Your quiz is ready!" })).toBeInTheDocument();
+    expect(screen.queryByText("Redo Missed Questions doesn't count toward your monthly quiz limit.")).not.toBeInTheDocument();
+  });
+
+  it("polls a multi-note Prepare Quiz from generating to ready", async () => {
+    searchParamsMock = new URLSearchParams("collectionId=collection-1");
+    setupChallengePrestart(false, "STUDENT", "PLUS");
+    const sources = [
+      { studyPackId: "sp-1", noteId: "note-1", noteTitle: "One", questionCount: 9 },
+      { studyPackId: "sp-2", noteId: "note-2", noteTitle: "Two", questionCount: 9 },
+    ];
+    (getCollection as jest.Mock).mockResolvedValue({
+      id: "collection-1",
+      items: [
+        { noteId: "note-1", position: 0, studyPackStatus: "STUDY_PACK_READY", studyPackDone: true, generatedQuizId: "quiz-1" },
+        { noteId: "note-2", position: 1, studyPackStatus: "STUDY_PACK_READY", studyPackDone: true, generatedQuizId: "quiz-2" },
+      ],
+    });
+    (listNotes as jest.Mock).mockResolvedValue([
+      { id: "note-2", title: "Plan Two", subject: "Biology", studyPackId: "sp-2", studyPackStatus: "STUDY_PACK_READY", studyPackDone: true },
+    ]);
+    let started = false;
+    (startChallengeQuizSession as jest.Mock).mockImplementation(async () => {
+      started = true;
+      return { ...preparationSession("GENERATING"), sourceNoteRefs: sources, requestedQuestionCount: 18 };
+    });
+    (getInProgressChallengeQuizSession as jest.Mock).mockImplementation(async () => started
+      ? { ...preparationSession(), sourceNoteRefs: sources, totalQuestions: 18,
+          requestedQuestionCount: 18, sessionState: { sourceContributionCount: 2 } }
+      : { ...preparationSession(), sessionId: null, status: null, preparedNotStarted: false });
+    render(<ChallengeQuizPage />);
+    const source = await screen.findByRole("button", { name: /Plan Two/ });
+    fireEvent.click(source);
+    expect(source).toHaveAttribute("aria-pressed", "true");
+    fireEvent.click(await screen.findByRole("button", { name: "Prepare Quiz" }));
+    expect(startChallengeQuizSession).toHaveBeenCalledWith("note-1", {
+      mode: "challenge", additionalStudyPackIds: ["sp-2"], sourceCollectionId: "collection-1",
+    });
+    expect(await screen.findByRole("heading", { name: "Getting your quiz ready" })).toBeInTheDocument();
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 2100)); });
+    expect(await screen.findByRole("heading", { name: "Your quiz is ready!" })).toBeInTheDocument();
+    expect(screen.getByText("From 2 of 2 notes")).toBeInTheDocument();
+  });
 
   it.each([
     ["GENERATING", true, false, "Getting your quiz ready"],
