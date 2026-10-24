@@ -107,6 +107,15 @@ public class GenerationRecoveryService {
                 now, "prepared-challenge-session");
     }
 
+    public SurfaceRecoveryResult recoverExpiredStartedChallengeSessions() {
+        OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
+        OffsetDateTime cutoff = now.minusMinutes(properties.getGeneration().getChallengeStartedExpiryGraceMinutes());
+        List<UUID> ids = quickReviewSessionRepository.findExpiredStartedChallengeCandidateIds(
+                cutoff, PageRequest.of(0, normalizedBatchSize()));
+        return sweep(ids, id -> rowWriter.recoverExpiredStartedChallengeSession(id, cutoff),
+                now, "started-challenge-session");
+    }
+
     public SurfaceRecoveryResult recoverStuckChallengeGenerations() {
         OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
         OffsetDateTime cutoff = now.minusMinutes(properties.getGeneration().getChallengeStuckGenerationMinutes());

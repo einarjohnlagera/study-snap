@@ -111,6 +111,26 @@ class GenerationRecoveryServiceTest {
     }
 
     @Test
+    void startedChallengeSweepUsesTenMinuteGraceAndBoundedPage() {
+        UUID id = UUID.randomUUID();
+        GenerationRecoveryRowWriter writer = org.mockito.Mockito.mock(GenerationRecoveryRowWriter.class);
+        GenerationRecoveryService isolated = new GenerationRecoveryService(examQuestionPoolRepository,
+                quickReviewSessionRepository, noteRepository, writer, properties);
+        when(quickReviewSessionRepository.findExpiredStartedChallengeCandidateIds(any(), any()))
+                .thenReturn(List.of(id));
+        when(writer.recoverExpiredStartedChallengeSession(eq(id), any()))
+                .thenReturn(Optional.of(OffsetDateTime.now().minusMinutes(11)));
+        OffsetDateTime before = OffsetDateTime.now().minusMinutes(10);
+        assertThat(isolated.recoverExpiredStartedChallengeSessions().recoveredCount()).isEqualTo(1);
+        OffsetDateTime after = OffsetDateTime.now().minusMinutes(10);
+        ArgumentCaptor<OffsetDateTime> cutoff = ArgumentCaptor.forClass(OffsetDateTime.class);
+        ArgumentCaptor<Pageable> page = ArgumentCaptor.forClass(Pageable.class);
+        verify(quickReviewSessionRepository).findExpiredStartedChallengeCandidateIds(cutoff.capture(), page.capture());
+        assertThat(cutoff.getValue()).isBetween(before, after);
+        assertThat(page.getValue().getPageSize()).isEqualTo(200);
+    }
+
+    @Test
     void recoverStaleExamQuestionPools_generatingPastBoundBecomesFailed() {
         ExamQuestionPoolEntity pool = pool(STATUS_GENERATING, OffsetDateTime.now().minusHours(2));
         stubPoolCandidate(pool);

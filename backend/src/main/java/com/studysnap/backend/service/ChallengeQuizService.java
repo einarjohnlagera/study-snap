@@ -261,31 +261,33 @@ public class ChallengeQuizService {
                 && request.sourceCollectionId() != null
                 && !request.sourceCollectionId().isBlank();
         int maxChallengeSourceNotes = resolveMaxChallengeSourceNotes(planType);
-        // Resume using the saved source list. A changed cap or unavailable requested source must not
-        // invalidate an already prepared session. For a new session, acquire all pack locks in UUID order.
-        if (multiNoteClaim && quickReviewSessionRepository
-                .findTopByUserIdAndStudyPackIdAndSessionModeAndStatusInOrderByCreatedAtDesc(
-                        userId, studyPackId, QuickReviewSessionMode.CHALLENGE, ACTIVE_GENERATION_STATUSES)
-                .isPresent()) {
-            studyPack = findOwnedStudyPackForGenerationOrThrow(studyPackId, userId);
-            Optional<ChallengeQuizStartResponse> resumed = resolveExistingChallengeSession(
-                    userId, studyPackId, studyPack, planType, selectedMode, false,
-                    request.discardPreparedSessionId(), request);
-            if (resumed.isPresent()) return resumed.get();
-        }
-        List<UUID> preliminaryMultiNoteIds = multiNoteClaim
-                ? resolveAdditionalChallengeStudyPackIds(request, studyPackId, maxChallengeSourceNotes - 1)
-                : List.of();
+        // Lock every requested and saved source before the session. Validation of the new source cap
+        // follows resume, so a changed cap cannot make an existing quiz inaccessible.
+        List<UUID> preliminaryMultiNoteIds = List.of();
         if (multiNoteClaim) {
-            List<UUID> lockIds = new ArrayList<>(preliminaryMultiNoteIds);
+            List<UUID> lockIds = new ArrayList<>();
             lockIds.add(studyPackId);
+            for (String id : request.additionalStudyPackIds()) {
+                if (id == null || id.isBlank()) throw new MultiNoteChallengeQuizSourceNotAllowedException();
+                lockIds.add(parseBoardExamSourceStudyPackId(id));
+            }
+            quickReviewSessionRepository.findTopByUserIdAndStudyPackIdAndSessionModeAndStatusInOrderByCreatedAtDesc(
+                    userId, studyPackId, QuickReviewSessionMode.CHALLENGE, ACTIVE_GENERATION_STATUSES)
+                    .ifPresent(existing -> extractSourceNoteRefs(existing.getSessionState()).forEach(source ->
+                            lockIds.add(UUID.fromString(source.studyPackId()))));
             for (UUID sourceId : lockIds.stream().distinct()
                     .sorted(Comparator.comparing(UUID::toString)).toList()) {
                 StudyPackEntity locked = sourceId.equals(studyPackId)
                         ? findOwnedStudyPackForGenerationOrThrow(sourceId, userId)
-                        : findOwnedBoardExamSourceOrThrow(sourceId, userId);
+                        : studyPackRepository.findByIdAndOwnerUserIdForUpdate(sourceId, userId).orElse(null);
                 if (sourceId.equals(studyPackId)) studyPack = locked;
             }
+            Optional<ChallengeQuizStartResponse> resumed = resolveExistingChallengeSession(
+                    userId, studyPackId, studyPack, planType, selectedMode, false,
+                    request.discardPreparedSessionId(), request);
+            if (resumed.isPresent()) return resumed.get();
+            preliminaryMultiNoteIds = resolveAdditionalChallengeStudyPackIds(
+                    request, studyPackId, maxChallengeSourceNotes - 1);
         }
 
         Optional<ChallengeQuizStartResponse> existingSession = resolveExistingChallengeSession(
@@ -696,8 +698,9 @@ public class ChallengeQuizService {
                             GeneratedChallengeQuizContent result = generated.get(source.input().studyPackId());
                             if (result == null) continue;
                             var input = source.input();
-                            StudyPackEntity pack = findOwnedStudyPackForGenerationOrThrow(
-                                    UUID.fromString(input.studyPackId()), captured.userId());
+                            StudyPackEntity pack = studyPackRepository.findByIdAndOwnerUserIdForUpdate(
+                                    UUID.fromString(input.studyPackId()), captured.userId()).orElse(null);
+                            if (pack == null) continue;
                             if (pack.getGenerationStamp() != input.generationStamp()) continue;
                             Set<String> sourceExcluded = new LinkedHashSet<>(excluded);
                             sourceExcluded.addAll(QuizDeduplicationUtils.toNormalizedQuestionSetFromStrings(
@@ -1482,16 +1485,31 @@ public class ChallengeQuizService {
     public ChallengeQuizSessionResponse completeSession(String sessionIdRaw, UUID userId, ChallengeQuizCompleteRequest request) {
         QuickReviewSessionEntity session = findChallengeSessionForUpdateOrThrow(parseSessionId(sessionIdRaw), userId);
         assertSessionInProgress(session);
-        int totalQuestions = session.getTotalQuestions() == null ? request.totalQuestions() : session.getTotalQuestions();
-        if (request.correctAnswers() > totalQuestions) {
-            throw new InvalidChallengeQuizResultException();
-        }
-
         List<QuizItem> quiz = QuizSessionStateUtils.extractQuiz(session.getSessionState());
         Map<Integer, Integer> selectedChoices = QuizSessionStateUtils.extractSelectedChoiceIndexes(session.getSessionState(), quiz);
         Map<Integer, List<Integer>> selectedMultiChoices = QuizSessionStateUtils.extractSelectedMultiChoiceIndexes(session.getSessionState(), quiz);
         Map<Integer, String> selectedIdentificationAnswers = QuizSessionStateUtils.extractSelectedIdentificationAnswers(session.getSessionState(), quiz);
         Map<Integer, List<String>> selectedEnumerationAnswers = QuizSessionStateUtils.extractSelectedEnumerationAnswers(session.getSessionState(), quiz);
+        if (MODE_CHALLENGE.equals(extractMode(session.getSessionState())) && request.totalQuestions() < quiz.size()) {
+            int retained = quiz.size();
+            while (retained > request.totalQuestions()
+                    && !selectedChoices.containsKey(retained - 1)
+                    && !selectedMultiChoices.containsKey(retained - 1)
+                    && !selectedIdentificationAnswers.containsKey(retained - 1)
+                    && !selectedEnumerationAnswers.containsKey(retained - 1)) {
+                retained--;
+            }
+            if (retained < quiz.size()) {
+                quiz = List.copyOf(quiz.subList(0, retained));
+                session.setSessionState(QuizSessionStateUtils.withQuiz(quiz, session.getSessionState()));
+                session.setTotalQuestions(retained);
+                challengeQuizQuestionBankService.releaseUnappendedClaims(userId, session.getId(), quiz);
+            }
+        }
+        int totalQuestions = quiz.size();
+        if (request.correctAnswers() > totalQuestions) {
+            throw new InvalidChallengeQuizResultException();
+        }
         ChallengeStatistics statistics = computeStatistics(
                 quiz,
                 selectedChoices,
@@ -1811,6 +1829,18 @@ public class ChallengeQuizService {
             List<QuizItem> existing = QuizSessionStateUtils.extractQuiz(session.getSessionState());
             int count = Math.min(GENERATE_MORE_BATCH_SIZE, MAX_CHALLENGE_QUIZ_QUESTIONS - existing.size());
             Set<String> excluded = QuizDeduplicationUtils.toNormalizedQuestionSet(existing);
+            List<String> disallowed = new ArrayList<>(extractQuestionTexts(existing));
+            excluded.addAll(QuizDeduplicationUtils.toNormalizedQuestionSet(pack.getQuiz()));
+            disallowed.addAll(extractQuestionTexts(pack.getQuiz()));
+            for (LongExamSourceNoteRef source : extractSourceNoteRefs(session.getSessionState())) {
+                UUID sourceId = UUID.fromString(source.studyPackId());
+                if (sourceId.equals(pack.getId())) continue;
+                // A source deleted mid-session has no saved quiz left to expose; skip it rather than fail every +5.
+                StudyPackEntity sourcePack = studyPackRepository.findByIdAndOwnerUserId(sourceId, userId).orElse(null);
+                if (sourcePack == null) continue;
+                excluded.addAll(QuizDeduplicationUtils.toNormalizedQuestionSet(sourcePack.getQuiz()));
+                disallowed.addAll(extractQuestionTexts(sourcePack.getQuiz()));
+            }
             List<QuizItem> banked = challengeQuizQuestionBankService.claimEligibleQuestions(userId, pack.getId(),
                     level, sessionId, excluded, count);
             excluded.addAll(QuizDeduplicationUtils.toNormalizedQuestionSet(banked));
@@ -1819,7 +1849,7 @@ public class ChallengeQuizService {
             List<QuizItem> claimed = new ArrayList<>(stampQuestionsWithSourceStudyPack(banked, pack.getId()));
             claimed.addAll(stampQuestionsWithSourceStudyPack(templates, pack.getId()));
             return new MorePreparation(sessionId, userId, pack.getId(), token, count, pack.getTitle(),
-                    pack.getSummary(), List.copyOf(getKeyConcepts(pack)), extractQuestionTexts(existing),
+                    pack.getSummary(), List.copyOf(getKeyConcepts(pack)), List.copyOf(disallowed),
                     List.copyOf(extractConcepts(existing)), extractDifficulty(session.getSessionState()),
                     context.withRouting(LlmRouting.tiered(userId)), level, pack.getGenerationStamp(),
                     List.copyOf(claimed), banked.size());
@@ -2699,7 +2729,9 @@ public class ChallengeQuizService {
                 .toList();
         if (quiz.isEmpty()) {
             if (session.getStatus() != QuickReviewSessionStatus.GENERATING
-                    && session.getStatus() != QuickReviewSessionStatus.FAILED) {
+                    && session.getStatus() != QuickReviewSessionStatus.FAILED
+                    && !(session.getStatus() == QuickReviewSessionStatus.FORFEITED
+                            && MODE_CHALLENGE.equals(extractMode(session.getSessionState())))) {
                 throw new ChallengeQuizNotAvailableException();
             }
         }

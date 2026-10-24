@@ -229,7 +229,7 @@ class NativeQueryPostgresIntegrationTest {
      * v0.93.0 pressure test: at 25 against an actual 31, the reflective scan could silently degrade by
      * six queries and stay green, which is the same false comfort the harness exists to remove.
      */
-    private static final int EXPECTED_NATIVE_QUERIES = 51;
+    private static final int EXPECTED_NATIVE_QUERIES = 52;
 
     @Test
     void challengeRecoveryCandidatesFilterModeAndStatusBeforeThePageLimit() {
@@ -261,6 +261,24 @@ class NativeQueryPostgresIntegrationTest {
         }
         assertThat(quickReviewSessionRepository.findExpiredPreparedChallengeCandidateIds(
                 cutoff, PageRequest.of(0, 2))).containsExactly(prepared);
+
+        OffsetDateTime startedCutoff = OffsetDateTime.now().minusMinutes(10);
+        UUID expiredStarted = seedGeneratingChallengeCandidate(owner, "challenge", cutoff.minusDays(1));
+        jdbcTemplate.update("update quick_review_sessions set status='IN_PROGRESS', session_state=cast(? as jsonb) where id=?",
+                "{\"mode\":\"challenge\",\"preparedNotStarted\":false,\"timerStartedAtEpochSeconds\":1000000000,\"timeLimitSeconds\":600}",
+                expiredStarted);
+        UUID unexpiredStarted = seedGeneratingChallengeCandidate(owner, "challenge", cutoff.minusDays(1));
+        jdbcTemplate.update("update quick_review_sessions set status='IN_PROGRESS', session_state=cast(? as jsonb) where id=?",
+                "{\"mode\":\"challenge\",\"preparedNotStarted\":false,\"timerStartedAtEpochSeconds\":"
+                        + OffsetDateTime.now().toEpochSecond() + ",\"timeLimitSeconds\":600}", unexpiredStarted);
+        // Mutant: without the SQL mode filter, an older expired Board Exam row fills the one-row page
+        // and the ordinary row starves (the row writer would then skip the Board Exam row under lock).
+        UUID expiredBoardExam = seedGeneratingChallengeCandidate(owner, "board_exam", cutoff.minusDays(3));
+        jdbcTemplate.update("update quick_review_sessions set status='IN_PROGRESS', session_state=cast(? as jsonb) where id=?",
+                "{\"mode\":\"board_exam\",\"timerStartedAtEpochSeconds\":1000000000,\"timeLimitSeconds\":600}",
+                expiredBoardExam);
+        assertThat(quickReviewSessionRepository.findExpiredStartedChallengeCandidateIds(
+                startedCutoff, PageRequest.of(0, 1))).containsExactly(expiredStarted);
     }
 
     @Test

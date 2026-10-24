@@ -4,6 +4,9 @@ import com.studysnap.backend.dto.ChallengeQuizStartResponse;
 import com.studysnap.backend.dto.ChallengeQuizSessionStatusResponse;
 import com.studysnap.backend.exception.ChallengeQuizSessionNotFoundException;
 import com.studysnap.backend.exception.ChallengePreparationInProgressException;
+import com.studysnap.backend.exception.PreparedChallengeExpiredException;
+import com.studysnap.backend.exception.InvalidPreparedChallengeDiscardException;
+import com.studysnap.backend.dto.GenerateMoreChallengeQuizResponse;
 import com.studysnap.backend.exception.GlobalExceptionHandler;
 import com.studysnap.backend.entity.QuickReviewSessionStatus;
 import com.studysnap.backend.entity.UserRole;
@@ -135,5 +138,54 @@ class ChallengeQuizControllerHttpTest {
                 .andExpect(jsonPath("$.redoMissed").value(false))
                 .andExpect(jsonPath("$.sessionState.timerStartedAtEpochSeconds").value(42));
         verify(service).startQuiz(sessionId.toString(), userId);
+    }
+
+    @Test
+    void preparedExpiryAndInvalidDiscardExposeTheirWireCodes() throws Exception {
+        ChallengeQuizService service = mock(ChallengeQuizService.class);
+        UUID userId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+        AuthenticatedUser user = new AuthenticatedUser(userId, UserRole.USER, true, 1);
+        when(service.startQuiz(sessionId.toString(), userId)).thenThrow(new PreparedChallengeExpiredException());
+        when(service.startSession(org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.eq(userId), org.mockito.ArgumentMatchers.any()))
+                .thenThrow(new InvalidPreparedChallengeDiscardException());
+        var mvc = standaloneSetup(new ChallengeQuizController(service))
+                .setControllerAdvice(new GlobalExceptionHandler(DataSize.ofMegabytes(10)))
+                .setCustomArgumentResolvers(authenticated(user)).build();
+        mvc.perform(post("/challenge-quiz/sessions/" + sessionId + "/start-quiz"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.error.code").value("PREPARED_CHALLENGE_EXPIRED"));
+        mvc.perform(post("/challenge-quiz/study-packs/" + UUID.randomUUID() + "/start")
+                .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                .content("{\"mode\":\"challenge\",\"discardPreparedSessionId\":\"" + sessionId + "\"}"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.error.code").value("INVALID_PREPARED_CHALLENGE_DISCARD"));
+    }
+
+    @Test
+    void generateMoreRealPostSerializesPendingAndEmptyNewQuestions() throws Exception {
+        ChallengeQuizService service = mock(ChallengeQuizService.class);
+        UUID userId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+        AuthenticatedUser user = new AuthenticatedUser(userId, UserRole.USER, true, 1);
+        when(service.generateMoreQuestions(sessionId.toString(), userId)).thenReturn(
+                new GenerateMoreChallengeQuizResponse(sessionId.toString(), List.of(), 15, 1350, 42));
+        var mvc = standaloneSetup(new ChallengeQuizController(service))
+                .setCustomArgumentResolvers(authenticated(user)).build();
+        mvc.perform(post("/challenge-quiz/sessions/" + sessionId + "/generate-more"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.morePending").value(true))
+                .andExpect(jsonPath("$.newQuestions").isEmpty());
+    }
+
+    private HandlerMethodArgumentResolver authenticated(AuthenticatedUser user) {
+        return new HandlerMethodArgumentResolver() {
+            @Override public boolean supportsParameter(MethodParameter parameter) {
+                return parameter.getParameterType() == AuthenticatedUser.class;
+            }
+            @Override public Object resolveArgument(MethodParameter parameter, ModelAndViewContainer container,
+                    NativeWebRequest request, WebDataBinderFactory binderFactory) { return user; }
+        };
     }
 }
