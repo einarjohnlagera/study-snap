@@ -3171,7 +3171,26 @@ export default function ChallengeQuizPage() {
               >
                 Previous
               </Button>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                {/* +5 status shows on every question, not only the last one where +5 lives. */}
+                {!isBoardExamMode ? <>
+                  {morePending ? <div role="status" className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <LoadingSpinner className="text-primary" />
+                    <span>{moreStillAdding ? PREPARATION_COPY.moreStillAdding : PREPARATION_COPY.moreAdding}</span>
+                    {moreStillAdding ? (
+                      <Button type="button" variant="outline" onClick={() => void handleStopAdding()}>
+                        {PREPARATION_COPY.moreStop}
+                      </Button>
+                    ) : null}
+                  </div> : null}
+                  {moreFinishingPrevious ? <div role="status">{PREPARATION_COPY.moreFinishingPrevious}</div> : null}
+                  {moreFailed ? <div role="status" className="flex items-center gap-2">
+                    <span>{PREPARATION_COPY.moreFailed}</span>
+                    <Button type="button" variant="outline" onClick={() => void handleGenerateMore()}>
+                      {PREPARATION_COPY.moreRetry}
+                    </Button>
+                  </div> : null}
+                </> : null}
                 {(currentMatchingGroup?.endIndex ?? currentIndex) < totalQuestions - 1 && !boardExamTimerExpired ? (
                   <Button
                     type="button"
@@ -3208,22 +3227,6 @@ export default function ChallengeQuizPage() {
                         +5 questions
                       </Button>
                     ) : null}
-                    {morePending ? <div role="status" className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <LoadingSpinner className="text-primary" />
-                      <span>{moreStillAdding ? PREPARATION_COPY.moreStillAdding : PREPARATION_COPY.moreAdding}</span>
-                      {moreStillAdding ? (
-                        <Button type="button" variant="outline" onClick={() => void handleStopAdding()}>
-                          {PREPARATION_COPY.moreStop}
-                        </Button>
-                      ) : null}
-                    </div> : null}
-                    {moreFinishingPrevious ? <div role="status">{PREPARATION_COPY.moreFinishingPrevious}</div> : null}
-                    {moreFailed ? <div role="status" className="flex items-center gap-2">
-                      <span>{PREPARATION_COPY.moreFailed}</span>
-                      <Button type="button" variant="outline" onClick={() => void handleGenerateMore()}>
-                        {PREPARATION_COPY.moreRetry}
-                      </Button>
-                    </div> : null}
                     <Button
                       type="button"
                       className="flex-1 sm:w-auto sm:flex-none"
