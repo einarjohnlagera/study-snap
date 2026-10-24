@@ -336,6 +336,21 @@ describe("ChallengeQuizPage", () => {
     }
   });
 
+  it("shows the +5 status on a question that is not the last one", async () => {
+    setupInProgressChallengeQuiz();
+    const initial = await (getInProgressChallengeQuizSession as jest.Mock)();
+    const twoQuestions = { ...initial, morePending: true, totalQuestions: 2,
+      quiz: [...initial.quiz, { question: "Second question", choices: ["A", "B"], correctIndex: 0,
+        concept: "Concept", explanation: "Explanation" }] };
+    (getInProgressChallengeQuizSession as jest.Mock).mockResolvedValue(twoQuestions);
+    (getChallengeQuizSession as jest.Mock).mockResolvedValue(twoQuestions);
+    render(<ChallengeQuizPage />);
+    fireEvent.click(await screen.findByRole("button", { name: /Mitochondria/i }));
+    expect(await screen.findByText("Adding questions…")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Next" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "+5 questions" })).not.toBeInTheDocument();
+  });
+
   it("never holds Complete for a +5 that this tab did not start, such as after a reload", async () => {
     setupInProgressChallengeQuiz();
     const initial = await (getInProgressChallengeQuizSession as jest.Mock)();
