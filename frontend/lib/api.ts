@@ -1542,6 +1542,7 @@ export type ChallengeQuizCollision = {
   existingSessionId: string;
   existingMode: "challenge" | "redo_missed";
   requestedMode: "board_exam" | "redo_missed" | "challenge";
+  existingStarted: boolean;
 };
 
 export type ChallengeQuizStartResponse = {

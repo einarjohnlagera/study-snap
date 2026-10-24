@@ -2433,13 +2433,18 @@ export default function ChallengeQuizPage() {
       ) : phase === "collision" && collisionContext ? (
         <Card className="space-y-4 p-4 sm:p-6">
           <h1 className="text-xl font-semibold sm:text-2xl">
-            {collisionContext.response.status === "GENERATING" ? PREPARATION_COPY.collisionGeneratingTitle : PREPARATION_COPY.collisionTitle}
+            {collisionContext.response.collision?.existingStarted
+              ? PREPARATION_COPY.collisionStartedTitle
+              : collisionContext.response.status === "GENERATING" ? PREPARATION_COPY.collisionGeneratingTitle : PREPARATION_COPY.collisionTitle}
           </h1>
-          <p className="text-sm text-foreground/75">{PREPARATION_COPY.collisionBody}</p>
+          <p className="text-sm text-foreground/75">{collisionContext.response.collision?.existingStarted
+            ? PREPARATION_COPY.collisionStartedBody : PREPARATION_COPY.collisionBody}</p>
           {error ? <p className="text-sm text-red-600 dark:text-red-400">{error}</p> : null}
           <div className="flex flex-col gap-2 sm:flex-row">
-            <Button type="button" disabled={starting} onClick={handleResumeCollision}>{PREPARATION_COPY.collisionResume}</Button>
-            <Button type="button" variant="outline" disabled={starting} onClick={handleReplaceCollision}>{PREPARATION_COPY.collisionReplace}</Button>
+            <Button type="button" disabled={starting} onClick={handleResumeCollision}>{collisionContext.response.collision?.existingStarted
+              ? PREPARATION_COPY.collisionStartedResume : PREPARATION_COPY.collisionResume}</Button>
+            <Button type="button" variant="outline" disabled={starting} onClick={handleReplaceCollision}>{collisionContext.response.collision?.existingStarted
+              ? PREPARATION_COPY.collisionStartedReplace : PREPARATION_COPY.collisionReplace}</Button>
           </div>
         </Card>
       ) : phase === "prestart" ? (

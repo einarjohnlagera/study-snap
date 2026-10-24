@@ -139,8 +139,12 @@ reads never call Start Quiz, forfeit a session, or start the timer.
 
 Failed preparation shows **Try Again** and **Continue Reviewing**. An expired or stale prepared quiz
 shows **Prepare New Quiz**, which returns to setup without creating a replacement. A conflicting intent
-shows the existing prepared quiz and lets the learner resume it or discard it by resending the original
+shows the existing quiz and lets the learner resume it or discard it by resending the original
 start request with `discardPreparedSessionId`. Discarding an unstarted quiz uses no monthly quota.
+When Redo Missed Questions meets a started ordinary Challenge Quiz, the collision instead offers
+**Resume quiz** or **End quiz and redo missed**. Ending leaves it unscored, releases its claims, and
+does not return the monthly attempt already spent at Start quiz. A quiz that expires before either
+request is forfeited as expired and Redo Missed preparation continues.
 Try again reconstructs its mode, additional source packs, collection, and redo intent from the failed
 session itself, including after a deep link or reload. A linked preparation that is forfeited or ended
 while the page is polling stops polling and shows the expired screen.
@@ -200,10 +204,13 @@ unexpired sessions, and Board Exam sessions are excluded. The preparation sweeps
 bank claims; a late async result may still save valid questions unclaimed. Board Exam is excluded.
 
 If a new ordinary, Board Exam, or redo-missed request conflicts with an unstarted ordinary Challenge
-preparation, the response carries a `collision` with the existing session and both intents. The learner
-can resume it or submit its id as `discardPreparedSessionId` on the new request. Discard forfeits the
-unstarted preparation and releases claims before proceeding. A wrong id or an already-started quiz is
-rejected. A same-intent request resumes. Existing started-session behavior is unchanged.
+preparation, the response carries a `collision` with the existing session and both intents, with
+`existingStarted=false`. The learner can resume it or submit its id as `discardPreparedSessionId` on
+the new request. Discard forfeits the unstarted preparation and releases claims before proceeding.
+A started ordinary Challenge Quiz receives `existingStarted=true` only when Redo Missed is requested;
+its exact id may be submitted to end it without a preparation-abandoned event. A wrong id is rejected.
+Expired started quizzes are forfeited before collision handling. A same-intent request resumes.
+Board Exam and other started-session paths keep their existing behavior.
 
 Preparation, failure, discard, and expiry consume no ordinary Challenge quota. The successful Start Quiz
 charges the billing period in which Start happened, including the multi-note meter when applicable.

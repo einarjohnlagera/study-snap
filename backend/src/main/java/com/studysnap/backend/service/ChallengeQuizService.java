@@ -2237,15 +2237,32 @@ public class ChallengeQuizService {
         }
         boolean sourceMismatch = MODE_CHALLENGE.equals(requestedMode) && !requireRedoMissedSource
                 && !sameRequestedChallengeSources(request, studyPackId, lockedExisting.getSessionState());
-        boolean collision = ordinary && unstarted &&
-                (MODE_BOARD_EXAM.equals(requestedMode)
+        boolean startedRedoCollision = ordinary && lockedExisting.getStatus() == QuickReviewSessionStatus.IN_PROGRESS
+                && !unstarted && requireRedoMissedSource
+                && !QuizSessionStateUtils.extractRedoMissedSource(lockedExisting.getSessionState());
+        if (startedRedoCollision && isSessionExpired(lockedExisting)) {
+            if (discardPreparedSessionId != null
+                    && !lockedExisting.getId().toString().equals(discardPreparedSessionId)) {
+                throw new InvalidPreparedChallengeDiscardException();
+            }
+            forfeitExpiredSession(lockedExisting, userId);
+            return Optional.empty();
+        }
+        boolean collision = startedRedoCollision || (ordinary && unstarted
+                && (MODE_BOARD_EXAM.equals(requestedMode)
                         || requireRedoMissedSource != QuizSessionStateUtils.extractRedoMissedSource(
-                                lockedExisting.getSessionState()) || sourceMismatch);
+                                lockedExisting.getSessionState()) || sourceMismatch));
         if (discardPreparedSessionId != null) {
             if (!collision || !lockedExisting.getId().toString().equals(discardPreparedSessionId)) {
                 throw new InvalidPreparedChallengeDiscardException();
             }
-            forfeitPreparedSession(lockedExisting, userId, "DISCARDED");
+            if (startedRedoCollision) {
+                markSessionForfeited(lockedExisting);
+                quickReviewSessionRepository.save(lockedExisting);
+                challengeQuizQuestionBankService.releaseClaims(userId, lockedExisting.getId());
+            } else {
+                forfeitPreparedSession(lockedExisting, userId, "DISCARDED");
+            }
             return Optional.empty();
         }
         if (collision) {
@@ -2255,7 +2272,7 @@ public class ChallengeQuizService {
             return Optional.of(toStartResponse(lockedExisting, studyPack,
                     resolveUsedThisMonthForResponse(userId, lockedExisting), planType)
                     .withCollision(new ChallengeQuizCollision(lockedExisting.getId().toString(),
-                            existingIntent, requestedIntent)));
+                            existingIntent, requestedIntent, startedRedoCollision)));
         }
         if (lockedExisting.getStatus() == QuickReviewSessionStatus.GENERATING) {
             if (requireRedoMissedSource
