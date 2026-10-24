@@ -270,7 +270,7 @@ public class ChallengeQuizService {
             studyPack = findOwnedStudyPackForGenerationOrThrow(studyPackId, userId);
             Optional<ChallengeQuizStartResponse> resumed = resolveExistingChallengeSession(
                     userId, studyPackId, studyPack, planType, selectedMode, false,
-                    request.discardPreparedSessionId());
+                    request.discardPreparedSessionId(), request);
             if (resumed.isPresent()) return resumed.get();
         }
         List<UUID> preliminaryMultiNoteIds = multiNoteClaim
@@ -295,7 +295,7 @@ public class ChallengeQuizService {
                 planType,
                 selectedMode,
                 false,
-                request == null ? null : request.discardPreparedSessionId()
+                request == null ? null : request.discardPreparedSessionId(), request
         );
         if (existingSession.isPresent()) {
             return existingSession.get();
@@ -417,6 +417,12 @@ public class ChallengeQuizService {
                 selectedMode,
                 sourceNoteRefs
         ));
+        if (MODE_CHALLENGE.equals(selectedMode) && request != null && request.sourceCollectionId() != null
+                && !request.sourceCollectionId().isBlank()) {
+            Map<String, Object> state = new LinkedHashMap<>(session.getSessionState());
+            state.put("sourceCollectionId", request.sourceCollectionId().trim());
+            session.setSessionState(state);
+        }
         if (MODE_CHALLENGE.equals(selectedMode)) {
             session.setQuotaExempt(true);
             if (multiNoteChallenge) {
@@ -1199,7 +1205,8 @@ public class ChallengeQuizService {
                 planType,
                 MODE_CHALLENGE,
                 true,
-                discardPreparedSessionId
+                discardPreparedSessionId,
+                null
         );
         if (existingSession.isPresent()) {
             return existingSession.get();
@@ -2104,7 +2111,35 @@ public class ChallengeQuizService {
             UUID userId, UUID studyPackId, StudyPackEntity studyPack, PlanType planType
     ) {
         return resolveExistingChallengeSession(userId, studyPackId, studyPack, planType,
-                MODE_CHALLENGE, false, null);
+                MODE_CHALLENGE, false, null, null);
+    }
+
+    private boolean sameRequestedChallengeSources(
+            ChallengeQuizStartRequest request, UUID primaryStudyPackId, Map<String, Object> sessionState
+    ) {
+        String requestedCollectionId = request == null ? null : request.sourceCollectionId();
+        Object existingCollectionId = sessionState == null ? null : sessionState.get("sourceCollectionId");
+        // Challenge's plan picker sends selected pack IDs; the server validates membership but does
+        // not sample sources. Compare both identities before any validation or additional-pack lock.
+        String requestedPlan = requestedCollectionId == null || requestedCollectionId.isBlank()
+                ? null : requestedCollectionId.trim();
+        String existingPlan = existingCollectionId instanceof String id && !id.isBlank() ? id : null;
+        if (requestedPlan != null || existingPlan != null) {
+            if (requestedPlan == null || !requestedPlan.equals(existingPlan)) return false;
+        }
+        Set<String> requested = new LinkedHashSet<>();
+        if (request != null && request.additionalStudyPackIds() != null) {
+            for (String id : request.additionalStudyPackIds()) {
+                if (id != null && !id.isBlank() && !id.trim().equals(primaryStudyPackId.toString())) {
+                    requested.add(id.trim());
+                }
+            }
+        }
+        Set<String> existing = extractSourceNoteRefs(sessionState).stream()
+                .map(LongExamSourceNoteRef::studyPackId)
+                .filter(id -> !id.equals(primaryStudyPackId.toString()))
+                .collect(Collectors.toSet());
+        return requested.equals(existing);
     }
 
     private Optional<ChallengeQuizStartResponse> resolveExistingChallengeSession(
@@ -2114,7 +2149,8 @@ public class ChallengeQuizService {
             PlanType planType,
             String requestedMode,
             boolean requireRedoMissedSource,
-            String discardPreparedSessionId
+            String discardPreparedSessionId,
+            ChallengeQuizStartRequest request
     ) {
         QuickReviewSessionEntity existing = quickReviewSessionRepository
                 .findTopByUserIdAndStudyPackIdAndSessionModeAndStatusInOrderByCreatedAtDesc(
@@ -2169,10 +2205,12 @@ public class ChallengeQuizService {
                 return Optional.empty();
             }
         }
+        boolean sourceMismatch = MODE_CHALLENGE.equals(requestedMode) && !requireRedoMissedSource
+                && !sameRequestedChallengeSources(request, studyPackId, lockedExisting.getSessionState());
         boolean collision = ordinary && unstarted &&
                 (MODE_BOARD_EXAM.equals(requestedMode)
                         || requireRedoMissedSource != QuizSessionStateUtils.extractRedoMissedSource(
-                                lockedExisting.getSessionState()));
+                                lockedExisting.getSessionState()) || sourceMismatch);
         if (discardPreparedSessionId != null) {
             if (!collision || !lockedExisting.getId().toString().equals(discardPreparedSessionId)) {
                 throw new InvalidPreparedChallengeDiscardException();
@@ -3387,9 +3425,13 @@ public class ChallengeQuizService {
         int requestedCount = QuizSessionStateUtils.extractRequestedQuestionCount(session.getSessionState());
         Map<String, Long> sourceStamps = QuizSessionStateUtils.extractPreparedSourceStamps(session.getSessionState());
         List<LongExamSourceNoteRef> sourceNoteRefs = extractSourceNoteRefs(session.getSessionState());
+        Object sourceCollectionId = session.getSessionState().get("sourceCollectionId");
         int rateSeconds = MODE_BOARD_EXAM.equals(mode) ? SECONDS_PER_QUESTION_BOARD_EXAM : SECONDS_PER_QUESTION_CHALLENGE;
         int timeLimitSeconds = challengeQuiz.size() * rateSeconds;
         Map<String, Object> state = buildInitialSessionState(difficulty, mode, sourceNoteRefs);
+        if (sourceCollectionId instanceof String id && !id.isBlank()) {
+            state.put("sourceCollectionId", id);
+        }
         state.put(SESSION_STATE_TIME_LIMIT_SECONDS, timeLimitSeconds);
         if (startTimer) {
             state = QuizSessionStateUtils.withTimerStartedAtEpochSeconds(
