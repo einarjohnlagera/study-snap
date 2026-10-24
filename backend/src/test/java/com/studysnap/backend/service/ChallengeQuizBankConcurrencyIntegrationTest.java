@@ -19,6 +19,7 @@ import com.studysnap.backend.entity.QuickReviewConfidenceLevel;
 import com.studysnap.backend.exception.QuickReviewSessionStaleException;
 import com.studysnap.backend.exception.MonthlyChallengeQuizLimitReachedException;
 import com.studysnap.backend.exception.PreparedChallengeExpiredException;
+import com.studysnap.backend.exception.InvalidPreparedChallengeDiscardException;
 import com.studysnap.backend.exception.InterviewPracticeAnswerAlreadyRecordedException;
 import com.studysnap.backend.entity.LearnerLevel;
 import com.studysnap.backend.repository.ChallengeQuizQuestionBankOwnerProjection;
@@ -362,6 +363,97 @@ class ChallengeQuizBankConcurrencyIntegrationTest {
                 String.class, fixture.sessionId)).isEqualTo("FORFEITED");
         assertThat(jdbc.queryForObject("select count(*) from challenge_quiz_question_bank where claimed_session_id = ?",
                 Integer.class, fixture.sessionId)).isZero();
+    }
+
+    @Test
+    void startedChallengeRedoCollisionKeepsSessionAndClaimsUntilExactIdDiscard() {
+        Fixture fixture = seed(false);
+        addMissedQuestions(fixture);
+        jdbc.update("update quick_review_sessions set session_state = jsonb_set(session_state, '{selectedChoices}', '{\"0\":1}'::jsonb) where id = ?",
+                fixture.sessionId);
+        Boolean quotaExempt = jdbc.queryForObject(
+                "select quota_exempt from quick_review_sessions where id = ?", Boolean.class, fixture.sessionId);
+
+        ChallengeQuizStartResponse collision = challengeQuizService.startRedoMissedSession(
+                fixture.packId.toString(), fixture.userId);
+        assertThat(collision.collision().existingStarted()).isTrue();
+        assertThat(collision.collision().existingSessionId()).isEqualTo(fixture.sessionId.toString());
+        assertThat(collision.quiz()).hasSize(1);
+        assertThat(collision.currentQuestionIndex()).isZero();
+        assertThat(collision.sessionState()).containsEntry("selectedChoices", java.util.Map.of("0", 1));
+        assertThat(collision.sessionState()).containsKey("timerStartedAtEpochSeconds");
+        assertThat(jdbc.queryForObject("select status from quick_review_sessions where id = ?",
+                String.class, fixture.sessionId)).isEqualTo("IN_PROGRESS");
+        assertThat(jdbc.queryForObject("select count(*) from challenge_quiz_question_bank where claimed_session_id = ?",
+                Integer.class, fixture.sessionId)).isEqualTo(1);
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> challengeQuizService.startRedoMissedSession(
+                fixture.packId.toString(), fixture.userId, UUID.randomUUID().toString()))
+                .isInstanceOf(InvalidPreparedChallengeDiscardException.class);
+        assertThat(jdbc.queryForObject("select status from quick_review_sessions where id = ?",
+                String.class, fixture.sessionId)).isEqualTo("IN_PROGRESS");
+
+        ChallengeQuizStartResponse redo = challengeQuizService.startRedoMissedSession(
+                fixture.packId.toString(), fixture.userId, fixture.sessionId.toString());
+        assertThat(redo.sessionId()).isNotEqualTo(fixture.sessionId.toString());
+        assertThat(redo.preparedNotStarted()).isTrue();
+        assertThat(redo.redoMissed()).isTrue();
+        assertThat(jdbc.queryForObject("select status from quick_review_sessions where id = ?",
+                String.class, fixture.sessionId)).isEqualTo("FORFEITED");
+        assertThat(jdbc.queryForObject("select quota_exempt from quick_review_sessions where id = ?",
+                Boolean.class, fixture.sessionId)).isEqualTo(quotaExempt);
+        assertThat(jdbc.queryForObject("select count(*) from challenge_quiz_question_bank where claimed_session_id = ?",
+                Integer.class, fixture.sessionId)).isZero();
+        org.mockito.Mockito.verify(analyticsService, org.mockito.Mockito.never()).trackEvent(
+                any(), eq(com.studysnap.backend.entity.AnalyticsEventType.CHALLENGE_QUIZ_PREPARATION_ABANDONED),
+                any(), any());
+        org.mockito.Mockito.verify(userUsageService, org.mockito.Mockito.never())
+                .incrementChallengeQuizGeneration(any(), any());
+    }
+
+    @Test
+    void expiredStartedChallengeRedoForfeitsBeforeCollisionAndPreparesRedo() {
+        Fixture fixture = seed(true);
+        addMissedQuestions(fixture);
+        ChallengeQuizStartResponse redo = challengeQuizService.startRedoMissedSession(
+                fixture.packId.toString(), fixture.userId);
+        assertThat(redo.collision()).isNull();
+        assertThat(redo.redoMissed()).isTrue();
+        assertThat(jdbc.queryForObject("select status from quick_review_sessions where id = ?",
+                String.class, fixture.sessionId)).isEqualTo("FORFEITED");
+        assertThat(jdbc.queryForObject("select count(*) from challenge_quiz_question_bank where claimed_session_id = ?",
+                Integer.class, fixture.sessionId)).isZero();
+    }
+
+    @Test
+    void startedChallengeExpiringAfterCollisionStillAcceptsDiscard() {
+        Fixture fixture = seed(false);
+        addMissedQuestions(fixture);
+        assertThat(challengeQuizService.startRedoMissedSession(fixture.packId.toString(), fixture.userId)
+                .collision().existingStarted()).isTrue();
+        jdbc.update("update quick_review_sessions set session_state = jsonb_set(session_state, '{timerStartedAtEpochSeconds}', '1'::jsonb) where id = ?",
+                fixture.sessionId);
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> challengeQuizService.startRedoMissedSession(
+                fixture.packId.toString(), fixture.userId, UUID.randomUUID().toString()))
+                .isInstanceOf(InvalidPreparedChallengeDiscardException.class);
+        assertThat(jdbc.queryForObject("select status from quick_review_sessions where id = ?",
+                String.class, fixture.sessionId)).isEqualTo("IN_PROGRESS");
+
+        ChallengeQuizStartResponse redo = challengeQuizService.startRedoMissedSession(
+                fixture.packId.toString(), fixture.userId, fixture.sessionId.toString());
+        assertThat(redo.collision()).isNull();
+        assertThat(redo.redoMissed()).isTrue();
+        assertThat(jdbc.queryForObject("select status from quick_review_sessions where id = ?",
+                String.class, fixture.sessionId)).isEqualTo("FORFEITED");
+        assertThat(jdbc.queryForObject("select count(*) from challenge_quiz_question_bank where claimed_session_id = ?",
+                Integer.class, fixture.sessionId)).isZero();
+    }
+
+    private void addMissedQuestions(Fixture fixture) {
+        for (int index = 0; index < 3; index++) {
+            insertBankQuestion(fixture, "Missed question " + index, "INCORRECT",
+                    OffsetDateTime.now(ZoneOffset.UTC));
+        }
     }
 
     @Test

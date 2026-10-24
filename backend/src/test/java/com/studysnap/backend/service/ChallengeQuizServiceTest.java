@@ -554,7 +554,8 @@ class ChallengeQuizServiceTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.collision.existingSessionId").value(prepared.sessionId()))
                 .andExpect(jsonPath("$.collision.existingMode").value("challenge"))
-                .andExpect(jsonPath("$.collision.requestedMode").value("challenge"));
+                .andExpect(jsonPath("$.collision.requestedMode").value("challenge"))
+                .andExpect(jsonPath("$.collision.existingStarted").value(false));
     }
 
     private MockMvc challengeMvc(UUID userId) {
@@ -1881,7 +1882,7 @@ class ChallengeQuizServiceTest {
     }
 
     @Test
-    void startRedoMissedSession_forfeitsStaleOrdinarySessionAndStartsFreshWithMissedQuestions() {
+    void startRedoMissedSession_requiresDiscardBeforeEndingStartedOrdinaryQuiz() {
         UUID userId = UUID.randomUUID();
         UUID studyPackId = UUID.randomUUID();
         UUID noteId = UUID.randomUUID();
@@ -1924,7 +1925,14 @@ class ChallengeQuizServiceTest {
                 .thenAnswer(invocation -> recordSession(invocation.getArgument(0)));
         stubChallengeUsagePeriod(userId, PlanType.FREE);
 
-        ChallengeQuizStartResponse response = challengeQuizService.startRedoMissedSession(studyPackId.toString(), userId);
+        ChallengeQuizStartResponse collision = challengeQuizService.startRedoMissedSession(studyPackId.toString(), userId);
+
+        assertThat(collision.collision().existingStarted()).isTrue();
+        assertThat(collision.collision().existingSessionId()).isEqualTo(staleSessionId.toString());
+        assertThat(staleOrdinarySession.getStatus()).isEqualTo(QuickReviewSessionStatus.IN_PROGRESS);
+        verify(challengeQuizQuestionBankService, never()).releaseClaims(userId, staleSessionId);
+        ChallengeQuizStartResponse response = challengeQuizService.startRedoMissedSession(
+                studyPackId.toString(), userId, staleSessionId.toString());
 
         assertThat(staleOrdinarySession.getStatus()).isEqualTo(QuickReviewSessionStatus.FORFEITED);
         assertThat(response.sessionId()).isNotEqualTo(staleSessionId.toString());
@@ -1936,7 +1944,7 @@ class ChallengeQuizServiceTest {
     }
 
     @Test
-    void startRedoMissedSession_startsFreshWhenStaleOrdinaryForfeitSaveFails() {
+    void startRedoMissedSession_doesNotTryToSaveStartedOrdinaryQuizBeforeChoice() {
         UUID userId = UUID.randomUUID();
         UUID studyPackId = UUID.randomUUID();
         UUID noteId = UUID.randomUUID();
@@ -1950,14 +1958,6 @@ class ChallengeQuizServiceTest {
                 "challenge",
                 QuickReviewSessionStatus.IN_PROGRESS
         );
-        List<QuizItem> missedQuestions = buildQuizWithPrefix("Missed", 3);
-        StudyPackGenerationContext generationContext = new StudyPackGenerationContext(
-                LearnerLevel.COLLEGE,
-                "Engineering",
-                studyPack.getSubject(),
-                List.of()
-        );
-
         when(studyPackRepository.findByIdAndOwnerUserIdForUpdate(studyPackId, userId)).thenReturn(Optional.of(studyPack));
         when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.FREE);
         when(quickReviewSessionRepository.findTopByUserIdAndStudyPackIdAndSessionModeAndStatusInOrderByCreatedAtDesc(
@@ -1966,31 +1966,15 @@ class ChallengeQuizServiceTest {
         when(quickReviewSessionRepository.findByIdAndUserIdAndSessionModeForUpdate(
                 staleSessionId, userId, QuickReviewSessionMode.CHALLENGE
         )).thenReturn(Optional.of(staleOrdinarySession));
-        when(generationContextResolver.resolveForStudyPack(userId, studyPack)).thenReturn(generationContext);
-        when(challengeQuizQuestionBankService.claimIncorrectQuestions(
-                eq(userId),
-                eq(studyPackId),
-                eq(LearnerLevel.COLLEGE),
-                any(UUID.class),
-                eq(REDO_MISSED_QUESTION_COUNT),
-                eq(ChallengeQuizQuestionBankService.MINIMUM_REDO_MISSED_QUESTIONS)
-        )).thenReturn(missedQuestions);
-        when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class))).thenAnswer(invocation -> {
-            QuickReviewSessionEntity session = recordSession(invocation.getArgument(0));
-            if (session == staleOrdinarySession) {
-                throw new IllegalStateException("save failed");
-            }
-            return session;
-        });
         stubChallengeUsagePeriod(userId, PlanType.FREE);
 
         ChallengeQuizStartResponse response = challengeQuizService.startRedoMissedSession(studyPackId.toString(), userId);
 
-        assertThat(response.sessionId()).isNotEqualTo(staleSessionId.toString());
-        assertThat(preparedQuiz(response)).containsExactlyInAnyOrderElementsOf(
-                withoutAnswerKeys(withSourceStudyPackId(missedQuestions, studyPackId))
-        );
-        verify(challengeQuizQuestionBankService).releaseClaims(userId, staleSessionId);
+        assertThat(response.collision().existingStarted()).isTrue();
+        assertThat(response.sessionId()).isEqualTo(staleSessionId.toString());
+        assertThat(staleOrdinarySession.getStatus()).isEqualTo(QuickReviewSessionStatus.IN_PROGRESS);
+        verify(quickReviewSessionRepository, never()).save(staleOrdinarySession);
+        verify(challengeQuizQuestionBankService, never()).releaseClaims(userId, staleSessionId);
     }
 
     @Test

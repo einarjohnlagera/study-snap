@@ -1199,12 +1199,14 @@ describe("ChallengeQuizPage", () => {
     searchParamsMock = new URLSearchParams("entry=redo-missed");
     setupChallengePrestart();
     const collision = { ...preparationSession(), collision: {
-      existingSessionId: "prepared-1", existingMode: "challenge", requestedMode: "redo_missed",
+      existingSessionId: "prepared-1", existingMode: "challenge", requestedMode: "redo_missed", existingStarted: false,
     } };
     (startRedoMissedChallengeQuizSession as jest.Mock).mockResolvedValueOnce(collision)
       .mockResolvedValueOnce(preparationSession());
     render(<ChallengeQuizPage />);
     expect(await screen.findByRole("heading", { name: "You already have a quiz ready" })).toBeInTheDocument();
+    expect(screen.getByText("You can return to your quiz or start something else. If you start something else, your unstarted quiz will be discarded without using a monthly attempt.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Resume your prepared quiz" })).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "All set! Your quiz is ready." })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Start something else" }));
     await waitFor(() => expect(startRedoMissedChallengeQuizSession).toHaveBeenLastCalledWith("note-1", {
@@ -1256,14 +1258,57 @@ describe("ChallengeQuizPage", () => {
     expect(screen.queryByRole("heading", { name: "We couldn't finish preparing your quiz" })).not.toBeInTheDocument();
   });
 
-  it("redo entry with a started session keeps the existing reset-then-request flow", async () => {
+  it("redo entry with a started quiz offers the approved collision and resumes saved progress without starting", async () => {
+    searchParamsMock = new URLSearchParams("entry=redo-missed");
+    const nowEpochSeconds = Math.floor(Date.now() / 1000);
+    jest.spyOn(Date, "now").mockReturnValue(nowEpochSeconds * 1000);
+    setupInProgressChallengeQuiz("challenge", nowEpochSeconds - 30, {
+      quiz: twoQuestionChallengeQuiz(), currentQuestionIndex: 1, selectedChoices: { "0": 1 },
+    });
+    const running = await (getInProgressChallengeQuizSession as jest.Mock)();
+    (startRedoMissedChallengeQuizSession as jest.Mock).mockResolvedValue({
+      ...running, preparedNotStarted: false, collision: {
+        existingSessionId: "session-1", existingMode: "challenge", requestedMode: "redo_missed", existingStarted: true,
+      },
+    });
+    render(<ChallengeQuizPage />);
+    expect(await screen.findByRole("heading", { name: "You have a Challenge Quiz in progress" })).toBeInTheDocument();
+    expect(screen.getByText("You can go back to your quiz, or end it and start Redo Missed Questions. If you end it, it won't be scored, and the attempt you used for it won't be returned.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "End quiz and redo missed" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Resume quiz" }));
+    expect(await screen.findByText("Question 2 of 2")).toBeInTheDocument();
+    expect(screen.getByTestId("challenge-quiz-timer")).toHaveTextContent("09:30");
+    expect(screen.queryByRole("heading", { name: "All set! Your quiz is ready." })).not.toBeInTheDocument();
+    expect(startPreparedChallengeQuiz).not.toHaveBeenCalled();
+    expect(completeChallengeQuizSession).not.toHaveBeenCalled();
+    expect(forfeitChallengeQuizSession).not.toHaveBeenCalled();
+    expect(startRedoMissedChallengeQuizSession).toHaveBeenCalledTimes(1);
+    // Returning to the first item shows the answer restored from the collision response.
+    fireEvent.click(screen.getByRole("button", { name: "Previous" }));
+    expect(screen.getByRole("button", { name: /Nucleus/i })).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("redo entry ends a started quiz with one exact-id discard and reaches redo preparation", async () => {
     searchParamsMock = new URLSearchParams("entry=redo-missed");
     setupInProgressChallengeQuiz("challenge");
-    (startRedoMissedChallengeQuizSession as jest.Mock).mockRejectedValue(new Error("An active quiz is already running."));
+    const running = await (getInProgressChallengeQuizSession as jest.Mock)();
+    let finishDiscard: ((response: ReturnType<typeof preparationSession>) => void) | undefined;
+    (startRedoMissedChallengeQuizSession as jest.Mock)
+      .mockResolvedValueOnce({ ...running, preparedNotStarted: false, collision: {
+        existingSessionId: "session-1", existingMode: "challenge", requestedMode: "redo_missed", existingStarted: true,
+      } })
+      .mockImplementationOnce(() => new Promise((resolve) => { finishDiscard = resolve; }));
     render(<ChallengeQuizPage />);
-    await waitFor(() => expect(startRedoMissedChallengeQuizSession).toHaveBeenCalledWith("note-1"));
-    expect(startRedoMissedChallengeQuizSession).toHaveBeenCalledTimes(1);
-    expect(screen.queryByRole("heading", { name: "All set! Your quiz is ready." })).not.toBeInTheDocument();
+    const end = await screen.findByRole("button", { name: "End quiz and redo missed" });
+    fireEvent.click(end);
+    fireEvent.click(end);
+    expect(startRedoMissedChallengeQuizSession).toHaveBeenCalledTimes(2);
+    expect(startRedoMissedChallengeQuizSession).toHaveBeenLastCalledWith("note-1", {
+      discardPreparedSessionId: "session-1",
+    });
+    await act(async () => finishDiscard?.(preparationSession()));
+    expect(await screen.findByRole("heading", { name: "All set! Your quiz is ready." })).toBeInTheDocument();
+    expect(startPreparedChallengeQuiz).not.toHaveBeenCalled();
   });
 
   it("resumes the existing quiz from a collision without a replacement request", async () => {
