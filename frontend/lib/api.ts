@@ -4615,7 +4615,7 @@ export async function getChallengeQuizSession(sessionId: string): Promise<Challe
     `/challenge-quiz/sessions/${sessionId}`,
     { method: "GET", headers: buildAuthHeaders() }, true,
   );
-  return parseApiResponse<ChallengeQuizStartResponse>(response, "Could not load Challenge Quiz session.");
+  return parseApiResponse<ChallengeQuizStartResponse>(response, "We couldn't load your quiz. Please refresh the page to try again.");
 }
 
 export async function getInProgressChallengeQuizSession(
@@ -4710,7 +4710,7 @@ export async function stopAddingChallengeQuizQuestions(sessionId: string): Promi
     { method: "POST", headers: buildAuthHeaders() },
     true,
   );
-  if (!response.ok) await parseApiResponse(response, "Could not stop adding questions.");
+  if (!response.ok) await parseApiResponse(response, "We couldn't stop adding questions. Any new ones will appear when they're ready.");
 }
 
 export async function listRecentChallengeQuizSessions(

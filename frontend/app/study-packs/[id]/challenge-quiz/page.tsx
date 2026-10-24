@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
 import { EyeOff, Hourglass, ListChecks, Maximize2 } from "lucide-react";
+import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { VerifyEmailRequiredModal } from "@/components/auth/verify-email-required-modal";
 import { useAppShellTitleOverride } from "@/components/app-shell-title-context";
 import { ExamTopBar } from "@/components/exam-mode/exam-top-bar";
@@ -143,6 +144,7 @@ type ChallengePaywallVariant =
   | "challenge-quiz-limit"
   | "adaptive-practice";
 
+const MORE_COMPLETE_HOLD_MS = 45_000;
 const CHALLENGE_MODE: ChallengeQuizMode = "challenge";
 const BOARD_EXAM_MODE: ChallengeQuizMode = "board_exam";
 const MAX_SESSION_QUESTIONS = 20;
@@ -374,6 +376,12 @@ export default function ChallengeQuizPage() {
   const [moreFailed, setMoreFailed] = useState(false);
   const [moreStartedAt, setMoreStartedAt] = useState<number | null>(null);
   const [moreNow, setMoreNow] = useState(Date.now());
+  // Complete Quiz waits only for the first 45 s of a +5 started in this tab. The ceiling is what keeps
+  // it from locking: a +5 seen only after a reload (no local start time), a poll that keeps failing, or
+  // a job that never finishes all re-enable it, and Complete then stops and reconciles before submitting.
+  // The timer's own auto-submit never goes through this button.
+  const moreStillAdding = moreStartedAt !== null && moreNow - moreStartedAt >= MORE_COMPLETE_HOLD_MS;
+  const completeHeldForMore = morePending && moreStartedAt !== null && !moreStillAdding;
   const [noMoreQuestions, setNoMoreQuestions] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [remainingSeconds, setRemainingSeconds] = useState(0);
@@ -598,7 +606,7 @@ export default function ChallengeQuizPage() {
     const collectionStartsWithChallenge = collectionId !== null
         && resolvePlanPremiumExamMode(viewerProfileTypeRaw, viewerPlanType) === "challenge";
     setSelectedMode(collectionStartsWithChallenge ? CHALLENGE_MODE : collectionId ? BOARD_EXAM_MODE : resolvePreferredChallengeMode(viewerProfileType));
-    setPrestartStep("mode-selection");
+    setPrestartStep(collectionStartsWithChallenge ? "challenge-setup" : collectionId ? "board-exam-setup" : resolveInitialPrestartStep(viewerProfileType));
   }, [challengeSession?.sessionId, collectionId, phase, resumeCandidate, sharedModeSelectionEntryRequested, viewerPlanType, viewerProfileType, viewerProfileTypeRaw]);
 
   useEffect(() => {
@@ -1217,7 +1225,7 @@ export default function ChallengeQuizPage() {
         setTimedOut(false);
         setShowAnswerReview(false);
         setSelectedMode(requestedPrestartMode);
-        setPrestartStep("mode-selection");
+        setPrestartStep(hasResumeCandidate ? "mode-selection" : requestedPrestartStep);
         setChallengeQuizLimitReached(inProgress.usedThisMonth >= inProgress.monthlyLimit);
         setPhase("prestart");
         setActivePaywallModal(null);
@@ -1500,14 +1508,6 @@ export default function ChallengeQuizPage() {
     }
   }, [finalizeChallengeSession]);
 
-  const handleManualSubmit = useCallback(() => {
-    if (unansweredCount === 0) {
-      void handleSubmit(false);
-      return;
-    }
-    setShowIncompleteSubmitModal(true);
-  }, [handleSubmit, unansweredCount]);
-
   const handleReturnToFirstUnansweredQuestion = useCallback(() => {
     setShowIncompleteSubmitModal(false);
     if (firstUnansweredQuestionIndex < 0) {
@@ -1562,6 +1562,32 @@ export default function ChallengeQuizPage() {
     if (!next.morePending) setMoreStartedAt(null);
     return serverDeadline;
   }, []);
+
+  const submitAfterPendingReconcile = useCallback(async () => {
+    const current = challengeSessionRef.current;
+    if (current?.sessionId && (morePending || generatingMore)) {
+      try {
+        moreStopRequestedRef.current = true;
+        await stopAddingChallengeQuizQuestions(current.sessionId);
+        const next = await getChallengeQuizSession(current.sessionId);
+        reconcileMoreSession(next);
+        if (next.quiz.length > current.quiz.length) return;
+      } catch (err) {
+        moreStopRequestedRef.current = false;
+        setError(err instanceof Error ? err.message : "We couldn't stop adding questions. Any new ones will appear when they're ready.");
+        return;
+      }
+    }
+    void handleSubmit(false);
+  }, [generatingMore, handleSubmit, morePending, reconcileMoreSession]);
+
+  const handleManualSubmit = useCallback(() => {
+    if (unansweredCount === 0) {
+      void submitAfterPendingReconcile();
+      return;
+    }
+    setShowIncompleteSubmitModal(true);
+  }, [submitAfterPendingReconcile, unansweredCount]);
 
   const submitOnExpiredDeadline = useCallback(() => {
     if (submitInFlightRef.current || timeoutAutoSubmitRequestedRef.current
@@ -1627,6 +1653,12 @@ export default function ChallengeQuizPage() {
           setChallengeSession(nextSession);
           return;
         }
+        if (challengeSession?.mode !== BOARD_EXAM_MODE
+            && (nextSession.status === "FORFEITED" || nextSession.status === "COMPLETED")) {
+          linkedPollSessionIdRef.current = null;
+          setPhase("expired");
+          return;
+        }
         linkedPollSessionIdRef.current = null;
         if (!nextSession.sessionId && challengeSessionRef.current?.mode !== BOARD_EXAM_MODE) {
           setPhase("preparation-failed");
@@ -1634,6 +1666,19 @@ export default function ChallengeQuizPage() {
         }
         applyStartedSession(nextSession, Boolean(nextSession.sessionId));
       } catch (err) {
+        if (isMounted && linkedPollSessionIdRef.current
+            && challengeSession?.mode !== BOARD_EXAM_MODE) {
+          try {
+            const status = await getChallengeQuizSessionStatus(linkedPollSessionIdRef.current);
+            if (isMounted && (status.expired || status.status === "FORFEITED" || status.status === "COMPLETED")) {
+              linkedPollSessionIdRef.current = null;
+              setPhase("expired");
+              return;
+            }
+          } catch {
+            // A transient status failure leaves the current preparation visible.
+          }
+        }
         if (isMounted && challengeSessionRef.current?.mode === BOARD_EXAM_MODE) {
           const message = err instanceof Error ? err.message : "Could not load Challenge Quiz generation status.";
           setError(message);
@@ -1651,7 +1696,7 @@ export default function ChallengeQuizPage() {
       isMounted = false;
       globalThis.clearInterval(intervalId);
     };
-  }, [applyStartedSession, note, phase]);
+  }, [applyStartedSession, challengeSession?.mode, note, phase]);
 
   useEffect(() => {
     if (phase !== "running" || deadlineEpochSeconds === null) {
@@ -1886,7 +1931,19 @@ export default function ChallengeQuizPage() {
   };
 
   const handleTryPreparationAgain = () => {
-    const intent = preparedIntentRef.current;
+    const session = challengeSession ?? resumeCandidate;
+    const primaryId = session?.studyPackId;
+    const sourceIds = session?.sourceNoteRefs?.map((source) => source.studyPackId)
+      .filter((id) => id !== primaryId) ?? [];
+    const sourceCollectionId = session?.sessionState?.sourceCollectionId;
+    const intent: ChallengeStartIntent | null = session ? {
+      request: {
+        mode: session.mode ?? CHALLENGE_MODE,
+        ...(sourceIds.length ? { additionalStudyPackIds: sourceIds } : {}),
+        ...(typeof sourceCollectionId === "string" && sourceCollectionId ? { sourceCollectionId } : {}),
+      },
+      redoMissed: Boolean(session.redoMissed),
+    } : preparedIntentRef.current;
     void handleStartChallenge(intent?.request.mode ?? CHALLENGE_MODE, intent?.redoMissed ?? false, intent ?? undefined);
   };
 
@@ -1950,6 +2007,19 @@ export default function ChallengeQuizPage() {
     setError(null);
     try {
       const response = await generateMoreChallengeQuizQuestions(challengeSession.sessionId);
+      if (response.newQuestions?.length) {
+        const current = challengeSessionRef.current;
+        if (current?.sessionId === response.sessionId) {
+          const batchStart = response.totalQuestions - response.newQuestions.length;
+          const missing = response.newQuestions.slice(Math.max(0, current.quiz.length - batchStart));
+          reconcileMoreSession({ ...current,
+            quiz: [...current.quiz, ...missing],
+            totalQuestions: response.totalQuestions,
+            timeLimitSeconds: response.timeLimitSeconds,
+            morePending: response.morePending,
+          });
+        }
+      }
       moreStopRequestedRef.current = false;
       retryMoreAfterStopRef.current = false;
       setMoreFinishingPrevious(false);
@@ -1963,12 +2033,15 @@ export default function ChallengeQuizPage() {
         retryMoreAfterStopRef.current = true;
         setMoreFinishingPrevious(true);
         setMoreStopped(true);
+      } else if (err instanceof ApiRequestError && err.code === "MORE_IN_PROGRESS") {
+        setMorePending(true);
+        setMoreStartedAt(Date.now());
       } else if (isNotEnoughNewQuestionsError(err)) setNoMoreQuestions(true);
       else setError(err instanceof Error ? err.message : "Could not generate more questions.");
     } finally {
       setGeneratingMore(false);
     }
-  }, [challengeSession?.sessionId, generatingMore, morePending, moreStopped]);
+  }, [challengeSession?.sessionId, generatingMore, morePending, moreStopped, reconcileMoreSession]);
 
   const handleStopAdding = useCallback(async () => {
     if (!challengeSession?.sessionId) return;
@@ -2439,7 +2512,8 @@ export default function ChallengeQuizPage() {
                 {error ? <p className="text-sm text-red-600 dark:text-red-400">{error}</p> : null}
               </div>
             ) : null}
-            {(!resumeCandidate || resumeCandidate.preparedNotStarted) ? (
+            {(!resumeCandidate || resumeCandidate.preparedNotStarted
+              || (resumeCandidate.mode === CHALLENGE_MODE && resumeCandidate.status === "GENERATING")) ? (
               <>
             <div className="grid gap-3 sm:grid-cols-2">
               {challengeModeCard ? (
@@ -3129,10 +3203,10 @@ export default function ChallengeQuizPage() {
                         +5 questions
                       </Button>
                     ) : null}
-                    {morePending ? <div role="status" className="flex items-center gap-2">
-                      <span>{moreStartedAt !== null && moreNow - moreStartedAt >= 45000
-                        ? PREPARATION_COPY.moreStillAdding : PREPARATION_COPY.moreAdding}</span>
-                      {moreStartedAt !== null && moreNow - moreStartedAt >= 45000 ? (
+                    {morePending ? <div role="status" className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <LoadingSpinner className="text-primary" />
+                      <span>{moreStillAdding ? PREPARATION_COPY.moreStillAdding : PREPARATION_COPY.moreAdding}</span>
+                      {moreStillAdding ? (
                         <Button type="button" variant="outline" onClick={() => void handleStopAdding()}>
                           {PREPARATION_COPY.moreStop}
                         </Button>
@@ -3149,7 +3223,7 @@ export default function ChallengeQuizPage() {
                       type="button"
                       className="flex-1 sm:w-auto sm:flex-none"
                       onClick={handleManualSubmit}
-                      disabled={submitting}
+                      disabled={submitting || completeHeldForMore}
                     >
                       {submitting ? "Submitting..." : "Complete Quiz"}
                     </Button>
@@ -3666,7 +3740,7 @@ export default function ChallengeQuizPage() {
               type="button"
               onClick={() => {
                 setShowIncompleteSubmitModal(false);
-                void handleSubmit(false);
+                void submitAfterPendingReconcile();
               }}
               disabled={submitting}
             >

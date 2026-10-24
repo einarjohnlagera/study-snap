@@ -29,11 +29,12 @@ class GenerationRecoveryJobTest {
     }
 
     @Test
-    void run_delegatesToAllSixSurfaces() {
+    void run_delegatesToAllSevenSurfaces() {
         when(generationRecoveryService.recoverStaleExamQuestionPools()).thenReturn(SurfaceRecoveryResult.empty());
         when(generationRecoveryService.recoverStaleLongExamSessions()).thenReturn(SurfaceRecoveryResult.empty());
         when(generationRecoveryService.recoverStaleBoardExamSessions()).thenReturn(SurfaceRecoveryResult.empty());
         when(generationRecoveryService.recoverExpiredPreparedChallengeSessions()).thenReturn(SurfaceRecoveryResult.empty());
+        when(generationRecoveryService.recoverExpiredStartedChallengeSessions()).thenReturn(SurfaceRecoveryResult.empty());
         when(generationRecoveryService.recoverStuckChallengeGenerations()).thenReturn(SurfaceRecoveryResult.empty());
         when(generationRecoveryService.recoverStaleNotes()).thenReturn(SurfaceRecoveryResult.empty());
 
@@ -43,6 +44,7 @@ class GenerationRecoveryJobTest {
         verify(generationRecoveryService).recoverStaleLongExamSessions();
         verify(generationRecoveryService).recoverStaleBoardExamSessions();
         verify(generationRecoveryService).recoverExpiredPreparedChallengeSessions();
+        verify(generationRecoveryService).recoverExpiredStartedChallengeSessions();
         verify(generationRecoveryService).recoverStuckChallengeGenerations();
         verify(generationRecoveryService).recoverStaleNotes();
     }
@@ -57,6 +59,7 @@ class GenerationRecoveryJobTest {
         when(generationRecoveryService.recoverStaleBoardExamSessions())
                 .thenThrow(new IllegalStateException("row lock timeout"));
         when(generationRecoveryService.recoverExpiredPreparedChallengeSessions()).thenReturn(SurfaceRecoveryResult.empty());
+        when(generationRecoveryService.recoverExpiredStartedChallengeSessions()).thenReturn(SurfaceRecoveryResult.empty());
         when(generationRecoveryService.recoverStuckChallengeGenerations()).thenReturn(SurfaceRecoveryResult.empty());
         when(generationRecoveryService.recoverStaleNotes()).thenReturn(SurfaceRecoveryResult.empty());
 
@@ -65,6 +68,7 @@ class GenerationRecoveryJobTest {
         verify(generationRecoveryService).recoverStaleLongExamSessions();
         verify(generationRecoveryService).recoverStaleBoardExamSessions();
         verify(generationRecoveryService).recoverExpiredPreparedChallengeSessions();
+        verify(generationRecoveryService).recoverExpiredStartedChallengeSessions();
         verify(generationRecoveryService).recoverStuckChallengeGenerations();
         verify(generationRecoveryService).recoverStaleNotes();
     }
@@ -79,6 +83,7 @@ class GenerationRecoveryJobTest {
         verify(generationRecoveryService, never()).recoverStaleLongExamSessions();
         verify(generationRecoveryService, never()).recoverStaleBoardExamSessions();
         verify(generationRecoveryService, never()).recoverExpiredPreparedChallengeSessions();
+        verify(generationRecoveryService, never()).recoverExpiredStartedChallengeSessions();
         verify(generationRecoveryService, never()).recoverStuckChallengeGenerations();
         verify(generationRecoveryService, never()).recoverStaleNotes();
     }

@@ -177,6 +177,19 @@ public interface QuickReviewSessionRepository extends JpaRepository<QuickReviewS
             """, nativeQuery = true)
     List<UUID> findExpiredPreparedChallengeCandidateIds(@Param("cutoff") OffsetDateTime cutoff, Pageable pageable);
 
+    @Query(value = """
+            select q.id from quick_review_sessions q
+            where q.session_mode = 'CHALLENGE' and q.status = 'IN_PROGRESS'
+              and q.session_state->>'mode' = 'challenge'
+              and q.session_state->>'preparedNotStarted' is distinct from 'true'
+              and q.session_state->>'timerStartedAtEpochSeconds' ~ '^[0-9]+$'
+              and q.session_state->>'timeLimitSeconds' ~ '^[0-9]+$'
+              and to_timestamp((q.session_state->>'timerStartedAtEpochSeconds')::bigint
+                  + (q.session_state->>'timeLimitSeconds')::bigint) <= :cutoff
+            order by q.created_at asc
+            """, nativeQuery = true)
+    List<UUID> findExpiredStartedChallengeCandidateIds(@Param("cutoff") OffsetDateTime cutoff, Pageable pageable);
+
     boolean existsByUserIdAndStatusAndCompletedAtIsNotNull(UUID userId, QuickReviewSessionStatus status);
 
     long countByUserIdAndStatusAndCompletedAtIsNotNull(UUID userId, QuickReviewSessionStatus status);

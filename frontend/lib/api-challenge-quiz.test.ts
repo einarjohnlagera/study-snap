@@ -77,6 +77,20 @@ describe("Challenge Quiz preparation API", () => {
     );
   });
 
+  it("uses the approved session-read fallback when an error has no message", async () => {
+    (globalThis.fetch as jest.Mock).mockResolvedValueOnce({ ok: false, status: 503,
+      json: jest.fn().mockResolvedValue({}) } as unknown as Response);
+    await expect(getChallengeQuizSession("session-1")).rejects.toThrow(
+      "We couldn't load your quiz. Please refresh the page to try again.");
+  });
+
+  it("uses the approved stop fallback when an error has no message", async () => {
+    (globalThis.fetch as jest.Mock).mockResolvedValueOnce({ ok: false, status: 503,
+      json: jest.fn().mockResolvedValue({}) } as unknown as Response);
+    await expect(stopAddingChallengeQuizQuestions("session-1")).rejects.toThrow(
+      "We couldn't stop adding questions. Any new ones will appear when they're ready.");
+  });
+
   it("keeps redo missed bodyless when nothing is discarded", async () => {
     await startRedoMissedChallengeQuizSession("note-1");
     expect(globalThis.fetch).toHaveBeenCalledWith(

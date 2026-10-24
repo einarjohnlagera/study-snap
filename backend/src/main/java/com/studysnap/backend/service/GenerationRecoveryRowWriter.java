@@ -19,9 +19,12 @@ import org.springframework.transaction.annotation.Propagation;
 
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.time.Instant;
+import java.util.List;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
+import java.util.TreeSet;
 import java.util.UUID;
 
 /**
@@ -110,6 +113,48 @@ public class GenerationRecoveryRowWriter {
                     }
                     return staleSince;
                 });
+    }
+
+    /** Lock all source packs in UUID order, then the session, matching multi-note Start Quiz. */
+    @Transactional
+    public Optional<OffsetDateTime> recoverExpiredStartedChallengeSession(UUID sessionId, OffsetDateTime cutoff) {
+        QuickReviewSessionEntity observed = quickReviewSessionRepository.findById(sessionId).orElse(null);
+        if (observed == null) return Optional.empty();
+        TreeSet<UUID> sourceIds = new TreeSet<>(java.util.Comparator.comparing(UUID::toString));
+        sourceIds.add(observed.getStudyPackId());
+        Object rawRefs = observed.getSessionState() == null ? null : observed.getSessionState().get("sourceNoteRefs");
+        if (rawRefs instanceof List<?> refs) {
+            for (Object raw : refs) {
+                if (raw instanceof Map<?, ?> ref && ref.get("studyPackId") instanceof String id) {
+                    try { sourceIds.add(UUID.fromString(id)); } catch (IllegalArgumentException ignored) { }
+                }
+            }
+        }
+        for (UUID sourceId : sourceIds) {
+            studyPackRepository.findByIdAndOwnerUserIdForUpdate(sourceId, observed.getUserId());
+        }
+        QuickReviewSessionEntity session = quickReviewSessionRepository.findByIdForUpdate(sessionId).orElse(null);
+        if (session == null) return Optional.empty();
+        entityManager.refresh(session);
+        if (session.getSessionMode() != QuickReviewSessionMode.CHALLENGE
+                || isBoardExamSession(session)
+                || session.getSessionState() == null
+                || !"challenge".equals(session.getSessionState().get("mode"))
+                || session.getStatus() != QuickReviewSessionStatus.IN_PROGRESS
+                || QuizSessionStateUtils.extractPreparedNotStarted(session.getSessionState())) return Optional.empty();
+        Map<String, Object> state = session.getSessionState();
+        Object started = state == null ? null : state.get("timerStartedAtEpochSeconds");
+        Object limit = state == null ? null : state.get("timeLimitSeconds");
+        if (!(started instanceof Number start) || !(limit instanceof Number seconds)
+                || start.longValue() <= 0 || seconds.longValue() <= 0) return Optional.empty();
+        OffsetDateTime expiredAt = OffsetDateTime.ofInstant(
+                Instant.ofEpochSecond(start.longValue() + seconds.longValue()), ZoneOffset.UTC);
+        if (expiredAt.isAfter(cutoff)) return Optional.empty();
+        session.setStatus(QuickReviewSessionStatus.FORFEITED);
+        session.setCompletedAt(null);
+        challengeQuizQuestionBankService.releaseClaims(session.getUserId(), sessionId);
+        quickReviewSessionRepository.save(session);
+        return Optional.of(expiredAt);
     }
 
     @Transactional
