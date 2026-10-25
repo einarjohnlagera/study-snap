@@ -1,6 +1,6 @@
 # RELEASES_ARCHIVE.md — NoteLib
 
-Archived sections of `RELEASES.md`. **Contents are NOT one contiguous range:** `v0.41.0`–`v0.120.0`, plus `v0.126.0` (moved at the `v0.132.0` kickoff), `v0.127.0` (moved at the `v0.133.0` kickoff) `v0.128.0` (moved at the `v0.134.0` kickoff) `v0.129.0` (moved at the `v0.135.0` kickoff) `v0.130.0` (moved at the `v0.136.0` kickoff) `v0.131.0` (moved at the `v0.137.0` kickoff) `v0.132.0` (moved at the `v0.138.0` kickoff) `v0.133.0` (moved at the `v0.139.0` kickoff), `v0.134.0` (moved at the `v0.140.0` kickoff), `v0.135.0` (moved at the `v0.141.0` kickoff), `v0.136.0` (moved at the `v0.142.0` kickoff), `v0.137.0` (moved at the `v0.143.0` kickoff), `v0.138.0` (moved at the `v0.144.0` kickoff), `v0.139.0` (moved at the `v0.145.0` kickoff), `v0.140.0` (moved at the `v0.146.0` kickoff), `v0.141.0` (moved at the `v0.147.0` kickoff), `v0.142.0` (moved at the `v0.148.0` kickoff), `v0.143.0` (moved at the `v0.149.0` kickoff), `v0.144.0` (moved at the `v0.150.0` kickoff), `v0.145.0` (moved at the `v0.151.0` kickoff), `v0.146.0` (moved at the `v0.152.0` kickoff), `v0.147.0` (moved at the `v0.153.0` kickoff), `v0.148.0` (moved at the `v0.154.0` kickoff), `v0.149.0` (moved at the `v0.155.0` kickoff), `v0.150.0` (moved at the `v0.156.0` signoff — the first time this archive check ran at signoff rather than kickoff, since v0.156.0 folded two releases' worth of scope into one and crossed the cap without an intervening kickoff) and `v0.151.0` (moved at the `v0.157.0` kickoff) and `v0.152.0` (moved at the `v0.158.0` kickoff) and `v0.153.0` and `v0.154.0` (moved at the `v0.159.0` and `v0.160.0` kickoffs; earlier passes did not extend this line) and `v0.155.0` (moved at the `v0.161.0` kickoff) and `v0.156.0` (moved at the `v0.162.0` kickoff) and `v0.157.0` (moved at the `v0.163.0` kickoff) and `v0.158.0` (moved at the `v0.164.0` kickoff) and `v0.159.0` (moved at the `v0.165.0` kickoff) and `v0.160.0` (moved at the `v0.166.0` kickoff) and `v0.161.0` (moved at the `v0.167.0` kickoff) and `v0.164.0` (moved at the `v0.170.0` kickoff) and `v0.165.0` (moved at the `v0.171.0` kickoff) and `v0.166.0` (moved at the `v0.172.0` kickoff) and `v0.167.0` (moved at the `v0.173.0` kickoff) as the live file crossed its *current + last five* cap. Each version's own `## vX.Y.Z` heading is the index — search for it. `v0.40.1` and earlier moved here
+Archived sections of `RELEASES.md`. **Contents are NOT one contiguous range:** `v0.41.0`–`v0.120.0`, plus `v0.126.0` (moved at the `v0.132.0` kickoff), `v0.127.0` (moved at the `v0.133.0` kickoff) `v0.128.0` (moved at the `v0.134.0` kickoff) `v0.129.0` (moved at the `v0.135.0` kickoff) `v0.130.0` (moved at the `v0.136.0` kickoff) `v0.131.0` (moved at the `v0.137.0` kickoff) `v0.132.0` (moved at the `v0.138.0` kickoff) `v0.133.0` (moved at the `v0.139.0` kickoff), `v0.134.0` (moved at the `v0.140.0` kickoff), `v0.135.0` (moved at the `v0.141.0` kickoff), `v0.136.0` (moved at the `v0.142.0` kickoff), `v0.137.0` (moved at the `v0.143.0` kickoff), `v0.138.0` (moved at the `v0.144.0` kickoff), `v0.139.0` (moved at the `v0.145.0` kickoff), `v0.140.0` (moved at the `v0.146.0` kickoff), `v0.141.0` (moved at the `v0.147.0` kickoff), `v0.142.0` (moved at the `v0.148.0` kickoff), `v0.143.0` (moved at the `v0.149.0` kickoff), `v0.144.0` (moved at the `v0.150.0` kickoff), `v0.145.0` (moved at the `v0.151.0` kickoff), `v0.146.0` (moved at the `v0.152.0` kickoff), `v0.147.0` (moved at the `v0.153.0` kickoff), `v0.148.0` (moved at the `v0.154.0` kickoff), `v0.149.0` (moved at the `v0.155.0` kickoff), `v0.150.0` (moved at the `v0.156.0` signoff — the first time this archive check ran at signoff rather than kickoff, since v0.156.0 folded two releases' worth of scope into one and crossed the cap without an intervening kickoff) and `v0.151.0` (moved at the `v0.157.0` kickoff) and `v0.152.0` (moved at the `v0.158.0` kickoff) and `v0.153.0` and `v0.154.0` (moved at the `v0.159.0` and `v0.160.0` kickoffs; earlier passes did not extend this line) and `v0.155.0` (moved at the `v0.161.0` kickoff) and `v0.156.0` (moved at the `v0.162.0` kickoff) and `v0.157.0` (moved at the `v0.163.0` kickoff) and `v0.158.0` (moved at the `v0.164.0` kickoff) and `v0.159.0` (moved at the `v0.165.0` kickoff) and `v0.160.0` (moved at the `v0.166.0` kickoff) and `v0.161.0` (moved at the `v0.167.0` kickoff) and `v0.164.0` (moved at the `v0.170.0` kickoff) and `v0.165.0` (moved at the `v0.171.0` kickoff) and `v0.166.0` (moved at the `v0.172.0` kickoff) and `v0.167.0` (moved at the `v0.173.0` kickoff) and `v0.168.0` (moved at the `v0.174.0` kickoff) as the live file crossed its *current + last five* cap. Each version's own `## vX.Y.Z` heading is the index — search for it. `v0.40.1` and earlier moved here
 2026-07-10; **`v0.41.0` through `v0.120.0` moved here 2026-09-07** in the `v0.126.0` pass, which
 resumed this convention after it had lapsed for 85 releases — `RELEASES.md` had reached 116
 sections against its documented design of *current + last few versions*. Both passes are MOVES,
@@ -22463,3 +22463,101 @@ blocks signoff.** Three non-blocking follow-ups logged rather than silently drop
     5,003) with 0 clicks, meeting neither leg of the row's own 30-click-or-2,000-send floor. An
     unmet floor is a re-date per the row's own rule, not a verdict either way — re-dated to the
     doctrine's own pre-specified 60-day backstop from the `V149` deploy, not a fresh interval.
+
+## v0.168.0 - Free Quota, Fairly Metered
+
+**Status: Released** (signed off 2026-10-09; commits `0ce371a3`/`ad6caa8c` on `releases/v0.168.0`)
+
+Theme: fix a confirmed production defect where Free-tier Study Pack quota counted note copies and
+shared-pack remixes the same as paid LLM generations, incorrectly blocking real generation capacity
+for 76 real users.
+
+### Background
+
+Found by a same-day, four-correction-pass product health audit
+(`docs/claude-findings/2026-10-08-product-health-funnel-audit.md`, indexed at this kickoff), confirmed
+independently by a concurrent session ("Feature Planner") working the same evidence, and root-caused
+jointly: `StudyPackUsageService.resolveUsage` takes `max(trackedUsage.studyPackGenerations(),
+persistedStudyPackCount)`, where `persistedStudyPackCount` is a raw `COUNT(*)` of `study_packs` rows
+by owner and period — with no distinction between a real LLM generation and a copy/remix.
+`copySourceStudyPack` (`NoteService.java`, shipped `v0.52.0`-era per the audit, confirmed 2026-06-04)
+and `remixSharedStudyPack` (`ShareService.java`) both insert a `study_packs` row with no LLM call and
+never call `incrementStudyPackGeneration` — correctly, since neither is a generation. The floor's raw
+count doesn't make that distinction, so a user who copies/adopts heavily can hit `remaining = 0` on
+their real generation quota having generated nothing. **75 of the 76 affected users hit this via Study
+Plan adoption in the prior 30 days** — the single behavior the same audit's §6 found most predictive of
+retention, meaning the bug actively penalizes the product's best-performing behavior.
+
+**Considered and explicitly excluded from this release**, per the owner's own request to scope
+narrowly after a wider "fully implement Study Journey" option was evaluated and found not ready:
+- **CE dashboard goal-card framing** — re-checked 2026-10-09 and found **already resolved** as a side
+  effect of `v0.167.0` (Civil Engineering is now a valid `exam_goal_slug`, so `buildGoalNudge` already
+  resolves `GOAL_TYPE_EXAM` for it); zero production users currently have this goal set either way.
+  Nothing to ship. Not to be re-proposed without new evidence.
+- **Exam Hub page for Civil Engineering** — Product UX explicitly deferred this pending adoption
+  evidence; unchanged since that decision.
+- **Multi-goal support** — re-verified live 2026-10-09: still exactly 2 production users show the
+  pattern (checkpoint due 2026-12-07, not yet due; see `ROADMAP.md`'s Backlog Index).
+- **Degree Journey catalog (Phase C of `docs/claude-plans/degree-study-journeys-stage1-architecture-audit.md`)**
+  — architecturally fully approved with zero open decisions (§22), but its own stated dependency
+  ("at least two published Years") is unmet: exactly one BS Computer Science Year root exists today,
+  and it is unpublished. Content-authoring gate, not a code gate.
+- **Public Note → Study Journey discovery** — the original discovery brief's §14 keeps
+  "recommendations"/"Explore" changes explicitly forbidden without their own fresh decision.
+
+### Fix
+
+`StudyPackUsageService.resolveUsage` drops the `persistedStudyPackCount` floor and the `max()`
+entirely, trusting `trackedUsage.studyPackGenerations()` alone. Verified safe by enumerating every
+`StudyPackEntity` construction site in the backend (exactly three: the real generation path in
+`StudyPackService.saveStudyPack`, which always increments except for the existing, intentional
+`ADMIN`-bypass via `enforceLimits`; and the two copy/remix paths above, which never should). No
+evidence found that the floor has ever caught a genuine undercount — its only observable effect was
+inflating usage for copies, remixes, and (incidentally) failing to respect the existing ADMIN
+quota-exemption either, since a raw count has no exemption logic.
+
+**Spend decision (owner, 2026-10-09):** restoring quota to the 76 blocked users is bounded by real
+production token averages at ~$2.08/month at full utilization by every affected user (derived from
+`study_packs`' own 90-day average input/output tokens on the FREE tier — 3,077 input + 943 output
+tokens/generation, `gpt-4.1-mini` pricing) — not the audit's own abstract "2.8M tokens" framing, which
+had no dollar figure attached. **Owner decided: ship uncapped, no spend ceiling** — the exposure is
+immaterial at this scale.
+
+**Known limitation, explicitly not fixed here:** `study_packs.estimated_cost` is NULL on 100% of
+production rows (FREE and PREMIUM alike) — confirmed while deriving the number above. The column
+exists but whatever is meant to populate it (`GeneratedStudyPackContent.estimatedCost()`) does not.
+Not bundled into this release — unsized, and this release is deliberately kept to one fix.
+
+Anti-drift: no change to quota VALUES, no change to plan tiers, no change to any other usage-metered
+feature (Challenge Quiz, Adaptive Practice, Long Exam). Additive-safe: `UsageSnapshot`'s shape is
+unchanged, only its internal computation.
+
+**Delivery:** isolated bug fix, 1 file + its test — Claude Code implements directly per `CLAUDE.md`'s
+task-routing table, no Codex prompt.
+
+**Verification tier:** one scoped cold falsification agent at signoff (money/quota semantics changed,
+per `CLAUDE.md`'s gate) — run via Codex (`codex exec`, `workspace-write` sandbox) against an isolated
+local clone, per owner request, rather than the Agent tool used for `v0.167.0`'s equivalent pass.
+
+**Falsification pass results (2026-10-09, Codex, 8 claims checked against live code in an isolated
+clone, no credentials available or needed):** 7 of 8 confirmed — the method no longer queries
+`study_packs` at all, the real generation path's `incrementStudyPackGeneration` call is unconditional
+except the pre-existing `ADMIN` bypass, exactly 3 `StudyPackEntity` construction sites exist and only
+one increments, the actual enforcement path (`assertMonthlyStudyPackQuotaAvailable`, which throws
+`MONTHLY_STUDY_PACK_LIMIT_REACHED`) calls the fixed method directly — not just a display surface —
+no other caller was missed, the 3 targeted unit tests pass fresh (46 tests, 0 failures), and the diff
+touches exactly the 3 stated files with no other usage-metered feature touched. **1 of 8 refuted:**
+the regression-guard test's name overclaimed — it verified pure pass-through logic, not an actual
+copy/remix. **Fixed, not just documented:** confirmed the real guarantee is structural (`NoteService`
+and `ShareService` have no `UserUsageService` dependency anywhere in their constructors or anything
+either depends on, including `ActivityTrackingService` — copying/remixing is architecturally incapable
+of reaching `incrementStudyPackGeneration`, not merely observed not to), renamed the test and
+documented this precisely (PR #1483, commit `ad6caa8c`).
+
+### Shipped
+
+- **Fix (PR #1482, commit `0ce371a3`):** `StudyPackUsageService.resolveUsage` drops the quota floor,
+  trusting the tracked generation counter alone. Full backend suite + Docker-backed
+  `NativeQueryPostgresIntegrationTest` both clean before merge.
+- **Falsification correction (PR #1483, commit `ad6caa8c`):** test naming/documentation fix per the
+  Codex pass above — no production code change.

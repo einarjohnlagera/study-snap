@@ -3,11 +3,41 @@ package com.studysnap.backend.config;
 import com.studysnap.backend.entity.PlanType;
 import com.studysnap.backend.entity.ProfileType;
 import org.junit.jupiter.api.Test;
+import org.springframework.boot.context.properties.bind.Bindable;
+import org.springframework.boot.context.properties.bind.Binder;
+import org.springframework.boot.context.properties.source.ConfigurationPropertySources;
+import org.springframework.boot.env.YamlPropertySourceLoader;
+import org.springframework.core.io.FileSystemResource;
+
+import java.io.IOException;
+import java.math.BigDecimal;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class StudySnapPropertiesTest {
+
+    @Test
+    void applicationYamlBindsBracketedModelPriceKeysAndRates() throws IOException {
+        // The test classpath has its own application.yaml; read the production file explicitly.
+        var sources = new YamlPropertySourceLoader().load(
+                "application", new FileSystemResource("src/main/resources/application.yaml"));
+        var binder = new Binder(ConfigurationPropertySources.from(sources.get(0)));
+        Map<String, StudySnapProperties.ModelPrice> prices = binder.bind(
+                "studysnap.curation-cost-alert.model-prices",
+                Bindable.mapOf(String.class, StudySnapProperties.ModelPrice.class))
+                .orElseThrow(() -> new AssertionError("application.yaml model prices did not bind"));
+
+        assertThat(prices).containsKeys("gpt-6.1-sol", "gpt-4.1-mini");
+        assertThat(prices).doesNotContainKeys("[gpt-6.1-sol]", "[gpt-4.1-mini]");
+        assertThat(prices.get("gpt-6.1-sol").getInput()).isEqualByComparingTo(new BigDecimal("2.00"));
+        assertThat(prices.get("gpt-6.1-sol").getCachedInput()).isNull();
+        assertThat(prices.get("gpt-6.1-sol").getOutput()).isEqualByComparingTo(new BigDecimal("10.00"));
+        assertThat(prices.get("gpt-4.1-mini").getInput()).isEqualByComparingTo(new BigDecimal("0.40"));
+        assertThat(prices.get("gpt-4.1-mini").getCachedInput()).isNull();
+        assertThat(prices.get("gpt-4.1-mini").getOutput()).isEqualByComparingTo(new BigDecimal("1.60"));
+    }
 
     @Test
     void linkedLearnerGuardianConsentUsesConservativeConfigurableDefault() {

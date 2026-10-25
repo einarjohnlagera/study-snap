@@ -1,5 +1,6 @@
 package com.studysnap.backend.service;
 
+import com.studysnap.backend.service.model.LlmRouting;
 import com.studysnap.backend.dto.AddNoteCollectionItemsRequest;
 import com.studysnap.backend.dto.AdoptGoalResponse;
 import com.studysnap.backend.dto.AdoptStudyPlanResponse;
@@ -1023,7 +1024,7 @@ public class NoteCollectionService {
         NoteCollectionEntity collection = getOwnedCollectionOrThrow(collectionId, userId);
         validateCompanionTarget(collection);
         CompanionContent draft = llmStudyPackService.generateCompanion(
-                buildCompanionGenerationContext(collection),
+                buildCompanionGenerationContext(collection).withRouting(LlmRouting.paidInteractive()),
                 sections
         );
         return GeneratedCompanionContentResponse.from(draft);

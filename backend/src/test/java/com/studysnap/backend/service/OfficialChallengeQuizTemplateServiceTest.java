@@ -170,7 +170,8 @@ class OfficialChallengeQuizTemplateServiceTest {
         when(studyPackRepository.findById(studyPackId)).thenReturn(Optional.of(officialStudyPack));
         when(generationContextResolver.resolveForStudyPack(officialId, officialStudyPack)).thenReturn(context);
         when(quizGenerationService.generateChallengeQuiz(
-                eq("Official pack"), eq("Summary"), eq(List.of("Concept")), eq(List.of()), eq(20), eq("medium"), eq(context)
+                eq("Official pack"), eq("Summary"), eq(List.of("Concept")), eq(List.of()), eq(20), eq("medium"),
+                eq(context.withRouting(com.studysnap.backend.service.model.LlmRouting.tiered(officialId)))
         )).thenReturn(GeneratedChallengeQuizContent.withoutUsage(List.of(
                 new QuizItem("Official question", List.of("A", "B", "C", "D"), "A", "Concept", "Explanation")
         )));
@@ -210,7 +211,8 @@ class OfficialChallengeQuizTemplateServiceTest {
         when(studyPackRepository.findById(studyPackId)).thenReturn(Optional.of(officialStudyPack));
         when(generationContextResolver.resolveForStudyPack(officialId, officialStudyPack)).thenReturn(context);
         when(quizGenerationService.generateChallengeQuiz(
-                eq("Official pack"), eq("Summary"), eq(List.of("Concept")), eq(List.of()), eq(20), eq("medium"), eq(context)
+                eq("Official pack"), eq("Summary"), eq(List.of("Concept")), eq(List.of()), eq(20), eq("medium"),
+                eq(context.withRouting(com.studysnap.backend.service.model.LlmRouting.tiered(officialId)))
         )).thenReturn(GeneratedChallengeQuizContent.withoutUsage(List.of(
                 new QuizItem("Official question", List.of("A", "B", "C", "D"), "A", "Concept", "Explanation")
         )));

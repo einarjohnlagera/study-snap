@@ -14,8 +14,12 @@ import com.studysnap.backend.dto.CompanionMentorTipAction;
 import com.studysnap.backend.dto.CompanionSection;
 import com.studysnap.backend.dto.QuizItem;
 import com.studysnap.backend.entity.LearnerLevel;
+import com.studysnap.backend.entity.ModelTier;
 import com.studysnap.backend.exception.AppException;
 import com.studysnap.backend.service.LlmStudyPackService;
+import com.studysnap.backend.service.LlmModelRouter;
+import com.studysnap.backend.service.model.LlmRoute;
+import com.studysnap.backend.service.model.LlmRouting;
 import com.studysnap.backend.service.StudyPackGenerationContextResolver;
 import com.studysnap.backend.service.model.CompanionGenerationContext;
 import com.studysnap.backend.service.model.GeneratedChallengeQuizContent;
@@ -42,6 +46,7 @@ import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestClientResponseException;
 
 import java.io.IOException;
+import java.net.SocketTimeoutException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.EnumSet;
@@ -102,6 +107,30 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
     private static final int MAX_INVALID_OUTPUT_ATTEMPTS = 2;
     private static final int PARALLEL_BUFFER = 2;
     private static final String INVALID_OUTPUT_CODE = "LLM_INVALID_OUTPUT";
+    private static final String LLM_MODEL_MISSING_MESSAGE = "LLM model is missing for the selected route.";
+    private static final String LOG_OPERATION = "operation";
+    private static final String LOG_ROUTE = "route";
+    private static final String LOG_MODEL = "model";
+    private static final String LOG_TIER = "tier";
+    private static final String LOG_LATENCY_MS = "latency_ms";
+    private static final String LOG_ATTEMPT = "attempt";
+    private static final String LOG_OUTCOME = "outcome";
+    private static final String LOG_INPUT_TOKENS = "input_tokens";
+    private static final String LOG_OUTPUT_TOKENS = "output_tokens";
+    private static final String LOG_CACHED_TOKENS = "cached_tokens";
+    private static final String LOG_REASONING_TOKENS = "reasoning_tokens";
+    private static final String LLM_CALL_LOG_FORMAT = "action=llm_call " + LOG_OPERATION + "={} " + LOG_ROUTE
+            + "={} " + LOG_MODEL + "={} " + LOG_TIER + "={} " + LOG_LATENCY_MS + "={} "
+            + LOG_ATTEMPT + "={} " + LOG_OUTCOME + "={} " + LOG_INPUT_TOKENS + "={} "
+            + LOG_OUTPUT_TOKENS + "={} " + LOG_CACHED_TOKENS + "={} " + LOG_REASONING_TOKENS + "={}";
+    private static final String OUTCOME_SUCCESS = "SUCCESS";
+    private static final String OUTCOME_HTTP_ERROR = "HTTP_ERROR";
+    private static final String OUTCOME_TIMEOUT = "TIMEOUT";
+    private static final String OUTCOME_SCHEMA_OR_PARSE = "SCHEMA_OR_PARSE";
+    private static final ThreadLocal<Integer> ATTEMPT_NUMBER = ThreadLocal.withInitial(() -> 1);
+    private static final ThreadLocal<PendingCallLog> PENDING_CALL_LOG = new ThreadLocal<>();
+    private static final ThreadLocal<Boolean> DEFER_SUCCESS_LOG = ThreadLocal.withInitial(() -> false);
+    private static final ThreadLocal<String> TRANSPORT_OUTCOME = new ThreadLocal<>();
     private static final int MAX_LOG_VALUE_LENGTH = 80;
     private static final String LONG_EXAM_FIRST_HALF_HINT = "Generate questions covering the first half of the material.";
     private static final String LONG_EXAM_SECOND_HALF_HINT = "Generate questions covering the second half of the material.";
@@ -203,36 +232,46 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
     private final ObjectMapper objectMapper;
     private final RestClient restClient;
     private final OpenAiPromptResources promptResources;
+    private final LlmModelRouter modelRouter;
 
     @Override
     public GeneratedStudyPackContent generateStudyPack(String normalizedNotesText, StudyPackGenerationContext context) {
         Objects.requireNonNull(context, "context");
-        return retryOnceOnInvalidOutput(() -> generateStudyPackOnce(normalizedNotesText, context));
+        LlmModelRouter.Selection selection = select(context.routing());
+        return retryOnceOnInvalidOutput(() -> generateStudyPackOnce(normalizedNotesText, context, selection));
     }
 
     @Override
     public String regenerateSummary(String normalizedNoteContent, StudyPackGenerationContext context) {
-        return retryOnceOnInvalidOutput(() -> regenerateSummaryOnce(normalizedNoteContent, context));
+        LlmModelRouter.Selection selection = select(context.routing());
+        return retryOnceOnInvalidOutput(() -> regenerateSummaryOnce(normalizedNoteContent, context, selection));
     }
 
     @Override
     public String generateNoteFromTopic(String topic, StudyPackGenerationContext context) {
-        return retryOnceOnInvalidOutput(() -> generateNoteFromTopicOnce(topic, context));
+        LlmModelRouter.Selection selection = select(context.routing());
+        return retryOnceOnInvalidOutput(() -> generateNoteFromTopicOnce(topic, context, selection));
     }
 
     @Override
     public CompanionContent generateCompanion(CompanionGenerationContext context, Set<CompanionSection> sections) {
         Objects.requireNonNull(context, "context");
         Set<CompanionSection> requestedSections = normalizeCompanionSections(sections);
-        return retryOnceOnInvalidOutput(() -> generateCompanionOnce(context, requestedSections));
+        LlmModelRouter.Selection selection = select(context.routing());
+        return retryOnceOnInvalidOutput(() -> generateCompanionOnce(context, requestedSections, selection));
     }
 
-    private String regenerateSummaryOnce(String normalizedNoteContent, StudyPackGenerationContext context) {
-        String model = requireConfiguredModel();
+    private LlmModelRouter.Selection select(LlmRouting routing) {
+        return modelRouter.resolve(routing);
+    }
+
+    private String regenerateSummaryOnce(String normalizedNoteContent, StudyPackGenerationContext context,
+            LlmModelRouter.Selection selection) {
+        String model = requireConfiguredModel(selection.model(), LLM_MODEL_MISSING_MESSAGE);
         JsonSchemaResponse<PromptRegeneratedSummary> response = executeJsonSchemaOperation(
                 model,
                 buildSummaryRegenerationInputMessages(normalizedNoteContent, context),
-                summaryRegenerationOperation(),
+                summaryRegenerationOperation().withSelection(selection),
                 buildRegeneratedSummarySchema(),
                 PromptRegeneratedSummary.class
         );
@@ -243,16 +282,17 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
         return summary;
     }
 
-    private String generateNoteFromTopicOnce(String topic, StudyPackGenerationContext context) {
+    private String generateNoteFromTopicOnce(String topic, StudyPackGenerationContext context,
+            LlmModelRouter.Selection selection) {
         String normalizedTopic = StringNormalizationUtils.normalizeWhitespaceToSingleSpaceOrNull(topic);
         if (normalizedTopic == null) {
             throw invalidOutput("The note generation service returned invalid content. Please try again.");
         }
-        String model = requireConfiguredModel();
+        String model = requireConfiguredModel(selection.model(), LLM_MODEL_MISSING_MESSAGE);
         JsonSchemaResponse<PromptGeneratedNote> response = executeJsonSchemaOperation(
                 model,
                 buildGenerateNoteInputMessages(normalizedTopic, context),
-                noteGenerationOperation(),
+                noteGenerationOperation().withSelection(selection),
                 buildGeneratedNoteSchema(),
                 PromptGeneratedNote.class
         );
@@ -266,15 +306,15 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
 
     private CompanionContent generateCompanionOnce(
             CompanionGenerationContext context,
-            Set<CompanionSection> requestedSections
+            Set<CompanionSection> requestedSections,
+            LlmModelRouter.Selection selection
     ) {
-        // Companion drafts are curated, human-reviewed prose shown to every learner on a plan,
-        // so they use the premium generation tier rather than the lower-latency critique tier.
-        String model = requireConfiguredPremiumModel();
+        // Companion drafts are curated prose; the caller pins this interactive path separately.
+        String model = requireConfiguredModel(selection.model(), LLM_MODEL_MISSING_MESSAGE);
         JsonSchemaResponse<PromptCompanionContent> response = executeJsonSchemaOperation(
                 model,
                 buildCompanionInputMessages(context, requestedSections),
-                companionOperation(),
+                companionOperation().withSelection(selection),
                 buildCompanionSchema(),
                 PromptCompanionContent.class
         );
@@ -283,18 +323,20 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
 
     private GeneratedStudyPackContent generateStudyPackOnce(
             String normalizedNotesText,
-            StudyPackGenerationContext context
+            StudyPackGenerationContext context,
+            LlmModelRouter.Selection selection
     ) {
-        String model = requireConfiguredModel();
+        String model = requireConfiguredModel(selection.model(), LLM_MODEL_MISSING_MESSAGE);
         ArrayNode inputMessages = buildInputMessages(normalizedNotesText, context);
         JsonSchemaResponse<PromptStudyPack> response = executeJsonSchemaOperation(
                 model,
                 inputMessages,
-                studyPackOperation(),
+                studyPackOperation().withSelection(selection),
                 promptResources.responseSchema(),
                 PromptStudyPack.class
         );
-        return toGeneratedStudyPackContent(response.payload(), response.responseJson(), model, inputMessages);
+        return toGeneratedStudyPackContent(response.payload(), response.responseJson(), model, inputMessages,
+                selection);
     }
 
     private ArrayNode buildInputMessages(String normalizedNotesText, StudyPackGenerationContext context) {
@@ -343,14 +385,6 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
         return input;
     }
 
-    private String requireConfiguredModel() {
-        return requireConfiguredModel(properties.getSettings().getModelFree(), "LLM model is missing. Please configure LLM_MODEL_FREE.");
-    }
-
-    private String requireConfiguredPremiumModel() {
-        return requireConfiguredModel(properties.getSettings().getModelPremium(), "LLM premium model is missing. Please configure LLM_MODEL_PREMIUM.");
-    }
-
     private String requireConfiguredCritiqueModel() {
         return requireConfiguredModel(properties.getSettings().getModelCritique(), "LLM critique model is missing. Please configure LLM_MODEL_CRITIQUE.");
     }
@@ -385,12 +419,71 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
             JsonNode schema,
             Class<T> payloadType
     ) {
-        JsonNode responseJson = executeJsonSchemaRequest(
-                buildJsonSchemaRequest(model, inputMessages, operation.schemaName(), schema),
-                operation
-        );
-        T payload = parseOutputPayload(responseJson, payloadType, operation.invalidFormatMessage());
-        return new JsonSchemaResponse<>(payload, responseJson);
+        flushPendingCallLog(OUTCOME_SUCCESS);
+        long startedAt = System.nanoTime();
+        JsonNode responseJson = null;
+        String outcome = OUTCOME_SUCCESS;
+        try {
+            responseJson = executeJsonSchemaRequest(
+                    buildJsonSchemaRequest(model, inputMessages, operation.schemaName(), schema), operation);
+            T payload = parseOutputPayload(responseJson, payloadType, operation.invalidFormatMessage());
+            return new JsonSchemaResponse<>(payload, responseJson);
+        } catch (AppException ex) {
+            outcome = switch (ex.getCode()) {
+                case "LLM_REQUEST_FAILED" -> OUTCOME_HTTP_ERROR;
+                case "LLM_UNAVAILABLE" -> Objects.requireNonNullElse(TRANSPORT_OUTCOME.get(), OUTCOME_HTTP_ERROR);
+                default -> OUTCOME_SCHEMA_OR_PARSE;
+            };
+            throw ex;
+        } finally {
+            TRANSPORT_OUTCOME.remove();
+            JsonNode usage = responseJson == null ? objectMapper.createObjectNode() : responseJson.path("usage");
+            LlmModelRouter.Selection selection = operation.selection();
+            PendingCallLog call = new PendingCallLog(operation.schemaName(),
+                    selection == null ? LlmRoute.CRITIQUE : selection.route(), model,
+                    selection == null ? LlmModelRouter.TIER_NOT_APPLICABLE : selection.tier(),
+                    TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedAt), ATTEMPT_NUMBER.get(),
+                    LlmResponseUtils.asNullableInt(usage.get(LOG_INPUT_TOKENS)),
+                    LlmResponseUtils.asNullableInt(usage.get(LOG_OUTPUT_TOKENS)),
+                    LlmResponseUtils.asNullableInt(usage.path("input_tokens_details").get(LOG_CACHED_TOKENS)),
+                    LlmResponseUtils.asNullableInt(usage.path("output_tokens_details").get(LOG_REASONING_TOKENS)));
+            if (OUTCOME_SUCCESS.equals(outcome) && DEFER_SUCCESS_LOG.get()) {
+                // A wrapped operation can make more than one HTTP call; an earlier deferred call that
+                // execution moved past did succeed, so log it rather than let this one overwrite it.
+                flushPendingCallLog(OUTCOME_SUCCESS);
+                PENDING_CALL_LOG.set(call);
+            } else {
+                logCall(call, outcome);
+            }
+        }
+    }
+
+    private static boolean hasSocketTimeout(Throwable failure) {
+        for (Throwable cause = failure; cause != null; cause = cause.getCause()) {
+            if (cause instanceof SocketTimeoutException) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private void flushPendingCallLog(String outcome) {
+        PendingCallLog call = PENDING_CALL_LOG.get();
+        if (call != null) {
+            PENDING_CALL_LOG.remove();
+            logCall(call, outcome);
+        }
+    }
+
+    private void logCall(PendingCallLog call, String outcome) {
+        log.info(LLM_CALL_LOG_FORMAT, call.operation(), call.route(), call.model(), call.tier(),
+                call.latencyMs(), call.attempt(), outcome, call.inputTokens(), call.outputTokens(),
+                call.cachedTokens(), call.reasoningTokens());
+    }
+
+    private record PendingCallLog(String operation, LlmRoute route, String model, String tier,
+            long latencyMs, int attempt, Integer inputTokens, Integer outputTokens,
+            Integer cachedTokens, Integer reasoningTokens) {
     }
 
     private JsonNode executeJsonSchemaRequest(
@@ -425,6 +518,7 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
         } catch (IOException ex) {
             throw invalidOutput(operation.invalidFormatMessage());
         } catch (RestClientException ex) {
+            TRANSPORT_OUTCOME.set(hasSocketTimeout(ex) ? OUTCOME_TIMEOUT : OUTCOME_HTTP_ERROR);
             String requestId = MDC.get("requestId");
             log.warn(
                     "{} requestId={} errorCode={} message={}",
@@ -451,13 +545,14 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
             PromptStudyPack promptStudyPack,
             JsonNode responseJson,
             String fallbackModel,
-            ArrayNode inputMessages
+            ArrayNode inputMessages,
+            LlmModelRouter.Selection selection
     ) {
         validatePromptStudyPack(promptStudyPack);
         String normalizedSubject = normalizeGeneratedSubject(promptStudyPack.subject());
         List<String> normalizedKeyConcepts = normalizeAndValidateKeyConcepts(promptStudyPack.keyConcepts());
         List<String> normalizedTags = normalizeAndValidateTags(promptStudyPack.tags(), promptStudyPack.title());
-        List<QuizItem> quizItems = buildStudyPackQuizItems(promptStudyPack.quiz(), fallbackModel, inputMessages);
+        List<QuizItem> quizItems = buildStudyPackQuizItems(promptStudyPack.quiz(), fallbackModel, inputMessages, selection);
 
         UsageMetadata usageMetadata = extractUsageMetadata(responseJson, fallbackModel);
         return new GeneratedStudyPackContent(
@@ -471,7 +566,9 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
                 usageMetadata.inputTokens(),
                 usageMetadata.outputTokens(),
                 usageMetadata.cachedInputTokens(),
-                null
+                null,
+                selection.modelTier(),
+                fallbackModel
         );
     }
 
@@ -487,7 +584,8 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
     private List<QuizItem> buildStudyPackQuizItems(
             List<PromptQuizItem> promptQuizItems,
             String model,
-            ArrayNode inputMessages
+            ArrayNode inputMessages,
+            LlmModelRouter.Selection selection
     ) {
         List<QuizItem> quizItems = new ArrayList<>();
         Set<String> normalizedQuestions = new HashSet<>();
@@ -528,6 +626,7 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
                     answerIndex,
                     new ConsistencyRetryContext(
                             model,
+                            selection,
                             inputMessages,
                             "note_lib_study_pack_quiz",
                             "Study pack quiz generation",
@@ -1787,10 +1886,16 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
 
     @Override
     public String generateQuickReviewStudyTip(List<String> incorrectQuestionSummaries) {
+        return generateQuickReviewStudyTip(incorrectQuestionSummaries, LlmRouting.interactiveQuiz());
+    }
+
+    @Override
+    public String generateQuickReviewStudyTip(List<String> incorrectQuestionSummaries, LlmRouting routing) {
         if (incorrectQuestionSummaries == null || incorrectQuestionSummaries.isEmpty()) {
             return null;
         }
-        String model = requireConfiguredModel();
+        LlmModelRouter.Selection selection = select(routing);
+        String model = requireConfiguredModel(selection.model(), LLM_MODEL_MISSING_MESSAGE);
 
         String joinedSummaries = incorrectQuestionSummaries.stream()
                 .filter(Objects::nonNull)
@@ -1806,7 +1911,7 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
         JsonSchemaResponse<PromptStudyTip> response = executeJsonSchemaOperation(
                 model,
                 buildQuickReviewStudyTipInputMessages(joinedSummaries),
-                studyTipOperation(),
+                studyTipOperation().withSelection(selection),
                 buildStudyTipSchema(),
                 PromptStudyTip.class
         );
@@ -1841,7 +1946,8 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
                 questionCount,
                 "note_lib_adaptive_quiz",
                 "Adaptive practice quiz generation",
-                normalizedWeakConcepts
+                normalizedWeakConcepts,
+                select(context.routing())
         );
     }
 
@@ -1857,7 +1963,6 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
         List<String> normalizedKeyConcepts = sanitizeConceptList(keyConcepts);
         List<String> normalizedDisallowedQuestions = sanitizeQuestionList(disallowedQuestions);
         return generateQuizWithSchema(
-                requireConfiguredPremiumModel(),
                 buildInterviewPracticeInputMessages(
                         studyPackSummary == null ? "" : studyPackSummary,
                         normalizedKeyConcepts,
@@ -1870,7 +1975,8 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
                 "Interview practice generation",
                 normalizedKeyConcepts,
                 normalizedKeyConcepts,
-                false
+                false,
+                select(context.routing())
         );
     }
 
@@ -1916,7 +2022,8 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
                 questionCount,
                 "note_lib_challenge_quiz",
                 "Challenge quiz generation",
-                normalizedKeyConcepts
+                normalizedKeyConcepts,
+                select(context.routing())
         );
     }
 
@@ -1947,7 +2054,8 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
                 questionCount,
                 "note_lib_challenge_quiz",
                 "Challenge quiz generation (more)",
-                normalizedKeyConcepts
+                normalizedKeyConcepts,
+                select(context.routing())
         );
     }
 
@@ -1976,7 +2084,8 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
                 "note_lib_board_exam",
                 "Board exam quiz generation",
                 normalizedKeyConcepts,
-                false
+                false,
+                select(context.routing())
         );
     }
 
@@ -2005,7 +2114,8 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
                 LONG_EXAM_SCHEMA_NAME,
                 "Long exam generation",
                 normalizedKeyConcepts,
-                normalizedKeyConcepts
+                normalizedKeyConcepts,
+                select(context.routing())
         );
     }
 
@@ -2127,7 +2237,8 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
                 LONG_EXAM_SCHEMA_NAME,
                 "Long exam generation batch",
                 normalizedKeyConcepts,
-                normalizedKeyConcepts
+                normalizedKeyConcepts,
+                select(context.routing())
         );
     }
 
@@ -2151,155 +2262,64 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
                 questionCount,
                 "note_lib_teacher_quiz",
                 "Teacher quiz generation",
-                conceptFallbackPool
+                conceptFallbackPool,
+                select(context.routing())
         );
     }
 
     private List<QuizItem> generateQuizWithSchema(
-            ArrayNode inputMessages,
-            int questionCount,
-            String schemaName,
-            String operationLabel,
-            List<String> conceptFallbackPool
+            ArrayNode inputMessages, int questionCount, String schemaName, String operationLabel,
+            List<String> conceptFallbackPool, LlmModelRouter.Selection selection
     ) {
-        return generateQuizWithSchema(inputMessages, questionCount, schemaName, operationLabel, conceptFallbackPool, List.of(), true);
+        return generateQuizWithSchema(inputMessages, questionCount, schemaName, operationLabel,
+                conceptFallbackPool, List.of(), true, selection);
     }
 
     private List<QuizItem> generateQuizWithSchema(
-            ArrayNode inputMessages,
-            int questionCount,
-            String schemaName,
-            String operationLabel,
-            List<String> conceptFallbackPool,
-            List<String> keyConceptEnum
+            ArrayNode inputMessages, int questionCount, String schemaName, String operationLabel,
+            List<String> conceptFallbackPool, List<String> keyConceptEnum,
+            LlmModelRouter.Selection selection
     ) {
-        return generateQuizWithSchema(inputMessages, questionCount, schemaName, operationLabel, conceptFallbackPool, keyConceptEnum, true);
+        return generateQuizWithSchema(inputMessages, questionCount, schemaName, operationLabel,
+                conceptFallbackPool, keyConceptEnum, true, selection);
     }
 
     private List<QuizItem> generateQuizWithSchema(
-            ArrayNode inputMessages,
-            int questionCount,
-            String schemaName,
-            String operationLabel,
-            List<String> conceptFallbackPool,
-            boolean allowTrueFalse
+            ArrayNode inputMessages, int questionCount, String schemaName, String operationLabel,
+            List<String> conceptFallbackPool, boolean allowTrueFalse,
+            LlmModelRouter.Selection selection
     ) {
-        return generateQuizWithSchema(inputMessages, questionCount, schemaName, operationLabel, conceptFallbackPool, List.of(), allowTrueFalse);
+        return generateQuizWithSchema(inputMessages, questionCount, schemaName, operationLabel,
+                conceptFallbackPool, List.of(), allowTrueFalse, selection);
     }
 
     private List<QuizItem> generateQuizWithSchema(
-            ArrayNode inputMessages,
-            int questionCount,
-            String schemaName,
-            String operationLabel,
-            List<String> conceptFallbackPool,
-            List<String> keyConceptEnum,
-            boolean allowTrueFalse
+            ArrayNode inputMessages, int questionCount, String schemaName, String operationLabel,
+            List<String> conceptFallbackPool, List<String> keyConceptEnum, boolean allowTrueFalse,
+            LlmModelRouter.Selection selection
     ) {
-        String model = requireConfiguredModel();
-        return generateQuizWithSchema(
-                model,
-                inputMessages,
-                questionCount,
-                schemaName,
-                operationLabel,
-                conceptFallbackPool,
-                keyConceptEnum,
-                allowTrueFalse
-        );
-    }
-
-    private List<QuizItem> generateQuizWithSchema(
-            String model,
-            ArrayNode inputMessages,
-            int questionCount,
-            String schemaName,
-            String operationLabel,
-            List<String> conceptFallbackPool
-    ) {
-        return generateQuizWithSchema(
-                model,
-                inputMessages,
-                questionCount,
-                schemaName,
-                operationLabel,
-                conceptFallbackPool,
-                List.of(),
-                true
-        );
-    }
-
-    private List<QuizItem> generateQuizWithSchema(
-            String model,
-            ArrayNode inputMessages,
-            int questionCount,
-            String schemaName,
-            String operationLabel,
-            List<String> conceptFallbackPool,
-            boolean allowTrueFalse
-    ) {
-        return generateQuizWithSchema(model, inputMessages, questionCount, schemaName, operationLabel, conceptFallbackPool, List.of(), allowTrueFalse);
-    }
-
-    private List<QuizItem> generateQuizWithSchema(
-            String model,
-            ArrayNode inputMessages,
-            int questionCount,
-            String schemaName,
-            String operationLabel,
-            List<String> conceptFallbackPool,
-            List<String> keyConceptEnum,
-            boolean allowTrueFalse
-    ) {
-        return generateQuizWithSchemaResponse(
-                model,
-                inputMessages,
-                questionCount,
-                schemaName,
-                operationLabel,
-                conceptFallbackPool,
-                keyConceptEnum,
-                allowTrueFalse
-        ).quizItems();
+        return generateQuizWithSchemaResponse(selection, inputMessages, questionCount, schemaName,
+                operationLabel, conceptFallbackPool, keyConceptEnum, allowTrueFalse).quizItems();
     }
 
     private GeneratedChallengeQuizContent generateChallengeQuizWithSchema(
-            ArrayNode inputMessages,
-            int questionCount,
-            String schemaName,
-            String operationLabel,
-            List<String> conceptFallbackPool
+            ArrayNode inputMessages, int questionCount, String schemaName, String operationLabel,
+            List<String> conceptFallbackPool, LlmModelRouter.Selection selection
     ) {
-        String model = requireConfiguredModel();
+        String model = requireConfiguredModel(selection.model(), LLM_MODEL_MISSING_MESSAGE);
         GeneratedQuizResponse generated = generateQuizWithSchemaResponse(
-                model,
-                inputMessages,
-                questionCount,
-                schemaName,
-                operationLabel,
-                conceptFallbackPool,
-                List.of(),
-                true
-        );
-        UsageMetadata usageMetadata = extractUsageMetadataOrNull(
-                generated.responseJson(),
-                model,
-                operationLabel
-        );
+                selection, inputMessages, questionCount, schemaName, operationLabel,
+                conceptFallbackPool, List.of(), true);
+        UsageMetadata usageMetadata = extractUsageMetadataOrNull(generated.responseJson(), model, operationLabel);
         if (usageMetadata == null) {
             return GeneratedChallengeQuizContent.withoutUsage(generated.quizItems());
         }
-        return new GeneratedChallengeQuizContent(
-                generated.quizItems(),
-                usageMetadata.modelUsed(),
-                usageMetadata.inputTokens(),
-                usageMetadata.outputTokens(),
-                usageMetadata.cachedInputTokens()
-        );
+        return new GeneratedChallengeQuizContent(generated.quizItems(), usageMetadata.modelUsed(),
+                usageMetadata.inputTokens(), usageMetadata.outputTokens(), usageMetadata.cachedInputTokens());
     }
 
     private GeneratedQuizResponse generateQuizWithSchemaResponse(
-            String model,
+            LlmModelRouter.Selection selection,
             ArrayNode inputMessages,
             int questionCount,
             String schemaName,
@@ -2309,7 +2329,7 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
             boolean allowTrueFalse
     ) {
         return retryOnceOnInvalidOutput(() -> generateQuizWithSchemaOnce(
-                model,
+                selection,
                 inputMessages,
                 questionCount,
                 schemaName,
@@ -2321,7 +2341,7 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
     }
 
     private GeneratedQuizResponse generateQuizWithSchemaOnce(
-            String model,
+            LlmModelRouter.Selection selection,
             ArrayNode inputMessages,
             int questionCount,
             String schemaName,
@@ -2330,11 +2350,12 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
             List<String> keyConceptEnum,
             boolean allowTrueFalse
     ) {
+        String model = requireConfiguredModel(selection.model(), LLM_MODEL_MISSING_MESSAGE);
         List<String> normalizedKeyConceptEnum = sanitizeConceptList(keyConceptEnum);
         JsonSchemaResponse<PromptGeneratedQuiz> response = executeJsonSchemaOperation(
                 model,
                 inputMessages,
-                quizOperation(schemaName, operationLabel),
+                quizOperation(schemaName, operationLabel).withSelection(selection),
                 buildGeneratedQuizSchema(
                         questionCount,
                         allowTrueFalse,
@@ -2376,6 +2397,7 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
                     answerIndex,
                     new ConsistencyRetryContext(
                             model,
+                            selection,
                             inputMessages,
                             schemaName,
                             operationLabel,
@@ -2465,6 +2487,7 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
             String rejectedQuestion,
             ConsistencyRetryContext context
     ) {
+        flushPendingCallLog(OUTCOME_SCHEMA_OR_PARSE);
         ArrayNode retryMessages = context.inputMessages().deepCopy();
         retryMessages.add(buildTextMessage(
                 "developer",
@@ -2477,7 +2500,8 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
             JsonSchemaResponse<PromptGeneratedQuiz> retryResponse = executeJsonSchemaOperation(
                     context.model(),
                     retryMessages,
-                    quizOperation(context.schemaName() + "_consistency_retry", context.operationLabel() + " consistency retry"),
+                    quizOperation(context.schemaName() + "_consistency_retry", context.operationLabel() + " consistency retry")
+                            .withSelection(context.selection()),
                     buildGeneratedQuizSchema(
                             1,
                             context.allowTrueFalse(),
@@ -2570,9 +2594,15 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
     private <T> T retryOnceOnInvalidOutput(Supplier<T> operation) {
         AppException lastInvalidOutput = null;
         for (int attempt = 1; attempt <= MAX_INVALID_OUTPUT_ATTEMPTS; attempt++) {
+            ATTEMPT_NUMBER.set(attempt);
+            DEFER_SUCCESS_LOG.set(true);
             try {
-                return operation.get();
+                T result = operation.get();
+                flushPendingCallLog(OUTCOME_SUCCESS);
+                return result;
             } catch (AppException ex) {
+                flushPendingCallLog(INVALID_OUTPUT_CODE.equals(ex.getCode())
+                        ? OUTCOME_SCHEMA_OR_PARSE : OUTCOME_SUCCESS);
                 if (!INVALID_OUTPUT_CODE.equals(ex.getCode())) {
                     throw ex;
                 }
@@ -2581,6 +2611,12 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
                     throw ex;
                 }
                 log.warn("Retrying OpenAI response validation after invalid output on attempt {}: {}", attempt, ex.getMessage());
+            } catch (RuntimeException ex) {
+                flushPendingCallLog(OUTCOME_SCHEMA_OR_PARSE);
+                throw ex;
+            } finally {
+                ATTEMPT_NUMBER.remove();
+                DEFER_SUCCESS_LOG.remove();
             }
         }
         throw Objects.requireNonNull(lastInvalidOutput, "lastInvalidOutput");
@@ -3090,6 +3126,7 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
 
     private record ConsistencyRetryContext(
             String model,
+            LlmModelRouter.Selection selection,
             ArrayNode inputMessages,
             String schemaName,
             String operationLabel,
@@ -3157,8 +3194,20 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
             String emptyResponseMessage,
             String invalidFormatMessage,
             String requestFailedMessage,
-            String unavailableMessage
+            String unavailableMessage,
+            LlmModelRouter.Selection selection
     ) {
+        private JsonSchemaOperation(String schemaName, String requestFailedLogKey, String unavailableLogKey,
+                String emptyResponseMessage, String invalidFormatMessage, String requestFailedMessage,
+                String unavailableMessage) {
+            this(schemaName, requestFailedLogKey, unavailableLogKey, emptyResponseMessage,
+                    invalidFormatMessage, requestFailedMessage, unavailableMessage, null);
+        }
+
+        private JsonSchemaOperation withSelection(LlmModelRouter.Selection value) {
+            return new JsonSchemaOperation(schemaName, requestFailedLogKey, unavailableLogKey,
+                    emptyResponseMessage, invalidFormatMessage, requestFailedMessage, unavailableMessage, value);
+        }
     }
 
     private record JsonSchemaResponse<T>(

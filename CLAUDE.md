@@ -36,7 +36,17 @@ impossible.
 
 **NoteLib** (rebranded from StudySnap — db/package names still use `studysnap`) is a notes-first study workspace. Users capture notes, generate AI-powered Study Packs, and practice with quizzes. Database schema uses the old name; do not rename unless explicitly asked.
 
-Current version: **v0.173.0 — Cached Catalog** (Released 2026-10-16, **merge to `main` HELD for the 2026-10-22 gate, not yet deployed**; kicked off 2026-10-15, base branch `releases/v0.173.0`, cut from `docs/v0.172.0-deploy-stamp` = `main` after `v0.172.0` merged as #1501 plus the deploy-time stamp `3961383e`, which rides in here instead of PR #1502). Takes the remaining repeat load off `notelib-db-prod`'s Explore discovery reads: `v0.172.0` made `getPublicLibraryDiscoverySections` compute the copies/likes/views aggregates once per call; this release caches them in-process (Caffeine, short TTL — fix plan `docs/claude-plans/2026-10-14-db-oom-memory-ceiling-fix-plan.md`, Leg D "Durable follow-up"), owner-deferred here on 2026-10-14. **Scope:** (1) discovery aggregate cache (backend, Tier N, Codex) — what is cached, the TTL, and whether a copy/like invalidates the entry (else a reload inside the TTL undoes #1500's fresh copy counts) are settled in the contract before the brief; re-read the backend `instance_count` read-only first; (2) the carried `v0.172.0` deploy-time docs commit. **⚠️ MERGE GATE: the release PR merges to `main` only AFTER the `[CHECKPOINT — due 2026-10-22]` signal-9 read** (window 2026-10-15T07:09:09Z → 10-22T07:09Z; read by 10-29 at the latest, Render log retention). A cache shipped inside that window makes the read unattributable, and every `main` merge redeploys, which is itself a kill mechanism. ≥ 5 kills makes Leg A (plan upgrade) the next lever and can redirect this release — owner decides. **Anti-drift:** Caffeine is the ONE allowed new dependency (no Redis, no HTTP cache headers, no Next.js `revalidate` change); no Hikari pool-size change (pinned by the 09-04 outage fix + `TomcatThreadPoolHikariAlignmentTest`); no change to FEATURED/POPULAR weights, decay, thresholds or the paginated listing's SQL (pinned by #1498's 14 golden SQL files); no checkout/payment path (RC-4 baseline) and no public-note/adoption path (RC-5 read); no migration. Full scope in `RELEASES.md`.
+Current version: **v0.174.0 — Enhanced Generation** (Released 2026-10-19, **merge to `main` HELD, not yet deployed**. It merges only after `v0.173.0`'s PR #1505 has merged with a merge commit, after its `[CHECKPOINT — due 2026-10-22]` signal-9 read, and after the `[CHECKPOINT — due cache deploy + 7 days]` read. Base branch `releases/v0.174.0`, cut from `releases/v0.173.0` (`7d1407a1`).)
+
+**What shipped:**
+- `LlmModelRouter` routes the **Study Pack family** by tier: Study Pack generation (async and the synchronous `/study` routes), summary regeneration, the malformed-quiz repair, note-from-topic and the Official template seed. FREE → `LLM_MODEL_FREE`; Plus/Pro (`SubscriptionService`, expiry-aware) and `UserRole.ADMIN` → `LLM_MODEL_PREMIUM`.
+- **Every interactive quiz and practice path is pinned to today's model for every plan:** Challenge (start, +5, multi-note), Board Exam, Long Exam, Adaptive, study tip, teacher quiz (`LLM_MODEL_INTERACTIVE_QUIZ`); Interview quiz and companion (`LLM_MODEL_PAID_INTERACTIVE`). Challenge tier routing and the hybrid preparation UX are `v0.175.0`.
+- A $10/month partial curation cost alert (`CurationCostAlertJob`, alert only).
+- `/study` Try again.
+
+**⚠️ THE NEW MODELS GO LIVE ONLY WITH THE OWNER'S POST-MERGE RENDER SWITCH** (`LLM_MODEL_FREE=gpt-6-luna`, `LLM_MODEL_PREMIUM=gpt-6.1-sol`). Until that switch, after the merge, Plus/Pro and ADMIN Study Pack paths run on Render's `gpt-4.1`. The merge-day handoff and rollback values are in the `RELEASES.md` v0.174.0 signoff record. **Never call the Render MCP's env-var update.**
+
+**Anti-drift:** no Plus/Pro entitlement, quota or pricing change; no announcement, and customer copy (if any) says "Enhanced Study Pack Generation" and never names a model; no mass regeneration and no historical `model_tier`/`model_used` rewrite; no prompt-content change; no `LLM_MODEL_CRITIQUE` change (its own assessment, before 2027-01-14); no migration. Full record in `RELEASES.md`.
 
 ## Source-of-truth docs (read before implementing anything)
 
@@ -118,7 +128,13 @@ Required env vars (put in `backend/.env`):
 - `LLM_API_KEY` (OpenAI key)
 - `JWT_SECRET`
 
-LLM models are config-driven: `LLM_MODEL_FREE` (default: `gpt-4.1-mini`), `LLM_MODEL_PREMIUM` (default: `gpt-4.1`), and `LLM_MODEL_CRITIQUE` (default: `gpt-4.1-mini` for short Interview Practice feedback).
+LLM models are config-driven and routed by `LlmModelRouter` (v0.174.0); every caller passes an explicit route:
+- **Study Pack family, routed by tier:** `LLM_MODEL_FREE` (default `gpt-6-luna`) for FREE; `LLM_MODEL_PREMIUM` (default `gpt-6.1-sol`) for Plus/Pro and for `UserRole.ADMIN` on any plan.
+- **Interactive quiz and practice, pinned for every plan:** `LLM_MODEL_INTERACTIVE_QUIZ` (default `gpt-4.1-mini`).
+- **Interview Practice quiz and the companion:** `LLM_MODEL_PAID_INTERACTIVE` (default `gpt-4.1`).
+- **Interview critique and Ask Companion:** `LLM_MODEL_CRITIQUE` (default `gpt-4.1-mini`).
+
+**⚠️ Production Render sets `LLM_MODEL_FREE` / `LLM_MODEL_PREMIUM` explicitly, and the owner switches them; never change them yourself.** `gpt-4.1` and `gpt-4.1-mini` shut down on 2027-01-14 (pin checkpoint due 2026-12-15).
 
 ### Frontend (Next.js)
 

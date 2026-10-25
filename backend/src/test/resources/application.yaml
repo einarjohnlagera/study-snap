@@ -39,6 +39,8 @@ studysnap:
   notifications:
     # ⚠️ Hourly at :15 in production, so it WOULD fire on the wall clock during a full suite.
     cleanup-cron: "-"
+  curation-cost-alert:
+    schedule-cron: "-"
   billing:
     usage-reset-cron: "-"
     subscription-expiry-cron: "-"

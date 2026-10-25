@@ -135,6 +135,9 @@ class GeneratedQuizServiceTest {
         verify(userUsageService).incrementChallengeQuizGeneration(eq(userId), any(OffsetDateTime.class));
         assertThat(response.noteId()).isEqualTo(noteId.toString());
         assertThat(response.questions()).hasSize(10);
+        verify(quizGenerationService).generateTeacherQuiz(eq("Cell Structure"), eq("Cell membrane and nucleus notes"),
+                eq(List.of()), eq(10), org.mockito.ArgumentMatchers.argThat(context ->
+                        com.studysnap.backend.service.model.LlmRouting.interactiveQuiz().equals(context.routing())));
 
         ArgumentCaptor<GeneratedQuizEntity> captor = ArgumentCaptor.forClass(GeneratedQuizEntity.class);
         verify(generatedQuizRepository).save(captor.capture());

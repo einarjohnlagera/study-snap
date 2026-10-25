@@ -112,8 +112,8 @@ Interview Practice is a **sub-mode of Adaptive Practice**, not a standalone quiz
 - Generation prompt is **section-aware**: scans the note's Key Concepts and tries to spread questions across multiple facets (technical / applied / behavioral when content supports it). No formal template object — the note itself carries role context via title, courseProgram, and content.
 - New critique prompt pair: `interview-critique-developer.txt` + `interview-critique-system.txt`
 - **Model split** (cost optimization):
-  - Generation call: `gpt-4.1` (premium, scenario quality matters)
-  - Critique calls: `gpt-4.1-mini` (cheaper, scoped output)
+  - Generation call: `LLM_MODEL_PAID_INTERACTIVE` (default `gpt-4.1`; pinned for every plan)
+  - Critique calls: `LLM_MODEL_CRITIQUE` (default `gpt-4.1-mini`; unchanged)
 
 ### Quota and gating
 

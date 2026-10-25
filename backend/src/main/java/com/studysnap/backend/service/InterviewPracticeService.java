@@ -1,5 +1,6 @@
 package com.studysnap.backend.service;
 
+import com.studysnap.backend.service.model.LlmRouting;
 import com.studysnap.backend.config.StudySnapProperties;
 import com.studysnap.backend.dto.InterviewPracticeAnswerRequest;
 import com.studysnap.backend.dto.InterviewPracticeAnswerResponse;
@@ -693,7 +694,7 @@ public class InterviewPracticeService {
                     sourceStudyPack.getKeyConcepts() == null ? List.of() : sourceStudyPack.getKeyConcepts(),
                     sourceDisallowedQuestions,
                     sourceNoteRef.questionCount(),
-                    generationContext
+                    generationContext.withRouting(LlmRouting.paidInteractive())
             );
             List<QuizItem> uniqueGeneratedQuiz = QuizDeduplicationUtils.uniqueQuestions(
                     generatedQuiz,

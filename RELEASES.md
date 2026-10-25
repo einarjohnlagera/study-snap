@@ -1,5 +1,415 @@
 # RELEASES.md - NoteLib
 
+## v0.174.0 - Enhanced Generation
+
+**Status: Released** (signed off 2026-10-19; **merge to `main` HELD behind the v0.173.0 gates, so NOT yet
+deployed, and the new models go live only with the owner's post-merge Render switch**; see the merge-day
+handoff in the signoff record below. Kicked off 2026-10-16 on `releases/v0.174.0`, **cut from
+`releases/v0.173.0` (`7d1407a1`, signed off, NOT yet on `main`)** — owner decision 2026-10-16, the same pattern `v0.111.0`
+and `v0.120.0` used. Anything that changes on `releases/v0.173.0` after this cut is merged forward.)
+
+Theme: paid plans get the stronger model they were always tagged for. FREE moves to a newer model,
+Plus and Pro to the stronger one, and official NoteLib curation is routed on purpose rather than by
+the admin account's subscription tier, all before `gpt-4.1` retires on 2027-01-14.
+
+**Why this release exists.**
+- Every generation path ignores the plan tier. `ModelTier.PREMIUM` is written for paid plans
+  (`StudyPackService.java:721`), but nothing reads it to pick a model. Nine `LlmStudyPackService`
+  methods always use `LLM_MODEL_FREE` (`OpenAiLlmStudyPackService.java:231,251,288,1793,2199,2273`);
+  premium is used only at `:273` (companion) and `:1860` (Interview Practice).
+- The owner chose the new models on 2026-10-16: FREE → `gpt-6-luna`, Plus/Pro → `gpt-6.1-sol`.
+- The planning package is in `docs/claude-plans/2026-10-16-v0174-llm-tiering-remediation-tightened.md`
+  (plan), `…-audit-and-scope.md` (audit, 5a/5b trace) and
+  `docs/claude-plans/2026-10-16-llm-model-migration-benchmark-design.md` (benchmark).
+- Cost context (`docs/claude-findings/2026-10-16-study-packs-plantype-distribution-original-generations.md`):
+  2,002 of 2,234 original Study Packs come from the owner's ADMIN account, which holds a
+  non-billable PRO grant. No paid subscription is active. So the real Sol exposure is official
+  curation, not subscribers.
+
+**⚠️ MERGE GATE: this release's PR merges to `main` only after BOTH:**
+1. `v0.173.0`'s PR #1505 has merged, with a merge commit (it is held for the
+   `[CHECKPOINT — due 2026-10-22]` signal-9 read); and
+2. the `[CHECKPOINT — due cache deploy + 7 days]` read of `v0.173.0`'s cache. Owner decision
+   2026-10-16. Any `main` merge, and any Render env-var change, redeploys the backend. A deploy
+   briefly runs two connection pools, which is a known kill mechanism and would muddy that read.
+   `gpt-4.1` retires 2027-01-14, so waiting costs nothing.
+- The owner's Render env-var change for the new models is held to the same gate.
+
+### Planned Scope
+
+1. **Model benchmark (read-only, owner-approved $10 spend cap). Runs FIRST, and gates item 3.**
+   - Candidates: `gpt-4.1-mini` (baseline), `gpt-6-luna`, `gpt-6.1-sol`. Design in
+     `docs/claude-plans/2026-10-16-llm-model-migration-benchmark-design.md`: deterministic metrics
+     plus blind-adjudicated quality.
+   - Sol runs at its documented default reasoning effort. Measure billed reasoning tokens, quality,
+     latency and retries; tune effort afterwards.
+   - **$10 is a maximum, not an allowance for unlimited runs.** The execution plan (who runs it,
+     where the API key lives, the per-run cost estimate) goes to the owner before any spend. No
+     production writes.
+   - It also verifies API compatibility of both new models with the current request shape.
+2. **Tier routing for the Study Pack family, and pins for every interactive path.** Delivered as **three
+   pieces**, so each verification stays proportionate:
+   - **2a:** routing, pins, the log line and the `model_used` fix. Backend, Tier H, Codex at high effort;
+     brief `docs/codex-prompts/v0.174.0-item2a-tier-routing-and-pins.md`.
+   - **2b:** the cost alert (item 4). Tier N, Codex; brief `docs/codex-prompts/v0.174.0-item2b-curation-cost-alert.md`.
+   - **2c:** the `/study` and note-editor error-and-retry state. Frontend, Tier S, inline.
+
+   Both briefs were approved 2026-10-19 and shipped: #1508 (2b), #1509 (2a), #1510 (2c), plus the
+   pre-signoff fixes in #1511. **Revised 2026-10-19** by the owner's final decisions A1–A7,
+   verbatim in `docs/claude-plans/2026-10-19-owner-final-decisions-v0174-a1-a7.md`. Plan:
+   `docs/claude-plans/2026-10-19-v0174-v0175-consolidated-implementation-plan.md`.
+   - **Routed by tier** through one resolver that reads `SubscriptionService.resolvePlan` (expiry-aware):
+     FREE → `LLM_MODEL_FREE` (Luna); Plus/Pro → `LLM_MODEL_PREMIUM` (Sol); `UserRole.ADMIN` → Sol whatever
+     its plan (A1).
+     - Do NOT use `CuratorAuthoringPredicate.isCurator()`: it also matches TEACHER profiles.
+     - Two separate checks, one destination: `model_tier` stays `planType.isPaid()`
+       (`StudyPackService:721`).
+     - **Paths:**
+       - Study Pack generation: async, plus the synchronous `/study` routes;
+       - summary regeneration;
+       - note-from-topic, single and bulk;
+       - the Official template seed (its owner is the Official author, so Sol);
+       - the malformed-quiz repair, using **the pack owner's current effective tier** (A3), resolved inside
+         the async task. A missing or deleted owner routes as FREE and logs a warning.
+     - The tier is resolved once per generation, and that one snapshot sets both the model sent and the
+       `model_tier` label.
+     - The benchmark harness sets all four model keys, so every leg still sends the candidate model.
+   - **Pinned to today's model for every plan** (A1, A2):
+     - new `LLM_MODEL_INTERACTIVE_QUIZ` = `gpt-4.1-mini`: Challenge start, "+5" and multi-note; Adaptive
+       Practice; the Quick Review study tip; the teacher quiz; Board Exam and Long Exam, sessions and pools;
+     - new `LLM_MODEL_PAID_INTERACTIVE` = `gpt-4.1` (the production value of `LLM_MODEL_PREMIUM`, owner
+       verified, A7): Interview Practice quiz and the companion.
+     - `LLM_MODEL_CRITIQUE` is unchanged: Interview critique and Ask Companion.
+   - **The model is passed in by the caller.** Challenge start, "+5" and the template seed share
+     `generateChallengeQuizWithSchema`, and `generateStudyPack` is shared by learner routes and the repair.
+   - **`/study` conditions (A5):**
+     - keep the existing loading feedback and duplicate-submit guard (`use-study-pack.ts:191`);
+     - **add an actionable error-and-retry state** (the error card at `study-page-client.tsx:156-162` has no
+       retry action);
+     - no copy that promises a completion time;
+     - no new automatic retry.
+   - **Monitoring:**
+     - one structured log line per LLM call (data only, read by a Render log search);
+     - fix the Study Pack `model_used` fallback (`StudyPackService:722-723`), which records the free model
+       when a response lacks `model`;
+     - repaired packs keep their original `model_used` / `model_tier`. That is a documented known
+       limitation, not a rewrite (A3).
+   - **Shipped in #1509:** a test per path asserting the model **actually sent** for FREE, Plus, Pro, ADMIN on a FREE
+     plan and a lapsed paid plan, on every routed and pinned row. Pinned paths must ignore changes to
+     `LLM_MODEL_FREE` / `LLM_MODEL_PREMIUM`.
+     - The test surface spans all 11 caller services, even though routing changes only the Study Pack
+       family.
+3. **Model defaults to Luna / Sol (config + an OWNER env-var handoff).** The benchmark is complete and
+   adoption is approved (2026-10-17, as amended 2026-10-19).
+   - `application.yaml`: `LLM_MODEL_FREE` = `gpt-6-luna`, `LLM_MODEL_PREMIUM` = `gpt-6.1-sol`, plus the two
+     new pin keys at today's models.
+   - **The production env vars are an owner action.** Claude never calls the Render MCP's env-var update.
+     They change only after the merge gate.
+   - **Owner-verified Render state (2026-10-19):** `LLM_MODEL_FREE=gpt-4.1-mini` and
+     `LLM_MODEL_PREMIUM=gpt-4.1` are set; `LLM_MODEL_CRITIQUE` is unset (YAML default `gpt-4.1-mini`).
+     - **[CORRECTED 2026-10-19, pre-signoff falsification]** The earlier "the merge changes no model" claim was
+       WRONG. Before this release, every Study Pack path read `LLM_MODEL_FREE` (`gpt-4.1-mini` on Render) for
+       every plan. After it, Plus/Pro and ADMIN read `LLM_MODEL_PREMIUM`, which Render sets to `gpt-4.1`.
+       - **So merging to `main` with today's Render values moves Plus/Pro and all official curation from
+         `gpt-4.1-mini` to `gpt-4.1`**, at about 5× the per-token price. That covers Study Pack generation, summary
+         regeneration, repair, note-from-topic and the template seed.
+       - FREE and every pinned path are unchanged.
+       - **Rollback to today's behaviour** is `LLM_MODEL_PREMIUM=gpt-4.1-mini`, not "back to its current value".
+         Interview Practice and the companion are now pinned separately (`LLM_MODEL_PAID_INTERACTIVE`).
+       - **Owner decision 2026-10-19:** keep the Render overrides and change their values right after the
+         merge. Do not remove them, so that no future code default can switch production models on its own.
+         The steps are in the merge-day handoff in the signoff record.
+     - The two new pin keys stay unset and fall back to today's models.
+   - **The Long Exam pool stays at 48 in v0.174.0** (A4). Effective value confirmed 2026-10-19:
+     `application.yaml:249` `${LONG_EXAM_POOL_SIZE:48}`, the Java default `StudySnapProperties:169`, no
+     `application-prod.yaml` override, no Render override (owner, A7). All 626 production Long Exam pools
+     have `pool_size` 48. The reduction to 30 moves to v0.175.0.
+4. **Official curation cost alert (backend, Tier N, brief 2b).**
+   - **$10 per calendar month (A6). It alerts and never blocks.**
+   - The estimate is computed by a scheduled read-only job from **persisted** tokens on ADMIN-owned Study
+     Packs (`input_tokens`, `output_tokens`, `cached_input_tokens`), at configured per-token rates with the
+     cached-input discount.
+   - **It is labelled as partial, never as total curation spend.** Note generation from topics, template
+     seeding, summary regeneration and repair persist no tokens, so their cost is reviewed on the OpenAI
+     billing dashboard.
+   - **Delivery:** one in-app notification to the ADMIN account through `NotificationService.deliver`, with
+     a per-month dedup key, so a threshold crossing alerts once per month. `type` is a plain `VARCHAR(64)`
+     (`V139`), so a new `NotificationType` needs no migration.
+   - **The temporary pins expire:** `gpt-4.1` and `gpt-4.1-mini` shut down 2027-01-14. Every pinned path
+     needs its own replacement, not only Challenge (A2). Tracked by a `[CHECKPOINT]` row in `ROADMAP.md`.
+
+**Owner decision on the benchmark (2026-10-17, verbatim in
+`docs/claude-plans/2026-10-17-owner-conditional-approval-challenge-quiz-ux.md`). Conditional approval of the strategy,
+not approval to deploy.**
+- **APPROVED:** FREE → `gpt-6-luna`.
+- **CONDITIONALLY APPROVED:** Plus/Pro → `gpt-6.1-sol`, and official curation → Sol regardless of the admin
+  account's plan, within the agreed cost caps and monitoring.
+- **Condition: Challenge Quiz start latency is a product UX issue this release must address, not an accepted
+  caveat.** Do not treat the 5-question benchmark leg as a proxy for the real 10/12/15-question and multi-note
+  starts.
+- Ten deliverables are owed before final rollout approval:
+  1. the updated v0.174.0 scope;
+  2. the model-routing matrix for FREE, Plus, Pro and curation;
+  3. the start-latency root cause;
+  4. a recommended UX solution;
+  5. a comparison of solutions;
+  6. a targeted-benchmark proposal for the real start sizes, needing owner approval before any paid call;
+  7. Board Exam and Long Exam validation on the production paths, including the parallel Long Exam variant;
+  8. a monitoring and rollback plan;
+  9. the split between v0.174.0 and future releases;
+  10. the remaining decisions.
+- Split by role (agreed between sessions 2026-10-17): **Feature Planner** owns 3, 4 and 5; **Release
+  Implementor** owns 1, 2, 6, 7, 8, 9 and 10.
+- The decision supersedes the separate Product UX consultation: Feature Planner's deliverables 3–5 answer the
+  prompt's questions. The prompt stays as input.
+- **Owner decisions, 2026-10-17 (later):**
+  - **Targeted benchmark: option A approved.** It runs Tier 1 (10/12/15-question starts and multi-note
+    3×6 and 6×3) plus the lower-reasoning-effort variant, under a **$4.50 hard stop** that includes the smoke
+    run (`docs/claude-plans/2026-10-17-v0174-targeted-challenge-start-benchmark-proposal.md`).
+    - The harness change is test scope only and goes to Codex on its own PR.
+    - The owner runs the paid calls.
+  - **[SUPERSEDED 2026-10-19 by A4: the pool stays 48 in v0.174.0; the reduction moves to v0.175.0.]**
+    **Long Exam pool: lower it rather than benchmark the 26-question pool call (owner).** The owner chose to
+    lower it; **Release Implementor chose 30** (`long-exam-pool-size`, `application.yaml:249`;
+    `StudySnapProperties:169`).
+    - **Trade-off:** at 30 a pool serves one exam and is then refreshed (`ExamQuestionPoolService:134`), so
+      reuse across sessions effectively ends. No learner uses Long Exam today.
+    - Item 3 checks that no validator or test assumes the pool is larger than the exam (`examSizeForMode`).
+    - 30 is the floor: a pool must hold at least one whole exam (`ExamQuestionPoolService:116-123`), and
+      the largest Long Exam is 30 questions (`StudySnapProperties:168`).
+    - At 30 the pool generates as two calls of 17, the same size a session already sends.
+    - It lands with item 3's `application.yaml` defaults. Existing pools are untouched, since none has been
+      served and no regeneration is allowed. If `LONG_EXAM_POOL_SIZE` is set on Render, changing it is an
+      owner action.
+  - ~~Still owed: the acceptable Challenge start wait~~ **Answered 2026-10-19:** a 30 s target and a 60 s
+    maximum blocking wait (owner decisions, Set 1). The Challenge work is split out to v0.175.0.
+- ~~Item 3's default and the item 2 brief wait on these deliverables.~~ **Discharged 2026-10-19:** the
+  deliverables were returned, the owner decided A1–A7, and items 2 and 3 shipped. No Challenge-specific
+  routing destination was adopted; Challenge work moved to v0.175.0.
+
+**Anti-drift:**
+- No change to Plus/Pro entitlements, `FeatureGateService` quotas or `UserUsageEntity`.
+- No pricing, plan copy or announcement. If customer-facing copy is ever needed, it says "Enhanced
+  Study Pack Generation" for Plus/Pro and never names an internal model.
+- No mass regeneration, and no historical `model_tier` or `model_used` rewrite. 5a: those columns
+  correctly record who last generated each pack.
+- No prompt-content change beyond what model compatibility strictly requires.
+- No migration.
+- No checkout/payment path.
+- No Hikari pool change.
+- Existing notes, Study Packs and learner progress are untouched.
+
+**Deferred, each to be scoped on its own once it has data** (decision 1, approved 2026-10-16):
+- the optional regeneration UX; quiz-only regeneration stays a feasibility assessment;
+- Sol-as-checker quiz-pool remediation, which needs the benchmark numbers and selective validation
+  first;
+- the `LLM_MODEL_CRITIQUE` migration, which needs its own feedback-quality check (tightened plan
+  §10) and must also land before 2027-01-14;
+- pricing/subscription copy and announcements;
+- retention instrumentation.
+
+**Verification tier:** Tier H, with at least one scoped cold falsification pass at pre-signoff.
+Item 2 changes a shared method and per-generation cost, so falsify both the tier resolution and the
+ADMIN carve-out.
+
+**Kickoff scan (2026-10-16):**
+- One unindexed plan file (the `v0.173.0` Product UX consultation prompt) was moved to
+  `docs/claude-plans/done/`: a consumed release artifact.
+- 16 overdue `[CHECKPOINT]` rows are carried unread, not actioned at this kickoff. Among them are
+  the 7 long-running ones (`v0.107.0`, `v0.90.0`, `v0.106.0`, `v0.97.0`, `v0.111.0`, `v0.96.0`,
+  `v0.74.0`).
+- New this scan: the `v0.166.0` Hikari checkpoint row's title still reads open although its Status
+  records the 2026-10-14 read. That is a title/status contradiction, left for a dedicated pass.
+- RC-3's reminder-timing checkpoint falls due 2026-10-21, inside this release.
+- `v0.168.0` was archived from both files; no line was lost, checked against the pre-move copies.
+
+### Shipped
+
+- **Item 1, part 1: the benchmark harness (PR #1506, `8d417a35`, test scope only). No API call made
+  and nothing spent yet; the owner runs the paid smoke and full runs.**
+  - `backend/src/test/java/com/studysnap/backend/benchmark/`. `LlmModelBenchmark` runs the real
+    `OpenAiLlmStudyPackService` and production prompts on one candidate model. It is skipped unless
+    `-Dllm.benchmark=true`, so a normal build and CI never run it. No file under `backend/src/main`
+    changed.
+  - `MeteringInterceptor` meters every HTTP call, including the service's own retries. It stops
+    before the next call at `spendStopUsd` (hard max $10) or `maxCalls`, and records raw `usage`
+    including reasoning tokens. It never saves the request or its headers.
+  - The README sets explicit per-model stops totalling $9.25 under the $10 cap: smoke $0.25 × 3,
+    then full runs at mini $1.50, Luna $0.75, Sol $7.00. Without them, the $8 per-command default
+    would have allowed up to $24.
+  - `sample-query.sql` is one read-only `SELECT` producing 81 public-note lines (A 40, B 32, C 5,
+    D 4). Its output holds note text, stays under `backend/target/`, and is never committed.
+  - Codex review P2, fixed with a regression test that fails without the fix: a transport failure
+    was classified `EMPTY`, which distorted that metric and bypassed the 3-consecutive-errors stop.
+  - Verification: full `./mvnw clean install` with Docker, 2,713 tests, 0 failures, before the
+    test-only P2 fix; `LlmModelBenchmarkTest` 12/12 after it.
+  - **Results caveat:** Leg B reuses each note's existing `gpt-4.1-mini` Study Pack as identical
+    input for all three models; the context fields approximate `StudyPackGenerationContextResolver`.
+  - Findings for item 2/4: `LlmResponseUtils` takes the first `output_text` and skips reasoning
+    items, so a second `output_text` is silently ignored; `extractUsageMetadata` does not record
+    reasoning tokens, which item 4's cost monitor needs.
+- **Item 1, part 2: benchmark run and results (2026-10-17). COMPLETE; item 3 is the owner's decision.**
+  Results and recommendation: `docs/claude-findings/2026-10-17-v0174-llm-benchmark-results.md`.
+  - The owner ran the smoke run and the three full runs: about **$2.62** of the $10 cap. Billed cost
+    is lower: `output_tokens` already includes reasoning, and cached input is billed below list price.
+  - Generations succeeded: `gpt-4.1-mini` 77/81 (3 timeouts at 180 s, 1 invalid Long Exam format),
+    `gpt-6-luna` 81/81, `gpt-6.1-sol` 81/81. No multi-output responses and no H4 flags on any model.
+  - Blind tier, 20 items per model, scored by a fresh agent: no regression detected for either
+    candidate. Differences between the means are within noise and are not evidence for an "Enhanced"
+    quality claim.
+  - Cost per generation: mini $0.0033, Luna $0.0015, Sol $0.0272.
+  - Recommendation: both candidates pass the pre-stated rule; Sol's cost is accepted under the execution
+    plan's own clause. Caveat for items 2 and 3: STARTING a Challenge Quiz waits in the foreground for 10–15
+    live questions whenever the learner's bank and the Official template fall short (33 starts by 29 of
+    34 learners since 2026-07-24). That wait is already p50 30 s / p90 62 s on mini, and projects to about
+    55–90 s on Luna and 90–175 s on Sol, near the 180 s timeout. "+5" is almost always served from the
+    bank (2 live batches for learners). The owner made it a release condition on 2026-10-17 (see Planned Scope); Sol's single-call Long Exam took up to 126 s against the 180 s timeout.
+
+- **Item 1, part 3: the Leg E harness for the targeted Challenge start benchmark (PR #1507, `5dffd5e6`,
+  test scope only). Nothing spent yet; the owner runs the paid calls.**
+  - `backend/src/test/java/com/studysnap/backend/benchmark/` gains cells S15 / S10 / S12 (15 `hard`,
+    10 `easy`, 12 `medium`, read from the `ChallengeQuizService` constants), M6x3 and M3x6 (multi-note
+    starts as sequential per-source calls), and VLOW (S15 with `reasoning.effort: "low"`, injected by the
+    interceptor on every attempt).
+  - It mirrors production's avoid-lists. Single-note uses the pack's saved quiz (`:396,463`). Multi-note
+    starts empty, accumulates, aborts on a failed source, and dedups the final set against the primary
+    pack's quiz (`:421,1831-1860`).
+  - It records accepted vs requested questions, the sequential start latency, the slowest source call, the
+    failed source index and timeouts. The summary excludes spend-stopped runs.
+  - The pre-flight fails the command before any HTTP call. `sample-query-e.sql` is one read-only `SELECT`;
+    a count-only version run against production returned all 52 paired lines.
+  - Run sheet: ten commands with explicit stops totalling $4.10, about $4.45 worst case with a one-call
+    overshoot per command, under the approved $4.50.
+  - Release Implementor fixed two issues after Codex, each with an assertion mutation-checked to fail
+    without its fix: a malformed line no longer passes silently, and spend-stopped runs no longer skew the
+    latency summary.
+  - Verification: `./mvnw install` with Docker, 2,723 tests, 0 failures, including
+    `NativeQueryPostgresIntegrationTest` (115). No file under `backend/src/main` changed.
+  - Known difference from production: multi-note cells use `medium`, but a learner's last Quick Review
+    score can make it `easy` or `hard`.
+- **Item 4: the Official curation cost alert (brief 2b, PR #1508, `c1a28305`). Alert only; never blocks.**
+  - `CurationCostAlertJob` runs hourly in UTC.
+    - It estimates the month's **tracked** cost of ADMIN-owned Study Pack generation from persisted tokens:
+      one native aggregate query by `model_used`, at configured per-model rates.
+    - At **USD 10** (owner A6) it delivers one in-app `CURATION_COST_ALERT` per ADMIN per month, deduplicated
+      by a per-month key through `NotificationService.deliver`.
+  - The copy states its partial scope: Study Pack generation only, excluding note generation from topics
+    (added in #1511), template seeding, summary regeneration and repair, with a pointer to the billing
+    dashboard. No model is named.
+  - The cached-input rate falls back to the input rate, which overstates cost. Reasoning tokens are not
+    added, because `output_tokens` already includes them.
+  - **Known limits (corrected by the pre-signoff pass; the earlier "$45 bulk regeneration" and "a repair
+    counts the original tokens" examples were wrong):**
+    - Summary regeneration and repair do **not** advance `updated_at`, so they are not counted at all.
+    - Share-link creation, owner reassignment, and title, subject and tag edits **do** advance it, and
+      re-count a pack's original tokens (over-count).
+    - An ADMIN remix copies the source pack's tokens into a new pack (over-count, with no LLM call behind it).
+    - Tokens from failed or retried attempts are never persisted (under-count).
+    - The month is UTC.
+  - Verified:
+    - `CurationCostAlertJobTest` 8/8, plus the notification dedup integration test.
+    - The full suite with Docker. The 7 Docker-dependent classes failed during a disk-full Docker outage
+      and all passed on rerun, including `NativeQueryPostgresIntegrationTest` at 116/116.
+    - The query, run read-only against production, returned 10 admin packs this month.
+  - Release Implementor fixed the new native test's fixture: notes for the fixture packs, and a past-month
+    window for isolation. No migration, and no frontend change (notification `type` is a plain string).
+- **Item 2a: tier routing for Study Pack generation and pins for every interactive path (PR #1509,
+  `96a46d78`; owner A1–A3).**
+  - `LlmModelRouter` resolves the model from an explicit route; a missing route throws.
+    - **TIERED:** FREE → `LLM_MODEL_FREE`; Plus/Pro → `LLM_MODEL_PREMIUM`, from the expiry-aware
+      `SubscriptionService` snapshot; `UserRole.ADMIN` on any plan → premium. A missing or deleted tier user
+      routes as FREE with a warning.
+    - **Routed paths:** Study Pack async and synchronous (requester); summary regeneration and the
+      malformed-quiz repair (pack owner, resolved at repair time); note-from-topic, single and bulk; the
+      Official template seed (note owner).
+  - **Pinned for every plan:**
+    - `LLM_MODEL_INTERACTIVE_QUIZ` (`gpt-4.1-mini`): Challenge start, +5, multi-note, Board Exam, Adaptive,
+      study tip, teacher quiz, Long Exam and the exam pools.
+    - `LLM_MODEL_PAID_INTERACTIVE` (`gpt-4.1`): Interview quiz and the companion.
+    - `LLM_MODEL_CRITIQUE` is untouched.
+  - **Metadata:** one tier snapshot per generation sets the model sent and `model_tier`, keeping the
+    PLUS||PRO rule. `model_used` falls back to the model sent. A repair keeps the original metadata (known
+    limitation).
+  - **Logging:** a structured log line per HTTP attempt (route, model, tier, latency, attempt, outcome, tokens
+    including reasoning). No prompt, body or headers.
+  - **Defaults:** `application.yaml` now defaults to `gpt-6-luna` / `gpt-6.1-sol`. Render sets
+    `LLM_MODEL_FREE` / `LLM_MODEL_PREMIUM`. **[CORRECTED: the merge to `main` DOES change a model.** Plus/Pro
+    and ADMIN Study Pack paths move from `gpt-4.1-mini` to Render's `LLM_MODEL_PREMIUM=gpt-4.1`. See the
+    correction under Planned Scope item 3.]
+  - **Verified:**
+    - Tests assert the model in every outgoing request body, per route and for every pinned method (Long
+      Exam halves, salvage, fallback and consistency retry included). Pins hold when the tier keys change.
+      Each caller's route is tested.
+    - A cold Opus falsification pass found no claim wrong. It found five gaps, which Codex fixed and Release
+      Implementor verified in the code: the null-route fallback, the Board Exam route test, body-level pin
+      tests, log outcome labels, and upstream error detail. Release Implementor also added a safeguard so a
+      deferred log line cannot be overwritten.
+    - `./mvnw install` with Docker: 2,770 tests, 0 failures, including `NativeQueryPostgresIntegrationTest`
+      116/116. Feature docs are updated; no migration.
+  - **Known:** an email-only Official author would route FREE. In production that email is the single ADMIN
+    account.
+- **Item 2c: Try again on the `/study` Study Pack error card (PR #1510, `f1a5c244`; owner A5).**
+  - A failed synchronous generation now offers a deliberate retry. It goes through the existing guarded
+    handler (disabled while loading or redirecting), never retries on its own, and makes no time promise.
+  - **The note-editor half of 2c needed no change.** Note-from-topic already meets A5: an inline error and a
+    toast, the topic kept, and "Generate Note" re-enabled (`note-editor-page-client.tsx` `handleGenerateNote`).
+  - Frontend suite 2,669 passed; tsc and eslint clean.
+- **Pre-signoff fixes (PR #1511, `fa474931`), from the cold falsification pass:**
+  - **Try again ran the wrong operation after a confirm-text failure.** It re-uploaded the image, spent OCR
+    quota and overwrote the learner's edited text.
+    - It now shows only after a retryable generation failure (a `retryable` flag in `useStudyPack`).
+    - It is hidden while confirmation is pending and after the signed-out error.
+    - Tests cover each case.
+  - The cost-alert copy now also excludes note generation from topics. The feature docs list every
+    over-count and under-count.
+  - `StudySnapPropertiesTest` binds the production YAML price map.
+  - Backend 2,771 tests with Docker; frontend 2,672.
+
+### Signoff record (2026-10-19)
+
+**Scope completeness, item by item:**
+1. **Benchmark: shipped**: #1506, #1507, and both owner-run runs (about $5.37 of the $10 cap).
+2. **Routing: shipped as CHANGED by owner A1.** Tier routing covers the Study Pack family only. Every
+   interactive path is pinned to today's model. Challenge routing moves to v0.175.0. Delivered as #1509,
+   #1510 and #1511.
+3. **Defaults: shipped in code** (`application.yaml`: Luna/Sol defaults plus two pins). **The production switch
+   is the owner's post-merge env change.** The Long Exam pool reduction is **deferred to v0.175.0** (A4).
+4. **Cost alert: shipped**: #1508 and #1511.
+
+**Verification:**
+- Tier H. Cold Opus falsification on 2a (five gaps, fixed). A release-wide cold pass at pre-signoff found
+  three confirmed issues, fixed in #1511, plus one wrong production-safety claim, corrected above.
+- Final backend build: 2,771 tests with Docker, 0 failures. Frontend: 2,672 passed.
+
+**Known limitations, recorded and not fixed:**
+- No test calls `CurationCostAlertJob.run()` through its `@Scheduled` entry or `findAdminUserIds` directly.
+  The cron and zone are asserted by `ScheduledJobCronContractTest`, and the job logic by `runAt`.
+- An email-only Official author would route FREE. Today that email is the single ADMIN account.
+- A repaired pack keeps its original `model_used` / `model_tier`.
+- The cost estimate's over-count and under-count cases are listed in item 4.
+
+**⚠️ MERGE-DAY HANDOFF. Every step is an owner action unless marked; follow it in order:**
+1. **#1505 (v0.173.0) merges with a merge commit, after its 2026-10-22 signal-9 read.** Then the v0.173.0
+   cache deploy + 7 days read.
+2. **Only then, open the `releases/v0.174.0` → `main` PR.** Opening it earlier would show v0.173.0's commits
+   in its diff.
+3. Merge it. Wait at least 5 minutes, then run `scripts/check-deploys.sh` (exit 0 = both platforms serve
+   `main`).
+   - **From this deploy until step 4, Plus/Pro and ADMIN Study Pack paths run on `gpt-4.1`** (Render's current
+     `LLM_MODEL_PREMIUM`).
+4. **Immediately set on Render: `LLM_MODEL_FREE=gpt-6-luna` and `LLM_MODEL_PREMIUM=gpt-6.1-sol`.** Do not
+   remove the overrides. This is a second redeploy: record both deploy times, because they matter for the
+   v0.173.0 memory-kill and cache reads. Wait, then run `check-deploys.sh` again.
+5. **First-use check** (read-only, Release Implementor can run it):
+   - the next ADMIN Study Pack's `model_used` starts with `gpt-6.1-sol`;
+   - the next FREE pack's starts with `gpt-6-luna`;
+   - a new Challenge session's `model_used` is still `gpt-4.1-mini`;
+   - Render logs show the structured per-call line.
+6. **Rollback to pre-release behaviour:** `LLM_MODEL_FREE=gpt-4.1-mini` and `LLM_MODEL_PREMIUM=gpt-4.1-mini`.
+   Interview Practice and the companion stay on their own pin. No data rewrite is needed.
+
+**Checkpoint:** `[CHECKPOINT — due env switch + 14 days]` in `ROADMAP.md`. The pin-retirement checkpoint is
+due 2026-12-15.
 ## v0.173.0 - Cached Catalog
 
 **Status: Released** (signed off 2026-10-16; **merge to `main` HELD for the 2026-10-22 gate, so NOT yet deployed**. Kicked off 2026-10-15 on `releases/v0.173.0`, cut from `docs/v0.172.0-deploy-stamp`
@@ -32,7 +442,7 @@ owner deferred it to this release on 2026-10-14.
    - Add Caffeine and cache the copies/likes/views aggregates behind
      `NoteService.getPublicLibraryDiscoverySections` for a short TTL (fix plan: 60–300 s).
    - **Product UX decision, 2026-10-15 (APPROVED with safeguards; consultation prompt
-     `docs/claude-plans/2026-10-15-discovery-cache-product-ux-consultation-prompt.md`):**
+     `docs/claude-plans/done/2026-10-15-discovery-cache-product-ux-consultation-prompt.md`):**
      - **Cache the ranked id lists of all three sections (Featured, Most Popular, Recently Added) as
        one coherent snapshot, TTL 300 s.** Existing ranking and exclusion semantics are preserved.
        Card counts and the viewer's liked state stay live per request, and are never cached.
@@ -809,104 +1219,6 @@ fixed in the same session).
   via Codex, independently re-verified (tests, `tsc --noEmit`, `npm run build` all re-run fresh, not
   trusted from the delivery report alone).
 
-## v0.168.0 - Free Quota, Fairly Metered
-
-**Status: Released** (signed off 2026-10-09; commits `0ce371a3`/`ad6caa8c` on `releases/v0.168.0`)
-
-Theme: fix a confirmed production defect where Free-tier Study Pack quota counted note copies and
-shared-pack remixes the same as paid LLM generations, incorrectly blocking real generation capacity
-for 76 real users.
-
-### Background
-
-Found by a same-day, four-correction-pass product health audit
-(`docs/claude-findings/2026-10-08-product-health-funnel-audit.md`, indexed at this kickoff), confirmed
-independently by a concurrent session ("Feature Planner") working the same evidence, and root-caused
-jointly: `StudyPackUsageService.resolveUsage` takes `max(trackedUsage.studyPackGenerations(),
-persistedStudyPackCount)`, where `persistedStudyPackCount` is a raw `COUNT(*)` of `study_packs` rows
-by owner and period — with no distinction between a real LLM generation and a copy/remix.
-`copySourceStudyPack` (`NoteService.java`, shipped `v0.52.0`-era per the audit, confirmed 2026-06-04)
-and `remixSharedStudyPack` (`ShareService.java`) both insert a `study_packs` row with no LLM call and
-never call `incrementStudyPackGeneration` — correctly, since neither is a generation. The floor's raw
-count doesn't make that distinction, so a user who copies/adopts heavily can hit `remaining = 0` on
-their real generation quota having generated nothing. **75 of the 76 affected users hit this via Study
-Plan adoption in the prior 30 days** — the single behavior the same audit's §6 found most predictive of
-retention, meaning the bug actively penalizes the product's best-performing behavior.
-
-**Considered and explicitly excluded from this release**, per the owner's own request to scope
-narrowly after a wider "fully implement Study Journey" option was evaluated and found not ready:
-- **CE dashboard goal-card framing** — re-checked 2026-10-09 and found **already resolved** as a side
-  effect of `v0.167.0` (Civil Engineering is now a valid `exam_goal_slug`, so `buildGoalNudge` already
-  resolves `GOAL_TYPE_EXAM` for it); zero production users currently have this goal set either way.
-  Nothing to ship. Not to be re-proposed without new evidence.
-- **Exam Hub page for Civil Engineering** — Product UX explicitly deferred this pending adoption
-  evidence; unchanged since that decision.
-- **Multi-goal support** — re-verified live 2026-10-09: still exactly 2 production users show the
-  pattern (checkpoint due 2026-12-07, not yet due; see `ROADMAP.md`'s Backlog Index).
-- **Degree Journey catalog (Phase C of `docs/claude-plans/degree-study-journeys-stage1-architecture-audit.md`)**
-  — architecturally fully approved with zero open decisions (§22), but its own stated dependency
-  ("at least two published Years") is unmet: exactly one BS Computer Science Year root exists today,
-  and it is unpublished. Content-authoring gate, not a code gate.
-- **Public Note → Study Journey discovery** — the original discovery brief's §14 keeps
-  "recommendations"/"Explore" changes explicitly forbidden without their own fresh decision.
-
-### Fix
-
-`StudyPackUsageService.resolveUsage` drops the `persistedStudyPackCount` floor and the `max()`
-entirely, trusting `trackedUsage.studyPackGenerations()` alone. Verified safe by enumerating every
-`StudyPackEntity` construction site in the backend (exactly three: the real generation path in
-`StudyPackService.saveStudyPack`, which always increments except for the existing, intentional
-`ADMIN`-bypass via `enforceLimits`; and the two copy/remix paths above, which never should). No
-evidence found that the floor has ever caught a genuine undercount — its only observable effect was
-inflating usage for copies, remixes, and (incidentally) failing to respect the existing ADMIN
-quota-exemption either, since a raw count has no exemption logic.
-
-**Spend decision (owner, 2026-10-09):** restoring quota to the 76 blocked users is bounded by real
-production token averages at ~$2.08/month at full utilization by every affected user (derived from
-`study_packs`' own 90-day average input/output tokens on the FREE tier — 3,077 input + 943 output
-tokens/generation, `gpt-4.1-mini` pricing) — not the audit's own abstract "2.8M tokens" framing, which
-had no dollar figure attached. **Owner decided: ship uncapped, no spend ceiling** — the exposure is
-immaterial at this scale.
-
-**Known limitation, explicitly not fixed here:** `study_packs.estimated_cost` is NULL on 100% of
-production rows (FREE and PREMIUM alike) — confirmed while deriving the number above. The column
-exists but whatever is meant to populate it (`GeneratedStudyPackContent.estimatedCost()`) does not.
-Not bundled into this release — unsized, and this release is deliberately kept to one fix.
-
-Anti-drift: no change to quota VALUES, no change to plan tiers, no change to any other usage-metered
-feature (Challenge Quiz, Adaptive Practice, Long Exam). Additive-safe: `UsageSnapshot`'s shape is
-unchanged, only its internal computation.
-
-**Delivery:** isolated bug fix, 1 file + its test — Claude Code implements directly per `CLAUDE.md`'s
-task-routing table, no Codex prompt.
-
-**Verification tier:** one scoped cold falsification agent at signoff (money/quota semantics changed,
-per `CLAUDE.md`'s gate) — run via Codex (`codex exec`, `workspace-write` sandbox) against an isolated
-local clone, per owner request, rather than the Agent tool used for `v0.167.0`'s equivalent pass.
-
-**Falsification pass results (2026-10-09, Codex, 8 claims checked against live code in an isolated
-clone, no credentials available or needed):** 7 of 8 confirmed — the method no longer queries
-`study_packs` at all, the real generation path's `incrementStudyPackGeneration` call is unconditional
-except the pre-existing `ADMIN` bypass, exactly 3 `StudyPackEntity` construction sites exist and only
-one increments, the actual enforcement path (`assertMonthlyStudyPackQuotaAvailable`, which throws
-`MONTHLY_STUDY_PACK_LIMIT_REACHED`) calls the fixed method directly — not just a display surface —
-no other caller was missed, the 3 targeted unit tests pass fresh (46 tests, 0 failures), and the diff
-touches exactly the 3 stated files with no other usage-metered feature touched. **1 of 8 refuted:**
-the regression-guard test's name overclaimed — it verified pure pass-through logic, not an actual
-copy/remix. **Fixed, not just documented:** confirmed the real guarantee is structural (`NoteService`
-and `ShareService` have no `UserUsageService` dependency anywhere in their constructors or anything
-either depends on, including `ActivityTrackingService` — copying/remixing is architecturally incapable
-of reaching `incrementStudyPackGeneration`, not merely observed not to), renamed the test and
-documented this precisely (PR #1483, commit `ad6caa8c`).
-
-### Shipped
-
-- **Fix (PR #1482, commit `0ce371a3`):** `StudyPackUsageService.resolveUsage` drops the quota floor,
-  trusting the tracked generation counter alone. Full backend suite + Docker-backed
-  `NativeQueryPostgresIntegrationTest` both clean before merge.
-- **Falsification correction (PR #1483, commit `ad6caa8c`):** test naming/documentation fix per the
-  Codex pass above — no production code change.
-
 ## Archived releases
 
 - `v0.163.0 — No Peeking` (Released) — archived to `docs/archive/RELEASES_ARCHIVE.md`.
@@ -917,3 +1229,4 @@ documented this precisely (PR #1483, commit `ad6caa8c`).
 - `v0.165.0 — Bounded Discovery` (Released) — closed the public-note discovery-rail DB-saturation restart mechanism (Leg B) and shipped three R4-pilot generation-quality fixes (G1, G2b, G5); carries its own now-closed `[CHECKPOINT — due 2026-10-12T15:24:27Z]` (fix worked, 0 restarts). Moved at the `v0.171.0` kickoff.
 - `v0.166.0 — Measured Twice` (Released) — archived to `docs/archive/RELEASES_ARCHIVE.md`. Moved at the `v0.172.0` kickoff.
 - `v0.167.0 — Study Journey Purpose` (Released) — archived to `docs/archive/RELEASES_ARCHIVE.md`. Moved at the `v0.173.0` kickoff.
+- `v0.168.0 — Free Quota, Fairly Metered` (Released) — archived to `docs/archive/RELEASES_ARCHIVE.md`. Moved at the `v0.174.0` kickoff.

@@ -24,6 +24,8 @@ public interface UserRepository extends JpaRepository<UserEntity, UUID> {
     Optional<UserEntity> findByPendingEmailIgnoreCase(String email);
     Optional<UserEntity> findByUsernameIgnoreCase(String username);
     List<UserEntity> findByRole(UserRole role);
+    @Query("select u.id from UserEntity u where u.role = com.studysnap.backend.entity.UserRole.ADMIN")
+    List<UUID> findAdminUserIds();
     long countByEmailVerifiedAtIsNotNull();
     List<UserEntity> findByStatusAndEmailVerifiedAtIsNotNull(UserStatus status);
     List<UserEntity> findByStatusAndEmailVerifiedAtIsNotNullAndInactivityRemindersEnabledTrue(UserStatus status);

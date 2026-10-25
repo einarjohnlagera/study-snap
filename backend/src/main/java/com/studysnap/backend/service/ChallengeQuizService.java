@@ -1,5 +1,6 @@
 package com.studysnap.backend.service;
 
+import com.studysnap.backend.service.model.LlmRouting;
 import com.studysnap.backend.config.StudySnapProperties;
 import com.studysnap.backend.dto.ChallengeQuizCompleteRequest;
 import com.studysnap.backend.dto.GenerateMoreChallengeQuizResponse;
@@ -456,7 +457,7 @@ public class ChallengeQuizService {
                             appendQuestionTexts(disallowedQuestions, bankedQuestions),
                             shortfall,
                             profile.difficulty(),
-                            generationContext
+                            generationContext.withRouting(LlmRouting.interactiveQuiz())
                     );
                     generatedQuiz = generatedContent.quizItems();
                 }
@@ -688,7 +689,7 @@ public class ChallengeQuizService {
                 disallowed.addAll(QuizDeduplicationUtils.toNormalizedQuestionSetFromStrings(sourceSavedQuestions));
                 List<QuizItem> generated = quizGenerationService.generateBoardExamQuiz(
                         sourcePack.getTitle(), sourcePack.getSummary(), getKeyConcepts(sourcePack),
-                        sourceSavedQuestions, source.questionCount(), difficulty, context
+                        sourceSavedQuestions, source.questionCount(), difficulty, context.withRouting(LlmRouting.interactiveQuiz())
                 );
                 List<QuizItem> unique = stampQuestionsWithSourceStudyPack(
                         QuizDeduplicationUtils.uniqueQuestions(generated, disallowed), sourceId
@@ -1175,7 +1176,7 @@ public class ChallengeQuizService {
                         existingConcepts,
                         shortfall,
                         difficulty,
-                        generationContext
+                        generationContext.withRouting(LlmRouting.interactiveQuiz())
                 );
                 generated = generatedContent.quizItems();
             }
@@ -1846,7 +1847,7 @@ public class ChallengeQuizService {
                     List.copyOf(disallowedQuestions),
                     sourceNoteRef.questionCount(),
                     difficulty,
-                    sourceContext
+                    sourceContext.withRouting(LlmRouting.interactiveQuiz())
             );
             List<QuizItem> uniqueGeneratedQuiz = QuizDeduplicationUtils.uniqueQuestions(
                     generatedContent.quizItems(),

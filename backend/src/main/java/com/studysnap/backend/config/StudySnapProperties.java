@@ -29,6 +29,7 @@ public class StudySnapProperties {
     private final Generation generation = new Generation();
     private final GoalAdoption goalAdoption = new GoalAdoption();
     private final Notifications notifications = new Notifications();
+    private final CurationCostAlert curationCostAlert = new CurationCostAlert();
 
     @Getter
     @Setter
@@ -47,8 +48,10 @@ public class StudySnapProperties {
         private int maxNotesChars = 12000;
         private long maxImageBytes = 5_000_000;
         private int quizQuestionsFree = 5;
-        private String modelFree = "gpt-4.1-mini";
-        private String modelPremium = "gpt-4.1";
+        private String modelFree = "gpt-6-luna";
+        private String modelPremium = "gpt-6.1-sol";
+        private String modelInteractiveQuiz = "gpt-4.1-mini";
+        private String modelPaidInteractive = "gpt-4.1";
         private String modelCritique = "gpt-4.1-mini";
         private String promptDir = "prompts/study-pack-v1";
     }
@@ -524,5 +527,35 @@ public class StudySnapProperties {
     public static class Notifications {
         private String cleanupCron = "0 15 * * * *";
         private int retentionDays = 90;
+    }
+
+    @Getter
+    @Setter
+    public static class CurationCostAlert {
+        private boolean enabled = true;
+        private BigDecimal thresholdUsd = new BigDecimal("10.00");
+        private String scheduleCron = "0 30 * * * *";
+        private Map<String, ModelPrice> modelPrices = new LinkedHashMap<>(Map.of(
+                "gpt-6.1-sol", new ModelPrice("2.00", "10.00"),
+                "gpt-6-luna", new ModelPrice("0.10", "0.50"),
+                "gpt-4.1", new ModelPrice("2.00", "8.00"),
+                "gpt-4.1-mini", new ModelPrice("0.40", "1.60")
+        ));
+    }
+
+    @Getter
+    @Setter
+    public static class ModelPrice {
+        private BigDecimal input;
+        private BigDecimal cachedInput;
+        private BigDecimal output;
+
+        public ModelPrice() {
+        }
+
+        public ModelPrice(String input, String output) {
+            this.input = new BigDecimal(input);
+            this.output = new BigDecimal(output);
+        }
     }
 }
