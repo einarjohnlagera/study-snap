@@ -27,7 +27,7 @@ Student and Board Taker enter through a shared mode-selection screen. Profile ty
 **Student:**
 
 - `Challenge Quiz` — Recommended
-- `Long Exam Mode` — Coming Soon (card visible; tapping it shows a coming-soon screen with "Long Exam — Coming Soon" disabled; "Choose another mode" returns to mode-selection)
+- `Long Exam Mode` — available as its own mode (`comingSoon: false` in `exam-mode-visibility.ts`); it is untouched by this feature
 - Escape-hatch line shown: *"Preparing for boards? Switch your profile in Settings to enable Board Exam Mode."*
 
 **Board Taker:**
@@ -92,10 +92,10 @@ Study Plan / Review Set detail resolves on both profile and plan: Free and Plus 
 
 ### Prepared Challenge sessions (v0.175.0)
 
-Ordinary Challenge Quiz starts with **Prepare Quiz**. A generating session shows “Getting your quiz ready”
+Ordinary Challenge Quiz starts with **Prepare quiz**. A generating session shows “Getting your quiz ready”
 with a progress indicator and a Continue reviewing link. The page polls every two seconds and moves to
-“Your quiz is ready!” automatically when preparation finishes. Bank-served and redo-missed sessions use
-the same ready screen. Questions and the timer appear only after the learner presses **Start Quiz**.
+the ready briefing (“All set! Your quiz is ready.”) automatically when preparation finishes. Bank-served and redo-missed sessions use
+the same ready screen. Questions and the timer appear only after the learner presses **Start quiz**.
 Reloading restores generating, ready, failed, or running sessions without starting the timer.
 
 Choosing Challenge Quiz from mode selection opens an existing exact-match, single-note preparation
@@ -137,8 +137,8 @@ forfeited sessions show the expiry screen; failed sessions show preparation fail
 started-then-forfeited sessions return to setup. A not-owned session returns 404 and setup. These
 reads never call Start Quiz, forfeit a session, or start the timer.
 
-Failed preparation shows **Try Again** and **Continue Reviewing**. An expired or stale prepared quiz
-shows **Prepare New Quiz**, which returns to setup without creating a replacement. A conflicting intent
+Failed preparation shows **Try again** and **Continue reviewing**. An expired or stale prepared quiz
+shows **Prepare a new quiz**, which returns to setup without creating a replacement. A conflicting intent
 shows the existing quiz and lets the learner resume it or discard it by resending the original
 start request with `discardPreparedSessionId`. Discarding an unstarted quiz uses no monthly quota.
 When Redo Missed Questions meets a started ordinary Challenge Quiz, the collision instead offers
@@ -159,10 +159,11 @@ Entry intents are kept when an unstarted preparation already exists:
 
 - **Mode selection** (`?entry=mode-selection`):
   - A failed preparation is ignored, and mode selection shows as if there were no session.
-  - A preparation still generating is offered as a resume candidate ("You already have a quiz being
-    prepared"), with **Resume** but no **Start Fresh**, because the forfeit endpoint only ends in-progress
+  - A preparation still generating shows the continuation card ("We're getting your Challenge Quiz ready",
+    action **View preparation**), with no Start Fresh, because the forfeit endpoint only ends in-progress
     sessions. Choosing another mode goes through the collision choice, which discards it.
-  - A ready prepared quiz keeps **Resume** and **Start Fresh**.
+  - A ready prepared quiz shows the one-action continuation card (**Open prepared quiz**). Only a Board Exam
+    candidate keeps **Resume** and **Start Fresh**.
 - **Redo Missed Questions** (`?entry=redo-missed`):
   - With a ready or generating preparation, the redo request is still sent, and the collision choice
     appears.
@@ -192,7 +193,7 @@ without starting.
 
 Ready is `IN_PROGRESS` with `preparedNotStarted=true`, `preparedAtEpochSeconds`, and the pack's
 `preparedGenerationStamp`; it has a time limit but no timer start. Start and resume responses hide both
-the quiz and the quiz inside `sessionState` until `POST /challenge-quiz/sessions/{id}/start-quiz` succeeds.
+the top-level `quiz` and the quiz inside `sessionState` until `POST /challenge-quiz/sessions/{id}/start-quiz` succeeds.
 That action checks the current pack stamp and monthly quota under pack-then-session-then-user row locks, stamps the
 timer once, and returns the questions. Repeating it returns the same running attempt. A stale pack forfeits
 the prepared session and releases its bank claims.
@@ -228,7 +229,7 @@ the next preparation can reuse them. A changed generation stamp prevents stale q
 - Challenge Quiz questions use the shared numeric-answer/explanation internal-consistency gate before construction; an inconsistent question is retried once and omitted if its replacement is still inconsistent
 - start flow must be idempotent
 - an existing `GENERATING` or non-expired `IN_PROGRESS` session is reused for the same intent instead of creating duplicates; a different intent colliding with an unstarted ordinary Challenge asks the learner. A fresh preparation request forfeits an expired prepared session and prepares another; `start-quiz` on the expired session rejects it without replacement. Expired started Challenge Quiz and Board Exam sessions keep their existing auto-forfeit behavior, and expired Challenge cleanup releases its bank claims. An expired `+5` rolls its forfeit back with the failed request; the bounded started-session sweep later forfeits it and releases its claims even if the learner never starts another session. Reuse detection reads the existing session twice — once unlocked to capture its status, once locked — and calls `entityManager.refresh()` on the locked read before comparing: both reads resolve to the same Java object by Hibernate identity within the one transaction, so without the refresh a status a concurrent request committed between the two reads is invisible and the stale session gets incorrectly resumed instead of a fresh one being started.
-- when the mode-selection entry (`?entry=mode-selection`) finds a live in-progress Challenge Quiz or Board Exam session, it offers **Resume** or **Start Fresh** rather than silently discarding progress; expired sessions return to a clean prestart and are never resumed into an immediate timeout. The note detail Challenge Quiz card and collection/Review Set premium-exam launch both add this entry marker, so their explicit "start" intent gets the same choice. This prompt is forced onto the mode-selection step even for profiles (Teacher) whose initial step otherwise skips it, so a live session is never silently re-entered without the choice (v0.60.1, collection launch aligned in v0.60.2). Direct/bookmarked URLs, page refresh, and Dashboard's Continue widget still auto-resume a live non-expired session with no prompt by design — that is deliberate "continue where you left off" behavior.
+- when the mode-selection entry (`?entry=mode-selection`) finds a live in-progress Challenge Quiz or Board Exam session, an ordinary Challenge shows the single-action continuation card and a Board Exam keeps **Resume** / **Start Fresh**, rather than silently discarding progress; expired sessions return to a clean prestart and are never resumed into an immediate timeout. The note detail Challenge Quiz card and collection/Review Set premium-exam launch both add this entry marker, so their explicit "start" intent gets the same choice. This prompt is forced onto the mode-selection step even for profiles (Teacher) whose initial step otherwise skips it, so a live session is never silently re-entered without the choice (v0.60.1, collection launch aligned in v0.60.2). Direct/bookmarked URLs, page refresh, and Dashboard's Continue widget still auto-resume a live non-expired session with no prompt by design — that is deliberate "continue where you left off" behavior.
 - `+5 Questions` checks expiry before setting a pending marker. The finish transaction appends and extends by 90 seconds per added question only while the session is running, the marker matches, the pack stamp is current, and the timer has not expired. Otherwise it releases this job's claims, banks valid current-stamp generated questions unclaimed, and leaves quiz and timer untouched. Completion leaves the session `COMPLETED`, so a later finish cannot append and releases its token-matched claims.
 - Board Exam generation uses the shared generation lock; ordinary Challenge preparation allows the learner to continue reviewing and return later
 - Standard Challenge mode starts with a score-adaptive question count from the learner's latest completed Quick Review on the same Study Pack: below 50 → 10 questions, 50–79 → 12 questions, and 80 or above → 15 questions; no prior score starts with 12. Redo Missed Questions remains fixed at up to 5 claimed questions.
@@ -252,7 +253,7 @@ the next preparation can reuse them. A changed generation stamp prevents stale q
 - Completion's claimed-row read has a `PESSIMISTIC_WRITE` lock. A real two-connection PostgreSQL test confirmed a concurrent bank delete waits until completion commits, then deletes; completion does not throw from a missing-row flush in this path. Outcome recording remains one load/mutate/save pass, with no generation-stamp filter on its owning-session read.
 - Bank inserts join the owning transaction (the Challenge session's on start and the background finish transaction for `+5`; `seedTemplateAsync`, which has no session, uses its own transaction) and skip a same-level duplicate (including a NULL-level duplicate) at the insert itself. A skipped question can still be served in that session, but it is not banked or claimed for that session. Its outcome is not recorded in the bank, and Redo Missed Questions will not offer it from that session. The template key pre-read still avoids re-serving known keys; the insert also closes concurrent races. A generated shortfall is deduplicated against the Study Pack's quiz (on start) or every source Study Pack's saved quiz and the live session's questions (on `+5`), plus the questions just claimed or copied for it, but not against the user's other bank rows, so it can serve a duplicate currently claimed by another in-progress session. Isolating a start write in its own transaction was attempted and reverted because the bank's session foreign keys cannot see an uncommitted session row. Bank read failures and non-duplicate write failures (for example, a foreign-key violation) can still poison the caller's PostgreSQL transaction despite the surrounding catch. Adaptive Practice remains intentionally always-fresh and does not use this bank.
 - Ordinary bank claims, Redo Missed claims, and the Redo Missed availability count exclude learner-original statement-pair rows generated before `studysnap.challenge-quiz.statement-pair-legacy-cutoff`. When the cutoff is unset (the deployment default), they exclude every learner-original statement-pair row. A row whose key belongs to that pack's resolved Official template remains eligible, including the Official owner's own rows. Excluded rows remain stored and unchanged; later eligible rows can fill an ordinary claim shortfall. The owner sets the cutoff after v0.175.0 deploys. “Post-cutoff” means the question passed R1's consistency check, **not** that its facts were independently verified. If a template is regenerated, older adopter copies whose keys leave the template's current key set lose the exemption and become excluded.
-- When at least three eligible bank entries were last answered `INCORRECT` **after the statement-pair exclusion**, the Challenge result handoff offers **Redo Missed Questions**. It starts a normal `CHALLENGE` session sourced only from those same-effective-curriculum-level claimed questions, with no LLM call and no Challenge quota consumption to *start*. The availability count and the claim query resolve the same effective curriculum level and use the same statement-pair predicate, so the CTA and claim agree on eligibility. The same-route handoff resets the completed result and reliably starts the redo session; if fewer than three entries remain eligible, it returns to a clean prestart with the backend's message. A bank failure or a claim race fails closed rather than starting a partial redo. Completion still records `ConceptHealth` through the ordinary Challenge path; this is an entry point, not a new quiz mode or sub-mode. The frontend's one-shot retrigger guard resets on every start outcome (success or error), so requesting Redo Missed Questions again later in the same page session (e.g. after redoing once, then missing questions again) reliably fires a second time instead of silently no-op'ing (v0.60.1). Redo session matching uses a dedicated provenance marker: a marked prior redo session still resumes. A mismatched unstarted ordinary Challenge session now returns a collision; a started unrelated session retains the older forfeit-and-replace behavior (v0.60.3).
+- When at least three eligible bank entries were last answered `INCORRECT` **after the statement-pair exclusion**, the Challenge result handoff offers **Redo Missed Questions**. It starts a normal `CHALLENGE` session sourced only from those same-effective-curriculum-level claimed questions, with no LLM call and no Challenge quota consumption to *start*. The availability count and the claim query resolve the same effective curriculum level and use the same statement-pair predicate, so the CTA and claim agree on eligibility. The same-route handoff resets the completed result and reliably starts the redo session; if fewer than three entries remain eligible, it returns to a clean prestart with the backend's message. A bank failure or a claim race fails closed rather than starting a partial redo. Completion still records `ConceptHealth` through the ordinary Challenge path; this is an entry point, not a new quiz mode or sub-mode. The frontend's one-shot retrigger guard resets on every start outcome (success or error), so requesting Redo Missed Questions again later in the same page session (e.g. after redoing once, then missing questions again) reliably fires a second time instead of silently no-op'ing (v0.60.1). Redo session matching uses a dedicated provenance marker: a marked prior redo session still resumes. A mismatched unstarted ordinary Challenge session now returns a collision; a started ordinary Challenge now returns the collision choice (with `existingStarted: true`, v0.175.0), and only a started Board Exam keeps the older forfeit-and-replace behavior (v0.60.3).
 - Completion records outcomes and clears claims for every bank row owned by the session and user, regardless of Study Pack. If a pending `+5` committed after the client's last read, completion removes only the unanswered trailing questions beyond the client's submitted count, releases their claims as unserved, and grades the retained quiz. An answered trailing question is retained. Discard, expiry, failed preparation, generation recovery, and forfeiture also release claims by session and user in the caller's transaction. A repeated release has no further effect.
 - `+5 Questions` on a redo-missed session is not quota-exempt-aware: it falls through to normal LLM generation like any other Challenge session, so the zero-cost guarantee applies only to the session's start, not to any later add-more request. Whether to block `+5 Questions` on redo-missed sessions is an open product question, not yet decided.
 
@@ -306,7 +307,7 @@ Challenge mode supports on-demand question batching within a live session:
 - **Batch size**: +5 questions per request
 - **Maximum**: 20 questions per session (`MAX_CHALLENGE_QUIZ_QUESTIONS = 20`)
 - Backend minimum for a valid batch: 3 unique new questions after dedup (`MIN_NEW_QUESTIONS_AFTER_DEDUP = 3`)
-- Users see a `+5 Questions` button in the action bar at the last answered question (when under max and `noMoreQuestions` is false)
+- Users see a `+5 questions` button in the action bar at the last answered question (when under max and `noMoreQuestions` is false)
 - The POST records a token and start timestamp under the session lock and returns HTTP 200 with `morePending: true`. A second POST returns 409 `MORE_IN_PROGRESS`; POST `generate-more/stop` clears the token and returns 204. The background worker claims bank rows and copies templates in a short transaction, calls the tiered model outside any transaction, then takes the session lock to append. The in-progress read and Start Quiz responses expose `morePending` and `moreFailed`. The page polls every 2 seconds while pending, keeps answering enabled, and only appends new questions and timer values; it never resets local answers or the current index. After 45 seconds it offers Stop adding. A failure offers Try again. The timer continues throughout.
 - A `MORE_IN_PROGRESS` response in another tab starts that tab's polling too. If the POST ever includes questions directly, the page uses the same append-only reconciliation as a poll. Pressing Complete while an add is pending stops it, reads the session once, and shows the added-question notice without submitting if questions arrived; otherwise it submits. Complete Quiz is disabled for the first 45 seconds of a successful +5 POST from this tab, measured only by this tab's clock. A +5 restored on reload or found in another tab never holds Complete, even when the server's start timestamp is ahead of the client clock. The restored add shows the existing still-adding and Stop controls after 45 seconds from when this page applied it. A clock moving backwards releases a local hold and exposes Stop. The timer's auto-submit never depends on the button. The status line shows a spinner with "Adding questions…" in the action bar on every question, not only the last one; the +5 button itself stays on the last question.
 - Polls and stop/deadline reconciliation do not append from a session whose status is no longer `IN_PROGRESS`; they stop polling and return a started quiz to Challenge Quiz setup. Complete's `SESSION_NOT_IN_PROGRESS` response does the same. A forfeited or completed response never advertises `morePending`, even when its old +5 token remains in session state for the worker.
@@ -322,9 +323,9 @@ Challenge mode supports on-demand question batching within a live session:
 **Challenge mode (non-Board Exam):**
 
 - At the last question, the action bar renders:
-  - `+5 Questions` — visible when `totalQuestions < MAX_SESSION_QUESTIONS` and `noMoreQuestions` is false
+  - `+5 questions` — visible when `totalQuestions < MAX_SESSION_QUESTIONS` and `noMoreQuestions` is false
   - `Complete Quiz` — submits the session and navigates to the result screen
-- An action hint appears above the buttons at the last question: `What would you like to do next?`
+- An action hint appears above the buttons at the last question. It varies by count: `Good start — want to keep going?` at 5, `10 questions in — push to 15?` at 10, `Almost there — finish with all 20?` at 15, `You've answered all N questions — ready to submit?` at the cap, and `What would you like to do next?` otherwise
 - The action bar is rendered by `StickyAssessmentFooter` (`components/ui/sticky-assessment-footer.tsx`) — fixed to the viewport bottom at all breakpoints with iOS safe-area inset and backdrop blur
 - The hint text is passed via the `hint` prop and appears above the buttons
 
@@ -354,9 +355,9 @@ Running state (Challenge mode only):
 
 - Banner at top of quiz: `Your starting question set adapts to your recent performance. Generate more as you go (up to 20).`
 - Below choice list at last question: `You can finish anytime. Score is based on answered questions.`
-- Action bar hint at last question: `What would you like to do next?`
-- Toast on successful generate-more: `{n} questions added` using the actual appended count
-- When `noMoreQuestions = true`, the `+5 Questions` button is hidden; no toast shown
+- Action bar hint at last question: the count-based variants above, defaulting to `What would you like to do next?`
+- Toast on successful generate-more: `Added {n} more questions.` using the actual appended count
+- When `noMoreQuestions = true`, the `+5 questions` button is hidden; no toast shown
 
 ## Result screen
 

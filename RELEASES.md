@@ -2,7 +2,7 @@
 
 ## v0.175.0 - Quiz Ready
 
-**Status: In Progress** (kicked off 2026-10-20 on `releases/v0.175.0`, **cut from `releases/v0.174.0`
+**Status: Released** (kicked off 2026-10-20, signed off 2026-10-25 on `releases/v0.175.0`, **cut from `releases/v0.174.0`
 (`e539b045`, signed off, NOT yet on `main`)**, the same stacking pattern `v0.174.0` used on `v0.173.0`.
 Anything that changes on `releases/v0.174.0` after this cut is merged forward.)
 
@@ -31,7 +31,7 @@ held behind `v0.173.0`'s #1505 and two checkpoints).
 Order matters: item 1 ships before item 6. Items 2–4 form one learner journey and are briefed together, but
 delivered as separate PRs where the seams allow.
 
-1. **R1: statement-pair answer-key guard. Tier N, raised to one cold falsification review by the start minimum. FIRST. `[merged-to-release]`** PR #1513, merged 2026-10-20 (`7b9ae007`). Wording signed off 2026-10-20: `docs/claude-plans/2026-10-20-v0175-r1-statement-pair-guard-wording.md`. **Acceptance run (mini, 2026-10-20, about $0.18): the smoke-test rule FAILED.** 3 of 32 delivered statement-pair keys were wrong (2 clear, 1 arguable). All three are factual-verdict errors, which the check cannot catch; none is the index class R1 targets. Findings: `docs/claude-findings/2026-10-20-v0175-r1-acceptance-run.md`. **Luna arm (2026-10-20, about $0.10): the smoke-test rule PASSED.** 31 of 31 statement-pair keys agreed in the blind check, 370 of 370 questions were delivered, and there were zero rejections. The pre-R1 Luna rate was about 19%. Luna starts take a median of 45 s and up to 69 s, versus mini's 15 s, so item 6 stays behind item 2. **Sol arm (2026-10-20, cap raised to about $1.75, meter $1.45): the smoke-test rule PASSED.** 28 of 28 statement-pair keys agreed in the blind check, and 348 of 348 questions were delivered on the 28 completed starts (1 network timeout, 1 spend-stopped). Sol start p50 is 55–105 s, max 150 s. Mini's factual-verdict errors stay live on multi-note Challenge until item 5. **Owner direction, 2026-10-20: Option 3 (an independent statement-pair verifier) is approved for investigation only, as a v0.175.0 candidate subject to a separate go/no-go** (`docs/claude-plans/2026-10-20-owner-direction-v0175-option3-verifier-investigation.md`). Proposal: `docs/claude-plans/2026-10-20-v0175-statement-pair-verifier-investigation.md`. **Owner decisions, 2026-10-20** (`docs/claude-plans/2026-10-20-owner-decisions-v0175-statement-pair-verifier.md`): Option F (Sol and Luna check every statement-pair item on every plan), conditional on validation; +5 batches exclude statement-pair items by a prompt rule (wording pending sign-off), with skip-and-log as the fallback; a rejected item may be replaced by another question type; no new provider in v0.175.0; a read-only recheck of the about 890 first-pass-only Official stock items after validation. **The verifier is never a prerequisite for background preparation** (Product UX): it ships with every switch OFF, and live-start verification is enabled only after items 2 and 5 are validated. **Follow-up decisions, 2026-10-20** (`docs/claude-plans/2026-10-20-owner-decisions-v0175-verifier-follow-up.md`): a local, non-production test harness is approved (test scope only, no paid calls); the exact +5 rule, replacement message, verifier prompt and schema, and the two-stage pass rules are drafted for owner sign-off in `docs/claude-plans/2026-10-20-v0175-statement-pair-verifier-wording-and-pass-rules.md`. **Wording and pass rules signed off, 2026-10-20** (`docs/claude-plans/2026-10-20-owner-decisions-v0175-verifier-wording-and-pass-rules.md`), with clarifications incorporated into the exact text: rejected statements are untrusted; SILENT stays visible; a note that conflicts with established knowledge gives UNCERTAIN; only genuine, applicable exceptions count for absolute words; r1-04 strict; a gray zone returns for review; a wrong key among accepted items triggers a rollout review. **The local verifier harness merged** as PR #1514 (`944cbfdb`), test scope only, after the owner's merge conditions were confirmed. **Paid Stage 1 ran 2026-10-20 (owner-run, meter $1.08): KILL on S-A4b**, with F-union false rejection at 10/78 against a kill line above 9. Detection was perfect: mini's three errors 3/3 each, 20/20 constructed, 20/20 unseen, no joint miss, 6/6 ambiguous. Analysis: 5 rejections were Luna evidence-quote artifacts, where the verdicts were correct. A blind Codex adjudication (D11) sided with the checkers on the other 5, all mini-generated, which suggests the test-set labels were wrong there and mini's R1 rate may be about 8/32, not 3/32. That is unconfirmed: all three judges are OpenAI-family. Revised proposal (gold correction, quote-rule fix, fresh re-run at a $2.20 cap) awaits the owner: `docs/claude-plans/2026-10-20-v0175-statement-pair-verifier-wording-and-pass-rules.md` Part 10. No threshold was relaxed; nothing is in production code; Stage 2 stays gated. **Owner approved all four items, with an Opus tie-break first (2026-10-20).** Only r1-30 was relabeled; Opus sided with the original label on r1-02, r1-08 and r1-23 and called r1-05 ambiguous, so mini's R1 count is 4/32, not 8. Corrected gold: N 77 plus 1 adjudicated. Quote rule and scorer updated (test scope, branch `feat/v0.175.0-verifier-rerun`). Re-run cap $2.20, commands in Part 11 of the wording doc. **Re-run (owner-run, meter $1.15): Stage 1 PASS as a smoke test.** Every criterion passes; per-checker false rejection 3/77 each is exactly at the limit, F union 4/77, joint miss 0/40, all positives caught. Verifier evaluation total $2.23. Next, each separately gated: the production implementation, activation for Official question-set creation, the read-only stock recheck, and Stage 2.
+1. **R1: statement-pair answer-key guard. Tier N, raised to one cold falsification review by the start minimum. FIRST. `[shipped: #1513, verifier #1514 and #1520, switches OFF]`** PR #1513, merged 2026-10-20 (`7b9ae007`). Wording signed off 2026-10-20: `docs/claude-plans/2026-10-20-v0175-r1-statement-pair-guard-wording.md`. **Acceptance run (mini, 2026-10-20, about $0.18): the smoke-test rule FAILED.** 3 of 32 delivered statement-pair keys were wrong (2 clear, 1 arguable). All three are factual-verdict errors, which the check cannot catch; none is the index class R1 targets. Findings: `docs/claude-findings/2026-10-20-v0175-r1-acceptance-run.md`. **Luna arm (2026-10-20, about $0.10): the smoke-test rule PASSED.** 31 of 31 statement-pair keys agreed in the blind check, 370 of 370 questions were delivered, and there were zero rejections. The pre-R1 Luna rate was about 19%. Luna starts take a median of 45 s and up to 69 s, versus mini's 15 s, so item 6 stays behind item 2. **Sol arm (2026-10-20, cap raised to about $1.75, meter $1.45): the smoke-test rule PASSED.** 28 of 28 statement-pair keys agreed in the blind check, and 348 of 348 questions were delivered on the 28 completed starts (1 network timeout, 1 spend-stopped). Sol start p50 is 55–105 s, max 150 s. Mini's factual-verdict errors stay live on multi-note Challenge until item 5. **Owner direction, 2026-10-20: Option 3 (an independent statement-pair verifier) is approved for investigation only, as a v0.175.0 candidate subject to a separate go/no-go** (`docs/claude-plans/2026-10-20-owner-direction-v0175-option3-verifier-investigation.md`). Proposal: `docs/claude-plans/2026-10-20-v0175-statement-pair-verifier-investigation.md`. **Owner decisions, 2026-10-20** (`docs/claude-plans/2026-10-20-owner-decisions-v0175-statement-pair-verifier.md`): Option F (Sol and Luna check every statement-pair item on every plan), conditional on validation; +5 batches exclude statement-pair items by a prompt rule (wording pending sign-off), with skip-and-log as the fallback; a rejected item may be replaced by another question type; no new provider in v0.175.0; a read-only recheck of the about 890 first-pass-only Official stock items after validation. **The verifier is never a prerequisite for background preparation** (Product UX): it ships with every switch OFF, and live-start verification is enabled only after items 2 and 5 are validated. **Follow-up decisions, 2026-10-20** (`docs/claude-plans/2026-10-20-owner-decisions-v0175-verifier-follow-up.md`): a local, non-production test harness is approved (test scope only, no paid calls); the exact +5 rule, replacement message, verifier prompt and schema, and the two-stage pass rules are drafted for owner sign-off in `docs/claude-plans/2026-10-20-v0175-statement-pair-verifier-wording-and-pass-rules.md`. **Wording and pass rules signed off, 2026-10-20** (`docs/claude-plans/2026-10-20-owner-decisions-v0175-verifier-wording-and-pass-rules.md`), with clarifications incorporated into the exact text: rejected statements are untrusted; SILENT stays visible; a note that conflicts with established knowledge gives UNCERTAIN; only genuine, applicable exceptions count for absolute words; r1-04 strict; a gray zone returns for review; a wrong key among accepted items triggers a rollout review. **The local verifier harness merged** as PR #1514 (`944cbfdb`), test scope only, after the owner's merge conditions were confirmed. **Paid Stage 1 ran 2026-10-20 (owner-run, meter $1.08): KILL on S-A4b**, with F-union false rejection at 10/78 against a kill line above 9. Detection was perfect: mini's three errors 3/3 each, 20/20 constructed, 20/20 unseen, no joint miss, 6/6 ambiguous. Analysis: 5 rejections were Luna evidence-quote artifacts, where the verdicts were correct. A blind Codex adjudication (D11) sided with the checkers on the other 5, all mini-generated, which suggests the test-set labels were wrong there and mini's R1 rate may be about 8/32, not 3/32. That is unconfirmed: all three judges are OpenAI-family. Revised proposal (gold correction, quote-rule fix, fresh re-run at a $2.20 cap) awaits the owner: `docs/claude-plans/2026-10-20-v0175-statement-pair-verifier-wording-and-pass-rules.md` Part 10. No threshold was relaxed; nothing is in production code; Stage 2 stays gated. **Owner approved all four items, with an Opus tie-break first (2026-10-20).** Only r1-30 was relabeled; Opus sided with the original label on r1-02, r1-08 and r1-23 and called r1-05 ambiguous, so mini's R1 count is 4/32, not 8. Corrected gold: N 77 plus 1 adjudicated. Quote rule and scorer updated (test scope, branch `feat/v0.175.0-verifier-rerun`). Re-run cap $2.20, commands in Part 11 of the wording doc. **Re-run (owner-run, meter $1.15): Stage 1 PASS as a smoke test.** Every criterion passes; per-checker false rejection 3/77 each is exactly at the limit, F union 4/77, joint miss 0/40, all positives caught. Verifier evaluation total $2.23. Next, each separately gated: the production implementation, activation for Official question-set creation, the read-only stock recheck, and Stage 2.
    - **Owner additions (2026-10-20):** a start minimum (single-note at most one short; multi-note fails at zero), with a failed start charging no quota and releasing its claims. Multi-note underfill (1–17 of 18) stays a high-priority issue for items 2 and 5.
    - Generation records a true/false verdict for each statement in a "Statement 1 / Statement 2" item.
    - The validator checks the keyed choice against those verdicts and retries on a mismatch.
@@ -46,7 +46,7 @@ delivered as separate PRs where the seams allow.
      Pack quizzes. Extending the guard to them is a separate owner question.
    - **It changes the prompt and the response schema, so the exact wording goes to the owner before the
      brief.**
-2. **Preparation state machine (backend). Tier H. `[queued]`** Plan items 2–4 and 9–11.
+2. **Preparation state machine (backend). Tier H. `[shipped: #1518, #1519]`** Plan items 2–4 and 9–11.
    - Single-note async dispatch.
    - A ready-not-started state: plan §5 leans to a flag on `IN_PROGRESS`, to keep the partial unique index.
    - `markSessionReady` is split from an explicit **Start Quiz** action, **for Challenge sessions only**.
@@ -67,19 +67,19 @@ delivered as separate PRs where the seams allow.
    - **A 7-day expiry sweep** returns the questions to the bank (B3).
    - **A collision with a ready session asks the learner (C3).**
    - **Bank-served starts and redo-missed land on the pre-screen (C2).**
-3. **Preparation screens (frontend). Tier N. `[queued]`** Plan items 12–13.
+3. **Preparation screens (frontend). Tier N. `[shipped: #1521]`** Plan items 12–13.
    - "Getting your quiz ready" shows progress and **Continue reviewing** only, with no "Stay" button (C1).
    - "Your quiz is ready!" has **Start Quiz**.
    - Failure recovery offers Try Again and Continue Reviewing; the expired state offers Prepare New Quiz;
      and there is the collision prompt.
    - B4 copy. No model names.
-4. **Readiness notification and deep link. Tier N. `[queued]`** Plan items 14–15.
+4. **Readiness notification and deep link. Tier N. `[shipped: #1522]`** Plan items 14–15.
    - One in-app `ASYNC_RESULT` notification through `NotificationService.deliver`, deduplicated per
      session, sent for any way of leaving (B2).
    - It is marked read if the learner stayed and saw the pre-screen.
    - The deep link handles four cases: ready, already started, expired or forfeited, and not owned.
    - A real-request test is owed for any new endpoint.
-5. **Multi-note preparation. Tier H. `[queued]`** Plan items 5–8.
+5. **Multi-note preparation. Tier H. `[shipped: #1523, #1525]`** Plan items 5–8.
    - Async dispatch through the same journey.
    - Per-source calls run in parallel on `llmParallelTaskExecutor` (measured 4–5× faster).
    - A per-source failure no longer fails the start: it continues if enough questions survive (the floor).
@@ -98,7 +98,7 @@ delivered as separate PRs where the seams allow.
      - **Q4:** the copy is approved with edits (PR #1524).
      - **Q5:** +5 direction is set (no silent downgrade; fix timer fairness first).
      - **Final product priorities:** accuracy, correctness, reliability, smooth flow, fairness.
-6. **Challenge tier routing. Tier N. `[queued — after items 1 AND 2 merge]`** Plan item 17.
+6. **Challenge tier routing. Tier N. `[shipped: #1526, with background +5]`** Plan item 17.
    - **Gated on item 2 as well as item 1.** Routing Plus/Pro to Sol before the preparation flow exists
      brings back the blocking start of about 107 s, which is why v0.174.0 pinned Challenge.
    - **Multi-note starts stay pinned until item 5 ships.** Sequential Sol generation takes about 3.5–4
@@ -442,7 +442,7 @@ never edit this file.
   "Resume", "Starting...") are unchanged (C6) and left for a later sweep. Backend 2,976 tests and frontend
   2,753 tests pass; `tsc`, lint and `next build` are clean.
 
-- **Challenge Quiz flow polish** (branch `feat/v0.175.0-challenge-flow-polish`). It applies the owner-approved audit
+- **Challenge Quiz flow polish** (PR #1528, merged as `e864fee2`). It applies the owner-approved audit
   and proposal `docs/claude-plans/2026-10-22-v0175-challenge-flow-polish-audit-and-proposal.md` (§1–§9), to
   ordinary Challenge only.
   - **⚠️ Defect fixed (F5).** The collision check ignored the note selection, so asking for different notes on a
@@ -479,7 +479,7 @@ never edit this file.
     - One Codex review.
   - **Review note.** The `startSession` collision change is a named input to the signoff pressure test.
 
-- **Statement-pair verifier in production code, switches off** (branch `feat/v0.175.0-statement-pair-verifier`).
+- **Statement-pair verifier in production code, switches off** (PR #1520, merged as `f054a37a`).
   - **What it does.** Before a statement-pair question is kept, two independent checkers (Sol and Luna, run
     concurrently on their own `statementPairVerifierTaskExecutor`) judge each statement against the source
     note. A question is kept only when both agree with its key. Rejected questions get one batched
@@ -510,6 +510,112 @@ never edit this file.
   - **Known limitation:** verifier calls are logged under the `CRITIQUE` route, and cost attribution uses
     `action=statement_pair_verifier`. A dedicated `LlmRoute` value would also change model routing, so it
     was left out.
+
+- **Signoff fix rounds** (PRs #1529, #1530, #1531, #1532). The full pre-signoff pressure test (three cold agents)
+  found no P1 and these confirmed defects; Codex fixed them, and each round was re-verified on the Docker suite
+  with a mutation check.
+  - **#1529 (`8fb55423`), the first fix round.**
+    - **Complete during +5.** The page stops and re-reads the session before submitting, and does not submit if
+      questions arrived. The server grades only the questions the client saw: it drops trailing unanswered items
+      beyond the client's `totalQuestions` and returns their claims to the pool unserved. Scoring is unchanged,
+      since the denominator is the answered count.
+    - **Entry routing restored (C6).** Item 3 had forced mode selection on Review Set and Teacher entries. Those
+      now land on their pre-release first screen; mode selection appears only when a quiz exists to continue.
+    - **Mode cards while preparing.** They now show for a generating Challenge. The test fixture had set
+      `preparedNotStarted` on a GENERATING session, a shape production never produces.
+    - **Abandoned started quizzes.** A bounded recovery sweep forfeits a started ordinary Challenge after its time
+      plus a 10-minute grace (`studysnap.generation.challenge-started-expiry-grace-minutes`) and releases every
+      source's claims. It takes pack locks in sorted order, then the session, and charges or refunds no quota.
+    - **+5 and saved quizzes.** +5 now excludes the saved Study Pack quiz of the primary and every source note
+      from the bank claim, the template copy and generation. A source deleted mid-session is skipped instead of
+      failing every +5.
+    - **Locks and salvage.** The multi-note start locks every requested pack in sorted order before the session.
+      A deleted source no longer rolls back the other sources' salvage.
+    - **Smaller fixes.** Try again after a deep link rebuilds its request from the session; a linked poll stops on
+      a quiz ended elsewhere; a second tab polls an in-progress +5; the two API fallback messages use the approved
+      wording; a non-empty `generate-more` response is appended through the poll path.
+    - **Tests.** Real-request MockMvc tests for the `generate-more` response and the `PREPARED_CHALLENGE_EXPIRED`
+      and `INVALID_PREPARED_CHALLENGE_DISCARD` wire codes; real-PostgreSQL tests for the completion trim, the sweep
+      and the lock order. The sweep predicate was mutation-checked on its cutoff and its mode filter.
+  - **#1530 (`e58108bc`), Redo Missed no longer ends a started quiz silently.** A Redo Missed request on a note with a
+    started ordinary Challenge now returns the collision choice (`existingStarted: true`). "Resume quiz" returns to
+    the running quiz without calling `start-quiz`; "End quiz and redo missed" ends only that exact quiz (forfeit and
+    release claims, no prepared-discard analytics, no quota change). An expired quiz is still cleared quietly.
+    Owner-approved copy.
+  - **#1531 (`737e6f4c`), the +5 status on every question.** "Adding questions…" with a spinner, Stop and the retry
+    line show in the action bar on every question, not only the last. The owner's click-through found this.
+  - **#1532 (`69062102`), the clock and ended-quiz fixes.** Found by the cross-PR interaction test.
+    - **Complete lockout closed.** Complete is held only for a +5 started by this tab's own successful request,
+      timed by this tab's clock for at most 45 s. A reloaded or other-tab +5, a server clock ahead or behind, a hung
+      poll or a dead worker can no longer keep it disabled. The earlier reload test had omitted the server start
+      field; it now uses the production shape.
+    - **Ended quizzes.** Resume re-reads the session first; any poll or reconcile that sees a status other than
+      `IN_PROGRESS` stops, never appends, and returns to Challenge setup; Complete failing with
+      `SESSION_NOT_IN_PROGRESS` does the same. The response reports `morePending` only while the session is
+      `IN_PROGRESS`.
+  - **Verification at close.** `./mvnw clean install`-equivalent full suite on Docker: 2,998 tests, 0 failures,
+    0 skipped, real-PostgreSQL tests included. Frontend: 2,786 tests; `tsc`, lint (0 errors) and `next build` clean.
+    The old server-time hold was killed by 4 tests, and the started-quiz collision guard by 4.
+
+### Signoff record (2026-10-25)
+
+**Scope-completeness gate.** Items 1–6 are all shipped, each with its PRs above. Item 2's "recovery-sweep entries" are
+the stuck-generating, prepared-expiry and started-expiry sweeps in `GenerationRecoveryService`. The verifier ships
+with every switch OFF by design. **Not shipped, by the owner's earlier decisions:** Board Exam and Long Exam "press
+Start first" (C6), the Long Exam pool reduction 48 to 30 (A4, deferred from v0.174.0 into the Board/Long Exam release;
+`LONG_EXAM_POOL_SIZE` is still 48), the B6 backfill (C8), and low reasoning effort (B7). **Deferred:** the "this note is also in a
+prepared quiz" line on secondary notes.
+
+**⚠️ Deploy-ordering statement. There is no safe order: ship backend and frontend together from one push.**
+- **Old frontend against the new backend:** a prepared response carries an empty quiz, so a tab opened before the
+  deploy cannot start a Challenge Quiz at all (Prepare quiz returns to setup; nothing is charged). On a +5 that was
+  already running, the old page appends nothing and can step past the last question. **Open tabs need a refresh;
+  the app has no stale-bundle reload mechanism.**
+- **New frontend against the old backend:** start and +5 behave as in v0.174.0 (`morePending` is read as false and
+  `newQuestions` append), but the started-quiz collision never arrives, so Redo Missed silently ends a started quiz
+  again, and the completion trim is a no-op.
+- **Redo Missed on a started quiz in a pre-deploy tab:** the old page shows the unstarted wording ("discarded without
+  using a monthly attempt") for a started quiz, and "Start something else" ends it.
+- **Frontend-first does less harm than backend-first.** After the merge, wait about five minutes, then run
+  `scripts/check-deploys.sh`; if one platform lags, redeploy it at once.
+
+**Owner post-deploy actions (none run by Claude):**
+1. Set `CHALLENGE_QUIZ_STATEMENT_PAIR_LEGACY_CUTOFF` to the deploy time of R1 (an ISO-8601 instant). Until it is set,
+   every learner-original statement-pair bank row is excluded from reuse (template-derived rows are exempt), which
+   lowers bank reuse and nothing else.
+2. **The v0.174.0 Render model switch now also moves Challenge:** FREE to `LLM_MODEL_FREE`, Plus, Pro and ADMIN to
+   `LLM_MODEL_PREMIUM`, with no fallback. Preparation runs in the background, so the longer starts (Luna p50 45 s,
+   Sol 55–105 s, max 150 s in the benchmarks) no longer block the learner. The rollback values are in the v0.174.0
+   signoff record.
+3. The three verifier switches stay OFF; activation is a separate gated decision.
+
+**Known limitations (every finding is fixed or listed here).**
+- **Board Exam can still be lost silently.** A started, charged Board Exam is ended with no confirmation when the
+  learner follows the `?entry=redo-missed` next step on that note (`PostSessionNextStepService.java:60`, then
+  `forfeitStaleOrdinarySession`). It predates this release and is kept out under C6; it is the first item of the
+  Board Exam release (Backlog row).
+- A completion with a lowered `totalQuestions` (only a hand-made API request) skips the miss penalty for trailing
+  unanswered questions in concept tracking. The score is unaffected, and the app always sends the true count.
+- A quiz completed or ended in another tab sends this tab back to Challenge setup with no message, so the result can
+  look as if it vanished. It is saved. Better wording needs new copy and is next release.
+- In one two-tab case, "Adding questions…" shows without Stop (Complete stays enabled). If the session read behind
+  Resume never answers, the button stays busy until a refresh. The running quiz flashes briefly before the started
+  collision screen. Under clock skew, "still adding" can appear early.
+- The +5 stale-marker threshold (270 s) is shorter than one model call plus its retry. A superseded job's append is
+  refused by its token, so the cost is a wasted call, not a double append.
+- Capacity: `challengePreparationTaskExecutor` defaults to 6 threads against 20 Hikari connections and 18 Tomcat
+  threads; heavy concurrent preparation queues rather than fails. A stale pack heals on retry.
+- Board Exam can exceed its monthly limit by one under a race (predates this release).
+- Redo Missed on a multi-note quiz's secondary note starts a parallel session; a reload exactly at the deadline
+  forfeits instead of grading; the learner-facing expired screen describes a prepared quiz for a stale one. All
+  predate this release.
+- Smaller bank items that predate this release: swallowed exceptions on some forfeit paths, `ON CONFLICT` insert
+  behaviour, the template-exemption shrink, and a cross-source saved-quiz gap on the start path.
+- Not yet read: the verifier's Stage 2 result is inconclusive, so it ships OFF; multi-note starts are not verified
+  (`ChallengeVerifierPath.NONE`); verifier calls are logged under the `CRITIQUE` route.
+- Deferred to a later release: the "this note is also in another prepared quiz" line, and a second click on the same
+  readiness notification does nothing.
+
 
 ## v0.174.0 - Enhanced Generation
 

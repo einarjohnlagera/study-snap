@@ -36,7 +36,7 @@ impossible.
 
 **NoteLib** (rebranded from StudySnap — db/package names still use `studysnap`) is a notes-first study workspace. Users capture notes, generate AI-powered Study Packs, and practice with quizzes. Database schema uses the old name; do not rename unless explicitly asked.
 
-Current version: **v0.175.0 — Quiz Ready** (In Progress, kicked off 2026-10-20 on `releases/v0.175.0`, **cut from `releases/v0.174.0` (`e539b045`, signed off, NOT yet on `main`)**. It merges only after `v0.174.0`'s PR #1512 has merged.)
+Current version: **v0.175.0 — Quiz Ready** (Released 2026-10-25; kicked off 2026-10-20 on `releases/v0.175.0`, **cut from `releases/v0.174.0` (`e539b045`, signed off, NOT yet on `main`)**. It merges only after `v0.174.0`'s PR #1512 has merged.)
 
 **Scope:** Challenge Quiz is prepared in the background, lands on a "Your quiz is ready!" pre-screen, and starts its timer only on **Start Quiz**; a readiness notification deep-links back; multi-note generation runs in parallel with a floor; Challenge is routed by tier; and a statement-pair answer-key guard (R1, Challenge generation path only) ships **first**. Tier routing waits for R1 **and** the preparation flow. Item list, tiers and order: `RELEASES.md` v0.175.0. Plans: `docs/claude-plans/2026-10-19-v0175-challenge-quiz-preparation-plan.md` and Part G of `docs/claude-plans/2026-10-19-v0174-v0175-consolidated-implementation-plan.md` (C1–C8, R1–R3 owner-approved).
 

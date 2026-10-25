@@ -96,7 +96,7 @@ Long Exam and Board Exam quotas are distinct monthly counters:
 - Long Exam is Pro-only and consumes **one** `longExamUsed` unit **per session**, whatever the source count — a 3-note Long Exam deducts 1 unit (`LongExamService.QUOTA_UNITS_PER_SESSION`); quota is checked and incremented only after successful session generation starts
 - Board Exam is Pro-only, consumes the shared quiz-generation budget, and also consumes **one** `boardExamUsed` unit **per session** (`ChallengeQuizService.BOARD_EXAM_QUOTA_UNITS_PER_SESSION`) — a 3-note Board Exam deducts 1 unit, the same as a 6-note Review Set one. Both meters are charged inside the start transaction, and both are reversed together if generation later fails.
 - Board Exam must be blocked when either the Challenge Quiz budget is exhausted or the Board Exam hard cap is exhausted
-- Active sessions can always be resumed regardless of quota state; quota is only checked when starting a new session
+- Active sessions can always be resumed regardless of quota state; Challenge quota is checked when preparation is requested and is charged, and checked again under lock, at Start quiz (a ready quiz can still be rejected there); other modes check when starting a new session
 - Challenge Quiz, Adaptive Practice, Interview Practice, Study Pack, topic note generation, OCR, and export quotas remain separate from these counters unless explicitly stated above
 
 When topic note generation is exhausted:
