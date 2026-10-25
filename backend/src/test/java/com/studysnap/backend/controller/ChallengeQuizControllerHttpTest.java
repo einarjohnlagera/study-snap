@@ -3,6 +3,7 @@ package com.studysnap.backend.controller;
 import com.studysnap.backend.dto.ChallengeQuizStartResponse;
 import com.studysnap.backend.dto.ChallengeQuizSessionStatusResponse;
 import com.studysnap.backend.exception.ChallengeQuizSessionNotFoundException;
+import com.studysnap.backend.exception.ChallengeQuizSessionNotInProgressException;
 import com.studysnap.backend.exception.ChallengePreparationInProgressException;
 import com.studysnap.backend.exception.PreparedChallengeExpiredException;
 import com.studysnap.backend.exception.InvalidPreparedChallengeDiscardException;
@@ -161,6 +162,26 @@ class ChallengeQuizControllerHttpTest {
                 .content("{\"mode\":\"challenge\",\"discardPreparedSessionId\":\"" + sessionId + "\"}"))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.error.code").value("INVALID_PREPARED_CHALLENGE_DISCARD"));
+    }
+
+    @Test
+    void completeOfEndedSessionExposesSessionNotInProgressWireCode() throws Exception {
+        ChallengeQuizService service = mock(ChallengeQuizService.class);
+        UUID userId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+        AuthenticatedUser user = new AuthenticatedUser(userId, UserRole.USER, true, 1);
+        when(service.completeSession(org.mockito.ArgumentMatchers.eq(sessionId.toString()),
+                org.mockito.ArgumentMatchers.eq(userId), org.mockito.ArgumentMatchers.any()))
+                .thenThrow(new ChallengeQuizSessionNotInProgressException());
+        var mvc = standaloneSetup(new ChallengeQuizController(service))
+                .setControllerAdvice(new GlobalExceptionHandler(DataSize.ofMegabytes(10)))
+                .setCustomArgumentResolvers(authenticated(user)).build();
+
+        mvc.perform(post("/challenge-quiz/sessions/" + sessionId + "/complete")
+                        .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                        .content("{\"correctAnswers\":0,\"totalQuestions\":1,\"durationSeconds\":1}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.code").value("SESSION_NOT_IN_PROGRESS"));
     }
 
     @Test
