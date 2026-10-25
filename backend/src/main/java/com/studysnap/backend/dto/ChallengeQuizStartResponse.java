@@ -31,7 +31,8 @@ public record ChallengeQuizStartResponse(
 ) {
     @JsonProperty("morePending")
     public boolean morePending() {
-        return com.studysnap.backend.util.QuizSessionStateUtils.extractMoreToken(sessionState) != null
+        return status == QuickReviewSessionStatus.IN_PROGRESS
+                && com.studysnap.backend.util.QuizSessionStateUtils.extractMoreToken(sessionState) != null
                 && !com.studysnap.backend.util.QuizSessionStateUtils.extractMoreStopped(sessionState);
     }
 

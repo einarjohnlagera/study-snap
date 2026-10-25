@@ -558,6 +558,26 @@ class ChallengeQuizServiceTest {
                 .andExpect(jsonPath("$.collision.existingStarted").value(false));
     }
 
+    @Test
+    void forfeitedStartedQuizWithLingeringMoreTokenSerializesNotPendingOnRealGet() throws Exception {
+        UUID userId = UUID.randomUUID();
+        StudyPackEntity pack = buildStudyPack(UUID.randomUUID(), UUID.randomUUID(), userId);
+        ChallengeQuizStartResponse prepared = prepareFullyBankedQuiz(userId, pack);
+        QuickReviewSessionEntity row = savedSessionsById.get(UUID.fromString(prepared.sessionId()));
+        challengeQuizService.startQuiz(prepared.sessionId(), userId);
+        assertThat(QuizSessionStateUtils.extractQuiz(row.getSessionState())).isNotEmpty();
+        row.setSessionState(QuizSessionStateUtils.withMorePending(row.getSessionState(), "lingering-job", 42));
+        row.setStatus(QuickReviewSessionStatus.FORFEITED);
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(
+                row.getId(), userId, QuickReviewSessionMode.CHALLENGE)).thenReturn(Optional.of(row));
+
+        challengeMvc(userId).perform(get("/challenge-quiz/sessions/{id}", prepared.sessionId()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("FORFEITED"))
+                .andExpect(jsonPath("$.quiz").isNotEmpty())
+                .andExpect(jsonPath("$.morePending").value(false));
+    }
+
     private MockMvc challengeMvc(UUID userId) {
         AuthenticatedUser user = new AuthenticatedUser(userId, UserRole.USER, true, 1);
         return standaloneSetup(new ChallengeQuizController(challengeQuizService))

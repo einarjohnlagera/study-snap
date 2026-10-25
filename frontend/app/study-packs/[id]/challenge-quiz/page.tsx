@@ -375,13 +375,17 @@ export default function ChallengeQuizPage() {
   const [moreFinishingPrevious, setMoreFinishingPrevious] = useState(false);
   const [moreFailed, setMoreFailed] = useState(false);
   const [moreStartedAt, setMoreStartedAt] = useState<number | null>(null);
+  const localMoreStartedAtRef = useRef<number | null>(null);
   const [moreNow, setMoreNow] = useState(Date.now());
-  // Complete Quiz waits only for the first 45 s of a +5 started in this tab. The ceiling is what keeps
-  // it from locking: a +5 seen only after a reload (no local start time), a poll that keeps failing, or
-  // a job that never finishes all re-enable it, and Complete then stops and reconciles before submitting.
-  // The timer's own auto-submit never goes through this button.
-  const moreStillAdding = moreStartedAt !== null && moreNow - moreStartedAt >= MORE_COMPLETE_HOLD_MS;
-  const completeHeldForMore = morePending && moreStartedAt !== null && !moreStillAdding;
+  // Only a successful +5 POST in this tab holds Complete. A restored or other-tab +5 gets its own
+  // local display clock, while a clock moving backwards releases the hold and exposes Stop.
+  const moreElapsedRaw = moreStartedAt === null ? null : moreNow - moreStartedAt;
+  const moreElapsed = moreElapsedRaw === null ? null : Math.max(0, moreElapsedRaw);
+  const moreStillAdding = moreElapsedRaw !== null
+    && (moreElapsedRaw < 0 || (moreElapsed !== null && moreElapsed >= MORE_COMPLETE_HOLD_MS));
+  const localMoreElapsedRaw = localMoreStartedAtRef.current === null ? null : moreNow - localMoreStartedAtRef.current;
+  const completeHeldForMore = morePending && localMoreElapsedRaw !== null
+    && localMoreElapsedRaw >= 0 && localMoreElapsedRaw < MORE_COMPLETE_HOLD_MS;
   const [noMoreQuestions, setNoMoreQuestions] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [remainingSeconds, setRemainingSeconds] = useState(0);
@@ -835,8 +839,10 @@ export default function ChallengeQuizPage() {
     setMorePending(Boolean(started.morePending));
     setMoreStopped(Boolean(started.moreStopped));
     setMoreFailed(Boolean(started.moreFailed));
-    setMoreStartedAt(typeof started.sessionState?.moreStartedAtEpochSeconds === "number"
-      ? started.sessionState.moreStartedAtEpochSeconds * 1000 : null);
+    localMoreStartedAtRef.current = null;
+    const appliedAt = Date.now();
+    setMoreStartedAt(started.morePending ? appliedAt : null);
+    setMoreNow(appliedAt);
     const state = (started.sessionState ?? {}) as ChallengeSessionStatePayload;
     const restoredChoices = toSelectedChoiceIndexRecord(state.selectedChoices, started.quiz);
     const restoredMultiChoices = toSelectedMultiChoiceIndicesRecord(state.selectedMultiChoices, started.quiz);
@@ -948,6 +954,14 @@ export default function ChallengeQuizPage() {
     setShowBoardExamStartModal(false);
     setShowIncompleteSubmitModal(false);
     setGeneratingMore(false);
+    setMorePending(false);
+    setMoreStopped(false);
+    setMoreFailed(false);
+    setMoreStartedAt(null);
+    localMoreStartedAtRef.current = null;
+    moreStopRequestedRef.current = false;
+    retryMoreAfterStopRef.current = false;
+    moreStoppedAtRef.current = null;
     setNoMoreQuestions(false);
     setGenerateMoreToast(null);
     setNextStepResponse(null);
@@ -1488,6 +1502,10 @@ export default function ChallengeQuizPage() {
       }
       return completed;
     } catch (err) {
+      if (activeSession.mode !== BOARD_EXAM_MODE && isChallengeSessionNotInProgressError(err)) {
+        resetToPrestart(activeSession.mode);
+        throw err;
+      }
       const message = err instanceof Error ? err.message : "Could not save Challenge Quiz results.";
       setError(message);
       throw err instanceof Error ? err : new Error(message);
@@ -1495,7 +1513,7 @@ export default function ChallengeQuizPage() {
       submitInFlightRef.current = false;
       setSubmitting(false);
     }
-  }, [persistLatestProgress]);
+  }, [persistLatestProgress, resetToPrestart]);
 
   const handleSubmit = useCallback(async (timeoutTriggered: boolean) => {
     try {
@@ -1541,6 +1559,10 @@ export default function ChallengeQuizPage() {
   const reconcileMoreSession = useCallback((next: ChallengeQuizStartResponse) => {
     const current = challengeSessionRef.current;
     if (!current || current.sessionId !== next.sessionId) return null;
+    if (next.status !== "IN_PROGRESS") {
+      resetToPrestart(current.mode);
+      return null;
+    }
     const previousCount = current.quiz.length;
     if (next.quiz.length > previousCount) {
       const appended = next.quiz.slice(previousCount);
@@ -1559,9 +1581,12 @@ export default function ChallengeQuizPage() {
     setMorePending(Boolean(next.morePending));
     setMoreStopped(Boolean(next.moreStopped));
     setMoreFailed(Boolean(next.moreFailed));
-    if (!next.morePending) setMoreStartedAt(null);
+    if (!next.morePending) {
+      setMoreStartedAt(null);
+      localMoreStartedAtRef.current = null;
+    }
     return serverDeadline;
-  }, []);
+  }, [resetToPrestart]);
 
   const submitAfterPendingReconcile = useCallback(async () => {
     const current = challengeSessionRef.current;
@@ -1571,6 +1596,7 @@ export default function ChallengeQuizPage() {
         await stopAddingChallengeQuizQuestions(current.sessionId);
         const next = await getChallengeQuizSession(current.sessionId);
         reconcileMoreSession(next);
+        if (next.status !== "IN_PROGRESS") return;
         if (next.quiz.length > current.quiz.length) return;
       } catch (err) {
         moreStopRequestedRef.current = false;
@@ -1601,6 +1627,7 @@ export default function ChallengeQuizPage() {
     timeoutReconcileInFlightRef.current = true;
     void getChallengeQuizSession(sessionId).then((next) => {
       const serverDeadline = reconcileMoreSession(next);
+      if (next.status !== "IN_PROGRESS") return;
       if (serverDeadline === null || deadlineEpochSeconds === null
           || serverDeadline <= deadlineEpochSeconds) void handleSubmit(true);
     }).catch(() => { void handleSubmit(true); }).finally(() => {
@@ -1952,22 +1979,43 @@ export default function ChallengeQuizPage() {
     resetToPrestart(preparedIntentRef.current?.request.mode ?? CHALLENGE_MODE);
   };
 
-  const handleResumeCollision = () => {
+  const handleResumeCollision = async () => {
     if (!collisionContext || starting) return;
     const existing = { ...collisionContext.response, collision: null };
-    const additionalStudyPackIds = existing.sourceNoteRefs
-      ?.map((source) => source.studyPackId)
-      .filter((id) => id !== existing.studyPackId);
-    preparedIntentRef.current = {
-      request: {
-        mode: CHALLENGE_MODE,
-        ...(additionalStudyPackIds?.length ? { additionalStudyPackIds } : {}),
-        ...(additionalStudyPackIds?.length && collectionId ? { sourceCollectionId: collectionId } : {}),
-      },
-      redoMissed: collisionContext.response.collision?.existingMode === "redo_missed",
-    };
-    setCollisionContext(null);
-    applyStartedSession(existing, true);
+    if (!existing.sessionId) return;
+    setStarting(true);
+    setError(null);
+    try {
+      const fresh = await getChallengeQuizSession(existing.sessionId);
+      if (fresh.status === "FORFEITED" || fresh.status === "COMPLETED"
+          || (existing.status === "IN_PROGRESS" && fresh.status !== "IN_PROGRESS")) {
+        setCollisionContext(null);
+        resetToPrestart(existing.mode);
+        return;
+      }
+      const additionalStudyPackIds = fresh.sourceNoteRefs
+        ?.map((source) => source.studyPackId)
+        .filter((id) => id !== fresh.studyPackId);
+      preparedIntentRef.current = {
+        request: {
+          mode: CHALLENGE_MODE,
+          ...(additionalStudyPackIds?.length ? { additionalStudyPackIds } : {}),
+          ...(additionalStudyPackIds?.length && collectionId ? { sourceCollectionId: collectionId } : {}),
+        },
+        redoMissed: collisionContext.response.collision?.existingMode === "redo_missed",
+      };
+      setCollisionContext(null);
+      applyStartedSession(fresh, true);
+    } catch (err) {
+      if (err instanceof ApiRequestError && err.status === 404) {
+        setCollisionContext(null);
+        resetToPrestart(existing.mode);
+      } else {
+        setError(err instanceof Error ? err.message : null);
+      }
+    } finally {
+      setStarting(false);
+    }
   };
 
   const handleReplaceCollision = () => {
@@ -2026,7 +2074,10 @@ export default function ChallengeQuizPage() {
       setMoreStopped(false);
       setMorePending(response.morePending);
       setMoreFailed(false);
-      setMoreStartedAt(Date.now());
+      const localStartedAt = Date.now();
+      localMoreStartedAtRef.current = response.morePending ? localStartedAt : null;
+      setMoreStartedAt(response.morePending ? localStartedAt : null);
+      setMoreNow(localStartedAt);
     } catch (err) {
       if (err instanceof ApiRequestError && err.code === "MORE_IN_PROGRESS"
           && (moreStoppedAtRef.current !== null || moreStopped)) {
@@ -2035,7 +2086,10 @@ export default function ChallengeQuizPage() {
         setMoreStopped(true);
       } else if (err instanceof ApiRequestError && err.code === "MORE_IN_PROGRESS") {
         setMorePending(true);
-        setMoreStartedAt(Date.now());
+        localMoreStartedAtRef.current = null;
+        const appliedAt = Date.now();
+        setMoreStartedAt(appliedAt);
+        setMoreNow(appliedAt);
       } else if (isNotEnoughNewQuestionsError(err)) setNoMoreQuestions(true);
       else setError(err instanceof Error ? err.message : "Could not generate more questions.");
     } finally {
@@ -2063,10 +2117,16 @@ export default function ChallengeQuizPage() {
     let active = true;
     let reading = false;
     const poll = async () => {
-      if (reading) return;
+      if (!active || reading) return;
       reading = true;
       try {
         const next = await getChallengeQuizSession(challengeSession.sessionId!);
+        if (!active) return;
+        if (next.status !== "IN_PROGRESS") {
+          reconcileMoreSession(next);
+          active = false;
+          return;
+        }
         if (!active || (moreStopRequestedRef.current && next.morePending)) return;
         reconcileMoreSession(next);
         if (!next.morePending && !next.moreStopped && retryMoreAfterStopRef.current) {
