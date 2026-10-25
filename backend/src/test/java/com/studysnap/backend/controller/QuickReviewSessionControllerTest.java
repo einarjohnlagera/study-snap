@@ -368,7 +368,8 @@ class QuickReviewSessionControllerTest {
                 mock(com.studysnap.backend.repository.NoteCollectionItemRepository.class),
                 mock(com.studysnap.backend.repository.CourseProgramCatalogRepository.class),
                 mock(com.studysnap.backend.service.StudyPackQuizMasteryService.class),
-                mock(com.studysnap.backend.service.StudyPackGenerationContextResolver.class)
+                mock(com.studysnap.backend.service.StudyPackGenerationContextResolver.class),
+                org.mockito.Mockito.mock(com.studysnap.backend.service.PublicLibraryDiscoveryRankingCache.class)
         );
     }
 

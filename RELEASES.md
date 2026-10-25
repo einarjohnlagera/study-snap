@@ -1,5 +1,253 @@
 # RELEASES.md - NoteLib
 
+## v0.173.0 - Cached Catalog
+
+**Status: Released** (signed off 2026-10-16; **merge to `main` HELD for the 2026-10-22 gate, so NOT yet deployed**. Kicked off 2026-10-15 on `releases/v0.173.0`, cut from `docs/v0.172.0-deploy-stamp`
+(`3961383e`), which is `main` after `v0.172.0` merged as #1501 plus one docs commit.)
+
+Theme: take the remaining repeat load off the production database's Explore discovery reads by
+caching the copies/likes/views aggregates in-process for a short TTL, so most page views stop
+recomputing them at all.
+
+**Why this release exists.** `v0.172.0` made each discovery call compute the three engagement
+aggregates once instead of once per section. The fix plan's durable follow-up is to stop computing
+them on every call: an in-process Caffeine cache, TTL 60–300 s
+(`docs/claude-plans/2026-10-14-db-oom-memory-ceiling-fix-plan.md`, Leg D "Durable follow-up"). The
+owner deferred it to this release on 2026-10-14.
+
+**⚠️ MERGE GATE: the release PR merges to `main` only AFTER the `[CHECKPOINT — due 2026-10-22]` read.**
+- That checkpoint measures `v0.172.0` (Leg D) plus Leg B with **no** cache, over 7 days from the
+  2026-10-15T07:09:09Z deploy. Shipping the cache inside that window would make the read unattributable.
+- Every `main` merge also triggers a Render deploy, and the deploy double-pool overlap is itself a
+  known kill mechanism. So nothing merges to `main` before 2026-10-22T07:09Z.
+- **The read can redirect this release.** ≥ 5 kills: Leg A (plan upgrade) becomes the next lever and
+  the cache alone is not enough; the owner decides whether this release still ships. 2–4: proceed as
+  planned. 0–1: the checkpoint is silent on the cache; owner call after the read.
+- Work can be built, audited and merged into `releases/v0.173.0` before then.
+
+### Planned Scope
+
+1. **Discovery ranking cache (backend, Tier H, Codex). ✅ Merged #1503 (`70fdd019`), 2026-10-15; see Shipped.**
+   - **Tier N → H (2026-10-15, before the brief):** single-flight under concurrent load is the charter's concurrency trigger, and a waiter holding a JDBC connection under open-in-view would reproduce this method's own leak traces. A scoped cold falsification pass is owed at pre-signoff. Brief: `docs/codex-prompts/v0.173.0-discovery-ranking-cache.md` (no stale-on-error: `expireAfterWrite` 300 s keeps Product UX's bound).
+   - Add Caffeine and cache the copies/likes/views aggregates behind
+     `NoteService.getPublicLibraryDiscoverySections` for a short TTL (fix plan: 60–300 s).
+   - **Product UX decision, 2026-10-15 (APPROVED with safeguards; consultation prompt
+     `docs/claude-plans/2026-10-15-discovery-cache-product-ux-consultation-prompt.md`):**
+     - **Cache the ranked id lists of all three sections (Featured, Most Popular, Recently Added) as
+       one coherent snapshot, TTL 300 s.** Existing ranking and exclusion semantics are preserved.
+       Card counts and the viewer's liked state stay live per request, and are never cached.
+     - **No early invalidation**: not on publish, unpublish, copy, like or view.
+     - **The per-request `visibility = 'PUBLIC'` re-check stays on every response, cache hits
+       included.** A private or deleted note drops out at once, even if a section then shows fewer
+       than 6 cards.
+     - No user-facing freshness notice, and no promise that publishing lands a note in Recently Added
+       (it orders by creation date, which this release must not change).
+     - **Safeguards to verify:** concurrent misses must not each run the ranking query
+       (single-flight). A failing refresh must not cause a retry storm. Cold-start, expiry and
+       failure behaviour must be tested under concurrency. No per-copy or per-like invalidation, and
+       no expensive per-request backfill.
+     - **Post-deploy:** compare the 7-day signal-9 count against the baseline of 9. Add bounded
+       instrumentation for ranking computations, hit/miss, refresh failures, ranking duration and
+       short (< 6) sections.
+     - **Why the copy-count concern is gone:** counts are loaded per request by
+       `NoteService.toListItems`, not by the ranking, so #1500's in-page freshness is unaffected.
+   - **Re-read 2026-10-15, read-only:** backend `numInstances` = 1 (Render `get_service`), so an
+     in-memory cache is consistent across visitors.
+   - Guard (fix plan): a test asserting the aggregate computation runs at most once per TTL window
+     across repeated `getPublicLibraryDiscoverySections` calls, plus a real-request test if any
+     endpoint changes.
+2. **Carried docs commit (no code). `[merged-to-release: 3961383e]`** Stamps the `v0.172.0`
+   production deploy time (2026-10-15T07:09:09Z) into the `ROADMAP.md` Backlog rows. It rides in via
+   this release instead of PR #1502, so it does not trigger its own deploy mid-checkpoint window.
+
+Anti-drift:
+- **Caffeine is the one allowed new dependency.** No Redis, no HTTP cache headers, no Next.js
+  `revalidate` change.
+- No Hikari pool-size change (pinned by the 09-04 outage fix and
+  `TomcatThreadPoolHikariAlignmentTest`).
+- No change to FEATURED/POPULAR weights, decay, thresholds, or the paginated listing's SQL (pinned by
+  the 14 golden SQL files from #1498).
+- No checkout/payment path (RC-4 baseline) and no public-note/adoption path (RC-5 read).
+- No migration.
+
+**Open at kickoff, not scoped:**
+- `[CHECKPOINT — due 2026-10-22]` (signal-9 kills; read by 2026-10-29 at the latest, Render log
+  retention). RC-3 checkpoint due 2026-10-21.
+- Overdue checkpoint reads carried from `v0.172.0`: `v0.107.0`, `v0.90.0`, `v0.106.0`, `v0.97.0` (due
+  10-13); `v0.111.0`, `v0.96.0` (09-28); the `v0.74.0` conversion read (09-30).
+- The `v0.166.0` Hikari checkpoint row's title still reads open, though the `v0.171.0` kickoff read
+  it (cell contradiction, not re-read here).
+- Owner: re-run the admin Official Challenge backfill seed for note `0c6b0be8`.
+- Workflow redesign: `v0.172.0` ran two Tier-N items through the new worktree lifecycle, but no M5
+  pilot measurement was recorded. D4/D9 stay gated on it.
+
+### Shipped
+
+1. **Explore discovery rankings cached for 300 s** — #1503 (`70fdd019`), Tier H.
+   - `PublicLibraryDiscoveryRankingCache` holds one viewer-independent snapshot of the Featured /
+     Popular / Recent id lists. It is a Caffeine `AsyncLoadingCache` (`:51-55`): the 300 s TTL counts
+     from completion, concurrent misses share one computation and its failure, and a failure is not
+     cached.
+   - The ranking runs on `discoveryRankingTaskExecutor` (`AppConfig.java:35`) in its own read-only
+     transaction. `NoteService.getPublicLibraryDiscoverySections` (`:940-942`) is `NOT_SUPPORTED`, so
+     waiting requests hold no JDBC connection.
+   - Card projections, counts, the `visibility = 'PUBLIC'` re-check and the viewer's liked state run on
+     every request. There is no early invalidation and no stale-on-error. Repository SQL, ranking
+     formulas, the pool and migrations are unchanged; the one new dependency is Caffeine 3.2.3, from
+     the Boot BOM.
+   - Instrumentation:
+     - `DISCOVERY_RANKING_CACHE computed` (INFO): `durationMs`, the three list sizes, cumulative
+       hits/misses/failures, and `shortSectionResponses`. The line emits; it appeared 13 times in the
+       full build.
+     - `DISCOVERY_RANKING_CACHE failed` (WARN).
+     - A request that joins a ranking still in flight counts as a **hit**: in a cold-start burst of 8,
+       7 show as hits.
+   - Verification:
+     - Full `./mvnw clean install` with Docker: 2,694 tests, 0 failures.
+     - `concurrentHttpDiscoveryWaitersDoNotHoldJdbcConnections` (real HTTP, 8 concurrent requests,
+       ≤1 active connection) fails with **9** when the method is reverted to `readOnly = true`. That
+       mutation was run by Release Implementor.
+     - `inFlightRankingSurvivesTtlAndExpiresFromCompletion` fails with 2 rankings under insertion-time
+       expiry. That mutation was run by Codex; the test was read by Release Implementor.
+     - Two defects in Codex pass 1 were confirmed and fixed in fix-1: the TTL started at insertion, and
+       the connection guard bypassed the real request path.
+   - **Known gaps (as merged in #1503; the first two are closed by item 2):**
+     - No test asserts that `shortSectionResponses` rises.
+     - The HTTP test's identical-body check is trivial, because every section is stubbed empty.
+     - ~~`future.join()` has no timeout. That is no worse than the previous per-request query.~~
+       **Corrected 2026-10-16: this was wrong.** The old query failed alone. Here a stalled ranking left an
+       in-flight future that never expired, and every request pinned a Tomcat thread (25 total) on it.
+       Health checks starved, and Explore stayed frozen until restart. The cold pass found it (C8), and
+       item 2 fixes it.
+   - The Tier-H cold falsification pass (Opus, read-only) ran on 2026-10-15. It found no blockers;
+     its findings are resolved under item 2.
+
+2. **Stalled rankings bounded and the cache hardened** — #1504 (`ff555530`), Tier H, Codex at high
+   effort (D10).
+   - **C8 (stall):** the ranking transaction has a 50 s statement timeout
+     (`PublicLibraryDiscoveryRankingCache.java:40`, via `TransactionTemplate.setTimeout`). The loader
+     future has a 55 s `orTimeout` backstop (`:41`). Both are under the 60 s Hikari leak threshold.
+     - 50/55 rather than the 30/45 that was built: before `v0.172.0`, this endpoint held connections over
+       60 s three times during CPU spikes. A shorter cancel risks a cancel-and-retry loop with no backoff.
+       The owner chose this on 2026-10-16.
+     - A timed-out ranking is not cached, so the next request retries.
+   - **Rejection:** when the queue of 16 is full, the load fails at once and reports one failure, with
+     no orphan timer. A queued load whose future already timed out skips the ranking.
+   - **Accounting (both Codex-review P2s):**
+     - The success line and the `shortSectionResponses` reset happen only when `complete()` delivers
+       the snapshot.
+     - The counter is captured before publishing and added back if the snapshot is not delivered. That
+       last race can't be reproduced by a test, so this fix is unverified.
+     - Failures, including `Error`, are counted once per load.
+   - **Missing decorator:** `InFlightThreadRegisteringTaskDecorator` is now set on
+     `discoveryRankingTaskExecutor`, pinned by
+     `AppConfigTest.discoveryRankingExecutorIsBoundedAbortOnOverflowAndRegistered`.
+   - **C10 (test gaps):**
+     - The pagination fixture now has 7 notes, so a backfill would be detected, and it asserts
+       `shortSectionResponses`.
+     - The cold test is now `coldRequestsShareOneRanking`; its "no connection" half could not fail, so
+       that claim was dropped there and is left to the HTTP test.
+     - The HTTP test now sends one authenticated (JWT) request.
+   - The inert `invalidateAll` call in the pagination test was removed.
+   - **New tests:**
+     - `PublicLibraryDiscoveryTimeoutPostgresIntegrationTest.lockedNativeRankingIsCancelledServerSideAndNextRequestRetries`
+       (Docker): an `ACCESS EXCLUSIVE` lock on `notes` checks the server-side cancel, the worker being
+       released, and recovery after unlock.
+     - Unit tests for a late result after the wait timeout, a rejected submission, a timed-out queued
+       load, and a failure logged once.
+   - **Verification:**
+     - Full `./mvnw clean install` with Docker: 2,701 tests, 0 failures, at 30/45 and again at 50/55.
+     - Mutations run by Release Implementor:
+       - Removing the transaction timeout fails the lock test at "each caller sees PostgreSQL
+         cancellation before the 5 s backstop".
+       - Removing both bounds now fails in about 7 s. Before fix-1, the test hung instead.
+       - Removing `readOnly` gives 9 connections against 1 in the HTTP test.
+     - Codex killed the complete-guard, rejection-handling and decorator mutations.
+   - **D10 cost (gpt-6-sol), as 5h-window / weekly `used_percent`:**
+
+     | Run | Effort | 5h window | Weekly |
+     |---|---|---|---|
+     | Hardening pass | high | 49→72 | 8→11 |
+     | Review | medium | +2 | 11→12 |
+     | Fix-1 | high | 0→7 (after the 5h reset) | 12→13 |
+
+     That is two D10 runs this week on one item, and the owner was told.
+   - **Known limitations (cold-pass notes, not fixed):**
+     - **A dead socket can't be cancelled.** The worker stays stuck until restart. Each request fails
+       after 55 s, and requests fail at once once the queue of 16 fills. Tomcat threads stay free, so
+       health checks don't restart the service, but Explore is down until restart.
+     - **C2:** for a few microseconds after a failed ranking, a request can join the failed future.
+       Retries have no backoff.
+     - **C7 (log emitters):**
+       - One failure also emits Caffeine's own WARNING and one `unhandled_exception` ERROR per waiting
+         request. Count failures from `DISCOVERY_RANKING_CACHE failed` only.
+       - Joining an in-flight ranking counts as a hit.
+       - `shortSectionResponses` resets after each delivered computation.
+     - The HTTP test's identical-body check is still trivial.
+     - **C11:** the doc-wording notes were folded into `docs/features/public-library.md`.
+
+3. **Owner action: four residual pre-H4 answer-key defects repaired in `study_packs.quiz`** — 2026-10-16,
+   run by the owner with psql.
+   - Source: `docs/claude-findings/2026-10-15-quiz-quality-retention-llm-cost-production-read.md` §2
+     (Feature Planner / Prod Investigator).
+   - Script: `docs/claude-plans/done/2026-10-16-study-packs-residual-answer-key-defects-repair-tightened.sql`.
+     It is the Release Implementor's tightened copy of the Prod Investigator's
+     `done/2026-10-15-…-repair.sql`. It adds a question-text match (D3's choices are generic), keeps array
+     order (`WITH ORDINALITY … ORDER BY`), and runs as one transaction with checks that abort it.
+     Before production, it was tested in a throwaway local Postgres, with a decoy question sharing
+     D3's choices and wrong index.
+   - Corrections:
+     - D1 audit detection risk: 0.06/(0.4×0.5) = 0.3, so idx 3 → 0.
+     - D2 labor efficiency variance: (120−100)×$15 = $300 unfavorable, so idx 0 → 2.
+     - D3 weighted average cost: $10,000/500 = $20, so idx 2 → 1.
+     - D4 straight-line depreciation: ($50,000−$5,000)/9 = $5,000, so idx 3 → 0, on the source and
+       both public-note copies.
+   - Owner run: `UPDATE 1/1/1/3`, the check block passed ("6 packs corrected"), and `COMMIT`.
+   - **Verified read-only by Release Implementor, after commit:**
+     - In each of the 6 packs, only the targeted question's `correctIndex` changed, compared with a
+       per-question read taken before the repair.
+     - Question order is unchanged, and every quiz still has 5 questions.
+     - `quiz_stamp` (0) and `updated_at` are unchanged, so no Quick Review mastery was reset.
+     - A whole-table recount finds 0 wrong keys for all four defects, and 3 corrected D4 copies.
+   - Exposure: one incomplete owner test session existed on these packs. The real learner's D4 copy
+     had no sessions.
+   - Not repaired, by design: the APGAR, percentage-tax and grain-size candidates were re-derived as
+     correctly keyed (false positives).
+
+### Signoff (2026-10-16)
+
+- **Signed off ahead of the merge, owner decision 2026-10-16**, so `v0.174.0` can be cut from this
+  branch. The merge gate is unchanged: the release PR merges to `main` only after the
+  `[CHECKPOINT — due 2026-10-22]` signal-9 read (by 2026-10-29 at the latest). If that read shows
+  ≥ 5 kills, the owner decides whether this release still ships, and any change made here is merged
+  forward into `v0.174.0`.
+- **Interim reads at signoff (read-only, NOT the verdict):**
+  - 0 `terminated by signal 9` lines from 2026-10-15T07:09:09Z to 2026-10-16T03:14Z. The filter was
+    checked against the known 07:08:54Z kill.
+  - 1 `Apparent connection leak` trace since the `v0.172.0` deploy: 2026-10-15T14:25:32Z on
+    `PublicProfileController.getByUsername`, returned to the pool about 70 s after acquire. That is a
+    `v0.166.0` method, not discovery, and is recorded on its checkpoint row.
+- **Scope completeness:**
+  - Item 1 shipped: #1503 plus the #1504 hardening, file:line anchors under Shipped.
+  - Item 2 shipped: the carried deploy-time stamp `3961383e` is on this branch.
+  - Item 3 is an owner action, done and verified.
+  - Nothing was planned and left unbuilt.
+- **Pressure test:** one scoped cold falsification agent (Opus, read-only), Tier H for concurrency.
+  It found no blockers; every finding is fixed or listed as a known limitation under item 2.
+- **Feature-doc drift:** `docs/features/public-library.md`'s cache paragraph was re-read against the
+  final `PublicLibraryDiscoveryRankingCache`. These all match:
+  - the 50 s / 55 s bounds (`:40-41`);
+  - a failure is not cached;
+  - immediate rejection when the queue is full;
+  - no viewer id;
+  - no backfill;
+  - the log and counter semantics.
+- **Backlog:**
+  - The "Production DB memory ceiling" and discovery long-hold `[DECISION]` rows are updated: cache
+    built, deploy held.
+  - The `v0.166.0` Hikari checkpoint row carries the `getByUsername` recurrence.
+  - A new `[CHECKPOINT]` row covers the cache itself, dated from its deploy.
+
 ## v0.172.0 - Headroom
 
 **Status: Released** (signed off 2026-10-15 on `releases/v0.172.0`; kicked off 2026-10-14, cut from
@@ -659,195 +907,6 @@ documented this precisely (PR #1483, commit `ad6caa8c`).
 - **Falsification correction (PR #1483, commit `ad6caa8c`):** test naming/documentation fix per the
   Codex pass above — no production code change.
 
-## v0.167.0 - Study Journey Purpose
-
-**Status: Released** (signed off 2026-10-08; commits `22584379`/`1dd1c80c` on `releases/v0.167.0`)
-
-Theme: activate the parked "Study Journey Purpose / Learner Goal" architecture discovery, resolve
-its Q1 ("what problem are we solving"), and implement the chosen scope. **Started as investigation-only
-per the discovery brief's §14** (`docs/claude-plans/study-journey-purpose-learner-goal-discovery-brief.md`)
-— **scope expanded in place, owner decision 2026-10-08, after the investigation (§11, all 12 questions)
-completed and the owner picked Q1's scope.** The brief's blanket "no implementation" constraint is
-superseded for exactly the scope named below; everything else in §14 (no certification/role catalog,
-no `ProfileType` change, no recommendation-engine change, no BSCS backfill) still holds.
-
-### Investigation phase (complete)
-
-Worked the brief's §11 open questions in order, as a companion decision file
-(`docs/claude-plans/study-journey-purpose-learner-goal-discovery-decision.md`), corrected and
-re-verified across several passes (see that file's own §0a and the git history on this branch for
-the full trail). Found the brief's own premise partially stale (`UserEntity.studyGoal` and
-`course_programs.exam_goal_slug` already persisted crude versions of both concepts), found a
-genuine presentation gap (Journey terminology keyed to viewer `ProfileType`, never to the Journey
-itself), and left Q1 to the owner with three evidenced candidate scopes.
-
-### Implementation phase — Q1 resolved as Candidate A + B (+ Civil Engineering), owner decision 2026-10-08
-
-**A second verification pass, done before any implementation, recalibrated both candidates** —
-smaller and better-evidenced than the decision doc's speculative Q12 sizing in both cases:
-
-- **Candidate A is a labeling fix, not a mode-selection fix.** `getAvailableExamModes` proves
-  `EXAM_MODES.md`'s Audience & Profile-Type Mapping table is load-bearing: Board Exam Mode is never
-  offered as a tile to a non-Board-Taker profile. Letting `resolvePlanPremiumExamMode` (the terminal
-  CTA on a collection page) override viewer profile with Journey nature would route a viewer toward
-  a mode their own profile-gated screen doesn't list — a real contract violation, not a risk.
-  **`resolvePlanPremiumExamMode` and `EXAM_MODES.md` are explicitly OUT of scope.** Only
-  `getCollectionLabels` (terminology) changes, resolved server-side from a collection's root
-  ancestor's `courseProgram` → `course_programs.exam_goal_slug`, gated additionally on the root's
-  own `learner_level = BOARD_EXAM_REVIEW` (a concrete guard against the future collision Q11 left
-  open — two roots sharing one `courseProgram` with different purposes). Page-chrome labels
-  (`navLabel`, empty states) stay viewer-keyed; only per-collection nouns become Journey-aware.
-- **Candidate B's real gap is smaller than "single-valuedness."** Production read: only **2 users**
-  have adopted roots spanning ≥2 distinct `exam_goal_slug`s — building multi-goal infrastructure
-  now would ship ahead of its evidence. `docs/features/profile.md:97-99` documents the EXAM/SUBJECT
-  split as intentional (not a bug). What's actually missing: no UI lets a learner deliberately
-  choose or switch their exam goal — the only paths are Profile's "Clear" and the dashboard banner's
-  single auto-suggestion; "Change" is documented to redirect into editing `focusSubjects` instead.
-  **Fix: add a constrained exam-goal combobox (reusing the existing `SuggestionCombobox`/
-  `CourseProgramCombobox` pattern, `allowCustom=false` per this repo's taxonomy-field rule) wired to
-  the existing `updateStudyGoal` endpoint — no new column, no migration.** True multi-goal support
-  is explicitly deferred, not silently dropped: re-open only if the ≥2-distinct-exam-goal population
-  grows past a handful.
-- **Civil Engineering fold-in (owner-confirmed, 2026-10-08):** widen `course_programs.exam_goal_slug`'s
-  `CHECK` constraint to include `'ce'`, seed it onto the existing Civil Engineering row, add it to
-  `ExamGoalConfig.java` and the new exam-goal combobox's options. The one piece of this release that
-  needs a migration.
-
-Shipped implementation:
-
-- **A:** Collection detail, Goal detail, and summary responses now carry the exam slug resolved from the root collection's program and `BOARD_EXAM_REVIEW` level. Collection nouns show ALE, PNLE, LET, CPALE, or CELE Review Set terminology across profiles; library chrome stays profile-keyed.
-- **B:** Profile's Study Focus now offers a constrained exam picker alongside Change and Clear. It lists the server's valid exam definitions, allows switching, and clears subject focus when a goal is saved.
-- **CE:** V154 widens the catalog constraint and assigns `ce` to Civil Engineering, with a row-count guard. `ExamGoalConfig` names CELE and includes it in valid slugs. The optional Exam Hub page was deferred because it creates a new public SEO surface.
-
-Anti-drift for the implementation phase: additive only — no change to `ProfileType`, no
-recommendation-engine change, no certification/role catalog beyond the single `'ce'` slug, no
-backfill of existing Study Journeys' presentation, no touch to `resolvePlanPremiumExamMode`/
-`EXAM_MODES.md`. New DTO fields are additive (old clients ignore them; no field removed or renamed).
-
-**Delivery:** Codex-routed per `CLAUDE.md`'s task-routing table (new backend service logic +
-multi-system frontend/backend change). Claude Code designed the scope above and will write the
-Codex prompt; Codex implements; `/audit-diff` runs on the diff before commit.
-
-**Verification tier:** one scoped cold falsification agent on the diff (not the full three-agent
-tier — no money/quota/permission surface is touched, per `CLAUDE.md`'s gate), plus a real-request
-(`MockMvc`) test for the new/changed DTO fields, plus the standing Postgres migration harness for
-the Civil Engineering `CHECK`-constraint change.
-
-**Falsification pass results (2026-10-08, cold agent, 10 claims checked against live code, not the
-commit message):** all 10 confirmed — both audit fixes (privacy, N+1), the collision-guard test,
-the page-chrome/per-collection-noun split, the `EXAM_MODES.md`/`exam-mode-visibility.ts` exclusion
-(empty diff, verified), mutual-exclusivity in both directions, real transport-level tests for every
-new file, feature-doc accuracy, and 327 backend + 39 frontend tests passing. **Nothing found that
-blocks signoff.** Three non-blocking follow-ups logged rather than silently dropped:
-- No direct unit test pins `resolveWithoutInheritance` against a collection that itself has a
-  non-null `parentCollectionId` (currently only exercised indirectly via a parentless collection,
-  equivalent in effect, not in intent-signaling). Low priority — add if this area is touched again.
-- No test exercises `resolve()`'s cross-owner defensive branch (fails closed, currently
-  dead-from-a-coverage-perspective).
-- `NativeQueryPostgresIntegrationTest`'s V154 migration test was verified by reading source only in
-  this pass (the falsification run used `-Dnativequery.pg.skip=true`); it was run earlier in this
-  session with Docker and passed, but wasn't re-run live in the same pass as the other 9 claims.
-- Candidate B's "only 2 production users" figure is a production-state claim from the discovery
-  phase, not re-verified in this pass — same decay risk as any other prod-state claim per
-  `CLAUDE.md`; re-check before relying on it further rather than assuming it still holds.
-
-### Shipped
-
-- **Study Journey Purpose / Learner Goal — §11 question pass (2026-10-07/08).** Worked all 12 of
-  the discovery brief's §11 open questions, in order, as a companion decision file:
-  `docs/claude-plans/study-journey-purpose-learner-goal-discovery-decision.md`. Found and corrected
-  a stale half of the brief's own "premise verified against current code" line: `UserEntity.studyGoal` and
-  `course_programs.exam_goal_slug` already persist crude, shipped versions of Learner Goal and
-  Target Credential at the profile/catalog grain — the brief's "nothing already represents either
-  concept" claim held only at the Note/Collection grain it checked. Found a concrete,
-  code-reproducible gap (not a bug — Journey terminology and the terminal exam-mode CTA are keyed
-  solely to the viewer's `ProfileType`, never to the Journey itself, and catalog adoption is
-  verified unrestricted by profile), but confirmed the quiz-mode half of that gap sits against a
-  **locked** contract (`EXAM_MODES.md`'s audience-by-profile mapping), so any fix there is a product
-  decision, not a cheap rewire. Q1 (which problem to solve) is explicitly left to the owner with 3
-  evidenced candidate scopes, not picked unilaterally. One empirical question (whether published
-  Journeys sharing a `courseProgram` are already distinguishable without new metadata) is blocked on
-  a production read — Render MCP `CONNECT_TIMEOUT` all session — and left open rather than guessed.
-  `ROADMAP.md`'s Backlog Index row for the brief (`:701`) updated to summarize these findings and
-  point at the new decision file.
-- **Six `[CHECKPOINT — due 2026-10-07]` ROADMAP rows read** (the handoff note's count of five was
-  itself wrong — one row, the shared-quiz-promotion checkpoint, was missing from its list). One closed on its own kill criterion (archive
-  convention: `RELEASES.md` at 6 sections, `CLAUDE.md`'s `Current version:` block at 1,304 chars,
-  neither regrown — **but note `CLAUDE.md`'s total file size, 50,177 chars, remains over the
-  checkpoint's separate ~45,000-char observation**, unrelated to the kill criterion itself). One
-  partially advanced with a code-only finding (`generation_failure_reason` write path confirmed
-  live via `StudyPackService.java:1316-1338`, prod count still unread). The remaining four
-  (announcement fan-out pool saturation, `/notes/public` re-saturation, SEO `sort=recent`
-  engagement, shared-quiz promotion floor) are genuinely production-only reads and are marked
-  blocked rather than guessed at; none had their `Last reviewed` date advanced.
-- **Render MCP reconnected, 2026-10-08 — every blocked read above was run.** All read-only
-  `SELECT`s via `mcp__render__query_render_postgres` (self-wrapped in a read-only transaction) plus
-  two Render platform reads (`get_metrics`, `list_logs`); no write made or considered.
-  - **Study Journey Purpose's Q11 production read: RESOLVED (corrected once after an advisor pass
-    caught that `published_at IS NOT NULL` alone isn't "official root" — any user can publish their
-    own collection; re-run with an `owner.role` join).** Every published, curator-owned
-    (`role=ADMIN`) `courseProgram` root in production is the only one for its program today — no
-    academic/licensure-prep collision exists yet, so `courseProgram`/`exam_goal_slug` currently
-    disambiguates, though this is a point-in-time fact (it breaks the day a program publishes a
-    second root), not a structural guarantee. Sharper finding, also corrected once: Civil
-    Engineering's curator-owned, 2-adopter official root ("🏗️ CELE Comprehensive Review") has
-    `exam_goal_slug IS NULL` — but the goal-nudge *filter* itself still works for it via the
-    free-text fallback (checked against `ProgressReportService.filterGoalStudyPacks:446-448`); the
-    real gap is narrower — no Exam Hub discovery page, and `GOAL_TYPE_SUBJECT` framing instead of
-    the recognized-exam `GOAL_TYPE_EXAM` framing on the dashboard goal card. Decision file and
-    `ROADMAP.md:701` updated accordingly.
-  - **Announcement pool-starve checkpoint:** 419 active users (197 max in one `profile_type`), only
-    1 non-DRAFT announcement ever. Falls in the kill criterion's 200-500 advisory band, not a clean
-    pass — re-dated to `2026-11-07` (this pass's own judgment call on cadence) with interim guidance
-    to publish large announcements off-peak.
-  - **Failure-reason column checkpoint: CLOSED.** 9 notes carry a failure code (2 distinct codes),
-    and all 9 now sit at `status = GENERATED` while still carrying their failure reason — the
-    retry-survival guard this column exists for is confirmed in production.
-  - **`/notes/public` pool-saturation checkpoint: SUPERSEDED, not a clean close.** Postgres
-    `active_connections` holding flat at 20-22 for 30 days is uninformative (HikariCP keeps
-    `maximumPoolSize` connections open regardless of load). `list_logs` for the literal Hikari
-    phrase `"Connection leak detection"` (timed out once, succeeded on retry) found zero matches
-    2026-09-09 → 2026-10-01 and exactly two on 2026-10-04, neither naming `/notes/public`. Checked
-    whether these two (both resolving to `NoteCollectionService.adoptGoal`) were a bystander effect
-    of `/notes/public` DB saturation rather than their own thing: the existing incident's own
-    fingerprint (the same note's `PUBLIC_NOTE_VIEWED` ≥3 times inside either hold window) and
-    `server_failed`/`server_restarted` events both came back empty for that evening — negative on
-    both, so folded as a dated data point into the pool-exhaustion row's already-open
-    "connections held on unidentified blocking I/O" question (`ROADMAP.md`'s 2026-09-18 row)
-    rather than opened as a new finding. **But this row's own narrow instrument still cannot close
-    its real question: `/notes/public` saturation DID recur inside this same 30-day window** — 24
-    restarts since 2026-09-01, diagnosed 2026-10-01, fixed as `v0.165.0` Leg B — through DB CPU
-    exhaustion on an unbounded ranked-branch fan-out. A leak-detection trace names where a
-    connection was *acquired*, not what actually saturated the database, so it can't reliably
-    attribute a DB-wide slowdown to any one path either way. Superseded by the Leg B row and its
-    own post-fix checkpoint (clock from 2026-10-05), not an independent pass.
-  - **SEO `sort=recent` checkpoint: CLOSED, no material fall.** `PUBLIC_NOTE_VIEWED`/`pathType=seo`
-    (56,444 all-time, 32,037 in the last 30 days) shows no drop around the deploy week and both full
-    weeks after it are higher than any week before — though the deploy week itself (1,991) and the
-    week right after (6,476) bracket a lower week in between (2,838), so "grew every week" overstates
-    it; the honest read is "no material fall," not uninterrupted growth — a raw traffic count, not a
-    controlled comparison, but the kill criterion's own metric shows no fall.
-  - **Shared-quiz promotion-floor checkpoint: applied as written — promoted, floor unmet, hands to
-    an owner decision, not reclassified.** 1 share link from 1 generator against a 20-link/5-generator
-    floor; that one link was created 2026-09-05, a day *before* the promoting tip shipped (`v0.122.0`,
-    2026-09-06), so there have been zero links since promotion; the 1,245 tip impressions are 7
-    distinct users (6 learners, 1 admin), not 1,245 people — and 1,245 ÷ 7 ≈ 178 firings per user for
-    a tip documented as one-time, recorded as a separate over-firing observation, not fixed. An
-    earlier draft of this read reclassified the unmet floor as "not really promoted" to avoid the
-    owner-decision branch; withdrawn as fitting the criterion to the data after the fact. The row now
-    states the facts (near-zero reach, zero post-promotion links) and leaves the call to the owner.
-  - **`INACTIVITY` retention-email checkpoint (separately tracked, `due 2026-10-08`): RE-DATED to
-    `2026-11-23`, not a kill-criterion fire.** Went through two wrong conclusions before landing on
-    the right one, kept in the row as the record: first read all-time `email_log` (5,003 sent, 0
-    clicked) and read it as the kill criterion firing; corrected after an advisor pass to check
-    whether click tracking was globally broken (it wasn't — `DUE_CONCEPTS_DIGEST` recorded real
-    clicks, confirmed via `email_log` and `email_open_daily_counts`); corrected again on finding the
-    actual error — tracking is Stage 1a instrumentation (`V149`, installed 2026-09-24), not
-    `INACTIVITY`'s lifetime history, and re-anchored to that deploy, `INACTIVITY` sent only 537 (not
-    5,003) with 0 clicks, meeting neither leg of the row's own 30-click-or-2,000-send floor. An
-    unmet floor is a re-date per the row's own rule, not a verdict either way — re-dated to the
-    doctrine's own pre-specified 60-day backstop from the `V149` deploy, not a fresh interval.
-
 ## Archived releases
 
 - `v0.163.0 — No Peeking` (Released) — archived to `docs/archive/RELEASES_ARCHIVE.md`.
@@ -857,3 +916,4 @@ blocks signoff.** Three non-blocking follow-ups logged rather than silently drop
 - `v0.164.0 — Computing` (Released) — ratified `Computing` as a 13th Domain Context (ADR-001 amendment), shipped the enum/frontend value, swept the context/spec docs; carries a `[CHECKPOINT — due when BSCS Year 1 Computing authoring reaches 10+ classified notes, backstop 2026-12-29]`. Moved at the `v0.170.0` kickoff.
 - `v0.165.0 — Bounded Discovery` (Released) — closed the public-note discovery-rail DB-saturation restart mechanism (Leg B) and shipped three R4-pilot generation-quality fixes (G1, G2b, G5); carries its own now-closed `[CHECKPOINT — due 2026-10-12T15:24:27Z]` (fix worked, 0 restarts). Moved at the `v0.171.0` kickoff.
 - `v0.166.0 — Measured Twice` (Released) — archived to `docs/archive/RELEASES_ARCHIVE.md`. Moved at the `v0.172.0` kickoff.
+- `v0.167.0 — Study Journey Purpose` (Released) — archived to `docs/archive/RELEASES_ARCHIVE.md`. Moved at the `v0.173.0` kickoff.

@@ -5377,3 +5377,23 @@ change; the profile-load fix is backend-only. Both audited (direct trace + a col
 for the Goal-adoption fix) before merging. A `[CHECKPOINT — due Render deploy + 7 days]` on whether
 the fixes actually stop the Hikari long-hold traces is tracked in `ROADMAP.md`'s Backlog Index, not
 yet readable (not yet merged to `main`). Full scope in `RELEASES.md`.
+
+**Kicked off 2026-10-07, signed off 2026-10-08.** `v0.167.0 — Study Journey Purpose` is **Released** on
+`releases/v0.167.0`, cut from `main` after `v0.166.0` merged as #1479 and tagged. **Activated the
+parked "Study Journey Purpose / Learner Goal" architecture discovery**
+(`docs/claude-plans/study-journey-purpose-learner-goal-discovery-brief.md`) — owner-confirmed as the
+next release candidate 2026-10-07. **Scope expanded 2026-10-08, owner decision, after the
+investigation (§11, all 12 questions, companion decision file
+`docs/claude-plans/study-journey-purpose-learner-goal-discovery-decision.md`) completed.** Q1 is
+resolved as **Candidate A (Journey terminology keyed to the Journey's own nature, not the viewer's
+`ProfileType` — labeling only; `resolvePlanPremiumExamMode`/`EXAM_MODES.md` stay untouched, since
+changing the terminal-mode CTA would violate the locked per-mode audience contract) + Candidate B
+(a missing exam-goal picker; true multi-goal support explicitly deferred — only 2 production users
+show the pattern it would serve) + a Civil Engineering `exam_goal_slug` fold-in (owner-confirmed)**.
+Shipped via Codex prompt + inline audit (commits `22584379`, `1dd1c80c`), found and fixed a real
+pre-ship privacy leak (public collection page inheriting a private parent's classification) and an
+N+1 query during the pre-commit audit. **A one-scoped-cold-agent falsification pass ran before
+signoff (two independent triggers fired: an authorization/privacy boundary moved, and a defect was
+found-and-fixed in the same session) and confirmed all 10 checked claims, including both audit
+fixes — nothing found that blocks the release.** Full scope and the falsification pass's non-blocking
+follow-ups in `RELEASES.md`.
