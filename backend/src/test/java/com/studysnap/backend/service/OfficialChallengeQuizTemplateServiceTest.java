@@ -113,7 +113,7 @@ class OfficialChallengeQuizTemplateServiceTest {
                 eq(source.getQuestionKey()), any(), eq(LearnerLevel.SENIOR_HIGH.name()),
                 eq("UNANSWERED"), eq(sessionId), any());
         verify(quizGenerationService, org.mockito.Mockito.never())
-                .generateChallengeQuiz(any(), any(), any(), any(), any(Integer.class), any(), any());
+                .generateChallengeQuiz(any(), any(), any(), any(), any(Integer.class), any(), any(), any(), any());
     }
 
     @Test
@@ -150,6 +150,7 @@ class OfficialChallengeQuizTemplateServiceTest {
         UUID noteId = UUID.randomUUID();
         UUID studyPackId = UUID.randomUUID();
         NoteEntity officialNote = note(noteId, officialId, NoteVisibility.PUBLIC);
+        officialNote.setContent("Official note text for verification.");
         StudyPackEntity officialStudyPack = studyPack(studyPackId, noteId, officialId);
         officialStudyPack.setTitle("Official pack");
         officialStudyPack.setSummary("Summary");
@@ -172,7 +173,8 @@ class OfficialChallengeQuizTemplateServiceTest {
         when(quizGenerationService.generateChallengeQuiz(
                 eq("Official pack"), eq("Summary"), eq(List.of("Concept")), eq(List.of()), eq(20), eq("medium"),
                 eq(context.withRouting(com.studysnap.backend.service.model.LlmRouting.tiered(officialId)))
-        )).thenReturn(GeneratedChallengeQuizContent.withoutUsage(List.of(
+        , eq("Official note text for verification."),
+                eq(LlmStudyPackService.ChallengeVerifierPath.TEMPLATE_SEED))).thenReturn(GeneratedChallengeQuizContent.withoutUsage(List.of(
                 new QuizItem("Official question", List.of("A", "B", "C", "D"), "A", "Concept", "Explanation")
         )));
 
@@ -213,7 +215,7 @@ class OfficialChallengeQuizTemplateServiceTest {
         when(quizGenerationService.generateChallengeQuiz(
                 eq("Official pack"), eq("Summary"), eq(List.of("Concept")), eq(List.of()), eq(20), eq("medium"),
                 eq(context.withRouting(com.studysnap.backend.service.model.LlmRouting.tiered(officialId)))
-        )).thenReturn(GeneratedChallengeQuizContent.withoutUsage(List.of(
+        , any(), any())).thenReturn(GeneratedChallengeQuizContent.withoutUsage(List.of(
                 new QuizItem("Official question", List.of("A", "B", "C", "D"), "A", "Concept", "Explanation")
         )));
 
@@ -445,6 +447,8 @@ class OfficialChallengeQuizTemplateServiceTest {
         return new OfficialChallengeQuizTemplateService(
                 questionBankRepository,
                 questionBankService,
+                new OfficialChallengeQuizTemplateResolver(noteRepository, studyPackRepository,
+                        userRepository, questionBankRepository),
                 noteRepository,
                 studyPackRepository,
                 userRepository,

@@ -59,6 +59,11 @@ public interface ChallengeQuizQuestionBankRepository extends JpaRepository<Chall
             @Param("sessionId") UUID sessionId
     );
 
+    @Modifying
+    @Query("update ChallengeQuizQuestionBankEntity e set e.claimedSessionId = null where e.userId = :userId and e.claimedSessionId = :sessionId and e.questionKey in :keys")
+    int releaseSelectedClaims(@Param("userId") UUID userId, @Param("sessionId") UUID sessionId,
+            @Param("keys") Collection<String> keys);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("""
             select question
@@ -80,7 +85,7 @@ public interface ChallengeQuizQuestionBankRepository extends JpaRepository<Chall
     );
 
     @Query("""
-            select count(question)
+            select question
             from ChallengeQuizQuestionBankEntity question
             where question.userId = :userId
               and question.studyPackId = :studyPackId
@@ -89,8 +94,9 @@ public interface ChallengeQuizQuestionBankRepository extends JpaRepository<Chall
               and question.claimedSessionId is null
               and (question.generationStamp is null or question.generationStamp =
                    (select pack.generationStamp from StudyPackEntity pack where pack.id = :studyPackId))
+            order by question.generatedAt asc
             """)
-    long countIncorrectEligibleQuestions(
+    List<ChallengeQuizQuestionBankEntity> findIncorrectClaimable(
             @Param("userId") UUID userId,
             @Param("studyPackId") UUID studyPackId,
             @Param("learnerLevel") String learnerLevel,
@@ -158,19 +164,16 @@ public interface ChallengeQuizQuestionBankRepository extends JpaRepository<Chall
     );
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
-    List<ChallengeQuizQuestionBankEntity> findByUserIdAndStudyPackIdAndClaimedSessionId(
+    List<ChallengeQuizQuestionBankEntity> findByUserIdAndClaimedSessionId(
             UUID userId,
-            UUID studyPackId,
             UUID claimedSessionId
     );
 
     @Modifying
     @Query("""
             update ChallengeQuizQuestionBankEntity question set question.claimedSessionId = null
-            where question.userId = :userId and question.studyPackId = :studyPackId
-              and question.claimedSessionId = :sessionId
+            where question.userId = :userId and question.claimedSessionId = :sessionId
             """)
-    int releaseClaims(@Param("userId") UUID userId, @Param("studyPackId") UUID studyPackId,
-                      @Param("sessionId") UUID sessionId);
+    int releaseClaims(@Param("userId") UUID userId, @Param("sessionId") UUID sessionId);
 
 }

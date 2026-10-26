@@ -7,6 +7,33 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class QuizValidationUtilsTest {
+    @org.junit.jupiter.api.Test
+    void statementPairGuardClassifiesVerdictsChoicesAndScope() {
+        String stem = "Statement I: One is true.\nStatement II: Two is false.\nWhich is correct?";
+        java.util.List<String> choices = java.util.List.of(
+                "D. Neither statement is correct", "B) Only Statement II is correct",
+                "A: Both statements are correct", "C. Only Statement I is correct");
+        assertThat(QuizValidationUtils.checkStatementPair(stem, choices, 3, "MCQ", true, false))
+                .isEqualTo(QuizValidationUtils.StatementPairResult.OK);
+        assertThat(QuizValidationUtils.checkStatementPair(stem, choices, 0, "MCQ", true, false))
+                .isEqualTo(QuizValidationUtils.StatementPairResult.KEY_MISMATCH);
+        assertThat(QuizValidationUtils.checkStatementPair(stem, choices, 3, "MCQ", null, false))
+                .isEqualTo(QuizValidationUtils.StatementPairResult.MISSING_VERDICTS);
+        assertThat(QuizValidationUtils.checkStatementPair("Ordinary question", choices, 3, "MCQ", true, false))
+                .isEqualTo(QuizValidationUtils.StatementPairResult.NOT_STATEMENT_PAIR);
+        assertThat(QuizValidationUtils.checkStatementPair(stem, choices, 3, "TRUE_FALSE", true, false))
+                .isEqualTo(QuizValidationUtils.StatementPairResult.UNCLASSIFIED_CHOICES);
+        assertThat(QuizValidationUtils.checkStatementPair(stem,
+                java.util.List.of("Both", "Only Statement 1 is incorrect", "Only Statement 2", "Neither"),
+                1, "MCQ", true, false)).isEqualTo(QuizValidationUtils.StatementPairResult.UNCLASSIFIED_CHOICES);
+        assertThat(QuizValidationUtils.checkStatementPair(stem,
+                java.util.List.of("Both", "Only Statement 11", "Only Statement 2", "Neither"),
+                1, "MCQ", true, false)).isEqualTo(QuizValidationUtils.StatementPairResult.UNCLASSIFIED_CHOICES);
+        assertThat(QuizValidationUtils.checkStatementPair(stem,
+                java.util.List.of("Both", "Only Statement 1", "Only Statement I", "Neither"),
+                1, "MCQ", true, false)).isEqualTo(QuizValidationUtils.StatementPairResult.UNCLASSIFIED_CHOICES);
+    }
+
 
     @Test
     void hasInvalidChoices_detectsExactDuplicatesAndExtraWhitespace() {

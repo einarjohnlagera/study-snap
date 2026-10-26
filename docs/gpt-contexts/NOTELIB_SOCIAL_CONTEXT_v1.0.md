@@ -1,5 +1,12 @@
 # NoteLib Social Media Context
 
+**⚠️ SUPERSEDED 2026-10-20 for the Facebook challenge workflow** — `docs/agents/gpt/NoteLib Marketing.md`
+§4 is the current locked four-deliverable workflow (Main Page / Personal Share / Direct-to-Group /
+Answer Reveal) and §13 is the current discovery CTA (`/explore`, anonymous-accessible). This file's
+posting sequence below (which includes a "Follow-up Comment" promoting the whole Review Set, and a
+`/collections` link that requires login) is kept as historical record, not deleted and not rewritten
+section-by-section — do not follow it for new Facebook challenge content.
+
 This document defines the standard content format and writing style for all NoteLib social media posts.
 
 These guidelines should be followed unless explicitly instructed otherwise.

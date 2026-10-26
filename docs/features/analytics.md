@@ -57,7 +57,18 @@ Core usage and business events:
   update event; analytics failure never affects the save.
 - `STUDY_PACK_GENERATED`
 - `QUICK_REVIEW_STARTED`
-- `CHALLENGE_QUIZ_STARTED`
+- `CHALLENGE_QUIZ_STARTED` — from v0.175.0, a timed Challenge attempt (including redo-missed)
+  successfully began at Start Quiz, once per session. Earlier versions fired it when ordinary
+  generation finished and did not fire it for redo-missed starts. Both timing and population changed;
+  historical and post-v0.175.0 counts must not be compared without qualification.
+- `CHALLENGE_QUIZ_PREPARATION_REQUESTED` — an ordinary Challenge preparation was requested; metadata
+  contains `sessionId` and `mode`.
+- `CHALLENGE_QUIZ_PREPARATION_READY` — the ordinary Challenge session became ready for Start Quiz;
+  metadata contains `sessionId` and `mode`.
+- `CHALLENGE_QUIZ_PREPARATION_ABANDONED` — an unstarted ordinary Challenge was expired, discarded
+  through a collision or the explicit forfeit endpoint, or forfeited after a Study Pack stamp change;
+  metadata contains `sessionId`, `mode`, and
+  `reason` (`EXPIRED`, `DISCARDED`, or `STALE`). Failed preparation does not fire this event.
 - `ADAPTIVE_PRACTICE_STARTED`
 - `PAYWALL_VIEWED`
 - `UPGRADE_CLICKED`

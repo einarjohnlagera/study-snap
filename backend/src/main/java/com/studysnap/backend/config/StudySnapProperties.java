@@ -2,6 +2,7 @@ package com.studysnap.backend.config;
 
 import com.studysnap.backend.entity.PlanType;
 import com.studysnap.backend.entity.ProfileType;
+import java.time.OffsetDateTime;
 import java.math.RoundingMode;
 import lombok.Getter;
 import lombok.Setter;
@@ -18,6 +19,23 @@ public class StudySnapProperties {
     private final Ocr ocr = new Ocr();
     private final Llm llm = new Llm();
     private final QuizGeneration quizGeneration = new QuizGeneration();
+    private final ChallengeQuiz challengeQuiz = new ChallengeQuiz();
+
+    @Getter
+    @Setter
+    public static class ChallengeQuiz {
+        private OffsetDateTime statementPairLegacyCutoff;
+        // Owner-approved policy (2026-10-21). Production changes require owner approval.
+        private int challengeMultiNoteMinimumQuestionNumerator = 2;
+        private int challengeMultiNoteMinimumQuestionDenominator = 3;
+        private int challengeMultiNoteMinimumCoverageNumerator = 2;
+        private int challengeMultiNoteMinimumCoverageDenominator = 3;
+        private int challengeMultiNoteWaitDeadlineSeconds = 300;
+        private int challengeMultiNoteSourceTaskThreads = 6;
+        private int challengePreparationCoreThreads = 6;
+        private int challengePreparationMaxThreads = 6;
+        private int challengeMoreWaitDeadlineSeconds = 240;
+    }
     private final QuickReview quickReview = new QuickReview();
     private final Pricing pricing = new Pricing();
     private final LinkedLearners linkedLearners = new LinkedLearners();
@@ -80,6 +98,19 @@ public class StudySnapProperties {
     @Setter
     public static class Llm {
         private final Api api = new Api();
+        private final StatementPairVerifier statementPairVerifier = new StatementPairVerifier();
+    }
+
+    @Getter
+    @Setter
+    public static class StatementPairVerifier {
+        private boolean templateSeedEnabled = false;
+        private boolean liveStartEnabled = false;
+        private boolean plus5ExclusionEnabled = false;
+        private String primaryModel = "gpt-6.1-sol";
+        private String secondaryModel = "gpt-6-luna";
+        // Two 180 s read-timeout attempts plus a 30 s margin.
+        private int waitTimeoutSeconds = 390;
     }
 
     @Getter
@@ -519,6 +550,9 @@ public class StudySnapProperties {
         private int poolPendingBoundMinutes = 60;
         private int poolGeneratingBoundMinutes = 60;
         private int longExamSessionBoundMinutes = 30;
+        private int challengePreparedExpiryDays = 7;
+        private int challengeStartedExpiryGraceMinutes = 10;
+        private int challengeStuckGenerationMinutes = 20;
         private int noteBoundMinutes = 120;
     }
 

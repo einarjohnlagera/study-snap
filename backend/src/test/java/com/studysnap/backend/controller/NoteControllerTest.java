@@ -14,6 +14,9 @@ import com.studysnap.backend.dto.NoteRegenerationPreflightResponse;
 import com.studysnap.backend.dto.NoteBulkRegenerationReceiptResponse;
 import com.studysnap.backend.dto.NoteListItemResponse;
 import com.studysnap.backend.dto.NoteResponse;
+import com.studysnap.backend.dto.ChallengeQuizStartRequest;
+import com.studysnap.backend.dto.ChallengeQuizStartResponse;
+import com.studysnap.backend.dto.ChallengeQuizCollision;
 import com.studysnap.backend.dto.NoteStatusResponse;
 import com.studysnap.backend.dto.NotesLibraryFilterOptionsResponse;
 import com.studysnap.backend.dto.NotesLibraryIdsResponse;
@@ -1435,6 +1438,69 @@ class NoteControllerTest {
                         .content("{}"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.error.code").value("QUICK_REVIEW_NOT_AVAILABLE"));
+    }
+
+    @Test
+    void challengeStartAcceptsDiscardIdInARealJsonBody() throws Exception {
+        AuthenticatedUser routeUser = new AuthenticatedUser(UUID.randomUUID(), UserRole.USER, true, 1);
+        UUID noteId = UUID.randomUUID();
+        UUID discardId = UUID.randomUUID();
+        String packId = UUID.randomUUID().toString();
+        when(noteService.getOwnedStudyPackIdOrThrow(noteId.toString(), routeUser.userId())).thenReturn(packId);
+
+        buildMockMvc(routeUser).perform(post("/notes/" + noteId + "/challenge-quiz/start")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"mode\":\"challenge\",\"discardPreparedSessionId\":\"" + discardId + "\"}"))
+                .andExpect(status().isOk());
+
+        ArgumentCaptor<ChallengeQuizStartRequest> request = ArgumentCaptor.forClass(ChallengeQuizStartRequest.class);
+        verify(challengeQuizService).startSession(eq(packId), eq(routeUser.userId()), request.capture());
+        assertThat(request.getValue().discardPreparedSessionId()).isEqualTo(discardId.toString());
+    }
+
+    @Test
+    void redoMissedAcceptsOptionalDiscardBodyAndBodylessCall() throws Exception {
+        AuthenticatedUser routeUser = new AuthenticatedUser(UUID.randomUUID(), UserRole.USER, true, 1);
+        UUID noteId = UUID.randomUUID();
+        UUID discardId = UUID.randomUUID();
+        String packId = UUID.randomUUID().toString();
+        when(noteService.getOwnedStudyPackIdOrThrow(noteId.toString(), routeUser.userId())).thenReturn(packId);
+        MockMvc mvc = buildMockMvc(routeUser);
+
+        mvc.perform(post("/notes/" + noteId + "/challenge-quiz/redo-missed"))
+                .andExpect(status().isOk());
+        mvc.perform(post("/notes/" + noteId + "/challenge-quiz/redo-missed")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"discardPreparedSessionId\":\"" + discardId + "\"}"))
+                .andExpect(status().isOk());
+        verify(challengeQuizService).startRedoMissedSession(packId, routeUser.userId(), null);
+        verify(challengeQuizService).startRedoMissedSession(packId, routeUser.userId(), discardId.toString());
+    }
+
+    @Test
+    void redoMissedRealRequestSerializesStartedAndUnstartedCollisionSignals() throws Exception {
+        AuthenticatedUser routeUser = new AuthenticatedUser(UUID.randomUUID(), UserRole.USER, true, 1);
+        UUID noteId = UUID.randomUUID();
+        String packId = UUID.randomUUID().toString();
+        String existingId = UUID.randomUUID().toString();
+        when(noteService.getOwnedStudyPackIdOrThrow(noteId.toString(), routeUser.userId())).thenReturn(packId);
+        ChallengeQuizStartResponse base = new ChallengeQuizStartResponse(
+                existingId, com.studysnap.backend.entity.QuickReviewSessionStatus.IN_PROGRESS,
+                packId, "Pack", 1, 600, 1, 20, 0, 10, "challenge", "medium",
+                List.of(), 0, Map.of(), List.of(), 1, false);
+        when(challengeQuizService.startRedoMissedSession(packId, routeUser.userId(), null))
+                .thenReturn(base.withCollision(new ChallengeQuizCollision(existingId, "challenge", "redo_missed", true)))
+                .thenReturn(base.withCollision(new ChallengeQuizCollision(existingId, "challenge", "redo_missed", false)));
+        MockMvc mvc = buildMockMvc(routeUser);
+
+        mvc.perform(post("/notes/{id}/challenge-quiz/redo-missed", noteId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.collision.existingMode").value("challenge"))
+                .andExpect(jsonPath("$.collision.requestedMode").value("redo_missed"))
+                .andExpect(jsonPath("$.collision.existingStarted").value(true));
+        mvc.perform(post("/notes/{id}/challenge-quiz/redo-missed", noteId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.collision.existingStarted").value(false));
     }
 
     @Test

@@ -56,6 +56,244 @@ public class QuizSessionStateUtils {
     private static final String ENUMERATION_FORMAT = "ENUMERATION";
     public static final String SESSION_STATE_POOL_SOURCED = "poolSourced";
     private static final String SESSION_STATE_REDO_MISSED_SOURCE = "redoMissedSource";
+    private static final String PREPARED_NOT_STARTED = "preparedNotStarted";
+    private static final String PREPARED_AT_EPOCH_SECONDS = "preparedAtEpochSeconds";
+    private static final String PREPARED_GENERATION_STAMP = "preparedGenerationStamp";
+    private static final String CHALLENGE_QUOTA_CHARGED = "challengeQuotaCharged";
+    private static final String PREPARATION_QUIZ = "preparationQuiz";
+    private static final String PREPARATION_REQUESTED_COUNT = "preparationRequestedCount";
+    private static final String PREPARATION_SOURCES = "preparationSources";
+    private static final String PREPARED_SOURCE_STAMPS = "preparedSourceStamps";
+    private static final String REQUESTED_QUESTION_COUNT = "requestedQuestionCount";
+    private static final String SOURCE_CONTRIBUTION_COUNT = "sourceContributionCount";
+    private static final String CHALLENGE_SOURCE_SCOPE = "challengeSourceScope";
+    public static final String CHALLENGE_SOURCE_SCOPE_MANUAL = "manual";
+    public static final String TIMER_STARTED_AT_EPOCH_SECONDS = "timerStartedAtEpochSeconds";
+    private static final String MORE_TOKEN = "moreToken";
+    private static final String MORE_STARTED_AT = "moreStartedAtEpochSeconds";
+    private static final String MORE_STOPPED = "moreStopped";
+    private static final String MORE_FAILED = "moreFailed";
+    private static final String MORE_FAILED_TOKEN = "moreFailedToken";
+    private static final String MORE_FAILED_AT = "moreFailedAtEpochSeconds";
+
+    public Map<String, Object> withMorePending(Map<String, Object> source, String token, long startedAt) {
+        Map<String, Object> state = new LinkedHashMap<>(source == null ? Map.of() : source);
+        state.put(MORE_TOKEN, token);
+        state.put(MORE_STARTED_AT, startedAt);
+        state.remove(MORE_STOPPED);
+        state.remove(MORE_FAILED);
+        state.remove(MORE_FAILED_TOKEN);
+        state.remove(MORE_FAILED_AT);
+        return state;
+    }
+
+    public String extractMoreToken(Map<String, Object> state) {
+        Object value = state == null ? null : state.get(MORE_TOKEN);
+        return value instanceof String token ? token : null;
+    }
+
+    public boolean extractMoreStopped(Map<String, Object> state) {
+        return state != null && Boolean.TRUE.equals(state.get(MORE_STOPPED));
+    }
+
+    public long extractMoreStartedAt(Map<String, Object> state) {
+        Object value = state == null ? null : state.get(MORE_STARTED_AT);
+        return value instanceof Number number ? number.longValue() : 0L;
+    }
+
+    public Map<String, Object> withMoreStopped(Map<String, Object> source, String token) {
+        Map<String, Object> state = new LinkedHashMap<>(source == null ? Map.of() : source);
+        if (Objects.equals(extractMoreToken(state), token)) state.put(MORE_STOPPED, true);
+        return state;
+    }
+
+    public boolean extractMoreFailed(Map<String, Object> state) {
+        return state != null && Boolean.TRUE.equals(state.get(MORE_FAILED));
+    }
+
+    public Map<String, Object> withoutMorePending(Map<String, Object> source, String token, boolean failed) {
+        Map<String, Object> state = new LinkedHashMap<>(source == null ? Map.of() : source);
+        if (!Objects.equals(extractMoreToken(state), token)) return state;
+        state.remove(MORE_TOKEN);
+        state.remove(MORE_STARTED_AT);
+        state.remove(MORE_STOPPED);
+        if (failed) {
+            state.put(MORE_FAILED, true);
+            state.put(MORE_FAILED_TOKEN, token);
+            state.put(MORE_FAILED_AT, java.time.OffsetDateTime.now(java.time.ZoneOffset.UTC).toEpochSecond());
+        }
+        return state;
+    }
+
+    public Map<String, Object> withTimerStartedAtEpochSeconds(Map<String, Object> source, long value) {
+        Map<String, Object> state = new LinkedHashMap<>(source == null ? Map.of() : source);
+        state.put(TIMER_STARTED_AT_EPOCH_SECONDS, value);
+        return state;
+    }
+
+    public Map<String, Object> withoutChallengeQuotaCharged(Map<String, Object> source) {
+        Map<String, Object> state = new LinkedHashMap<>(source == null ? Map.of() : source);
+        state.remove(CHALLENGE_QUOTA_CHARGED);
+        return state;
+    }
+
+    public Map<String, Object> withChallengeSourceScope(Map<String, Object> source, String scope) {
+        Map<String, Object> state = new LinkedHashMap<>(source == null ? Map.of() : source);
+        state.put(CHALLENGE_SOURCE_SCOPE, scope);
+        return state;
+    }
+
+    public String extractChallengeSourceScope(Map<String, Object> state) {
+        Object value = state == null ? null : state.get(CHALLENGE_SOURCE_SCOPE);
+        return value instanceof String scope ? scope : CHALLENGE_SOURCE_SCOPE_MANUAL;
+    }
+
+    public Map<String, Object> withPreparedNotStarted(Map<String, Object> source, boolean value) {
+        Map<String, Object> state = new LinkedHashMap<>(source == null ? Map.of() : source);
+        state.put(PREPARED_NOT_STARTED, value);
+        return state;
+    }
+
+    public boolean extractPreparedNotStarted(Map<String, Object> state) {
+        return state != null && Boolean.TRUE.equals(state.get(PREPARED_NOT_STARTED));
+    }
+
+    public Map<String, Object> withPreparedAtEpochSeconds(Map<String, Object> source, long value) {
+        Map<String, Object> state = new LinkedHashMap<>(source == null ? Map.of() : source);
+        state.put(PREPARED_AT_EPOCH_SECONDS, value);
+        return state;
+    }
+
+    public long extractPreparedAtEpochSeconds(Map<String, Object> state) {
+        return extractLong(state, PREPARED_AT_EPOCH_SECONDS);
+    }
+
+    public Map<String, Object> withPreparedGenerationStamp(Map<String, Object> source, long value) {
+        Map<String, Object> state = new LinkedHashMap<>(source == null ? Map.of() : source);
+        state.put(PREPARED_GENERATION_STAMP, value);
+        return state;
+    }
+
+    public long extractPreparedGenerationStamp(Map<String, Object> state) {
+        return extractLong(state, PREPARED_GENERATION_STAMP);
+    }
+
+    public Map<String, Object> withChallengeQuotaCharged(Map<String, Object> source, boolean value) {
+        Map<String, Object> state = new LinkedHashMap<>(source == null ? Map.of() : source);
+        state.put(CHALLENGE_QUOTA_CHARGED, value);
+        return state;
+    }
+
+    public boolean extractChallengeQuotaCharged(Map<String, Object> state) {
+        return state != null && Boolean.TRUE.equals(state.get(CHALLENGE_QUOTA_CHARGED));
+    }
+
+    public Map<String, Object> withPreparationInputs(Map<String, Object> source, List<QuizItem> quiz, int requestedCount) {
+        Map<String, Object> state = new LinkedHashMap<>(source == null ? Map.of() : source);
+        state.put(PREPARATION_QUIZ, serializeQuiz(quiz));
+        state.put(PREPARATION_REQUESTED_COUNT, requestedCount);
+        return state;
+    }
+
+    public List<QuizItem> extractPreparationQuiz(Map<String, Object> state) {
+        return extractQuiz(state == null ? null : Map.of(QUIZ_KEY, state.getOrDefault(PREPARATION_QUIZ, List.of())));
+    }
+
+    public int extractPreparationRequestedCount(Map<String, Object> state) {
+        return (int) extractLong(state, PREPARATION_REQUESTED_COUNT);
+    }
+
+    public Map<String, Object> withRequestedQuestionCount(Map<String, Object> source, int count) {
+        Map<String, Object> state = new LinkedHashMap<>(source == null ? Map.of() : source);
+        state.put(REQUESTED_QUESTION_COUNT, count);
+        return state;
+    }
+
+    public int extractRequestedQuestionCount(Map<String, Object> state) {
+        int ready = (int) extractLong(state, REQUESTED_QUESTION_COUNT);
+        return ready > 0 ? ready : extractPreparationRequestedCount(state);
+    }
+
+    public Map<String, Object> withSourceContributionCount(Map<String, Object> source, int count) {
+        Map<String, Object> state = new LinkedHashMap<>(source == null ? Map.of() : source);
+        state.put(SOURCE_CONTRIBUTION_COUNT, count);
+        return state;
+    }
+
+    public record ChallengePreparationSource(String studyPackId, int requestedCount,
+                                             List<QuizItem> claimed, String curriculumLevel,
+                                             long generationStamp, int bankedCount, int templateCount) { }
+
+    public Map<String, Object> withChallengePreparationSources(
+            Map<String, Object> source, List<ChallengePreparationSource> sources) {
+        Map<String, Object> state = new LinkedHashMap<>(source == null ? Map.of() : source);
+        List<Map<String, Object>> values = new ArrayList<>();
+        for (ChallengePreparationSource item : sources) {
+            Map<String, Object> value = new LinkedHashMap<>();
+            value.put("studyPackId", item.studyPackId());
+            value.put("requestedCount", item.requestedCount());
+            value.put("claimed", serializeQuiz(item.claimed()));
+            value.put("curriculumLevel", item.curriculumLevel());
+            value.put("generationStamp", item.generationStamp());
+            value.put("bankedCount", item.bankedCount());
+            value.put("templateCount", item.templateCount());
+            values.add(value);
+        }
+        state.put(PREPARATION_SOURCES, values);
+        return state;
+    }
+
+    public List<ChallengePreparationSource> extractChallengePreparationSources(Map<String, Object> state) {
+        Object raw = state == null ? null : state.get(PREPARATION_SOURCES);
+        if (!(raw instanceof List<?> values)) return List.of();
+        List<ChallengePreparationSource> sources = new ArrayList<>();
+        for (Object value : values) {
+            if (!(value instanceof Map<?, ?> item) || !(item.get("studyPackId") instanceof String id)) continue;
+            Object claimed = item.get("claimed");
+            sources.add(new ChallengePreparationSource(id,
+                    number(item.get("requestedCount")),
+                    extractQuiz(Map.of(QUIZ_KEY, claimed instanceof List<?> ? claimed : List.of())),
+                    item.get("curriculumLevel") instanceof String level ? level : "",
+                    longNumber(item.get("generationStamp")),
+                    number(item.get("bankedCount")), number(item.get("templateCount"))));
+        }
+        return List.copyOf(sources);
+    }
+
+    private int number(Object value) { return value instanceof Number n ? n.intValue() : 0; }
+    private long longNumber(Object value) { return value instanceof Number n ? n.longValue() : 0L; }
+
+    public Map<String, Object> withPreparedSourceStamps(Map<String, Object> source,
+                                                          List<ChallengePreparationSource> sources) {
+        Map<String, Object> state = new LinkedHashMap<>(source == null ? Map.of() : source);
+        Map<String, Long> stamps = new LinkedHashMap<>();
+        for (ChallengePreparationSource item : sources) stamps.put(item.studyPackId(), item.generationStamp());
+        state.put(PREPARED_SOURCE_STAMPS, stamps);
+        return state;
+    }
+
+    public Map<String, Long> extractPreparedSourceStamps(Map<String, Object> state) {
+        Object raw = state == null ? null : state.get(PREPARED_SOURCE_STAMPS);
+        if (!(raw instanceof Map<?, ?> values)) return Map.of();
+        Map<String, Long> stamps = new LinkedHashMap<>();
+        values.forEach((key, value) -> {
+            if (key instanceof String id && value instanceof Number n) stamps.put(id, n.longValue());
+        });
+        return stamps;
+    }
+
+    public Map<String, Object> withoutPreparationInputs(Map<String, Object> source) {
+        Map<String, Object> state = new LinkedHashMap<>(source == null ? Map.of() : source);
+        state.remove(PREPARATION_QUIZ);
+        state.remove(PREPARATION_REQUESTED_COUNT);
+        state.remove(PREPARATION_SOURCES);
+        return state;
+    }
+
+    private long extractLong(Map<String, Object> state, String key) {
+        Object value = state == null ? null : state.get(key);
+        return value instanceof Number number ? number.longValue() : 0L;
+    }
 
     public Map<String, Object> appendQuizItems(Map<String, Object> sessionState, List<QuizItem> newItems) {
         List<QuizItem> existing = extractQuiz(sessionState);

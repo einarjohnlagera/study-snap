@@ -1016,10 +1016,11 @@ class OpenAiLlmStudyPackServiceTest {
                 boolean.class,
                 List.class,
                 boolean.class,
+                boolean.class,
                 boolean.class
         );
         method.setAccessible(true);
-        return (JsonNode) method.invoke(service, questionCount, allowTrueFalse, keyConceptEnum, allowIdentification, allowEnumeration);
+        return (JsonNode) method.invoke(service, questionCount, allowTrueFalse, keyConceptEnum, allowIdentification, allowEnumeration, false);
     }
 
     private JsonNode invokeBuildCompanionSchema() throws Exception {
@@ -1530,6 +1531,26 @@ class OpenAiLlmStudyPackServiceTest {
     }
 
     @Test
+    void studyPackStatementPairWithoutVerdictsIsNotGuarded() throws Exception {
+        stubResponsesCall();
+        ObjectNode payload = buildValidStudyPackPayload();
+        ((ArrayNode) payload.get("quiz")).set(0, promptQuizItem(
+                "Statement 1: Cells use ATP.\nStatement 2: ATP stores energy.\nWhich is correct?",
+                List.of("Both statements are correct", "Only Statement 1 is correct",
+                        "Only Statement 2 is correct", "Neither statement is correct"),
+                "A", "ATP production"));
+        when(responseSpec.body(String.class)).thenReturn(studyPackResponseJson(payload));
+
+        GeneratedStudyPackContent content = service.generateStudyPack("Cell notes",
+                new StudyPackGenerationContext(LearnerLevel.COLLEGE, "Biology", "Cells", List.of())
+                        .withRouting(LlmRouting.tiered(null)));
+
+        assertThat(content.quiz()).hasSize(5);
+        assertThat(content.quiz().getFirst().correctIndex()).isZero();
+        verify(requestSpec).body(anyString());
+    }
+
+    @Test
     void generateStudyPack_retriesInternallyInconsistentQuickReviewQuestion() throws JsonProcessingException {
         stubResponsesCall();
         ObjectNode payload = buildValidStudyPackPayload();
@@ -1599,6 +1620,115 @@ class OpenAiLlmStudyPackServiceTest {
         );
 
         assertThat(result.quizItems()).extracting(QuizItem::question).containsExactly("Challenge replacement");
+    }
+
+    @Test
+    void challengeStatementPairWrongKeyRetriesWithGuardedSchema() throws Exception {
+        stubResponsesCall();
+        ObjectNode first = statementPairItem("Original", "A", true, false);
+        ObjectNode replacement = statementPairItem("Replacement", "B", true, false);
+        when(responseSpec.body(String.class)).thenReturn(
+                generatedQuizResponseJson(quizPayload(first)), generatedQuizResponseJson(quizPayload(replacement)));
+
+        GeneratedChallengeQuizContent result = service.generateChallengeQuiz(
+                "Percentages", "Summary", List.of("Percent change"), List.of(), 1, "medium", generationContext());
+
+        assertThat(result.quizItems()).extracting(QuizItem::question)
+                .containsExactly(replacement.path("question").asText());
+        ArgumentCaptor<String> requests = ArgumentCaptor.forClass(String.class);
+        verify(requestSpec, times(2)).body(requests.capture());
+        String retryRequest = requests.getAllValues().get(1);
+        assertThat(retryRequest).contains("The prior question was rejected because its keyed answer did not match its own statement verdicts.");
+        JsonNode retryItem = generatedQuizItemSchema(retryRequest);
+        assertThat(retryItem.path("required").toString()).contains("statementVerdicts");
+        assertThat(retryItem.path("properties").path("statementVerdicts").path("anyOf").get(0)
+                .path("additionalProperties").asBoolean()).isFalse();
+        assertThat(retryItem.path("properties").properties().stream().map(java.util.Map.Entry::getKey).toList())
+                .startsWith("question", "choices", "statementVerdicts", "answer", "explanation");
+    }
+
+    @Test
+    void challengeStatementPairShuffledChoicesPassWithoutRetry() throws Exception {
+        stubResponsesCall();
+        ObjectNode pair = statementPairItem("Shuffled", "D", true, false);
+        ArrayNode choices = pair.putArray("choices");
+        List.of("Neither statement is correct", "Only Statement 2 is correct",
+                "Both statements are correct", "Only Statement 1 is correct").forEach(choices::add);
+        when(responseSpec.body(String.class)).thenReturn(generatedQuizResponseJson(quizPayload(pair)));
+
+        GeneratedChallengeQuizContent result = service.generateChallengeQuiz(
+                "Percentages", "Summary", List.of("Percent change"), List.of(), 1, "medium", generationContext());
+
+        assertThat(result.quizItems()).hasSize(1);
+        verify(requestSpec).body(anyString());
+    }
+
+    @Test
+    void challengeOrdinaryMcqIgnoresVerdictsWhetherSetOrNull() throws Exception {
+        stubResponsesCall();
+        ObjectNode set = generatedQuizItem("Ordinary one", List.of("One", "Two", "Three", "Four"),
+                "A", "One is right.", "Concept");
+        set.putObject("statementVerdicts").put("statement1Correct", true).put("statement2Correct", false);
+        ObjectNode unset = generatedQuizItem("Ordinary two", List.of("One", "Two", "Three", "Four"),
+                "B", "Two is right.", "Concept");
+        unset.putNull("statementVerdicts");
+        when(responseSpec.body(String.class)).thenReturn(generatedQuizResponseJson(quizPayload(set, unset)));
+
+        GeneratedChallengeQuizContent result = service.generateChallengeQuiz(
+                "Percentages", "Summary", List.of("Percent change"), List.of(), 2, "medium", generationContext());
+
+        assertThat(result.quizItems()).hasSize(2);
+        verify(requestSpec).body(anyString());
+    }
+
+    @Test
+    void challengeStatementPairWrongTwiceOmitsOnlyThatItem() throws Exception {
+        stubResponsesCall();
+        ObjectNode initial = quizPayload(statementPairItem("Original", "A", true, false),
+                generatedQuizItem("Ordinary question", List.of("One", "Two", "Three", "Four"), "A", "One is correct.", "Concept"));
+        when(responseSpec.body(String.class)).thenReturn(
+                generatedQuizResponseJson(initial),
+                generatedQuizResponseJson(quizPayload(statementPairItem("Still wrong", "A", true, false))));
+
+        GeneratedChallengeQuizContent result = service.generateChallengeQuiz(
+                "Percentages", "Summary", List.of("Percent change"), List.of(), 2, "medium", generationContext());
+
+        assertThat(result.quizItems()).extracting(QuizItem::question).containsExactly("Ordinary question");
+        verify(requestSpec, times(2)).body(anyString());
+    }
+
+    @Test
+    void challengeStatementPairNullVerdictsRetriesButOtherModesIgnoreThem() throws Exception {
+        stubResponsesCall();
+        ObjectNode pair = statementPairItem("Original", "B", true, false);
+        pair.putNull("statementVerdicts");
+        when(responseSpec.body(String.class)).thenReturn(
+                generatedQuizResponseJson(quizPayload(pair)),
+                generatedQuizResponseJson(quizPayload(statementPairItem("Replacement", "B", true, false))));
+        GeneratedChallengeQuizContent challenge = service.generateChallengeQuiz(
+                "Percentages", "Summary", List.of("Percent change"), List.of(), 1, "medium", generationContext());
+        assertThat(challenge.quizItems()).extracting(QuizItem::question)
+                .containsExactly("Statement 1: Replacement is true.\nStatement 2: Replacement is false.\nWhich is correct?");
+        verify(requestSpec, times(2)).body(anyString());
+    }
+
+    private ObjectNode quizPayload(ObjectNode... items) {
+        ObjectNode payload = objectMapper.createObjectNode();
+        ArrayNode questions = payload.putArray("questions");
+        for (ObjectNode item : items) {
+            questions.add(item);
+        }
+        return payload;
+    }
+
+    private ObjectNode statementPairItem(String label, String answer, boolean one, boolean two) {
+        ObjectNode item = generatedQuizItem(
+                "Statement 1: " + label + " is true.\nStatement 2: " + label + " is false.\nWhich is correct?",
+                List.of("Both statements are correct", "Only Statement 1 is correct",
+                        "Only Statement 2 is correct", "Neither statement is correct"),
+                answer, "Statement 1 is correct; Statement 2 is incorrect.", "Concept");
+        item.putObject("statementVerdicts").put("statement1Correct", one).put("statement2Correct", two);
+        return item;
     }
 
     @Test
@@ -2232,6 +2362,7 @@ class OpenAiLlmStudyPackServiceTest {
     @Test
     void rejectedGeneratedTitleLogsWhichBoundFailedAndTheMeasuredCount() throws JsonProcessingException {
         Logger serviceLogger = (Logger) org.slf4j.LoggerFactory.getLogger(OpenAiLlmStudyPackService.class);
+        Level previousLevel = serviceLogger.getLevel();
         ListAppender<ILoggingEvent> appender = new ListAppender<>();
         appender.start();
         serviceLogger.addAppender(appender);
@@ -2266,6 +2397,7 @@ class OpenAiLlmStudyPackServiceTest {
                     .contains("max=12");
         } finally {
             serviceLogger.detachAppender(appender);
+            serviceLogger.setLevel(previousLevel);
         }
     }
 
@@ -2279,6 +2411,7 @@ class OpenAiLlmStudyPackServiceTest {
     @Test
     void rejectedGeneratedOverviewIsReportedUnderItsOwnFieldName() throws JsonProcessingException {
         Logger serviceLogger = (Logger) org.slf4j.LoggerFactory.getLogger(OpenAiLlmStudyPackService.class);
+        Level previousLevel = serviceLogger.getLevel();
         ListAppender<ILoggingEvent> appender = new ListAppender<>();
         appender.start();
         serviceLogger.addAppender(appender);
@@ -2310,6 +2443,7 @@ class OpenAiLlmStudyPackServiceTest {
                     .contains("max=90");
         } finally {
             serviceLogger.detachAppender(appender);
+            serviceLogger.setLevel(previousLevel);
         }
     }
 
@@ -3241,7 +3375,9 @@ class OpenAiLlmStudyPackServiceTest {
         invalidQuestions.set(0, invalidQuestion);
         when(responseSpec.body(String.class)).thenReturn(
                 generatedQuizResponseJson(invalidPayload),
-                generatedQuizResponseJson(buildGeneratedQuizPayload())
+                generatedQuizResponseJson(quizPayload(generatedQuizItem(
+                        "How is ATP regenerated?", List.of("Respiration", "Evaporation", "Diffusion", "Osmosis"),
+                        "A", "Respiration regenerates ATP.", "ATP production")))
         );
 
         List<QuizItem> quizItems = service.generateChallengeQuiz(
@@ -3741,7 +3877,7 @@ class OpenAiLlmStudyPackServiceTest {
         // while the prompt rules, the DTO field, the grading path and the frontend input all shipped.
         // A prompt-only assertion cannot catch that — the schema is what the model is actually bound by.
         JsonNode longExamSchema = ReflectionTestUtils.invokeMethod(
-                service, "buildGeneratedQuizSchema", 10, true, List.<String>of(), true, false);
+                service, "buildGeneratedQuizSchema", 10, true, List.<String>of(), true, false, false);
         JsonNode item = longExamSchema.path("properties").path("questions").path("items");
         List<String> formats = new ArrayList<>();
         item.path("properties").path("questionFormat").path("enum").forEach(node -> formats.add(node.asText()));
@@ -3752,9 +3888,53 @@ class OpenAiLlmStudyPackServiceTest {
     }
 
     @Test
+    void challengeSchemaOrdersChoicesAndVerdictsBeforeAnswerWhileOtherSchemasKeepOldOrder() throws Exception {
+        JsonNode challenge = ReflectionTestUtils.invokeMethod(
+                service, "buildGeneratedQuizSchema", 1, true, List.<String>of(), true, true, true);
+        JsonNode ordinary = ReflectionTestUtils.invokeMethod(
+                service, "buildGeneratedQuizSchema", 1, true, List.<String>of(), true, false, false);
+        JsonNode challengeItem = challenge.path("properties").path("questions").path("items");
+        JsonNode ordinaryItem = ordinary.path("properties").path("questions").path("items");
+        assertThat(challengeItem.path("properties").properties().stream().map(java.util.Map.Entry::getKey).toList())
+                .startsWith("question", "choices", "statementVerdicts", "answer", "explanation");
+        assertThat(challengeItem.path("required").toString()).contains("statementVerdicts");
+        JsonNode verdicts = challengeItem.path("properties").path("statementVerdicts").path("anyOf").get(0);
+        assertThat(verdicts.path("additionalProperties").asBoolean()).isFalse();
+        assertThat(verdicts.path("required").toString()).contains("statement1Correct", "statement2Correct");
+        assertThat(ordinaryItem.path("properties").properties().stream().map(java.util.Map.Entry::getKey).toList())
+                .startsWith("question", "answer", "explanation").endsWith("choices");
+        assertThat(ordinaryItem.path("properties").has("statementVerdicts")).isFalse();
+        assertThat(ordinaryItem.path("required").toString()).doesNotContain("statementVerdicts");
+    }
+
+    @Test
+    void boardExamStatementPairWithoutVerdictsPassesUnchanged() throws Exception {
+        stubResponsesCall();
+        ObjectNode pair = statementPairItem("Board exam", "B", true, false);
+        pair.remove("statementVerdicts");
+        when(responseSpec.body(String.class)).thenReturn(generatedQuizResponseJson(quizPayload(pair)));
+        List<QuizItem> result = service.generateBoardExamQuiz(
+                "Percentages", "Summary", List.of("Percent change"), List.of(), 1, "medium", generationContext());
+        assertThat(result).hasSize(1);
+        verify(requestSpec).body(anyString());
+    }
+
+    @Test
+    void longExamStatementPairWithoutVerdictsPassesUnchanged() throws Exception {
+        stubResponsesCall();
+        ObjectNode pair = statementPairItem("Long exam", "B", true, false);
+        pair.remove("statementVerdicts");
+        when(responseSpec.body(String.class)).thenReturn(generatedQuizResponseJson(quizPayload(pair)));
+        List<QuizItem> result = service.generateLongExam(
+                "Percentages", "Summary", List.of("Percent change"), List.of(), 1, "medium", generationContext());
+        assertThat(result).hasSize(1);
+        verify(requestSpec).body(anyString());
+    }
+
+    @Test
     void challengeQuizSchemaStillAllowsBothIdentificationAndEnumeration() {
         JsonNode challengeSchema = ReflectionTestUtils.invokeMethod(
-                service, "buildGeneratedQuizSchema", 10, true, List.<String>of(), true, true);
+                service, "buildGeneratedQuizSchema", 10, true, List.<String>of(), true, true, true);
         List<String> formats = new ArrayList<>();
         challengeSchema.path("properties").path("questions").path("items")
                 .path("properties").path("questionFormat").path("enum")

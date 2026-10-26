@@ -2,17 +2,25 @@ import { act, fireEvent, render, screen, waitFor, within } from "@testing-librar
 import ChallengeQuizPage from "./page";
 import { getAuthUser } from "@/lib/auth";
 import {
+  ApiRequestError,
   completeChallengeQuizSession,
   forfeitChallengeQuizSession,
+  generateMoreChallengeQuizQuestions,
+  stopAddingChallengeQuizQuestions,
   getCollection,
   getCollectionGoal,
   getInProgressChallengeQuizSession,
+  getChallengeQuizSessionStatus,
+  getChallengeQuizSession,
+  markChallengeQuizReadySeen,
   getMe,
   getNote,
   getPostSessionNextStep,
   listNotes,
   startRedoMissedChallengeQuizSession,
   startChallengeQuizSession,
+  startPreparedChallengeQuiz,
+  trackAnalyticsEvent,
   updateChallengeQuizSessionProgress,
 } from "@/lib/api";
 import { useBillingUsageSummary } from "@/hooks/use-billing-usage-summary";
@@ -61,11 +69,25 @@ jest.mock("@/hooks/use-billing-usage-summary", () => ({
 }));
 
 jest.mock("@/lib/api", () => ({
+  ApiRequestError: class ApiRequestError extends Error {
+    code: string | null;
+    status: number;
+    constructor(message: string, options: { code?: string | null; status?: number }) {
+      super(message);
+      this.code = options.code ?? null;
+      this.status = options.status ?? 0;
+    }
+  },
   completeChallengeQuizSession: jest.fn(),
   forfeitChallengeQuizSession: jest.fn(),
+  generateMoreChallengeQuizQuestions: jest.fn(),
+  stopAddingChallengeQuizQuestions: jest.fn(),
   getCollection: jest.fn(),
   getCollectionGoal: jest.fn(),
   getInProgressChallengeQuizSession: jest.fn(),
+  getChallengeQuizSessionStatus: jest.fn(),
+  getChallengeQuizSession: jest.fn(),
+  markChallengeQuizReadySeen: jest.fn().mockResolvedValue(undefined),
   getMe: jest.fn().mockResolvedValue({ learnerLevel: "COLLEGE" }),
   getMyStudyPack: jest.fn(),
   getNote: jest.fn(),
@@ -74,10 +96,16 @@ jest.mock("@/lib/api", () => ({
   isNotEnoughMissedChallengeQuestionsError: (error: { code?: string }) => (
     error?.code === "NOT_ENOUGH_MISSED_CHALLENGE_QUESTIONS"
   ),
+  isPreparedChallengeExpiredError: (error: { code?: string }) => error?.code === "PREPARED_CHALLENGE_EXPIRED",
+  isChallengeSessionNotInProgressError: (error: { code?: string }) => error?.code === "SESSION_NOT_IN_PROGRESS",
+  isInvalidPreparedDiscardError: (error: { code?: string }) => error?.code === "INVALID_PREPARED_CHALLENGE_DISCARD",
+  isChallengePreparationInProgressError: (error: { code?: string }) => error?.code === "PREPARATION_IN_PROGRESS",
+  isChallengePreparationFailedError: (error: { code?: string }) => error?.code === "PREPARATION_FAILED",
   listNotes: jest.fn(),
   recordReviewCommitmentPrompted: jest.fn().mockResolvedValue({ message: "recorded" }),
   startRedoMissedChallengeQuizSession: jest.fn(),
   startChallengeQuizSession: jest.fn(),
+  startPreparedChallengeQuiz: jest.fn(),
   trackAnalyticsEvent: jest.fn(),
   updateChallengeQuizSessionProgress: jest.fn(),
   updateProfileLearnerLevel: jest.fn().mockResolvedValue({ learnerLevel: "COLLEGE" }),
@@ -124,10 +152,17 @@ describe("ChallengeQuizPage", () => {
     (listNotes as jest.Mock).mockReset();
     (listNotes as jest.Mock).mockResolvedValue([]);
     (getInProgressChallengeQuizSession as jest.Mock).mockReset();
+    (getChallengeQuizSessionStatus as jest.Mock).mockReset();
+    (getChallengeQuizSession as jest.Mock).mockReset();
+    (markChallengeQuizReadySeen as jest.Mock).mockClear();
     (completeChallengeQuizSession as jest.Mock).mockReset();
     (forfeitChallengeQuizSession as jest.Mock).mockReset();
     (forfeitChallengeQuizSession as jest.Mock).mockResolvedValue({ message: "Challenge Quiz session forfeited." });
+    (generateMoreChallengeQuizQuestions as jest.Mock).mockReset();
+    (stopAddingChallengeQuizQuestions as jest.Mock).mockReset();
+    (stopAddingChallengeQuizQuestions as jest.Mock).mockResolvedValue(undefined);
     (startChallengeQuizSession as jest.Mock).mockReset();
+    (startPreparedChallengeQuiz as jest.Mock).mockReset();
     (startRedoMissedChallengeQuizSession as jest.Mock).mockReset();
     (updateChallengeQuizSessionProgress as jest.Mock).mockReset();
     (updateChallengeQuizSessionProgress as jest.Mock).mockResolvedValue(undefined);
@@ -236,6 +271,332 @@ describe("ChallengeQuizPage", () => {
       },
     });
   }
+
+  it("keeps an unsaved answer and index while a pending +5 poll appends questions", async () => {
+    setupInProgressChallengeQuiz();
+    const initial = await (getInProgressChallengeQuizSession as jest.Mock)();
+    let deliverPoll: ((value: unknown) => void) | undefined;
+    (getChallengeQuizSession as jest.Mock).mockImplementation(() => new Promise((resolve) => { deliverPoll = resolve; }));
+    (generateMoreChallengeQuizQuestions as jest.Mock).mockResolvedValue({ morePending: true,
+      newQuestions: [], totalQuestions: 1, timeLimitSeconds: 600,
+      timerStartedAtEpochSeconds: initial.sessionState.timerStartedAtEpochSeconds });
+    render(<ChallengeQuizPage />);
+    fireEvent.click(await screen.findByRole("button", { name: "+5 questions" }));
+    expect(await screen.findByText("Adding questions…")).toBeInTheDocument();
+    await waitFor(() => expect(getChallengeQuizSession).toHaveBeenCalledWith("session-1"));
+    const answer = screen.getByRole("button", { name: /Mitochondria/i });
+    expect(answer).not.toBeDisabled();
+    fireEvent.click(answer);
+    expect(answer).toHaveAttribute("aria-pressed", "true");
+    await act(async () => { deliverPoll?.({ ...initial, morePending: false, moreFailed: false,
+      totalQuestions: 4, timeLimitSeconds: 870,
+      quiz: [...initial.quiz, ...["New one", "New two", "New three"].map((question) => ({
+        question, choices: ["A", "B"], correctIndex: 0, concept: "Concept", explanation: "Explanation",
+      }))] }); });
+    expect(await screen.findByText("Added 3 more questions.")).toBeInTheDocument();
+    expect(screen.getByText("Question 1 of 4")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Mitochondria/i })).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it.each([true, false])("Complete while +5 is pending stops and reconciles (appended=%s)", async (appended) => {
+    setupInProgressChallengeQuiz();
+    const initial = await (getInProgressChallengeQuizSession as jest.Mock)();
+    const pending = { ...initial, morePending: true };
+    const later = appended ? { ...initial, morePending: false, totalQuestions: 4, timeLimitSeconds: 870,
+      quiz: [...initial.quiz, ...["Late one", "Late two", "Late three"].map((question) => ({
+        question, choices: ["A", "B"], correctIndex: 0, concept: "Concept", explanation: "Explanation",
+      }))] } : { ...initial, morePending: false };
+    (generateMoreChallengeQuizQuestions as jest.Mock).mockResolvedValue({
+      sessionId: "session-1", morePending: true, newQuestions: [], totalQuestions: 1,
+      timeLimitSeconds: 600, timerStartedAtEpochSeconds: initial.sessionState.timerStartedAtEpochSeconds,
+    });
+    (getChallengeQuizSession as jest.Mock).mockResolvedValue(pending);
+    (completeChallengeQuizSession as jest.Mock).mockReturnValue(new Promise(() => {}));
+    render(<ChallengeQuizPage />);
+    fireEvent.click(await screen.findByRole("button", { name: /Mitochondria/i }));
+    fireEvent.click(screen.getByRole("button", { name: "+5 questions" }));
+    await screen.findByText("Adding questions…");
+    expect(screen.getByRole("button", { name: "Complete Quiz" })).toBeDisabled();
+    // Past the 45 s hold, Complete re-enables and must stop and reconcile before it submits.
+    const startedAt = Date.now();
+    const nowSpy = jest.spyOn(Date, "now").mockReturnValue(startedAt + 46_000);
+    await waitFor(() => expect(screen.getByRole("button", { name: "Complete Quiz" })).toBeEnabled(),
+      { timeout: 3_000 });
+    (getChallengeQuizSession as jest.Mock).mockResolvedValue(later);
+    fireEvent.click(screen.getByRole("button", { name: "Complete Quiz" }));
+    nowSpy.mockRestore();
+    await waitFor(() => expect(stopAddingChallengeQuizQuestions).toHaveBeenCalledWith("session-1"));
+    if (appended) {
+      expect(await screen.findByText("Added 3 more questions.")).toBeInTheDocument();
+      expect(completeChallengeQuizSession).not.toHaveBeenCalled();
+    } else {
+      await waitFor(() => expect(completeChallengeQuizSession).toHaveBeenCalledWith("session-1", expect.objectContaining({
+        totalQuestions: 1,
+      })));
+    }
+  });
+
+  it("shows the +5 status on a question that is not the last one", async () => {
+    setupInProgressChallengeQuiz();
+    const initial = await (getInProgressChallengeQuizSession as jest.Mock)();
+    const twoQuestions = { ...initial, morePending: true, totalQuestions: 2,
+      quiz: [...initial.quiz, { question: "Second question", choices: ["A", "B"], correctIndex: 0,
+        concept: "Concept", explanation: "Explanation" }] };
+    (getInProgressChallengeQuizSession as jest.Mock).mockResolvedValue(twoQuestions);
+    (getChallengeQuizSession as jest.Mock).mockResolvedValue(twoQuestions);
+    render(<ChallengeQuizPage />);
+    fireEvent.click(await screen.findByRole("button", { name: /Mitochondria/i }));
+    expect(await screen.findByText("Adding questions…")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Next" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "+5 questions" })).not.toBeInTheDocument();
+  });
+
+  it("never holds Complete for a +5 that this tab did not start, such as after a reload", async () => {
+    setupInProgressChallengeQuiz();
+    const initial = await (getInProgressChallengeQuizSession as jest.Mock)();
+    const pending = { ...initial, morePending: true, sessionState: { ...initial.sessionState,
+      moreStartedAtEpochSeconds: Math.floor(Date.now() / 1000) } };
+    (getInProgressChallengeQuizSession as jest.Mock).mockResolvedValue(pending);
+    (getChallengeQuizSession as jest.Mock).mockResolvedValue(pending);
+    render(<ChallengeQuizPage />);
+    fireEvent.click(await screen.findByRole("button", { name: /Mitochondria/i }));
+    expect(await screen.findByText("Adding questions…")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Complete Quiz" })).toBeEnabled();
+  });
+
+  it("ignores a future server +5 timestamp and offers Stop within 45 local seconds", async () => {
+    jest.useFakeTimers();
+    setupInProgressChallengeQuiz();
+    const initial = await (getInProgressChallengeQuizSession as jest.Mock)();
+    const pending = { ...initial, morePending: true, sessionState: { ...initial.sessionState,
+      moreStartedAtEpochSeconds: Math.floor(Date.now() / 1000) + 3_600 } };
+    (getInProgressChallengeQuizSession as jest.Mock).mockResolvedValue(pending);
+    (getChallengeQuizSession as jest.Mock).mockResolvedValue(pending);
+    render(<ChallengeQuizPage />);
+    expect(await screen.findByText("Adding questions…")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Complete Quiz" })).toBeEnabled();
+    await act(async () => { jest.advanceTimersByTime(44_000); await Promise.resolve(); });
+    expect(screen.getByRole("button", { name: "Complete Quiz" })).toBeEnabled();
+    await act(async () => { jest.advanceTimersByTime(2_000); await Promise.resolve(); });
+    expect(screen.getByRole("button", { name: "Stop adding" })).toBeInTheDocument();
+  });
+
+  it("releases an in-tab Complete hold and offers Stop if the local clock moves backwards", async () => {
+    setupInProgressChallengeQuiz();
+    const initial = await (getInProgressChallengeQuizSession as jest.Mock)();
+    (generateMoreChallengeQuizQuestions as jest.Mock).mockResolvedValue({
+      sessionId: "session-1", morePending: true, newQuestions: [], totalQuestions: 1,
+      timeLimitSeconds: 600, timerStartedAtEpochSeconds: initial.sessionState.timerStartedAtEpochSeconds,
+    });
+    (getChallengeQuizSession as jest.Mock).mockResolvedValue({ ...initial, morePending: true });
+    render(<ChallengeQuizPage />);
+    fireEvent.click(await screen.findByRole("button", { name: "+5 questions" }));
+    expect(await screen.findByText("Adding questions…")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Complete Quiz" })).toBeDisabled();
+    const startedAt = Date.now();
+    jest.spyOn(Date, "now").mockReturnValue(startedAt - 5_000);
+    expect(await screen.findByRole("button", { name: "Stop adding" }, { timeout: 3_000 })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Complete Quiz" })).toBeEnabled();
+  });
+
+  it.each(["FORFEITED", "COMPLETED"] as const)(
+    "stops +5 polling without appending when a started quiz is %s", async (status) => {
+    jest.useFakeTimers();
+    setupInProgressChallengeQuiz();
+    const initial = await (getInProgressChallengeQuizSession as jest.Mock)();
+    const pending = { ...initial, morePending: true, sessionState: { ...initial.sessionState,
+      moreStartedAtEpochSeconds: Math.floor(Date.now() / 1000) } };
+    (getInProgressChallengeQuizSession as jest.Mock).mockResolvedValue(pending);
+    (getChallengeQuizSession as jest.Mock).mockResolvedValue({ ...pending, status, morePending: false,
+      quiz: [...pending.quiz, { question: "Added elsewhere", choices: ["A", "B"], correctIndex: 0,
+        concept: "Concept", explanation: "Explanation" }], totalQuestions: 2 });
+    render(<ChallengeQuizPage />);
+    expect(await screen.findByRole("heading", { name: "Challenge Quiz Setup" })).toBeInTheDocument();
+    expect(screen.queryByText("What powers the cell?")).not.toBeInTheDocument();
+    expect(screen.queryByText("Added 1 more questions.")).not.toBeInTheDocument();
+    expect(completeChallengeQuizSession).not.toHaveBeenCalled();
+    const readCount = (getChallengeQuizSession as jest.Mock).mock.calls.length;
+    await act(async () => { jest.advanceTimersByTime(4_000); await Promise.resolve(); });
+    expect(getChallengeQuizSession).toHaveBeenCalledTimes(readCount);
+  });
+
+  it("returns to setup when Complete reports SESSION_NOT_IN_PROGRESS", async () => {
+    setupInProgressChallengeQuiz();
+    (completeChallengeQuizSession as jest.Mock).mockRejectedValue(
+      new ApiRequestError("Challenge Quiz session is already completed.", { code: "SESSION_NOT_IN_PROGRESS", status: 400 }));
+    render(<ChallengeQuizPage />);
+    fireEvent.click(await screen.findByRole("button", { name: /Mitochondria/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Complete Quiz" }));
+    expect(await screen.findByRole("heading", { name: "Challenge Quiz Setup" })).toBeInTheDocument();
+    expect(screen.queryByText("What powers the cell?")).not.toBeInTheDocument();
+  });
+
+  it("returns to setup without completing when Complete's stop read finds a forfeited quiz", async () => {
+    setupInProgressChallengeQuiz();
+    const initial = await (getInProgressChallengeQuizSession as jest.Mock)();
+    const pending = { ...initial, morePending: true, sessionState: { ...initial.sessionState,
+      moreStartedAtEpochSeconds: Math.floor(Date.now() / 1000) } };
+    (getInProgressChallengeQuizSession as jest.Mock).mockResolvedValue(pending);
+    (getChallengeQuizSession as jest.Mock).mockResolvedValueOnce(pending)
+      .mockResolvedValue({ ...pending, status: "FORFEITED", morePending: false });
+    render(<ChallengeQuizPage />);
+    fireEvent.click(await screen.findByRole("button", { name: /Mitochondria/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Complete Quiz" }));
+    expect(await screen.findByRole("heading", { name: "Challenge Quiz Setup" })).toBeInTheDocument();
+    expect(completeChallengeQuizSession).not.toHaveBeenCalled();
+  });
+
+  it("returns to setup without completing when deadline reconciliation finds a forfeited quiz", async () => {
+    jest.useFakeTimers();
+    setupInProgressChallengeQuiz("challenge", Math.floor(Date.now() / 1000), { timeLimitSeconds: 3 });
+    const initial = await (getInProgressChallengeQuizSession as jest.Mock)();
+    const pending = { ...initial, morePending: true, sessionState: { ...initial.sessionState,
+      moreStartedAtEpochSeconds: Math.floor(Date.now() / 1000) } };
+    (getInProgressChallengeQuizSession as jest.Mock).mockResolvedValue(pending);
+    (getChallengeQuizSession as jest.Mock).mockResolvedValueOnce(pending)
+      .mockResolvedValue({ ...pending, status: "FORFEITED", morePending: false });
+    render(<ChallengeQuizPage />);
+    expect(await screen.findByText("What powers the cell?")).toBeInTheDocument();
+    await act(async () => { jest.advanceTimersByTime(3_000); await Promise.resolve(); });
+    expect(screen.getByRole("heading", { name: "Challenge Quiz Setup" })).toBeInTheDocument();
+    expect(completeChallengeQuizSession).not.toHaveBeenCalled();
+  });
+
+  it("polls another tab's MORE_IN_PROGRESS job without a local Stop marker", async () => {
+    setupInProgressChallengeQuiz();
+    const initial = await (getInProgressChallengeQuizSession as jest.Mock)();
+    (generateMoreChallengeQuizQuestions as jest.Mock).mockRejectedValue(
+      new ApiRequestError("busy", { code: "MORE_IN_PROGRESS", status: 409 }));
+    (getChallengeQuizSession as jest.Mock).mockResolvedValue({ ...initial, morePending: false,
+      quiz: [...initial.quiz, { question: "From other tab", choices: ["A", "B"], correctIndex: 0,
+        concept: "Concept", explanation: "Explanation" }], totalQuestions: 2 });
+    render(<ChallengeQuizPage />);
+    fireEvent.click(await screen.findByRole("button", { name: "+5 questions" }));
+    expect(await screen.findByText("Added 1 more questions.")).toBeInTheDocument();
+    expect(getChallengeQuizSession).toHaveBeenCalledWith("session-1");
+  });
+
+  it("appends nonempty generate-more response questions through the poll reconciler", async () => {
+    setupInProgressChallengeQuiz();
+    const initial = await (getInProgressChallengeQuizSession as jest.Mock)();
+    (generateMoreChallengeQuizQuestions as jest.Mock).mockResolvedValue({
+      sessionId: "session-1", morePending: false, totalQuestions: 2, timeLimitSeconds: 690,
+      timerStartedAtEpochSeconds: initial.sessionState.timerStartedAtEpochSeconds,
+      newQuestions: [{ question: "Direct addition", choices: ["A", "B"], correctIndex: 0,
+        concept: "Concept", explanation: "Explanation" }],
+    });
+    render(<ChallengeQuizPage />);
+    fireEvent.click(await screen.findByRole("button", { name: "+5 questions" }));
+    expect(await screen.findByText("Added 1 more questions.")).toBeInTheDocument();
+    expect(screen.getByText("Question 1 of 2")).toBeInTheDocument();
+  });
+
+  it("resumes pending +5 on reload and offers Stop adding after 45 seconds", async () => {
+    jest.useFakeTimers();
+    setupInProgressChallengeQuiz();
+    const initial = await (getInProgressChallengeQuizSession as jest.Mock)();
+    (getInProgressChallengeQuizSession as jest.Mock).mockResolvedValue({ ...initial,
+      morePending: true, sessionState: { ...initial.sessionState,
+        moreStartedAtEpochSeconds: Math.floor(Date.now() / 1000) } });
+    (getChallengeQuizSession as jest.Mock).mockResolvedValue({ ...initial, morePending: true });
+    render(<ChallengeQuizPage />);
+    expect(await screen.findByText("Adding questions…")).toBeInTheDocument();
+    await act(async () => { jest.advanceTimersByTime(46_000); await Promise.resolve(); });
+    expect(screen.getByText("Still adding questions…")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Stop adding" }));
+    await waitFor(() => expect(stopAddingChallengeQuizQuestions).toHaveBeenCalledWith("session-1"));
+  });
+
+  it("reconciles questions and the extended deadline when the worker appends just before Stop", async () => {
+    setupInProgressChallengeQuiz();
+    const initial = await (getInProgressChallengeQuizSession as jest.Mock)();
+    const pending = { ...initial, morePending: true,
+      sessionState: { ...initial.sessionState, moreStartedAtEpochSeconds: Math.floor(Date.now() / 1000) - 46 } };
+    const appended = { ...pending, morePending: false, moreStopped: false,
+      totalQuestions: 4, timeLimitSeconds: 870,
+      quiz: [...initial.quiz, ...["Late one", "Late two", "Late three"].map((question) => ({
+        question, choices: ["A", "B"], correctIndex: 0, concept: "Concept", explanation: "Explanation",
+      }))] };
+    (getInProgressChallengeQuizSession as jest.Mock).mockResolvedValue(pending);
+    (getChallengeQuizSession as jest.Mock).mockResolvedValue(pending);
+    (stopAddingChallengeQuizQuestions as jest.Mock).mockImplementation(() => {
+      (getChallengeQuizSession as jest.Mock).mockResolvedValue(appended);
+      return Promise.resolve();
+    });
+    render(<ChallengeQuizPage />);
+    await screen.findByText("Adding questions…");
+    const appliedAt = Date.now();
+    jest.spyOn(Date, "now").mockReturnValue(appliedAt + 46_000);
+    await screen.findByRole("button", { name: "Stop adding" }, { timeout: 3_000 });
+    fireEvent.click(screen.getByRole("button", { name: "Stop adding" }));
+    expect(await screen.findByText("Question 1 of 4")).toBeInTheDocument();
+    expect(screen.getByTestId("challenge-quiz-timer")).toHaveTextContent("13:44");
+    expect(screen.getByText("Added 3 more questions.")).toBeInTheDocument();
+  });
+
+  it("shows the finishing notice on a post-Stop 409 and retries after the marker clears", async () => {
+    setupInProgressChallengeQuiz();
+    const initial = await (getInProgressChallengeQuizSession as jest.Mock)();
+    const pending = { ...initial, morePending: true,
+      sessionState: { ...initial.sessionState, moreStartedAtEpochSeconds: Math.floor(Date.now() / 1000) - 46 } };
+    const stopped = { ...initial, morePending: false, moreStopped: true };
+    const finishStoppedPolls: Array<(value: unknown) => void> = [];
+    (getInProgressChallengeQuizSession as jest.Mock).mockResolvedValue(pending);
+    (getChallengeQuizSession as jest.Mock).mockResolvedValue(pending);
+    (stopAddingChallengeQuizQuestions as jest.Mock).mockImplementation(() => {
+      (getChallengeQuizSession as jest.Mock).mockResolvedValueOnce(stopped)
+        .mockImplementation(() => new Promise((resolve) => { finishStoppedPolls.push(resolve); }));
+      return Promise.resolve();
+    });
+    (generateMoreChallengeQuizQuestions as jest.Mock)
+      .mockRejectedValueOnce(new ApiRequestError("busy", { code: "MORE_IN_PROGRESS", status: 409 }))
+      .mockResolvedValue({ morePending: true });
+    render(<ChallengeQuizPage />);
+    await screen.findByText("Adding questions…");
+    const appliedAt = Date.now();
+    jest.spyOn(Date, "now").mockReturnValue(appliedAt + 46_000);
+    fireEvent.click(await screen.findByRole("button", { name: "Stop adding" }, { timeout: 3_000 }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "+5 questions" })).toBeEnabled());
+    await waitFor(() => expect(finishStoppedPolls.length).toBeGreaterThan(0));
+    fireEvent.click(screen.getByRole("button", { name: "+5 questions" }));
+    expect(await screen.findByText("Finishing up your last set of questions…")).toBeInTheDocument();
+    await act(async () => { finishStoppedPolls.forEach((resolve) =>
+      resolve({ ...initial, morePending: false, moreStopped: false })); });
+    await waitFor(() => expect(generateMoreChallengeQuizQuestions).toHaveBeenCalledTimes(2));
+  });
+
+  it("reads the extended server deadline before timeout auto-submit while +5 is pending", async () => {
+    jest.useFakeTimers();
+    setupInProgressChallengeQuiz("challenge", Math.floor(Date.now() / 1000), { timeLimitSeconds: 3 });
+    const initial = await (getInProgressChallengeQuizSession as jest.Mock)();
+    (getInProgressChallengeQuizSession as jest.Mock).mockResolvedValue({ ...initial, morePending: true });
+    const startingTime = Date.now();
+    (getChallengeQuizSession as jest.Mock).mockImplementation(() => Promise.resolve(Date.now() - startingTime >= 3000
+      ? { ...initial, morePending: false, timeLimitSeconds: 273,
+          quiz: [...initial.quiz, { question: "Just added", choices: ["A", "B"], correctIndex: 0,
+            concept: "Concept", explanation: "Explanation" }], totalQuestions: 2 }
+      : { ...initial, morePending: true }));
+    render(<ChallengeQuizPage />);
+    expect(await screen.findByText("What powers the cell?")).toBeInTheDocument();
+    await act(async () => { jest.advanceTimersByTime(3000); await Promise.resolve(); });
+    expect(completeChallengeQuizSession).not.toHaveBeenCalled();
+    expect(screen.getByText("Question 1 of 2")).toBeInTheDocument();
+    expect(screen.getByTestId("challenge-quiz-timer")).toHaveTextContent("04:30");
+  });
+
+  it("offers Try again after a pending +5 fails", async () => {
+    setupInProgressChallengeQuiz();
+    const initial = await (getInProgressChallengeQuizSession as jest.Mock)();
+    (getInProgressChallengeQuizSession as jest.Mock).mockResolvedValue({ ...initial, moreFailed: true });
+    (generateMoreChallengeQuizQuestions as jest.Mock).mockResolvedValue({ morePending: true,
+      newQuestions: [], totalQuestions: 1, timeLimitSeconds: 600,
+      timerStartedAtEpochSeconds: initial.sessionState.timerStartedAtEpochSeconds });
+    (getChallengeQuizSession as jest.Mock).mockResolvedValue({ ...initial, morePending: true });
+    render(<ChallengeQuizPage />);
+    expect(await screen.findByText("We couldn't add more questions. Your answers are safe.")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    await waitFor(() => expect(generateMoreChallengeQuizQuestions).toHaveBeenCalledWith("session-1"));
+  });
 
   it.each([
     ["challenge", "GENERATING"],
@@ -404,6 +765,1020 @@ describe("ChallengeQuizPage", () => {
     ];
   }
 
+  function preparationSession(status: "GENERATING" | "IN_PROGRESS" | "FAILED" = "IN_PROGRESS") {
+    return {
+      sessionId: "prepared-1", status, studyPackId: "sp-1", title: "Challenge Note",
+      totalQuestions: status === "IN_PROGRESS" ? 1 : 0, timeLimitSeconds: 600,
+      usedThisMonth: 0, monthlyLimit: 50, boardExamUsedThisMonth: 0, boardExamMonthlyLimit: 10,
+      mode: "challenge", selectedDifficulty: "medium", quiz: [], currentQuestionIndex: 0,
+      sessionState: null, preparedNotStarted: status === "IN_PROGRESS", collision: null, maxSourceNotes: 6,
+      requestedQuestionCount: 1, redoMissed: false,
+    };
+  }
+
+  function startedFromPrepared() {
+    return { ...preparationSession(), quiz: twoQuestionChallengeQuiz(), totalQuestions: 2,
+      preparedNotStarted: false, sessionState: { timerStartedAtEpochSeconds: Math.floor(Date.now() / 1000) } };
+  }
+
+  it.each([
+    ["single", 1, 2, false, "Your quiz is ready with 1 of 2 questions."],
+    ["multi", 12, 18, true, "Your quiz is ready with 12 of 18 questions."],
+    ["single", 2, 2, false, "Your quiz is ready!"],
+    ["multi", 18, 18, true, "Your quiz is ready!"],
+  ])("%s ready screen discloses %s of %s", async (_kind, delivered, requested, multi, title) => {
+    setupChallengePrestart();
+    const sourceNoteRefs = multi ? [
+      { studyPackId: "sp-1", noteId: "note-1", noteTitle: "One", questionCount: 9 },
+      { studyPackId: "sp-2", noteId: "note-2", noteTitle: "Two", questionCount: 9 },
+    ] : [];
+    (getInProgressChallengeQuizSession as jest.Mock).mockResolvedValue({
+      ...preparationSession(), totalQuestions: delivered, requestedQuestionCount: requested,
+      sourceNoteRefs, sessionState: multi ? { sourceContributionCount: 1 } : null,
+    });
+    render(<ChallengeQuizPage />);
+    expect(await screen.findByRole("heading", { name: "All set! Your quiz is ready." })).toBeInTheDocument();
+    if (delivered < requested) expect(screen.getByText(title)).toBeInTheDocument();
+    expect(screen.getByText(`${delivered} questions · 10 minutes`)).toBeInTheDocument();
+    if (multi) {
+      expect(screen.getByText("Challenge Note + 1 more notes")).toBeInTheDocument();
+      expect(screen.getByText("From 1 of 2 notes")).toBeInTheDocument();
+    }
+    else expect(screen.queryByText(/From .* notes/)).not.toBeInTheDocument();
+  });
+
+  it("shows the monthly-limit exemption only for Redo Missed", async () => {
+    setupChallengePrestart();
+    (getInProgressChallengeQuizSession as jest.Mock).mockResolvedValue({
+      ...preparationSession(), redoMissed: true,
+    });
+    const page = render(<ChallengeQuizPage />);
+    expect(await screen.findByText("Your timer starts only when you press Start quiz. Redo Missed Questions doesn't count toward your monthly quiz limit.")).toBeInTheDocument();
+    (getInProgressChallengeQuizSession as jest.Mock).mockResolvedValue(preparationSession());
+    page.unmount();
+    render(<ChallengeQuizPage />);
+    expect(await screen.findByRole("heading", { name: "All set! Your quiz is ready." })).toBeInTheDocument();
+    expect(screen.queryByText("Your timer starts only when you press Start quiz. Redo Missed Questions doesn't count toward your monthly quiz limit.")).not.toBeInTheDocument();
+  });
+
+  it("polls a multi-note Prepare Quiz from generating to ready", async () => {
+    searchParamsMock = new URLSearchParams("collectionId=collection-1");
+    setupChallengePrestart(false, "STUDENT", "PLUS");
+    const sources = [
+      { studyPackId: "sp-1", noteId: "note-1", noteTitle: "One", questionCount: 9 },
+      { studyPackId: "sp-2", noteId: "note-2", noteTitle: "Two", questionCount: 9 },
+    ];
+    (getCollection as jest.Mock).mockResolvedValue({
+      id: "collection-1",
+      items: [
+        { noteId: "note-1", position: 0, studyPackStatus: "STUDY_PACK_READY", studyPackDone: true, generatedQuizId: "quiz-1" },
+        { noteId: "note-2", position: 1, studyPackStatus: "STUDY_PACK_READY", studyPackDone: true, generatedQuizId: "quiz-2" },
+      ],
+    });
+    (listNotes as jest.Mock).mockResolvedValue([
+      { id: "note-2", title: "Plan Two", subject: "Biology", studyPackId: "sp-2", studyPackStatus: "STUDY_PACK_READY", studyPackDone: true },
+    ]);
+    let started = false;
+    (startChallengeQuizSession as jest.Mock).mockImplementation(async () => {
+      started = true;
+      return { ...preparationSession("GENERATING"), sourceNoteRefs: sources, requestedQuestionCount: 18 };
+    });
+    (getInProgressChallengeQuizSession as jest.Mock).mockImplementation(async () => started
+      ? { ...preparationSession(), sourceNoteRefs: sources, totalQuestions: 18,
+          requestedQuestionCount: 18, sessionState: { sourceContributionCount: 2 } }
+      : { ...preparationSession(), sessionId: null, status: null, preparedNotStarted: false });
+    render(<ChallengeQuizPage />);
+    const source = await screen.findByRole("button", { name: /Plan Two/ });
+    fireEvent.click(source);
+    expect(source).toHaveAttribute("aria-pressed", "true");
+    fireEvent.click(await screen.findByRole("button", { name: "Prepare quiz" }));
+    expect(startChallengeQuizSession).toHaveBeenCalledWith("note-1", {
+      mode: "challenge", additionalStudyPackIds: ["sp-2"], sourceCollectionId: "collection-1",
+    });
+    expect(await screen.findByRole("heading", { name: "Getting your quiz ready" })).toBeInTheDocument();
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 2100)); });
+    expect(await screen.findByRole("heading", { name: "All set! Your quiz is ready." })).toBeInTheDocument();
+    expect(screen.getByText("From 2 of 2 notes")).toBeInTheDocument();
+  });
+
+  it.each([
+    ["GENERATING", false, false, "Getting your quiz ready"],
+    ["IN_PROGRESS", true, false, "All set! Your quiz is ready."],
+    ["IN_PROGRESS", false, false, null],
+    ["IN_PROGRESS", true, true, "This prepared quiz has expired"],
+    ["FORFEITED", true, false, "This prepared quiz has expired"],
+    ["FAILED", false, false, "We couldn't finish preparing your quiz"],
+    ["COMPLETED", false, false, null],
+    ["FORFEITED", false, false, null],
+  ] as const)("deep link %s prepared=%s expired=%s resolves exact session", async (status, prepared, expired, heading) => {
+    searchParamsMock = new URLSearchParams("session=linked-1");
+    setupChallengePrestart();
+    (getChallengeQuizSessionStatus as jest.Mock).mockResolvedValue({
+      sessionId: "linked-1", studyPackId: "sp-1", status, preparedNotStarted: prepared,
+      mode: "challenge", expired,
+    });
+    (getChallengeQuizSession as jest.Mock).mockResolvedValue({
+      ...preparationSession(status === "COMPLETED" || status === "FORFEITED" ? "IN_PROGRESS" : status),
+      sessionId: "linked-1", preparedNotStarted: prepared,
+      quiz: prepared || status === "GENERATING" || status === "FAILED" ? [] : twoQuestionChallengeQuiz(),
+      sessionState: prepared || status === "GENERATING" || status === "FAILED"
+        ? null : { timerStartedAtEpochSeconds: Math.floor(Date.now() / 1000) },
+    });
+    render(<ChallengeQuizPage />);
+    await waitFor(() => expect(getChallengeQuizSessionStatus).toHaveBeenCalledWith("linked-1"));
+    if (heading) expect(await screen.findByRole("heading", { name: heading })).toBeInTheDocument();
+    if (status === "IN_PROGRESS" && !prepared) {
+      expect(await screen.findByText(/What powers the cell\?/)).toBeInTheDocument();
+    }
+    if (status === "IN_PROGRESS" && prepared && !expired) {
+      await waitFor(() => expect(markChallengeQuizReadySeen).toHaveBeenCalledWith("linked-1"));
+      expect(screen.queryByTestId("challenge-quiz-timer")).not.toBeInTheDocument();
+    } else {
+      expect(markChallengeQuizReadySeen).not.toHaveBeenCalled();
+    }
+    expect(startPreparedChallengeQuiz).not.toHaveBeenCalled();
+    expect(replaceMock).toHaveBeenCalledWith("/notes/note-1/challenge-quiz", { scroll: false });
+    expect(getInProgressChallengeQuizSession).not.toHaveBeenCalled();
+    if (status === "GENERATING" || (status === "IN_PROGRESS" && !expired) || status === "FAILED") {
+      expect(getChallengeQuizSession).toHaveBeenCalledWith("linked-1");
+    }
+  });
+
+  it("a not-owned deep link returns to setup without naming the session", async () => {
+    searchParamsMock = new URLSearchParams("session=other-1");
+    setupChallengePrestart();
+    (getChallengeQuizSessionStatus as jest.Mock).mockRejectedValue(new ApiRequestError("missing", { status: 404 }));
+    render(<ChallengeQuizPage />);
+    expect(await screen.findByRole("heading", { name: "Choose your quiz mode" })).toBeInTheDocument();
+    expect(getInProgressChallengeQuizSession).not.toHaveBeenCalled();
+    expect(screen.queryByText("other-1")).not.toBeInTheDocument();
+  });
+
+  it("acknowledges a ready deep link once without reloading after URL cleanup", async () => {
+    searchParamsMock = new URLSearchParams("session=linked-1");
+    setupChallengePrestart();
+    (getChallengeQuizSessionStatus as jest.Mock).mockResolvedValue({
+      sessionId: "linked-1", studyPackId: "sp-1", status: "IN_PROGRESS",
+      preparedNotStarted: true, mode: "challenge", expired: false,
+    });
+    (getChallengeQuizSession as jest.Mock).mockResolvedValue({ ...preparationSession(), sessionId: "linked-1" });
+    const { rerender } = render(<ChallengeQuizPage />);
+    expect(await screen.findByRole("heading", { name: "All set! Your quiz is ready." })).toBeInTheDocument();
+    await waitFor(() => expect(markChallengeQuizReadySeen).toHaveBeenCalledTimes(1));
+    searchParamsMock = new URLSearchParams();
+    rerender(<ChallengeQuizPage />);
+    expect(getNote).toHaveBeenCalledTimes(1);
+    expect(markChallengeQuizReadySeen).toHaveBeenCalledTimes(1);
+  });
+
+  it("opens a second ready session query on the mounted page without reloading the note", async () => {
+    searchParamsMock = new URLSearchParams("session=linked-a");
+    setupChallengePrestart();
+    (getChallengeQuizSessionStatus as jest.Mock).mockImplementation(async (sessionId: string) => ({
+      sessionId, studyPackId: "sp-1", status: "IN_PROGRESS", preparedNotStarted: true,
+      mode: "challenge", expired: false,
+    }));
+    (getChallengeQuizSession as jest.Mock).mockImplementation(async (sessionId: string) => ({
+      ...preparationSession(), sessionId,
+    }));
+    const page = render(<ChallengeQuizPage />);
+    await waitFor(() => expect(markChallengeQuizReadySeen).toHaveBeenCalledWith("linked-a"));
+
+    searchParamsMock = new URLSearchParams("session=linked-b");
+    page.rerender(<ChallengeQuizPage />);
+    await waitFor(() => expect(markChallengeQuizReadySeen).toHaveBeenCalledWith("linked-b"));
+    expect(screen.getByRole("heading", { name: "All set! Your quiz is ready." })).toBeInTheDocument();
+    expect(getChallengeQuizSession).toHaveBeenLastCalledWith("linked-b");
+    expect(getNote).toHaveBeenCalledTimes(1);
+    page.rerender(<ChallengeQuizPage />);
+    expect(getChallengeQuizSessionStatus).toHaveBeenCalledTimes(2);
+  });
+
+  it("clears a linked poll target when the exact read is ready before the next preparation", async () => {
+    searchParamsMock = new URLSearchParams("session=linked-a");
+    setupChallengePrestart();
+    (getChallengeQuizSessionStatus as jest.Mock).mockImplementation(async (sessionId: string) => ({
+      sessionId, studyPackId: "sp-1", status: sessionId === "linked-a" ? "GENERATING" : "COMPLETED",
+      preparedNotStarted: false, mode: "challenge", expired: false,
+    }));
+    (getChallengeQuizSession as jest.Mock).mockResolvedValue({ ...preparationSession(), sessionId: "linked-a" });
+    (startChallengeQuizSession as jest.Mock).mockResolvedValue({ ...preparationSession("GENERATING"), sessionId: "new-prep" });
+    (getInProgressChallengeQuizSession as jest.Mock).mockResolvedValue({ ...preparationSession(), sessionId: "new-prep" });
+    const page = render(<ChallengeQuizPage />);
+    expect(await screen.findByRole("heading", { name: "All set! Your quiz is ready." })).toBeInTheDocument();
+
+    searchParamsMock = new URLSearchParams("session=completed-link");
+    page.rerender(<ChallengeQuizPage />);
+    expect(await screen.findByRole("heading", { name: "Choose your quiz mode" })).toBeInTheDocument();
+    fireEvent.click(await getModeCard("Challenge Quiz"));
+    fireEvent.click(await screen.findByRole("button", { name: "Prepare quiz" }));
+    await waitFor(() => expect(getInProgressChallengeQuizSession).toHaveBeenCalledWith("note-1"));
+    expect(getChallengeQuizSession).toHaveBeenCalledTimes(1);
+    expect(getNote).toHaveBeenCalledTimes(1);
+  });
+
+  it("retries a failed ready-seen acknowledgement and stops after success", async () => {
+    searchParamsMock = new URLSearchParams("session=linked-1");
+    setupChallengePrestart();
+    (getChallengeQuizSessionStatus as jest.Mock).mockResolvedValue({
+      sessionId: "linked-1", studyPackId: "sp-1", status: "IN_PROGRESS",
+      preparedNotStarted: true, mode: "challenge", expired: false,
+    });
+    (getChallengeQuizSession as jest.Mock).mockResolvedValue({ ...preparationSession(), sessionId: "linked-1" });
+    (markChallengeQuizReadySeen as jest.Mock).mockRejectedValueOnce(new Error("unavailable"));
+    const page = render(<ChallengeQuizPage />);
+    expect(await screen.findByRole("heading", { name: "All set! Your quiz is ready." })).toBeInTheDocument();
+    await waitFor(() => expect(markChallengeQuizReadySeen).toHaveBeenCalledTimes(1));
+    await act(async () => { await Promise.resolve(); });
+    page.rerender(<ChallengeQuizPage />);
+    await waitFor(() => expect(markChallengeQuizReadySeen).toHaveBeenCalledTimes(2));
+    await act(async () => { await Promise.resolve(); });
+    page.rerender(<ChallengeQuizPage />);
+    expect(markChallengeQuizReadySeen).toHaveBeenCalledTimes(2);
+  });
+
+  it.each([
+    ["GENERATING", "Getting your quiz ready"],
+    ["IN_PROGRESS", "All set! Your quiz is ready."],
+    ["FAILED", "We couldn't finish preparing your quiz"],
+  ] as const)("reload of %s ordinary preparation lands on %s", async (status, title) => {
+    setupChallengePrestart();
+    (getInProgressChallengeQuizSession as jest.Mock).mockResolvedValue(preparationSession(status));
+    render(<ChallengeQuizPage />);
+    expect(await screen.findByRole("heading", { name: title })).toBeInTheDocument();
+    expect(startPreparedChallengeQuiz).not.toHaveBeenCalled();
+    expect(screen.queryByTestId("challenge-quiz-timer")).not.toBeInTheDocument();
+    expect(screen.queryByText("What powers the cell?")).not.toBeInTheDocument();
+  });
+
+  it("lets the learner leave preparation without forfeiting or entering focus mode", async () => {
+    setupChallengePrestart();
+    (getInProgressChallengeQuizSession as jest.Mock).mockResolvedValue(preparationSession("GENERATING"));
+    render(<ChallengeQuizPage />);
+    expect(await screen.findByRole("heading", { name: "Getting your quiz ready" })).toBeInTheDocument();
+    expect(screen.getByRole("progressbar", { name: "Preparing your quiz" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /stay/i })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Continue reviewing" }));
+    expect(pushMock).toHaveBeenCalledWith("/notes/note-1");
+    expect(forfeitChallengeQuizSession).not.toHaveBeenCalled();
+    expect(updateChallengeQuizSessionProgress).not.toHaveBeenCalled();
+    expect(useExamFocusModeMock).not.toHaveBeenCalledWith(true);
+  });
+
+  it("polls a generating quiz into ready without starting its timer", async () => {
+    setupChallengePrestart();
+    (getInProgressChallengeQuizSession as jest.Mock)
+      .mockResolvedValueOnce(preparationSession("GENERATING"))
+      .mockResolvedValue(preparationSession());
+    render(<ChallengeQuizPage />);
+    expect(await screen.findByRole("heading", { name: "All set! Your quiz is ready." })).toBeInTheDocument();
+    expect(getInProgressChallengeQuizSession).toHaveBeenCalledTimes(2);
+    expect(startPreparedChallengeQuiz).not.toHaveBeenCalled();
+    expect(screen.queryByTestId("challenge-quiz-timer")).not.toBeInTheDocument();
+  });
+
+  it.each([
+    ["GENERATING", "Getting your quiz ready"],
+    ["IN_PROGRESS", "All set! Your quiz is ready."],
+  ] as const)("%s preparation never writes progress or ends the session", async (status, title) => {
+    jest.useFakeTimers();
+    setupChallengePrestart();
+    (getInProgressChallengeQuizSession as jest.Mock).mockResolvedValue(preparationSession(status));
+    render(<ChallengeQuizPage />);
+    expect(await screen.findByRole("heading", { name: title })).toBeInTheDocument();
+    await act(async () => {
+      jest.advanceTimersByTime(30_000);
+      document.dispatchEvent(new Event("visibilitychange"));
+      window.dispatchEvent(new Event("beforeunload"));
+      await Promise.resolve();
+    });
+    expect(updateChallengeQuizSessionProgress).not.toHaveBeenCalled();
+    expect(completeChallengeQuizSession).not.toHaveBeenCalled();
+    expect(forfeitChallengeQuizSession).not.toHaveBeenCalled();
+    expect(generateMoreChallengeQuizQuestions).not.toHaveBeenCalled();
+    expect(startPreparedChallengeQuiz).not.toHaveBeenCalled();
+  });
+
+  it("keeps polling after a preparation network error", async () => {
+    jest.useFakeTimers();
+    setupChallengePrestart();
+    (getInProgressChallengeQuizSession as jest.Mock)
+      .mockResolvedValueOnce(preparationSession("GENERATING"))
+      .mockRejectedValueOnce(new Error("network"))
+      .mockResolvedValue(preparationSession());
+    render(<ChallengeQuizPage />);
+    expect(await screen.findByRole("heading", { name: "Getting your quiz ready" })).toBeInTheDocument();
+    await act(async () => { jest.advanceTimersByTime(2_000); await Promise.resolve(); });
+    expect(screen.getByRole("heading", { name: "All set! Your quiz is ready." })).toBeInTheDocument();
+    expect(getInProgressChallengeQuizSession).toHaveBeenCalledTimes(3);
+  });
+
+  it("rejects an impossible collision from the in-progress lookup before applying it", async () => {
+    setupChallengePrestart();
+    (getInProgressChallengeQuizSession as jest.Mock).mockResolvedValue({
+      ...preparationSession(), collision: {
+        existingSessionId: "prepared-1", existingMode: "challenge", requestedMode: "board_exam",
+      },
+    });
+    render(<ChallengeQuizPage />);
+    expect(await screen.findByText("In-progress lookup must not return a collision.")).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "All set! Your quiz is ready." })).not.toBeInTheDocument();
+  });
+
+  it("shows preparation failure when the poll loses the generating session", async () => {
+    setupChallengePrestart();
+    (getInProgressChallengeQuizSession as jest.Mock)
+      .mockResolvedValueOnce(preparationSession("GENERATING"))
+      .mockResolvedValue({ ...preparationSession(), sessionId: null, status: null });
+    render(<ChallengeQuizPage />);
+    expect(await screen.findByRole("heading", { name: "We couldn't finish preparing your quiz" })).toBeInTheDocument();
+  });
+
+  it("Start Quiz reveals questions and a timer only after start-quiz succeeds, once", async () => {
+    setupChallengePrestart();
+    (getInProgressChallengeQuizSession as jest.Mock).mockResolvedValue(preparationSession());
+    let finish!: (value: ReturnType<typeof startedFromPrepared>) => void;
+    (startPreparedChallengeQuiz as jest.Mock).mockReturnValue(new Promise((resolve) => { finish = resolve; }));
+    render(<ChallengeQuizPage />);
+    const start = await screen.findByRole("button", { name: "Start quiz" });
+    fireEvent.click(start);
+    fireEvent.click(start);
+    expect(startPreparedChallengeQuiz).toHaveBeenCalledTimes(1);
+    expect(start).toBeDisabled();
+    expect(screen.queryByText("What powers the cell?")).not.toBeInTheDocument();
+    await act(async () => { finish(startedFromPrepared()); });
+    expect(await screen.findByText("What powers the cell?")).toBeInTheDocument();
+    expect(screen.getByTestId("challenge-quiz-timer")).toBeInTheDocument();
+  });
+
+  it.each([
+    ["PREPARED_CHALLENGE_EXPIRED", "This prepared quiz has expired"],
+    ["SESSION_NOT_IN_PROGRESS", "This prepared quiz has expired"],
+    ["PREPARATION_FAILED", "We couldn't finish preparing your quiz"],
+    ["monthly challenge quiz limit", "You’ve reached your quiz limit for this month"],
+    ["MONTHLY_CHALLENGE_QUIZ_LIMIT_REACHED", "You’ve reached your quiz limit for this month"],
+  ])("Start Quiz error %s opens the right screen", async (code, title) => {
+    setupChallengePrestart();
+    (getInProgressChallengeQuizSession as jest.Mock).mockResolvedValue(preparationSession());
+    (startPreparedChallengeQuiz as jest.Mock).mockRejectedValue(new ApiRequestError(code, { code, status: 429 }));
+    render(<ChallengeQuizPage />);
+    fireEvent.click(await screen.findByRole("button", { name: "Start quiz" }));
+    expect(await screen.findByRole("heading", { name: title })).toBeInTheDocument();
+    if (code === "PREPARED_CHALLENGE_EXPIRED" || code === "SESSION_NOT_IN_PROGRESS") {
+      fireEvent.click(screen.getByRole("button", { name: "Prepare a new quiz" }));
+      expect(startChallengeQuizSession).not.toHaveBeenCalled();
+      expect(await screen.findByRole("heading", { name: "Challenge Quiz Setup" })).toBeInTheDocument();
+    }
+  });
+
+  it("Start Quiz multi-note quota error opens the paywall and keeps the prepared quiz ready", async () => {
+    setupChallengePrestart(false, "STUDENT", "PLUS");
+    (getInProgressChallengeQuizSession as jest.Mock).mockResolvedValue(preparationSession());
+    (startPreparedChallengeQuiz as jest.Mock).mockRejectedValue(new ApiRequestError(
+      "You've used all 5 multi-note Challenge Quiz sessions in this billing period.",
+      { code: "MONTHLY_MULTI_NOTE_LIMIT_REACHED", status: 429 },
+    ));
+    render(<ChallengeQuizPage />);
+    fireEvent.click(await screen.findByRole("button", { name: "Start quiz" }));
+    expect(await screen.findByRole("dialog", { name: "You've reached your quiz limit" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "All set! Your quiz is ready." })).toBeInTheDocument();
+    expect(trackAnalyticsEvent).toHaveBeenCalledWith(expect.objectContaining({
+      metadata: expect.objectContaining({ source: "multi_note_challenge_quiz_start" }),
+    }));
+  });
+
+  it("Start Quiz ordinary quota error shows the limit page for Pro", async () => {
+    setupChallengePrestart(true, "STUDENT", "PRO");
+    (getInProgressChallengeQuizSession as jest.Mock).mockResolvedValue(preparationSession());
+    (startPreparedChallengeQuiz as jest.Mock).mockRejectedValue(new ApiRequestError(
+      "Monthly challenge quiz limit reached", { code: "MONTHLY_CHALLENGE_QUIZ_LIMIT_REACHED", status: 429 },
+    ));
+    render(<ChallengeQuizPage />);
+    fireEvent.click(await screen.findByRole("button", { name: "Start quiz" }));
+    expect(await screen.findByRole("heading", { name: "You’ve reached your quiz limit for this month" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "All set! Your quiz is ready." })).not.toBeInTheDocument();
+  });
+
+  it("Start Quiz ordinary quota error opens the paywall and keeps the prepared quiz ready for Plus", async () => {
+    setupChallengePrestart(false, "STUDENT", "PLUS");
+    (getInProgressChallengeQuizSession as jest.Mock).mockResolvedValue(preparationSession());
+    (startPreparedChallengeQuiz as jest.Mock).mockRejectedValue(new ApiRequestError(
+      "Monthly challenge quiz limit reached", { code: "MONTHLY_CHALLENGE_QUIZ_LIMIT_REACHED", status: 429 },
+    ));
+    render(<ChallengeQuizPage />);
+    fireEvent.click(await screen.findByRole("button", { name: "Start quiz" }));
+    expect(await screen.findByRole("dialog", { name: "You've reached your quiz limit" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "All set! Your quiz is ready." })).toBeInTheDocument();
+    expect(trackAnalyticsEvent).toHaveBeenCalledWith(expect.objectContaining({
+      metadata: expect.objectContaining({ source: "challenge_quiz_start" }),
+    }));
+  });
+
+  it("returns to polling when Start Quiz races preparation, then reaches ready", async () => {
+    setupChallengePrestart();
+    (getInProgressChallengeQuizSession as jest.Mock).mockResolvedValueOnce(preparationSession())
+      .mockResolvedValueOnce(preparationSession("GENERATING"))
+      .mockResolvedValue(preparationSession());
+    (startPreparedChallengeQuiz as jest.Mock).mockRejectedValue(Object.assign(new Error("Still preparing"), {
+      code: "PREPARATION_IN_PROGRESS",
+    }));
+    render(<ChallengeQuizPage />);
+    fireEvent.click(await screen.findByRole("button", { name: "Start quiz" }));
+    expect(await screen.findByRole("heading", { name: "Getting your quiz ready" })).toBeInTheDocument();
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 2100)); });
+    expect(await screen.findByRole("heading", { name: "All set! Your quiz is ready." })).toBeInTheDocument();
+  });
+
+  it("retries a reloaded plan preparation with its collection scope", async () => {
+    searchParamsMock = new URLSearchParams("collectionId=collection-1");
+    setupChallengePrestart();
+    const failed = { ...preparationSession("FAILED"), sessionState: { sourceCollectionId: "collection-1" }, sourceNoteRefs: [
+      { studyPackId: "sp-1", noteId: "note-1", noteTitle: "One", questionCount: 0 },
+      { studyPackId: "sp-2", noteId: "note-2", noteTitle: "Two", questionCount: 0 },
+    ] };
+    (getInProgressChallengeQuizSession as jest.Mock).mockResolvedValue(failed);
+    (startChallengeQuizSession as jest.Mock).mockResolvedValue(preparationSession());
+    render(<ChallengeQuizPage />);
+    fireEvent.click(await screen.findByRole("button", { name: "Try again" }));
+    await waitFor(() => expect(startChallengeQuizSession).toHaveBeenCalledWith("note-1", {
+      mode: "challenge", additionalStudyPackIds: ["sp-2"], sourceCollectionId: "collection-1",
+    }));
+  });
+
+  it("retries a reloaded multi-note preparation with its saved sources when plan scope is unavailable", async () => {
+    setupChallengePrestart();
+    (getInProgressChallengeQuizSession as jest.Mock).mockResolvedValue({
+      ...preparationSession("FAILED"), sourceNoteRefs: [
+        { studyPackId: "sp-1", noteId: "note-1", noteTitle: "One", questionCount: 0 },
+        { studyPackId: "sp-2", noteId: "note-2", noteTitle: "Two", questionCount: 0 },
+      ],
+    });
+    (startChallengeQuizSession as jest.Mock).mockResolvedValue(preparationSession());
+    render(<ChallengeQuizPage />);
+    fireEvent.click(await screen.findByRole("button", { name: "Try again" }));
+    await waitFor(() => expect(startChallengeQuizSession).toHaveBeenCalledWith("note-1", {
+      mode: "challenge", additionalStudyPackIds: ["sp-2"],
+    }));
+  });
+
+  it("retries a failed deep-linked multi-note preparation from the session's own intent", async () => {
+    searchParamsMock = new URLSearchParams("session=linked-1");
+    setupChallengePrestart();
+    (getChallengeQuizSessionStatus as jest.Mock).mockResolvedValue({
+      sessionId: "linked-1", studyPackId: "sp-1", status: "FAILED",
+      preparedNotStarted: false, mode: "challenge", expired: false,
+    });
+    (getChallengeQuizSession as jest.Mock).mockResolvedValue({ ...preparationSession("FAILED"),
+      sessionId: "linked-1", sessionState: { sourceCollectionId: "collection-1" }, sourceNoteRefs: [
+        { studyPackId: "sp-1", noteId: "note-1", noteTitle: "One", questionCount: 0 },
+        { studyPackId: "sp-2", noteId: "note-2", noteTitle: "Two", questionCount: 0 },
+      ],
+    });
+    (startChallengeQuizSession as jest.Mock).mockResolvedValue(preparationSession());
+    render(<ChallengeQuizPage />);
+    fireEvent.click(await screen.findByRole("button", { name: "Try again" }));
+    await waitFor(() => expect(startChallengeQuizSession).toHaveBeenCalledWith("note-1", {
+      mode: "challenge", additionalStudyPackIds: ["sp-2"], sourceCollectionId: "collection-1",
+    }));
+  });
+
+  it("stops a linked preparation poll when another tab forfeits the session", async () => {
+    searchParamsMock = new URLSearchParams("session=linked-1");
+    setupChallengePrestart();
+    (getChallengeQuizSessionStatus as jest.Mock)
+      .mockResolvedValueOnce({ sessionId: "linked-1", studyPackId: "sp-1", status: "GENERATING",
+        preparedNotStarted: false, mode: "challenge", expired: false })
+      .mockResolvedValue({ sessionId: "linked-1", studyPackId: "sp-1", status: "FORFEITED",
+        preparedNotStarted: false, mode: "challenge", expired: false });
+    (getChallengeQuizSession as jest.Mock)
+      .mockResolvedValueOnce({ ...preparationSession("GENERATING"), sessionId: "linked-1" })
+      .mockRejectedValue(new ApiRequestError("ended", { status: 409 }));
+    render(<ChallengeQuizPage />);
+    expect(await screen.findByRole("heading", { name: "This prepared quiz has expired" })).toBeInTheDocument();
+    expect(getChallengeQuizSessionStatus).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps a redo entry ready after removing its query without another in-progress lookup", async () => {
+    searchParamsMock = new URLSearchParams("entry=redo-missed");
+    setupChallengePrestart();
+    (startRedoMissedChallengeQuizSession as jest.Mock).mockResolvedValue(preparationSession());
+    const page = render(<ChallengeQuizPage />);
+    expect(await screen.findByRole("heading", { name: "All set! Your quiz is ready." })).toBeInTheDocument();
+    expect(replaceMock).toHaveBeenCalledWith("/notes/note-1/challenge-quiz", { scroll: false });
+    searchParamsMock = new URLSearchParams();
+    await act(async () => {
+      page.rerender(<ChallengeQuizPage />);
+      await Promise.resolve();
+    });
+    expect(screen.getByRole("heading", { name: "All set! Your quiz is ready." })).toBeInTheDocument();
+    expect(getInProgressChallengeQuizSession).toHaveBeenCalledTimes(1);
+  });
+
+  it("retries a failed redo-missed preparation through the redo endpoint", async () => {
+    searchParamsMock = new URLSearchParams("entry=redo-missed");
+    setupChallengePrestart();
+    (startRedoMissedChallengeQuizSession as jest.Mock)
+      .mockResolvedValueOnce({ ...preparationSession("FAILED"), redoMissed: true })
+      .mockResolvedValueOnce(preparationSession());
+    render(<ChallengeQuizPage />);
+    fireEvent.click(await screen.findByRole("button", { name: "Try again" }));
+    await waitFor(() => expect(startRedoMissedChallengeQuizSession).toHaveBeenCalledTimes(2));
+    expect(startChallengeQuizSession).not.toHaveBeenCalled();
+  });
+
+  it("prepares a new quiz with the selected sources only after the learner clicks", async () => {
+    searchParamsMock = new URLSearchParams("collectionId=collection-1");
+    setupChallengePrestart();
+    (getCollection as jest.Mock).mockResolvedValue({
+      id: "collection-1",
+      items: [
+        { noteId: "note-1", position: 0, studyPackStatus: "STUDY_PACK_READY", studyPackDone: true, generatedQuizId: "quiz-1" },
+        { noteId: "note-2", position: 1, studyPackStatus: "STUDY_PACK_READY", studyPackDone: true, generatedQuizId: "quiz-2" },
+      ],
+    });
+    (listNotes as jest.Mock).mockResolvedValue([
+      { id: "note-2", title: "Plan Two", subject: "Biology", studyPackId: "sp-2", studyPackStatus: "STUDY_PACK_READY", studyPackDone: true },
+    ]);
+    (getInProgressChallengeQuizSession as jest.Mock).mockResolvedValue({
+      ...preparationSession(), sourceNoteRefs: [
+        { studyPackId: "sp-1", noteId: "note-1", noteTitle: "One", questionCount: 9 },
+        { studyPackId: "sp-2", noteId: "note-2", noteTitle: "Two", questionCount: 9 },
+      ],
+    });
+    (startPreparedChallengeQuiz as jest.Mock).mockRejectedValue(Object.assign(new Error("expired"), {
+      code: "PREPARED_CHALLENGE_EXPIRED",
+    }));
+    (startChallengeQuizSession as jest.Mock).mockResolvedValue(preparationSession());
+    render(<ChallengeQuizPage />);
+    fireEvent.click(await screen.findByRole("button", { name: "Start quiz" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Prepare a new quiz" }));
+    expect(startChallengeQuizSession).not.toHaveBeenCalled();
+    const selectedSource = await screen.findByRole("button", { name: /Plan Two/ });
+    expect(selectedSource).toHaveAttribute("aria-pressed", "true");
+    fireEvent.click(selectedSource);
+    expect(selectedSource).toHaveAttribute("aria-pressed", "false");
+    fireEvent.click(screen.getByRole("button", { name: "Prepare quiz" }));
+    await waitFor(() => expect(startChallengeQuizSession).toHaveBeenCalledWith("note-1", {
+      mode: "challenge",
+    }));
+  });
+
+  it("offers a collision choice before applying the existing session and resends redo missed with its discard id", async () => {
+    searchParamsMock = new URLSearchParams("entry=redo-missed");
+    setupChallengePrestart();
+    const collision = { ...preparationSession(), collision: {
+      existingSessionId: "prepared-1", existingMode: "challenge", requestedMode: "redo_missed", existingStarted: false,
+    } };
+    (startRedoMissedChallengeQuizSession as jest.Mock).mockResolvedValueOnce(collision)
+      .mockResolvedValueOnce(preparationSession());
+    render(<ChallengeQuizPage />);
+    expect(await screen.findByRole("heading", { name: "You already have a quiz ready" })).toBeInTheDocument();
+    expect(screen.getByText("You can return to your quiz or start something else. If you start something else, your unstarted quiz will be discarded without using a monthly attempt.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Resume your prepared quiz" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "All set! Your quiz is ready." })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Start something else" }));
+    await waitFor(() => expect(startRedoMissedChallengeQuizSession).toHaveBeenLastCalledWith("note-1", {
+      discardPreparedSessionId: "prepared-1",
+    }));
+    expect(await screen.findByRole("heading", { name: "All set! Your quiz is ready." })).toBeInTheDocument();
+  });
+
+  it("redo entry with a ready ordinary preparation sends one redo request and stores its collision intent", async () => {
+    searchParamsMock = new URLSearchParams("entry=redo-missed");
+    setupChallengePrestart();
+    (getInProgressChallengeQuizSession as jest.Mock).mockResolvedValue(preparationSession());
+    (startRedoMissedChallengeQuizSession as jest.Mock).mockResolvedValue({
+      ...preparationSession(), collision: {
+        existingSessionId: "prepared-1", existingMode: "challenge", requestedMode: "redo_missed",
+      },
+    });
+    render(<ChallengeQuizPage />);
+    expect(await screen.findByRole("heading", { name: "You already have a quiz ready" })).toBeInTheDocument();
+    expect(startRedoMissedChallengeQuizSession).toHaveBeenCalledTimes(1);
+    expect(startRedoMissedChallengeQuizSession).toHaveBeenCalledWith("note-1");
+    expect(screen.getByRole("button", { name: "Start something else" })).toBeInTheDocument();
+  });
+
+  it("redo entry with a generating ordinary preparation sends one redo request and shows the collision", async () => {
+    searchParamsMock = new URLSearchParams("entry=redo-missed");
+    setupChallengePrestart();
+    (getInProgressChallengeQuizSession as jest.Mock).mockResolvedValue(preparationSession("GENERATING"));
+    (startRedoMissedChallengeQuizSession as jest.Mock).mockResolvedValue({
+      ...preparationSession("GENERATING"), collision: {
+        existingSessionId: "prepared-1", existingMode: "challenge", requestedMode: "redo_missed",
+      },
+    });
+    (getChallengeQuizSession as jest.Mock).mockResolvedValue(preparationSession("GENERATING"));
+    render(<ChallengeQuizPage />);
+    expect(await screen.findByRole("heading", { name: "Your quiz is still being prepared" })).toBeInTheDocument();
+    expect(startRedoMissedChallengeQuizSession).toHaveBeenCalledTimes(1);
+    expect(startRedoMissedChallengeQuizSession).toHaveBeenCalledWith("note-1");
+    fireEvent.click(screen.getByRole("button", { name: "Resume your prepared quiz" }));
+    expect(await screen.findByRole("heading", { name: "Getting your quiz ready" })).toBeInTheDocument();
+    expect(getChallengeQuizSession).toHaveBeenCalledWith("prepared-1");
+  });
+
+  it("redo entry with a failed ordinary preparation sends one redo request and reaches ready", async () => {
+    searchParamsMock = new URLSearchParams("entry=redo-missed");
+    setupChallengePrestart();
+    (getInProgressChallengeQuizSession as jest.Mock).mockResolvedValue(preparationSession("FAILED"));
+    (startRedoMissedChallengeQuizSession as jest.Mock).mockResolvedValue(preparationSession());
+    render(<ChallengeQuizPage />);
+    expect(await screen.findByRole("heading", { name: "All set! Your quiz is ready." })).toBeInTheDocument();
+    expect(startRedoMissedChallengeQuizSession).toHaveBeenCalledTimes(1);
+    expect(startRedoMissedChallengeQuizSession).toHaveBeenCalledWith("note-1");
+    expect(screen.queryByRole("heading", { name: "We couldn't finish preparing your quiz" })).not.toBeInTheDocument();
+  });
+
+  it("redo entry with a started quiz offers the approved collision and resumes saved progress without starting", async () => {
+    searchParamsMock = new URLSearchParams("entry=redo-missed");
+    const nowEpochSeconds = Math.floor(Date.now() / 1000);
+    jest.spyOn(Date, "now").mockReturnValue(nowEpochSeconds * 1000);
+    setupInProgressChallengeQuiz("challenge", nowEpochSeconds - 30, {
+      quiz: twoQuestionChallengeQuiz(), currentQuestionIndex: 1, selectedChoices: { "0": 1 },
+    });
+    const running = await (getInProgressChallengeQuizSession as jest.Mock)();
+    (startRedoMissedChallengeQuizSession as jest.Mock).mockResolvedValue({
+      ...running, preparedNotStarted: false, collision: {
+        existingSessionId: "session-1", existingMode: "challenge", requestedMode: "redo_missed", existingStarted: true,
+      },
+    });
+    (getChallengeQuizSession as jest.Mock).mockResolvedValue(running);
+    render(<ChallengeQuizPage />);
+    expect(await screen.findByRole("heading", { name: "You have a Challenge Quiz in progress" })).toBeInTheDocument();
+    expect(screen.getByText("You can go back to your quiz, or end it and start Redo Missed Questions. If you end it, it won't be scored, and the attempt you used for it won't be returned.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "End quiz and redo missed" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Resume quiz" }));
+    expect(await screen.findByText("Question 2 of 2")).toBeInTheDocument();
+    expect(screen.getByTestId("challenge-quiz-timer")).toHaveTextContent("09:30");
+    expect(screen.queryByRole("heading", { name: "All set! Your quiz is ready." })).not.toBeInTheDocument();
+    expect(startPreparedChallengeQuiz).not.toHaveBeenCalled();
+    expect(completeChallengeQuizSession).not.toHaveBeenCalled();
+    expect(forfeitChallengeQuizSession).not.toHaveBeenCalled();
+    expect(startRedoMissedChallengeQuizSession).toHaveBeenCalledTimes(1);
+    expect(getChallengeQuizSession).toHaveBeenCalledWith("session-1");
+    // Returning to the first item shows the answer restored from the collision response.
+    fireEvent.click(screen.getByRole("button", { name: "Previous" }));
+    expect(screen.getByRole("button", { name: /Nucleus/i })).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("redo entry ends a started quiz with one exact-id discard and reaches redo preparation", async () => {
+    searchParamsMock = new URLSearchParams("entry=redo-missed");
+    setupInProgressChallengeQuiz("challenge");
+    const running = await (getInProgressChallengeQuizSession as jest.Mock)();
+    let finishDiscard: ((response: ReturnType<typeof preparationSession>) => void) | undefined;
+    (startRedoMissedChallengeQuizSession as jest.Mock)
+      .mockResolvedValueOnce({ ...running, preparedNotStarted: false, collision: {
+        existingSessionId: "session-1", existingMode: "challenge", requestedMode: "redo_missed", existingStarted: true,
+      } })
+      .mockImplementationOnce(() => new Promise((resolve) => { finishDiscard = resolve; }));
+    render(<ChallengeQuizPage />);
+    const end = await screen.findByRole("button", { name: "End quiz and redo missed" });
+    fireEvent.click(end);
+    fireEvent.click(end);
+    expect(startRedoMissedChallengeQuizSession).toHaveBeenCalledTimes(2);
+    expect(startRedoMissedChallengeQuizSession).toHaveBeenLastCalledWith("note-1", {
+      discardPreparedSessionId: "session-1",
+    });
+    await act(async () => finishDiscard?.(preparationSession()));
+    expect(await screen.findByRole("heading", { name: "All set! Your quiz is ready." })).toBeInTheDocument();
+    expect(startPreparedChallengeQuiz).not.toHaveBeenCalled();
+  });
+
+  it("resumes the existing quiz from a collision without a replacement request", async () => {
+    searchParamsMock = new URLSearchParams("entry=redo-missed");
+    setupChallengePrestart();
+    (startRedoMissedChallengeQuizSession as jest.Mock).mockResolvedValue({ ...preparationSession(), collision: {
+      existingSessionId: "prepared-1", existingMode: "challenge", requestedMode: "redo_missed",
+    } });
+    (getChallengeQuizSession as jest.Mock).mockResolvedValue(preparationSession());
+    render(<ChallengeQuizPage />);
+    fireEvent.click(await screen.findByRole("button", { name: "Resume your prepared quiz" }));
+    expect(await screen.findByRole("heading", { name: "All set! Your quiz is ready." })).toBeInTheDocument();
+    expect(startRedoMissedChallengeQuizSession).toHaveBeenCalledTimes(1);
+  });
+
+  it("re-reads a collision and returns to setup when the started quiz was forfeited elsewhere", async () => {
+    searchParamsMock = new URLSearchParams("entry=redo-missed");
+    setupInProgressChallengeQuiz();
+    const running = await (getInProgressChallengeQuizSession as jest.Mock)();
+    (startRedoMissedChallengeQuizSession as jest.Mock).mockResolvedValue({ ...running, collision: {
+      existingSessionId: "session-1", existingMode: "challenge", requestedMode: "redo_missed", existingStarted: true,
+    } });
+    (getChallengeQuizSession as jest.Mock).mockResolvedValue({ ...running, status: "FORFEITED" });
+    render(<ChallengeQuizPage />);
+    fireEvent.click(await screen.findByRole("button", { name: "Resume quiz" }));
+    expect(await screen.findByRole("heading", { name: "Challenge Quiz Setup" })).toBeInTheDocument();
+    expect(getChallengeQuizSession).toHaveBeenCalledWith("session-1");
+    expect(startPreparedChallengeQuiz).not.toHaveBeenCalled();
+    expect(completeChallengeQuizSession).not.toHaveBeenCalled();
+  });
+
+  it("resumes a prepared mode-selection candidate on ready without starting the timer", async () => {
+    searchParamsMock = new URLSearchParams("entry=mode-selection");
+    setupChallengePrestart(true, "BOARD_EXAM", "PRO");
+    (getInProgressChallengeQuizSession as jest.Mock).mockResolvedValue(preparationSession());
+    render(<ChallengeQuizPage />);
+    expect(await screen.findByText("Your Challenge Quiz is ready")).toBeInTheDocument();
+    expect(screen.getByText("1 questions · 10 minutes · Challenge Note")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Start Fresh" })).not.toBeInTheDocument();
+    fireEvent.click(await screen.findByRole("button", { name: "Open prepared quiz" }));
+    expect(await screen.findByRole("heading", { name: "All set! Your quiz is ready." })).toBeInTheDocument();
+    expect(startPreparedChallengeQuiz).not.toHaveBeenCalled();
+    expect(screen.queryByTestId("challenge-quiz-timer")).not.toBeInTheDocument();
+  });
+
+  it("shows one prepared multi-note continuation action with the approved copy", async () => {
+    searchParamsMock = new URLSearchParams("entry=mode-selection");
+    setupChallengePrestart();
+    (getInProgressChallengeQuizSession as jest.Mock).mockResolvedValue({ ...preparationSession(),
+      totalQuestions: 18,
+      sourceNoteRefs: [
+        { studyPackId: "sp-1", noteId: "note-1", noteTitle: "Challenge Note", questionCount: 9 },
+        { studyPackId: "sp-2", noteId: "note-2", noteTitle: "Second", questionCount: 9 },
+      ],
+    });
+    render(<ChallengeQuizPage />);
+    const eyebrow = await screen.findByText("CONTINUE WHERE YOU LEFT OFF");
+    expect(eyebrow).toBeInTheDocument();
+    expect(screen.getByText("Your Challenge Quiz is ready")).toBeInTheDocument();
+    expect(screen.getByText("18 questions from 2 notes, including this one")).toBeInTheDocument();
+    expect(within(eyebrow.closest("div.rounded-xl") as HTMLElement).getAllByRole("button")).toHaveLength(1);
+    expect(screen.getByRole("button", { name: "Open prepared quiz" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Start Fresh" })).not.toBeInTheDocument();
+  });
+
+  it("shows the note count on a generating multi-note continuation", async () => {
+    searchParamsMock = new URLSearchParams("entry=mode-selection");
+    setupChallengePrestart();
+    (getInProgressChallengeQuizSession as jest.Mock).mockResolvedValue({ ...preparationSession("GENERATING"),
+      sourceNoteRefs: [
+        { studyPackId: "sp-1", noteId: "note-1", noteTitle: "Challenge Note", questionCount: 9 },
+        { studyPackId: "sp-2", noteId: "note-2", noteTitle: "Second", questionCount: 9 },
+      ],
+    });
+    render(<ChallengeQuizPage />);
+    expect(await screen.findByText("We're getting your Challenge Quiz ready")).toBeInTheDocument();
+    expect(screen.getByText("2 notes")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "View preparation" })).toBeInTheDocument();
+  });
+
+  it.each([
+    ["IN_PROGRESS", "Your missed-question review is ready!", "Open prepared quiz"],
+    ["GENERATING", "We're getting your missed-question review ready…", "View preparation"],
+  ] as const)("shows the Redo Missed %s continuation", async (status, title, action) => {
+    searchParamsMock = new URLSearchParams("entry=mode-selection");
+    setupChallengePrestart();
+    (getInProgressChallengeQuizSession as jest.Mock).mockResolvedValue({ ...preparationSession(status), redoMissed: true });
+    render(<ChallengeQuizPage />);
+    expect(await screen.findByText(title)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: action })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Start Fresh" })).not.toBeInTheDocument();
+  });
+
+  it("opens an exact single-note preparation directly when Challenge Quiz is chosen", async () => {
+    searchParamsMock = new URLSearchParams("entry=mode-selection");
+    setupChallengePrestart();
+    (getInProgressChallengeQuizSession as jest.Mock).mockResolvedValue({
+      ...preparationSession(), totalQuestions: 15, timeLimitSeconds: 1350,
+    });
+    render(<ChallengeQuizPage />);
+    fireEvent.click(await getModeCard("Challenge Quiz"));
+    expect(await screen.findByRole("heading", { name: "All set! Your quiz is ready." })).toBeInTheDocument();
+    expect(screen.getByText("Challenge Note")).toBeInTheDocument();
+    expect(screen.getByText("15 questions · 23 minutes")).toBeInTheDocument();
+    expect(screen.getByText("Your timer and monthly attempt start only when you press Start quiz.")).toBeInTheDocument();
+    expect(startChallengeQuizSession).not.toHaveBeenCalled();
+    expect(startPreparedChallengeQuiz).not.toHaveBeenCalled();
+  });
+
+  it("opens an exact generating single-note preparation without Prepare quiz", async () => {
+    searchParamsMock = new URLSearchParams("entry=mode-selection");
+    setupChallengePrestart();
+    (getInProgressChallengeQuizSession as jest.Mock).mockResolvedValue(preparationSession("GENERATING"));
+    render(<ChallengeQuizPage />);
+    fireEvent.click(await getModeCard("Challenge Quiz"));
+    expect(await screen.findByRole("heading", { name: "Getting your quiz ready" })).toBeInTheDocument();
+    expect(startChallengeQuizSession).not.toHaveBeenCalled();
+    expect(startPreparedChallengeQuiz).not.toHaveBeenCalled();
+  });
+
+  it("keeps Prepare quiz when no prepared Challenge exists", async () => {
+    searchParamsMock = new URLSearchParams("entry=mode-selection");
+    setupChallengePrestart();
+    render(<ChallengeQuizPage />);
+    fireEvent.click(await getModeCard("Challenge Quiz"));
+    expect(await screen.findByRole("button", { name: "Prepare quiz" })).toBeInTheDocument();
+    expect(startPreparedChallengeQuiz).not.toHaveBeenCalled();
+  });
+
+  it("returns from the briefing to selectable setup without forfeiting", async () => {
+    searchParamsMock = new URLSearchParams("collectionId=collection-1");
+    setupChallengePrestart();
+    (getCollection as jest.Mock).mockResolvedValue({ id: "collection-1", items: [
+      { noteId: "note-1", position: 0, studyPackStatus: "STUDY_PACK_READY", studyPackDone: true },
+      { noteId: "note-2", position: 1, studyPackStatus: "STUDY_PACK_READY", studyPackDone: true },
+    ] });
+    (listNotes as jest.Mock).mockResolvedValue([
+      { id: "note-2", title: "Plan Two", subject: "Biology", studyPackId: "sp-2", studyPackStatus: "STUDY_PACK_READY", studyPackDone: true },
+    ]);
+    (getInProgressChallengeQuizSession as jest.Mock).mockResolvedValue(preparationSession());
+    (startChallengeQuizSession as jest.Mock).mockResolvedValue(preparationSession());
+    render(<ChallengeQuizPage />);
+    fireEvent.click(await screen.findByRole("button", { name: "Want to study different notes?" }));
+    expect(await screen.findByRole("heading", { name: "Challenge Quiz Setup" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Plan Two/ })).toBeInTheDocument();
+    expect(forfeitChallengeQuizSession).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Prepare quiz" }));
+    expect(await screen.findByRole("heading", { name: "All set! Your quiz is ready." })).toBeInTheDocument();
+    expect(startChallengeQuizSession).toHaveBeenCalledTimes(1);
+    expect(forfeitChallengeQuizSession).not.toHaveBeenCalled();
+  });
+
+  it("restores only still-selectable notes when returning from the briefing to setup", async () => {
+    searchParamsMock = new URLSearchParams("collectionId=collection-1");
+    setupChallengePrestart();
+    (getCollection as jest.Mock).mockResolvedValue({ id: "collection-1", items: [
+      { noteId: "note-1", position: 0, studyPackStatus: "STUDY_PACK_READY", studyPackDone: true },
+      { noteId: "note-2", position: 1, studyPackStatus: "STUDY_PACK_READY", studyPackDone: true },
+    ] });
+    (listNotes as jest.Mock).mockResolvedValue([
+      { id: "note-2", title: "Plan Two", subject: "Biology", studyPackId: "sp-2", studyPackStatus: "STUDY_PACK_READY", studyPackDone: true },
+    ]);
+    const prepared = { ...preparationSession(), sourceNoteRefs: [
+      { studyPackId: "sp-1", questionCount: 3 },
+      { studyPackId: "sp-2", questionCount: 3 },
+      { studyPackId: "sp-gone", questionCount: 3 },
+    ] };
+    (getInProgressChallengeQuizSession as jest.Mock).mockResolvedValue(prepared);
+    (startChallengeQuizSession as jest.Mock).mockResolvedValue(preparationSession());
+    render(<ChallengeQuizPage />);
+    fireEvent.click(await screen.findByRole("button", { name: "Want to study different notes?" }));
+    expect(await screen.findByRole("heading", { name: "Challenge Quiz Setup" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Prepare quiz" }));
+    await waitFor(() => expect(startChallengeQuizSession).toHaveBeenCalledTimes(1));
+    const request = (startChallengeQuizSession as jest.Mock).mock.calls[0][1];
+    expect(request.additionalStudyPackIds ?? []).toEqual(["sp-2"]);
+    expect(request.additionalStudyPackIds ?? []).not.toContain("sp-gone");
+  });
+
+  it("hides the different-notes link when the response allows one source", async () => {
+    setupChallengePrestart();
+    (getInProgressChallengeQuizSession as jest.Mock).mockResolvedValue({ ...preparationSession(), maxSourceNotes: 1 });
+    render(<ChallengeQuizPage />);
+    expect(await screen.findByRole("heading", { name: "All set! Your quiz is ready." })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Want to study different notes?" })).not.toBeInTheDocument();
+  });
+
+  it("hides the different-notes link when there is no plan source picker", async () => {
+    setupChallengePrestart();
+    (getInProgressChallengeQuizSession as jest.Mock).mockResolvedValue(preparationSession());
+    render(<ChallengeQuizPage />);
+    expect(await screen.findByRole("heading", { name: "All set! Your quiz is ready." })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Want to study different notes?" })).not.toBeInTheDocument();
+  });
+
+  it("mode-selection entry ignores a failed ordinary preparation", async () => {
+    searchParamsMock = new URLSearchParams("entry=mode-selection");
+    setupChallengePrestart(true, "BOARD_EXAM", "PRO");
+    (getInProgressChallengeQuizSession as jest.Mock).mockResolvedValue(preparationSession("FAILED"));
+    render(<ChallengeQuizPage />);
+    expect(await screen.findByRole("heading", { name: "Choose your quiz mode" })).toBeInTheDocument();
+    expect(await getModeCard("Board Exam Mode")).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "We couldn't finish preparing your quiz" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Resume" })).not.toBeInTheDocument();
+  });
+
+  it("mode-selection entry offers a generating ordinary preparation and Resume follows polling", async () => {
+    searchParamsMock = new URLSearchParams("entry=mode-selection");
+    setupChallengePrestart(true, "BOARD_EXAM", "PRO");
+    (getInProgressChallengeQuizSession as jest.Mock).mockResolvedValue(preparationSession("GENERATING"));
+    render(<ChallengeQuizPage />);
+    expect(await screen.findByRole("heading", { name: "Choose your quiz mode" })).toBeInTheDocument();
+    expect(screen.getByText("We're getting your Challenge Quiz ready")).toBeInTheDocument();
+    expect(screen.getByText("Challenge Note")).toBeInTheDocument();
+    expect(await getModeCard("Board Exam Mode")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "View preparation" }));
+    expect(await screen.findByRole("heading", { name: "Getting your quiz ready" })).toBeInTheDocument();
+    await waitFor(() => expect(getInProgressChallengeQuizSession).toHaveBeenCalledTimes(2));
+  });
+
+  it("does not offer Start Fresh or forfeit a generating mode-selection candidate", async () => {
+    searchParamsMock = new URLSearchParams("entry=mode-selection");
+    setupChallengePrestart();
+    (getInProgressChallengeQuizSession as jest.Mock).mockResolvedValue(preparationSession("GENERATING"));
+    render(<ChallengeQuizPage />);
+    expect(await screen.findByRole("heading", { name: "Choose your quiz mode" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "View preparation" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Start Fresh" })).not.toBeInTheDocument();
+    expect(await getModeCard("Challenge Quiz")).toBeInTheDocument();
+    expect(forfeitChallengeQuizSession).not.toHaveBeenCalled();
+  });
+
+  it("choosing Board Exam from a generating mode-selection candidate reaches the collision screen", async () => {
+    searchParamsMock = new URLSearchParams("entry=mode-selection");
+    setupChallengePrestart(true, "BOARD_EXAM", "PRO");
+    (getInProgressChallengeQuizSession as jest.Mock).mockResolvedValue(preparationSession("GENERATING"));
+    (startChallengeQuizSession as jest.Mock).mockResolvedValue({
+      ...preparationSession("GENERATING"), collision: {
+        existingSessionId: "prepared-1", existingMode: "challenge", requestedMode: "board_exam",
+      },
+    });
+    render(<ChallengeQuizPage />);
+    fireEvent.click(await getModeCard("Board Exam Mode"));
+    fireEvent.click(await screen.findByRole("button", { name: /Begin Board Exam/i }));
+    fireEvent.click(await screen.findByRole("button", { name: "Start Exam" }));
+    expect(await screen.findByRole("heading", { name: "Your quiz is still being prepared" })).toBeInTheDocument();
+    expect(startChallengeQuizSession).toHaveBeenCalledWith("note-1", { mode: "board_exam" });
+  });
+
+  it("routes a Review Set exam entry without a session straight to Board Exam setup", async () => {
+    searchParamsMock = new URLSearchParams("collectionId=collection-1&entry=mode-selection");
+    setupChallengePrestart(true, "BOARD_EXAM", "PRO");
+    render(<ChallengeQuizPage />);
+    expect(await screen.findByRole("heading", { name: "Board Exam" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Choose your quiz mode" })).not.toBeInTheDocument();
+  });
+
+  it("routes a plan resolved to Challenge straight to Challenge setup", async () => {
+    searchParamsMock = new URLSearchParams("collectionId=collection-1&entry=mode-selection");
+    setupChallengePrestart(false, "STUDENT", "FREE");
+    render(<ChallengeQuizPage />);
+    expect(await screen.findByRole("heading", { name: "Challenge Quiz Setup" })).toBeInTheDocument();
+  });
+
+  it("routes a Teacher without a session straight to Challenge setup", async () => {
+    searchParamsMock = new URLSearchParams("entry=mode-selection");
+    setupChallengePrestart(true, "TEACHER", "PRO");
+    render(<ChallengeQuizPage />);
+    expect(await screen.findByRole("heading", { name: "Challenge Quiz Setup" })).toBeInTheDocument();
+  });
+
+  it("keeps a started quiz running on reload without another Start Quiz call", async () => {
+    setupChallengePrestart();
+    (getInProgressChallengeQuizSession as jest.Mock).mockResolvedValue(startedFromPrepared());
+    render(<ChallengeQuizPage />);
+    expect(await screen.findByText("What powers the cell?")).toBeInTheDocument();
+    expect(screen.getByTestId("challenge-quiz-timer")).toBeInTheDocument();
+    expect(startPreparedChallengeQuiz).not.toHaveBeenCalled();
+  });
+
+  it("keeps Board Exam generating on its existing loading screen", async () => {
+    setupChallengePrestart(true, "BOARD_EXAM", "PRO");
+    (getInProgressChallengeQuizSession as jest.Mock).mockResolvedValue({
+      ...preparationSession("GENERATING"), mode: "board_exam", preparedNotStarted: false,
+    });
+    render(<ChallengeQuizPage />);
+    await waitFor(() => expect(getInProgressChallengeQuizSession).toHaveBeenCalled());
+    expect(screen.queryByRole("heading", { name: "Getting your quiz ready" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Continue reviewing" })).not.toBeInTheDocument();
+  });
+
+  it("keeps Board Exam failure on its existing setup with the original error", async () => {
+    setupChallengePrestart(true, "BOARD_EXAM", "PRO");
+    (getInProgressChallengeQuizSession as jest.Mock).mockResolvedValue({
+      ...preparationSession("FAILED"), mode: "board_exam", preparedNotStarted: false,
+    });
+    render(<ChallengeQuizPage />);
+    expect(await screen.findByText("We couldn't generate Board Exam Mode this time. Try again.")).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "We couldn't finish preparing your quiz" })).not.toBeInTheDocument();
+  });
+
+  it("reloads the current session after an invalid discard id", async () => {
+    searchParamsMock = new URLSearchParams("entry=redo-missed");
+    setupChallengePrestart();
+    (getInProgressChallengeQuizSession as jest.Mock).mockResolvedValueOnce({ ...preparationSession(), sessionId: null, status: null })
+      .mockResolvedValue(preparationSession());
+    (startRedoMissedChallengeQuizSession as jest.Mock).mockResolvedValueOnce({ ...preparationSession(), collision: {
+      existingSessionId: "prepared-1", existingMode: "challenge", requestedMode: "redo_missed",
+    } }).mockRejectedValueOnce(Object.assign(new Error("Invalid discard"), { code: "INVALID_PREPARED_CHALLENGE_DISCARD" }));
+    render(<ChallengeQuizPage />);
+    fireEvent.click(await screen.findByRole("button", { name: "Start something else" }));
+    expect(await screen.findByRole("heading", { name: "All set! Your quiz is ready." })).toBeInTheDocument();
+    expect(getInProgressChallengeQuizSession).toHaveBeenCalledTimes(2);
+  });
+
+  it("preserves a Board Exam request body through a Challenge collision", async () => {
+    searchParamsMock = new URLSearchParams("collectionId=collection-1");
+    setupChallengePrestart(true, "BOARD_EXAM", "PRO");
+    (getCollection as jest.Mock).mockResolvedValue({ id: "collection-1", items: [
+      { noteId: "note-1", position: 0, studyPackStatus: "STUDY_PACK_READY", studyPackDone: true, generatedQuizId: "quiz-1" },
+    ] });
+    (startChallengeQuizSession as jest.Mock).mockResolvedValueOnce({ ...preparationSession(), collision: {
+      existingSessionId: "prepared-1", existingMode: "challenge", requestedMode: "board_exam",
+    } }).mockResolvedValueOnce({ ...preparationSession("GENERATING"), mode: "board_exam", preparedNotStarted: false });
+    render(<ChallengeQuizPage />);
+    fireEvent.click(await screen.findByRole("button", { name: /Begin Board Exam/i }));
+    fireEvent.click(await screen.findByRole("button", { name: "Start Exam" }));
+    expect(await screen.findByRole("heading", { name: "You already have a quiz ready" })).toBeInTheDocument();
+    const originalRequest = (startChallengeQuizSession as jest.Mock).mock.calls[0][1];
+    fireEvent.click(screen.getByRole("button", { name: "Start something else" }));
+    await waitFor(() => expect(startChallengeQuizSession).toHaveBeenLastCalledWith("note-1", {
+      ...originalRequest, discardPreparedSessionId: "prepared-1",
+    }));
+    expect(originalRequest).toEqual({ mode: "board_exam", sourceCollectionId: "collection-1" });
+  });
+
   function mockCompletedChallengeQuiz(
     totalQuestions = 1,
     correctAnswers = 1,
@@ -516,23 +1891,25 @@ describe("ChallengeQuizPage", () => {
     expect(screen.queryByRole("dialog", { name: "Prepare for the part that isn't a quiz" })).not.toBeInTheDocument();
   });
 
-  it("offers Resume or Start Fresh for a live session from the mode-selection entry", async () => {
+  it("offers one resume action for a live ordinary session from mode selection", async () => {
     searchParamsMock = new URLSearchParams("entry=mode-selection");
     setupInProgressChallengeQuiz("challenge");
 
     render(<ChallengeQuizPage />);
 
     expect(await screen.findByRole("heading", { name: "Choose your quiz mode" })).toBeInTheDocument();
-    expect(screen.getByText("You have an active quiz session.")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Resume" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Start Fresh" })).toBeInTheDocument();
+    expect(screen.getByText("CONTINUE WHERE YOU LEFT OFF")).toBeInTheDocument();
+    expect(screen.getByText("You have a Challenge Quiz in progress")).toBeInTheDocument();
+    expect(screen.getByText("1 questions")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Resume quiz" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Start Fresh" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Challenge Quiz" })).not.toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Challenge Quiz Setup" })).not.toBeInTheDocument();
     expect(screen.queryByTestId("challenge-quiz-top-bar")).not.toBeInTheDocument();
     expect(replaceMock).toHaveBeenCalledWith("/notes/note-1/challenge-quiz", { scroll: false });
   });
 
-  it("offers Resume or Start Fresh for a TEACHER with a live session, even though TEACHER otherwise skips mode-selection", async () => {
+  it("offers the continuation card to a TEACHER with a live session", async () => {
     searchParamsMock = new URLSearchParams("entry=mode-selection");
     (getAuthUser as jest.Mock).mockReturnValue({
       id: "user-1",
@@ -594,9 +1971,9 @@ describe("ChallengeQuizPage", () => {
     render(<ChallengeQuizPage />);
 
     expect(await screen.findByRole("heading", { name: "Choose your quiz mode" })).toBeInTheDocument();
-    expect(screen.getByText("You have an active quiz session.")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Resume" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Start Fresh" })).toBeInTheDocument();
+    expect(screen.getByText("You have a Challenge Quiz in progress")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Resume quiz" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Start Fresh" })).not.toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Challenge Quiz Setup" })).not.toBeInTheDocument();
   });
 
@@ -606,23 +1983,22 @@ describe("ChallengeQuizPage", () => {
 
     render(<ChallengeQuizPage />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Resume" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Resume quiz" }));
 
     expect(await screen.findByText("What powers the cell?")).toBeInTheDocument();
     expect(forfeitChallengeQuizSession).not.toHaveBeenCalled();
     expect(getInProgressChallengeQuizSession).toHaveBeenCalledTimes(1);
   });
 
-  it("forfeits the live mode-selection session before starting fresh", async () => {
+  it("keeps a live ordinary session until the learner opens it", async () => {
     searchParamsMock = new URLSearchParams("entry=mode-selection");
     setupInProgressChallengeQuiz("challenge");
 
     render(<ChallengeQuizPage />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Start Fresh" }));
-
-    await waitFor(() => expect(forfeitChallengeQuizSession).toHaveBeenCalledWith("session-1"));
-    expect(await screen.findByRole("heading", { name: "Challenge Quiz Setup" })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Resume quiz" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Start Fresh" })).not.toBeInTheDocument();
+    expect(forfeitChallengeQuizSession).not.toHaveBeenCalled();
   });
 
   it("forfeits an expired in-progress session on load instead of resuming and auto-submitting it", async () => {
@@ -658,7 +2034,7 @@ describe("ChallengeQuizPage", () => {
     expect(await screen.findByRole("heading", { name: "Challenge Quiz Setup" })).toBeInTheDocument();
     expect(screen.getByText("10 minutes. Timer runs until submission or expiration.")).toBeInTheDocument();
     expect(screen.getByText("Recommended based on your recent performance.")).toBeInTheDocument();
-    expect(screen.getByText("Counts toward your monthly quiz limit.")).toBeInTheDocument();
+    expect(screen.getByText("This quiz counts toward your monthly limit only once you start it. Leaving before you start won't use an attempt.")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "easy" })).not.toBeInTheDocument();
     expect(startChallengeQuizSession).not.toHaveBeenCalled();
   });
@@ -684,7 +2060,7 @@ describe("ChallengeQuizPage", () => {
     render(<ChallengeQuizPage />);
 
     fireEvent.click(await getModeCard("Challenge Quiz"));
-    fireEvent.click(await screen.findByRole("button", { name: "Start Quiz" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Prepare quiz" }));
 
     await waitFor(() => {
       expect(startChallengeQuizSession).toHaveBeenCalledWith("note-1", { mode: "challenge" });
@@ -861,7 +2237,7 @@ describe("ChallengeQuizPage", () => {
     render(<ChallengeQuizPage />);
 
     expect(await screen.findByText("Answer at least 3 Challenge Quiz questions incorrectly before redoing missed questions.")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Start Quiz" }));
+    fireEvent.click(screen.getByRole("button", { name: "Prepare quiz" }));
     await waitFor(() => expect(startChallengeQuizSession).toHaveBeenCalledWith("note-1", { mode: "challenge" }));
   });
 

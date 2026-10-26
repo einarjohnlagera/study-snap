@@ -17,6 +17,7 @@ import com.studysnap.backend.entity.LearnerLevel;
 import com.studysnap.backend.entity.ModelTier;
 import com.studysnap.backend.exception.AppException;
 import com.studysnap.backend.service.LlmStudyPackService;
+import com.studysnap.backend.service.LlmStudyPackService.ChallengeVerifierPath;
 import com.studysnap.backend.service.LlmModelRouter;
 import com.studysnap.backend.service.model.LlmRoute;
 import com.studysnap.backend.service.model.LlmRouting;
@@ -33,7 +34,9 @@ import com.studysnap.backend.util.QuizValidationUtils;
 import com.studysnap.backend.util.StringNormalizationUtils;
 import com.studysnap.backend.util.SubjectNormalizationUtils;
 import com.studysnap.backend.util.SubjectSanitizer;
-import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.core.task.SimpleAsyncTaskExecutor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
@@ -58,13 +61,14 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.function.Supplier;
 import java.util.regex.Pattern;
 
 @Service
 @ConditionalOnProperty(prefix = "studysnap.llm.api", name = "provider", havingValue = "openai", matchIfMissing = true)
-@RequiredArgsConstructor
 public class OpenAiLlmStudyPackService implements LlmStudyPackService {
     private static final Logger log = LoggerFactory.getLogger(OpenAiLlmStudyPackService.class);
     private static final int STUDY_PACK_QUIZ_QUESTION_COUNT = 5;
@@ -145,6 +149,14 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
     private static final String IDENTIFICATION_FORMAT = "IDENTIFICATION";
     private static final String ENUMERATION_FORMAT = "ENUMERATION";
     private static final String CHALLENGE_QUIZ_SCHEMA_NAME = "note_lib_challenge_quiz";
+    private static final String STATEMENT_VERDICTS_FIELD = "statementVerdicts";
+    private static final String STATEMENT_ONE_CORRECT_FIELD = "statement1Correct";
+    private static final String STATEMENT_TWO_CORRECT_FIELD = "statement2Correct";
+    private static final String STATEMENT_PAIR_LOG_ACTION = "quiz_statement_pair_consistency";
+    private static final String STATEMENT_PAIR_RETRY_MESSAGE = "Correction retry: return exactly one replacement quiz question under the response schema. "
+            + "The prior question was rejected because its keyed answer did not match its own statement verdicts. "
+            + "Generate a different internally consistent question from the same source material. If it is assertion-style, judge "
+            + "each statement on its own, fill statementVerdicts, and key the choice that matches both verdicts.";
     private static final String LONG_EXAM_SCHEMA_NAME = "note_lib_long_exam";
     private static final String COMPANION_SCHEMA_NAME = "note_lib_companion_draft";
     private static final String COMPANION_INVALID_OUTPUT_MESSAGE =
@@ -233,6 +245,36 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
     private final RestClient restClient;
     private final OpenAiPromptResources promptResources;
     private final LlmModelRouter modelRouter;
+    private final AsyncTaskExecutor llmParallelTaskExecutor;
+    private final AsyncTaskExecutor statementPairVerifierTaskExecutor;
+
+    @Autowired
+    public OpenAiLlmStudyPackService(StudySnapProperties properties, ObjectMapper objectMapper,
+            RestClient restClient, OpenAiPromptResources promptResources, LlmModelRouter modelRouter,
+            @Qualifier("llmParallelTaskExecutor") AsyncTaskExecutor llmParallelTaskExecutor,
+            @Qualifier("statementPairVerifierTaskExecutor") AsyncTaskExecutor statementPairVerifierTaskExecutor) {
+        this.properties = properties;
+        this.objectMapper = objectMapper;
+        this.restClient = restClient;
+        this.promptResources = promptResources;
+        this.modelRouter = modelRouter;
+        this.llmParallelTaskExecutor = llmParallelTaskExecutor;
+        this.statementPairVerifierTaskExecutor = statementPairVerifierTaskExecutor;
+    }
+
+    public OpenAiLlmStudyPackService(StudySnapProperties properties, ObjectMapper objectMapper,
+            RestClient restClient, OpenAiPromptResources promptResources, LlmModelRouter modelRouter) {
+        this(properties, objectMapper, restClient, promptResources, modelRouter,
+                new SimpleAsyncTaskExecutor("llm-parallel-test-"),
+                new SimpleAsyncTaskExecutor("statement-pair-test-"));
+    }
+
+    public OpenAiLlmStudyPackService(StudySnapProperties properties, ObjectMapper objectMapper,
+            RestClient restClient, OpenAiPromptResources promptResources, LlmModelRouter modelRouter,
+            AsyncTaskExecutor statementPairVerifierTaskExecutor) {
+        this(properties, objectMapper, restClient, promptResources, modelRouter,
+                new SimpleAsyncTaskExecutor("llm-parallel-test-"), statementPairVerifierTaskExecutor);
+    }
 
     @Override
     public GeneratedStudyPackContent generateStudyPack(String normalizedNotesText, StudyPackGenerationContext context) {
@@ -621,7 +663,8 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
                             item.questionGroup(),
                             null,
                             item.acceptableAnswers(),
-                            item.acceptableAnswerGroups()
+                            item.acceptableAnswerGroups(),
+                            null
                     ),
                     answerIndex,
                     new ConsistencyRetryContext(
@@ -634,7 +677,9 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
                             List.of(),
                             true,
                             false,
-                            false
+                            false,
+                            false,
+                            null
                     ),
                     true
             );
@@ -963,7 +1008,8 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
             List<String> existingConcepts,
             int questionCount,
             String difficulty,
-            StudyPackGenerationContext context
+            StudyPackGenerationContext context,
+            boolean more
     ) {
         ArrayNode input = objectMapper.createArrayNode();
         input.add(buildTextMessage("system", promptResources.challengeQuizSystemPrompt()));
@@ -978,6 +1024,11 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
                 .replace("{COMPUTATION_GUIDANCE}", buildComputationGuidance(quantitativeContext, QuizMode.CHALLENGE))
                 .replace("{TIME_EXPECTATION}", buildTimeExpectation(QuizMode.CHALLENGE));
         input.add(buildTextMessage("developer", challengeQuizDeveloperPrompt));
+        if (more && properties.getLlm().getStatementPairVerifier().isPlus5ExclusionEnabled()
+                && promptResources.challengeMoreNoStatementPairDeveloperPrompt() != null
+                && !promptResources.challengeMoreNoStatementPairDeveloperPrompt().isBlank()) {
+            input.add(buildTextMessage("developer", promptResources.challengeMoreNoStatementPairDeveloperPrompt()));
+        }
         StringBuilder userMessage = new StringBuilder();
         userMessage.append(buildLearnerContextBlock(context)).append("\n");
         userMessage.append("Summary: ").append(studyPackSummary).append("\n");
@@ -1104,7 +1155,8 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
             boolean allowTrueFalse,
             List<String> keyConceptEnum,
             boolean allowIdentification,
-            boolean allowEnumeration
+            boolean allowEnumeration,
+            boolean statementPairGuard
     ) {
         ObjectNode root = objectMapper.createObjectNode();
         root.put("type", "object");
@@ -1124,6 +1176,9 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
         ArrayNode required = item.putArray("required");
         required.add("question");
         required.add("choices");
+        if (statementPairGuard) {
+            required.add(STATEMENT_VERDICTS_FIELD);
+        }
         required.add("answer");
         required.add("explanation");
         required.add("concept");
@@ -1146,6 +1201,19 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
 
         ObjectNode itemProps = item.putObject("properties");
         itemProps.putObject("question").put("type", "string");
+        if (statementPairGuard) {
+            addGeneratedQuizChoices(itemProps, allowIdentification, allowEnumeration, allowTrueFalse);
+            ObjectNode verdicts = itemProps.putObject(STATEMENT_VERDICTS_FIELD);
+            ArrayNode variants = verdicts.putArray("anyOf");
+            ObjectNode verdictObject = variants.addObject();
+            verdictObject.put("type", "object");
+            verdictObject.put("additionalProperties", false);
+            verdictObject.putArray("required").add(STATEMENT_ONE_CORRECT_FIELD).add(STATEMENT_TWO_CORRECT_FIELD);
+            ObjectNode verdictProperties = verdictObject.putObject("properties");
+            verdictProperties.putObject(STATEMENT_ONE_CORRECT_FIELD).put("type", "boolean");
+            verdictProperties.putObject(STATEMENT_TWO_CORRECT_FIELD).put("type", "boolean");
+            variants.addObject().put("type", "null");
+        }
         ObjectNode answer = itemProps.putObject("answer");
         if (allowIdentification || allowEnumeration) {
             ArrayNode answerTypes = answer.putArray("type");
@@ -1229,13 +1297,19 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
             acceptableAnswerGroupItems.putObject("items").put("type", "string");
         }
 
+        if (!statementPairGuard) {
+            addGeneratedQuizChoices(itemProps, allowIdentification, allowEnumeration, allowTrueFalse);
+        }
+        return root;
+    }
+
+    private void addGeneratedQuizChoices(ObjectNode itemProps, boolean allowIdentification,
+                                         boolean allowEnumeration, boolean allowTrueFalse) {
         ObjectNode choices = itemProps.putObject("choices");
         choices.put("type", "array");
         choices.put("minItems", (allowIdentification || allowEnumeration) ? 0 : allowTrueFalse ? 2 : 4);
         choices.put("maxItems", 4);
         choices.putObject("items").put("type", "string");
-
-        return root;
     }
 
     private JsonNode buildStudyTipSchema() {
@@ -1999,64 +2073,48 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
 
     @Override
     public GeneratedChallengeQuizContent generateChallengeQuiz(
-            String studyPackTitle,
-            String studyPackSummary,
-            List<String> keyConcepts,
-            List<String> disallowedQuestions,
-            int questionCount,
-            String difficulty,
-            StudyPackGenerationContext context
-    ) {
-        List<String> normalizedKeyConcepts = sanitizeConceptList(keyConcepts);
-        List<String> normalizedDisallowedQuestions = sanitizeQuestionList(disallowedQuestions);
+            String title, String summary, List<String> keyConcepts, List<String> disallowedQuestions,
+            int questionCount, String difficulty, StudyPackGenerationContext context) {
+        return generateChallengeQuiz(title, summary, keyConcepts, disallowedQuestions,
+                questionCount, difficulty, context, null, ChallengeVerifierPath.NONE);
+    }
+
+    @Override
+    public GeneratedChallengeQuizContent generateChallengeQuiz(
+            String title, String summary, List<String> keyConcepts, List<String> disallowedQuestions,
+            int questionCount, String difficulty, StudyPackGenerationContext context,
+            String noteText, ChallengeVerifierPath path) {
+        List<String> concepts = sanitizeConceptList(keyConcepts);
         return generateChallengeQuizWithSchema(
-                buildChallengeQuizInputMessages(
-                        studyPackSummary == null ? "" : studyPackSummary,
-                        normalizedKeyConcepts,
-                        normalizedDisallowedQuestions,
-                        List.of(),
-                        questionCount,
-                        difficulty == null || difficulty.isBlank() ? "medium" : difficulty,
-                        context
-                ),
-                questionCount,
-                "note_lib_challenge_quiz",
-                "Challenge quiz generation",
-                normalizedKeyConcepts,
-                select(context.routing())
-        );
+                buildChallengeQuizInputMessages(summary == null ? "" : summary, concepts,
+                        sanitizeQuestionList(disallowedQuestions), List.of(), questionCount,
+                        difficulty == null || difficulty.isBlank() ? "medium" : difficulty, context, false),
+                questionCount, CHALLENGE_QUIZ_SCHEMA_NAME, "Challenge quiz generation", concepts,
+                select(context.routing()), new VerifierContext(noteText, summary, context, path));
     }
 
     @Override
     public GeneratedChallengeQuizContent generateMoreChallengeQuiz(
-            String studyPackTitle,
-            String studyPackSummary,
-            List<String> keyConcepts,
-            List<String> disallowedQuestions,
-            List<String> existingConcepts,
-            int questionCount,
-            String difficulty,
-            StudyPackGenerationContext context
-    ) {
-        List<String> normalizedKeyConcepts = sanitizeConceptList(keyConcepts);
-        List<String> normalizedDisallowedQuestions = sanitizeQuestionList(disallowedQuestions);
-        List<String> normalizedExistingConcepts = sanitizeConceptList(existingConcepts);
+            String title, String summary, List<String> keyConcepts, List<String> disallowedQuestions,
+            List<String> existingConcepts, int questionCount, String difficulty,
+            StudyPackGenerationContext context) {
+        return generateMoreChallengeQuiz(title, summary, keyConcepts, disallowedQuestions,
+                existingConcepts, questionCount, difficulty, context, null, ChallengeVerifierPath.MORE);
+    }
+
+    @Override
+    public GeneratedChallengeQuizContent generateMoreChallengeQuiz(
+            String title, String summary, List<String> keyConcepts, List<String> disallowedQuestions,
+            List<String> existingConcepts, int questionCount, String difficulty,
+            StudyPackGenerationContext context, String noteText, ChallengeVerifierPath path) {
+        List<String> concepts = sanitizeConceptList(keyConcepts);
         return generateChallengeQuizWithSchema(
-                buildChallengeQuizInputMessages(
-                        studyPackSummary == null ? "" : studyPackSummary,
-                        normalizedKeyConcepts,
-                        normalizedDisallowedQuestions,
-                        normalizedExistingConcepts,
-                        questionCount,
-                        difficulty == null || difficulty.isBlank() ? "medium" : difficulty,
-                        context
-                ),
-                questionCount,
-                "note_lib_challenge_quiz",
-                "Challenge quiz generation (more)",
-                normalizedKeyConcepts,
-                select(context.routing())
-        );
+                buildChallengeQuizInputMessages(summary == null ? "" : summary, concepts,
+                        sanitizeQuestionList(disallowedQuestions), sanitizeConceptList(existingConcepts),
+                        questionCount, difficulty == null || difficulty.isBlank() ? "medium" : difficulty,
+                        context, true),
+                questionCount, CHALLENGE_QUIZ_SCHEMA_NAME, "Challenge quiz generation (more)", concepts,
+                select(context.routing()), new VerifierContext(noteText, summary, context, ChallengeVerifierPath.MORE));
     }
 
     @Override
@@ -2304,12 +2362,12 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
 
     private GeneratedChallengeQuizContent generateChallengeQuizWithSchema(
             ArrayNode inputMessages, int questionCount, String schemaName, String operationLabel,
-            List<String> conceptFallbackPool, LlmModelRouter.Selection selection
+            List<String> conceptFallbackPool, LlmModelRouter.Selection selection, VerifierContext verifierContext
     ) {
         String model = requireConfiguredModel(selection.model(), LLM_MODEL_MISSING_MESSAGE);
         GeneratedQuizResponse generated = generateQuizWithSchemaResponse(
                 selection, inputMessages, questionCount, schemaName, operationLabel,
-                conceptFallbackPool, List.of(), true);
+                conceptFallbackPool, List.of(), true, verifierContext);
         UsageMetadata usageMetadata = extractUsageMetadataOrNull(generated.responseJson(), model, operationLabel);
         if (usageMetadata == null) {
             return GeneratedChallengeQuizContent.withoutUsage(generated.quizItems());
@@ -2328,6 +2386,15 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
             List<String> keyConceptEnum,
             boolean allowTrueFalse
     ) {
+        return generateQuizWithSchemaResponse(selection, inputMessages, questionCount, schemaName,
+                operationLabel, conceptFallbackPool, keyConceptEnum, allowTrueFalse, null);
+    }
+
+    private GeneratedQuizResponse generateQuizWithSchemaResponse(
+            LlmModelRouter.Selection selection, ArrayNode inputMessages, int questionCount,
+            String schemaName, String operationLabel, List<String> conceptFallbackPool,
+            List<String> keyConceptEnum, boolean allowTrueFalse, VerifierContext verifierContext
+    ) {
         return retryOnceOnInvalidOutput(() -> generateQuizWithSchemaOnce(
                 selection,
                 inputMessages,
@@ -2336,7 +2403,8 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
                 operationLabel,
                 conceptFallbackPool,
                 keyConceptEnum,
-                allowTrueFalse
+                allowTrueFalse,
+                verifierContext
         ));
     }
 
@@ -2348,75 +2416,377 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
             String operationLabel,
             List<String> conceptFallbackPool,
             List<String> keyConceptEnum,
-            boolean allowTrueFalse
+            boolean allowTrueFalse,
+            VerifierContext verifierContext
     ) {
-        String model = requireConfiguredModel(selection.model(), LLM_MODEL_MISSING_MESSAGE);
-        List<String> normalizedKeyConceptEnum = sanitizeConceptList(keyConceptEnum);
-        JsonSchemaResponse<PromptGeneratedQuiz> response = executeJsonSchemaOperation(
-                model,
-                inputMessages,
-                quizOperation(schemaName, operationLabel).withSelection(selection),
-                buildGeneratedQuizSchema(
-                        questionCount,
-                        allowTrueFalse,
-                        normalizedKeyConceptEnum,
-                        // ⚠️ IDENTIFICATION and ENUMERATION are separate decisions and must not share one
-                        // predicate. Long Exam ships Identification (its developer prompt carries the same
-                        // notation rules, copied verbatim from the Challenge prompt, and grading is the
-                        // shared normalized exact match). Enumeration stays Challenge-only — it is
-                        // deliberately deferred for Long Exam.
-                        // ⚠️ Deriving BOTH from CHALLENGE_QUIZ_SCHEMA_NAME made the Long Exam schema forbid
-                        // questionFormat=IDENTIFICATION and forbid acceptableAnswers outright, so the entire
-                        // Identification feature could never emit a single question.
-                        CHALLENGE_QUIZ_SCHEMA_NAME.equals(schemaName) || LONG_EXAM_SCHEMA_NAME.equals(schemaName),
-                        CHALLENGE_QUIZ_SCHEMA_NAME.equals(schemaName)
-                ),
-                PromptGeneratedQuiz.class
-        );
-        PromptGeneratedQuiz promptGeneratedQuiz = response.payload();
-
-        if (promptGeneratedQuiz.questions() == null || promptGeneratedQuiz.questions().size() != questionCount) {
-            throw invalidOutput(operationLabel + " returned an invalid format. Please try again.");
-        }
-
-        List<QuizItem> quizItems = new ArrayList<>();
-        int conceptIndex = 0;
-        for (PromptGeneratedQuizItem item : promptGeneratedQuiz.questions()) {
-            validateGeneratedQuizItem(item, operationLabel);
-            boolean isFreeTextFormat = IDENTIFICATION_FORMAT.equals(item.questionFormat())
-                    || ENUMERATION_FORMAT.equals(item.questionFormat());
-            Integer answerIndex = isFreeTextFormat
-                    ? null
-                    : resolveAnswerIndex(item.answer(), item.choices().size(), operationLabel + " returned an invalid answer mapping. Please try again.");
-            String conceptFallback = conceptFallbackPool.isEmpty()
-                    ? null
-                    : conceptFallbackPool.get(conceptIndex % conceptFallbackPool.size());
-            conceptIndex += 1;
-            QuizItem quizItem = buildQuizItemOrRetry(
-                    toQuizItemDraft(item, conceptFallback, normalizedKeyConceptEnum, operationLabel),
-                    answerIndex,
-                    new ConsistencyRetryContext(
-                            model,
-                            selection,
-                            inputMessages,
-                            schemaName,
-                            operationLabel,
-                            conceptFallbackPool,
-                            normalizedKeyConceptEnum,
+        boolean statementPairGuard = CHALLENGE_QUIZ_SCHEMA_NAME.equals(schemaName);
+        ChallengeGenerationCounts counts = statementPairGuard ? new ChallengeGenerationCounts() : null;
+        long startedAt = System.nanoTime();
+        boolean threw = true;
+        try {
+            String model = requireConfiguredModel(selection.model(), LLM_MODEL_MISSING_MESSAGE);
+            List<String> normalizedKeyConceptEnum = sanitizeConceptList(keyConceptEnum);
+            JsonSchemaResponse<PromptGeneratedQuiz> response = executeJsonSchemaOperation(
+                    model,
+                    inputMessages,
+                    quizOperation(schemaName, operationLabel).withSelection(selection),
+                    buildGeneratedQuizSchema(
+                            questionCount,
                             allowTrueFalse,
+                            normalizedKeyConceptEnum,
+                            // ⚠️ IDENTIFICATION and ENUMERATION are separate decisions and must not share one
+                            // predicate. Long Exam ships Identification (its developer prompt carries the same
+                            // notation rules, copied verbatim from the Challenge prompt, and grading is the
+                            // shared normalized exact match). Enumeration stays Challenge-only — it is
+                            // deliberately deferred for Long Exam.
+                            // ⚠️ Deriving BOTH from CHALLENGE_QUIZ_SCHEMA_NAME made the Long Exam schema forbid
+                            // questionFormat=IDENTIFICATION and forbid acceptableAnswers outright, so the entire
+                            // Identification feature could never emit a single question.
                             CHALLENGE_QUIZ_SCHEMA_NAME.equals(schemaName) || LONG_EXAM_SCHEMA_NAME.equals(schemaName),
+                            CHALLENGE_QUIZ_SCHEMA_NAME.equals(schemaName),
                             CHALLENGE_QUIZ_SCHEMA_NAME.equals(schemaName)
                     ),
-                    true
+                    PromptGeneratedQuiz.class
             );
-            if (quizItem != null) {
-                quizItems.add(quizItem);
+            PromptGeneratedQuiz promptGeneratedQuiz = response.payload();
+
+            if (promptGeneratedQuiz.questions() == null || promptGeneratedQuiz.questions().size() != questionCount) {
+                throw invalidOutput(operationLabel + " returned an invalid format. Please try again.");
+            }
+            List<QuizItem> quizItems = new ArrayList<>();
+            List<ChallengeCandidate> candidates = new ArrayList<>();
+            int conceptIndex = 0;
+            for (PromptGeneratedQuizItem item : promptGeneratedQuiz.questions()) {
+                ConsistencyRetryContext retryContext = new ConsistencyRetryContext(
+                        model, selection, inputMessages, schemaName, operationLabel, conceptFallbackPool,
+                        normalizedKeyConceptEnum, allowTrueFalse,
+                        CHALLENGE_QUIZ_SCHEMA_NAME.equals(schemaName) || LONG_EXAM_SCHEMA_NAME.equals(schemaName),
+                        CHALLENGE_QUIZ_SCHEMA_NAME.equals(schemaName), statementPairGuard, counts);
+                QuizValidationUtils.StatementPairResult pairResult = precheckStatementPair(item, retryContext);
+                if (isRejectedStatementPair(pairResult)) {
+                    logStatementPairRejection(item.question(), retryContext, true,
+                            pairResult.name().toLowerCase(Locale.ROOT));
+                    ChallengeCandidate replacement = retryInternallyInconsistentQuestion(item.question(), retryContext, true);
+                    if (replacement != null) {
+                        quizItems.add(replacement.quizItem());
+                        candidates.add(replacement);
+                        counts.accepted++;
+                    }
+                    continue;
+                }
+                validateGeneratedQuizItem(item, operationLabel);
+                boolean isFreeTextFormat = IDENTIFICATION_FORMAT.equals(item.questionFormat())
+                        || ENUMERATION_FORMAT.equals(item.questionFormat());
+                Integer answerIndex = isFreeTextFormat
+                        ? null
+                        : resolveAnswerIndex(item.answer(), item.choices().size(), operationLabel + " returned an invalid answer mapping. Please try again.");
+                String conceptFallback = conceptFallbackPool.isEmpty()
+                        ? null
+                        : conceptFallbackPool.get(conceptIndex % conceptFallbackPool.size());
+                conceptIndex += 1;
+                ChallengeCandidate candidate = buildCandidateOrRetry(
+                        toQuizItemDraft(item, conceptFallback, normalizedKeyConceptEnum, operationLabel),
+                        answerIndex,
+                        retryContext,
+                        true,
+                        item
+                );
+                if (candidate != null) {
+                    quizItems.add(candidate.quizItem());
+                    if (counts != null) candidates.add(candidate);
+                    if (counts != null) {
+                        counts.accepted++;
+                    }
+                }
+            }
+            if (counts != null) {
+                if (verifierEnabled(verifierContext)) {
+                    quizItems = verifyAndReplace(candidates, verifierContext, inputMessages, selection,
+                            operationLabel, conceptFallbackPool, normalizedKeyConceptEnum, counts);
+                    counts.accepted = quizItems.size();
+                }
+            }
+            List<QuizItem> returned = normalizeMatchingGroups(quizItems, operationLabel);
+            if (counts != null) {
+                counts.returned = returned.size();
+                if (verifierContext != null && verifierContext.path() == ChallengeVerifierPath.MORE) {
+                    counts.statementPairLeaked = (int) returned.stream()
+                            .filter(item -> QuizValidationUtils.isStatementPair(item.question())).count();
+                }
+            }
+            threw = false;
+            return new GeneratedQuizResponse(returned, response.responseJson());
+        } finally {
+            if (counts != null) {
+                log.info("action=challenge_quiz_generation_counts operation={} attempt={} requested={} accepted={} rejected={} retried={} omitted={} returned={} retryElapsedMs={} elapsedMs={} outcome={} verifierPath={} verified={} verifierRejected={} verifierUncertain={} verifierFailed={} verifierReplaced={} replacementFormats={} verifierModels={} verifierElapsedMs={} statementPairLeaked={}",
+                        operationLabel, ATTEMPT_NUMBER.get(), questionCount, counts.accepted, counts.rejected,
+                        counts.retried, counts.omitted, counts.returned, TimeUnit.NANOSECONDS.toMillis(counts.retryElapsedNanos),
+                        TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedAt), threw ? "threw" : "returned",
+                        verifierContext == null ? ChallengeVerifierPath.NONE : verifierContext.path(), counts.verified,
+                        counts.verifierRejected, counts.verifierUncertain, counts.verifierFailed,
+                        counts.verifierReplaced, counts.replacementFormats, counts.verifierModels,
+                        TimeUnit.NANOSECONDS.toMillis(counts.verifierElapsedNanos), counts.statementPairLeaked);
             }
         }
-        return new GeneratedQuizResponse(
-                normalizeMatchingGroups(quizItems, operationLabel),
-                response.responseJson()
-        );
+    }
+
+    private static final String VERIFIER_SCHEMA_NAME = "note_lib_statement_pair_verifier";
+    private static final String REPLACEMENT_SCHEMA_NAME = "note_lib_challenge_verifier_replacement";
+
+    private boolean verifierEnabled(VerifierContext context) {
+        if (context == null) return false;
+        StudySnapProperties.StatementPairVerifier config = properties.getLlm().getStatementPairVerifier();
+        return switch (context.path()) {
+            case TEMPLATE_SEED -> config.isTemplateSeedEnabled();
+            case LIVE_START -> config.isLiveStartEnabled();
+            case NONE, MORE -> false;
+        };
+    }
+
+    private List<QuizItem> verifyAndReplace(List<ChallengeCandidate> candidates, VerifierContext context,
+            ArrayNode inputMessages, LlmModelRouter.Selection selection, String operationLabel,
+            List<String> conceptFallbackPool, List<String> keyConceptEnum, ChallengeGenerationCounts counts) {
+        long startedAt = System.nanoTime();
+        try {
+            List<StatementPairVerification.Item> checkable = new ArrayList<>();
+            Map<Integer, StatementPairVerification.Item> byPosition = new LinkedHashMap<>();
+            int nextId = 1;
+            for (int i = 0; i < candidates.size(); i++) {
+                ChallengeCandidate candidate = candidates.get(i);
+                if (!QuizValidationUtils.isStatementPair(candidate.quizItem().question())) continue;
+                StatementPairVerification.Pair pair = StatementPairVerification.extract(candidate.quizItem().question());
+                StatementVerdicts verdicts = candidate.source() == null ? null : candidate.source().statementVerdicts();
+                boolean canCheck = verdicts != null && pair != null && context.noteText() != null
+                        && !context.noteText().isBlank();
+                StatementPairVerification.Item item = new StatementPairVerification.Item(
+                        canCheck ? String.valueOf(nextId++) : null, pair,
+                        verdicts != null && Boolean.TRUE.equals(verdicts.statement1Correct()),
+                        verdicts != null && Boolean.TRUE.equals(verdicts.statement2Correct()));
+                byPosition.put(i, item);
+                if (canCheck) {
+                    checkable.add(item);
+                }
+            }
+            if (byPosition.isEmpty()) return candidates.stream().map(ChallengeCandidate::quizItem).toList();
+            JsonNode primary = null;
+            JsonNode secondary = null;
+            if (!checkable.isEmpty()) {
+                StudySnapProperties.StatementPairVerifier config = properties.getLlm().getStatementPairVerifier();
+                counts.verified = checkable.size();
+                counts.verifierModels = config.getPrimaryModel() + "," + config.getSecondaryModel();
+                long deadlineNanos = System.nanoTime() + TimeUnit.SECONDS.toNanos(config.getWaitTimeoutSeconds());
+                CompletableFuture<JsonNode> first = submitVerifier(config.getPrimaryModel(), checkable, context,
+                        deadlineNanos);
+                CompletableFuture<JsonNode> second = submitVerifier(config.getSecondaryModel(), checkable, context,
+                        deadlineNanos);
+                primary = awaitVerifier(first, config.getPrimaryModel(), deadlineNanos);
+                secondary = awaitVerifier(second, config.getSecondaryModel(), deadlineNanos);
+            }
+            Map<Integer, QuizItem> replacementByPosition = new LinkedHashMap<>();
+            List<Integer> rejected = new ArrayList<>();
+            for (var entry : byPosition.entrySet()) {
+                StatementPairVerification.Item item = entry.getValue();
+                JsonNode firstResult = primary == null || item.itemId() == null
+                        ? null : findVerifierResult(primary, item.itemId());
+                JsonNode secondResult = secondary == null || item.itemId() == null
+                        ? null : findVerifierResult(secondary, item.itemId());
+                StatementPairVerification.Decision decision = candidates.get(entry.getKey()).source() == null
+                        || candidates.get(entry.getKey()).source().statementVerdicts() == null
+                        ? new StatementPairVerification.Decision(false, "MISSING_VERDICTS")
+                        : StatementPairVerification.decide(item, firstResult, secondResult, context.noteText());
+                log.info("action=statement_pair_verifier_decision outcome={} operation={} reason={} primarySourceSupport={} secondarySourceSupport={} questionHash={}",
+                        decision.accepted() ? "accepted" : "rejected", operationLabel,
+                        decision.reason() == null ? "none" : decision.reason(),
+                        sourceSupports(firstResult), sourceSupports(secondResult),
+                        StringNormalizationUtils.normalizeForDuplicateCheck(
+                                candidates.get(entry.getKey()).quizItem().question()).hashCode());
+                if (!decision.accepted()) {
+                    rejected.add(entry.getKey());
+                    counts.verifierRejected++;
+                    if ("UNCERTAIN".equals(decision.reason())) counts.verifierUncertain++;
+                    if ("CALL_FAILED".equals(decision.reason())) counts.verifierFailed++;
+                }
+            }
+            if (!rejected.isEmpty()) {
+                replacementByPosition.putAll(replaceRejected(candidates, rejected, inputMessages,
+                        selection, operationLabel, conceptFallbackPool, keyConceptEnum, counts));
+            }
+            List<QuizItem> result = new ArrayList<>();
+            for (int i = 0; i < candidates.size(); i++) {
+                if (rejected.contains(i)) {
+                    QuizItem replacement = replacementByPosition.get(i);
+                    if (replacement != null) result.add(replacement);
+                    else counts.omitted++;
+                } else result.add(candidates.get(i).quizItem());
+            }
+            return result;
+        } finally {
+            counts.verifierElapsedNanos += System.nanoTime() - startedAt;
+        }
+    }
+
+    private String sourceSupports(JsonNode result) {
+        if (result == null) return "unavailable";
+        return result.path("statement1").path("sourceSupport").asText() + ","
+                + result.path("statement2").path("sourceSupport").asText();
+    }
+
+    private CompletableFuture<JsonNode> submitVerifier(String model,
+            List<StatementPairVerification.Item> items, VerifierContext context, long deadlineNanos) {
+        try {
+            return CompletableFuture.supplyAsync(() -> verifierWithRetry(model, items, context, deadlineNanos),
+                    statementPairVerifierTaskExecutor);
+        } catch (RuntimeException exception) {
+            log.warn("action=statement_pair_verifier outcome=call_failed model={} reason=executor_rejected",
+                    model, exception);
+            return CompletableFuture.completedFuture(null);
+        }
+    }
+
+    private JsonNode awaitVerifier(CompletableFuture<JsonNode> future, String model, long deadlineNanos) {
+        try {
+            long remainingNanos = deadlineNanos - System.nanoTime();
+            if (remainingNanos <= 0) throw new TimeoutException();
+            return future.get(remainingNanos, TimeUnit.NANOSECONDS);
+        } catch (TimeoutException exception) {
+            future.cancel(true);
+            log.warn("action=statement_pair_verifier outcome=call_failed model={} reason=timeout", model);
+        } catch (InterruptedException exception) {
+            future.cancel(true);
+            Thread.currentThread().interrupt();
+            log.warn("action=statement_pair_verifier outcome=call_failed model={} reason=interrupted", model);
+        } catch (ExecutionException exception) {
+            log.warn("action=statement_pair_verifier outcome=call_failed model={} reason=task_failed", model,
+                    exception);
+        }
+        return null;
+    }
+
+    private JsonNode findVerifierResult(JsonNode root, String id) {
+        for (JsonNode result : root.path("results")) {
+            if (id.equals(result.path("itemId").asText())) return result;
+        }
+        return null;
+    }
+
+    private JsonNode verifierWithRetry(String model, List<StatementPairVerification.Item> items,
+            VerifierContext context, long deadlineNanos) {
+        for (int attempt = 1; attempt <= 2; attempt++) {
+            if (Thread.currentThread().isInterrupted() || System.nanoTime() >= deadlineNanos) {
+                log.warn("action=statement_pair_verifier outcome=call_failed model={} attempt={} reason=deadline_passed",
+                        model, attempt);
+                return null;
+            }
+            try {
+                return verifierCallOnce(model, items, context, attempt);
+            } catch (Exception exception) {
+                log.warn("action=statement_pair_verifier outcome=call_failed model={} attempt={} reason={}",
+                        model, attempt, exception.getClass().getSimpleName());
+            }
+        }
+        return null;
+    }
+
+    private JsonNode verifierCallOnce(String model, List<StatementPairVerification.Item> items,
+            VerifierContext context, int attempt) throws Exception {
+        ObjectNode body = StatementPairVerification.request(objectMapper, promptResources,
+                requireConfiguredModel(model, "Statement-pair verifier model is missing."),
+                StudyPackGenerationContextResolver.effectiveAuthoringDomain(context.generationContext()),
+                context.generationContext().subject(),
+                toLearnerLevelLabel(StudyPackGenerationContextResolver.effectiveCurriculumLevel(
+                        context.generationContext())), context.noteText(), context.summary(), items);
+        long startedAt = System.nanoTime();
+        JsonNode response = null;
+        String outcome = OUTCOME_SUCCESS;
+        try {
+            response = executeJsonSchemaRequest(body, quizOperation(VERIFIER_SCHEMA_NAME,
+                    "Statement-pair verification"));
+            String output = LlmResponseUtils.findOutputJson(response)
+                    .orElseThrow(() -> new StatementPairVerification.InvalidVerifierResponseException("Missing output"));
+            return StatementPairVerification.validate(output, items.size(), objectMapper);
+        } catch (Exception exception) {
+            outcome = exception instanceof StatementPairVerification.InvalidVerifierResponseException
+                    || exception instanceof IOException ? OUTCOME_SCHEMA_OR_PARSE : OUTCOME_HTTP_ERROR;
+            throw exception;
+        } finally {
+            JsonNode usage = response == null ? objectMapper.createObjectNode() : response.path("usage");
+            logCall(new PendingCallLog(VERIFIER_SCHEMA_NAME, LlmRoute.CRITIQUE, model,
+                    LlmModelRouter.TIER_NOT_APPLICABLE,
+                    TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedAt), attempt,
+                    LlmResponseUtils.asNullableInt(usage.get(LOG_INPUT_TOKENS)),
+                    LlmResponseUtils.asNullableInt(usage.get(LOG_OUTPUT_TOKENS)),
+                    LlmResponseUtils.asNullableInt(usage.path("input_tokens_details").get(LOG_CACHED_TOKENS)),
+                    LlmResponseUtils.asNullableInt(usage.path("output_tokens_details").get(LOG_REASONING_TOKENS))),
+                    outcome);
+            TRANSPORT_OUTCOME.remove();
+        }
+    }
+
+    private Map<Integer, QuizItem> replaceRejected(List<ChallengeCandidate> candidates,
+            List<Integer> rejected, ArrayNode inputMessages, LlmModelRouter.Selection selection,
+            String operationLabel, List<String> conceptFallbackPool, List<String> keyConceptEnum,
+            ChallengeGenerationCounts counts) {
+        Map<Integer, QuizItem> replacements = new LinkedHashMap<>();
+        try {
+            ArrayNode messages = inputMessages.deepCopy();
+            messages.add(buildTextMessage("developer", promptResources.statementPairReplacementDeveloperPrompt()
+                    .replace("{COUNT}", String.valueOf(rejected.size()))));
+            String[] userTemplate = promptResources.statementPairReplacementUserPrompt().split("\n");
+            StringBuilder user = new StringBuilder(userTemplate[0]);
+            String itemTemplate = userTemplate[1].substring("1. ".length());
+            for (int i = 0; i < rejected.size(); i++) {
+                QuizItem item = candidates.get(rejected.get(i)).quizItem();
+                user.append('\n').append(i + 1).append(". ")
+                        .append(itemTemplate.replace("{CONCEPT}", item.concept())
+                                .replace("{REJECTED_QUESTION_TEXT}", item.question()));
+            }
+            messages.add(buildTextMessage("user", user.toString()));
+            JsonSchemaResponse<PromptGeneratedQuiz> response = executeJsonSchemaOperation(
+                    requireConfiguredModel(selection.model(), LLM_MODEL_MISSING_MESSAGE), messages,
+                    quizOperation(REPLACEMENT_SCHEMA_NAME, operationLabel + " verifier replacement")
+                            .withSelection(selection),
+                    buildGeneratedQuizSchema(rejected.size(), true, keyConceptEnum, true, true, true),
+                    PromptGeneratedQuiz.class);
+            if (response.payload().questions() == null || response.payload().questions().size() != rejected.size())
+                throw new InvalidReplacementBatchException("Invalid replacement count");
+            ConsistencyRetryContext retryContext = new ConsistencyRetryContext(selection.model(), selection,
+                    inputMessages, CHALLENGE_QUIZ_SCHEMA_NAME, operationLabel, conceptFallbackPool,
+                    keyConceptEnum, true, true, true, true, counts);
+            for (int i = 0; i < rejected.size(); i++) {
+                PromptGeneratedQuizItem item = response.payload().questions().get(i);
+                try {
+                    QuizValidationUtils.StatementPairResult pair = precheckStatementPair(item, retryContext);
+                    if (pair != QuizValidationUtils.StatementPairResult.NOT_STATEMENT_PAIR
+                            || StatementPairVerification.containsStatementMarker(item.question())) continue;
+                    validateGeneratedQuizItem(item, operationLabel);
+                    boolean freeText = IDENTIFICATION_FORMAT.equals(item.questionFormat())
+                            || ENUMERATION_FORMAT.equals(item.questionFormat());
+                    Integer answerIndex = freeText ? null : resolveAnswerIndex(item.answer(), item.choices().size(),
+                            operationLabel + " replacement returned an invalid answer mapping.");
+                    String fallback = conceptFallbackPool.isEmpty() ? null
+                            : conceptFallbackPool.get(i % conceptFallbackPool.size());
+                    QuizItem built = buildQuizItemOrRetry(toQuizItemDraft(item, fallback,
+                            keyConceptEnum, operationLabel), answerIndex, retryContext, false);
+                    if (built != null) {
+                        replacements.put(rejected.get(i), built);
+                        counts.verifierReplaced++;
+                        counts.replacementFormats.merge(Objects.toString(built.questionFormat(), MCQ_FORMAT), 1,
+                                Integer::sum);
+                    }
+                } catch (RuntimeException exception) {
+                    log.warn("action=statement_pair_verifier_replacement outcome=omitted operation={} index={} reason={}",
+                            operationLabel, i, exception.getClass().getSimpleName());
+                }
+            }
+        } catch (RuntimeException exception) {
+            log.warn("action=statement_pair_verifier_replacement outcome=omitted operation={} reason={}",
+                    operationLabel, exception.getClass().getSimpleName());
+        }
+        return replacements;
+    }
+
+    private static final class InvalidReplacementBatchException extends RuntimeException {
+        private InvalidReplacementBatchException(String message) { super(message); }
     }
 
     private QuizItemDraft toQuizItemDraft(
@@ -2440,7 +2810,8 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
                 item.questionGroup(),
                 normalizeKeyConceptOrNull(item.keyConcept(), normalizedKeyConceptEnum),
                 item.acceptableAnswers(),
-                item.acceptableAnswerGroups()
+                item.acceptableAnswerGroups(),
+                item.statementVerdicts()
         );
     }
 
@@ -2450,6 +2821,31 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
             ConsistencyRetryContext retryContext,
             boolean allowRetry
     ) {
+        ChallengeCandidate candidate = buildCandidateOrRetry(item, answerIndex, retryContext, allowRetry, null);
+        return candidate == null ? null : candidate.quizItem();
+    }
+
+    private ChallengeCandidate buildCandidateOrRetry(
+            QuizItemDraft item,
+            Integer answerIndex,
+            ConsistencyRetryContext retryContext,
+            boolean allowRetry,
+            PromptGeneratedQuizItem source
+    ) {
+        if (retryContext.statementPairGuard()) {
+            StatementVerdicts verdicts = item.statementVerdicts();
+            QuizValidationUtils.StatementPairResult result = QuizValidationUtils.checkStatementPair(
+                    item.question(), item.choices(), answerIndex, item.questionFormat(),
+                    verdicts == null ? null : verdicts.statement1Correct(),
+                    verdicts == null ? null : verdicts.statement2Correct()
+            );
+            if (result != QuizValidationUtils.StatementPairResult.NOT_STATEMENT_PAIR
+                    && result != QuizValidationUtils.StatementPairResult.OK) {
+                String reason = result.name().toLowerCase(Locale.ROOT);
+                logStatementPairRejection(item.question(), retryContext, allowRetry, reason);
+                return allowRetry ? retryInternallyInconsistentQuestion(item.question(), retryContext, true) : null;
+            }
+        }
         if (QuizValidationUtils.isAnswerExplanationInternallyInconsistent(
                 item.choices(),
                 answerIndex,
@@ -2463,9 +2859,10 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
                     retryContext.operationLabel(),
                     StringNormalizationUtils.normalizeForDuplicateCheck(item.question()).hashCode()
             );
-            return allowRetry ? retryInternallyInconsistentQuestion(item.question(), retryContext) : null;
+            recordConsistencyRejection(retryContext, allowRetry);
+            return allowRetry ? retryInternallyInconsistentQuestion(item.question(), retryContext, false) : null;
         }
-        return new QuizItem(
+        return new ChallengeCandidate(new QuizItem(
                 item.question(),
                 item.choices(),
                 MULTI_SELECT_FORMAT.equals(item.questionFormat()) ? null : answerIndex,
@@ -2480,22 +2877,68 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
                 item.keyConcept(),
                 item.acceptableAnswers(),
                 item.acceptableAnswerGroups()
-        );
+        ), source);
     }
 
-    private QuizItem retryInternallyInconsistentQuestion(
+    private QuizValidationUtils.StatementPairResult precheckStatementPair(
+            PromptGeneratedQuizItem item, ConsistencyRetryContext context) {
+        if (!context.statementPairGuard() || !QuizValidationUtils.isStatementPair(item.question())) {
+            return QuizValidationUtils.StatementPairResult.NOT_STATEMENT_PAIR;
+        }
+        Integer index = null;
+        if ((item.questionFormat() == null || MCQ_FORMAT.equals(item.questionFormat()))
+                && item.choices() != null) {
+            index = resolveAnswerIndex(item.answer(), item.choices().size(),
+                    context.operationLabel() + " returned an invalid answer mapping. Please try again.");
+        }
+        StatementVerdicts verdicts = item.statementVerdicts();
+        return QuizValidationUtils.checkStatementPair(item.question(), item.choices(), index,
+                item.questionFormat(), verdicts == null ? null : verdicts.statement1Correct(),
+                verdicts == null ? null : verdicts.statement2Correct());
+    }
+
+    private boolean isRejectedStatementPair(QuizValidationUtils.StatementPairResult result) {
+        return result != QuizValidationUtils.StatementPairResult.NOT_STATEMENT_PAIR
+                && result != QuizValidationUtils.StatementPairResult.OK;
+    }
+
+    private void logStatementPairRejection(String question, ConsistencyRetryContext context,
+                                           boolean allowRetry, String reason) {
+        log.warn("action=" + STATEMENT_PAIR_LOG_ACTION + " outcome={} operation={} reason={} questionHash={}",
+                allowRetry ? "retrying" : "omitted", context.operationLabel(), reason,
+                StringNormalizationUtils.normalizeForDuplicateCheck(question).hashCode());
+        recordConsistencyRejection(context, allowRetry);
+    }
+
+    private void recordConsistencyRejection(ConsistencyRetryContext context, boolean allowRetry) {
+        if (context.counts() != null) {
+            if (allowRetry) {
+                context.counts().rejected++;
+            } else {
+                context.counts().omitted++;
+            }
+        }
+    }
+
+    private ChallengeCandidate retryInternallyInconsistentQuestion(
             String rejectedQuestion,
-            ConsistencyRetryContext context
+            ConsistencyRetryContext context,
+            boolean statementPairRejection
     ) {
         flushPendingCallLog(OUTCOME_SCHEMA_OR_PARSE);
         ArrayNode retryMessages = context.inputMessages().deepCopy();
         retryMessages.add(buildTextMessage(
                 "developer",
+                statementPairRejection ? STATEMENT_PAIR_RETRY_MESSAGE :
                 "Correction retry: return exactly one replacement quiz question under the response schema. "
                         + "The prior question was rejected because its keyed numeric answer contradicted its own explanation. "
                         + "Generate a different internally consistent question from the same source material."
         ));
         retryMessages.add(buildTextMessage("user", "Rejected question: " + rejectedQuestion));
+        long retryStartedAt = System.nanoTime();
+        if (context.counts() != null) {
+            context.counts().retried++;
+        }
         try {
             JsonSchemaResponse<PromptGeneratedQuiz> retryResponse = executeJsonSchemaOperation(
                     context.model(),
@@ -2507,18 +2950,35 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
                             context.allowTrueFalse(),
                             context.keyConceptEnum(),
                             context.allowIdentification(),
-                            context.allowEnumeration()
+                            context.allowEnumeration(),
+                            context.statementPairGuard()
                     ),
                     PromptGeneratedQuiz.class
             );
             if (retryResponse.payload().questions() == null || retryResponse.payload().questions().size() != 1) {
                 log.warn(
-                        "action=quiz_answer_explanation_consistency outcome=omitted operation={} reason=invalid_retry_count",
+                        "action={} outcome=omitted operation={} reason=invalid_retry_count",
+                        statementPairRejection ? STATEMENT_PAIR_LOG_ACTION : "quiz_answer_explanation_consistency",
                         context.operationLabel()
                 );
+                if (context.counts() != null) {
+                    context.counts().omitted++;
+                }
                 return null;
             }
             PromptGeneratedQuizItem replacement = retryResponse.payload().questions().getFirst();
+            if (context.counts() != null && QuizValidationUtils.isStatementPair(replacement.question())
+                    && replacement.statementVerdicts() == null) {
+                log.warn("action=statement_pair_verifier_decision outcome=rejected operation={} reason=MISSING_VERDICTS questionHash={}",
+                        context.operationLabel(),
+                        StringNormalizationUtils.normalizeForDuplicateCheck(replacement.question()).hashCode());
+            }
+            QuizValidationUtils.StatementPairResult pairResult = precheckStatementPair(replacement, context);
+            if (isRejectedStatementPair(pairResult)) {
+                logStatementPairRejection(replacement.question(), context, false,
+                        pairResult.name().toLowerCase(Locale.ROOT));
+                return null;
+            }
             validateGeneratedQuizItem(replacement, context.operationLabel());
             boolean freeText = IDENTIFICATION_FORMAT.equals(replacement.questionFormat())
                     || ENUMERATION_FORMAT.equals(replacement.questionFormat());
@@ -2532,7 +2992,7 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
             String fallback = context.conceptFallbackPool().isEmpty()
                     ? null
                     : context.conceptFallbackPool().getFirst();
-            return buildQuizItemOrRetry(
+            return buildCandidateOrRetry(
                     toQuizItemDraft(
                             replacement,
                             fallback,
@@ -2541,15 +3001,24 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
                     ),
                     replacementAnswerIndex,
                     context,
-                    false
+                    false,
+                    replacement
             );
         } catch (AppException ex) {
             log.warn(
-                    "action=quiz_answer_explanation_consistency outcome=omitted operation={} reason={}",
+                    "action={} outcome=omitted operation={} reason={}",
+                    statementPairRejection ? STATEMENT_PAIR_LOG_ACTION : "quiz_answer_explanation_consistency",
                     context.operationLabel(),
                     ex.getCode()
             );
+            if (context.counts() != null) {
+                context.counts().omitted++;
+            }
             return null;
+        } finally {
+            if (context.counts() != null) {
+                context.counts().retryElapsedNanos += System.nanoTime() - retryStartedAt;
+            }
         }
     }
 
@@ -3104,8 +3573,12 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
             String questionGroup,
             String keyConcept,
             List<String> acceptableAnswers,
-            List<List<String>> acceptableAnswerGroups
+            List<List<String>> acceptableAnswerGroups,
+            StatementVerdicts statementVerdicts
     ) {
+    }
+
+    private record StatementVerdicts(Boolean statement1Correct, Boolean statement2Correct) {
     }
 
     private record QuizItemDraft(
@@ -3120,7 +3593,8 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
             String questionGroup,
             String keyConcept,
             List<String> acceptableAnswers,
-            List<List<String>> acceptableAnswerGroups
+            List<List<String>> acceptableAnswerGroups,
+            StatementVerdicts statementVerdicts
     ) {
     }
 
@@ -3134,9 +3608,33 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
             List<String> keyConceptEnum,
             boolean allowTrueFalse,
             boolean allowIdentification,
-            boolean allowEnumeration
+            boolean allowEnumeration,
+            boolean statementPairGuard,
+            ChallengeGenerationCounts counts
     ) {
     }
+
+    private static final class ChallengeGenerationCounts {
+        private int accepted;
+        private int rejected;
+        private int retried;
+        private int omitted;
+        private int returned;
+        private long retryElapsedNanos;
+        private int verified;
+        private int verifierRejected;
+        private int verifierUncertain;
+        private int verifierFailed;
+        private int verifierReplaced;
+        private int statementPairLeaked;
+        private long verifierElapsedNanos;
+        private String verifierModels = "";
+        private final Map<String, Integer> replacementFormats = new LinkedHashMap<>();
+    }
+
+    private record VerifierContext(String noteText, String summary,
+            StudyPackGenerationContext generationContext, ChallengeVerifierPath path) { }
+    private record ChallengeCandidate(QuizItem quizItem, PromptGeneratedQuizItem source) { }
 
     private record PromptInterviewCritique(
             String verdict,

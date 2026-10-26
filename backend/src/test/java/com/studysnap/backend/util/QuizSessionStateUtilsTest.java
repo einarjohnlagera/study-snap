@@ -14,6 +14,25 @@ import static org.assertj.core.api.Assertions.assertThat;
 class QuizSessionStateUtilsTest {
 
     @Test
+    void challengePreparationStateRoundTripsAndRemovesPrivateInputs() {
+        QuizItem item = new QuizItem("Banked", List.of("A", "B"), 0, "Concept", "Explanation");
+        Map<String, Object> state = QuizSessionStateUtils.withPreparationInputs(Map.of(), List.of(item), 12);
+        state = QuizSessionStateUtils.withPreparedNotStarted(state, true);
+        state = QuizSessionStateUtils.withPreparedAtEpochSeconds(state, 42L);
+        state = QuizSessionStateUtils.withPreparedGenerationStamp(state, 7L);
+        state = QuizSessionStateUtils.withChallengeQuotaCharged(state, false);
+
+        assertThat(QuizSessionStateUtils.extractPreparationQuiz(state)).containsExactly(item);
+        assertThat(QuizSessionStateUtils.extractPreparationRequestedCount(state)).isEqualTo(12);
+        assertThat(QuizSessionStateUtils.extractPreparedNotStarted(state)).isTrue();
+        assertThat(QuizSessionStateUtils.extractPreparedAtEpochSeconds(state)).isEqualTo(42L);
+        assertThat(QuizSessionStateUtils.extractPreparedGenerationStamp(state)).isEqualTo(7L);
+        assertThat(QuizSessionStateUtils.extractChallengeQuotaCharged(state)).isFalse();
+        assertThat(QuizSessionStateUtils.withoutPreparationInputs(state)).doesNotContainKey("preparationQuiz");
+        assertThat(QuizSessionStateUtils.withoutChallengeQuotaCharged(state)).doesNotContainKey("challengeQuotaCharged");
+    }
+
+    @Test
     void withQuiz_andExtractQuiz_roundTripsSourceStudyPackIdAndTreatsMissingOrMalformedValuesAsNull() {
         String sourceStudyPackId = UUID.randomUUID().toString();
         QuizItem item = new QuizItem("Question", List.of("A", "B"), 0, "Concept", "Explanation")

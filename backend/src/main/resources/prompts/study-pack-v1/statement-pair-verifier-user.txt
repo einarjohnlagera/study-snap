@@ -1,0 +1,16 @@
+Domain context: {DOMAIN_CONTEXT}
+Subject: {SUBJECT}
+Curriculum level: {LEARNER_LEVEL}
+
+Source note:
+<<<
+{NOTE_TEXT}
+>>>
+
+Study Pack summary (secondary reference, written from the same note):
+<<<
+{STUDY_PACK_SUMMARY}
+>>>
+
+Items:
+{ITEMS_JSON}

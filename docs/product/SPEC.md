@@ -1066,20 +1066,20 @@ Primary routes:
 
 ### Challenge Quiz
 
-- Timed exam-style mode (10 minutes)
+- Timed exam-style mode (90 seconds per question; each added question adds 90 seconds). Ordinary Challenge is prepared in the background and its timer and monthly attempt start only on **Start quiz** (see the Prepared Challenge section of `docs/features/challenge-quiz.md`)
 - Generated from Study Pack summary + key concepts, plus learner-level and note-context metadata
 - Board Exam Mode is the strict exam-simulation presentation of the Challenge Quiz engine and is available as a distinct Challenge mode for Pro users in the current rollout stage.
 - The Challenge Quiz screen presents both `Challenge Quiz` and `Board Exam Mode` as explicit mode choices.
 - Board Exam Mode uses a dedicated `Board Exam setup` confirmation state with timer/question/result summary plus `Cancel` and `Start Exam`.
 - Board Exam Mode may request fullscreen/focus mode as a best-effort browser enhancement.
 - Challenge Quiz has no manual difficulty selector (removed v0.60.1); difficulty is fully automatic from the last Quick Review score. Board Exam Mode remains a Pro feature.
-- Reuse existing in-progress session to avoid duplicate LLM calls
+- Reuse an existing prepared, generating or in-progress session to avoid duplicate LLM calls; a started ordinary quiz is never ended without the learner's choice
 - Persist in-progress state (answers, index, timer basis)
-- Usage limit: 50/month (separate from Study Pack generation quota)
+- Usage limit: 20 / 100 / 200 per month on Free / Plus / Pro (separate from Study Pack generation quota), charged when Start quiz succeeds
 
 **Progressive generation (Challenge mode only):**
 
-- Challenge mode starts with 5 questions; users can generate +5 more from the last question, up to a session maximum of 20
+- Challenge mode starts with a score-adaptive 10, 12 or 15 questions; users can generate +5 more from the last question, up to a session maximum of 20
 - Board Exam Mode uses a profile-adaptive fixed count (10–15 questions based on learner level) and does not support progressive generation
 - Board Exam difficulty and question count adapt by latest Quick Review score:
   - `<50`: 10 questions, easy-medium

@@ -1,5 +1,622 @@
 # RELEASES.md - NoteLib
 
+## v0.175.0 - Quiz Ready
+
+**Status: Released** (kicked off 2026-10-20, signed off 2026-10-25 on `releases/v0.175.0`, **cut from `releases/v0.174.0`
+(`e539b045`, signed off, NOT yet on `main`)**, the same stacking pattern `v0.174.0` used on `v0.173.0`.
+Anything that changes on `releases/v0.174.0` after this cut is merged forward.)
+
+Theme: a learner who starts a Challenge Quiz is never stuck watching a spinner or racing a timer that
+started without them. The quiz is prepared in the background, waits on a "Your quiz is ready!" screen, and
+starts only when they press Start Quiz. Challenge also moves to each plan's model, behind a guard that
+catches wrong answer keys.
+
+**⚠️ MERGE GATE:** this release's PR merges to `main` only after `v0.174.0`'s PR #1512 has merged (itself
+held behind `v0.173.0`'s #1505 and two checkpoints).
+
+**Sources, all owner-approved:**
+- plan: `docs/claude-plans/2026-10-19-v0175-challenge-quiz-preparation-plan.md` (Feature Planner; §1
+  journey, §5 lifecycle, §7 retry, §8 acceptance criteria, §9 items 1–17);
+- decisions: B1–B7 (`docs/claude-plans/2026-10-19-owner-decisions-v0175-b1-b7.md`), and C1–C8 plus the C7
+  follow-ups R1–R3 (consolidated plan, Part G);
+- R1 evidence: `docs/claude-findings/2026-10-19-v0175-c7-statement-pair-answer-key-comparison.md` and
+  `docs/claude-findings/2026-10-19-v0175-r2-statement-pair-answer-key-scan.md`.
+  - 370 of 1,389 Official template statement-pair items (26.6%) had a wrong key on today's model.
+  - The owner repaired them on 2026-10-20.
+- **Plan §10's five open decisions are all closed:** C1 (no "Stay" button), C6 (Board/Long Exam follow-up
+  release), C3 (collision asks), C4 (refund) and C5 (+5 inherits Sol).
+
+### Planned Scope
+
+Order matters: item 1 ships before item 6. Items 2–4 form one learner journey and are briefed together, but
+delivered as separate PRs where the seams allow.
+
+1. **R1: statement-pair answer-key guard. Tier N, raised to one cold falsification review by the start minimum. FIRST. `[shipped: #1513, verifier #1514 and #1520, switches OFF]`** PR #1513, merged 2026-10-20 (`7b9ae007`). Wording signed off 2026-10-20: `docs/claude-plans/2026-10-20-v0175-r1-statement-pair-guard-wording.md`. **Acceptance run (mini, 2026-10-20, about $0.18): the smoke-test rule FAILED.** 3 of 32 delivered statement-pair keys were wrong (2 clear, 1 arguable). All three are factual-verdict errors, which the check cannot catch; none is the index class R1 targets. Findings: `docs/claude-findings/2026-10-20-v0175-r1-acceptance-run.md`. **Luna arm (2026-10-20, about $0.10): the smoke-test rule PASSED.** 31 of 31 statement-pair keys agreed in the blind check, 370 of 370 questions were delivered, and there were zero rejections. The pre-R1 Luna rate was about 19%. Luna starts take a median of 45 s and up to 69 s, versus mini's 15 s, so item 6 stays behind item 2. **Sol arm (2026-10-20, cap raised to about $1.75, meter $1.45): the smoke-test rule PASSED.** 28 of 28 statement-pair keys agreed in the blind check, and 348 of 348 questions were delivered on the 28 completed starts (1 network timeout, 1 spend-stopped). Sol start p50 is 55–105 s, max 150 s. Mini's factual-verdict errors stay live on multi-note Challenge until item 5. **Owner direction, 2026-10-20: Option 3 (an independent statement-pair verifier) is approved for investigation only, as a v0.175.0 candidate subject to a separate go/no-go** (`docs/claude-plans/2026-10-20-owner-direction-v0175-option3-verifier-investigation.md`). Proposal: `docs/claude-plans/2026-10-20-v0175-statement-pair-verifier-investigation.md`. **Owner decisions, 2026-10-20** (`docs/claude-plans/2026-10-20-owner-decisions-v0175-statement-pair-verifier.md`): Option F (Sol and Luna check every statement-pair item on every plan), conditional on validation; +5 batches exclude statement-pair items by a prompt rule (wording pending sign-off), with skip-and-log as the fallback; a rejected item may be replaced by another question type; no new provider in v0.175.0; a read-only recheck of the about 890 first-pass-only Official stock items after validation. **The verifier is never a prerequisite for background preparation** (Product UX): it ships with every switch OFF, and live-start verification is enabled only after items 2 and 5 are validated. **Follow-up decisions, 2026-10-20** (`docs/claude-plans/2026-10-20-owner-decisions-v0175-verifier-follow-up.md`): a local, non-production test harness is approved (test scope only, no paid calls); the exact +5 rule, replacement message, verifier prompt and schema, and the two-stage pass rules are drafted for owner sign-off in `docs/claude-plans/2026-10-20-v0175-statement-pair-verifier-wording-and-pass-rules.md`. **Wording and pass rules signed off, 2026-10-20** (`docs/claude-plans/2026-10-20-owner-decisions-v0175-verifier-wording-and-pass-rules.md`), with clarifications incorporated into the exact text: rejected statements are untrusted; SILENT stays visible; a note that conflicts with established knowledge gives UNCERTAIN; only genuine, applicable exceptions count for absolute words; r1-04 strict; a gray zone returns for review; a wrong key among accepted items triggers a rollout review. **The local verifier harness merged** as PR #1514 (`944cbfdb`), test scope only, after the owner's merge conditions were confirmed. **Paid Stage 1 ran 2026-10-20 (owner-run, meter $1.08): KILL on S-A4b**, with F-union false rejection at 10/78 against a kill line above 9. Detection was perfect: mini's three errors 3/3 each, 20/20 constructed, 20/20 unseen, no joint miss, 6/6 ambiguous. Analysis: 5 rejections were Luna evidence-quote artifacts, where the verdicts were correct. A blind Codex adjudication (D11) sided with the checkers on the other 5, all mini-generated, which suggests the test-set labels were wrong there and mini's R1 rate may be about 8/32, not 3/32. That is unconfirmed: all three judges are OpenAI-family. Revised proposal (gold correction, quote-rule fix, fresh re-run at a $2.20 cap) awaits the owner: `docs/claude-plans/2026-10-20-v0175-statement-pair-verifier-wording-and-pass-rules.md` Part 10. No threshold was relaxed; nothing is in production code; Stage 2 stays gated. **Owner approved all four items, with an Opus tie-break first (2026-10-20).** Only r1-30 was relabeled; Opus sided with the original label on r1-02, r1-08 and r1-23 and called r1-05 ambiguous, so mini's R1 count is 4/32, not 8. Corrected gold: N 77 plus 1 adjudicated. Quote rule and scorer updated (test scope, branch `feat/v0.175.0-verifier-rerun`). Re-run cap $2.20, commands in Part 11 of the wording doc. **Re-run (owner-run, meter $1.15): Stage 1 PASS as a smoke test.** Every criterion passes; per-checker false rejection 3/77 each is exactly at the limit, F union 4/77, joint miss 0/40, all positives caught. Verifier evaluation total $2.23. Next, each separately gated: the production implementation, activation for Official question-set creation, the read-only stock recheck, and Stage 2.
+   - **Owner additions (2026-10-20):** a start minimum (single-note at most one short; multi-note fails at zero), with a failed start charging no quota and releasing its claims. Multi-note underfill (1–17 of 18) stays a high-priority issue for items 2 and 5.
+   - Generation records a true/false verdict for each statement in a "Statement 1 / Statement 2" item.
+   - The validator checks the keyed choice against those verdicts and retries on a mismatch.
+   - An explanation-only check is not enough: R2 measured about 40% recall.
+   - **Scope: the Challenge generation path only, on every model, including today's pinned mini.**
+     Challenge start (single and multi-note, `ChallengeQuizService.generateChallengeQuizForSources:1832`),
+     +5 (`OpenAiLlmStudyPackService.generateMoreChallengeQuiz:2031`) and the Official template seed
+     (`OfficialChallengeQuizTemplateService:301`) all go through `generateChallengeQuizWithSchema`
+     (`OpenAiLlmStudyPackService.java:2305`).
+   - **Board Exam, Long Exam, Adaptive, teacher quiz and Study Pack generation share the prompt rule but are
+     NOT in scope.** Board and Long Exam are untouched in this release (C6), and R2 found no defect in Study
+     Pack quizzes. Extending the guard to them is a separate owner question.
+   - **It changes the prompt and the response schema, so the exact wording goes to the owner before the
+     brief.**
+2. **Preparation state machine (backend). Tier H. `[shipped: #1518, #1519]`** Plan items 2–4 and 9–11.
+   - Single-note async dispatch.
+   - A ready-not-started state: plan §5 leans to a flag on `IN_PROGRESS`, to keep the partial unique index.
+   - `markSessionReady` is split from an explicit **Start Quiz** action, **for Challenge sessions only**.
+     There the timer is stamped only on Start Quiz.
+   - **Board Exam's callers keep "ready" and "started" as one step until the C6 follow-up** (the pooled
+     path, `ChallengeQuizService:338`, and `generateBoardExamAsync`, `:638`). An unstamped Board Exam never expires (`isSessionExpired`,
+     `:1489-1496`), and it shares `session_mode='CHALLENGE'`, so it would block Challenge requests on that
+     note.
+   - **Quota is charged only when Start Quiz succeeds** (owner decision 2026-10-20, superseding C4's
+     charge-at-creation; `docs/claude-plans/2026-10-20-owner-decisions-v0175-analytics-and-quota-at-start.md`).
+     Preparation, failure, discard and expiry never consume quota, so no refund path is needed. Prepared,
+     unstarted sessions are `quotaExempt` until Start.
+   - `CHALLENGE_QUIZ_STARTED` fires once, at a successful Start Quiz (owner decision 1, same file).
+     Preparation-requested, ready and abandoned events are new.
+   - Retry once, only after a lock-and-recheck (`generateBoardExamAsync:626-633` pattern). **No Luna fallback
+     for Plus/Pro.**
+   - Recovery-sweep entries for stuck generating and ready sessions.
+   - **A 7-day expiry sweep** returns the questions to the bank (B3).
+   - **A collision with a ready session asks the learner (C3).**
+   - **Bank-served starts and redo-missed land on the pre-screen (C2).**
+3. **Preparation screens (frontend). Tier N. `[shipped: #1521]`** Plan items 12–13.
+   - "Getting your quiz ready" shows progress and **Continue reviewing** only, with no "Stay" button (C1).
+   - "Your quiz is ready!" has **Start Quiz**.
+   - Failure recovery offers Try Again and Continue Reviewing; the expired state offers Prepare New Quiz;
+     and there is the collision prompt.
+   - B4 copy. No model names.
+4. **Readiness notification and deep link. Tier N. `[shipped: #1522]`** Plan items 14–15.
+   - One in-app `ASYNC_RESULT` notification through `NotificationService.deliver`, deduplicated per
+     session, sent for any way of leaving (B2).
+   - It is marked read if the learner stayed and saw the pre-screen.
+   - The deep link handles four cases: ready, already started, expired or forfeited, and not owned.
+   - A real-request test is owed for any new endpoint.
+5. **Multi-note preparation. Tier H. `[shipped: #1523, #1525]`** Plan items 5–8.
+   - Async dispatch through the same journey.
+   - Per-source calls run in parallel on `llmParallelTaskExecutor` (measured 4–5× faster).
+   - A per-source failure no longer fails the start: it continues if enough questions survive (the floor).
+   - Token usage is recorded.
+   - **Split into 5a and 5b (2026-10-21).**
+     - **5a** (PR #1523, merged) is the shared claim and release surface: claims are released per session, and
+       legacy statement-pair rows are excluded.
+     - **5b** is multi-note background preparation, plus Feature Planner's Part A (each source's own bank,
+       A.1 and A.2). Plan: `docs/claude-plans/2026-10-21-v0175-multinote-bank-and-start-while-generating-plan.md`.
+   - **Owner decisions, 2026-10-21:** `docs/claude-plans/2026-10-21-owner-decisions-v0175-open-questions-and-priorities.md`.
+     - **Q1, the multi-note floor:** at least 2/3 of the requested questions **and** at least 2/3 of the notes
+       with a positive allocation, both rounded up. A shorter ready quiz discloses "Your quiz is ready with X
+       of Y questions."
+     - **Q2:** the +5 exclusion rule sits behind its own switch, OFF.
+     - **Q3:** the replacement instruction is to be revised; the checker stays OFF.
+     - **Q4:** the copy is approved with edits (PR #1524).
+     - **Q5:** +5 direction is set (no silent downgrade; fix timer fairness first).
+     - **Final product priorities:** accuracy, correctness, reliability, smooth flow, fairness.
+6. **Challenge tier routing. Tier N. `[shipped: #1526, with background +5]`** Plan item 17.
+   - **Gated on item 2 as well as item 1.** Routing Plus/Pro to Sol before the preparation flow exists
+     brings back the blocking start of about 107 s, which is why v0.174.0 pinned Challenge.
+   - **Multi-note starts stay pinned until item 5 ships.** Sequential Sol generation takes about 3.5–4
+     minutes. If Sol's benchmark rate of about 1 timeout in 40 calls holds per source call, a 6-note start
+     fails roughly 1 time in 7.
+   - Challenge start, +5 and multi-note move from `LLM_MODEL_INTERACTIVE_QUIZ` to the `TIERED` route:
+     FREE → `LLM_MODEL_FREE`; Plus/Pro and ADMIN → `LLM_MODEL_PREMIUM`.
+   - **+5 inherits (C5).**
+   - `model_used` is recorded on the session for the checkpoint read.
+   - Live models still depend on the owner's v0.174.0 Render switch.
+
+**Not in this release:**
+- Board Exam / Long Exam "press Start first" plus their expiry sweep: their own follow-up release right
+  after this one (C6).
+- The B6 targeted template backfill: a separate small PR after the v0.174.0 switch (C8).
+- Low reasoning effort (B7, not adopted).
+- A scan of learner-original statement-pair content.
+- The R3 impairment-note correction (Note Strategist and owner).
+
+**Verification tier: full Tier H.**
+- It touches quota semantics (a charge moves to creation, plus a new refund), adds a new session state and
+  a concurrency surface (the sweep against Start, the retry lock), and two or more items touch
+  `ChallengeQuizService`'s session lifecycle.
+- **Six items is above the three-to-four-item size guidance.** Expect the full pre-signoff pressure test,
+  not a single scoped agent.
+- If the owner wants a smaller first release, the clean seam is: items 1–4 plus 6 here, with item 5
+  (multi-note) as its own release. **Item 6 then routes single-note starts and +5 only, and multi-note
+  stays pinned until item 5 ships.**
+
+**Kickoff scan (2026-10-20):**
+- **14 live planning files had no Backlog row.** They are the `v0.174.0`/`v0.175.0` package: benchmark,
+  latency, Product UX, the A1–A7 decisions, routing plans, the B6/B7 proposals and the four R2 `.sql`
+  handoffs. Each is now named in the `v0.174.0` or `v0.175.0` Backlog row. None was moved to `done/`.
+- The `v0.175.0` row's title still described the removed "Stay on this page" button. Corrected (C1).
+- **Overdue `[CHECKPOINT]` rows are carried unread, not actioned at this kickoff.**
+  - A crude filter (a Gate cell with a past due date and no "closed" or "✅" in the first 300 characters
+    of Status) returns 39 rows. That overcounts, because several are struck through or resolved in their
+    title. `v0.174.0`'s kickoff recorded 16.
+  - Due inside this release: RC-3's reminder timing (2026-10-21), the `v0.166.0` Hikari backstop
+    (2026-10-21), and `v0.173.0`'s signal-9 read (2026-10-22), which gates #1505 and so this release's
+    merge chain.
+- `v0.169.0` was archived from `RELEASES.md` and the ROADMAP baseline. Both files were rebuilt from the
+  archives and compared byte-for-byte against the pre-move copies: identical.
+
+Anti-drift: no pricing, entitlement or quota-limit change. **The only quota change is charging Challenge
+when Start Quiz succeeds, never during preparation** (owner, 2026-10-20, superseding the charge-at-creation
+plan);
+customer copy never names a model and implies no FREE/paid quality difference; no email or push; **no timer
+starts before Start Quiz**; no Luna fallback for Plus/Pro; Board/Long Exam untouched; **no prompt or schema
+change beyond R1's owner-signed wording**; no `LLM_MODEL_CRITIQUE` change; no mass regeneration; feature PRs
+never edit this file.
+
+### Shipped
+
+- **R1: statement-pair answer-key guard and Challenge start minimum** (PR #1513, `7b9ae007`).
+  - **The guard.** Challenge generation records a true/false verdict for each statement before it picks the
+    answer. The server rejects a key that contradicts those verdicts, retries the question once, and then omits
+    it.
+  - **Scope.** It covers Challenge start (single and multi-note), +5 and the Official template seed. Board,
+    Long Exam, Adaptive, teacher quiz and Study Pack generation are unchanged.
+  - **Field order.** The Challenge item order is now question, choices, statementVerdicts, answer, explanation.
+  - **Start minimum.** A single-note start may be at most one question short; a multi-note start fails at zero.
+    A start below its minimum ends FAILED before quota is charged, and its claims are released.
+  - **The old 0-question path is fixed.** It charged quota for a failed start; Codex's pre-fix test showed this.
+    A read-only check found that the 3 production 0-question failures failed before the charge, so no refund is
+    owed.
+  - **Count logs.** `challenge_quiz_generation_counts` and `challenge_quiz_delivery_counts`.
+  - **Verification.** `./mvnw clean install`: 2,789 tests, 0 failures, including the real-transaction floor
+    tests. Codex review found nothing. A cold Sonnet falsification review of 10 claims disproved none.
+  - **Known limitations:**
+    - A single-note start can be one short (item 2). *(Superseded for multi-note by item 5b: a multi-note start below its two-thirds floors now fails with no charge, instead of opening with as few as 1 of 18.)*
+    - A stem without "Statement 1:" with a colon is not checked.
+    - A choice like "Only Statement 1 and 2 are correct" would misclassify. Neither appears in stored data.
+    - A statement-pair item emitted as TRUE_FALSE now takes the one-question retry instead of a whole-batch
+      retry.
+    - **Factual-verdict errors are not caught.** The model can judge a statement wrongly and key it
+      consistently. The acceptance run found 3 of 32 such keys on mini, 0 of 31 on Luna and 0 of 28 on Sol.
+    - A start whose database write fails mid-transaction returns a server error instead of "Try again". This
+      is pre-existing and loses no quota (item 2).
+
+- **Item 2a: Challenge preparation state and charge at Start Quiz** (PR #1518, merged as `5c80f809`).
+  - **No timer before Start Quiz.** Every ordinary Challenge start lands on `preparedNotStarted`. The new
+    `POST /challenge-quiz/sessions/{id}/start-quiz` is the only thing that starts the timer, and it is
+    idempotent. Board Exam is unchanged.
+  - **Quota at Start only** (owner decision 2026-10-20). It is re-checked under the user-row lock.
+    Preparation, failure and expiry never charge.
+  - **Async preparation.** Single-note generation runs on a dedicated executor with no transaction across the
+    model call. Failed preparations keep their questions in the bank and release claims.
+  - **Analytics.** `CHALLENGE_QUIZ_STARTED` fires at Start, redo-missed included. There are three new
+    preparation events.
+  - **Verification.** `./mvnw clean install`: 2,829 tests, 0 failures. A cold falsification review found
+    2 P2 and 5 P3 defects; all are fixed with tests.
+  - **Not done yet, by design:** the frontend Start Quiz wiring (item 3; **items 2 and 3 deploy together**)
+    and the expiry and stuck-preparation sweeps (2b).
+  - **Known limitation:** regeneration of an additional source note in a multi-note quiz is not caught
+    before Start (item 5).
+
+- **Item 2b: prepared-quiz expiry, stuck-preparation sweep and collision choice** (PR #1519, merged as
+  `f086851f`).
+  - **7-day expiry of an unstarted quiz.** It is enforced three ways: lazily (forfeit and proceed), by a
+    sweep, and under lock in `startQuiz`, which returns 409 `PREPARED_CHALLENGE_EXPIRED`. Claims are released
+    and quota is untouched. A reload never shows an expired quiz as ready. The sweep selects candidates by
+    preparation time.
+  - **A preparation stuck for 20 minutes is marked FAILED** by the recovery job (ordinary Challenge only),
+    with claims released and no quota effect.
+  - **Collision instead of silent reuse.** A Board Exam or Redo Missed request against an unstarted
+    ordinary Challenge on the same note returns `collision`. Re-sending with `discardPreparedSessionId`
+    forfeits it (`DISCARDED`) and proceeds; a mismatched id returns 409 `INVALID_PREPARED_CHALLENGE_DISCARD`.
+  - **Analytics.** `CHALLENGE_QUIZ_PREPARATION_ABANDONED` carries the reason EXPIRED, DISCARDED or STALE. An
+    explicit forfeit of an unstarted quiz fires DISCARDED.
+  - **Verification.** `./mvnw clean install`: 2,854 tests, 0 failures. That includes real-PostgreSQL tests of
+    both sweep row writers, the expiry-sweep versus Start race and the stuck-sweep versus preparation-finish
+    race. A cold falsification review disproved none of 9 claims. Codex review findings are fixed, except
+    the frontend collision handling, which is item 3's.
+  - **⚠️ Release dependency: the client does not yet act on `collision`.** Until item 3 lands, a learner
+    with an unstarted Challenge cannot reach Board Exam or Redo Missed on that note. **v0.175.0 must not merge
+    to `main` without item 3.** ✅ Satisfied by item 3 (Challenge preparation screens).
+  - **Known limitations:**
+    - The 20-minute stuck bound counts from `createdAt`, so a preparation queued under heavy load can be
+      failed. That costs no quota.
+    - A double-submitted Board Exam discard gets a 409 on the second request.
+    - Claim release is scoped to the session's primary pack. That is correct today, because multi-note
+      starts do not claim from the bank; item 5 replaces it with a session-scoped release.
+
+- **Item 3: Challenge preparation screens, with Part B folded in** (PR #1521, merged as `9951f4e6`).
+  - **The learner flow.** The ordinary Challenge setup button reads **Prepare Quiz**. It leads to "Getting
+    your quiz ready" (with Continue reviewing and no Stay button), which moves to "Your quiz is ready!" on
+    its own, and the timer starts only on **Start Quiz**.
+  - **The other screens.** Preparation failed (Try Again), expired (Prepare New Quiz, which creates nothing
+    until clicked) and the collision choice (Resume, or Start something else, which re-sends the original
+    request with `discardPreparedSessionId`).
+  - **Every route in lands on the right screen.** Reload, the dashboard card ("Open your prepared quiz"),
+    mode selection and Redo Missed all do, and no path reaches running without a successful `start-quiz`.
+  - **Board Exam is unchanged,** with regression tests.
+  - **Part B** (the 2026-10-21 plan): `startQuiz` now returns a separate code per case:
+    - 409 `PREPARATION_IN_PROGRESS` while generating;
+    - 409 `PREPARATION_FAILED`;
+    - 409 `PREPARED_CHALLENGE_EXPIRED` for a quiz forfeited before it started.
+
+    A completed or started quiz keeps `SESSION_NOT_IN_PROGRESS`. The page maps the first two to the
+    preparation and failure screens.
+  - **Copy:** "Counts toward your monthly quiz limit when you press Start Quiz. Leaving before you start
+    doesn't use an attempt." (ordinary Challenge only), plus the collision and dashboard strings. **New
+    strings are pending owner sign-off.**
+  - **Verification.**
+    - Backend `./mvnw clean install`: 2,860 tests, 0 failures, including a MockMvc 409 test.
+    - Frontend: 2,723 tests; `tsc`, lint and `next build` clean.
+    - The new `lib/api-challenge-quiz.test.ts` pins the request shapes.
+    - Three Codex reviews and three fix rounds; 9 findings fixed and 1 dismissed. The last fix round had
+      full checks but no further review.
+  - **Known limitations:**
+    - During an API outage the preparation screen keeps polling and shows no error. Continue reviewing
+      always works.
+    - Multi-note Prepare Quiz is still one synchronous request (item 5).
+  - **⚠️ Deploy ordering.** The new frontend calls `start-quiz` and the new codes, and the old frontend
+    cannot drive prepared sessions. Backend and frontend must ship together in the release merge; that
+    statement is owed at signoff.
+  - **Review note.** `startQuiz` has now been edited by 2a, 2b and item 3, with item 5 to come. It is a
+    named input to the scoped cold review at signoff.
+
+- **Item 4: readiness notification and deep link** (PR #1522, merged as `5a6fc945`).
+  - **One in-app notification per ready session** (`CHALLENGE_QUIZ_READY`, `ASYNC_RESULT`). It is sent on every
+    ordinary-Challenge transition into ready, through one shared hook that item 5 inherits:
+    - the async single-note finish;
+    - a full bank or template hit;
+    - Redo Missed;
+    - a multi-note start.
+
+    It is published inside the transaction and delivered after commit on `notificationFanOutExecutor`, so it
+    runs outside any transaction. Dedup is the existing `(recipient, dedupKey)` index, keyed by session. A
+    delivery failure never changes the session. Board Exam never notifies.
+  - **Copy (pending owner sign-off):** "Your quiz is ready!" / "Pick up where you left off." / "Open your
+    prepared quiz". The link goes to `/notes/{noteId}/challenge-quiz?session=<id>`.
+  - **Marked read when seen:** `POST /challenge-quiz/sessions/{id}/ready-seen`. It never writes the session, so
+    it cannot race `start-quiz`. It delivers with the same dedup key and marks the row read, so both orders end
+    with one read row.
+  - **Deep link:**
+    - `GET /challenge-quiz/sessions/{id}/status` and `GET /challenge-quiz/sessions/{id}`, both owner only, 404
+      for anyone else, read-only, and redacted while unstarted;
+    - the page lands on generating, ready, running, expired, failed or setup, and never calls `start-quiz`;
+    - a link opened while the page is already mounted also resolves.
+  - **Verification.**
+    - Backend `./mvnw clean install`: 2,868 tests, 0 failures. That includes 4 real-PostgreSQL tests:
+      committed and deduplicated after commit, a rollback delivers nothing, ready-seen-first leaves one read row,
+      and another owner gets 404.
+    - MockMvc tests for the three endpoints.
+    - Frontend: 2,739 tests; `tsc`, lint and `next build` clean.
+    - One Codex review and one fix round, with 3 findings fixed.
+  - **Review note.** `ChallengeQuizService` readiness paths are a named input to the scoped cold review at
+    signoff.
+
+- **Item 5a: question-bank integrity, the first half of item 5** (PR #1523, merged as `14b14361`).
+  Item 5 is split: 5a is the shared claim/release surface; 5b is multi-note background preparation.
+  - **Claims release per session, not per pack (A.4).** Every release and outcome update is scoped to
+    `(userId, claimedSessionId)`; no pack-scoped call is left. Rerouted:
+    - `startSession`, `finishChallengePreparation`, `completeSession`, `forfeitSession`;
+    - `generateMoreQuestions`;
+    - `forfeitPreparedSession`, `forfeitStaleOrdinarySession`, `forfeitExpiredSession`;
+    - both `GenerationRecoveryRowWriter` sweeps.
+
+    Rows a session claims from several packs are all freed. This becomes reachable from multi-note in 5b.
+  - **Legacy statement-pair exclusion (A.3, Option A, owner-confirmed).** A bank row is excluded from claims when
+    it is a statement pair, **not** template-derived, and older than the cutoff. While the cutoff is unset,
+    every such row is excluded.
+    - One shared predicate is applied to the ordinary claim (single-note start and +5), the Redo Missed claim
+      (before its minimum check, so it still fails closed) and the Redo Missed count (a non-locking fetch).
+    - Template copies are exempt, by membership in the template's key set. That includes an Official note's
+      own seeded rows when the note was itself copied.
+    - Excluded rows are never written.
+    - **"Post-cutoff" means the row passed R1's consistency check, not that it is factually verified.**
+  - **⚠️ Behaviour change on paths already live:**
+    - single-note starts and +5 stop serving legacy learner-original statement-pair rows, which means a little
+      extra live generation until the cutoff is set;
+    - the Redo Missed CTA can appear less often, because its count and claim both filter.
+  - **⚠️ Owner post-deploy step (v0.175.0 signoff handoff).** Set `CHALLENGE_QUIZ_STATEMENT_PAIR_LEGACY_CUTOFF`
+    on Render to the moment the v0.175.0 backend is **confirmed live**, from `scripts/check-deploys.sh` or the
+    Render deploy record. Do not use the merge time.
+    - The format is ISO-8601 with an offset, for example `2026-10-28T09:00:00+08:00`.
+    - A malformed value fails startup.
+    - This is an owner action only.
+  - **Verification.**
+    - `./mvnw clean install`: 2,881 tests, 0 failures. That includes the A.4 lifecycle tests on real
+      PostgreSQL (completion, discard, expiry, failed preparation, stuck recovery, two-pack release,
+      idempotent release, session isolation, concurrent completion and discard), the filter tests on real rows,
+      and a startup test for a malformed cutoff.
+    - One Codex review, which found the copied-Official-note exemption gap (fixed), and two test-fixture fixes.
+  - **Known limitations:**
+    - Regenerating an Official template removes the exemption from adopters' older copies. That errs safe.
+    - An excluded legacy row blocks banking an identical regenerated question for the same learner, pack
+      and level, so that question is regenerated on each start.
+    - The template-key lookup's reads run inside the caller's transaction, which widens the documented
+      class of a failed read poisoning a PostgreSQL transaction.
+    - `templateQuestionKeys` loads whole bank rows to read their keys; switch it to the key-only query in 5b.
+  - **Review note.** The shared claim/release surface is a named input to the scoped cold review at signoff.
+
+- **Item 5b: multi-note preparation in the background** (PR #1525, merged as `aac57fc1`).
+  - **Same journey as single-note.** A multi-note Prepare Quiz returns at once with `GENERATING` (or ready on a
+    full bank hit) and shows "Getting your quiz ready", the readiness notification and Start Quiz. Nothing
+    generates inside the request, which used to take 1–4 minutes.
+  - **Each source's own bank first (plan A.1, A.2).** Each source, in sorted pack order:
+    1. claims from its own bank;
+    2. copies from its Official template;
+    3. generates only its shortfall, with its own level, stamp and disallowed keys (including its own saved
+       quiz);
+    4. persists that shortfall back to its own bank.
+
+    So re-preparing the same set costs no model calls once its questions are banked, and multi-note and
+    single-note now feed each other.
+  - **Parallel, bounded generation.** Shortfalls run concurrently on a dedicated
+    `challengeMultiNoteSourceTaskExecutor` (six threads), with one shared 300-second deadline. No paid
+    attempt or retry starts after it. The job runs on `challengePreparationTaskExecutor`, so it never waits
+    on its own pool. Token usage is recorded for every source.
+  - **Owner-approved floors (Q1).** Ready requires at least `ceil(2/3 × requested)` questions **and** at least
+    `ceil(2/3 × sources)` contributing sources, in integer arithmetic (18 → 12, 6 sources → 4, 2 → 2). Below
+    either floor the session fails: no charge, Try Again offered, claims released, valid generated questions
+    salvaged unclaimed. The thresholds are configurable; changing them in production needs owner approval.
+  - **Stale protection.** If any source regenerates or is deleted during preparation, the session fails. At
+    Start Quiz or on resume, every source stamp is checked: a mismatch or a missing pack forfeits STALE and
+    releases claims, and resume prepares fresh.
+  - **Disclosure.** An underfilled ready quiz, single-note or multi-note, shows "Your quiz is ready with X of Y
+    questions." (owner Q4 wording). Multi-note also shows source coverage "From {n} of {m} notes" (owner-approved
+    2026-10-22). A Redo Missed ready quiz shows "Redo Missed Questions doesn't count toward your
+    monthly quiz limit."
+  - **Also:** `templateQuestionKeys` now uses the key-only query, which clears 5a's recorded limitation.
+  - **Verification.**
+    - `./mvnw clean install`: 2,913 tests, 0 failures, including real-PostgreSQL tests for: full and partial
+      bank hits; per-source banking with its own level and stamp; cross-pollination; non-primary release;
+      parallel and deadline behaviour; the floors; stale and deleted sources; and overlapping starts with no
+      deadlock.
+    - Frontend: 2,746 tests, `tsc`, lint and `next build` clean.
+    - Two Codex reviews and two fix rounds, with 5 findings fixed.
+  - **⚠️ Behaviour change:** a multi-note start below the floors now fails, instead of opening underfilled.
+    R1's limitation line is updated above.
+  - **Known limitation:** queue time within the dedicated pool counts against the shared deadline.
+  - **Review note.** The shared start, Start Quiz and bank paths are named inputs to the scoped cold review at
+    signoff.
+
+- **Item 6: Challenge tier routing plus background +5** (PR #1526, merged as `a4555d42`). Owner kept
+  it in v0.175.0 on 2026-10-21. The +5 design is the owner-approved proposal
+  `docs/claude-plans/2026-10-21-v0175-plus5-slower-models-proposal.md`.
+  - **Routing by plan.** Ordinary Challenge single-note preparation, multi-note source shortfalls and +5 use
+    `LlmRouting.tiered(userId)`: FREE uses `LLM_MODEL_FREE`; Plus, Pro and ADMIN use `LLM_MODEL_PREMIUM`.
+    - There is **no free fallback** for a paid learner, and a transport retry stays on the same route.
+    - Board Exam and Long Exam are unchanged (C6). Official template seeding was already tiered.
+    - `model_used` is recorded for every path.
+    - **Why it matters for correctness:** R1's arms found 0 wrong statement-pair keys on Luna (31/31) and Sol
+      (28/28), against about 4/32 on the interactive model.
+  - **Background +5.**
+    - **The request** records an in-flight marker under a short lock and returns HTTP 200 with
+      `morePending` at once. No model call happens in the request, and no lock or transaction is held across
+      one; before this, +5 held the session lock and a database connection for the whole model call.
+    - **One +5 per session:** a second request gets 409 `MORE_IN_PROGRESS`.
+    - **The job** runs on `challengePreparationTaskExecutor` with a 240-second deadline. No paid call starts
+      after the deadline or after Stop.
+    - **The append** happens only if the quiz is still running, the marker still matches and the timer has
+      not expired. It is append-only, the time is extended 90 seconds per question added, and it never
+      touches answers or progress.
+    - **Stop:** `POST …/generate-more/stop`. A retry waits until the stopped job has released its claims,
+      so a stopped job can never release a retry's claims.
+    - **Recovery:** a lost worker's stale marker recovers after the deadline plus a margin. Completion
+      releases unserved +5 claims and keeps their prior outcome, so Redo Missed eligibility is preserved.
+  - **The page.** Answering stays enabled during +5 and the timer is never paused.
+    - Copy: "Adding questions…", "{n} questions added", "Still adding questions…" / "Stop adding" after 45
+      seconds, and "Couldn't add questions" / "Try again" (owner-approved).
+    - The append never calls `applyStartedSession` and never overwrites unsaved answers or the current index.
+    - The page re-reads the server after Stop, and before a timeout auto-submit while +5 is pending.
+    - **New string pending owner sign-off:** "Finishing the previous request…", shown only on Try again right
+      after Stop.
+  - **Executor sizing.** `challengePreparationTaskExecutor` is now configurable, default 6 threads with a
+    24-task queue (it was 4). That keeps it within the 20-connection Hikari pool shared with 18 Tomcat
+    threads; production showed 20 open and all idle on 2026-10-22. Jobs hold a connection only for short
+    load and finish transactions.
+  - **Verification.**
+    - `./mvnw clean install`: 2,976 tests, 0 failures. That includes real-PostgreSQL tests for: the latched
+      race between append and a progress save; concurrent +5 requests; stop; stop then retry; timer expiry
+      mid-generation; regeneration; a stale pending marker; and completion during +5.
+    - MockMvc tests for 200 with `morePending`, 409, and stop 204.
+    - Frontend: 2,753 tests; `tsc`, lint and `next build` clean.
+    - Two Codex reviews and two fix rounds, with 5 race findings fixed.
+  - **⚠️ Deploy ordering.** The `generate-more` response contract changed, so the backend and frontend must
+    ship together in the release merge.
+  - **⚠️ Your Render switch now moves Challenge too.** The v0.174.0 Render switch (`LLM_MODEL_FREE`,
+    `LLM_MODEL_PREMIUM`) now also moves Challenge start, multi-note and +5, not only Study Packs. Rolling those
+    env vars back rolls Challenge back with them. This belongs in the v0.175.0 signoff handoff.
+  - **Review note.** It changes the running-quiz state and shares `startQuiz` and the bank paths, so it is a named
+    input to the signoff pressure test. This release changes quota semantics, so that is the **full**
+    three-agent test.
+
+- **Voice copy for v0.175.0** (PR #1527, merged as `a42a1548`). Owner-approved 2026-10-22 under the new
+  `docs/product/VOICE_AND_TONE.md`. It applies the 19-row copy diff in
+  `docs/claude-plans/2026-10-22-v0175-copy-review-product-ux-prompt.md`:
+  - sentence-case Challenge buttons ("Prepare quiz", "Start quiz", "Prepare a new quiz", "Try again", "Continue
+    reviewing", "+5 questions");
+  - the setup line "…counts toward your monthly limit only once you start it…";
+  - +5: "Added {n} more questions." and "We couldn't add more questions. Your answers are safe.";
+  - a warmer mode-selection line;
+  - the screen-reader label "Preparing your quiz";
+  - five reassuring server messages.
+
+  **Copy only:** no behaviour, rule or configuration change. Buttons shared with Board Exam ("Start Fresh",
+  "Resume", "Starting...") are unchanged (C6) and left for a later sweep. Backend 2,976 tests and frontend
+  2,753 tests pass; `tsc`, lint and `next build` are clean.
+
+- **Challenge Quiz flow polish** (PR #1528, merged as `e864fee2`). It applies the owner-approved audit
+  and proposal `docs/claude-plans/2026-10-22-v0175-challenge-flow-polish-audit-and-proposal.md` (§1–§9), to
+  ordinary Challenge only.
+  - **⚠️ Defect fixed (F5).** The collision check ignored the note selection, so asking for different notes on a
+    note that already had a prepared quiz silently reopened the old quiz.
+    - Now an unstarted quiz with a different source set gets the existing collision choice.
+    - An exact match (the same set in any order, the same `sourceCollectionId` for plan quizzes, and the same
+      Redo Missed flag) reopens it.
+    - It is compared straight from the request, with no cap check or lock, so 5b's resume-after-cap-drop still
+      holds.
+  - **Direct open.** Choosing Challenge Quiz with an exact ready or generating single-note quiz opens it, with no
+    redundant Prepare quiz. No path calls `start-quiz` except the Start quiz button.
+  - **The continuation card.** A new `challenge-continuation-card` in the lighter Today's Focus style, with one
+    action per state:
+    - "Open prepared quiz", "View preparation" or "Resume quiz";
+    - the Redo Missed titles "Your missed-question review is ready!" and "We're getting your missed-question
+      review ready…";
+    - **no Start Fresh** on the ordinary card, since a started quiz can still be ended from inside it;
+    - Board Exam's continuation is unchanged (C6).
+  - **The ready briefing.**
+    - "All set! Your quiz is ready.", the note title, the real "{N} questions · {M} minutes" (one shared
+      `Math.ceil` helper), the coverage and X-of-Y lines, and the timer and attempt reminder (with a Redo Missed
+      variant).
+    - One "Start quiz" button, plus quiet links "Continue reviewing" and "Want to study different notes?". The
+      second shows only when notes can be chosen, and restores only notes the picker can still show.
+  - **⚠️ Defect fixed (found in review).** Returning to setup restored notes that had left the plan. They stayed
+    selected but invisible and used up the source cap; now only still-selectable notes are restored. A
+    mutation-checked test covers it.
+  - **Deferred:** the "this note is also in another prepared quiz" line on secondary notes. It needs a
+    source-membership endpoint, beyond the approved small scope.
+  - **Verification.**
+    - `./mvnw clean install`: 2,980 tests, 0 failures, including a real-request MockMvc test that a ready
+      unstarted response carries the stored count and time.
+    - Frontend: 2,764 tests; `tsc`, lint and `next build` clean.
+    - One Codex review.
+  - **Review note.** The `startSession` collision change is a named input to the signoff pressure test.
+
+- **Statement-pair verifier in production code, switches off** (PR #1520, merged as `f054a37a`).
+  - **What it does.** Before a statement-pair question is kept, two independent checkers (Sol and Luna, run
+    concurrently on their own `statementPairVerifierTaskExecutor`) judge each statement against the source
+    note. A question is kept only when both agree with its key. Rejected questions get one batched
+    replacement round; anything still rejected is omitted. Every failure is closed: a timeout, a rejected
+    submission, a missing verdict, an unparseable pair or blank note text rejects the question, and no
+    paid attempt starts after the shared deadline.
+  - **Three switches, all default false:** `STATEMENT_PAIR_VERIFIER_TEMPLATE_SEED_ENABLED` (Official template
+    seeding), `STATEMENT_PAIR_VERIFIER_LIVE_START_ENABLED` (single-note Challenge preparation), and
+    `STATEMENT_PAIR_PLUS5_EXCLUSION_ENABLED` (+5 exclusion rule). Production behavior is unchanged on merge.
+  - **Prompts.** The signed verifier prompts are byte-identical to the Stage 1 harness, and a parity test
+    guards them. Template fields are filled in one pass, so note text is inserted literally.
+  - **Verification.** `./mvnw clean install`: 2,870 tests, 0 failures. Seven Codex reviews and six fix
+    rounds covered:
+    - a shared-pool deadlock;
+    - one deadline for both checkers;
+    - item-ID gaps;
+    - closing-question stripping, checked against 1,607 real stems;
+    - placeholder expansion;
+    - the +5 leak count including retries;
+    - replacement questions with a single statement marker.
+  - **Merge gate (owner update, 2026-10-21):** #1520 may merge with all three switches OFF after code review
+    and release checks. No checker activation is authorized; the +5 exclusion switch remains OFF.
+  - **Stage 2 record:** Part 15 of `docs/claude-plans/2026-10-20-v0175-statement-pair-verifier-wording-and-pass-rules.md`
+    records P1 pass; P2 KILL as computed with the timeout confound; an inconclusive paired diagnostic;
+    R1r concept GRAY at 82.5%; and R3r pass.
+  - **Activation scope:** multi-note Challenge starts are not checked (`ChallengeVerifierPath.NONE`) until
+    item 5 moves them to background preparation with a question-count floor.
+  - **Known limitation:** verifier calls are logged under the `CRITIQUE` route, and cost attribution uses
+    `action=statement_pair_verifier`. A dedicated `LlmRoute` value would also change model routing, so it
+    was left out.
+
+- **Signoff fix rounds** (PRs #1529, #1530, #1531, #1532). The full pre-signoff pressure test (three cold agents)
+  found no P1 and these confirmed defects; Codex fixed them, and each round was re-verified on the Docker suite
+  with a mutation check.
+  - **#1529 (`8fb55423`), the first fix round.**
+    - **Complete during +5.** The page stops and re-reads the session before submitting, and does not submit if
+      questions arrived. The server grades only the questions the client saw: it drops trailing unanswered items
+      beyond the client's `totalQuestions` and returns their claims to the pool unserved. Scoring is unchanged,
+      since the denominator is the answered count.
+    - **Entry routing restored (C6).** Item 3 had forced mode selection on Review Set and Teacher entries. Those
+      now land on their pre-release first screen; mode selection appears only when a quiz exists to continue.
+    - **Mode cards while preparing.** They now show for a generating Challenge. The test fixture had set
+      `preparedNotStarted` on a GENERATING session, a shape production never produces.
+    - **Abandoned started quizzes.** A bounded recovery sweep forfeits a started ordinary Challenge after its time
+      plus a 10-minute grace (`studysnap.generation.challenge-started-expiry-grace-minutes`) and releases every
+      source's claims. It takes pack locks in sorted order, then the session, and charges or refunds no quota.
+    - **+5 and saved quizzes.** +5 now excludes the saved Study Pack quiz of the primary and every source note
+      from the bank claim, the template copy and generation. A source deleted mid-session is skipped instead of
+      failing every +5.
+    - **Locks and salvage.** The multi-note start locks every requested pack in sorted order before the session.
+      A deleted source no longer rolls back the other sources' salvage.
+    - **Smaller fixes.** Try again after a deep link rebuilds its request from the session; a linked poll stops on
+      a quiz ended elsewhere; a second tab polls an in-progress +5; the two API fallback messages use the approved
+      wording; a non-empty `generate-more` response is appended through the poll path.
+    - **Tests.** Real-request MockMvc tests for the `generate-more` response and the `PREPARED_CHALLENGE_EXPIRED`
+      and `INVALID_PREPARED_CHALLENGE_DISCARD` wire codes; real-PostgreSQL tests for the completion trim, the sweep
+      and the lock order. The sweep predicate was mutation-checked on its cutoff and its mode filter.
+  - **#1530 (`e58108bc`), Redo Missed no longer ends a started quiz silently.** A Redo Missed request on a note with a
+    started ordinary Challenge now returns the collision choice (`existingStarted: true`). "Resume quiz" returns to
+    the running quiz without calling `start-quiz`; "End quiz and redo missed" ends only that exact quiz (forfeit and
+    release claims, no prepared-discard analytics, no quota change). An expired quiz is still cleared quietly.
+    Owner-approved copy.
+  - **#1531 (`737e6f4c`), the +5 status on every question.** "Adding questions…" with a spinner, Stop and the retry
+    line show in the action bar on every question, not only the last. The owner's click-through found this.
+  - **#1532 (`69062102`), the clock and ended-quiz fixes.** Found by the cross-PR interaction test.
+    - **Complete lockout closed.** Complete is held only for a +5 started by this tab's own successful request,
+      timed by this tab's clock for at most 45 s. A reloaded or other-tab +5, a server clock ahead or behind, a hung
+      poll or a dead worker can no longer keep it disabled. The earlier reload test had omitted the server start
+      field; it now uses the production shape.
+    - **Ended quizzes.** Resume re-reads the session first; any poll or reconcile that sees a status other than
+      `IN_PROGRESS` stops, never appends, and returns to Challenge setup; Complete failing with
+      `SESSION_NOT_IN_PROGRESS` does the same. The response reports `morePending` only while the session is
+      `IN_PROGRESS`.
+  - **Verification at close.** `./mvnw clean install`-equivalent full suite on Docker: 2,998 tests, 0 failures,
+    0 skipped, real-PostgreSQL tests included. Frontend: 2,786 tests; `tsc`, lint (0 errors) and `next build` clean.
+    The old server-time hold was killed by 4 tests, and the started-quiz collision guard by 4.
+
+### Signoff record (2026-10-25)
+
+**Scope-completeness gate.** Items 1–6 are all shipped, each with its PRs above. Item 2's "recovery-sweep entries" are
+the stuck-generating, prepared-expiry and started-expiry sweeps in `GenerationRecoveryService`. The verifier ships
+with every switch OFF by design. **Not shipped, by the owner's earlier decisions:** Board Exam and Long Exam "press
+Start first" (C6), the Long Exam pool reduction 48 to 30 (A4, deferred from v0.174.0 into the Board/Long Exam release;
+`LONG_EXAM_POOL_SIZE` is still 48), the B6 backfill (C8), and low reasoning effort (B7). **Deferred:** the "this note is also in a
+prepared quiz" line on secondary notes.
+
+**⚠️ Deploy-ordering statement. There is no safe order: ship backend and frontend together from one push.**
+- **Old frontend against the new backend:** a prepared response carries an empty quiz, so a tab opened before the
+  deploy cannot start a Challenge Quiz at all (Prepare quiz returns to setup; nothing is charged). On a +5 that was
+  already running, the old page appends nothing and can step past the last question. **Open tabs need a refresh;
+  the app has no stale-bundle reload mechanism.**
+- **New frontend against the old backend:** start and +5 behave as in v0.174.0 (`morePending` is read as false and
+  `newQuestions` append), but the started-quiz collision never arrives, so Redo Missed silently ends a started quiz
+  again, and the completion trim is a no-op.
+- **Redo Missed on a started quiz in a pre-deploy tab:** the old page shows the unstarted wording ("discarded without
+  using a monthly attempt") for a started quiz, and "Start something else" ends it.
+- **Frontend-first does less harm than backend-first.** After the merge, wait about five minutes, then run
+  `scripts/check-deploys.sh`; if one platform lags, redeploy it at once.
+
+**Owner post-deploy actions (none run by Claude):**
+1. Set `CHALLENGE_QUIZ_STATEMENT_PAIR_LEGACY_CUTOFF` to the deploy time of R1 (an ISO-8601 instant). Until it is set,
+   every learner-original statement-pair bank row is excluded from reuse (template-derived rows are exempt), which
+   lowers bank reuse and nothing else.
+2. **The v0.174.0 Render model switch now also moves Challenge:** FREE to `LLM_MODEL_FREE`, Plus, Pro and ADMIN to
+   `LLM_MODEL_PREMIUM`, with no fallback. Preparation runs in the background, so the longer starts (Luna p50 45 s,
+   Sol 55–105 s, max 150 s in the benchmarks) no longer block the learner. The rollback values are in the v0.174.0
+   signoff record.
+3. The three verifier switches stay OFF; activation is a separate gated decision.
+
+**Known limitations (every finding is fixed or listed here).**
+- **Board Exam can still be lost silently.** A started, charged Board Exam is ended with no confirmation when the
+  learner follows the `?entry=redo-missed` next step on that note (`PostSessionNextStepService.java:60`, then
+  `forfeitStaleOrdinarySession`). It predates this release and is kept out under C6; it is the first item of the
+  Board Exam release (Backlog row).
+- A completion with a lowered `totalQuestions` (only a hand-made API request) skips the miss penalty for trailing
+  unanswered questions in concept tracking. The score is unaffected, and the app always sends the true count.
+- A quiz completed or ended in another tab sends this tab back to Challenge setup with no message, so the result can
+  look as if it vanished. It is saved. Better wording needs new copy and is next release.
+- In one two-tab case, "Adding questions…" shows without Stop (Complete stays enabled). If the session read behind
+  Resume never answers, the button stays busy until a refresh. The running quiz flashes briefly before the started
+  collision screen. Under clock skew, "still adding" can appear early.
+- The +5 stale-marker threshold (270 s) is shorter than one model call plus its retry. A superseded job's append is
+  refused by its token, so the cost is a wasted call, not a double append.
+- Capacity: `challengePreparationTaskExecutor` defaults to 6 threads against 20 Hikari connections and 18 Tomcat
+  threads; heavy concurrent preparation queues rather than fails. A stale pack heals on retry.
+- Board Exam can exceed its monthly limit by one under a race (predates this release).
+- Redo Missed on a multi-note quiz's secondary note starts a parallel session; a reload exactly at the deadline
+  forfeits instead of grading; the learner-facing expired screen describes a prepared quiz for a stale one. All
+  predate this release.
+- Smaller bank items that predate this release: swallowed exceptions on some forfeit paths, `ON CONFLICT` insert
+  behaviour, the template-exemption shrink, and a cross-source saved-quiz gap on the start path.
+- Not yet read: the verifier's Stage 2 result is inconclusive, so it ships OFF; multi-note starts are not verified
+  (`ChallengeVerifierPath.NONE`); verifier calls are logged under the `CRITIQUE` route.
+- Deferred to a later release: the "this note is also in another prepared quiz" line, and a second click on the same
+  readiness notification does nothing.
+
+
 ## v0.174.0 - Enhanced Generation
 
 **Status: Released** (signed off 2026-10-19; **merge to `main` HELD behind the v0.173.0 gates, so NOT yet
@@ -1116,109 +1733,6 @@ pending real adopters. Neither is "Study Journey" work this release can close by
   should be cross-checked against the actual Vercel dashboard before anyone acts on it. Comment-only
   change to the script; no logic changed.
 
-## v0.169.0 - Study Journey, Continued
-
-**Status: Released** (signed off 2026-10-12; commit `3200c773` on `releases/v0.169.0`)
-
-Theme: continue the Study Journey Purpose / Learner Goal architecture by shipping the one piece
-that's actually ready — after an `advisor()` pass caught that the original 3-item plan had
-sequencing and decision gaps, and the owner then explicitly chose to close this release on that
-one piece rather than fold in the others.
-
-### Planned Scope
-
-- **Civil Engineering Exam Hub page.** Adds a discovery page for CE alongside the four that already
-  exist (ALE, PNLE, LET, CPALE) in `frontend/lib/exam-hub-config.ts`. **Owner override of Product
-  UX's earlier "defer pending adoption evidence" call** — no new evidence arrived; this is a
-  deliberate reversal, recorded as such. Codex prompt: `docs/codex-prompts/v0.169.0-ce-exam-hub.md`.
-  Found during scoping, not assumed: 4 files (not just the config) hardcode the 4 existing slugs by
-  name, including one (`exam-hubs-guide.tsx`) already independently stale (missing CPALE) before
-  this task touched it — fixed as one move, deriving all of them from the shared config instead of
-  a 3rd/4th/5th duplicate list. Production size checked directly: CE's 113 public notes sit between
-  the smallest (ALE, 90) and largest (CPALE, 154) already-live hubs — no new bound needed.
-
-### Multi-goal exam support — owner direction recorded 2026-10-10, explicitly NOT authorized to implement
-
-The 5 batched questions got real answers, but **the owner was explicit these are product-direction
-preferences, not technical authorization** — before any Codex prompt, Feature Planner is to validate
-the storage migration, state transitions, onboarding semantics, cost, and acceptance criteria against
-the current code. No multi-goal implementation prompt exists, and none should until that validation
-and a separate go-ahead happen. Recorded here so the direction isn't re-litigated or lost before that
-validation happens:
-
-1. **Storage — a normalized join table**, one row per (user, exam goal), with one goal flagged
-   active per user. No redundant active-state storage (e.g. not a separate "active goal" column
-   that can drift from the join rows). Existing single `studyGoal` values migrate losslessly;
-   current users keep their existing goal, now active.
-2. **Dashboard & nudges — the active goal only** drives general dashboard nudges; other goals stay
-   visible/accessible but don't compete for nudge real estate. **Exception:** post-session next
-   steps must reflect the actual session/Study Journey context even when it differs from the active
-   goal — a session on a non-active goal's material must not get nudged toward the active goal
-   instead.
-3. **EXAM/SUBJECT exclusivity — unchanged.** Multiple exam goals may coexist with each other; a
-   subject focus still can't coexist with any exam goal. This is a profile-preference rule only —
-   it has never restricted which Notes/Study Plans are reachable, and broadening subject/exam
-   coexistence needs its own separate decision, not an inference from this one.
-4. **Exam-hub signup intent — add and activate**, never silently replace other exam goals. For a
-   learner who currently has subject focus (not an exam goal), the existing exclusivity contract
-   still requires clear disclosure before the intent flow overwrites it. Signing up via an Exam Hub
-   must NOT auto-adopt any Review Set — goal-setting and content-adoption stay separate actions.
-5. **Picker — a real goal-management surface** in Profile's Study Focus (add/remove/set-active),
-   not a single-select-to-multi-select conversion with no active-goal concept. Removing a goal must
-   never delete adopted content or assessment history — it only changes which goal drives nudges.
-
-**Release boundary:** multi-goal stays out of `v0.169.0` entirely. It remains additionally gated on
-the `[CHECKPOINT — due 2026-12-07]` population read (still 2 users as of 2026-10-09) and
-prioritization against the product-health release plan — neither is resolved by this direction
-record.
-
-### Deferred out of this release (sequencing, not scope changes)
-
-- **Public Note → Study Journey discovery — moved to `v0.170.0`.** Two problems caught by
-  `advisor()`: (1) it already has a design — Feature Planner's RC-5 in
-  `docs/claude-plans/2026-10-09-product-health-release-plan.md` §3 ("Part of Official Review Set
-  X") — so this release does not need to design it from scratch, only reuse that spec; (2) RC-5's
-  own stated gate is the two active stability checkpoints (`v0.165.0`'s discovery-rail fix, due
-  2026-10-12, and `v0.166.0`'s Hikari long-hold fix, due 2026-10-14) — a new per-request lookup on
-  public Note pages, shipped before those read out, makes both checkpoints' kill criteria
-  uninterpretable (the same contamination pattern already recorded for Learning Connections).
-  Sequencing this after 10-14 roughly lines up with the Claude budget reset on 10-12 anyway.
-
-Anti-drift carried over from the original discovery brief, still binding for everything in this
-release: no `ProfileType` change, no recommendation-engine change beyond the explicitly-decided
-Public Note link, no Degree Journey / Academic Term / ConceptHealth change, no change to
-`resolvePlanPremiumExamMode`/`EXAM_MODES.md`.
-
-**Explicitly excluded — the one piece NOT in this release:** the Degree Journey catalog (Phase C).
-Re-checked 2026-10-09: its own stated dependency ("≥2 published Years") is unmet — exactly one BSCS
-Year exists and it's unpublished. This is a content-authoring gap, not a code gap, and no decision
-override removes it. A separate, unmerged curriculum-authoring branch
-(`docs/bscs-year1-curriculum-shaping`) exists with planning material for completing that one Year,
-but it predates `v0.167.0`/`v0.168.0` (merging it as-is would roll both back) and even once rebased
-and authored, completes only the existing Year — not a second one. Tracked separately; not part of
-this release.
-
-**Delivery:** all three items are new backend/multi-system work — Codex-routed per `CLAUDE.md`'s
-task-routing table, one prompt per item. **Budget note:** the owner's Claude usage resets 2026-10-12;
-implementation is deliberately routed through Codex rather than done inline to conserve it, with
-Claude Code's role limited to scoping, prompt-writing, and post-delivery audit.
-
-**Verification tier:** three separate Codex deliveries folding into one release raises verification
-cost per `CLAUDE.md`'s own size-vs-cost rule. None of the three trigger the full three-agent tier
-(no money/quota/permission-substrate change, no first-of-kind cross-user read). Default to one
-`advisor()` pass per item after its audit, escalating to one scoped cold agent only if a trigger
-fires during implementation (e.g. two items touching the same shared method, or a defect found and
-fixed in the same session).
-
-### Shipped
-
-- **Civil Engineering Exam Hub (CELE) — PR #1485, commit `3200c773`.** Added `/exam/ce` and all 5
-  consuming surfaces (index page, Help Center guide and card, server-side course-program resolution).
-  Fixed `EXAM_HUB_ICONS` duplication along the way — moved into `exam-hub-config.ts` as the single
-  source of truth, which also fixed `exam-hubs-guide.tsx`'s pre-existing CPALE omission. Implemented
-  via Codex, independently re-verified (tests, `tsc --noEmit`, `npm run build` all re-run fresh, not
-  trusted from the delivery report alone).
-
 ## Archived releases
 
 - `v0.163.0 — No Peeking` (Released) — archived to `docs/archive/RELEASES_ARCHIVE.md`.
@@ -1230,3 +1744,4 @@ fixed in the same session).
 - `v0.166.0 — Measured Twice` (Released) — archived to `docs/archive/RELEASES_ARCHIVE.md`. Moved at the `v0.172.0` kickoff.
 - `v0.167.0 — Study Journey Purpose` (Released) — archived to `docs/archive/RELEASES_ARCHIVE.md`. Moved at the `v0.173.0` kickoff.
 - `v0.168.0 — Free Quota, Fairly Metered` (Released) — archived to `docs/archive/RELEASES_ARCHIVE.md`. Moved at the `v0.174.0` kickoff.
+- `v0.169.0 — Study Journey, Continued` (Released) — archived to `docs/archive/RELEASES_ARCHIVE.md`. Moved at the `v0.175.0` kickoff.

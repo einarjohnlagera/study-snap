@@ -21,6 +21,26 @@ import static org.assertj.core.api.Assertions.assertThat;
 class AppConfigTest {
 
     @Test
+    void challengePreparationExecutorDefaultsToSixAndBindsConfiguredSizes() {
+        StudySnapProperties properties = new StudySnapProperties();
+        ThreadPoolTaskExecutor defaults = asThreadPool(new AppConfig().challengePreparationTaskExecutor(
+                taskDecorator(new InFlightRequestRegistry()), properties));
+        try {
+            assertThat(defaults.getCorePoolSize()).isEqualTo(6);
+            assertThat(defaults.getMaxPoolSize()).isEqualTo(6);
+            assertThat(defaults.getQueueCapacity()).isEqualTo(24);
+        } finally { defaults.shutdown(); }
+        properties.getChallengeQuiz().setChallengePreparationCoreThreads(7);
+        properties.getChallengeQuiz().setChallengePreparationMaxThreads(8);
+        ThreadPoolTaskExecutor configured = asThreadPool(new AppConfig().challengePreparationTaskExecutor(
+                taskDecorator(new InFlightRequestRegistry()), properties));
+        try {
+            assertThat(configured.getCorePoolSize()).isEqualTo(7);
+            assertThat(configured.getMaxPoolSize()).isEqualTo(8);
+        } finally { configured.shutdown(); }
+    }
+
+    @Test
     void discoveryRankingExecutorIsBoundedAbortOnOverflowAndRegistered() throws Exception {
         InFlightRequestRegistry registry = new InFlightRequestRegistry();
         ThreadPoolTaskExecutor executor = asThreadPool(new AppConfig().discoveryRankingTaskExecutor(
@@ -73,6 +93,37 @@ class AppConfigTest {
         } finally {
             studyPackExecutor.shutdown();
             llmParallelExecutor.shutdown();
+        }
+    }
+
+    @Test
+    void challengeMultiNoteSourceExecutorStartsAllSixSourcesConcurrently() throws Exception {
+        StudySnapProperties properties = new StudySnapProperties();
+        ThreadPoolTaskExecutor executor = asThreadPool(
+                new AppConfig().challengeMultiNoteSourceTaskExecutor(properties));
+        CountDownLatch entered = new CountDownLatch(6);
+        CountDownLatch release = new CountDownLatch(1);
+        try {
+            assertThat(executor.getCorePoolSize()).isEqualTo(6);
+            assertThat(executor.getMaxPoolSize()).isEqualTo(6);
+            assertThat(executor.getQueueCapacity()).isEqualTo(12);
+            assertThat(executor.getThreadPoolExecutor().getRejectedExecutionHandler())
+                    .isInstanceOf(ThreadPoolExecutor.AbortPolicy.class);
+            List<? extends Future<?>> tasks = java.util.stream.IntStream.range(0, 6)
+                    .mapToObj(index -> executor.submit(() -> {
+                        entered.countDown();
+                        try {
+                            release.await();
+                        } catch (InterruptedException interrupted) {
+                            Thread.currentThread().interrupt();
+                        }
+                    })).toList();
+            assertThat(entered.await(3, TimeUnit.SECONDS)).isTrue();
+            release.countDown();
+            for (Future<?> task : tasks) task.get(3, TimeUnit.SECONDS);
+        } finally {
+            release.countDown();
+            executor.shutdown();
         }
     }
 

@@ -6,18 +6,25 @@ import com.studysnap.backend.entity.NoteStatus;
 import com.studysnap.backend.entity.QuickReviewSessionEntity;
 import com.studysnap.backend.entity.QuickReviewSessionMode;
 import com.studysnap.backend.entity.QuickReviewSessionStatus;
+import com.studysnap.backend.entity.AnalyticsEventType;
 import com.studysnap.backend.repository.ExamQuestionPoolRepository;
 import com.studysnap.backend.repository.NoteRepository;
 import com.studysnap.backend.repository.QuickReviewSessionRepository;
+import com.studysnap.backend.repository.StudyPackRepository;
+import com.studysnap.backend.util.QuizSessionStateUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.annotation.Propagation;
 
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.time.Instant;
+import java.util.List;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
+import java.util.TreeSet;
 import java.util.UUID;
 
 /**
@@ -34,8 +41,10 @@ import java.util.UUID;
  * <p><strong>This is NOT the {@code REQUIRES_NEW} pattern reverted in v0.81.0.</strong> That failure
  * was a nested transaction opened <em>inside</em> an outer one: a second connection could not see the
  * uncommitted {@code quick_review_sessions} row, so every FK check failed. Here the caller holds no
- * transaction at all, so these methods open the only one — plain {@code REQUIRED} propagation, one
- * connection, nothing invisible. Do not "simplify" this back onto the sweep methods.
+ * transaction at all, so the sweep methods open the only one — plain {@code REQUIRED} propagation, one
+ * connection, nothing invisible. Do not "simplify" this back onto the sweep methods. The generate-more
+ * dispatch-rejection method below is different: its row has committed, but Spring has not yet unbound
+ * the request's resources, so it opens a fresh transaction for the failure marker.
  */
 @Service
 @RequiredArgsConstructor
@@ -49,6 +58,153 @@ public class GenerationRecoveryRowWriter {
     private final NoteRepository noteRepository;
     private final StudyPackService studyPackService;
     private final UserUsageService userUsageService;
+    private final ChallengeQuizQuestionBankService challengeQuizQuestionBankService;
+    private final StudyPackRepository studyPackRepository;
+    private final AnalyticsService analyticsService;
+    private final jakarta.persistence.EntityManager entityManager;
+
+    /**
+     * Dispatch rejection is reported from an after-completion callback while request resources can
+     * still be bound. The session row is committed by then, so a fresh transaction is required.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void failChallengeMore(UUID sessionId, UUID userId, String token) {
+        QuickReviewSessionEntity session = quickReviewSessionRepository
+                .findByIdAndUserIdAndSessionModeForUpdate(sessionId, userId, QuickReviewSessionMode.CHALLENGE)
+                .orElse(null);
+        if (session == null) return;
+        entityManager.refresh(session);
+        if (!token.equals(QuizSessionStateUtils.extractMoreToken(session.getSessionState()))) return;
+        session.setSessionState(QuizSessionStateUtils.withoutMorePending(session.getSessionState(), token, true));
+        quickReviewSessionRepository.save(session);
+    }
+
+    /** Pack then session: the same order as Start Quiz and preparation completion. */
+    @Transactional
+    public Optional<OffsetDateTime> recoverExpiredPreparedChallengeSession(UUID sessionId, OffsetDateTime cutoff) {
+        QuickReviewSessionEntity observed = quickReviewSessionRepository.findById(sessionId).orElse(null);
+        if (observed == null) {
+            return Optional.empty();
+        }
+        if (studyPackRepository.findByIdAndOwnerUserIdForUpdate(observed.getStudyPackId(), observed.getUserId()).isEmpty()) {
+            return Optional.empty();
+        }
+        return quickReviewSessionRepository.findByIdForUpdate(sessionId)
+                .map(session -> {
+                    entityManager.refresh(session);
+                    return session;
+                })
+                .filter(session -> session.getSessionMode() == QuickReviewSessionMode.CHALLENGE)
+                .filter(session -> !isBoardExamSession(session))
+                .filter(session -> session.getStatus() == QuickReviewSessionStatus.IN_PROGRESS)
+                .filter(session -> PreparedChallengeExpiry.expired(session, cutoff))
+                .map(session -> {
+                    OffsetDateTime staleSince = PreparedChallengeExpiry.preparedAt(session);
+                    session.setStatus(QuickReviewSessionStatus.FORFEITED);
+                    challengeQuizQuestionBankService.releaseClaims(session.getUserId(), sessionId);
+                    quickReviewSessionRepository.save(session);
+                    try {
+                        analyticsService.trackEvent(session.getUserId(),
+                                AnalyticsEventType.CHALLENGE_QUIZ_PREPARATION_ABANDONED,
+                                session.getStudyPackId(), Map.of("sessionId", sessionId.toString(),
+                                        "mode", "challenge", "reason", "EXPIRED"));
+                    } catch (RuntimeException ignored) {
+                        // Analytics is best effort.
+                    }
+                    return staleSince;
+                });
+    }
+
+    /** Lock all source packs in UUID order, then the session, matching multi-note Start Quiz. */
+    @Transactional
+    public Optional<OffsetDateTime> recoverExpiredStartedChallengeSession(UUID sessionId, OffsetDateTime cutoff) {
+        QuickReviewSessionEntity observed = quickReviewSessionRepository.findById(sessionId).orElse(null);
+        if (observed == null) return Optional.empty();
+        TreeSet<UUID> sourceIds = new TreeSet<>(java.util.Comparator.comparing(UUID::toString));
+        sourceIds.add(observed.getStudyPackId());
+        Object rawRefs = observed.getSessionState() == null ? null : observed.getSessionState().get("sourceNoteRefs");
+        if (rawRefs instanceof List<?> refs) {
+            for (Object raw : refs) {
+                if (raw instanceof Map<?, ?> ref && ref.get("studyPackId") instanceof String id) {
+                    try { sourceIds.add(UUID.fromString(id)); } catch (IllegalArgumentException ignored) { }
+                }
+            }
+        }
+        for (UUID sourceId : sourceIds) {
+            studyPackRepository.findByIdAndOwnerUserIdForUpdate(sourceId, observed.getUserId());
+        }
+        QuickReviewSessionEntity session = quickReviewSessionRepository.findByIdForUpdate(sessionId).orElse(null);
+        if (session == null) return Optional.empty();
+        entityManager.refresh(session);
+        if (session.getSessionMode() != QuickReviewSessionMode.CHALLENGE
+                || isBoardExamSession(session)
+                || session.getSessionState() == null
+                || !"challenge".equals(session.getSessionState().get("mode"))
+                || session.getStatus() != QuickReviewSessionStatus.IN_PROGRESS
+                || QuizSessionStateUtils.extractPreparedNotStarted(session.getSessionState())) return Optional.empty();
+        Map<String, Object> state = session.getSessionState();
+        Object started = state == null ? null : state.get("timerStartedAtEpochSeconds");
+        Object limit = state == null ? null : state.get("timeLimitSeconds");
+        if (!(started instanceof Number start) || !(limit instanceof Number seconds)
+                || start.longValue() <= 0 || seconds.longValue() <= 0) return Optional.empty();
+        OffsetDateTime expiredAt = OffsetDateTime.ofInstant(
+                Instant.ofEpochSecond(start.longValue() + seconds.longValue()), ZoneOffset.UTC);
+        if (expiredAt.isAfter(cutoff)) return Optional.empty();
+        session.setStatus(QuickReviewSessionStatus.FORFEITED);
+        session.setCompletedAt(null);
+        challengeQuizQuestionBankService.releaseClaims(session.getUserId(), sessionId);
+        quickReviewSessionRepository.save(session);
+        return Optional.of(expiredAt);
+    }
+
+    @Transactional
+    public Optional<OffsetDateTime> recoverStuckChallengeGeneration(UUID sessionId, OffsetDateTime cutoff) {
+        QuickReviewSessionEntity observed = quickReviewSessionRepository.findById(sessionId).orElse(null);
+        if (observed == null) {
+            return Optional.empty();
+        }
+        if (studyPackRepository.findByIdAndOwnerUserIdForUpdate(observed.getStudyPackId(), observed.getUserId()).isEmpty()) {
+            return Optional.empty();
+        }
+        return quickReviewSessionRepository.findByIdForUpdate(sessionId)
+                .map(session -> {
+                    entityManager.refresh(session);
+                    return session;
+                })
+                .filter(session -> session.getSessionMode() == QuickReviewSessionMode.CHALLENGE)
+                .filter(session -> !isBoardExamSession(session))
+                .filter(session -> session.getStatus() == QuickReviewSessionStatus.GENERATING)
+                .filter(session -> session.getCreatedAt() != null && session.getCreatedAt().isBefore(cutoff))
+                .map(session -> {
+                    OffsetDateTime staleSince = session.getCreatedAt();
+                    failChallengeSession(sessionId);
+                    return staleSince;
+                });
+    }
+
+    /** A failed preparation never held a quota charge. Repeated recovery is harmless. */
+    @Transactional
+    public void failChallengeSession(UUID sessionId) {
+        quickReviewSessionRepository.findByIdForUpdate(sessionId)
+                .filter(session -> session.getSessionMode() == QuickReviewSessionMode.CHALLENGE)
+                .filter(session -> session.getStatus() == QuickReviewSessionStatus.GENERATING)
+                .filter(session -> !isBoardExamSession(session))
+                .ifPresent(session -> {
+                    session.setStatus(QuickReviewSessionStatus.FAILED);
+                    session.setSessionState(QuizSessionStateUtils.withoutPreparationInputs(session.getSessionState()));
+                    challengeQuizQuestionBankService.releaseClaims(
+                            session.getUserId(), session.getId());
+                    quickReviewSessionRepository.save(session);
+                    try {
+                        analyticsService.trackEvent(session.getUserId(),
+                                AnalyticsEventType.CHALLENGE_QUIZ_PREPARATION_FAILED,
+                                session.getStudyPackId(), Map.of("sessionId", sessionId.toString(),
+                                        "mode", "challenge"));
+                    } catch (RuntimeException ignored) {
+                        // Analytics cannot prevent claim release or failure recovery.
+                    }
+                });
+    }
 
     /**
      * @return when recovered, the instant the row became stale, for the caller's age reporting
@@ -77,7 +233,7 @@ public class GenerationRecoveryRowWriter {
                 });
     }
 
-    /** Recovers only Board Exam CHALLENGE rows; ordinary Challenge sessions retain their existing path. */
+    /** Recovers only Board Exam CHALLENGE rows; ordinary Challenge has its own sweep. */
     @Transactional
     public Optional<OffsetDateTime> recoverBoardExamSession(UUID sessionId, OffsetDateTime cutoff) {
         return quickReviewSessionRepository.findByIdForUpdate(sessionId)

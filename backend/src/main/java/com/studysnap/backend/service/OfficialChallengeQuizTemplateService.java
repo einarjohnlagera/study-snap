@@ -56,6 +56,7 @@ public class OfficialChallengeQuizTemplateService {
 
     private final ChallengeQuizQuestionBankRepository questionBankRepository;
     private final ChallengeQuizQuestionBankService questionBankService;
+    private final OfficialChallengeQuizTemplateResolver templateResolver;
     private final NoteRepository noteRepository;
     private final StudyPackRepository studyPackRepository;
     private final UserRepository userRepository;
@@ -164,24 +165,7 @@ public class OfficialChallengeQuizTemplateService {
      */
     public Optional<OfficialTemplateKey> resolveTemplate(UUID callerStudyPackId) {
         try {
-            StudyPackEntity callerStudyPack = studyPackRepository.findById(callerStudyPackId).orElse(null);
-            if (callerStudyPack == null || callerStudyPack.getNoteId() == null) {
-                return Optional.empty();
-            }
-            NoteEntity callerNote = noteRepository.findById(callerStudyPack.getNoteId()).orElse(null);
-            if (callerNote == null || callerNote.getCopiedFromNoteId() == null) {
-                return Optional.empty();
-            }
-            NoteEntity sourceNote = noteRepository.findById(callerNote.getCopiedFromNoteId()).orElse(null);
-            if (sourceNote == null || sourceNote.getVisibility() != NoteVisibility.PUBLIC
-                    || !isOfficialAuthor(sourceNote.getOwnerUserId())) {
-                return Optional.empty();
-            }
-            StudyPackEntity sourceStudyPack = studyPackRepository.findByNoteId(sourceNote.getId()).orElse(null);
-            if (sourceStudyPack == null || !sourceNote.getOwnerUserId().equals(sourceStudyPack.getOwnerUserId())) {
-                return Optional.empty();
-            }
-            return Optional.of(new OfficialTemplateKey(sourceNote.getOwnerUserId(), sourceStudyPack.getId()));
+            return templateResolver.resolveTemplate(callerStudyPackId);
         } catch (RuntimeException exception) {
             log.warn("Official Challenge template resolution failed for studyPackId={}", callerStudyPackId, exception);
             return Optional.empty();
@@ -293,7 +277,7 @@ public class OfficialChallengeQuizTemplateService {
                 StudyPackGenerationContext context = generationContextResolver.resolveForStudyPack(
                         note.getOwnerUserId(), studyPack
                 );
-                return new OfficialTemplateSeedTarget(note.getOwnerUserId(), studyPack, context);
+                return new OfficialTemplateSeedTarget(note.getOwnerUserId(), studyPack, context, note.getContent());
             });
             if (target == null) {
                 return;
@@ -305,7 +289,8 @@ public class OfficialChallengeQuizTemplateService {
                     List.of(),
                     ChallengeQuizService.MAX_CHALLENGE_QUIZ_QUESTIONS,
                     TEMPLATE_DIFFICULTY,
-                    target.context().withRouting(LlmRouting.tiered(target.ownerUserId()))
+                    target.context().withRouting(LlmRouting.tiered(target.ownerUserId())),
+                    target.noteText(), LlmStudyPackService.ChallengeVerifierPath.TEMPLATE_SEED
             ).quizItems();
             studyPackGenerationTransactionOperations.execute(status -> {
                 NoteEntity note = noteRepository.findById(noteId).orElse(null);
@@ -360,10 +345,7 @@ public class OfficialChallengeQuizTemplateService {
     }
 
     private boolean isOfficialAuthor(UUID userId) {
-        return userId != null && !AccountPurgeService.DELETED_USER_ID.equals(userId)
-                && userRepository.findById(userId)
-                .map(OfficialChallengeQuizTemplateService::isOfficialAuthorAccount)
-                .orElse(false);
+        return templateResolver.isOfficialAuthor(userId);
     }
 
     /**
@@ -387,7 +369,7 @@ public class OfficialChallengeQuizTemplateService {
         return officialAuthorIds;
     }
 
-    private static boolean isOfficialAuthorAccount(UserEntity user) {
+    static boolean isOfficialAuthorAccount(UserEntity user) {
         return user != null
                 && (user.getRole() == UserRole.ADMIN || OFFICIAL_AUTHOR_EMAIL.equalsIgnoreCase(user.getEmail()));
     }
@@ -434,7 +416,8 @@ public class OfficialChallengeQuizTemplateService {
     private record OfficialTemplateSeedTarget(
             UUID ownerUserId,
             StudyPackEntity studyPack,
-            StudyPackGenerationContext context
+            StudyPackGenerationContext context,
+            String noteText
     ) {
     }
 }

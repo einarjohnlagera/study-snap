@@ -3,6 +3,8 @@ package com.studysnap.backend.service;
 import com.studysnap.backend.entity.QuickReviewSessionEntity;
 import com.studysnap.backend.entity.QuickReviewSessionMode;
 import com.studysnap.backend.entity.QuickReviewSessionStatus;
+import com.studysnap.backend.entity.StudyPackEntity;
+import com.studysnap.backend.entity.AnalyticsEventType;
 import com.studysnap.backend.repository.ExamQuestionPoolRepository;
 import com.studysnap.backend.repository.NoteRepository;
 import com.studysnap.backend.repository.QuickReviewSessionRepository;
@@ -32,11 +34,103 @@ class GenerationRecoveryRowWriterTest {
     @Mock private NoteRepository noteRepository;
     @Mock private StudyPackService studyPackService;
     @Mock private UserUsageService userUsageService;
+    @Mock private ChallengeQuizQuestionBankService challengeQuizQuestionBankService;
+    @Mock private com.studysnap.backend.repository.StudyPackRepository studyPackRepository;
+    @Mock private AnalyticsService analyticsService;
+    @Mock private jakarta.persistence.EntityManager entityManager;
     private GenerationRecoveryRowWriter writer;
 
     @BeforeEach
     void setUp() {
-        writer = new GenerationRecoveryRowWriter(poolRepository, sessionRepository, noteRepository, studyPackService, userUsageService);
+        writer = new GenerationRecoveryRowWriter(poolRepository, sessionRepository, noteRepository,
+                studyPackService, userUsageService, challengeQuizQuestionBankService,
+                studyPackRepository, analyticsService, entityManager);
+    }
+
+    @Test
+    void failChallengeSessionReleasesClaimsWithoutChargingAndIsIdempotent() {
+        QuickReviewSessionEntity session = new QuickReviewSessionEntity();
+        session.setId(UUID.randomUUID());
+        session.setUserId(UUID.randomUUID());
+        session.setStudyPackId(UUID.randomUUID());
+        session.setSessionMode(QuickReviewSessionMode.CHALLENGE);
+        session.setStatus(QuickReviewSessionStatus.GENERATING);
+        session.setQuotaExempt(true);
+        session.setSessionState(Map.of(ChallengeQuizService.SESSION_STATE_MODE, "challenge"));
+        when(sessionRepository.findByIdForUpdate(session.getId())).thenReturn(Optional.of(session));
+
+        writer.failChallengeSession(session.getId());
+        writer.failChallengeSession(session.getId());
+
+        assertThat(session.getStatus()).isEqualTo(QuickReviewSessionStatus.FAILED);
+        assertThat(session.isQuotaExempt()).isTrue();
+        verify(challengeQuizQuestionBankService).releaseClaims(
+                session.getUserId(), session.getId());
+        verify(userUsageService, never()).incrementChallengeQuizGeneration(any(), any());
+    }
+
+    private QuickReviewSessionEntity recoveryChallenge(QuickReviewSessionStatus status, String mode,
+                                                        OffsetDateTime createdAt, OffsetDateTime preparedAt) {
+        QuickReviewSessionEntity session = new QuickReviewSessionEntity();
+        session.setId(UUID.randomUUID());
+        session.setUserId(UUID.randomUUID());
+        session.setStudyPackId(UUID.randomUUID());
+        session.setSessionMode(QuickReviewSessionMode.CHALLENGE);
+        session.setStatus(status);
+        session.setCreatedAt(createdAt);
+        session.setQuotaExempt(true);
+        Map<String, Object> state = new java.util.LinkedHashMap<>(Map.of("mode", mode, "preparedNotStarted", true));
+        if (preparedAt != null) state.put("preparedAtEpochSeconds", preparedAt.toEpochSecond());
+        session.setSessionState(state);
+        StudyPackEntity pack = new StudyPackEntity();
+        pack.setId(session.getStudyPackId());
+        when(sessionRepository.findById(session.getId())).thenReturn(Optional.of(session));
+        when(studyPackRepository.findByIdAndOwnerUserIdForUpdate(session.getStudyPackId(), session.getUserId()))
+                .thenReturn(Optional.of(pack));
+        when(sessionRepository.findByIdForUpdate(session.getId())).thenReturn(Optional.of(session));
+        return session;
+    }
+
+    @Test
+    void expiredPreparedSweepUsesReadyClockAndFallbackWithoutQuotaMutation() {
+        OffsetDateTime cutoff = OffsetDateTime.now().minusDays(7);
+        QuickReviewSessionEntity old = recoveryChallenge(QuickReviewSessionStatus.IN_PROGRESS,
+                "challenge", cutoff.minusDays(2), cutoff.minusMinutes(1));
+        assertThat(writer.recoverExpiredPreparedChallengeSession(old.getId(), cutoff)).isPresent();
+        assertThat(old.getStatus()).isEqualTo(QuickReviewSessionStatus.FORFEITED);
+        assertThat(old.isQuotaExempt()).isTrue();
+        verify(challengeQuizQuestionBankService).releaseClaims(old.getUserId(), old.getId());
+        verify(analyticsService).trackEvent(org.mockito.ArgumentMatchers.eq(old.getUserId()),
+                org.mockito.ArgumentMatchers.eq(AnalyticsEventType.CHALLENGE_QUIZ_PREPARATION_ABANDONED),
+                org.mockito.ArgumentMatchers.eq(old.getStudyPackId()),
+                org.mockito.ArgumentMatchers.argThat(m -> "EXPIRED".equals(m.get("reason"))));
+        verify(userUsageService, never()).incrementChallengeQuizGeneration(any(), any());
+        QuickReviewSessionEntity young = recoveryChallenge(QuickReviewSessionStatus.IN_PROGRESS,
+                "challenge", cutoff.minusDays(2), cutoff.plusMinutes(1));
+        assertThat(writer.recoverExpiredPreparedChallengeSession(young.getId(), cutoff)).isEmpty();
+        assertThat(young.getStatus()).isEqualTo(QuickReviewSessionStatus.IN_PROGRESS);
+        QuickReviewSessionEntity started = recoveryChallenge(QuickReviewSessionStatus.IN_PROGRESS,
+                "challenge", cutoff.minusDays(2), null);
+        started.setSessionState(Map.of("mode", "challenge", "preparedNotStarted", false));
+        assertThat(writer.recoverExpiredPreparedChallengeSession(started.getId(), cutoff)).isEmpty();
+        QuickReviewSessionEntity legacy = recoveryChallenge(QuickReviewSessionStatus.IN_PROGRESS,
+                "challenge", cutoff.minusDays(2), null);
+        assertThat(writer.recoverExpiredPreparedChallengeSession(legacy.getId(), cutoff)).isPresent();
+    }
+
+    @Test
+    void stuckChallengeSweepFailsOnlyOldOrdinaryGeneration() {
+        OffsetDateTime cutoff = OffsetDateTime.now().minusMinutes(20);
+        QuickReviewSessionEntity ordinary = recoveryChallenge(QuickReviewSessionStatus.GENERATING,
+                "challenge", cutoff.minusMinutes(1), null);
+        assertThat(writer.recoverStuckChallengeGeneration(ordinary.getId(), cutoff)).isPresent();
+        assertThat(ordinary.getStatus()).isEqualTo(QuickReviewSessionStatus.FAILED);
+        assertThat(ordinary.isQuotaExempt()).isTrue();
+        verify(challengeQuizQuestionBankService).releaseClaims(ordinary.getUserId(), ordinary.getId());
+        QuickReviewSessionEntity board = recoveryChallenge(QuickReviewSessionStatus.GENERATING,
+                "board_exam", cutoff.minusMinutes(1), null);
+        assertThat(writer.recoverStuckChallengeGeneration(board.getId(), cutoff)).isEmpty();
+        assertThat(board.getStatus()).isEqualTo(QuickReviewSessionStatus.GENERATING);
     }
 
     @Test

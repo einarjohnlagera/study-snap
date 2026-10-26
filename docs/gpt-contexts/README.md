@@ -17,7 +17,11 @@ snapshots/briefs, not source-of-truth for implementation — for that, always de
 | `DECISION_HISTORY_CONTEXT.md` | Module: questions already settled (and a few still open), each with its reasoning. **Paste before reopening a question** — it exists to stop re-litigating decided things. |
 | `NOTES_AND_COLLECTIONS_CONTEXT.md` | Module: Note fields, subject/courseProgram taxonomy, Bulk Generate metadata, and how Note Collections (Study Plans) vs. query-filtered groupings (Exam Hub, Public Library, Saved Filters) work. Paste when the conversation is specifically about Library/notes/collection structure. |
 | `NOTELIB_PRODUCT_DECISIONS.md` | Standing role/instruction prompt for a GPT acting as long-term PM/UX strategist. |
-| `MARKETING_STRATEGY.md` | Current marketing strategy and source of truth for channel strategy. |
-| `FACEBOOK_GROUP_STRATEGY.md` | Facebook-group-specific organic growth strategy. |
-| `NOTELIB_SOCIAL_CONTEXT_v1.0.md` | Content format and writing style rules for social posts. |
-| `GPT_MARKETER_PROMPT.txt` | Session-starter prompt for a marketing-focused GPT session. |
+| `FACEBOOK_GROUP_STRATEGY.md` | Facebook-group-specific organic growth strategy (June 2026). Partially superseded in substance by `docs/agents/gpt/NoteLib Marketing.md`'s §4 workflow and §6 audience strategy — kept as historical record, not deleted. |
+| `NOTELIB_SOCIAL_CONTEXT_v1.0.md` | Content format and writing style rules for social posts. **Carries a "SUPERSEDED 2026-10-20" banner** — its 3-deliverable structure and `/collections` CTA conflict with the locked 4-deliverable workflow and `/explore` CTA in `docs/agents/gpt/NoteLib Marketing.md` §4/§13. Body kept as historical record, not rewritten. |
+| `GPT_MARKETER_PROMPT.txt` | Session-starter prompt for a marketing-focused GPT session. **Carries a "SUPERSEDED 2026-10-20" banner** — its load list still names `PROJECT_CONTEXT.md` and the now-deleted `MARKETING_STRATEGY.md`, and its post structure conflicts with the locked workflow. Use `docs/agents/gpt/NoteLib Marketing.md` §18's opening prompt instead. |
+
+**Marketing context moved 2026-10-20.** `MARKETING_STRATEGY.md` and `NoteLib_Marketing_Strategist_Context_v2.md`
+(formerly listed here) were retired and consolidated into **`docs/agents/gpt/NoteLib Marketing.md`** —
+the current canonical marketing-strategist context, mirroring `NoteLib Product UX.md`'s pattern. Use that
+file, not this directory, for a fresh marketing session.

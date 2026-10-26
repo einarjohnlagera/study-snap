@@ -22561,3 +22561,106 @@ documented this precisely (PR #1483, commit `ad6caa8c`).
   `NativeQueryPostgresIntegrationTest` both clean before merge.
 - **Falsification correction (PR #1483, commit `ad6caa8c`):** test naming/documentation fix per the
   Codex pass above — no production code change.
+
+## v0.169.0 - Study Journey, Continued
+
+**Status: Released** (signed off 2026-10-12; commit `3200c773` on `releases/v0.169.0`)
+
+Theme: continue the Study Journey Purpose / Learner Goal architecture by shipping the one piece
+that's actually ready — after an `advisor()` pass caught that the original 3-item plan had
+sequencing and decision gaps, and the owner then explicitly chose to close this release on that
+one piece rather than fold in the others.
+
+### Planned Scope
+
+- **Civil Engineering Exam Hub page.** Adds a discovery page for CE alongside the four that already
+  exist (ALE, PNLE, LET, CPALE) in `frontend/lib/exam-hub-config.ts`. **Owner override of Product
+  UX's earlier "defer pending adoption evidence" call** — no new evidence arrived; this is a
+  deliberate reversal, recorded as such. Codex prompt: `docs/codex-prompts/v0.169.0-ce-exam-hub.md`.
+  Found during scoping, not assumed: 4 files (not just the config) hardcode the 4 existing slugs by
+  name, including one (`exam-hubs-guide.tsx`) already independently stale (missing CPALE) before
+  this task touched it — fixed as one move, deriving all of them from the shared config instead of
+  a 3rd/4th/5th duplicate list. Production size checked directly: CE's 113 public notes sit between
+  the smallest (ALE, 90) and largest (CPALE, 154) already-live hubs — no new bound needed.
+
+### Multi-goal exam support — owner direction recorded 2026-10-10, explicitly NOT authorized to implement
+
+The 5 batched questions got real answers, but **the owner was explicit these are product-direction
+preferences, not technical authorization** — before any Codex prompt, Feature Planner is to validate
+the storage migration, state transitions, onboarding semantics, cost, and acceptance criteria against
+the current code. No multi-goal implementation prompt exists, and none should until that validation
+and a separate go-ahead happen. Recorded here so the direction isn't re-litigated or lost before that
+validation happens:
+
+1. **Storage — a normalized join table**, one row per (user, exam goal), with one goal flagged
+   active per user. No redundant active-state storage (e.g. not a separate "active goal" column
+   that can drift from the join rows). Existing single `studyGoal` values migrate losslessly;
+   current users keep their existing goal, now active.
+2. **Dashboard & nudges — the active goal only** drives general dashboard nudges; other goals stay
+   visible/accessible but don't compete for nudge real estate. **Exception:** post-session next
+   steps must reflect the actual session/Study Journey context even when it differs from the active
+   goal — a session on a non-active goal's material must not get nudged toward the active goal
+   instead.
+3. **EXAM/SUBJECT exclusivity — unchanged.** Multiple exam goals may coexist with each other; a
+   subject focus still can't coexist with any exam goal. This is a profile-preference rule only —
+   it has never restricted which Notes/Study Plans are reachable, and broadening subject/exam
+   coexistence needs its own separate decision, not an inference from this one.
+4. **Exam-hub signup intent — add and activate**, never silently replace other exam goals. For a
+   learner who currently has subject focus (not an exam goal), the existing exclusivity contract
+   still requires clear disclosure before the intent flow overwrites it. Signing up via an Exam Hub
+   must NOT auto-adopt any Review Set — goal-setting and content-adoption stay separate actions.
+5. **Picker — a real goal-management surface** in Profile's Study Focus (add/remove/set-active),
+   not a single-select-to-multi-select conversion with no active-goal concept. Removing a goal must
+   never delete adopted content or assessment history — it only changes which goal drives nudges.
+
+**Release boundary:** multi-goal stays out of `v0.169.0` entirely. It remains additionally gated on
+the `[CHECKPOINT — due 2026-12-07]` population read (still 2 users as of 2026-10-09) and
+prioritization against the product-health release plan — neither is resolved by this direction
+record.
+
+### Deferred out of this release (sequencing, not scope changes)
+
+- **Public Note → Study Journey discovery — moved to `v0.170.0`.** Two problems caught by
+  `advisor()`: (1) it already has a design — Feature Planner's RC-5 in
+  `docs/claude-plans/2026-10-09-product-health-release-plan.md` §3 ("Part of Official Review Set
+  X") — so this release does not need to design it from scratch, only reuse that spec; (2) RC-5's
+  own stated gate is the two active stability checkpoints (`v0.165.0`'s discovery-rail fix, due
+  2026-10-12, and `v0.166.0`'s Hikari long-hold fix, due 2026-10-14) — a new per-request lookup on
+  public Note pages, shipped before those read out, makes both checkpoints' kill criteria
+  uninterpretable (the same contamination pattern already recorded for Learning Connections).
+  Sequencing this after 10-14 roughly lines up with the Claude budget reset on 10-12 anyway.
+
+Anti-drift carried over from the original discovery brief, still binding for everything in this
+release: no `ProfileType` change, no recommendation-engine change beyond the explicitly-decided
+Public Note link, no Degree Journey / Academic Term / ConceptHealth change, no change to
+`resolvePlanPremiumExamMode`/`EXAM_MODES.md`.
+
+**Explicitly excluded — the one piece NOT in this release:** the Degree Journey catalog (Phase C).
+Re-checked 2026-10-09: its own stated dependency ("≥2 published Years") is unmet — exactly one BSCS
+Year exists and it's unpublished. This is a content-authoring gap, not a code gap, and no decision
+override removes it. A separate, unmerged curriculum-authoring branch
+(`docs/bscs-year1-curriculum-shaping`) exists with planning material for completing that one Year,
+but it predates `v0.167.0`/`v0.168.0` (merging it as-is would roll both back) and even once rebased
+and authored, completes only the existing Year — not a second one. Tracked separately; not part of
+this release.
+
+**Delivery:** all three items are new backend/multi-system work — Codex-routed per `CLAUDE.md`'s
+task-routing table, one prompt per item. **Budget note:** the owner's Claude usage resets 2026-10-12;
+implementation is deliberately routed through Codex rather than done inline to conserve it, with
+Claude Code's role limited to scoping, prompt-writing, and post-delivery audit.
+
+**Verification tier:** three separate Codex deliveries folding into one release raises verification
+cost per `CLAUDE.md`'s own size-vs-cost rule. None of the three trigger the full three-agent tier
+(no money/quota/permission-substrate change, no first-of-kind cross-user read). Default to one
+`advisor()` pass per item after its audit, escalating to one scoped cold agent only if a trigger
+fires during implementation (e.g. two items touching the same shared method, or a defect found and
+fixed in the same session).
+
+### Shipped
+
+- **Civil Engineering Exam Hub (CELE) — PR #1485, commit `3200c773`.** Added `/exam/ce` and all 5
+  consuming surfaces (index page, Help Center guide and card, server-side course-program resolution).
+  Fixed `EXAM_HUB_ICONS` duplication along the way — moved into `exam-hub-config.ts` as the single
+  source of truth, which also fixed `exam-hubs-guide.tsx`'s pre-existing CPALE omission. Implemented
+  via Codex, independently re-verified (tests, `tsc --noEmit`, `npm run build` all re-run fresh, not
+  trusted from the delivery report alone).

@@ -7,6 +7,7 @@ import com.studysnap.backend.dto.ChallengeQuizSessionResponse;
 import com.studysnap.backend.dto.ChallengeQuizSessionSummaryResponse;
 import com.studysnap.backend.dto.ChallengeQuizStartRequest;
 import com.studysnap.backend.dto.ChallengeQuizStartResponse;
+import com.studysnap.backend.dto.ChallengeQuizSessionStatusResponse;
 import com.studysnap.backend.dto.GenerateMoreChallengeQuizResponse;
 import com.studysnap.backend.dto.SimpleMessageResponse;
 import com.studysnap.backend.security.AuthenticatedUser;
@@ -22,6 +23,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.ResponseStatus;
 
 import java.util.List;
 import java.util.UUID;
@@ -32,6 +35,33 @@ import java.util.UUID;
 @PreAuthorize("hasAnyRole('USER','ADMIN')")
 public class ChallengeQuizController {
     private final ChallengeQuizService challengeQuizService;
+
+    @PostMapping("/sessions/{sessionId}/ready-seen")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void markReadySeen(@PathVariable String sessionId,
+            @AuthenticationPrincipal AuthenticatedUser user) {
+        challengeQuizService.markReadySeen(sessionId, user.userId());
+    }
+
+    @GetMapping("/sessions/{sessionId}/status")
+    public ChallengeQuizSessionStatusResponse getSessionStatus(@PathVariable String sessionId,
+            @AuthenticationPrincipal AuthenticatedUser user) {
+        return challengeQuizService.getSessionStatus(sessionId, user.userId());
+    }
+
+    @GetMapping("/sessions/{sessionId}")
+    public ChallengeQuizStartResponse getSession(@PathVariable String sessionId,
+            @AuthenticationPrincipal AuthenticatedUser user) {
+        return challengeQuizService.getSession(sessionId, user.userId());
+    }
+
+    @PostMapping("/sessions/{sessionId}/start-quiz")
+    public ChallengeQuizStartResponse startPreparedQuiz(
+            @PathVariable String sessionId,
+            @AuthenticationPrincipal AuthenticatedUser user
+    ) {
+        return challengeQuizService.startQuiz(sessionId, user.userId());
+    }
 
     @PostMapping("/study-packs/{studyPackId}/start")
     @Deprecated
@@ -111,5 +141,12 @@ public class ChallengeQuizController {
     ) {
         UUID userId = user.userId();
         return challengeQuizService.generateMoreQuestions(sessionId, userId);
+    }
+
+    @PostMapping("/sessions/{sessionId}/generate-more/stop")
+    @ResponseStatus(org.springframework.http.HttpStatus.NO_CONTENT)
+    public void stopGenerateMore(@PathVariable String sessionId,
+            @AuthenticationPrincipal AuthenticatedUser user) {
+        challengeQuizService.stopGenerateMore(sessionId, user.userId());
     }
 }

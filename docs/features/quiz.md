@@ -71,7 +71,14 @@ cross-index overwrite that could erase a stored critique and reopen an answered 
 - immediate answer feedback
 - one retry round for incorrect questions
 
+The statement-pair answer-key guard applies only to newly generated Challenge Quiz questions; other quiz modes do not check statement-pair verdicts.
+
 ### Challenge Quiz
+
+From v0.175.0, preparing an ordinary Challenge Quiz does not start its timer. The ready pre-screen shows
+the question count and time limit; only the explicit Start Quiz request starts the timed attempt and
+reveals its questions. This includes bank-served, Redo Missed Questions, and multi-note starts. Board Exam
+continues to start its timer when ready.
 
 - timed quiz mode
 - available on Free, Plus, and Pro with plan-based monthly limits
@@ -292,7 +299,8 @@ Challenge Quiz and Adaptive Practice:
 - active quiz sessions show `Leave Quiz`
 - app navigation, browser back, and refresh should be guarded while a session is active
 - confirmed leaves mark the session `FORFEITED`
-- Challenge Quiz and Adaptive Practice forfeits do not refund quota
+- A started Challenge Quiz and Adaptive Practice forfeit does not refund quota; an unstarted prepared
+  Challenge Quiz was never charged
 
 ## Session review
 

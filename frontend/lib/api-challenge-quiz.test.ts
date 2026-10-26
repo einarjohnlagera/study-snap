@@ -1,0 +1,133 @@
+import {
+  ApiRequestError,
+  isChallengePreparationFailedError,
+  isChallengePreparationInProgressError,
+  isChallengeSessionNotInProgressError,
+  isInvalidPreparedDiscardError,
+  isPreparedChallengeExpiredError,
+  startChallengeQuizSession,
+  startPreparedChallengeQuiz,
+  startRedoMissedChallengeQuizSession,
+  markChallengeQuizReadySeen,
+  getChallengeQuizSessionStatus,
+  getChallengeQuizSession,
+  stopAddingChallengeQuizQuestions,
+} from "./api";
+
+describe("Challenge Quiz preparation API", () => {
+  const originalFetch = globalThis.fetch;
+  beforeEach(() => {
+    globalThis.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: jest.fn().mockResolvedValue({}),
+    } as unknown as Response);
+  });
+  afterEach(() => { globalThis.fetch = originalFetch; });
+
+  it("starts a prepared quiz with a bodyless POST", async () => {
+    await startPreparedChallengeQuiz("session-1");
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      "http://localhost:8080/api/challenge-quiz/sessions/session-1/start-quiz",
+      { method: "POST", headers: {} },
+    );
+  });
+
+  it("preserves requested count and redo source in an ordinary start response", async () => {
+    (globalThis.fetch as jest.Mock).mockResolvedValueOnce({
+      ok: true, status: 200,
+      json: jest.fn().mockResolvedValue({ requestedQuestionCount: 18, redoMissed: false }),
+    } as unknown as Response);
+    const response = await startChallengeQuizSession("note-1", { mode: "challenge" });
+    expect(response).toEqual(expect.objectContaining({ requestedQuestionCount: 18, redoMissed: false }));
+  });
+
+  it("marks the ready screen seen with a bodyless POST", async () => {
+    await markChallengeQuizReadySeen("session-1");
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      "http://localhost:8080/api/challenge-quiz/sessions/session-1/ready-seen",
+      { method: "POST", headers: {} },
+    );
+  });
+
+  it("reads the exact session status with GET", async () => {
+    await getChallengeQuizSessionStatus("session-1");
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      "http://localhost:8080/api/challenge-quiz/sessions/session-1/status",
+      { method: "GET", headers: {} },
+    );
+  });
+
+  it("reads the exact session payload without starting it", async () => {
+    await getChallengeQuizSession("session-1");
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      "http://localhost:8080/api/challenge-quiz/sessions/session-1",
+      { method: "GET", headers: {} },
+    );
+  });
+
+  it("stops a pending add with a bodyless POST", async () => {
+    (globalThis.fetch as jest.Mock).mockResolvedValueOnce({
+      ok: true, status: 204,
+    } as Response);
+    await stopAddingChallengeQuizQuestions("session-1");
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      "http://localhost:8080/api/challenge-quiz/sessions/session-1/generate-more/stop",
+      { method: "POST", headers: {} },
+    );
+  });
+
+  it("uses the approved session-read fallback when an error has no message", async () => {
+    (globalThis.fetch as jest.Mock).mockResolvedValueOnce({ ok: false, status: 503,
+      json: jest.fn().mockResolvedValue({}) } as unknown as Response);
+    await expect(getChallengeQuizSession("session-1")).rejects.toThrow(
+      "We couldn't load your quiz. Please refresh the page to try again.");
+  });
+
+  it("uses the approved stop fallback when an error has no message", async () => {
+    (globalThis.fetch as jest.Mock).mockResolvedValueOnce({ ok: false, status: 503,
+      json: jest.fn().mockResolvedValue({}) } as unknown as Response);
+    await expect(stopAddingChallengeQuizQuestions("session-1")).rejects.toThrow(
+      "We couldn't stop adding questions. Any new ones will appear when they're ready.");
+  });
+
+  it("keeps redo missed bodyless when nothing is discarded", async () => {
+    await startRedoMissedChallengeQuizSession("note-1");
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      "http://localhost:8080/api/notes/note-1/challenge-quiz/redo-missed",
+      { method: "POST", headers: {} },
+    );
+  });
+
+  it("sends JSON and Content-Type when redo missed discards a prepared quiz", async () => {
+    await startRedoMissedChallengeQuizSession("note-1", { discardPreparedSessionId: "session-1" });
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      "http://localhost:8080/api/notes/note-1/challenge-quiz/redo-missed",
+      { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ discardPreparedSessionId: "session-1" }) },
+    );
+  });
+
+  it("carries the discard id in an ordinary start request", async () => {
+    await startChallengeQuizSession("note-1", { mode: "board_exam", additionalStudyPackIds: ["note-2"],
+      sourceCollectionId: "collection-1", discardPreparedSessionId: "session-1" });
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      "http://localhost:8080/api/notes/note-1/challenge-quiz/start",
+      { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({
+        mode: "board_exam", additionalStudyPackIds: ["note-2"], sourceCollectionId: "collection-1",
+        discardPreparedSessionId: "session-1",
+      }) },
+    );
+  });
+
+  it.each([
+    ["PREPARED_CHALLENGE_EXPIRED", isPreparedChallengeExpiredError],
+    ["SESSION_NOT_IN_PROGRESS", isChallengeSessionNotInProgressError],
+    ["INVALID_PREPARED_CHALLENGE_DISCARD", isInvalidPreparedDiscardError],
+    ["PREPARATION_IN_PROGRESS", isChallengePreparationInProgressError],
+    ["PREPARATION_FAILED", isChallengePreparationFailedError],
+  ])("recognizes only %s", (code, helper) => {
+    expect(helper(new ApiRequestError("error", { code, status: 409 }))).toBe(true);
+    expect(helper(new ApiRequestError("error", { code: "OTHER", status: 409 }))).toBe(false);
+    expect(helper(new Error(code))).toBe(false);
+  });
+});

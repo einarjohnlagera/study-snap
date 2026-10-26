@@ -41,10 +41,17 @@ class ChallengeQuizQuestionBankServiceTest {
     @Mock
     private ChallengeQuizQuestionBankRepository questionBankRepository;
 
+    private ChallengeQuizQuestionBankService service() {
+        OfficialChallengeQuizTemplateResolver resolver = mock(OfficialChallengeQuizTemplateResolver.class);
+        org.mockito.Mockito.lenient().when(resolver.templateQuestionKeys(any())).thenReturn(Set.of());
+        return new ChallengeQuizQuestionBankService(
+                questionBankRepository, resolver, new com.studysnap.backend.config.StudySnapProperties());
+    }
+
     @Test
     void invalidateForStudyPack_joinsTheCallerTransactionAndBulkDeletes() throws NoSuchMethodException {
         UUID studyPackId = UUID.randomUUID();
-        ChallengeQuizQuestionBankService service = new ChallengeQuizQuestionBankService(questionBankRepository);
+        ChallengeQuizQuestionBankService service = service();
 
         service.invalidateForStudyPack(studyPackId);
 
@@ -57,7 +64,7 @@ class ChallengeQuizQuestionBankServiceTest {
     @Test
     void releaseClaims_joinsCallerTransactionSoClaimsAndForfeitShareItsFate() throws NoSuchMethodException {
         Transactional transactional = ChallengeQuizQuestionBankService.class
-                .getMethod("releaseClaims", UUID.class, UUID.class, UUID.class)
+                .getMethod("releaseClaims", UUID.class, UUID.class)
                 .getAnnotation(Transactional.class);
 
         assertThat(transactional).isNull();
@@ -74,7 +81,7 @@ class ChallengeQuizQuestionBankServiceTest {
                 userId, studyPackId, LearnerLevel.COLLEGE.name(), sessionId
         )).thenReturn(List.of(first, second));
 
-        ChallengeQuizQuestionBankService service = new ChallengeQuizQuestionBankService(questionBankRepository);
+        ChallengeQuizQuestionBankService service = service();
         List<QuizItem> claimed = service.claimEligibleQuestions(
                 userId, studyPackId, LearnerLevel.COLLEGE, sessionId, Set.of(first.getQuestionKey()), 2
         );
@@ -85,7 +92,7 @@ class ChallengeQuizQuestionBankServiceTest {
         verify(questionBankRepository).findClaimableForUpdate(
                 userId, studyPackId, LearnerLevel.COLLEGE.name(), sessionId
         );
-        verify(questionBankRepository).saveAll(List.of(first, second));
+        verify(questionBankRepository).saveAll(List.of(second));
     }
 
     @Test
@@ -101,7 +108,7 @@ class ChallengeQuizQuestionBankServiceTest {
         when(questionBankRepository.findClaimableForUpdate(
                 userId, studyPackId, LearnerLevel.SENIOR_HIGH.name(), sessionId
         )).thenReturn(List.of(banked));
-        ChallengeQuizQuestionBankService service = new ChallengeQuizQuestionBankService(questionBankRepository);
+        ChallengeQuizQuestionBankService service = service();
 
         List<QuizItem> claimed = service.claimEligibleQuestions(
                 userId, studyPackId, effectiveCurriculumLevel, sessionId, Set.of(), 1
@@ -122,13 +129,12 @@ class ChallengeQuizQuestionBankServiceTest {
         ChallengeQuizQuestionBankEntity incorrect = bankedQuestion("Incorrect question");
         correct.setClaimedSessionId(sessionId);
         incorrect.setClaimedSessionId(sessionId);
-        when(questionBankRepository.findByUserIdAndStudyPackIdAndClaimedSessionId(userId, studyPackId, sessionId))
+        when(questionBankRepository.findByUserIdAndClaimedSessionId(userId, sessionId))
                 .thenReturn(List.of(correct, incorrect));
-        ChallengeQuizQuestionBankService service = new ChallengeQuizQuestionBankService(questionBankRepository);
+        ChallengeQuizQuestionBankService service = service();
 
         service.updateOutcomesAndReleaseClaims(
                 userId,
-                studyPackId,
                 sessionId,
                 List.of(correct.getQuestion(), incorrect.getQuestion()),
                 Map.of(0, 0, 1, 1),
@@ -145,6 +151,27 @@ class ChallengeQuizQuestionBankServiceTest {
     }
 
     @Test
+    void updateOutcomesAndReleaseClaims_preservesUnservedMissedOutcomeAndMarksServedUnanswered() {
+        UUID userId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+        ChallengeQuizQuestionBankEntity served = bankedQuestion("Served question");
+        ChallengeQuizQuestionBankEntity unserved = bankedQuestion("Claimed by pending more");
+        served.setClaimedSessionId(sessionId);
+        unserved.setClaimedSessionId(sessionId);
+        unserved.setLastKnownOutcome("INCORRECT");
+        when(questionBankRepository.findByUserIdAndClaimedSessionId(userId, sessionId))
+                .thenReturn(List.of(served, unserved));
+
+        service().updateOutcomesAndReleaseClaims(userId, sessionId, List.of(served.getQuestion()),
+                Map.of(), Map.of(), Map.of(), Map.of());
+
+        assertThat(served.getLastKnownOutcome()).isEqualTo("UNANSWERED");
+        assertThat(unserved.getLastKnownOutcome()).isEqualTo("INCORRECT");
+        assertThat(served.getClaimedSessionId()).isNull();
+        assertThat(unserved.getClaimedSessionId()).isNull();
+    }
+
+    @Test
     void claimIncorrectQuestions_claimsOnlyIncorrectCurriculumLevelQuestions() {
         UUID userId = UUID.randomUUID();
         UUID studyPackId = UUID.randomUUID();
@@ -155,7 +182,7 @@ class ChallengeQuizQuestionBankServiceTest {
         when(questionBankRepository.findIncorrectClaimableForUpdate(
                 userId, studyPackId, LearnerLevel.COLLEGE.name(), "INCORRECT"
         )).thenReturn(missedQuestions);
-        ChallengeQuizQuestionBankService service = new ChallengeQuizQuestionBankService(questionBankRepository);
+        ChallengeQuizQuestionBankService service = service();
 
         List<QuizItem> claimed = service.claimIncorrectQuestions(
                 userId, studyPackId, LearnerLevel.COLLEGE, sessionId, 5, 3
@@ -175,7 +202,7 @@ class ChallengeQuizQuestionBankServiceTest {
         when(questionBankRepository.findIncorrectClaimableForUpdate(
                 userId, studyPackId, LearnerLevel.COLLEGE.name(), "INCORRECT"
         )).thenReturn(missedQuestions);
-        ChallengeQuizQuestionBankService service = new ChallengeQuizQuestionBankService(questionBankRepository);
+        ChallengeQuizQuestionBankService service = service();
 
         assertThatThrownBy(() -> service.claimIncorrectQuestions(
                 userId, studyPackId, LearnerLevel.COLLEGE, sessionId, 5, 3
@@ -192,7 +219,7 @@ class ChallengeQuizQuestionBankServiceTest {
         when(questionBankRepository.findClaimableForUpdate(
                 eq(userId), eq(studyPackId), eq(LearnerLevel.COLLEGE.name()), eq(sessionId)
         )).thenThrow(new RuntimeException("connection reset"));
-        ChallengeQuizQuestionBankService service = new ChallengeQuizQuestionBankService(questionBankRepository);
+        ChallengeQuizQuestionBankService service = service();
 
         List<QuizItem> claimed = service.claimEligibleQuestions(
                 userId, studyPackId, LearnerLevel.COLLEGE, sessionId, Set.of(), 5
@@ -208,7 +235,7 @@ class ChallengeQuizQuestionBankServiceTest {
         UUID sessionId = UUID.randomUUID();
         doThrow(new RuntimeException("connection reset")).when(questionBankRepository).insertIfAbsent(
                 any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any());
-        ChallengeQuizQuestionBankService service = new ChallengeQuizQuestionBankService(questionBankRepository);
+        ChallengeQuizQuestionBankService service = service();
 
         service.persistGeneratedQuestions(
                 userId, studyPackId, sessionId, LearnerLevel.COLLEGE, 0L, List.of(
@@ -227,7 +254,7 @@ class ChallengeQuizQuestionBankServiceTest {
         UUID userId = UUID.randomUUID();
         UUID studyPackId = UUID.randomUUID();
         UUID sessionId = UUID.randomUUID();
-        ChallengeQuizQuestionBankService service = new ChallengeQuizQuestionBankService(questionBankRepository);
+        ChallengeQuizQuestionBankService service = service();
         QuizItem repeatedQuestion = quizItem("Same generated question");
 
         service.persistGeneratedQuestions(
@@ -244,6 +271,21 @@ class ChallengeQuizQuestionBankServiceTest {
                 eq(sessionId), any());
         assertThat(levels.getAllValues()).containsExactly(
                 LearnerLevel.JUNIOR_HIGH.name(), LearnerLevel.SENIOR_HIGH.name());
+    }
+
+    @Test
+    void persistGeneratedQuestionsUnclaimedRetainsOriginAndLeavesClaimAvailable() {
+        UUID userId = UUID.randomUUID();
+        UUID packId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+        ChallengeQuizQuestionBankService service = service();
+
+        service.persistGeneratedQuestionsUnclaimed(userId, packId, sessionId, LearnerLevel.COLLEGE, 7L,
+                List.of(quizItem("Saved after failed preparation")));
+
+        verify(questionBankRepository).insertIfAbsent(any(), eq(userId), eq(packId), eq(7L),
+                eq(sessionId), any(), any(), eq(LearnerLevel.COLLEGE.name()), eq("UNANSWERED"),
+                org.mockito.ArgumentMatchers.isNull(), any());
     }
 
     private ChallengeQuizQuestionBankEntity bankedQuestion(String questionText) {

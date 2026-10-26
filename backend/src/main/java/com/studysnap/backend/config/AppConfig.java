@@ -155,6 +155,26 @@ public class AppConfig {
     }
 
     /**
+     * Challenge preparation must not wait behind multi-minute Study Pack generation jobs.
+     * Keep its bounded queue and threads separate so a learner can poll readiness promptly.
+     */
+    @Bean
+    public AsyncTaskExecutor challengePreparationTaskExecutor(
+            InFlightThreadRegisteringTaskDecorator taskDecorator, StudySnapProperties properties
+    ) {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setThreadNamePrefix("challenge-preparation-");
+        // Jobs take a Hikari connection only in short load/finish transactions, never during a model call.
+        executor.setCorePoolSize(properties.getChallengeQuiz().getChallengePreparationCoreThreads());
+        executor.setMaxPoolSize(properties.getChallengeQuiz().getChallengePreparationMaxThreads());
+        executor.setQueueCapacity(24);
+        executor.setRejectedExecutionHandler(new ThreadPoolExecutor.AbortPolicy());
+        executor.setTaskDecorator(taskDecorator);
+        executor.initialize();
+        return executor;
+    }
+
+    /**
      * ⚠️ THE BULK REGENERATION DRIVER GETS ITS OWN POOL, AND THAT IS THE WHOLE FIX FOR A MEASURED
      * STARVATION. Bulk *generation* dispatches its batch loop onto
      * {@link #studyPackGenerationTaskExecutor(InFlightThreadRegisteringTaskDecorator)}, so the loop
@@ -216,6 +236,31 @@ public class AppConfig {
         executor.setCorePoolSize(4);
         executor.setMaxPoolSize(8);
         executor.setQueueCapacity(50);
+        executor.initialize();
+        return executor;
+    }
+
+    /** Runs all six sources of one multi-note preparation concurrently under its shared deadline. */
+    @Bean
+    public AsyncTaskExecutor challengeMultiNoteSourceTaskExecutor(StudySnapProperties properties) {
+        int threads = properties.getChallengeQuiz().getChallengeMultiNoteSourceTaskThreads();
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setThreadNamePrefix("challenge-multi-note-source-");
+        executor.setCorePoolSize(threads);
+        executor.setMaxPoolSize(threads);
+        executor.setQueueCapacity(12);
+        executor.setRejectedExecutionHandler(new ThreadPoolExecutor.AbortPolicy());
+        executor.initialize();
+        return executor;
+    }
+
+    @Bean
+    public AsyncTaskExecutor statementPairVerifierTaskExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setThreadNamePrefix("statement-pair-verifier-");
+        executor.setCorePoolSize(4);
+        executor.setMaxPoolSize(8);
+        executor.setQueueCapacity(20);
         executor.initialize();
         return executor;
     }
