@@ -2,8 +2,10 @@
 
 ## v0.175.0 - Quiz Ready
 
-**Status: Released** (kicked off 2026-10-20, signed off 2026-10-25 on `releases/v0.175.0`, **cut from `releases/v0.174.0`
-(`e539b045`, signed off, NOT yet on `main`)**, the same stacking pattern `v0.174.0` used on `v0.173.0`.
+**Status: Released and deployed** (kicked off 2026-10-20, signed off 2026-10-25 on `releases/v0.175.0`, **cut from `releases/v0.174.0`
+(`e539b045`)**, the same stacking pattern `v0.174.0` used on `v0.173.0`. **Merged to `main` as #1533 (`06a09f7c`) on 2026-10-26;
+Render live at 14:58:47Z, Vercel at 15:02:51Z.** `v0.174.0` had been squash-merged to `main` with a tree identical to `e539b045`, so #1533 carried a
+no-op `ours` merge (`bff16fbd`) to clear the conflict.
 Anything that changes on `releases/v0.174.0` after this cut is merged forward.)
 
 Theme: a learner who starts a Challenge Quiz is never stuck watching a spinner or racing a timer that
@@ -11,8 +13,9 @@ started without them. The quiz is prepared in the background, waits on a "Your q
 starts only when they press Start Quiz. Challenge also moves to each plan's model, behind a guard that
 catches wrong answer keys.
 
-**⚠️ MERGE GATE:** this release's PR merges to `main` only after `v0.174.0`'s PR #1512 has merged (itself
-held behind `v0.173.0`'s #1505 and two checkpoints).
+**MERGE GATE (discharged 2026-10-26):** this release's PR merged to `main` only after `v0.174.0`'s PR #1512 (2026-10-25), which in turn
+followed `v0.173.0`'s #1505 (2026-10-25). The owner overrode #1512's "wait for the cache read" hold on 2026-10-25; the cost is attribution,
+recorded in the cache checkpoint row in `ROADMAP.md`.
 
 **Sources, all owner-approved:**
 - plan: `docs/claude-plans/2026-10-19-v0175-challenge-quiz-preparation-plan.md` (Feature Planner; §1
@@ -619,8 +622,9 @@ prepared quiz" line on secondary notes.
 
 ## v0.174.0 - Enhanced Generation
 
-**Status: Released** (signed off 2026-10-19; **merge to `main` HELD behind the v0.173.0 gates, so NOT yet
-deployed, and the new models go live only with the owner's post-merge Render switch**; see the merge-day
+**Status: Released** (signed off 2026-10-19; **merged to `main` as #1512 (`cd2d55f3`) on 2026-10-25 and live on
+Render at 2026-10-25T15:56:25Z; the owner has set `LLM_MODEL_FREE` / `LLM_MODEL_PREMIUM` on Render (reported 2026-10-26; 25 of 25 Study
+Packs since the deploy ran on `gpt-6.1-sol`)**; see the merge-day
 handoff in the signoff record below. Kicked off 2026-10-16 on `releases/v0.174.0`, **cut from
 `releases/v0.173.0` (`7d1407a1`, signed off, NOT yet on `main`)** — owner decision 2026-10-16, the same pattern `v0.111.0`
 and `v0.120.0` used. Anything that changes on `releases/v0.173.0` after this cut is merged forward.)
@@ -1029,7 +1033,7 @@ ADMIN carve-out.
 due 2026-12-15.
 ## v0.173.0 - Cached Catalog
 
-**Status: Released** (signed off 2026-10-16; **merge to `main` HELD for the 2026-10-22 gate, so NOT yet deployed**. Kicked off 2026-10-15 on `releases/v0.173.0`, cut from `docs/v0.172.0-deploy-stamp`
+**Status: Released** (signed off 2026-10-16; **merged to `main` as #1505 (`ff2ea964`) on 2026-10-25 after the 2026-10-22 gate read (partial); the first deploy failed on a database kill, and the cache has been live since 2026-10-25T01:47:11Z**. Kicked off 2026-10-15 on `releases/v0.173.0`, cut from `docs/v0.172.0-deploy-stamp`
 (`3961383e`), which is `main` after `v0.172.0` merged as #1501 plus one docs commit.)
 
 Theme: take the remaining repeat load off the production database's Explore discovery reads by
