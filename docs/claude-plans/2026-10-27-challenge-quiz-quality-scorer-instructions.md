@@ -1,6 +1,6 @@
-# Challenge Quiz quality evaluation: scorer instructions (DRAFT for freeze with the rubric)
+# Challenge Quiz quality evaluation: scorer instructions (FROZEN 2026-10-27)
 
-Status: **DRAFT. Frozen only when the owner signs it and its SHA-256 is recorded in the pre-registration file next to the rubric's.** These are the exact words given to every scorer, identical for every item batch. The orchestrator (the Release Implementor) pastes sections 1 to 6 **verbatim**;
+Status: **FROZEN: approved by the owner on 2026-10-27. Its SHA-256 is recorded in the pre-registration file next to the rubric's; any later change voids the pre-registration.** These are the exact words given to every scorer, identical for every item batch. The orchestrator (the Release Implementor) pastes sections 1 to 6 **verbatim**;
 it adds only the batch content and, outside the scorer's view, the `reviewerId` and `round` that the score files require. **These instructions contain no word about how the items were produced: no model, arm, prompt, version, "current" or "proposed". If a scorer asks, the answer is "you are not told".**
 Specification: `docs/claude-plans/2026-10-27-challenge-quiz-quality-scoring-rubric.md` (sections 2 to 4). This document is delivery only; the rubric wins on any difference.
 
