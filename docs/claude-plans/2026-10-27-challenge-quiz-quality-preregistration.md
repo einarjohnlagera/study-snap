@@ -60,6 +60,16 @@ Five generation arms on the 20 notes: A1 `gpt-4.1-mini`, A2 Luna, A3 Sol on the 
 1. After generation and the offline export: the review-order manifest SHA-256 and the per-arm counts, as an addendum to this file, **before any scoring starts**.
 2. Scoring then follows the rubric (Codex read-only in a scratch directory outside the repository; cold Opus independent review of about 100 items per pass; adjudication; whole-arm re-review if a proposed arm has a missed critical defect; gate report). The default outcome is HOLD.
 
-## 5. Deviations
+## 5. Amendments and deviations
 
-None recorded at the time of writing. Any later deviation is added here with its date and reason, never edited above.
+Each entry is dated and states its reason. Nothing above is edited.
+
+**Amendment 1, 2026-10-27, made after the smoke pass and before any full-run result exists (owner approved):** the two Sol **full-run** spend stops (A3 and B3) are raised from $1.40 to **$1.55**. All other stops are unchanged (smoke 0.03, 0.03, 0.12, 0.12, 0.03; full A2 0.15, B2 0.15, A1 0.18).
+- **Evidence:** the smoke pass (all five starts succeeded, 15 of 15 delivered) measured the meter's conservative cost at $0.0764 for A3 and $0.0696 for B3 per start. The meter counts reasoning tokens twice, so real money is about 12% lower. The stop is checked before each call, so A3 completes all 19 full-run notes only if its first 18 average under $0.0778, a 2% margin measured on one note.
+- **Why it matters:** the last full-run note (run 20, `Engineering Mathematics`) is alone in its stratum. A3 stopping before it would leave that stratum without a paired note and make Sol INCONCLUSIVE under the rubric's stratum trigger, so the stop, not the prompt, would decide the verdict.
+- **Cap:** worst case is $0.158 smoke spend (conservative figure) + $3.58 full stops + about $0.19 overshoot (one final Sol call at most $0.08 per Sol command, about $0.01 per other command) = about **$3.93**, inside the **$4.00** cap. Real money is lower because the meter's figure is conservative.
+- **Rule kept:** a spend-stopped or failed start is still a missing side of a pair, reported and **never re-run or replaced**; no stop is raised after any full-run result exists.
+- **Timing, stated plainly:** the owner approved the amendment, the run script was edited (local time 16:12:46) and this text was drafted (16:12:54) **before** the first full arm started (A2, 16:13:15), but the owner ran the full pass **before this file was committed**. The git record of the amendment therefore post-dates the run; the decision and the on-disk draft did not. The committed text differs from the draft only by this bullet and the next.
+- **In hindsight the amendment was not needed:** the full run finished with no spend stop in any arm (A3 conservative $1.318 and B3 $1.290 for 19 notes, both under the original $1.40). The amendment changed no outcome.
+
+No other deviation is recorded at the time of writing.
