@@ -13,6 +13,7 @@ import java.util.Map;
 import java.util.Random;
 import java.util.Set;
 import java.util.TreeMap;
+import java.util.TreeSet;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
@@ -39,18 +40,24 @@ public final class QualityReviewBatches {
         for (JsonNode chunk : blindManifest.path("chunks")) items.putAll(QualityScoreFiles.keyed(blind.resolve(chunk.asText())));
         Map<String,JsonNode> scores=QualityScoreFiles.keyed(scoresPath);
         if (!scores.keySet().equals(keys.keySet())) throw new IllegalArgumentException("Primary scores must cover every blind item");
+        List<String> invalidPrimaryIds=new ArrayList<>();
         for (var entry:scores.entrySet()) {
-            QualityScoreFiles.validate(entry.getValue(),QualityScoreFiles.choice(keys.get(entry.getKey())));
             if (!"PRIMARY".equals(QualityScoreFiles.text(entry.getValue(),"round")))
                 throw new IllegalArgumentException("Expected PRIMARY score for " + entry.getKey());
+            try {
+                QualityScoreFiles.validate(entry.getValue(),QualityScoreFiles.choice(keys.get(entry.getKey())));
+            } catch (IllegalArgumentException invalid) {
+                invalidPrimaryIds.add(entry.getKey());
+            }
         }
         Map<String,String> reasons=selection(QualityScoreFiles.lines(orderPath),keys,scores);
         Map<String,Integer> unflaggedPerArm=new TreeMap<>();
         for (var entry:reasons.entrySet()) if (!"FLAGGED".equals(entry.getValue()))
             unflaggedPerArm.merge(QualityScoreFiles.text(keys.get(entry.getKey()),"arm"),1,Integer::sum);
         // Non-choice critical flags also receive independent review; only choice items enter G4 sampling.
+        Set<String> invalidPrimarySet=new HashSet<>(invalidPrimaryIds);
         for (var entry:keys.entrySet()) if (!QualityScoreFiles.choice(entry.getValue())
-                && scores.get(entry.getKey()).path("critical").asBoolean())
+                && (invalidPrimarySet.contains(entry.getKey()) || scores.get(entry.getKey()).path("critical").asBoolean()))
             reasons.put(entry.getKey(),"FLAGGED");
         // Shuffle all categories together; no position encodes the selection reason.
         long seed=QualityScoreFiles.JSON.readTree(plan.resolve("review-manifest.json").toFile()).path("seed").asLong();
@@ -72,6 +79,12 @@ public final class QualityReviewBatches {
         manifest.put("reviewOrderSha256",QualityScoreFiles.text(QualityScoreFiles.JSON.readTree(plan.resolve("review-manifest.json").toFile()),"sha256"));
         manifest.put("batchFiles",batchNames); manifest.put("reasonById",reasons);
         manifest.put("unflaggedPerArm",unflaggedPerArm);
+        if (!invalidPrimaryIds.isEmpty()) {
+            manifest.put("invalidPrimaryIds",invalidPrimaryIds);
+            Set<String> invalidPrimaryArms=new TreeSet<>();
+            for (String id:invalidPrimaryIds) invalidPrimaryArms.add(QualityScoreFiles.text(keys.get(id),"arm"));
+            manifest.put("invalidPrimaryArms",invalidPrimaryArms);
+        }
         QualityScoreFiles.JSON.writerWithDefaultPrettyPrinter().writeValue(out.resolve("opus-batch-manifest.json").toFile(),manifest);
     }
     static Map<String,String> selection(List<JsonNode> order,Map<String,JsonNode> keys,Map<String,JsonNode> scores) {
@@ -83,10 +96,15 @@ public final class QualityReviewBatches {
             JsonNode key=keys.get(id),score=scores.get(id);
             if (key==null || score==null || !QualityScoreFiles.choice(key))
                 throw new IllegalArgumentException("Invalid review order id "+id);
-            QualityScoreFiles.validate(score,true);
             if (!"PRIMARY".equals(QualityScoreFiles.text(score,"round"))) throw new IllegalArgumentException("Expected PRIMARY score");
+            boolean invalid=false;
+            try {
+                QualityScoreFiles.validate(score,true);
+            } catch (IllegalArgumentException ignored) {
+                invalid=true;
+            }
             if (row.path("sampled").asBoolean()) sampled.merge(arm,1,Integer::sum);
-            if (score.path("critical").asBoolean() || score.path("seriousGiveaway").asBoolean()) reasons.put(id,"FLAGGED");
+            if (invalid || score.path("critical").asBoolean() || score.path("seriousGiveaway").asBoolean()) reasons.put(id,"FLAGGED");
             else eligible.computeIfAbsent(arm,ignored->new ArrayList<>()).add(id);
         }
         for (var arm:eligible.entrySet()) {
