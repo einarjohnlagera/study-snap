@@ -28,7 +28,7 @@ Each item has: `id`, `noteRef`, `question`, `choices` (an array), `questionForma
 
 ## 4. Critical defect (`critical`: true or false)
 
-`true` if **any** of: (1) the keyed answer is wrong; (2) more than one choice is defensibly correct, or none is; (3) the explanation contradicts the keyed answer, or the question or explanation is `CONTRADICTED`. A critical defect is never averaged away.
+`true` if **any** of: (1) the keyed answer is wrong; (2) the keyed answer is not the uniquely defensible answer or complete correct-answer set required by the question format; (3) the explanation contradicts the keyed answer, or the question or explanation is `CONTRADICTED`. A critical defect is never averaged away.
 **First decide whether the item meets that definition; only then choose a type. A type never makes an item critical on its own.**
 - Single-select items need exactly one defensible answer. `MULTI_SELECT` items need the **complete intended set** of correct options: several correct options are not a defect, a missing or extra one is. For assertion-style and matching items, judge each assertion or pair, and the keyed combination must be the only defensible one.
 - Complexity that the summary and key concepts do not support is **not critical by itself**: it is critical only if it also makes the keyed answer wrong, not uniquely defensible, or contradicted. Otherwise mark it through `grounding` and `faithfulness`.

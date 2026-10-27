@@ -36,7 +36,7 @@ The primary scorer (Codex) records every field. Choice-based = standard MCQ, MUL
 
 **Critical defect flag (G1), yes or no, with a reason and a root cause.** Yes if **any** of:
 1. the keyed answer is wrong (`factuallyCorrect = no` for the keyed answer);
-2. more than one choice is defensibly correct, or none is (the single-best-answer rule fails);
+2. the keyed answer is not the uniquely defensible answer or complete correct-answer set required by the question format;
 3. the explanation contradicts the keyed answer, or the question or explanation is **CONTRADICTED** per section 2.
 A critical flag is never averaged away.
 
