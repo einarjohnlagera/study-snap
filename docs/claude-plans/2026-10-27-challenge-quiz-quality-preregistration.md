@@ -73,3 +73,36 @@ Each entry is dated and states its reason. Nothing above is edited.
 - **In hindsight the amendment was not needed:** the full run finished with no spend stop in any arm (A3 conservative $1.318 and B3 $1.290 for 19 notes, both under the original $1.40). The amendment changed no outcome.
 
 No other deviation is recorded at the time of writing.
+
+## 6. Addendum A: generation record and review plan (2026-10-27, after generation and the offline export, before any scoring)
+
+Fulfils section 4 item 1. Nothing above is edited. No score, review or gate result exists when this is written; the review plan uses no scores.
+
+**Generation (owner-run, with Amendment 1's stops):** five arms x 20 notes = 100 starts, **all successful**, 15 of 15 questions delivered each, validator telemetry captured on every start, no spend stop, no timeout, no verifier run. Meter total about $3.03 (smoke $0.158 + full $2.876, conservative figure) against the $4.00 cap. Descriptive only: validator rejections and retries (equal by construction) of 300 requested per arm: A2 0, B2 0, A3 0, B3 1, A1 4; one discarded attempt (A1, one note). Both models have 20 paired notes and the descriptors' missingness verdict is CLEAR for both.
+
+**Offline export:** 1,600 blind items (300 per generated arm plus 100 stock), 16 chunks of up to 100; item ids unique and equal to the private key's; no item field names the arm, model, level, prompt hash, pack or generation time. The blind-key, notes, results, review order and manifests stay private under `backend/target/llm-benchmark/` and are never shown to a scorer.
+
+**Review plan:** seed `176`; review-order manifest SHA-256 **`34c1dcad2a0305ecd8aed03f9a6f6e967ab425be2f777ab201fd05f19a898d0d`** (equal to the SHA-256 of `review-order.jsonl`). Choice-based items per arm in the order: A1 280, A2 274, A3 274, B2 268, B3 280, stock 88; the seeded 20% sample per arm: A1 56, A2 55, A3 55, B2 54, B3 56, stock 18 (the review-batch step tops each generated arm up to the signed floor of 60 unflagged items).
+
+**Content hashes of the data the scorers will see or the calculator will read (SHA-256):**
+
+| File | SHA-256 |
+|---|---|
+| `blind-items-001..016.jsonl` concatenated in order | `8f530ce520862af1649de7ac0fa4d22f4ec0ab9e77beed52c609178449e28e6e` |
+| `notes.jsonl` | `4a31f63c743c2d304e8fee5b2e7c0d01b0b6a1bf7e5ea85fefd7feb37c4130c4` |
+| `blind-key.jsonl` (private) | `631038e7d6fe1212912558582753eec13e9c6ddd78bdaded8c3ca3a8d4c236f1` |
+| `quality-stock.jsonl` (100 lines) | `434fcb6a5f4bf245336a04538eb4ddd46a7301f9ce42ca303005c7713f8cfeea` |
+| `descriptors.json` | `d4fa7da06d3cbd3feac49691206370800b0294bbcb358c0d8bfe4fc206f2de81` |
+| `review-manifest.json` | `a22f3a3ee532523828a44a91b70ab57f439ec0ea19850cf267b7ccd73f8b79fd` |
+
+`results.jsonl` per arm (smoke / full):
+
+| Arm | Smoke | Full |
+|---|---|---|
+| A1 | `4304f1dc9b8f2066a7cb30c6e25370761a42a75026d5fb27f4db3b8cb6405130` | `2853faee597ba08a3304b97aaea0dfe208cd06e29bb583d6520d156f25aac80d` |
+| A2 | `74be6722add55f4685a312762ce63a81e5ff223afd4de6df9f06b686075e173e` | `d39bce23d40028a23ccb870e6f1fb766ecd04405adf181a0b41e373ad6857a58` |
+| A3 | `0cb9eeec97cacf2e667acf03072cb4985c74663b6e163a04dc3638dc761d1bed` | `9e6345fb0474f9554cf58f2e19bb52771693e58620129406ea512fcd2122d30f` |
+| B2 | `0cfc8a1970faad5ae8f3c7b0bfbe141875179d7562e02709fa2755dfa71ecaef` | `266bc03517d385733540c733515593a0831e70f511650e93b5a5650baed8f5da` |
+| B3 | `749d01ce74cd181aee61fd7d0a0329a02674adc38f438b69e2a1f257c23612f3` | `d46d2e144637b946d279296b02e34f3f99799b719122c29972fb0c7e1007e215` |
+
+The calculator tree hash was re-read after the run and is unchanged (`8643dc740e8de3f476304e7e9072aebe327ad465`).
