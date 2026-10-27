@@ -106,3 +106,21 @@ Fulfils section 4 item 1. Nothing above is edited. No score, review or gate resu
 | B3 | `749d01ce74cd181aee61fd7d0a0329a02674adc38f438b69e2a1f257c23612f3` | `d46d2e144637b946d279296b02e34f3f99799b719122c29972fb0c7e1007e215` |
 
 The calculator tree hash was re-read after the run and is unchanged (`8643dc740e8de3f476304e7e9072aebe327ad465`).
+
+## 7. Addendum B: primary scoring record (2026-10-27, after primary scoring, before the Opus batches are built)
+
+Nothing above is edited. No independent review, adjudication or gate result exists when this is written.
+
+**Run (owner-run, `codex exec -s read-only`, `codex-cli 0.158.0`, Codex's default model, not pinned by the script):** 16 chunks of 100 items, one fresh `--ephemeral` session per chunk, run sequentially, 2026-10-27 13:08:56Z to 13:43:04Z. The prompt was sections 1 to 6 of the frozen scorer instructions verbatim (SHA-256 of the instructions `62311fa4...`, verified before staging) plus one pointer line naming the chunk file and `notes.jsonl`; SHA-256 of the prompt body `b9ab123d58e30ac423eb11537a2838a5f7ceaed4fc4ff0657682637f5fdeece4`. The scratch directory held only the 16 chunks and `notes.jsonl`, outside the repository, with hashes checked against Addendum A before staging.
+
+**Isolation audit, and one correction to the audit rule itself.** Each chunk's full transcript is scanned for the key, results, review order, manifests, descriptors, the repository path, `.env` and any other chunk. The first merge voided all 16 chunks on a single word: the rule listed the bare substring `manifest`, which matched **"clinical manifestations"** in a nursing note's text, not a file. No other forbidden word appeared in any transcript. The audit rule was narrowed to the actual manifest file names (`review-manifest`, `blind-manifest`, `batch-manifest`, `-manifest.json`) and the merge re-run; it then found no hit. The correction was checked independently: across all 52 distinct command patterns in the 16 transcripts, **every command read only its own `blind-items-NNN.jsonl` and `notes.jsonl`**, and none named any other file. No chunk was re-run and no output was edited.
+
+**Result:** 1,600 of 1,600 items scored, one row each, ids equal to the private key's, every row valid against the schema and enums (checked independently of the harness), the reviewer id `codex-1`, the round `PRIMARY`. Primary flags, **unconfirmed**: 72 critical, 65 serious giveaway, 137 items in total, each with a one-sentence note in the private notes stream. Flags are not findings; the independent review decides what is confirmed.
+
+| File (private) | SHA-256 |
+|---|---|
+| `scores-codex.jsonl` (frozen here) | `02ea34e56ae7af07685a87c2ae3147de99935844733ea31673cdcb65b4340e3c` |
+| `quality-primary/notes-codex.jsonl` | `072e4914d9a97ceae1f3d7e4a564d46d89fbec051078e3f3bada1149d1e03040` |
+| `quality-primary/prompt-body.txt` | `b9ab123d58e30ac423eb11537a2838a5f7ceaed4fc4ff0657682637f5fdeece4` |
+
+Next, in order: the review-batch step builds the Opus batches from this frozen file (every flagged item plus the stratified unflagged sample, topped up to the signed floor of 60 per generated arm), then independent cold review, adjudication and the gate report.
