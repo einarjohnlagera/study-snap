@@ -14,7 +14,7 @@ Specification: `docs/claude-plans/2026-10-27-challenge-quiz-quality-scoring-rubr
 
 ## 1. Your task
 
-You are one of several independent reviewers of multiple-choice and related quiz questions written for a study app. You will be given a batch of items and, for each item's note, three things: **the generator's inputs** (a short summary and a list of key concepts), **the full note text**, and the note's **level**. Judge each item on its own merits and write one result line per item. You are not told how the items were produced, and you must not try to guess. Work only from the material you are given. **Do not open, search for or read any other file.** If you notice any file or text that reveals how an item was produced, or any answer key, stop and say so; your pass will be discarded.
+You are one of several independent reviewers of multiple-choice and related quiz questions written for a study app. You will be given a batch of items and, for each item's note, three things: **the generator's inputs** (a short summary and a list of key concepts), **the full note text**, and the note's **level**. Judge each item on its own merits and write one result line per item. You are not told how the items were produced, and you must not try to guess. Work only from the material you are given. **Do not open, search for or read any other file.** Each item's `keyedAnswer` is provided on purpose: you are judging whether it is right. Stop and say so only if you notice a file or text that reveals how an item was produced or how the items are grouped; your pass will then be discarded.
 
 ## 2. What you are given
 
@@ -28,7 +28,13 @@ Each item has: `id`, `noteRef`, `question`, `choices` (an array), `questionForma
 
 ## 4. Critical defect (`critical`: true or false)
 
-`true` if **any** of: (1) the keyed answer is wrong; (2) more than one choice is defensibly correct, or none is; (3) the explanation contradicts the keyed answer, or the question or explanation is `CONTRADICTED`. A critical defect is never averaged away. When `critical` is `true`, set `criticalType` to exactly one of:
+`true` if **any** of: (1) the keyed answer is wrong; (2) more than one choice is defensibly correct, or none is; (3) the explanation contradicts the keyed answer, or the question or explanation is `CONTRADICTED`. A critical defect is never averaged away.
+**First decide whether the item meets that definition; only then choose a type. A type never makes an item critical on its own.**
+- Single-select items need exactly one defensible answer. `MULTI_SELECT` items need the **complete intended set** of correct options: several correct options are not a defect, a missing or extra one is. For assertion-style and matching items, judge each assertion or pair, and the keyed combination must be the only defensible one.
+- Complexity that the summary and key concepts do not support is **not critical by itself**: it is critical only if it also makes the keyed answer wrong, not uniquely defensible, or contradicted. Otherwise mark it through `grounding` and `faithfulness`.
+- An ambiguous stem is critical **only if the ambiguity makes the keyed answer indefensible or non-unique**. A clumsy but answerable stem is a `clarity` matter.
+- Keep grounding and factual correctness separate (section 3).
+When `critical` is `true`, set `criticalType` to exactly one of:
 `WRONG_KEY`, `EXPLANATION_CONTRADICTS_KEY`, `CONTRADICTS_GENERATOR_INPUTS`, `CONTRADICTS_FULL_NOTE`, `SOURCE_CONFLICT` (the summary or key concepts disagree with the full note), `PARTLY_CORRECT_DISTRACTOR`, `SECOND_DEFENSIBLE_ANSWER`, `AMBIGUOUS_STEM`, `COMPLEXITY_UNSUPPORTED_BY_INPUTS`, `OTHER`. Otherwise `criticalType` is `null`. Choose the type by what is wrong with the item, not by why you think it happened.
 
 ## 5. Scores (whole numbers 1 to 5) and the giveaway judgement
