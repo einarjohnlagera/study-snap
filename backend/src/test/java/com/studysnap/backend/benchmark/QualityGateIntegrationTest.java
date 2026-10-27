@@ -258,6 +258,72 @@ class QualityGateIntegrationTest {
         assertThat(report.path("incompleteScoring").path("A3").toString()).contains("Unparseable PRIMARY row");
     }
 
+    @Test void invalidA1BatchAndGateLeaveBothModelsUnaffectedThenInvalidB2HoldsOnlyLuna() throws Exception {
+        Fixture fixture=new Fixture(false,false);
+        assertThat(fixture.run(true).path("verdict").asText()).isEqualTo("PASS");
+        fixture.keys.add(Map.of("id","A1-0","arm","A1","questionFormat","MCQ",
+                "noteLevel","COLLEGE","packId","pack-0","noteRef","note-0",
+                "model","gpt-4.1-mini","promptSha256","a".repeat(64)));
+        ObjectNode a1=score("A1-0","codex","PRIMARY",false,"AMBIGUOUS_STEM",4);
+        fixture.primaryRows.add(a1);
+        QualityScoreFiles.write(fixture.key,fixture.keys);
+        Files.delete(fixture.plan.resolve("review-order.jsonl"));
+        Files.delete(fixture.plan.resolve("review-manifest.json"));
+        QualityReviewPlan.plan(fixture.key,fixture.plan,176);
+        Path blind=Files.createDirectory(temp.resolve("blind"));
+        List<Map<String,Object>> items=new ArrayList<>();
+        for (Map<String,Object> key:fixture.keys) items.add(Map.of("id",key.get("id"),"noteRef",key.get("noteRef"),
+                "question","Synthetic question","choices",List.of("A","B","C","D"),
+                "questionFormat",key.get("questionFormat"),"keyedAnswer","A","explanation","Synthetic explanation"));
+        QualityScoreFiles.write(blind.resolve("blind-key.jsonl"),fixture.keys);
+        QualityScoreFiles.write(blind.resolve("blind-items-001.jsonl"),items);
+        QualityScoreFiles.JSON.writeValue(blind.resolve("blind-manifest.json").toFile(),
+                Map.of("chunks",List.of("blind-items-001.jsonl")));
+
+        a1.putNull("distractorPlausibility"); a1.putNull("seriousGiveaway"); a1.putNull("giveawayPattern");
+        QualityScoreFiles.write(fixture.primary,fixture.primaryRows);
+        Path a1Batches=temp.resolve("a1-batches");
+        QualityReviewBatches.batches(blind,fixture.plan,fixture.primary,a1Batches);
+        JsonNode a1Manifest=QualityScoreFiles.JSON.readTree(a1Batches.resolve("opus-batch-manifest.json").toFile());
+        assertThat(a1Manifest.path("invalidPrimaryIds").toString()).isEqualTo("[\"A1-0\"]");
+        assertThat(a1Manifest.path("invalidPrimaryArms").toString()).isEqualTo("[\"A1\"]");
+        assertThat(a1Manifest.path("reasonById").path("A1-0").asText()).isEqualTo("FLAGGED");
+        assertThat(a1Manifest.path("unflaggedPerArm").has("A1")).isFalse();
+        boolean inBatch=false;
+        for (JsonNode name:a1Manifest.path("batchFiles"))
+            inBatch |= QualityScoreFiles.lines(a1Batches.resolve(name.asText())).stream()
+                    .anyMatch(row->"A1-0".equals(row.path("id").asText()));
+        assertThat(inBatch).isTrue();
+        JsonNode report=runReport(fixture);
+        assertThat(report.path("incompleteScoring").path("A1").toString()).contains("A1-0");
+        assertThat(report.path("models").path("Luna").path("verdict").asText()).isEqualTo("PASS");
+        assertThat(report.path("models").path("Sol").path("verdict").asText()).isEqualTo("PASS");
+
+        a1.put("distractorPlausibility",4); a1.put("seriousGiveaway",false);
+        ObjectNode b2=fixture.primaryRows.stream().filter(row->"B2-19".equals(row.path("id").asText()))
+                .findFirst().orElseThrow();
+        b2.putNull("critical");
+        QualityScoreFiles.write(fixture.primary,fixture.primaryRows);
+        Path b2Batches=temp.resolve("b2-batches");
+        QualityReviewBatches.batches(blind,fixture.plan,fixture.primary,b2Batches);
+        JsonNode b2Manifest=QualityScoreFiles.JSON.readTree(b2Batches.resolve("opus-batch-manifest.json").toFile());
+        assertThat(b2Manifest.path("invalidPrimaryIds").toString()).isEqualTo("[\"B2-19\"]");
+        assertThat(b2Manifest.path("invalidPrimaryArms").toString()).isEqualTo("[\"B2\"]");
+        assertThat(b2Manifest.path("reasonById").path("B2-19").asText()).isEqualTo("FLAGGED");
+        report=runReport(fixture);
+        assertThat(report.path("incompleteScoring").path("B2").toString()).contains("B2-19");
+        JsonNode luna=report.path("models").path("Luna");
+        assertThat(luna.path("verdict").asText()).isEqualTo("HOLD");
+        for (int gate=1;gate<=8;gate++) assertThat(luna.path("G"+gate).path("verdict").asText()).isEqualTo("INCONCLUSIVE");
+        assertThat(report.path("models").path("Sol").path("verdict").asText()).isEqualTo("PASS");
+    }
+
+    private JsonNode runReport(Fixture fixture) throws Exception {
+        QualityGateReport.report(fixture.key,fixture.primary,fixture.reviews,fixture.adjudications,fixture.descriptors,
+                fixture.plan.resolve("review-manifest.json"),fixture.plan.resolve("review-order.jsonl"),fixture.out);
+        return QualityScoreFiles.JSON.readTree(fixture.out.resolve("gates.json").toFile());
+    }
+
     private final class Fixture {
         final Path key=temp.resolve("key.jsonl"), primary=temp.resolve("primary.jsonl"), reviews=temp.resolve("reviews.jsonl"),
                 adjudications=temp.resolve("adjudications.jsonl"), descriptors=temp.resolve("descriptors.json"),
