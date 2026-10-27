@@ -191,6 +191,8 @@ class QualityEvaluationTest {
             capturedRequest(input,1,"A2",null);
             JsonNode captured = mapper.readTree(Files.readAllLines(temp.resolve("request-A2-1/results.jsonl")).getFirst());
             assertThat(captured.path("success").asBoolean()).isTrue();
+            assertThat(captured.path("studyPackSummary").asText()).isEqualTo("Summary");
+            assertThat(captured.path("keyConcepts").size()).isEqualTo(2);
             assertThat(captured.path("validatorTelemetry").asText()).isEqualTo("CAPTURED");
             assertThat(captured.path("validatorAccepted").isInt()).isTrue();
             logger.setLevel(ch.qos.logback.classic.Level.OFF);
@@ -352,6 +354,12 @@ class QualityEvaluationTest {
         assertThat(Files.readAllLines(out.resolve("notes.jsonl"))).hasSize(20);
         for (String note : Files.readAllLines(out.resolve("notes.jsonl")))
             assertThat(mapper.readTree(note).path("noteLevel").asText()).isIn("COLLEGE","BOARD_EXAM_REVIEW");
+        for (String note : Files.readAllLines(out.resolve("notes.jsonl"))) {
+            JsonNode value = mapper.readTree(note);
+            assertThat(value.path("studyPackSummary").asText()).isEqualTo("Summary");
+            assertThat(value.path("keyConcepts").size()).isEqualTo(2);
+            assertThat(value.path("sourceNoteText").asText()).startsWith("Official note ");
+        }
         assertThat(keyRows.stream().map(k -> k.path("noteRef").asText()).distinct().count()).isEqualTo(20);
         QualityBlindExport.export(List.of(a,b),stock,out,176,17);
         assertThat(Files.readAllLines(out.resolve("blind-items-001.jsonl"))).isEqualTo(items);
@@ -376,14 +384,28 @@ class QualityEvaluationTest {
         JsonNode report=mapper.readTree(out.resolve("descriptors.json").toFile());
         JsonNode pair=report.path("pairs").path("A2/B2");
         assertThat(pair.path("pairedNotes").asInt()).isEqualTo(18);
+        assertThat(pair.path("pairedArms").path("A2").path("starts").asInt()).isEqualTo(18);
+        assertThat(pair.path("pairedArms").path("B2").path("starts").asInt()).isEqualTo(18);
         assertThat(pair.path("missingOrFailedSides").size()).isEqualTo(2);
         assertThat(report.path("arms").path("B2").path("failedStarts").asInt()).isEqualTo(1);
         assertThat(report.path("arms").path("A2").path("g6").path("validatorRejected").asInt()).isEqualTo(20);
+        assertThat(report.path("arms").path("B2").path("g7").path("validatorRejected").asInt()).isEqualTo(18);
+        assertThat(report.path("arms").path("A2").path("g7").path("allFormatValidatorRetryRate").asDouble()).isEqualTo(.5);
+        assertThat(report.path("arms").path("B2").path("g6").path("starts").asInt()).isEqualTo(18);
         assertThat(report.path("arms").path("A2").path("g7").path("formatMix").path("MCQ").asInt()).isEqualTo(20);
         assertThat(report.path("arms").path("A2").path("perNoteLevel").path("COLLEGE").path("starts").asInt()).isEqualTo(10);
         assertThat(report.path("arms").path("A2").path("perNoteLevel").path("BOARD_EXAM_REVIEW").path("starts").asInt()).isEqualTo(10);
         assertThat(report.path("pairs").path("A2/B2").path("perNoteLevel").path("COLLEGE").path("pairedNotes").asInt()).isEqualTo(10);
         assertThat(Files.readString(out.resolve("descriptors.md"))).contains("MISSING","FAILED","15 of 20");
+        ObjectNode missing=(ObjectNode)mapper.readTree(as.getFirst());
+        missing.remove("validatorAccepted"); missing.remove("validatorRejected"); missing.remove("validatorRetried");
+        as.set(0,mapper.writeValueAsString(missing));
+        Files.write(a.resolve("results.jsonl"),as);
+        QualityDescriptors.report(List.of(a,b),out);
+        report=mapper.readTree(out.resolve("descriptors.json").toFile());
+        assertThat(report.path("arms").path("A2").path("g7").path("telemetryMissingStarts").asInt()).isEqualTo(1);
+        assertThat(report.path("arms").path("A2").path("g7").path("validatorAccepted").asInt()).isEqualTo(19);
+        assertThat(report.path("arms").path("A2").path("g7").path("allFormatValidatorRetryRate").asDouble()).isEqualTo(.5);
     }
 
     private LlmModelBenchmark.Config config(Path input) { return new LlmModelBenchmark.Config("test",input,temp,
@@ -420,6 +442,7 @@ class QualityEvaluationTest {
     private String result(String arm,String hash,int i,boolean success) throws Exception {
         ObjectNode row=mapper.createObjectNode(); row.put("arm",arm); row.put("model","gpt-6-luna");
         row.put("promptSha256",hash); row.put("packId","pack-"+i); row.put("sourceNoteText","Official note " + i);
+        row.put("studyPackSummary","Summary"); row.putArray("keyConcepts").add("one").add("two");
         row.put("noteLevel",i <= 10 ? "COLLEGE" : "BOARD_EXAM_REVIEW");
         row.put("success",success); row.put("failureClass",success ? "SUCCESS" : "SPEND_STOP");
         row.put("attempts",1); row.put("latencyMs",100); row.put("inputTokens",100); row.put("outputTokens",50);

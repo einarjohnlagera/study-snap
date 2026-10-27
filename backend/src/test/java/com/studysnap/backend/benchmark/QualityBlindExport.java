@@ -41,6 +41,8 @@ public final class QualityBlindExport {
         Map<String,String> refs = new LinkedHashMap<>();
         Map<String,String> noteTexts = new LinkedHashMap<>();
         Map<String,String> noteLevels = new LinkedHashMap<>();
+        Map<String,String> summaries = new LinkedHashMap<>();
+        Map<String,JsonNode> concepts = new LinkedHashMap<>();
         Map<String,Integer> counts = new LinkedHashMap<>();
         Map<String,Integer> stockCounts = new HashMap<>();
         Map<String,String> armIdentity = new HashMap<>();
@@ -62,6 +64,14 @@ public final class QualityBlindExport {
             String noteText = required(row,"sourceNoteText");
             if (noteTexts.putIfAbsent(noteRef, noteText) != null && !noteTexts.get(noteRef).equals(noteText))
                 throw new IllegalArgumentException("Source note changed for " + pack);
+            String summary = required(row,"studyPackSummary");
+            JsonNode keyConcepts = row.path("keyConcepts");
+            if (!keyConcepts.isArray() || !java.util.stream.StreamSupport.stream(keyConcepts.spliterator(),false).allMatch(JsonNode::isTextual))
+                throw new IllegalArgumentException("Missing or invalid keyConcepts for " + pack);
+            if (summaries.putIfAbsent(noteRef,summary) != null && !summaries.get(noteRef).equals(summary))
+                throw new IllegalArgumentException("Study Pack summary changed for " + pack);
+            if (concepts.putIfAbsent(noteRef,keyConcepts) != null && !concepts.get(noteRef).equals(keyConcepts))
+                throw new IllegalArgumentException("Key concepts changed for " + pack);
             if (!row.path("success").isBoolean()) throw new IllegalArgumentException("Malformed success in " + dir);
             JsonNode questions = row.path("questions");
             if (!questions.isArray()) throw new IllegalArgumentException("Malformed questions in " + dir);
@@ -72,7 +82,8 @@ public final class QualityBlindExport {
                 counts.merge(arm, 1, Integer::sum);
             }
         }
-        if (refs.size() != 20) throw new IllegalArgumentException("Expected 20 distinct packs; found " + refs.size());
+        if (refs.size() != QualityGateParameters.EXPECTED_NOTES)
+            throw new IllegalArgumentException("Expected " + QualityGateParameters.EXPECTED_NOTES + " distinct packs; found " + refs.size());
         for (String line : Files.readAllLines(stock)) {
             JsonNode row = parse(line);
             String pack = required(row,"packId"), noteRef = refs.get(pack);
@@ -104,7 +115,7 @@ public final class QualityBlindExport {
         }
         writeLines(out.resolve("blind-key.jsonl"), keyLines);
         List<String> notes = new ArrayList<>();
-        for (var entry : noteTexts.entrySet()) notes.add(MAPPER.writeValueAsString(Map.of("noteRef",entry.getKey(),"sourceNoteText",entry.getValue(),"noteLevel",noteLevels.get(entry.getKey()))));
+        for (var entry : noteTexts.entrySet()) notes.add(MAPPER.writeValueAsString(Map.of("noteRef",entry.getKey(),"sourceNoteText",entry.getValue(),"noteLevel",noteLevels.get(entry.getKey()),"studyPackSummary",summaries.get(entry.getKey()),"keyConcepts",concepts.get(entry.getKey()))));
         writeLines(out.resolve("notes.jsonl"), notes);
         MAPPER.writerWithDefaultPrettyPrinter().writeValue(out.resolve("blind-manifest.json").toFile(),
                 Map.of("countsPerArm", counts, "chunks", chunks, "seed", seed, "chunkSize", chunkSize, "totalItems", entries.size()));

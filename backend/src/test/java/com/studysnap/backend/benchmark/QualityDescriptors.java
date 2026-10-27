@@ -15,7 +15,7 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /** Descriptive diagnostics only. It never excludes a generated or stock item. */
 public final class QualityDescriptors {
-    static final int MIN_PAIRED_NOTES = 15;
+    static final int MIN_PAIRED_NOTES = QualityGateParameters.G8_MIN_PAIRED_NOTES;
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     @Test void reportWhenRequested() throws Exception {
@@ -40,14 +40,15 @@ public final class QualityDescriptors {
         Map<String,String> packLevels = new TreeMap<>();
         if (qualityInput != null) {
             List<String> lines = Files.readAllLines(qualityInput);
-            if (lines.size() != 20) throw new IllegalArgumentException("Quality input must contain 20 notes");
+            if (lines.size() != QualityGateParameters.EXPECTED_NOTES)
+                throw new IllegalArgumentException("Quality input must contain " + QualityGateParameters.EXPECTED_NOTES + " notes");
             for (String line : lines) {
                 JsonNode input = MAPPER.readTree(line);
                 if (!input.path("packId").isTextual()) throw new IllegalArgumentException("Quality input lacks packId");
                 packs.add(input.path("packId").asText());
                 recordLevel(packLevels,input);
             }
-            if (packs.size() != 20) throw new IllegalArgumentException("Quality input packIds must be unique");
+            if (packs.size() != QualityGateParameters.EXPECTED_NOTES) throw new IllegalArgumentException("Quality input packIds must be unique");
         }
         for (Path dir : dirs) for (String line : Files.readAllLines(dir.resolve("results.jsonl"))) {
             JsonNode row = MAPPER.readTree(line);
@@ -78,17 +79,19 @@ public final class QualityDescriptors {
         Map<String,Object> pairReports = new LinkedHashMap<>();
         for (String[] pair : new String[][]{{"A2","B2"},{"A3","B3"}}) {
             List<Map<String,Object>> notes = new ArrayList<>(); int complete = 0;
+            Map<String,JsonNode> pairedLeft = new TreeMap<>(), pairedRight = new TreeMap<>();
             for (String pack : packs) {
                 JsonNode left = arms.getOrDefault(pair[0],Map.of()).get(pack);
                 JsonNode right = arms.getOrDefault(pair[1],Map.of()).get(pack);
                 boolean leftOk = left != null && left.path("success").asBoolean();
                 boolean rightOk = right != null && right.path("success").asBoolean();
-                if (leftOk && rightOk) complete++;
+                if (leftOk && rightOk) { complete++; pairedLeft.put(pack,left); pairedRight.put(pack,right); }
                 else notes.add(Map.of("packId",pack, pair[0], side(left), pair[1], side(right)));
             }
             Map<String,Object> pairReport = new LinkedHashMap<>(Map.of("pairedNotes",complete,
                     "minimumPairedNotes", MIN_PAIRED_NOTES, "verdict",complete < MIN_PAIRED_NOTES ? "INCONCLUSIVE" : "DESCRIPTIVE",
                     "missingOrFailedSides",notes));
+            pairReport.put("pairedArms",Map.of(pair[0],describeArm(pairedLeft),pair[1],describeArm(pairedRight)));
             Map<String,Object> perLevel = new LinkedHashMap<>();
             for (String level : List.of("COLLEGE","BOARD_EXAM_REVIEW")) {
                 int levelComplete = 0; List<Map<String,Object>> levelMissing = new ArrayList<>();
@@ -98,7 +101,11 @@ public final class QualityDescriptors {
                     else levelMissing.add(Map.of("packId",pack,pair[0],side(left),pair[1],side(right)));
                 }
                 perLevel.put(level,Map.of("pairedNotes",levelComplete,"missingOrFailedSides",levelMissing,
-                        "interpretation","DESCRIPTIVE_ONLY; never a gate input (10 notes per level)"));
+                        "interpretation","DESCRIPTIVE_ONLY; never a gate input (10 notes per level)",
+                        "pairedArms",Map.of(pair[0],describeArm(pairedLeft.entrySet().stream().filter(e -> level.equals(packLevels.get(e.getKey())))
+                                        .collect(java.util.stream.Collectors.toMap(Map.Entry::getKey,Map.Entry::getValue))),
+                                pair[1],describeArm(pairedRight.entrySet().stream().filter(e -> level.equals(packLevels.get(e.getKey())))
+                                        .collect(java.util.stream.Collectors.toMap(Map.Entry::getKey,Map.Entry::getValue))))));
             }
             pairReport.put("perNoteLevel",perLevel);
             pairReports.put(pair[0] + "/" + pair[1],pairReport);
@@ -146,22 +153,26 @@ public final class QualityDescriptors {
         List<Long> latencies = new ArrayList<>();
         for (var entry : starts.entrySet()) {
             JsonNode row = entry.getValue();
+            if (!row.path("success").asBoolean()) continue;
             int count = row.path("questions").size(), attempts = row.path("attempts").asInt();
+            int rowAccepted = -1, rowRejected = -1, rowRetried = -1;
             delivered += count; calls += attempts; inputTokens += row.path("inputTokens").asLong();
             outputTokens += row.path("outputTokens").asLong();
-            if (attempts > 0) latencies.add(row.path("latencyMs").asLong());
+            latencies.add(row.path("latencyMs").asLong());
             if (row.path("validatorAccepted").isInt() && row.path("validatorRejected").isInt() && row.path("validatorRetried").isInt()) {
                 accepted += row.path("validatorAccepted").asInt();
                 rejected += row.path("validatorRejected").asInt(); retried += row.path("validatorRetried").asInt();
+                rowAccepted=row.path("validatorAccepted").asInt(); rowRejected=row.path("validatorRejected").asInt();
+                rowRetried=row.path("validatorRetried").asInt();
             } else if (row.path("success").asBoolean()) telemetryMissing++;
-            List<String> seen = new ArrayList<>(); int duplicateInStart = 0;
+            List<String> seen = new ArrayList<>(); int duplicateInStart = 0, rowMultiTwo = 0, rowMultiThree = 0;
             for (JsonNode q : row.path("questions")) {
                 String format = QualityBlindExport.format(q);
                 formats.merge(format,1,Integer::sum);
                 if ("TRUE_FALSE".equals(format)) trueFalse++;
                 if ("MULTI_SELECT".equals(format)) {
                     int size = q.path("correctIndices").size();
-                    if (size == 2) multiTwo++; else if (size == 3) multiThree++;
+                    if (size == 2) { multiTwo++; rowMultiTwo++; } else if (size == 3) { multiThree++; rowMultiThree++; }
                 }
                 String question = normalize(q.path("question").asText());
                 if (seen.stream().anyMatch(previous -> similar(previous,question))) { duplicateQuestions++; duplicateInStart++; }
@@ -192,28 +203,38 @@ public final class QualityDescriptors {
                     }
                 }
             }
-            perNote.put(entry.getKey(), Map.of("success",row.path("success").asBoolean(), "delivered",count,
-                    "apiCalls",attempts,"latencyMs",row.path("latencyMs").asLong(),
-                    "nearDuplicateQuestions",duplicateInStart));
+            Map<String,Object> noteMetrics=new LinkedHashMap<>();
+            noteMetrics.put("success",row.path("success").asBoolean()); noteMetrics.put("delivered",count);
+            noteMetrics.put("deliveredRate",(double)count/QualityGateParameters.REQUESTED_PER_START);
+            noteMetrics.put("apiCalls",attempts); noteMetrics.put("latencyMs",row.path("latencyMs").asLong());
+            noteMetrics.put("tokensPerDeliveredQuestion",count==0 ? "MISSING" : (double)(row.path("inputTokens").asLong()+row.path("outputTokens").asLong())/count);
+            noteMetrics.put("allFormatValidatorRetryRate",rowAccepted<0 || rowAccepted+rowRejected==0 ? "MISSING" : (double)rowRetried/(rowAccepted+rowRejected));
+            noteMetrics.put("allFormatValidatorRejectionRate",rowAccepted<0 || rowAccepted+rowRejected==0 ? "MISSING" : (double)rowRejected/(rowAccepted+rowRejected));
+            noteMetrics.put("multiSelectThreeShare",rowMultiTwo+rowMultiThree==0 ? "MISSING" : (double)rowMultiThree/(rowMultiTwo+rowMultiThree));
+            noteMetrics.put("nearDuplicateQuestions",duplicateInStart);
+            noteMetrics.put("nearDuplicateStart",duplicateInStart>0 ? 1 : 0);
+            perNote.put(entry.getKey(),noteMetrics);
         }
         latencies.sort(Long::compare);
-        report.put("starts",starts.size()); report.put("failedStarts",starts.values().stream().filter(r -> !r.path("success").asBoolean()).count());
+        int successful=(int)starts.values().stream().filter(r -> r.path("success").asBoolean()).count();
+        report.put("starts",successful); report.put("failedStarts",starts.size()-successful);
         report.put("perNote",perNote);
         report.put("g4",Map.of("choiceItems",choiceItems,"correctChoiceLongest",longest,
                 "absoluteOnlyIncorrect",absolutes,"answerPositions",answers,
                 "nearDuplicateChoices",duplicateChoices,"nearDuplicateQuestions",duplicateQuestions,
                 "trueFalseShare",delivered == 0 ? 0d : (double)trueFalse/delivered));
-        report.put("g6",Map.of("deliveredTotal",delivered,"apiCallsTotal",calls,
-                "meanCallsPerStart",starts.isEmpty() ? 0d : (double)calls/starts.size(),
-                "p50LatencyMs",latencies.isEmpty() ? 0 : latencies.get((latencies.size()-1)/2),
-                "tokensPerDeliveredQuestion",delivered == 0 ? 0d : (double)(inputTokens+outputTokens)/delivered,
-                "validatorRejected",rejected,"validatorRetried",retried,"telemetryMissingStarts",telemetryMissing,
-                "validatorRejectionRate",telemetryMissing > 0 ? "MISSING for " + telemetryMissing + " starts" : accepted+rejected > 0 ? (double)rejected/(accepted+rejected) : "UNOBSERVABLE"));
-        report.put("g7",Map.of("formatMix",formats,"multiSelectTwoCorrect",multiTwo,"multiSelectThreeCorrect",multiThree,
+        report.put("g6",Map.ofEntries(Map.entry("starts",successful),Map.entry("deliveredTotal",delivered),Map.entry("apiCallsTotal",calls),
+                Map.entry("meanCallsPerStart",successful==0 ? 0d : (double)calls/successful),
+                Map.entry("p50LatencyMs",latencies.isEmpty() ? 0 : latencies.get((latencies.size()-1)/2)),
+                Map.entry("tokensPerDeliveredQuestion",delivered == 0 ? 0d : (double)(inputTokens+outputTokens)/delivered),
+                Map.entry("validatorAccepted",accepted),Map.entry("validatorRejected",rejected),Map.entry("validatorRetried",retried),Map.entry("telemetryMissingStarts",telemetryMissing),
+                Map.entry("allFormatValidatorRejectionRate",accepted+rejected > 0 ? (double)rejected/(accepted+rejected) : "UNOBSERVABLE"),
+                Map.entry("allFormatValidatorRetryRate",accepted+rejected > 0 ? (double)retried/(accepted+rejected) : "UNOBSERVABLE")));
+        report.put("g7",Map.of("starts",successful,"formatMix",formats,"multiSelectTwoCorrect",multiTwo,"multiSelectThreeCorrect",multiThree,
                 "validatorAccepted",accepted,"validatorRejected",rejected,"validatorRetried",retried,
                 "telemetryMissingStarts",telemetryMissing,
-                "validatorRejectionRate",telemetryMissing > 0 ? "MISSING for " + telemetryMissing + " starts"
-                        : accepted+rejected > 0 ? (double)rejected/(accepted+rejected) : "UNOBSERVABLE"));
+                "allFormatValidatorRejectionRate",accepted+rejected > 0 ? (double)rejected/(accepted+rejected) : "UNOBSERVABLE",
+                "allFormatValidatorRetryRate",accepted+rejected > 0 ? (double)retried/(accepted+rejected) : "UNOBSERVABLE"));
         return report;
     }
     private static boolean isCorrect(JsonNode q, String format, int index) {

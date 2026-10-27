@@ -329,6 +329,8 @@ public class LlmModelBenchmark {
                         result.put("packId", needed(input,"packId"));
                         result.put("noteLevel", needed(input,"noteLevel"));
                         result.put("sourceNoteText", input.path("sources").get(0).path("sourceNoteText").asText());
+                        result.put("studyPackSummary", needed(input.path("sources").get(0), "studyPackSummary"));
+                        result.put("keyConcepts", strings(input.path("sources").get(0), "keyConcepts"));
                         int accepted = 0, rejected = 0, retried = 0, events = 0;
                         for (ILoggingEvent event : generationLog.list.subList(logBefore, generationLog.list.size())) {
                             String message = event.getFormattedMessage();
