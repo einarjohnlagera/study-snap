@@ -111,7 +111,7 @@ class LlmModelBenchmarkTest {
         ClientHttpRequestFactory noCalls = (uri, method) -> { throw new AssertionError("no HTTP call expected"); };
         LlmModelBenchmark.Config config = new LlmModelBenchmark.Config("test-model",input,temp,EnumSet.of(LlmModelBenchmark.Leg.A),10,new BigDecimal("8"),BigDecimal.ONE,BigDecimal.ONE,FAKE_KEY);
         LlmModelBenchmark.run(config,noCalls);
-        assertThat(Files.readString(temp.resolve("summary.csv"))).contains(",1\n");
+        assertThat(Files.readString(temp.resolve("summary.csv"))).contains(",1,0\n");
     }
 
     @Test void threeConsecutiveHttpErrorsStopRun() throws Exception {

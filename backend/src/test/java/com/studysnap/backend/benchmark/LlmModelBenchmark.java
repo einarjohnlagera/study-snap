@@ -3,6 +3,7 @@ package com.studysnap.backend.benchmark;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.studysnap.backend.config.OpenAiLlmConfig;
+import com.studysnap.backend.config.OpenAiPromptResources;
 import com.studysnap.backend.config.StudySnapProperties;
 import com.studysnap.backend.dto.QuizItem;
 import com.studysnap.backend.dto.LongExamSourceNoteRef;
@@ -23,6 +24,9 @@ import java.math.BigDecimal;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.util.HexFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.EnumSet;
@@ -34,6 +38,10 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.LinkedHashSet;
 import org.junit.jupiter.api.Test;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -167,8 +175,14 @@ public class LlmModelBenchmark {
 
     /** Package access lets offline tests inject a stub request factory. */
     static void run(Config config, org.springframework.http.client.ClientHttpRequestFactory requestFactory) throws Exception {
-        Files.createDirectories(config.outDir());
         ObjectMapper mapper = new ObjectMapper();
+        boolean quality = Boolean.getBoolean("llm.benchmark.qualityEval");
+        EFilter eFilter = config.legs().contains(Leg.E) ? EFilter.system() : null;
+        String arm = System.getProperty("llm.benchmark.arm", "");
+        String learnerLevel = quality ? qualityPreflight(config, mapper, eFilter, arm) : "";
+        OpenAiPromptResources resources = challengeResources(mapper, System.getProperty("llm.benchmark.challengePromptFile"));
+        String promptSha256 = sha256(resources.challengeQuizDeveloperPromptTemplate());
+        Files.createDirectories(config.outDir());
         MeteringInterceptor meter = new MeteringInterceptor(mapper, config.outDir(), config.model(),
                 config.inPrice(), config.outPrice(), config.spendStop(), config.maxCalls());
         StudySnapProperties properties = new StudySnapProperties();
@@ -186,13 +200,15 @@ public class LlmModelBenchmark {
                 .defaultHeader(HttpHeaders.AUTHORIZATION, "Bearer " + config.key())
                 .defaultHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
                 .requestInterceptor(meter).build();
-        OpenAiLlmConfig productionConfig = new OpenAiLlmConfig();
         OpenAiLlmStudyPackService service = new OpenAiLlmStudyPackService(properties, mapper, client,
-                productionConfig.openAiPromptResources(mapper, properties),
+                resources,
                 new com.studysnap.backend.service.LlmModelRouter(properties, null, null));
+        Logger serviceLogger = (Logger) LoggerFactory.getLogger(OpenAiLlmStudyPackService.class);
+        ListAppender<ILoggingEvent> generationLog = new ListAppender<>();
+        generationLog.start();
+        if (quality) serviceLogger.addAppender(generationLog);
         List<Map<String, Object>> results = new ArrayList<>();
         Map<String, Integer> malformed = new HashMap<>();
-        EFilter eFilter = config.legs().contains(Leg.E) ? EFilter.system() : null;
         // Scan selected E lines before the first HTTP attempt. A malformed source count aborts
         // this command rather than allowing earlier lines to spend money first.
         if (eFilter != null) {
@@ -204,7 +220,7 @@ public class LlmModelBenchmark {
                     try { validateInput(candidate, Leg.E); }
                     catch (IllegalArgumentException ex) {
                         malformed.merge("E", 1, Integer::sum);
-                        writeSummary(config.outDir(), config.model(), results, meter.calls(), malformed);
+                        writeSummary(config.outDir(), config.model(), results, meter.calls(), malformed, arm, promptSha256, learnerLevel);
                         // Fail the command, not just the line: a silent skip would let a ten-command
                         // sitting continue with a cell missing and nothing reported.
                         throw new IllegalArgumentException("Leg E preflight failed for "
@@ -241,6 +257,7 @@ public class LlmModelBenchmark {
                 String generationId = "g" + serial + "-" + id.replaceAll("[^A-Za-z0-9_-]", "_");
                 meter.begin(generationId, leg.name(), leg == Leg.E && "VLOW".equals(input.path("cell").asText()));
                 int before = meter.calls().size();
+                int logBefore = generationLog.list.size();
                 List<QuizItem> questions = List.of();
                 String noteContent = null;
                 Throwable failure = null;
@@ -306,7 +323,27 @@ public class LlmModelBenchmark {
                 if ("HTTP_ERROR".equals(classification)) consecutiveHttpErrors++; else consecutiveHttpErrors = 0;
                 Map<String, Object> result = result(config.model(), leg, method, id, input, generationId,
                         classification, failure, calls, questions, noteContent);
+                result.put("arm", arm); result.put("promptSha256", promptSha256);
                 if (leg == Leg.E) {
+                    if (quality) {
+                        result.put("packId", needed(input,"packId"));
+                        result.put("noteLevel", needed(input,"noteLevel"));
+                        result.put("sourceNoteText", input.path("sources").get(0).path("sourceNoteText").asText());
+                        int accepted = 0, rejected = 0, retried = 0, events = 0;
+                        for (ILoggingEvent event : generationLog.list.subList(logBefore, generationLog.list.size())) {
+                            String message = event.getFormattedMessage();
+                            if (!message.contains("action=challenge_quiz_generation_counts")) continue;
+                            events++;
+                            accepted += loggedCount(message, "accepted");
+                            rejected += loggedCount(message, "rejected");
+                            retried += loggedCount(message, "retried");
+                        }
+                        boolean missing = "SUCCESS".equals(classification) && events == 0;
+                        result.put("validatorTelemetry", missing ? "MISSING" : events > 0 ? "CAPTURED" : "NOT_APPLICABLE");
+                        result.put("validatorAccepted", missing ? null : accepted);
+                        result.put("validatorRejected", missing ? null : rejected);
+                        result.put("validatorRetried", missing ? null : retried);
+                    }
                     ECell profile = ECell.of(needed(input,"cell"));
                     result.put("cell",needed(input,"cell")); result.put("run",input.path("run").asInt());
                     result.put("requestedQuestions",profile.questions()); result.put("acceptedQuestions",questions.size());
@@ -320,9 +357,80 @@ public class LlmModelBenchmark {
                 }
                 writer.write(mapper.writeValueAsString(result)); writer.newLine(); writer.flush();
                 results.add(result);
-                if ("SPEND_STOP".equals(classification) || meter.unmetered() || consecutiveHttpErrors >= 3) break;
+                if (!quality && ("SPEND_STOP".equals(classification) || meter.unmetered() || consecutiveHttpErrors >= 3)) break;
             }
-        } finally { writeSummary(config.outDir(), config.model(), results, meter.calls(), malformed); }
+        } finally {
+            if (quality) serviceLogger.detachAppender(generationLog);
+            generationLog.stop();
+            writeSummary(config.outDir(), config.model(), results, meter.calls(), malformed, arm, promptSha256, learnerLevel);
+        }
+    }
+
+    static int loggedCount(String message, String field) {
+        var match = java.util.regex.Pattern.compile("(?:^| )" + field + "=(\\d+)(?: |$)").matcher(message);
+        if (!match.find()) throw new IllegalArgumentException("Missing " + field + " in generation log: " + message);
+        return Integer.parseInt(match.group(1));
+    }
+
+    static String qualityPreflight(Config config, ObjectMapper mapper, EFilter filter, String arm) throws IOException {
+        if (!config.legs().equals(EnumSet.of(Leg.E)) || filter == null || !filter.cells().equals(Set.of("S15")))
+            throw new IllegalArgumentException("qualityEval requires legs=E and cells=S15");
+        if (!Set.of("A1","A2","A3","B2","B3").contains(arm))
+            throw new IllegalArgumentException("llm.benchmark.arm must be A1, A2, A3, B2, or B3");
+        String expected = System.getProperty("llm.benchmark.expectedNotes");
+        if (expected == null || Integer.parseInt(expected) != 20)
+            throw new IllegalArgumentException("llm.benchmark.expectedNotes=20 is required");
+        List<String> lines = Files.readAllLines(config.input());
+        if (lines.size() != 20) throw new IllegalArgumentException("quality input requires exactly 20 lines; found " + lines.size());
+        Set<Integer> runs = new LinkedHashSet<>();
+        Set<String> packs = new LinkedHashSet<>();
+        Map<String,Integer> levels = new HashMap<>();
+        for (String line : lines) {
+            JsonNode input;
+            try { input = mapper.readTree(line); } catch (Exception ex) { throw new IllegalArgumentException("Malformed quality input", ex); }
+            if (!"E".equals(input.path("leg").asText()) || !"S15".equals(input.path("cell").asText()))
+                throw new IllegalArgumentException("Every quality line requires leg=E and cell=S15");
+            validateInput(input, Leg.E);
+            if (!input.path("officialOwner").isBoolean() || !input.path("officialOwner").asBoolean())
+                throw new IllegalArgumentException("Every quality line requires officialOwner=true");
+            if (!"COLLEGE".equals(input.path("sources").get(0).path("learnerLevel").asText()))
+                throw new IllegalArgumentException("Every quality source requires learnerLevel=COLLEGE");
+            String noteLevel = needed(input,"noteLevel");
+            if (!Set.of("COLLEGE","BOARD_EXAM_REVIEW").contains(noteLevel)
+                    || !noteLevel.equals(needed(input,"effectiveLevel"))
+                    || !noteLevel.equals(needed(input.path("sources").get(0),"noteLearnerLevel")))
+                throw new IllegalArgumentException("Every quality note requires matching noteLevel, effectiveLevel and noteLearnerLevel");
+            levels.merge(noteLevel,1,Integer::sum);
+            if (!runs.add(input.path("run").asInt()) || !packs.add(needed(input,"packId")))
+                throw new IllegalArgumentException("Quality runs and packIds must be unique");
+        }
+        for (int i = 1; i <= 20; i++) if (!runs.contains(i)) throw new IllegalArgumentException("Quality run missing: " + i);
+        if (levels.getOrDefault("COLLEGE",0) != 10 || levels.getOrDefault("BOARD_EXAM_REVIEW",0) != 10)
+            throw new IllegalArgumentException("Quality input requires exactly 10 COLLEGE and 10 BOARD_EXAM_REVIEW noteLevel values");
+        String prompt = System.getProperty("llm.benchmark.challengePromptFile", "");
+        if (arm.startsWith("B") && prompt.isBlank()) throw new IllegalArgumentException("B arms require llm.benchmark.challengePromptFile");
+        if (!prompt.isBlank() && !Files.isRegularFile(Path.of(prompt)))
+            throw new IllegalArgumentException("Challenge prompt file missing: " + prompt);
+        return "COLLEGE";
+    }
+
+    static OpenAiPromptResources challengeResources(ObjectMapper mapper, String promptFile) throws Exception {
+        OpenAiPromptResources original = new OpenAiLlmConfig().openAiPromptResources(mapper, new StudySnapProperties());
+        if (promptFile == null || promptFile.isBlank()) return original;
+        String replacement = Files.readString(Path.of(promptFile), StandardCharsets.UTF_8);
+        var components = OpenAiPromptResources.class.getRecordComponents();
+        Object[] values = new Object[components.length];
+        Class<?>[] types = new Class<?>[components.length];
+        for (int i = 0; i < components.length; i++) {
+            types[i] = components[i].getType();
+            values[i] = components[i].getName().equals("challengeQuizDeveloperPromptTemplate")
+                    ? replacement : components[i].getAccessor().invoke(original);
+        }
+        return OpenAiPromptResources.class.getDeclaredConstructor(types).newInstance(values);
+    }
+
+    static String sha256(String content) throws Exception {
+        return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(content.getBytes(StandardCharsets.UTF_8)));
     }
 
     private static String needed(JsonNode node, String field) {
@@ -441,9 +549,10 @@ public class LlmModelBenchmark {
         return row;
     }
     private static void writeSummary(Path outDir, String model, List<Map<String,Object>> rows,
-                                     List<MeteringInterceptor.Call> calls, Map<String,Integer> malformed) throws IOException {
+                                     List<MeteringInterceptor.Call> calls, Map<String,Integer> malformed,
+                                     String arm, String promptSha256, String learnerLevel) throws IOException {
         try (BufferedWriter writer = Files.newBufferedWriter(outDir.resolve("summary.csv"))) {
-            writer.write("model,leg,calls,generations,successRate,HTTP_ERROR,EMPTY,SCHEMA_OR_PARSE,MULTI_OUTPUT_TEXT,SPEND_STOP,OTHER,meanLatencyMs,p50LatencyMs,p95LatencyMs,meanAttempts,h4FlagRate,meanInputTokens,meanOutputTokens,meanReasoningTokens,conservativeUsd,nonAdditiveUsd,cell,runs,timeouts,startLatencyP50Ms,startLatencyP90Ms,startLatencyMaxMs,acceptedShortRuns,meanMaxSourceCallLatencyMs,malformedInputs\n");
+            writer.write("model,leg,calls,generations,successRate,HTTP_ERROR,EMPTY,SCHEMA_OR_PARSE,MULTI_OUTPUT_TEXT,SPEND_STOP,OTHER,meanLatencyMs,p50LatencyMs,p95LatencyMs,meanAttempts,h4FlagRate,meanInputTokens,meanOutputTokens,meanReasoningTokens,conservativeUsd,nonAdditiveUsd,cell,runs,timeouts,startLatencyP50Ms,startLatencyP90Ms,startLatencyMaxMs,acceptedShortRuns,meanMaxSourceCallLatencyMs,arm,promptSha256,learnerLevel,malformedInputs,telemetryMissingStarts\n");
             for (Leg leg : Leg.values()) {
                 List<Map<String,Object>> selected = rows.stream().filter(r -> leg.name().equals(r.get("leg"))).toList();
                 List<MeteringInterceptor.Call> legCalls = calls.stream().filter(c -> leg.name().equals(c.leg())).toList();
@@ -459,7 +568,10 @@ public class LlmModelBenchmark {
                         mean(selected,"inputTokens"),mean(selected,"outputTokens"),mean(selected,"reasoningTokens"),
                         sumCost(selected,"conservativeUsd"),sumCost(selected,"nonAdditiveUsd")));
                 cells.addAll(List.of("", "", "", "", "", "", "", ""));
+                cells.addAll(List.of(arm,promptSha256,learnerLevel));
                 cells.add(String.valueOf(malformed.getOrDefault(leg.name(),0)));
+                cells.add(String.valueOf(selected.stream().filter(r -> Boolean.TRUE.equals(r.get("success"))
+                        && "MISSING".equals(r.get("validatorTelemetry"))).count()));
                 writer.write(String.join(",",cells)); writer.newLine();
             }
             for (String cell : List.of("S15","M6x3","S10","S12","M3x6","VLOW")) {
@@ -477,7 +589,9 @@ public class LlmModelBenchmark {
                         String.valueOf(selected.stream().filter(r -> Boolean.TRUE.equals(r.get("timeout"))).count()),
                         percentile(latency,.5),percentile(latency,.9),String.valueOf(latency.getLast()),
                         String.valueOf(selected.stream().filter(r -> Boolean.FALSE.equals(r.get("acceptedAtLeastRequested"))).count()),
-                        cell.startsWith("M") ? mean(selected,"maxSourceCallLatencyMs") : "","")));
+                        cell.startsWith("M") ? mean(selected,"maxSourceCallLatencyMs") : "",arm,promptSha256,learnerLevel,"",
+                        String.valueOf(selected.stream().filter(r -> Boolean.TRUE.equals(r.get("success"))
+                                && "MISSING".equals(r.get("validatorTelemetry"))).count()))));
                 writer.newLine();
             }
             if (malformed.containsKey("UNKNOWN")) writer.write(model + ",UNKNOWN,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0," + malformed.get("UNKNOWN") + "\n");

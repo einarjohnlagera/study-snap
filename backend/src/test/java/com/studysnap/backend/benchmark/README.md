@@ -91,6 +91,78 @@ Full pass (`runs=2-10`), after the smoke review and stop reset:
 ./mvnw test -Dtest=LlmModelBenchmark -Dllm.benchmark=true -Dnativequery.pg.skip=true -Dllm.benchmark.legs=E -Dllm.benchmark.input=target/llm-benchmark/e.jsonl -Dllm.benchmark.outDir=target/llm-benchmark/e-full-sol-vlow -Dllm.benchmark.model=gpt-6.1-sol -Dllm.benchmark.cells=VLOW -Dllm.benchmark.runs=2-10 -Dllm.benchmark.priceInPerM=2.00 -Dllm.benchmark.priceOutPerM=10.00 -Dllm.benchmark.spendStopUsd=0.66
 ```
 
+## Challenge quality evaluation (v0.176.0), owner-run
+
+This is an opt-in **paid** evaluation. Only the owner runs the generation commands. Put `LLM_API_KEY` in the shell environment; never place it in a file, prompt, command argument, or committed artifact. All raw inputs, results, blind items, keys and notes remain under git-ignored `backend/target/` and are never committed. Do not run `clean` until they are saved elsewhere. No database is accessed by the Java harness or offline tools.
+
+From the repository root, use the read-only SQL. `sample-query-quality.sql` requires 10 `COLLEGE` and 10 `BOARD_EXAM_REVIEW` Official notes by each note's own level, with at least four strata and two quantitative notes in each level; it emits zero lines if any target is unavailable. Overall it requires at least six strata and four quantitative notes. `sample-query-stock.sql` uses claimable ADMIN-owned template rows and emits five per pack. Check the line counts (20 and 100) before spending.
+
+```sh
+mkdir -p backend/target/llm-benchmark
+psql "<read-only database URL>" -At -f backend/src/test/java/com/studysnap/backend/benchmark/sample-query-quality.sql > backend/target/llm-benchmark/quality-e.jsonl
+wc -l backend/target/llm-benchmark/quality-e.jsonl
+```
+
+**Before any paid call**, generate the exact `-v "pack_ids='uuid-1','uuid-2',..."` argument from the sampled input and preregister the 20 IDs plus its SHA-256. This command needs only Python 3:
+
+```sh
+python3 -c 'import json,hashlib,uuid,pathlib; p=pathlib.Path("backend/target/llm-benchmark/quality-e.jsonl"); ids=[str(uuid.UUID(json.loads(line)["packId"])) for line in p.read_text().splitlines()]; assert len(ids)==20 and len(set(ids))==20; arg="-v \"pack_ids="+",".join(chr(39)+x+chr(39) for x in ids)+"\""; out="quality-e.jsonl SHA-256: "+hashlib.sha256(p.read_bytes()).hexdigest()+"\npackIds:\n"+"\n".join(ids)+"\nstock psql argument: "+arg+"\n"; pathlib.Path("backend/target/llm-benchmark/quality-preregistration.txt").write_text(out); print(arg)'
+```
+
+Before generating, run this read-only count check with the printed `-v` argument in place of the placeholder. It returns one count per pre-registered pack; **each of the 20 counts must be at least five**. This uses the same NULL-or-current generation-stamp claimability rule as the stock query:
+
+```sh
+psql "<read-only database URL>" -v "pack_ids='uuid-1','uuid-2',...,'uuid-20'" -At <<'SQL'
+WITH requested AS (SELECT unnest(ARRAY[:pack_ids]::uuid[]) AS pack_id)
+SELECT r.pack_id, count(u.id) AS claimable_admin_templates
+FROM requested r
+LEFT JOIN study_packs sp ON sp.id = r.pack_id
+LEFT JOIN challenge_quiz_question_bank bank ON bank.study_pack_id = r.pack_id
+  AND bank.claimed_session_id IS NULL
+  AND (bank.generation_stamp IS NULL OR bank.generation_stamp = sp.generation_stamp)
+LEFT JOIN users u ON u.id = bank.user_id AND u.role = 'ADMIN'
+GROUP BY r.pack_id ORDER BY r.pack_id;
+SQL
+```
+
+Then use the same printed `-v` argument for the stock export and verify 100 rows:
+
+```sh
+psql "<read-only database URL>" -v "pack_ids='uuid-1','uuid-2',...,'uuid-20'" -At -f backend/src/test/java/com/studysnap/backend/benchmark/sample-query-stock.sql > backend/target/llm-benchmark/quality-stock.jsonl
+wc -l backend/target/llm-benchmark/quality-stock.jsonl
+```
+
+Every selected note has its own level, so the pinned viewer `learnerLevel` is irrelevant to level guidance. Cell `S15` asks for 15 `hard` questions. The evaluation covers both `COLLEGE` and `BOARD_EXAM_REVIEW` notes and reports overall and per-level results; per-level reads are descriptive only, never gate inputs. `BOARD_EXAM_REVIEW` notes already receive “plausible distractors, multi-step thinking” through level guidance, so a smaller prompt effect there is expected. Saved quiz texts supply the disallowed-question list in every arm; the bank is not used for generation. A failed or spend-stopped start remains in `results.jsonl` and is not retried by the harness. Each row and `summary.csv` carry the arm and the SHA-256 of the actual Challenge developer template. `validatorRejected` and `validatorRetried` in quality rows come from the production `challenge_quiz_generation_counts` log line attached in test scope; `attempts` is the separate API-call proxy. If a successful start has no log event, its telemetry is `MISSING`, the counts are null, and the summary reports `telemetryMissingStarts`.
+
+From `backend/`, run A2 and B2 back to back, then A3 and B3 back to back, with A1 anywhere, all in one sitting. The order controls time-of-day latency drift. First run the smoke pass (`runs=1`; the input still contains all 20 notes and passes preflight):
+
+```sh
+./mvnw test -Dtest=LlmModelBenchmark -Dnativequery.pg.skip=true -Dllm.benchmark=true -Dllm.benchmark.qualityEval=true -Dllm.benchmark.legs=E -Dllm.benchmark.cells=S15 -Dllm.benchmark.expectedNotes=20 -Dllm.benchmark.runs=1 -Dllm.benchmark.input=target/llm-benchmark/quality-e.jsonl -Dllm.benchmark.arm=A2 -Dllm.benchmark.outDir=target/llm-benchmark/quality-smoke-A2 -Dllm.benchmark.model=gpt-6-luna -Dllm.benchmark.priceInPerM=0.10 -Dllm.benchmark.priceOutPerM=0.50 -Dllm.benchmark.spendStopUsd=0.03
+./mvnw test -Dtest=LlmModelBenchmark -Dnativequery.pg.skip=true -Dllm.benchmark=true -Dllm.benchmark.qualityEval=true -Dllm.benchmark.legs=E -Dllm.benchmark.cells=S15 -Dllm.benchmark.expectedNotes=20 -Dllm.benchmark.runs=1 -Dllm.benchmark.input=target/llm-benchmark/quality-e.jsonl -Dllm.benchmark.arm=B2 -Dllm.benchmark.challengePromptFile=src/test/resources/benchmark/challenge-quality/challenge-quiz-developer.proposed.txt -Dllm.benchmark.outDir=target/llm-benchmark/quality-smoke-B2 -Dllm.benchmark.model=gpt-6-luna -Dllm.benchmark.priceInPerM=0.10 -Dllm.benchmark.priceOutPerM=0.50 -Dllm.benchmark.spendStopUsd=0.03
+./mvnw test -Dtest=LlmModelBenchmark -Dnativequery.pg.skip=true -Dllm.benchmark=true -Dllm.benchmark.qualityEval=true -Dllm.benchmark.legs=E -Dllm.benchmark.cells=S15 -Dllm.benchmark.expectedNotes=20 -Dllm.benchmark.runs=1 -Dllm.benchmark.input=target/llm-benchmark/quality-e.jsonl -Dllm.benchmark.arm=A3 -Dllm.benchmark.outDir=target/llm-benchmark/quality-smoke-A3 -Dllm.benchmark.model=gpt-6.1-sol -Dllm.benchmark.priceInPerM=2.00 -Dllm.benchmark.priceOutPerM=10.00 -Dllm.benchmark.spendStopUsd=0.12
+./mvnw test -Dtest=LlmModelBenchmark -Dnativequery.pg.skip=true -Dllm.benchmark=true -Dllm.benchmark.qualityEval=true -Dllm.benchmark.legs=E -Dllm.benchmark.cells=S15 -Dllm.benchmark.expectedNotes=20 -Dllm.benchmark.runs=1 -Dllm.benchmark.input=target/llm-benchmark/quality-e.jsonl -Dllm.benchmark.arm=B3 -Dllm.benchmark.challengePromptFile=src/test/resources/benchmark/challenge-quality/challenge-quiz-developer.proposed.txt -Dllm.benchmark.outDir=target/llm-benchmark/quality-smoke-B3 -Dllm.benchmark.model=gpt-6.1-sol -Dllm.benchmark.priceInPerM=2.00 -Dllm.benchmark.priceOutPerM=10.00 -Dllm.benchmark.spendStopUsd=0.12
+./mvnw test -Dtest=LlmModelBenchmark -Dnativequery.pg.skip=true -Dllm.benchmark=true -Dllm.benchmark.qualityEval=true -Dllm.benchmark.legs=E -Dllm.benchmark.cells=S15 -Dllm.benchmark.expectedNotes=20 -Dllm.benchmark.runs=1 -Dllm.benchmark.input=target/llm-benchmark/quality-e.jsonl -Dllm.benchmark.arm=A1 -Dllm.benchmark.outDir=target/llm-benchmark/quality-smoke-A1 -Dllm.benchmark.model=gpt-4.1-mini -Dllm.benchmark.priceInPerM=0.40 -Dllm.benchmark.priceOutPerM=1.60 -Dllm.benchmark.spendStopUsd=0.03
+```
+
+Review the smoke results and cumulative spend. Then run the remaining 19 notes (`runs=2-20`) with fresh output directories:
+
+```sh
+./mvnw test -Dtest=LlmModelBenchmark -Dnativequery.pg.skip=true -Dllm.benchmark=true -Dllm.benchmark.qualityEval=true -Dllm.benchmark.legs=E -Dllm.benchmark.cells=S15 -Dllm.benchmark.expectedNotes=20 -Dllm.benchmark.runs=2-20 -Dllm.benchmark.input=target/llm-benchmark/quality-e.jsonl -Dllm.benchmark.arm=A2 -Dllm.benchmark.outDir=target/llm-benchmark/quality-full-A2 -Dllm.benchmark.model=gpt-6-luna -Dllm.benchmark.priceInPerM=0.10 -Dllm.benchmark.priceOutPerM=0.50 -Dllm.benchmark.spendStopUsd=0.15
+./mvnw test -Dtest=LlmModelBenchmark -Dnativequery.pg.skip=true -Dllm.benchmark=true -Dllm.benchmark.qualityEval=true -Dllm.benchmark.legs=E -Dllm.benchmark.cells=S15 -Dllm.benchmark.expectedNotes=20 -Dllm.benchmark.runs=2-20 -Dllm.benchmark.input=target/llm-benchmark/quality-e.jsonl -Dllm.benchmark.arm=B2 -Dllm.benchmark.challengePromptFile=src/test/resources/benchmark/challenge-quality/challenge-quiz-developer.proposed.txt -Dllm.benchmark.outDir=target/llm-benchmark/quality-full-B2 -Dllm.benchmark.model=gpt-6-luna -Dllm.benchmark.priceInPerM=0.10 -Dllm.benchmark.priceOutPerM=0.50 -Dllm.benchmark.spendStopUsd=0.15
+./mvnw test -Dtest=LlmModelBenchmark -Dnativequery.pg.skip=true -Dllm.benchmark=true -Dllm.benchmark.qualityEval=true -Dllm.benchmark.legs=E -Dllm.benchmark.cells=S15 -Dllm.benchmark.expectedNotes=20 -Dllm.benchmark.runs=2-20 -Dllm.benchmark.input=target/llm-benchmark/quality-e.jsonl -Dllm.benchmark.arm=A3 -Dllm.benchmark.outDir=target/llm-benchmark/quality-full-A3 -Dllm.benchmark.model=gpt-6.1-sol -Dllm.benchmark.priceInPerM=2.00 -Dllm.benchmark.priceOutPerM=10.00 -Dllm.benchmark.spendStopUsd=1.40
+./mvnw test -Dtest=LlmModelBenchmark -Dnativequery.pg.skip=true -Dllm.benchmark=true -Dllm.benchmark.qualityEval=true -Dllm.benchmark.legs=E -Dllm.benchmark.cells=S15 -Dllm.benchmark.expectedNotes=20 -Dllm.benchmark.runs=2-20 -Dllm.benchmark.input=target/llm-benchmark/quality-e.jsonl -Dllm.benchmark.arm=B3 -Dllm.benchmark.challengePromptFile=src/test/resources/benchmark/challenge-quality/challenge-quiz-developer.proposed.txt -Dllm.benchmark.outDir=target/llm-benchmark/quality-full-B3 -Dllm.benchmark.model=gpt-6.1-sol -Dllm.benchmark.priceInPerM=2.00 -Dllm.benchmark.priceOutPerM=10.00 -Dllm.benchmark.spendStopUsd=1.40
+./mvnw test -Dtest=LlmModelBenchmark -Dnativequery.pg.skip=true -Dllm.benchmark=true -Dllm.benchmark.qualityEval=true -Dllm.benchmark.legs=E -Dllm.benchmark.cells=S15 -Dllm.benchmark.expectedNotes=20 -Dllm.benchmark.runs=2-20 -Dllm.benchmark.input=target/llm-benchmark/quality-e.jsonl -Dllm.benchmark.arm=A1 -Dllm.benchmark.outDir=target/llm-benchmark/quality-full-A1 -Dllm.benchmark.model=gpt-4.1-mini -Dllm.benchmark.priceInPerM=0.40 -Dllm.benchmark.priceOutPerM=1.60 -Dllm.benchmark.spendStopUsd=0.18
+```
+
+The five smoke stops total **$0.33** (A2 0.03, B2 0.03, A3 0.12, B3 0.12, A1 0.03); the five full stops total **$3.28** (A2 0.15, B2 0.15, A3 1.40, B3 1.40, A1 0.18). Their sum is **$3.61**. The meter checks before each call, so one final call per command may overshoot its stop; Sol is about $0.07 per call and the other models about $0.01, so the estimated worst case is about **$3.95**, inside the **$4.00** cap. The Sol full stops (1.40) sit about 17% above the expected spend of roughly $1.20 per Sol arm (19 notes × 15 questions × about $0.0042 per delivered question, from the v0.175.0 R1 runs); the B arms send a longer prompt but the cost is dominated by output tokens. A Sol arm that stops early leaves pairs missing, which is recorded and never re-run; any re-run spends from the same **$4.00**; a stop is never raised.
+
+Afterward, export and report entirely offline. The exporter consumes all ten result directories, includes every successful generated item and the stock items, and shuffles fixed-size resumable chunks. Give adjudicators only the chunks and `notes.jsonl`; retain `blind-key.jsonl` separately. The descriptor report lists missing or failed pair sides, applies a documented **15 of 20** minimum for paired notes, and computes G4, G6 and G7 diagnostics. No script rejects a question.
+
+```sh
+./mvnw test -Dtest=QualityBlindExport -Dnativequery.pg.skip=true -Dllm.benchmark.qualityBlind=true -Dllm.benchmark.blindDirs=target/llm-benchmark/quality-smoke-A1,target/llm-benchmark/quality-full-A1,target/llm-benchmark/quality-smoke-A2,target/llm-benchmark/quality-full-A2,target/llm-benchmark/quality-smoke-A3,target/llm-benchmark/quality-full-A3,target/llm-benchmark/quality-smoke-B2,target/llm-benchmark/quality-full-B2,target/llm-benchmark/quality-smoke-B3,target/llm-benchmark/quality-full-B3 -Dllm.benchmark.stock=target/llm-benchmark/quality-stock.jsonl -Dllm.benchmark.blindOutDir=target/llm-benchmark/quality-blind -Dllm.benchmark.blindSeed=176 -Dllm.benchmark.blindChunk=100
+./mvnw test -Dtest=QualityDescriptors -Dnativequery.pg.skip=true -Dllm.benchmark.qualityDescriptors=true -Dllm.benchmark.input=target/llm-benchmark/quality-e.jsonl -Dllm.benchmark.blindDirs=target/llm-benchmark/quality-smoke-A1,target/llm-benchmark/quality-full-A1,target/llm-benchmark/quality-smoke-A2,target/llm-benchmark/quality-full-A2,target/llm-benchmark/quality-smoke-A3,target/llm-benchmark/quality-full-A3,target/llm-benchmark/quality-smoke-B2,target/llm-benchmark/quality-full-B2,target/llm-benchmark/quality-smoke-B3,target/llm-benchmark/quality-full-B3 -Dllm.benchmark.descriptorsOutDir=target/llm-benchmark/quality-descriptors
+```
+
 ## Statement-pair verifier Stage 1 (v0.175.0, signed)
 
 This local, opt-in harness checks a proposed independent statement-pair verifier before any production implementation. The four prompt resources in `src/test/resources/benchmark/verifier/` carry the owner-signed wording and are pinned to the production resources by a drift test. The runner reads only local files and sends the note context plus extracted statements; it never queries or writes a database. The API key comes only from `LLM_API_KEY` in the owner's shell. No paid call occurs in the normal test suite.
