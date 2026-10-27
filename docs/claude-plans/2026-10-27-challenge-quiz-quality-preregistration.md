@@ -195,3 +195,27 @@ public final class ReceiptCheck {
 ```
 
 Next, in order: build the Opus batches from the frozen primary scores with the merged code, then independent cold review with every returned batch checked on receipt, adjudication, and the gate report.
+
+## 9. Amendment 3: independent reviewers read a scratch directory, not inline text (2026-10-27, owner-approved, after Amendment 2 and before any independent review exists)
+
+Nothing above is edited. This changes **only the isolation mechanism** in the signed rubric (section 4 item 6, "inline in the prompt, with no file paths"). It changes no gate, threshold, definition, sampling or instruction text.
+
+**Why.** Inline delivery means the orchestrator reads each 41k-token batch into its own context and writes it back out in the agent call: about 80k tokens of orchestrator context per batch and about 400k for five, on a limited budget, and a hand transcription of about 76 KB of item text per batch that cannot be verified against the file the agent received. A scratch directory delivers byte-exact content that is hash-checked.
+
+**Mechanism.** One directory per reviewer under `~/quality-review-v0176/r1` to `r5`, outside the repository and with no repository name in its path. Each holds only that reviewer's batch file and `notes.jsonl`, copied byte for byte and verified by hash before any agent runs; the staged directories were scanned for the key, results, scores, hashes, arm and repository names and nothing was found.
+
+| Reviewer | Batch file | SHA-256 |
+|---|---|---|
+| `opus-1` | `opus-batch-001.jsonl` (100 items) | `b9bdb6a67ec9f4712a4655bf2bc321b895880950b95c283943581fbee176d941` |
+| `opus-2` | `opus-batch-002.jsonl` (100 items) | `9b0447813573909ebe65fe2e227d597cbe9aa9dbc433b072645b67d5e07a83c8` |
+| `opus-3` | `opus-batch-003.jsonl` (100 items) | `3c335e63cb99f13eb40b6b4e87b24048f2080dcf7357281cd9dde66a1812508b` |
+| `opus-4` | `opus-batch-004.jsonl` (100 items) | `0137165eef843ab1909405a7f2991eb5e53fcbc73aec602476abad621b5c4db8` |
+| `opus-5` | `opus-batch-005.jsonl` (97 items) | `2a941430e7e0dfd912c0c13cb31e8350380e2c8cf579e5334e62be05aff047ad` |
+
+`notes.jsonl` in every directory has SHA-256 `4a31f63c743c2d304e8fee5b2e7c0d01b0b6a1bf7e5ea85fefd7feb37c4130c4` (the pinned file from Addendum A).
+
+**Each reviewer** is a fresh Opus agent of the general-purpose type, with no prior context, no primary scores and no earlier review. Its prompt is sections 1 to 6 of the frozen scorer instructions verbatim (prompt-body SHA-256 `b9ab123d58e30ac423eb11537a2838a5f7ceaed4fc4ff0657682637f5fdeece4`, the same text the primary scorer received) plus orchestrator lines that add only: the absolute path of its own directory and the instruction to read only its batch file and `notes.jsonl`; the instruction to write its complete answer, exactly as section 6 specifies and nothing else, to `review-00N.txt` in that directory (so the answer is not copied through the orchestrator's context); and the instruction that its final chat message list every file it opened or wrote. Reviewer ids are `opus-1` to `opus-5`, round `INDEPENDENT_REVIEW`, added by the orchestrator, not by the reviewer.
+
+**What this does not give, stated plainly.** The primary pass had a full command transcript that was audited. An agent's commands cannot be audited that way, and an agent with file tools can in principle read anywhere on the disk. The substitutes are weaker: the agent's own report of every file it touched, and the tool-use count its result shows. **A pass whose report names any file other than its own batch, `notes.jsonl` and its own output file, or whose report is missing, is void and is re-run by a fresh reviewer; the original is kept on record.** Adjudicators and whole-arm re-reviewers use the same mechanism with their own directories, with the two earlier judgements labelled "Reviewer 1" and "Reviewer 2" as the scorer-instructions notes require.
+
+**Receipt.** The orchestrator extracts each `review-00N.txt`, adds `reviewerId` and `round`, and runs the receipt checker of Amendment 2b on every row of every arm before the pass is accepted.
