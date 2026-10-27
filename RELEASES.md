@@ -24,11 +24,12 @@ inconclusive evaluation means HOLD, with **no measurement-only deploy without se
 
 ### Planned Scope
 
-1. **Evaluation harness (test scope). Tier N. `[queued]`** Load an alternate prompt directory
-   (`OpenAiLlmConfig` reads `properties.getSettings().getPromptDir()`), run five generation arms (current prompt on `gpt-4.1-mini`, Luna, Sol;
+1. **Evaluation harness (test scope). Tier N. `[in review: PR #1536 into `releases/v0.176.0`]`** Extends the existing Leg E (cell `S15`) with a quality mode: an alternate Challenge
+   prompt file (`challengeResources` replaces `challengeQuizDeveloperPromptTemplate`), five generation arms (current prompt on `gpt-4.1-mini`, Luna, Sol;
    proposed prompt on Luna and Sol) plus a stock arm of about 100 Official template questions, with blind export, a leak check and a per-arm
    prompt hash. Official notes only. No production code.
-2. **Evaluation run. Owner-run, no agent paid call. `[queued]`** 20 Official notes with templates (at least 6 subjects, at least 4 quantitative),
+2. **Evaluation run. Owner-run, no agent paid call. `[queued]`** **20 Official notes, 10 `COLLEGE` + 10 `BOARD_EXAM_REVIEW` by each note's own level** (owner decision, design A,
+   2026-10-27; each level at least 4 strata and 2 quantitative notes, overall at least 6 and 4), with template stock, all `hard` (cell `S15`),
    one fresh 15-question start per note per arm, bank off, **$4 generation cap**. Blind Codex scoring (D11), independent Opus review of a stratified
    sample including unflagged items against the source notes, disputes adjudicated. **Finalized gates (Luna and Sol judged separately, both must
    pass):** G1 correctness (no more confirmed critical defects than the same-model current arm, zero attributable to the new wording; owner-approved);
@@ -49,6 +50,24 @@ inconclusive evaluation means HOLD, with **no measurement-only deploy without se
    private-note content or unnecessary learner identifiers; a failure to log never affects correctness, availability or quota; a real-database or
    log-contract test. It also makes the `model_used` read in the `[CHECKPOINT — due 2026-11-09]` row readable.
 5. **Backlog rows and checkpoints. Docs. `[done at kickoff, extended at signoff]`**
+
+**Owner decisions and corrections recorded 2026-10-27 (evaluation design).**
+- **Design A (owner):** 10 `COLLEGE` + 10 `BOARD_EXAM_REVIEW` notes by each note's own level; the difficulty stays `hard`. Gates are read **overall**; per-level results are
+  descriptive only (10 notes each).
+- **Why:** the prompt's `{LEARNER_LEVEL_GUIDANCE}` comes from `StudyPackGenerationContextResolver.effectiveCurriculumLevel`, which uses the **note's own level first**, so a viewer-level pin
+  only affects notes with no level. For `BOARD_EXAM_REVIEW` the guidance already says "plausible distractors, multi-step thinking". Real completed Challenge sessions run at
+  `BOARD_EXAM_REVIEW` for 128 of 215 (about 59%); the Official eligible pool is 875 `COLLEGE`, 447 `BOARD_EXAM_REVIEW`, 207 with no level.
+- **Correction:** Official template rows carry a **NULL** `generation_stamp` and are claimable (`findClaimableForUpdate`); an early draft of the selection filtered on the pack's current stamp and found only 33
+  notes in 4 strata. The corrected pool is 1,529 notes in 41 strata, and the per-level selection validated read-only against production (counts only): 10 + 10 notes, 12 strata, 4 quantitative.
+- **The drift guard must be retired or updated by item 3.** `ChallengeQualityPromptGuardTest` pins production's current prompt hash, so the prompt-change commit breaks it by design.
+- **Spend stops (README run sheet):** smoke 0.33 + full 3.28 = 3.61, worst case about 3.95 under the $4 cap; the Sol full stops are 1.40 against an expected spend of about $1.20 per Sol arm.
+- **Scoring rubric v3 written, not yet frozen:** `docs/claude-plans/2026-10-27-challenge-quiz-quality-scoring-rubric.md`. Product UX's three decisions and four sign-offs of 2026-10-27 (relayed by the owner) are in it: grounding is
+  scored against the generator's inputs (summary and key concepts) with the full note as a consistency safeguard; **G4 decides on a sampling-adjusted estimate** (at most 5%, 90% one-sided bound, `UL` at most 10% as a tolerance,
+  at least 60 randomly sampled unflagged items per arm stratified across notes and formats, 3-items-across-2-notes pattern rule, `N` at least 150); a **missed critical defect in a proposed arm triggers a whole-arm independent
+  re-review**; the **wording-sensitive regression rule** (excess over the same-model current arm for four defect types; a mechanical screen, not proof of causation); **G7 tolerance 10 percentage points**, absolute. Denominators and
+  missing-data handling were written by the Release Implementor and are not separately signed.
+- **Still open before any paid run:** the owner signs and freezes the rubric (its SHA-256, the 20 pack ids, the SHA-256 of `quality-e.jsonl`, the review-order seed and the gate calculator's commit SHA are committed to a
+  pre-registration file on this branch before the first paid command; the review-order manifest hash follows as an addendum after generation and before scoring).
 
 **Operational deployment gate (Product UX, 2026-10-27):** the four Postgres signal-9 kills that followed four deploys are investigated before any
 production approval: cause and current database health (the `[CHECKPOINT — due cache deploy + 7 days]` read of 2026-11-01 is the first input),
